@@ -65,8 +65,8 @@ Manual (default). System learns from Chairman feedback over time to suggest Auto
 - No clear differentiation -> **Halt for strategy revision**
 
 ## Data Flow (contract skeleton)
-- **Inputs**: validation_report.json from Stage 3, market_data.json
-- **Outputs**: competitive_analysis.json -> stored in DB, consumed by Stage 5
+- **Inputs**: truth_validation_decision.json from Stage 3, market_data.json
+- **Outputs**: truth_competitive_analysis.json -> stored in DB, consumed by Stage 5
 
 ## Rollback
 - Return to Stage 3 if market not viable

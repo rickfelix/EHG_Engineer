@@ -353,7 +353,7 @@ Artifact Record Structure
 
 venture_id:        Venture UUID
 lifecycle_stage:   Stage number (3, 5, 13, 16, 17, 22, or 23)
-artifact_type:     'devils_advocate_review'
+artifact_type:     'system_devils_advocate_review'
 title:             'Devil's Advocate - Stage {N} {kill|promotion} gate'
 content:           JSON with full review details
 metadata:          { model, durationMs, usage, isFallback }

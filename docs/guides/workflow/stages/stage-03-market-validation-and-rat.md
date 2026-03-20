@@ -57,7 +57,7 @@ This is an artifact-only stage focused on producing specific outputs.
 
 ## Artifacts
 
-- **`validation_report`**
+- **`truth_validation_decision`**
 
 ## Entry Gates
 
@@ -123,8 +123,7 @@ This is an artifact-only stage focused on producing specific outputs.
 
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
-- `venture_stage_work` - Stage entry/completion tracking
-- `venture_validation_report` (if separate table)
+- `venture_stage_work` - Stage entry/completion tracking
 
 ## Related Documentation
 

@@ -30,12 +30,6 @@ tags: [guide, auto-generated]
   - [4. Token Budget Profiles](#4-token-budget-profiles)
 - [Stage Dependencies](#stage-dependencies)
 - [Artifacts by Phase](#artifacts-by-phase)
-  - [Phase 1: THE TRUTH](#phase-1-the-truth)
-  - [Phase 2: THE ENGINE](#phase-2-the-engine)
-  - [Phase 3: THE IDENTITY](#phase-3-the-identity)
-  - [Phase 4: THE BLUEPRINT](#phase-4-the-blueprint)
-  - [Phase 5: THE BUILD LOOP](#phase-5-the-build-loop)
-  - [Phase 6: LAUNCH & LEARN](#phase-6-launch-learn)
 - [Integration with LEO Protocol](#integration-with-leo-protocol)
 - [Evolution from 40-Stage Model](#evolution-from-40-stage-model)
 - [Quick Reference Card](#quick-reference-card)
@@ -49,12 +43,12 @@ tags: [guide, auto-generated]
 - **Last Updated**: 2026-01-19
 - **Tags**: api, unit, schema, security
 
-**Version**: 2.1 (Venture Vision v2.0 — Implementation Aligned)
+**Version**: 2.1 (Venture Vision v2.0 -- Implementation Aligned)
 **Status**: Active
 **Last Updated**: 2026-03-05
 **Technical Reference**: [`stages_v2.yaml`](./stages_v2.yaml)
 
-> **⚠️ Implementation Alignment Note** (2026-03-05): Stage titles in this document have been updated to reflect the **actual codebase implementation** (`lib/eva/stage-templates/stage-XX.js`). Phase 5 spans stages 17-22 and Phase 6 spans stages 23-25 in the implementation (the original design spec had Phase 5: 17-20 and Phase 6: 21-25).
+> **Implementation Alignment Note** (2026-03-05): Stage titles in this document have been updated to reflect the **actual codebase implementation** (`lib/eva/stage-templates/stage-XX.js`). Phase 5 spans stages 17-22 and Phase 6 spans stages 23-25 in the implementation (the original design spec had Phase 5: 17-20 and Phase 6: 21-25).
 
 ---
 
@@ -73,37 +67,37 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 ## Visual Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        25-STAGE VENTURE LIFECYCLE                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   PHASE 1              PHASE 2           PHASE 3          PHASE 4          │
-│   THE TRUTH            THE ENGINE        THE IDENTITY     THE BLUEPRINT    │
-│   ┌─────────┐          ┌─────────┐       ┌─────────┐      ┌─────────┐      │
-│   │ 1  2  3 │ ───────► │ 6  7  8 │ ────► │10 11 12│ ───► │13 14 15│      │
-│   │ 4  5    │          │ 9       │       │         │      │16       │      │
-│   └─────────┘          └─────────┘       └─────────┘      └─────────┘      │
-│        │                                                        │           │
-│        ▼                                                        ▼           │
-│   [Kill Gate]                                            [Schema Gate]      │
-│                                                                             │
-│                        PHASE 5                    PHASE 6                   │
-│                        THE BUILD LOOP             LAUNCH & LEARN            │
-│                        ┌─────────────┐            ┌─────────────┐           │
-│                        │17 18 19 20  │ ────────►  │23 24        │           │
-│                        │21 22        │            │25           │           │
-│                        └─────────────┘            └─────────────┘           │
-│                                                         │                   │
-│                                                         ▼                   │
-│                                                   [LIVE PRODUCT]            │
-│                                                         │                   │
-│                                                         ▼                   │
-│                                              ┌──────────────────┐           │
-│                                              │   PHASE 7        │           │
-│                                              │   THE ORBIT      │           │
-│                                              │ (Active Ops)     │           │
-│                                              └──────────────────┘           │
-└─────────────────────────────────────────────────────────────────────────────┘
++---------------------------------------------------------------------------+
+|                        25-STAGE VENTURE LIFECYCLE                           |
++---------------------------------------------------------------------------+
+|                                                                             |
+|   PHASE 1              PHASE 2           PHASE 3          PHASE 4          |
+|   THE TRUTH            THE ENGINE        THE IDENTITY     THE BLUEPRINT    |
+|   +---------+          +---------+       +---------+      +---------+      |
+|   | 1  2  3 | -------+ | 6  7  8 | ----+|10 11 12| ---+ |13 14 15|      |
+|   | 4  5    |          | 9       |       |         |      |16       |      |
+|   +---------+          +---------+       +---------+      +---------+      |
+|        |                                                        |           |
+|        v                                                        v           |
+|   [Kill Gate]                                            [Schema Gate]      |
+|                                                                             |
+|                        PHASE 5                    PHASE 6                   |
+|                        THE BUILD LOOP             LAUNCH & LEARN            |
+|                        +-------------+            +-------------+           |
+|                        |17 18 19 20  | --------+  |23 24        |           |
+|                        |21 22        |            |25           |           |
+|                        +-------------+            +-------------+           |
+|                                                         |                   |
+|                                                         v                   |
+|                                                   [LIVE PRODUCT]            |
+|                                                         |                   |
+|                                                         v                   |
+|                                              +------------------+           |
+|                                              |   PHASE 7        |           |
+|                                              |   THE ORBIT      |           |
+|                                              | (Active Ops)     |           |
+|                                              +------------------+           |
++---------------------------------------------------------------------------+
 ```
 
 ---
@@ -181,7 +175,7 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 | 16 | **Financial Projections** | Revenue/cost projections, runway, break-even | Financial model, runway calculation |
 
 **Kill Gate**: Stage 13 enforces roadmap completeness (minimum 3 milestones, at least one `priority: now`).
-**Promotion Gate**: Stage 16 is the **Phase 4→5 Promotion Gate** — positive runway and defined projections required before build begins.
+**Promotion Gate**: Stage 16 is the **Phase 4->5 Promotion Gate** -- positive runway and defined projections required before build begins.
 
 ---
 
@@ -199,7 +193,7 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 | 21 | Build Review | Integration testing and acceptance verification | Build review report |
 | 22 | **Release Readiness** | Final release gate before launch | Release readiness checklist |
 
-**Promotion Gate**: Stage 22 is the **Phase 5→6 Promotion Gate** — all pre-launch checks must pass before entering Launch & Learn.
+**Promotion Gate**: Stage 22 is the **Phase 5->6 Promotion Gate** -- all pre-launch checks must pass before entering Launch & Learn.
 
 ---
 
@@ -254,8 +248,8 @@ Six stages have **gates** where the venture must pass criteria before advancing:
 | 3 | Kill Gate | Kill Gate | validation_score < 6 |
 | 5 | Kill Gate (Financial) | Kill Gate | gross_margin < threshold OR breakeven_months > threshold |
 | 13 | Product Roadmap | Kill Gate | milestones < 3 OR no `priority: now` milestone |
-| 16 | Financial Projections | Promotion Gate (Phase 4→5) | runway <= 0 OR projections incomplete |
-| 22 | Release Readiness | Promotion Gate (Phase 5→6) | release_checklist incomplete |
+| 16 | Financial Projections | Promotion Gate (Phase 4->5) | runway <= 0 OR projections incomplete |
+| 22 | Release Readiness | Promotion Gate (Phase 5->6) | release_checklist incomplete |
 | 25 | Launch Execution | Authorization Gate | `verifyLaunchAuthorization()` fails |
 
 ### 3. Golden Nuggets
@@ -293,69 +287,99 @@ Ventures are assigned a compute budget profile:
 ## Stage Dependencies
 
 ```
-Stage 1 ─► Stage 2 ─► Stage 3 ─► Stage 4 ─► Stage 5
-                                              │
-                                              ▼
-          Stage 9 ◄─ Stage 8 ◄─ Stage 7 ◄─ Stage 6
-              │
-              ▼
-         Stage 10 ─► Stage 11 ─► Stage 12
-                                     │
-                                     ▼
-         Stage 16 ◄─ Stage 15 ◄─ Stage 14 ◄─ Stage 13
-              │
-              ▼
-         Stage 17 ─► Stage 18 ─► Stage 19 ─► Stage 20
-                                                  │
-                                                  ▼
-         Stage 25 ◄─ Stage 24 ◄─ Stage 23 ◄─ Stage 22 ◄─ Stage 21
+Stage 1 -> Stage 2 -> Stage 3 -> Stage 4 -> Stage 5
+                                              |
+                                              v
+          Stage 9 <- Stage 8 <- Stage 7 <- Stage 6
+              |
+              v
+         Stage 10 -> Stage 11 -> Stage 12
+                                     |
+                                     v
+         Stage 16 <- Stage 15 <- Stage 14 <- Stage 13
+              |
+              v
+         Stage 17 -> Stage 18 -> Stage 19 -> Stage 20
+                                                  |
+                                                  v
+         Stage 25 <- Stage 24 <- Stage 23 <- Stage 22 <- Stage 21
 ```
 
 ---
 
 ## Artifacts by Phase
 
-### Phase 1: THE TRUTH
-- `idea_brief`
-- `critique_report`
-- `validation_report`
-- `competitive_analysis`
-- `financial_model`
+> Artifact types follow the `{phase_prefix}_{descriptive_name}` naming convention.
+> Single source of truth: `lib/eva/artifact-types.js` (SD-LEO-INFRA-EVA-ARTIFACT-NAMING-001).
 
-### Phase 2: THE ENGINE
-- `risk_matrix`
-- `pricing_model`
-- `business_model_canvas`
-- `exit_strategy`
+### Stage 0: Intake
+- `intake_venture_analysis`
 
-### Phase 3: THE IDENTITY
-- `brand_guidelines`
-- `cultural_design_config`
-- `gtm_plan`
-- `marketing_manifest`
-- `sales_playbook`
+### Phase 1: THE TRUTH (Stages 1-5)
+- `truth_idea_brief`
+- `truth_ai_critique`
+- `truth_validation_decision`
+- `truth_competitive_analysis`
+- `truth_financial_model`
+- `truth_problem_statement`
+- `truth_target_market_analysis`
+- `truth_value_proposition`
 
-### Phase 4: THE BLUEPRINT
-- `tech_stack_decision`
-- `data_model`
-- `erd_diagram`
-- `user_story_pack`
-- `api_contract`
-- `schema_spec`
+### Phase 2: THE ENGINE (Stages 6-9)
+- `engine_risk_matrix`
+- `engine_pricing_model`
+- `engine_business_model_canvas`
+- `engine_exit_strategy`
+- `engine_risk_assessment`
+- `engine_revenue_model`
 
-### Phase 5: THE BUILD LOOP
-- `system_prompt`
-- `cicd_config`
-- `security_audit`
+### Phase 3: THE IDENTITY (Stages 10-12)
+- `identity_persona_brand`
+- `identity_brand_guidelines`
+- `identity_naming_visual`
+- `identity_brand_name`
+- `identity_gtm_sales_strategy`
 
-### Phase 6: LAUNCH & LEARN
-- `test_plan`
-- `uat_report`
-- `deployment_runbook`
-- `launch_checklist`
-- `analytics_dashboard`
-- `optimization_roadmap`
-- `assumptions_vs_reality_report`
+### Phase 4: THE BLUEPRINT (Stages 13-16)
+- `blueprint_product_roadmap`
+- `blueprint_technical_architecture`
+- `blueprint_data_model`
+- `blueprint_erd_diagram`
+- `blueprint_api_contract`
+- `blueprint_schema_spec`
+- `blueprint_risk_register`
+- `blueprint_user_story_pack`
+- `blueprint_wireframes`
+- `blueprint_financial_projection`
+- `blueprint_launch_readiness`
+- `blueprint_sprint_plan`
+- `blueprint_promotion_gate`
+- `blueprint_project_plan`
+
+### Phase 5: THE BUILD (Stages 17-20)
+- `build_system_prompt`
+- `build_cicd_config`
+- `build_security_audit`
+- `build_mvp_build`
+- `build_test_coverage_report`
+
+### Phase 6: LAUNCH & LEARN (Stages 21-25)
+- `launch_test_plan`
+- `launch_uat_report`
+- `launch_deployment_runbook`
+- `launch_marketing_checklist`
+- `launch_analytics_dashboard`
+- `launch_health_scoring`
+- `launch_churn_triggers`
+- `launch_retention_playbook`
+- `launch_optimization_roadmap`
+- `launch_assumptions_vs_reality`
+- `launch_launch_metrics`
+- `launch_user_feedback_summary`
+- `launch_production_app`
+
+### Cross-cutting
+- `system_devils_advocate_review`
 
 ---
 
@@ -389,26 +413,26 @@ See: [Venture Lifecycle Gap Remediation Overview](../../04_features/venture-life
 ## Quick Reference Card
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                 25-STAGE QUICK REFERENCE                      │
-├───────────────────────────────────────────────────────────────┤
-│ Phase 1: THE TRUTH (1-5)       → Validate idea                │
-│ Phase 2: THE ENGINE (6-9)      → Build business model         │
-│ Phase 3: THE IDENTITY (10-12)  → Brand and GTM                │
-│ Phase 4: THE BLUEPRINT (13-16) → Roadmap, architecture, risk  │
-│ Phase 5: THE BUILD LOOP (17-22)→ Plan, build, review, release │
-│ Phase 6: LAUNCH & LEARN (23-25)→ Prepare, launch, go live     │
-├───────────────────────────────────────────────────────────────┤
-│ Kill Gates: Stage 3 (validation), Stage 5 (financial),        │
-│             Stage 13 (roadmap)                                │
-│ Promotion Gates: Stage 16 (Phase 4→5), Stage 22 (Phase 5→6)  │
-│ Authorization Gate: Stage 25 (go-live)                        │
-├───────────────────────────────────────────────────────────────┤
-│ Token Budgets: Exploratory (75K) | Standard (375K) | Deep (1.5M)│
-├───────────────────────────────────────────────────────────────┤
-│ Technical Reference: docs/guides/workflow/stages_v2.yaml      │
-│ Code Reference: lib/eva/stage-templates/stage-XX.js           │
-└───────────────────────────────────────────────────────────────┘
++---------------------------------------------------------------+
+|                 25-STAGE QUICK REFERENCE                      |
++---------------------------------------------------------------+
+| Phase 1: THE TRUTH (1-5)       -> Validate idea                |
+| Phase 2: THE ENGINE (6-9)      -> Build business model         |
+| Phase 3: THE IDENTITY (10-12)  -> Brand and GTM                |
+| Phase 4: THE BLUEPRINT (13-16) -> Roadmap, architecture, risk  |
+| Phase 5: THE BUILD LOOP (17-22)-> Plan, build, review, release |
+| Phase 6: LAUNCH & LEARN (23-25)-> Prepare, launch, go live     |
++---------------------------------------------------------------+
+| Kill Gates: Stage 3 (validation), Stage 5 (financial),        |
+|             Stage 13 (roadmap)                                |
+| Promotion Gates: Stage 16 (Phase 4->5), Stage 22 (Phase 5->6)  |
+| Authorization Gate: Stage 25 (go-live)                        |
++---------------------------------------------------------------+
+| Token Budgets: Exploratory (75K) | Standard (375K) | Deep (1.5M)|
++---------------------------------------------------------------+
+| Technical Reference: docs/guides/workflow/stages_v2.yaml      |
+| Code Reference: lib/eva/stage-templates/stage-XX.js           |
++---------------------------------------------------------------+
 ```
 
 ---

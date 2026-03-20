@@ -189,7 +189,7 @@ The kill gate is evaluated by the exported `evaluateKillGate()` function.
 
 ### Generated Artifacts
 
-- **launch_checklist** -- Go/No-Go decision with operational readiness assessment
+- **launch_marketing_checklist** -- Go/No-Go decision with operational readiness assessment
 
 ### Derived Fields
 
@@ -310,7 +310,7 @@ Each metric:
 
 ### Generated Artifacts
 
-- **analytics_dashboard** -- AARRR metrics with funnel analysis and learnings
+- **launch_analytics_dashboard** -- AARRR metrics with funnel analysis and learnings
 
 ### Derived Fields
 
@@ -432,8 +432,8 @@ The Cross-Venture Learning module at `lib/eva/cross-venture-learning.js` capture
 
 ### Generated Artifacts
 
-- **optimization_roadmap** -- Next steps and improvement plan
-- **assumptions_vs_reality_report** -- Drift analysis comparing original vs. actual
+- **launch_optimization_roadmap** -- Next steps and improvement plan
+- **launch_assumptions_vs_reality** -- Drift analysis comparing original vs. actual
 
 ### Derived Fields
 

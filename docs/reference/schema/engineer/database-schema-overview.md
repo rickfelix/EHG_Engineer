@@ -337,7 +337,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [leo_workflow_phases](tables/leo_workflow_phases.md) | 0 | ✅ | 2 | - |
 | [lifecycle_phases](tables/lifecycle_phases.md) | 6 | ✅ | 2 | Venture Vision v2.0 - 6 Phase Definitions |
 | [lifecycle_stage_config](tables/lifecycle_stage_config.md) | 25 | ✅ | 5 | 25-stage venture lifecycle configuration. Stage 10 (Strategic Narrative & Positioning)
-includes cultural_design_config artifact for venture-based design style selection.
+includes identity_persona_brand artifact for venture-based design style selection.
 Reference: docs/workflow/stages_v2.yaml |
 | [llm_canary_metrics](tables/llm_canary_metrics.md) | 0 | ✅ | 1 | Rolling window metrics. Consider BRIN index or partitioning for high volume. |
 | [llm_canary_state](tables/llm_canary_state.md) | 1 | ✅ | 1 | - |
@@ -1058,7 +1058,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [learning_decisions](tables/learning_decisions.md) - Tracks all /learn command actions, findings, and user approvals to close the feedback loop on organizational learning.
 - [learning_inbox](tables/learning_inbox.md) - Unified view of all learnable items from various sources (patterns, feedback, retrospectives, improvements)
 - [lifecycle_stage_config](tables/lifecycle_stage_config.md) - 25-stage venture lifecycle configuration. Stage 10 (Strategic Narrative & Positioning)
-includes cultural_design_config artifact for venture-based design style selection.
+includes identity_persona_brand artifact for venture-based design style selection.
 Reference: docs/workflow/stages_v2.yaml
 - [llm_canary_metrics](tables/llm_canary_metrics.md) - Rolling window metrics. Consider BRIN index or partitioning for high volume.
 - [llm_canary_state](tables/llm_canary_state.md)

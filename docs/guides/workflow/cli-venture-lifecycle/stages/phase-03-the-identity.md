@@ -174,8 +174,8 @@ The BrandGenomeService supports these cultural design styles:
 
 ### Generated Artifacts
 
-- **brand_guidelines** -- Brand genome definition with naming analysis
-- **cultural_design_config** -- Cultural design style selection
+- **identity_brand_guidelines** -- Brand genome definition with naming analysis
+- **identity_persona_brand** -- Cultural design style selection
 
 ### Derived Fields
 
@@ -270,8 +270,8 @@ Referrals | PR/Media | Influencer Marketing | Community
 
 ### Generated Artifacts
 
-- **gtm_plan** -- Three-tier market strategy with 8-channel economics
-- **marketing_manifest** -- Channel budget allocation and KPI framework
+- **identity_naming_visual** -- Three-tier market strategy with 8-channel economics
+- **identity_persona_brand** -- Channel budget allocation and KPI framework
 
 ### Derived Fields
 
@@ -368,7 +368,7 @@ The Reality Gate is evaluated by the exported `evaluateRealityGate()` function. 
 
 ### Generated Artifacts
 
-- **sales_playbook** -- Sales model, funnel, and customer journey definition
+- **identity_gtm_sales_strategy** -- Sales model, funnel, and customer journey definition
 
 ### Derived Fields
 

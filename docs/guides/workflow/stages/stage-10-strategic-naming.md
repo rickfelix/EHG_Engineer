@@ -60,8 +60,8 @@ This stage requires a Strategic Directive (SD) to be created and executed.
 
 ## Artifacts
 
-- **`brand_guidelines`**
-- **`cultural_design_config`**
+- **`identity_brand_guidelines`**
+- **`identity_persona_brand`**
 
 ## Entry Gates
 
@@ -126,8 +126,7 @@ No specific exit gates defined.
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
 - `venture_stage_work` - Stage entry/completion tracking
-- `venture_brand_guidelines` (if separate table)
-- `venture_cultural_design_config` (if separate table)
+- `venture_brand_guidelines` (if separate table)
 
 ## Related Documentation
 
