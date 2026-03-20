@@ -18,6 +18,7 @@ const path = require('path');
 const os = require('os');
 
 const THROTTLE_FILE = path.join(os.tmpdir(), 'claude-coordination-inbox-last-check.json');
+const IDENTITY_FILE = path.resolve(__dirname, '../../.claude/fleet-identity.json');
 const CHECK_INTERVAL_MS = 300_000; // Only check DB every 5 minutes
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 
@@ -147,8 +148,21 @@ async function main() {
         'IDENTITY_COLLISION': 'IDENTITY COLLISION',
         'CLAIM_REMINDER': 'CLAIM REMINDER',
         'STALE_WARNING': 'STALE WARNING',
+        'SET_IDENTITY': 'IDENTITY ASSIGNMENT',
         'INFO': 'INFO'
       }[msg.message_type] || msg.message_type;
+
+      // Handle SET_IDENTITY: write identity file for statusline integration
+      if (msg.message_type === 'SET_IDENTITY' && msg.payload) {
+        try {
+          fs.writeFileSync(IDENTITY_FILE, JSON.stringify({
+            color: msg.payload.color,
+            callsign: msg.payload.callsign,
+            display_name: msg.payload.display_name,
+            assigned_at: new Date().toISOString()
+          }));
+        } catch { /* ignore write errors */ }
+      }
 
       console.log('');
       console.log('=== COORDINATION: ' + typeLabel + ' ===');
