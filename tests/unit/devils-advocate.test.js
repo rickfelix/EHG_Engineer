@@ -269,7 +269,7 @@ describe('buildArtifactRecord', () => {
     const row = buildArtifactRecord('venture-uuid-123', review);
     expect(row.venture_id).toBe('venture-uuid-123');
     expect(row.lifecycle_stage).toBe(3);
-    expect(row.artifact_type).toBe('devils_advocate_review');
+    expect(row.artifact_type).toBe('system_devils_advocate_review');
     expect(row.is_current).toBe(true);
     expect(row.source).toBe('devils-advocate');
     expect(row.quality_score).toBeGreaterThan(0);

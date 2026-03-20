@@ -98,7 +98,7 @@ describe('StageRegistry — loadFromDatabase', () => {
   it('loads stages from lifecycle_stage_config', async () => {
     const registry = new StageRegistry();
     const mockData = [
-      { stage_number: 1, stage_name: 'Draft Idea', phase_number: 1, phase_name: 'THE TRUTH', work_type: 'artifact_only', sd_required: false, advisory_enabled: false, depends_on: [], required_artifacts: ['idea_brief'], metadata: {}, description: '' },
+      { stage_number: 1, stage_name: 'Draft Idea', phase_number: 1, phase_name: 'THE TRUTH', work_type: 'artifact_only', sd_required: false, advisory_enabled: false, depends_on: [], required_artifacts: ['truth_idea_brief'], metadata: {}, description: '' },
       { stage_number: 2, stage_name: 'Chairman Review', phase_number: 1, phase_name: 'THE TRUTH', work_type: 'decision_gate', sd_required: false, advisory_enabled: false, depends_on: [1], required_artifacts: [], metadata: {}, description: '' },
     ];
 

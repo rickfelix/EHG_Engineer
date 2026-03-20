@@ -248,7 +248,7 @@ describe('VentureMonitor', () => {
         new: {
           id: 'a1',
           venture_id: 'v1',
-          artifact_type: 'critique_report',
+          artifact_type: 'truth_ai_critique',
           lifecycle_stage: 3,
           title: 'Critique for Stage 3',
         },
@@ -259,7 +259,7 @@ describe('VentureMonitor', () => {
       );
       expect(logged).toBeDefined();
       expect(logged.status).toBe('succeeded');
-      expect(logged.metadata.artifact_type).toBe('critique_report');
+      expect(logged.metadata.artifact_type).toBe('truth_ai_critique');
     });
 
     it('handles null payload gracefully', async () => {

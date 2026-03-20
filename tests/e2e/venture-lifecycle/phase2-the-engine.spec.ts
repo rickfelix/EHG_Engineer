@@ -2,16 +2,16 @@
  * Phase 2: THE ENGINE - Venture Lifecycle E2E Tests (Stages 6-9)
  *
  * Tests the business model development phase:
- * - Stage 6: Risk Assessment (requires: risk_matrix)
- * - Stage 7: Revenue Architecture (requires: pricing_model)
- * - Stage 8: Business Model Canvas (requires: business_model_canvas)
- * - Stage 9: Exit Strategy (requires: exit_strategy)
+ * - Stage 6: Risk Assessment (requires: engine_risk_matrix)
+ * - Stage 7: Revenue Architecture (requires: engine_pricing_model)
+ * - Stage 8: Business Model Canvas (requires: engine_business_model_canvas)
+ * - Stage 9: Exit Strategy (requires: engine_exit_strategy)
  *
  * Golden Nugget Validation Requirements:
- * - risk_matrix: {risk, probability, impact, mitigation}
- * - pricing_model: minimum 200 chars
- * - business_model_canvas: standard BMC structure
- * - exit_strategy: exit scenarios with valuation
+ * - engine_risk_matrix: {risk, probability, impact, mitigation}
+ * - engine_pricing_model: minimum 200 chars
+ * - engine_business_model_canvas: standard BMC structure
+ * - engine_exit_strategy: exit scenarios with valuation
  */
 
 import { test, expect } from '@playwright/test';
@@ -53,11 +53,11 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
 
     // Create prerequisite Phase 1 artifacts
     const phase1Artifacts = [
-      { document_type: 'idea_brief', title: 'Idea Brief', content: { summary: 'Test idea' }, status: 'complete' },
-      { document_type: 'critique_report', title: 'Critique', content: { score: 7.5 }, status: 'complete' },
-      { document_type: 'validation_report', title: 'Validation', content: { score: 7.0 }, status: 'complete' },
-      { document_type: 'competitive_analysis', title: 'Competition', content: { competitors: [] }, status: 'complete' },
-      { document_type: 'financial_model', title: 'Financial', content: { revenue: 1000000 }, status: 'complete' }
+      { document_type: 'truth_idea_brief', title: 'Idea Brief', content: { summary: 'Test idea' }, status: 'complete' },
+      { document_type: 'truth_ai_critique', title: 'Critique', content: { score: 7.5 }, status: 'complete' },
+      { document_type: 'truth_validation_decision', title: 'Validation', content: { score: 7.0 }, status: 'complete' },
+      { document_type: 'truth_competitive_analysis', title: 'Competition', content: { competitors: [] }, status: 'complete' },
+      { document_type: 'truth_financial_model', title: 'Financial', content: { revenue: 1000000 }, status: 'complete' }
     ];
 
     for (const artifact of phase1Artifacts) {
@@ -172,7 +172,7 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'risk_matrix',
+          document_type: 'engine_risk_matrix',
           title: 'Risk Assessment',
           content: riskMatrix,
           status: 'complete'
@@ -273,7 +273,7 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'pricing_model',
+          document_type: 'engine_pricing_model',
           title: 'Revenue Architecture',
           content: pricingModel,
           status: 'complete'
@@ -362,7 +362,7 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'business_model_canvas',
+          document_type: 'engine_business_model_canvas',
           title: 'Business Model Canvas',
           content: businessModelCanvas,
           status: 'complete'
@@ -453,7 +453,7 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'exit_strategy',
+          document_type: 'engine_exit_strategy',
           title: 'Exit Strategy',
           content: exitStrategy,
           status: 'complete'
@@ -476,18 +476,18 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
         .select('document_type')
         .eq('venture_id', testVentureId)
         .in('document_type', [
-          'risk_matrix',
-          'pricing_model',
-          'business_model_canvas',
-          'exit_strategy'
+          'engine_risk_matrix',
+          'engine_pricing_model',
+          'engine_business_model_canvas',
+          'engine_exit_strategy'
         ]);
 
       const artifactTypes = artifacts?.map(a => a.document_type) || [];
 
-      expect(artifactTypes).toContain('risk_matrix');
-      expect(artifactTypes).toContain('pricing_model');
-      expect(artifactTypes).toContain('business_model_canvas');
-      expect(artifactTypes).toContain('exit_strategy');
+      expect(artifactTypes).toContain('engine_risk_matrix');
+      expect(artifactTypes).toContain('engine_pricing_model');
+      expect(artifactTypes).toContain('engine_business_model_canvas');
+      expect(artifactTypes).toContain('engine_exit_strategy');
 
       // Ready for Phase 3 (Stage 10)
       const { error } = await supabase

@@ -45,7 +45,7 @@ vi.mock('../../../lib/eva/devils-advocate.js', async () => {
     }),
     buildArtifactRecord: vi.fn().mockReturnValue({
       venture_id: 'v-e2e-phase-a',
-      artifact_type: 'devils_advocate_review',
+      artifact_type: 'system_devils_advocate_review',
       quality_score: 0.8,
     }),
   };

@@ -9,11 +9,11 @@
  * - Stage 5: Kill Gate - Financial (Decision Gate)
  *
  * Required Artifacts by Stage:
- * - Stage 1: idea_brief
- * - Stage 2: critique_report
- * - Stage 3: validation_report
- * - Stage 4: competitive_analysis
- * - Stage 5: financial_model
+ * - Stage 1: truth_idea_brief
+ * - Stage 2: truth_ai_critique
+ * - Stage 3: truth_validation_decision
+ * - Stage 4: truth_competitive_analysis
+ * - Stage 5: truth_financial_model
  */
 
 import { test, expect } from '@playwright/test';
@@ -83,7 +83,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .select('document_type')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'idea_brief');
+        .eq('document_type', 'truth_idea_brief');
 
       // Then entry should be blocked without idea_brief
       const hasIdeaBrief = stage1Artifacts && stage1Artifacts.length > 0;
@@ -96,7 +96,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'idea_brief',
+          document_type: 'truth_idea_brief',
           title: 'Test Idea Brief',
           content: {
             problem_statement: 'Users struggle with venture lifecycle management',
@@ -159,7 +159,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'critique_report',
+          document_type: 'truth_ai_critique',
           title: 'Idea Analysis Report',
           content: critiqueReport,
           status: 'complete'
@@ -181,7 +181,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .select('content')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'critique_report')
+        .eq('document_type', 'truth_ai_critique')
         .single();
 
       // Then all exit gates should pass
@@ -207,7 +207,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .select('id')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'critique_report');
+        .eq('document_type', 'truth_ai_critique');
 
       expect(critiques.length).toBeGreaterThan(0);
 
@@ -250,7 +250,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'validation_report',
+          document_type: 'truth_validation_decision',
           title: 'Kill Gate Report',
           content: validationReport,
           status: 'complete'
@@ -283,13 +283,13 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
               .from('venture_documents')
               .select('content')
               .eq('venture_id', testVentureId)
-              .eq('document_type', 'validation_report')
+              .eq('document_type', 'truth_validation_decision')
               .single()).data?.content || {}),
             chairman_decision: chairmanDecision
           }
         })
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'validation_report');
+        .eq('document_type', 'truth_validation_decision');
 
       expect(error).toBeNull();
       expect(decisionOptions).toContain(chairmanDecision.decision);
@@ -301,7 +301,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .select('content')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'validation_report')
+        .eq('document_type', 'truth_validation_decision')
         .single();
 
       // Then tier rating should not exceed cap
@@ -375,7 +375,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'competitive_analysis',
+          document_type: 'truth_competitive_analysis',
           title: 'Competitive Intelligence Report',
           content: competitiveAnalysis,
           status: 'complete'
@@ -444,7 +444,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'financial_model',
+          document_type: 'truth_financial_model',
           title: 'Profitability Forecast Model',
           content: financialModel,
           status: 'complete'
@@ -465,7 +465,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .from('venture_documents')
         .select('content')
         .eq('venture_id', testVentureId)
-        .eq('document_type', 'financial_model')
+        .eq('document_type', 'truth_financial_model')
         .single();
 
       const gates = {
@@ -486,20 +486,20 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .select('document_type')
         .eq('venture_id', testVentureId)
         .in('document_type', [
-          'idea_brief',
-          'critique_report',
-          'validation_report',
-          'competitive_analysis',
-          'financial_model'
+          'truth_idea_brief',
+          'truth_ai_critique',
+          'truth_validation_decision',
+          'truth_competitive_analysis',
+          'truth_financial_model'
         ]);
 
       // Then all required artifacts exist
       const artifactTypes = artifacts?.map(a => a.document_type) || [];
-      expect(artifactTypes).toContain('idea_brief');
-      expect(artifactTypes).toContain('critique_report');
-      expect(artifactTypes).toContain('validation_report');
-      expect(artifactTypes).toContain('competitive_analysis');
-      expect(artifactTypes).toContain('financial_model');
+      expect(artifactTypes).toContain('truth_idea_brief');
+      expect(artifactTypes).toContain('truth_ai_critique');
+      expect(artifactTypes).toContain('truth_validation_decision');
+      expect(artifactTypes).toContain('truth_competitive_analysis');
+      expect(artifactTypes).toContain('truth_financial_model');
 
       // And venture can advance to Phase 2 (Stage 6)
       const { error } = await supabase

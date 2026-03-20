@@ -94,7 +94,7 @@ describe('resolveGateThreshold', () => {
   test('returns legacy default when profile has empty gate_thresholds', () => {
     const profile = { gate_thresholds: {} };
 
-    const result = resolveGateThreshold(profile, '12->13', 'business_model_canvas');
+    const result = resolveGateThreshold(profile, '12->13', 'engine_business_model_canvas');
     expect(result).toBe(0.7); // Legacy default
   });
 
@@ -199,7 +199,7 @@ describe('evaluateRealityGate with profileThresholds', () => {
 
   test('fails when score below profile threshold even though above legacy', async () => {
     const artifacts = [
-      { artifact_type: 'business_model_canvas', quality_score: 0.75, file_url: null, is_current: true },
+      { artifact_type: 'engine_business_model_canvas', quality_score: 0.75, file_url: null, is_current: true },
       { artifact_type: 'technical_architecture', quality_score: 0.65, file_url: null, is_current: true },
       { artifact_type: 'project_plan', quality_score: 0.5, file_url: null, is_current: true },
     ];
@@ -212,12 +212,12 @@ describe('evaluateRealityGate with profileThresholds', () => {
       toStage: 13,
       supabase: createMockSupabase(artifacts),
       logger: silentLogger,
-      profileThresholds: { business_model_canvas: 0.8 },
+      profileThresholds: { engine_business_model_canvas: 0.8 },
     });
 
     expect(result.status).toBe('FAIL');
     const failReason = result.reasons.find(r =>
-      r.artifact_type === 'business_model_canvas' &&
+      r.artifact_type === 'engine_business_model_canvas' &&
       r.code === 'QUALITY_SCORE_BELOW_THRESHOLD'
     );
     expect(failReason).toBeDefined();

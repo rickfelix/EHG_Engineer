@@ -2,9 +2,9 @@
  * Phase 3: THE IDENTITY - Venture Lifecycle E2E Tests (Stages 10-12)
  *
  * Tests the brand and go-to-market phase:
- * - Stage 10: Customer & Brand Foundation (SD_REQUIRED, requires: brand_guidelines)
- * - Stage 11: Naming & Visual Identity (requires: gtm_plan, marketing_manifest)
- * - Stage 12: GTM & Sales Strategy (requires: sales_playbook)
+ * - Stage 10: Customer & Brand Foundation (SD_REQUIRED, requires: identity_brand_guidelines)
+ * - Stage 11: Naming & Visual Identity (requires: identity_naming_visual, identity_persona_brand)
+ * - Stage 12: GTM & Sales Strategy (requires: identity_gtm_sales_strategy)
  *
  * Note: Stage 10 requires a Strategic Directive (SD) with suffix 'BRAND'
  */
@@ -141,7 +141,7 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'brand_guidelines',
+          document_type: 'identity_brand_guidelines',
           title: 'Brand Guidelines',
           content: brandGuidelines,
           status: 'complete'
@@ -226,7 +226,7 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'gtm_plan',
+          document_type: 'identity_naming_visual',
           title: 'Go-to-Market Plan',
           content: gtmPlan,
           status: 'complete'
@@ -269,7 +269,7 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'marketing_manifest',
+          document_type: 'identity_persona_brand',
           title: 'Marketing Manifest',
           content: marketingManifest,
           status: 'complete'
@@ -335,7 +335,7 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'sales_playbook',
+          document_type: 'identity_gtm_sales_strategy',
           title: 'Sales Playbook',
           content: salesPlaybook,
           status: 'complete'
@@ -351,14 +351,14 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
         .from('venture_documents')
         .select('document_type')
         .eq('venture_id', testVentureId)
-        .in('document_type', ['brand_guidelines', 'gtm_plan', 'marketing_manifest', 'sales_playbook']);
+        .in('document_type', ['identity_brand_guidelines', 'identity_naming_visual', 'identity_persona_brand', 'identity_gtm_sales_strategy']);
 
       const artifactTypes = artifacts?.map(a => a.document_type) || [];
 
-      expect(artifactTypes).toContain('brand_guidelines');
-      expect(artifactTypes).toContain('gtm_plan');
-      expect(artifactTypes).toContain('marketing_manifest');
-      expect(artifactTypes).toContain('sales_playbook');
+      expect(artifactTypes).toContain('identity_brand_guidelines');
+      expect(artifactTypes).toContain('identity_naming_visual');
+      expect(artifactTypes).toContain('identity_persona_brand');
+      expect(artifactTypes).toContain('identity_gtm_sales_strategy');
 
       // Ready for Phase 4 (Stage 13)
       const { error } = await supabase

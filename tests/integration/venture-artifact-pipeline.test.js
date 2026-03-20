@@ -140,7 +140,7 @@ describe('Venture Artifact Pipeline E2E', () => {
     expect(error).toBeNull();
     expect(data.length).toBeGreaterThanOrEqual(1);
     expect(data.every(a => a.lifecycle_stage === 1)).toBe(true);
-    expect(data[0].artifact_type).toBe('idea_brief');
+    expect(data[0].artifact_type).toBe('truth_idea_brief');
   });
 
   it('should advance venture stage from 1 to 2', async () => {
@@ -222,7 +222,7 @@ describe('Venture Artifact Pipeline E2E', () => {
       .insert({
         venture_id: TEST_VENTURE_ID,
         lifecycle_stage: 1,
-        artifact_type: 'idea_brief',
+        artifact_type: 'truth_idea_brief',
         title: 'Updated idea brief v2',
         content: 'Revised pipeline test content with improvements',
         version: 2,
@@ -603,9 +603,9 @@ describe('Lifecycle Stage Config Validation', () => {
     }
 
     // Verify specific expected artifact types
-    expect(data[0].required_artifacts).toContain('idea_brief');
-    expect(data[1].required_artifacts).toContain('critique_report');
-    expect(data[2].required_artifacts).toContain('validation_report');
+    expect(data[0].required_artifacts).toContain('truth_idea_brief');
+    expect(data[1].required_artifacts).toContain('truth_ai_critique');
+    expect(data[2].required_artifacts).toContain('truth_validation_decision');
   });
 
   it('should have phase_name for all stages 1-3', async () => {

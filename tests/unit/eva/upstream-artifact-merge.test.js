@@ -126,8 +126,8 @@ describe('fetchUpstreamArtifacts merge logic', () => {
   it('merges financial_model and DA review correctly (DA review has null data)', () => {
     // Sorted ASC: financial_model (older) first, DA review (newer) second
     const rows = [
-      { lifecycle_stage: 5, artifact_type: 'financial_model', artifact_data: { unitEconomics: { cac: 100 }, decision: 'approved' }, metadata: null, content: null },
-      { lifecycle_stage: 5, artifact_type: 'devils_advocate_review', artifact_data: null, metadata: null, content: null },
+      { lifecycle_stage: 5, artifact_type: 'truth_financial_model', artifact_data: { unitEconomics: { cac: 100 }, decision: 'approved' }, metadata: null, content: null },
+      { lifecycle_stage: 5, artifact_type: 'system_devils_advocate_review', artifact_data: null, metadata: null, content: null },
     ];
     const result = mergeArtifacts(rows);
     expect(result.stage5Data).toEqual({ unitEconomics: { cac: 100 }, decision: 'approved' });
@@ -135,7 +135,7 @@ describe('fetchUpstreamArtifacts merge logic', () => {
 
   it('merges two valid artifacts for same stage', () => {
     const rows = [
-      { lifecycle_stage: 5, artifact_type: 'financial_model', artifact_data: { unitEconomics: { cac: 100 } }, metadata: null, content: null },
+      { lifecycle_stage: 5, artifact_type: 'truth_financial_model', artifact_data: { unitEconomics: { cac: 100 } }, metadata: null, content: null },
       { lifecycle_stage: 5, artifact_type: 'deployment_runbook', artifact_data: { deploySteps: ['step1'] }, metadata: null, content: null },
     ];
     const result = mergeArtifacts(rows);
