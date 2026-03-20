@@ -140,7 +140,7 @@ describe('DevilsAdvocate', () => {
 
       expect(record.venture_id).toBe('venture-123');
       expect(record.lifecycle_stage).toBe(3);
-      expect(record.artifact_type).toBe('devils_advocate_review');
+      expect(record.artifact_type).toBe('system_devils_advocate_review');
       expect(record.is_current).toBe(true);
       expect(record.source).toBe('devils-advocate');
       expect(record.quality_score).toBeGreaterThan(0);
