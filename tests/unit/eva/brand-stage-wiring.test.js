@@ -172,7 +172,7 @@ describe('Stage 10 Brand Wiring — Persona Role Assignment', () => {
     const brandArtifact = artifactInsertCalls.find(a => a.title === 'Brand Genome (Stage 10)');
     expect(brandArtifact).toBeDefined();
     expect(brandArtifact.lifecycle_stage).toBe(10);
-    expect(brandArtifact.artifact_type).toBe('brand_guidelines');
+    expect(brandArtifact.artifact_type).toBe('identity_brand_guidelines');
   });
 
   it('skips DB writes when supabase is not provided', async () => {
