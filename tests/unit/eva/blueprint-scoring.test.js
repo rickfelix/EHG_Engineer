@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { RUBRIC_DEFINITIONS, ARTIFACT_TYPES } from '../../../lib/eva/blueprint-scoring/rubric-definitions.js';
+import { ARTIFACT_TYPES as AT } from '../../../lib/eva/artifact-types.js';
 import { scoreArtifact } from '../../../lib/eva/blueprint-scoring/quality-scorer.js';
 import { checkConsistency } from '../../../lib/eva/blueprint-scoring/consistency-checker.js';
 import { calculateReadiness } from '../../../lib/eva/blueprint-scoring/readiness-calculator.js';
@@ -40,20 +41,20 @@ describe('BlueprintQualityScorer', () => {
       naming: { convention: 'snake_case', consistent: true },
       normalization: { level: '3NF', rationale: 'Standard for transactional data' },
     };
-    const result = scoreArtifact('data_model', content);
+    const result = scoreArtifact(AT.BLUEPRINT_DATA_MODEL, content);
     expect(result.total).toBeGreaterThanOrEqual(50);
     expect(result.dimensions).toHaveLength(4);
-    expect(result.artifactType).toBe('data_model');
+    expect(result.artifactType).toBe(AT.BLUEPRINT_DATA_MODEL);
     expect(result.rubricVersion).toBe(1);
   });
 
   it('scores empty content as 0', () => {
-    const result = scoreArtifact('data_model', {});
+    const result = scoreArtifact(AT.BLUEPRINT_DATA_MODEL, {});
     expect(result.total).toBe(0);
   });
 
   it('scores minimal content low', () => {
-    const result = scoreArtifact('data_model', { note: 'todo' });
+    const result = scoreArtifact(AT.BLUEPRINT_DATA_MODEL, { note: 'todo' });
     expect(result.total).toBeLessThanOrEqual(50);
   });
 
@@ -62,7 +63,7 @@ describe('BlueprintQualityScorer', () => {
   });
 
   it('returns feedback for each dimension', () => {
-    const result = scoreArtifact('api_contract', { endpoints: ['/users', '/orders'] });
+    const result = scoreArtifact(AT.BLUEPRINT_API_CONTRACT, { endpoints: ['/users', '/orders'] });
     for (const dim of result.dimensions) {
       expect(dim.feedback).toBeTruthy();
       expect(dim.name).toBeTruthy();
@@ -76,11 +77,11 @@ describe('BlueprintQualityScorer', () => {
 describe('CrossArtifactConsistencyChecker', () => {
   it('returns no penalties when all references match', () => {
     const artifacts = {
-      api_contract: { endpoints: ['users', 'orders'] },
-      launch_readiness: { screens: ['users', 'orders'] },
-      user_story_pack: { stories: ['create user', 'view orders'] },
-      data_model: { entities: ['User', 'Order'] },
-      erd_diagram: { entities: ['User', 'Order'] },
+      [AT.BLUEPRINT_API_CONTRACT]: { endpoints: ['users', 'orders'] },
+      [AT.BLUEPRINT_LAUNCH_READINESS]: { screens: ['users', 'orders'] },
+      [AT.BLUEPRINT_USER_STORY_PACK]: { stories: ['create user', 'view orders'] },
+      [AT.BLUEPRINT_DATA_MODEL]: { entities: ['User', 'Order'] },
+      [AT.BLUEPRINT_ERD_DIAGRAM]: { entities: ['User', 'Order'] },
     };
     const result = checkConsistency(artifacts);
     expect(result.totalPenalty).toBe(0);
@@ -89,8 +90,8 @@ describe('CrossArtifactConsistencyChecker', () => {
 
   it('detects orphaned API endpoints', () => {
     const artifacts = {
-      api_contract: { endpoints: ['users', 'orders', 'payments'] },
-      launch_readiness: { screens: ['users'] },
+      [AT.BLUEPRINT_API_CONTRACT]: { endpoints: ['users', 'orders', 'payments'] },
+      [AT.BLUEPRINT_LAUNCH_READINESS]: { screens: ['users'] },
     };
     const result = checkConsistency(artifacts);
     expect(result.penalties.length).toBeGreaterThan(0);
@@ -102,8 +103,8 @@ describe('CrossArtifactConsistencyChecker', () => {
 
   it('detects entity-ERD mismatches', () => {
     const artifacts = {
-      data_model: { entities: ['User', 'Order', 'Payment'] },
-      erd_diagram: { entities: ['User'] },
+      [AT.BLUEPRINT_DATA_MODEL]: { entities: ['User', 'Order', 'Payment'] },
+      [AT.BLUEPRINT_ERD_DIAGRAM]: { entities: ['User'] },
     };
     const result = checkConsistency(artifacts);
     const erdPenalty = result.penalties.find((p) => p.type === 'entity_erd');
@@ -180,18 +181,18 @@ describe('QualityGateDecisionEngine', () => {
     const readiness = {
       readinessScore: 40,
       artifactSubscores: {},
-      missingArtifacts: ['risk_register', 'financial_projection'],
+      missingArtifacts: [AT.BLUEPRINT_RISK_REGISTER, AT.BLUEPRINT_FINANCIAL_PROJECTION],
     };
     const result = evaluateGate(readiness);
     expect(result.remediationItems).toHaveLength(2);
-    expect(result.remediationItems[0].artifactType).toBe('risk_register');
+    expect(result.remediationItems[0].artifactType).toBe(AT.BLUEPRINT_RISK_REGISTER);
     expect(result.remediationItems[0].dimension).toBe('presence');
   });
 
   it('includes remediation for low-scoring dimensions', () => {
     const readiness = { readinessScore: 55, artifactSubscores: {}, missingArtifacts: [] };
     const details = [{
-      artifactType: 'data_model',
+      artifactType: AT.BLUEPRINT_DATA_MODEL,
       dimensions: [
         { name: 'entity_coverage', score: 30, weight: 0.3 },
         { name: 'relationship_clarity', score: 80, weight: 0.3 },
@@ -232,7 +233,7 @@ describe('PersistenceModule', () => {
 describe('End-to-End Scoring Flow', () => {
   it('scores a complete blueprint through all stages', () => {
     const artifacts = {
-      data_model: {
+      [AT.BLUEPRINT_DATA_MODEL]: {
         entities: [
           { name: 'User', attributes: [{ name: 'id' }, { name: 'email' }, { name: 'name' }] },
           { name: 'Order', attributes: [{ name: 'id' }, { name: 'total' }, { name: 'status' }] },
@@ -241,16 +242,16 @@ describe('End-to-End Scoring Flow', () => {
         normalization: { level: '3NF' },
         naming: { convention: 'snake_case' },
       },
-      erd_diagram: { entities: ['User', 'Order'], diagram: 'erDiagram...' },
-      api_contract: { endpoints: ['users', 'orders'], schemas: { User: {}, Order: {} } },
-      user_story_pack: { stories: ['create user', 'place order'], epics: [{ name: 'Core' }] },
-      technical_architecture: { layers: ['presentation', 'api', 'data'], components: ['auth'] },
-      schema_spec: { tables: { users: {}, orders: {} }, types: {} },
-      risk_register: { risks: [{ name: 'Scale' }, { name: 'Security' }], mitigations: {} },
-      financial_projection: { revenue: {}, costs: {}, metrics: { ltv: 500, cac: 100 } },
-      launch_readiness: { screens: ['users', 'orders'], checklist: [], dimensions: {} },
-      sprint_plan: { sprints: [{ stories: ['create user', 'place order'] }] },
-      promotion_gate: { criteria: {}, decision: 'promote', evidence: {} },
+      [AT.BLUEPRINT_ERD_DIAGRAM]: { entities: ['User', 'Order'], diagram: 'erDiagram...' },
+      [AT.BLUEPRINT_API_CONTRACT]: { endpoints: ['users', 'orders'], schemas: { User: {}, Order: {} } },
+      [AT.BLUEPRINT_USER_STORY_PACK]: { stories: ['create user', 'place order'], epics: [{ name: 'Core' }] },
+      [AT.BLUEPRINT_TECHNICAL_ARCHITECTURE]: { layers: ['presentation', 'api', 'data'], components: ['auth'] },
+      [AT.BLUEPRINT_SCHEMA_SPEC]: { tables: { users: {}, orders: {} }, types: {} },
+      [AT.BLUEPRINT_RISK_REGISTER]: { risks: [{ name: 'Scale' }, { name: 'Security' }], mitigations: {} },
+      [AT.BLUEPRINT_FINANCIAL_PROJECTION]: { revenue: {}, costs: {}, metrics: { ltv: 500, cac: 100 } },
+      [AT.BLUEPRINT_LAUNCH_READINESS]: { screens: ['users', 'orders'], checklist: [], dimensions: {} },
+      [AT.BLUEPRINT_SPRINT_PLAN]: { sprints: [{ stories: ['create user', 'place order'] }] },
+      [AT.BLUEPRINT_PROMOTION_GATE]: { criteria: {}, decision: 'promote', evidence: {} },
     };
 
     // Score each artifact
@@ -281,8 +282,8 @@ describe('End-to-End Scoring Flow', () => {
 
   it('handles partial blueprint with missing artifacts', () => {
     const artifacts = {
-      data_model: { entities: [{ name: 'User' }] },
-      api_contract: { endpoints: ['users'] },
+      [AT.BLUEPRINT_DATA_MODEL]: { entities: [{ name: 'User' }] },
+      [AT.BLUEPRINT_API_CONTRACT]: { endpoints: ['users'] },
     };
 
     const scores = Object.entries(artifacts)

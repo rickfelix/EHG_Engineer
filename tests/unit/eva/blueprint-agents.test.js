@@ -11,23 +11,24 @@ import {
   ARTIFACT_TYPES,
   getAgent,
 } from '../../../lib/eva/blueprint-agents/index.js';
+import { ARTIFACT_TYPES as REGISTRY } from '../../../lib/eva/artifact-types.js';
 import { resolveExecutionOrder, orchestrate } from '../../../lib/eva/blueprint-coordinator.js';
 
 // ── Registry completeness ────────────────────────────────────
 
 describe('Blueprint Agent Registry', () => {
   const EXPECTED_TYPES = [
-    'data_model',
-    'erd_diagram',
-    'technical_architecture',
-    'api_contract',
-    'schema_spec',
-    'user_story_pack',
-    'risk_register',
-    'financial_projection',
-    'launch_readiness',
-    'sprint_plan',
-    'promotion_gate',
+    REGISTRY.BLUEPRINT_DATA_MODEL,
+    REGISTRY.BLUEPRINT_ERD_DIAGRAM,
+    REGISTRY.BLUEPRINT_TECHNICAL_ARCHITECTURE,
+    REGISTRY.BLUEPRINT_API_CONTRACT,
+    REGISTRY.BLUEPRINT_SCHEMA_SPEC,
+    REGISTRY.BLUEPRINT_USER_STORY_PACK,
+    REGISTRY.BLUEPRINT_RISK_REGISTER,
+    REGISTRY.BLUEPRINT_FINANCIAL_PROJECTION,
+    REGISTRY.BLUEPRINT_LAUNCH_READINESS,
+    REGISTRY.BLUEPRINT_SPRINT_PLAN,
+    REGISTRY.BLUEPRINT_PROMOTION_GATE,
   ];
 
   it('exports all 11 artifact types', () => {
@@ -190,16 +191,16 @@ describe('orchestrate', () => {
     await orchestrate({ name: 'Test' }, { executeAgent });
 
     // erd_diagram depends on data_model — verify it received that upstream result
-    const erdContext = receivedContexts.get('erd_diagram');
-    expect(erdContext.upstream.data_model).toEqual({ result: 'data_model' });
+    const erdContext = receivedContexts.get(REGISTRY.BLUEPRINT_ERD_DIAGRAM);
+    expect(erdContext.upstream[REGISTRY.BLUEPRINT_DATA_MODEL]).toEqual({ result: REGISTRY.BLUEPRINT_DATA_MODEL });
 
     // promotion_gate depends on launch_readiness and financial_projection
-    const gateContext = receivedContexts.get('promotion_gate');
-    expect(gateContext.upstream.launch_readiness).toEqual({ result: 'launch_readiness' });
-    expect(gateContext.upstream.financial_projection).toEqual({ result: 'financial_projection' });
+    const gateContext = receivedContexts.get(REGISTRY.BLUEPRINT_PROMOTION_GATE);
+    expect(gateContext.upstream[REGISTRY.BLUEPRINT_LAUNCH_READINESS]).toEqual({ result: REGISTRY.BLUEPRINT_LAUNCH_READINESS });
+    expect(gateContext.upstream[REGISTRY.BLUEPRINT_FINANCIAL_PROJECTION]).toEqual({ result: REGISTRY.BLUEPRINT_FINANCIAL_PROJECTION });
 
     // data_model has no dependencies — upstream should be empty
-    const dmContext = receivedContexts.get('data_model');
+    const dmContext = receivedContexts.get(REGISTRY.BLUEPRINT_DATA_MODEL);
     expect(Object.keys(dmContext.upstream)).toHaveLength(0);
   });
 });
