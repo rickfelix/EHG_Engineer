@@ -8,9 +8,9 @@
 **Rows**: 3
 **RLS**: Enabled (5 policies)
 
-⚠️ **This is a REFERENCE document** - Query database directly for validation
+> **This is a REFERENCE document** - Query database directly for validation
 
-⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in EHG_Engineer (this repository)
+> **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in EHG_Engineer (this repository)
 
 ---
 
@@ -21,7 +21,7 @@
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | venture_id | `uuid` | **NO** | - | - |
 | lifecycle_stage | `integer(32)` | **NO** | - | - |
-| artifact_type | `character varying(50)` | **NO** | - | Types: idea_brief, critique_report, validation_report, competitive_analysis, financial_model, risk_matrix, pricing_model, business_model_canvas, exit_strategy, strategic_narrative, marketing_manifest, brand_name, brand_guidelines, sales_playbook, tech_stack_decision, data_model, erd_diagram, user_story_pack, api_contract, schema_spec, system_prompt, cicd_config, deployment_config, launch_checklist, analytics_dashboard, optimization_plan |
+| artifact_type | `character varying(50)` | **NO** | - | Artifact type using `{phase_prefix}_{descriptive_name}` convention. Enforced by CHECK constraint. See `lib/eva/artifact-types.js` for the centralized registry (single source of truth). Phase prefixes: `intake_` (Stage 0), `truth_` (S1-5), `engine_` (S6-9), `identity_` (S10-12), `blueprint_` (S13-16), `build_` (S17-20), `launch_` (S21-25), `system_` (cross-cutting). Valid types listed in [Artifact Types](#artifact-types) section below. |
 | title | `character varying(255)` | **NO** | - | - |
 | content | `text` | YES | - | - |
 | file_url | `text` | YES | - | - |
@@ -44,15 +44,35 @@
 | source | `character varying(100)` | YES | - | - |
 | artifact_data | `jsonb` | YES | - | - |
 
+## Artifact Types
+
+> **Single source of truth**: `lib/eva/artifact-types.js`
+>
+> All artifact types follow the `{phase_prefix}_{descriptive_name}` naming convention
+> (SD-LEO-INFRA-EVA-ARTIFACT-NAMING-001). A CHECK constraint on `venture_artifacts.artifact_type`
+> enforces only valid new names.
+
+| Phase | Prefix | Artifact Types |
+|-------|--------|----------------|
+| Stage 0 (Intake) | `intake_` | `intake_venture_analysis` |
+| THE TRUTH (S1-5) | `truth_` | `truth_idea_brief`, `truth_ai_critique`, `truth_validation_decision`, `truth_competitive_analysis`, `truth_financial_model`, `truth_problem_statement`, `truth_target_market_analysis`, `truth_value_proposition` |
+| THE ENGINE (S6-9) | `engine_` | `engine_risk_matrix`, `engine_pricing_model`, `engine_business_model_canvas`, `engine_exit_strategy`, `engine_risk_assessment`, `engine_revenue_model` |
+| THE IDENTITY (S10-12) | `identity_` | `identity_persona_brand`, `identity_brand_guidelines`, `identity_naming_visual`, `identity_brand_name`, `identity_gtm_sales_strategy` |
+| THE BLUEPRINT (S13-16) | `blueprint_` | `blueprint_product_roadmap`, `blueprint_technical_architecture`, `blueprint_data_model`, `blueprint_erd_diagram`, `blueprint_api_contract`, `blueprint_schema_spec`, `blueprint_risk_register`, `blueprint_user_story_pack`, `blueprint_wireframes`, `blueprint_financial_projection`, `blueprint_launch_readiness`, `blueprint_sprint_plan`, `blueprint_promotion_gate`, `blueprint_project_plan` |
+| THE BUILD (S17-20) | `build_` | `build_system_prompt`, `build_cicd_config`, `build_security_audit`, `build_mvp_build`, `build_test_coverage_report` |
+| LAUNCH & LEARN (S21-25) | `launch_` | `launch_test_plan`, `launch_uat_report`, `launch_deployment_runbook`, `launch_marketing_checklist`, `launch_analytics_dashboard`, `launch_health_scoring`, `launch_churn_triggers`, `launch_retention_playbook`, `launch_optimization_roadmap`, `launch_assumptions_vs_reality`, `launch_launch_metrics`, `launch_user_feedback_summary`, `launch_production_app` |
+| Cross-cutting | `system_` | `system_devils_advocate_review` |
+
 ## Constraints
 
 ### Primary Key
 - `venture_artifacts_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
-- `venture_artifacts_venture_id_fkey`: venture_id → ventures(id)
+- `venture_artifacts_venture_id_fkey`: venture_id -> ventures(id)
 
 ### Check Constraints
+- `venture_artifacts_artifact_type_check`: CHECK (artifact_type is one of the valid types listed above)
 - `venture_artifacts_epistemic_classification_check`: CHECK ((epistemic_classification = ANY (ARRAY['fact'::text, 'assumption'::text, 'simulation'::text, 'unknown'::text])))
 - `venture_artifacts_indexing_status_check`: CHECK ((indexing_status = ANY (ARRAY['pending'::text, 'indexed'::text, 'failed'::text, 'skipped'::text])))
 - `venture_artifacts_quality_score_check`: CHECK (((quality_score >= 0) AND (quality_score <= 100)))
@@ -142,4 +162,4 @@
 
 ---
 
-[← Back to Schema Overview](../database-schema-overview.md)
+[< Back to Schema Overview](../database-schema-overview.md)
