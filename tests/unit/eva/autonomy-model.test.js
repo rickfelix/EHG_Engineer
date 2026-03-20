@@ -33,27 +33,49 @@ describe('autonomy-model', () => {
 
   describe('GATE_BEHAVIOR_MATRIX', () => {
     it('L0 is all manual', () => {
-      expect(GATE_BEHAVIOR_MATRIX.L0).toEqual({
+      expect(GATE_BEHAVIOR_MATRIX.L0).toMatchObject({
         stage_gate: 'manual',
+        kill_gate: 'manual',
+        promotion_gate: 'manual',
         reality_gate: 'manual',
         devils_advocate: 'manual',
       });
     });
 
-    it('L1 auto-approves stage gates but not reality gates', () => {
+    it('L1 auto-approves stage gates but not reality/kill/promotion gates', () => {
       expect(GATE_BEHAVIOR_MATRIX.L1.stage_gate).toBe('auto_approve');
+      expect(GATE_BEHAVIOR_MATRIX.L1.kill_gate).toBe('manual');
+      expect(GATE_BEHAVIOR_MATRIX.L1.promotion_gate).toBe('manual');
       expect(GATE_BEHAVIOR_MATRIX.L1.reality_gate).toBe('manual');
     });
 
-    it('L4 auto-approves all gates and skips DA', () => {
+    it('kill gates are always manual at every autonomy level', () => {
+      for (const level of LEVEL_ORDER) {
+        expect(GATE_BEHAVIOR_MATRIX[level].kill_gate).toBe('manual');
+      }
+    });
+
+    it('promotion gates are manual at L0-L1, auto at L2+', () => {
+      expect(GATE_BEHAVIOR_MATRIX.L0.promotion_gate).toBe('manual');
+      expect(GATE_BEHAVIOR_MATRIX.L1.promotion_gate).toBe('manual');
+      expect(GATE_BEHAVIOR_MATRIX.L2.promotion_gate).toBe('auto_approve');
+      expect(GATE_BEHAVIOR_MATRIX.L3.promotion_gate).toBe('auto_approve');
+      expect(GATE_BEHAVIOR_MATRIX.L4.promotion_gate).toBe('auto_approve');
+    });
+
+    it('L4 auto-approves all gates except kill and skips DA', () => {
       expect(GATE_BEHAVIOR_MATRIX.L4.stage_gate).toBe('auto_approve');
+      expect(GATE_BEHAVIOR_MATRIX.L4.kill_gate).toBe('manual');
+      expect(GATE_BEHAVIOR_MATRIX.L4.promotion_gate).toBe('auto_approve');
       expect(GATE_BEHAVIOR_MATRIX.L4.reality_gate).toBe('auto_approve');
       expect(GATE_BEHAVIOR_MATRIX.L4.devils_advocate).toBe('skip');
     });
 
-    it('every level has all three gate types', () => {
+    it('every level has all five gate types', () => {
       for (const level of LEVEL_ORDER) {
         expect(GATE_BEHAVIOR_MATRIX[level]).toHaveProperty('stage_gate');
+        expect(GATE_BEHAVIOR_MATRIX[level]).toHaveProperty('kill_gate');
+        expect(GATE_BEHAVIOR_MATRIX[level]).toHaveProperty('promotion_gate');
         expect(GATE_BEHAVIOR_MATRIX[level]).toHaveProperty('reality_gate');
         expect(GATE_BEHAVIOR_MATRIX[level]).toHaveProperty('devils_advocate');
       }
@@ -66,7 +88,7 @@ describe('autonomy-model', () => {
         from: () => ({
           select: () => ({
             eq: () => ({
-              single: () => Promise.resolve({ data: { autonomy_level: 'L0' }, error: null }),
+              maybeSingle: () => Promise.resolve({ data: { autonomy_level: 'L0' }, error: null }),
             }),
           }),
         }),
@@ -81,7 +103,7 @@ describe('autonomy-model', () => {
         from: () => ({
           select: () => ({
             eq: () => ({
-              single: () => Promise.resolve({ data: { autonomy_level: 'L2' }, error: null }),
+              maybeSingle: () => Promise.resolve({ data: { autonomy_level: 'L2' }, error: null }),
             }),
           }),
         }),
@@ -96,7 +118,7 @@ describe('autonomy-model', () => {
         from: () => ({
           select: () => ({
             eq: () => ({
-              single: () => Promise.resolve({ data: null, error: { message: 'not found' } }),
+              maybeSingle: () => Promise.resolve({ data: null, error: { message: 'not found' } }),
             }),
           }),
         }),
@@ -106,12 +128,57 @@ describe('autonomy-model', () => {
       expect(result.level).toBe('L0');
     });
 
+    it('returns manual for kill_gate even at L4', async () => {
+      const supabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: { autonomy_level: 'L4' }, error: null }),
+            }),
+          }),
+        }),
+      };
+      const result = await checkAutonomy('v1', 'kill_gate', { supabase });
+      expect(result.action).toBe('manual');
+      expect(result.level).toBe('L4');
+    });
+
+    it('returns auto_approve for promotion_gate at L2+', async () => {
+      const supabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: { autonomy_level: 'L2' }, error: null }),
+            }),
+          }),
+        }),
+      };
+      const result = await checkAutonomy('v1', 'promotion_gate', { supabase });
+      expect(result.action).toBe('auto_approve');
+      expect(result.level).toBe('L2');
+    });
+
+    it('returns manual for promotion_gate at L1', async () => {
+      const supabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: { autonomy_level: 'L1' }, error: null }),
+            }),
+          }),
+        }),
+      };
+      const result = await checkAutonomy('v1', 'promotion_gate', { supabase });
+      expect(result.action).toBe('manual');
+      expect(result.level).toBe('L1');
+    });
+
     it('defaults to L0 for null autonomy_level', async () => {
       const supabase = {
         from: () => ({
           select: () => ({
             eq: () => ({
-              single: () => Promise.resolve({ data: { autonomy_level: null }, error: null }),
+              maybeSingle: () => Promise.resolve({ data: { autonomy_level: null }, error: null }),
             }),
           }),
         }),
@@ -150,7 +217,7 @@ describe('autonomy-model', () => {
       from: () => ({
         select: () => ({
           eq: () => ({
-            single: () => Promise.resolve({ data: { autonomy_level: level }, error: null }),
+            maybeSingle: () => Promise.resolve({ data: { autonomy_level: level }, error: null }),
           }),
         }),
       }),

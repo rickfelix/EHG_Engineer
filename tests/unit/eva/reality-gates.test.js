@@ -125,7 +125,7 @@ describe('RealityGates', () => {
       expect(result.reasons).toHaveLength(0);
     });
 
-    it('should FAIL when required artifact is missing', async () => {
+    it('should BLOCK when required artifact is missing', async () => {
       const artifacts = [
         { artifact_type: 'problem_statement', quality_score: 0.8, is_current: true },
       ];
@@ -136,12 +136,13 @@ describe('RealityGates', () => {
         supabase: createMockDb(artifacts),
         logger: silentLogger,
       });
-      expect(result.status).toBe('FAIL');
+      expect(result.status).toBe('BLOCKED');
+      expect(result.passed).toBe(false);
       const missingReasons = result.reasons.filter(r => r.code === REASON_CODES.ARTIFACT_MISSING);
       expect(missingReasons.length).toBe(2);
     });
 
-    it('should FAIL when quality score is below threshold', async () => {
+    it('should BLOCK when quality score is below threshold', async () => {
       const artifacts = [
         { artifact_type: 'problem_statement', quality_score: 0.3, is_current: true },
         { artifact_type: 'target_market_analysis', quality_score: 0.5, is_current: true },
@@ -154,12 +155,13 @@ describe('RealityGates', () => {
         supabase: createMockDb(artifacts),
         logger: silentLogger,
       });
-      expect(result.status).toBe('FAIL');
+      expect(result.status).toBe('BLOCKED');
+      expect(result.passed).toBe(false);
       const qualityReasons = result.reasons.filter(r => r.code === REASON_CODES.QUALITY_SCORE_BELOW_THRESHOLD);
       expect(qualityReasons.length).toBe(1);
     });
 
-    it('should FAIL when quality score is null', async () => {
+    it('should BLOCK when quality score is null', async () => {
       const artifacts = [
         { artifact_type: 'problem_statement', quality_score: null, is_current: true },
         { artifact_type: 'target_market_analysis', quality_score: 0.5, is_current: true },
@@ -172,7 +174,8 @@ describe('RealityGates', () => {
         supabase: createMockDb(artifacts),
         logger: silentLogger,
       });
-      expect(result.status).toBe('FAIL');
+      expect(result.status).toBe('BLOCKED');
+      expect(result.passed).toBe(false);
       const missingScore = result.reasons.find(r => r.code === REASON_CODES.QUALITY_SCORE_MISSING);
       expect(missingScore).toBeDefined();
     });
@@ -212,7 +215,7 @@ describe('RealityGates', () => {
       expect(httpClient).toHaveBeenCalled();
     });
 
-    it('should FAIL when URL is unreachable', async () => {
+    it('should BLOCK when URL is unreachable', async () => {
       const artifacts = [
         { artifact_type: 'mvp_build', quality_score: 0.8, file_url: 'https://app.example.com', is_current: true },
         { artifact_type: 'test_coverage_report', quality_score: 0.7, is_current: true },
@@ -227,9 +230,32 @@ describe('RealityGates', () => {
         httpClient,
         logger: silentLogger,
       });
-      expect(result.status).toBe('FAIL');
+      expect(result.status).toBe('BLOCKED');
       const urlReason = result.reasons.find(r => r.code === REASON_CODES.URL_UNREACHABLE);
       expect(urlReason).toBeDefined();
+    });
+
+    it('should skip URL verification in simulation mode', async () => {
+      const artifacts = [
+        { artifact_type: 'mvp_build', quality_score: 0.8, file_url: null, is_current: true },
+        { artifact_type: 'test_coverage_report', quality_score: 0.7, is_current: true },
+        { artifact_type: 'deployment_runbook', quality_score: 0.6, is_current: true },
+      ];
+      const httpClient = vi.fn();
+      const result = await evaluateRealityGate({
+        ventureId: 'v1',
+        fromStage: 16,
+        toStage: 17,
+        supabase: createMockDb(artifacts),
+        httpClient,
+        simulationMode: true,
+        logger: silentLogger,
+      });
+      expect(result.status).toBe('PASS');
+      expect(result.simulation_mode).toBe(true);
+      expect(httpClient).not.toHaveBeenCalled();
+      const urlReasons = result.reasons.filter(r => r.code === REASON_CODES.URL_UNREACHABLE);
+      expect(urlReasons).toHaveLength(0);
     });
   });
 
