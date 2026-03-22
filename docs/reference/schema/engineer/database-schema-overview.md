@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-22T06:02:31.922Z
+**Generated**: 2026-03-22T07:40:45.312Z
 **Tables**: 590
 **Source**: Supabase PostgreSQL introspection
 
@@ -336,7 +336,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [leo_vetting_rubrics](tables/leo_vetting_rubrics.md) | 1 | ✅ | 2 | Versioned rubrics for evaluating proposals |
 | [leo_workflow_phases](tables/leo_workflow_phases.md) | 0 | ✅ | 2 | - |
 | [lifecycle_phases](tables/lifecycle_phases.md) | 6 | ✅ | 2 | Venture Vision v2.0 - 6 Phase Definitions |
-| [lifecycle_stage_config](tables/lifecycle_stage_config.md) | 25 | ✅ | 5 | 25-stage venture lifecycle configuration. Stage 10 (Strategic Narrative & Positioning)
+| [lifecycle_stage_config](tables/lifecycle_stage_config.md) | 26 | ✅ | 5 | 25-stage venture lifecycle configuration. Stage 10 (Strategic Narrative & Positioning)
 includes cultural_design_config artifact for venture-based design style selection.
 Reference: docs/workflow/stages_v2.yaml |
 | [llm_canary_metrics](tables/llm_canary_metrics.md) | 0 | ✅ | 1 | Rolling window metrics. Consider BRIN index or partitioning for high volume. |
@@ -387,7 +387,7 @@ Reference: docs/workflow/stages_v2.yaml |
 | [outcome_signals](tables/outcome_signals.md) | 1,139 | ✅ | 1 | - |
 | [pattern_occurrences](tables/pattern_occurrences.md) | 0 | ✅ | 1 | Tracks individual pattern occurrences for trend calculation. |
 | [pattern_resolution_signals](tables/pattern_resolution_signals.md) | 0 | ✅ | 1 | Signals indicating pattern resolution for evidence tracking |
-| [pattern_subagent_mapping](tables/pattern_subagent_mapping.md) | 147 | ✅ | 3 | RLS: Service role write, authenticated read |
+| [pattern_subagent_mapping](tables/pattern_subagent_mapping.md) | 150 | ✅ | 3 | RLS: Service role write, authenticated read |
 | [pending_ceo_handoffs](tables/pending_ceo_handoffs.md) | 0 | ✅ | 2 | Persists pending CEO handoff reviews. Replaces in-memory Map in venture-state-machine.js.
 Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [persona_behavioral_data](tables/persona_behavioral_data.md) | 0 | ✅ | 4 | Anonymized behavioral pattern aggregations per persona segment for Portfolio Intelligence Phase 2 |
@@ -604,7 +604,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [user_organizations](tables/user_organizations.md) | 0 | ✅ | 1 | Multi-tenant user-organization membership for RLS policies |
 | [user_preferences](tables/user_preferences.md) | 2 | ✅ | 2 | - |
 | [user_stories](tables/user_stories.md) | 6,125 | ✅ | 3 | RLS enabled: service_role full access, authenticated read-only |
-| [validation_audit_log](tables/validation_audit_log.md) | 46,752 | ✅ | 1 | Audit log for LEO Protocol validation failures including bypass detection, coverage validation, and gate failures |
+| [validation_audit_log](tables/validation_audit_log.md) | 46,862 | ✅ | 1 | Audit log for LEO Protocol validation failures including bypass detection, coverage validation, and gate failures |
 | [validation_evidence](tables/validation_evidence.md) | 0 | ✅ | 2 | - |
 | [validation_gate_registry](tables/validation_gate_registry.md) | 99 | ✅ | 2 | Database-first policy for validation gate applicability per SD type and validation profile. Part of SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001. |
 | [venture_archetypes](tables/venture_archetypes.md) | 14 | ✅ | 5 | Recurring venture patterns with visual themes and historical performance data. Stage 0 uses archetype recognition to trigger specific benchmarks, pitfalls, and strategies. |
