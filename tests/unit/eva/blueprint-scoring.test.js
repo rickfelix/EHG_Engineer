@@ -10,8 +10,8 @@ import { scoreAndPersist, seedDefaultRubrics, getLatestReadiness, getLatestAsses
 // --- Rubric Definitions ---
 
 describe('RubricDefinitions', () => {
-  it('defines rubrics for all 11 artifact types', () => {
-    expect(ARTIFACT_TYPES).toHaveLength(11);
+  it('defines rubrics for all 12 artifact types', () => {
+    expect(ARTIFACT_TYPES).toHaveLength(12);
     for (const type of ARTIFACT_TYPES) {
       expect(RUBRIC_DEFINITIONS[type]).toBeDefined();
     }
@@ -78,7 +78,7 @@ describe('CrossArtifactConsistencyChecker', () => {
   it('returns no penalties when all references match', () => {
     const artifacts = {
       [AT.BLUEPRINT_API_CONTRACT]: { endpoints: ['users', 'orders'] },
-      [AT.BLUEPRINT_LAUNCH_READINESS]: { screens: ['users', 'orders'] },
+      [AT.BLUEPRINT_WIREFRAMES]: { screens: ['users', 'orders'] },
       [AT.BLUEPRINT_USER_STORY_PACK]: { stories: ['create user', 'view orders'] },
       [AT.BLUEPRINT_DATA_MODEL]: { entities: ['User', 'Order'] },
       [AT.BLUEPRINT_ERD_DIAGRAM]: { entities: ['User', 'Order'] },
@@ -91,7 +91,7 @@ describe('CrossArtifactConsistencyChecker', () => {
   it('detects orphaned API endpoints', () => {
     const artifacts = {
       [AT.BLUEPRINT_API_CONTRACT]: { endpoints: ['users', 'orders', 'payments'] },
-      [AT.BLUEPRINT_LAUNCH_READINESS]: { screens: ['users'] },
+      [AT.BLUEPRINT_WIREFRAMES]: { screens: ['users'] },
     };
     const result = checkConsistency(artifacts);
     expect(result.penalties.length).toBeGreaterThan(0);
@@ -136,7 +136,7 @@ describe('ReadinessScoreCalculator', () => {
     const consistency = { totalPenalty: 0, penalties: [] };
     const result = calculateReadiness(scores, consistency);
     expect(result.readinessScore).toBeLessThan(80);
-    expect(result.missingArtifacts).toHaveLength(3);
+    expect(result.missingArtifacts).toHaveLength(4);
     expect(result.breakdown.presentCount).toBe(8);
   });
 
@@ -151,7 +151,7 @@ describe('ReadinessScoreCalculator', () => {
   it('handles empty input', () => {
     const result = calculateReadiness([], { totalPenalty: 0, penalties: [] });
     expect(result.readinessScore).toBe(0);
-    expect(result.missingArtifacts).toHaveLength(11);
+    expect(result.missingArtifacts).toHaveLength(12);
   });
 });
 
@@ -252,6 +252,7 @@ describe('End-to-End Scoring Flow', () => {
       [AT.BLUEPRINT_LAUNCH_READINESS]: { screens: ['users', 'orders'], checklist: [], dimensions: {} },
       [AT.BLUEPRINT_SPRINT_PLAN]: { sprints: [{ stories: ['create user', 'place order'] }] },
       [AT.BLUEPRINT_PROMOTION_GATE]: { criteria: {}, decision: 'promote', evidence: {} },
+      [AT.BLUEPRINT_WIREFRAMES]: { screens: [{ name: 'Dashboard' }, { name: 'Onboarding' }], navigation_flows: [{ from: 'Dashboard', to: 'Onboarding', trigger: 'click' }], persona_coverage: {} },
     };
 
     // Score each artifact
@@ -272,7 +273,7 @@ describe('End-to-End Scoring Flow', () => {
     const readiness = calculateReadiness(scores, consistency);
     expect(readiness.readinessScore).toBeGreaterThan(0);
     expect(readiness.missingArtifacts).toHaveLength(0);
-    expect(readiness.breakdown.presentCount).toBe(11);
+    expect(readiness.breakdown.presentCount).toBe(12);
 
     // Gate decision
     const gate = evaluateGate(readiness);
