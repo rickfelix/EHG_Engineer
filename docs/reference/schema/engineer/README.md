@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-22T16:30:13.945Z
-**Tables**: 590
+**Generated**: 2026-03-22T18:00:11.108Z
+**Tables**: 592
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (590)
+## All Tables (592)
 
 ### LEO Protocol
 
@@ -597,6 +597,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_briefs](tables/venture_briefs.md)
 - [venture_capabilities](tables/venture_capabilities.md)
 - [venture_competitive_analysis](tables/venture_competitive_analysis.md)
+- [venture_compliance](tables/venture_compliance.md)
 - [venture_compliance_artifacts](tables/venture_compliance_artifacts.md)
 - [venture_compliance_progress](tables/venture_compliance_progress.md)
 - [venture_data_room_artifacts](tables/venture_data_room_artifacts.md)
@@ -608,6 +609,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_exit_readiness](tables/venture_exit_readiness.md)
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_financial_projections](tables/venture_financial_projections.md)
+- [venture_fundamentals](tables/venture_fundamentals.md)
 - [venture_market_analysis](tables/venture_market_analysis.md)
 - [venture_milestones](tables/venture_milestones.md)
 - [venture_nursery](tables/venture_nursery.md)
