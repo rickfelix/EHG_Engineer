@@ -507,7 +507,7 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
 
       // Add artifacts for reality gate at 16->17
       if (stage === 16) {
-        state.artifacts.push(...buildBoundaryArtifacts('16->17'));
+        state.artifacts.push(...buildBoundaryArtifacts('17->18'));
       }
 
       const result = await processStage(
@@ -780,7 +780,7 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
       expect(boundaries).toContain('5->6');
       expect(boundaries).toContain('9->10');
       expect(boundaries).toContain('12->13');
-      expect(boundaries).toContain('16->17');
+      expect(boundaries).toContain('17->18');
       expect(boundaries).toContain('22->23');
     });
 
@@ -817,7 +817,7 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
         state.venture.current_lifecycle_stage = stage;
 
         // Seed boundary artifacts
-        const boundaries = ['5->6', '9->10', '12->13', '16->17', '22->23'];
+        const boundaries = ['5->6', '9->10', '12->13', '17->18', '23->24'];
         for (const b of boundaries) {
           const [from] = b.split('->').map(Number);
           if (stage === from) {

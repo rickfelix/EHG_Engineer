@@ -454,7 +454,7 @@ describe('Eva Orchestrator Integration', () => {
       expect(boundaries).toContain('5->6');
       expect(boundaries).toContain('9->10');
       expect(boundaries).toContain('12->13');
-      expect(boundaries).toContain('16->17');
+      expect(boundaries).toContain('17->18');
       expect(boundaries).toContain('22->23');
 
       // Each boundary has 3 required artifacts
