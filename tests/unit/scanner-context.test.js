@@ -18,11 +18,11 @@ function mockSupabase(data = [], error = null) {
 }
 
 const SAMPLE_CAPABILITIES = [
-  { capability_name: 'AI Image Classification', capability_type: 'ai_automation', plane1_score: 18.5, maturity_score: 4, reuse_count: 3, sd_key: 'SD-IMG-001', scored_at: '2026-03-01T00:00:00Z' },
-  { capability_name: 'Natural Language Processing', capability_type: 'ai_automation', plane1_score: 16.2, maturity_score: 3, reuse_count: 5, sd_key: 'SD-NLP-001', scored_at: '2026-03-02T00:00:00Z' },
-  { capability_name: 'Supabase Integration', capability_type: 'infrastructure', plane1_score: 14.0, maturity_score: 5, reuse_count: 10, sd_key: 'SD-INFRA-001', scored_at: '2026-02-15T00:00:00Z' },
-  { capability_name: 'Payment Processing', capability_type: 'integration', plane1_score: 12.0, maturity_score: 3, reuse_count: 2, sd_key: 'SD-PAY-001', scored_at: '2026-02-20T00:00:00Z' },
-  { capability_name: 'Automated Reporting', capability_type: 'application', plane1_score: 10.5, maturity_score: 2, reuse_count: 1, sd_key: 'SD-RPT-001', scored_at: '2026-03-03T00:00:00Z' },
+  { capability_key: 'ai_image_classification', name: 'AI Image Classification', capability_type: 'ai_automation', plane1_score: 18.5, maturity_score: 4, reuse_count: 3, registered_by_sd: 'SD-IMG-001', first_registered_at: '2026-03-01T00:00:00Z' },
+  { capability_key: 'natural_language_processing', name: 'Natural Language Processing', capability_type: 'ai_automation', plane1_score: 16.2, maturity_score: 3, reuse_count: 5, registered_by_sd: 'SD-NLP-001', first_registered_at: '2026-03-02T00:00:00Z' },
+  { capability_key: 'supabase_integration', name: 'Supabase Integration', capability_type: 'infrastructure', plane1_score: 14.0, maturity_score: 5, reuse_count: 10, registered_by_sd: 'SD-INFRA-001', first_registered_at: '2026-02-15T00:00:00Z' },
+  { capability_key: 'payment_processing', name: 'Payment Processing', capability_type: 'integration', plane1_score: 12.0, maturity_score: 3, reuse_count: 2, registered_by_sd: 'SD-PAY-001', first_registered_at: '2026-02-20T00:00:00Z' },
+  { capability_key: 'automated_reporting', name: 'Automated Reporting', capability_type: 'application', plane1_score: 10.5, maturity_score: 2, reuse_count: 1, registered_by_sd: 'SD-RPT-001', first_registered_at: '2026-03-03T00:00:00Z' },
 ];
 
 describe('getCapabilityContextBlock', () => {
@@ -87,13 +87,14 @@ describe('getCapabilityContextBlock', () => {
   it('enforces 2000 character cap', async () => {
     // Create a large capability set
     const largeSet = Array.from({ length: 20 }, (_, i) => ({
-      capability_name: `Very Long Capability Name That Takes Up Space Number ${i + 1} With Extra Description`,
+      capability_key: `very_long_capability_${i + 1}`,
+      name: `Very Long Capability Name That Takes Up Space Number ${i + 1} With Extra Description`,
       capability_type: 'ai_automation',
       plane1_score: 20 - i,
       maturity_score: 5,
       reuse_count: i,
-      sd_key: `SD-LONG-${i}`,
-      scored_at: '2026-03-01T00:00:00Z',
+      registered_by_sd: `SD-LONG-${i}`,
+      first_registered_at: '2026-03-01T00:00:00Z',
     }));
 
     const supabase = mockSupabase(largeSet);
