@@ -1,0 +1,28 @@
+{
+  "name": "@ehg/lint-config",
+  "version": "1.0.0",
+  "description": "EHG ESLint + Prettier configuration for React TypeScript projects",
+  "license": "MIT",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js"
+  ],
+  "peerDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "eslint-plugin-jsx-a11y": "^6.0.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "keywords": ["eslint", "prettier", "ehg", "typescript", "react"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rickfelix/EHG_Engineer.git",
+    "directory": "packages/lint-config"
+  }
+}

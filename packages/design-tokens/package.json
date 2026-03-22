@@ -1,0 +1,29 @@
+{
+  "name": "@ehg/design-tokens",
+  "version": "1.0.0",
+  "description": "EHG Design Token System - Three-tier hierarchy (brand, semantic, component)",
+  "license": "MIT",
+  "main": "tokens.json",
+  "types": "types.d.ts",
+  "exports": {
+    ".": "./tokens.json",
+    "./css": "./tokens.css",
+    "./brand": "./brand.json",
+    "./semantic": "./semantic.json",
+    "./component": "./component.json"
+  },
+  "files": [
+    "tokens.json",
+    "tokens.css",
+    "brand.json",
+    "semantic.json",
+    "component.json",
+    "types.d.ts"
+  ],
+  "keywords": ["design-tokens", "ehg", "css-variables", "tailwind"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rickfelix/EHG_Engineer.git",
+    "directory": "packages/design-tokens"
+  }
+}
