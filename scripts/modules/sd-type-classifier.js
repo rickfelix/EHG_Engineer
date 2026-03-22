@@ -456,11 +456,11 @@ async function main() {
   if (args[0] === '--test') {
     // Test with SD-VISION-TRANSITION-001D6
     const testSd = {
-      title: 'Phase 6 Stages: LAUNCH & LEARN (Stages 21-25)',
-      scope: `DELIVERABLE: Complete working UI/UX, forms, APIs, and AI agents for Stages 21-25 (LAUNCH & LEARN phase).
+      title: 'Phase 6 Stages: LAUNCH & LEARN (Stages 24-26)',
+      scope: `DELIVERABLE: Complete working UI/UX, forms, APIs, and AI agents for Stages 24-26 (LAUNCH & LEARN phase).
 BUILD REQUIREMENTS:
-1. UI/Forms: QA test runner, deployment dashboard, launch checklist, analytics viewer
-2. Stage Components: Stage21QA, Stage22Deployment, Stage23Launch, Stage24Analytics, Stage25Optimization`,
+1. UI/Forms: Marketing prep dashboard, launch checklist, analytics viewer
+2. Stage Components: Stage24MarketingPreparation, Stage25LaunchReadiness, Stage26LaunchExecution`,
       description: 'Implement the final phase of the venture lifecycle with React components for QA, deployment, launch, analytics, and optimization stages.',
       sd_type: 'infrastructure'
     };
