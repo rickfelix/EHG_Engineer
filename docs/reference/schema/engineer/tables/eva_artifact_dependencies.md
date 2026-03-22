@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-22T07:47:56.894Z
+**Generated**: 2026-03-22T07:56:11.782Z
 **Rows**: 7
 **RLS**: Enabled (2 policies)
 
@@ -39,8 +39,8 @@
 
 ### Check Constraints
 - `eva_artifact_dependencies_check`: CHECK ((source_stage < target_stage))
-- `eva_artifact_dependencies_source_stage_check`: CHECK (((source_stage >= 1) AND (source_stage <= 25)))
-- `eva_artifact_dependencies_target_stage_check`: CHECK (((target_stage >= 1) AND (target_stage <= 25)))
+- `eva_artifact_dependencies_source_stage_check`: CHECK (((source_stage >= 1) AND (source_stage <= 26)))
+- `eva_artifact_dependencies_target_stage_check`: CHECK (((target_stage >= 1) AND (target_stage <= 26)))
 - `eva_artifact_dependencies_validation_status_check`: CHECK ((validation_status = ANY (ARRAY['pending'::text, 'validated'::text, 'missing'::text, 'invalid'::text])))
 
 ## Indexes

@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-22T07:47:56.894Z
+**Generated**: 2026-03-22T07:56:11.782Z
 **Rows**: 8
 **RLS**: Enabled (2 policies)
 
@@ -47,7 +47,7 @@
 ### Check Constraints
 - `compliance_events_event_type_check`: CHECK ((event_type = ANY (ARRAY['check_started'::text, 'check_completed'::text, 'check_failed'::text, 'violation_detected'::text, 'violation_resolved'::text, 'policy_changed'::text, 'remediation_created'::text])))
 - `compliance_events_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text, 'info'::text])))
-- `compliance_events_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 25)))
+- `compliance_events_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 26)))
 
 ## Indexes
 

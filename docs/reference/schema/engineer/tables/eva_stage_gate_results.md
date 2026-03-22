@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-22T07:47:56.894Z
+**Generated**: 2026-03-22T07:56:11.782Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -45,7 +45,7 @@
 ### Check Constraints
 - `eva_stage_gate_results_gate_type_check`: CHECK ((gate_type = ANY (ARRAY['entry'::text, 'exit'::text, 'kill'::text])))
 - `eva_stage_gate_results_overall_score_check`: CHECK (((overall_score >= (0)::numeric) AND (overall_score <= (100)::numeric)))
-- `eva_stage_gate_results_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 25)))
+- `eva_stage_gate_results_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 26)))
 
 ## Indexes
 
