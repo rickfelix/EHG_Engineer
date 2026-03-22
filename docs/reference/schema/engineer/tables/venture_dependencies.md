@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-22T07:47:56.894Z
+**Generated**: 2026-03-22T07:56:11.782Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -42,7 +42,7 @@
 ### Check Constraints
 - `no_self_dependency`: CHECK ((dependent_venture_id <> provider_venture_id))
 - `venture_dependencies_dependency_type_check`: CHECK ((dependency_type = ANY (ARRAY['hard'::text, 'soft'::text])))
-- `venture_dependencies_required_stage_check`: CHECK (((required_stage >= 1) AND (required_stage <= 25)))
+- `venture_dependencies_required_stage_check`: CHECK (((required_stage >= 1) AND (required_stage <= 26)))
 - `venture_dependencies_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'resolved'::text, 'blocked'::text])))
 
 ## Indexes
