@@ -2515,7 +2515,7 @@ const TEMPLATE = {
 ### CLI Implementation (Ground Truth)
 
 **Template**: `lib/eva/stage-templates/stage-13.js`
-**Phase**: THE BLUEPRINT (Stages 13-16) -- **first stage of Phase 4**
+**Phase**: THE BLUEPRINT (Stages 13-17) -- **first stage of Phase 4**
 **Type**: Passive validation + **active `computeDerived()`** (Kill Gate evaluation)
 
 **Schema (Input)**:
@@ -2757,7 +2757,7 @@ const TEMPLATE = {
 ### CLI Implementation (Ground Truth)
 
 **Template**: `lib/eva/stage-templates/stage-14.js`
-**Phase**: THE BLUEPRINT (Stages 13-16)
+**Phase**: THE BLUEPRINT (Stages 13-17)
 **Type**: Passive validation + **active `computeDerived()`** (layer count, component totals)
 
 **Schema (Input)**:
@@ -3011,7 +3011,7 @@ const TEMPLATE = {
 6. **P1**: Add `integration_type` enum + `deliverable_ref` to integration_points. Traceability to Stage 13.
 7. **P2**: Add `category` enum to constraints (budget/compliance/skillset/performance/legacy)
 8. **P2**: Add `scaling_strategy` field
-9. **P3**: Do NOT add full ERD / entity-field modeling (BUILD phase, Stages 17-22)
+9. **P3**: Do NOT add full ERD / entity-field modeling (BUILD phase, Stages 18-23)
 10. **P3**: Do NOT rename frontend→client (standard terminology, 2:1)
 11. **P3**: Do NOT add cost estimation fields (Stage 16's job)
 12. **P3**: Do NOT add reliability/latency/failure_impact to integration points (implementation detail)
@@ -3033,7 +3033,7 @@ const TEMPLATE = {
 ### CLI Implementation (Ground Truth)
 
 **Template**: `lib/eva/stage-templates/stage-15.js`
-**Phase**: THE BLUEPRINT (Stages 13-16)
+**Phase**: THE BLUEPRINT (Stages 13-17)
 **Type**: Passive validation + **active `computeDerived()`** (team totals)
 
 **Schema (Input)**:
@@ -3269,7 +3269,7 @@ const TEMPLATE = {
 ### CLI Implementation (Ground Truth)
 
 **Template**: `lib/eva/stage-templates/stage-16.js`
-**Phase**: THE BLUEPRINT (Stages 13-16) -- **final stage before BUILD LOOP**
+**Phase**: THE BLUEPRINT (Stages 13-17) -- **final stage before BUILD LOOP**
 **Type**: Passive validation + **active `computeDerived()`** (runway, break-even, promotion gate)
 
 **Schema (Input)**:
@@ -3294,7 +3294,7 @@ const TEMPLATE = {
 | `break_even_month` | number/null | First month where cumulative profit >= 0 |
 | `total_projected_revenue` | number | Sum of all revenue_projections[].revenue |
 | `total_projected_costs` | number | Sum of all revenue_projections[].costs |
-| `promotion_gate` | object | Phase 4→5 gate (checks Stages 13-16 completeness) |
+| `promotion_gate` | object | Phase 4→5 gate (checks Stages 13-17 completeness) |
 
 **Promotion Gate** (Phase 4→5):
 | Prerequisite | Condition |
@@ -3521,7 +3521,7 @@ const TEMPLATE = {
 ### CLI Implementation (Ground Truth)
 
 **Template**: `lib/eva/stage-templates/stage-17.js`
-**Phase**: THE BUILD LOOP (Stages 17-22) -- **first stage of BUILD phase**
+**Phase**: THE BUILD LOOP (Stages 18-23) -- **first stage of BUILD phase**
 **Type**: Passive validation + **active `computeDerived()`** (readiness percentage)
 
 **Schema (Input)**:
@@ -3562,7 +3562,7 @@ const TEMPLATE = {
 - `validate(data)`: Schema validation + per-item name/status checks
 - `computeDerived(data)`: Calculates readiness percentage, category completeness
 - **No `analysisStep`** -- all checklist items are user-provided
-- **No connection to Stages 13-16** -- architecture items don't reference Stage 14 decisions
+- **No connection to Stages 13-17** -- architecture items don't reference Stage 14 decisions
 - **No connection to Stage 16 promotion gate** -- no inheritance of Phase 4→5 gate results
 - **No go/no-go decision** -- readiness_pct is calculated but no threshold for proceeding
 - **No priority on items** -- all items treated equally
@@ -3576,7 +3576,7 @@ const TEMPLATE = {
 
 ### Key Gaps
 
-1. **No analysisStep**: Stages 13-16 contain structured data that directly implies checklist items. Stage 14 architecture decisions → architecture readiness items. Stage 15 team composition → team readiness items. Stage 14 technology choices → tooling items. But all items must be manually entered.
+1. **No analysisStep**: Stages 13-17 contain structured data that directly implies checklist items. Stage 14 architecture decisions → architecture readiness items. Stage 15 team composition → team readiness items. Stage 14 technology choices → tooling items. But all items must be manually entered.
 2. **No prior-stage seeding**: Each category should be pre-populated from BLUEPRINT outputs. Architecture items from Stage 14 layers/technologies, team items from Stage 15 members/skills, tooling from Stage 14 technology stack, dependencies from Stage 14 integration points.
 3. **No go/no-go threshold**: readiness_pct is calculated but there's no decision gate. When is the venture "ready to build"?
 4. **No priority on items**: Some items are blocking (can't start without CI/CD) while others are nice-to-have (documentation). No way to distinguish.
@@ -3719,7 +3719,7 @@ const TEMPLATE = {
 ### CLI Implementation (Ground Truth)
 
 **Template**: `lib/eva/stage-templates/stage-18.js`
-**Phase**: THE BUILD LOOP (Stages 17-22)
+**Phase**: THE BUILD LOOP (Stages 18-23)
 **Type**: Passive validation + **active `computeDerived()`** (SD Bridge payloads)
 
 **Schema (Input)**:
@@ -3934,7 +3934,7 @@ const TEMPLATE = {
 ### CLI Implementation (Ground Truth)
 
 **Template**: `lib/eva/stage-templates/stage-19.js`
-**Phase**: THE BUILD LOOP (Stages 17-22)
+**Phase**: THE BUILD LOOP (Stages 18-23)
 **Type**: Passive validation + **active `computeDerived()`** (completion tracking)
 
 **Schema (Input)**:
@@ -4151,7 +4151,7 @@ const TEMPLATE = {
 
 ## Stage 20: Quality Assurance
 
-**Phase**: THE BUILD LOOP (Stages 17-22)
+**Phase**: THE BUILD LOOP (Stages 18-23)
 
 ### CLI Implementation (Ground Truth)
 
@@ -4359,7 +4359,7 @@ const TEMPLATE = {
 
 ## Stage 21: Integration Testing
 
-**Phase**: THE BUILD LOOP (Stages 17-22)
+**Phase**: THE BUILD LOOP (Stages 18-23)
 
 ### CLI Implementation (Ground Truth)
 
@@ -4557,7 +4557,7 @@ const TEMPLATE = {
 
 ## Stage 22: Release Readiness
 
-**Phase**: THE BUILD LOOP (Stages 17-22) -- LAST stage of this phase
+**Phase**: THE BUILD LOOP (Stages 18-23) -- LAST stage of this phase
 
 ### CLI Implementation (Ground Truth)
 

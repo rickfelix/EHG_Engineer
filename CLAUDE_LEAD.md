@@ -1301,7 +1301,7 @@ Before LEAD approval, you MUST:
 **Additional questions for Vision V2 SDs:**
 
 1. **Spec Alignment**: Does the SD scope match the referenced spec sections?
-2. **25-Stage Insulation**: If SD touches agents/CEOs, does it maintain READ-ONLY access to venture_stage_work?
+2. **26-Stage Insulation**: If SD touches agents/CEOs, does it maintain READ-ONLY access to venture_stage_work?
 3. **Vision Document Traceability**: Are specific spec sections cited in the SD description?
 
 ### Implementation Guidance

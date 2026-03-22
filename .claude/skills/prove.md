@@ -4,7 +4,7 @@
 
 ## Instructions
 
-This skill guides the Chairman through the full venture lifecycle — from discovering an opportunity, through creating a venture, through proving all 25 stages. ALL user interaction MUST use AskUserQuestion. NEVER auto-advance past a gate — the Chairman always decides.
+This skill guides the Chairman through the full venture lifecycle — from discovering an opportunity, through creating a venture, through proving all 26 stages. ALL user interaction MUST use AskUserQuestion. NEVER auto-advance past a gate — the Chairman always decides.
 
 ### Step 0: Detect Context
 
@@ -123,7 +123,7 @@ Present a context-aware menu based on detected state:
     "header": "Proving",
     "multiSelect": false,
     "options": [
-      {"label": "Resume Proving Run (Recommended)", "description": "<venture name> — <N>/25 stages assessed, next gate is <G>"},
+      {"label": "Resume Proving Run (Recommended)", "description": "<venture name> — <N>/26 stages assessed, next gate is <G>"},
       {"label": "View Status", "description": "See progress, gap breakdown, and decisions so far"},
       {"label": "Find New Opportunity", "description": "Discover and start a new venture"},
       {"label": "Generate Report", "description": "Summary of what has been assessed so far"}
@@ -142,7 +142,7 @@ Present a context-aware menu based on detected state:
     "multiSelect": false,
     "options": [
       {"label": "Find an Opportunity (Recommended)", "description": "Discover a new venture opportunity using AI-driven research"},
-      {"label": "Prove an Existing Venture", "description": "Start a 25-stage proving run on one of your <N> ventures"},
+      {"label": "Prove an Existing Venture", "description": "Start a 26-stage proving run on one of your <N> ventures"},
       {"label": "View Past Runs", "description": "Browse completed proving run reports"}
     ]
   }]
@@ -313,7 +313,7 @@ Present next step:
     "header": "Venture Created",
     "multiSelect": false,
     "options": [
-      {"label": "Start Proving Run (Recommended)", "description": "Begin the 25-stage assessment for <venture_name>. First gate checkpoint is at Stage 3."},
+      {"label": "Start Proving Run (Recommended)", "description": "Begin the 26-stage assessment for <venture_name>. First gate checkpoint is at Stage 3."},
       {"label": "View Venture Details", "description": "See the full venture profile before starting"},
       {"label": "Find Another Opportunity", "description": "Discover more opportunities before committing to a proving run"}
     ]
@@ -501,16 +501,16 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 
 ### Step 9: Post-Completion
 
-When all 25 stages are assessed:
+When all 26 stages are assessed:
 
 ```javascript
 {
   "questions": [{
-    "question": "All 25 stages assessed! What would you like to do?",
+    "question": "All 26 stages assessed! What would you like to do?",
     "header": "Complete",
     "multiSelect": false,
     "options": [
-      {"label": "Persist Specialists (Recommended)", "description": "Create 25 Board of Directors stage experts. Improves future brainstorms and ventures."},
+      {"label": "Persist Specialists (Recommended)", "description": "Create 26 Board of Directors stage experts. Improves future brainstorms and ventures."},
       {"label": "Generate Report", "description": "Full summary with gap breakdown, decision tally, and stage completion rate."},
       {"label": "Find Next Opportunity", "description": "Start discovery for your next venture."},
       {"label": "Done", "description": "Return to main menu"}

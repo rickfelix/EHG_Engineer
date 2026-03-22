@@ -1,6 +1,6 @@
 # /prove — Venture Proving Companion
 
-Guide the Chairman through the venture proving lifecycle — from discovering an opportunity, through creating a venture, through proving stages 1-17 (THE_TRUTH → THE_IDENTITY → THE_BLUEPRINT → THE_BUILD entry gate). Stages 18-25 (build execution through launch) require venture-repo-aware assessment and will be addressed separately.
+Guide the Chairman through the venture proving lifecycle — from discovering an opportunity, through creating a venture, through proving stages 1-18 (THE_TRUTH → THE_IDENTITY → THE_BLUEPRINT → THE_BUILD entry gate). Stages 19-26 (build execution through launch) require venture-repo-aware assessment and will be addressed separately.
 
 ## Arguments
 
@@ -136,7 +136,7 @@ Present a context-aware menu based on detected state:
     "header": "Proving",
     "multiSelect": false,
     "options": [
-      {"label": "Resume Proving Run (Recommended)", "description": "<venture name> — <N>/17 stages assessed, next gate is <G>"},
+      {"label": "Resume Proving Run (Recommended)", "description": "<venture name> — <N>/18 stages assessed, next gate is <G>"},
       {"label": "View Status", "description": "See progress, gap breakdown, and decisions so far"},
       {"label": "Find New Opportunity", "description": "Discover and start a new venture"},
       {"label": "Generate Report", "description": "Summary of what has been assessed so far"}
@@ -155,7 +155,7 @@ Present a context-aware menu based on detected state:
     "multiSelect": false,
     "options": [
       {"label": "Find an Opportunity (Recommended)", "description": "Discover a new venture opportunity using AI-driven research"},
-      {"label": "Prove an Existing Venture", "description": "Start a 17-stage proving run on one of your <N> ventures"},
+      {"label": "Prove an Existing Venture", "description": "Start a 18-stage proving run on one of your <N> ventures"},
       {"label": "View Past Runs", "description": "Browse completed proving run reports"}
     ]
   }]
@@ -326,7 +326,7 @@ Present next step:
     "header": "Venture Created",
     "multiSelect": false,
     "options": [
-      {"label": "Start Proving Run (Recommended)", "description": "Begin the 17-stage proving assessment for <venture_name>. First gate checkpoint is at Stage 3, final gate is Stage 17 (Build Readiness)."},
+      {"label": "Start Proving Run (Recommended)", "description": "Begin the 18-stage proving assessment for <venture_name>. First gate checkpoint is at Stage 3, final gate is Stage 18 (Build Readiness)."},
       {"label": "View Venture Details", "description": "See the full venture profile before starting"},
       {"label": "Find Another Opportunity", "description": "Discover more opportunities before committing to a proving run"}
     ]
@@ -512,16 +512,16 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 
 ### Step 9: Post-Completion
 
-When all 17 proving stages are assessed (venture has passed the Stage 17 Build Readiness gate):
+When all 18 proving stages are assessed (venture has passed the Stage 18 Build Readiness gate):
 
 ```javascript
 {
   "questions": [{
-    "question": "All 17 proving stages assessed! This venture has been validated through Build Readiness. What would you like to do?",
+    "question": "All 18 proving stages assessed! This venture has been validated through Build Readiness. What would you like to do?",
     "header": "Proving Complete",
     "multiSelect": false,
     "options": [
-      {"label": "Persist Specialists (Recommended)", "description": "Create 17 Board of Directors stage experts. Improves future brainstorms and ventures."},
+      {"label": "Persist Specialists (Recommended)", "description": "Create 18 Board of Directors stage experts. Improves future brainstorms and ventures."},
       {"label": "Generate Report", "description": "Full summary with gap breakdown, decision tally, and stage completion rate."},
       {"label": "Find Next Opportunity", "description": "Start discovery for your next venture."},
       {"label": "Done", "description": "Return to main menu"}

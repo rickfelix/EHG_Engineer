@@ -532,7 +532,7 @@ stages:
       - Handoff clarity
 
   # ============================================================================
-  # PHASE 4: THE BLUEPRINT (Stages 13-16) - "Kochel Firewall"
+  # PHASE 4: THE BLUEPRINT (Stages 13-17) - "Kochel Firewall"
   # ============================================================================
   - id: 13
     title: "Product Roadmap"
@@ -647,7 +647,7 @@ stages:
       note: "Schema Firewall - all schema decisions must have epistemic classification (Facts/Assumptions/Unknowns)"
 
   # ============================================================================
-  # PHASE 5: THE BUILD LOOP (Stages 17-22)
+  # PHASE 5: THE BUILD LOOP (Stages 18-23)
   # ============================================================================
   - id: 17
     title: "Pre-Build Checklist"
@@ -803,7 +803,7 @@ stages:
       - Monitoring coverage
 
   # ============================================================================
-  # PHASE 6: THE LAUNCH (Stages 23-25)
+  # PHASE 6: THE LAUNCH (Stages 24-26)
   # ============================================================================
   - id: 23
     title: "Marketing Preparation"

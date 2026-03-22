@@ -1,14 +1,14 @@
-# EVA 25-Stage Pipeline Reference
+# EVA 26-Stage Pipeline Reference
 
 > Authoritative reference for the EVA venture lifecycle pipeline.
 > Source of truth: `lib/eva/stage-templates/` and `lib/eva/stage-execution-worker.js`
 
 ## Overview
 
-The EVA pipeline processes ventures through 25 sequential stages organized into 6 lifecycle phases. Each stage has a defined purpose, input/output schema, analysis step, and optional chairman gate.
+The EVA pipeline processes ventures through 26 sequential stages organized into 6 lifecycle phases. Each stage has a defined purpose, input/output schema, analysis step, and optional chairman gate.
 
 **Key concepts:**
-- **Stages** are numbered 1-25 and execute sequentially
+- **Stages** are numbered 1-26 and execute sequentially
 - **Phases** group stages by business function (6 phases)
 - **Operating Modes** control the stage-execution-worker behavior (5 modes)
 - **Chairman Gates** are decision points requiring human approval (blocking or advisory)
@@ -26,9 +26,9 @@ The EVA pipeline processes ventures through 25 sequential stages organized into 
 | 1 | THE TRUTH | 1-5 | Validation and market reality assessment |
 | 2 | THE ENGINE | 6-9 | Business model and strategy foundation |
 | 3 | THE IDENTITY | 10-12 | Brand, positioning, and go-to-market |
-| 4 | THE BLUEPRINT | 13-16 | Technical architecture and specification |
-| 5 | THE BUILD LOOP | 17-20 | Implementation and development cycle |
-| 6 | LAUNCH & LEARN | 21-25 | Deployment, analytics, and optimization |
+| 4 | THE BLUEPRINT | 13-17 | Technical architecture and specification |
+| 5 | THE BUILD LOOP | 18-23 | Implementation and development cycle |
+| 6 | LAUNCH & LEARN | 24-26 | Deployment, analytics, and optimization |
 
 ### Operating Modes (Stage Execution Worker)
 
@@ -38,9 +38,9 @@ The stage-execution-worker uses 5 operating modes for processing control:
 |------|-------------|-------------|
 | EVALUATION | 1-5 | Idea validation and kill decisions |
 | STRATEGY | 6-12 | Business model and brand strategy |
-| PLANNING | 13-16 | Technical planning and architecture |
-| BUILD | 17-21 | Implementation and QA |
-| LAUNCH | 22-25 | Release, marketing, and go-live |
+| PLANNING | 13-17 | Technical planning and architecture |
+| BUILD | 18-22 | Implementation and QA |
+| LAUNCH | 23-26 | Release, marketing, and go-live |
 
 ### Chairman Gates
 
@@ -372,7 +372,7 @@ Each block: `items` array with text, priority (1-3), optional evidence.
 
 ---
 
-### Phase 4: THE BLUEPRINT (Stages 13-16)
+### Phase 4: THE BLUEPRINT (Stages 13-17)
 
 #### Stage 13: Product Roadmap
 
@@ -469,7 +469,7 @@ Each block: `items` array with text, priority (1-3), optional evidence.
 
 ---
 
-### Phase 5: THE BUILD LOOP (Stages 17-22)
+### Phase 5: THE BUILD LOOP (Stages 18-23)
 
 #### Stage 17: Pre-Build Checklist
 
@@ -603,7 +603,7 @@ Each block: `items` array with text, priority (1-3), optional evidence.
 
 ---
 
-### Phase 6: LAUNCH & LEARN (Stages 23-25)
+### Phase 6: LAUNCH & LEARN (Stages 24-26)
 
 #### Stage 23: Marketing Preparation
 
@@ -833,7 +833,7 @@ const result = await analyzeStage01({
 
 | Metric | Value |
 |--------|-------|
-| Total Stages | 25 |
+| Total Stages | 26 |
 | Lifecycle Phases | 6 |
 | Operating Modes | 5 |
 | Blocking Chairman Gates | 4 (stages 3, 10, 22, 24) |
@@ -841,8 +841,8 @@ const result = await analyzeStage01({
 | Deterministic Kill Gates | 3 (stages 3, 5, 13) |
 | Reality Gates | 1 (stage 9) |
 | Promotion Gates | 2 (stages 16, 22) |
-| Analysis Step Functions | 25 |
-| Stage Template Files | 25 |
+| Analysis Step Functions | 26 |
+| Stage Template Files | 26 |
 
 ---
 
