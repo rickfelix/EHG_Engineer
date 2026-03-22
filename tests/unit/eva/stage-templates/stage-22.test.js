@@ -1,557 +1,364 @@
 /**
- * Unit tests for Stage 22 - Release Readiness template
+ * Unit tests for Stage 21 - Integration Testing template
  * Part of SD-LEO-FEAT-TMPL-BUILD-001
  *
- * Test Scenario: Stage 22 validation enforces release checklist and
- * evaluates Phase 5→6 Promotion Gate based on stages 17-22 prerequisites.
+ * Test Scenario: Stage 21 validation enforces integration test data
+ * and tracks pass/fail status per integration point.
  *
- * @module tests/unit/eva/stage-templates/stage-22.test
+ * @module tests/unit/eva/stage-templates/stage-21.test
  */
 
 import { describe, it, expect } from 'vitest';
-import stage22, { evaluatePromotionGate, APPROVAL_STATUSES, RELEASE_CATEGORIES, RELEASE_DECISIONS, MIN_RELEASE_ITEMS, MIN_READINESS_PCT, MIN_BUILD_COMPLETION_PCT } from '../../../../lib/eva/stage-templates/stage-22.js';
-import { CHECKLIST_CATEGORIES } from '../../../../lib/eva/stage-templates/stage-17.js';
-import { MIN_COVERAGE_PCT } from '../../../../lib/eva/stage-templates/stage-20.js';
+import stage21, { INTEGRATION_STATUSES, MIN_INTEGRATIONS } from '../../../../lib/eva/stage-templates/stage-21.js';
 
-describe('stage-22.js - Release Readiness template', () => {
+describe('stage-21.js - Integration Testing template', () => {
   describe('Template metadata', () => {
     it('should have correct template structure', () => {
-      expect(stage22.id).toBe('stage-22');
-      expect(stage22.slug).toBe('release-readiness');
-      expect(stage22.title).toBe('Release Readiness');
-      expect(stage22.version).toBe('2.0.0');
+      expect(stage21.id).toBe('stage-21');
+      expect(stage21.slug).toBe('integration-testing');
+      expect(stage21.title).toBe('Build Review');
+      expect(stage21.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {
-      expect(stage22.schema).toBeDefined();
-      expect(stage22.schema.release_items).toBeDefined();
-      expect(stage22.schema.release_notes).toBeDefined();
-      expect(stage22.schema.target_date).toBeDefined();
+      expect(stage21.schema).toBeDefined();
+      expect(stage21.schema.integrations).toBeDefined();
+      expect(stage21.schema.environment).toBeDefined();
+      expect(stage21.schema.total_integrations).toBeDefined();
     });
 
     it('should have defaultData', () => {
-      expect(stage22.defaultData).toEqual({
-        release_items: [],
-        release_notes: null,
-        target_date: null,
-        sprintRetrospective: { wentWell: [], wentPoorly: [], actionItems: [] },
-        sprintSummary: null,
-        total_items: 0,
-        approved_items: 0,
-        all_approved: false,
-        releaseDecision: null,
-        promotion_gate: null,
-        chairmanGate: { status: 'pending', rationale: null, decision_id: null },
+      expect(stage21.defaultData).toEqual({
+        integrations: [],
+        environment: null,
+        total_integrations: 0,
+        passing_integrations: 0,
+        failing_integrations: [],
+        pass_rate: 0,
+        all_passing: false,
+        reviewDecision: null,
       });
     });
 
     it('should have validate function', () => {
-      expect(typeof stage22.validate).toBe('function');
+      expect(typeof stage21.validate).toBe('function');
     });
 
     it('should have computeDerived function', () => {
-      expect(typeof stage22.computeDerived).toBe('function');
+      expect(typeof stage21.computeDerived).toBe('function');
     });
 
     it('should export constants', () => {
-      expect(APPROVAL_STATUSES).toEqual(['pending', 'approved', 'rejected']);
-      expect(RELEASE_CATEGORIES).toEqual(['feature', 'bugfix', 'infrastructure', 'documentation', 'security', 'performance', 'configuration']);
-      expect(RELEASE_DECISIONS).toEqual(['release', 'hold', 'cancel']);
-      expect(MIN_RELEASE_ITEMS).toBe(1);
-      expect(MIN_READINESS_PCT).toBe(80);
-      expect(MIN_BUILD_COMPLETION_PCT).toBe(80);
-    });
-
-    it('should export evaluatePromotionGate function', () => {
-      expect(typeof evaluatePromotionGate).toBe('function');
+      expect(INTEGRATION_STATUSES).toEqual(['pass', 'fail', 'skip', 'pending']);
+      expect(MIN_INTEGRATIONS).toBe(1);
     });
   });
 
-  describe('validate() - Release items', () => {
-    it('should pass for valid release items', () => {
+  describe('validate() - Environment', () => {
+    const validIntegrations = [
+      { name: 'API to DB', source: 'API', target: 'Database', status: 'pass' },
+    ];
+
+    it('should pass for valid environment', () => {
       const validData = {
-        release_items: [
-          { name: 'Security review', category: 'security', status: 'approved', approver: 'CISO' },
-        ],
-        release_notes: 'Release notes for v1.0',
-        target_date: '2026-03-01',
-        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
+        environment: 'staging',
+        integrations: validIntegrations,
       };
-      const result = stage22.validate(validData);
+      const result = stage21.validate(validData);
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
 
-    it('should fail for missing release_items array', () => {
+    it('should fail for missing environment', () => {
       const invalidData = {
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
+        integrations: validIntegrations,
       };
-      const result = stage22.validate(invalidData);
+      const result = stage21.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('release_items'))).toBe(true);
+      expect(result.errors.some(e => e.includes('environment'))).toBe(true);
     });
 
-    it('should fail for empty release_items array', () => {
+    it('should fail for empty environment', () => {
       const invalidData = {
-        release_items: [],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
+        environment: '',
+        integrations: validIntegrations,
       };
-      const result = stage22.validate(invalidData);
+      const result = stage21.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('release_items') && e.includes('at least 1'))).toBe(true);
+      expect(result.errors.some(e => e.includes('environment'))).toBe(true);
     });
+  });
 
-    it('should fail for release item missing name', () => {
-      const invalidData = {
-        release_items: [{ category: 'security', status: 'approved' }],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-      };
-      const result = stage22.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('release_items[0].name'))).toBe(true);
-    });
-
-    it('should fail for release item missing category', () => {
-      const invalidData = {
-        release_items: [{ name: 'Security review', status: 'approved' }],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-      };
-      const result = stage22.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('release_items[0].category'))).toBe(true);
-    });
-
-    it('should fail for release item missing status', () => {
-      const invalidData = {
-        release_items: [{ name: 'Security review', category: 'security' }],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-      };
-      const result = stage22.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('release_items[0].status'))).toBe(true);
-    });
-
-    it('should fail for release item with invalid status', () => {
-      const invalidData = {
-        release_items: [{ name: 'Security review', category: 'security', status: 'invalid' }],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-      };
-      const result = stage22.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('release_items[0].status'))).toBe(true);
-    });
-
-    it('should fail for release item with invalid category enum value', () => {
-      const invalidData = {
-        release_items: [{ name: 'Security review', category: 'InvalidCategory', status: 'approved' }],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-      };
-      const result = stage22.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('release_items[0].category'))).toBe(true);
-    });
-
-    it('should pass with optional approver field', () => {
+  describe('validate() - Integrations', () => {
+    it('should pass for valid integrations', () => {
       const validData = {
-        release_items: [
-          { name: 'Security review', category: 'security', status: 'approved', approver: 'CISO' },
+        environment: 'staging',
+        integrations: [
+          { name: 'API to DB', source: 'API', target: 'Database', status: 'pass' },
+          { name: 'Frontend to API', source: 'Frontend', target: 'API', status: 'fail', error_message: 'Timeout' },
         ],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
-      const result = stage22.validate(validData);
+      const result = stage21.validate(validData);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('should fail for missing integrations array', () => {
+      const invalidData = {
+        environment: 'staging',
+      };
+      const result = stage21.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('integrations'))).toBe(true);
+    });
+
+    it('should fail for empty integrations array', () => {
+      const invalidData = {
+        environment: 'staging',
+        integrations: [],
+      };
+      const result = stage21.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('integrations') && e.includes('at least 1'))).toBe(true);
+    });
+
+    it('should fail for integration missing name', () => {
+      const invalidData = {
+        environment: 'staging',
+        integrations: [{ source: 'API', target: 'Database', status: 'pass' }],
+      };
+      const result = stage21.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('integrations[0].name'))).toBe(true);
+    });
+
+    it('should fail for integration missing source', () => {
+      const invalidData = {
+        environment: 'staging',
+        integrations: [{ name: 'API to DB', target: 'Database', status: 'pass' }],
+      };
+      const result = stage21.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('integrations[0].source'))).toBe(true);
+    });
+
+    it('should fail for integration missing target', () => {
+      const invalidData = {
+        environment: 'staging',
+        integrations: [{ name: 'API to DB', source: 'API', status: 'pass' }],
+      };
+      const result = stage21.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('integrations[0].target'))).toBe(true);
+    });
+
+    it('should fail for integration missing status', () => {
+      const invalidData = {
+        environment: 'staging',
+        integrations: [{ name: 'API to DB', source: 'API', target: 'Database' }],
+      };
+      const result = stage21.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('integrations[0].status'))).toBe(true);
+    });
+
+    it('should fail for integration with invalid status', () => {
+      const invalidData = {
+        environment: 'staging',
+        integrations: [{ name: 'API to DB', source: 'API', target: 'Database', status: 'invalid' }],
+      };
+      const result = stage21.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('integrations[0].status'))).toBe(true);
+    });
+
+    it('should pass with optional error_message', () => {
+      const validData = {
+        environment: 'staging',
+        integrations: [
+          { name: 'API to DB', source: 'API', target: 'Database', status: 'fail', error_message: 'Connection timeout' },
+        ],
+      };
+      const result = stage21.validate(validData);
       expect(result.valid).toBe(true);
     });
   });
 
-  describe('validate() - Release notes and target date', () => {
-    const validItems = [
-      { name: 'Security review', category: 'security', status: 'approved' },
-    ];
-
-    it('should fail for missing release_notes', () => {
-      const invalidData = {
-        release_items: validItems,
-        target_date: '2026-03-01',
+  describe('computeDerived() - Integration metrics', () => {
+    it('should calculate total_integrations correctly', () => {
+      const data = {
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
+          { name: 'I2', source: 'B', target: 'C', status: 'pass' },
+          { name: 'I3', source: 'C', target: 'D', status: 'fail' },
+        ],
       };
-      const result = stage22.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('release_notes'))).toBe(true);
+      const result = stage21.computeDerived(data);
+      expect(result.total_integrations).toBe(3);
     });
 
-    it('should fail for release_notes < 10 characters', () => {
-      const invalidData = {
-        release_items: validItems,
-        release_notes: 'Short',
-        target_date: '2026-03-01',
+    it('should calculate passing_integrations correctly', () => {
+      const data = {
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
+          { name: 'I2', source: 'B', target: 'C', status: 'pass' },
+          { name: 'I3', source: 'C', target: 'D', status: 'fail' },
+        ],
       };
-      const result = stage22.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('release_notes'))).toBe(true);
+      const result = stage21.computeDerived(data);
+      expect(result.passing_integrations).toBe(2);
     });
 
-    it('should fail for missing target_date', () => {
-      const invalidData = {
-        release_items: validItems,
-        release_notes: 'Valid release notes',
+    it('should extract failing_integrations correctly', () => {
+      const data = {
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
+          { name: 'I2', source: 'B', target: 'C', status: 'fail', error_message: 'Timeout' },
+          { name: 'I3', source: 'C', target: 'D', status: 'fail', error_message: 'Auth error' },
+        ],
       };
-      const result = stage22.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('target_date'))).toBe(true);
+      const result = stage21.computeDerived(data);
+      expect(result.failing_integrations).toHaveLength(2);
+      expect(result.failing_integrations[0]).toEqual({
+        name: 'I2',
+        source: 'B',
+        target: 'C',
+        error_message: 'Timeout',
+      });
+      expect(result.failing_integrations[1]).toEqual({
+        name: 'I3',
+        source: 'C',
+        target: 'D',
+        error_message: 'Auth error',
+      });
     });
 
-    it('should fail for empty target_date', () => {
-      const invalidData = {
-        release_items: validItems,
-        release_notes: 'Valid release notes',
-        target_date: '',
+    it('should handle missing error_message in failing_integrations', () => {
+      const data = {
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'fail' },
+        ],
       };
-      const result = stage22.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('target_date'))).toBe(true);
+      const result = stage21.computeDerived(data);
+      expect(result.failing_integrations).toHaveLength(1);
+      expect(result.failing_integrations[0].error_message).toBeNull();
+    });
+
+    it('should calculate pass_rate correctly', () => {
+      const data = {
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
+          { name: 'I2', source: 'B', target: 'C', status: 'pass' },
+          { name: 'I3', source: 'C', target: 'D', status: 'fail' },
+          { name: 'I4', source: 'D', target: 'E', status: 'skip' },
+          { name: 'I5', source: 'E', target: 'F', status: 'pending' },
+        ],
+      };
+      const result = stage21.computeDerived(data);
+      // 2 passing out of 5 = 40%
+      expect(result.pass_rate).toBe(40);
+    });
+
+    it('should return 0 pass_rate for zero integrations', () => {
+      const data = {
+        environment: 'staging',
+        integrations: [],
+      };
+      const result = stage21.computeDerived(data);
+      expect(result.pass_rate).toBe(0);
+    });
+
+    it('should calculate pass_rate to 2 decimal places', () => {
+      const data = {
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
+          { name: 'I2', source: 'B', target: 'C', status: 'fail' },
+          { name: 'I3', source: 'C', target: 'D', status: 'fail' },
+        ],
+      };
+      const result = stage21.computeDerived(data);
+      // 1 passing out of 3 = 33.33%
+      expect(result.pass_rate).toBe(33.33);
     });
   });
 
-  describe('computeDerived() - Release metrics', () => {
-    it('should calculate total_items correctly', () => {
+  describe('computeDerived() - All passing flag', () => {
+    it('should set all_passing to true when all integrations pass', () => {
       const data = {
-        release_items: [
-          { name: 'R1', category: 'feature', status: 'approved' },
-          { name: 'R2', category: 'bugfix', status: 'pending' },
-          { name: 'R3', category: 'infrastructure', status: 'approved' },
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
+          { name: 'I2', source: 'B', target: 'C', status: 'pass' },
         ],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
       };
-      const result = stage22.computeDerived(data);
-      expect(result.total_items).toBe(3);
+      const result = stage21.computeDerived(data);
+      expect(result.all_passing).toBe(true);
     });
 
-    it('should calculate approved_items correctly', () => {
+    it('should set all_passing to false when any integration fails', () => {
       const data = {
-        release_items: [
-          { name: 'R1', category: 'feature', status: 'approved' },
-          { name: 'R2', category: 'bugfix', status: 'pending' },
-          { name: 'R3', category: 'infrastructure', status: 'approved' },
-          { name: 'R4', category: 'documentation', status: 'rejected' },
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
+          { name: 'I2', source: 'B', target: 'C', status: 'fail' },
         ],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
       };
-      const result = stage22.computeDerived(data);
-      expect(result.approved_items).toBe(2);
+      const result = stage21.computeDerived(data);
+      expect(result.all_passing).toBe(false);
     });
 
-    it('should set all_approved to true when all items approved', () => {
+    it('should set all_passing to false for zero integrations', () => {
       const data = {
-        release_items: [
-          { name: 'R1', category: 'feature', status: 'approved' },
-          { name: 'R2', category: 'bugfix', status: 'approved' },
+        environment: 'staging',
+        integrations: [],
+      };
+      const result = stage21.computeDerived(data);
+      expect(result.all_passing).toBe(false);
+    });
+
+    it('should ignore skip and pending statuses for all_passing', () => {
+      const data = {
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
+          { name: 'I2', source: 'B', target: 'C', status: 'skip' },
+          { name: 'I3', source: 'C', target: 'D', status: 'pending' },
         ],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
       };
-      const result = stage22.computeDerived(data);
-      expect(result.all_approved).toBe(true);
-    });
-
-    it('should set all_approved to false when any item not approved', () => {
-      const data = {
-        release_items: [
-          { name: 'R1', category: 'feature', status: 'approved' },
-          { name: 'R2', category: 'bugfix', status: 'pending' },
-        ],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-      };
-      const result = stage22.computeDerived(data);
-      expect(result.all_approved).toBe(false);
-    });
-
-    it('should set all_approved to false for zero items', () => {
-      const data = {
-        release_items: [],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-      };
-      const result = stage22.computeDerived(data);
-      expect(result.all_approved).toBe(false);
-    });
-  });
-
-  describe('evaluatePromotionGate() - Pure function', () => {
-    const validPrerequisites = {
-      stage17: {
-        checklist: {
-          architecture: [{ name: 'T1', status: 'complete' }],
-          team_readiness: [{ name: 'T2', status: 'complete' }],
-          tooling: [{ name: 'T3', status: 'complete' }],
-          environment: [{ name: 'T4', status: 'complete' }],
-          dependencies: [{ name: 'T5', status: 'complete' }],
-        },
-        readiness_pct: 100,
-      },
-      stage18: {
-        items: [
-          {
-            title: 'Feature 1',
-            description: 'Test',
-            priority: 'high',
-            type: 'feature',
-            scope: 'Test',
-            success_criteria: 'Test',
-            target_application: 'Test',
-          },
-        ],
-      },
-      stage19: {
-        completion_pct: 100,
-        blocked_tasks: 0,
-      },
-      stage20: {
-        quality_gate_passed: true,
-        overall_pass_rate: 100,
-        coverage_pct: 80,
-      },
-      stage21: {
-        all_passing: true,
-      },
-      stage22: {
-        release_items: [
-          { name: 'R1', category: 'feature', status: 'approved' },
-        ],
-      },
-    };
-
-    it('should pass promotion gate for all valid prerequisites', () => {
-      const result = evaluatePromotionGate(validPrerequisites);
-      expect(result.pass).toBe(true);
-      expect(result.blockers).toEqual([]);
-      expect(result.required_next_actions).toEqual([]);
-      expect(result.rationale).toContain('All Phase 5 prerequisites met');
-    });
-
-    it('should fail for incomplete stage 17 categories', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage17: {
-          checklist: {
-            architecture: [{ name: 'T1', status: 'complete' }],
-            team_readiness: [{ name: 'T2', status: 'complete' }],
-            tooling: [],
-            environment: [],
-            dependencies: [],
-          },
-          readiness_pct: 100,
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('category'))).toBe(true);
-      expect(result.required_next_actions.some(a => a.includes('Complete all pre-build checklist categories'))).toBe(true);
-    });
-
-    it('should fail for stage 17 readiness < 80%', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage17: {
-          ...validPrerequisites.stage17,
-          readiness_pct: 75,
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('Pre-build readiness at 75%'))).toBe(true);
-      expect(result.required_next_actions.some(a => a.includes('reach readiness threshold'))).toBe(true);
-    });
-
-    it('should fail for zero sprint items in stage 18', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage18: {
-          items: [],
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('No sprint items defined'))).toBe(true);
-      expect(result.required_next_actions.some(a => a.includes('Define at least 1 sprint item'))).toBe(true);
-    });
-
-    it('should fail for stage 19 completion < 80%', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage19: {
-          completion_pct: 75,
-          blocked_tasks: 0,
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('Build completion at 75%'))).toBe(true);
-      expect(result.required_next_actions.some(a => a.includes('Complete more build tasks'))).toBe(true);
-    });
-
-    it('should fail for blocked tasks in stage 19', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage19: {
-          completion_pct: 100,
-          blocked_tasks: 2,
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('2 build task(s) are blocked'))).toBe(true);
-      expect(result.required_next_actions.some(a => a.includes('Resolve blocked build tasks'))).toBe(true);
-    });
-
-    it('should fail for quality gate not passed in stage 20', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage20: {
-          quality_gate_passed: false,
-          overall_pass_rate: 95,
-          coverage_pct: 80,
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('Test pass rate at 95%, must be 100%'))).toBe(true);
-      expect(result.required_next_actions.some(a => a.includes('Fix all failing tests'))).toBe(true);
-    });
-
-    it('should fail for coverage < 60% in stage 20', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage20: {
-          quality_gate_passed: false,
-          overall_pass_rate: 100,
-          coverage_pct: 55,
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('Test coverage at 55%, minimum 60% required'))).toBe(true);
-      expect(result.required_next_actions.some(a => a.includes('Increase test coverage to at least 60%'))).toBe(true);
-    });
-
-    it('should fail for failing integrations in stage 21', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage21: {
-          all_passing: false,
-          failing_integrations: [{ name: 'I1', source: 'A', target: 'B' }],
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('1 integration(s) failing'))).toBe(true);
-      expect(result.required_next_actions.some(a => a.includes('Fix all failing integration tests'))).toBe(true);
-    });
-
-    it('should fail for unapproved release items in stage 22', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage22: {
-          release_items: [
-            { name: 'R1', category: 'feature', status: 'approved' },
-            { name: 'R2', category: 'bugfix', status: 'pending' },
-          ],
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('1 release item(s) not yet approved'))).toBe(true);
-      expect(result.required_next_actions.some(a => a.includes('Get approval for all release items'))).toBe(true);
-    });
-
-    it('should collect multiple blockers', () => {
-      const prerequisites = {
-        stage17: { checklist: {}, readiness_pct: 50 },
-        stage18: { items: [] },
-        stage19: { completion_pct: 50, blocked_tasks: 1 },
-        stage20: { quality_gate_passed: false, overall_pass_rate: 90, coverage_pct: 50 },
-        stage21: { all_passing: false, failing_integrations: [{ name: 'I1' }] },
-        stage22: { release_items: [{ name: 'R1', category: 'feature', status: 'pending' }] },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.length).toBeGreaterThan(5);
-      expect(result.required_next_actions.length).toBeGreaterThan(5);
-    });
-  });
-
-  describe('computeDerived() - Integration with promotion gate', () => {
-    it('should include promotion gate evaluation when prerequisites provided', () => {
-      const data = {
-        release_items: [{ name: 'R1', category: 'feature', status: 'approved' }],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-      };
-      const prerequisites = {
-        stage17: {
-          checklist: {
-            architecture: [{ name: 'T1', status: 'complete' }],
-            team_readiness: [{ name: 'T2', status: 'complete' }],
-            tooling: [{ name: 'T3', status: 'complete' }],
-            environment: [{ name: 'T4', status: 'complete' }],
-            dependencies: [{ name: 'T5', status: 'complete' }],
-          },
-          readiness_pct: 100,
-        },
-        stage18: { items: [{ title: 'T', description: 'D', priority: 'high', type: 'feature', scope: 'S', success_criteria: 'SC', target_application: 'A' }] },
-        stage19: { completion_pct: 100, blocked_tasks: 0 },
-        stage20: { quality_gate_passed: true, overall_pass_rate: 100, coverage_pct: 80 },
-        stage21: { all_passing: true },
-      };
-      const result = stage22.computeDerived(data, prerequisites);
-      expect(result.promotion_gate).toBeDefined();
-      expect(result.promotion_gate.pass).toBe(true);
-    });
-
-    it('should return default promotion gate when prerequisites not provided', () => {
-      const data = {
-        release_items: [{ name: 'R1', category: 'feature', status: 'approved' }],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
-      };
-      const result = stage22.computeDerived(data);
-      expect(result.promotion_gate).toBeDefined();
-      expect(result.promotion_gate.pass).toBe(false);
-      expect(result.promotion_gate.rationale).toContain('Prerequisites not provided');
+      const result = stage21.computeDerived(data);
+      // No failures, so all_passing should be true
+      expect(result.all_passing).toBe(true);
     });
   });
 
   describe('Edge cases', () => {
-    it('should handle empty release_items array in computeDerived', () => {
+    it('should handle empty integrations array in computeDerived', () => {
       const data = {
-        release_items: [],
-        release_notes: 'Release notes',
-        target_date: '2026-03-01',
+        environment: 'staging',
+        integrations: [],
       };
-      const result = stage22.computeDerived(data);
-      expect(result.total_items).toBe(0);
-      expect(result.approved_items).toBe(0);
-      expect(result.all_approved).toBe(false);
+      const result = stage21.computeDerived(data);
+      expect(result.total_integrations).toBe(0);
+      expect(result.passing_integrations).toBe(0);
+      expect(result.failing_integrations).toEqual([]);
+      expect(result.pass_rate).toBe(0);
+      expect(result.all_passing).toBe(false);
     });
 
     it('should handle null data in validate', () => {
-      const result = stage22.validate(null);
+      const result = stage21.validate(null);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
     it('should handle undefined data in validate', () => {
-      const result = stage22.validate(undefined);
+      const result = stage21.validate(undefined);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
@@ -560,34 +367,34 @@ describe('stage-22.js - Release Readiness template', () => {
   describe('Integration: validate + computeDerived workflow', () => {
     it('should work together for valid data', () => {
       const data = {
-        release_items: [
-          { name: 'Security review', category: 'security', status: 'approved' },
-          { name: 'Legal review', category: 'documentation', status: 'approved' },
+        environment: 'staging',
+        integrations: [
+          { name: 'API to DB', source: 'API', target: 'Database', status: 'pass' },
+          { name: 'Frontend to API', source: 'Frontend', target: 'API', status: 'pass' },
+          { name: 'Service A to B', source: 'ServiceA', target: 'ServiceB', status: 'fail', error_message: 'Timeout' },
         ],
-        release_notes: 'Major release with new features',
-        target_date: '2026-03-01',
-        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
-      const validation = stage22.validate(data);
+      const validation = stage21.validate(data);
       expect(validation.valid).toBe(true);
 
-      const computed = stage22.computeDerived(data);
-      expect(computed.total_items).toBe(2);
-      expect(computed.approved_items).toBe(2);
-      expect(computed.all_approved).toBe(true);
+      const computed = stage21.computeDerived(data);
+      expect(computed.total_integrations).toBe(3);
+      expect(computed.passing_integrations).toBe(2);
+      expect(computed.failing_integrations).toHaveLength(1);
+      expect(computed.pass_rate).toBe(66.67);
+      expect(computed.all_passing).toBe(false);
     });
 
     it('should not require validation before computeDerived (decoupled)', () => {
       const data = {
-        release_items: [
-          { name: 'R1', category: 'feature', status: 'invalid_status' },
+        environment: 'staging',
+        integrations: [
+          { name: 'I1', source: 'A', target: 'B', status: 'invalid_status' },
         ],
-        release_notes: 'Short',
-        target_date: '2026-03-01',
       };
-      const computed = stage22.computeDerived(data);
-      expect(computed.total_items).toBe(1);
-      expect(computed.approved_items).toBe(0);
+      const computed = stage21.computeDerived(data);
+      expect(computed.total_integrations).toBe(1);
+      expect(computed.passing_integrations).toBe(0);
     });
   });
 });

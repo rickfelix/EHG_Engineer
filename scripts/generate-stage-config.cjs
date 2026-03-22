@@ -97,9 +97,9 @@ function parseVentureWorkflow(tsSource) {
     stages.push({ stageNumber, stageName, stageKey, componentPath, gateType, chunk });
   }
 
-  if (stages.length !== 25) {
+  if (stages.length !== 26) {
     throw new Error(
-      `Expected 25 stages from venture-workflow.ts, got ${stages.length}`
+      `Expected 26 stages from venture-workflow.ts, got ${stages.length}`
     );
   }
 

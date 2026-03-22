@@ -1,402 +1,593 @@
 /**
- * Unit tests for Stage 23 - Marketing Preparation template
- * Part of SD-LEO-ORCH-EVA-STAGE-PIPELINE-001-B
+ * Unit tests for Stage 22 - Release Readiness template
+ * Part of SD-LEO-FEAT-TMPL-BUILD-001
  *
- * Test Scenario: Stage 23 validation enforces marketing item requirements,
- * marketing strategy summary, and release readiness checks against Stage 22.
+ * Test Scenario: Stage 22 validation enforces release checklist and
+ * evaluates Phase 5→6 Promotion Gate based on stages 17-22 prerequisites.
  *
- * @module tests/unit/eva/stage-templates/stage-23.test
+ * @module tests/unit/eva/stage-templates/stage-22.test
  */
 
 import { describe, it, expect } from 'vitest';
-import stage23, {
-  checkReleaseReadiness,
-  MARKETING_ITEM_TYPES,
-  MARKETING_PRIORITIES,
-  MIN_MARKETING_ITEMS,
-} from '../../../../lib/eva/stage-templates/stage-23.js';
+import stage22, { evaluatePromotionGate, APPROVAL_STATUSES, RELEASE_CATEGORIES, RELEASE_DECISIONS, MIN_RELEASE_ITEMS, MIN_READINESS_PCT, MIN_BUILD_COMPLETION_PCT } from '../../../../lib/eva/stage-templates/stage-22.js';
+import { CHECKLIST_CATEGORIES } from '../../../../lib/eva/stage-templates/stage-17.js';
+import { MIN_COVERAGE_PCT } from '../../../../lib/eva/stage-templates/stage-20.js';
 
-describe('stage-23.js - Marketing Preparation template', () => {
-  describe('Template contract', () => {
-    it('should export TEMPLATE with required properties', () => {
-      expect(stage23).toBeDefined();
-      expect(stage23.id).toBeDefined();
-      expect(stage23.slug).toBeDefined();
-      expect(stage23.title).toBeDefined();
-      expect(stage23.version).toBeDefined();
+describe('stage-22.js - Release Readiness template', () => {
+  describe('Template metadata', () => {
+    it('should have correct template structure', () => {
+      expect(stage22.id).toBe('stage-22');
+      expect(stage22.slug).toBe('release-readiness');
+      expect(stage22.title).toBe('Release Readiness');
+      expect(stage22.version).toBe('2.0.0');
     });
 
-    it('should have correct id, slug, title, version', () => {
-      expect(stage23.id).toBe('stage-23');
-      expect(stage23.slug).toBe('marketing-preparation');
-      expect(stage23.title).toBe('Marketing Preparation');
-      expect(stage23.version).toBe('2.0.0');
+    it('should have schema definition', () => {
+      expect(stage22.schema).toBeDefined();
+      expect(stage22.schema.release_items).toBeDefined();
+      expect(stage22.schema.release_notes).toBeDefined();
+      expect(stage22.schema.target_date).toBeDefined();
     });
 
-    it('should have schema, defaultData, validate, computeDerived', () => {
-      expect(stage23.schema).toBeDefined();
-      expect(stage23.defaultData).toBeDefined();
-      expect(typeof stage23.validate).toBe('function');
-      expect(typeof stage23.computeDerived).toBe('function');
-    });
-
-    it('should have analysisStep function', () => {
-      expect(typeof stage23.analysisStep).toBe('function');
-    });
-
-    it('should have outputSchema from extractOutputSchema', () => {
-      expect(stage23.outputSchema).toBeDefined();
-    });
-
-    it('should have schema with expected fields', () => {
-      expect(stage23.schema.marketing_items).toBeDefined();
-      expect(stage23.schema.sd_bridge_payloads).toBeDefined();
-      expect(stage23.schema.marketing_sds).toBeDefined();
-      expect(stage23.schema.marketing_strategy_summary).toBeDefined();
-      expect(stage23.schema.target_audience).toBeDefined();
-      expect(stage23.schema.marketing_readiness_pct).toBeDefined();
-      expect(stage23.schema.total_marketing_items).toBeDefined();
-      expect(stage23.schema.sds_created_count).toBeDefined();
-    });
-
-    it('should have correct defaultData', () => {
-      expect(stage23.defaultData).toEqual({
-        marketing_items: [],
-        sd_bridge_payloads: [],
-        marketing_sds: [],
-        marketing_strategy_summary: null,
-        target_audience: null,
-        marketing_readiness_pct: 0,
-        total_marketing_items: 0,
-        sds_created_count: 0,
+    it('should have defaultData', () => {
+      expect(stage22.defaultData).toEqual({
+        release_items: [],
+        release_notes: null,
+        target_date: null,
+        sprintRetrospective: { wentWell: [], wentPoorly: [], actionItems: [] },
+        sprintSummary: null,
+        total_items: 0,
+        approved_items: 0,
+        all_approved: false,
+        releaseDecision: null,
+        promotion_gate: null,
+        chairmanGate: { status: 'pending', rationale: null, decision_id: null },
       });
     });
 
-    it('should export constants', () => {
-      expect(Array.isArray(MARKETING_ITEM_TYPES)).toBe(true);
-      expect(MARKETING_ITEM_TYPES).toContain('landing_page');
-      expect(MARKETING_ITEM_TYPES).toContain('social_media_campaign');
-      expect(MARKETING_ITEM_TYPES).toContain('press_release');
-      expect(MARKETING_ITEM_TYPES).toContain('email_campaign');
-      expect(MARKETING_ITEM_TYPES).toContain('launch_announcement');
-      expect(MARKETING_ITEM_TYPES).toHaveLength(10);
-
-      expect(MARKETING_PRIORITIES).toEqual(['critical', 'high', 'medium', 'low']);
-      expect(MIN_MARKETING_ITEMS).toBe(3);
+    it('should have validate function', () => {
+      expect(typeof stage22.validate).toBe('function');
     });
 
-    it('should export checkReleaseReadiness function', () => {
-      expect(typeof checkReleaseReadiness).toBe('function');
+    it('should have computeDerived function', () => {
+      expect(typeof stage22.computeDerived).toBe('function');
+    });
+
+    it('should export constants', () => {
+      expect(APPROVAL_STATUSES).toEqual(['pending', 'approved', 'rejected']);
+      expect(RELEASE_CATEGORIES).toEqual(['feature', 'bugfix', 'infrastructure', 'documentation', 'security', 'performance', 'configuration']);
+      expect(RELEASE_DECISIONS).toEqual(['release', 'hold', 'cancel']);
+      expect(MIN_RELEASE_ITEMS).toBe(1);
+      expect(MIN_READINESS_PCT).toBe(80);
+      expect(MIN_BUILD_COMPLETION_PCT).toBe(80);
+    });
+
+    it('should export evaluatePromotionGate function', () => {
+      expect(typeof evaluatePromotionGate).toBe('function');
     });
   });
 
-  describe('validate() - Marketing items', () => {
-    const validBase = {
-      marketing_strategy_summary: 'Comprehensive marketing strategy for launch',
-    };
-
-    it('should pass for well-formed data with 3+ marketing items', () => {
+  describe('validate() - Release items', () => {
+    it('should pass for valid release items', () => {
       const validData = {
-        ...validBase,
-        marketing_items: [
-          { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
-          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
-          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        release_items: [
+          { name: 'Security review', category: 'security', status: 'approved', approver: 'CISO' },
         ],
+        release_notes: 'Release notes for v1.0',
+        target_date: '2026-03-01',
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
-      const result = stage23.validate(validData, { logger: { warn: () => {} } });
+      const result = stage22.validate(validData);
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
 
-    it('should fail for fewer than 3 marketing items', () => {
+    it('should fail for missing release_items array', () => {
       const invalidData = {
-        ...validBase,
-        marketing_items: [
-          { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
-          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
-        ],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
       };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      const result = stage22.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_items') && e.includes('at least 3'))).toBe(true);
+      expect(result.errors.some(e => e.includes('release_items'))).toBe(true);
     });
 
-    it('should fail for empty marketing items array', () => {
+    it('should fail for empty release_items array', () => {
       const invalidData = {
-        ...validBase,
-        marketing_items: [],
+        release_items: [],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
       };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      const result = stage22.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_items'))).toBe(true);
+      expect(result.errors.some(e => e.includes('release_items') && e.includes('at least 1'))).toBe(true);
     });
 
-    it('should fail for missing marketing_items', () => {
+    it('should fail for release item missing name', () => {
       const invalidData = {
-        ...validBase,
+        release_items: [{ category: 'security', status: 'approved' }],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
       };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      const result = stage22.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_items'))).toBe(true);
+      expect(result.errors.some(e => e.includes('release_items[0].name'))).toBe(true);
     });
 
-    it('should fail for marketing item missing title', () => {
+    it('should fail for release item missing category', () => {
       const invalidData = {
-        ...validBase,
-        marketing_items: [
-          { description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
-          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
-          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
-        ],
+        release_items: [{ name: 'Security review', status: 'approved' }],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
       };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      const result = stage22.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_items[0].title'))).toBe(true);
+      expect(result.errors.some(e => e.includes('release_items[0].category'))).toBe(true);
     });
 
-    it('should fail for marketing item missing description', () => {
+    it('should fail for release item missing status', () => {
       const invalidData = {
-        ...validBase,
-        marketing_items: [
-          { title: 'Landing Page', type: 'landing_page', priority: 'critical' },
-          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
-          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
-        ],
+        release_items: [{ name: 'Security review', category: 'security' }],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
       };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      const result = stage22.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_items[0].description'))).toBe(true);
+      expect(result.errors.some(e => e.includes('release_items[0].status'))).toBe(true);
     });
 
-    it('should fail for marketing item with invalid type', () => {
+    it('should fail for release item with invalid status', () => {
       const invalidData = {
-        ...validBase,
-        marketing_items: [
-          { title: 'Landing Page', description: 'Main page', type: 'invalid_type', priority: 'critical' },
-          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
-          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
-        ],
+        release_items: [{ name: 'Security review', category: 'security', status: 'invalid' }],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
       };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      const result = stage22.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_items[0].type'))).toBe(true);
+      expect(result.errors.some(e => e.includes('release_items[0].status'))).toBe(true);
     });
 
-    it('should fail for marketing item with invalid priority', () => {
+    it('should fail for release item with invalid category enum value', () => {
       const invalidData = {
-        ...validBase,
-        marketing_items: [
-          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'urgent' },
-          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
-          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
-        ],
+        release_items: [{ name: 'Security review', category: 'InvalidCategory', status: 'approved' }],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
       };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      const result = stage22.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_items[0].priority'))).toBe(true);
+      expect(result.errors.some(e => e.includes('release_items[0].category'))).toBe(true);
     });
 
-    it('should validate multiple items and collect all errors', () => {
-      const invalidData = {
-        ...validBase,
-        marketing_items: [
-          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'critical' },
-          { description: 'Missing title', type: 'press_release', priority: 'high' },
-          { title: 'Email Blast', type: 'email_campaign', priority: 'medium' },
-        ],
-      };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_items[1].title'))).toBe(true);
-      expect(result.errors.some(e => e.includes('marketing_items[2].description'))).toBe(true);
-    });
-  });
-
-  describe('validate() - Marketing strategy summary', () => {
-    const validItems = [
-      { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
-      { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
-      { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
-    ];
-
-    it('should fail for missing marketing_strategy_summary', () => {
-      const invalidData = {
-        marketing_items: validItems,
-      };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_strategy_summary'))).toBe(true);
-    });
-
-    it('should fail for marketing_strategy_summary shorter than 10 characters', () => {
-      const invalidData = {
-        marketing_items: validItems,
-        marketing_strategy_summary: 'Short',
-      };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_strategy_summary'))).toBe(true);
-    });
-
-    it('should pass for marketing_strategy_summary with 10+ characters', () => {
+    it('should pass with optional approver field', () => {
       const validData = {
-        marketing_items: validItems,
-        marketing_strategy_summary: 'Comprehensive marketing strategy for product launch',
+        release_items: [
+          { name: 'Security review', category: 'security', status: 'approved', approver: 'CISO' },
+        ],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
-      const result = stage23.validate(validData, { logger: { warn: () => {} } });
+      const result = stage22.validate(validData);
       expect(result.valid).toBe(true);
     });
   });
 
-  describe('computeDerived()', () => {
-    it('should spread input data to output', () => {
-      const data = {
-        marketing_items: [
-          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'critical' },
-        ],
-        marketing_strategy_summary: 'Strategy summary text here',
+  describe('validate() - Release notes and target date', () => {
+    const validItems = [
+      { name: 'Security review', category: 'security', status: 'approved' },
+    ];
+
+    it('should fail for missing release_notes', () => {
+      const invalidData = {
+        release_items: validItems,
+        target_date: '2026-03-01',
       };
-      const result = stage23.computeDerived(data);
-      expect(result.marketing_items).toEqual(data.marketing_items);
-      expect(result.marketing_strategy_summary).toBe(data.marketing_strategy_summary);
+      const result = stage22.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('release_notes'))).toBe(true);
+    });
+
+    it('should fail for release_notes < 10 characters', () => {
+      const invalidData = {
+        release_items: validItems,
+        release_notes: 'Short',
+        target_date: '2026-03-01',
+      };
+      const result = stage22.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('release_notes'))).toBe(true);
+    });
+
+    it('should fail for missing target_date', () => {
+      const invalidData = {
+        release_items: validItems,
+        release_notes: 'Valid release notes',
+      };
+      const result = stage22.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('target_date'))).toBe(true);
+    });
+
+    it('should fail for empty target_date', () => {
+      const invalidData = {
+        release_items: validItems,
+        release_notes: 'Valid release notes',
+        target_date: '',
+      };
+      const result = stage22.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('target_date'))).toBe(true);
     });
   });
 
-  describe('checkReleaseReadiness() - Pure function', () => {
-    it('should return ready when stage22 promotion gate passes and release decision is release', () => {
-      const result = checkReleaseReadiness({
-        stage22Data: {
-          promotion_gate: { pass: true, blockers: [] },
-          releaseDecision: { decision: 'release' },
+  describe('computeDerived() - Release metrics', () => {
+    it('should calculate total_items correctly', () => {
+      const data = {
+        release_items: [
+          { name: 'R1', category: 'feature', status: 'approved' },
+          { name: 'R2', category: 'bugfix', status: 'pending' },
+          { name: 'R3', category: 'infrastructure', status: 'approved' },
+        ],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+      };
+      const result = stage22.computeDerived(data);
+      expect(result.total_items).toBe(3);
+    });
+
+    it('should calculate approved_items correctly', () => {
+      const data = {
+        release_items: [
+          { name: 'R1', category: 'feature', status: 'approved' },
+          { name: 'R2', category: 'bugfix', status: 'pending' },
+          { name: 'R3', category: 'infrastructure', status: 'approved' },
+          { name: 'R4', category: 'documentation', status: 'rejected' },
+        ],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+      };
+      const result = stage22.computeDerived(data);
+      expect(result.approved_items).toBe(2);
+    });
+
+    it('should set all_approved to true when all items approved', () => {
+      const data = {
+        release_items: [
+          { name: 'R1', category: 'feature', status: 'approved' },
+          { name: 'R2', category: 'bugfix', status: 'approved' },
+        ],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+      };
+      const result = stage22.computeDerived(data);
+      expect(result.all_approved).toBe(true);
+    });
+
+    it('should set all_approved to false when any item not approved', () => {
+      const data = {
+        release_items: [
+          { name: 'R1', category: 'feature', status: 'approved' },
+          { name: 'R2', category: 'bugfix', status: 'pending' },
+        ],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+      };
+      const result = stage22.computeDerived(data);
+      expect(result.all_approved).toBe(false);
+    });
+
+    it('should set all_approved to false for zero items', () => {
+      const data = {
+        release_items: [],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+      };
+      const result = stage22.computeDerived(data);
+      expect(result.all_approved).toBe(false);
+    });
+  });
+
+  describe('evaluatePromotionGate() - Pure function', () => {
+    const validPrerequisites = {
+      stage17: {
+        checklist: {
+          architecture: [{ name: 'T1', status: 'complete' }],
+          team_readiness: [{ name: 'T2', status: 'complete' }],
+          tooling: [{ name: 'T3', status: 'complete' }],
+          environment: [{ name: 'T4', status: 'complete' }],
+          dependencies: [{ name: 'T5', status: 'complete' }],
         },
-      });
-      expect(result.ready).toBe(true);
-      expect(result.reasons).toEqual([]);
+        readiness_pct: 100,
+      },
+      stage18: {
+        items: [
+          {
+            title: 'Feature 1',
+            description: 'Test',
+            priority: 'high',
+            type: 'feature',
+            scope: 'Test',
+            success_criteria: 'Test',
+            target_application: 'Test',
+          },
+        ],
+      },
+      stage19: {
+        completion_pct: 100,
+        blocked_tasks: 0,
+      },
+      stage20: {
+        quality_gate_passed: true,
+        overall_pass_rate: 100,
+        coverage_pct: 80,
+      },
+      stage21: {
+        all_passing: true,
+      },
+      stage22: {
+        release_items: [
+          { name: 'R1', category: 'feature', status: 'approved' },
+        ],
+      },
+    };
+
+    it('should pass promotion gate for all valid prerequisites', () => {
+      const result = evaluatePromotionGate(validPrerequisites);
+      expect(result.pass).toBe(true);
+      expect(result.blockers).toEqual([]);
+      expect(result.required_next_actions).toEqual([]);
+      expect(result.rationale).toContain('All Phase 5 prerequisites met');
     });
 
-    it('should return ready when release decision is approved', () => {
-      const result = checkReleaseReadiness({
-        stage22Data: {
-          promotion_gate: { pass: true, blockers: [] },
-          releaseDecision: { decision: 'approved' },
+    it('should fail for incomplete stage 17 categories', () => {
+      const prerequisites = {
+        ...validPrerequisites,
+        stage17: {
+          checklist: {
+            architecture: [{ name: 'T1', status: 'complete' }],
+            team_readiness: [{ name: 'T2', status: 'complete' }],
+            tooling: [],
+            environment: [],
+            dependencies: [],
+          },
+          readiness_pct: 100,
         },
-      });
-      expect(result.ready).toBe(true);
-      expect(result.reasons).toEqual([]);
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.some(b => b.includes('category'))).toBe(true);
+      expect(result.required_next_actions.some(a => a.includes('Complete all pre-build checklist categories'))).toBe(true);
     });
 
-    it('should return not ready when stage22Data is not provided', () => {
-      const result = checkReleaseReadiness({ stage22Data: undefined });
-      expect(result.ready).toBe(false);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0]).toContain('not available');
-    });
-
-    it('should return not ready when promotion gate has not passed', () => {
-      const result = checkReleaseReadiness({
-        stage22Data: {
-          promotion_gate: { pass: false, blockers: ['Test coverage below 80%'] },
-          releaseDecision: { decision: 'release' },
+    it('should fail for stage 17 readiness < 80%', () => {
+      const prerequisites = {
+        ...validPrerequisites,
+        stage17: {
+          ...validPrerequisites.stage17,
+          readiness_pct: 75,
         },
-      });
-      expect(result.ready).toBe(false);
-      expect(result.reasons.some(r => r.includes('promotion gate'))).toBe(true);
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.some(b => b.includes('Pre-build readiness at 75%'))).toBe(true);
+      expect(result.required_next_actions.some(a => a.includes('reach readiness threshold'))).toBe(true);
     });
 
-    it('should return not ready when release decision is not release or approved', () => {
-      const result = checkReleaseReadiness({
-        stage22Data: {
-          promotion_gate: { pass: true, blockers: [] },
-          releaseDecision: { decision: 'hold' },
+    it('should fail for zero sprint items in stage 18', () => {
+      const prerequisites = {
+        ...validPrerequisites,
+        stage18: {
+          items: [],
         },
-      });
-      expect(result.ready).toBe(false);
-      expect(result.reasons.some(r => r.includes('release decision'))).toBe(true);
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.some(b => b.includes('No sprint items defined'))).toBe(true);
+      expect(result.required_next_actions.some(a => a.includes('Define at least 1 sprint item'))).toBe(true);
     });
 
-    it('should return not ready when releaseDecision is missing', () => {
-      const result = checkReleaseReadiness({
-        stage22Data: {
-          promotion_gate: { pass: true, blockers: [] },
+    it('should fail for stage 19 completion < 80%', () => {
+      const prerequisites = {
+        ...validPrerequisites,
+        stage19: {
+          completion_pct: 75,
+          blocked_tasks: 0,
         },
-      });
-      expect(result.ready).toBe(false);
-      expect(result.reasons.some(r => r.includes('release decision not found'))).toBe(true);
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.some(b => b.includes('Build completion at 75%'))).toBe(true);
+      expect(result.required_next_actions.some(a => a.includes('Complete more build tasks'))).toBe(true);
     });
 
-    it('should collect multiple reasons when both gate and decision fail', () => {
-      const result = checkReleaseReadiness({
-        stage22Data: {
-          promotion_gate: { pass: false, blockers: ['Not ready'] },
-          releaseDecision: { decision: 'hold' },
+    it('should fail for blocked tasks in stage 19', () => {
+      const prerequisites = {
+        ...validPrerequisites,
+        stage19: {
+          completion_pct: 100,
+          blocked_tasks: 2,
         },
-      });
-      expect(result.ready).toBe(false);
-      expect(result.reasons).toHaveLength(2);
-      expect(result.reasons.some(r => r.includes('promotion gate'))).toBe(true);
-      expect(result.reasons.some(r => r.includes('release decision'))).toBe(true);
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.some(b => b.includes('2 build task(s) are blocked'))).toBe(true);
+      expect(result.required_next_actions.some(a => a.includes('Resolve blocked build tasks'))).toBe(true);
     });
 
-    it('should handle null stage22Data', () => {
-      const result = checkReleaseReadiness({ stage22Data: null });
-      expect(result.ready).toBe(false);
-      expect(result.reasons.length).toBeGreaterThan(0);
+    it('should fail for quality gate not passed in stage 20', () => {
+      const prerequisites = {
+        ...validPrerequisites,
+        stage20: {
+          quality_gate_passed: false,
+          overall_pass_rate: 95,
+          coverage_pct: 80,
+        },
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.some(b => b.includes('Test pass rate at 95%, must be 100%'))).toBe(true);
+      expect(result.required_next_actions.some(a => a.includes('Fix all failing tests'))).toBe(true);
+    });
+
+    it('should fail for coverage < 60% in stage 20', () => {
+      const prerequisites = {
+        ...validPrerequisites,
+        stage20: {
+          quality_gate_passed: false,
+          overall_pass_rate: 100,
+          coverage_pct: 55,
+        },
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.some(b => b.includes('Test coverage at 55%, minimum 60% required'))).toBe(true);
+      expect(result.required_next_actions.some(a => a.includes('Increase test coverage to at least 60%'))).toBe(true);
+    });
+
+    it('should fail for failing integrations in stage 21', () => {
+      const prerequisites = {
+        ...validPrerequisites,
+        stage21: {
+          all_passing: false,
+          failing_integrations: [{ name: 'I1', source: 'A', target: 'B' }],
+        },
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.some(b => b.includes('1 integration(s) failing'))).toBe(true);
+      expect(result.required_next_actions.some(a => a.includes('Fix all failing integration tests'))).toBe(true);
+    });
+
+    it('should fail for unapproved release items in stage 22', () => {
+      const prerequisites = {
+        ...validPrerequisites,
+        stage22: {
+          release_items: [
+            { name: 'R1', category: 'feature', status: 'approved' },
+            { name: 'R2', category: 'bugfix', status: 'pending' },
+          ],
+        },
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.some(b => b.includes('1 release item(s) not yet approved'))).toBe(true);
+      expect(result.required_next_actions.some(a => a.includes('Get approval for all release items'))).toBe(true);
+    });
+
+    it('should collect multiple blockers', () => {
+      const prerequisites = {
+        stage17: { checklist: {}, readiness_pct: 50 },
+        stage18: { items: [] },
+        stage19: { completion_pct: 50, blocked_tasks: 1 },
+        stage20: { quality_gate_passed: false, overall_pass_rate: 90, coverage_pct: 50 },
+        stage21: { all_passing: false, failing_integrations: [{ name: 'I1' }] },
+        stage22: { release_items: [{ name: 'R1', category: 'feature', status: 'pending' }] },
+      };
+      const result = evaluatePromotionGate(prerequisites);
+      expect(result.pass).toBe(false);
+      expect(result.blockers.length).toBeGreaterThan(5);
+      expect(result.required_next_actions.length).toBeGreaterThan(5);
+    });
+  });
+
+  describe('computeDerived() - Integration with promotion gate', () => {
+    it('should include promotion gate evaluation when prerequisites provided', () => {
+      const data = {
+        release_items: [{ name: 'R1', category: 'feature', status: 'approved' }],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+      };
+      const prerequisites = {
+        stage17: {
+          checklist: {
+            architecture: [{ name: 'T1', status: 'complete' }],
+            team_readiness: [{ name: 'T2', status: 'complete' }],
+            tooling: [{ name: 'T3', status: 'complete' }],
+            environment: [{ name: 'T4', status: 'complete' }],
+            dependencies: [{ name: 'T5', status: 'complete' }],
+          },
+          readiness_pct: 100,
+        },
+        stage18: { items: [{ title: 'T', description: 'D', priority: 'high', type: 'feature', scope: 'S', success_criteria: 'SC', target_application: 'A' }] },
+        stage19: { completion_pct: 100, blocked_tasks: 0 },
+        stage20: { quality_gate_passed: true, overall_pass_rate: 100, coverage_pct: 80 },
+        stage21: { all_passing: true },
+      };
+      const result = stage22.computeDerived(data, prerequisites);
+      expect(result.promotion_gate).toBeDefined();
+      expect(result.promotion_gate.pass).toBe(true);
+    });
+
+    it('should return default promotion gate when prerequisites not provided', () => {
+      const data = {
+        release_items: [{ name: 'R1', category: 'feature', status: 'approved' }],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+      };
+      const result = stage22.computeDerived(data);
+      expect(result.promotion_gate).toBeDefined();
+      expect(result.promotion_gate.pass).toBe(false);
+      expect(result.promotion_gate.rationale).toContain('Prerequisites not provided');
     });
   });
 
   describe('Edge cases', () => {
+    it('should handle empty release_items array in computeDerived', () => {
+      const data = {
+        release_items: [],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+      };
+      const result = stage22.computeDerived(data);
+      expect(result.total_items).toBe(0);
+      expect(result.approved_items).toBe(0);
+      expect(result.all_approved).toBe(false);
+    });
+
     it('should handle null data in validate', () => {
-      const result = stage23.validate(null, { logger: { warn: () => {} } });
+      const result = stage22.validate(null);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
     it('should handle undefined data in validate', () => {
-      const result = stage23.validate(undefined, { logger: { warn: () => {} } });
+      const result = stage22.validate(undefined);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-    });
-
-    it('should handle non-array marketing_items', () => {
-      const invalidData = {
-        marketing_items: 'not an array',
-        marketing_strategy_summary: 'Valid strategy summary text',
-      };
-      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('marketing_items'))).toBe(true);
     });
   });
 
   describe('Integration: validate + computeDerived workflow', () => {
     it('should work together for valid data', () => {
       const data = {
-        marketing_items: [
-          { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
-          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
-          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        release_items: [
+          { name: 'Security review', category: 'security', status: 'approved' },
+          { name: 'Legal review', category: 'documentation', status: 'approved' },
         ],
-        marketing_strategy_summary: 'Comprehensive marketing strategy for product launch',
-        sd_bridge_payloads: [],
-        marketing_sds: [],
+        release_notes: 'Major release with new features',
+        target_date: '2026-03-01',
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
-      const validation = stage23.validate(data, { logger: { warn: () => {} } });
+      const validation = stage22.validate(data);
       expect(validation.valid).toBe(true);
 
-      const computed = stage23.computeDerived(data);
-      expect(computed.marketing_items).toEqual(data.marketing_items);
-      expect(computed.marketing_strategy_summary).toBe(data.marketing_strategy_summary);
+      const computed = stage22.computeDerived(data);
+      expect(computed.total_items).toBe(2);
+      expect(computed.approved_items).toBe(2);
+      expect(computed.all_approved).toBe(true);
     });
 
     it('should not require validation before computeDerived (decoupled)', () => {
       const data = {
-        marketing_items: [],
-        marketing_strategy_summary: 'Short',
+        release_items: [
+          { name: 'R1', category: 'feature', status: 'invalid_status' },
+        ],
+        release_notes: 'Short',
+        target_date: '2026-03-01',
       };
-      // computeDerived should not throw even with invalid data
-      const computed = stage23.computeDerived(data);
-      expect(computed.marketing_items).toEqual([]);
+      const computed = stage22.computeDerived(data);
+      expect(computed.total_items).toBe(1);
+      expect(computed.approved_items).toBe(0);
     });
   });
 });

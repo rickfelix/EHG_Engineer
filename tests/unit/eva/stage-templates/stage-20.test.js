@@ -1,409 +1,356 @@
 /**
- * Unit tests for Stage 20 - Quality Assurance template
+ * Unit tests for Stage 19 - Build Execution template
  * Part of SD-LEO-FEAT-TMPL-BUILD-001
  *
- * Test Scenario: Stage 20 validation enforces test suite data and
- * evaluates quality gate (100% pass rate, >= 60% coverage).
+ * Test Scenario: Stage 19 validation enforces task tracking and
+ * computes completion percentage.
  *
- * @module tests/unit/eva/stage-templates/stage-20.test
+ * @module tests/unit/eva/stage-templates/stage-19.test
  */
 
 import { describe, it, expect } from 'vitest';
-import stage20, {
-  MIN_TEST_SUITES,
-  MIN_COVERAGE_PCT,
-  TEST_SUITE_TYPES,
-  DEFECT_SEVERITIES,
-  DEFECT_STATUSES,
-  QUALITY_DECISIONS,
-} from '../../../../lib/eva/stage-templates/stage-20.js';
+import stage19, {
+  TASK_STATUSES,
+  ISSUE_SEVERITIES,
+  ISSUE_STATUSES,
+  SPRINT_COMPLETION_DECISIONS,
+  MIN_TASKS,
+} from '../../../../lib/eva/stage-templates/stage-19.js';
 
-describe('stage-20.js - Quality Assurance template', () => {
+describe('stage-19.js - Build Execution template', () => {
   describe('Template metadata', () => {
     it('should have correct template structure', () => {
-      expect(stage20.id).toBe('stage-20');
-      expect(stage20.slug).toBe('quality-assurance');
-      expect(stage20.title).toBe('Quality Assurance');
-      expect(stage20.version).toBe('2.0.0');
+      expect(stage19.id).toBe('stage-19');
+      expect(stage19.slug).toBe('build-execution');
+      expect(stage19.title).toBe('Build Execution');
+      expect(stage19.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {
-      expect(stage20.schema).toBeDefined();
-      expect(stage20.schema.test_suites).toBeDefined();
-      expect(stage20.schema.known_defects).toBeDefined();
-      expect(stage20.schema.overall_pass_rate).toBeDefined();
+      expect(stage19.schema).toBeDefined();
+      expect(stage19.schema.tasks).toBeDefined();
+      expect(stage19.schema.issues).toBeDefined();
+      expect(stage19.schema.total_tasks).toBeDefined();
     });
 
     it('should have defaultData', () => {
-      expect(stage20.defaultData).toEqual({
-        test_suites: [],
-        known_defects: [],
-        overall_pass_rate: 0,
-        coverage_pct: 0,
-        critical_failures: 0,
-        totalFailures: 0,
-        total_tests: 0,
-        total_passing: 0,
-        quality_gate_passed: false,
-        qualityDecision: null,
+      expect(stage19.defaultData).toEqual({
+        tasks: [],
+        issues: [],
+        total_tasks: 0,
+        completed_tasks: 0,
+        blocked_tasks: 0,
+        completion_pct: 0,
+        tasks_by_status: {},
+        sprintCompletion: null,
       });
     });
 
     it('should have validate function', () => {
-      expect(typeof stage20.validate).toBe('function');
+      expect(typeof stage19.validate).toBe('function');
     });
 
     it('should have computeDerived function', () => {
-      expect(typeof stage20.computeDerived).toBe('function');
+      expect(typeof stage19.computeDerived).toBe('function');
     });
 
     it('should export constants', () => {
-      expect(MIN_TEST_SUITES).toBe(1);
-      expect(MIN_COVERAGE_PCT).toBe(60);
-      expect(TEST_SUITE_TYPES).toEqual(['unit', 'integration', 'e2e']);
-      expect(DEFECT_SEVERITIES).toEqual(['critical', 'high', 'medium', 'low']);
-      expect(DEFECT_STATUSES).toEqual(['open', 'investigating', 'resolved', 'deferred', 'wont_fix']);
-      expect(QUALITY_DECISIONS).toEqual(['pass', 'conditional_pass', 'fail']);
+      expect(TASK_STATUSES).toEqual(['pending', 'in_progress', 'done', 'blocked']);
+      expect(ISSUE_SEVERITIES).toEqual(['critical', 'high', 'medium', 'low']);
+      expect(ISSUE_STATUSES).toEqual(['open', 'investigating', 'resolved', 'deferred']);
+      expect(SPRINT_COMPLETION_DECISIONS).toEqual(['complete', 'continue', 'blocked']);
+      expect(MIN_TASKS).toBe(1);
     });
   });
 
-  describe('validate() - Test suites', () => {
-    it('should pass for valid test suites', () => {
+  describe('validate() - Tasks', () => {
+    it('should pass for valid tasks', () => {
       const validData = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
+        tasks: [
+          { name: 'Task 1', status: 'done', assignee: 'Dev 1', sprint_item_ref: 'ITEM-1' },
+          { name: 'Task 2', status: 'in_progress' },
         ],
       };
-      const result = stage20.validate(validData);
+      const result = stage19.validate(validData);
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
 
-    it('should fail for missing test_suites array', () => {
+    it('should fail for missing tasks array', () => {
       const invalidData = {};
-      const result = stage20.validate(invalidData);
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('test_suites'))).toBe(true);
+      expect(result.errors.some(e => e.includes('tasks'))).toBe(true);
     });
 
-    it('should fail for empty test_suites array', () => {
-      const invalidData = { test_suites: [] };
-      const result = stage20.validate(invalidData);
+    it('should fail for empty tasks array', () => {
+      const invalidData = { tasks: [] };
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('test_suites') && e.includes('at least 1'))).toBe(true);
+      expect(result.errors.some(e => e.includes('tasks') && e.includes('at least 1'))).toBe(true);
     });
 
-    it('should fail for test suite missing name', () => {
+    it('should fail for task missing name', () => {
       const invalidData = {
-        test_suites: [{ total_tests: 100, passing_tests: 100 }],
+        tasks: [{ status: 'done' }],
       };
-      const result = stage20.validate(invalidData);
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('test_suites[0].name'))).toBe(true);
+      expect(result.errors.some(e => e.includes('tasks[0].name'))).toBe(true);
     });
 
-    it('should fail for test suite missing total_tests', () => {
+    it('should fail for task missing status', () => {
       const invalidData = {
-        test_suites: [{ name: 'Unit Tests', passing_tests: 100 }],
+        tasks: [{ name: 'Task 1' }],
       };
-      const result = stage20.validate(invalidData);
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('test_suites[0].total_tests'))).toBe(true);
+      expect(result.errors.some(e => e.includes('tasks[0].status'))).toBe(true);
     });
 
-    it('should fail for test suite missing passing_tests', () => {
+    it('should fail for task with invalid status', () => {
       const invalidData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100 }],
+        tasks: [{ name: 'Task 1', status: 'invalid' }],
       };
-      const result = stage20.validate(invalidData);
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('test_suites[0].passing_tests'))).toBe(true);
+      expect(result.errors.some(e => e.includes('tasks[0].status'))).toBe(true);
     });
 
-    it('should fail for negative total_tests', () => {
-      const invalidData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: -1, passing_tests: 0 }],
-      };
-      const result = stage20.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('test_suites[0].total_tests'))).toBe(true);
-    });
-
-    it('should fail for negative passing_tests', () => {
-      const invalidData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: -1 }],
-      };
-      const result = stage20.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('test_suites[0].passing_tests'))).toBe(true);
-    });
-
-    it('should fail for passing_tests > total_tests', () => {
-      const invalidData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 101 }],
-      };
-      const result = stage20.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('passing_tests') && e.includes('cannot exceed'))).toBe(true);
-    });
-
-    it('should pass with optional coverage_pct', () => {
+    it('should pass with optional fields (assignee, sprint_item_ref)', () => {
       const validData = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
+        tasks: [
+          { name: 'Task 1', status: 'done', assignee: 'Dev 1', sprint_item_ref: 'ITEM-1' },
         ],
       };
-      const result = stage20.validate(validData);
+      const result = stage19.validate(validData);
       expect(result.valid).toBe(true);
     });
   });
 
-  describe('validate() - Known defects (optional)', () => {
-    it('should pass when known_defects are omitted', () => {
+  describe('validate() - Issues (optional)', () => {
+    it('should pass when issues are omitted', () => {
       const validData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        tasks: [{ name: 'Task 1', status: 'done' }],
       };
-      const result = stage20.validate(validData);
+      const result = stage19.validate(validData);
       expect(result.valid).toBe(true);
     });
 
-    it('should pass when known_defects are empty array', () => {
+    it('should pass when issues are empty array', () => {
       const validData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
-        known_defects: [],
+        tasks: [{ name: 'Task 1', status: 'done' }],
+        issues: [],
       };
-      const result = stage20.validate(validData);
+      const result = stage19.validate(validData);
       expect(result.valid).toBe(true);
     });
 
-    it('should pass when known_defects have valid items', () => {
+    it('should pass when issues have valid items', () => {
       const validData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
-        known_defects: [
-          { description: 'Defect 1', severity: 'low', status: 'open' },
+        tasks: [{ name: 'Task 1', status: 'done' }],
+        issues: [
+          { description: 'Issue 1', severity: 'high', status: 'open' },
         ],
       };
-      const result = stage20.validate(validData);
+      const result = stage19.validate(validData);
       expect(result.valid).toBe(true);
     });
 
-    it('should fail for defect missing description', () => {
+    it('should fail for issue missing description', () => {
       const invalidData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
-        known_defects: [{ severity: 'low', status: 'open' }],
+        tasks: [{ name: 'Task 1', status: 'done' }],
+        issues: [{ severity: 'high', status: 'open' }],
       };
-      const result = stage20.validate(invalidData);
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('known_defects[0].description'))).toBe(true);
+      expect(result.errors.some(e => e.includes('issues[0].description'))).toBe(true);
     });
 
-    it('should fail for defect missing severity', () => {
+    it('should fail for issue missing severity', () => {
       const invalidData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
-        known_defects: [{ description: 'Defect 1', status: 'open' }],
+        tasks: [{ name: 'Task 1', status: 'done' }],
+        issues: [{ description: 'Issue 1', status: 'open' }],
       };
-      const result = stage20.validate(invalidData);
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('known_defects[0].severity'))).toBe(true);
+      expect(result.errors.some(e => e.includes('issues[0].severity'))).toBe(true);
     });
 
-    it('should fail for defect missing status', () => {
+    it('should fail for issue missing status', () => {
       const invalidData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
-        known_defects: [{ description: 'Defect 1', severity: 'low' }],
+        tasks: [{ name: 'Task 1', status: 'done' }],
+        issues: [{ description: 'Issue 1', severity: 'high' }],
       };
-      const result = stage20.validate(invalidData);
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('known_defects[0].status'))).toBe(true);
+      expect(result.errors.some(e => e.includes('issues[0].status'))).toBe(true);
     });
-    it('should fail for defect with invalid severity enum value', () => {
+    it('should fail for issue with invalid severity enum value', () => {
       const invalidData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
-        known_defects: [{ description: 'Defect 1', severity: 'urgent', status: 'open' }],
+        tasks: [{ name: 'Task 1', status: 'done' }],
+        issues: [{ description: 'Issue 1', severity: 'urgent', status: 'open' }],
       };
-      const result = stage20.validate(invalidData);
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('known_defects[0].severity'))).toBe(true);
+      expect(result.errors.some(e => e.includes('issues[0].severity'))).toBe(true);
     });
 
-    it('should fail for defect with invalid status enum value', () => {
+    it('should fail for issue with invalid status enum value', () => {
       const invalidData = {
-        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
-        known_defects: [{ description: 'Defect 1', severity: 'low', status: 'closed' }],
+        tasks: [{ name: 'Task 1', status: 'done' }],
+        issues: [{ description: 'Issue 1', severity: 'high', status: 'closed' }],
       };
-      const result = stage20.validate(invalidData);
+      const result = stage19.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('known_defects[0].status'))).toBe(true);
+      expect(result.errors.some(e => e.includes('issues[0].status'))).toBe(true);
     });
   });
 
-  describe('computeDerived() - Test metrics', () => {
-    it('should calculate total_tests correctly', () => {
+  describe('computeDerived() - Task metrics', () => {
+    it('should calculate total_tasks correctly', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 95 },
-          { name: 'E2E Tests', total_tests: 50, passing_tests: 48 },
+        tasks: [
+          { name: 'T1', status: 'done' },
+          { name: 'T2', status: 'in_progress' },
+          { name: 'T3', status: 'pending' },
         ],
       };
-      const result = stage20.computeDerived(data);
-      expect(result.total_tests).toBe(150);
+      const result = stage19.computeDerived(data);
+      expect(result.total_tasks).toBe(3);
     });
 
-    it('should calculate total_passing correctly', () => {
+    it('should calculate completed_tasks correctly', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 95 },
-          { name: 'E2E Tests', total_tests: 50, passing_tests: 48 },
+        tasks: [
+          { name: 'T1', status: 'done' },
+          { name: 'T2', status: 'in_progress' },
+          { name: 'T3', status: 'done' },
+          { name: 'T4', status: 'blocked' },
         ],
       };
-      const result = stage20.computeDerived(data);
-      expect(result.total_passing).toBe(143);
+      const result = stage19.computeDerived(data);
+      expect(result.completed_tasks).toBe(2);
     });
 
-    it('should calculate overall_pass_rate correctly', () => {
+    it('should calculate blocked_tasks correctly', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100 },
-          { name: 'E2E Tests', total_tests: 50, passing_tests: 48 },
+        tasks: [
+          { name: 'T1', status: 'done' },
+          { name: 'T2', status: 'blocked' },
+          { name: 'T3', status: 'in_progress' },
+          { name: 'T4', status: 'blocked' },
         ],
       };
-      const result = stage20.computeDerived(data);
-      // 148 / 150 = 98.67%
-      expect(result.overall_pass_rate).toBe(98.67);
+      const result = stage19.computeDerived(data);
+      expect(result.blocked_tasks).toBe(2);
     });
 
-    it('should return 0 overall_pass_rate for zero tests', () => {
+    it('should calculate completion_pct correctly', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 0, passing_tests: 0 },
+        tasks: [
+          { name: 'T1', status: 'done' },
+          { name: 'T2', status: 'done' },
+          { name: 'T3', status: 'in_progress' },
+          { name: 'T4', status: 'pending' },
+          { name: 'T5', status: 'blocked' },
         ],
       };
-      const result = stage20.computeDerived(data);
-      expect(result.overall_pass_rate).toBe(0);
-    });
-  });
-
-  describe('computeDerived() - Coverage', () => {
-    it('should calculate average coverage_pct correctly', () => {
-      const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
-          { name: 'E2E Tests', total_tests: 50, passing_tests: 50, coverage_pct: 60 },
-        ],
-      };
-      const result = stage20.computeDerived(data);
-      // (80 + 60) / 2 = 70%
-      expect(result.coverage_pct).toBe(70);
+      const result = stage19.computeDerived(data);
+      // 2 done out of 5 = 40%
+      expect(result.completion_pct).toBe(40);
     });
 
-    it('should ignore suites without coverage_pct', () => {
-      const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
-          { name: 'E2E Tests', total_tests: 50, passing_tests: 50 },
-        ],
-      };
-      const result = stage20.computeDerived(data);
-      expect(result.coverage_pct).toBe(80);
+    it('should return 0 completion_pct for zero tasks', () => {
+      const data = { tasks: [] };
+      const result = stage19.computeDerived(data);
+      expect(result.completion_pct).toBe(0);
     });
 
-    it('should return 0 coverage_pct when no suites have coverage', () => {
+    it('should calculate completion_pct to 2 decimal places', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100 },
+        tasks: [
+          { name: 'T1', status: 'done' },
+          { name: 'T2', status: 'in_progress' },
+          { name: 'T3', status: 'pending' },
         ],
       };
-      const result = stage20.computeDerived(data);
-      expect(result.coverage_pct).toBe(0);
+      const result = stage19.computeDerived(data);
+      // 1 done out of 3 = 33.33%
+      expect(result.completion_pct).toBe(33.33);
     });
   });
 
-  describe('computeDerived() - Quality gate', () => {
-    it('should pass quality gate for 100% pass rate and >= 60% coverage', () => {
+  describe('computeDerived() - Tasks by status', () => {
+    it('should calculate tasks_by_status correctly', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
+        tasks: [
+          { name: 'T1', status: 'done' },
+          { name: 'T2', status: 'done' },
+          { name: 'T3', status: 'in_progress' },
+          { name: 'T4', status: 'pending' },
+          { name: 'T5', status: 'blocked' },
         ],
       };
-      const result = stage20.computeDerived(data);
-      expect(result.quality_gate_passed).toBe(true);
+      const result = stage19.computeDerived(data);
+      expect(result.tasks_by_status).toEqual({
+        pending: 1,
+        in_progress: 1,
+        done: 2,
+        blocked: 1,
+      });
     });
 
-    it('should fail quality gate for < 100% pass rate', () => {
+    it('should include all statuses in tasks_by_status', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 99, coverage_pct: 80 },
+        tasks: [
+          { name: 'T1', status: 'done' },
         ],
       };
-      const result = stage20.computeDerived(data);
-      expect(result.quality_gate_passed).toBe(false);
+      const result = stage19.computeDerived(data);
+      TASK_STATUSES.forEach(status => {
+        expect(result.tasks_by_status).toHaveProperty(status);
+      });
     });
 
-    it('should fail quality gate for < 60% coverage', () => {
+    it('should return 0 counts for statuses with no tasks', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 59 },
+        tasks: [
+          { name: 'T1', status: 'done' },
         ],
       };
-      const result = stage20.computeDerived(data);
-      expect(result.quality_gate_passed).toBe(false);
-    });
-
-    it('should pass quality gate at exactly 60% coverage', () => {
-      const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 60 },
-        ],
-      };
-      const result = stage20.computeDerived(data);
-      expect(result.quality_gate_passed).toBe(true);
-    });
-  });
-
-  describe('computeDerived() - Critical failures', () => {
-    it('should calculate critical_failures correctly', () => {
-      const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 95 },
-          { name: 'E2E Tests', total_tests: 50, passing_tests: 48 },
-        ],
-      };
-      const result = stage20.computeDerived(data);
-      // 150 - 143 = 7 failures
-      expect(result.critical_failures).toBe(7);
-    });
-
-    it('should return 0 critical_failures for 100% pass rate', () => {
-      const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100 },
-        ],
-      };
-      const result = stage20.computeDerived(data);
-      expect(result.critical_failures).toBe(0);
+      const result = stage19.computeDerived(data);
+      expect(result.tasks_by_status.pending).toBe(0);
+      expect(result.tasks_by_status.in_progress).toBe(0);
+      expect(result.tasks_by_status.done).toBe(1);
+      expect(result.tasks_by_status.blocked).toBe(0);
     });
   });
 
   describe('Edge cases', () => {
-    it('should handle empty test_suites array in computeDerived', () => {
-      const data = { test_suites: [] };
-      const result = stage20.computeDerived(data);
-      expect(result.total_tests).toBe(0);
-      expect(result.total_passing).toBe(0);
-      expect(result.overall_pass_rate).toBe(0);
-      expect(result.coverage_pct).toBe(0);
-      expect(result.critical_failures).toBe(0);
-      expect(result.quality_gate_passed).toBe(false);
+    it('should handle empty tasks array in computeDerived', () => {
+      const data = { tasks: [] };
+      const result = stage19.computeDerived(data);
+      expect(result.total_tasks).toBe(0);
+      expect(result.completed_tasks).toBe(0);
+      expect(result.blocked_tasks).toBe(0);
+      expect(result.completion_pct).toBe(0);
+      expect(result.tasks_by_status).toEqual({
+        pending: 0,
+        in_progress: 0,
+        done: 0,
+        blocked: 0,
+      });
     });
 
     it('should handle null data in validate', () => {
-      const result = stage20.validate(null);
+      const result = stage19.validate(null);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
     it('should handle undefined data in validate', () => {
-      const result = stage20.validate(undefined);
+      const result = stage19.validate(undefined);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
@@ -412,34 +359,34 @@ describe('stage-20.js - Quality Assurance template', () => {
   describe('Integration: validate + computeDerived workflow', () => {
     it('should work together for valid data', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
-          { name: 'E2E Tests', total_tests: 50, passing_tests: 50, coverage_pct: 70 },
+        tasks: [
+          { name: 'Task 1', status: 'done', assignee: 'Dev 1' },
+          { name: 'Task 2', status: 'in_progress', assignee: 'Dev 2' },
+          { name: 'Task 3', status: 'pending' },
         ],
-        known_defects: [
-          { description: 'Minor UI bug', severity: 'low', status: 'open' },
+        issues: [
+          { description: 'Issue 1', severity: 'medium', status: 'open' },
         ],
       };
-      const validation = stage20.validate(data);
+      const validation = stage19.validate(data);
       expect(validation.valid).toBe(true);
 
-      const computed = stage20.computeDerived(data);
-      expect(computed.total_tests).toBe(150);
-      expect(computed.total_passing).toBe(150);
-      expect(computed.overall_pass_rate).toBe(100);
-      expect(computed.coverage_pct).toBe(75);
-      expect(computed.quality_gate_passed).toBe(true);
+      const computed = stage19.computeDerived(data);
+      expect(computed.total_tasks).toBe(3);
+      expect(computed.completed_tasks).toBe(1);
+      expect(computed.blocked_tasks).toBe(0);
+      expect(computed.completion_pct).toBe(33.33);
     });
 
     it('should not require validation before computeDerived (decoupled)', () => {
       const data = {
-        test_suites: [
-          { name: 'Unit Tests', total_tests: 100, passing_tests: 101 }, // Invalid
+        tasks: [
+          { name: 'Task 1', status: 'invalid_status' },
         ],
       };
-      const computed = stage20.computeDerived(data);
-      expect(computed.total_tests).toBe(100);
-      expect(computed.total_passing).toBe(101);
+      const computed = stage19.computeDerived(data);
+      expect(computed.total_tasks).toBe(1);
+      expect(computed.completed_tasks).toBe(0);
     });
   });
 });

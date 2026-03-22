@@ -66,11 +66,11 @@ function createPreferenceRows(prefs) {
 
 describe('Gate Configuration', () => {
   it('defines correct kill gate stages', () => {
-    expect(KILL_GATE_STAGES).toEqual(new Set([3, 5, 13, 23]));
+    expect(KILL_GATE_STAGES).toEqual(new Set([3, 5, 13, 24]));
   });
 
   it('defines correct promotion gate stages', () => {
-    expect(PROMOTION_GATE_STAGES).toEqual(new Set([16, 17, 22]));
+    expect(PROMOTION_GATE_STAGES).toEqual(new Set([17, 18, 23]));
   });
 
   it('kill and promotion stages do not overlap', () => {
@@ -106,21 +106,21 @@ describe('Gate Configuration', () => {
 
 describe('getGateType', () => {
   it('returns KILL for kill gate stages', () => {
-    for (const stage of [3, 5, 13, 23]) {
+    for (const stage of [3, 5, 13, 24]) {
       const result = getGateType(stage);
       expect(result).toEqual({ isGated: true, gateType: GATE_TYPE.KILL });
     }
   });
 
   it('returns PROMOTION for promotion gate stages', () => {
-    for (const stage of [16, 17, 22]) {
+    for (const stage of [17, 18, 23]) {
       const result = getGateType(stage);
       expect(result).toEqual({ isGated: true, gateType: GATE_TYPE.PROMOTION });
     }
   });
 
   it('returns not gated for other stages', () => {
-    for (const stage of [1, 2, 4, 6, 7, 8, 9, 10, 11, 14, 15, 18, 19, 20, 24, 25]) {
+    for (const stage of [1, 2, 4, 6, 7, 8, 9, 10, 11, 14, 15, 16, 19, 20, 21, 25, 26]) {
       const result = getGateType(stage);
       expect(result).toEqual({ isGated: false, gateType: null });
     }
@@ -201,11 +201,11 @@ describe('validateStageGate routing', () => {
       },
     });
 
-    const result = await validateStageGate(supabase, 'v1', 15, 16, {
+    const result = await validateStageGate(supabase, 'v1', 16, 17, {
       logger: silentLogger,
       stageOutput: { score: 9 },
     });
-    expect(result.gate_name).toBe('PROMOTION_GATE_STAGE_16');
+    expect(result.gate_name).toBe('PROMOTION_GATE_STAGE_17');
     expect(result.gateType).toBe(GATE_TYPE.PROMOTION);
   });
 
@@ -364,7 +364,7 @@ describe('Promotion Gate (evaluatePromotionGate)', () => {
       },
     });
 
-    const result = await evaluatePromotionGate(supabase, 'v1', 15, 16, {
+    const result = await evaluatePromotionGate(supabase, 'v1', 16, 17, {
       chairmanId: 'ch1',
       stageOutput: { cost: 1000, score: 8 },
       logger: silentLogger,
@@ -391,7 +391,7 @@ describe('Promotion Gate (evaluatePromotionGate)', () => {
       },
     });
 
-    const result = await evaluatePromotionGate(supabase, 'v1', 15, 16, {
+    const result = await evaluatePromotionGate(supabase, 'v1', 16, 17, {
       chairmanId: 'ch1',
       stageOutput: { cost: 20000, score: 8 },
       logger: silentLogger,
@@ -418,7 +418,7 @@ describe('Promotion Gate (evaluatePromotionGate)', () => {
       },
     });
 
-    const result = await evaluatePromotionGate(supabase, 'v1', 16, 17, {
+    const result = await evaluatePromotionGate(supabase, 'v1', 17, 18, {
       chairmanId: 'ch1',
       stageOutput: { cost: 1000, score: 5 }, // Low score = MEDIUM severity
       logger: silentLogger,
@@ -434,7 +434,7 @@ describe('Promotion Gate (evaluatePromotionGate)', () => {
       from: vi.fn(() => { throw new Error('Timeout'); }),
     };
 
-    const result = await evaluatePromotionGate(supabase, 'v1', 15, 16, {
+    const result = await evaluatePromotionGate(supabase, 'v1', 16, 17, {
       chairmanId: 'ch1',
       stageOutput: {},
       logger: silentLogger,
@@ -448,12 +448,12 @@ describe('Promotion Gate (evaluatePromotionGate)', () => {
   it('includes stage and correlationId in result', async () => {
     const supabase = createMockSupabase();
 
-    const result = await evaluatePromotionGate(supabase, 'v1', 21, 22, {
+    const result = await evaluatePromotionGate(supabase, 'v1', 22, 23, {
       stageOutput: { score: 9 },
       logger: silentLogger,
     });
 
-    expect(result.details.stage).toBe(22);
+    expect(result.details.stage).toBe(23);
     expect(result.details.correlationId).toBeDefined();
   });
 });

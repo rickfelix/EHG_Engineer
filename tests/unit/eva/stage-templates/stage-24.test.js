@@ -1,493 +1,402 @@
 /**
- * Unit tests for Stage 24 - Launch Readiness template
+ * Unit tests for Stage 23 - Marketing Preparation template
  * Part of SD-LEO-ORCH-EVA-STAGE-PIPELINE-001-B
  *
- * Test Scenario: Stage 24 validation enforces a readiness checklist with
- * weighted scoring, operational readiness plans, and chairman governance gate.
+ * Test Scenario: Stage 23 validation enforces marketing item requirements,
+ * marketing strategy summary, and release readiness checks against Stage 22.
  *
- * @module tests/unit/eva/stage-templates/stage-24.test
+ * @module tests/unit/eva/stage-templates/stage-23.test
  */
 
 import { describe, it, expect } from 'vitest';
-import stage24, {
-  computeReadinessScore,
-  GO_NO_GO_DECISIONS,
-  CHECKLIST_ITEM_STATUSES,
-  READINESS_CHECKLIST_KEYS,
-  CHECKLIST_WEIGHTS,
-} from '../../../../lib/eva/stage-templates/stage-24.js';
+import stage23, {
+  checkReleaseReadiness,
+  MARKETING_ITEM_TYPES,
+  MARKETING_PRIORITIES,
+  MIN_MARKETING_ITEMS,
+} from '../../../../lib/eva/stage-templates/stage-23.js';
 
-describe('stage-24.js - Launch Readiness template', () => {
+describe('stage-23.js - Marketing Preparation template', () => {
   describe('Template contract', () => {
     it('should export TEMPLATE with required properties', () => {
-      expect(stage24).toBeDefined();
-      expect(stage24.id).toBeDefined();
-      expect(stage24.slug).toBeDefined();
-      expect(stage24.title).toBeDefined();
-      expect(stage24.version).toBeDefined();
+      expect(stage23).toBeDefined();
+      expect(stage23.id).toBeDefined();
+      expect(stage23.slug).toBeDefined();
+      expect(stage23.title).toBeDefined();
+      expect(stage23.version).toBeDefined();
     });
 
     it('should have correct id, slug, title, version', () => {
-      expect(stage24.id).toBe('stage-24');
-      expect(stage24.slug).toBe('launch-readiness');
-      expect(stage24.title).toBe('Launch Readiness');
-      expect(stage24.version).toBe('2.0.0');
+      expect(stage23.id).toBe('stage-23');
+      expect(stage23.slug).toBe('marketing-preparation');
+      expect(stage23.title).toBe('Marketing Preparation');
+      expect(stage23.version).toBe('2.0.0');
     });
 
     it('should have schema, defaultData, validate, computeDerived', () => {
-      expect(stage24.schema).toBeDefined();
-      expect(stage24.defaultData).toBeDefined();
-      expect(typeof stage24.validate).toBe('function');
-      expect(typeof stage24.computeDerived).toBe('function');
+      expect(stage23.schema).toBeDefined();
+      expect(stage23.defaultData).toBeDefined();
+      expect(typeof stage23.validate).toBe('function');
+      expect(typeof stage23.computeDerived).toBe('function');
     });
 
     it('should have analysisStep function', () => {
-      expect(typeof stage24.analysisStep).toBe('function');
+      expect(typeof stage23.analysisStep).toBe('function');
     });
 
     it('should have outputSchema from extractOutputSchema', () => {
-      expect(stage24.outputSchema).toBeDefined();
-    });
-
-    it('should have onBeforeAnalysis hook', () => {
-      expect(typeof stage24.onBeforeAnalysis).toBe('function');
+      expect(stage23.outputSchema).toBeDefined();
     });
 
     it('should have schema with expected fields', () => {
-      expect(stage24.schema.readiness_checklist).toBeDefined();
-      expect(stage24.schema.go_no_go_decision).toBeDefined();
-      expect(stage24.schema.decision_rationale).toBeDefined();
-      expect(stage24.schema.incident_response_plan).toBeDefined();
-      expect(stage24.schema.monitoring_setup).toBeDefined();
-      expect(stage24.schema.rollback_plan).toBeDefined();
-      expect(stage24.schema.launch_risks).toBeDefined();
-      expect(stage24.schema.chairmanGate).toBeDefined();
-      expect(stage24.schema.readiness_score).toBeDefined();
-      expect(stage24.schema.all_checks_pass).toBeDefined();
-      expect(stage24.schema.blocking_items).toBeDefined();
+      expect(stage23.schema.marketing_items).toBeDefined();
+      expect(stage23.schema.sd_bridge_payloads).toBeDefined();
+      expect(stage23.schema.marketing_sds).toBeDefined();
+      expect(stage23.schema.marketing_strategy_summary).toBeDefined();
+      expect(stage23.schema.target_audience).toBeDefined();
+      expect(stage23.schema.marketing_readiness_pct).toBeDefined();
+      expect(stage23.schema.total_marketing_items).toBeDefined();
+      expect(stage23.schema.sds_created_count).toBeDefined();
     });
 
     it('should have correct defaultData', () => {
-      expect(stage24.defaultData.go_no_go_decision).toBeNull();
-      expect(stage24.defaultData.decision_rationale).toBeNull();
-      expect(stage24.defaultData.incident_response_plan).toBeNull();
-      expect(stage24.defaultData.monitoring_setup).toBeNull();
-      expect(stage24.defaultData.rollback_plan).toBeNull();
-      expect(stage24.defaultData.launch_risks).toEqual([]);
-      expect(stage24.defaultData.chairmanGate).toEqual({
-        status: 'pending', rationale: null, decision_id: null,
+      expect(stage23.defaultData).toEqual({
+        marketing_items: [],
+        sd_bridge_payloads: [],
+        marketing_sds: [],
+        marketing_strategy_summary: null,
+        target_audience: null,
+        marketing_readiness_pct: 0,
+        total_marketing_items: 0,
+        sds_created_count: 0,
       });
-      expect(stage24.defaultData.readiness_score).toBe(0);
-      expect(stage24.defaultData.all_checks_pass).toBe(false);
-      expect(stage24.defaultData.blocking_items).toEqual([]);
-    });
-
-    it('should have readiness_checklist default with pending status for all keys', () => {
-      const checklist = stage24.defaultData.readiness_checklist;
-      for (const key of READINESS_CHECKLIST_KEYS) {
-        expect(checklist[key]).toEqual({ status: 'pending', evidence: null, verified_at: null });
-      }
     });
 
     it('should export constants', () => {
-      expect(GO_NO_GO_DECISIONS).toEqual(['go', 'no_go', 'conditional_go']);
-      expect(CHECKLIST_ITEM_STATUSES).toEqual(['pass', 'fail', 'pending', 'waived']);
-      expect(READINESS_CHECKLIST_KEYS).toEqual([
-        'release_confirmed', 'marketing_complete', 'monitoring_ready', 'rollback_plan_exists',
-      ]);
-      expect(CHECKLIST_WEIGHTS).toEqual({
-        release_confirmed: 0.35,
-        marketing_complete: 0.25,
-        monitoring_ready: 0.20,
-        rollback_plan_exists: 0.20,
-      });
+      expect(Array.isArray(MARKETING_ITEM_TYPES)).toBe(true);
+      expect(MARKETING_ITEM_TYPES).toContain('landing_page');
+      expect(MARKETING_ITEM_TYPES).toContain('social_media_campaign');
+      expect(MARKETING_ITEM_TYPES).toContain('press_release');
+      expect(MARKETING_ITEM_TYPES).toContain('email_campaign');
+      expect(MARKETING_ITEM_TYPES).toContain('launch_announcement');
+      expect(MARKETING_ITEM_TYPES).toHaveLength(10);
+
+      expect(MARKETING_PRIORITIES).toEqual(['critical', 'high', 'medium', 'low']);
+      expect(MIN_MARKETING_ITEMS).toBe(3);
     });
 
-    it('should export computeReadinessScore function', () => {
-      expect(typeof computeReadinessScore).toBe('function');
+    it('should export checkReleaseReadiness function', () => {
+      expect(typeof checkReleaseReadiness).toBe('function');
     });
   });
 
-  describe('validate() - Readiness checklist', () => {
-    const makeValidData = (overrides = {}) => ({
-      readiness_checklist: {
-        release_confirmed: { status: 'pass', evidence: 'Release build verified' },
-        marketing_complete: { status: 'pass', evidence: 'Marketing materials ready' },
-        monitoring_ready: { status: 'pass', evidence: 'Dashboards configured' },
-        rollback_plan_exists: { status: 'pass', evidence: 'Rollback playbook approved' },
-      },
-      incident_response_plan: 'Full incident response plan details here',
-      monitoring_setup: 'Full monitoring setup details here',
-      rollback_plan: 'Full rollback plan details here',
-      chairmanGate: { status: 'approved', rationale: null, decision_id: null },
-      ...overrides,
-    });
+  describe('validate() - Marketing items', () => {
+    const validBase = {
+      marketing_strategy_summary: 'Comprehensive marketing strategy for launch',
+    };
 
-    it('should pass for valid data with all checks passing', () => {
-      const result = stage24.validate(makeValidData(), { logger: { warn: () => {} } });
+    it('should pass for well-formed data with 3+ marketing items', () => {
+      const validData = {
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        ],
+      };
+      const result = stage23.validate(validData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
 
-    it('should fail for missing readiness_checklist', () => {
-      const data = makeValidData();
-      delete data.readiness_checklist;
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
+    it('should fail for fewer than 3 marketing items', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+        ],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('readiness_checklist'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_items') && e.includes('at least 3'))).toBe(true);
     });
 
-    it('should fail for non-object readiness_checklist', () => {
-      const data = makeValidData({ readiness_checklist: 'not an object' });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
+    it('should fail for empty marketing items array', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('readiness_checklist'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_items'))).toBe(true);
     });
 
-    it('should fail for missing checklist key', () => {
-      const data = makeValidData();
-      delete data.readiness_checklist.release_confirmed;
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
+    it('should fail for missing marketing_items', () => {
+      const invalidData = {
+        ...validBase,
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('readiness_checklist.release_confirmed'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_items'))).toBe(true);
     });
 
-    it('should fail for checklist item with invalid status', () => {
-      const data = makeValidData();
-      data.readiness_checklist.release_confirmed.status = 'invalid';
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
+    it('should fail for marketing item missing title', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        ],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('readiness_checklist.release_confirmed.status'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_items[0].title'))).toBe(true);
     });
 
-    it('should fail for checklist item with missing evidence', () => {
-      const data = makeValidData();
-      data.readiness_checklist.marketing_complete.evidence = null;
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
+    it('should fail for marketing item missing description', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        ],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('readiness_checklist.marketing_complete.evidence'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_items[0].description'))).toBe(true);
     });
 
-    it('should accept waived status as valid', () => {
-      const data = makeValidData();
-      data.readiness_checklist.monitoring_ready = { status: 'waived', evidence: 'Deferred to post-launch' };
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(true);
+    it('should fail for marketing item with invalid type', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main page', type: 'invalid_type', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        ],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items[0].type'))).toBe(true);
     });
 
-    it('should accept pending status as valid (status-wise)', () => {
-      const data = makeValidData();
-      data.readiness_checklist.rollback_plan_exists = { status: 'pending', evidence: 'In progress' };
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
-      // pending is a valid status per CHECKLIST_ITEM_STATUSES
-      expect(result.valid).toBe(true);
+    it('should fail for marketing item with invalid priority', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'urgent' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        ],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items[0].priority'))).toBe(true);
+    });
+
+    it('should validate multiple items and collect all errors', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'critical' },
+          { description: 'Missing title', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', type: 'email_campaign', priority: 'medium' },
+        ],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items[1].title'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_items[2].description'))).toBe(true);
     });
   });
 
-  describe('validate() - Operational readiness plans', () => {
-    const makeValidData = (overrides = {}) => ({
-      readiness_checklist: {
-        release_confirmed: { status: 'pass', evidence: 'Release build verified' },
-        marketing_complete: { status: 'pass', evidence: 'Marketing materials ready' },
-        monitoring_ready: { status: 'pass', evidence: 'Dashboards configured' },
-        rollback_plan_exists: { status: 'pass', evidence: 'Rollback playbook approved' },
-      },
-      incident_response_plan: 'Full incident response plan details here',
-      monitoring_setup: 'Full monitoring setup details here',
-      rollback_plan: 'Full rollback plan details here',
-      chairmanGate: { status: 'approved', rationale: null, decision_id: null },
-      ...overrides,
-    });
+  describe('validate() - Marketing strategy summary', () => {
+    const validItems = [
+      { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+      { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+      { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+    ];
 
-    it('should fail for missing incident_response_plan', () => {
-      const data = makeValidData({ incident_response_plan: null });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
+    it('should fail for missing marketing_strategy_summary', () => {
+      const invalidData = {
+        marketing_items: validItems,
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('incident_response_plan'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_strategy_summary'))).toBe(true);
     });
 
-    it('should fail for incident_response_plan < 10 characters', () => {
-      const data = makeValidData({ incident_response_plan: 'Short' });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
+    it('should fail for marketing_strategy_summary shorter than 10 characters', () => {
+      const invalidData = {
+        marketing_items: validItems,
+        marketing_strategy_summary: 'Short',
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('incident_response_plan'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_strategy_summary'))).toBe(true);
     });
 
-    it('should fail for missing monitoring_setup', () => {
-      const data = makeValidData({ monitoring_setup: null });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('monitoring_setup'))).toBe(true);
-    });
-
-    it('should fail for monitoring_setup < 10 characters', () => {
-      const data = makeValidData({ monitoring_setup: 'Short' });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('monitoring_setup'))).toBe(true);
-    });
-
-    it('should fail for missing rollback_plan', () => {
-      const data = makeValidData({ rollback_plan: null });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('rollback_plan'))).toBe(true);
-    });
-
-    it('should fail for rollback_plan < 10 characters', () => {
-      const data = makeValidData({ rollback_plan: 'Short' });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('rollback_plan'))).toBe(true);
-    });
-  });
-
-  describe('validate() - Chairman governance gate', () => {
-    const makeValidData = (overrides = {}) => ({
-      readiness_checklist: {
-        release_confirmed: { status: 'pass', evidence: 'Release build verified' },
-        marketing_complete: { status: 'pass', evidence: 'Marketing materials ready' },
-        monitoring_ready: { status: 'pass', evidence: 'Dashboards configured' },
-        rollback_plan_exists: { status: 'pass', evidence: 'Rollback playbook approved' },
-      },
-      incident_response_plan: 'Full incident response plan details here',
-      monitoring_setup: 'Full monitoring setup details here',
-      rollback_plan: 'Full rollback plan details here',
-      ...overrides,
-    });
-
-    it('should pass when chairman gate is approved', () => {
-      const data = makeValidData({ chairmanGate: { status: 'approved', rationale: null, decision_id: null } });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
+    it('should pass for marketing_strategy_summary with 10+ characters', () => {
+      const validData = {
+        marketing_items: validItems,
+        marketing_strategy_summary: 'Comprehensive marketing strategy for product launch',
+      };
+      const result = stage23.validate(validData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(true);
-    });
-
-    it('should fail when chairman gate is pending', () => {
-      const data = makeValidData({ chairmanGate: { status: 'pending', rationale: null, decision_id: null } });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Chairman') && e.includes('pending'))).toBe(true);
-    });
-
-    it('should fail when chairman gate is rejected', () => {
-      const data = makeValidData({
-        chairmanGate: { status: 'rejected', rationale: 'Not ready for launch', decision_id: null },
-      });
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Chairman') && e.includes('rejected'))).toBe(true);
-    });
-
-    it('should fail when chairmanGate is not provided', () => {
-      const data = makeValidData();
-      // No chairmanGate means status is undefined, which is not 'approved'
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Chairman') || e.includes('chairman'))).toBe(true);
-    });
-  });
-
-  describe('computeReadinessScore() - Pure function', () => {
-    it('should return 100 when all items pass', () => {
-      const result = computeReadinessScore({
-        readiness_checklist: {
-          release_confirmed: { status: 'pass' },
-          marketing_complete: { status: 'pass' },
-          monitoring_ready: { status: 'pass' },
-          rollback_plan_exists: { status: 'pass' },
-        },
-      });
-      expect(result.readiness_score).toBe(100);
-      expect(result.all_checks_pass).toBe(true);
-      expect(result.blocking_items).toEqual([]);
-    });
-
-    it('should return 0 when all items are pending', () => {
-      const result = computeReadinessScore({
-        readiness_checklist: {
-          release_confirmed: { status: 'pending' },
-          marketing_complete: { status: 'pending' },
-          monitoring_ready: { status: 'pending' },
-          rollback_plan_exists: { status: 'pending' },
-        },
-      });
-      expect(result.readiness_score).toBe(0);
-      expect(result.all_checks_pass).toBe(false);
-      expect(result.blocking_items).toHaveLength(4);
-    });
-
-    it('should return 0 when all items fail', () => {
-      const result = computeReadinessScore({
-        readiness_checklist: {
-          release_confirmed: { status: 'fail' },
-          marketing_complete: { status: 'fail' },
-          monitoring_ready: { status: 'fail' },
-          rollback_plan_exists: { status: 'fail' },
-        },
-      });
-      expect(result.readiness_score).toBe(0);
-      expect(result.all_checks_pass).toBe(false);
-      expect(result.blocking_items).toHaveLength(4);
-    });
-
-    it('should give waived items 50% weight', () => {
-      const result = computeReadinessScore({
-        readiness_checklist: {
-          release_confirmed: { status: 'waived' },
-          marketing_complete: { status: 'waived' },
-          monitoring_ready: { status: 'waived' },
-          rollback_plan_exists: { status: 'waived' },
-        },
-      });
-      // All waived: 0.35*50 + 0.25*50 + 0.20*50 + 0.20*50 = 50
-      expect(result.readiness_score).toBe(50);
-      expect(result.all_checks_pass).toBe(true);
-      expect(result.blocking_items).toEqual([]);
-    });
-
-    it('should apply correct weights per checklist key', () => {
-      // Only release_confirmed passes (weight 0.35), rest fail
-      const result = computeReadinessScore({
-        readiness_checklist: {
-          release_confirmed: { status: 'pass' },
-          marketing_complete: { status: 'fail' },
-          monitoring_ready: { status: 'fail' },
-          rollback_plan_exists: { status: 'fail' },
-        },
-      });
-      // 0.35 * 100 = 35
-      expect(result.readiness_score).toBe(35);
-      expect(result.all_checks_pass).toBe(false);
-      expect(result.blocking_items).toEqual(['marketing_complete', 'monitoring_ready', 'rollback_plan_exists']);
-    });
-
-    it('should handle mixed pass and waived statuses', () => {
-      const result = computeReadinessScore({
-        readiness_checklist: {
-          release_confirmed: { status: 'pass' },      // 0.35 * 100 = 35
-          marketing_complete: { status: 'waived' },    // 0.25 * 50  = 12.5
-          monitoring_ready: { status: 'pass' },        // 0.20 * 100 = 20
-          rollback_plan_exists: { status: 'pending' }, // 0.20 * 0   = 0
-        },
-      });
-      // 35 + 12.5 + 20 + 0 = 67.5 -> rounded to 68
-      expect(result.readiness_score).toBe(68);
-      expect(result.all_checks_pass).toBe(false);
-      expect(result.blocking_items).toEqual(['rollback_plan_exists']);
-    });
-
-    it('should handle null readiness_checklist', () => {
-      const result = computeReadinessScore({ readiness_checklist: null });
-      expect(result.readiness_score).toBe(0);
-      expect(result.all_checks_pass).toBe(false);
-      expect(result.blocking_items).toEqual(READINESS_CHECKLIST_KEYS.slice());
-    });
-
-    it('should handle undefined readiness_checklist', () => {
-      const result = computeReadinessScore({ readiness_checklist: undefined });
-      expect(result.readiness_score).toBe(0);
-      expect(result.all_checks_pass).toBe(false);
-      expect(result.blocking_items).toHaveLength(4);
-    });
-
-    it('should handle missing keys in checklist', () => {
-      const result = computeReadinessScore({
-        readiness_checklist: {
-          release_confirmed: { status: 'pass' },
-          // Other keys missing
-        },
-      });
-      expect(result.readiness_score).toBe(35); // Only release_confirmed passes
-      expect(result.all_checks_pass).toBe(false);
-      expect(result.blocking_items).toContain('marketing_complete');
-      expect(result.blocking_items).toContain('monitoring_ready');
-      expect(result.blocking_items).toContain('rollback_plan_exists');
     });
   });
 
   describe('computeDerived()', () => {
     it('should spread input data to output', () => {
       const data = {
-        readiness_checklist: {
-          release_confirmed: { status: 'pass', evidence: 'Verified' },
-          marketing_complete: { status: 'pass', evidence: 'Ready' },
-          monitoring_ready: { status: 'pass', evidence: 'Configured' },
-          rollback_plan_exists: { status: 'pass', evidence: 'Approved' },
-        },
-        incident_response_plan: 'Incident response plan',
-        monitoring_setup: 'Monitoring setup',
-        rollback_plan: 'Rollback plan',
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'critical' },
+        ],
+        marketing_strategy_summary: 'Strategy summary text here',
       };
-      const result = stage24.computeDerived(data);
-      expect(result.readiness_checklist).toEqual(data.readiness_checklist);
-      expect(result.incident_response_plan).toBe(data.incident_response_plan);
+      const result = stage23.computeDerived(data);
+      expect(result.marketing_items).toEqual(data.marketing_items);
+      expect(result.marketing_strategy_summary).toBe(data.marketing_strategy_summary);
+    });
+  });
+
+  describe('checkReleaseReadiness() - Pure function', () => {
+    it('should return ready when stage22 promotion gate passes and release decision is release', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: true, blockers: [] },
+          releaseDecision: { decision: 'release' },
+        },
+      });
+      expect(result.ready).toBe(true);
+      expect(result.reasons).toEqual([]);
+    });
+
+    it('should return ready when release decision is approved', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: true, blockers: [] },
+          releaseDecision: { decision: 'approved' },
+        },
+      });
+      expect(result.ready).toBe(true);
+      expect(result.reasons).toEqual([]);
+    });
+
+    it('should return not ready when stage22Data is not provided', () => {
+      const result = checkReleaseReadiness({ stage22Data: undefined });
+      expect(result.ready).toBe(false);
+      expect(result.reasons).toHaveLength(1);
+      expect(result.reasons[0]).toContain('not available');
+    });
+
+    it('should return not ready when promotion gate has not passed', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: false, blockers: ['Test coverage below 80%'] },
+          releaseDecision: { decision: 'release' },
+        },
+      });
+      expect(result.ready).toBe(false);
+      expect(result.reasons.some(r => r.includes('promotion gate'))).toBe(true);
+    });
+
+    it('should return not ready when release decision is not release or approved', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: true, blockers: [] },
+          releaseDecision: { decision: 'hold' },
+        },
+      });
+      expect(result.ready).toBe(false);
+      expect(result.reasons.some(r => r.includes('release decision'))).toBe(true);
+    });
+
+    it('should return not ready when releaseDecision is missing', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: true, blockers: [] },
+        },
+      });
+      expect(result.ready).toBe(false);
+      expect(result.reasons.some(r => r.includes('release decision not found'))).toBe(true);
+    });
+
+    it('should collect multiple reasons when both gate and decision fail', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: false, blockers: ['Not ready'] },
+          releaseDecision: { decision: 'hold' },
+        },
+      });
+      expect(result.ready).toBe(false);
+      expect(result.reasons).toHaveLength(2);
+      expect(result.reasons.some(r => r.includes('promotion gate'))).toBe(true);
+      expect(result.reasons.some(r => r.includes('release decision'))).toBe(true);
+    });
+
+    it('should handle null stage22Data', () => {
+      const result = checkReleaseReadiness({ stage22Data: null });
+      expect(result.ready).toBe(false);
+      expect(result.reasons.length).toBeGreaterThan(0);
     });
   });
 
   describe('Edge cases', () => {
     it('should handle null data in validate', () => {
-      const result = stage24.validate(null, { logger: { warn: () => {} } });
+      const result = stage23.validate(null, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
     it('should handle undefined data in validate', () => {
-      const result = stage24.validate(undefined, { logger: { warn: () => {} } });
+      const result = stage23.validate(undefined, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    it('should handle whitespace-only plan strings', () => {
-      const data = {
-        readiness_checklist: {
-          release_confirmed: { status: 'pass', evidence: 'Verified' },
-          marketing_complete: { status: 'pass', evidence: 'Ready' },
-          monitoring_ready: { status: 'pass', evidence: 'Configured' },
-          rollback_plan_exists: { status: 'pass', evidence: 'Approved' },
-        },
-        incident_response_plan: '          ',
-        monitoring_setup: '          ',
-        rollback_plan: '          ',
-        chairmanGate: { status: 'approved' },
+    it('should handle non-array marketing_items', () => {
+      const invalidData = {
+        marketing_items: 'not an array',
+        marketing_strategy_summary: 'Valid strategy summary text',
       };
-      const result = stage24.validate(data, { logger: { warn: () => {} } });
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      // Whitespace-only strings should fail minimum length checks
-      expect(result.errors.length).toBeGreaterThanOrEqual(3);
+      expect(result.errors.some(e => e.includes('marketing_items'))).toBe(true);
     });
   });
 
   describe('Integration: validate + computeDerived workflow', () => {
     it('should work together for valid data', () => {
       const data = {
-        readiness_checklist: {
-          release_confirmed: { status: 'pass', evidence: 'Release build verified' },
-          marketing_complete: { status: 'pass', evidence: 'Marketing materials ready' },
-          monitoring_ready: { status: 'pass', evidence: 'Dashboards configured' },
-          rollback_plan_exists: { status: 'pass', evidence: 'Rollback playbook approved' },
-        },
-        incident_response_plan: 'Full incident response plan with escalation matrix',
-        monitoring_setup: 'Full monitoring setup with dashboards and alerts',
-        rollback_plan: 'Full rollback plan with versioned deployment strategy',
-        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
-        go_no_go_decision: 'go',
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        ],
+        marketing_strategy_summary: 'Comprehensive marketing strategy for product launch',
+        sd_bridge_payloads: [],
+        marketing_sds: [],
       };
-      const validation = stage24.validate(data, { logger: { warn: () => {} } });
+      const validation = stage23.validate(data, { logger: { warn: () => {} } });
       expect(validation.valid).toBe(true);
 
-      const computed = stage24.computeDerived(data);
-      expect(computed.readiness_checklist).toEqual(data.readiness_checklist);
+      const computed = stage23.computeDerived(data);
+      expect(computed.marketing_items).toEqual(data.marketing_items);
+      expect(computed.marketing_strategy_summary).toBe(data.marketing_strategy_summary);
     });
 
     it('should not require validation before computeDerived (decoupled)', () => {
       const data = {
-        readiness_checklist: {},
-        incident_response_plan: 'Short',
-        monitoring_setup: null,
-        rollback_plan: null,
+        marketing_items: [],
+        marketing_strategy_summary: 'Short',
       };
-      const computed = stage24.computeDerived(data);
-      expect(computed.readiness_checklist).toEqual({});
+      // computeDerived should not throw even with invalid data
+      const computed = stage23.computeDerived(data);
+      expect(computed.marketing_items).toEqual([]);
     });
   });
 });
