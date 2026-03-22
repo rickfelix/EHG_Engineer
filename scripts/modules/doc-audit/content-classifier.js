@@ -24,7 +24,7 @@ import { join, relative, extname } from 'path';
 
 const SOURCE_EXTENSIONS = new Set(['.js', '.ts', '.mjs', '.cjs', '.sql']);
 const SOURCE_DIRS = ['src', 'lib', 'scripts', 'database'];
-const MAX_STAGE = 25;
+const MAX_STAGE = 26;
 
 // ── Code Artifact Index ─────────────────────────────────────────────
 
