@@ -45,15 +45,15 @@ Complete documentation for the **Eva Orchestrator** and the **25-Stage Venture L
 | [stages/phase-01-the-truth.md](./stages/phase-01-the-truth.md) | 1-5 | Idea validation (2 kill gates) |
 | [stages/phase-02-the-engine.md](./stages/phase-02-the-engine.md) | 6-9 | Business model foundation |
 | [stages/phase-03-the-identity.md](./stages/phase-03-the-identity.md) | 10-12 | Brand and GTM strategy |
-| [stages/phase-04-the-blueprint.md](./stages/phase-04-the-blueprint.md) | 13-16 | Technical specification |
-| [stages/phase-05-the-build-loop.md](./stages/phase-05-the-build-loop.md) | 17-22 | Implementation (all SD-required) |
-| [stages/phase-06-launch-and-learn.md](./stages/phase-06-launch-and-learn.md) | 23-25 | Deploy and optimize |
+| [stages/phase-04-the-blueprint.md](./stages/phase-04-the-blueprint.md) | 13-17 | Technical specification + Blueprint Review |
+| [stages/phase-05-the-build-loop.md](./stages/phase-05-the-build-loop.md) | 18-23 | Implementation (all SD-required) |
+| [stages/phase-06-launch-and-learn.md](./stages/phase-06-launch-and-learn.md) | 24-26 | Deploy and optimize |
 
 ### Reference
 
 | Document | Description |
 |----------|-------------|
-| [reference/kill-gates.md](./reference/kill-gates.md) | Kill gates at stages 3, 5, 13, 23 |
+| [reference/kill-gates.md](./reference/kill-gates.md) | Kill gates at stages 3, 5, 13, 24 |
 | [reference/promotion-gates.md](./reference/promotion-gates.md) | Promotion gates at stages 16, 17, 22 |
 | [reference/sd-requirements.md](./reference/sd-requirements.md) | 12 stages requiring SD creation |
 | [reference/gate-thresholds.md](./reference/gate-thresholds.md) | Quantitative thresholds per stage |
@@ -130,9 +130,9 @@ Level 0: SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001 (Root)
   │     ├── SD-LEO-FEAT-TMPL-TRUTH-001 (Stages 1-5)
   │     ├── SD-LEO-FEAT-TMPL-ENGINE-001 (Stages 6-9)
   │     ├── SD-LEO-FEAT-TMPL-IDENTITY-001 (Stages 10-12)
-  │     ├── SD-LEO-FEAT-TMPL-BLUEPRINT-001 (Stages 13-16)
-  │     ├── SD-LEO-FEAT-TMPL-BUILD-001 (Stages 17-22)
-  │     └── SD-LEO-FEAT-TMPL-LAUNCH-001 (Stages 23-25)
+  │     ├── SD-LEO-FEAT-TMPL-BLUEPRINT-001 (Stages 13-17)
+  │     ├── SD-LEO-FEAT-TMPL-BUILD-001 (Stages 18-23)
+  │     └── SD-LEO-FEAT-TMPL-LAUNCH-001 (Stages 24-26)
   │
   ├── Level 1: SD-LEO-ORCH-CLI-VL-INTELLIGENCE-001
   │     ├── SD-LEO-FEAT-DEVILS-ADVOCATE-001

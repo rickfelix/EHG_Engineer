@@ -19,9 +19,9 @@ tags: [guide, auto-generated]
   - [Phase 1: THE TRUTH (Stages 1-5)](#phase-1-the-truth-stages-1-5)
   - [Phase 2: THE ENGINE (Stages 6-9)](#phase-2-the-engine-stages-6-9)
   - [Phase 3: THE IDENTITY (Stages 10-12)](#phase-3-the-identity-stages-10-12)
-  - [Phase 4: THE BLUEPRINT (Stages 13-16)](#phase-4-the-blueprint-stages-13-16)
-  - [Phase 5: THE BUILD LOOP (Stages 17-22)](#phase-5-the-build-loop-stages-17-22)
-  - [Phase 6: LAUNCH & LEARN (Stages 23-25)](#phase-6-launch-learn-stages-23-25)
+  - [Phase 4: THE BLUEPRINT (Stages 13-17)](#phase-4-the-blueprint-stages-13-16)
+  - [Phase 5: THE BUILD LOOP (Stages 18-23)](#phase-5-the-build-loop-stages-17-22)
+  - [Phase 6: LAUNCH & LEARN (Stages 24-26)](#phase-6-launch-learn-stages-23-25)
 - [Phase 7: THE ORBIT (Post-Stage 25)](#phase-7-the-orbit-post-stage-25)
 - [Key Mechanisms](#key-mechanisms)
   - [1. Work Types](#1-work-types)
@@ -162,7 +162,7 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 
 ---
 
-### Phase 4: THE BLUEPRINT (Stages 13-16)
+### Phase 4: THE BLUEPRINT (Stages 13-17)
 **Purpose**: Product planning and financial validation before build.
 
 > "What's the roadmap? What are the risks? Can we afford to build?"
@@ -179,7 +179,7 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 
 ---
 
-### Phase 5: THE BUILD LOOP (Stages 17-22)
+### Phase 5: THE BUILD LOOP (Stages 18-23)
 **Purpose**: Implementation and development.
 
 > "Plan the build, execute it, review it, and confirm it's ready to ship."
@@ -197,7 +197,7 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 
 ---
 
-### Phase 6: LAUNCH & LEARN (Stages 23-25)
+### Phase 6: LAUNCH & LEARN (Stages 24-26)
 **Purpose**: Prepare, launch, and go live.
 
 > "Get marketing ready, confirm you're ready to launch, and execute."
@@ -340,7 +340,7 @@ Stage 1 -> Stage 2 -> Stage 3 -> Stage 4 -> Stage 5
 - `identity_brand_name`
 - `identity_gtm_sales_strategy`
 
-### Phase 4: THE BLUEPRINT (Stages 13-16)
+### Phase 4: THE BLUEPRINT (Stages 13-17)
 - `blueprint_product_roadmap`
 - `blueprint_technical_architecture`
 - `blueprint_data_model`
@@ -419,9 +419,9 @@ See: [Venture Lifecycle Gap Remediation Overview](../../04_features/venture-life
 | Phase 1: THE TRUTH (1-5)       -> Validate idea                |
 | Phase 2: THE ENGINE (6-9)      -> Build business model         |
 | Phase 3: THE IDENTITY (10-12)  -> Brand and GTM                |
-| Phase 4: THE BLUEPRINT (13-16) -> Roadmap, architecture, risk  |
-| Phase 5: THE BUILD LOOP (17-22)-> Plan, build, review, release |
-| Phase 6: LAUNCH & LEARN (23-25)-> Prepare, launch, go live     |
+| Phase 4: THE BLUEPRINT (13-17) -> Roadmap, architecture, risk  |
+| Phase 5: THE BUILD LOOP (18-23)-> Plan, build, review, release |
+| Phase 6: LAUNCH & LEARN (24-26)-> Prepare, launch, go live     |
 +---------------------------------------------------------------+
 | Kill Gates: Stage 3 (validation), Stage 5 (financial),        |
 |             Stage 13 (roadmap)                                |

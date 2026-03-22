@@ -135,9 +135,9 @@ All templates are accessed via the master index at `lib/eva/stage-templates/inde
 | 1 - The Truth | [phase-01-the-truth.md](phase-01-the-truth.md) | 1-5 |
 | 2 - The Engine | [phase-02-the-engine.md](phase-02-the-engine.md) | 6-9 |
 | 3 - The Identity | [phase-03-the-identity.md](phase-03-the-identity.md) | 10-12 |
-| 4 - The Blueprint | [phase-04-the-blueprint.md](phase-04-the-blueprint.md) | 13-16 |
-| 5 - The Build Loop | [phase-05-the-build-loop.md](phase-05-the-build-loop.md) | 17-22 |
-| 6 - Launch & Learn | [phase-06-launch-and-learn.md](phase-06-launch-and-learn.md) | 23-25 |
+| 4 - The Blueprint | [phase-04-the-blueprint.md](phase-04-the-blueprint.md) | 13-17 |
+| 5 - The Build Loop | [phase-05-the-build-loop.md](phase-05-the-build-loop.md) | 18-23 |
+| 6 - Launch & Learn | [phase-06-launch-and-learn.md](phase-06-launch-and-learn.md) | 24-26 |
 
 ## Common Template Structure
 

@@ -86,7 +86,7 @@ Tags: [cli-venture-lifecycle, eva, stages, phase-5, the-build-loop]
 Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001]
 ---
 
-# Phase 5: The Build Loop -- Stages 17-22
+# Phase 5: The Build Loop -- Stages 18-23
 
 ## Phase Purpose
 
@@ -167,7 +167,7 @@ flowchart TD
 
 ---
 
-## Stage 17: Build Readiness
+## Stage 18: Build Readiness
 
 | Property | Value |
 |----------|-------|
