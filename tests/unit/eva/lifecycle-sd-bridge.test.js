@@ -1,6 +1,7 @@
 /**
  * Tests for Lifecycle-SD Bridge
  * SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-002-B
+ * SD-LEO-INFRA-VENTURE-BUILD-READINESS-001-D (3-tier hierarchy, safety controls)
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -8,7 +9,11 @@ import { describe, it, expect, vi } from 'vitest';
 // Mock sd-key-generator (has shebang that vitest can't transform)
 vi.mock('../../../scripts/modules/sd-key-generator.js', () => ({
   generateSDKey: vi.fn().mockReturnValue('SD-ORCH-SPRINT-TEST-001'),
-  generateChildKey: vi.fn().mockReturnValue('SD-ORCH-SPRINT-TEST-001-A'),
+  generateChildKey: vi.fn().mockImplementation((parent, idx) => {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    return `${parent}-${letters[idx]}`;
+  }),
+  generateGrandchildKey: vi.fn().mockImplementation((parent, idx) => `${parent}${idx + 1}`),
   normalizeVenturePrefix: vi.fn().mockReturnValue('TEST'),
 }));
 
@@ -18,12 +23,20 @@ import {
   _internal,
 } from '../../../lib/eva/lifecycle-sd-bridge.js';
 
-const { TYPE_MAP } = _internal;
+const {
+  TYPE_MAP,
+  ARCHITECTURE_LAYERS,
+  MAX_CHILDREN_PER_ORCHESTRATOR,
+  MAX_GRANDCHILDREN_PER_CHILD,
+  buildProvenance,
+  selectApplicableLayers,
+} = _internal;
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-function createMockSupabase({ insertError = null, existingOrchestrator = null } = {}) {
+function createMockSupabase({ insertError = null, existingOrchestrator = null, failOnNthInsert = -1 } = {}) {
   let selectCallCount = 0;
+  let insertCallCount = 0;
 
   return {
     from: vi.fn((table) => {
@@ -39,7 +52,14 @@ function createMockSupabase({ insertError = null, existingOrchestrator = null } 
             return Promise.resolve({ data: [], error: null });
           }),
           order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          insert: vi.fn().mockReturnThis(),
+          insert: vi.fn().mockImplementation(() => {
+            insertCallCount++;
+            if (failOnNthInsert > 0 && insertCallCount === failOnNthInsert) {
+              return Promise.resolve({ data: null, error: { message: `Insert #${insertCallCount} failed` } });
+            }
+            return Promise.resolve({ data: null, error: insertError });
+          }),
+          update: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
             data: null,
             error: insertError,
@@ -51,6 +71,7 @@ function createMockSupabase({ insertError = null, existingOrchestrator = null } 
         insert: vi.fn().mockResolvedValue({ data: null, error: insertError }),
       };
     }),
+    rpc: vi.fn().mockResolvedValue({ data: { cancelled_sds: 0, cancelled_prds: 0 }, error: null }),
   };
 }
 
@@ -118,12 +139,146 @@ describe('LifecycleSDBridge', () => {
     });
   });
 
+  describe('convertSprintToSDs - grandchild generation (US-001)', () => {
+    it('should include grandchildKeys in result', async () => {
+      const result = await convertSprintToSDs(
+        {
+          stageOutput: {
+            sprint_name: 'Sprint 1',
+            sprint_goal: 'Build',
+            sd_bridge_payloads: [{ title: 'Feature A', type: 'feature', description: 'Desc', scope: 'Scope' }],
+          },
+          ventureContext: { id: 'v1', name: 'Test' },
+        },
+        { supabase: createMockSupabase(), logger: silentLogger },
+      );
+
+      expect(result.created).toBe(true);
+      expect(result.grandchildKeys).toBeDefined();
+      expect(result.grandchildKeys.length).toBeGreaterThan(0);
+    });
+
+    it('should skip grandchildren when option disabled', async () => {
+      const result = await convertSprintToSDs(
+        {
+          stageOutput: {
+            sprint_name: 'Sprint 1',
+            sprint_goal: 'Build',
+            sd_bridge_payloads: [{ title: 'Feature A', type: 'feature', description: 'D', scope: 'S' }],
+          },
+          ventureContext: { id: 'v1', name: 'Test' },
+          options: { generateGrandchildren: false },
+        },
+        { supabase: createMockSupabase(), logger: silentLogger },
+      );
+
+      expect(result.created).toBe(true);
+      expect(result.grandchildKeys).toEqual([]);
+    });
+  });
+
+  describe('Amplification cap (US-004)', () => {
+    it('should enforce MAX_CHILDREN_PER_ORCHESTRATOR', () => {
+      expect(MAX_CHILDREN_PER_ORCHESTRATOR).toBe(10);
+    });
+
+    it('should enforce MAX_GRANDCHILDREN_PER_CHILD', () => {
+      expect(MAX_GRANDCHILDREN_PER_CHILD).toBe(5);
+    });
+
+    it('should cap children to MAX when payloads exceed limit', async () => {
+      const payloads = Array.from({ length: 15 }, (_, i) => ({
+        title: `Item ${i}`, type: 'feature', description: 'D', scope: 'S',
+      }));
+      const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+      const result = await convertSprintToSDs(
+        {
+          stageOutput: { sprint_name: 'Big Sprint', sprint_goal: 'Big', sd_bridge_payloads: payloads },
+          ventureContext: { id: 'v1', name: 'Test' },
+          options: { generateGrandchildren: false },
+        },
+        { supabase: createMockSupabase(), logger },
+      );
+
+      expect(result.childKeys.length).toBeLessThanOrEqual(MAX_CHILDREN_PER_ORCHESTRATOR);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Amplification cap hit'),
+      );
+    });
+  });
+
+  describe('Provenance tagging (US-005)', () => {
+    it('should build provenance with all required fields', () => {
+      const prov = buildProvenance('venture-123');
+      expect(prov.generation_source).toBe('auto-pipeline-stage-17-doc-gen');
+      expect(prov.source_venture_id).toBe('venture-123');
+      expect(prov.generated_at).toBeDefined();
+      expect(prov.generation_version).toBe('1.0');
+    });
+
+    it('should handle null ventureId', () => {
+      const prov = buildProvenance(null);
+      expect(prov.source_venture_id).toBeNull();
+    });
+  });
+
+  describe('selectApplicableLayers', () => {
+    it('should return all layers by default', () => {
+      const layers = selectApplicableLayers({});
+      expect(layers).toEqual(ARCHITECTURE_LAYERS);
+      expect(layers.length).toBe(4);
+    });
+
+    it('should filter by payload hints', () => {
+      const layers = selectApplicableLayers({ architecture_layers: ['data', 'api'] });
+      expect(layers.length).toBe(2);
+      expect(layers[0].key).toBe('data');
+      expect(layers[1].key).toBe('api');
+    });
+
+    it('should ignore unknown layer keys', () => {
+      const layers = selectApplicableLayers({ architecture_layers: ['data', 'unknown'] });
+      expect(layers.length).toBe(1);
+    });
+  });
+
+  describe('Transaction rollback (US-003)', () => {
+    it('should rollback on failure and return errors', async () => {
+      // Fail on 3rd insert (2nd child)
+      const mockSb = createMockSupabase({ failOnNthInsert: 3 });
+      const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+      const result = await convertSprintToSDs(
+        {
+          stageOutput: {
+            sprint_name: 'Sprint 1',
+            sprint_goal: 'Build',
+            sd_bridge_payloads: [
+              { title: 'A', type: 'feature', description: 'D', scope: 'S' },
+              { title: 'B', type: 'feature', description: 'D', scope: 'S' },
+            ],
+          },
+          ventureContext: { id: 'v1', name: 'Test' },
+          options: { generateGrandchildren: false },
+        },
+        { supabase: mockSb, logger },
+      );
+
+      expect(result.created).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+      // RPC rollback should have been attempted
+      expect(mockSb.rpc).toHaveBeenCalledWith('fn_rollback_sd_hierarchy', expect.any(Object));
+    });
+  });
+
   describe('buildBridgeArtifactRecord', () => {
     it('should build correct artifact for successful bridge', () => {
       const record = buildBridgeArtifactRecord('venture-1', 18, {
         created: true,
         orchestratorKey: 'SD-ORCH-SPRINT-001',
         childKeys: ['SD-ORCH-SPRINT-001-A', 'SD-ORCH-SPRINT-001-B'],
+        grandchildKeys: ['SD-ORCH-SPRINT-001-A1'],
         errors: [],
       });
 
@@ -134,6 +289,7 @@ describe('LifecycleSDBridge', () => {
       expect(record.validation_status).toBe('validated');
       expect(record.is_current).toBe(true);
       expect(record.metadata.childCount).toBe(2);
+      expect(record.metadata.grandchildCount).toBe(1);
       expect(record.metadata.hasErrors).toBe(false);
     });
 
@@ -142,6 +298,7 @@ describe('LifecycleSDBridge', () => {
         created: true,
         orchestratorKey: 'SD-ORCH-001',
         childKeys: ['SD-ORCH-001-A'],
+        grandchildKeys: [],
         errors: ['Child B failed', 'Child C failed'],
       });
 
