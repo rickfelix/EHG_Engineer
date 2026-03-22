@@ -11,7 +11,7 @@
  *
  * Uses 7 deterministic heuristics (no LLM):
  *   1. Code artifact cross-reference
- *   2. Stage number validation (>25 = invalid)
+ *   2. Stage number validation (>26 = invalid)
  *   3. DOCMON template detection
  *   4. TAM/market claim detection
  *   5. Content-code ratio analysis
