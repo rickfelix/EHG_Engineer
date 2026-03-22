@@ -16,7 +16,7 @@ const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 describe('DevilsAdvocate', () => {
   describe('isDevilsAdvocateGate', () => {
     it('should identify kill gates', () => {
-      for (const stage of [3, 5, 13, 23]) {
+      for (const stage of [3, 5, 13, 24]) {
         const result = isDevilsAdvocateGate(stage);
         expect(result.isGate).toBe(true);
         expect(result.gateType).toBe('kill');

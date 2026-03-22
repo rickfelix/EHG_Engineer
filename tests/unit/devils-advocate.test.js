@@ -24,7 +24,7 @@ const {
 
 describe('isDevilsAdvocateGate', () => {
   it('identifies kill gates correctly', () => {
-    for (const stage of [3, 5, 13, 23]) {
+    for (const stage of [3, 5, 13, 24]) {
       const result = isDevilsAdvocateGate(stage);
       expect(result.isGate).toBe(true);
       expect(result.gateType).toBe('kill');
@@ -32,7 +32,7 @@ describe('isDevilsAdvocateGate', () => {
   });
 
   it('identifies promotion gates correctly', () => {
-    for (const stage of [16, 17, 22]) {
+    for (const stage of [17, 18, 23]) {
       const result = isDevilsAdvocateGate(stage);
       expect(result.isGate).toBe(true);
       expect(result.gateType).toBe('promotion');
@@ -40,7 +40,7 @@ describe('isDevilsAdvocateGate', () => {
   });
 
   it('returns false for non-gate stages', () => {
-    for (const stage of [1, 2, 4, 6, 7, 8, 9, 10, 11, 12, 14, 15, 18, 19, 20, 21, 24, 25]) {
+    for (const stage of [1, 2, 4, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 19, 20, 21, 22, 25, 26]) {
       const result = isDevilsAdvocateGate(stage);
       expect(result.isGate).toBe(false);
       expect(result.gateType).toBeNull();

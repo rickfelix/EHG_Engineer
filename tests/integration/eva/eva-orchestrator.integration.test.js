@@ -471,8 +471,8 @@ describe('Eva Orchestrator Integration', () => {
     });
 
     it('should verify kill gates and promotion gates are disjoint', () => {
-      const killGates = [3, 5, 13, 23];
-      const promotionGates = [16, 17, 22];
+      const killGates = [3, 5, 13, 24];
+      const promotionGates = [17, 18, 23];
 
       for (const stage of killGates) {
         expect(promotionGates).not.toContain(stage);
