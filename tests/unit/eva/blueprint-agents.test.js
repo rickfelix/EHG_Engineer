@@ -29,17 +29,18 @@ describe('Blueprint Agent Registry', () => {
     REGISTRY.BLUEPRINT_LAUNCH_READINESS,
     REGISTRY.BLUEPRINT_SPRINT_PLAN,
     REGISTRY.BLUEPRINT_PROMOTION_GATE,
+    REGISTRY.BLUEPRINT_WIREFRAMES,
   ];
 
-  it('exports all 11 artifact types', () => {
-    expect(ARTIFACT_TYPES).toHaveLength(11);
+  it('exports all 12 artifact types', () => {
+    expect(ARTIFACT_TYPES).toHaveLength(12);
     for (const type of EXPECTED_TYPES) {
       expect(ARTIFACT_TYPES).toContain(type);
     }
   });
 
-  it('registry contains all 11 agents', () => {
-    expect(agentRegistry.size).toBe(11);
+  it('registry contains all 12 agents', () => {
+    expect(agentRegistry.size).toBe(12);
     for (const type of EXPECTED_TYPES) {
       expect(agentRegistry.has(type)).toBe(true);
     }
@@ -115,10 +116,10 @@ describe('Dependency Integrity', () => {
 // ── Topological execution order ──────────────────────────────
 
 describe('resolveExecutionOrder', () => {
-  it('returns all 11 artifact types', () => {
+  it('returns all 12 artifact types', () => {
     const order = resolveExecutionOrder();
-    expect(order).toHaveLength(11);
-    expect(new Set(order).size).toBe(11);
+    expect(order).toHaveLength(12);
+    expect(new Set(order).size).toBe(12);
   });
 
   it('places every agent after its dependencies', () => {
@@ -153,9 +154,9 @@ describe('resolveExecutionOrder', () => {
 // ── Orchestrate (dry run) ────────────────────────────────────
 
 describe('orchestrate', () => {
-  it('returns a Map with all 11 artifact types when no executeAgent provided', async () => {
+  it('returns a Map with all 12 artifact types when no executeAgent provided', async () => {
     const results = await orchestrate({ name: 'Test Venture' });
-    expect(results.size).toBe(11);
+    expect(results.size).toBe(12);
     for (const type of ARTIFACT_TYPES) {
       expect(results.has(type)).toBe(true);
       expect(results.get(type).planned).toBe(true);
@@ -171,7 +172,7 @@ describe('orchestrate', () => {
 
     const results = await orchestrate({ name: 'Test' }, { executeAgent });
 
-    expect(callOrder).toHaveLength(11);
+    expect(callOrder).toHaveLength(12);
     // Verify dependency ordering in call sequence
     const indexOf = new Map(callOrder.map((type, i) => [type, i]));
     for (const [type, agent] of agentRegistry) {
