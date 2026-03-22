@@ -144,20 +144,7 @@ describe('validateStageGate routing', () => {
     expect(result.passed).toBe(false);
   });
 
-  it('routes 21->22 to UAT Signoff Gate (existing)', async () => {
-    const supabase = createMockSupabase({
-      venture_artifacts: {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
-      },
-    });
-
-    const result = await validateStageGate(supabase, 'v1', 21, 22, { logger: silentLogger });
-    expect(result.gate_name).toBe('UAT_SIGNOFF');
-  });
-
-  it('routes 22->23 to Deployment Health Gate (existing)', async () => {
+  it('routes 22->23 to UAT Signoff Gate (existing)', async () => {
     const supabase = createMockSupabase({
       venture_artifacts: {
         select: vi.fn().mockReturnThis(),
@@ -167,6 +154,19 @@ describe('validateStageGate routing', () => {
     });
 
     const result = await validateStageGate(supabase, 'v1', 22, 23, { logger: silentLogger });
+    expect(result.gate_name).toBe('UAT_SIGNOFF');
+  });
+
+  it('routes 23->24 to Deployment Health Gate (existing)', async () => {
+    const supabase = createMockSupabase({
+      venture_artifacts: {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
+      },
+    });
+
+    const result = await validateStageGate(supabase, 'v1', 23, 24, { logger: silentLogger });
     expect(result.gate_name).toBe('DEPLOYMENT_HEALTH');
   });
 

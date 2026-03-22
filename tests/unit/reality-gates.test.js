@@ -100,7 +100,7 @@ describe('Reality Gates', () => {
 
     it('has config for exactly 5 boundaries', () => {
       const boundaries = Object.keys(BOUNDARY_CONFIG);
-      expect(boundaries).toEqual(['5->6', '9->10', '12->13', '16->17', '22->23']);
+      expect(boundaries).toEqual(['5->6', '9->10', '12->13', '17->18', '23->24']);
     });
   });
 
