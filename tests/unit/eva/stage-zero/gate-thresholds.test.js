@@ -23,7 +23,7 @@ import {
 describe('LEGACY_GATE_THRESHOLDS', () => {
   test('contains all 5 enforced boundaries', () => {
     expect(Object.keys(LEGACY_GATE_THRESHOLDS)).toEqual([
-      '5->6', '9->10', '12->13', '16->17', '20->21',
+      '5->6', '9->10', '12->13', '17->18', '23->24',
     ]);
   });
 
@@ -37,11 +37,11 @@ describe('LEGACY_GATE_THRESHOLDS', () => {
   });
 
   test('matches BOUNDARY_CONFIG values for shared boundaries', () => {
-    // LEGACY_GATE_THRESHOLDS covers boundaries 5->6, 9->10, 12->13, 16->17, 20->21
-    // BOUNDARY_CONFIG covers boundaries 5->6, 9->10, 12->13, 16->17, 22->23
-    // They share 5->6, 12->13, 16->17 with identical artifact types.
+    // LEGACY_GATE_THRESHOLDS covers boundaries 5->6, 9->10, 12->13, 17->18, 23->24
+    // BOUNDARY_CONFIG covers boundaries 5->6, 9->10, 12->13, 17->18, 23->24
+    // They share 5->6, 12->13, 17->18 with identical artifact types.
     // 9->10 and last boundary differ (legacy has old artifact types, config was updated).
-    const sharedBoundaries = ['5->6', '12->13', '16->17'];
+    const sharedBoundaries = ['5->6', '12->13', '17->18'];
     for (const boundary of sharedBoundaries) {
       const config = BOUNDARY_CONFIG[boundary];
       for (const artifact of config.required_artifacts) {
