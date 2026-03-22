@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-22T07:56:11.782Z
+**Generated**: 2026-03-22T16:30:13.945Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (82 total)
+## Columns (83 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -105,6 +105,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | orchestrator_lock_id | `uuid` | YES | - | - |
 | orchestrator_lock_acquired_at | `timestamp with time zone` | YES | - | - |
 | growth_strategy | `USER-DEFINED` | YES | - | Portfolio growth strategy classification: cash_engine (proven revenue), capability_builder (reusable tech/business capabilities), moonshot (high risk/high ceiling) |
+| venture_type | `text` | YES | - | Classifies the venture by its primary technology focus: ui (frontend/design), backend (API/services), mixed (full-stack), or data (analytics/ML). NULL for unclassified ventures. Added by SD-LEO-INFRA-SRIP-WIREFRAME-GATING-001. |
 
 ## Constraints
 
@@ -126,6 +127,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `ventures_pipeline_mode_check`: CHECK ((pipeline_mode = ANY (ARRAY['building'::text, 'operations'::text, 'growth'::text, 'scaling'::text, 'exit_prep'::text, 'divesting'::text, 'sold'::text])))
 - `ventures_portfolio_synergy_score_check`: CHECK (((portfolio_synergy_score >= (0)::numeric) AND (portfolio_synergy_score <= (1)::numeric)))
 - `ventures_time_horizon_classification_check`: CHECK ((time_horizon_classification = ANY (ARRAY['build_now'::text, 'park_later'::text, 'window_closing'::text])))
+- `ventures_venture_type_check`: CHECK ((venture_type = ANY (ARRAY['ui'::text, 'backend'::text, 'mixed'::text, 'data'::text])))
 - `ventures_vertical_category_check`: CHECK ((vertical_category = ANY (ARRAY['healthcare'::text, 'fintech'::text, 'edtech'::text, 'logistics'::text, 'other'::text])))
 
 ## Indexes
