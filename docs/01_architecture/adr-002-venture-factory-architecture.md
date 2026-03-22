@@ -204,9 +204,9 @@ The EHG Venture Factory uses a **Unified Platform Architecture** - one shared co
 
 **Rationale**:
 - Ventures share 95% of their lifecycle logic (validation, naming, schema generation)
-- Only Stage 17+ (Build Loop) produces venture-specific code
+- Only Stage 18+ (Build Loop) produces venture-specific code
 - The Factory orchestrates; it doesn't contain venture product code
-- Venture *outputs* (the actual products) deploy separately at Stage 22
+- Venture *outputs* (the actual products) deploy separately at Stage 23
 
 ### 0.3 Where Venture-Specific Things Live
 
@@ -218,7 +218,7 @@ The EHG Venture Factory uses a **Unified Platform Architecture** - one shared co
 | System prompts (DB) | `venture_artifacts` | `artifact_type = 'build_system_prompt'` |
 | System prompts (Files) | `.claude/prompts/` | Prefixed: `solara-coder.md` |
 | Strategic Directives | `strategic_directives_v2` | Named: `SD-SOLARA-SCHEMA-001` |
-| Produced code (MVP+) | Venture's own repo/deploy | Created at Stage 18, deployed at Stage 22 |
+| Produced code (MVP+) | Venture's own repo/deploy | Created at Stage 19, deployed at Stage 23 |
 
 ### 0.4 The Venture Lifecycle in Code vs Database
 
@@ -231,7 +231,7 @@ STAGES 1-17: Database-Only
 
 STAGE 18 (MVP Development Loop): Code Generation Begins
 ├── Leo Protocol generates actual product code
-├── Code lives in venture's deployment target (TBD at Stage 17)
+├── Code lives in venture's deployment target (TBD at Stage 18)
 └── Could be: Vercel project, separate repo, or subdirectory
 
 STAGES 19-22: Build, Secure, Test, Deploy
@@ -239,7 +239,7 @@ STAGES 19-22: Build, Secure, Test, Deploy
 ├── Deployed to production infrastructure
 └── Venture becomes a LIVE PRODUCT (independent of Factory)
 
-STAGES 23-25: Post-Launch
+STAGES 24-26: Post-Launch
 ├── Factory monitors via analytics
 ├── Optimization SDs still reference the venture
 └── Growth Engine uses venture's distribution_config
@@ -345,7 +345,7 @@ The `ehg` app provides a unified view of ALL ventures:
 | Venture isolation | RLS + venture_id FK | Database-level security |
 | Agent prompts | Filtered sync | `.active_venture` controls which prompts load |
 | SD naming | `SD-{CODE}-{SUFFIX}-{SEQ}` | Clear venture attribution |
-| Produced code location | Determined at Stage 17 | Venture chooses its deployment target |
+| Produced code location | Determined at Stage 18 | Venture chooses its deployment target |
 
 ### 0.9 Shared Services Architecture (Platform-as-a-Factory)
 
@@ -455,7 +455,7 @@ public.ventures
 public.venture_stage_work
 public.venture_artifacts
 
--- Per-venture schemas (created at Stage 17)
+-- Per-venture schemas (created at Stage 18)
 CREATE SCHEMA solara;   -- SolaraAI customer data
 CREATE SCHEMA oracle;   -- OracleBot customer data
 CREATE SCHEMA finbot;   -- FinBot customer data
@@ -474,7 +474,7 @@ solara.transactions
 
 #### 0.9.5 Venture Deployment Model
 
-At **Stage 17** (Environment & Agent Config), Chairman selects deployment target:
+At **Stage 18** (Environment & Agent Config), Chairman selects deployment target:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -773,8 +773,8 @@ IF score < threshold                 IF score < threshold
 | 2 | THE ENGINE | 6-9 | Define business model and monetization |
 | 3 | THE IDENTITY | 10-12 | Brand, positioning, and go-to-market |
 | 4 | THE BLUEPRINT | 13-16 | Technical design before code |
-| 5 | THE BUILD LOOP | 17-22 | Engineering execution via Leo Protocol |
-| 6 | LAUNCH & LEARN | 23-25 | Deploy, measure, optimize |
+| 5 | THE BUILD LOOP | 18-23 | Engineering execution via Leo Protocol |
+| 6 | LAUNCH & LEARN | 24-26 | Deploy, measure, optimize |
 
 ### 2.2 Complete Stage Definitions
 
@@ -845,12 +845,12 @@ IF score < threshold                 IF score < threshold
 **The Firewall Philosophy**:
 > No code is written until the schema is unambiguous. Stage 16 is the checkpoint that prevents "build first, spec later" chaos.
 
-#### PHASE 5: THE BUILD LOOP (Stages 17-22)
+#### PHASE 5: THE BUILD LOOP (Stages 18-23)
 *"Leo Protocol engineering execution"*
 
 | Stage | Name | Work Type | Advisory Gate | Key Outputs |
 |-------|------|-----------|---------------|-------------|
-| **17** | Environment & Agent Config | `sd_required` | No | System prompts, CI/CD, dev environment |
+| **18** | Environment & Agent Config | `sd_required` | No | System prompts, CI/CD, dev environment |
 | **18** | MVP Development Loop | `sd_required` | No | Working code (iterative) |
 | **19** | Monetization & API Layer | `sd_required` | No | Payment integration, revenue APIs |
 | **20** | Security & Performance | `sd_required` | No | Security hardening, performance tuning |
@@ -859,11 +859,11 @@ IF score < threshold                 IF score < threshold
 
 **Build Loop Pattern**:
 ```
-Stage 17-22 each generate SDs that follow Leo Protocol:
+Stage 18-23 each generate SDs that follow Leo Protocol:
   SD created → LEAD approves → PLAN creates PRD → EXEC implements → LEAD closes
 ```
 
-#### PHASE 6: LAUNCH & LEARN (Stages 23-25)
+#### PHASE 6: LAUNCH & LEARN (Stages 24-26)
 *"Ship it, measure it, scale it"*
 
 | Stage | Name | Work Type | Advisory Gate | Key Outputs |
@@ -1383,7 +1383,7 @@ async function evaluateStageCompletion(
            │
            ├── Runs Schema Completeness Checklist
            │
-           └── If PASS → Advance to Stage 17
+           └── If PASS → Advance to Stage 18
                If FAIL → Show quick fixes, await Chairman decision
 
 4. VENTURE ADVANCES TO STAGE 17
@@ -2860,9 +2860,9 @@ cleanupLegacySDs();
 
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
-| **ADR-002-001** | **Unified Platform Architecture** | Ventures share 95% lifecycle logic; only Stage 17+ produces venture-specific code | 2025-12-06 |
+| **ADR-002-001** | **Unified Platform Architecture** | Ventures share 95% lifecycle logic; only Stage 18+ produces venture-specific code | 2025-12-06 |
 | **ADR-002-002** | **Database-Driven Ventures** | Single codebase with venture_id filtering vs. separate repos | 2025-12-06 |
-| **ADR-002-003** | **25-Stage Lifecycle** | Streamlined from 40 stages for solo entrepreneur efficiency | 2025-12-06 |
+| **ADR-002-003** | **26-Stage Lifecycle** | Streamlined from 40 stages for solo entrepreneur efficiency | 2025-12-06 |
 | **ADR-002-004** | **Chairman Advisory over Hard Loops** | Soft gates with override capability instead of automated GOTO | 2025-12-06 |
 | **ADR-002-005** | **Platform-as-a-Factory Model** | Shared services (AI Gateway, Auth) consumed by ventures | 2025-12-06 |
 | **ADR-002-006** | **Hybrid Database Isolation** | Shared factory schema + per-venture schemas for customer data | 2025-12-06 |
@@ -3079,8 +3079,8 @@ Profile: Standard (500K tokens)
 ├── THE ENGINE (Stages 6-9):     15% (75K)
 ├── THE IDENTITY (Stages 10-12): 10% (50K)
 ├── THE BLUEPRINT (Stages 13-16): 20% (100K)
-├── THE BUILD LOOP (Stages 17-20): 20% (100K)
-└── LAUNCH & LEARN (Stages 21-25): 10% (50K)
+├── THE BUILD LOOP (Stages 18-23): 20% (100K)
+└── LAUNCH & LEARN (Stages 24-26): 10% (50K)
 ```
 
 #### B.4.4 Schema Addition

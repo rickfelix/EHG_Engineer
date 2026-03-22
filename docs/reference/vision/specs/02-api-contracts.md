@@ -135,9 +135,9 @@ export type PhaseName =
   | 'THE_TRUTH'      // Stages 1-5
   | 'THE_ENGINE'     // Stages 6-9
   | 'THE_IDENTITY'   // Stages 10-12
-  | 'THE_BLUEPRINT'  // Stages 13-16
-  | 'THE_BUILD_LOOP' // Stages 17-20
-  | 'LAUNCH_LEARN';  // Stages 21-25
+  | 'THE_BLUEPRINT'  // Stages 13-17
+  | 'THE_BUILD_LOOP' // Stages 18-23
+  | 'LAUNCH_LEARN';  // Stages 24-26
 
 // ============================================
 // VENTURE TYPES

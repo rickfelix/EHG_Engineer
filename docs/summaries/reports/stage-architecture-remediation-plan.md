@@ -164,8 +164,8 @@ This document represents the **final, simplified action plan** for resolving the
 **Consequences**:
 - `venture.current_stage` stores 1-25
 - Stage names match Vision V2 exactly
-- Kill gates at stages 3, 5, 13, 23
-- Promotion gates at stages 16, 17, 22
+- Kill gates at stages 3, 5, 13, 24
+- Promotion gates at stages 17, 18, 23
 
 ---
 
@@ -496,8 +496,8 @@ export const getPromotionGateStages = (): StageNumber[] =>
   STAGE_NUMBERS.filter(n => isPromotionGate(n));
 
 // Gate summary for reference
-export const KILL_GATES: readonly StageNumber[] = [3, 5, 13, 23] as const;
-export const PROMOTION_GATES: readonly StageNumber[] = [16, 17, 22] as const;
+export const KILL_GATES: readonly StageNumber[] = [3, 5, 13, 24] as const;
+export const PROMOTION_GATES: readonly StageNumber[] = [17, 18, 23] as const;
 ```
 
 ### File: `/src/config/vision-v2-stages.json`

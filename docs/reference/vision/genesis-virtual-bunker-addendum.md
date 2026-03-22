@@ -41,11 +41,11 @@ tags: [reference, auto-generated]
   - [Stage 1: Genesis Entry](#stage-1-genesis-entry)
   - [Stage 2: AI Multi-Model Critique](#stage-2-ai-multi-model-critique)
   - [Stage 3: Kill Gate](#stage-3-kill-gate)
-  - [Stages 4-15: Validation with Simulation Reference](#stages-4-15-validation-with-simulation-reference)
-  - [Stage 16: Schema Regeneration Gate](#stage-16-schema-regeneration-gate)
-  - [Stage 17: Repository Regeneration Gate](#stage-17-repository-regeneration-gate)
-  - [Stages 18-21: Production Build](#stages-18-21-production-build)
-  - [Stage 22-23: Production Deployment](#stage-22-23-production-deployment)
+  - [Stages 4-16: Validation with Simulation Reference](#stages-4-16-validation-with-simulation-reference)
+  - [Stage 17: Schema Regeneration Gate](#stage-17-schema-regeneration-gate)
+  - [Stage 18: Repository Regeneration Gate](#stage-18-repository-regeneration-gate)
+  - [Stages 19-22: Production Build](#stages-19-22-production-build)
+  - [Stage 23-24: Production Deployment](#stage-23-24-production-deployment)
 - [Database Schema Changes](#database-schema-changes)
   - [New Tables](#new-tables)
   - [Deferred Tables (v2)](#deferred-tables-v2)
@@ -208,7 +208,7 @@ if (!isMockMode()) {
 }
 ```
 
-This line is removed only at regeneration time (Stage 16+).
+This line is removed only at regeneration time (Stage 17+).
 
 ### 3. Ephemeral Deployments (Replaces Dedicated Hosting)
 
@@ -235,15 +235,15 @@ The original spec described "elevation" - copying simulation artifacts to produc
 
 | Stage | Original (Elevation) | Virtual Bunker (Regeneration) |
 |-------|---------------------|------------------------------|
-| 16 | Copy `schema_sim_*` → `schema_*` | Generate fresh schema from validated requirements |
-| 17 | Fork `ehg-simulations/*` → `ehg-ventures/*` | Generate fresh repo with production patterns |
-| 22 | Redirect `*.possible.ehg.dev` → `*.ehg.dev` | Deploy fresh build to production domain |
+| 17 | Copy `schema_sim_*` → `schema_*` | Generate fresh schema from validated requirements |
+| 18 | Fork `ehg-simulations/*` → `ehg-ventures/*` | Generate fresh repo with production patterns |
+| 23 | Redirect `*.possible.ehg.dev` → `*.ehg.dev` | Deploy fresh build to production domain |
 
 **Why regeneration over elevation:**
 
 1. **No drift** - Production code generated from validated requirements, not evolved simulation
 2. **Clean slate** - No simulation hacks leak into production
-3. **Lessons learned** - Regeneration incorporates learnings from Stages 4-15
+3. **Lessons learned** - Regeneration incorporates learnings from Stages 4-16
 4. **Simpler** - No migration scripts, no data sync, no credential swap
 
 ---
@@ -275,7 +275,7 @@ Output: Database schema with:
         - Sample seed data
 ```
 
-**Schema is tagged `epistemic_status: simulation`**. May be regenerated at Stage 16.
+**Schema is tagged `epistemic_status: simulation`**. May be regenerated at Stage 17.
 
 ### Phase 3: Schema → Repository
 
@@ -289,7 +289,7 @@ Output: Complete repository with:
         - Simulation enforcement checks
 ```
 
-**Repository is ephemeral.** Deleted on incineration, regenerated at Stage 17.
+**Repository is ephemeral.** Deleted on incineration, regenerated at Stage 18.
 
 ### Phase 4: Repository → Live URL
 
@@ -428,7 +428,7 @@ When a venture passes validation and reaches regeneration gates, we extract "sou
 }
 ```
 
-This extraction feeds into Stage 16/17/22 regeneration.
+This extraction feeds into Stage 17/18/23 regeneration.
 
 ---
 
@@ -462,7 +462,7 @@ This extraction feeds into Stage 16/17/22 regeneration.
 | On REJECT | Incineration sequence triggered |
 | On APPROVE | Continue to Stage 4, simulation persists as reference |
 
-### Stages 4-15: Validation with Simulation Reference
+### Stages 4-16: Validation with Simulation Reference
 
 Simulation remains visible as "North Star" but:
 - Cannot be edited (read-only)
@@ -470,29 +470,29 @@ Simulation remains visible as "North Star" but:
 - Serves as discussion reference
 - No code from simulation enters production
 
-### Stage 16: Schema Regeneration Gate
+### Stage 17: Schema Regeneration Gate
 
 | Aspect | Specification |
 |--------|--------------|
-| Input | Soul extraction + Stage 15 user stories |
+| Input | Soul extraction + Stage 16 user stories |
 | Process | AI generates production schema from requirements |
 | Output | Fresh schema in `ehg-ventures` namespace |
 | Simulation | Archived (kept for audit) |
 
-### Stage 17: Repository Regeneration Gate
+### Stage 18: Repository Regeneration Gate
 
 | Aspect | Specification |
 |--------|--------------|
-| Input | Stage 16 schema + validated requirements |
+| Input | Stage 17 schema + validated requirements |
 | Process | AI generates production repository |
 | Output | Fresh repo in `ehg-ventures` GitHub org |
 | Simulation repo | Deleted |
 
-### Stages 18-21: Production Build
+### Stages 19-22: Production Build
 
 Standard LEO workflow - build using real infrastructure.
 
-### Stage 22-23: Production Deployment
+### Stage 23-24: Production Deployment
 
 | Aspect | Specification |
 |--------|--------------|
@@ -588,15 +588,15 @@ leo genesis extend {simulation_id} --days=30 --reason="..."
 ### Regeneration Commands
 
 ```bash
-# Stage 16: Regenerate schema
+# Stage 17: Regenerate schema
 leo regenerate schema {venture_id}
 # → Extracts soul from simulation
 # → Generates production schema
 # → Archives simulation schema
 
-# Stage 17: Regenerate repository
+# Stage 18: Regenerate repository
 leo regenerate repo {venture_id}
-# → Uses Stage 16 schema
+# → Uses Stage 17 schema
 # → Generates production repository
 # → Deletes simulation repository
 ```

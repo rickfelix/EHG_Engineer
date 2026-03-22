@@ -28,9 +28,9 @@ tags: [architecture, auto-generated]
   - [Phase 1: THE TRUTH (Stages 1-5)](#phase-1-the-truth-stages-1-5)
   - [Phase 2: THE ENGINE (Stages 6-9)](#phase-2-the-engine-stages-6-9)
   - [Phase 3: THE IDENTITY (Stages 10-12)](#phase-3-the-identity-stages-10-12)
-  - [Phase 4: THE BLUEPRINT (Stages 13-16)](#phase-4-the-blueprint-stages-13-16)
-  - [Phase 5: THE BUILD LOOP (Stages 17-22)](#phase-5-the-build-loop-stages-17-22)
-  - [Phase 6: LAUNCH & LEARN (Stages 23-25)](#phase-6-launch-learn-stages-23-25)
+  - [Phase 4: THE BLUEPRINT (Stages 13-17)](#phase-4-the-blueprint-stages-13-17)
+  - [Phase 5: THE BUILD LOOP (Stages 18-23)](#phase-5-the-build-loop-stages-18-23)
+  - [Phase 6: LAUNCH & LEARN (Stages 24-26)](#phase-6-launch-learn-stages-24-26)
   - [Universal Patterns Across All 25 Stages](#universal-patterns-across-all-25-stages)
 - [Reference Files](#reference-files)
 - [Existing EHG App Architecture (from codebase analysis)](#existing-ehg-app-architecture-from-codebase-analysis)
@@ -291,7 +291,7 @@ Per-stage consensus decisions extracted from the 25-stage triangulated analysis.
 | **11** | GTM Strategy | Add tier/channel/timeline generation `analysisStep`. Keep exactly 8 channels ($0 budget = backlog). Add persona + pain_points to tiers. | Forced breadth: 8 channels is the EVA method |
 | **12** | Sales Identity | Add sales logic generation `analysisStep`. Wire sales_model to Stage 7 pricing + Stage 11 channels. Add conversion_rate_estimate to funnel stages. | Sales model is the most impactful identity decision |
 
-### Phase 4: THE BLUEPRINT (Stages 13-16)
+### Phase 4: THE BLUEPRINT (Stages 13-17)
 
 | Stage | Name | P0 Consensus | Key Pattern |
 |:-----:|------|-------------|-------------|
@@ -300,7 +300,7 @@ Per-stage consensus decisions extracted from the 25-stage triangulated analysis.
 | **15** | Resource Planning | Add agent allocation `analysisStep` from Stages 12-14. Map AI agent capabilities to build phases. Add service/tool requirements and compute budget per phase. | AI-only operation: agents and compute, not human hiring |
 | **16** | Financial Projections | Add financial model `analysisStep` consuming 7 prior stages. Replace flat projections with "Startup Standard" P&L. Phase-variable costs from Stage 15. Promotion gate checks viability, not just presence. | The synthesis stage of THE BLUEPRINT: all prior stages feed financial truth |
 
-### Phase 5: THE BUILD LOOP (Stages 17-22)
+### Phase 5: THE BUILD LOOP (Stages 18-23)
 
 | Stage | Name | P0 Consensus | Key Pattern |
 |:-----:|------|-------------|-------------|
@@ -311,7 +311,7 @@ Per-stage consensus decisions extracted from the 25-stage triangulated analysis.
 | **21** | Build Review | **Reconceive** from "Integration Testing" to "Build Review". Add `analysisStep` consuming Stages 14/19/20. review_decision (approve/conditional/reject). | Stage 20 = "Did we test it?" Stage 21 = "Is it ready?" |
 | **22** | Release Readiness | **Fix promotion gate stale contracts** (critical bug). Add `analysisStep` synthesizing entire BUILD LOOP. release_decision (release/hold/cancel). Sprint retrospective. | Business review (human judgment) separate from technical gate |
 
-### Phase 6: LAUNCH & LEARN (Stages 23-25)
+### Phase 6: LAUNCH & LEARN (Stages 24-26)
 
 | Stage | Name | P0 Consensus | Key Pattern |
 |:-----:|------|-------------|-------------|

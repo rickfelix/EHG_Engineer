@@ -35,7 +35,7 @@ tags: [guide, auto-generated]
   - [On Revise](#on-revise)
   - [On Proceed](#on-proceed)
   - [Implementation](#implementation)
-- [Kill Gate 23: Production Launch Viability](#kill-gate-23-production-launch-viability)
+- [Kill Gate 24: Production Launch Viability](#kill-gate-24-production-launch-viability)
   - [Trigger Conditions](#trigger-conditions)
   - [Go/No-Go Decision Framework](#gono-go-decision-framework)
   - [Post-Launch Monitoring Triggers](#post-launch-monitoring-triggers)
@@ -63,13 +63,13 @@ Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-STAGE-GATES-EX
 
 Kill Gates are hard decision points where a venture can be **terminated** ("killed"), **sent back** for revision, or **approved** to proceed. They enforce deterministic thresholds -- not AI predictions -- per Chairman Decision D01.
 
-There are 4 Kill Gates in the 25-stage lifecycle, placed at the boundaries where continuing with a flawed venture would waste significant resources.
+There are 4 Kill Gates in the 26-stage lifecycle, placed at the boundaries where continuing with a flawed venture would waste significant resources.
 
 ## Architecture Overview
 
 ```
                      THE TRUTH           THE BLUEPRINT        LAUNCH & LEARN
-                    Stages 1-5           Stages 13-16         Stages 23-25
+                    Stages 1-5           Stages 13-17         Stages 24-26
                         |                     |                    |
                    +----+----+           +----+----+          +----+----+
                    |         |           |         |          |         |
@@ -318,7 +318,7 @@ Note: Even when the composite score passes, the `new_tech_vendor` filter trigger
 ### On Proceed
 
 - Stage advances to Stage 14 (Data Model & Architecture)
-- Tech stack decisions become binding constraints for stages 14-22
+- Tech stack decisions become binding constraints for stages 14-23
 
 ### Implementation
 
@@ -329,18 +329,18 @@ Note: Even when the composite score passes, the `new_tech_vendor` filter trigger
 
 ---
 
-## Kill Gate 23: Production Launch Viability
+## Kill Gate 24: Production Launch Viability
 
-**Stage**: 23 (Production Launch) -- part of LAUNCH & LEARN phase
+**Stage**: 24 (Production Launch) -- part of LAUNCH & LEARN phase
 **Purpose**: Final Go/No-Go decision before the venture goes live to real users. Evaluates post-build readiness and projected viability.
 
 ### Trigger Conditions
 
-Stage 23 is the final kill gate and evaluates multiple dimensions:
+Stage 24 is the final kill gate and evaluates multiple dimensions:
 
 | Metric Category | Specific Checks |
 |-----------------|-----------------|
-| Deployment readiness | All Stage 22 checklist items passed |
+| Deployment readiness | All Stage 23 checklist items passed |
 | Security posture | No critical/high vulnerabilities open |
 | Performance baseline | Response times within SLA targets |
 | Monitoring setup | Alerting, logging, incident response configured |
@@ -371,7 +371,7 @@ Stage 23 is the final kill gate and evaluates multiple dimensions:
 
 ### Post-Launch Monitoring Triggers
 
-If the venture proceeds to launch, Stage 23 also defines the post-launch monitoring thresholds that feed back into the system:
+If the venture proceeds to launch, Stage 24 also defines the post-launch monitoring thresholds that feed back into the system:
 
 | Post-Launch Metric | Alert Threshold | Kill Reconsideration |
 |--------------------|-----------------|----------------------|
@@ -383,39 +383,39 @@ If the venture proceeds to launch, Stage 23 also defines the post-launch monitor
 ### On Kill
 
 - Venture status set to `killed` -- deployment does NOT proceed
-- All infrastructure provisioned during stages 17-22 flagged for decommission
+- All infrastructure provisioned during stages 18-23 flagged for decommission
 - Kill rationale recorded with specific failing criteria
 - Post-mortem automatically captured in cross-venture learning
 
 ### On Revise
 
 - Venture rolls back to the specific failing area:
-  - Deployment issues --> Roll back to **Stage 22** (Deployment)
-  - Security issues --> Roll back to **Stage 20** (Security & Performance)
-  - Performance issues --> Roll back to **Stage 20**
-  - Operational issues --> Roll back to **Stage 17** (Environment)
+  - Deployment issues --> Roll back to **Stage 23** (Deployment)
+  - Security issues --> Roll back to **Stage 21** (Security & Performance)
+  - Performance issues --> Roll back to **Stage 21**
+  - Operational issues --> Roll back to **Stage 18** (Environment)
   - Financial issues --> Roll back to **Stage 5** (Profitability) for re-evaluation
 - Rollback target specified in `chairman_decisions.metadata.rollback_stage`
 
 ### On Proceed
 
 - Venture launches to production
-- Stage advances to Stage 24 (Analytics)
+- Stage advances to Stage 25 (Analytics)
 - Post-launch monitoring begins per the thresholds defined above
 - Incident response procedures activate
 
 ### Implementation
 
 - Gate logic: `lib/agents/modules/venture-state-machine/stage-gates.js`
-- Launch template: `lib/eva/stage-templates/stage-23.js`
-- Prerequisite check: Validates Stage 22 Promotion Gate passed
+- Launch template: `lib/eva/stage-templates/stage-24.js`
+- Prerequisite check: Validates Stage 23 Promotion Gate passed
 - Post-launch metrics: Fed back through `venture_artifacts` for ongoing tracking
 
 ---
 
 ## Kill Gate Comparison
 
-| Aspect | Gate 3 | Gate 5 | Gate 13 | Gate 23 |
+| Aspect | Gate 3 | Gate 5 | Gate 13 | Gate 24 |
 |--------|--------|--------|---------|---------|
 | Phase | THE TRUTH | THE TRUTH | THE BLUEPRINT | LAUNCH & LEARN |
 | Focus | Market viability | Financial viability | Technical feasibility | Launch readiness |
@@ -455,12 +455,12 @@ Kill decisions and their rationale are preserved indefinitely in `chairman_decis
 ## Lifecycle Position Diagram
 
 ```
-Stage:  1    2    3    4    5    6 .. 12   13   14 .. 22   23   24   25
+Stage:  1    2    3    4    5    6 .. 12   13   14 .. 23   24   25   26
         |    |    |    |    |    |         |    |         |    |    |
         v    v    v    v    v    v         v    v         v    v    v
        [Draft][AI][KILL][Comp][KILL][...]  [KILL][Data]  [KILL][An][Scale]
                   GATE       GATE         GATE          GATE
-                   3          5            13            23
+                   3          5            13            24
                    |          |            |             |
              THE TRUTH        |      THE BLUEPRINT   LAUNCH &
             (Is it worth      |     (Can we build    LEARN

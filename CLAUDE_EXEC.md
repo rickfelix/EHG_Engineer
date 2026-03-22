@@ -1724,7 +1724,7 @@ Before writing any code, you MUST:
 | Requirement | Description |
 |-------------|-------------|
 | **Spec Compliance** | Code MUST match spec definitions exactly (table names, column types, API shapes) |
-| **25-Stage Insulation** | CEO Runtime MUST be OBSERVER-COMMITTER only - no direct venture_stage_work writes |
+| **26-Stage Insulation** | CEO Runtime MUST be OBSERVER-COMMITTER only - no direct venture_stage_work writes |
 | **Glass Cockpit Design** | UI MUST follow progressive disclosure, minimal chrome philosophy |
 | **Token Budget Enforcement** | All agent operations MUST respect venture token budgets |
 
@@ -1735,7 +1735,7 @@ All Vision V2 SDs have this implementation guidance:
 - **CREATE FROM NEW** - similar files may exist to learn from, but implement fresh
 - **DO NOT MODIFY** existing files - create new implementations per vision specs
 
-### 25-Stage Insulation Checklist (SD-VISION-V2-005 CRITICAL)
+### 26-Stage Insulation Checklist (SD-VISION-V2-005 CRITICAL)
 
 **Before marking SD-VISION-V2-005 complete:**
 

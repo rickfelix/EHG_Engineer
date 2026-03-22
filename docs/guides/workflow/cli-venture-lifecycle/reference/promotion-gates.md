@@ -11,7 +11,7 @@ tags: [guide, auto-generated]
 
 - [Architecture Overview](#architecture-overview)
 - [Common Gate Behavior](#common-gate-behavior)
-- [Promotion Gate 16: Schema Firewall](#promotion-gate-16-schema-firewall)
+- [Promotion Gate 17: Schema Firewall](#promotion-gate-17-schema-firewall)
   - [Approval Criteria](#approval-criteria)
   - [Scoring](#scoring)
   - [Devil's Advocate Review](#devils-advocate-review)
@@ -20,7 +20,7 @@ tags: [guide, auto-generated]
   - [On Hold (Rejection)](#on-hold-rejection)
   - [Relationship to Reality Gates](#relationship-to-reality-gates)
   - [Implementation](#implementation)
-- [Promotion Gate 17: Environment Ready](#promotion-gate-17-environment-ready)
+- [Promotion Gate 18: Environment Ready](#promotion-gate-18-environment-ready)
   - [Approval Criteria](#approval-criteria)
   - [Scoring](#scoring)
   - [Devil's Advocate Review](#devils-advocate-review)
@@ -28,7 +28,7 @@ tags: [guide, auto-generated]
   - [On Approval](#on-approval)
   - [On Hold (Rejection)](#on-hold-rejection)
   - [Implementation](#implementation)
-- [Promotion Gate 22: Go-to-Market Ready](#promotion-gate-22-go-to-market-ready)
+- [Promotion Gate 23: Go-to-Market Ready](#promotion-gate-23-go-to-market-ready)
   - [Approval Criteria](#approval-criteria)
   - [Scoring](#scoring)
   - [Devil's Advocate Review](#devils-advocate-review)
@@ -55,13 +55,13 @@ Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-STAGE-GATES-EX
 
 Promotion Gates are approval checkpoints where the Chairman must verify that deliverables meet quality standards before the venture advances into a more resource-intensive phase. Unlike Kill Gates (which can terminate a venture), Promotion Gates either **approve** or **hold** -- a venture stays at its current stage until the gate passes.
 
-There are 3 Promotion Gates in the 25-stage lifecycle.
+There are 3 Promotion Gates in the 26-stage lifecycle.
 
 ## Architecture Overview
 
 ```
         THE BLUEPRINT              THE BUILD LOOP
-        Stages 13-16               Stages 17-22
+        Stages 13-17               Stages 18-23
              |                          |
         +----+----+               +-----+-----+
         |         |               |           |
@@ -85,9 +85,9 @@ All Promotion Gates share these characteristics:
 - **Decision recording**: All decisions stored in `chairman_decisions` with `decision_type = 'promotion_gate'`.
 - **Artifact validation**: Reality Gates at the same boundary also validate that required artifacts exist and meet quality thresholds.
 
-## Promotion Gate 16: Schema Firewall
+## Promotion Gate 17: Schema Firewall
 
-**Stage**: 16 (Spec-Driven Schema Generation) -- end of THE BLUEPRINT phase
+**Stage**: 17 (Spec-Driven Schema Generation) -- end of THE BLUEPRINT phase
 **Purpose**: Ensure the data model, user stories, and schema are complete and consistent before any code is written. This is the "measure twice, cut once" gate.
 
 ### Approval Criteria
@@ -175,43 +175,43 @@ Devil's Advocate specifically looks for:
 
 ### On Approval
 
-- Stage advances to Stage 17 (Environment & Agent Config)
+- Stage advances to Stage 18 (Environment & Agent Config)
 - Venture crosses from THE BLUEPRINT into THE BUILD LOOP
 - Schema becomes the binding contract for all development work
-- Reality Gate at the 16-to-17 boundary also fires
+- Reality Gate at the 17-to-18 boundary also fires
 
 ### On Hold (Rejection)
 
-- Venture stays at Stage 16
+- Venture stays at Stage 17
 - Chairman provides specific feedback on failing checks
 - Feedback stored in `chairman_decisions.metadata.failing_checks`
-- Team revises and re-submits (Stage 16 re-runs with updated artifacts)
+- Team revises and re-submits (Stage 17 re-runs with updated artifacts)
 - No rollback to earlier stages -- just re-validation at current stage
 
 ### Relationship to Reality Gates
 
-The Stage 16 Promotion Gate overlaps with the Reality Gate at the Phase 4-to-5 boundary (stages 16->17). Both gates must pass:
+The Stage 17 Promotion Gate overlaps with the Reality Gate at the Phase 4-to-5 boundary (stages 17->18). Both gates must pass:
 
 | Gate | What It Checks | Fail Behavior |
 |------|----------------|---------------|
-| Promotion Gate 16 | 12-check schema quality | Hold at Stage 16 |
-| Reality Gate (16->17) | Artifact existence + quality scores | Block transition |
+| Promotion Gate 17 | 12-check schema quality | Hold at Stage 17 |
+| Reality Gate (17->18) | Artifact existence + quality scores | Block transition |
 
 The Reality Gate fires first (are artifacts present?), then the Promotion Gate fires (are artifacts good enough?).
 
 ### Implementation
 
 - Gate logic: `lib/agents/modules/venture-state-machine/stage-gates.js`
-- Schema template: `lib/eva/stage-templates/stage-16.js`
-- 12-check validator: Part of stage-16 template output validation
-- Reality Gate: `lib/eva/reality-gates.js` (boundary check at stages 16->17)
+- Schema template: `lib/eva/stage-templates/stage-17.js`
+- 12-check validator: Part of stage-17 template output validation
+- Reality Gate: `lib/eva/reality-gates.js` (boundary check at stages 17->18)
 - Devil's Advocate: `lib/eva/devils-advocate.js`
 
 ---
 
-## Promotion Gate 17: Environment Ready
+## Promotion Gate 18: Environment Ready
 
-**Stage**: 17 (Environment & Agent Config) -- start of THE BUILD LOOP phase
+**Stage**: 18 (Environment & Agent Config) -- start of THE BUILD LOOP phase
 **Purpose**: Verify that the development environment, CI/CD pipeline, and operational tooling are properly configured before any feature development begins.
 
 ### Approval Criteria
@@ -262,27 +262,27 @@ Environment readiness checks run
 
 ### On Approval
 
-- Stage advances to Stage 18 (MVP Development Loop)
+- Stage advances to Stage 19 (MVP Development Loop)
 - The LIFECYCLE-TO-SD BRIDGE activates -- sprint items become real LEO SDs
 - Development work can begin
 
 ### On Hold (Rejection)
 
-- Venture stays at Stage 17
+- Venture stays at Stage 18
 - Missing infrastructure must be provisioned
 - Common hold reasons: CI/CD not configured, secrets not managed, no staging environment
 
 ### Implementation
 
 - Gate logic: `lib/agents/modules/venture-state-machine/stage-gates.js`
-- Environment template: `lib/eva/stage-templates/stage-17.js`
-- Readiness validator: Part of stage-17 template output validation
+- Environment template: `lib/eva/stage-templates/stage-18.js`
+- Readiness validator: Part of stage-18 template output validation
 
 ---
 
-## Promotion Gate 22: Go-to-Market Ready
+## Promotion Gate 23: Go-to-Market Ready
 
-**Stage**: 22 (Deployment & Infrastructure) -- end of THE BUILD LOOP phase
+**Stage**: 23 (Deployment & Infrastructure) -- end of THE BUILD LOOP phase
 **Purpose**: Final verification before production launch that all deployment infrastructure, monitoring, and operational procedures are in place.
 
 ### Approval Criteria
@@ -366,21 +366,21 @@ Devil's Advocate specifically looks for:
   or HOLD
     |
     v
-  Advance to Stage 23
+  Advance to Stage 24
   (LAUNCH & LEARN begins)
-  Kill Gate 23 awaits
+  Kill Gate 24 awaits
 ```
 
 ### On Approval
 
-- Stage advances to Stage 23 (Production Launch)
+- Stage advances to Stage 24 (Production Launch)
 - Venture crosses from THE BUILD LOOP into LAUNCH & LEARN
-- **Kill Gate 23** (Go/No-Go) is the next gate -- this is the final decision point
-- Reality Gate at the 22-to-23 boundary also validates
+- **Kill Gate 24** (Go/No-Go) is the next gate -- this is the final decision point
+- Reality Gate at the 23-to-24 boundary also validates
 
 ### On Hold (Rejection)
 
-- Venture stays at Stage 22
+- Venture stays at Stage 23
 - Failing items must be addressed
 - Common hold reasons: missing runbooks, incomplete monitoring, failed security scan
 - Feedback stored in `chairman_decisions.metadata.failing_items`
@@ -390,36 +390,36 @@ Devil's Advocate specifically looks for:
 The Stage 22 Promotion Gate overlaps with the Reality Gate at the Build-to-Launch boundary (stages 20->21). The sequence is:
 
 ```
-Stage 20 (Security/Perf) --> Reality Gate (20->21) --> Stage 21 (QA/UAT)
-    --> Stage 22 (Deployment) --> Promotion Gate 22 --> Stage 23 (Launch)
+Stage 21 (Security/Perf) --> Reality Gate (21->22) --> Stage 22 (QA/UAT)
+    --> Stage 23 (Deployment) --> Promotion Gate 23 --> Stage 24 (Launch)
 ```
 
 | Gate | What It Checks | Fail Behavior |
 |------|----------------|---------------|
-| Reality Gate (20->21) | Security/perf artifacts exist | Block transition |
-| Promotion Gate 22 | 14-item deployment readiness | Hold at Stage 22 |
+| Reality Gate (21->22) | Security/perf artifacts exist | Block transition |
+| Promotion Gate 23 | 14-item deployment readiness | Hold at Stage 23 |
 
 ### Implementation
 
 - Gate logic: `lib/agents/modules/venture-state-machine/stage-gates.js`
-- Deployment template: `lib/eva/stage-templates/stage-22.js`
-- 14-item checklist: Part of stage-22 template output validation
-- Reality Gate: `lib/eva/reality-gates.js` (boundary check at stages 20->21)
+- Deployment template: `lib/eva/stage-templates/stage-23.js`
+- 14-item checklist: Part of stage-23 template output validation
+- Reality Gate: `lib/eva/reality-gates.js` (boundary check at stages 21->22)
 - Devil's Advocate: `lib/eva/devils-advocate.js`
-- Prerequisite: Validates Stage 21 QA/UAT sign-off artifact exists
+- Prerequisite: Validates Stage 22 QA/UAT sign-off artifact exists
 
 ---
 
 ## Promotion Gate Comparison
 
-| Aspect | Gate 16 | Gate 17 | Gate 22 |
+| Aspect | Gate 17 | Gate 18 | Gate 23 |
 |--------|---------|---------|---------|
 | Phase boundary | BLUEPRINT -> BUILD | BUILD start | BUILD -> LAUNCH |
 | Focus | Schema quality | Environment setup | Deployment readiness |
 | Check count | 12 items | 6 items | 14 items |
 | Pass threshold | 80% (10/12) | 100% (6/6) | 100% (14/14) |
 | Devil's Advocate | Yes | No | Yes |
-| Reality Gate overlap | Yes (16->17) | No | Yes (20->21) |
+| Reality Gate overlap | Yes (17->18) | No | Yes (21->22) |
 | Common hold reason | Missing RLS, orphan epics | No CI/CD, no staging | Missing runbooks |
 
 ## Promotion vs Kill Gates
@@ -445,18 +445,18 @@ Stage 20 (Security/Perf) --> Reality Gate (20->21) --> Stage 21 (QA/UAT)
 | Chairman         | All gates          | All gates          |
 | required?        |                    |                    |
 +------------------+--------------------+--------------------+
-| Stages           | 3, 5, 13, 23      | 16, 17, 22         |
+| Stages           | 3, 5, 13, 24      | 17, 18, 23         |
 +------------------+--------------------+--------------------+
 ```
 
 ## Lifecycle Position Diagram
 
 ```
-Stage:  1 .. 5    6 .. 12   13 .. 16   17   18 .. 22   23 .. 25
+Stage:  1 .. 5    6 .. 12   13 .. 17   18   19 .. 23   24 .. 26
         |    |    |         |     |     |    |     |    |
         v    v    v         v     v     v    v     v    v
        [...][KILL][...]    [KILL][PROMO][PROMO][..][PROMO][KILL]
-             G5            G13   G16   G17        G22   G23
+             G5            G13   G17   G18        G23   G24
                                   |     |          |
                            Schema  Env    Go-to-
                            Firewall Ready  Market
