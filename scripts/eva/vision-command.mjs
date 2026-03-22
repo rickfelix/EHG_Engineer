@@ -232,36 +232,12 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     }
   }
 
-  // Build next version number and fetch existing addendums
-  const { data: existing } = await supabase
-    .from('eva_vision_documents')
-    .select('id, version, addendums')
-    .eq('vision_key', visionKey)
-    .maybeSingle();
-
-  const version = existing ? existing.version + 1 : 1;
-
-  const record = {
-    vision_key: visionKey,
-    level,
-    content,
-    extracted_dimensions: dimensions,
-    version,
-    status: 'active',
-    chairman_approved: true,
-    source_file_path: source || null,
-    created_by: 'eva-vision-command',
-    addendums: existing?.addendums || [],
-    ...(sections && Object.keys(sections).length > 0 ? { sections } : {}),
-    ...(ventureId ? { venture_id: ventureId } : {}),
-    ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
-  };
-
-  const { data, error } = await supabase
-    .from('eva_vision_documents')
-    .upsert(record, { onConflict: 'vision_key' })
-    .select('id, vision_key, level, version, status')
-    .single();
+  // Delegate to extracted upsert module (SD-LEO-INFRA-VENTURE-BUILD-READINESS-001-C)
+  const { upsertVision } = await import('../../lib/eva/vision-upsert.js');
+  const { data, error } = await upsertVision({
+    supabase, visionKey, level, content, sections, dimensions,
+    ventureId, brainstormId, createdBy: 'eva-vision-command',
+  });
 
   if (error) { console.error('❌ Upsert failed:', error.message); process.exit(1); }
 

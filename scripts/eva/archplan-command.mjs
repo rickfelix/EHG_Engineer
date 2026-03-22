@@ -243,21 +243,6 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
     content = readFileSync(fullPath, 'utf8');
   }
 
-  // Resolve vision_id from vision_key
-  const { data: visionDoc, error: visionErr } = await supabase
-    .from('eva_vision_documents')
-    .select('id, vision_key, level, status')
-    .eq('vision_key', visionKey)
-    .single();
-
-  if (visionErr || !visionDoc) {
-    console.error(`❌ Vision document not found for key: ${visionKey}`);
-    console.error('   Run "/eva vision list" to see available vision documents.');
-    process.exit(1);
-  }
-
-  console.error(`\n✅ Vision document found: ${visionDoc.vision_key} (${visionDoc.level}, ${visionDoc.status})`);
-
   let dimensions = null;
   if (dimensionsJson) {
     try { dimensions = JSON.parse(dimensionsJson); }
@@ -276,90 +261,12 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
     }
   }
 
-  // Determine next version
-  const { data: existing } = await supabase
-    .from('eva_architecture_plans')
-    .select('id, version')
-    .eq('plan_key', planKey)
-    .maybeSingle();
-
-  const version = existing ? existing.version + 1 : 1;
-
-  // Extract structured sections from content markdown headings
-  // Parses all ## Heading blocks into sections JSONB, plus structured implementation_phases
-  let sections = null;
-  try {
-    // Parse all markdown ## headings into sections
-    const sectionMap = {};
-    const headingRegex = /^##\s+(.+)$/gm;
-    const headings = [];
-    let match;
-    while ((match = headingRegex.exec(content)) !== null) {
-      headings.push({ title: match[1].trim(), index: match.index + match[0].length });
-    }
-    for (let i = 0; i < headings.length; i++) {
-      const start = headings[i].index;
-      const end = i + 1 < headings.length ? headings[i + 1].index - headings[i + 1].title.length - 4 : content.length;
-      const body = content.slice(start, end).trim();
-      // Convert heading to snake_case key
-      const key = headings[i].title
-        .toLowerCase()
-        .replace(/&/g, 'and')
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '');
-      if (body.length > 0) {
-        sectionMap[key] = body;
-      }
-    }
-
-    // Also extract structured implementation_phases for orchestrator creation
-    const { parsePhases } = await import('../create-orchestrator-from-plan.js');
-    const phases = parsePhases(content);
-    if (phases.length > 0) {
-      sectionMap.implementation_phases = phases.map(p => ({
-        number: p.number,
-        title: p.title,
-        description: p.description || '',
-        child_designation: 'child',
-        covered_by_sd_key: null,
-        deliverables: [],
-        estimate_loc: null
-      }));
-    }
-
-    const sectionCount = Object.keys(sectionMap).filter(k => k !== 'extracted_at' && k !== 'extraction_source').length;
-    if (sectionCount > 0) {
-      sections = {
-        ...sectionMap,
-        extracted_at: new Date().toISOString(),
-        extraction_source: 'content_parse'
-      };
-      console.log(`\n   📋 Extracted ${sectionCount} section(s) from content`);
-    }
-  } catch (e) {
-    // Non-blocking: sections population is best-effort
-    console.warn(`   ⚠️  Could not extract sections: ${e.message}`);
-  }
-
-  const record = {
-    plan_key: planKey,
-    vision_id: visionDoc.id,
-    content,
-    extracted_dimensions: dimensions,
-    version,
-    status: 'active',
-    chairman_approved: true,
-    created_by: 'eva-archplan-command',
-    source_file_path: source,
-    ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
-    ...(sections ? { sections } : {}),
-  };
-
-  const { data, error } = await supabase
-    .from('eva_architecture_plans')
-    .upsert(record, { onConflict: 'plan_key' })
-    .select('id, plan_key, version, status, vision_id')
-    .single();
+  // Delegate to extracted upsert module (SD-LEO-INFRA-VENTURE-BUILD-READINESS-001-C)
+  const { upsertArchPlan } = await import('../../lib/eva/archplan-upsert.js');
+  const { data, error } = await upsertArchPlan({
+    supabase, planKey, visionKey, content, dimensions,
+    brainstormId, createdBy: 'eva-archplan-command',
+  });
 
   if (error) { console.error('❌ Upsert failed:', error.message); process.exit(1); }
 
@@ -367,7 +274,7 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
   console.log(`   ID:       ${data.id}`);
   console.log(`   Key:      ${data.plan_key}`);
   console.log(`   Version:  ${data.version}`);
-  console.log(`   Vision:   ${visionDoc.vision_key} (id: ${data.vision_id})`);
+  console.log(`   Vision:   ${visionKey} (id: ${data.vision_id})`);
   console.log(`   Status:   ${data.status}`);
   if (dimensions) console.log(`   Dimensions: ${dimensions.length} extracted`);
 }
