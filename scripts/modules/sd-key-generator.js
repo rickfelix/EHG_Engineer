@@ -152,7 +152,16 @@ export function validateCoreFileRead() {
   }
 
   // Case 2: Read but only partially (with limit/offset)
+  // Exception: CLAUDE_CORE.md exceeds the Read tool's 10K token limit (14K+ tokens),
+  // so chunked sequential reads (readCount >= 3) are accepted as a full read.
   if (partialDetails?.wasPartial) {
+    const state = readSessionState();
+    const fileStatus = state.protocolFileReadStatus?.['CLAUDE_CORE.md'];
+    const readCount = fileStatus?.readCount || 0;
+    if (readCount >= 3) {
+      // Multiple chunked reads = full coverage of a large file
+      return { valid: true, error: null, remediation: null };
+    }
     return {
       valid: false,
       error: `CLAUDE_CORE.md was only partially read (limit=${partialDetails.limit}, offset=${partialDetails.offset})`,
@@ -233,7 +242,16 @@ export function validateLeadFileRead() {
   }
 
   // Case 2: Read but only partially (with limit/offset)
+  // Exception: CLAUDE_LEAD.md exceeds the Read tool's 10K token limit (15K+ tokens),
+  // so chunked sequential reads (readCount >= 3) are accepted as a full read.
   if (partialDetails?.wasPartial) {
+    const state = readSessionState();
+    const fileStatus = state.protocolFileReadStatus?.['CLAUDE_LEAD.md'];
+    const readCount = fileStatus?.readCount || 0;
+    if (readCount >= 3) {
+      // Multiple chunked reads = full coverage of a large file
+      return { valid: true, error: null, remediation: null };
+    }
     return {
       valid: false,
       error: `CLAUDE_LEAD.md was only partially read (limit=${partialDetails.limit}, offset=${partialDetails.offset})`,

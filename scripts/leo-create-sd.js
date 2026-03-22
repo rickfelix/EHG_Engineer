@@ -1224,7 +1224,7 @@ async function createSD(options) {
         title,
         description,
         strategic_objectives: finalStrategicObjectives,
-        key_changes: keyChanges || [],
+        key_changes: (typeof keyChanges !== 'undefined' ? keyChanges : []),
         vision_key: metadata?.vision_key || null,
         venture_id: metadata?.venture_id || null,
         metadata,
@@ -1284,13 +1284,13 @@ async function createSD(options) {
       'Follow LEO Protocol for all changes',
       'Ensure backward compatibility'
     ],
-    risks: risks && risks.length > 0 ? risks : [
+    risks: (typeof risks !== 'undefined' && risks && risks.length > 0) ? risks : [
       { risk: 'Implementation may not fully address root cause', likelihood: 'low', impact: 'low', mitigation: 'Verify against original evidence; re-queue via /learn if pattern recurs' }
     ],
-    dependencies: dependencies && dependencies.length > 0 ? dependencies : [
+    dependencies: (typeof dependencies !== 'undefined' && dependencies && dependencies.length > 0) ? dependencies : [
       { dependency: 'none', type: 'internal', status: 'available' }
     ],
-    implementation_guidelines: implementation_guidelines && implementation_guidelines.length > 0 ? implementation_guidelines : [
+    implementation_guidelines: (typeof implementation_guidelines !== 'undefined' && implementation_guidelines && implementation_guidelines.length > 0) ? implementation_guidelines : [
       `Implement changes for: ${title}`,
       'Verify no regressions in existing functionality'
     ],
