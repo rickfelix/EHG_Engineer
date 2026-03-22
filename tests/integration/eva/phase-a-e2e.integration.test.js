@@ -784,15 +784,15 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
       expect(boundaries).toContain('22->23');
     });
 
-    it('verifies kill gates at stages 3, 5, 13, 23 and promotion gates at 16, 17, 22', () => {
+    it('verifies kill gates at stages 3, 5, 13, 24 and promotion gates at 17, 18, 23', () => {
       // Kill gates
-      for (const stage of [3, 5, 13, 23]) {
+      for (const stage of [3, 5, 13, 24]) {
         const { isGate, gateType } = isDevilsAdvocateGate(stage);
         expect(isGate).toBe(true);
         expect(gateType).toBe('kill');
       }
       // Promotion gates
-      for (const stage of [16, 17, 22]) {
+      for (const stage of [17, 18, 23]) {
         const { isGate, gateType } = isDevilsAdvocateGate(stage);
         expect(isGate).toBe(true);
         expect(gateType).toBe('promotion');
