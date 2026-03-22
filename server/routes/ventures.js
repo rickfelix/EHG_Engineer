@@ -118,8 +118,8 @@ router.patch('/:id/stage', validateUuidParam('id'), asyncHandler(async (req, res
   const { id } = req.params;
   const { stage } = req.body;
 
-  if (!stage || stage < 1 || stage > 25) {
-    return res.status(400).json({ error: 'Invalid stage. Must be 1-25.' });
+  if (!stage || stage < 1 || stage > 26) {
+    return res.status(400).json({ error: 'Invalid stage. Must be 1-26.' });
   }
 
   // Gate enforcement: if target stage is a gate, require chairman approval
