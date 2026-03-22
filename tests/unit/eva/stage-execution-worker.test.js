@@ -206,12 +206,12 @@ describe('StageExecutionWorker', () => {
       );
     });
 
-    it('marks venture completed at MAX_STAGES (25)', async () => {
+    it('marks venture completed at MAX_STAGES (26)', async () => {
       worker = new StageExecutionWorker({ supabase, logger, maxRetries: 0, retryDelayMs: 1 });
 
-      // Venture at stage 25
+      // Venture at stage 26
       supabase._chain.single.mockResolvedValue({
-        data: { current_lifecycle_stage: 25, name: 'Final Venture' },
+        data: { current_lifecycle_stage: 26, name: 'Final Venture' },
         error: null,
       });
       supabase._chain.maybeSingle.mockResolvedValue({ data: null, error: null });
@@ -361,8 +361,8 @@ describe('StageExecutionWorker', () => {
     });
 
     it('identifies all chairman gate stages correctly', () => {
-      const expectedGates = [3, 5, 10, 13, 16, 17, 22, 23, 24];
-      const expectedNonGates = [1, 2, 4, 6, 7, 8, 9, 11, 12, 14, 15, 18, 19, 20, 21, 25];
+      const expectedGates = [3, 5, 10, 13, 17, 18, 23, 24, 25];
+      const expectedNonGates = [1, 2, 4, 6, 7, 8, 9, 11, 12, 14, 15, 16, 19, 20, 21, 22, 26];
 
       for (const stage of expectedGates) {
         expect(CHAIRMAN_GATES.BLOCKING.has(stage)).toBe(true);
@@ -384,18 +384,18 @@ describe('StageExecutionWorker', () => {
       expect(getOperatingMode(6)).toBe('STRATEGY');
       expect(getOperatingMode(10)).toBe('STRATEGY');
       expect(getOperatingMode(12)).toBe('STRATEGY');
-      // PLANNING: 13-16
+      // PLANNING: 13-17
       expect(getOperatingMode(13)).toBe('PLANNING');
-      expect(getOperatingMode(16)).toBe('PLANNING');
-      // BUILD: 17-21
-      expect(getOperatingMode(17)).toBe('BUILD');
-      expect(getOperatingMode(21)).toBe('BUILD');
-      // LAUNCH: 22-25
-      expect(getOperatingMode(22)).toBe('LAUNCH');
-      expect(getOperatingMode(25)).toBe('LAUNCH');
+      expect(getOperatingMode(17)).toBe('PLANNING');
+      // BUILD: 18-22
+      expect(getOperatingMode(18)).toBe('BUILD');
+      expect(getOperatingMode(22)).toBe('BUILD');
+      // LAUNCH: 23-26
+      expect(getOperatingMode(23)).toBe('LAUNCH');
+      expect(getOperatingMode(26)).toBe('LAUNCH');
       // Out of range
       expect(getOperatingMode(0)).toBe('UNKNOWN');
-      expect(getOperatingMode(26)).toBe('UNKNOWN');
+      expect(getOperatingMode(27)).toBe('UNKNOWN');
     });
 
     it('stops at mode boundary', async () => {

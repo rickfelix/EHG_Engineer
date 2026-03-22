@@ -1,364 +1,409 @@
 /**
- * Unit tests for Stage 21 - Integration Testing template
+ * Unit tests for Stage 20 - Quality Assurance template
  * Part of SD-LEO-FEAT-TMPL-BUILD-001
  *
- * Test Scenario: Stage 21 validation enforces integration test data
- * and tracks pass/fail status per integration point.
+ * Test Scenario: Stage 20 validation enforces test suite data and
+ * evaluates quality gate (100% pass rate, >= 60% coverage).
  *
- * @module tests/unit/eva/stage-templates/stage-21.test
+ * @module tests/unit/eva/stage-templates/stage-20.test
  */
 
 import { describe, it, expect } from 'vitest';
-import stage21, { INTEGRATION_STATUSES, MIN_INTEGRATIONS } from '../../../../lib/eva/stage-templates/stage-21.js';
+import stage20, {
+  MIN_TEST_SUITES,
+  MIN_COVERAGE_PCT,
+  TEST_SUITE_TYPES,
+  DEFECT_SEVERITIES,
+  DEFECT_STATUSES,
+  QUALITY_DECISIONS,
+} from '../../../../lib/eva/stage-templates/stage-20.js';
 
-describe('stage-21.js - Integration Testing template', () => {
+describe('stage-20.js - Quality Assurance template', () => {
   describe('Template metadata', () => {
     it('should have correct template structure', () => {
-      expect(stage21.id).toBe('stage-21');
-      expect(stage21.slug).toBe('integration-testing');
-      expect(stage21.title).toBe('Build Review');
-      expect(stage21.version).toBe('2.0.0');
+      expect(stage20.id).toBe('stage-20');
+      expect(stage20.slug).toBe('quality-assurance');
+      expect(stage20.title).toBe('Quality Assurance');
+      expect(stage20.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {
-      expect(stage21.schema).toBeDefined();
-      expect(stage21.schema.integrations).toBeDefined();
-      expect(stage21.schema.environment).toBeDefined();
-      expect(stage21.schema.total_integrations).toBeDefined();
+      expect(stage20.schema).toBeDefined();
+      expect(stage20.schema.test_suites).toBeDefined();
+      expect(stage20.schema.known_defects).toBeDefined();
+      expect(stage20.schema.overall_pass_rate).toBeDefined();
     });
 
     it('should have defaultData', () => {
-      expect(stage21.defaultData).toEqual({
-        integrations: [],
-        environment: null,
-        total_integrations: 0,
-        passing_integrations: 0,
-        failing_integrations: [],
-        pass_rate: 0,
-        all_passing: false,
-        reviewDecision: null,
+      expect(stage20.defaultData).toEqual({
+        test_suites: [],
+        known_defects: [],
+        overall_pass_rate: 0,
+        coverage_pct: 0,
+        critical_failures: 0,
+        totalFailures: 0,
+        total_tests: 0,
+        total_passing: 0,
+        quality_gate_passed: false,
+        qualityDecision: null,
       });
     });
 
     it('should have validate function', () => {
-      expect(typeof stage21.validate).toBe('function');
+      expect(typeof stage20.validate).toBe('function');
     });
 
     it('should have computeDerived function', () => {
-      expect(typeof stage21.computeDerived).toBe('function');
+      expect(typeof stage20.computeDerived).toBe('function');
     });
 
     it('should export constants', () => {
-      expect(INTEGRATION_STATUSES).toEqual(['pass', 'fail', 'skip', 'pending']);
-      expect(MIN_INTEGRATIONS).toBe(1);
+      expect(MIN_TEST_SUITES).toBe(1);
+      expect(MIN_COVERAGE_PCT).toBe(60);
+      expect(TEST_SUITE_TYPES).toEqual(['unit', 'integration', 'e2e']);
+      expect(DEFECT_SEVERITIES).toEqual(['critical', 'high', 'medium', 'low']);
+      expect(DEFECT_STATUSES).toEqual(['open', 'investigating', 'resolved', 'deferred', 'wont_fix']);
+      expect(QUALITY_DECISIONS).toEqual(['pass', 'conditional_pass', 'fail']);
     });
   });
 
-  describe('validate() - Environment', () => {
-    const validIntegrations = [
-      { name: 'API to DB', source: 'API', target: 'Database', status: 'pass' },
-    ];
-
-    it('should pass for valid environment', () => {
+  describe('validate() - Test suites', () => {
+    it('should pass for valid test suites', () => {
       const validData = {
-        environment: 'staging',
-        integrations: validIntegrations,
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
+        ],
       };
-      const result = stage21.validate(validData);
+      const result = stage20.validate(validData);
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
 
-    it('should fail for missing environment', () => {
-      const invalidData = {
-        integrations: validIntegrations,
-      };
-      const result = stage21.validate(invalidData);
+    it('should fail for missing test_suites array', () => {
+      const invalidData = {};
+      const result = stage20.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('environment'))).toBe(true);
+      expect(result.errors.some(e => e.includes('test_suites'))).toBe(true);
     });
 
-    it('should fail for empty environment', () => {
-      const invalidData = {
-        environment: '',
-        integrations: validIntegrations,
-      };
-      const result = stage21.validate(invalidData);
+    it('should fail for empty test_suites array', () => {
+      const invalidData = { test_suites: [] };
+      const result = stage20.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('environment'))).toBe(true);
+      expect(result.errors.some(e => e.includes('test_suites') && e.includes('at least 1'))).toBe(true);
     });
-  });
 
-  describe('validate() - Integrations', () => {
-    it('should pass for valid integrations', () => {
+    it('should fail for test suite missing name', () => {
+      const invalidData = {
+        test_suites: [{ total_tests: 100, passing_tests: 100 }],
+      };
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('test_suites[0].name'))).toBe(true);
+    });
+
+    it('should fail for test suite missing total_tests', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', passing_tests: 100 }],
+      };
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('test_suites[0].total_tests'))).toBe(true);
+    });
+
+    it('should fail for test suite missing passing_tests', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100 }],
+      };
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('test_suites[0].passing_tests'))).toBe(true);
+    });
+
+    it('should fail for negative total_tests', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: -1, passing_tests: 0 }],
+      };
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('test_suites[0].total_tests'))).toBe(true);
+    });
+
+    it('should fail for negative passing_tests', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: -1 }],
+      };
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('test_suites[0].passing_tests'))).toBe(true);
+    });
+
+    it('should fail for passing_tests > total_tests', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 101 }],
+      };
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('passing_tests') && e.includes('cannot exceed'))).toBe(true);
+    });
+
+    it('should pass with optional coverage_pct', () => {
       const validData = {
-        environment: 'staging',
-        integrations: [
-          { name: 'API to DB', source: 'API', target: 'Database', status: 'pass' },
-          { name: 'Frontend to API', source: 'Frontend', target: 'API', status: 'fail', error_message: 'Timeout' },
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
         ],
       };
-      const result = stage21.validate(validData);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toEqual([]);
-    });
-
-    it('should fail for missing integrations array', () => {
-      const invalidData = {
-        environment: 'staging',
-      };
-      const result = stage21.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('integrations'))).toBe(true);
-    });
-
-    it('should fail for empty integrations array', () => {
-      const invalidData = {
-        environment: 'staging',
-        integrations: [],
-      };
-      const result = stage21.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('integrations') && e.includes('at least 1'))).toBe(true);
-    });
-
-    it('should fail for integration missing name', () => {
-      const invalidData = {
-        environment: 'staging',
-        integrations: [{ source: 'API', target: 'Database', status: 'pass' }],
-      };
-      const result = stage21.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('integrations[0].name'))).toBe(true);
-    });
-
-    it('should fail for integration missing source', () => {
-      const invalidData = {
-        environment: 'staging',
-        integrations: [{ name: 'API to DB', target: 'Database', status: 'pass' }],
-      };
-      const result = stage21.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('integrations[0].source'))).toBe(true);
-    });
-
-    it('should fail for integration missing target', () => {
-      const invalidData = {
-        environment: 'staging',
-        integrations: [{ name: 'API to DB', source: 'API', status: 'pass' }],
-      };
-      const result = stage21.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('integrations[0].target'))).toBe(true);
-    });
-
-    it('should fail for integration missing status', () => {
-      const invalidData = {
-        environment: 'staging',
-        integrations: [{ name: 'API to DB', source: 'API', target: 'Database' }],
-      };
-      const result = stage21.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('integrations[0].status'))).toBe(true);
-    });
-
-    it('should fail for integration with invalid status', () => {
-      const invalidData = {
-        environment: 'staging',
-        integrations: [{ name: 'API to DB', source: 'API', target: 'Database', status: 'invalid' }],
-      };
-      const result = stage21.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('integrations[0].status'))).toBe(true);
-    });
-
-    it('should pass with optional error_message', () => {
-      const validData = {
-        environment: 'staging',
-        integrations: [
-          { name: 'API to DB', source: 'API', target: 'Database', status: 'fail', error_message: 'Connection timeout' },
-        ],
-      };
-      const result = stage21.validate(validData);
+      const result = stage20.validate(validData);
       expect(result.valid).toBe(true);
     });
   });
 
-  describe('computeDerived() - Integration metrics', () => {
-    it('should calculate total_integrations correctly', () => {
-      const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
-          { name: 'I2', source: 'B', target: 'C', status: 'pass' },
-          { name: 'I3', source: 'C', target: 'D', status: 'fail' },
-        ],
+  describe('validate() - Known defects (optional)', () => {
+    it('should pass when known_defects are omitted', () => {
+      const validData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
       };
-      const result = stage21.computeDerived(data);
-      expect(result.total_integrations).toBe(3);
+      const result = stage20.validate(validData);
+      expect(result.valid).toBe(true);
     });
 
-    it('should calculate passing_integrations correctly', () => {
-      const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
-          { name: 'I2', source: 'B', target: 'C', status: 'pass' },
-          { name: 'I3', source: 'C', target: 'D', status: 'fail' },
-        ],
+    it('should pass when known_defects are empty array', () => {
+      const validData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        known_defects: [],
       };
-      const result = stage21.computeDerived(data);
-      expect(result.passing_integrations).toBe(2);
+      const result = stage20.validate(validData);
+      expect(result.valid).toBe(true);
     });
 
-    it('should extract failing_integrations correctly', () => {
-      const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
-          { name: 'I2', source: 'B', target: 'C', status: 'fail', error_message: 'Timeout' },
-          { name: 'I3', source: 'C', target: 'D', status: 'fail', error_message: 'Auth error' },
+    it('should pass when known_defects have valid items', () => {
+      const validData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        known_defects: [
+          { description: 'Defect 1', severity: 'low', status: 'open' },
         ],
       };
-      const result = stage21.computeDerived(data);
-      expect(result.failing_integrations).toHaveLength(2);
-      expect(result.failing_integrations[0]).toEqual({
-        name: 'I2',
-        source: 'B',
-        target: 'C',
-        error_message: 'Timeout',
-      });
-      expect(result.failing_integrations[1]).toEqual({
-        name: 'I3',
-        source: 'C',
-        target: 'D',
-        error_message: 'Auth error',
-      });
+      const result = stage20.validate(validData);
+      expect(result.valid).toBe(true);
     });
 
-    it('should handle missing error_message in failing_integrations', () => {
-      const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'fail' },
-        ],
+    it('should fail for defect missing description', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        known_defects: [{ severity: 'low', status: 'open' }],
       };
-      const result = stage21.computeDerived(data);
-      expect(result.failing_integrations).toHaveLength(1);
-      expect(result.failing_integrations[0].error_message).toBeNull();
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('known_defects[0].description'))).toBe(true);
     });
 
-    it('should calculate pass_rate correctly', () => {
-      const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
-          { name: 'I2', source: 'B', target: 'C', status: 'pass' },
-          { name: 'I3', source: 'C', target: 'D', status: 'fail' },
-          { name: 'I4', source: 'D', target: 'E', status: 'skip' },
-          { name: 'I5', source: 'E', target: 'F', status: 'pending' },
-        ],
+    it('should fail for defect missing severity', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        known_defects: [{ description: 'Defect 1', status: 'open' }],
       };
-      const result = stage21.computeDerived(data);
-      // 2 passing out of 5 = 40%
-      expect(result.pass_rate).toBe(40);
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('known_defects[0].severity'))).toBe(true);
     });
 
-    it('should return 0 pass_rate for zero integrations', () => {
-      const data = {
-        environment: 'staging',
-        integrations: [],
+    it('should fail for defect missing status', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        known_defects: [{ description: 'Defect 1', severity: 'low' }],
       };
-      const result = stage21.computeDerived(data);
-      expect(result.pass_rate).toBe(0);
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('known_defects[0].status'))).toBe(true);
+    });
+    it('should fail for defect with invalid severity enum value', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        known_defects: [{ description: 'Defect 1', severity: 'urgent', status: 'open' }],
+      };
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('known_defects[0].severity'))).toBe(true);
     });
 
-    it('should calculate pass_rate to 2 decimal places', () => {
-      const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
-          { name: 'I2', source: 'B', target: 'C', status: 'fail' },
-          { name: 'I3', source: 'C', target: 'D', status: 'fail' },
-        ],
+    it('should fail for defect with invalid status enum value', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        known_defects: [{ description: 'Defect 1', severity: 'low', status: 'closed' }],
       };
-      const result = stage21.computeDerived(data);
-      // 1 passing out of 3 = 33.33%
-      expect(result.pass_rate).toBe(33.33);
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('known_defects[0].status'))).toBe(true);
     });
   });
 
-  describe('computeDerived() - All passing flag', () => {
-    it('should set all_passing to true when all integrations pass', () => {
+  describe('computeDerived() - Test metrics', () => {
+    it('should calculate total_tests correctly', () => {
       const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
-          { name: 'I2', source: 'B', target: 'C', status: 'pass' },
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 95 },
+          { name: 'E2E Tests', total_tests: 50, passing_tests: 48 },
         ],
       };
-      const result = stage21.computeDerived(data);
-      expect(result.all_passing).toBe(true);
+      const result = stage20.computeDerived(data);
+      expect(result.total_tests).toBe(150);
     });
 
-    it('should set all_passing to false when any integration fails', () => {
+    it('should calculate total_passing correctly', () => {
       const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
-          { name: 'I2', source: 'B', target: 'C', status: 'fail' },
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 95 },
+          { name: 'E2E Tests', total_tests: 50, passing_tests: 48 },
         ],
       };
-      const result = stage21.computeDerived(data);
-      expect(result.all_passing).toBe(false);
+      const result = stage20.computeDerived(data);
+      expect(result.total_passing).toBe(143);
     });
 
-    it('should set all_passing to false for zero integrations', () => {
+    it('should calculate overall_pass_rate correctly', () => {
       const data = {
-        environment: 'staging',
-        integrations: [],
-      };
-      const result = stage21.computeDerived(data);
-      expect(result.all_passing).toBe(false);
-    });
-
-    it('should ignore skip and pending statuses for all_passing', () => {
-      const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'pass' },
-          { name: 'I2', source: 'B', target: 'C', status: 'skip' },
-          { name: 'I3', source: 'C', target: 'D', status: 'pending' },
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100 },
+          { name: 'E2E Tests', total_tests: 50, passing_tests: 48 },
         ],
       };
-      const result = stage21.computeDerived(data);
-      // No failures, so all_passing should be true
-      expect(result.all_passing).toBe(true);
+      const result = stage20.computeDerived(data);
+      // 148 / 150 = 98.67%
+      expect(result.overall_pass_rate).toBe(98.67);
+    });
+
+    it('should return 0 overall_pass_rate for zero tests', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 0, passing_tests: 0 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      expect(result.overall_pass_rate).toBe(0);
+    });
+  });
+
+  describe('computeDerived() - Coverage', () => {
+    it('should calculate average coverage_pct correctly', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
+          { name: 'E2E Tests', total_tests: 50, passing_tests: 50, coverage_pct: 60 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      // (80 + 60) / 2 = 70%
+      expect(result.coverage_pct).toBe(70);
+    });
+
+    it('should ignore suites without coverage_pct', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
+          { name: 'E2E Tests', total_tests: 50, passing_tests: 50 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      expect(result.coverage_pct).toBe(80);
+    });
+
+    it('should return 0 coverage_pct when no suites have coverage', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      expect(result.coverage_pct).toBe(0);
+    });
+  });
+
+  describe('computeDerived() - Quality gate', () => {
+    it('should pass quality gate for 100% pass rate and >= 60% coverage', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      expect(result.quality_gate_passed).toBe(true);
+    });
+
+    it('should fail quality gate for < 100% pass rate', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 99, coverage_pct: 80 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      expect(result.quality_gate_passed).toBe(false);
+    });
+
+    it('should fail quality gate for < 60% coverage', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 59 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      expect(result.quality_gate_passed).toBe(false);
+    });
+
+    it('should pass quality gate at exactly 60% coverage', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 60 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      expect(result.quality_gate_passed).toBe(true);
+    });
+  });
+
+  describe('computeDerived() - Critical failures', () => {
+    it('should calculate critical_failures correctly', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 95 },
+          { name: 'E2E Tests', total_tests: 50, passing_tests: 48 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      // 150 - 143 = 7 failures
+      expect(result.critical_failures).toBe(7);
+    });
+
+    it('should return 0 critical_failures for 100% pass rate', () => {
+      const data = {
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100 },
+        ],
+      };
+      const result = stage20.computeDerived(data);
+      expect(result.critical_failures).toBe(0);
     });
   });
 
   describe('Edge cases', () => {
-    it('should handle empty integrations array in computeDerived', () => {
-      const data = {
-        environment: 'staging',
-        integrations: [],
-      };
-      const result = stage21.computeDerived(data);
-      expect(result.total_integrations).toBe(0);
-      expect(result.passing_integrations).toBe(0);
-      expect(result.failing_integrations).toEqual([]);
-      expect(result.pass_rate).toBe(0);
-      expect(result.all_passing).toBe(false);
+    it('should handle empty test_suites array in computeDerived', () => {
+      const data = { test_suites: [] };
+      const result = stage20.computeDerived(data);
+      expect(result.total_tests).toBe(0);
+      expect(result.total_passing).toBe(0);
+      expect(result.overall_pass_rate).toBe(0);
+      expect(result.coverage_pct).toBe(0);
+      expect(result.critical_failures).toBe(0);
+      expect(result.quality_gate_passed).toBe(false);
     });
 
     it('should handle null data in validate', () => {
-      const result = stage21.validate(null);
+      const result = stage20.validate(null);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
     it('should handle undefined data in validate', () => {
-      const result = stage21.validate(undefined);
+      const result = stage20.validate(undefined);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
@@ -367,34 +412,34 @@ describe('stage-21.js - Integration Testing template', () => {
   describe('Integration: validate + computeDerived workflow', () => {
     it('should work together for valid data', () => {
       const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'API to DB', source: 'API', target: 'Database', status: 'pass' },
-          { name: 'Frontend to API', source: 'Frontend', target: 'API', status: 'pass' },
-          { name: 'Service A to B', source: 'ServiceA', target: 'ServiceB', status: 'fail', error_message: 'Timeout' },
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 100, coverage_pct: 80 },
+          { name: 'E2E Tests', total_tests: 50, passing_tests: 50, coverage_pct: 70 },
+        ],
+        known_defects: [
+          { description: 'Minor UI bug', severity: 'low', status: 'open' },
         ],
       };
-      const validation = stage21.validate(data);
+      const validation = stage20.validate(data);
       expect(validation.valid).toBe(true);
 
-      const computed = stage21.computeDerived(data);
-      expect(computed.total_integrations).toBe(3);
-      expect(computed.passing_integrations).toBe(2);
-      expect(computed.failing_integrations).toHaveLength(1);
-      expect(computed.pass_rate).toBe(66.67);
-      expect(computed.all_passing).toBe(false);
+      const computed = stage20.computeDerived(data);
+      expect(computed.total_tests).toBe(150);
+      expect(computed.total_passing).toBe(150);
+      expect(computed.overall_pass_rate).toBe(100);
+      expect(computed.coverage_pct).toBe(75);
+      expect(computed.quality_gate_passed).toBe(true);
     });
 
     it('should not require validation before computeDerived (decoupled)', () => {
       const data = {
-        environment: 'staging',
-        integrations: [
-          { name: 'I1', source: 'A', target: 'B', status: 'invalid_status' },
+        test_suites: [
+          { name: 'Unit Tests', total_tests: 100, passing_tests: 101 }, // Invalid
         ],
       };
-      const computed = stage21.computeDerived(data);
-      expect(computed.total_integrations).toBe(1);
-      expect(computed.passing_integrations).toBe(0);
+      const computed = stage20.computeDerived(data);
+      expect(computed.total_tests).toBe(100);
+      expect(computed.total_passing).toBe(101);
     });
   });
 });
