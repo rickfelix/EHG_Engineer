@@ -10,6 +10,8 @@
 --   - venture_artifacts (venture data)
 --   - venture_stage_transitions (transition history)
 --   - stage_proving_journal (proving companion journal)
+--
+-- EXECUTED: 2026-03-22 (via database-agent, corrected column names for venture_stage_transitions)
 
 BEGIN;
 
@@ -82,19 +84,23 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 3: Shift venture_stage_transitions.stage_number (descending order)
+-- STEP 3: Shift venture_stage_transitions.from_stage and .to_stage
 -- ============================================================================
+-- NOTE: Original migration referenced non-existent column "stage_number".
+-- Corrected to use actual columns: from_stage and to_stage.
 DO $$
 DECLARE
   affected_count INTEGER;
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM venture_stage_transitions WHERE stage_number = 26 LIMIT 1
+    SELECT 1 FROM venture_stage_transitions WHERE from_stage = 26 LIMIT 1
   ) AND EXISTS (
-    SELECT 1 FROM venture_stage_transitions WHERE stage_number = 25 LIMIT 1
+    SELECT 1 FROM venture_stage_transitions WHERE from_stage = 25 LIMIT 1
   ) THEN
-    UPDATE venture_stage_transitions SET stage_number = stage_number + 1
-    WHERE stage_number >= 17 AND stage_number <= 25;
+    UPDATE venture_stage_transitions SET from_stage = from_stage + 1
+    WHERE from_stage >= 17 AND from_stage <= 25;
+    UPDATE venture_stage_transitions SET to_stage = to_stage + 1
+    WHERE to_stage >= 17 AND to_stage <= 25;
     GET DIAGNOSTICS affected_count = ROW_COUNT;
     RAISE NOTICE 'Shifted % venture_stage_transitions records', affected_count;
   ELSE
@@ -141,3 +147,11 @@ BEGIN
 END $$;
 
 COMMIT;
+
+-- ROLLBACK SQL (if needed):
+-- DELETE FROM lifecycle_stage_config WHERE stage_number = 17 AND stage_name = 'Blueprint Review';
+-- UPDATE lifecycle_stage_config SET stage_number = stage_number - 1 WHERE stage_number >= 18 AND stage_number <= 26;
+-- UPDATE venture_artifacts SET lifecycle_stage = lifecycle_stage - 1 WHERE lifecycle_stage >= 18 AND lifecycle_stage <= 26;
+-- UPDATE venture_stage_transitions SET from_stage = from_stage - 1 WHERE from_stage >= 18 AND from_stage <= 26;
+-- UPDATE venture_stage_transitions SET to_stage = to_stage - 1 WHERE to_stage >= 18 AND to_stage <= 26;
+-- UPDATE stage_proving_journal SET stage_number = stage_number - 1 WHERE stage_number >= 18 AND stage_number <= 26;
