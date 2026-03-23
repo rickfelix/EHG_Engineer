@@ -55,30 +55,34 @@ describe('SRIP Wireframe Generator', () => {
     expect(typeof generateWireframes).toBe('function');
   });
 
-  it('fetches design references via RPC with correct archetype', async () => {
+  it('fetches design references with correct archetype via service layer', async () => {
     const mockSupabase = makeMockSupabase();
+    const mockFetchRefs = vi.fn(async () => []);
     const llm = makeMockLLMClient([wireframeJson, specialistJson, specialistJson, specialistJson, specialistJson]);
 
     await generateWireframes({
       ventureId: 'v1', ventureName: 'Test', archetypeCategory: 'fintech',
       logger: silentLogger, _supabase: mockSupabase, _llmClient: llm,
       _writeArtifactFn: vi.fn(async () => 'art-id'),
+      _fetchDesignRefsFn: mockFetchRefs,
     });
 
-    expect(mockSupabase.rpc).toHaveBeenCalledWith('get_design_references_by_archetype', { p_archetype: 'fintech', p_limit: 5 });
+    expect(mockFetchRefs).toHaveBeenCalledWith(mockSupabase, 'fintech');
   });
 
   it('defaults archetype to corporate', async () => {
     const mockSupabase = makeMockSupabase();
+    const mockFetchRefs = vi.fn(async () => []);
     const llm = makeMockLLMClient([wireframeJson, specialistJson, specialistJson, specialistJson, specialistJson]);
 
     await generateWireframes({
       ventureId: 'v1', ventureName: 'Test',
       logger: silentLogger, _supabase: mockSupabase, _llmClient: llm,
       _writeArtifactFn: vi.fn(async () => 'art-id'),
+      _fetchDesignRefsFn: mockFetchRefs,
     });
 
-    expect(mockSupabase.rpc).toHaveBeenCalledWith('get_design_references_by_archetype', { p_archetype: 'corporate', p_limit: 5 });
+    expect(mockFetchRefs).toHaveBeenCalledWith(mockSupabase, 'corporate');
   });
 
   it('returns success with correct structure', async () => {

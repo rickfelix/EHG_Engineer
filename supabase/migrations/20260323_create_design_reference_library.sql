@@ -1,30 +1,33 @@
 -- Migration: Create design_reference_library table
 -- SD: SD-MAN-INFRA-AWWWARDS-CURATED-DESIGN-001
 -- Purpose: Curated Awwwards design reference library for archetype-based lookups
+--
+-- NOTE: This migration reflects the LIVE schema as deployed. Column names use
+-- score_design (not design_score), tech_stack is TEXT[] (not TEXT), and
+-- awwwards_page_url is included. screenshot_url and metadata were never deployed.
 
 CREATE TABLE IF NOT EXISTS design_reference_library (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   url TEXT NOT NULL UNIQUE,
   site_name TEXT NOT NULL,
-  archetype_category TEXT NOT NULL CHECK (archetype_category IN ('saas', 'marketplace', 'fintech', 'healthtech', 'e-commerce', 'portfolio', 'corporate')),
-  design_score NUMERIC(4,2),
-  usability_score NUMERIC(4,2),
-  creativity_score NUMERIC(4,2),
-  content_score NUMERIC(4,2),
-  combined_score NUMERIC(4,2) GENERATED ALWAYS AS ((design_score + usability_score + creativity_score + content_score) / 4.0) STORED,
-  tech_stack TEXT,
+  description TEXT,
+  score_design NUMERIC(4,2),
+  score_usability NUMERIC(4,2),
+  score_creativity NUMERIC(4,2),
+  score_content NUMERIC(4,2),
+  score_combined NUMERIC(4,2) GENERATED ALWAYS AS ((score_design + score_usability + score_creativity + score_content) / 4.0) STORED,
+  tech_stack TEXT[],
   agency_name TEXT,
   country TEXT,
   date_awarded DATE,
-  description TEXT,
-  screenshot_url TEXT,
-  metadata JSONB DEFAULT '{}',
+  archetype_category TEXT NOT NULL CHECK (archetype_category IN ('saas', 'marketplace', 'fintech', 'healthtech', 'e-commerce', 'portfolio', 'corporate')),
+  awwwards_page_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_drl_archetype ON design_reference_library(archetype_category);
-CREATE INDEX IF NOT EXISTS idx_drl_combined_score ON design_reference_library(combined_score DESC);
+CREATE INDEX IF NOT EXISTS idx_drl_combined_score ON design_reference_library(score_combined DESC);
 
 -- RLS
 ALTER TABLE design_reference_library ENABLE ROW LEVEL SECURITY;
