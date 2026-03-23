@@ -16,6 +16,7 @@ import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { ARTIFACT_TYPES } from '../../../lib/eva/artifact-types.js';
 import { writeArtifact } from '../../../lib/eva/artifact-persistence-service.js';
 import { getLLMClient } from '../../../lib/llm/index.js';
+import { getDesignReferencesByArchetype } from '../../../lib/eva/services/design-reference-library.js';
 
 const SPECIALIST_AGENTS = [
   { role: 'UX Architect', focus: 'information architecture, navigation, content hierarchy, user mental models' },
@@ -80,22 +81,12 @@ async function fetchProductHuntPatterns(supabase, ventureCategory) {
 
 /**
  * Fetch design references from the Awwwards curated library.
+ * Uses the shared service layer (design-reference-library.js) which returns
+ * all fields via select('*'), sorted by score_combined DESC.
  */
-async function fetchDesignReferences(supabase, archetypeCategory) {
+async function fetchDesignReferences(_supabase, archetypeCategory) {
   const archetype = archetypeCategory || 'corporate';
-  const { data } = await supabase.rpc('get_design_references_by_archetype', {
-    p_archetype: archetype,
-    p_limit: 5,
-  });
-
-  if (!data?.length) return [];
-  return data.map(d => ({
-    site_name: d.site_name,
-    url: d.url,
-    score_combined: d.score_combined,
-    tech_stack: d.tech_stack,
-    archetype_category: d.archetype_category,
-  }));
+  return getDesignReferencesByArchetype(archetype, 5);
 }
 
 /**
@@ -121,7 +112,13 @@ function buildGenerationPrompt({ brandGenome, techArch, productHuntPatterns, des
     : 'No Product Hunt data available';
 
   const designRefs = designReferences.length
-    ? designReferences.map(r => `- ${r.site_name} (${r.url}) Score: ${r.score_combined}, Stack: ${(r.tech_stack || []).slice(0, 3).join(', ')}`).join('\n')
+    ? designReferences.map(r => {
+        const scores = `Design ${r.score_design ?? 'N/A'}/10, Usability ${r.score_usability ?? 'N/A'}/10, Creativity ${r.score_creativity ?? 'N/A'}/10, Content ${r.score_content ?? 'N/A'}/10`;
+        const tech = Array.isArray(r.tech_stack) ? r.tech_stack.join(', ') : (r.tech_stack || '');
+        const techLine = tech ? `\n  Tech: ${tech}` : '';
+        const desc = r.description || '';
+        return `- ${r.site_name} (${r.url}): ${scores}${techLine}\n  ${desc}`;
+      }).join('\n')
     : 'No design references available';
 
   return `Generate 5-7 ASCII wireframe screens for "${ventureName}".
@@ -230,17 +227,19 @@ export async function generateWireframes({
   _supabase = null,
   _llmClient = null,
   _writeArtifactFn = null,
+  _fetchDesignRefsFn = null,
 }) {
   const supabase = _supabase || createSupabaseServiceClient();
   const startTime = Date.now();
   logger.log('[WireframeGen] Starting for venture:', ventureName);
 
   // 1. Fetch all 4 data sources in parallel
+  const fetchRefs = _fetchDesignRefsFn || ((_sb, cat) => fetchDesignReferences(_sb, cat));
   const [brandGenome, techArch, productHuntPatterns, designReferences] = await Promise.all([
     fetchBrandGenome(supabase, ventureId),
     fetchTechArchitecture(supabase, ventureId),
     fetchProductHuntPatterns(supabase, archetypeCategory),
-    fetchDesignReferences(supabase, archetypeCategory),
+    fetchRefs(supabase, archetypeCategory),
   ]);
 
   logger.log('[WireframeGen] Data sources loaded:', {

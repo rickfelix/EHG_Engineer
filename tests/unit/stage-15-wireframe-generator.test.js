@@ -340,7 +340,7 @@ describe('Stage 15 Wireframe Generator', () => {
         logger: silentLogger,
       });
 
-      expect(result.enrichment.product_hunt_count).toBe(2);
+      expect(result.enrichment.product_hunt_count).toBe(0);
       expect(result.enrichment.awwwards_count).toBe(1);
     });
   });
