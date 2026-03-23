@@ -51,15 +51,15 @@ async function main() {
   const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
   let query = supabase
     .from('claude_sessions')
-    .select('session_id, sd_id, metadata, last_heartbeat_at')
-    .gte('last_heartbeat_at', fiveMinAgo)
+    .select('session_id, sd_id, metadata, heartbeat_at')
+    .gte('heartbeat_at', fiveMinAgo)
     .neq('status', 'terminated');
 
   if (excludeSession) {
     query = query.neq('session_id', excludeSession);
   }
 
-  const { data: workers, error } = await query.order('last_heartbeat_at', { ascending: false });
+  const { data: workers, error } = await query.order('heartbeat_at', { ascending: false });
 
   if (error) {
     console.error('Error querying workers:', error.message);
@@ -122,7 +122,7 @@ async function main() {
           payload: { color: id.color, callsign: id.callsign, display_name: expectedDisplayName },
           sender_type: 'coordinator',
           expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
-        }).catch(() => { /* ignore */ });
+        });
       refreshed++;
     }
   }
@@ -148,7 +148,7 @@ async function main() {
     .delete()
     .eq('message_type', 'SET_IDENTITY')
     .lt('expires_at', new Date().toISOString())
-    .catch(() => { /* ignore */ });
+;
 
   console.log('');
   console.log(`${ANSI.bold}Fleet Identity Assignment${ANSI.reset}`);
