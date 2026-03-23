@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-22T18:00:11.108Z
-**Rows**: 0
+**Generated**: 2026-03-23T17:34:16.821Z
+**Rows**: 5
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (83 total)
+## Columns (84 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -106,6 +106,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | orchestrator_lock_acquired_at | `timestamp with time zone` | YES | - | - |
 | growth_strategy | `USER-DEFINED` | YES | - | Portfolio growth strategy classification: cash_engine (proven revenue), capability_builder (reusable tech/business capabilities), moonshot (high risk/high ceiling) |
 | venture_type | `text` | YES | - | Classifies the venture by its primary technology focus: ui (frontend/design), backend (API/services), mixed (full-stack), or data (analytics/ML). NULL for unclassified ventures. Added by SD-LEO-INFRA-SRIP-WIREFRAME-GATING-001. |
+| autonomy_level | `text` | YES | `'L0'::text` | Venture autonomy level: L0=Manual, L1=Guided, L2=Supervised, L3=Autonomous, L4=Full Auto |
 
 ## Constraints
 
@@ -122,6 +123,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `ventures_vision_id_fkey`: vision_id → eva_vision_documents(id)
 
 ### Check Constraints
+- `ventures_autonomy_level_check`: CHECK ((autonomy_level = ANY (ARRAY['L0'::text, 'L1'::text, 'L2'::text, 'L3'::text, 'L4'::text])))
 - `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)))
 - `ventures_health_status_check`: CHECK (((health_status)::text = ANY ((ARRAY['healthy'::character varying, 'warning'::character varying, 'critical'::character varying])::text[])))
 - `ventures_pipeline_mode_check`: CHECK ((pipeline_mode = ANY (ARRAY['building'::text, 'operations'::text, 'growth'::text, 'scaling'::text, 'exit_prep'::text, 'divesting'::text, 'sold'::text])))
@@ -195,6 +197,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_status`
   ```sql
   CREATE INDEX idx_ventures_status ON public.ventures USING btree (status)
+  ```
+- `idx_ventures_unique_active_name`
+  ```sql
+  CREATE UNIQUE INDEX idx_ventures_unique_active_name ON public.ventures USING btree (name) WHERE (status = ANY (ARRAY['active'::venture_status_enum, 'paused'::venture_status_enum]))
   ```
 - `idx_ventures_variants_awaiting_approval`
   ```sql
