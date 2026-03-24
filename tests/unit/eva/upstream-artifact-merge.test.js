@@ -162,4 +162,79 @@ describe('fetchUpstreamArtifacts merge logic', () => {
     const result = mergeArtifacts([]);
     expect(Object.keys(result).length).toBe(0);
   });
+
+});
+
+describe('fetchUpstreamArtifacts __byType lossless access', () => {
+  // Full merge pattern including __byType (matches actual fetchUpstreamArtifacts implementation)
+  function mergeWithByType(rows) {
+    const result = {};
+    for (const artifact of rows) {
+      const key = `stage${artifact.lifecycle_stage}Data`;
+      let artifactData = artifact.artifact_data || artifact.metadata || artifact.content;
+      if (typeof artifactData === 'string') {
+        try { artifactData = JSON.parse(artifactData); } catch { /* keep */ }
+      }
+      if (!artifactData || (typeof artifactData === 'object' && Object.keys(artifactData).length === 0)) continue;
+
+      if (!result[key]) {
+        result[key] = typeof artifactData === 'object' ? { ...artifactData } : artifactData;
+      } else if (typeof result[key] === 'object' && typeof artifactData === 'object') {
+        result[key] = { ...result[key], ...artifactData };
+      }
+      if (typeof result[key] === 'object' && artifact.artifact_type) {
+        if (!result[key].__byType) result[key].__byType = {};
+        result[key].__byType[artifact.artifact_type] = artifactData;
+      }
+    }
+    return result;
+  }
+
+  it('populates __byType with single artifact entry', () => {
+    const rows = [
+      { lifecycle_stage: 3, artifact_type: 'analysis', artifact_data: { score: 85, summary: 'good' }, metadata: null, content: null },
+    ];
+    const result = mergeWithByType(rows);
+    expect(result.stage3Data.__byType).toBeDefined();
+    expect(result.stage3Data.__byType.analysis).toEqual({ score: 85, summary: 'good' });
+  });
+
+  it('preserves both artifact types in __byType on collision', () => {
+    const rows = [
+      { lifecycle_stage: 5, artifact_type: 'truth_financial_model', artifact_data: { decision: 'approved', unitEconomics: { cac: 100 } }, metadata: null, content: null },
+      { lifecycle_stage: 5, artifact_type: 'system_devils_advocate_review', artifact_data: { decision: 'challenged', riskScore: 7 }, metadata: null, content: null },
+    ];
+    const result = mergeWithByType(rows);
+    // Merged result: newer wins on collision
+    expect(result.stage5Data.decision).toBe('challenged');
+    expect(result.stage5Data.unitEconomics).toEqual({ cac: 100 });
+    expect(result.stage5Data.riskScore).toBe(7);
+    // __byType: both originals preserved losslessly
+    expect(result.stage5Data.__byType.truth_financial_model.decision).toBe('approved');
+    expect(result.stage5Data.__byType.system_devils_advocate_review.decision).toBe('challenged');
+  });
+
+  it('__byType preserves original data even when merged result overwrites', () => {
+    const rows = [
+      { lifecycle_stage: 5, artifact_type: 'model_v1', artifact_data: { score: 75, notes: 'initial' }, metadata: null, content: null },
+      { lifecycle_stage: 5, artifact_type: 'model_v2', artifact_data: { score: 92, confidence: 'high' }, metadata: null, content: null },
+    ];
+    const result = mergeWithByType(rows);
+    // Merged: newer score wins
+    expect(result.stage5Data.score).toBe(92);
+    // __byType: original score from v1 preserved
+    expect(result.stage5Data.__byType.model_v1.score).toBe(75);
+    expect(result.stage5Data.__byType.model_v2.score).toBe(92);
+    // Non-colliding fields also preserved
+    expect(result.stage5Data.__byType.model_v1.notes).toBe('initial');
+    expect(result.stage5Data.__byType.model_v2.confidence).toBe('high');
+  });
+
+  it('does not populate __byType when artifact_type is missing', () => {
+    const rows = [
+      { lifecycle_stage: 3, artifact_data: { score: 85 }, metadata: null, content: null },
+    ];
+    const result = mergeWithByType(rows);
+    expect(result.stage3Data.__byType).toBeUndefined();
+  });
 });

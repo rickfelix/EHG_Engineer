@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-MAN-INFRA-AWWWARDS-CURATED-DESIGN-001",
+  "currentSd": "SD-MAN-INFRA-FETCHUPSTREAMARTIFACTS-TYPED-REFACTOR-001",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing Awwwards Curated Design Reference Library",
+  "currentTask": "Implementing fetchUpstreamArtifacts Typed Refactor PRD",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
   "clearedAt": "2026-03-17T17:38:11.272Z",
-  "lastUpdatedAt": "2026-03-23T17:08:28.490Z"
+  "lastUpdatedAt": "2026-03-24T10:23:17.012Z"
 }
