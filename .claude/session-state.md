@@ -1,42 +1,20 @@
 # LEO Protocol Session State
-**Last Updated**: 2026-03-13T21:55:00Z
-**Session Focus**: Orchestrator Completion Validation Gates
+**Last Updated**: 2026-03-24T00:00:00Z
+**Session Focus**: Worktree Cleanup (27 remaining)
 
 ---
 
-## Current Work Status: IN PROGRESS
+## Current Task
+Worktree cleanup — 27 remaining worktrees need investigation before removal.
+See memory: `project_worktree_cleanup_2026-03-24.md` for full list.
 
-### Active Orchestrator
-- **SD**: SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001 (EXEC phase)
-- **UUID**: 255161f2-006c-4a8a-bc86-17dae156e367
-- **Handoffs**: LEAD-TO-PLAN (96%), PLAN-TO-EXEC (100%) — both accepted
-- **PRD**: 4f552bd0-7c4c-4015-ac62-8e397a8e53fa
+## Immediate Next Steps
+1. Run `git worktree prune` to clean 2 prunable worktrees
+2. For each remaining worktree, check if unpushed commits are superseded on main
+3. Remove safe ones, flag any with unique unmerged work
 
-### Next Child to Execute
-- **SD**: SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001-A
-- **Title**: Integration Smoke Test Gate + Schema
-- **Type**: infrastructure, **Phase**: LEAD (draft, claimed)
-- **Worktree**: `.worktrees/SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001-A`
-
-### All Children (all LEAD/draft)
-- **-A**: Integration Smoke Test Gate + Schema (infrastructure)
-- **-B**: Acceptance Criteria Traceability Gate (feature)
-- **-C**: Wire Check Gate (AST Call Graph) (feature)
-- **-D**: Automated UAT Gate (feature)
-
-### Key Artifacts
-- Vision: VISION-ORCH-COMPLETION-GATES-L2-001
-- Arch: ARCH-ORCH-COMPLETION-GATES-001
-- Brainstorm: 4a438401-2263-4b53-b0e6-a826836004b7
-
-### Design Decisions (Chairman-Approved)
-- Hard block, no bypass, ALL orchestrators
-- PRD smoke_test_cmd for smoke testing
-- Vision Success Criteria for acceptance traceability
-- Full AST call graph via acorn for wire checks
-- Fully automated UAT, all gates ship simultaneously
-- Non-code SDs pass with justified skip
-
-### Session Origin
-- /distill revealed chairman review never wired into pipeline
-- Brainstormed 4 gates, created vision+arch, orchestrator SD with children
+## Key Context
+- All 27 remaining worktrees have SDs marked completed/cancelled in DB
+- Each has either unpushed commits or non-metadata uncommitted changes
+- Work was likely shipped via direct-to-main commits but worktree branches never cleaned
+- 20 worktrees already removed this session (6 clean + 14 metadata-only)

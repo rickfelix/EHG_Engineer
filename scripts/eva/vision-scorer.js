@@ -475,7 +475,7 @@ ${rawResponse.substring(0, 1000)}`;
     vision_id: visionResult.id,
     arch_plan_id: archResult.id,
     sd_id: sdKey || null,  // TEXT column — store the SD key string, not UUID
-    total_score: parsed.total_score,
+    total_score: Math.round(parsed.total_score),
     dimension_scores: dimensionScores,
     threshold_action: thresholdAction,
     rubric_snapshot: {
@@ -650,7 +650,7 @@ async function runPersistMode(sdKey, visionKey, archKey, scoreJson) {
     vision_id: visionResult.id,
     arch_plan_id: archResult.id,
     sd_id: sdKey || null,
-    total_score: parsed.total_score,
+    total_score: Math.round(parsed.total_score),
     dimension_scores: dimensionScores,
     threshold_action: thresholdAction,
     rubric_snapshot: {
