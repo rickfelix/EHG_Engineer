@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-24T09:44:14.447Z
-**Rows**: 475
+**Generated**: 2026-03-24T22:12:13.520Z
+**Rows**: 511
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (25 total)
+## Columns (27 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -43,6 +43,8 @@
 | indexing_status | `text` | YES | `'pending'::text` | Embedding indexing status: pending, indexed, failed, skipped |
 | source | `character varying(100)` | YES | - | - |
 | artifact_data | `jsonb` | YES | - | - |
+| supports_vision_key | `character varying(100)` | YES | - | - |
+| supports_plan_key | `character varying(100)` | YES | - | - |
 
 ## Constraints
 
@@ -68,6 +70,22 @@
 - `idx_artifacts_epistemic_evidence`
   ```sql
   CREATE INDEX idx_artifacts_epistemic_evidence ON public.venture_artifacts USING gin (epistemic_evidence)
+  ```
+- `idx_va_plan_key_current`
+  ```sql
+  CREATE INDEX idx_va_plan_key_current ON public.venture_artifacts USING btree (supports_plan_key, is_current) WHERE ((supports_plan_key IS NOT NULL) AND (is_current = true))
+  ```
+- `idx_va_supports_plan_key`
+  ```sql
+  CREATE INDEX idx_va_supports_plan_key ON public.venture_artifacts USING btree (supports_plan_key) WHERE (supports_plan_key IS NOT NULL)
+  ```
+- `idx_va_supports_vision_key`
+  ```sql
+  CREATE INDEX idx_va_supports_vision_key ON public.venture_artifacts USING btree (supports_vision_key) WHERE (supports_vision_key IS NOT NULL)
+  ```
+- `idx_va_vision_key_current`
+  ```sql
+  CREATE INDEX idx_va_vision_key_current ON public.venture_artifacts USING btree (supports_vision_key, is_current) WHERE ((supports_vision_key IS NOT NULL) AND (is_current = true))
   ```
 - `idx_venture_artifacts_content_trgm`
   ```sql
