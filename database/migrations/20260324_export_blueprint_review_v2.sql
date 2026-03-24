@@ -16,6 +16,26 @@
 --   DROP FUNCTION IF EXISTS export_blueprint_review(UUID);
 --   -- Then re-deploy the previous version from 20260322_export_blueprint_review_rpc.sql
 
+-- Helper: resolve venture archetype from ventures table or Stage 1 artifact fallback
+-- Needed because ventures.archetype FK references archetype_benchmarks (different taxonomy)
+CREATE OR REPLACE FUNCTION _get_venture_archetype(p_venture_id UUID)
+RETURNS TEXT
+LANGUAGE plpgsql STABLE
+AS $$
+DECLARE
+  v_archetype TEXT;
+BEGIN
+  SELECT archetype INTO v_archetype FROM ventures WHERE id = p_venture_id;
+  IF v_archetype IS NOT NULL THEN RETURN v_archetype; END IF;
+  SELECT artifact_data->>'archetype' INTO v_archetype
+  FROM venture_artifacts
+  WHERE venture_id = p_venture_id AND lifecycle_stage = '1' AND is_current = true
+  LIMIT 1;
+  RETURN v_archetype;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION _get_venture_archetype(UUID) TO service_role;
+
 CREATE OR REPLACE FUNCTION export_blueprint_review(p_venture_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -52,7 +72,8 @@ BEGIN
   -- ----------------------------------------------------------------
   -- 1. Validate venture exists and fetch metadata
   -- ----------------------------------------------------------------
-  SELECT v.name, v.current_lifecycle_stage, v.archetype
+  SELECT v.name, v.current_lifecycle_stage,
+         COALESCE(v.archetype, _get_venture_archetype(p_venture_id)) AS archetype
     INTO v_venture_name, v_current_stage, v_archetype
     FROM ventures v
    WHERE v.id = p_venture_id;
