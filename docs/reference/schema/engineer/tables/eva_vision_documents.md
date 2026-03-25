@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-24T22:12:13.520Z
-**Rows**: 110
+**Generated**: 2026-03-25T07:13:28.462Z
+**Rows**: 114
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -34,7 +34,7 @@
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | created_by | `text` | YES | - | - |
-| addendums | `jsonb` | YES | `'[]'::jsonb` | - |
+| addendums | `jsonb` | YES | `'[]'::jsonb` | Version increment log — each writeArtifact upsert appends {stage_number, artifact_count, evidence_count, timestamp} |
 | sections | `jsonb` | YES | - | - |
 | quality_checked | `boolean` | YES | `false` | - |
 | quality_issues | `jsonb` | YES | `'[]'::jsonb` | - |
