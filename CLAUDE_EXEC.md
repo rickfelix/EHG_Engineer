@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-03-25 8:09:51 AM
+**Generated**: 2026-03-25 8:16:32 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -1774,8 +1774,8 @@ If SD implements a feature that reduces legacy references from 243 to 200:
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
 | `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
+| `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
 
 ### leo_protocols
 
@@ -1800,9 +1800,9 @@ If SD implements a feature that reduces legacy references from 243 to 200:
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
 | `from_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 | `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
+| `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
 
 ### sd_scope_deliverables
 
@@ -1827,9 +1827,9 @@ If SD implements a feature that reduces legacy references from 243 to 200:
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
-| `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
 | `status` | draft, completed, in_progress, ready | Use one of: draft, completed, in_progress, ready. NOT "approved" - that is not a valid value. |
+| `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
+| `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
 
 
 

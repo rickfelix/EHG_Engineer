@@ -18,8 +18,10 @@ const path = require('path');
 const os = require('os');
 
 const THROTTLE_FILE = path.join(os.tmpdir(), 'claude-coordination-inbox-last-check.json');
+const HEARTBEAT_FILE = path.join(os.tmpdir(), 'claude-heartbeat-last-update.json');
 const IDENTITY_FILE = path.resolve(__dirname, '../../.claude/fleet-identity.json');
 const CHECK_INTERVAL_MS = 300_000; // Only check DB every 5 minutes
+const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 
 function shouldCheck() {
@@ -36,6 +38,36 @@ function markChecked() {
   try {
     fs.writeFileSync(THROTTLE_FILE, JSON.stringify({ lastCheck: Date.now() }));
   } catch { /* ignore */ }
+}
+
+function shouldHeartbeat() {
+  try {
+    if (!fs.existsSync(HEARTBEAT_FILE)) return true;
+    const data = JSON.parse(fs.readFileSync(HEARTBEAT_FILE, 'utf8'));
+    return (Date.now() - data.lastHeartbeat) > HEARTBEAT_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+function markHeartbeat() {
+  try {
+    fs.writeFileSync(HEARTBEAT_FILE, JSON.stringify({ lastHeartbeat: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+/**
+ * Update heartbeat_at on claude_sessions — runs every 30s regardless of inbox check
+ */
+async function updateHeartbeat(supabase, sessionId) {
+  if (!shouldHeartbeat()) return;
+  markHeartbeat();
+  try {
+    await supabase
+      .from('claude_sessions')
+      .update({ heartbeat_at: new Date().toISOString() })
+      .eq('session_id', sessionId);
+  } catch { /* fail silently */ }
 }
 
 function getCurrentSessionId() {
@@ -99,9 +131,6 @@ function emitAutoClaimDirective(suggestedSd, availableSds) {
 }
 
 async function main() {
-  if (!shouldCheck()) return;
-  markChecked();
-
   let supabase;
   try {
     const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
@@ -112,6 +141,12 @@ async function main() {
 
   const sessionId = getCurrentSessionId();
   if (!sessionId) return;
+
+  // Always update heartbeat (30s throttle) — even when inbox check is skipped
+  await updateHeartbeat(supabase, sessionId);
+
+  if (!shouldCheck()) return;
+  markChecked();
 
   // Check if this session is idle (no SD claimed)
   let isIdle = false;
