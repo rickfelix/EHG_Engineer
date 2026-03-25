@@ -339,6 +339,44 @@ export class BaseExecutor {
         }
       }
 
+      // Step 3.9: SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001 — Claim heartbeat validation
+      // Verify this session still holds the claim before executing state transitions
+      try {
+        const sdKey = sd?.sd_key || sdId;
+        const { data: currentClaim } = await this.supabase
+          .from('claude_sessions')
+          .select('session_id, sd_id')
+          .eq('sd_id', sdKey)
+          .eq('status', 'active')
+          .limit(1)
+          .single();
+
+        // Also check by UUID if sd_key didn't match
+        if (!currentClaim && sd?.id) {
+          const { data: uuidClaim } = await this.supabase
+            .from('claude_sessions')
+            .select('session_id, sd_id')
+            .eq('sd_id', sd.id)
+            .eq('status', 'active')
+            .limit(1)
+            .single();
+
+          if (uuidClaim && options.autoProceedSessionId && uuidClaim.session_id !== options.autoProceedSessionId) {
+            console.log(`\n⚠️  CLAIM HEARTBEAT: Another session (${uuidClaim.session_id}) now holds this SD`);
+            console.log('   Aborting handoff to prevent race condition.');
+            try { endSpan(rootSpan, { result: 'claim_lost' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+            return ResultBuilder.gateFailure('CLAIM_HEARTBEAT_LOST', {
+              issues: [`Claim on ${sdKey} was lost to session ${uuidClaim.session_id} during handoff execution`],
+              score: 0,
+              max_score: 100
+            }, 'Re-claim the SD with npm run sd:start before retrying the handoff.');
+          }
+        }
+      } catch (e) {
+        // Non-fatal: heartbeat check failure should not block handoff
+        console.debug('[BaseExecutor] Claim heartbeat check suppressed:', e?.message || e);
+      }
+
       // Step 4: Execute type-specific logic
       let step4Span;
       try { step4Span = startSpan('step.executeSpecific', { span_type: 'phase', step_name: 'executeSpecific', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }

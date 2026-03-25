@@ -3,9 +3,38 @@
  * Part of SD-LEO-REFACTOR-SD-NEXT-001
  *
  * Control Gap Fix: SD status must reflect actual phase, not just dependency resolution
+ * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Added STUCK detection
  */
 
 import { colors } from './colors.js';
+
+// Phase-to-required-handoff mapping for stuck detection
+const PHASE_REQUIRES_HANDOFF = {
+  PLAN_PRD: { from: 'LEAD', to: 'PLAN' },
+  PLAN: { from: 'LEAD', to: 'PLAN' },
+  PLAN_VERIFICATION: { from: 'LEAD', to: 'PLAN' },
+  EXEC: { from: 'PLAN', to: 'EXEC' },
+  EXEC_ACTIVE: { from: 'PLAN', to: 'EXEC' },
+  EXEC_COMPLETE: { from: 'PLAN', to: 'EXEC' },
+};
+
+/**
+ * Check if an SD is stuck (phase advanced beyond accepted handoffs)
+ * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001
+ *
+ * @param {Object} item - SD item
+ * @param {Array} acceptedHandoffs - Accepted handoff records for this SD (pre-fetched)
+ * @returns {boolean} True if SD is stuck
+ */
+export function isStuckSD(item, acceptedHandoffs) {
+  const phase = item.current_phase || '';
+  const req = PHASE_REQUIRES_HANDOFF[phase];
+  if (!req) return false; // LEAD phase or completed — can't be stuck
+
+  if (!acceptedHandoffs || acceptedHandoffs.length === 0) return true;
+
+  return !acceptedHandoffs.some(h => h.from_phase === req.from && h.to_phase === req.to);
+}
 
 /**
  * Get phase-aware status icon for an SD
@@ -19,6 +48,12 @@ export function getPhaseAwareStatus(item) {
   const status = item.status || '';
   const depsResolved = item.deps_resolved;
   const progress = item.progress_percentage || 0;
+
+  // SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: STUCK detection
+  // If handoff chain data is attached, check for stuck state
+  if (item._stuck) {
+    return `${colors.red}STUCK${colors.reset}`;
+  }
 
   // Phase-based status takes priority over dependency resolution
   // This prevents showing "READY" for SDs that need verification/review
@@ -71,6 +106,11 @@ export function getPhaseAwareStatus(item) {
 export function isActionableForLead(item) {
   const phase = item.current_phase || '';
   const status = item.status || '';
+
+  // SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Not actionable if stuck
+  if (item._stuck) {
+    return false;
+  }
 
   // Not actionable if needs verification
   if (phase === 'EXEC_COMPLETE' || phase.includes('COMPLETE')) {

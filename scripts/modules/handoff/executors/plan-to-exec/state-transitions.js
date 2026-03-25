@@ -3,7 +3,58 @@
  * Part of SD-LEO-REFACTOR-PLANTOEXEC-001
  *
  * Root cause fix: Handoffs should act as state machine transitions, not just validation gates
+ * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Added rollback support
  */
+
+/**
+ * Capture current SD + PRD state for rollback on handoff failure
+ * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Defensive rollback
+ */
+export function captureStateSnapshot(sd, prd) {
+  return {
+    sd_phase: sd?.current_phase || 'PLAN_PRD',
+    sd_status: sd?.status || 'planning',
+    sd_is_working_on: sd?.is_working_on || false,
+    prd_status: prd?.status || 'approved',
+    prd_phase: prd?.phase || null,
+    captured_at: new Date().toISOString()
+  };
+}
+
+/**
+ * Rollback SD + PRD state to pre-transition snapshot
+ * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001
+ */
+export async function rollbackState(supabase, sdId, prd, snapshot) {
+  console.log('\n⚠️  STATE ROLLBACK: Reverting SD and PRD phase/status');
+  console.log('-'.repeat(50));
+  try {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+    const queryField = isUUID ? 'id' : 'sd_key';
+    const { error: sdErr } = await supabase
+      .from('strategic_directives_v2')
+      .update({
+        current_phase: snapshot.sd_phase,
+        status: snapshot.sd_status,
+        is_working_on: snapshot.sd_is_working_on,
+        updated_at: new Date().toISOString()
+      })
+      .eq(queryField, sdId);
+    if (sdErr) console.log(`   ❌ SD rollback failed: ${sdErr.message}`);
+    else console.log(`   ✅ SD rolled back to phase=${snapshot.sd_phase}, status=${snapshot.sd_status}`);
+
+    if (prd) {
+      const { error: prdErr } = await supabase
+        .from('product_requirements_v2')
+        .update({ status: snapshot.prd_status, phase: snapshot.prd_phase, updated_at: new Date().toISOString() })
+        .eq('id', prd.id);
+      if (prdErr) console.log(`   ❌ PRD rollback failed: ${prdErr.message}`);
+      else console.log(`   ✅ PRD rolled back to status=${snapshot.prd_status}`);
+    }
+  } catch (error) {
+    console.log(`   ❌ Rollback error: ${error.message}`);
+  }
+}
 
 /**
  * Transition PRD status to EXEC phase

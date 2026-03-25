@@ -723,6 +723,38 @@ async function main() {
     // Worktree resolution is optional - don't block SD start
   }
 
+  // 4.9. SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Pre-claim health check
+  // Verify handoff chain integrity before proceeding
+  try {
+    const phase = sd.current_phase || 'LEAD';
+    const PHASE_REQUIRES = {
+      PLAN_PRD: { from: 'LEAD', to: 'PLAN' },
+      PLAN: { from: 'LEAD', to: 'PLAN' },
+      EXEC: { from: 'PLAN', to: 'EXEC' },
+      EXEC_ACTIVE: { from: 'PLAN', to: 'EXEC' },
+      EXEC_COMPLETE: { from: 'PLAN', to: 'EXEC' },
+    };
+    const req = PHASE_REQUIRES[phase];
+    if (req) {
+      const { data: handoffs } = await supabase
+        .from('sd_phase_handoffs')
+        .select('from_phase, to_phase, status')
+        .eq('sd_id', sd.id)
+        .eq('status', 'accepted');
+      const hasRequired = (handoffs || []).some(h => h.from_phase === req.from && h.to_phase === req.to);
+      if (!hasRequired) {
+        console.log(`\n${colors.bgYellow}${colors.bold} STUCK SD WARNING ${colors.reset}`);
+        console.log(`   ${colors.yellow}SD is in phase ${phase} but has no accepted ${req.from}→${req.to} handoff${colors.reset}`);
+        console.log(`   This SD may have a broken handoff chain.`);
+        console.log(`   ${colors.cyan}Run: npm run sd:recover -- ${effectiveId} --fix${colors.reset}`);
+        console.log('');
+      }
+    }
+  } catch (e) {
+    // Non-fatal: health check failure should not block claiming
+    console.debug('[sd-start] Health check error:', e?.message || e);
+  }
+
   // 5. Display SD info
   console.log(`\n${colors.green}✓ SD claimed successfully (${claimResult.claim.status})${colors.reset}`);
   console.log(`\n${colors.bold}SD: ${effectiveId}${colors.reset}`);
