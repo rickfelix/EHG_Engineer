@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-03-25T07:09:51.724Z -->
-<!-- git_commit: 859e85a2 -->
+<!-- generated_at: 2026-03-25T07:16:32.303Z -->
+<!-- git_commit: 7de0b7c0 -->
 <!-- db_snapshot_hash: 1ba41d24a4b01a2a -->
 <!-- file_content_hash: pending -->
 
@@ -124,5 +124,5 @@ These are kept for reference but should NEVER be used as templates.
 
 ---
 
-*DIGEST generated: 2026-03-25 8:09:51 AM*
+*DIGEST generated: 2026-03-25 8:16:32 AM*
 *Protocol: 4.3.3*
