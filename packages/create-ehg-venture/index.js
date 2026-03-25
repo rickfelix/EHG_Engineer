@@ -5,6 +5,7 @@
  * Usage:
  *   npx create-ehg-venture my-venture
  *   npx create-ehg-venture my-venture --skip-install
+ *   npx create-ehg-venture my-venture --register
  *
  * Creates a new venture project with:
  *   - React + Vite + TypeScript (EHG stack)
@@ -14,11 +15,18 @@
  *   - Pre-configured testing (Vitest + Playwright)
  *   - CI/CD workflow template
  *
+ * --register flag additionally:
+ *   - Creates GitHub repo via gh CLI (rickfelix/<name>)
+ *   - Registers venture in applications/registry.json
+ *   - Creates venture_provisioning_state DB record
+ *
  * SD: SD-LEO-INFRA-EHG-VENTURE-FUNDAMENTALS-001
+ * SD: SD-LEO-INFRA-VENTURE-LEO-BUILD-001-B (--register flag)
  */
-import { mkdirSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
 import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
 
 const PACKAGE_VERSIONS = {
   react: '^18.3.0',
@@ -417,24 +425,164 @@ export default defineConfig({
 
   console.log('\n═'.repeat(50));
   console.log(`\n✅ Venture "${name}" created successfully!`);
-  console.log(`\nNext steps:`);
+  console.log('\nNext steps:');
   console.log(`  cd ${name}`);
-  console.log(`  cp .env.example .env    # Configure Supabase`);
-  console.log(`  npm run dev             # Start development server`);
-  console.log(`  npm run test:unit       # Run unit tests`);
-  console.log(`\nConformance check:`);
-  console.log(`  node ../scripts/venture-conformance-check.js .`);
+  console.log('  cp .env.example .env    # Configure Supabase');
+  console.log('  npm run dev             # Start development server');
+  console.log('  npm run test:unit       # Run unit tests');
+  if (!options.register) {
+    console.log('\nTo register with GitHub & LEO:');
+    console.log(`  npx create-ehg-venture ${name} --register`);
+  }
+  console.log('\nConformance check:');
+  console.log('  node ../scripts/venture-conformance-check.js .');
   console.log('');
+}
+
+/**
+ * Register venture: create GitHub repo, update registry, insert DB record.
+ * Each step is independent — failures in one step do not block others.
+ */
+async function registerVenture(name, root) {
+  console.log('\n  Registering venture...');
+  console.log('  ' + '─'.repeat(40));
+
+  const ghOrg = 'rickfelix';
+  const repoName = `${ghOrg}/${name}`;
+  let githubRepoUrl = null;
+
+  // Step 1: Check gh CLI auth
+  try {
+    execSync('gh auth status', { stdio: 'pipe' });
+  } catch {
+    console.log('  ✗ gh CLI not authenticated. Run: gh auth login');
+    console.log('    Skipping GitHub repo creation.');
+    return;
+  }
+
+  // Step 2: Create GitHub repo
+  try {
+    const existing = execSync(`gh repo view ${repoName} --json url -q .url`, { stdio: 'pipe', encoding: 'utf8' }).trim();
+    if (existing) {
+      console.log(`  ⚠ GitHub repo already exists: ${existing}`);
+      githubRepoUrl = existing;
+    }
+  } catch {
+    // Repo doesn't exist — create it
+    try {
+      execSync(`gh repo create ${repoName} --public --description "EHG Venture: ${name}" --confirm`, { stdio: 'pipe', encoding: 'utf8' });
+      githubRepoUrl = `https://github.com/${repoName}`;
+      console.log(`  ✓ GitHub repo created: ${githubRepoUrl}`);
+    } catch (err) {
+      console.log(`  ✗ Failed to create GitHub repo: ${err.message}`);
+    }
+  }
+
+  // Step 3: Update applications/registry.json
+  try {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const registryPath = join(__dirname, '..', '..', 'applications', 'registry.json');
+
+    if (!existsSync(registryPath)) {
+      console.log('  ✗ Registry not found at: ' + registryPath);
+    } else {
+      const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
+
+      // Check for existing entry
+      const existingEntry = Object.values(registry.applications).find(app => app.name === name);
+      if (existingEntry) {
+        console.log(`  ⚠ Registry already contains "${name}" (${existingEntry.id})`);
+      } else {
+        // Generate next APP ID
+        const existingIds = Object.keys(registry.applications)
+          .filter(k => k.startsWith('APP'))
+          .map(k => parseInt(k.replace('APP', ''), 10))
+          .filter(n => !isNaN(n));
+        const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+        const appId = `APP${String(nextNum).padStart(3, '0')}`;
+
+        registry.applications[appId] = {
+          id: appId,
+          name,
+          github_repo: `${ghOrg}/${name}`,
+          supabase_project_id: 'pending',
+          supabase_url: 'pending',
+          status: 'active',
+          environment: 'development',
+          registered_at: new Date().toISOString(),
+          registered_by: 'create-ehg-venture --register',
+          local_path: root,
+        };
+        registry.metadata.total_apps = Object.keys(registry.applications).length;
+        registry.metadata.active_apps = Object.values(registry.applications).filter(a => a.status === 'active').length;
+        registry.metadata.last_updated = new Date().toISOString();
+
+        writeFileSync(registryPath, JSON.stringify(registry, null, 2) + '\n', 'utf8');
+        console.log(`  ✓ Registered in registry.json as ${appId}`);
+      }
+    }
+  } catch (err) {
+    console.log(`  ✗ Registry update failed: ${err.message}`);
+  }
+
+  // Step 4: Insert venture_provisioning_state record
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.log('  ⚠ SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set. Skipping DB record.');
+    } else {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      const { error } = await supabase.from('venture_provisioning_state').upsert({
+        venture_name: name,
+        state: 'provisioned',
+        github_repo_url: githubRepoUrl,
+        registry_entry_id: null,
+        provisioned_at: new Date().toISOString(),
+      }, { onConflict: 'venture_name' });
+
+      if (error) {
+        console.log(`  ⚠ DB insert warning: ${error.message}`);
+        console.log('    (venture_provisioning_state table may not exist yet)');
+      } else {
+        console.log('  ✓ venture_provisioning_state record created');
+      }
+    }
+  } catch (err) {
+    console.log(`  ⚠ DB insert skipped: ${err.message}`);
+  }
+
+  console.log('  ' + '─'.repeat(40));
+  if (githubRepoUrl) {
+    console.log(`  Registration complete. Repo: ${githubRepoUrl}`);
+  }
 }
 
 // CLI entry point
 const args = process.argv.slice(2);
 const name = args.find(a => !a.startsWith('--'));
 const skipInstall = args.includes('--skip-install');
+const register = args.includes('--register');
 
 if (!name) {
-  console.log('Usage: npx create-ehg-venture <venture-name> [--skip-install]');
+  console.log('Usage: npx create-ehg-venture <venture-name> [--skip-install] [--register]');
   process.exit(1);
 }
 
-scaffold(name, { skipInstall });
+// Validate venture name
+if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+  console.error('Error: venture name must be lowercase alphanumeric with hyphens (e.g., "my-venture")');
+  process.exit(1);
+}
+
+scaffold(name, { skipInstall, register });
+
+if (register) {
+  registerVenture(name, join(process.cwd(), name)).catch(err => {
+    console.error(`Registration failed: ${err.message}`);
+    process.exit(1);
+  });
+}
