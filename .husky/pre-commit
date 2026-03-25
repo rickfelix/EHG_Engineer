@@ -162,6 +162,35 @@ fi
 echo "✅ CLAUDE*.md protection check passed"
 
 # ============================================================================
+# STAGE 0.6: Script Reference Protection (BLOCKING)
+# ============================================================================
+# SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002: Prevent deletion of referenced scripts
+# Checks if any staged deletions in scripts/ would break operational references.
+# Only blocks on CRITICAL-tier refs (protocol docs, commands, CI, hooks).
+# ============================================================================
+echo ""
+echo "🔍 Running script reference protection..."
+
+STAGED_SCRIPT_DELETIONS=$(git diff --cached --name-only --diff-filter=D | grep -E '^scripts/[^/]+\.(js|mjs|cjs)$' | grep -v 'archive/' || true)
+
+if [ ! -z "$STAGED_SCRIPT_DELETIONS" ]; then
+  node scripts/validate-script-references.js --staged 2>&1
+  REF_EXIT=$?
+
+  if [ $REF_EXIT -ne 0 ]; then
+    echo ""
+    echo "❌ BLOCKED: Deleting referenced scripts!"
+    echo "   Remove the references first, or restore the scripts."
+    echo "   Run: node scripts/validate-script-references.js --fix"
+    echo "   Bypass: git commit --no-verify"
+    echo ""
+    exit 1
+  fi
+fi
+
+echo "✅ Script reference protection passed"
+
+# ============================================================================
 # STAGE 1: Secret Detection (BLOCKING)
 # ============================================================================
 # SD-SEC-CREDENTIAL-ROTATION-001: Prevent accidental commit of secrets
