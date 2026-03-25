@@ -261,6 +261,27 @@ export async function generateCorrectiveSD(scoreId) {
     return { created: false, action: 'skipped', reason: `false-positive-signals (${relevance.signal_count}/${relevance.total_dims})`, sdKey: null, sdId: null };
   }
 
+  // 1e. Staleness check — skip if score is based on outdated codebase state
+  // SD-LEO-INFRA-HEAL-PIPELINE-INTEGRITY-001 (CAPA-3)
+  const scoreGitSha = score.rubric_snapshot?.git_sha;
+  if (scoreGitSha && !options?.force) {
+    try {
+      const { execSync } = await import('child_process');
+      const commitCount = execSync(`git rev-list --count ${scoreGitSha}..HEAD 2>/dev/null`, { encoding: 'utf8' }).trim();
+      const commitsBehind = parseInt(commitCount, 10) || 0;
+      const STALENESS_THRESHOLD = 50;
+      if (commitsBehind > STALENESS_THRESHOLD) {
+        console.log(`[corrective-sd-generator] ⚠️  STALE SCORE: ${commitsBehind} commits behind HEAD (threshold: ${STALENESS_THRESHOLD})`);
+        console.log(`[corrective-sd-generator] Score git_sha: ${scoreGitSha} — scored_at: ${score.scored_at}`);
+        console.log(`[corrective-sd-generator] Use --force to override staleness check`);
+        await _logAudit(supabase, scoreId, 'skipped_stale_score', null, score.vision_id);
+        return { created: false, action: 'skipped', reason: `stale-score (${commitsBehind} commits behind)`, sdKey: null, sdId: null };
+      }
+    } catch {
+      // git command failed (worktree, shallow clone, etc.) — proceed anyway
+    }
+  }
+
   // 2. Determine action (prefer stored threshold_action, fall back to classify)
   // Normalize DB values: "escalate" → "escalation", "gap_closure" → "gap-closure", etc.
   const rawAction = score.threshold_action || classifyScore(score.total_score ?? 0);
