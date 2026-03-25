@@ -440,6 +440,131 @@ export default defineConfig({
 }
 
 /**
+ * Generate CI/CD workflow templates for a venture.
+ * Creates .github/workflows/ with ci.yml and deploy.yml.
+ * SD: SD-LEO-INFRA-VENTURE-LEO-BUILD-001-F
+ *
+ * @param {string} name - Venture name
+ * @param {string} root - Venture root directory
+ */
+function generateCICDWorkflows(name, root) {
+  const workflowDir = join(root, '.github', 'workflows');
+  mkdirSync(workflowDir, { recursive: true });
+
+  // ci.yml — lint, test, build on push and PRs
+  const ciYml = `name: CI - ${name}
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+`;
+
+  // deploy.yml — Vercel deployment + Supabase migrations on main push
+  const deployYml = `name: Deploy - ${name}
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: \${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: \${{ secrets.SUPABASE_DB_PASSWORD }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: migrate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: \${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: \${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: \${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: --prod
+`;
+
+  writeFileSync(join(workflowDir, 'ci.yml'), ciYml, 'utf8');
+  writeFileSync(join(workflowDir, 'deploy.yml'), deployYml, 'utf8');
+}
+
+/**
  * Register venture: create GitHub repo, update registry, insert DB record.
  * Each step is independent — failures in one step do not block others.
  */
@@ -553,6 +678,15 @@ async function registerVenture(name, root) {
     }
   } catch (err) {
     console.log(`  ⚠ DB insert skipped: ${err.message}`);
+  }
+
+  // Step 5: Generate CI/CD workflow templates
+  // SD: SD-LEO-INFRA-VENTURE-LEO-BUILD-001-F
+  try {
+    generateCICDWorkflows(name, root);
+    console.log('  ✓ CI/CD workflows generated (.github/workflows/)');
+  } catch (err) {
+    console.log(`  ✗ CI/CD template generation failed: ${err.message}`);
   }
 
   console.log('  ' + '─'.repeat(40));
