@@ -200,14 +200,34 @@ async function getSDDetails(sdId) {
 /**
  * Check if an SD is an orchestrator (has children).
  * Returns the list of children if found, empty array otherwise.
+ *
+ * FIX: parent_sd_id stores the UUID `id`, not `sd_key`. Query by both
+ * to handle both legacy (id === sd_key) and modern (id is UUID) SDs.
  */
-async function getOrchestratorChildren(sdKey) {
+async function getOrchestratorChildren(sdKeyOrId) {
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, claiming_session_id, progress_percentage')
-    .eq('parent_sd_id', sdKey);
+    .select('id, sd_key, title, status, current_phase, priority, claiming_session_id, progress_percentage, sd_type')
+    .or(`parent_sd_id.eq.${sdKeyOrId}`);
 
-  if (error || !data) return [];
+  if (error || !data || data.length === 0) {
+    // If sdKeyOrId was a sd_key, resolve its UUID id and retry
+    const { data: parent } = await supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('sd_key', sdKeyOrId)
+      .single();
+
+    if (parent && parent.id !== sdKeyOrId) {
+      const { data: children, error: childErr } = await supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_key, title, status, current_phase, priority, claiming_session_id, progress_percentage, sd_type')
+        .eq('parent_sd_id', parent.id);
+
+      if (!childErr && children) return children;
+    }
+    return data || [];
+  }
   return data;
 }
 
@@ -226,6 +246,66 @@ async function getActiveClaimSessionIds() {
 }
 
 /**
+ * Recursively find a leaf-level (non-orchestrator) work item from an orchestrator hierarchy.
+ * Traverses orchestrator → sub-orchestrator → ... → leaf SD.
+ *
+ * When a child is itself an orchestrator (sd_type === 'orchestrator' or has children),
+ * recurse into it instead of claiming it directly. This ensures that `sd:start` on a
+ * top-level orchestrator drills down to the actual grandchild that needs work.
+ *
+ * @param {string} parentSdKey - The orchestrator SD key to search from
+ * @param {number} depth - Current recursion depth (safety limit)
+ * @param {string[]} routingPath - Accumulated routing path for display
+ * @returns {Promise<{child: object|null, allComplete: boolean, reason: string, routingPath: string[]}>}
+ */
+async function findLeafWorkItem(parentSdKey, depth = 0, routingPath = []) {
+  const MAX_DEPTH = 5; // Safety limit for deeply nested orchestrators
+
+  if (depth >= MAX_DEPTH) {
+    return {
+      child: null,
+      allComplete: false,
+      reason: `Max orchestrator nesting depth (${MAX_DEPTH}) exceeded`,
+      routingPath
+    };
+  }
+
+  const { child, allComplete, reason } = await findUnclaimedChild(parentSdKey);
+
+  if (!child) {
+    return { child: null, allComplete, reason, routingPath };
+  }
+
+  const childKey = child.sd_key || child.id;
+  const updatedPath = [...routingPath, childKey];
+
+  // Check if this child is itself an orchestrator (has its own children)
+  const grandchildren = await getOrchestratorChildren(childKey);
+
+  if (grandchildren.length > 0) {
+    // Sub-orchestrator detected — check if all its children are done
+    const allGrandchildrenComplete = grandchildren.every(gc => gc.status === 'completed');
+
+    if (allGrandchildrenComplete) {
+      // Sub-orchestrator needs its own completion handoff — return it as the work item
+      return {
+        child,
+        allComplete: false,
+        reason: `Sub-orchestrator ${childKey}: all ${grandchildren.length} children completed — needs completion handoff`,
+        routingPath: updatedPath
+      };
+    }
+
+    // Recurse into the sub-orchestrator to find a leaf grandchild
+    console.log(`   ${colors.cyan}↳ ${childKey} is a sub-orchestrator (${grandchildren.length} children) — drilling deeper...${colors.reset}`);
+    return findLeafWorkItem(childKey, depth + 1, updatedPath);
+  }
+
+  // Leaf-level SD found
+  return { child, allComplete: false, reason, routingPath: updatedPath };
+}
+
+/**
  * Find the first unclaimed child SD that's ready to work on.
  * Uses child-sd-selector for urgency-based sorting, then filters out claimed children.
  *
@@ -233,8 +313,21 @@ async function getActiveClaimSessionIds() {
  * A child with a stale/released claiming_session_id is treated as unclaimed.
  */
 async function findUnclaimedChild(parentSdKey) {
+  // FIX: parent_sd_id stores UUID `id`, not sd_key.
+  // Resolve sd_key → UUID id so getNextReadyChild and getOrchestratorChildren
+  // can query parent_sd_id correctly.
+  let parentId = parentSdKey;
+  const { data: parentRow } = await supabase
+    .from('strategic_directives_v2')
+    .select('id')
+    .eq('sd_key', parentSdKey)
+    .single();
+  if (parentRow) {
+    parentId = parentRow.id;
+  }
+
   // Use the existing getNextReadyChild which handles urgency sorting and blocker filtering
-  const result = await getNextReadyChild(supabase, parentSdKey);
+  const result = await getNextReadyChild(supabase, parentId);
 
   if (!result.sd) {
     return { child: null, allComplete: result.allComplete, reason: result.reason };
@@ -324,9 +417,9 @@ async function main() {
     const children = await getOrchestratorChildren(effectiveId);
     if (children.length > 0) {
       console.log(`\n${colors.cyan}🔀 ORCHESTRATOR DETECTED${colors.reset} (${children.length} children)`);
-      console.log(`   ${colors.dim}Routing to first unclaimed child instead of claiming orchestrator${colors.reset}`);
+      console.log(`   ${colors.dim}Routing to leaf-level work item (recursive through sub-orchestrators)${colors.reset}`);
 
-      const { child, allComplete, reason } = await findUnclaimedChild(effectiveId);
+      const { child, allComplete, reason, routingPath } = await findLeafWorkItem(effectiveId);
 
       if (allComplete) {
         console.log(`\n${colors.green}✅ All children completed${colors.reset}`);
@@ -336,12 +429,17 @@ async function main() {
       }
 
       if (!child) {
-        console.log(`\n${colors.yellow}⚠️  No unclaimed children available: ${reason}${colors.reset}`);
+        console.log(`\n${colors.yellow}⚠️  No unclaimed leaf work items available${colors.reset}`);
+        console.log(`   ${colors.dim}Reason: ${reason}${colors.reset}`);
 
-        // Show current child status for visibility
+        if (routingPath && routingPath.length > 0) {
+          console.log(`   ${colors.dim}Routing reached: ${routingPath.join(' → ')}${colors.reset}`);
+        }
+
+        // Show current top-level child status for visibility
         const claimed = children.filter(c => c.claiming_session_id);
         const completed = children.filter(c => c.status === 'completed');
-        console.log(`   Claimed: ${claimed.length} | Completed: ${completed.length} | Total: ${children.length}`);
+        console.log(`\n   ${colors.bold}Top-level children:${colors.reset} Claimed: ${claimed.length} | Completed: ${completed.length} | Total: ${children.length}`);
 
         if (claimed.length > 0) {
           console.log(`\n${colors.bold}Currently claimed children:${colors.reset}`);
@@ -355,9 +453,20 @@ async function main() {
         process.exit(1);
       }
 
-      // Route to the child — update the SD reference for the rest of the flow
+      // Route to the leaf work item — update the SD reference for the rest of the flow
       const childId = child.sd_key || child.id;
-      console.log(`\n${colors.green}→ Routing to child: ${childId}${colors.reset}`);
+
+      // Show routing path if we traversed through sub-orchestrators
+      if (routingPath && routingPath.length > 1) {
+        console.log(`\n${colors.green}→ Routing path (${routingPath.length} levels deep):${colors.reset}`);
+        routingPath.forEach((key, i) => {
+          const indent = '  '.repeat(i + 1);
+          const arrow = i < routingPath.length - 1 ? `${colors.cyan}↳${colors.reset}` : `${colors.green}★${colors.reset}`;
+          console.log(`   ${indent}${arrow} ${key}`);
+        });
+      } else {
+        console.log(`\n${colors.green}→ Routing to child: ${childId}${colors.reset}`);
+      }
       console.log(`   ${child.title}`);
 
       // Re-fetch the child SD details for the rest of the flow
@@ -368,7 +477,7 @@ async function main() {
       }
       Object.assign(sd, childSd);
       effectiveId = childId;
-      console.log(`   ${colors.dim}(Orchestrator ${sdId} not claimed — only child ${childId} will be claimed)${colors.reset}`);
+      console.log(`   ${colors.dim}(Orchestrator ${sdId} not claimed — only leaf ${childId} will be claimed)${colors.reset}`);
     }
   }
 
