@@ -3,9 +3,8 @@
  * SD: SD-LEO-INFRA-VENTURE-LEO-BUILD-001-B
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
 
 const REGISTRY_PATH = join(process.cwd(), 'applications', 'registry.json');
 

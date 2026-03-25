@@ -470,7 +470,7 @@ async function registerVenture(name, root) {
   } catch {
     // Repo doesn't exist — create it
     try {
-      const result = execSync(`gh repo create ${repoName} --public --description "EHG Venture: ${name}" --confirm`, { stdio: 'pipe', encoding: 'utf8' });
+      execSync(`gh repo create ${repoName} --public --description "EHG Venture: ${name}" --confirm`, { stdio: 'pipe', encoding: 'utf8' });
       githubRepoUrl = `https://github.com/${repoName}`;
       console.log(`  ✓ GitHub repo created: ${githubRepoUrl}`);
     } catch (err) {
