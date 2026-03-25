@@ -1,86 +1,184 @@
-// Dead Script Archival - SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-001
-// Moves one-off scripts to scripts/archive/one-time/
-// Consolidates archived directories
-// Removes tmp/debug files
+// Dead Script Archival v2.0.0 - SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002
+// Uses static reference analysis to determine if a script is truly dead.
+// NEVER archives a script that is referenced in operational files.
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
 const SCRIPTS_DIR = path.join(__dirname);
+const PROJECT_ROOT = path.resolve(SCRIPTS_DIR, '..');
 const ARCHIVE_DIR = path.join(SCRIPTS_DIR, 'archive', 'one-time');
-const ARCHIVE_TESTS_DIR = path.join(ARCHIVE_DIR, 'tests');
 
-// Protected scripts that must NOT be moved (referenced in package.json or imported)
-const PROTECTED = new Set([
-  'add-prd-to-database.js', 'add-sd-to-database.js', 'agent-reconciliation-audit.js',
-  'audit-dormant-tables.js', 'audit-enum-coverage.js', 'audit-retro.mjs',
-  'audit-rls-policies.js', 'audit-to-sd.mjs', 'auto-extract-patterns-from-retro.js',
-  'backfill-pattern-subagents.js', 'baseline.js', 'brainstorm-pipeline-health.js',
-  'capability-analyzer.js', 'chairman-dashboard.js', 'chairman-seed-data.js',
-  'check-directives-data.js', 'check-handoff-compliance.js', 'check-jsonb-integrity.js',
-  'check-leo-version.js', 'child-sd-preflight.js', 'claude-code-release-check.js',
-  'claude-session-coordinator.mjs', 'cleanup-passing-traces.js', 'cleanup-root-temp-files.js',
-  'cli.cjs', 'context-monitor.js', 'create-department.js', 'cross-platform-run.js',
-  'decision-audit.js', 'department-hierarchy.cjs', 'design-quality-scorecard.js',
-  'detect-duplicate-docs.js', 'detect-stale-patterns.js', 'discover-schema-constraints.js',
-  'doc-health-report.js', 'docmon.js', 'docmon-validate.js',
-  'eva-decisions.js', 'eva-dlq-replay.js', 'eva-events-status.js',
-  'eva-health-check.cjs', 'eva-idea-evaluate.js', 'eva-idea-post-process.js',
-  'eva-idea-status.js', 'eva-idea-sync.js', 'eva-intake-classify.js',
-  'eva-intake-pipeline.js', 'eva-intake-refine.js', 'eva-recovery-status.js',
-  'eva-run.js', 'eva-scheduler.js', 'eva-services-status.js',
-  'eva-venture-new.js', 'eva-youtube-auth.js', 'exec-commit-gate.js',
-  'execute-database-sql.js', 'execute-subagent.js', 'execute-untrack-manifest.js',
-  'feedback-staleness-check.js', 'fix-prd-scripts.js', 'gate-health-check.js',
-  'generate-agent-md-from-db.js', 'generate-boundary-examples.js',
-  'generate-claude-md-from-db.js', 'generate-doc-metadata.js',
-  'generate-file-trees.js', 'generate-playground-config.cjs',
-  'generate-schema-docs-from-db.js', 'generate-session-prologue.js',
-  'generate-untrack-manifest.js', 'generate-workflow-docs.js',
-  'git-commit-recovery.js', 'governance.js', 'handoff.js',
-  'heal-empty-metrics.js', 'human-like-e2e-retrospective.js',
-  'ingest-audit-file.mjs', 'ingest-lessons-learned-markdown.js',
-  'inject-doc-metadata.js', 'install-doc-validation-hooks.js',
-  'lead-dossier.js', 'leo.js', 'leo-analytics.js',
-  'leo-artifact-cleaner.js', 'leo-audit.js', 'leo-auto-init.js',
-  'leo-cleanup.js', 'leo-continuous.js', 'leo-continuous-prompt.js',
-  'leo-genesis-branches.js', 'leo-hook-feedback.js', 'leo-maintenance.js',
-  'leo-orchestrator-enforced.js', 'leo-refresh.js', 'leo-search.mjs',
-  'leo-status-line.js', 'leo-summary.mjs', 'list-departments.cjs',
-  'llm-audit.js', 'llm-canary-control.js', 'manage-department-agents.cjs',
-  'manage-department-capabilities.cjs', 'migration-stats.js',
-  'new-strategic-directive.js', 'oiv-validate.js', 'okr-priority-sync.js',
-  'pattern-alert-sd-creator.js', 'pattern-maintenance.js',
-  'phase-preflight.js', 'pipeline-status.js', 'prd-diagnostic-toolkit.js',
-  'prd-format-validator.js', 'proposal-manage.js', 'protocol-improvements.js',
-  'rca-learning-ingestion.js', 'register-app.js', 'resolve-pattern.js',
-  'retroactive-gap-analysis.js', 'roadmap-generate.js', 'roadmap-promote.js',
-  'roadmap-status.js', 'root-cause-agent.js', 'run-leo.cjs',
-  'schema-snapshot.js', 'sd-baseline.js', 'sd-baseline-deactivate.js',
-  'sd-baseline-intelligent.js', 'sd-burnrate.js', 'sd-from-feedback.js',
-  'sd-next.js', 'sd-query.js', 'sd-start.js', 'sd-status.js', 'sd-verify.js',
-  'security-audit-dashboard.js', 'separability-delta.js', 'session-worktree.js',
-  'setup-database.js', 'setup-database-supabase.js', 'setup-global-hooks.cjs',
-  'ship-preflight.js', 'show-budget-status.js', 'skill-audit.js',
-  'story-requirements-template.js', 'strategy-objectives.js',
-  'switch-context.js', 'sync-context-usage.js', 'sync-github.js',
-  'sync-manager.js', 'sync-pattern-triggers.js', 'sync-supabase.js',
-  'test-automation.js', 'test-database.js', 'test-feedback-loop-integration.js',
-  'test-pipeline-smoke.js', 'test-result-capture.js', 'test-scanner.js',
-  'test-selection.js', 'test-validate-system.js', 'token-logger.js',
-  'unified-consolidated-prd.js', 'update-directive-status.js',
-  'validate-audit-file.mjs', 'validate-doc-links.js', 'validate-doc-location.js',
-  'validate-doc-metadata.js', 'validate-doc-naming.js', 'validate-doc-staged.js',
-  'validate-story-test-mapping.js', 'venture-proving-companion.js',
-  'view-memory.js', 'wsjf-priority-fetcher.js',
-  // Also protect this archival script and other infrastructure
-  'archive-dead-scripts.cjs', 'leo-create-sd.js', 'leo-history.mjs',
-  'create-quick-fix.js', 'get-working-on-sd.js', 'multi-repo-status.js',
-  'orchestrator-preflight.js', 'unified-handoff-system-v2.js',
-  'handoff-validator.js', 'handoff-import.cjs', 'handoff-export.cjs',
-]);
+// ============================================================================
+// REFERENCE ANALYSIS (replaces hardcoded PROTECTED list)
+// ============================================================================
 
-// Patterns to archive (one-off scripts)
+// Operational file patterns to scan for script references
+const OPERATIONAL_SCAN_DIRS = [
+  { dir: '', patterns: ['CLAUDE*.md'], description: 'Protocol docs' },
+  { dir: '.claude/commands', patterns: ['*.md'], description: 'Slash commands' },
+  { dir: '.claude/context', patterns: ['*.md'], description: 'Context files' },
+  { dir: '.github/workflows', patterns: ['*.yml'], exclude: /archived/, description: 'CI workflows' },
+  { dir: 'scripts/hooks', patterns: ['*.cjs', '*.js'], description: 'Hook scripts' },
+  { dir: 'templates/claude-md', patterns: ['*.md'], description: 'Sub-agent templates' },
+  { dir: '', patterns: ['package.json'], description: 'npm scripts' },
+];
+
+// Regex patterns to extract script references from files
+const REF_PATTERNS = [
+  /node\s+scripts\/([a-zA-Z0-9_.-]+\.(?:js|mjs|cjs))/g,
+  /(?:^|\s|["'`(])scripts\/([a-zA-Z0-9_.-]+\.(?:js|mjs|cjs))(?:\s|["'`)\n]|$)/gm,
+];
+
+// Subdirectory references to ignore (these aren't root-level scripts)
+const SUBDIR_PREFIXES = ['modules/', 'lib/', 'hooks/', 'archive/', 'reports/'];
+
+/**
+ * Collect all files matching patterns in a directory (non-recursive simple glob)
+ */
+function collectFiles(baseDir, patterns, exclude) {
+  const results = [];
+  const dir = path.join(PROJECT_ROOT, baseDir);
+  if (!fs.existsSync(dir)) return results;
+
+  // Simple *.ext matching
+  for (const pattern of patterns) {
+    if (pattern.startsWith('*')) {
+      const ext = pattern.slice(1); // e.g., '.md'
+      const files = fs.readdirSync(dir).filter(f => f.endsWith(ext));
+      for (const f of files) {
+        const fullPath = path.join(dir, f);
+        if (exclude && exclude.test(fullPath)) continue;
+        results.push(fullPath);
+      }
+    } else {
+      // Exact filename
+      const fullPath = path.join(dir, pattern);
+      if (fs.existsSync(fullPath)) results.push(fullPath);
+    }
+  }
+  return results;
+}
+
+/**
+ * Recursively collect files matching extension in a directory tree
+ */
+function collectFilesRecursive(baseDir, ext, exclude) {
+  const results = [];
+  const dir = path.join(PROJECT_ROOT, baseDir);
+  if (!fs.existsSync(dir)) return results;
+
+  function walk(current) {
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === '.worktrees' || entry.name === '.git') continue;
+        if (exclude && exclude.test(entry.name)) continue;
+        walk(fullPath);
+      } else if (entry.isFile() && entry.name.endsWith(ext)) {
+        results.push(fullPath);
+      }
+    }
+  }
+  walk(dir);
+  return results;
+}
+
+/**
+ * Build the set of scripts referenced in operational files
+ */
+function buildReferencedSet() {
+  const referenced = new Set();
+
+  // Collect all operational files to scan
+  const filesToScan = [];
+  for (const scan of OPERATIONAL_SCAN_DIRS) {
+    filesToScan.push(...collectFiles(scan.dir, scan.patterns, scan.exclude));
+  }
+  // Also scan templates recursively
+  filesToScan.push(...collectFilesRecursive('templates/claude-md', '.md'));
+
+  // Also check package.json scripts section specifically
+  const pkgPath = path.join(PROJECT_ROOT, 'package.json');
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      const scriptValues = Object.values(pkg.scripts || {}).join('\n');
+      for (const pattern of REF_PATTERNS) {
+        pattern.lastIndex = 0;
+        let match;
+        while ((match = pattern.exec(scriptValues)) !== null) {
+          const name = match[1];
+          if (!SUBDIR_PREFIXES.some(p => name.startsWith(p))) {
+            referenced.add(name);
+          }
+        }
+      }
+    } catch { /* ignore parse errors */ }
+  }
+
+  // Extract references from all operational files
+  for (const file of filesToScan) {
+    let content;
+    try { content = fs.readFileSync(file, 'utf8'); }
+    catch { continue; }
+
+    for (const pattern of REF_PATTERNS) {
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(content)) !== null) {
+        const name = match[1];
+        if (!SUBDIR_PREFIXES.some(p => name.startsWith(p))) {
+          referenced.add(name);
+        }
+      }
+    }
+  }
+
+  // Also check JS imports/requires between scripts
+  const scriptFiles = fs.readdirSync(SCRIPTS_DIR)
+    .filter(f => /\.(js|mjs|cjs)$/.test(f) && fs.statSync(path.join(SCRIPTS_DIR, f)).isFile());
+
+  for (const scriptFile of scriptFiles) {
+    let content;
+    try { content = fs.readFileSync(path.join(SCRIPTS_DIR, scriptFile), 'utf8'); }
+    catch { continue; }
+
+    // Check require('./X') or import './X' patterns
+    const importPatterns = [
+      /require\(['"]\.\/([a-zA-Z0-9_.-]+)(?:\.(?:js|mjs|cjs))?['"]\)/g,
+      /from\s+['"]\.\/([a-zA-Z0-9_.-]+)(?:\.(?:js|mjs|cjs))?['"]/g,
+    ];
+
+    for (const pattern of importPatterns) {
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(content)) !== null) {
+        const baseName = match[1];
+        // Try common extensions
+        for (const ext of ['.js', '.mjs', '.cjs']) {
+          const candidate = baseName + ext;
+          if (fs.existsSync(path.join(SCRIPTS_DIR, candidate))) {
+            referenced.add(candidate);
+          }
+        }
+        // Also try exact match (may already have extension)
+        if (/\.(js|mjs|cjs)$/.test(baseName)) {
+          referenced.add(baseName);
+        }
+      }
+    }
+  }
+
+  return referenced;
+}
+
+// ============================================================================
+// ARCHIVAL LOGIC
+// ============================================================================
+
+// Patterns for scripts that are CANDIDATES for archival (one-off patterns)
 const ONE_OFF_PATTERNS = [
   /^accept-/,
   /^create-.*prd/i,
@@ -90,202 +188,126 @@ const ONE_OFF_PATTERNS = [
   /^create-.*retro/i,
   /^create-.*sd-/i,
   /^activate-/,
-  /^fix-.*(?!prd-scripts)/,  // fix-* but not fix-prd-scripts
+  /^fix-/,
   /^migrate-/,
-  /^setup-.*(?!database|global)/,  // setup-* but not setup-database or setup-global
-];
-
-// Test script patterns (ad-hoc tests, not CI-referenced)
-const TEST_PATTERNS = [
-  /^test-.*(?!automation|database|feedback|pipeline|result|scanner|selection|validate)/,
+  /^setup-/,
+  /^add-/,
+  /^create-/,
 ];
 
 const dryRun = process.argv.includes('--dry-run');
+const verbose = process.argv.includes('--verbose');
 const mode = dryRun ? 'DRY RUN' : 'LIVE';
 
-console.log(`\n=== Dead Script Archival (${mode}) ===\n`);
+console.log(`\n=== Dead Script Archival v2.0.0 (${mode}) ===`);
+console.log('Using static reference analysis (not pattern matching alone)\n');
 
-// Step 1: Get all root-level scripts
+// Step 1: Build referenced set from operational files
+console.log('Scanning operational files for script references...');
+const referenced = buildReferencedSet();
+console.log(`Found ${referenced.size} scripts referenced in operational files`);
+
+// Step 2: Get all root-level scripts
 const allFiles = fs.readdirSync(SCRIPTS_DIR)
   .filter(f => /\.(js|mjs|cjs)$/.test(f) && fs.statSync(path.join(SCRIPTS_DIR, f)).isFile());
 
 console.log(`Total scripts at root: ${allFiles.length}`);
-console.log(`Protected scripts: ${PROTECTED.size}`);
 
-// Step 2: Categorize
+// Step 3: Categorize with reference-awareness
 const toArchive = [];
-const toArchiveTests = [];
 const toRemove = [];
+const protectedByRef = [];
 
 for (const file of allFiles) {
-  if (PROTECTED.has(file)) continue;
+  // NEVER archive referenced scripts
+  if (referenced.has(file)) {
+    protectedByRef.push(file);
+    continue;
+  }
 
-  // tmp-* and debug-* -> remove
+  // NEVER archive this script itself
+  if (file === 'archive-dead-scripts.cjs') continue;
+
+  // tmp-* and debug-* -> remove (even if unreferenced)
   if (/^(tmp-|debug-)/.test(file)) {
     toRemove.push(file);
     continue;
   }
 
-  // test-* (not protected) -> archive tests
-  if (/^test-/.test(file) && !PROTECTED.has(file)) {
-    toArchiveTests.push(file);
-    continue;
-  }
-
-  // One-off patterns -> archive
+  // One-off patterns -> archive candidates (only if NOT referenced)
   if (ONE_OFF_PATTERNS.some(p => p.test(file))) {
-    if (!PROTECTED.has(file)) {
-      toArchive.push(file);
-    }
-    continue;
-  }
-
-  // create-* (not protected and not the main create scripts)
-  if (/^create-/.test(file) && !PROTECTED.has(file)) {
-    toArchive.push(file);
-    continue;
-  }
-
-  // add-* (not protected)
-  if (/^add-/.test(file) && !PROTECTED.has(file)) {
     toArchive.push(file);
     continue;
   }
 }
 
-console.log(`\nTo archive (one-time): ${toArchive.length}`);
-console.log(`To archive (tests): ${toArchiveTests.length}`);
-console.log(`To remove (tmp/debug): ${toRemove.length}`);
-console.log(`Expected new root count: ${allFiles.length - toArchive.length - toArchiveTests.length - toRemove.length}`);
+console.log(`\nProtected by references: ${protectedByRef.length}`);
+console.log(`Candidates for archive:  ${toArchive.length}`);
+console.log(`Candidates for removal:  ${toRemove.length}`);
+
+if (verbose) {
+  console.log('\n--- Protected by operational references ---');
+  protectedByRef.sort().forEach(f => console.log('  ✓ ' + f));
+}
 
 if (dryRun) {
-  console.log('\n--- Would archive (one-time) ---');
-  toArchive.slice(0, 20).forEach(f => console.log('  ' + f));
-  if (toArchive.length > 20) console.log(`  ... and ${toArchive.length - 20} more`);
-
-  console.log('\n--- Would archive (tests) ---');
-  toArchiveTests.slice(0, 20).forEach(f => console.log('  ' + f));
-  if (toArchiveTests.length > 20) console.log(`  ... and ${toArchiveTests.length - 20} more`);
+  console.log('\n--- Would archive (unreferenced one-off) ---');
+  toArchive.slice(0, 30).forEach(f => console.log('  → ' + f));
+  if (toArchive.length > 30) console.log(`  ... and ${toArchive.length - 30} more`);
 
   console.log('\n--- Would remove (tmp/debug) ---');
-  toRemove.forEach(f => console.log('  ' + f));
+  toRemove.forEach(f => console.log('  ✗ ' + f));
 
-  console.log('\n--- Archived directories to consolidate ---');
-  const archivedDirs = fs.readdirSync(SCRIPTS_DIR)
-    .filter(f => f.startsWith('archived-') && fs.statSync(path.join(SCRIPTS_DIR, f)).isDirectory());
-  archivedDirs.forEach(d => {
-    const count = fs.readdirSync(path.join(SCRIPTS_DIR, d)).length;
-    console.log(`  ${d}/ (${count} files)`);
-  });
-
+  console.log(`\nExpected root count: ${allFiles.length - toArchive.length - toRemove.length}`);
   process.exit(0);
 }
 
-// Step 3: Create directories
+// Step 4: Create archive directory
 fs.mkdirSync(ARCHIVE_DIR, { recursive: true });
-fs.mkdirSync(ARCHIVE_TESTS_DIR, { recursive: true });
 
-// Step 4: Move one-off scripts
+// Step 5: Move unreferenced one-off scripts
 let moved = 0;
 for (const file of toArchive) {
   const src = path.join(SCRIPTS_DIR, file);
   const dst = path.join(ARCHIVE_DIR, file);
   try {
-    execSync(`git mv "${src}" "${dst}"`, { cwd: path.dirname(SCRIPTS_DIR), stdio: 'pipe' });
+    execSync(`git mv "${src}" "${dst}"`, { cwd: PROJECT_ROOT, stdio: 'pipe' });
     moved++;
-  } catch (e) {
-    // Fallback to fs.rename if not tracked
+  } catch {
     try {
       fs.renameSync(src, dst);
       moved++;
-    } catch (e2) {
-      console.error(`  Failed to move: ${file} - ${e2.message}`);
+    } catch (e) {
+      console.error(`  Failed to move: ${file} - ${e.message}`);
     }
   }
 }
-console.log(`Moved ${moved} one-off scripts to archive/one-time/`);
-
-// Step 5: Move test scripts
-let movedTests = 0;
-for (const file of toArchiveTests) {
-  const src = path.join(SCRIPTS_DIR, file);
-  const dst = path.join(ARCHIVE_TESTS_DIR, file);
-  try {
-    execSync(`git mv "${src}" "${dst}"`, { cwd: path.dirname(SCRIPTS_DIR), stdio: 'pipe' });
-    movedTests++;
-  } catch (e) {
-    try {
-      fs.renameSync(src, dst);
-      movedTests++;
-    } catch (e2) {
-      console.error(`  Failed to move test: ${file} - ${e2.message}`);
-    }
-  }
-}
-console.log(`Moved ${movedTests} test scripts to archive/one-time/tests/`);
+console.log(`\nArchived: ${moved} unreferenced scripts`);
 
 // Step 6: Remove tmp/debug
 let removed = 0;
 for (const file of toRemove) {
   const src = path.join(SCRIPTS_DIR, file);
   try {
-    execSync(`git rm "${src}"`, { cwd: path.dirname(SCRIPTS_DIR), stdio: 'pipe' });
+    execSync(`git rm "${src}"`, { cwd: PROJECT_ROOT, stdio: 'pipe' });
     removed++;
-  } catch (e) {
+  } catch {
     try {
       fs.unlinkSync(src);
       removed++;
-    } catch (e2) {
-      console.error(`  Failed to remove: ${file} - ${e2.message}`);
-    }
-  }
-}
-console.log(`Removed ${removed} tmp/debug scripts`);
-
-// Step 7: Consolidate archived-* directories
-const ARCHIVE_BASE = path.join(SCRIPTS_DIR, 'archive');
-const archivedDirs = [
-  { src: 'archived-prd-scripts', dst: 'prd-scripts' },
-  { src: 'archived-handoffs', dst: 'handoffs' },
-  { src: 'archived-sd-scripts', dst: 'sd-scripts' },
-  { src: 'archived-migrations', dst: 'migrations' },
-];
-
-for (const { src, dst } of archivedDirs) {
-  const srcPath = path.join(SCRIPTS_DIR, src);
-  const dstPath = path.join(ARCHIVE_BASE, dst);
-  if (fs.existsSync(srcPath)) {
-    try {
-      fs.mkdirSync(dstPath, { recursive: true });
-      execSync(`git mv "${srcPath}" "${dstPath}"`, { cwd: path.dirname(SCRIPTS_DIR), stdio: 'pipe' });
-      console.log(`Consolidated ${src}/ -> archive/${dst}/`);
     } catch (e) {
-      // git mv of dirs can fail, try moving contents
-      try {
-        const files = fs.readdirSync(srcPath);
-        for (const f of files) {
-          try {
-            execSync(`git mv "${path.join(srcPath, f)}" "${path.join(dstPath, f)}"`, { cwd: path.dirname(SCRIPTS_DIR), stdio: 'pipe' });
-          } catch {
-            fs.renameSync(path.join(srcPath, f), path.join(dstPath, f));
-          }
-        }
-        // Remove empty source dir
-        if (fs.readdirSync(srcPath).length === 0) {
-          fs.rmdirSync(srcPath);
-        }
-        console.log(`Consolidated ${src}/ -> archive/${dst}/ (file-by-file)`);
-      } catch (e2) {
-        console.error(`  Failed to consolidate ${src}/: ${e2.message}`);
-      }
+      console.error(`  Failed to remove: ${file} - ${e.message}`);
     }
   }
 }
+console.log(`Removed: ${removed} tmp/debug scripts`);
 
 // Final count
 const finalFiles = fs.readdirSync(SCRIPTS_DIR)
   .filter(f => /\.(js|mjs|cjs)$/.test(f) && fs.statSync(path.join(SCRIPTS_DIR, f)).isFile());
+
 console.log(`\n=== RESULTS ===`);
 console.log(`Root scripts: ${allFiles.length} -> ${finalFiles.length}`);
-console.log(`Archived: ${moved + movedTests}`);
+console.log(`Referenced (protected): ${protectedByRef.length}`);
+console.log(`Archived: ${moved}`);
 console.log(`Removed: ${removed}`);
