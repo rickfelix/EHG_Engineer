@@ -43,7 +43,8 @@
       "work_tracking_policy",
       "genesis_codebase",
       "governance_strategic_hierarchy",
-      "governance_chairman_ceo_roles"
+      "governance_chairman_ceo_roles",
+      "cascade_invalidation_system"
     ],
     "_removed_sections_note": "weighted_keyword_scoring (implementation detail of keyword-intent-scorer.js, hook handles routing), mandatory_agent_invocation (covered by PreToolUse hook routing advisory), sub_agent_prompt_quality (duplicate of Five-Point Brief in CLAUDE.md router), sustainable_issue_resolution (overlaps RCA mandate and execution philosophy), skill_integration (skills are self-documenting, reference pointer sufficient), communication_context (common sense for Opus 4.6), parallel_execution (common sense - read-safe, write-sequential), development_workflow (duplicate of application_architecture), strunkian_writing_standards (moved to docs/reference/), rca_multi_expert_protocol (RCA agent knows its own collaboration protocol)"
   },
@@ -106,7 +107,8 @@
       "governance_kr_linkage_plan",
       "plan_smoke_test_requirement",
       "plan_failure_chain_ordering",
-      "sub_agent_phase_guidance_plan"
+      "sub_agent_phase_guidance_plan",
+      "cascade_invalidation_plan"
     ],
     "_removed_sections_note": "migration_execution_protocol_plan (duplicate of CORE), mandatory_phase_transitions_plan (duplicate of CORE), testing_tier_strategy (superseded by testing_tier_strategy_updated), schema_documentation_access + schema_documentation_reference + database_schema_overview (reference data, on-demand lookup via docs/), plan_visual_documentation_examples (Mermaid examples, reference doc). RCA mandate removed from generator — already in router."
   },

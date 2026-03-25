@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-03-17 10:23:33 AM
+**Generated**: 2026-03-25 8:09:51 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -41,6 +41,19 @@ Resolve root causes so they do not happen again in the future. Update processes,
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
+
+## Cascade Invalidation — PLAN Phase Guidance
+
+### Before Creating Architecture Plans
+Check if there are pending cascade invalidation flags:
+```bash
+node scripts/modules/governance/cascade-invalidation-engine.js stale architecture_plan
+```
+
+If flags exist, resolve them BEFORE creating new plans — stale plans should not be the basis for new work.
+
+### After Vision Updates
+When a vision document is updated during PLAN phase (e.g., via brainstorm refinement), the cascade trigger automatically flags downstream plans. Review flagged plans and update if the vision changes affect architecture decisions.
 
 ## 🎯 Multi-Perspective Planning
 
@@ -146,7 +159,7 @@ npm run sd:branch:auto SD-XXX-001
 npm run sd:branch:check SD-XXX-001
 
 # Full command with options
-node scripts/create-sd-branch.js SD-XXX-001 --app EHG --auto-stash
+# scripts/create-sd-branch.js removed SD-XXX-001 --app EHG --auto-stash
 ```
 
 ### Branch Naming Convention
@@ -431,23 +444,6 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 | "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
 | "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
-
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -518,6 +514,23 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
+
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## PLAN Pre-EXEC Checklist
 
@@ -1629,34 +1642,6 @@ for (const childId of childIds) {
 
 > **Team Capabilities**: When planning complex SDs, consider whether team spawning (any agent leading specialists) could parallelize cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
-## PRD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off PRD creation scripts like:**
-- `create-prd-sd-*.js`
-- `insert-prd-*.js`
-- `enhance-prd-*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/add-prd-to-database.js
-```
-
-### Why This Matters
-- One-off scripts bypass PRD quality validation
-- They create massive maintenance burden (100+ orphaned scripts)
-- They fragment PRD creation patterns
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-prd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/add-prd-to-database.js`
-2. Follow the modular PRD creation system in `scripts/prd/`
-3. PRD is properly validated against quality rubrics
-
 ## Vision V2 PRD Requirements (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Integration in PRDs
@@ -1697,6 +1682,34 @@ Key spec requirements addressed:
 ### Implementation Guidance (from SD metadata)
 
 All Vision V2 SDs have `creation_mode: CREATE_FROM_NEW` - implement fresh per specs, learn from existing code but do not modify it.
+
+## PRD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off PRD creation scripts like:**
+- `create-prd-sd-*.js`
+- `insert-prd-*.js`
+- `enhance-prd-*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/add-prd-to-database.js
+```
+
+### Why This Matters
+- One-off scripts bypass PRD quality validation
+- They create massive maintenance burden (100+ orphaned scripts)
+- They fragment PRD creation patterns
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-prd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/add-prd-to-database.js`
+2. Follow the modular PRD creation system in `scripts/prd/`
+3. PRD is properly validated against quality rubrics
 
 ## Quality Assessment Integration in Handoffs
 
@@ -2077,18 +2090,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
   - Criteria: max_length: 300; description: "Goal summary present and <= 300 chars"
 
 
-- **fileScopeValidation** (Gate 1)
-  - Weight: 0.08
-  - Required: Yes
-  - Criteria: description: "File scope has create/modify/delete arrays"; required_arrays: ["create","modify","delete"]
-
-
-- **executionPlanValidation** (Gate 1)
-  - Weight: 0.1
-  - Required: Yes
-  - Criteria: min_steps: 1; description: "Execution plan has >= 1 step"
-
-
 - **testingStrategyValidation** (Gate 1)
   - Weight: 0.1
   - Required: Yes
@@ -2269,24 +2270,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
   - Criteria: description: "Target application is valid and accessible"; valid_targets: ["EHG","EHG_Engineer"]
 
 
-- **architectureVerification** (Gate 1)
-  - Weight: 0
-  - Required: No
-  - Criteria: checks: ["adr_exists","interfaces_defined"]; description: "Architecture verification gate"
-
-
-- **explorationAudit** (Gate 1)
-  - Weight: 0
-  - Required: No
-  - Criteria: checks: ["files_explored","patterns_identified"]; description: "Exploration audit - codebase understanding verified"
-
-
-- **branchEnforcement** (Gate 1)
-  - Weight: 0
-  - Required: Yes
-  - Criteria: checks: ["branch_exists","branch_naming_valid"]; description: "Git branch enforcement - feature branch created"
-
-
 - **subAgentOrchestration** (Gate 3)
   - Weight: 0
   - Required: Yes
@@ -2297,12 +2280,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
   - Weight: 0
   - Required: No
   - Criteria: description: "Retrospective quality gate - lessons captured"; min_quality_score: 70
-
-
-- **gitCommitEnforcement** (Gate 3)
-  - Weight: 0
-  - Required: Yes
-  - Criteria: checks: ["commits_exist","commits_reference_sd"]; description: "Git commits reference SD ID"
 
 
 - **planToLeadHandoffExists** (Gate 4)
@@ -2349,6 +2326,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 
 ---
 
-*Generated from database: 2026-03-17*
+*Generated from database: 2026-03-25*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

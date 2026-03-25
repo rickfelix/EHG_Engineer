@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-03-17 10:23:33 AM
+**Generated**: 2026-03-25 8:09:51 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -291,7 +291,7 @@ npm run sd:branch:auto SD-XXX-001
 npm run sd:branch:check SD-XXX-001
 
 # Full command with options
-node scripts/create-sd-branch.js SD-XXX-001 --app EHG --auto-stash
+# scripts/create-sd-branch.js removed SD-XXX-001 --app EHG --auto-stash
 ```
 
 ### Branch Naming Convention
@@ -385,6 +385,41 @@ Sub-agents are FIRST RESPONDERS in EXEC phase. When you encounter a problem that
 
 *Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
+## Migration Script Pattern (MANDATORY)
+
+**Issue Pattern**: PAT-DB-MIGRATION-001
+
+When writing migration scripts, you MUST use the established pattern:
+
+### Correct Pattern
+```javascript
+import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
+import { readFileSync } from 'fs';
+
+const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
+const client = await createDatabaseClient('engineer', { verify: true });
+const statements = splitPostgreSQLStatements(migrationSQL);
+
+for (const statement of statements) {
+  await client.query(statement);
+}
+
+await client.end();
+```
+
+### NEVER Use This Pattern
+```javascript
+// WRONG - exec_sql RPC does not exist
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(url, key);
+await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
+```
+
+### Before Writing Migration Scripts
+1. Search for existing patterns: `Glob *migration*.js`
+2. Read `scripts/run-sql-migration.js` as canonical template
+3. Use `lib/supabase-connection.js` utilities
+
 ## 📚 Skill Integration (EXEC Phase)
 
 ## Skill Integration During EXEC
@@ -461,41 +496,6 @@ Skills provide patterns, templates, and examples. Apply them to your specific im
 Skills are for **creative guidance** (how to build).
 Sub-agents are for **validation** (did you build it right).
 Use skills during EXEC, save sub-agents for PLAN_VERIFY.
-
-## Migration Script Pattern (MANDATORY)
-
-**Issue Pattern**: PAT-DB-MIGRATION-001
-
-When writing migration scripts, you MUST use the established pattern:
-
-### Correct Pattern
-```javascript
-import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
-import { readFileSync } from 'fs';
-
-const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
-const client = await createDatabaseClient('engineer', { verify: true });
-const statements = splitPostgreSQLStatements(migrationSQL);
-
-for (const statement of statements) {
-  await client.query(statement);
-}
-
-await client.end();
-```
-
-### NEVER Use This Pattern
-```javascript
-// WRONG - exec_sql RPC does not exist
-import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(url, key);
-await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
-```
-
-### Before Writing Migration Scripts
-1. Search for existing patterns: `Glob *migration*.js`
-2. Read `scripts/run-sql-migration.js` as canonical template
-3. Use `lib/supabase-connection.js` utilities
 
 ## Validation Rules (SD-LEARN-008)
 
@@ -694,6 +694,24 @@ EXEC→PLAN handoffs now have **intelligent verification**:
 | **300-600** | ✅ **OPTIMAL** | Sweet spot |
 | **>800** | **MUST split** | Too complex |
 
+## TODO Comment Standard
+
+## TODO Comment Standard (When Deferring Work)
+
+**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
+
+### Standard TODO Format
+
+```typescript
+// TODO (SD-ID): Action required
+// Requires: Dependencies, prerequisites
+// Estimated effort: X-Y hours
+// Current state: Mock/temporary/placeholder
+```
+
+**Success Pattern** (SD-UAT-003):
+> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
+
 ## Human-Like E2E Testing Fixtures
 
 ### Human-Like E2E Testing Enhancements (LEO v4.4)
@@ -777,24 +795,6 @@ All human-like test results are automatically included in the LEO evidence pack:
 - `test_results.attachments.accessibility` - axe-core violations
 - `test_results.attachments.chaos` - resilience test results
 - `test_results.attachments.llm_ux` - LLM evaluation scores
-
-## TODO Comment Standard
-
-## TODO Comment Standard (When Deferring Work)
-
-**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
-
-### Standard TODO Format
-
-```typescript
-// TODO (SD-ID): Action required
-// Requires: Dependencies, prerequisites
-// Estimated effort: X-Y hours
-// Current state: Mock/temporary/placeholder
-```
-
-**Success Pattern** (SD-UAT-003):
-> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
 ## EXEC Dual Test Requirement
 
@@ -912,86 +912,6 @@ UI Parity Status:
 - Gate 2.5 Status: PASS/FAIL
 ```
 
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
-
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
-
-**Every completed Strategic Directive and Quick-Fix MUST end with:**
-
-1. **Commit** - All changes committed with proper message format
-2. **Push** - Branch pushed to remote
-3. **Merge to Main** - Feature branch merged into main
-
-### For Quick-Fixes
-
-The `complete-quick-fix.js` script handles this automatically:
-
-```bash
-node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
-```
-
-The script will:
-1. Verify tests pass and UAT completed
-2. Commit and push changes
-3. **Prompt to merge PR to main** (or local merge if no PR)
-4. Delete the feature branch
-
-### For Strategic Directives
-
-After LEAD approval, execute the following:
-
-```bash
-# 1. Ensure all changes committed
-git add .
-git commit -m "feat(SD-YYYY-XXX): [description]
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-# 2. Push to remote
-git push origin feature/SD-YYYY-XXX
-
-# 3. Create PR if not exists
-gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
-
-# 4. Merge PR (preferred method)
-gh pr merge --merge --delete-branch
-
-# OR local merge fallback
-git checkout main
-git pull origin main
-git merge --no-ff feature/SD-YYYY-XXX
-git push origin main
-git branch -d feature/SD-YYYY-XXX
-git push origin --delete feature/SD-YYYY-XXX
-```
-
-### Merge Checklist
-
-Before merging, verify:
-- [ ] All tests passing (unit + E2E)
-- [ ] CI/CD pipeline green
-- [ ] Code review completed (if required)
-- [ ] No merge conflicts
-- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
-
-### Anti-Patterns
-
-❌ **NEVER** leave feature branches unmerged after completion
-❌ **NEVER** skip the push step
-❌ **NEVER** merge without verifying tests pass
-❌ **NEVER** force push to main
-
-### Verification
-
-After merge, confirm:
-```bash
-git checkout main
-git pull origin main
-git log --oneline -5  # Should show your merge commit
-```
-
 ## 🌿 Branch Hygiene Gate (MANDATORY)
 
 ## Branch Hygiene Gate (MANDATORY)
@@ -1081,6 +1001,86 @@ When starting implementation:
 3. If multiple SDs detected → split branches
 4. If >100 files changed → assess scope creep
 5. Document branch health in handoff notes
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
+
+**Every completed Strategic Directive and Quick-Fix MUST end with:**
+
+1. **Commit** - All changes committed with proper message format
+2. **Push** - Branch pushed to remote
+3. **Merge to Main** - Feature branch merged into main
+
+### For Quick-Fixes
+
+The `complete-quick-fix.js` script handles this automatically:
+
+```bash
+node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
+```
+
+The script will:
+1. Verify tests pass and UAT completed
+2. Commit and push changes
+3. **Prompt to merge PR to main** (or local merge if no PR)
+4. Delete the feature branch
+
+### For Strategic Directives
+
+After LEAD approval, execute the following:
+
+```bash
+# 1. Ensure all changes committed
+git add .
+git commit -m "feat(SD-YYYY-XXX): [description]
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 2. Push to remote
+git push origin feature/SD-YYYY-XXX
+
+# 3. Create PR if not exists
+gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
+
+# 4. Merge PR (preferred method)
+gh pr merge --merge --delete-branch
+
+# OR local merge fallback
+git checkout main
+git pull origin main
+git merge --no-ff feature/SD-YYYY-XXX
+git push origin main
+git branch -d feature/SD-YYYY-XXX
+git push origin --delete feature/SD-YYYY-XXX
+```
+
+### Merge Checklist
+
+Before merging, verify:
+- [ ] All tests passing (unit + E2E)
+- [ ] CI/CD pipeline green
+- [ ] Code review completed (if required)
+- [ ] No merge conflicts
+- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
+
+### Anti-Patterns
+
+❌ **NEVER** leave feature branches unmerged after completion
+❌ **NEVER** skip the push step
+❌ **NEVER** merge without verifying tests pass
+❌ **NEVER** force push to main
+
+### Verification
+
+After merge, confirm:
+```bash
+git checkout main
+git pull origin main
+git log --oneline -5  # Should show your merge commit
+```
 
 ## Auto-Merge Workflow for SD Completion
 
@@ -1724,7 +1724,7 @@ Before writing any code, you MUST:
 | Requirement | Description |
 |-------------|-------------|
 | **Spec Compliance** | Code MUST match spec definitions exactly (table names, column types, API shapes) |
-| **26-Stage Insulation** | CEO Runtime MUST be OBSERVER-COMMITTER only - no direct venture_stage_work writes |
+| **25-Stage Insulation** | CEO Runtime MUST be OBSERVER-COMMITTER only - no direct venture_stage_work writes |
 | **Glass Cockpit Design** | UI MUST follow progressive disclosure, minimal chrome philosophy |
 | **Token Budget Enforcement** | All agent operations MUST respect venture token budgets |
 
@@ -1735,7 +1735,7 @@ All Vision V2 SDs have this implementation guidance:
 - **CREATE FROM NEW** - similar files may exist to learn from, but implement fresh
 - **DO NOT MODIFY** existing files - create new implementations per vision specs
 
-### 26-Stage Insulation Checklist (SD-VISION-V2-005 CRITICAL)
+### 25-Stage Insulation Checklist (SD-VISION-V2-005 CRITICAL)
 
 **Before marking SD-VISION-V2-005 complete:**
 
@@ -1774,8 +1774,8 @@ If SD implements a feature that reduces legacy references from 243 to 200:
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
 | `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
+| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
 
 ### leo_protocols
 
@@ -1800,9 +1800,9 @@ If SD implements a feature that reduces legacy references from 243 to 200:
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
+| `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
 | `from_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 | `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
-| `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
 
 ### sd_scope_deliverables
 
@@ -1827,9 +1827,9 @@ If SD implements a feature that reduces legacy references from 243 to 200:
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | draft, completed, in_progress, ready | Use one of: draft, completed, in_progress, ready. NOT "approved" - that is not a valid value. |
-| `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
 | `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
+| `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
+| `status` | draft, completed, in_progress, ready | Use one of: draft, completed, in_progress, ready. NOT "approved" - that is not a valid value. |
 
 
 
@@ -1937,6 +1937,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-03-17*
+*Generated from database: 2026-03-25*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*
