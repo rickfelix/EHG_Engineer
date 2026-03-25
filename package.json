@@ -247,6 +247,7 @@
     "story:template": "node scripts/story-requirements-template.js",
     "sd:next": "node scripts/sd-next.js",
     "sd:start": "node scripts/sd-start.js",
+    "sd:recover": "node scripts/sd-recover.js",
     "search": "node scripts/leo-search.mjs",
     "sd:baseline": "node scripts/sd-baseline.js",
     "sd:baseline:create": "node scripts/sd-baseline.js create",

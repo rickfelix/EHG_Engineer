@@ -407,6 +407,50 @@ export class SDNextSelector {
     };
   }
 
+  /**
+   * SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Annotate SDs with _stuck flag
+   * Batch-loads accepted handoffs for all non-LEAD SDs and marks those with broken chains.
+   */
+  async _annotateStuckSDs(tracks) {
+    try {
+      // Collect all SD UUIDs that are beyond LEAD phase
+      const allItems = [...tracks.A, ...tracks.B, ...tracks.C, ...(tracks.STANDALONE || [])];
+      const beyondLead = allItems.filter(item => {
+        const phase = item.current_phase || '';
+        return ['PLAN_PRD', 'PLAN', 'PLAN_VERIFICATION', 'EXEC', 'EXEC_ACTIVE', 'EXEC_COMPLETE'].includes(phase);
+      });
+
+      if (beyondLead.length === 0) return;
+
+      // Batch fetch accepted handoffs for these SDs
+      const sdIds = beyondLead.map(item => item.id).filter(Boolean);
+      if (sdIds.length === 0) return;
+
+      const { data: handoffs } = await this.supabase
+        .from('sd_phase_handoffs')
+        .select('sd_id, from_phase, to_phase, status')
+        .in('sd_id', sdIds)
+        .eq('status', 'accepted');
+
+      // Group handoffs by sd_id
+      const handoffMap = new Map();
+      for (const h of (handoffs || [])) {
+        if (!handoffMap.has(h.sd_id)) handoffMap.set(h.sd_id, []);
+        handoffMap.get(h.sd_id).push(h);
+      }
+
+      // Annotate items with _stuck flag
+      const { isStuckSD } = await import('./status-helpers.js');
+      for (const item of beyondLead) {
+        const sdHandoffs = handoffMap.get(item.id) || [];
+        item._stuck = isStuckSD(item, sdHandoffs);
+      }
+    } catch (e) {
+      // Non-fatal: if stuck detection fails, items display normally
+      console.debug('[sd-next] Stuck detection error:', e?.message || e);
+    }
+  }
+
   async displayTelemetryFindings() {
     try {
       const { getLatestFindings } = await import('../../../lib/telemetry/auto-trigger.js');
@@ -678,6 +722,9 @@ export class SDNextSelector {
         return (a.composite_rank ?? a.sequence_rank ?? 9999) - (b.composite_rank ?? b.sequence_rank ?? 9999);
       });
     }
+
+    // SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Annotate stuck SDs
+    await this._annotateStuckSDs(tracks);
 
     const sessionContext = this.getSessionContext();
     await displayTrackSection('A', 'Infrastructure/Safety', tracks.A, sessionContext);
