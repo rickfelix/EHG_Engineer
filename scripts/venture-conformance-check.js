@@ -175,4 +175,10 @@ function main() {
   process.exit(failing > 0 ? 1 : 0);
 }
 
-main();
+// Export for programmatic use by venture-provisioner.js
+export { run as runConformanceCheck };
+
+// CLI entry point
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
+  main();
+}
