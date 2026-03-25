@@ -318,4 +318,96 @@ describe('LifecycleSDBridge', () => {
       expect(record.quality_score).toBe(0);
     });
   });
+
+  describe('convertSprintToSDs - EVA key enrichment (SD-LEO-INFRA-STREAM-SPRINT-BRIDGE-001-A)', () => {
+    it('should include vision_key and plan_key in orchestrator metadata', async () => {
+      const mockSb = createMockSupabase();
+      const insertCalls = [];
+      mockSb.from = vi.fn((table) => {
+        if (table === 'strategic_directives_v2') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+            order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            insert: vi.fn().mockImplementation((data) => {
+              insertCalls.push(data);
+              return Promise.resolve({ data: null, error: null });
+            }),
+            update: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          };
+        }
+        return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
+      });
+      mockSb.rpc = vi.fn().mockResolvedValue({ data: { cancelled_sds: 0, cancelled_prds: 0 }, error: null });
+
+      await convertSprintToSDs(
+        {
+          stageOutput: {
+            sprint_name: 'Sprint 1',
+            sprint_goal: 'Build',
+            sd_bridge_payloads: [{ title: 'Feature A', type: 'feature', description: 'D', scope: 'S' }],
+          },
+          ventureContext: { id: 'v1', name: 'Test' },
+          evaKeys: { vision_key: 'VISION-TEST-001', plan_key: 'ARCH-TEST-001' },
+          options: { generateGrandchildren: false },
+        },
+        { supabase: mockSb, logger: silentLogger },
+      );
+
+      // Orchestrator is first insert
+      const orchestratorInsert = insertCalls[0];
+      expect(orchestratorInsert.metadata.vision_key).toBe('VISION-TEST-001');
+      expect(orchestratorInsert.metadata.plan_key).toBe('ARCH-TEST-001');
+
+      // Child is second insert
+      const childInsert = insertCalls[1];
+      expect(childInsert.metadata.vision_key).toBe('VISION-TEST-001');
+      expect(childInsert.metadata.plan_key).toBe('ARCH-TEST-001');
+    });
+
+    it('should handle missing evaKeys gracefully', async () => {
+      const mockSb = createMockSupabase();
+      const insertCalls = [];
+      mockSb.from = vi.fn((table) => {
+        if (table === 'strategic_directives_v2') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+            order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            insert: vi.fn().mockImplementation((data) => {
+              insertCalls.push(data);
+              return Promise.resolve({ data: null, error: null });
+            }),
+            update: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          };
+        }
+        return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
+      });
+      mockSb.rpc = vi.fn().mockResolvedValue({ data: { cancelled_sds: 0, cancelled_prds: 0 }, error: null });
+
+      const result = await convertSprintToSDs(
+        {
+          stageOutput: {
+            sprint_name: 'Sprint 1',
+            sprint_goal: 'Build',
+            sd_bridge_payloads: [{ title: 'Feature A', type: 'feature', description: 'D', scope: 'S' }],
+          },
+          ventureContext: { id: 'v1', name: 'Test' },
+          // evaKeys omitted — should default to {}
+          options: { generateGrandchildren: false },
+        },
+        { supabase: mockSb, logger: silentLogger },
+      );
+
+      expect(result.created).toBe(true);
+      // Metadata should have null keys, not crash
+      const orchestratorInsert = insertCalls[0];
+      expect(orchestratorInsert.metadata.vision_key).toBeNull();
+      expect(orchestratorInsert.metadata.plan_key).toBeNull();
+    });
+  });
 });
