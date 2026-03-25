@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-03-17 10:23:33 AM
+**Generated**: 2026-03-25 8:09:51 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -26,6 +26,39 @@ The DATABASE sub-agent handles common blockers automatically:
 Task tool with subagent_type="database-agent":
 "Execute the migration file: database/migrations/YYYYMMDD_name.sql"
 ```
+
+## Cascade Invalidation System
+
+**Purpose**: When a vision document evolves (version bump), all downstream architecture plans and objectives are automatically flagged for review.
+
+### How It Works
+1. **Trigger**: `trg_cascade_invalidation_on_vision_update` fires on `eva_vision_documents` when `version` column changes
+2. **Effect**: Sets `needs_review_since = now()` on all linked `eva_architecture_plans` and `objectives`
+3. **Audit**: Creates entries in `cascade_invalidation_log` (append-only) and `cascade_invalidation_flags` (work queue)
+
+### Flag Lifecycle
+| Status | Meaning |
+|--------|---------|
+| pending | Document needs review after upstream change |
+| acknowledged | Reviewer has seen the flag |
+| resolved | Document updated to reflect upstream changes |
+| dismissed | Flag reviewed and no action needed |
+
+### Commands
+```bash
+# View cascade health summary
+node scripts/modules/governance/cascade-invalidation-engine.js summary
+
+# List stale documents needing review
+node scripts/modules/governance/cascade-invalidation-engine.js stale
+
+# Resolve a flag after review
+node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> "Updated to reflect vision v3"
+```
+
+### Key Columns
+- `eva_architecture_plans.needs_review_since` — auto-set by trigger, NULL when resolved
+- `eva_architecture_plans.vision_version_aligned_to` — tracks which vision version the plan was last aligned with
 
 ## 🏗️ Application Architecture - UNIFIED FRONTEND
 
@@ -179,6 +212,48 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## 🤖 Built-in Agent Integration
+
+## Built-in Agent Integration
+
+### Three-Layer Agent Architecture
+
+LEO Protocol uses three complementary agent layers:
+
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
+
 ## Claude Code Plan Mode Integration
 
 **Status**: ACTIVE | **Version**: 1.0.0
@@ -222,47 +297,37 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
-## 🤖 Built-in Agent Integration
+## Work Tracking Policy
 
-## Built-in Agent Integration
+**ALL changes to main must be tracked** as either:
 
-### Three-Layer Agent Architecture
+### Strategic Directive (SD) - For Substantial Work
+- Features, refactors, infrastructure (>50 LOC)
+- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
+- Command: `npm run sd:create`
 
-LEO Protocol uses three complementary agent layers:
+### Quick-Fix (QF) - For Small Fixes
+- Bugs, polish, docs (<=50 LOC)
+- Branch: `quick-fix/QF-YYYYMMDD-NNN`
+- Command: `node scripts/create-quick-fix.js --interactive`
 
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+### Why This Matters
+- All work tracked in database
+- Lessons learned captured
+- Quality gates enforced
+- Progress metrics accurate
 
-### Integration Principle
-
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
-
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
+### Emergency Bypass (Logged)
+```bash
+EMERGENCY_PUSH="critical: reason here" git push
 ```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
+This logs to audit_log and should be followed by retroactive SD/QF creation.
 
-This is faster than sequential exploration and provides comprehensive coverage.
+### Pre-Push Enforcement
+The pre-push hook automatically:
+1. Detects SD/QF from branch name
+2. Verifies completion status in database
+3. Blocks if not ready for merge
 
 ## Sub-Agent Model Routing
 
@@ -305,70 +370,43 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
-## Work Tracking Policy
+## Sub-Agent Routing Reference
 
-**ALL changes to main must be tracked** as either:
+All 16 specialized sub-agents are available in EVERY phase (LEAD, PLAN, EXEC). Use the Task tool with the appropriate `subagent_type` to invoke them. See phase-specific guidance in each phase's CLAUDE file for recommended priorities.
 
-### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>50 LOC)
-- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
-- Command: `npm run sd:create`
+> **Routing Config**: Full keyword-to-agent mappings are defined in `config/agent-keywords-routing.json`. The table below is a quick reference.
 
-### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (<=50 LOC)
-- Branch: `quick-fix/QF-YYYYMMDD-NNN`
-- Command: `node scripts/create-quick-fix.js --interactive`
+| Agent | Trigger Keywords | Best For |
+|-------|-----------------|----------|
+| database-agent | migration, schema, sql, postgres, rls | Database operations, migrations, RLS policies |
+| design-agent | component design, tailwind, responsive, a11y | UI/UX design, accessibility, frontend components |
+| security-agent | auth bypass, csrf, xss, vulnerability | Security audits, vulnerability fixes |
+| testing-agent | test coverage, e2e test, unit test, vitest | Test creation, test infrastructure |
+| performance-agent | bottleneck, load time, memory leak | Performance optimization, profiling |
+| rca-agent | root cause, 5 whys, failure analysis | Root cause analysis, debugging |
+| docmon-agent | documentation update, api docs, readme | Documentation maintenance |
+| regression-agent | backward compatible, breaking change, refactor | Refactoring safety, API compatibility |
+| retro-agent | retrospective, lessons learned, post-mortem | Sprint retrospectives, learning capture |
+| risk-agent | risk assessment, security risk, tradeoff | Risk analysis, architecture decisions |
+| validation-agent | duplicate check, existing implementation | Codebase validation, overlap detection |
+| stories-agent | user stories, acceptance criteria, epic | User story generation |
+| github-agent | pull request, ci pipeline, code review | Git operations, CI/CD |
+| api-agent | api endpoint, rest api, graphql | API design and implementation |
+| dependency-agent | npm audit, outdated packages, vulnerability | Dependency management |
+| uat-agent | user acceptance test, user journey, manual test | User acceptance testing |
 
-### Why This Matters
-- All work tracked in database
-- Lessons learned captured
-- Quality gates enforced
-- Progress metrics accurate
-
-### Emergency Bypass (Logged)
-```bash
-EMERGENCY_PUSH="critical: reason here" git push
+### Invocation Pattern
 ```
-This logs to audit_log and should be followed by retroactive SD/QF creation.
+Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX...")
+```
 
-### Pre-Push Enforcement
-The pre-push hook automatically:
-1. Detects SD/QF from branch name
-2. Verifies completion status in database
-3. Blocks if not ready for merge
+### Key Rules
+- **ALL phases**: Sub-agents are available in LEAD, PLAN, and EXEC phases
+- **Model**: Always use Sonnet (never Haiku) - see Sub-Agent Model Routing section
+- **Immediate invocation**: When a task matches an agent's domain, invoke IMMEDIATELY - do not attempt manual workarounds
+- **Error routing**: ANY database error triggers database-agent; ANY test failure triggers testing-agent
 
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+*Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
 ## Execution Philosophy
 
@@ -407,43 +445,38 @@ Before marking any stage/feature as complete:
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
 
-## Sub-Agent Routing Reference
+## 🖥️ UI Parity Requirement (MANDATORY)
 
-All 16 specialized sub-agents are available in EVERY phase (LEAD, PLAN, EXEC). Use the Task tool with the appropriate `subagent_type` to invoke them. See phase-specific guidance in each phase's CLAUDE file for recommended priorities.
+**Every backend data contract field MUST have a corresponding UI representation.**
 
-> **Routing Config**: Full keyword-to-agent mappings are defined in `config/agent-keywords-routing.json`. The table below is a quick reference.
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
 
-| Agent | Trigger Keywords | Best For |
-|-------|-----------------|----------|
-| database-agent | migration, schema, sql, postgres, rls | Database operations, migrations, RLS policies |
-| design-agent | component design, tailwind, responsive, a11y | UI/UX design, accessibility, frontend components |
-| security-agent | auth bypass, csrf, xss, vulnerability | Security audits, vulnerability fixes |
-| testing-agent | test coverage, e2e test, unit test, vitest | Test creation, test infrastructure |
-| performance-agent | bottleneck, load time, memory leak | Performance optimization, profiling |
-| rca-agent | root cause, 5 whys, failure analysis | Root cause analysis, debugging |
-| docmon-agent | documentation update, api docs, readme | Documentation maintenance |
-| regression-agent | backward compatible, breaking change, refactor | Refactoring safety, API compatibility |
-| retro-agent | retrospective, lessons learned, post-mortem | Sprint retrospectives, learning capture |
-| risk-agent | risk assessment, security risk, tradeoff | Risk analysis, architecture decisions |
-| validation-agent | duplicate check, existing implementation | Codebase validation, overlap detection |
-| stories-agent | user stories, acceptance criteria, epic | User story generation |
-| github-agent | pull request, ci pipeline, code review | Git operations, CI/CD |
-| api-agent | api endpoint, rest api, graphql | API design and implementation |
-| dependency-agent | npm audit, outdated packages, vulnerability | Dependency management |
-| uat-agent | user acceptance test, user journey, manual test | User acceptance testing |
+### Requirements
 
-### Invocation Pattern
-```
-Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX...")
-```
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
 
-### Key Rules
-- **ALL phases**: Sub-agents are available in LEAD, PLAN, and EXEC phases
-- **Model**: Always use Sonnet (never Haiku) - see Sub-Agent Model Routing section
-- **Immediate invocation**: When a task matches an agent's domain, invoke IMMEDIATELY - do not attempt manual workarounds
-- **Error routing**: ANY database error triggers database-agent; ANY test failure triggers testing-agent
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
 
-*Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -1135,60 +1168,63 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. LEAD_TO_PLAN Handoff Retrospective: Crew Tournament Pattern for Stage 11 GTM [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
+### 1. LEAD_TO_PLAN Handoff Retrospective: Notification Service [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/27/2026 | **Score**: 100
 
 **Key Improvements**:
-- {"area":"PRD quality validation failed 4 times during planning (scores: 46, 0, 51, 49/100) - the LEA...
-- {"area":"Goal summary validation scored 0/100 on first attempt - the summary lacked measurable objec...
+- [PAT-AUTO-fee6f486] Gate RETROSPECTIVE_QUALITY_GATE failed: score 59/100
+- [PAT-AUTO-132791ed] Gate MANDATORY_TESTING_VALIDATION failed: score 0/100
 
 **Action Items**:
-- [ ] During LEAD approval for AI-related SDs, require explicit cost impact analysis (...
-- [ ] Add measurable success criteria to LEAD approval template: target quality improv...
+- [ ] Verify: 18 notification files verified and export expected functions for SD-MAN-...
+- [ ] Validate: Multi-channel delivery: email, telegram, discord, database for SD-MAN-...
 
-### 2. SD Completion Retrospective: Autonomy Model L0-L4 Full Implementation [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
+### 2. LEAD_TO_PLAN Handoff Retrospective: Unified Sensemaking Service - KB Binding, Multi-Type Routing, Dynamic Personas [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/23/2026 | **Score**: 100
 
 **Key Improvements**:
-- First EXEC-TO-PLAN handoff rejected (score 0) because sd_type="feature" requires 85% gate score but ...
-- PLAN-TO-LEAD retrospective rejected for learning_specificity (3/10) -- initial retrospective contain...
+- [PAT-AUTO-2db93761] Gate 1:userStoryQualityValidation failed: score 51/100
+- [PAT-AUTO-129d8943] Gate 1:prdQualityValidation failed: score 47/100
 
 **Action Items**:
-- [ ] Add sd_type "backend" or "infrastructure" that does not include UI gates in scor...
-- [ ] Document integration_operationalization required keys (consumers, dependencies, ...
+- [ ] Verify: Sensemaking service processes TYPE A (YouTube), TYPE B (text URL), TYPE ...
+- [ ] Validate: KB context from sensemaking_knowledge_base injected into every analysi...
 
-### 3. SD Completion Retrospective: Assumptions vs Reality End-to-End Loop (assumption-reality-tracker.js) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
+### 3. LEAD_TO_PLAN Handoff Retrospective: Legacy Cleanup — Route Migration and Dead Component Removal [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/26/2026 | **Score**: 100
 
 **Key Improvements**:
-- PLAN-TO-EXEC handoff rejected 10 times before passing due to missing user stories and insufficient t...
-- deriveStatus() initially returned active instead of partially_validated, violating PRD FR-3 -- root ...
+- [PAT-AUTO-34afdf6c] Gate 1:prdQualityValidation failed: score 38/100
+- [PAT-AUTO-974f6c09] google API error: 503 - Google API error 503: {
+  "error": {
+    "code": 503,
+  ...
 
 **Action Items**:
-- [ ] Add observability/metrics for fire-and-forget Supabase writes in assumption-real...
-- [ ] Create integration test for full pipeline: collectRealityMeasurements -> buildCa...
+- [ ] Verify: Chairman routes point to v3 components for SD-LEO-ORCH-CHAIRMAN-WEB-PHAS...
+- [ ] Validate: Superseded chairman-v2 components deleted for SD-LEO-ORCH-CHAIRMAN-WEB...
 
-### 4. SD Completion Retrospective: Four Buckets Epistemic Classification Across 25 EVA Analysis Steps [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
+### 4. LEAD_TO_PLAN Handoff Retrospective: Notification Service [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/27/2026 | **Score**: 100
 
 **Key Improvements**:
-- PLAN-TO-EXEC handoff required 5 attempts because PRD separate columns (system_architecture, implemen...
-- Stage-02 (multi-persona) had fourBuckets variable scoped inside a for loop - required hoisting varia...
+- [PAT-AUTO-fee6f486] Gate RETROSPECTIVE_QUALITY_GATE failed: score 59/100
+- [PAT-AUTO-132791ed] Gate MANDATORY_TESTING_VALIDATION failed: score 0/100
 
 **Action Items**:
-- [ ] Create smoke test that runs one stage analysis end-to-end and verifies epistemic...
-- [ ] Monitor LLM token usage increase from appended Four Buckets prompt (~150 tokens ...
+- [ ] Verify: 18 notification files verified and export expected functions for SD-MAN-...
+- [ ] Validate: Multi-channel delivery: email, telegram, discord, database for SD-MAN-...
 
-### 5. PLAN_TO_EXEC Handoff Retrospective: Crew Tournament Pattern for Stage 11 GTM [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
+### 5. LEAD_TO_PLAN Handoff Retrospective: V1-Growth [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/27/2026 | **Score**: 100
 
 **Key Improvements**:
-- {"area":"PRD quality gate failed first attempt at 44/100 due to missing system_architecture section,...
-- {"area":"Exploration audit gate scored 0/100 because the format used files_examined instead of the r...
+- [PAT-AUTO-3439e3eb] Gate 1:userStoryQualityValidation failed: score 55/100
+- [PAT-AUTO-b8a37fa7] Gate 1:prdQualityValidation failed: score 18/100
 
 **Action Items**:
-- [ ] Create a pre-submission checklist for PRD quality gates that includes: system_ar...
-- [ ] Add timeout configuration testing to tournament orchestrator acceptance criteria...
+- [ ] Verify: Implementation complete with ~130 LOC for SD-MAN-INFRA-VISION-HEAL-PLATF...
+- [ ] Validate: All tests passing including stage-chain integration tests for SD-MAN-I...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1254,7 +1290,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-03-17*
+*Generated from database: 2026-03-25*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*

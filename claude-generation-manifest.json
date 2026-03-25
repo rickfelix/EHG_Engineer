@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-03-17T14:23:33.230Z",
-  "git_commit": "0be59f24",
-  "db_snapshot_hash": "41d2dee99ad0b539",
+  "generated_at": "2026-03-25T07:09:51.724Z",
+  "git_commit": "859e85a2",
+  "db_snapshot_hash": "1ba41d24a4b01a2a",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 5753,
-      "estimated_tokens": 1439,
-      "content_hash": "ef5847a537f37ddb",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE.md"
+      "chars": 5752,
+      "estimated_tokens": 1438,
+      "content_hash": "a1fe2807cd6969f1",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 51423,
-      "estimated_tokens": 12856,
-      "content_hash": "763dad0ae00586ad",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE_CORE.md"
+      "chars": 52506,
+      "estimated_tokens": 13127,
+      "content_hash": "b6238b72a6e60f80",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 54093,
-      "estimated_tokens": 13524,
-      "content_hash": "91e9862013f43d6c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE_LEAD.md"
+      "chars": 54092,
+      "estimated_tokens": 13523,
+      "content_hash": "6892730c756d1a21",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 82129,
-      "estimated_tokens": 20533,
-      "content_hash": "cc2571ab149fe270",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE_PLAN.md"
+      "chars": 81656,
+      "estimated_tokens": 20414,
+      "content_hash": "d37d9e4935c9226a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 69303,
-      "estimated_tokens": 17326,
-      "content_hash": "d3f42680bc17dbb4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE_EXEC.md"
+      "chars": 69307,
+      "estimated_tokens": 17327,
+      "content_hash": "9e71ce13c66ef7c3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 6619,
+      "chars": 6618,
       "estimated_tokens": 1655,
-      "content_hash": "9e36b4877d1ed042",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE_DIGEST.md"
+      "content_hash": "df6b2498f0cf8b8b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 10175,
+      "chars": 10174,
       "estimated_tokens": 2544,
-      "content_hash": "f22354d7766dea1e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "d688d9aed8b0b661",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 4802,
+      "chars": 4801,
       "estimated_tokens": 1201,
-      "content_hash": "def40b765cd0e308",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "eeaaf56bb2f9328a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 5032,
+      "chars": 5031,
       "estimated_tokens": 1258,
-      "content_hash": "bdbcc27030bd79d0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "51186629eac3b941",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 9486,
+      "chars": 9485,
       "estimated_tokens": 2372,
-      "content_hash": "c6f60cb0066a64d6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-DOC-PROTOCOL-DOCUMENTATION-ACCURACY-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "7dc865e446aa9799",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }
