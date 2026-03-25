@@ -1,7 +1,7 @@
 /**
  * evidence-rubrics/index.js — Rubric Loader
  *
- * Loads all 18 dimension rubric files (V01-V11, A01-A07),
+ * Loads all dimension rubric files (V01-V11, A01-A07, T01-T02),
  * validates each against the expected schema, and exports
  * them as a Map<dimId, rubric>.
  */
@@ -10,7 +10,7 @@ import { readdirSync } from 'fs';
 import { join } from 'path';
 
 const RUBRIC_DIR = import.meta.dirname;
-const RUBRIC_FILE_PATTERN = /^(V\d{2}|A\d{2})-/;
+const RUBRIC_FILE_PATTERN = /^(V\d{2}|A\d{2}|T\d{2})-/;
 
 /**
  * Validate a rubric definition has required fields.
