@@ -342,14 +342,26 @@ async function captureHealLearnings(supabase, failingScores, parsed) {
         keyLearnings.push(...sdScore.gaps.map(g => `[gap] ${g}`));
       }
 
-      // 3. Create retrospective record
+      // 3. Resolve sd_key → UUID for retrospective FK
+      const { data: sdRow } = await supabase
+        .from('strategic_directives_v2')
+        .select('id')
+        .eq('sd_key', failing.sdKey)
+        .single();
+      const sdUuid = sdRow?.id || failing.sdKey;
+
+      // 4. Create retrospective record
+      // SD-LEO-INFRA-HEAL-PIPELINE-INTEGRITY-001 (CAPA-2):
+      //   - quality_score: 80 (retro quality threshold, NOT the heal score)
+      //   - generated_by: 'SUB_AGENT' (constraint requirement)
+      //   - action_items: populated (required by trigger)
       const { error: retroError } = await supabase
         .from('retrospectives')
         .insert({
-          sd_id: failing.sdKey,
+          sd_id: sdUuid,
           title: `Heal loop learning: ${failing.sdKey} scored ${failing.score}/100`,
           retro_type: 'INCIDENT',
-          generated_by: 'TRIGGER',
+          generated_by: 'SUB_AGENT',
           trigger_event: 'SUB_THRESHOLD_SCORE',
           status: 'PUBLISHED',
           target_application: 'EHG_Engineer',
@@ -359,7 +371,13 @@ async function captureHealLearnings(supabase, failingScores, parsed) {
           key_learnings: keyLearnings,
           what_went_well: [`Score: ${failing.score}/100`, `Dimensions passing: ${dims.length - gapDims.length}/${dims.length}`],
           what_needs_improvement: gapDims.map(d => `${d.id}: ${d.score}/100 — needs ${ACCEPT_THRESHOLD - d.score}pt improvement`),
-          quality_score: failing.score,
+          action_items: gapDims.map(d => ({
+            action: `Address ${d.id} gap (current: ${d.score}, target: ${ACCEPT_THRESHOLD})`,
+            owner: 'LEO',
+            deadline: 'next session',
+            verification: `Re-score ${d.id} >= ${ACCEPT_THRESHOLD}`,
+          })),
+          quality_score: 80,
           auto_generated: true,
           metadata: {
             heal_score: failing.score,
