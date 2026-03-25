@@ -458,9 +458,40 @@ async function main() {
   const skippedSDs = [];
 
   if (!claimResult.success) {
-    // PID-based liveness check for enhanced diagnostics (same machine only)
+    // SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-001: Heartbeat TTL check (cross-machine compatible)
+    // Releases claims from sessions whose heartbeat is >30 minutes stale, regardless of PID visibility.
     let autoReleased = false;
-    if (claimResult.owner) {
+    const CLAIM_TTL_MS = 30 * 60 * 1000; // 30 minutes
+    if (claimResult.owner?.session_id) {
+      const { data: ownerSession } = await supabase
+        .from('claude_sessions')
+        .select('heartbeat_at, status')
+        .eq('session_id', claimResult.owner.session_id)
+        .maybeSingle();
+
+      const heartbeatAge = ownerSession?.heartbeat_at
+        ? Date.now() - new Date(ownerSession.heartbeat_at).getTime()
+        : Infinity;
+      const isStale = heartbeatAge > CLAIM_TTL_MS;
+      const isInactive = !ownerSession || ownerSession.status !== 'active';
+
+      if (isStale || isInactive) {
+        const ageMin = Math.round(heartbeatAge / 60000);
+        const reason = isInactive ? 'session inactive' : `heartbeat stale (${ageMin}m)`;
+        console.log(`[claimGuard] ${reason} for ${claimResult.owner.session_id} — auto-releasing claim on ${effectiveId}`);
+        const { error: releaseError } = await supabase.rpc('release_sd', {
+          p_session_id: claimResult.owner.session_id,
+          p_reason: 'ttl_expired'
+        });
+        if (!releaseError) {
+          console.log(`${colors.green}   ✅ TTL-expired claim released. Retrying...${colors.reset}`);
+          autoReleased = true;
+        }
+      }
+    }
+
+    // PID-based liveness check for enhanced diagnostics (same machine only)
+    if (!autoReleased && claimResult.owner) {
       const sameHost = claimResult.owner.hostname === os.hostname();
       const pidMatch = claimResult.owner.session_id?.match(/-(\d+)$/);
       const ownerPid = pidMatch ? parseInt(pidMatch[1]) : null;
