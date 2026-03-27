@@ -274,6 +274,23 @@ function Stop-Workers {
         $pidFile = Join-Path $PidDir $worker.pid_file
         Stop-Server -PidFile $pidFile -Name $worker.display_name
     }
+
+    # Kill orphan workers not tracked by PID files (zombie processes from previous sessions)
+    $orphanPatterns = @('start-stage-worker', 'stage-zero-queue-processor', 'stage-execution-worker', 'eva-master-scheduler', 'subagent-worker')
+    $orphanCount = 0
+    foreach ($pattern in $orphanPatterns) {
+        $orphans = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -match $pattern }
+        foreach ($orphan in $orphans) {
+            try {
+                Stop-Process -Id $orphan.ProcessId -Force -ErrorAction SilentlyContinue
+                $orphanCount++
+            } catch { }
+        }
+    }
+    if ($orphanCount -gt 0) {
+        Write-Log "WARN" "[WORKERS] Killed $orphanCount orphan worker process(es) from previous sessions" "Yellow"
+    }
 }
 
 # Function to stop a server by PID file
