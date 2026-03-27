@@ -146,7 +146,7 @@ export async function validateCascade({
   if (visionKey) {
     const { data: vision } = await supabase
       .from('eva_vision_documents')
-      .select('vision_key, dimensions')
+      .select('vision_key, extracted_dimensions')
       .eq('vision_key', visionKey)
       .single();
 
