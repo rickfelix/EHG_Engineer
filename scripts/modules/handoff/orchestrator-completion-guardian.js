@@ -14,6 +14,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
+import { extractContracts, detectMismatches } from './executors/exec-to-plan/gates/cross-child-integration-gate.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -102,6 +103,7 @@ export class OrchestratorCompletionGuardian {
 
     // Run all validations
     await this.validateChildren();
+    await this.validateCrossChildIntegration();
     await this.validateDeliverables();
     await this.validateHandoffs();
     await this.validatePRD();
@@ -148,6 +150,89 @@ export class OrchestratorCompletionGuardian {
         check: 'CHILDREN',
         passed: true,
         message: `All ${children.length} children completed`
+      });
+    }
+  }
+
+  /**
+   * Validate cross-child data contract integration (Advisory)
+   * SD-LEO-INFRA-CROSS-CHILD-INTEGRATION-001
+   */
+  async validateCrossChildIntegration() {
+    if (!this.childData || this.childData.length < 2) {
+      this.validationResults.push({
+        check: 'CROSS_CHILD_INTEGRATION',
+        passed: true,
+        message: `Skipped: ${this.childData?.length || 0} children (need ≥2 for cross-child validation)`
+      });
+      return;
+    }
+
+    try {
+      const childIds = this.childData.map(c => c.id);
+      const { data: handoffs, error } = await supabase
+        .from('sd_phase_handoffs')
+        .select('sd_id, deliverables_manifest, handoff_type')
+        .in('sd_id', childIds)
+        .eq('status', 'accepted');
+
+      if (error) {
+        this.validationResults.push({
+          check: 'CROSS_CHILD_INTEGRATION',
+          passed: true, // Advisory — don't block on errors
+          message: `Warning: Could not load child handoffs: ${error.message}`
+        });
+        return;
+      }
+
+      // Build manifests per child
+      const manifestsByChild = new Map();
+      for (const h of (handoffs || [])) {
+        const child = this.childData.find(c => c.id === h.sd_id);
+        const key = child?.title || h.sd_id;
+        if (!manifestsByChild.has(key)) manifestsByChild.set(key, []);
+        if (h.deliverables_manifest) manifestsByChild.get(key).push(h.deliverables_manifest);
+      }
+
+      // Extract contracts
+      const contractMaps = [];
+      for (const [childKey, manifests] of manifestsByChild) {
+        contractMaps.push(extractContracts(manifests.join('\n'), childKey));
+      }
+
+      // Detect mismatches
+      const mismatches = detectMismatches(contractMaps);
+      const totalContracts = contractMaps.reduce((sum, c) => sum + c.tables.length, 0);
+      const warningMismatches = mismatches.filter(m => m.severity === 'warning');
+
+      // Store results for inclusion in completeness report
+      this.crossChildResults = {
+        contracts_extracted: totalContracts,
+        children_analyzed: this.childData.length,
+        children_with_manifests: manifestsByChild.size,
+        mismatches: mismatches,
+        verdict: warningMismatches.length > 0 ? 'WARN' : 'PASS',
+      };
+
+      if (warningMismatches.length > 0) {
+        this.validationResults.push({
+          check: 'CROSS_CHILD_INTEGRATION',
+          passed: true, // Advisory — always passes
+          message: `Advisory: ${warningMismatches.length} potential cross-child contract mismatch(es) detected across ${totalContracts} contracts`,
+          details: warningMismatches.map(m => m.details),
+        });
+      } else {
+        this.validationResults.push({
+          check: 'CROSS_CHILD_INTEGRATION',
+          passed: true,
+          message: `${totalContracts} contracts validated across ${manifestsByChild.size} children — no mismatches detected`
+        });
+      }
+    } catch (err) {
+      this.validationResults.push({
+        check: 'CROSS_CHILD_INTEGRATION',
+        passed: true, // Advisory — don't block on unexpected errors
+        message: `Warning: Cross-child validation error: ${err.message}`
       });
     }
   }
@@ -333,7 +418,8 @@ export class OrchestratorCompletionGuardian {
       results: this.validationResults,
       missingArtifacts: this.missingArtifacts,
       parentData: this.parentData,
-      childData: this.childData
+      childData: this.childData,
+      crossChildIntegration: this.crossChildResults || null,
     };
   }
 
