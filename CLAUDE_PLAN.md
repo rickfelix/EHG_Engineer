@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-03-27 12:26:45 PM
+**Generated**: 2026-03-27 4:44:07 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -159,7 +159,7 @@ npm run sd:branch:auto SD-XXX-001
 npm run sd:branch:check SD-XXX-001
 
 # Full command with options
-# scripts/create-sd-branch.js removed SD-XXX-001 --app EHG --auto-stash
+# Branch was auto-created at LEAD-TO-PLAN handoff
 ```
 
 ### Branch Naming Convention
