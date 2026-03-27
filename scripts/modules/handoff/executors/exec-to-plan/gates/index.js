@@ -31,3 +31,6 @@ export { createUserStoryCoverageGate } from './user-story-coverage.js';
 
 // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
 export { createWireframeQaValidationGate } from './wireframe-qa-validation.js';
+
+// Cross-Child Integration (SD-LEO-INFRA-CROSS-CHILD-INTEGRATION-001)
+export { createCrossChildIntegrationGate } from './cross-child-integration-gate.js';
