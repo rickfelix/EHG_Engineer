@@ -244,6 +244,20 @@ export async function validateSdType(sd, supabase) {
     };
   }
 
+  // Guard: Orchestrator type is structural and immutable
+  // SD-LEO-FIX-PRD-SCRIPT-TYPE-001: defense-in-depth (same guards as prd/index.js)
+  if (currentType.toLowerCase() === 'orchestrator') {
+    console.log('   ℹ️  Guard: orchestrator type is immutable — skipping mismatch detection');
+    return { pass: true, score: 100, issues: [], warnings: ['Orchestrator type is immutable — mismatch detection skipped'] };
+  }
+
+  // Guard: Governance metadata with type_change_reason means type was deliberately set
+  // SD-LEO-FIX-PRD-SCRIPT-TYPE-001
+  if (sd.governance_metadata?.type_change_reason) {
+    console.log('   ℹ️  Guard: governance_metadata.type_change_reason present — skipping mismatch detection');
+    return { pass: true, score: 100, issues: [], warnings: [`Type protected by governance: ${sd.governance_metadata.type_change_reason}`] };
+  }
+
   // Check for potential mismatch using GPT 5.2 classifier
   let classification;
   try {
