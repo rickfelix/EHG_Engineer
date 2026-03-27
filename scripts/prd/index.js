@@ -289,6 +289,37 @@ async function handleSDTypeDetection(supabase, sdId, sdData) {
     return; // Skip all auto-correction logic
   }
 
+  // Guard 1: Orchestrator type is structural and immutable
+  // SD-LEO-FIX-PRD-SCRIPT-TYPE-001
+  if (currentSdType === 'orchestrator') {
+    console.log(`   ℹ️  Guard: orchestrator type is immutable — skipping auto-correction`);
+    return;
+  }
+
+  // Guard 2: Governance metadata with type_change_reason means type was deliberately set
+  // SD-LEO-FIX-PRD-SCRIPT-TYPE-001
+  const govMeta = sdData.governance_metadata;
+  if (govMeta?.type_change_reason) {
+    console.log(`   ℹ️  Guard: governance_metadata.type_change_reason present — skipping auto-correction`);
+    console.log(`      Reason on record: ${govMeta.type_change_reason}`);
+    return;
+  }
+
+  // Guard 3: If LEAD-TO-PLAN handoff already accepted, type was gate-validated
+  // SD-LEO-FIX-PRD-SCRIPT-TYPE-001
+  const { data: handoffs } = await supabase
+    .from('sd_phase_handoffs')
+    .select('id')
+    .eq('sd_id', sdId)
+    .eq('from_phase', 'LEAD')
+    .eq('to_phase', 'PLAN')
+    .eq('status', 'accepted')
+    .limit(1);
+  if (handoffs && handoffs.length > 0) {
+    console.log(`   ℹ️  Guard: accepted LEAD-TO-PLAN handoff exists — skipping auto-correction`);
+    return;
+  }
+
   if (typeDetection.detected && typeDetection.sd_type !== currentSdType && typeDetection.confidence >= 70) {
     console.log('\n   SD TYPE MISMATCH DETECTED');
     console.log(`      Current: ${currentSdType}`);
