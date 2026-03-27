@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-03-25T07:16:32.303Z -->
-<!-- git_commit: 7de0b7c0 -->
-<!-- db_snapshot_hash: 1ba41d24a4b01a2a -->
+<!-- generated_at: 2026-03-27T16:26:45.916Z -->
+<!-- git_commit: 6e8c7731 -->
+<!-- db_snapshot_hash: 82336bc777136c79 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
@@ -125,6 +125,12 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/handoff.js execute ...`
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
+
+### NC-7: No Silent Hook Failures
+❌ Catching post-stage hook errors and logging as "non-fatal" when the hook produced zero expected output rows
+✅ Hooks that write to database tables must ve
+
+*...truncated. Read full file for complete section.*
 
 ## Critical Term Definitions
 
@@ -261,5 +267,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-03-25 8:16:32 AM*
+*DIGEST generated: 2026-03-27 12:26:45 PM*
 *Protocol: 4.3.3*

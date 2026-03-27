@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-03-25 8:16:32 AM
+**Generated**: 2026-03-27 12:26:45 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -9,23 +9,6 @@
 > For Strunkian writing standards, see `docs/reference/strunkian-writing-standards.md`.
 
 ---
-
-## Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
 
 ## Cascade Invalidation System
 
@@ -60,6 +43,23 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 - `eva_architecture_plans.needs_review_since` — auto-set by trigger, NULL when resolved
 - `eva_architecture_plans.vision_version_aligned_to` — tracks which vision version the plan was last aligned with
 
+## Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
+
 ## 🏗️ Application Architecture - UNIFIED FRONTEND
 
 ## Application Architecture - UNIFIED FRONTEND
@@ -84,6 +84,41 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 ```bash
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
@@ -124,41 +159,6 @@ bash scripts/leo-stack.sh restart   # All 3 servers
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -370,43 +370,38 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
-## Sub-Agent Routing Reference
+## 🖥️ UI Parity Requirement (MANDATORY)
 
-All 16 specialized sub-agents are available in EVERY phase (LEAD, PLAN, EXEC). Use the Task tool with the appropriate `subagent_type` to invoke them. See phase-specific guidance in each phase's CLAUDE file for recommended priorities.
+**Every backend data contract field MUST have a corresponding UI representation.**
 
-> **Routing Config**: Full keyword-to-agent mappings are defined in `config/agent-keywords-routing.json`. The table below is a quick reference.
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
 
-| Agent | Trigger Keywords | Best For |
-|-------|-----------------|----------|
-| database-agent | migration, schema, sql, postgres, rls | Database operations, migrations, RLS policies |
-| design-agent | component design, tailwind, responsive, a11y | UI/UX design, accessibility, frontend components |
-| security-agent | auth bypass, csrf, xss, vulnerability | Security audits, vulnerability fixes |
-| testing-agent | test coverage, e2e test, unit test, vitest | Test creation, test infrastructure |
-| performance-agent | bottleneck, load time, memory leak | Performance optimization, profiling |
-| rca-agent | root cause, 5 whys, failure analysis | Root cause analysis, debugging |
-| docmon-agent | documentation update, api docs, readme | Documentation maintenance |
-| regression-agent | backward compatible, breaking change, refactor | Refactoring safety, API compatibility |
-| retro-agent | retrospective, lessons learned, post-mortem | Sprint retrospectives, learning capture |
-| risk-agent | risk assessment, security risk, tradeoff | Risk analysis, architecture decisions |
-| validation-agent | duplicate check, existing implementation | Codebase validation, overlap detection |
-| stories-agent | user stories, acceptance criteria, epic | User story generation |
-| github-agent | pull request, ci pipeline, code review | Git operations, CI/CD |
-| api-agent | api endpoint, rest api, graphql | API design and implementation |
-| dependency-agent | npm audit, outdated packages, vulnerability | Dependency management |
-| uat-agent | user acceptance test, user journey, manual test | User acceptance testing |
+### Requirements
 
-### Invocation Pattern
-```
-Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX...")
-```
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
 
-### Key Rules
-- **ALL phases**: Sub-agents are available in LEAD, PLAN, and EXEC phases
-- **Model**: Always use Sonnet (never Haiku) - see Sub-Agent Model Routing section
-- **Immediate invocation**: When a task matches an agent's domain, invoke IMMEDIATELY - do not attempt manual workarounds
-- **Error routing**: ANY database error triggers database-agent; ANY test failure triggers testing-agent
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
 
-*Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -445,38 +440,43 @@ Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX..
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
 
-## 🖥️ UI Parity Requirement (MANDATORY)
+## Sub-Agent Routing Reference
 
-**Every backend data contract field MUST have a corresponding UI representation.**
+All 16 specialized sub-agents are available in EVERY phase (LEAD, PLAN, EXEC). Use the Task tool with the appropriate `subagent_type` to invoke them. See phase-specific guidance in each phase's CLAUDE file for recommended priorities.
 
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+> **Routing Config**: Full keyword-to-agent mappings are defined in `config/agent-keywords-routing.json`. The table below is a quick reference.
 
-### Requirements
+| Agent | Trigger Keywords | Best For |
+|-------|-----------------|----------|
+| database-agent | migration, schema, sql, postgres, rls | Database operations, migrations, RLS policies |
+| design-agent | component design, tailwind, responsive, a11y | UI/UX design, accessibility, frontend components |
+| security-agent | auth bypass, csrf, xss, vulnerability | Security audits, vulnerability fixes |
+| testing-agent | test coverage, e2e test, unit test, vitest | Test creation, test infrastructure |
+| performance-agent | bottleneck, load time, memory leak | Performance optimization, profiling |
+| rca-agent | root cause, 5 whys, failure analysis | Root cause analysis, debugging |
+| docmon-agent | documentation update, api docs, readme | Documentation maintenance |
+| regression-agent | backward compatible, breaking change, refactor | Refactoring safety, API compatibility |
+| retro-agent | retrospective, lessons learned, post-mortem | Sprint retrospectives, learning capture |
+| risk-agent | risk assessment, security risk, tradeoff | Risk analysis, architecture decisions |
+| validation-agent | duplicate check, existing implementation | Codebase validation, overlap detection |
+| stories-agent | user stories, acceptance criteria, epic | User story generation |
+| github-agent | pull request, ci pipeline, code review | Git operations, CI/CD |
+| api-agent | api endpoint, rest api, graphql | API design and implementation |
+| dependency-agent | npm audit, outdated packages, vulnerability | Dependency management |
+| uat-agent | user acceptance test, user journey, manual test | User acceptance testing |
 
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
+### Invocation Pattern
+```
+Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX...")
+```
 
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
+### Key Rules
+- **ALL phases**: Sub-agents are available in LEAD, PLAN, and EXEC phases
+- **Model**: Always use Sonnet (never Haiku) - see Sub-Agent Model Routing section
+- **Immediate invocation**: When a task matches an agent's domain, invoke IMMEDIATELY - do not attempt manual workarounds
+- **Error routing**: ANY database error triggers database-agent; ANY test failure triggers testing-agent
 
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+*Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -523,38 +523,6 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
-
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -587,6 +555,46 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/handoff.js execute ...`
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
+
+### NC-7: No Silent Hook Failures
+❌ Catching post-stage hook errors and logging as "non-fatal" when the hook produced zero expected output rows
+✅ Hooks that write to database tables must verify their output exists after execution. Zero rows written = escalation to chairman dashboard, not a warning log.
+
+**Why**: SD-LEO-INFRA-CENTRALIZED-POST-STAGE-001 revealed that the S17 doc-gen hook failed silently on every run since it was shipped (wrong column name in query). Because the error was caught as non-fatal, the pipeline continued without vision/architecture docs, and S19 generated an unvalidated sprint plan.
+
+**Rule**: "Non-fatal" means the hook threw an unexpected exception. "Hook ran but wrote zero rows to its target table" is a **data integrity failure** that must surface.
+
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -1179,16 +1187,16 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] Verify: 18 notification files verified and export expected functions for SD-MAN-...
 - [ ] Validate: Multi-channel delivery: email, telegram, discord, database for SD-MAN-...
 
-### 2. LEAD_TO_PLAN Handoff Retrospective: Unified Sensemaking Service - KB Binding, Multi-Type Routing, Dynamic Personas [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/23/2026 | **Score**: 100
+### 2. LEAD_TO_PLAN Handoff Retrospective: V1-Growth [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/27/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-2db93761] Gate 1:userStoryQualityValidation failed: score 51/100
-- [PAT-AUTO-129d8943] Gate 1:prdQualityValidation failed: score 47/100
+- [PAT-AUTO-3439e3eb] Gate 1:userStoryQualityValidation failed: score 55/100
+- [PAT-AUTO-b8a37fa7] Gate 1:prdQualityValidation failed: score 18/100
 
 **Action Items**:
-- [ ] Verify: Sensemaking service processes TYPE A (YouTube), TYPE B (text URL), TYPE ...
-- [ ] Validate: KB context from sensemaking_knowledge_base injected into every analysi...
+- [ ] Verify: Implementation complete with ~130 LOC for SD-MAN-INFRA-VISION-HEAL-PLATF...
+- [ ] Validate: All tests passing including stage-chain integration tests for SD-MAN-I...
 
 ### 3. LEAD_TO_PLAN Handoff Retrospective: Legacy Cleanup — Route Migration and Dead Component Removal [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 2/26/2026 | **Score**: 100
@@ -1215,16 +1223,16 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] Verify: 18 notification files verified and export expected functions for SD-MAN-...
 - [ ] Validate: Multi-channel delivery: email, telegram, discord, database for SD-MAN-...
 
-### 5. LEAD_TO_PLAN Handoff Retrospective: V1-Growth [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/27/2026 | **Score**: 100
+### 5. LEAD_TO_PLAN Handoff Retrospective: Chairman V2 to V3 Complete Migration and Legacy Cleanup [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/28/2026 | **Score**: 100
 
 **Key Improvements**:
+- [PAT-AUTO-3b18dc45] Gate 1:prdQualityValidation failed: score 29/100
 - [PAT-AUTO-3439e3eb] Gate 1:userStoryQualityValidation failed: score 55/100
-- [PAT-AUTO-b8a37fa7] Gate 1:prdQualityValidation failed: score 18/100
 
 **Action Items**:
-- [ ] Verify: Implementation complete with ~130 LOC for SD-MAN-INFRA-VISION-HEAL-PLATF...
-- [ ] Validate: All tests passing including stage-chain integration tests for SD-MAN-I...
+- [ ] Verify: All chairman routes point to v3 components (zero v2 imports in routes) f...
+- [ ] Validate: chairman-v2/ directory completely deleted for SD-LEO-ORCH-CHAIRMAN-COM...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1290,7 +1298,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-03-25*
+*Generated from database: 2026-03-27*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*
