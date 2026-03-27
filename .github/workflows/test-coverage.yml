@@ -29,12 +29,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check dependency policy
-        run: |
-          echo "🔍 Checking dependency policy..."
-          node scripts/check-deps.js
-        continue-on-error: true
-
       - name: System deps (jq, bc)
         run: sudo apt-get update && sudo apt-get install -y jq bc
 

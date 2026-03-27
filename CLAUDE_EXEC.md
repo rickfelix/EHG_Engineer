@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-03-27 12:26:45 PM
+**Generated**: 2026-03-27 4:44:07 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -203,7 +203,7 @@ npm run sd:branch:auto SD-XXX-001
 npm run sd:branch:check SD-XXX-001
 
 # Full command with options
-# scripts/create-sd-branch.js removed SD-XXX-001 --app EHG --auto-stash
+# Branch was auto-created at LEAD-TO-PLAN handoff
 ```
 
 ### Branch Naming Convention
@@ -1906,36 +1906,7 @@ Adds a Product Requirements Document to the database with proper schema validati
 **Examples**:
 - `node scripts/add-prd-to-database.js --sd-id SD-IDEATION-STAGE1-001 --title "Stage 1 Implementation"`
 
-### Utility Scripts
-
-#### insert-leo-v431-protocol.js
-Inserts a new LEO protocol version and copies sections from previous version.
-
-**Usage**: `node scripts/insert-leo-v431-protocol.js`
-
-**Examples**:
-- `node scripts/insert-leo-v431-protocol.js`
-
-**Common Errors**:
-- Pattern: `violates check constraint.*status` -> Fix: Use valid status: active, superseded, draft, deprecated
-
 ### Validation Scripts
-
-#### verify-handoff-lead-to-plan.js
-Verifies LEAD to PLAN handoff requirements are met before allowing transition.
-
-**Usage**: `node scripts/verify-handoff-lead-to-plan.js <SD-ID>`
-
-**Examples**:
-- `node scripts/verify-handoff-lead-to-plan.js SD-IDEATION-STAGE1-001`
-
-#### verify-handoff-plan-to-exec.js
-Verifies PLAN to EXEC handoff requirements including PRD completeness and sub-agent validations.
-
-**Usage**: `node scripts/verify-handoff-plan-to-exec.js <SD-ID> [PRD-ID]`
-
-**Examples**:
-- `node scripts/verify-handoff-plan-to-exec.js SD-IDEATION-STAGE1-001`
 
 #### check-leo-version.js
 Verifies version consistency between CLAUDE*.md files and database. Use --fix to auto-regenerate.
