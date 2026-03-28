@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeGuardian CI - Analysis Results</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <nav>
+    <span class="brand">CodeGuardian CI</span>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="onboarding.html">Setup</a>
+    <a href="results.html">Results</a>
+    <a href="webhooks.html">Webhooks</a>
+    <a href="analysis.html" class="active">Analysis</a>
+  </nav>
+  <div class="container">
+    <h1>Analysis Results</h1>
+    <div class="metrics" id="stats"></div>
+
+    <h2>Recent Analyses</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Repository</th>
+          <th>Branch</th>
+          <th>Status</th>
+          <th>Quality</th>
+          <th>Findings</th>
+          <th>Completed</th>
+        </tr>
+      </thead>
+      <tbody id="analyses-body"></tbody>
+    </table>
+
+    <h2>Vulnerability Findings</h2>
+    <div class="filter-bar">
+      <select id="filter-severity">
+        <option value="">All Severities</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+        <option value="info">Info</option>
+      </select>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Severity</th>
+          <th>Type</th>
+          <th>Title</th>
+          <th>File</th>
+          <th>Line</th>
+          <th>Rule</th>
+        </tr>
+      </thead>
+      <tbody id="findings-body"></tbody>
+    </table>
+
+    <h2>Performance Metrics</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Value</th>
+          <th>Threshold</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="metrics-body"></tbody>
+    </table>
+  </div>
+
+  <script type="module">
+    import { AnalysisRepository } from '../src/data/analysis-repository.js';
+    import { seed } from '../src/data/analysis-seed.js';
+
+    const repo = new AnalysisRepository();
+    seed(repo);
+
+    function renderStats() {
+      const analyses = repo.listAnalyses({});
+      const findings = repo.listFindings({});
+      const metrics = repo.listMetrics({});
+      const completed = analyses.filter(a => a.status === 'completed');
+      const avgScore = completed.length > 0
+        ? Math.round(completed.filter(a => a.quality_score).reduce((s, a) => s + a.quality_score, 0) / completed.filter(a => a.quality_score).length)
+        : 0;
+      const criticalCount = findings.filter(f => f.severity === 'critical').length;
+      const passRate = metrics.length > 0
+        ? Math.round(metrics.filter(m => m.passed).length / metrics.length * 100)
+        : 0;
+
+      document.getElementById('stats').innerHTML = `
+        <div class="metric-card"><div class="value">${analyses.length}</div><div class="label">Total Analyses</div></div>
+        <div class="metric-card"><div class="value">${avgScore}</div><div class="label">Avg Quality Score</div></div>
+        <div class="metric-card critical"><div class="value">${criticalCount}</div><div class="label">Critical Findings</div></div>
+        <div class="metric-card passing"><div class="value">${passRate}%</div><div class="label">Metrics Passing</div></div>
+      `;
+    }
+
+    function renderAnalyses() {
+      const analyses = repo.listAnalyses({});
+      document.getElementById('analyses-body').innerHTML = analyses.map(a => {
+        const time = a.completed_at ? new Date(a.completed_at).toLocaleString() : 'In progress';
+        const statusClass = a.status === 'completed' ? (a.quality_score >= 80 ? 'passing' : a.quality_score >= 60 ? '' : 'failing') : '';
+        const score = a.quality_score !== null ? a.quality_score + '/100' : '-';
+        const sev = a.severity_summary || {};
+        const total = (sev.critical || 0) + (sev.high || 0) + (sev.medium || 0) + (sev.low || 0);
+        return `<tr>
+          <td>${a.repository_name}</td>
+          <td>${a.branch || '-'}</td>
+          <td><span class="badge ${statusClass}">${a.status}</span></td>
+          <td>${score}</td>
+          <td>${total} ${sev.critical ? `(<span class="sev-critical">${sev.critical}C</span>)` : ''}</td>
+          <td>${time}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    let currentSeverity = '';
+    function renderFindings() {
+      const filters = {};
+      if (currentSeverity) filters.severity = currentSeverity;
+      const findings = repo.listFindings(filters);
+      document.getElementById('findings-body').innerHTML = findings.map(f => `<tr>
+        <td><span class="sev-${f.severity}">${f.severity}</span></td>
+        <td>${f.finding_type}</td>
+        <td>${f.title}</td>
+        <td><code>${f.file_path}</code></td>
+        <td>${f.line_number}</td>
+        <td>${f.rule_id || '-'}</td>
+      </tr>`).join('');
+    }
+
+    function renderMetrics() {
+      const metrics = repo.listMetrics({});
+      document.getElementById('metrics-body').innerHTML = metrics.map(m => {
+        const thresholdStr = m.threshold !== null ? `${m.threshold} ${m.unit}` : '-';
+        const passClass = m.passed ? 'passing' : 'failing';
+        return `<tr>
+          <td>${m.name}</td>
+          <td>${m.value} ${m.unit}</td>
+          <td>${thresholdStr}</td>
+          <td><span class="badge ${passClass}">${m.passed ? 'PASS' : 'FAIL'}</span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('filter-severity').addEventListener('change', (e) => {
+      currentSeverity = e.target.value;
+      renderFindings();
+    });
+
+    renderStats();
+    renderAnalyses();
+    renderFindings();
+    renderMetrics();
+  </script>
+</body>
+</html>
