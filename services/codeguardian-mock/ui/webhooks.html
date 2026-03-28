@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeGuardian CI - Webhooks</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <nav>
+    <span class="brand">CodeGuardian CI</span>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="onboarding.html">Setup</a>
+    <a href="results.html">Results</a>
+    <a href="webhooks.html" class="active">Webhooks</a>
+  </nav>
+  <div class="container">
+    <h1>Webhook Events</h1>
+    <div class="metrics" id="stats"></div>
+
+    <h2>Recent Deliveries</h2>
+    <div class="filter-bar">
+      <select id="filter-type">
+        <option value="">All Types</option>
+        <option value="push">push</option>
+        <option value="pull_request">pull_request</option>
+        <option value="workflow_run">workflow_run</option>
+        <option value="check_suite">check_suite</option>
+        <option value="deployment_status">deployment_status</option>
+      </select>
+      <button id="btn-prev" disabled>&larr; Prev</button>
+      <span id="page-info">Page 1</span>
+      <button id="btn-next">Next &rarr;</button>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Delivery ID</th>
+          <th>Event Type</th>
+          <th>SD</th>
+          <th>Signature</th>
+          <th>Processed</th>
+          <th>Received</th>
+        </tr>
+      </thead>
+      <tbody id="deliveries-body"></tbody>
+    </table>
+
+    <h2>Pipeline Runs</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Run ID</th>
+          <th>Repository</th>
+          <th>Workflow</th>
+          <th>Status</th>
+          <th>Conclusion</th>
+          <th>Started</th>
+        </tr>
+      </thead>
+      <tbody id="runs-body"></tbody>
+    </table>
+  </div>
+
+  <script type="module">
+    import { WebhookRepository } from '../src/data/webhook-repository.js';
+    import { seed } from '../src/data/webhook-seed.js';
+
+    const repo = new WebhookRepository();
+    seed(repo);
+
+    const PAGE_SIZE = 5;
+    let currentPage = 0;
+    let currentFilter = '';
+
+    function renderStats() {
+      const deliveries = repo.listDeliveries({});
+      const runs = repo.listPipelineRuns({});
+      const counts = {};
+      for (const d of deliveries) counts[d.event_type] = (counts[d.event_type] || 0) + 1;
+      const processed = deliveries.filter(d => d.processed_successfully).length;
+      const rate = deliveries.length > 0 ? Math.round(processed / deliveries.length * 100) : 0;
+
+      document.getElementById('stats').innerHTML = `
+        <div class="metric-card"><div class="value">${deliveries.length}</div><div class="label">Total Events</div></div>
+        <div class="metric-card"><div class="value">${runs.length}</div><div class="label">Pipeline Runs</div></div>
+        <div class="metric-card passing"><div class="value">${rate}%</div><div class="label">Processed</div></div>
+        <div class="metric-card"><div class="value">${Object.keys(counts).length}</div><div class="label">Event Types</div></div>
+      `;
+    }
+
+    function renderDeliveries() {
+      const filters = {};
+      if (currentFilter) filters.event_type = currentFilter;
+      filters.limit = PAGE_SIZE;
+      filters.offset = currentPage * PAGE_SIZE;
+
+      const all = currentFilter ? repo.listDeliveries({ event_type: currentFilter }) : repo.listDeliveries({});
+      const page = repo.listDeliveries(filters);
+      const totalPages = Math.ceil(all.length / PAGE_SIZE);
+
+      document.getElementById('deliveries-body').innerHTML = page.map(d => {
+        const time = d.received_at ? new Date(d.received_at).toLocaleString() : '-';
+        return `<tr>
+          <td><code>${d.delivery_id}</code></td>
+          <td><span class="badge">${d.event_type}</span></td>
+          <td>${d.sd_id || '-'}</td>
+          <td>${d.signature_valid ? '&#10003;' : '&#10007;'}</td>
+          <td>${d.processed_successfully ? '&#10003;' : '&#10007;'}</td>
+          <td>${time}</td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('page-info').textContent = `Page ${currentPage + 1} of ${totalPages || 1}`;
+      document.getElementById('btn-prev').disabled = currentPage === 0;
+      document.getElementById('btn-next').disabled = currentPage >= totalPages - 1;
+    }
+
+    function renderRuns() {
+      const runs = repo.listPipelineRuns({});
+      document.getElementById('runs-body').innerHTML = runs.map(r => {
+        const time = r.started_at ? new Date(r.started_at).toLocaleString() : '-';
+        const statusClass = r.status === 'completed' ? (r.conclusion === 'success' ? 'passing' : 'failing') : '';
+        return `<tr>
+          <td><code>${r.run_id}</code></td>
+          <td>${r.repository_name}</td>
+          <td>${r.workflow_name}</td>
+          <td><span class="badge ${statusClass}">${r.status}</span></td>
+          <td>${r.conclusion || '-'}</td>
+          <td>${time}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('filter-type').addEventListener('change', (e) => {
+      currentFilter = e.target.value;
+      currentPage = 0;
+      renderDeliveries();
+    });
+    document.getElementById('btn-prev').addEventListener('click', () => { currentPage--; renderDeliveries(); });
+    document.getElementById('btn-next').addEventListener('click', () => { currentPage++; renderDeliveries(); });
+
+    renderStats();
+    renderDeliveries();
+    renderRuns();
+  </script>
+</body>
+</html>
