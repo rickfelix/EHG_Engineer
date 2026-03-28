@@ -24,6 +24,7 @@ import {
   normalizeVenturePrefix
 } from './modules/sd-key-generator.js';
 import { VentureContextManager } from '../lib/eva/venture-context-manager.js';
+import { getCurrentVenture, getVentureConfig } from '../lib/venture-resolver.js';
 import {
   checkGate,
   getArtifacts,
@@ -956,6 +957,8 @@ async function createSD(options) {
     // PAT-SDCREATE-001: Allow passing key_changes and smoke_test_steps
     key_changes = null,
     smoke_test_steps = null,
+    // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Allow explicit target_application
+    target_application: explicitTargetApp = null,
   } = options;
 
   // QF-CLAIM-CONFLICT-UX-001 + SD-LEO-ENH-IMPLEMENT-TIERED-QUICK-001:
@@ -1260,6 +1263,12 @@ async function createSD(options) {
     }
   }
 
+  // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Resolve target_application from venture context
+  // Precedence: explicit param > VENTURE env var > getCurrentVenture() > 'EHG_Engineer'
+  const resolvedTargetApplication = explicitTargetApp
+    || (process.env.VENTURE && (getVentureConfig(process.env.VENTURE)?.name || process.env.VENTURE))
+    || null;
+
   const sdData = {
     id: randomUUID(),
     sd_key: sdKey,
@@ -1272,7 +1281,7 @@ async function createSD(options) {
     priority,
     category: categoryValue,  // Use calculated value (may be inherited from parent)
     current_phase: 'LEAD',
-    target_application: 'EHG_Engineer',
+    target_application: resolvedTargetApplication || getCurrentVenture() || 'EHG_Engineer',
     created_by: 'Claude',
     parent_sd_id: parentId,
     success_criteria: finalSuccessCriteria,  // Array, NOT JSON.stringify()
@@ -1828,6 +1837,10 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         console.log('✓ SD fields enriched from vision/architecture documents');
       }
 
+      // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Resolve target_application from --venture flag
+      const ventureConfig = cliVenture ? getVentureConfig(cliVenture) : null;
+      const targetApp = ventureConfig?.name || cliVenture || null;
+
       await createSD({
         sdKey,
         title,
@@ -1836,6 +1849,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         rationale: enriched?.rationale || 'Created via /leo create',
         success_criteria: enriched?.success_criteria || null,
         key_changes: enriched?.key_changes || null,
+        target_application: targetApp,
         metadata: {
           source: source.toLowerCase(),
           ...phase0Metadata,
