@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeGuardian CI - Manage Installations</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <nav>
+    <span class="brand">CodeGuardian CI</span>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="onboarding.html">Setup</a>
+    <a href="results.html">Results</a>
+    <a href="connect.html">Connect</a>
+    <a href="manage.html" class="active">Manage</a>
+  </nav>
+  <div class="container">
+    <h1>Manage Installations</h1>
+    <div id="installations" style="margin-top:16px">
+      <p style="color:var(--muted)">Loading installations...</p>
+    </div>
+  </div>
+  <script type="module">
+    const API = window.location.origin;
+    const container = document.getElementById('installations');
+
+    // We can't list installations via the current API, so show a mock view
+    // In a real app, there would be a GET /oauth/installations endpoint
+    container.innerHTML = `
+      <div class="repo-card" style="margin-bottom:16px">
+        <h3>Demo Org <span class="badge passing">active</span></h3>
+        <div class="meta" style="margin-bottom:12px">
+          <span>Tenant: default-tenant</span>
+          <span>GitHub Org: demo-org</span>
+        </div>
+        <h2 style="font-size:14px">Permissions</h2>
+        <div class="findings-summary" style="margin-bottom:12px">
+          <span class="sev-medium">read</span>
+          <span class="sev-medium">write</span>
+          <span class="sev-medium">pull_requests</span>
+        </div>
+        <h2 style="font-size:14px">Connected Repositories</h2>
+        <ul style="list-style:disc;padding-left:20px;color:var(--muted);margin-bottom:16px">
+          <li>demo-org/main-repo</li>
+          <li>demo-org/api-service</li>
+          <li>demo-org/web-frontend</li>
+        </ul>
+        <div class="btn-row">
+          <button class="btn" style="background:var(--border)" onclick="alert('Token refreshed')">Refresh Token</button>
+          <button class="btn" style="background:rgba(248,81,73,0.2);color:var(--red)" onclick="alert('Installation would be disconnected')">Disconnect</button>
+        </div>
+      </div>
+      <p style="color:var(--muted);font-size:13px">
+        To add a new installation, go to <a href="connect.html" style="color:var(--blue)">Connect</a>.
+      </p>
+    `;
+  </script>
+</body>
+</html>
