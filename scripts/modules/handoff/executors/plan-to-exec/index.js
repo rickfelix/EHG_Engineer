@@ -51,6 +51,7 @@ import { getRemediation } from './remediation.js';
 
 // Worktree integration (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
 import { createWorktree, symlinkNodeModules, getRepoRoot } from '../../../../../lib/worktree-manager.js';
+import { getVenturePath, validateVentureRepo } from '../../../../../lib/venture-resolver.js';
 
 // External validators (lazy loaded)
 let validateBMADForPlanToExec;
@@ -332,7 +333,23 @@ export class PlanToExecExecutor extends BaseExecutor {
       try {
         console.log('\n🌲 Step 4: Worktree Creation');
         console.log('-'.repeat(50));
-        worktreeResult = createWorktree({ sdKey, branch: worktreeBranch });
+
+        // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Resolve venture repo root for cross-repo worktrees
+        let ventureRepoRoot = null;
+        const targetApp = sd.target_application;
+        if (targetApp && targetApp !== 'EHG_Engineer') {
+          const venturePath = getVenturePath(targetApp);
+          const validation = validateVentureRepo(venturePath);
+          if (validation.valid) {
+            ventureRepoRoot = venturePath;
+            console.log(`   🏢 Venture repo: ${targetApp} → ${venturePath}`);
+          } else {
+            console.warn(`   ⚠️  Venture repo not found: ${targetApp} (${validation.reason})`);
+            console.warn('   💡 Falling back to EHG_Engineer');
+          }
+        }
+
+        worktreeResult = createWorktree({ sdKey, branch: worktreeBranch, repoRoot: ventureRepoRoot });
 
         if (worktreeResult.reused) {
           console.log(`   ℹ️  Worktree already exists: .worktrees/${sdKey}`);
@@ -342,9 +359,10 @@ export class PlanToExecExecutor extends BaseExecutor {
         console.log(`   📂 Path: ${worktreeResult.path}`);
         console.log(`   🌿 Branch: ${worktreeResult.branch}`);
 
-        // Symlink node_modules for convenience
+        // Symlink node_modules from correct repo root
+        const moduleSourceRoot = ventureRepoRoot || getRepoRoot();
         try {
-          symlinkNodeModules(worktreeResult.path, getRepoRoot());
+          symlinkNodeModules(worktreeResult.path, moduleSourceRoot);
           console.log('   ✅ node_modules linked');
         } catch (symlinkError) {
           console.warn(`   ⚠️  Could not link node_modules: ${symlinkError.message}`);
