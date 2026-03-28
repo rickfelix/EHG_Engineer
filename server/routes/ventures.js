@@ -368,4 +368,123 @@ router.post('/competitor-analysis', asyncHandler(async (req, res) => {
   }
 }));
 
+// ── Master Reset with Repo + Registry Cleanup ──────────────────────
+// SD-LEO-INFRA-BRIDGE-ARTIFACT-ENRICHMENT-001 (extended cleanup)
+router.post('/master-reset', asyncHandler(async (req, res) => {
+  const supabase = dbLoader.supabase;
+
+  // Phase 1: Collect venture repo info BEFORE deletion
+  const { data: provisioningRows } = await supabase
+    .from('venture_provisioning_state')
+    .select('venture_id, venture_name, github_repo_url');
+
+  const repoUrls = (provisioningRows || [])
+    .map(r => r.github_repo_url)
+    .filter(Boolean);
+
+  const ventureNames = (provisioningRows || [])
+    .map(r => r.venture_name)
+    .filter(Boolean);
+
+  // Phase 2: Execute existing DB master reset RPC
+  const { data: rpcResult, error: rpcErr } = await supabase
+    .rpc('master_reset_portfolio');
+
+  if (rpcErr) {
+    return res.status(500).json({
+      success: false,
+      error: rpcErr.message,
+      phase: 'database_reset',
+    });
+  }
+
+  const dbCount = rpcResult?.count ?? 0;
+  const cleanupResults = { repos_deleted: [], repos_failed: [], registry_cleaned: false };
+
+  // Phase 3: Delete GitHub repos
+  if (repoUrls.length > 0) {
+    const { execSync } = await import('child_process');
+
+    for (const url of repoUrls) {
+      // Extract owner/repo from URL (https://github.com/owner/repo or owner/repo)
+      const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
+      const repoSlug = match ? match[1].replace(/\.git$/, '') : url.replace(/\.git$/, '');
+
+      if (!repoSlug || repoSlug.split('/').length !== 2) {
+        cleanupResults.repos_failed.push({ repo: url, reason: 'invalid repo format' });
+        continue;
+      }
+
+      // SAFETY: Never delete core repos
+      const PROTECTED_REPOS = new Set([
+        'rickfelix/ehg', 'rickfelix/EHG_Engineer', 'rickfelix/ehg_engineer',
+      ]);
+      if (PROTECTED_REPOS.has(repoSlug) || PROTECTED_REPOS.has(repoSlug.toLowerCase())) {
+        cleanupResults.repos_failed.push({ repo: repoSlug, reason: 'PROTECTED — core repo, skipped' });
+        continue;
+      }
+
+      try {
+        execSync(`gh repo delete ${repoSlug} --yes`, {
+          timeout: 15000,
+          stdio: 'pipe',
+        });
+        cleanupResults.repos_deleted.push(repoSlug);
+      } catch (err) {
+        const msg = err.stderr?.toString() || err.message;
+        // Not found is OK (already deleted)
+        if (msg.includes('not found') || msg.includes('404')) {
+          cleanupResults.repos_deleted.push(`${repoSlug} (already gone)`);
+        } else {
+          cleanupResults.repos_failed.push({ repo: repoSlug, reason: msg.substring(0, 200) });
+        }
+      }
+    }
+  }
+
+  // Phase 4: Clean applications/registry.json
+  try {
+    const { readFileSync, writeFileSync } = await import('fs');
+    const { resolve } = await import('path');
+    const registryPath = resolve(process.cwd(), 'applications/registry.json');
+
+    const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
+    const apps = registry.applications || {};
+    const ventureNameSet = new Set(ventureNames.map(n => n.toLowerCase()));
+
+    // Remove APP entries matching deleted venture names (keep APP001=ehg, APP002=test-leo-project)
+    const coreApps = new Set(['ehg', 'ehg_engineer', 'test-leo-project']);
+    let removed = 0;
+    for (const [key, app] of Object.entries(apps)) {
+      const name = (app.name || '').toLowerCase();
+      if (ventureNameSet.has(name) && !coreApps.has(name)) {
+        delete apps[key];
+        removed++;
+      }
+    }
+
+    if (removed > 0) {
+      registry.metadata.total_apps = Object.keys(apps).length;
+      registry.metadata.active_apps = Object.values(apps).filter(a => a.status === 'active').length;
+      registry.metadata.last_updated = new Date().toISOString();
+      writeFileSync(registryPath, JSON.stringify(registry, null, 2) + '\n', 'utf8');
+      cleanupResults.registry_cleaned = true;
+    }
+  } catch (err) {
+    cleanupResults.registry_error = err.message;
+  }
+
+  res.json({
+    success: true,
+    count: dbCount,
+    message: `${dbCount} venture(s) and all related data deleted.`,
+    cleanup: {
+      repos_deleted: cleanupResults.repos_deleted.length,
+      repos_failed: cleanupResults.repos_failed.length,
+      registry_cleaned: cleanupResults.registry_cleaned,
+      details: cleanupResults,
+    },
+  });
+}));
+
 export default router;
