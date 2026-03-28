@@ -1,0 +1,14 @@
+{
+  "name": "@ehg/codeguardian-mock",
+  "version": "0.1.0",
+  "description": "Mock API service for CodeGuardian CI - simulates PR analysis and webhook endpoints",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test tests/api.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

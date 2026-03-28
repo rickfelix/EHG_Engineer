@@ -1,0 +1,9 @@
+services:
+  codeguardian-mock:
+    build: .
+    ports:
+      - "4000:4000"
+    environment:
+      - MOCK_PORT=4000
+      - MOCK_ANALYSIS_RESULT=success
+    restart: unless-stopped
