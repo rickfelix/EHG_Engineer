@@ -20,6 +20,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { getVenturePath } from '../lib/venture-resolver.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -268,7 +269,7 @@ function emitLog(fields) {
   console.error(JSON.stringify(entry));
 }
 
-async function resolve(sdKey, mode, repoRoot) {
+async function resolve(sdKey, mode, repoRoot, targetApp) {
   if (!validateSdKey(sdKey)) {
     return {
       sdKey, cwd: repoRoot, source: 'legacy', success: false,
@@ -276,6 +277,35 @@ async function resolve(sdKey, mode, repoRoot) {
       errorCode: 'INVALID_SD_KEY',
       error: `Invalid SD key: ${sdKey}`
     };
+  }
+
+  // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Resolve repo root from SD's target_application
+  // When an SD targets a venture repo, create worktrees in that repo instead of EHG_Engineer
+  if (!targetApp) {
+    try {
+      const sb = createSupabaseServiceClient();
+      const { data: sdRow } = await sb
+        .from('strategic_directives_v2')
+        .select('target_application')
+        .or(`sd_key.eq.${sdKey},id.eq.${sdKey}`)
+        .single();
+      if (sdRow?.target_application) {
+        targetApp = sdRow.target_application;
+      }
+    } catch {
+      // Non-fatal — fall through to default repoRoot
+    }
+  }
+
+  if (targetApp && targetApp !== 'EHG_Engineer') {
+    const venturePath = getVenturePath(targetApp);
+    if (venturePath && fs.existsSync(path.join(venturePath, '.git'))) {
+      repoRoot = venturePath;
+      emitLog({ event: 'worktree.venture_repo_resolved', sdKey, targetApp, repoRoot: venturePath });
+    } else {
+      emitLog({ event: 'worktree.venture_repo_not_found', sdKey, targetApp, resolvedPath: venturePath });
+      // Fall through to default repoRoot (EHG_Engineer)
+    }
   }
 
   // 1. Try DB lookup first
@@ -358,11 +388,13 @@ async function main() {
   let sdKey = null;
   let mode = 'claim';
   let repoRoot = null;
+  let targetApp = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--sdKey' && args[i + 1]) { sdKey = args[++i]; }
     else if (args[i] === '--mode' && args[i + 1]) { mode = args[++i]; }
     else if (args[i] === '--repoRoot' && args[i + 1]) { repoRoot = args[++i]; }
+    else if (args[i] === '--target-app' && args[i + 1]) { targetApp = args[++i]; }
     else if (!args[i].startsWith('--')) { sdKey = sdKey || args[i]; }
   }
 
@@ -383,7 +415,7 @@ async function main() {
   }
 
   const resolvedRoot = getRepoRoot(repoRoot);
-  const result = await resolve(sdKey, mode, resolvedRoot);
+  const result = await resolve(sdKey, mode, resolvedRoot, targetApp);
 
   // Output to stdout (machine-readable)
   process.stdout.write(JSON.stringify(result));

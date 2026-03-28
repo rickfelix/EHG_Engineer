@@ -186,7 +186,7 @@ async function getSDDetails(sdId) {
   // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at')
+    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id')
     .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
@@ -745,7 +745,7 @@ async function main() {
       if (!hasRequired) {
         console.log(`\n${colors.bgYellow}${colors.bold} STUCK SD WARNING ${colors.reset}`);
         console.log(`   ${colors.yellow}SD is in phase ${phase} but has no accepted ${req.from}→${req.to} handoff${colors.reset}`);
-        console.log(`   This SD may have a broken handoff chain.`);
+        console.log('   This SD may have a broken handoff chain.');
         console.log(`   ${colors.cyan}Run: npm run sd:recover -- ${effectiveId} --fix${colors.reset}`);
         console.log('');
       }
@@ -764,6 +764,27 @@ async function main() {
   console.log(`Progress: ${sd.progress_percentage || 0}%`);
   console.log(`Type: ${sd.sd_type || 'feature'}`);
   console.log(`claiming_session_id: ${colors.green}${session.session_id}${colors.reset}`);
+
+  // 5.05. SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Set venture context on claim
+  // When an SD has target_application or venture_id, propagate to session metadata
+  if (sd.target_application && sd.target_application !== 'EHG_Engineer') {
+    try {
+      const { VentureContextManager } = await import('../lib/eva/venture-context-manager.js');
+      const vcm = new VentureContextManager({ supabaseClient: supabase });
+      if (sd.venture_id) {
+        await vcm.setActiveVenture(sd.venture_id);
+        console.log(`\n${colors.cyan}   🏢 Venture context set: ${sd.target_application} (from SD venture_id)${colors.reset}`);
+      } else {
+        // Store target_application in session metadata even without venture_id
+        await supabase.from('claude_sessions')
+          .update({ metadata: supabase.rpc ? undefined : { active_target_application: sd.target_application } })
+          .eq('session_id', session.session_id);
+        console.log(`\n${colors.cyan}   🏢 Target application: ${sd.target_application}${colors.reset}`);
+      }
+    } catch {
+      // Non-fatal — venture context is advisory
+    }
+  }
 
   // 5.1. Show worktree info + machine-readable activation directive
   if (worktreeInfo?.success && worktreeInfo.worktree?.exists) {

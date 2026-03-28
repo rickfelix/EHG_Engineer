@@ -184,7 +184,7 @@ export async function loadSDHierarchy(supabase) {
   try {
     const { data: sds } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority')
+      .select('id, sd_key, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority, target_application')
       .eq('is_active', true)
       .order('created_at')
       .limit(1000);
