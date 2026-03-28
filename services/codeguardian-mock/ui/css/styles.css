@@ -1,0 +1,64 @@
+:root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --red: #f85149; --yellow: #d29922; --blue: #58a6ff; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+h1 { font-size: 24px; margin-bottom: 24px; }
+h2 { font-size: 18px; margin-bottom: 16px; color: var(--muted); }
+
+/* Metrics */
+.metrics { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+.metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 24px; min-width: 140px; }
+.metric-card .value { font-size: 32px; font-weight: 700; }
+.metric-card .label { font-size: 13px; color: var(--muted); }
+.metric-card.critical .value { color: var(--red); }
+.metric-card.passing .value { color: var(--green); }
+
+/* Repo Grid */
+.repo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.repo-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+.repo-card h3 { font-size: 16px; margin-bottom: 8px; }
+.repo-card .meta { display: flex; gap: 12px; color: var(--muted); font-size: 13px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.badge.passing { background: rgba(63,185,80,0.15); color: var(--green); }
+.badge.failing { background: rgba(248,81,73,0.15); color: var(--red); }
+.badge.pending { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.findings-summary { margin-top: 12px; display: flex; gap: 8px; font-size: 12px; }
+.findings-summary span { padding: 2px 6px; border-radius: 4px; }
+.sev-critical { background: rgba(248,81,73,0.15); color: var(--red); }
+.sev-high { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.sev-medium { background: rgba(88,166,255,0.15); color: var(--blue); }
+.sev-low { background: rgba(139,148,158,0.15); color: var(--muted); }
+
+/* Wizard */
+.wizard { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 32px; max-width: 600px; margin: 0 auto; }
+.wizard .steps { display: flex; gap: 8px; margin-bottom: 24px; }
+.wizard .step { flex: 1; height: 4px; border-radius: 2px; background: var(--border); }
+.wizard .step.active { background: var(--blue); }
+.wizard .step.done { background: var(--green); }
+.option-list { list-style: none; }
+.option-list li { padding: 12px 16px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; cursor: pointer; }
+.option-list li:hover, .option-list li.selected { border-color: var(--blue); background: rgba(88,166,255,0.08); }
+.btn { display: inline-block; padding: 8px 20px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; background: var(--blue); color: #fff; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+
+/* Results */
+.severity-group { margin-bottom: 24px; }
+.severity-group h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.finding { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin-bottom: 6px; cursor: pointer; }
+.finding .title { font-weight: 600; font-size: 14px; }
+.finding .location { color: var(--muted); font-size: 12px; }
+.finding .details { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+.finding.expanded .details { display: block; }
+
+/* Nav */
+nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; gap: 24px; align-items: center; }
+nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+nav a:hover, nav a.active { color: var(--text); }
+nav .brand { font-weight: 700; color: var(--text); font-size: 16px; }
+
+@media (max-width: 768px) {
+  .repo-grid { grid-template-columns: 1fr; }
+  .metrics { flex-direction: column; }
+  .metric-card { min-width: auto; }
+}

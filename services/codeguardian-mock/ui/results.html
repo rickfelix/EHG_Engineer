@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeGuardian CI - Results</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <nav>
+    <span class="brand">CodeGuardian CI</span>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="onboarding.html">Setup</a>
+    <a href="results.html" class="active">Results</a>
+  </nav>
+  <div class="container">
+    <h1>Scan Results</h1>
+    <div style="margin-bottom:24px">
+      <select id="repo-select" style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:6px;font-size:14px"></select>
+    </div>
+    <div id="results"></div>
+  </div>
+  <script type="module">
+    import { repos, getFindingsForRepo } from './js/mock-data.js';
+    const select = document.getElementById('repo-select');
+    select.innerHTML = repos.map(r => `<option value="${r.id}">${r.name} (${r.status})</option>`).join('');
+
+    function renderResults(repoId) {
+      const f = getFindingsForRepo(repoId);
+      const groups = { critical: [], high: [], medium: [], low: [] };
+      f.forEach(item => groups[item.severity]?.push(item));
+
+      const html = Object.entries(groups)
+        .filter(([, items]) => items.length > 0)
+        .map(([sev, items]) => `
+          <div class="severity-group">
+            <h3><span class="sev-${sev}" style="padding:4px 10px;border-radius:4px">${sev} (${items.length})</span></h3>
+            ${items.map(i => `
+              <div class="finding" onclick="this.classList.toggle('expanded')">
+                <div class="title">${i.title}</div>
+                <div class="location">${i.file}:${i.line}</div>
+                <div class="details">${i.description}</div>
+              </div>
+            `).join('')}
+          </div>
+        `).join('');
+
+      document.getElementById('results').innerHTML = html || '<p style="color:var(--muted)">No findings for this repository.</p>';
+    }
+
+    select.addEventListener('change', () => renderResults(select.value));
+    renderResults(repos[0].id);
+  </script>
+</body>
+</html>

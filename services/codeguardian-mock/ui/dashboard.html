@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeGuardian CI - Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <nav>
+    <span class="brand">CodeGuardian CI</span>
+    <a href="dashboard.html" class="active">Dashboard</a>
+    <a href="onboarding.html">Setup</a>
+    <a href="results.html">Results</a>
+  </nav>
+  <div class="container">
+    <h1>Dashboard</h1>
+    <div class="metrics" id="metrics"></div>
+    <h2>Repositories</h2>
+    <div class="repo-grid" id="repo-grid"></div>
+  </div>
+  <script type="module">
+    import { repos, getMetrics } from './js/mock-data.js';
+    const m = getMetrics();
+    document.getElementById('metrics').innerHTML = `
+      <div class="metric-card"><div class="value">${m.total}</div><div class="label">Total Repos</div></div>
+      <div class="metric-card passing"><div class="value">${m.passing}</div><div class="label">Passing</div></div>
+      <div class="metric-card critical"><div class="value">${m.failing}</div><div class="label">Failing</div></div>
+      <div class="metric-card"><div class="value">${m.pending}</div><div class="label">Pending</div></div>
+      <div class="metric-card critical"><div class="value">${m.critical}</div><div class="label">Critical Findings</div></div>
+    `;
+    const grid = document.getElementById('repo-grid');
+    grid.innerHTML = repos.map(r => {
+      const f = r.findings;
+      const total = f.critical + f.high + f.medium + f.low;
+      const time = r.last_scan ? new Date(r.last_scan).toLocaleString() : 'Never';
+      return `<div class="repo-card">
+        <h3>${r.name} <span class="badge ${r.status}">${r.status}</span></h3>
+        <div class="meta"><span>Last scan: ${time}</span><span>${total} findings</span></div>
+        <div class="findings-summary">
+          ${f.critical ? `<span class="sev-critical">${f.critical} critical</span>` : ''}
+          ${f.high ? `<span class="sev-high">${f.high} high</span>` : ''}
+          ${f.medium ? `<span class="sev-medium">${f.medium} medium</span>` : ''}
+          ${f.low ? `<span class="sev-low">${f.low} low</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  </script>
+</body>
+</html>

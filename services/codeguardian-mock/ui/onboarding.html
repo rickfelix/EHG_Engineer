@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeGuardian CI - Setup</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <nav>
+    <span class="brand">CodeGuardian CI</span>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="onboarding.html" class="active">Setup</a>
+    <a href="results.html">Results</a>
+  </nav>
+  <div class="container">
+    <h1>Get Started</h1>
+    <div class="wizard" id="wizard"></div>
+  </div>
+  <script type="module">
+    import { orgs, getReposForOrg } from './js/mock-data.js';
+    let step = 1, selectedOrg = null, selectedRepos = new Set();
+
+    function render() {
+      const steps = `<div class="steps">
+        <div class="step ${step >= 1 ? (step > 1 ? 'done' : 'active') : ''}"></div>
+        <div class="step ${step >= 2 ? (step > 2 ? 'done' : 'active') : ''}"></div>
+        <div class="step ${step >= 3 ? 'active' : ''}"></div>
+      </div>`;
+
+      let content = '';
+      if (step === 1) {
+        content = `<h2>Select Organization</h2>
+          <ul class="option-list">${orgs.map(o =>
+            `<li data-id="${o.id}" class="${selectedOrg === o.id ? 'selected' : ''}">${o.name} <span style="color:var(--muted)">(${o.repos_count} repos)</span></li>`
+          ).join('')}</ul>
+          <div class="btn-row"><button class="btn" ${!selectedOrg ? 'disabled' : ''} id="next">Next</button></div>`;
+      } else if (step === 2) {
+        const repos = getReposForOrg(selectedOrg);
+        content = `<h2>Select Repositories</h2>
+          <ul class="option-list">${repos.map(r =>
+            `<li data-id="${r.id}" class="${selectedRepos.has(r.id) ? 'selected' : ''}">${r.name}</li>`
+          ).join('')}</ul>
+          <div class="btn-row"><button class="btn" style="background:var(--border)" id="back">Back</button><button class="btn" ${selectedRepos.size === 0 ? 'disabled' : ''} id="next">Next</button></div>`;
+      } else {
+        const orgName = orgs.find(o => o.id === selectedOrg).name;
+        content = `<h2>Confirm Setup</h2>
+          <p style="margin-bottom:16px">Organization: <strong>${orgName}</strong></p>
+          <p style="margin-bottom:16px">Repositories: <strong>${selectedRepos.size}</strong> selected</p>
+          <ul style="list-style:disc;padding-left:20px;margin-bottom:16px;color:var(--muted)">${[...selectedRepos].map(id => {
+            const allRepos = getReposForOrg(selectedOrg);
+            const r = allRepos.find(r => r.id === id);
+            return `<li>${r?.name || id}</li>`;
+          }).join('')}</ul>
+          <div class="btn-row"><button class="btn" style="background:var(--border)" id="back">Back</button><button class="btn" id="confirm">Start Scanning</button></div>`;
+      }
+      document.getElementById('wizard').innerHTML = steps + content;
+      attachHandlers();
+    }
+
+    function attachHandlers() {
+      document.querySelectorAll('.option-list li').forEach(li => {
+        li.addEventListener('click', () => {
+          const id = li.dataset.id;
+          if (step === 1) { selectedOrg = id; selectedRepos.clear(); }
+          else if (step === 2) { selectedRepos.has(id) ? selectedRepos.delete(id) : selectedRepos.add(id); }
+          render();
+        });
+      });
+      document.getElementById('next')?.addEventListener('click', () => { step++; render(); });
+      document.getElementById('back')?.addEventListener('click', () => { step--; render(); });
+      document.getElementById('confirm')?.addEventListener('click', () => { window.location.href = 'dashboard.html'; });
+    }
+    render();
+  </script>
+</body>
+</html>
