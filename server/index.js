@@ -145,7 +145,11 @@ app.use('/api/discovery', requireAuth, discoveryRoutes);
 app.use('/api/blueprints', optionalAuth, discoveryRoutes);
 app.use('/api/calibration', requireAuth, calibrationRoutes);
 app.use('/api/testing/campaign', requireAuth, testingCampaignRoutes);
-app.use('/api/ventures', requireAuth, venturesRoutes);
+app.use('/api/ventures', (req, res, next) => {
+  // Master reset uses service-role client internally — auth at RPC level (chairman check)
+  if (req.method === 'POST' && req.path === '/master-reset') return optionalAuth(req, res, next);
+  return requireAuth(req, res, next);
+}, venturesRoutes);
 app.use('/api/competitor-analysis', requireAuth, venturesRoutes);
 app.use('/api/v2', requireAuth, v2ApiRoutes);
 app.use('/api/chairman', requireAuth, createChairmanScopeGuard({ blocking: true }), chairmanRoutes);
