@@ -371,7 +371,12 @@ router.post('/competitor-analysis', asyncHandler(async (req, res) => {
 // ── Master Reset with Repo + Registry Cleanup ──────────────────────
 // SD-LEO-INFRA-BRIDGE-ARTIFACT-ENRICHMENT-001 (extended cleanup)
 router.post('/master-reset', asyncHandler(async (req, res) => {
-  const supabase = dbLoader.supabase;
+  // Use service-role client for admin operations (RPC requires service_role or chairman)
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
 
   // Phase 1: Collect venture repo info BEFORE deletion
   const { data: provisioningRows } = await supabase
