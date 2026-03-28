@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-27T13:55:01.844Z
-**Tables**: 594
+**Generated**: 2026-03-28T01:00:29.915Z
+**Tables**: 596
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (594)
+## All Tables (596)
 
 ### LEO Protocol
 
@@ -126,6 +126,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_workflow_template_steps](tables/sd_workflow_template_steps.md)
 - [sd_workflow_templates](tables/sd_workflow_templates.md)
 - [strategic_directives_v2](tables/strategic_directives_v2.md)
+- [venture_sd_artifact_mapping](tables/venture_sd_artifact_mapping.md)
 - [working_sd_sessions](tables/working_sd_sessions.md)
 
 ### Retrospectives
@@ -592,6 +593,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [validation_evidence](tables/validation_evidence.md)
 - [validation_gate_registry](tables/validation_gate_registry.md)
 - [venture_archetypes](tables/venture_archetypes.md)
+- [venture_artifact_summaries](tables/venture_artifact_summaries.md)
 - [venture_artifacts](tables/venture_artifacts.md)
 - [venture_asset_registry](tables/venture_asset_registry.md)
 - [venture_blueprints](tables/venture_blueprints.md)
