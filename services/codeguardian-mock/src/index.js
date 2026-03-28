@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { config } from './config.js';
 import analysesRouter from './routes/analyses.js';
 import webhooksRouter from './routes/webhooks.js';
+import { oauthRouter } from './routes/oauth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -15,6 +16,7 @@ app.get('/health', (_req, res) => {
 
 app.use('/api/analyses', analysesRouter);
 app.use('/webhooks', webhooksRouter);
+app.use('/oauth', oauthRouter);
 app.use('/ui', express.static(join(__dirname, '..', 'ui')));
 
 app.use((_req, res) => {
