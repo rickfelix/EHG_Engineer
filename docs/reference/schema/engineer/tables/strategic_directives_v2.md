@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-27T13:55:01.844Z
-**Rows**: 2,141
+**Generated**: 2026-03-28T01:00:29.915Z
+**Rows**: 2,170
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -132,7 +132,6 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_sd_key_key`: UNIQUE (sd_key)
 
 ### Check Constraints
-- `check_target_application`: CHECK (((target_application)::text = ANY ((ARRAY['EHG'::character varying, 'EHG_Engineer'::character varying])::text[])))
 - `chk_sd_v2_triage`: CHECK (((rolled_triage IS NULL) OR (rolled_triage = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text, 'Future'::text]))))
 - `key_changes_is_array`: CHECK (((key_changes IS NULL) OR (jsonb_typeof(key_changes) = 'array'::text)))
 - `key_principles_is_array`: CHECK (((key_principles IS NULL) OR (jsonb_typeof(key_principles) = 'array'::text)))
