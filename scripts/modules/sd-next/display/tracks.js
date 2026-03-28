@@ -145,8 +145,12 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
   const urgencyBadge = item.urgency_band
     ? ` ${urgencyBadgeColors[item.urgency_band] || colors.dim}[${item.urgency_band}]${colors.reset}`
     : '';
+  // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Show venture affinity badge
+  const ventureBadge = item.target_application && item.target_application !== 'EHG_Engineer'
+    ? ` ${colors.cyan}[${item.target_application}]${colors.reset}`
+    : '';
 
-  console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${urgencyBadge}${visionBadge}${gapBadge}... ${statusIcon}`);
+  console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${ventureBadge}${urgencyBadge}${visionBadge}${gapBadge}... ${statusIcon}`);
 
   // Show claim details with PID-aware output
   if (isClaimedByOther) {
