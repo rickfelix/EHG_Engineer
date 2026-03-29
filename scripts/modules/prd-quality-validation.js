@@ -103,6 +103,24 @@ function isBoilerplate(text, patterns) {
 }
 
 /**
+ * Normalize a PRD field that may be stored as JSONB array, JSON string, or text.
+ * Returns an array regardless of input format.
+ * SD-LEARN-FIX-ADDRESS-PAT-AUTO-079: Prevents false 75/100 scores from text-stored fields.
+ */
+function normalizeToArray(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  if (typeof value === 'string') {
+    try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; }
+    catch { /* not JSON — try splitting by newlines */ }
+    const lines = value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    return lines.length > 0 ? lines : [];
+  }
+  if (typeof value === 'object') return [value];
+  return [];
+}
+
+/**
  * Fast heuristic validation for PRD (no AI calls)
  *
  * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-030: SD-type-aware scoring.
@@ -131,8 +149,8 @@ export function validatePRDHeuristic(prd, options = {}) {
   // Reduced penalty: 3 pts instead of 5 for optional fields
   const optionalFieldPenalty = useReducedPenalty ? 3 : 5;
 
-  // Check functional requirements
-  const funcReqs = prd.functional_requirements || [];
+  // Check functional requirements (normalize text/JSON string to array)
+  const funcReqs = normalizeToArray(prd.functional_requirements);
   if (!Array.isArray(funcReqs) || funcReqs.length < 3) {
     issues.push(`${prdId}: Insufficient functional requirements (${funcReqs.length}, min 3)`);
     score -= 15;
@@ -147,8 +165,8 @@ export function validatePRDHeuristic(prd, options = {}) {
     }
   }
 
-  // Check acceptance criteria
-  const accCriteria = prd.acceptance_criteria || [];
+  // Check acceptance criteria (normalize text/JSON string to array)
+  const accCriteria = normalizeToArray(prd.acceptance_criteria);
   if (!Array.isArray(accCriteria) || accCriteria.length < 3) {
     issues.push(`${prdId}: Insufficient acceptance criteria (${accCriteria.length}, min 3)`);
     score -= 15;
@@ -163,8 +181,8 @@ export function validatePRDHeuristic(prd, options = {}) {
     }
   }
 
-  // Check test scenarios
-  const testScenarios = prd.test_scenarios || [];
+  // Check test scenarios (normalize text/JSON string to array)
+  const testScenarios = normalizeToArray(prd.test_scenarios);
   if (!Array.isArray(testScenarios) || testScenarios.length < 3) {
     warnings.push(`${prdId}: Few test scenarios (${testScenarios.length})`);
     score -= optionalFieldPenalty;
