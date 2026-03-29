@@ -370,6 +370,7 @@ router.post('/competitor-analysis', asyncHandler(async (req, res) => {
 
 // ── Master Reset with Repo + Registry Cleanup ──────────────────────
 // SD-LEO-INFRA-BRIDGE-ARTIFACT-ENRICHMENT-001 (extended cleanup)
+// SD-LEO-INFRA-VENTURE-CLEANUP-ORCHESTRATOR-001-B (external resource teardown)
 router.post('/master-reset', asyncHandler(async (req, res) => {
   // Use service-role client for admin operations (RPC requires service_role or chairman)
   const { createClient } = await import('@supabase/supabase-js');
@@ -390,6 +391,17 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
   const ventureNames = (provisioningRows || [])
     .map(r => r.venture_name)
     .filter(Boolean);
+
+  const ventureIds = (provisioningRows || [])
+    .map(r => r.venture_id)
+    .filter(Boolean);
+
+  // Phase 1.5: External resource teardown (Vercel, filesystem, Docker)
+  const { runTeardown } = await import('../../lib/cleanup/index.js');
+  const teardownResults = {};
+  for (const ventureId of ventureIds) {
+    teardownResults[ventureId] = await runTeardown(ventureId);
+  }
 
   // Phase 2: Execute existing DB master reset RPC
   const { data: rpcResult, error: rpcErr } = await supabase
@@ -487,6 +499,7 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
       repos_deleted: cleanupResults.repos_deleted.length,
       repos_failed: cleanupResults.repos_failed.length,
       registry_cleaned: cleanupResults.registry_cleaned,
+      teardown: teardownResults,
       details: cleanupResults,
     },
   });
