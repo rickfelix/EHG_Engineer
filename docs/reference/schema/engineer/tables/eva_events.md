@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-28T13:25:22.623Z
+**Generated**: 2026-03-29T00:43:51.421Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -39,11 +39,18 @@
 ### Foreign Keys
 - `eva_events_eva_venture_id_fkey`: eva_venture_id → eva_ventures(id)
 
+### Unique Constraints
+- `eva_events_idempotency_key_unique`: UNIQUE (idempotency_key)
+
 ### Check Constraints
 - `eva_events_event_type_check`: CHECK ((event_type = ANY (ARRAY['metric_update'::text, 'health_change'::text, 'decision_required'::text, 'alert_triggered'::text, 'automation_executed'::text, 'status_change'::text, 'milestone_reached'::text, 'risk_detected'::text, 'user_action'::text, 'stage_processing_started'::text, 'stage_processing_completed'::text, 'stage_processing_started'::text, 'stage_processing_failed'::text, 'stage.completed'::text, 'decision.submitted'::text, 'gate.evaluated'::text, 'sd.completed'::text])))
 
 ## Indexes
 
+- `eva_events_idempotency_key_unique`
+  ```sql
+  CREATE UNIQUE INDEX eva_events_idempotency_key_unique ON public.eva_events USING btree (idempotency_key)
+  ```
 - `eva_events_pkey`
   ```sql
   CREATE UNIQUE INDEX eva_events_pkey ON public.eva_events USING btree (id)
