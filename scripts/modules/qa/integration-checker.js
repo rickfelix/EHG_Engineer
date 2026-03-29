@@ -11,11 +11,12 @@ import { execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { resolveRepoPath } from '../../../lib/repo-paths.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../..');
-const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
+const EHG_ROOT = resolveRepoPath('ehg');
 
 /**
  * Verify component integration

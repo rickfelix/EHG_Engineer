@@ -6,10 +6,11 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { resolveRepoPath } from '../../lib/repo-paths.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-export const EHG_ROOT = path.resolve(__dirname, '../../../ehg');
+export const EHG_ROOT = resolveRepoPath('ehg');
 
 // Default options for QA Director execution
 export const DEFAULT_OPTIONS = {

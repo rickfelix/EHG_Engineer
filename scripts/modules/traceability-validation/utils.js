@@ -8,13 +8,14 @@ import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { resolveRepoPath } from '../../../lib/repo-paths.js';
 export const execAsync = promisify(exec);
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 export const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../..');
-export const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
+export const EHG_ROOT = resolveRepoPath('ehg');
 
 /**
  * Resolve SD UUID and get SD metadata
