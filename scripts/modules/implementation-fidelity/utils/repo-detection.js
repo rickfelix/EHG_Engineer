@@ -10,6 +10,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFile } from 'fs/promises';
 import { getSDSearchTerms } from './git-helpers.js';
+import { resolveRepoPath, ENGINEER_ROOT } from '../../../../lib/repo-paths.js';
 
 const execAsync = promisify(exec);
 
@@ -17,8 +18,8 @@ const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../../..');
-export const EHG_ROOT = path.resolve(__dirname, '../../../../../ehg');
+export const EHG_ENGINEER_ROOT = ENGINEER_ROOT;
+export const EHG_ROOT = resolveRepoPath('ehg') || path.resolve(ENGINEER_ROOT, '..', 'ehg');
 
 /**
  * Resolve repos for an SD using application registry + target_application field.

@@ -27,11 +27,12 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveRepoPath, ENGINEER_ROOT } from '../../lib/repo-paths.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DEFAULT_EHG_PATH = path.resolve(__dirname, '../../ehg');
+const DEFAULT_EHG_PATH = resolveRepoPath('ehg') || path.resolve(ENGINEER_ROOT, '..', 'ehg');
 
 // Import domain modules
 import {
@@ -107,9 +108,7 @@ export async function resolveBranch(supabase, sdId, options = {}) {
 
     // Determine target repo path based on target_application
     const targetApp = sd.target_application || 'EHG';
-    const actualRepoPath = targetApp === 'EHG_Engineer'
-      ? path.resolve(__dirname, '..')
-      : DEFAULT_EHG_PATH;
+    const actualRepoPath = resolveRepoPath(targetApp) || DEFAULT_EHG_PATH;
 
     result.repoPath = actualRepoPath;
     result.details.targetApplication = targetApp;

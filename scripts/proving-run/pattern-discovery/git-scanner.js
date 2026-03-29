@@ -8,9 +8,10 @@
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
+import { resolveRepoPath, ENGINEER_ROOT } from '../../../lib/repo-paths.js';
 
 const MAX_COMMITS = 50;
-const EHG_APP_PATH = path.resolve(process.cwd(), '..', 'ehg');
+const EHG_APP_PATH = resolveRepoPath('ehg') || path.resolve(ENGINEER_ROOT, '..', 'ehg');
 
 /**
  * Scan git history for a single repo, filtering by stage-relevant paths.

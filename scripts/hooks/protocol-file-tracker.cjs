@@ -14,9 +14,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const { detectProjectDir } = require('./lib/detect-context.cjs');
 
 // Session state file path
-const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
+const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || detectProjectDir();
 const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
 // Sync marker file for race condition prevention (PAT-ASYNC-RACE-001)
 const SYNC_MARKER_FILE = path.join(PROJECT_DIR, '.claude', '.protocol-sync');

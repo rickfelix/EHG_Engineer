@@ -25,15 +25,14 @@ import {
 } from '../lib/capabilities/capability-taxonomy.js';
 
 import { fileURLToPath } from 'url';
+import { resolveRepoPath, ENGINEER_ROOT as _ENGINEER_ROOT } from '../lib/repo-paths.js';
 
-// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+// Cross-platform path resolution (registry-driven via lib/repo-paths.js)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
-const DEFAULT_EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
-const EHG_ROOT = process.env.EHG_ROOT || DEFAULT_EHG_ROOT;
-const ENGINEER_ROOT = process.env.ENGINEER_ROOT || EHG_ENGINEER_ROOT;
+const EHG_ROOT = process.env.EHG_ROOT || resolveRepoPath('ehg') || path.resolve(__dirname, '../../ehg');
+const ENGINEER_ROOT = process.env.ENGINEER_ROOT || _ENGINEER_ROOT;
 
 /**
  * Capability detection patterns for codebase scanning

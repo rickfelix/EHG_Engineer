@@ -11,6 +11,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+import { resolveRepoPath } from '../../../lib/repo-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -262,7 +263,7 @@ export function createDefaultValidator() {
  * @returns {PathValidator}
  */
 export function createEHGValidator() {
-  const ehgRoot = path.resolve(__dirname, '../../../../ehg');
+  const ehgRoot = resolveRepoPath('ehg') || path.resolve(__dirname, '../../../../ehg');
   return new PathValidator(ehgRoot);
 }
 

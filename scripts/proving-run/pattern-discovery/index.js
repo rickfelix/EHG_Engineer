@@ -30,8 +30,9 @@ import { classifyPatterns } from './pattern-classifier.js';
 import { formatOutput } from './output-formatter.js';
 import { writeFileSync } from 'fs';
 import path from 'path';
+import { resolveRepoPath, ENGINEER_ROOT } from '../../../lib/repo-paths.js';
 
-const EHG_APP_DEFAULT = path.resolve(process.cwd(), '..', 'ehg');
+const EHG_APP_DEFAULT = resolveRepoPath('ehg') || path.resolve(ENGINEER_ROOT, '..', 'ehg');
 
 /**
  * Run the full pattern discovery pipeline.
