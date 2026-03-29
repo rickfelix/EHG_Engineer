@@ -457,7 +457,7 @@ describe('index.js - Stage templates registry', () => {
 
     it('checkReleaseReadiness should work correctly', () => {
       const result = checkReleaseReadiness({
-        stage22Data: {
+        stage23Data: {
           promotion_gate: { pass: true, blockers: [] },
           releaseDecision: { decision: 'release' },
         },
@@ -466,15 +466,15 @@ describe('index.js - Stage templates registry', () => {
       expect(result.reasons).toEqual([]);
     });
 
-    it('checkReleaseReadiness should detect missing stage22Data', () => {
-      const result = checkReleaseReadiness({ stage22Data: undefined });
+    it('checkReleaseReadiness should detect missing stage23Data', () => {
+      const result = checkReleaseReadiness({ stage23Data: undefined });
       expect(result.ready).toBe(false);
       expect(result.reasons.length).toBeGreaterThan(0);
     });
 
     it('verifyLaunchAuthorization should work correctly', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           chairmanGate: { status: 'approved' },
           go_no_go_decision: 'go',
         },
@@ -483,8 +483,8 @@ describe('index.js - Stage templates registry', () => {
       expect(result.reasons).toEqual([]);
     });
 
-    it('verifyLaunchAuthorization should detect missing stage24Data', () => {
-      const result = verifyLaunchAuthorization({ stage24Data: undefined });
+    it('verifyLaunchAuthorization should detect missing stage25Data', () => {
+      const result = verifyLaunchAuthorization({ stage25Data: undefined });
       expect(result.authorized).toBe(false);
       expect(result.reasons.length).toBeGreaterThan(0);
     });

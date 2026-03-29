@@ -1,8 +1,10 @@
 /**
- * Unit tests for Stage 22 Analysis Step - Release Readiness
+ * Unit tests for Stage 23 Analysis Step - Release Readiness
  * Part of SD-LEO-ORCH-EVA-STAGE-PIPELINE-001-C
  *
  * Tests both LLM-synthesis and real-data (buildRealReleaseData) paths.
+ * Lifecycle stage numbers: 18=build readiness, 19=sprint plan, 20=build exec,
+ * 21=QA, 22=build review, 23=release readiness.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -13,7 +15,7 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
   })),
 }));
 
-vi.mock('../../../../../lib/eva/stage-templates/stage-22.js', () => ({
+vi.mock('../../../../../lib/eva/stage-templates/stage-23.js', () => ({
   evaluatePromotionGate: vi.fn(() => ({
     passed: true,
     score: 85,
@@ -21,7 +23,7 @@ vi.mock('../../../../../lib/eva/stage-templates/stage-22.js', () => ({
   })),
 }));
 
-import { analyzeStage22, RELEASE_DECISIONS, RELEASE_CATEGORIES } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-22-release-readiness.js';
+import { analyzeStage22, RELEASE_DECISIONS, RELEASE_CATEGORIES } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-23-release-readiness.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
 
 function createLLMResponse(overrides = {}) {
@@ -59,19 +61,20 @@ function setupMock(responseOverrides = {}) {
   return mockComplete;
 }
 
-const STAGE20_DATA = {
+// Fixture constants named by semantic role (lifecycle stage in comments)
+const QA_DATA = {                        // lifecycle stage 21
   qualityDecision: { decision: 'pass' },
   overall_pass_rate: 98,
   coverage_pct: 85,
 };
 
-const STAGE21_DATA = {
+const REVIEW_DATA = {                    // lifecycle stage 22
   reviewDecision: { decision: 'approve' },
   passing_integrations: 3,
   total_integrations: 3,
 };
 
-const STAGE19_DATA = {
+const BUILD_EXEC_DATA = {               // lifecycle stage 20
   tasks: [
     { name: 'T1', status: 'done' },
     { name: 'T2', status: 'done' },
@@ -82,14 +85,14 @@ const STAGE19_DATA = {
   blocked_tasks: 1,
 };
 
-const STAGE18_DATA = {
+const SPRINT_DATA = {                    // lifecycle stage 19
   sprint_goal: 'Ship MVP',
   total_items: 3,
 };
 
 const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-describe('stage-22-release-readiness.js', () => {
+describe('stage-23-release-readiness.js', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -98,8 +101,8 @@ describe('stage-22-release-readiness.js', () => {
     it('should generate release readiness assessment', async () => {
       setupMock();
       const result = await analyzeStage22({
-        stage20Data: STAGE20_DATA,
-        stage21Data: STAGE21_DATA,
+        stage21Data: QA_DATA,
+        stage22Data: REVIEW_DATA,
         logger,
       });
 
@@ -109,29 +112,29 @@ describe('stage-22-release-readiness.js', () => {
       expect(result.promotion_gate).toBeDefined();
     });
 
-    it('should throw without stage20Data or stage21Data', async () => {
-      await expect(analyzeStage22({ stage21Data: STAGE21_DATA, logger }))
-        .rejects.toThrow('Stage 22 release readiness requires Stage 20');
-      await expect(analyzeStage22({ stage20Data: STAGE20_DATA, logger }))
-        .rejects.toThrow('Stage 22 release readiness requires Stage 20');
+    it('should throw without stage21Data or stage22Data', async () => {
+      await expect(analyzeStage22({ stage22Data: REVIEW_DATA, logger }))
+        .rejects.toThrow('Stage 23 release readiness requires Stage 21');
+      await expect(analyzeStage22({ stage21Data: QA_DATA, logger }))
+        .rejects.toThrow('Stage 23 release readiness requires Stage 21');
     });
 
     it('should normalize invalid release categories', async () => {
       setupMock({
         releaseItems: [{ name: 'X', category: 'INVALID', status: 'approved', approver: 'A' }],
       });
-      const result = await analyzeStage22({ stage20Data: STAGE20_DATA, stage21Data: STAGE21_DATA, logger });
+      const result = await analyzeStage22({ stage21Data: QA_DATA, stage22Data: REVIEW_DATA, logger });
 
       expect(result.release_items[0].category).toBe('feature');
     });
 
     it('should derive hold decision when only QA passes', async () => {
       setupMock({ releaseDecision: { decision: 'invalid' } });
-      const stage21Fail = { ...STAGE21_DATA, reviewDecision: { decision: 'reject' } };
+      const reviewFail = { ...REVIEW_DATA, reviewDecision: { decision: 'reject' } };
 
       const result = await analyzeStage22({
-        stage20Data: STAGE20_DATA,
-        stage21Data: stage21Fail,
+        stage21Data: QA_DATA,
+        stage22Data: reviewFail,
         logger,
       });
 
@@ -141,15 +144,15 @@ describe('stage-22-release-readiness.js', () => {
 
   describe('Real Data Path (buildRealReleaseData)', () => {
     it('should use real data when all upstream stages have venture_stage_work source', async () => {
-      const stage19Real = { ...STAGE19_DATA, dataSource: 'venture_stage_work' };
-      const stage20Real = { ...STAGE20_DATA, dataSource: 'venture_stage_work' };
-      const stage21Real = { ...STAGE21_DATA, dataSource: 'venture_stage_work' };
+      const buildExecReal = { ...BUILD_EXEC_DATA, dataSource: 'venture_stage_work' };
+      const qaReal = { ...QA_DATA, dataSource: 'venture_stage_work' };
+      const reviewReal = { ...REVIEW_DATA, dataSource: 'venture_stage_work' };
 
       const result = await analyzeStage22({
-        stage18Data: STAGE18_DATA,
-        stage19Data: stage19Real,
-        stage20Data: stage20Real,
-        stage21Data: stage21Real,
+        stage19Data: SPRINT_DATA,
+        stage20Data: buildExecReal,
+        stage21Data: qaReal,
+        stage22Data: reviewReal,
         logger,
       });
 
@@ -161,15 +164,15 @@ describe('stage-22-release-readiness.js', () => {
     });
 
     it('should compute hold decision when not all items approved', async () => {
-      const stage19Real = { ...STAGE19_DATA, dataSource: 'venture_stage_work' };
-      const stage20Real = { ...STAGE20_DATA, dataSource: 'venture_stage_work' };
-      const stage21Real = { ...STAGE21_DATA, dataSource: 'venture_stage_work' };
+      const buildExecReal = { ...BUILD_EXEC_DATA, dataSource: 'venture_stage_work' };
+      const qaReal = { ...QA_DATA, dataSource: 'venture_stage_work' };
+      const reviewReal = { ...REVIEW_DATA, dataSource: 'venture_stage_work' };
 
       const result = await analyzeStage22({
-        stage18Data: STAGE18_DATA,
-        stage19Data: stage19Real,
-        stage20Data: stage20Real,
-        stage21Data: stage21Real,
+        stage19Data: SPRINT_DATA,
+        stage20Data: buildExecReal,
+        stage21Data: qaReal,
+        stage22Data: reviewReal,
         logger,
       });
 
@@ -188,14 +191,14 @@ describe('stage-22-release-readiness.js', () => {
         blocked_tasks: 0,
         dataSource: 'venture_stage_work',
       };
-      const stage20Real = { ...STAGE20_DATA, dataSource: 'venture_stage_work' };
-      const stage21Real = { ...STAGE21_DATA, dataSource: 'venture_stage_work' };
+      const qaReal = { ...QA_DATA, dataSource: 'venture_stage_work' };
+      const reviewReal = { ...REVIEW_DATA, dataSource: 'venture_stage_work' };
 
       const result = await analyzeStage22({
-        stage18Data: STAGE18_DATA,
-        stage19Data: allDone,
-        stage20Data: stage20Real,
-        stage21Data: stage21Real,
+        stage19Data: SPRINT_DATA,
+        stage20Data: allDone,
+        stage21Data: qaReal,
+        stage22Data: reviewReal,
         logger,
       });
 
@@ -205,13 +208,13 @@ describe('stage-22-release-readiness.js', () => {
 
     it('should fall back to LLM when only some upstream stages use real data', async () => {
       setupMock();
-      const stage19Real = { ...STAGE19_DATA, dataSource: 'venture_stage_work' };
-      // stage20 and stage21 do NOT have dataSource
+      const buildExecReal = { ...BUILD_EXEC_DATA, dataSource: 'venture_stage_work' };
+      // stage21 and stage22 do NOT have dataSource
 
       const result = await analyzeStage22({
-        stage19Data: stage19Real,
-        stage20Data: STAGE20_DATA,
-        stage21Data: STAGE21_DATA,
+        stage20Data: buildExecReal,
+        stage21Data: QA_DATA,
+        stage22Data: REVIEW_DATA,
         logger,
       });
 
@@ -219,21 +222,21 @@ describe('stage-22-release-readiness.js', () => {
     });
 
     it('should include sprint retrospective from real data', async () => {
-      const stage19Real = {
+      const buildExecReal = {
         tasks: [{ name: 'T1', status: 'done' }],
         total_tasks: 1,
         completed_tasks: 1,
         blocked_tasks: 0,
         dataSource: 'venture_stage_work',
       };
-      const stage20Real = { ...STAGE20_DATA, dataSource: 'venture_stage_work' };
-      const stage21Real = { ...STAGE21_DATA, dataSource: 'venture_stage_work' };
+      const qaReal = { ...QA_DATA, dataSource: 'venture_stage_work' };
+      const reviewReal = { ...REVIEW_DATA, dataSource: 'venture_stage_work' };
 
       const result = await analyzeStage22({
-        stage18Data: STAGE18_DATA,
-        stage19Data: stage19Real,
-        stage20Data: stage20Real,
-        stage21Data: stage21Real,
+        stage19Data: SPRINT_DATA,
+        stage20Data: buildExecReal,
+        stage21Data: qaReal,
+        stage22Data: reviewReal,
         logger,
       });
 
