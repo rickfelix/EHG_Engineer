@@ -53,12 +53,25 @@
       "registered_at": "2026-03-25T21:12:52.605Z",
       "registered_by": "create-ehg-venture --register",
       "local_path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\test-cicd"
+    },
+    "APP005": {
+      "id": "APP005",
+      "name": "commitcraft-ai",
+      "github_repo": "rickfelix/commitcraft-ai",
+      "supabase_project_id": "consolidated",
+      "supabase_url": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
+      "status": "active",
+      "environment": "development",
+      "registered_at": "2026-03-29T00:17:06.529Z",
+      "registered_by": "venture-provisioner",
+      "local_path": "C:/Users/rickf/Projects/_EHG/commitcraft-ai",
+      "note": "CONSOLIDATED: Uses same DB as EHG_Engineer until production"
     }
   },
   "metadata": {
-    "total_apps": 4,
-    "active_apps": 4,
-    "last_updated": "2026-03-25T21:12:52.605Z",
+    "total_apps": 5,
+    "active_apps": 5,
+    "last_updated": "2026-03-29T00:17:06.529Z",
     "last_sync": null
   },
   "settings": {
