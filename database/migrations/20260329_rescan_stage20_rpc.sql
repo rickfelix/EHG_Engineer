@@ -74,8 +74,16 @@ BEGIN
 
     IF v_current_stage IS NOT NULL AND v_current_stage <= 20 THEN
       UPDATE ventures
-      SET current_lifecycle_stage = 21
+      SET current_lifecycle_stage = 21,
+          orchestrator_state = 'idle'
       WHERE id = p_venture_id;
+
+      -- Clean up stale chairman_decisions for Stage 20
+      UPDATE chairman_decisions
+      SET status = 'approved', decision = 'proceed', updated_at = NOW()
+      WHERE venture_id = p_venture_id
+        AND lifecycle_stage = 20
+        AND status = 'pending';
     END IF;
   END IF;
 
