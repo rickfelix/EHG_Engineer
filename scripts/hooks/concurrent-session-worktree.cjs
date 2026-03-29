@@ -441,8 +441,7 @@ async function main() {
   let supabase;
   try {
     const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
- });
-        supabase = createSupabaseServiceClient();
+    supabase = createSupabaseServiceClient();
   } catch {
     return; // Supabase not available - skip silently
   }
