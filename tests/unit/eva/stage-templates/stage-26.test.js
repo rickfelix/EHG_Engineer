@@ -334,7 +334,7 @@ describe('stage-25.js - Launch Execution template', () => {
   describe('verifyLaunchAuthorization() - Pure function', () => {
     it('should return authorized when chairman gate is approved and decision is go', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           chairmanGate: { status: 'approved' },
           go_no_go_decision: 'go',
         },
@@ -345,7 +345,7 @@ describe('stage-25.js - Launch Execution template', () => {
 
     it('should return authorized when decision is conditional_go', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           chairmanGate: { status: 'approved' },
           go_no_go_decision: 'conditional_go',
         },
@@ -354,22 +354,22 @@ describe('stage-25.js - Launch Execution template', () => {
       expect(result.reasons).toEqual([]);
     });
 
-    it('should return not authorized when stage24Data is not provided', () => {
-      const result = verifyLaunchAuthorization({ stage24Data: undefined });
+    it('should return not authorized when stage25Data is not provided', () => {
+      const result = verifyLaunchAuthorization({ stage25Data: undefined });
       expect(result.authorized).toBe(false);
       expect(result.reasons).toHaveLength(1);
       expect(result.reasons[0]).toContain('not available');
     });
 
-    it('should return not authorized when stage24Data is null', () => {
-      const result = verifyLaunchAuthorization({ stage24Data: null });
+    it('should return not authorized when stage25Data is null', () => {
+      const result = verifyLaunchAuthorization({ stage25Data: null });
       expect(result.authorized).toBe(false);
       expect(result.reasons.length).toBeGreaterThan(0);
     });
 
     it('should return not authorized when chairman gate is not approved', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           chairmanGate: { status: 'pending' },
           go_no_go_decision: 'go',
         },
@@ -380,7 +380,7 @@ describe('stage-25.js - Launch Execution template', () => {
 
     it('should return not authorized when chairman gate is rejected', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           chairmanGate: { status: 'rejected' },
           go_no_go_decision: 'go',
         },
@@ -391,7 +391,7 @@ describe('stage-25.js - Launch Execution template', () => {
 
     it('should return not authorized when decision is no_go', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           chairmanGate: { status: 'approved' },
           go_no_go_decision: 'no_go',
         },
@@ -402,7 +402,7 @@ describe('stage-25.js - Launch Execution template', () => {
 
     it('should return not authorized when decision is not set', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           chairmanGate: { status: 'approved' },
           go_no_go_decision: null,
         },
@@ -413,7 +413,7 @@ describe('stage-25.js - Launch Execution template', () => {
 
     it('should collect multiple reasons when both gate and decision fail', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           chairmanGate: { status: 'pending' },
           go_no_go_decision: 'no_go',
         },
@@ -424,9 +424,9 @@ describe('stage-25.js - Launch Execution template', () => {
       expect(result.reasons.some(r => r.includes('go/no-go decision'))).toBe(true);
     });
 
-    it('should handle missing chairmanGate in stage24Data', () => {
+    it('should handle missing chairmanGate in stage25Data', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           go_no_go_decision: 'go',
         },
       });
@@ -434,9 +434,9 @@ describe('stage-25.js - Launch Execution template', () => {
       expect(result.reasons.some(r => r.includes('chairman gate'))).toBe(true);
     });
 
-    it('should handle missing go_no_go_decision in stage24Data', () => {
+    it('should handle missing go_no_go_decision in stage25Data', () => {
       const result = verifyLaunchAuthorization({
-        stage24Data: {
+        stage25Data: {
           chairmanGate: { status: 'approved' },
         },
       });

@@ -266,7 +266,7 @@ describe('stage-23.js - Marketing Preparation template', () => {
   describe('checkReleaseReadiness() - Pure function', () => {
     it('should return ready when stage22 promotion gate passes and release decision is release', () => {
       const result = checkReleaseReadiness({
-        stage22Data: {
+        stage23Data: {
           promotion_gate: { pass: true, blockers: [] },
           releaseDecision: { decision: 'release' },
         },
@@ -277,7 +277,7 @@ describe('stage-23.js - Marketing Preparation template', () => {
 
     it('should return ready when release decision is approved', () => {
       const result = checkReleaseReadiness({
-        stage22Data: {
+        stage23Data: {
           promotion_gate: { pass: true, blockers: [] },
           releaseDecision: { decision: 'approved' },
         },
@@ -286,8 +286,8 @@ describe('stage-23.js - Marketing Preparation template', () => {
       expect(result.reasons).toEqual([]);
     });
 
-    it('should return not ready when stage22Data is not provided', () => {
-      const result = checkReleaseReadiness({ stage22Data: undefined });
+    it('should return not ready when stage23Data is not provided', () => {
+      const result = checkReleaseReadiness({ stage23Data: undefined });
       expect(result.ready).toBe(false);
       expect(result.reasons).toHaveLength(1);
       expect(result.reasons[0]).toContain('not available');
@@ -295,7 +295,7 @@ describe('stage-23.js - Marketing Preparation template', () => {
 
     it('should return not ready when promotion gate has not passed', () => {
       const result = checkReleaseReadiness({
-        stage22Data: {
+        stage23Data: {
           promotion_gate: { pass: false, blockers: ['Test coverage below 80%'] },
           releaseDecision: { decision: 'release' },
         },
@@ -306,7 +306,7 @@ describe('stage-23.js - Marketing Preparation template', () => {
 
     it('should return not ready when release decision is not release or approved', () => {
       const result = checkReleaseReadiness({
-        stage22Data: {
+        stage23Data: {
           promotion_gate: { pass: true, blockers: [] },
           releaseDecision: { decision: 'hold' },
         },
@@ -317,7 +317,7 @@ describe('stage-23.js - Marketing Preparation template', () => {
 
     it('should return not ready when releaseDecision is missing', () => {
       const result = checkReleaseReadiness({
-        stage22Data: {
+        stage23Data: {
           promotion_gate: { pass: true, blockers: [] },
         },
       });
@@ -327,7 +327,7 @@ describe('stage-23.js - Marketing Preparation template', () => {
 
     it('should collect multiple reasons when both gate and decision fail', () => {
       const result = checkReleaseReadiness({
-        stage22Data: {
+        stage23Data: {
           promotion_gate: { pass: false, blockers: ['Not ready'] },
           releaseDecision: { decision: 'hold' },
         },
@@ -338,8 +338,8 @@ describe('stage-23.js - Marketing Preparation template', () => {
       expect(result.reasons.some(r => r.includes('release decision'))).toBe(true);
     });
 
-    it('should handle null stage22Data', () => {
-      const result = checkReleaseReadiness({ stage22Data: null });
+    it('should handle null stage23Data', () => {
+      const result = checkReleaseReadiness({ stage23Data: null });
       expect(result.ready).toBe(false);
       expect(result.reasons.length).toBeGreaterThan(0);
     });
