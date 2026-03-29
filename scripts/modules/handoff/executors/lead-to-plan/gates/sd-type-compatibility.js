@@ -22,7 +22,7 @@ const GATE_NAME = 'SD_TYPE_COMPATIBILITY';
  * Parent type → allowed child types
  */
 const TYPE_COMPATIBILITY = {
-  orchestrator: ['feature', 'infrastructure', 'bugfix', 'fix', 'security', 'refactor', 'database', 'enhancement', 'documentation', 'ux_debt'],
+  orchestrator: ['orchestrator', 'feature', 'infrastructure', 'bugfix', 'fix', 'security', 'refactor', 'database', 'enhancement', 'documentation', 'ux_debt'],
   feature: ['feature', 'infrastructure', 'database', 'enhancement'],
   infrastructure: ['infrastructure', 'database'],
   security: ['security', 'fix', 'infrastructure']
