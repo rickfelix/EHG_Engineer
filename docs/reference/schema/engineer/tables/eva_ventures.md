@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-29T19:52:01.634Z
+**Generated**: 2026-03-29T20:40:29.893Z
 **Rows**: 1
 **RLS**: Enabled (2 policies)
 
@@ -52,6 +52,7 @@
 
 ### Check Constraints
 - `chk_lifecycle_stage`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)))
+- `eva_ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)))
 - `eva_ventures_decision_class_check`: CHECK ((decision_class = ANY (ARRAY['A'::text, 'B'::text, 'C'::text])))
 - `eva_ventures_health_status_check`: CHECK ((health_status = ANY (ARRAY['green'::text, 'yellow'::text, 'red'::text])))
 - `eva_ventures_orchestrator_state_check`: CHECK ((orchestrator_state = ANY (ARRAY['idle'::text, 'processing'::text, 'blocked'::text, 'failed'::text])))
