@@ -284,4 +284,52 @@ describe('Stage 19 Context Enrichment', () => {
       expect(result).toHaveProperty('usage');
     });
   });
+
+  describe('Sprint Iteration (SD-D)', () => {
+    it('should accept sprintIteration parameter and include in return', async () => {
+      const result = await analyzeStage19({
+        stage18Data: { buildReadiness: { decision: 'go', rationale: 'Ready' } },
+        ventureName: 'TestVenture',
+        sprintIteration: 2,
+        logger: silentLogger,
+      });
+
+      expect(result.sprintIteration).toBe(2);
+    });
+
+    it('should default sprintIteration to 0 when not provided', async () => {
+      const result = await analyzeStage19({
+        stage18Data: { buildReadiness: { decision: 'go', rationale: 'Ready' } },
+        ventureName: 'TestVenture',
+        logger: silentLogger,
+      });
+
+      expect(result.sprintIteration).toBe(0);
+    });
+
+    it('should include sprint iteration context in LLM prompt when iteration > 0', async () => {
+      await analyzeStage19({
+        stage18Data: { buildReadiness: { decision: 'go', rationale: 'Ready' } },
+        ventureName: 'TestVenture',
+        sprintIteration: 1,
+        logger: silentLogger,
+      });
+
+      const promptArg = mockComplete.mock.calls[0][1];
+      expect(promptArg).toContain('Sprint Iteration: 1');
+      expect(promptArg).toContain('core user-facing features');
+    });
+
+    it('should NOT include sprint iteration context when iteration is 0', async () => {
+      await analyzeStage19({
+        stage18Data: { buildReadiness: { decision: 'go', rationale: 'Ready' } },
+        ventureName: 'TestVenture',
+        sprintIteration: 0,
+        logger: silentLogger,
+      });
+
+      const promptArg = mockComplete.mock.calls[0][1];
+      expect(promptArg).not.toContain('Sprint Iteration:');
+    });
+  });
 });
