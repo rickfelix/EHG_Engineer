@@ -9,8 +9,9 @@ import glob from 'glob';
 const { sync: globSync } = glob;
 import { existsSync, statSync } from 'fs';
 import path from 'path';
+import { resolveRepoPath, ENGINEER_ROOT } from '../../../lib/repo-paths.js';
 
-const EHG_APP_PATH = path.resolve(process.cwd(), '..', 'ehg');
+const EHG_APP_PATH = resolveRepoPath('ehg') || path.resolve(ENGINEER_ROOT, '..', 'ehg');
 
 /**
  * Analyze codebase for a single stage, discovering existing files

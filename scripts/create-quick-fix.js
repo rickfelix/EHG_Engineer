@@ -23,37 +23,28 @@ import readline from 'readline';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { routeWorkItem } from '../lib/utils/work-item-router.js';
+import { getRepoPaths, ENGINEER_ROOT } from '../lib/repo-paths.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
-const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 dotenv.config();
 
-// Repository paths for target application detection - currently unused but kept for reference
-const _REPO_PATHS = {
-  EHG: EHG_ROOT,
-  EHG_Engineer: EHG_ENGINEER_ROOT
-};
-
 /**
- * Detect target application based on current working directory
- * @returns {'EHG' | 'EHG_Engineer'} The detected target application
+ * Detect target application based on current working directory (registry-driven)
+ * @returns {string} The detected target application name
  */
 function detectTargetApplication() {
-  const cwd = process.cwd();
-
-  if (cwd.includes('/EHG_Engineer') || cwd.includes('\\EHG_Engineer')) {
-    return 'EHG_Engineer';
+  const cwd = process.cwd().replace(/\\/g, '/').toLowerCase();
+  const paths = getRepoPaths();
+  // Sort by path length descending for longest-match-first
+  const entries = Object.entries(paths).sort((a, b) => b[1].length - a[1].length);
+  for (const [name, appPath] of entries) {
+    const norm = appPath.replace(/\\/g, '/').toLowerCase();
+    if (cwd === norm || cwd.startsWith(norm + '/')) return name;
   }
-  if (cwd.includes('/EHG') || cwd.includes('\\EHG')) {
-    return 'EHG';
-  }
-
-  // Default to EHG (main app) if unable to detect
-  return 'EHG';
+  return 'EHG_Engineer';
 }
 
 // Generate quick-fix ID: QF-YYYYMMDD-NNN

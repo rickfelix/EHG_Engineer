@@ -9,8 +9,9 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { detectProjectDir } = require('./lib/detect-context.cjs');
 
-const projectDir = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
+const projectDir = process.env.CLAUDE_PROJECT_DIR || detectProjectDir();
 const stateFile = path.join(projectDir, '.claude', 'session-state.md');
 const _hookInput = process.env.CLAUDE_TOOL_INPUT || '';
 

@@ -22,14 +22,21 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const { createClient } = require('@supabase/supabase-js');
+const { resolveRepoPath } = require('../lib/repo-paths.cjs');
 
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
-// Resolve app repo path: env var > sibling directory > known absolute path
+// Resolve app repo path: env var > registry > sibling directory > walk-up discovery
 const VENTURE_WORKFLOW_PATH = (() => {
   if (process.env.EHG_APP_PATH) {
     return path.resolve(process.env.EHG_APP_PATH, 'src', 'config', 'venture-workflow.ts');
+  }
+  // Registry-based resolution
+  const registryEhg = resolveRepoPath('ehg');
+  if (registryEhg) {
+    const candidate = path.join(registryEhg, 'src', 'config', 'venture-workflow.ts');
+    if (fs.existsSync(candidate)) return candidate;
   }
   // Walk up from script dir to find the _EHG parent containing both repos
   let dir = __dirname;
@@ -38,8 +45,8 @@ const VENTURE_WORKFLOW_PATH = (() => {
     const candidate = path.join(dir, 'ehg', 'src', 'config', 'venture-workflow.ts');
     if (fs.existsSync(candidate)) return candidate;
   }
-  // Fallback: known absolute path from applications/registry.json
-  return path.resolve('C:', 'Users', 'rickf', 'Projects', '_EHG', 'ehg', 'src', 'config', 'venture-workflow.ts');
+  // Fallback: registry path even if file doesn't exist yet
+  return path.resolve(registryEhg || path.resolve(__dirname, '..', '..', 'ehg'), 'src', 'config', 'venture-workflow.ts');
 })();
 const OUTPUT_PATH = path.resolve(
   __dirname, '..', 'lib', 'proving-companion', 'stage-config.js'

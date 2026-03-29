@@ -27,6 +27,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { detectCodebase } = require('./lib/detect-context.cjs');
 
 // Configuration
 const STALENESS_WINDOW_S = parseInt(process.env.WORKTREE_STALENESS_WINDOW_S || '300', 10);
@@ -75,10 +76,7 @@ function getCurrentSessionId() {
  * Get current codebase identifier
  */
 function getCodebase() {
-  const cwd = process.cwd();
-  if (cwd.includes('EHG_Engineer')) return 'EHG_Engineer';
-  if (cwd.includes('EHG')) return 'EHG';
-  return 'unknown';
+  return detectCodebase();
 }
 
 /**

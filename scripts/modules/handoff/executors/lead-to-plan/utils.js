@@ -5,6 +5,7 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveRepoPath, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -17,9 +18,5 @@ const __dirname = path.dirname(__filename);
  * @returns {string} Resolved repository path
  */
 export function getRepoPath(repoName) {
-  const normalizedName = repoName.toLowerCase();
-  if (normalizedName.includes('engineer')) {
-    return path.resolve(__dirname, '../../../../../');
-  }
-  return path.resolve(__dirname, '../../../../../../ehg');
+  return resolveRepoPath(repoName) || ENGINEER_ROOT;
 }

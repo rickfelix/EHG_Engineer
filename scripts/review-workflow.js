@@ -33,11 +33,12 @@ import readline from 'readline';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveRepoPath, ENGINEER_ROOT } from '../lib/repo-paths.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EHG_ROOT = path.resolve(__dirname, '../../ehg');
+const EHG_ROOT = resolveRepoPath('ehg') || path.resolve(ENGINEER_ROOT, '..', 'ehg');
 
 dotenv.config();
 

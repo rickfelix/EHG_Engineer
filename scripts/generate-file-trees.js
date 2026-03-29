@@ -23,12 +23,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+import { resolveRepoPath, ENGINEER_ROOT } from '../lib/repo-paths.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Cross-platform path resolution (SD-WIN-MIG-005 fix)
-const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
-const EHG_ROOT = path.resolve(__dirname, '../../ehg');
+// Cross-platform path resolution (registry-driven via lib/repo-paths.js)
+const EHG_ENGINEER_ROOT = ENGINEER_ROOT;
+const EHG_ROOT = resolveRepoPath('ehg') || path.resolve(ENGINEER_ROOT, '..', 'ehg');
 const PARENT_DIR = path.resolve(__dirname, '../..');
 
 class FileTreeGenerator {

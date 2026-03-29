@@ -8,6 +8,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
+import { resolveRepoPath, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
@@ -32,11 +33,7 @@ const __dirname = path.dirname(__filename);
  * @returns {string} Repository path
  */
 function getRepoPath(repoName) {
-  const normalizedName = repoName.toLowerCase();
-  if (normalizedName.includes('engineer')) {
-    return path.resolve(__dirname, '../../../../../');
-  }
-  return path.resolve(__dirname, '../../../../../../ehg');
+  return resolveRepoPath(repoName) || ENGINEER_ROOT;
 }
 
 /**

@@ -19,6 +19,7 @@
 
 const crypto = require('crypto');
 const path = require('path');
+const { detectProjectDir } = require('./lib/detect-context.cjs');
 
 // Environment configuration (TR-3)
 const RECORDER_MODE = process.env.SUBAGENT_RECORDER_MODE || 'best-effort';
@@ -182,7 +183,7 @@ function prepareRawOutput(output) {
  */
 function getActiveSD() {
   const fs = require('fs');
-  const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
+  const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || detectProjectDir();
   const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
 
   try {

@@ -16,18 +16,21 @@ import fs from 'fs';
 import path from 'path';
 import glob from 'glob';
 import { fileURLToPath } from 'url';
+import { resolveRepoPath, getRepoPaths, ENGINEER_ROOT } from '../../lib/repo-paths.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../..');
-const EHG_ROOT = path.resolve(__dirname, '../../../ehg');
+const EHG_ENGINEER_ROOT = ENGINEER_ROOT;
+const EHG_ROOT = resolveRepoPath('ehg') || path.resolve(ENGINEER_ROOT, '..', 'ehg');
 
-// Default application paths by target_application
+// Default application paths by target_application (registry-driven)
+const _repoPaths = getRepoPaths();
 const APP_PATHS = {
-  EHG: EHG_ROOT,
+  ..._repoPaths,
+  EHG: _repoPaths.ehg || EHG_ROOT,
   EHG_Engineer: EHG_ENGINEER_ROOT,
-  default: EHG_ROOT
+  default: _repoPaths.ehg || EHG_ROOT
 };
 
 /**
