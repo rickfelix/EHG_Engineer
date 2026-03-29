@@ -128,13 +128,14 @@ export async function createSDFromLearning(items, type, options = {}) {
   }
 
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-069: GATE_SD_QUALITY-aligned validation with auto-enrichment
-  // This uses the exact same scoring logic as the LEAD-TO-PLAN quality gate,
-  // so SDs born here will pass the gate without manual intervention.
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-078: Now populates missing fields AND logs post-enrichment score
   try {
     const gateResult = validateSDFields(sdData, { enrich: true, quiet: false });
+    if (gateResult.enrichments.length > 0) {
+      console.log(`   ✅ Auto-enrichment applied ${gateResult.enrichments.length} fix(es) (score: ${gateResult.score}/${gateResult.threshold})`);
+    }
     if (!gateResult.valid) {
-      console.log(`   ⚠️  GATE_SD_QUALITY pre-check: score ${gateResult.score}/${gateResult.threshold} (below threshold)`);
-      console.log(`   ℹ️  Auto-enrichment applied ${gateResult.enrichments.length} fix(es). Proceeding with insert.`);
+      console.log(`   ⚠️  GATE_SD_QUALITY pre-check: score ${gateResult.score}/${gateResult.threshold} (below threshold even after enrichment)`);
     }
   } catch (gateErr) {
     console.warn(`   ⚠️  GATE_SD_QUALITY pre-check skipped: ${gateErr.message}`);

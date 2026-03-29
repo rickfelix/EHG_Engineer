@@ -1340,9 +1340,12 @@ async function createSD(options) {
   }
 
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-069: GATE_SD_QUALITY-aligned validation with auto-enrichment
-  // Uses the same scoring logic as the LEAD-TO-PLAN quality gate to prevent creation-time gaps.
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-078: Now populates missing fields AND applies enriched data to insert
   try {
-    validateSDFields(sdData, { enrich: true, quiet: false });
+    const gateResult = validateSDFields(sdData, { enrich: true, quiet: false });
+    if (gateResult.enrichments.length > 0) {
+      console.log(`   ✅ Auto-enrichment applied ${gateResult.enrichments.length} fix(es) (score: ${gateResult.score}/${gateResult.threshold})`);
+    }
   } catch (vErr) {
     console.warn(`   ⚠️  GATE_SD_QUALITY pre-check skipped: ${vErr.message}`);
   }
