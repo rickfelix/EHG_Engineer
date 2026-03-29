@@ -20,7 +20,6 @@ import {
   JSONB_FIELDS,
   STRUCTURAL_RULES,
   isPopulated,
-  wordCount,
 } from './sd-quality-scoring.js';
 
 /**
