@@ -396,11 +396,28 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
     .map(r => r.venture_id)
     .filter(Boolean);
 
+<<<<<<< HEAD
   // Phase 1.5: External resource teardown (Vercel, filesystem, Docker)
   const { runTeardown } = await import('../../lib/cleanup/index.js');
   const teardownResults = {};
   for (const ventureId of ventureIds) {
     teardownResults[ventureId] = await runTeardown(ventureId);
+=======
+  // Phase 1.5: REVOKE — Credential revocation at external providers BEFORE DB deletion
+  // SD-LEO-INFRA-VENTURE-CLEANUP-ORCHESTRATOR-001-C
+  // This MUST run while the relational mapping (managed_applications -> application_credentials) is intact
+  let credentialCleanup = { revoked: [], failed: [], skipped: [] };
+  try {
+    const { cleanup: cleanupCredentials } = await import('../../lib/cleanup/credentials.js');
+    credentialCleanup = await cleanupCredentials(ventureIds, { dryRun: false });
+    if (credentialCleanup.failed.length > 0) {
+      console.warn(`[master-reset] ${credentialCleanup.failed.length} credential(s) failed revocation — quarantined for manual review`);
+    }
+  } catch (credErr) {
+    // Non-blocking: credential revocation failure should not prevent reset
+    console.error('[master-reset] Credential revocation error:', credErr.message);
+    credentialCleanup = { revoked: [], failed: [{ error: credErr.message }], skipped: [] };
+>>>>>>> 6db6f47caf (feat(cleanup): add credential revocation before master reset DB deletion)
   }
 
   // Phase 2: Execute existing DB master reset RPC
@@ -498,9 +515,16 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
     cleanup: {
       repos_deleted: cleanupResults.repos_deleted.length,
       repos_failed: cleanupResults.repos_failed.length,
+      credentials_revoked: credentialCleanup.revoked.length,
+      credentials_failed: credentialCleanup.failed.length,
+      credentials_skipped: credentialCleanup.skipped.length,
       registry_cleaned: cleanupResults.registry_cleaned,
+<<<<<<< HEAD
       teardown: teardownResults,
       details: cleanupResults,
+=======
+      details: { ...cleanupResults, credentials: credentialCleanup },
+>>>>>>> 6db6f47caf (feat(cleanup): add credential revocation before master reset DB deletion)
     },
   });
 }));
