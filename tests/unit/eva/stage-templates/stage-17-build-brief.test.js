@@ -94,7 +94,7 @@ describe('synthesizeBuildBrief', () => {
   it('returns all empty strings when artifactsByStage is empty', () => {
     const brief = synthesizeBuildBrief({}, REQUIRED_ARTIFACTS);
 
-    for (const [key, value] of Object.entries(brief)) {
+    for (const [, value] of Object.entries(brief)) {
       expect(value).toBe('');
     }
     expect(Object.keys(brief)).toHaveLength(12);
