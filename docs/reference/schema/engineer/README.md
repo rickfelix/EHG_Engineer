@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-29T15:44:49.284Z
-**Tables**: 596
+**Generated**: 2026-03-29T16:01:09.238Z
+**Tables**: 598
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (596)
+## All Tables (598)
 
 ### LEO Protocol
 
@@ -122,6 +122,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_type_gate_exemptions](tables/sd_type_gate_exemptions.md)
 - [sd_type_validation_profiles](tables/sd_type_validation_profiles.md)
 - [sd_ux_contracts](tables/sd_ux_contracts.md)
+- [sd_verification_results](tables/sd_verification_results.md)
 - [sd_wall_states](tables/sd_wall_states.md)
 - [sd_workflow_template_steps](tables/sd_workflow_template_steps.md)
 - [sd_workflow_templates](tables/sd_workflow_templates.md)
@@ -444,6 +445,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [pattern_occurrences](tables/pattern_occurrences.md)
 - [pattern_resolution_signals](tables/pattern_resolution_signals.md)
 - [pattern_subagent_mapping](tables/pattern_subagent_mapping.md)
+- [pcvp_verification_log](tables/pcvp_verification_log.md)
 - [persona_behavioral_data](tables/persona_behavioral_data.md)
 - [persona_config](tables/persona_config.md)
 - [pipeline_metrics](tables/pipeline_metrics.md)
