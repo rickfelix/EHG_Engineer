@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-29T00:43:51.421Z
+**Generated**: 2026-03-29T01:12:07.428Z
 **Tables**: 596
 **Source**: Supabase PostgreSQL introspection
 
@@ -115,7 +115,7 @@ SECURITY FIX: Replaced USING(true) from 20251216000001_chairman_unified_decision
 Records all handoffs rejected due to validation_score < 85%.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [claude_code_releases](tables/claude_code_releases.md) | 0 | ✅ | 1 | - |
-| [claude_sessions](tables/claude_sessions.md) | 11,191 | ✅ | 4 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
+| [claude_sessions](tables/claude_sessions.md) | 11,192 | ✅ | 4 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
 | [codebase_health_config](tables/codebase_health_config.md) | 6 | ✅ | 2 | - |
 | [codebase_health_snapshots](tables/codebase_health_snapshots.md) | 4 | ✅ | 2 | - |
 | [companies](tables/companies.md) | 385 | ✅ | 6 | - |
@@ -255,7 +255,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [gate_requirements_templates](tables/gate_requirements_templates.md) | 15 | ✅ | 2 | Templates for generating verification gates with standard requirements |
 | [github_operations](tables/github_operations.md) | 0 | ✅ | 2 | Tracks all GitHub operations initiated by the LEO Protocol GitHub Sub-Agent |
 | [global_competitors](tables/global_competitors.md) | 0 | ✅ | 2 | Global competitor catalog for cross-venture competitive intelligence. Supports deduplication via canonical_id. |
-| [governance_audit_log](tables/governance_audit_log.md) | 149,343 | ✅ | 2 | - |
+| [governance_audit_log](tables/governance_audit_log.md) | 149,345 | ✅ | 2 | - |
 | [governance_decisions](tables/governance_decisions.md) | 0 | ✅ | 1 | - |
 | [governance_policies](tables/governance_policies.md) | 0 | ✅ | 2 | - |
 | [governance_proposals](tables/governance_proposals.md) | 2 | ✅ | 2 | - |
@@ -518,7 +518,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [service_tasks](tables/service_tasks.md) | 0 | ✅ | 4 | Task queue for poll-based service delivery. Ventures pull pending tasks. |
 | [service_telemetry](tables/service_telemetry.md) | 0 | ✅ | 5 | Outcome feedback from ventures. Feeds cross-venture intelligence. |
 | [session_coordination](tables/session_coordination.md) | 8 | ✅ | 1 | Cross-session messaging for fleet coordination. Written by orchestrator/sweep, read by worker hooks. |
-| [session_lifecycle_events](tables/session_lifecycle_events.md) | 5,214 | ✅ | 2 | Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5. |
+| [session_lifecycle_events](tables/session_lifecycle_events.md) | 5,215 | ✅ | 2 | Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5. |
 | [shipping_decisions](tables/shipping_decisions.md) | 943 | ✅ | 2 | - |
 | [simulation_sessions](tables/simulation_sessions.md) | 5 | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
 | [skill_assessment_scores](tables/skill_assessment_scores.md) | 110 | ✅ | 1 | - |
