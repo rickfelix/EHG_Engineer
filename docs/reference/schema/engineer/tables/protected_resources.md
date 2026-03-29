@@ -1,11 +1,11 @@
-# tool_usage_ledger Table
+# protected_resources Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-03-29T22:45:56.772Z
-**Rows**: 0
+**Rows**: 3
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,52 +14,45 @@
 
 ---
 
-## Columns (8 total)
+## Columns (7 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| agent_id | `uuid` | **NO** | - | - |
+| resource_type | `text` | **NO** | - | Type of protected resource: venture, repo, application |
+| resource_id | `text` | **NO** | - | Identifier of the resource. UUID for ventures, slug for repos (e.g. rickfelix/ehg) |
 | venture_id | `uuid` | YES | - | - |
-| tool_id | `uuid` | **NO** | - | - |
-| tokens_consumed | `integer(32)` | YES | `0` | - |
-| cost_usd | `numeric(10,6)` | YES | `0` | - |
-| execution_ms | `integer(32)` | YES | - | - |
+| protection_reason | `text` | **NO** | - | - |
+| protected_by | `text` | **NO** | `'system'::text` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `tool_usage_ledger_pkey`: PRIMARY KEY (id)
+- `protected_resources_pkey`: PRIMARY KEY (id)
 
-### Foreign Keys
-- `tool_usage_ledger_agent_id_fkey`: agent_id → agent_registry(id)
-- `tool_usage_ledger_tool_id_fkey`: tool_id → tool_registry(id)
-- `tool_usage_ledger_venture_id_fkey`: venture_id → ventures(id)
+### Unique Constraints
+- `unique_protected_resource`: UNIQUE (resource_type, resource_id)
 
 ## Indexes
 
-- `idx_ledger_agent`
+- `protected_resources_pkey`
   ```sql
-  CREATE INDEX idx_ledger_agent ON public.tool_usage_ledger USING btree (agent_id, created_at DESC)
+  CREATE UNIQUE INDEX protected_resources_pkey ON public.protected_resources USING btree (id)
   ```
-- `idx_ledger_venture_cost`
+- `unique_protected_resource`
   ```sql
-  CREATE INDEX idx_ledger_venture_cost ON public.tool_usage_ledger USING btree (venture_id, created_at DESC, cost_usd)
-  ```
-- `tool_usage_ledger_pkey`
-  ```sql
-  CREATE UNIQUE INDEX tool_usage_ledger_pkey ON public.tool_usage_ledger USING btree (id)
+  CREATE UNIQUE INDEX unique_protected_resource ON public.protected_resources USING btree (resource_type, resource_id)
   ```
 
 ## RLS Policies
 
-### 1. chairman_read_ledger (SELECT)
+### 1. protected_resources_authenticated_read (SELECT)
 
 - **Roles**: {authenticated}
-- **Using**: `fn_is_chairman()`
+- **Using**: `true`
 
-### 2. service_role_all_ledger (ALL)
+### 2. protected_resources_service_role (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
