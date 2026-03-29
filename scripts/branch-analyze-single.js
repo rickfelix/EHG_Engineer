@@ -19,6 +19,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { getRepoPaths } from '../lib/repo-paths.js';
 dotenv.config();
 
 const execAsync = promisify(exec);
@@ -26,13 +27,8 @@ const execAsync = promisify(exec);
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
-const EHG_ROOT = path.resolve(__dirname, '../../ehg');
-
-const REPO_PATHS = {
-  EHG: EHG_ROOT,
-  EHG_Engineer: EHG_ENGINEER_ROOT
-};
+// SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-K: Registry-driven repo paths
+const REPO_PATHS = getRepoPaths();
 
 class BranchAnalyzer {
   constructor(branchName, repoName = 'EHG') {

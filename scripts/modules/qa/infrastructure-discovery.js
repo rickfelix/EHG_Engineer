@@ -11,11 +11,12 @@ import { readdir, stat } from 'fs/promises';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
+import { resolveRepoPath } from '../../../lib/repo-paths.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const EHG_ENGINEER_ROOT = resolve(__dirname, '../../..');
-const EHG_ROOT = resolve(__dirname, '../../../../ehg');
+const EHG_ROOT = resolveRepoPath('ehg');
 
 /**
  * Discover test infrastructure and generate recommendations

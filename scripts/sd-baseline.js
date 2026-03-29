@@ -81,13 +81,17 @@ class SDBaselineManager {
 
     // Get SDs with sequence_rank set
     // Note: legacy_id column was deprecated and removed - using sd_key instead
-    const { data: sds, error } = await supabase
+    // SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-R: venture filter
+    const ventureFilter = process.argv.includes('--venture') ? process.argv[process.argv.indexOf('--venture') + 1] : null;
+    let query = supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, sequence_rank, priority, status, dependencies, metadata, progress_percentage')
       .not('sequence_rank', 'is', null)
       .in('status', ['draft', 'active', 'in_progress'])
       .order('sequence_rank')
       .limit(50);
+    if (ventureFilter) query = query.eq('target_application', ventureFilter);
+    const { data: sds, error } = await query;
 
     if (error || !sds || sds.length === 0) {
       console.log(`${colors.red}No SDs with sequence_rank found. Set sequence_rank on SDs first.${colors.reset}`);

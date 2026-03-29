@@ -38,6 +38,9 @@ const colors = {
 class SDBurnRateCalculator {
   constructor() {
     this.command = process.argv[2] || 'report';
+    // SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-R: venture filter
+    const ventureIdx = process.argv.indexOf('--venture');
+    this.ventureFilter = ventureIdx >= 0 ? process.argv[ventureIdx + 1] : null;
     this.baseline = null;
     this.items = [];
     this.actuals = {};
@@ -100,10 +103,12 @@ class SDBurnRateCalculator {
     // Load SD details
     // Note: legacy_id column was deprecated and removed - using sd_key instead
     const sdIds = this.items.map(i => i.sd_id);
-    const { data: sds } = await supabase
+    let sdQuery = supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, progress_percentage, updated_at, created_at')
+      .select('id, sd_key, title, status, progress_percentage, updated_at, created_at, target_application')
       .in('sd_key', sdIds);
+    if (this.ventureFilter) sdQuery = sdQuery.eq('target_application', this.ventureFilter);
+    const { data: sds } = await sdQuery;
 
     if (sds) {
       sds.forEach(sd => this.sdDetails[sd.sd_key || sd.id] = sd);

@@ -28,8 +28,26 @@
 const path = require('path');
 const { spawn } = require('child_process');
 
-// Configuration
-const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
+// Configuration — detect current repo context (SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-H)
+const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || detectProjectDir();
+
+function detectProjectDir() {
+  try {
+    const fs = require('fs');
+    const registryPath = path.resolve(__dirname, '../../applications/registry.json');
+    if (fs.existsSync(registryPath)) {
+      const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+      const cwd = process.cwd().replace(/\\/g, '/').toLowerCase();
+      const apps = Object.values(registry.applications || {}).filter(a => a.local_path);
+      apps.sort((a, b) => (b.local_path || '').length - (a.local_path || '').length);
+      for (const app of apps) {
+        const appPath = app.local_path.replace(/\\/g, '/').toLowerCase();
+        if (cwd === appPath || cwd.startsWith(appPath + '/')) return app.local_path;
+      }
+    }
+  } catch { /* fallback */ }
+  return path.resolve(__dirname, '../..');
+}
 const LOG_LEVEL = process.env.AUTO_LEARNING_LOG_LEVEL || 'info';
 
 // Log level hierarchy

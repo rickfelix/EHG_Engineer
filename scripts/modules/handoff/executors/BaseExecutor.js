@@ -11,6 +11,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
+import { resolveRepoPath } from '../../../../lib/repo-paths.js';
 // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Shared git context to eliminate redundant execSync calls
 import { SharedGitContext } from '../shared-git-context.js';
 
@@ -921,6 +922,13 @@ export class BaseExecutor {
           targetApp === 'application') {
         console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG`);
         return getRepoPath('EHG');
+      }
+
+      // SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-F: Venture repo fallback
+      const venturePath = resolveRepoPath(sd.target_application);
+      if (venturePath) {
+        console.log(`   Repository determined by target_application: "${sd.target_application}" → venture (${venturePath})`);
+        return venturePath;
       }
 
       console.warn(`   ⚠️  Unknown target_application value: "${sd.target_application}"`);
