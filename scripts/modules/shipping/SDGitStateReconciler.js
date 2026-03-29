@@ -16,20 +16,25 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { getRepoPaths, resolveGitHubRepo } from '../../../lib/repo-paths.js';
 
 dotenv.config();
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../..');
-const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
 
-// Repository paths (dynamically resolved)
-const REPO_PATHS = {
-  'rickfelix/ehg': EHG_ROOT,
-  'rickfelix/EHG_Engineer': EHG_ENGINEER_ROOT
-};
+// Registry-driven repository paths (SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-E)
+function buildRepoPaths() {
+  const paths = getRepoPaths();
+  const result = {};
+  for (const [name, localPath] of Object.entries(paths)) {
+    const ghRepo = resolveGitHubRepo(name);
+    if (ghRepo) result[ghRepo] = localPath;
+  }
+  return result;
+}
+const REPO_PATHS = buildRepoPaths();
 
 // SD status categories
 const COMPLETED_STATUSES = ['completed', 'approved', 'merged', 'done', 'shipped', 'archived'];

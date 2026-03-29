@@ -14,6 +14,28 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+/**
+ * Detect the current repo context from CWD or CLAUDE_PROJECT_DIR.
+ * SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-H
+ */
+function detectCurrentRepo() {
+  try {
+    const cwd = (process.env.CLAUDE_PROJECT_DIR || process.cwd()).replace(/\\/g, '/').toLowerCase();
+    const registryPath = path.resolve(__dirname, '../../applications/registry.json');
+    if (fs.existsSync(registryPath)) {
+      const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+      const apps = Object.values(registry.applications || {}).filter(a => a.local_path);
+      // Sort by path length descending so more specific paths match first
+      apps.sort((a, b) => (b.local_path || '').length - (a.local_path || '').length);
+      for (const app of apps) {
+        const appPath = app.local_path.replace(/\\/g, '/').toLowerCase();
+        if (cwd === appPath || cwd.startsWith(appPath + '/')) return app.name;
+      }
+    }
+  } catch { /* fallback */ }
+  return 'EHG_Engineer';
+}
+
 function getCurrentSessionId() {
   try {
     const sessionFile = path.resolve(__dirname, '../../.claude/session-id.json');
@@ -74,7 +96,7 @@ async function main() {
       session_id: sessionId,
       hostname: getHostname(),
       tty: getTTY(),
-      codebase: 'EHG_Engineer',
+      codebase: detectCurrentRepo(),
       status: 'active',
       heartbeat_at: now,
       started_at: now
