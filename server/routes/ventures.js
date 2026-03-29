@@ -396,14 +396,14 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
     .map(r => r.venture_id)
     .filter(Boolean);
 
-<<<<<<< HEAD
-  // Phase 1.5: External resource teardown (Vercel, filesystem, Docker)
+  // Phase 1.5a: External resource teardown (Vercel, filesystem, Docker)
   const { runTeardown } = await import('../../lib/cleanup/index.js');
   const teardownResults = {};
   for (const ventureId of ventureIds) {
     teardownResults[ventureId] = await runTeardown(ventureId);
-=======
-  // Phase 1.5: REVOKE — Credential revocation at external providers BEFORE DB deletion
+  }
+
+  // Phase 1.5b: REVOKE — Credential revocation at external providers BEFORE DB deletion
   // SD-LEO-INFRA-VENTURE-CLEANUP-ORCHESTRATOR-001-C
   // This MUST run while the relational mapping (managed_applications -> application_credentials) is intact
   let credentialCleanup = { revoked: [], failed: [], skipped: [] };
@@ -417,7 +417,6 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
     // Non-blocking: credential revocation failure should not prevent reset
     console.error('[master-reset] Credential revocation error:', credErr.message);
     credentialCleanup = { revoked: [], failed: [{ error: credErr.message }], skipped: [] };
->>>>>>> 6db6f47caf (feat(cleanup): add credential revocation before master reset DB deletion)
   }
 
   // Phase 2: Execute existing DB master reset RPC
@@ -519,12 +518,8 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
       credentials_failed: credentialCleanup.failed.length,
       credentials_skipped: credentialCleanup.skipped.length,
       registry_cleaned: cleanupResults.registry_cleaned,
-<<<<<<< HEAD
       teardown: teardownResults,
-      details: cleanupResults,
-=======
       details: { ...cleanupResults, credentials: credentialCleanup },
->>>>>>> 6db6f47caf (feat(cleanup): add credential revocation before master reset DB deletion)
     },
   });
 }));
