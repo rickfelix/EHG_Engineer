@@ -21,8 +21,9 @@
  *
  * SD: SD-LEO-INFRA-EHG-VENTURE-FUNDAMENTALS-001
  */
-import { readFileSync, existsSync, statSync } from 'fs';
+import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
+import { execFileSync } from 'child_process';
 
 const REQUIRED_DIRS = [
   'src/components',
@@ -131,6 +132,61 @@ function run(projectPath) {
   const supaDir = join(absPath, 'supabase');
   const hasSupabase = existsSync(supaDir) && statSync(supaDir).isDirectory();
   results.push(check('config:supabase', hasSupabase, hasSupabase ? 'supabase/ directory present' : 'supabase/ directory missing'));
+
+  // === SECURITY CHECKS (SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-D) ===
+
+  // 7. Secret pattern scanning
+  const SECRET_PATTERNS = [
+    /SUPABASE_SERVICE_ROLE_KEY\s*=/,
+    /sk-[a-zA-Z0-9]{20,}/,
+    /ghp_[a-zA-Z0-9]{36}/,
+    /ANTHROPIC_API_KEY\s*=/,
+    /OPENAI_API_KEY\s*=/,
+    /BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY/,
+  ];
+  let secretFiles = 0;
+  try {
+    const tracked = execFileSync('git', ['ls-files'], { cwd: absPath, encoding: 'utf8', stdio: 'pipe' })
+      .trim().split('\n').filter(Boolean);
+    for (const file of tracked) {
+      if (/\.(png|jpg|jpeg|gif|ico|lock|woff|ttf)$/i.test(file)) continue;
+      try {
+        const content = readFileSync(join(absPath, file), 'utf8');
+        if (SECRET_PATTERNS.some(p => p.test(content))) secretFiles++;
+      } catch { /* skip unreadable */ }
+    }
+  } catch { /* git not available */ }
+  results.push(check('security:secret-scan', secretFiles === 0,
+    secretFiles > 0 ? `${secretFiles} file(s) with potential secrets` : 'No secrets detected'));
+
+  // 8. .gitignore includes .env entries
+  const giPath = join(absPath, '.gitignore');
+  if (existsSync(giPath)) {
+    const giContent = readFileSync(giPath, 'utf8');
+    const hasEnv = giContent.includes('.env');
+    results.push(check('security:gitignore-env', hasEnv, hasEnv ? '.env in .gitignore' : '.env NOT in .gitignore'));
+  } else {
+    results.push(check('security:gitignore-env', false, 'No .gitignore'));
+  }
+
+  // 9. Pre-commit hook presence
+  const gitHook = existsSync(join(absPath, '.git', 'hooks', 'pre-commit'));
+  const huskyHook = existsSync(join(absPath, '.husky', 'pre-commit'));
+  results.push(check('security:pre-commit-hook', gitHook || huskyHook,
+    gitHook ? 'Git hook present' : huskyHook ? 'Husky hook present' : 'No pre-commit hook'));
+
+  // 10. Private repo check (via gh CLI)
+  let repoPrivate = false;
+  try {
+    const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: absPath, encoding: 'utf8', stdio: 'pipe' }).trim();
+    const match = remoteUrl.match(/github\.com[:/](.+?)(?:\.git)?$/);
+    if (match) {
+      const ghOut = execFileSync('gh', ['repo', 'view', match[1], '--json', 'isPrivate'], { encoding: 'utf8', stdio: 'pipe', timeout: 10000 });
+      repoPrivate = JSON.parse(ghOut).isPrivate === true;
+    }
+  } catch { /* gh CLI unavailable */ }
+  results.push(check('security:private-repo', repoPrivate,
+    repoPrivate ? 'Repo is private' : 'Repo is public or could not verify'));
 
   return results;
 }
