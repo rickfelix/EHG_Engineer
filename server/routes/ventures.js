@@ -225,7 +225,8 @@ router.post('/:id/artifacts', validateUuidParam('id'), asyncHandler(async (req, 
   });
 }));
 
-// Create new venture - IDEATION-GENESIS-AUDIT: Capture raw Chairman intent
+// Create new venture — Routes through Stage 0 queue for chairman review
+// SD-LEO-INFRA-UNIFIED-VENTURE-CREATION-001-A: Stage 0 Gate Enforcement
 router.post('/', asyncHandler(async (req, res) => {
   const ventureData = req.body;
 
@@ -240,36 +241,47 @@ router.post('/', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'origin_type must be one of: manual, competitor_clone, blueprint' });
   }
 
+  // Route to Stage 0 queue instead of direct INSERT into ventures
+  const prompt = [
+    ventureData.name,
+    ventureData.problem_statement,
+    ventureData.solution,
+    ventureData.target_market
+  ].filter(Boolean).join('. ');
+
   const { data, error } = await dbLoader.supabase
-    .from('ventures')
+    .from('stage_zero_requests')
     .insert({
-      name: ventureData.name,
-      description: ventureData.description,
-      problem_statement: ventureData.problem_statement,
-      raw_chairman_intent: ventureData.problem_statement,
-      problem_statement_locked_at: new Date().toISOString(),
-      solution: ventureData.solution,
-      target_market: ventureData.target_market,
-      origin_type: ventureData.origin_type || 'manual',
-      competitor_ref: ventureData.competitor_ref || null,
-      current_lifecycle_stage: 1,
-      workflow_status: 'pending',
-      status: 'active'
+      prompt: prompt || ventureData.name,
+      status: 'pending',
+      priority: 0,
+      result: {
+        origin: 'api',
+        origin_type: ventureData.origin_type || 'manual',
+        venture_metadata: {
+          name: ventureData.name,
+          description: ventureData.description,
+          problem_statement: ventureData.problem_statement,
+          solution: ventureData.solution,
+          target_market: ventureData.target_market,
+          competitor_ref: ventureData.competitor_ref || null
+        }
+      }
     })
-    .select()
+    .select('id, status, created_at')
     .single();
 
   if (error) {
-    console.error('Error creating venture:', error);
+    console.error('Error creating stage zero request:', error);
     return res.status(500).json({ error: error.message });
   }
 
-  const venture = {
-    ...data,
-    stage: data.current_lifecycle_stage || 1
-  };
-
-  res.status(201).json(venture);
+  res.status(202).json({
+    stage_zero_request_id: data.id,
+    status: data.status,
+    message: 'Venture creation queued for Stage 0 chairman review',
+    created_at: data.created_at
+  });
 }));
 
 // Competitor Analysis - IDEATION-GENESIS-AUDIT: Real market intelligence
