@@ -71,6 +71,7 @@ Flags:
   const formatFlag = args.find(a => a.startsWith('--format='))?.split('=')[1] || 'monolithic';
   const outputDirFlag = args.find(a => a.startsWith('--output-dir='))?.split('=')[1]
     || args[args.indexOf('--output-dir') + 1];
+  const scope = args.find(a => a.startsWith('--scope='))?.split('=')[1] || 'sprint';
   const ventureNameIdx = args.indexOf('--venture-name');
   let input;
 
@@ -104,7 +105,7 @@ Flags:
   }
 
   // All other formats use the optimized formatter
-  const result = await formatReplitOptimized(ventureId);
+  const result = await formatReplitOptimized(ventureId, { scope });
 
   if (formatFlag === 'replit-md-only') {
     console.log(result.replitMd.content);
