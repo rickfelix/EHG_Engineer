@@ -5,6 +5,9 @@ import {
   formatFeaturePrompts,
   normalizeGroupKey,
   extractArtifactContent,
+  extractArchitectureSection,
+  formatJsonArtifact,
+  formatArtifactContent,
   summarizeContent,
   slugify,
 } from '../../../lib/eva/bridge/replit-format-strategies.js';
@@ -93,6 +96,205 @@ describe('Helper functions', () => {
     expect(slugify('User Authentication')).toBe('user-authentication');
     expect(slugify('AI Auto-Schedule!')).toBe('ai-auto-schedule');
     expect(slugify('A Very Long Feature Name That Should Be Truncated To Forty Chars')).toHaveLength(40);
+  });
+});
+
+// ── JSON Formatting ────────────────────────────────
+
+describe('formatJsonArtifact', () => {
+  it('formats product definition artifacts', () => {
+    const obj = {
+      description: 'A task management tool.',
+      problemStatement: 'Teams waste time prioritizing.',
+      valueProp: 'AI auto-prioritization.',
+      targetMarket: 'Product teams.',
+    };
+    const result = formatJsonArtifact(obj);
+    expect(result).toContain('A task management tool.');
+    expect(result).toContain('**Problem**: Teams waste time prioritizing.');
+    expect(result).toContain('**Value Proposition**: AI auto-prioritization.');
+    expect(result).toContain('**Target Market**: Product teams.');
+    expect(result).not.toContain('{');
+  });
+
+  it('formats customer personas', () => {
+    const obj = {
+      customerPersonas: [
+        { name: 'Dev Dan', demographics: { role: 'Developer' }, goals: ['Ship fast', 'No bugs'], painPoints: ['Manual testing'] },
+      ],
+    };
+    const result = formatJsonArtifact(obj);
+    expect(result).toContain('### Dev Dan');
+    expect(result).toContain('**Role**: Developer');
+    expect(result).toContain('Ship fast');
+    expect(result).toContain('Manual testing');
+  });
+
+  it('formats vision with milestones', () => {
+    const obj = {
+      vision_statement: 'Eliminate scheduling errors.',
+      milestones: [{ name: 'MVP', priority: 'now', deliverables: ['Parser', 'UI'] }],
+    };
+    const result = formatJsonArtifact(obj);
+    expect(result).toContain('Eliminate scheduling errors.');
+    expect(result).toContain('**MVP** (now): Parser, UI');
+  });
+
+  it('formats competitive analysis', () => {
+    const obj = { competitors: [{ name: 'Competitor A', threat: 'H', position: 'Market leader.' }] };
+    const result = formatJsonArtifact(obj);
+    expect(result).toContain('**Competitor A** (Threat: H): Market leader.');
+  });
+
+  it('formats architecture overview', () => {
+    const obj = {
+      architecture_summary: 'Serverless architecture.',
+      layers: { api: { technology: 'REST', components: ['/api/v1'] } },
+      security: { authStrategy: 'API Keys' },
+    };
+    const result = formatJsonArtifact(obj);
+    expect(result).toContain('Serverless architecture.');
+    expect(result).toContain('**api**: REST');
+    expect(result).toContain('**Auth**: API Keys');
+  });
+
+  it('formats wireframes', () => {
+    const obj = { wireframes: { screens: [{ name: 'Home', purpose: 'Landing page', ascii_layout: '+---+\n|   |\n+---+' }] } };
+    const result = formatJsonArtifact(obj);
+    expect(result).toContain('**Home**: Landing page');
+    expect(result).toContain('+---+');
+  });
+
+  it('returns empty string for null/undefined', () => {
+    expect(formatJsonArtifact(null)).toBe('');
+    expect(formatJsonArtifact(undefined)).toBe('');
+  });
+
+  it('falls back to key-value extraction for unknown shapes', () => {
+    const obj = { custom_field: 'Some value that is long enough to display' };
+    const result = formatJsonArtifact(obj);
+    expect(result).toContain('**custom field**: Some value');
+  });
+});
+
+describe('formatArtifactContent', () => {
+  it('parses JSON strings and formats them', () => {
+    const jsonStr = JSON.stringify({ description: 'A tool.', problemStatement: 'Time wasted.' });
+    const result = formatArtifactContent(jsonStr);
+    expect(result).toContain('A tool.');
+    expect(result).toContain('**Problem**: Time wasted.');
+    expect(result).not.toContain('{');
+  });
+
+  it('passes plain strings through unchanged', () => {
+    expect(formatArtifactContent('Just a plain string.')).toBe('Just a plain string.');
+  });
+
+  it('handles objects directly', () => {
+    const obj = { description: 'Direct object.' };
+    const result = formatArtifactContent(obj);
+    expect(result).toContain('Direct object.');
+  });
+
+  it('returns empty string for falsy values', () => {
+    expect(formatArtifactContent(null)).toBe('');
+    expect(formatArtifactContent('')).toBe('');
+  });
+});
+
+describe('extractArchitectureSection', () => {
+  it('extracts data model entities', () => {
+    const group = {
+      artifacts: [{
+        content: JSON.stringify({
+          architecture_summary: 'Serverless.',
+          dataEntities: [{ name: 'User', description: 'App user' }, { name: 'Task', description: 'Work item' }],
+          layers: { api: { technology: 'REST' } },
+        }),
+      }],
+    };
+    const result = extractArchitectureSection(group, 'data_model');
+    expect(result).toContain('**User**: App user');
+    expect(result).toContain('**Task**: Work item');
+    expect(result).not.toContain('Serverless');
+  });
+
+  it('extracts API section', () => {
+    const group = {
+      artifacts: [{
+        content: JSON.stringify({
+          layers: { api: { technology: 'GraphQL', components: ['/graphql'], rationale: 'Flexible queries.' } },
+        }),
+      }],
+    };
+    const result = extractArchitectureSection(group, 'api');
+    expect(result).toContain('**Protocol**: GraphQL');
+    expect(result).toContain('/graphql');
+    expect(result).toContain('Flexible queries.');
+  });
+
+  it('extracts architecture overview', () => {
+    const group = {
+      artifacts: [{
+        content: JSON.stringify({
+          architecture_summary: 'Monolith.',
+          layers: { api: { technology: 'Express', components: ['/api'] } },
+        }),
+      }],
+    };
+    const result = extractArchitectureSection(group, 'architecture');
+    expect(result).toContain('Monolith.');
+    expect(result).toContain('**api**: Express');
+  });
+
+  it('returns empty string for non-JSON artifacts', () => {
+    const group = { artifacts: [{ content: 'Plain text architecture' }] };
+    expect(extractArchitectureSection(group, 'data_model')).toBe('');
+  });
+});
+
+describe('formatReplitMd with JSON artifacts', () => {
+  const jsonGroups = [
+    {
+      group_key: 'what_to_build',
+      artifacts: [{
+        content: JSON.stringify({ description: 'A project manager.', problemStatement: 'Too many tools.' }),
+      }],
+    },
+    {
+      group_key: 'who_its_for',
+      artifacts: [{
+        content: JSON.stringify({ competitors: [{ name: 'Jira', threat: 'H', position: 'Enterprise.' }] }),
+      }],
+    },
+    {
+      group_key: 'how_to_build_it',
+      artifacts: [{
+        artifact_type: 'architecture',
+        content: JSON.stringify({
+          architecture_summary: 'Microservices.',
+          layers: { api: { technology: 'REST', components: ['/api/tasks'] } },
+          dataEntities: [{ name: 'Task', description: 'A work item' }],
+        }),
+      }],
+    },
+  ];
+
+  it('formats JSON string artifacts as readable markdown', () => {
+    const result = formatReplitMd(jsonGroups, mockVenture, mockSummary);
+    expect(result).toContain('A project manager.');
+    expect(result).toContain('**Problem**: Too many tools.');
+    expect(result).not.toMatch(/^\{/m); // No lines starting with {
+  });
+
+  it('deduplicates architecture sections', () => {
+    const result = formatReplitMd(jsonGroups, mockVenture, mockSummary);
+    // Data Model should have entities
+    expect(result).toContain('## Data Model');
+    expect(result).toContain('**Task**: A work item');
+    // API should have endpoints
+    expect(result).toContain('## API Patterns');
+    expect(result).toContain('/api/tasks');
   });
 });
 
