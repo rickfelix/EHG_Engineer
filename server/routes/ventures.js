@@ -415,6 +415,18 @@ router.post('/master-reset', asyncHandler(async (req, res) => {
     teardownResults[ventureId] = await runTeardown(ventureId);
   }
 
+  // Phase 1.5a2: Mark venture_resources as cleaned (SD-LEO-INFRA-UNIFIED-VENTURE-CREATION-001-B)
+  let resourcesCleanedCount = 0;
+  try {
+    const { markResourcesCleaned } = await import('../../lib/venture-resources.js');
+    for (const ventureId of ventureIds) {
+      resourcesCleanedCount += await markResourcesCleaned(ventureId);
+    }
+    console.log(`[master-reset] ${resourcesCleanedCount} venture resource(s) marked as cleaned`);
+  } catch (resErr) {
+    console.error('[master-reset] Resource cleanup non-fatal:', resErr.message);
+  }
+
   // Phase 1.5b: REVOKE — Credential revocation at external providers BEFORE DB deletion
   // SD-LEO-INFRA-VENTURE-CLEANUP-ORCHESTRATOR-001-C
   // This MUST run while the relational mapping (managed_applications -> application_credentials) is intact
