@@ -1,6 +1,7 @@
 /**
  * Tests for Cross-Stage Data Contracts Registry
  * SD-MAN-ORCH-EVA-GOVERNANCE-POLISH-001-B
+ * SD-RCA-PREEMPTIVE-S26: Updated to cover all 26 stages.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -11,8 +12,8 @@ const silentLogger = { warn() {}, info() {}, error() {}, debug() {}, log() {} };
 describe('stage-contracts', () => {
 
   describe('STAGE_CONTRACTS', () => {
-    it('covers all 25 stages', () => {
-      for (let i = 1; i <= 25; i++) {
+    it('covers all 26 stages', () => {
+      for (let i = 1; i <= 26; i++) {
         expect(STAGE_CONTRACTS.has(i), `stage ${i} missing`).toBe(true);
       }
     });
@@ -34,9 +35,18 @@ describe('stage-contracts', () => {
       expect(c.produces).toHaveProperty('description');
     });
 
+    it('returns contract for stage 26 (pipeline terminus)', () => {
+      const c = getContract(26);
+      expect(c).not.toBeNull();
+      expect(c.consumes).toHaveLength(1);
+      expect(c.consumes[0].stage).toBe(25);
+      expect(c.produces).toHaveProperty('distribution_channels');
+      expect(c.produces).toHaveProperty('pipeline_terminus');
+    });
+
     it('returns null for invalid stage', () => {
       expect(getContract(0)).toBeNull();
-      expect(getContract(26)).toBeNull();
+      expect(getContract(27)).toBeNull();
       expect(getContract(99)).toBeNull();
     });
   });
@@ -99,6 +109,32 @@ describe('stage-contracts', () => {
       ]);
       const result = validatePreStage(9, upstreamMap, { logger: silentLogger });
       expect(result.valid).toBe(true);
+    });
+
+    it('validates stage 26 pre-stage with stage 25 data', () => {
+      const upstreamMap = new Map([
+        [25, {
+          chairmanGate: { status: 'approved', rationale: 'test', decision_id: 'abc' },
+          go_no_go_decision: 'go',
+          readiness_score: 80,
+        }],
+      ]);
+      const result = validatePreStage(26, upstreamMap, { logger: silentLogger });
+      expect(result.valid).toBe(true);
+    });
+
+    it('fails stage 26 pre-stage when stage 25 data missing', () => {
+      const result = validatePreStage(26, new Map(), { logger: silentLogger });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toMatch(/stage-25 data missing/);
+    });
+
+    it('passes stage 25 pre-stage when upstream stages absent (all optional)', () => {
+      // Stage 25 consumes stages 23 and 24, but all fields are required: false
+      // When the upstream stages are entirely absent, optional fields produce warnings not errors
+      const result = validatePreStage(25, new Map(), { logger: silentLogger });
+      expect(result.valid).toBe(true);
+      expect(result.warnings.length).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -167,6 +203,28 @@ describe('stage-contracts', () => {
         normalized_risk_score: 0,
       };
       const result = validatePostStage(6, output, { logger: silentLogger });
+      expect(result.valid).toBe(false);
+    });
+
+    it('validates stage 26 post-stage output (pipeline terminus)', () => {
+      const output = {
+        distribution_channels: [{ name: 'Web', type: 'web', status: 'active' }],
+        operations_handoff: { monitoring: {}, escalation: {} },
+        launch_summary: 'CronRead launch: all items approved, pipeline complete.',
+        pipeline_terminus: true,
+      };
+      const result = validatePostStage(26, output, { logger: silentLogger });
+      expect(result.valid).toBe(true);
+    });
+
+    it('rejects stage 26 output with empty distribution_channels', () => {
+      const output = {
+        distribution_channels: [],
+        operations_handoff: {},
+        launch_summary: 'CronRead launch complete.',
+        pipeline_terminus: true,
+      };
+      const result = validatePostStage(26, output, { logger: silentLogger });
       expect(result.valid).toBe(false);
     });
   });
