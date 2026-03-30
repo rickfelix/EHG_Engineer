@@ -638,7 +638,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_nursery](tables/venture_nursery.md) | 0 | ✅ | 1 | Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation |
 | [venture_persona_mapping](tables/venture_persona_mapping.md) | 0 | ✅ | 4 | Maps customer personas to ventures with a relevance score (0.00-1.00). |
 | [venture_phase_budgets](tables/venture_phase_budgets.md) | 0 | ✅ | 3 | INDUSTRIAL-HARDENING-v3.0: Phase-level token budget tracking. Enables granular budget allocation across venture lifecycle stages. Default 20k tokens per phase. |
-| [venture_provisioning_state](tables/venture_provisioning_state.md) | 1 | ✅ | 2 | Tracks venture provisioning lifecycle: repo creation, registry entry, schema setup, CI/CD config, and conformance checks. Referenced by the Stage 18 post-approval hook and create-ehg-venture --register. |
+| [venture_provisioning_state](tables/venture_provisioning_state.md) | 1 | ✅ | 2 | Tracks venture provisioning lifecycle: repo creation, registry entry, schema setup, CI/CD config, and conformance checks. Referenced by the Stage 18 post-approval hook and venture-provisioner state machine. |
 | [venture_raid_summary](tables/venture_raid_summary.md) | 136 | ✅ | 1 | - |
 | [venture_resources](tables/venture_resources.md) | 0 | ✅ | 2 | Unified registry of external resources per venture (SD-LEO-INFRA-UNIFIED-VENTURE-CREATION-001-B) |
 | [venture_sd_artifact_mapping](tables/venture_sd_artifact_mapping.md) | 0 | ❌ | 0 | Deterministic mapping of EVA artifact types to SD architecture layers, keyed by venture_type. Used by lifecycle-sd-bridge enrichment pipeline. |
@@ -1303,7 +1303,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [venture_milestones](tables/venture_milestones.md)
 - [venture_nursery](tables/venture_nursery.md) - Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation
 - [venture_persona_mapping](tables/venture_persona_mapping.md) - Maps customer personas to ventures with a relevance score (0.00-1.00).
-- [venture_provisioning_state](tables/venture_provisioning_state.md) - Tracks venture provisioning lifecycle: repo creation, registry entry, schema setup, CI/CD config, and conformance checks. Referenced by the Stage 18 post-approval hook and create-ehg-venture --register.
+- [venture_provisioning_state](tables/venture_provisioning_state.md) - Tracks venture provisioning lifecycle: repo creation, registry entry, schema setup, CI/CD config, and conformance checks. Referenced by the Stage 18 post-approval hook and venture-provisioner state machine.
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_resources](tables/venture_resources.md) - Unified registry of external resources per venture (SD-LEO-INFRA-UNIFIED-VENTURE-CREATION-001-B)
 - [venture_separability_scores](tables/venture_separability_scores.md)

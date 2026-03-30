@@ -39,7 +39,7 @@
       "status": "active",
       "environment": "development",
       "registered_at": "2026-03-25T16:46:54.592Z",
-      "registered_by": "create-ehg-venture --register",
+      "registered_by": "venture-provisioner",
       "local_path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\test-venture"
     },
     "APP004": {
@@ -51,7 +51,7 @@
       "status": "active",
       "environment": "development",
       "registered_at": "2026-03-25T21:12:52.605Z",
-      "registered_by": "create-ehg-venture --register",
+      "registered_by": "venture-provisioner",
       "local_path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\test-cicd"
     },
     "APP005": {
