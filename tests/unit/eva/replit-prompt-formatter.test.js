@@ -35,6 +35,7 @@ describe('Replit Prompt Formatter', () => {
     },
     groups: [
       {
+        group: 'What to Build',
         group_name: 'What to Build',
         group_key: 'what_to_build',
         artifact_count: 4,
@@ -44,14 +45,16 @@ describe('Replit Prompt Formatter', () => {
         ],
       },
       {
+        group: 'How to Build It',
         group_name: 'How to Build It',
-        group_key: 'how_to_build',
+        group_key: 'how_to_build_it',
         artifact_count: 3,
         artifacts: [
           { title: 'Technical Architecture', artifact_type: 'architecture', lifecycle_stage: 14, content: 'React + TypeScript + Supabase with Next.js framework' },
         ],
       },
       {
+        group: 'Sprint Plan',
         group_name: 'Sprint Plan',
         group_key: 'sprint_plan',
         artifact_count: 1,
