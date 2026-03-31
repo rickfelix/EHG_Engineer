@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-30T00:43:22.384Z
+**Generated**: 2026-03-31T23:47:27.741Z
 **Rows**: 0
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,12 @@
 | agent_version | `text` | YES | - | - |
 | processing_time_ms | `integer(32)` | YES | - | - |
 | feedback | `jsonb` | YES | `'{}'::jsonb` | - |
+| service_key | `text` | YES | - | - |
+| event_type | `text` | YES | - | - |
+| confidence_score | `numeric(4,3)` | YES | - | - |
+| routing_decision | `text` | YES | - | - |
+| metadata | `jsonb` | YES | `'{}'::jsonb` | - |
+| created_at | `timestamp with time zone` | YES | `now()` | - |
 
 ## Constraints
 
@@ -44,9 +50,14 @@
 
 ### Check Constraints
 - `service_telemetry_pr_status_check`: CHECK (((pr_status IS NULL) OR (pr_status = ANY (ARRAY['open'::text, 'merged'::text, 'closed'::text, 'draft'::text]))))
+- `service_telemetry_routing_check`: CHECK (((routing_decision IS NULL) OR (routing_decision = ANY (ARRAY['auto_approve'::text, 'review_flagged'::text, 'draft_only'::text]))))
 
 ## Indexes
 
+- `idx_service_telemetry_routing`
+  ```sql
+  CREATE INDEX idx_service_telemetry_routing ON public.service_telemetry USING btree (routing_decision) WHERE (routing_decision IS NOT NULL)
+  ```
 - `idx_service_telemetry_service`
   ```sql
   CREATE INDEX idx_service_telemetry_service ON public.service_telemetry USING btree (service_id, reported_at)

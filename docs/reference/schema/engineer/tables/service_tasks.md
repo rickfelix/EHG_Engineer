@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-30T00:43:22.384Z
+**Generated**: 2026-03-31T23:47:27.741Z
 **Rows**: 0
 **RLS**: Enabled (4 policies)
 
@@ -57,6 +57,10 @@
 - `idx_service_tasks_priority`
   ```sql
   CREATE INDEX idx_service_tasks_priority ON public.service_tasks USING btree (venture_id, priority, created_at) WHERE (status = 'pending'::text)
+  ```
+- `idx_service_tasks_priority_sla`
+  ```sql
+  CREATE INDEX idx_service_tasks_priority_sla ON public.service_tasks USING btree (status, priority, created_at) WHERE (status = 'pending'::text)
   ```
 - `idx_service_tasks_service`
   ```sql
