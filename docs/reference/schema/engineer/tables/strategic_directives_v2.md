@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-30T00:43:22.384Z
-**Rows**: 2,234
+**Generated**: 2026-03-31T23:47:27.741Z
+**Rows**: 2,268
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (93 total)
+## Columns (94 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -115,6 +115,7 @@ Use the id column instead - it is the canonical identifier. |
 | quality_checked | `boolean` | YES | `false` | - |
 | quality_issues | `jsonb` | YES | `'[]'::jsonb` | - |
 | quality_checked_at | `timestamp with time zone` | YES | - | - |
+| transition_version | `integer(32)` | YES | `1` | Optimistic locking version for concurrent transition safety |
 
 ## Constraints
 

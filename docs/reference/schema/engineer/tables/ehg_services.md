@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-30T00:43:22.384Z
-**Rows**: 1
+**Generated**: 2026-03-31T23:47:27.741Z
+**Rows**: 4
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,9 @@
 | config | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| version | `text` | **NO** | `'1.0.0'::text` | - |
+| sla_tier | `text` | **NO** | `'standard'::text` | - |
+| config_schema | `jsonb` | YES | - | - |
 
 ## Constraints
 
@@ -38,6 +41,7 @@
 - `ehg_services_service_key_key`: UNIQUE (service_key)
 
 ### Check Constraints
+- `ehg_services_sla_tier_check`: CHECK ((sla_tier = ANY (ARRAY['free'::text, 'standard'::text, 'premium'::text, 'enterprise'::text])))
 - `ehg_services_status_check`: CHECK ((status = ANY (ARRAY['active'::text, 'deprecated'::text, 'disabled'::text])))
 
 ## Indexes

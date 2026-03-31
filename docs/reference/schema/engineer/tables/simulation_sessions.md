@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-30T00:43:22.384Z
+**Generated**: 2026-03-31T23:47:27.741Z
 **Rows**: 5
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (12 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -30,6 +30,7 @@
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | archived_at | `timestamp with time zone` | YES | - | - |
 | incinerated_at | `timestamp with time zone` | YES | - | - |
+| simulation_tier | `text` | YES | `'A'::text` | Simulation tier: A (PRD-only + mockups, default) or B (full simulation with scaffolding/deployment) |
 
 ## Constraints
 
@@ -38,6 +39,7 @@
 
 ### Check Constraints
 - `simulation_sessions_epistemic_status_check`: CHECK ((epistemic_status = ANY (ARRAY['simulation'::text, 'official'::text, 'archived'::text, 'incinerated'::text])))
+- `simulation_sessions_simulation_tier_check`: CHECK ((simulation_tier = ANY (ARRAY['A'::text, 'B'::text])))
 
 ## Indexes
 

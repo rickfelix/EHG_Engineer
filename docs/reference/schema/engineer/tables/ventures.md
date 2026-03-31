@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-30T00:43:22.384Z
-**Rows**: 5
+**Generated**: 2026-03-31T23:47:27.741Z
+**Rows**: 1
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -277,6 +277,11 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION sync_ventures_to_eva_ventures_update()`
+
+### trigger_create_postmortem_on_failure
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION create_postmortem_on_venture_failure()`
 
 ### update_ventures_updated_at
 

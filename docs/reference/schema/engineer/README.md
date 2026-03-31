@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-30T00:43:22.384Z
-**Tables**: 601
+**Generated**: 2026-03-31T23:47:27.741Z
+**Tables**: 616
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (601)
+## All Tables (616)
 
 ### LEO Protocol
 
@@ -118,6 +118,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_stream_requirements](tables/sd_stream_requirements.md)
 - [sd_subagent_deliverable_mapping](tables/sd_subagent_deliverable_mapping.md)
 - [sd_testing_status](tables/sd_testing_status.md)
+- [sd_transition_audit](tables/sd_transition_audit.md)
 - [sd_type_change_audit](tables/sd_type_change_audit.md)
 - [sd_type_gate_exemptions](tables/sd_type_gate_exemptions.md)
 - [sd_type_validation_profiles](tables/sd_type_validation_profiles.md)
@@ -210,6 +211,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [backlog_item_completion](tables/backlog_item_completion.md)
 - [backup_leo_feature_flag_audit](tables/backup_leo_feature_flag_audit.md)
 - [backup_leo_feature_flag_audit_log](tables/backup_leo_feature_flag_audit_log.md)
+- [batch_operation_log](tables/batch_operation_log.md)
 - [blueprint_board_submissions](tables/blueprint_board_submissions.md)
 - [blueprint_quality_assessments](tables/blueprint_quality_assessments.md)
 - [blueprint_selection_signals](tables/blueprint_selection_signals.md)
@@ -245,7 +247,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [cleanup_orchestration_state](tables/cleanup_orchestration_state.md)
 - [codebase_health_config](tables/codebase_health_config.md)
 - [codebase_health_snapshots](tables/codebase_health_snapshots.md)
+- [codebase_semantic_index](tables/codebase_semantic_index.md)
 - [companies](tables/companies.md)
+- [competitive_baselines](tables/competitive_baselines.md)
 - [competitors](tables/competitors.md)
 - [compliance_alerts](tables/compliance_alerts.md)
 - [compliance_artifact_templates](tables/compliance_artifact_templates.md)
@@ -364,6 +368,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [experiment_assignments](tables/experiment_assignments.md)
 - [experiment_outcomes](tables/experiment_outcomes.md)
 - [experiments](tables/experiments.md)
+- [failure_patterns](tables/failure_patterns.md)
 - [feedback](tables/feedback.md)
 - [feedback_events](tables/feedback_events.md)
 - [feedback_quality_config](tables/feedback_quality_config.md)
@@ -373,7 +378,11 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [fit_gate_scores](tables/fit_gate_scores.md)
 - [folder_structure_snapshot](tables/folder_structure_snapshot.md)
 - [gap_analysis_results](tables/gap_analysis_results.md)
+- [gate_failure_patterns](tables/gate_failure_patterns.md)
+- [gate_health_history](tables/gate_health_history.md)
 - [gate_requirements_templates](tables/gate_requirements_templates.md)
+- [genesis_deployments](tables/genesis_deployments.md)
+- [genesis_tier_config](tables/genesis_tier_config.md)
 - [github_operations](tables/github_operations.md)
 - [global_competitors](tables/global_competitors.md)
 - [governance_audit_log](tables/governance_audit_log.md)
@@ -385,6 +394,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [improvement_quality_assessments](tables/improvement_quality_assessments.md)
 - [intake_submissions](tables/intake_submissions.md)
 - [integration_config](tables/integration_config.md)
+- [integration_verification_records](tables/integration_verification_records.md)
 - [integrity_metrics](tables/integrity_metrics.md)
 - [intelligence_analysis](tables/intelligence_analysis.md)
 - [intelligence_patterns](tables/intelligence_patterns.md)
@@ -443,6 +453,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [ops_revenue_metrics](tables/ops_revenue_metrics.md)
 - [orchestration_metrics](tables/orchestration_metrics.md)
 - [outcome_signals](tables/outcome_signals.md)
+- [pattern_improvements](tables/pattern_improvements.md)
 - [pattern_occurrences](tables/pattern_occurrences.md)
 - [pattern_resolution_signals](tables/pattern_resolution_signals.md)
 - [pattern_subagent_mapping](tables/pattern_subagent_mapping.md)
@@ -458,9 +469,11 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [plan_verification_results](tables/plan_verification_results.md)
 - [portfolio_profile_allocations](tables/portfolio_profile_allocations.md)
 - [portfolios](tables/portfolios.md)
+- [postmortem_pattern_links](tables/postmortem_pattern_links.md)
 - [pr_metrics](tables/pr_metrics.md)
 - [prd_research_audit_log](tables/prd_research_audit_log.md)
 - [prd_ui_mappings](tables/prd_ui_mappings.md)
+- [product_hunt_cache](tables/product_hunt_cache.md)
 - [product_requirements_v2](tables/product_requirements_v2.md)
 - [profiles](tables/profiles.md)
 - [prompt_templates](tables/prompt_templates.md)
@@ -508,6 +521,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sensemaking_telegram_sessions](tables/sensemaking_telegram_sessions.md)
 - [service_tasks](tables/service_tasks.md)
 - [service_telemetry](tables/service_telemetry.md)
+- [service_versions](tables/service_versions.md)
 - [session_coordination](tables/session_coordination.md)
 - [session_lifecycle_events](tables/session_lifecycle_events.md)
 - [shipping_decisions](tables/shipping_decisions.md)
@@ -621,6 +635,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_milestones](tables/venture_milestones.md)
 - [venture_nursery](tables/venture_nursery.md)
 - [venture_persona_mapping](tables/venture_persona_mapping.md)
+- [venture_postmortems](tables/venture_postmortems.md)
 - [venture_provisioning_state](tables/venture_provisioning_state.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_resources](tables/venture_resources.md)
