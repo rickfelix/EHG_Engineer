@@ -239,6 +239,6 @@ export function createWireCheckGate(_supabase) {
         },
       };
     },
-    required: false, // Advisory initially — becomes required after stabilization
+    required: true, // Promoted to blocking enforcement (SD-LEO-INFRA-INTEGRATION-VERIFICATION-ENFORCEMENT-001)
   };
 }

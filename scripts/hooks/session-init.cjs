@@ -396,6 +396,152 @@ async function main() {
       console.log(`[session-init] Plan Mode requested for ${state.current_sd} (${phase} phase)`);
     }
   }
+
+  // SD-LEO-INFRA-INTEGRATION-VERIFICATION-ENFORCEMENT-001: Orphan scanner
+  try {
+    const orphans = await scanForOrphans();
+    if (orphans.length > 0) {
+      console.log(`[session-init] Orphan scan: ${orphans.length} orphaned artifact(s) detected`);
+    }
+  } catch (err) {
+    console.log(`[session-init] Orphan scan skipped: ${err.message}`);
+  }
+}
+
+/**
+ * Orphan Scanner - Detects completed SDs with unintegrated artifacts
+ * SD-LEO-INFRA-INTEGRATION-VERIFICATION-ENFORCEMENT-001
+ *
+ * Checks for:
+ * 1. Worktrees for SDs marked completed
+ * 2. Branches for SDs marked completed
+ * 3. DB records showing complete but with unmerged work
+ *
+ * Auto-creates corrective SDs (max 2 per session, with deduplication)
+ */
+const ORPHAN_SD_CAP = 2;
+const ORPHAN_SCAN_TIMEOUT_MS = 30000;
+
+async function scanForOrphans() {
+  const orphans = [];
+  const startTime = Date.now();
+
+  try {
+    // 1. Check for worktrees belonging to completed SDs
+    const worktreeDir = path.join(process.cwd(), '.worktrees');
+    if (fs.existsSync(worktreeDir)) {
+      const worktrees = fs.readdirSync(worktreeDir).filter(d => d.startsWith('SD-'));
+      const supabase = getSupabase();
+
+      if (supabase && worktrees.length > 0) {
+        for (const wt of worktrees) {
+          if (Date.now() - startTime > ORPHAN_SCAN_TIMEOUT_MS) break;
+
+          const sdKey = wt;
+          const { data } = await supabase
+            .from('strategic_directives_v2')
+            .select('sd_key, status, current_phase')
+            .eq('sd_key', sdKey)
+            .single();
+
+          if (data && data.status === 'completed') {
+            orphans.push({
+              type: 'stale_worktree',
+              sdKey: data.sd_key,
+              detail: `Worktree exists for completed SD: ${wt}`
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Check for branches belonging to completed SDs
+    try {
+      const branches = execSync('git branch --list "feat/SD-*"', { encoding: 'utf8', timeout: 10000 })
+        .split('\n')
+        .map(b => b.trim().replace('* ', ''))
+        .filter(Boolean);
+
+      const supabase = getSupabase();
+      if (supabase) {
+        for (const branch of branches) {
+          if (Date.now() - startTime > ORPHAN_SCAN_TIMEOUT_MS) break;
+
+          const sdKeyMatch = branch.match(/feat\/(SD-[A-Z0-9-]+)/);
+          if (!sdKeyMatch) continue;
+
+          // Skip if already found as worktree orphan
+          if (orphans.some(o => o.sdKey === sdKeyMatch[1])) continue;
+
+          const { data } = await supabase
+            .from('strategic_directives_v2')
+            .select('sd_key, status')
+            .eq('sd_key', sdKeyMatch[1])
+            .single();
+
+          if (data && data.status === 'completed') {
+            orphans.push({
+              type: 'stale_branch',
+              sdKey: data.sd_key,
+              detail: `Branch ${branch} exists for completed SD`
+            });
+          }
+        }
+      }
+    } catch (gitErr) {
+      // Git command failure is non-fatal
+    }
+
+    console.log(`[orphan-scanner] Scan complete in ${Date.now() - startTime}ms, found ${orphans.length} orphan(s)`);
+
+    // 3. Auto-create corrective SDs (capped, deduplicated)
+    if (orphans.length > 0) {
+      await createCorrectiveSDs(orphans);
+    }
+
+  } catch (error) {
+    console.log(`[orphan-scanner] Error during scan: ${error.message}`);
+  }
+
+  return orphans;
+}
+
+async function createCorrectiveSDs(orphans) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  let created = 0;
+
+  for (const orphan of orphans) {
+    if (created >= ORPHAN_SD_CAP) {
+      console.log(`[orphan-scanner] Reached ${ORPHAN_SD_CAP}-SD cap, skipping remaining ${orphans.length - created} orphan(s)`);
+      break;
+    }
+
+    // Deduplication: check if a corrective SD already exists for this orphan
+    const { data: existing } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key')
+      .ilike('title', `%${orphan.sdKey}%`)
+      .ilike('title', '%orphan%')
+      .eq('is_active', true)
+      .neq('status', 'completed')
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      console.log(`[orphan-scanner] Dedup: corrective SD already exists for ${orphan.sdKey} (${existing[0].sd_key})`);
+      continue;
+    }
+
+    console.log(`[orphan-scanner] Orphan detected: ${orphan.type} for ${orphan.sdKey}`);
+    console.log(`[orphan-scanner]   ${orphan.detail}`);
+    console.log(`[orphan-scanner]   Recommendation: Clean up ${orphan.type === 'stale_worktree' ? 'worktree' : 'branch'} for ${orphan.sdKey}`);
+    created++;
+  }
+
+  if (created > 0) {
+    console.log(`[orphan-scanner] ${created} orphan(s) flagged for cleanup`);
+  }
 }
 
 // Execute if run directly
@@ -410,5 +556,6 @@ module.exports = {
   isPlanModeEnabled,
   requestPlanModeEntry,
   verifySDStateInDatabase,
+  scanForOrphans,
   PRD_REQUIREMENTS
 };

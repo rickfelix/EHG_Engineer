@@ -304,7 +304,7 @@ export async function verifyIntegration(idOrKey, ctx = {}) {
   }
 
   const result = {
-    pass: true, // Advisory mode: always true
+    pass: true, // Blocking mode: determined by checks below
     score: 100,
     max_score: 100,
     issues: [],
@@ -315,7 +315,7 @@ export async function verifyIntegration(idOrKey, ctx = {}) {
       deliverablesClean: true,
       capabilitiesConsumed: true
     },
-    advisory: true,
+    advisory: false,
     sdKey: sd.sd_key
   };
 
@@ -350,6 +350,33 @@ export async function verifyIntegration(idOrKey, ctx = {}) {
   }
 
   result.score = Math.max(0, result.score);
+
+  // Blocking enforcement: fail if any critical check failed
+  if (!result.checks.childrenComplete || !result.checks.capabilitiesConsumed) {
+    result.pass = false;
+    if (!result.checks.childrenComplete) {
+      result.issues.push('Integration verification failed: not all children are completed');
+    }
+    if (!result.checks.capabilitiesConsumed) {
+      result.issues.push('Integration verification failed: orphaned capabilities detected with no consumers');
+    }
+  }
+
+  // Persist verification record for audit trail
+  try {
+    await supabase.from('integration_verification_records').insert({
+      sd_id: sd.id,
+      gate_name: 'integration-verification-gate',
+      result: result.pass ? 'pass' : 'fail',
+      score: result.score,
+      max_score: result.max_score,
+      gaps_found: result.issues,
+      details: result.details
+    });
+  } catch (recordErr) {
+    // Non-fatal: don't block on record persistence failure
+    result.warnings.push(`Failed to persist verification record: ${recordErr.message}`);
+  }
 
   return result;
 }
