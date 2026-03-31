@@ -142,10 +142,17 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
 
     console.log('   ' + '─'.repeat(50));
 
+    // Blocking enforcement: if migrations remain pending after all attempts, block the handoff
+    result.blocking = result.hasPendingMigrations;
+    if (result.blocking) {
+      console.log('   🚫 BLOCKING: Pending migrations prevent handoff completion');
+    }
+
     return result;
   } catch (error) {
     result.errors.push(`Migration check failed: ${error.message}`);
     console.log(`   ❌ Migration check error: ${error.message}`);
+    result.blocking = false; // Don't block on check errors (fail-open for safety)
     return result;
   }
 }
@@ -621,7 +628,7 @@ function sleep(ms) {
 }
 
 /**
- * Display pre-handoff migration warnings (non-blocking)
+ * Display pre-handoff migration warnings (blocking when migrations remain pending)
  * Call this from BaseExecutor.setup() or executeSpecific()
  */
 export async function displayMigrationWarnings(supabase, sd) {
