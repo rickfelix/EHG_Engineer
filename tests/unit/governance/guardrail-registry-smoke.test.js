@@ -46,7 +46,6 @@ describe('Guardrail Registry Smoke Tests', () => {
       expect(ids).toContain('GR-BULK-SD-BLOCK');
       expect(ids).toContain('GR-ORCHESTRATOR-ARCH-PLAN');
       expect(ids).toContain('GR-BRAINSTORM-INTENT');
-      expect(ids).toContain('GR-OKR-HARD-STOP');
     });
   });
 
@@ -110,22 +109,6 @@ describe('Guardrail Registry Smoke Tests', () => {
       expect(warning.mode).toBe('advisory');
     });
 
-    it('GR-OKR-HARD-STOP blocks late-cycle SD creation without chairman override', () => {
-      const result = check({ okrCycleDay: 30, strategic_objectives: ['OKR-1'] });
-      const violation = result.violations.find(v => v.guardrail === 'GR-OKR-HARD-STOP');
-      expect(violation).toBeDefined();
-      expect(violation.severity).toBe('critical');
-    });
-
-    it('GR-OKR-HARD-STOP allows late-cycle with chairman override', () => {
-      const result = check({
-        okrCycleDay: 30,
-        chairmanOverride: true,
-        strategic_objectives: ['OKR-1'],
-      });
-      const violation = result.violations.find(v => v.guardrail === 'GR-OKR-HARD-STOP');
-      expect(violation).toBeUndefined();
-    });
 
     it('violations have correct entry structure', () => {
       const result = check({ visionScore: 5 });

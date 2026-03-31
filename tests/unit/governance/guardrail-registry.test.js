@@ -18,9 +18,9 @@ beforeEach(() => {
 });
 
 describe('Guardrail Registry - list()', () => {
-  it('returns all 15 default guardrails', () => {
+  it('returns all 14 default guardrails', () => {
     const guardrails = list();
-    expect(guardrails.length).toBe(15);
+    expect(guardrails.length).toBe(14);
     expect(guardrails[0]).toHaveProperty('id');
     expect(guardrails[0]).toHaveProperty('name');
     expect(guardrails[0]).toHaveProperty('mode');
@@ -269,52 +269,6 @@ describe('Guardrail Registry - GR-BRAINSTORM-INTENT', () => {
   });
 });
 
-describe('Guardrail Registry - GR-OKR-HARD-STOP', () => {
-  it('blocks after OKR cycle day 28', () => {
-    const result = check({ okrCycleDay: 29 });
-    expect(result.passed).toBe(false);
-    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
-    expect(violation).toBeDefined();
-    expect(violation.severity).toBe('critical');
-  });
-
-  it('passes on day 28', () => {
-    const result = check({
-      okrCycleDay: 28,
-      strategic_objectives: ['OKR-1'],
-    });
-    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
-    expect(violation).toBeUndefined();
-  });
-
-  it('allows chairman override after day 28', () => {
-    const result = check({
-      okrCycleDay: 30,
-      chairmanOverride: true,
-      strategic_objectives: ['OKR-1'],
-    });
-    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
-    expect(violation).toBeUndefined();
-  });
-
-  it('allows metadata chairman_override', () => {
-    const result = check({
-      okrCycleDay: 30,
-      metadata: { chairman_override: true },
-      strategic_objectives: ['OKR-1'],
-    });
-    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
-    expect(violation).toBeUndefined();
-  });
-
-  it('skips check when no OKR cycle data', () => {
-    const result = check({
-      strategic_objectives: ['OKR-1'],
-    });
-    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
-    expect(violation).toBeUndefined();
-  });
-});
 
 describe('Guardrail Registry - MODES', () => {
   it('exports blocking and advisory modes', () => {

@@ -79,7 +79,7 @@ describe('Guardrail Event Emission - emitGuardrailEvent()', () => {
       violations: [],
       warnings: [],
       overridesUsed: [
-        { guardrailId: 'GR-OKR-HARD-STOP', guardrailName: 'OKR Cycle Hard Stop' },
+        { guardrailId: 'GR-SPENDING-LIMIT', guardrailName: 'Spending Limit Enforcement' },
       ],
     };
 

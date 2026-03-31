@@ -1067,30 +1067,6 @@ async function createSD(options) {
   // GOVERNANCE GUARDRAILS (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007)
   // ========================================================================
 
-  // Guardrail 2: OKR Monthly Hard Stop
-  // Warn when no active OKRs exist - SDs should align to strategic objectives
-  if (!parentId) { // Skip for child SDs (they inherit parent's OKR alignment)
-    try {
-      const { count: okrCount } = await supabase
-        .from('objectives')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true);
-
-      if (okrCount === 0) {
-        console.log('\n' + '⚠'.repeat(30));
-        console.log('⚠️  OKR ALIGNMENT WARNING (Guardrail V10)');
-        console.log('⚠'.repeat(30));
-        console.log('   No active OKRs found in the objectives table.');
-        console.log('   SDs should align to strategic objectives for prioritization.');
-        console.log('');
-        console.log('   To create OKRs: /leo eva okr');
-        console.log('   Proceeding without OKR alignment...');
-        console.log('⚠'.repeat(30));
-      }
-    } catch {
-      // Non-fatal: OKR check should not block SD creation
-    }
-  }
 
   // Guardrail 1: Brainstorm Intent Validation
   // Warn when feature/enhancement SDs are created without a prior brainstorm session
@@ -1178,8 +1154,6 @@ async function createSD(options) {
   // Blocking guardrails can prevent SD creation. Advisory guardrails log warnings.
   try {
     const guardrailRegistry = await import('../lib/governance/guardrail-registry.js');
-    // Compute OKR cycle day (day of current month, 1-31)
-    const okrCycleDay = new Date().getDate();
     const guardrailInput = {
       sd_type: dbType,
       scope: description,
@@ -1188,7 +1162,6 @@ async function createSD(options) {
       strategic_objectives: finalStrategicObjectives,
       risks: [],
       metadata,
-      okrCycleDay,
     };
     const guardrailResult = guardrailRegistry.check(guardrailInput);
 
@@ -1414,60 +1387,6 @@ async function createSD(options) {
       .catch(err => console.log(`\n   ⚠️  Scope complexity advisory failed (non-blocking): ${err.message}`));
   }
 
-  // OKR Auto-Mapping at SD creation (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-070)
-  // Automatically link new SDs to the most relevant active OKR objective
-  if (!parentId) { // Skip for child SDs (they inherit parent's OKR alignment)
-    try {
-      const { data: activeObjectives } = await supabase
-        .from('objectives')
-        .select('id, title, description, is_active')
-        .eq('is_active', true)
-        .limit(20);
-
-      if (activeObjectives && activeObjectives.length > 0) {
-        // Simple keyword matching: find the OKR with the best title/description overlap
-        const sdWords = new Set(
-          `${title} ${description || ''}`.toLowerCase()
-            .split(/\W+/)
-            .filter(w => w.length > 3)
-        );
-
-        let bestMatch = null;
-        let bestScore = 0;
-
-        for (const obj of activeObjectives) {
-          const okrWords = `${obj.title} ${obj.description || ''}`.toLowerCase()
-            .split(/\W+/)
-            .filter(w => w.length > 3);
-          const overlap = okrWords.filter(w => sdWords.has(w)).length;
-          if (overlap > bestScore) {
-            bestScore = overlap;
-            bestMatch = obj;
-          }
-        }
-
-        if (bestMatch && bestScore >= 2) {
-          // Link SD to best-match OKR
-          await supabase
-            .from('strategic_directives_v2')
-            .update({
-              metadata: {
-                ...sdData.metadata,
-                okr_id: bestMatch.id,
-                okr_title: bestMatch.title,
-                okr_auto_mapped: true,
-                objective_ids: [bestMatch.id],
-              },
-            })
-            .eq('id', data.id);
-
-          console.log(`   OKR:      ${bestMatch.title} (auto-mapped, ${bestScore} keyword matches)`);
-        }
-      }
-    } catch {
-      // Non-fatal: OKR auto-mapping should not block SD creation
-    }
-  }
 
   console.log('\n' + '═'.repeat(60));
   console.log('✅ SD CREATED');
