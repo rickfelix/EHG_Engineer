@@ -61,6 +61,67 @@ export function isLightweightSDType(sdType) {
   return LIGHTWEIGHT_SD_TYPES.includes((sdType || '').toLowerCase());
 }
 
+// File extensions that indicate code production (matched anywhere in text, not just at end)
+const CODE_FILE_EXTENSIONS = /\.(js|ts|cjs|mjs|jsx|tsx|py|sh|ps1|bash)\b/i;
+
+// Keywords in scope/title/key_changes that indicate code production
+const CODE_PRODUCTION_KEYWORDS = /\b(script|utility|function|module|handler|gate|validator|middleware|endpoint|api|worker|plugin|hook|adapter|factory|engine|executor|runner)\b/i;
+
+/**
+ * SD-LEO-INFRA-ENFORCE-EXECUTION-SMOKE-001: Detect whether an infrastructure SD produces executable code.
+ *
+ * Analyzes key_changes, scope, and title to determine if the SD creates or modifies
+ * executable code files (scripts, utilities, gates, etc.) vs config-only changes.
+ *
+ * @param {Object} sd - Strategic Directive object
+ * @returns {{ producesCode: boolean, reason: string }} Detection result with reasoning
+ */
+export function detectCodeProduction(sd) {
+  if (!sd) return { producesCode: false, reason: 'No SD provided' };
+
+  const sdType = (sd.sd_type || '').toLowerCase();
+  if (sdType !== 'infrastructure') {
+    return { producesCode: false, reason: `Not an infrastructure SD (type: ${sdType})` };
+  }
+
+  // Check key_changes for code file references
+  let keyChanges = sd.key_changes || [];
+  if (typeof keyChanges === 'string') {
+    try { keyChanges = JSON.parse(keyChanges); } catch { keyChanges = []; }
+  }
+
+  for (const kc of keyChanges) {
+    const changeText = typeof kc === 'string' ? kc : (kc.change || kc.description || '');
+    if (CODE_FILE_EXTENSIONS.test(changeText)) {
+      return { producesCode: true, reason: `key_changes references code file: "${changeText.slice(0, 80)}"` };
+    }
+  }
+
+  // Check scope for code file references
+  const scope = sd.scope || '';
+  if (CODE_FILE_EXTENSIONS.test(scope)) {
+    return { producesCode: true, reason: 'scope references code files' };
+  }
+
+  // Check key_changes for code production keywords
+  for (const kc of keyChanges) {
+    const changeText = typeof kc === 'string' ? kc : (kc.change || kc.description || '');
+    if (CODE_PRODUCTION_KEYWORDS.test(changeText)) {
+      return { producesCode: true, reason: `key_changes contains code keyword: "${changeText.slice(0, 80)}"` };
+    }
+  }
+
+  // Check scope and title for code production keywords
+  if (CODE_PRODUCTION_KEYWORDS.test(scope)) {
+    return { producesCode: true, reason: 'scope contains code production keywords' };
+  }
+  if (CODE_PRODUCTION_KEYWORDS.test(sd.title || '')) {
+    return { producesCode: true, reason: 'title contains code production keywords' };
+  }
+
+  return { producesCode: false, reason: 'No code production signals detected' };
+}
+
 /**
  * Validator requirement levels
  */
@@ -841,5 +902,7 @@ export default {
   getSkipConditionsForType,
   // SD-LEO-TESTING-STRATEGY-REDESIGN-ORCH-001-D: Test tier assignment
   computeTestTier,
-  TEST_TIER_DEFINITIONS
+  TEST_TIER_DEFINITIONS,
+  // SD-LEO-INFRA-ENFORCE-EXECUTION-SMOKE-001: Code production detection
+  detectCodeProduction
 };

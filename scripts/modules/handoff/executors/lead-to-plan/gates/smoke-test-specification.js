@@ -11,7 +11,7 @@
  * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
  */
 
-import { isLightweightSDType } from '../../../validation/sd-type-applicability-policy.js';
+import { isLightweightSDType, detectCodeProduction } from '../../../validation/sd-type-applicability-policy.js';
 import { safeTruncate } from '../../../../../../lib/utils/safe-truncate.js';
 
 /**
@@ -24,16 +24,39 @@ export async function validateSmokeTestSpecification(sd) {
   const sdType = (sd.sd_type || 'feature').toLowerCase();
 
   // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
+  // SD-LEO-INFRA-ENFORCE-EXECUTION-SMOKE-001: Check if infrastructure SD produces code
   if (isLightweightSDType(sdType)) {
-    console.log(`   ℹ️  SD Type: ${sdType} - smoke test specification not required`);
-    return {
-      pass: true,
-      score: 100,
-      max_score: 100,
-      issues: [],
-      warnings: [`Smoke test skipped for ${sdType} SD type`],
-      details: { skipped: true, reason: `${sdType} SD type exempt` }
-    };
+    // For infrastructure SDs, check if they produce code before auto-skipping
+    if (sdType === 'infrastructure') {
+      const detection = detectCodeProduction(sd);
+      console.log(`   ℹ️  SD Type: infrastructure — code production check: ${detection.producesCode ? 'YES' : 'NO'}`);
+      console.log(`   ℹ️  Reason: ${detection.reason}`);
+
+      if (detection.producesCode) {
+        console.log(`   ⚠️  Code-producing infrastructure SD — smoke test specification REQUIRED`);
+        // Fall through to the normal validation below (do NOT return early)
+      } else {
+        console.log(`   ℹ️  Non-code infrastructure SD — smoke test specification not required`);
+        return {
+          pass: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`Smoke test skipped for non-code infrastructure SD`],
+          details: { skipped: true, reason: 'non-code infrastructure SD exempt', codeDetection: detection }
+        };
+      }
+    } else {
+      console.log(`   ℹ️  SD Type: ${sdType} - smoke test specification not required`);
+      return {
+        pass: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: [`Smoke test skipped for ${sdType} SD type`],
+        details: { skipped: true, reason: `${sdType} SD type exempt` }
+      };
+    }
   }
 
   console.log(`   SD Type: ${sdType} - smoke test specification REQUIRED`);

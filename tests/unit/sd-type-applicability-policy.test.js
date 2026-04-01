@@ -20,7 +20,8 @@ import {
   getNonApplicableValidators,
   createSkippedResult,
   isSkippedResult,
-  getPolicySummary
+  getPolicySummary,
+  detectCodeProduction
 } from '../../scripts/modules/handoff/validation/sd-type-applicability-policy.js';
 
 describe('SD-Type Applicability Policy', () => {
@@ -311,6 +312,106 @@ describe('SD-Type Applicability Policy', () => {
           expect(result.passed).toBe(true);
         }
       }
+    });
+  });
+
+  // SD-LEO-INFRA-ENFORCE-EXECUTION-SMOKE-001: Code production detection tests
+  describe('detectCodeProduction', () => {
+    it('should return false for non-infrastructure SD types', () => {
+      const result = detectCodeProduction({ sd_type: 'feature', key_changes: [{ change: 'Add new script.js' }] });
+      expect(result.producesCode).toBe(false);
+      expect(result.reason).toContain('Not an infrastructure SD');
+    });
+
+    it('should return false for null/undefined SD', () => {
+      expect(detectCodeProduction(null).producesCode).toBe(false);
+      expect(detectCodeProduction(undefined).producesCode).toBe(false);
+    });
+
+    it('should detect code production from .js file references in key_changes', () => {
+      const sd = {
+        sd_type: 'infrastructure',
+        key_changes: [{ change: 'Add producesCode() to sd-type-applicability-policy.js', type: 'feature' }]
+      };
+      const result = detectCodeProduction(sd);
+      expect(result.producesCode).toBe(true);
+      expect(result.reason).toContain('code file');
+    });
+
+    it('should detect code production from .ts file references in key_changes', () => {
+      const sd = {
+        sd_type: 'infrastructure',
+        key_changes: [{ change: 'Update handler.ts with new middleware', type: 'feature' }]
+      };
+      expect(detectCodeProduction(sd).producesCode).toBe(true);
+    });
+
+    it('should detect code production from .mjs file references in scope', () => {
+      const sd = {
+        sd_type: 'infrastructure',
+        scope: 'Modify scripts/leo-history.mjs to add new output format',
+        key_changes: []
+      };
+      expect(detectCodeProduction(sd).producesCode).toBe(true);
+      expect(detectCodeProduction(sd).reason).toContain('scope references code files');
+    });
+
+    it('should return false for config-only key_changes', () => {
+      const sd = {
+        sd_type: 'infrastructure',
+        title: 'Update CI configuration',
+        scope: 'Modify .github/workflows/ci.yml to add caching',
+        key_changes: [
+          { change: 'Update CI YAML config for caching', type: 'config' },
+          { change: 'Add .env.example entries', type: 'config' }
+        ]
+      };
+      expect(detectCodeProduction(sd).producesCode).toBe(false);
+    });
+
+    it('should detect code production keywords in key_changes', () => {
+      const sd = {
+        sd_type: 'infrastructure',
+        key_changes: [{ change: 'Add new validation gate for smoke tests', type: 'feature' }]
+      };
+      const result = detectCodeProduction(sd);
+      expect(result.producesCode).toBe(true);
+      expect(result.reason).toContain('code keyword');
+    });
+
+    it('should detect code production keywords in title', () => {
+      const sd = {
+        sd_type: 'infrastructure',
+        title: 'Add executor for batch processing',
+        key_changes: []
+      };
+      expect(detectCodeProduction(sd).producesCode).toBe(true);
+    });
+
+    it('should return false for empty key_changes and generic title', () => {
+      const sd = {
+        sd_type: 'infrastructure',
+        title: 'Update deployment process',
+        scope: 'Change deployment steps in Confluence',
+        key_changes: []
+      };
+      expect(detectCodeProduction(sd).producesCode).toBe(false);
+    });
+
+    it('should handle string key_changes (JSON)', () => {
+      const sd = {
+        sd_type: 'infrastructure',
+        key_changes: JSON.stringify([{ change: 'Create new worker.js file' }])
+      };
+      expect(detectCodeProduction(sd).producesCode).toBe(true);
+    });
+
+    it('should detect .sh and .ps1 script files', () => {
+      const sd = {
+        sd_type: 'infrastructure',
+        key_changes: [{ change: 'Update deploy.sh with rollback support' }]
+      };
+      expect(detectCodeProduction(sd).producesCode).toBe(true);
     });
   });
 });
