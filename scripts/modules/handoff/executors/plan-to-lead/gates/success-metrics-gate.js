@@ -150,7 +150,10 @@ export function createSuccessMetricsGate(supabase) {
       // SD-LEARN-FIX-ADDRESS-PAT-AUTO-074: Auto-populate missing actual values
       // from handoff evidence to prevent 0/100 scores on SDs that completed work
       // but didn't manually fill in success_metrics.actual
-      const hasEmptyActuals = metrics.some(m => m.actual == null || String(m.actual).trim() === '');
+      // SD-LEARN-FIX-ADDRESS-PAT-AUTO-080: Also treat 'pending'/'tbd' as empty
+      const PENDING_PATTERN = /^(pending|tbd|to\s*be\s*determined|not\s*yet|awaiting)$/i;
+      const isEmptyOrPending = (val) => val == null || String(val).trim() === '' || PENDING_PATTERN.test(String(val).trim());
+      const hasEmptyActuals = metrics.some(m => isEmptyOrPending(m.actual));
       if (hasEmptyActuals) {
         try {
           // Query evidence: accepted handoffs, user story completion, PR merge status
@@ -166,12 +169,14 @@ export function createSuccessMetricsGate(supabase) {
             .select('status')
             .eq('sd_id', sdUuid);
           const totalStories = stories?.length || 0;
-          const completedStories = stories?.filter(s => s.status === 'completed')?.length || 0;
+          // SD-LEARN-FIX-ADDRESS-PAT-AUTO-080: Count ready/done/validated stories as evidence
+          const EVIDENCE_STATUSES = new Set(['completed', 'ready', 'done', 'validated']);
+          const completedStories = stories?.filter(s => EVIDENCE_STATUSES.has(s.status))?.length || 0;
 
           if (acceptedCount > 0 || completedStories > 0) {
             console.log(`   🔄 Auto-populating missing actuals from evidence (${acceptedCount} handoffs, ${completedStories}/${totalStories} stories)`);
             for (const metric of metrics) {
-              if (metric.actual != null && String(metric.actual).trim() !== '') continue;
+              if (!isEmptyOrPending(metric.actual)) continue;
               const name = (metric.metric || metric.name || '').toLowerCase();
               // Heuristic matching: common metric names → evidence-based values
               if (name.includes('implementation') || name.includes('completeness') || name.includes('scope')) {

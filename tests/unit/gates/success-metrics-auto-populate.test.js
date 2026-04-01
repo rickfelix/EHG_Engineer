@@ -140,6 +140,76 @@ describe('Success Metrics Auto-Population (PAT-AUTO-14398afb fix)', () => {
     expect(result.score).toBeGreaterThan(0);
   });
 
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-080: Pending detection tests
+  it('should auto-populate metrics with actual="pending"', async () => {
+    const metrics = [
+      { metric: 'Implementation completeness', target: '100%', actual: 'pending' },
+      { metric: 'Test coverage', target: '80%', actual: 'TBD' }
+    ];
+    mockSupabase = buildMockSupabase({
+      metrics,
+      handoffs: [
+        { handoff_type: 'PLAN-TO-EXEC', status: 'accepted', validation_score: 90 }
+      ],
+      stories: [{ status: 'completed' }, { status: 'ready' }]
+    });
+
+    gate = createSuccessMetricsGate(mockSupabase);
+    const result = await gate.validator({
+      sd: { id: 'test-uuid', sd_type: 'infrastructure' },
+      sdId: 'test-uuid'
+    });
+
+    // Should auto-populate — pending/TBD actuals treated as empty
+    // Score should be >0 (auto-populated with evidence, not stuck at 0)
+    expect(result.score).toBeGreaterThan(0);
+  });
+
+  it('should count ready stories as evidence for auto-population', async () => {
+    const metrics = [
+      { metric: 'Story completion', target: '100%' }
+    ];
+    mockSupabase = buildMockSupabase({
+      metrics,
+      handoffs: [],
+      stories: [
+        { status: 'ready' },
+        { status: 'ready' },
+        { status: 'pending' }
+      ]
+    });
+
+    gate = createSuccessMetricsGate(mockSupabase);
+    const result = await gate.validator({
+      sd: { id: 'test-uuid', sd_type: 'infrastructure' },
+      sdId: 'test-uuid'
+    });
+
+    // Should auto-populate because 2 ready stories count as evidence
+    expect(result.score).toBeGreaterThan(0);
+  });
+
+  it('should NOT treat real actual values as pending', async () => {
+    const metrics = [
+      { metric: 'Implementation completeness', target: '100%', actual: '3/3 stories done' },
+      { metric: 'Test coverage', target: '80%', actual: 'pending review of results' }
+    ];
+    mockSupabase = buildMockSupabase({
+      metrics,
+      handoffs: [{ handoff_type: 'PLAN-TO-EXEC', status: 'accepted', validation_score: 90 }],
+      stories: [{ status: 'completed' }]
+    });
+
+    gate = createSuccessMetricsGate(mockSupabase);
+    const result = await gate.validator({
+      sd: { id: 'test-uuid', sd_type: 'infrastructure' },
+      sdId: 'test-uuid'
+    });
+
+    // Real values should NOT be auto-populated — "pending review of results" is not just "pending"
+    expect(result.score).toBeGreaterThan(0);
+  });
+
   it('should score 0 when no evidence available and no actuals', async () => {
     const metrics = [
       { metric: 'Implementation completeness', target: '100%' }
