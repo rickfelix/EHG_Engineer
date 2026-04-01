@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-01T00:46:27.420Z
-**Tables**: 616
+**Generated**: 2026-04-01T11:28:02.645Z
+**Tables**: 617
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (616)
+## All Tables (617)
 
 ### LEO Protocol
 
@@ -368,6 +368,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [experiment_assignments](tables/experiment_assignments.md)
 - [experiment_outcomes](tables/experiment_outcomes.md)
 - [experiments](tables/experiments.md)
+- [factory_guardrail_state](tables/factory_guardrail_state.md)
 - [failure_patterns](tables/failure_patterns.md)
 - [feedback](tables/feedback.md)
 - [feedback_events](tables/feedback_events.md)
