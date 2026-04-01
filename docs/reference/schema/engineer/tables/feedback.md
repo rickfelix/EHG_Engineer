@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-01T11:28:02.645Z
+**Generated**: 2026-04-01T22:49:08.070Z
 **Rows**: 28
-**RLS**: Enabled (6 policies)
+**RLS**: Enabled (8 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (55 total)
+## Columns (57 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -73,6 +73,8 @@
 | sentry_issue_id | `text` | YES | - | Links feedback row back to Sentry issue for traceability |
 | sentry_first_seen | `timestamp with time zone` | YES | - | - |
 | auto_correction_status | `text` | YES | `'pending'::text` | Tracks automated correction lifecycle: pending → in_progress → resolved/failed |
+| venture_id | `uuid` | YES | - | Links feedback to a specific venture. Required for user-submitted feedback. |
+| feedback_type | `character varying(30)` | **NO** | `'sentry_error'::character varying` | Feedback channel type. sentry_error = automated capture; user_* = user-submitted via venture app. |
 
 ## Constraints
 
@@ -80,6 +82,7 @@
 - `feedback_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `feedback_venture_id_fkey`: venture_id → ventures(id)
 - `fk_feedback_duplicate_of`: duplicate_of_id → feedback(id)
 - `fk_feedback_duplicate_of_id`: duplicate_of_id → feedback(id)
 - `fk_feedback_quick_fix`: quick_fix_id → quick_fixes(id)
@@ -102,9 +105,10 @@ END)
 - `chk_wont_fix_requires_notes`: CHECK ((((status)::text <> 'wont_fix'::text) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0))))
 - `feedback_auto_correction_status_check`: CHECK ((auto_correction_status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'resolved'::text, 'failed'::text])))
 - `feedback_effort_estimate_check`: CHECK (((effort_estimate)::text = ANY ((ARRAY['small'::character varying, 'medium'::character varying, 'large'::character varying])::text[])))
+- `feedback_feedback_type_check`: CHECK (((feedback_type)::text = ANY ((ARRAY['sentry_error'::character varying, 'user_bug'::character varying, 'user_feature_request'::character varying, 'user_usability'::character varying, 'user_other'::character varying])::text[])))
 - `feedback_rubric_score_check`: CHECK (((rubric_score >= 0) AND (rubric_score <= 100)))
 - `feedback_severity_check`: CHECK (((severity)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
-- `feedback_source_type_check`: CHECK (((source_type)::text = ANY ((ARRAY['manual_feedback'::character varying, 'auto_capture'::character varying, 'uat_failure'::character varying, 'error_capture'::character varying, 'uncaught_exception'::character varying, 'unhandled_rejection'::character varying, 'manual_capture'::character varying, 'todoist_intake'::character varying, 'youtube_intake'::character varying, 'claude_code_intake'::character varying, 'telegram'::character varying])::text[])))
+- `feedback_source_type_check`: CHECK (((source_type)::text = ANY ((ARRAY['manual_feedback'::character varying, 'auto_capture'::character varying, 'uat_failure'::character varying, 'error_capture'::character varying, 'uncaught_exception'::character varying, 'unhandled_rejection'::character varying, 'manual_capture'::character varying, 'todoist_intake'::character varying, 'youtube_intake'::character varying, 'claude_code_intake'::character varying, 'telegram'::character varying, 'user_feedback'::character varying])::text[])))
 - `feedback_status_check`: CHECK (((status)::text = ANY (ARRAY[('new'::character varying)::text, ('triaged'::character varying)::text, ('in_progress'::character varying)::text, ('resolved'::character varying)::text, ('wont_fix'::character varying)::text, ('duplicate'::character varying)::text, ('invalid'::character varying)::text, ('backlog'::character varying)::text, ('shipped'::character varying)::text])))
 - `feedback_type_check`: CHECK (((type)::text = ANY ((ARRAY['issue'::character varying, 'enhancement'::character varying])::text[])))
 - `feedback_value_estimate_check`: CHECK (((value_estimate)::text = ANY ((ARRAY['high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
@@ -142,6 +146,10 @@ END)
 - `idx_feedback_error_hash`
   ```sql
   CREATE INDEX idx_feedback_error_hash ON public.feedback USING btree (error_hash) WHERE (error_hash IS NOT NULL)
+  ```
+- `idx_feedback_feedback_type`
+  ```sql
+  CREATE INDEX idx_feedback_feedback_type ON public.feedback USING btree (feedback_type)
   ```
 - `idx_feedback_issues`
   ```sql
@@ -199,6 +207,10 @@ END)
   ```sql
   CREATE INDEX idx_feedback_value ON public.feedback USING btree (value_estimate) WHERE ((type)::text = 'enhancement'::text)
   ```
+- `idx_feedback_venture_created`
+  ```sql
+  CREATE INDEX idx_feedback_venture_created ON public.feedback USING btree (venture_id, created_at DESC) WHERE (venture_id IS NOT NULL)
+  ```
 
 ## RLS Policies
 
@@ -231,6 +243,18 @@ END)
 
 - **Roles**: {service_role}
 - **Using**: `true`
+
+### 7. venture_user_insert_feedback (INSERT)
+
+- **Roles**: {anon}
+- **With Check**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL) AND (EXISTS ( SELECT 1
+   FROM ventures v
+  WHERE ((v.id = feedback.venture_id) AND (v.deleted_at IS NULL)))) AND (NOT check_feedback_rate_limit(venture_id)))`
+
+### 8. venture_user_select_feedback (SELECT)
+
+- **Roles**: {anon}
+- **Using**: `(((feedback_type)::text ~~ 'user_%'::text) AND (venture_id IS NOT NULL))`
 
 ## Triggers
 
