@@ -38,7 +38,7 @@ The Software Factory feeds errors into the same `feedback` table that Post-Pipel
 Venture App (Sentry SDK)
   → Sentry Cloud (error storage)
     → poll-errors.js (scheduled every 30min via GitHub Actions)
-      → error-sanitizer.js (prompt injection defense)
+      → content-sanitizer.js (prompt injection defense)
         → feedback-writer.js (central feedback table, error_hash dedup)
           → /heal scoring loop (evaluates error impact)
             → corrective-sd-generator.js (auto-creates SDs)
@@ -51,7 +51,7 @@ Venture App (Sentry SDK)
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | `sentry-poller.js` | `lib/factory/` | Polls Sentry REST API per venture with rate limit handling |
-| `error-sanitizer.js` | `lib/factory/` | Prompt injection defense — strips control chars, truncates, XML-wraps |
+| `content-sanitizer.js` | `lib/factory/` | Prompt injection defense — strips control chars, truncates, XML-wraps |
 | `feedback-writer.js` | `lib/factory/` | Writes to feedback table with SHA-256 error_hash dedup |
 | `guardrails.js` | `lib/factory/` | Enforces 10 CRO guardrails (rate limits, kill switch, etc.) |
 | `daily-digest.js` | `lib/factory/` | Chairman portfolio health summary |
