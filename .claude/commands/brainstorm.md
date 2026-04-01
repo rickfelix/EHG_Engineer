@@ -273,55 +273,261 @@ Present the score breakdown to the user.
 
 ### 6D.1a: Board of Directors Deliberation (Default — replaces 3-persona analysis)
 
-After discovery and crystallization, execute a full board deliberation using the programmatic deliberation engine.
+After discovery and crystallization, execute a full board deliberation. Claude directly orchestrates the deliberation by spawning board seats as Agents (which provides the `invokeAgent` callback that the deliberation engine requires).
 
-**Invocation** — Run the deliberation engine CLI runner:
+**IMPORTANT**: Do NOT run `node scripts/brainstorm-deliberate.js` without `--dry-run`. The CLI script cannot call back into Claude's Agent tool. Claude must orchestrate the deliberation directly using the steps below.
+
+**Execution Flow** (Claude orchestrates each step):
+
+#### Step A: Panel Selection & Setup
+
+Get the panel composition and create a debate session:
+
 ```bash
-node scripts/brainstorm-deliberate.js --topic "<crystallized topic>" --keywords "<comma-separated keywords>"
+node scripts/brainstorm-deliberate.js --topic "<crystallized topic>" --keywords "<comma-separated keywords>" --dry-run
 ```
 
-If a brainstorm session ID exists from earlier steps, pass it:
+This prints the panel (6 seats with codes, titles, relevance scores). Capture the seat codes and titles.
+
+Then create the debate session and load institutional memory:
+
 ```bash
-node scripts/brainstorm-deliberate.js --topic "<topic>" --keywords "<keywords>" --session-id "<brainstorm-session-id>"
+node -e "
+require('dotenv').config();
+const { createBoardDebateSession } = require('./lib/brainstorm/board-judiciary-bridge.js');
+const { loadSeatMemory } = require('./lib/brainstorm/institutional-memory.js');
+const { findRelevantSpecialists } = require('./lib/brainstorm/specialist-registry.js');
+(async () => {
+  const sessionId = await createBoardDebateSession('<BRAINSTORM_SESSION_ID>', '<TOPIC>');
+  console.log('DEBATE_SESSION_ID=' + sessionId);
+
+  // Load memory for all seats in parallel
+  const seats = ['CSO', 'CRO', 'CTO', 'CISO', 'COO', 'CFO'];
+  const keywords = '<KEYWORDS>'.split(',').map(k => k.trim());
+  for (const code of seats) {
+    const memory = await loadSeatMemory(code, '<TOPIC>', keywords);
+    if (memory) console.log('MEMORY_' + code + '=' + JSON.stringify(memory));
+    else console.log('MEMORY_' + code + '=');
+  }
+
+  // Pre-seed specialists
+  const specialists = await findRelevantSpecialists('<TOPIC>', keywords);
+  if (specialists.length > 0) console.log('PRE_SEEDED_SPECIALISTS=' + JSON.stringify(specialists));
+  else console.log('PRE_SEEDED_SPECIALISTS=[]');
+})();
+"
 ```
 
-To preview panel composition without running the full deliberation:
-```bash
-node scripts/brainstorm-deliberate.js --topic "<topic>" --keywords "<keywords>" --dry-run
+Capture the `DEBATE_SESSION_ID`, memory context per seat, and pre-seeded specialists.
+
+#### Step B: Round 1 — All Seats in Parallel
+
+Spawn **all 6 board seats as Agents in parallel** using the Agent tool. Each agent receives its seat's system prompt and the deliberation topic.
+
+For each seat, use this prompt template (replace `<SEAT_CODE>`, `<SEAT_TITLE>`, `<STANDING_QUESTION>`, `<SEAT_MEMORY>`, `<SPECIALIST_ROSTER>`):
+
+```
+You are the <SEAT_TITLE> (<SEAT_CODE>) on EHG's Board of Directors.
+
+Your standing question: "<STANDING_QUESTION>"
+
+<SEAT_MEMORY>
+<SPECIALIST_ROSTER>
+
+Deliberation Topic: <TOPIC>
+Domain: <DOMAIN>
+
+Produce your <SEAT_TITLE> position on this topic. Address your standing question.
+Be specific to THIS topic. Reference concrete details, not generic advice.
+
+When you identify an area where the board lacks deep expertise, flag it as:
+EXPERTISE_GAP: [description of the gap]
 ```
 
-The engine (`lib/brainstorm/deliberation-engine.js`) handles the complete flow automatically:
-- Dynamic panel selection from `specialist_registry` via `lib/brainstorm/panel-selector.js`
-- Expertise gap detection via rubric (`lib/brainstorm/expertise-gap-rubric.js`)
-- Institutional memory loading from past deliberations
-- Round 1 positions, specialist summoning, Round 2 rebuttals, judiciary verdict
-- All results persisted to `debate_arguments` and `judge_verdicts` tables
-- Specialists registered in `specialist_registry` for cross-session reuse
+**Standing questions by seat:**
+- CSO: "Does this move EHG forward or sideways?"
+- CRO: "What's the blast radius if this fails?"
+- CTO: "What do we already have? What's the real build cost?"
+- CISO: "What attack surface does this create?"
+- COO: "Can we actually deliver this given current load?"
+- CFO: "What does this cost and what's the return?"
 
-**Execution Flow (handled by engine):**
+**Quorum check**: After all agents respond, verify at least 4 of 6 (67%) produced substantive positions (>50 characters). If quorum fails, fall back to Step 6D.1b.
 
-1. **Panel Selection** — Dynamic panel from `specialist_registry` (governance floor seats always included, domain specialists scored by topic relevance and authority)
-2. **Institutional Memory** — Past positions loaded for each seat (parallel)
-3. **Round 1** — All seats produce positions in parallel with expertise gap rubric
-4. **Specialist Summoning** — Gaps auto-detected, specialists reused or generated (max 3)
-5. **Quorum Check** — 67% of panel must respond with substantive positions
-6. **Round 2** — Rebuttals with cross-seat awareness and specialist testimony
-7. **Judiciary Synthesis** — Verdict with constitutional citations and escalation decision
+#### Step C: Persist Round 1 & Detect Expertise Gaps
 
-**Error Handling:**
-- **Timeout** (>3 minutes): Engine returns partial results, exit code 2
-- **Quorum failure** (<67% seats): Partial results printed, exit code 3 → fall back to Step 6D.1b
-- **LLM unavailable**: Engine uses echo stub, warns user to configure API keys
+Record all Round 1 positions to the database:
 
-**Performance Budget**: 3 minutes total (enforced by engine timeout).
+```bash
+node -e "
+require('dotenv').config();
+const { recordBoardArgument, extractConstitutionalCitations } = require('./lib/brainstorm/board-judiciary-bridge.js');
+const { parseExpertiseGaps } = require('./lib/brainstorm/specialist-registry.js');
+(async () => {
+  const positions = <ROUND_1_POSITIONS_JSON>;
+  for (const pos of positions) {
+    const citations = extractConstitutionalCitations(pos.position);
+    const argId = await recordBoardArgument({
+      debateSessionId: '<DEBATE_SESSION_ID>',
+      agentCode: pos.seatCode,
+      roundNumber: 1,
+      argumentType: 'initial_position',
+      summary: pos.position.slice(0, 500),
+      detailedReasoning: pos.position,
+      confidenceScore: 0.8,
+      constitutionCitations: citations
+    });
+    console.log('ROUND1_ARG_' + pos.seatCode + '=' + argId);
+  }
 
-**Synthesis Output** (from engine stdout):
+  // Detect expertise gaps from all positions
+  const allOutputs = positions.map(p => p.position);
+  const gaps = parseExpertiseGaps(allOutputs);
+  console.log('EXPERTISE_GAPS=' + JSON.stringify(gaps));
+})();
+"
+```
+
+#### Step D: Specialist Summoning (if gaps detected)
+
+If `EXPERTISE_GAPS` is non-empty, for each gap (max 3):
+
+1. Check if a specialist exists:
+```bash
+node -e "
+require('dotenv').config();
+const { findSpecialist, generateSpecialistIdentity, registerSpecialist } = require('./lib/brainstorm/specialist-registry.js');
+(async () => {
+  let specialist = await findSpecialist('<GAP_DESCRIPTION>');
+  if (!specialist) {
+    specialist = generateSpecialistIdentity('<GAP_DESCRIPTION>', '<TOPIC>');
+    await registerSpecialist(specialist);
+    console.log('NEW_SPECIALIST=true');
+  } else {
+    console.log('NEW_SPECIALIST=false');
+  }
+  console.log('SPECIALIST_CODE=' + specialist.agentCode);
+  console.log('SPECIALIST_IDENTITY=' + JSON.stringify(specialist.identity));
+})();
+"
+```
+
+2. Spawn an Agent with the specialist's identity as the system prompt:
+```
+<SPECIALIST_IDENTITY>
+
+The Board of Directors is deliberating on: "<TOPIC>"
+They identified an expertise gap in: <GAP_DESCRIPTION>
+
+Provide your expert testimony. Be specific, actionable, and grounded in domain knowledge.
+```
+
+3. Persist specialist testimony via `recordBoardArgument` (same pattern as Round 1).
+
+#### Step E: Round 2 — Rebuttals in Parallel
+
+Spawn **all 6 seats as Agents again in parallel**, this time with cross-seat awareness.
+
+For each seat, include in the prompt:
+- Their original Round 1 position
+- All OTHER seats' Round 1 positions (truncated to 400 chars each)
+- Any specialist testimony from Step D
+
+Prompt template:
+```
+You are the <SEAT_TITLE> (<SEAT_CODE>) on EHG's Board of Directors.
+<SEAT_MEMORY>
+
+ROUND 2 REBUTTAL — Deliberation Topic: "<TOPIC>"
+
+Your Round 1 position has been recorded. Now review other board members' positions and specialist testimony, then produce your rebuttal.
+
+OTHER BOARD POSITIONS:
+<OTHER_POSITIONS>
+
+<SPECIALIST_TESTIMONY>
+
+Reference specific positions from other seats by their code (e.g., "The CRO raises a valid concern about..."). Incorporate specialist testimony where relevant. Refine or defend your position based on new information.
+```
+
+Persist Round 2 rebuttals via `recordBoardArgument` with `roundNumber: 2, argumentType: 'rebuttal'`.
+
+#### Step F: Judiciary Synthesis
+
+Spawn **one Agent** for the judiciary verdict:
+
+```
+You are the Judiciary of EHG's Board of Directors governance system.
+
+Your role: Synthesize the board's deliberation into a clear verdict.
+
+You MUST:
+1. Identify consensus points across all seats
+2. Identify tension points where seats disagree
+3. Cite specific constitutional rules (CONST-001 through CONST-010, FOUR_OATHS, DOCTRINE) where relevant
+4. Determine if positions are reconcilable or require chairman escalation
+5. Provide a clear recommendation
+
+Set escalation_required=true if:
+- Positions are fundamentally irreconcilable after Round 2
+- Constitutional concerns require human judgment
+- Confidence in synthesis is below 0.6
+
+ROUND 1 POSITIONS:
+<ALL_ROUND_1_POSITIONS>
+
+ROUND 2 REBUTTALS:
+<ALL_ROUND_2_REBUTTALS>
+
+<SPECIALIST_TESTIMONY>
+
+Produce your verdict with sections: CONSENSUS, TENSIONS, CONSTITUTIONAL CITATIONS, RECOMMENDATION, ESCALATION (true/false with reason).
+```
+
+Persist the verdict:
+```bash
+node -e "
+require('dotenv').config();
+const { recordJudiciaryVerdict, extractConstitutionalCitations, updateDebateRound } = require('./lib/brainstorm/board-judiciary-bridge.js');
+(async () => {
+  await updateDebateRound('<DEBATE_SESSION_ID>', 2);
+  const citations = extractConstitutionalCitations('<VERDICT_TEXT>');
+  const citationsWithScores = citations.map(c => ({
+    source: c.startsWith('CONST-') ? 'PROTOCOL' : c,
+    rule_number: c,
+    relevance_score: 0.80
+  }));
+  const escalation = /escalation.*(?:required|needed|true)/i.test('<VERDICT_TEXT>');
+  const verdictId = await recordJudiciaryVerdict({
+    debateSessionId: '<DEBATE_SESSION_ID>',
+    summary: '<VERDICT_TEXT>'.slice(0, 500),
+    detailedRationale: '<VERDICT_TEXT>',
+    constitutionCitations: citationsWithScores,
+    constitutionalScore: 0.80,
+    confidenceScore: escalation ? 0.5 : 0.8,
+    escalationRequired: escalation
+  });
+  console.log('VERDICT_ID=' + verdictId);
+  console.log('ESCALATION=' + escalation);
+})();
+"
+```
+
+#### Step G: Synthesis Output
+
+After all steps complete, compile the deliberation results:
+
 - **Board Consensus**: Points where 3+ seats agree
 - **Key Tensions**: Where seats disagree (with constitutional citations if relevant)
 - **Specialist Insights**: Deep expertise from auto-summoned specialists
 - **Risk Assessment**: Composite from CRO (risk), CISO (security), COO (execution)
 - **Strategic Recommendation**: From judiciary verdict
 - **Escalation Status**: Whether chairman override is needed
+
+**Error Handling:**
+- If any individual seat agent fails or times out, proceed with remaining seats (quorum requires 4/6)
+- If quorum fails (<4 seats responded): Fall back to Step 6D.1b (legacy 3-persona)
+- If judiciary agent fails: Synthesize verdict manually from Round 1 + Round 2 positions
 
 Store the board deliberation results for document generation (Step 9).
 
