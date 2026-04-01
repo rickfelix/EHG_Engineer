@@ -93,6 +93,14 @@ This section provides a clear picture of what works today, what partially works,
 
 ---
 
+## Related: Software Factory Self-Healing Loop
+
+The [Software Factory Self-Healing Loop](./software-factory-self-healing.md) complements Operations Mode by providing **runtime error detection** via Sentry. While Operations Mode monitors venture health through internal checks (health scoring, feedback classification), the Software Factory monitors **external runtime errors** from deployed venture code and auto-generates corrective SDs.
+
+The Software Factory activates at Stage 18 (Build Execution) — earlier than Operations Mode — and feeds errors into the same `feedback` table that the Operations Mode feedback classifier processes.
+
+---
+
 ## Activation
 
 ### Trigger
