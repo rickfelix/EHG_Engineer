@@ -105,6 +105,7 @@ async function main() {
         sentryOrg: sentryConfig.org,
         sentryProject: sentryConfig.project,
         sentryToken: sentryConfig.token,
+        baseUrl: sentryConfig.baseUrl || undefined,
         since: sentryConfig.lastPollAt || undefined
       });
 
