@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-01T22:49:08.070Z
-**Tables**: 617
+**Generated**: 2026-04-01T23:36:53.453Z
+**Tables**: 620
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (617)
+## All Tables (620)
 
 ### LEO Protocol
 
@@ -567,6 +567,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [system_health](tables/system_health.md)
 - [system_settings](tables/system_settings.md)
 - [task_hydration_log](tables/task_hydration_log.md)
+- [taste_interaction_logs](tables/taste_interaction_logs.md)
+- [taste_profiles](tables/taste_profiles.md)
 - [team_templates](tables/team_templates.md)
 - [tech_stack_references](tables/tech_stack_references.md)
 - [telegram_bot_interactions](tables/telegram_bot_interactions.md)
@@ -581,6 +583,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [tool_access_grants](tables/tool_access_grants.md)
 - [tool_registry](tables/tool_registry.md)
 - [tool_usage_ledger](tables/tool_usage_ledger.md)
+- [trust_promotions](tables/trust_promotions.md)
 - [uat_audit_trail](tables/uat_audit_trail.md)
 - [uat_cases](tables/uat_cases.md)
 - [uat_coverage_metrics](tables/uat_coverage_metrics.md)

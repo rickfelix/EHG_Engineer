@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-01T22:49:08.070Z
+**Generated**: 2026-04-01T23:36:53.453Z
 **Rows**: 1
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (11 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,7 @@
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | created_by | `uuid` | YES | - | - |
 | hard_gate_stages | `ARRAY` | **NO** | `ARRAY[20]` | Array of stage numbers that always require manual chairman approval regardless of auto-proceed settings. Default: [20] (compliance gate). |
+| taste_gate_config | `jsonb` | YES | `'{}'::jsonb` | - |
 
 ## Constraints
 
