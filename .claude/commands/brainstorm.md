@@ -273,56 +273,49 @@ Present the score breakdown to the user.
 
 ### 6D.1a: Board of Directors Deliberation (Default — replaces 3-persona analysis)
 
-After discovery and crystallization, execute a full board deliberation using the Board of Directors governance model.
+After discovery and crystallization, execute a full board deliberation using the programmatic deliberation engine.
 
-The board deliberation system is implemented in `lib/brainstorm/deliberation-engine.js` and uses:
-- 6 permanent board seats (CSO, CRO, CTO, CISO, COO, CFO) defined in `lib/brainstorm/board-seats/index.js`
-- Institutional memory from past deliberations (`lib/brainstorm/institutional-memory.js`)
-- Specialist auto-summoning when expertise gaps detected (`lib/brainstorm/specialist-registry.js`)
-- Full judiciary integration with constitutional citations (`lib/brainstorm/board-judiciary-bridge.js`)
-
-**Execution Flow:**
-
-1. **Load institutional memory** for each seat (parallel) — past positions on related topics with lifecycle annotations
-2. **Round 1** — All 6 seats produce positions in parallel (via Agent tool, one per seat):
-   - Each seat uses its domain-specific system prompt with standing question
-   - Each seat has access to its institutional memory context
-   - Positions stored in `debate_arguments` with seat agent codes (CSO, CRO, etc.)
-   - Seats flag expertise gaps with `EXPERTISE_GAP: <description>` markers
-
-3. **Specialist Summoning** — If any seat flagged expertise gaps:
-   - Check specialist registry for reusable specialist identities
-   - Generate new specialist identities for unmatched gaps (max 3 specialists)
-   - Specialists produce testimony stored in `debate_arguments` with `specialist_testimony` type
-   - Register new specialists in the registry for future reuse
-
-4. **Quorum Check** — Verify minimum 4 of 6 seats responded with substantive positions
-   - If quorum not met, report which seats are unavailable and halt deliberation
-   - Chairman can override quorum with `--override-quorum` flag
-
-5. **Round 2** — All 6 seats produce rebuttals (parallel):
-   - Each seat receives all other Round 1 positions and specialist testimony
-   - Rebuttals must reference specific positions from other seats by code
-   - Stored in `debate_arguments` with `rebuttal` type and `in_response_to_argument_id`
-
-6. **Judiciary Synthesis** — Generate verdict with:
-   - Consensus points (where 2+ seats agree)
-   - Tension points (where seats disagree — most valuable insights)
-   - Constitutional citations with relevance scores (PROTOCOL, FOUR_OATHS, DOCTRINE)
-   - Escalation decision (if positions are irreconcilable → chairman override)
-   - Stored in `judge_verdicts` with full citation trail
-
-**Performance Budget**: Total deliberation (Round 1 + Specialists + Round 2 + Judiciary) must complete within 3 minutes.
-
-**Agent Invocation** — For each seat in Round 1 and Round 2, use the Agent tool:
-```
-Agent tool:
-  subagent_type: "general-purpose"
-  description: "[SEAT_CODE] board position"
-  prompt: [seat system prompt with memory context + user prompt with topic]
+**Invocation** — Run the deliberation engine CLI runner:
+```bash
+node scripts/brainstorm-deliberate.js --topic "<crystallized topic>" --keywords "<comma-separated keywords>"
 ```
 
-**Synthesis Output** (replaces the legacy Challenger/Visionary/Pragmatist synthesis):
+If a brainstorm session ID exists from earlier steps, pass it:
+```bash
+node scripts/brainstorm-deliberate.js --topic "<topic>" --keywords "<keywords>" --session-id "<brainstorm-session-id>"
+```
+
+To preview panel composition without running the full deliberation:
+```bash
+node scripts/brainstorm-deliberate.js --topic "<topic>" --keywords "<keywords>" --dry-run
+```
+
+The engine (`lib/brainstorm/deliberation-engine.js`) handles the complete flow automatically:
+- Dynamic panel selection from `specialist_registry` via `lib/brainstorm/panel-selector.js`
+- Expertise gap detection via rubric (`lib/brainstorm/expertise-gap-rubric.js`)
+- Institutional memory loading from past deliberations
+- Round 1 positions, specialist summoning, Round 2 rebuttals, judiciary verdict
+- All results persisted to `debate_arguments` and `judge_verdicts` tables
+- Specialists registered in `specialist_registry` for cross-session reuse
+
+**Execution Flow (handled by engine):**
+
+1. **Panel Selection** — Dynamic panel from `specialist_registry` (governance floor seats always included, domain specialists scored by topic relevance and authority)
+2. **Institutional Memory** — Past positions loaded for each seat (parallel)
+3. **Round 1** — All seats produce positions in parallel with expertise gap rubric
+4. **Specialist Summoning** — Gaps auto-detected, specialists reused or generated (max 3)
+5. **Quorum Check** — 67% of panel must respond with substantive positions
+6. **Round 2** — Rebuttals with cross-seat awareness and specialist testimony
+7. **Judiciary Synthesis** — Verdict with constitutional citations and escalation decision
+
+**Error Handling:**
+- **Timeout** (>3 minutes): Engine returns partial results, exit code 2
+- **Quorum failure** (<67% seats): Partial results printed, exit code 3 → fall back to Step 6D.1b
+- **LLM unavailable**: Engine uses echo stub, warns user to configure API keys
+
+**Performance Budget**: 3 minutes total (enforced by engine timeout).
+
+**Synthesis Output** (from engine stdout):
 - **Board Consensus**: Points where 3+ seats agree
 - **Key Tensions**: Where seats disagree (with constitutional citations if relevant)
 - **Specialist Insights**: Deep expertise from auto-summoned specialists
