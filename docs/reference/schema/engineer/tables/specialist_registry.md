@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-31T23:47:27.741Z
-**Rows**: 19
+**Generated**: 2026-04-01T00:46:27.420Z
+**Rows**: 31
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (8 total)
+## Columns (16 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -26,6 +26,14 @@
 | metadata | `jsonb` | **NO** | `'{}'::jsonb` | Flexible metadata: source_venture_id, stage_number, created_by |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| authority_score | `numeric(5,2)` | YES | `50.00` | Specialist credibility score (0-100), used for panel selection weighting |
+| is_governance_floor | `boolean` | YES | `false` | When true, specialist must always participate in deliberations |
+| legacy_agent_code | `text` | YES | - | Maps to original BOARD_SEATS code (CSO, CRO, CTO, CISO, COO, CFO) |
+| expertise_domains | `ARRAY` | YES | `ARRAY[]::text[]` | Searchable domain tags for topic-based panel selection |
+| total_deliberations | `integer(32)` | YES | `0` | Count of deliberations this specialist has participated in |
+| outcome_wins | `integer(32)` | YES | `0` | Count of deliberations where specialist position was adopted |
+| outcome_losses | `integer(32)` | YES | `0` | Count of deliberations where specialist position was not adopted |
+| last_selected_at | `timestamp with time zone` | YES | - | Timestamp of last panel selection for recency-based balancing |
 
 ## Constraints
 
