@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-01T00:46:27.420Z
+**Generated**: 2026-04-01T11:28:02.645Z
 **Rows**: 28
 **RLS**: Enabled (6 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (52 total)
+## Columns (55 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -70,6 +70,9 @@
 | rubric_score | `integer(32)` | YES | - | Automated quality score (0-100) based on rubric evaluation |
 | quality_assessment | `jsonb` | YES | - | Detailed rubric breakdown: {criteria: {name, score, rationale, weight}, overall_assessment} |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | Flexible JSONB metadata from external sources (e.g., Telegram bot enrichment: domain, confidence, model, raw_text, youtube info) |
+| sentry_issue_id | `text` | YES | - | Links feedback row back to Sentry issue for traceability |
+| sentry_first_seen | `timestamp with time zone` | YES | - | - |
+| auto_correction_status | `text` | YES | `'pending'::text` | Tracks automated correction lifecycle: pending → in_progress → resolved/failed |
 
 ## Constraints
 
@@ -97,6 +100,7 @@ CASE
 END)
 - `chk_resolved_requires_reference`: CHECK ((((status)::text <> 'resolved'::text) OR ((quick_fix_id IS NOT NULL) OR (strategic_directive_id IS NOT NULL) OR (resolution_sd_id IS NOT NULL) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0)))))
 - `chk_wont_fix_requires_notes`: CHECK ((((status)::text <> 'wont_fix'::text) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0))))
+- `feedback_auto_correction_status_check`: CHECK ((auto_correction_status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'resolved'::text, 'failed'::text])))
 - `feedback_effort_estimate_check`: CHECK (((effort_estimate)::text = ANY ((ARRAY['small'::character varying, 'medium'::character varying, 'large'::character varying])::text[])))
 - `feedback_rubric_score_check`: CHECK (((rubric_score >= 0) AND (rubric_score <= 100)))
 - `feedback_severity_check`: CHECK (((severity)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
@@ -114,6 +118,10 @@ END)
 - `idx_feedback_ai_triage_confidence`
   ```sql
   CREATE INDEX idx_feedback_ai_triage_confidence ON public.feedback USING btree (ai_triage_confidence) WHERE (ai_triage_confidence IS NOT NULL)
+  ```
+- `idx_feedback_auto_correction`
+  ```sql
+  CREATE INDEX idx_feedback_auto_correction ON public.feedback USING btree (auto_correction_status) WHERE (auto_correction_status IS NOT NULL)
   ```
 - `idx_feedback_clustering`
   ```sql
@@ -158,6 +166,10 @@ END)
 - `idx_feedback_sd_id`
   ```sql
   CREATE INDEX idx_feedback_sd_id ON public.feedback USING btree (sd_id)
+  ```
+- `idx_feedback_sentry_issue`
+  ```sql
+  CREATE INDEX idx_feedback_sentry_issue ON public.feedback USING btree (sentry_issue_id) WHERE (sentry_issue_id IS NOT NULL)
   ```
 - `idx_feedback_severity`
   ```sql
