@@ -1,6 +1,6 @@
-# /rca - Root Cause Analysis with 5-Whys
+# /rca - Root Cause Analysis with 5-Whys + Investigation
 
-When a handoff, validation, or sub-agent fails, use this root cause analysis pattern instead of simple retry-then-skip.
+When a handoff, validation, or sub-agent fails, use this root cause analysis pattern instead of simple retry-then-skip. Combines progressive 5-Whys diagnosis with GStack-inspired investigation techniques (structured hypotheses, evidence collection, anti-confirmation-bias).
 
 ## RCA Levels
 
@@ -28,6 +28,61 @@ Ask 5 progressive "why" questions to find root cause.
 For each why, search the codebase for evidence.
 Return: root_cause, quick_fix (if <10 min), pattern_to_log
 ```
+
+### Level 2.5: Investigation Deepening (GStack Patterns)
+
+Before jumping to fixes, apply these investigation techniques to avoid premature conclusions:
+
+#### Competing Hypothesis Generation
+
+Generate **at least 3 competing explanations** before narrowing:
+
+```
+Hypothesis A (Obvious): [The most apparent cause — first instinct]
+Hypothesis B (Systemic): [A deeper process/architecture issue]
+Hypothesis C (Environmental): [External factors — config, dependencies, timing]
+```
+
+**Forced Questions** (answer ALL before choosing a hypothesis):
+- "What evidence would DISPROVE my leading hypothesis?"
+- "Has this exact failure happened before? What was the ACTUAL cause last time?"
+- "If I'm wrong about the cause, what's the most expensive consequence?"
+
+#### Evidence Collection Framework
+
+Systematically gather evidence across these categories before concluding:
+
+| Category | Check | Tool |
+|----------|-------|------|
+| **Error context** | Full stack trace, not just message | Read error logs |
+| **Recent changes** | Commits in last 24h touching related files | `git log --since=24h` |
+| **State** | Database records, config values at failure time | Supabase query |
+| **Dependencies** | Upstream service health, package versions | `npm ls`, API checks |
+| **Patterns** | Similar failures in `issue_patterns` table | Database query |
+
+**Anti-Confirmation-Bias Prompt:**
+> Before concluding, explicitly search for evidence that CONTRADICTS your hypothesis. If you cannot find disconfirming evidence after 2 minutes of searching, note this as a confidence factor, not proof.
+
+#### Root Cause Tree
+
+Map contributing factors as a tree rather than a single chain:
+
+```
+Root Failure: [symptom]
+├── Factor A: [contributing cause] (severity: H/M/L)
+│   └── Sub-factor: [deeper cause]
+├── Factor B: [contributing cause] (severity: H/M/L)
+│   └── Sub-factor: [deeper cause]
+└── Factor C: [environmental] (severity: H/M/L)
+    └── Sub-factor: [deeper cause]
+
+Primary root cause: [Factor with highest severity × likelihood]
+Contributing factors: [Other factors that amplified the failure]
+```
+
+Combine with 5-Whys: each branch of the tree can have its own "why" chain.
+
+---
 
 ### Level 3: Targeted Fix Attempt
 Based on Level 2 findings:
