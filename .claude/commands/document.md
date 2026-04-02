@@ -118,6 +118,38 @@ supabase.from('strategic_directives_v2')
 2. Update troubleshooting if common issue
 3. No extensive documentation needed
 
+### Release Documentation (GStack Patterns)
+
+When documenting completed SDs for release notes or CHANGELOG, apply these patterns:
+
+**Auto/Manual Classification**:
+Classify each documentation item before writing:
+
+| Classification | Criteria | Action |
+|---------------|----------|--------|
+| **Auto** | Pure code change, no user-visible behavior change | Generate from git commit messages |
+| **Manual** | User-facing feature, API change, breaking change | Write human-crafted description |
+| **Hybrid** | Internal change with user-visible side effects | Auto-generate, then human-edit |
+
+**CHANGELOG Voice Polish**:
+Apply these rules when writing release entries:
+- Lead with the **user benefit**, not the implementation detail
+- Use active voice: "Add X" not "X was added"
+- One sentence per entry — save details for docs
+- Group by: Breaking Changes > Features > Fixes > Internal
+- Include SD key for traceability: `(SD-XXX-001)`
+
+**Example**:
+```markdown
+## [Unreleased]
+### Features
+- Add taste gate review UI for chairman decision-making at S10/S13/S16 (SD-LEO-ORCH-GSTACK-INTEGRATION-CLEANUP-001-A)
+- Enhance /rca with structured hypothesis generation and anti-confirmation-bias prompts (SD-LEO-ORCH-GSTACK-INTEGRATION-CLEANUP-001-B)
+
+### Internal
+- Upgrade confidence tracker with dashboard metrics API (SD-LEO-ORCH-GSTACK-TASTE-GATE-001-C)
+```
+
 **Documentation SD**:
 1. Meta-documentation: update the docs you're documenting
 2. Ensure cross-references are updated
