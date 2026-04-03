@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-04-03 8:21:57 AM
+**Generated**: 2026-04-03 10:02:48 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -175,6 +175,70 @@ See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for c
 **If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
 
 
+## Branch Creation (Automated at LEAD-TO-PLAN)
+
+## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
+
+### Automatic Branch Creation
+
+As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
+
+1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
+2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
+3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
+4. Database is updated with branch name for tracking
+
+### Manual Branch Creation (If Needed)
+
+If branch creation fails or you need to create one manually:
+
+```bash
+# Create branch for an SD (looks up title from database)
+npm run sd:branch SD-XXX-001
+
+# Create with auto-stash (non-interactive)
+npm run sd:branch:auto SD-XXX-001
+
+# Check if branch exists
+npm run sd:branch:check SD-XXX-001
+
+# Full command with options
+# Branch was auto-created at LEAD-TO-PLAN handoff
+```
+
+### Branch Naming Convention
+
+| SD Type | Branch Prefix | Example |
+|---------|---------------|---------|
+| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
+| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
+| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
+| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
+| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
+
+### Branch Hygiene Rules
+
+From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
+- **≤7 days stale** at PLAN-TO-EXEC handoff
+- **One SD per branch** (no mixing work)
+- **Merge main at phase transitions**
+
+### When Branch is Created
+
+```
+LEAD Phase                    PLAN Phase                   EXEC Phase
+    |                              |                            |
+    |   LEAD-TO-PLAN handoff       |                            |
+    |---[Branch Created Here]----->|                            |
+    |                              |   PRD Creation             |
+    |                              |   Sub-agent validation     |
+    |                              |                            |
+    |                              |   PLAN-TO-EXEC handoff     |
+    |                              |---[Branch Validated]------>|
+    |                              |                            |
+```
+
+
 ## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
 
 **Source**: Analysis of 175 high-quality retrospectives (score ≥60)
@@ -263,70 +327,6 @@ If `research_confidence_score = 0.00`, you skipped this step.
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
 
-## Branch Creation (Automated at LEAD-TO-PLAN)
-
-## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
-
-### Automatic Branch Creation
-
-As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
-
-1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
-2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
-3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
-4. Database is updated with branch name for tracking
-
-### Manual Branch Creation (If Needed)
-
-If branch creation fails or you need to create one manually:
-
-```bash
-# Create branch for an SD (looks up title from database)
-npm run sd:branch SD-XXX-001
-
-# Create with auto-stash (non-interactive)
-npm run sd:branch:auto SD-XXX-001
-
-# Check if branch exists
-npm run sd:branch:check SD-XXX-001
-
-# Full command with options
-# Branch was auto-created at LEAD-TO-PLAN handoff
-```
-
-### Branch Naming Convention
-
-| SD Type | Branch Prefix | Example |
-|---------|---------------|---------|
-| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
-| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
-| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
-| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
-| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
-
-### Branch Hygiene Rules
-
-From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
-- **≤7 days stale** at PLAN-TO-EXEC handoff
-- **One SD per branch** (no mixing work)
-- **Merge main at phase transitions**
-
-### When Branch is Created
-
-```
-LEAD Phase                    PLAN Phase                   EXEC Phase
-    |                              |                            |
-    |   LEAD-TO-PLAN handoff       |                            |
-    |---[Branch Created Here]----->|                            |
-    |                              |   PRD Creation             |
-    |                              |   Sub-agent validation     |
-    |                              |                            |
-    |                              |   PLAN-TO-EXEC handoff     |
-    |                              |---[Branch Validated]------>|
-    |                              |                            |
-```
-
-
 ## Vision/Architecture Doc Pre-Check
 
 ## Vision/Architecture Doc Pre-Check (Step 0.25)
@@ -395,7 +395,7 @@ During the EXEC phase, use sub-agents proactively for implementation quality and
 - **uat-agent**: For user acceptance test execution before handoff
 
 ### When to Invoke
-- **On ANY database error**: Immediately invoke database-agent (do not attempt workarounds)
+- **On ANY database WRITE error**: Immediately invoke database-agent (do not attempt workarounds). For read errors, check MCP tool configuration first.
 - **Before PR creation**: Run testing-agent for coverage, security-agent for review
 - **During refactoring**: Run regression-agent to validate backward compatibility
 - **On test failures**: Run rca-agent for root cause analysis, then testing-agent
@@ -933,6 +933,86 @@ UI Parity Status:
 - Gate 2.5 Status: PASS/FAIL
 ```
 
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
+
+**Every completed Strategic Directive and Quick-Fix MUST end with:**
+
+1. **Commit** - All changes committed with proper message format
+2. **Push** - Branch pushed to remote
+3. **Merge to Main** - Feature branch merged into main
+
+### For Quick-Fixes
+
+The `complete-quick-fix.js` script handles this automatically:
+
+```bash
+node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
+```
+
+The script will:
+1. Verify tests pass and UAT completed
+2. Commit and push changes
+3. **Prompt to merge PR to main** (or local merge if no PR)
+4. Delete the feature branch
+
+### For Strategic Directives
+
+After LEAD approval, execute the following:
+
+```bash
+# 1. Ensure all changes committed
+git add .
+git commit -m "feat(SD-YYYY-XXX): [description]
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 2. Push to remote
+git push origin feature/SD-YYYY-XXX
+
+# 3. Create PR if not exists
+gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
+
+# 4. Merge PR (preferred method)
+gh pr merge --merge --delete-branch
+
+# OR local merge fallback
+git checkout main
+git pull origin main
+git merge --no-ff feature/SD-YYYY-XXX
+git push origin main
+git branch -d feature/SD-YYYY-XXX
+git push origin --delete feature/SD-YYYY-XXX
+```
+
+### Merge Checklist
+
+Before merging, verify:
+- [ ] All tests passing (unit + E2E)
+- [ ] CI/CD pipeline green
+- [ ] Code review completed (if required)
+- [ ] No merge conflicts
+- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
+
+### Anti-Patterns
+
+❌ **NEVER** leave feature branches unmerged after completion
+❌ **NEVER** skip the push step
+❌ **NEVER** merge without verifying tests pass
+❌ **NEVER** force push to main
+
+### Verification
+
+After merge, confirm:
+```bash
+git checkout main
+git pull origin main
+git log --oneline -5  # Should show your merge commit
+```
+
 ## 🌿 Branch Hygiene Gate (MANDATORY)
 
 ## Branch Hygiene Gate (MANDATORY)
@@ -1022,86 +1102,6 @@ When starting implementation:
 3. If multiple SDs detected → split branches
 4. If >100 files changed → assess scope creep
 5. Document branch health in handoff notes
-
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
-
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
-
-**Every completed Strategic Directive and Quick-Fix MUST end with:**
-
-1. **Commit** - All changes committed with proper message format
-2. **Push** - Branch pushed to remote
-3. **Merge to Main** - Feature branch merged into main
-
-### For Quick-Fixes
-
-The `complete-quick-fix.js` script handles this automatically:
-
-```bash
-node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
-```
-
-The script will:
-1. Verify tests pass and UAT completed
-2. Commit and push changes
-3. **Prompt to merge PR to main** (or local merge if no PR)
-4. Delete the feature branch
-
-### For Strategic Directives
-
-After LEAD approval, execute the following:
-
-```bash
-# 1. Ensure all changes committed
-git add .
-git commit -m "feat(SD-YYYY-XXX): [description]
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-# 2. Push to remote
-git push origin feature/SD-YYYY-XXX
-
-# 3. Create PR if not exists
-gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
-
-# 4. Merge PR (preferred method)
-gh pr merge --merge --delete-branch
-
-# OR local merge fallback
-git checkout main
-git pull origin main
-git merge --no-ff feature/SD-YYYY-XXX
-git push origin main
-git branch -d feature/SD-YYYY-XXX
-git push origin --delete feature/SD-YYYY-XXX
-```
-
-### Merge Checklist
-
-Before merging, verify:
-- [ ] All tests passing (unit + E2E)
-- [ ] CI/CD pipeline green
-- [ ] Code review completed (if required)
-- [ ] No merge conflicts
-- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
-
-### Anti-Patterns
-
-❌ **NEVER** leave feature branches unmerged after completion
-❌ **NEVER** skip the push step
-❌ **NEVER** merge without verifying tests pass
-❌ **NEVER** force push to main
-
-### Verification
-
-After merge, confirm:
-```bash
-git checkout main
-git pull origin main
-git log --oneline -5  # Should show your merge commit
-```
 
 ## Auto-Merge Workflow for SD Completion
 

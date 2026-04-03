@@ -9,6 +9,7 @@
  *
  * 4. Worktree claim guard (PAT-CLMMULTI-001) - HARD BLOCK (exit 2)
  * 5. DB-only strategic artifacts (SD-LEO-INFRA-ONLY-ENFORCEMENT-STRATEGIC-002) - HARD BLOCK (exit 2)
+ * 6. MCP write operation block (SD-LEO-INFRA-MCP-READ-WRITE-001) - HARD BLOCK (exit 2)
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -137,6 +138,19 @@ function main() {
       );
       process.exit(2);
     }
+  }
+
+  // --- ENFORCEMENT 6: MCP Write Operation Block (SD-LEO-INFRA-MCP-READ-WRITE-001) ---
+  // Block mcp__supabase__apply_migration — it's a write op but MCP role is read-only.
+  // Read tools (execute_sql, list_tables, list_extensions, list_migrations) remain allowed.
+  if (TOOL_NAME === 'mcp__supabase__apply_migration') {
+    process.stderr.write(
+      'MCP WRITE BLOCK: mcp__supabase__apply_migration is a write operation.\n' +
+      'The MCP Supabase role (supabase_read_only_user) cannot execute migrations.\n' +
+      'Use the database-agent instead:\n' +
+      '  Agent({ subagent_type: "database-agent", prompt: "Execute migration: <path>" })\n'
+    );
+    process.exit(2);
   }
 
   // --- ENFORCEMENT 2: Tool Policy Profile (Log-Only) ---
