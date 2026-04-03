@@ -10,6 +10,7 @@
  * 4. Worktree claim guard (PAT-CLMMULTI-001) - HARD BLOCK (exit 2)
  * 5. DB-only strategic artifacts (SD-LEO-INFRA-ONLY-ENFORCEMENT-STRATEGIC-002) - HARD BLOCK (exit 2)
  * 6. MCP write operation block (SD-LEO-INFRA-MCP-READ-WRITE-001) - HARD BLOCK (exit 2)
+ * 7. Schema pre-flight validation (SD-LEO-ORCH-SELF-HEALING-DATABASE-001-C) - TIERED (blocking/advisory/skip)
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -51,7 +52,131 @@ try {
   AGENT_ROUTING = [];
 }
 
-function main() {
+// --- SCHEMA PRE-FLIGHT VALIDATION CONFIG (SD-LEO-ORCH-SELF-HEALING-DATABASE-001-C) ---
+// Maps script path patterns to enforcement tiers.
+// 'blocking': exit(2) on validation failure. 'advisory': warn only. 'skip': no validation.
+const VALIDATION_CONFIG = {
+  blocking: [
+    /database\/migrations\//,
+    /scripts\/handoff\.js/,
+    /scripts\/unified-handoff-system\.js/,
+    /scripts\/add-prd-to-database\.js/,
+    /scripts\/add-sd-to-database\.js/,
+  ],
+  advisory: [
+    /scripts\//,
+    /lib\//,
+  ],
+  // Everything else is implicitly 'skip'
+};
+
+// Regex patterns to detect Supabase operations in Bash commands
+const SUPABASE_PATTERNS = [
+  /\.from\(\s*['"`](\w+)['"`]\s*\)/,        // .from('table_name')
+  /supabase\.from\(\s*['"`](\w+)['"`]\s*\)/, // supabase.from('table_name')
+  /\.rpc\(\s*['"`](\w+)['"`]/,               // .rpc('function_name')
+];
+
+/**
+ * Determine enforcement tier for the current Bash command context.
+ * Checks CWD and command content against VALIDATION_CONFIG path patterns.
+ * @param {string} command - The Bash command string
+ * @returns {'blocking'|'advisory'|'skip'}
+ */
+function getEnforcementTier(command) {
+  for (const pattern of VALIDATION_CONFIG.blocking) {
+    if (pattern.test(command)) return 'blocking';
+  }
+  for (const pattern of VALIDATION_CONFIG.advisory) {
+    if (pattern.test(command)) return 'advisory';
+  }
+  return 'skip';
+}
+
+/**
+ * Extract table name from a Bash command containing Supabase patterns.
+ * @param {string} command
+ * @returns {string|null}
+ */
+function extractTableName(command) {
+  for (const pattern of SUPABASE_PATTERNS) {
+    const match = command.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/**
+ * Extract column names from a Bash command (best-effort).
+ * Looks for .select(), .eq(), .update(), .insert() patterns.
+ * @param {string} command
+ * @returns {Object<string, *>}
+ */
+function extractParams(command) {
+  const params = {};
+  // Match .eq('col', value) / .eq("col", value)
+  const eqPattern = /\.eq\(\s*['"`](\w+)['"`]/g;
+  let match;
+  while ((match = eqPattern.exec(command)) !== null) {
+    params[match[1]] = 'unknown';
+  }
+  // Match .select('col1, col2') — extract column names
+  const selectMatch = command.match(/\.select\(\s*['"`]([^'"`]+)['"`]\s*\)/);
+  if (selectMatch && selectMatch[1] !== '*') {
+    selectMatch[1].split(',').forEach(col => {
+      const clean = col.trim().split(':')[0].trim(); // handle aliases
+      if (clean && clean !== '*') params[clean] = 'unknown';
+    });
+  }
+  return params;
+}
+
+/**
+ * Run schema pre-flight validation on a Bash command.
+ * Async — must be awaited. Fail-open on any error.
+ * @param {string} command
+ * @returns {Promise<void>}
+ */
+async function validateBeforeExecution(command) {
+  const tableName = extractTableName(command);
+  if (!tableName) return; // No Supabase pattern detected
+
+  const tier = getEnforcementTier(command);
+  if (tier === 'skip') return;
+
+  const params = extractParams(command);
+  if (Object.keys(params).length === 0) return; // No extractable params
+
+  try {
+    const { validateOperation } = require(path.resolve(__dirname, '..', '..', 'lib', 'schema-preflight.cjs'));
+    const result = await validateOperation(tableName, 'query', params);
+
+    if (!result.valid) {
+      if (tier === 'blocking') {
+        process.stderr.write(
+          `SCHEMA VALIDATION FAILED (blocking):\n` +
+          `  Table: ${tableName}\n` +
+          `  Errors: ${result.errors.join('; ')}\n` +
+          `  Fix the column names or types before running this command.\n`
+        );
+        process.exit(2);
+      } else {
+        // Advisory: warn but allow
+        console.log(
+          `[schema-preflight] WARNING: ${result.errors.join('; ')} (table: ${tableName})`
+        );
+      }
+    }
+
+    if (result.warnings.length > 0) {
+      console.log(`[schema-preflight] ${result.warnings.join('; ')}`);
+    }
+  } catch {
+    // Fail-open: validation errors never block execution
+  }
+}
+
+async function main() {
   let input;
   try {
     input = JSON.parse(TOOL_INPUT_RAW);
@@ -205,7 +330,17 @@ function main() {
     }
   }
 
-  process.exit(0); // Allow
+  // --- ENFORCEMENT 7: Schema Pre-Flight Validation (SD-LEO-ORCH-SELF-HEALING-DATABASE-001-C) ---
+  // Validates Supabase operations in Bash commands against live schema.
+  // Tiered: blocking for migrations/handoffs, advisory for general scripts, skip otherwise.
+  if (TOOL_NAME === 'Bash') {
+    const command = input.command || '';
+    if (SUPABASE_PATTERNS.some(p => p.test(command))) {
+      await validateBeforeExecution(command);
+    }
+  }
+
+  process.exitCode = 0; // Allow
 }
 
-main();
+main().catch(() => { process.exitCode = 0; }); // Fail-open: async errors never block
