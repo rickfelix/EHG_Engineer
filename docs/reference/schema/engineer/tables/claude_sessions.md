@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-03T14:11:52.650Z
-**Rows**: 11,301
+**Generated**: 2026-04-03T21:47:39.383Z
+**Rows**: 11,325
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -50,10 +50,10 @@
 | handoff_fail_count | `integer(32)` | YES | `0` | Count of failed handoff attempts on current SD. Reset on SD change or success. >3 triggers WORKER_STRUGGLING. |
 | current_phase | `text` | YES | - | Normalized phase: LEAD, PLAN, or EXEC. Derived from strategic_directives_v2.current_phase. NULL if no SD claimed. |
 | worktree_branch | `text` | YES | - | Git branch checked out in the worktree (e.g. feat/SD-XXX-001). Set by resolve-sd-workdir.js at claim time and concurrent-session-worktree hook. Cleared by heartbeat when worktree_path directory no longer exists on disk. |
-| is_virtual | `boolean` | YES | `false` | True for drain agent virtual sessions |
-| parent_session_id | `text` | YES | - | Links virtual agent session to parent drainer session |
-| agent_slot | `integer(32)` | YES | - | Slot index (0, 1, 2) within parent drainer |
-| last_progress_at | `timestamp with time zone` | YES | - | Updated on meaningful work completion (phase transition, PR) |
+| is_virtual | `boolean` | YES | `false` | True for drain agent virtual sessions (3-min stale threshold vs 15-min default) |
+| parent_session_id | `text` | YES | - | References the real session running the sd:drain command |
+| agent_slot | `integer(32)` | YES | - | Slot index (0-2) within the parent drainer |
+| last_progress_at | `timestamp with time zone` | YES | - | Updated on meaningful work completion (handoff, commit, test pass) — distinct from heartbeat liveness |
 
 ## Constraints
 
@@ -115,6 +115,14 @@
 - `idx_claude_sessions_unique_terminal_active`
   ```sql
   CREATE UNIQUE INDEX idx_claude_sessions_unique_terminal_active ON public.claude_sessions USING btree (terminal_identity) WHERE ((terminal_identity IS NOT NULL) AND (terminal_identity <> ':'::text) AND (status = ANY (ARRAY['active'::text, 'idle'::text])))
+  ```
+- `idx_claude_sessions_virtual`
+  ```sql
+  CREATE INDEX idx_claude_sessions_virtual ON public.claude_sessions USING btree (parent_session_id) WHERE (is_virtual = true)
+  ```
+- `idx_claude_sessions_virtual_heartbeat`
+  ```sql
+  CREATE INDEX idx_claude_sessions_virtual_heartbeat ON public.claude_sessions USING btree (heartbeat_at) WHERE ((is_virtual = true) AND (status = ANY (ARRAY['active'::text, 'idle'::text])))
   ```
 - `idx_claude_sessions_virtual_stale`
   ```sql
