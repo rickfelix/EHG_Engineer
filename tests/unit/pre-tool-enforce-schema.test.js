@@ -104,4 +104,74 @@ describe('pre-tool-enforce schema validation', () => {
     const result = runHook('Read', { file_path: '/tmp/test.txt' });
     expect(result.exitCode).toBe(0);
   });
+
+  // SD-D: Extended pattern extraction tests
+  it('detects columns from .insert() pattern', () => {
+    const result = runHook('Bash', {
+      command: 'node scripts/test.js && supabase.from(\'strategic_directives_v2\').insert({ fake_insert_col: \'value\' })',
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Unknown column');
+    expect(result.stdout).toContain('fake_insert_col');
+  });
+
+  it('detects columns from .update() pattern', () => {
+    const result = runHook('Bash', {
+      command: 'node scripts/test.js && supabase.from(\'strategic_directives_v2\').update({ fake_update_col: 42 })',
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Unknown column');
+    expect(result.stdout).toContain('fake_update_col');
+  });
+
+  it('detects columns from .upsert() pattern', () => {
+    const result = runHook('Bash', {
+      command: 'node scripts/test.js && supabase.from(\'strategic_directives_v2\').upsert({ fake_upsert_col: true })',
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Unknown column');
+    expect(result.stdout).toContain('fake_upsert_col');
+  });
+
+  it('detects columns from .order() pattern', () => {
+    const result = runHook('Bash', {
+      command: 'node scripts/test.js && supabase.from(\'strategic_directives_v2\').select(\'*\').order(\'fake_order_col\')',
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Unknown column');
+    expect(result.stdout).toContain('fake_order_col');
+  });
+
+  it('detects columns from .in() pattern', () => {
+    const result = runHook('Bash', {
+      command: 'node scripts/test.js && supabase.from(\'strategic_directives_v2\').in(\'fake_in_col\', [\'a\', \'b\'])',
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Unknown column');
+    expect(result.stdout).toContain('fake_in_col');
+  });
+
+  it('allows valid columns in .insert() pattern', () => {
+    const result = runHook('Bash', {
+      command: 'node scripts/test.js && supabase.from(\'strategic_directives_v2\').insert({ title: \'test\', status: \'draft\' })',
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).not.toContain('Unknown column');
+  });
+
+  it('detects columns from .neq() filter pattern', () => {
+    const result = runHook('Bash', {
+      command: 'node scripts/test.js && supabase.from(\'strategic_directives_v2\').neq(\'fake_neq_col\', \'x\')',
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Unknown column');
+  });
+
+  it('detects columns from .gte() filter pattern', () => {
+    const result = runHook('Bash', {
+      command: 'node scripts/test.js && supabase.from(\'strategic_directives_v2\').gte(\'fake_gte_col\', 10)',
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Unknown column');
+  });
 });
