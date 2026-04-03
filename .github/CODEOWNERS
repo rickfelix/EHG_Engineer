@@ -32,6 +32,9 @@
 **/config.* @rickfelix
 **/database-loader.* @rickfelix
 
+# Generated skill files (protocol-critical, require review)
+/.claude/commands/ @rickfelix
+
 # Documentation maintainers
 /docs/ @rickfelix
 README.md @rickfelix
