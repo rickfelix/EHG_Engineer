@@ -181,62 +181,18 @@ export async function executeVERIFICATIONPhase(_context, _sdId) {
  * @param {Object} context - Orchestrator context
  * @param {string} sdId - Strategic Directive ID
  */
-export async function executeAPPROVALPhase(context, sdId) {
-  const { supabase, decisionLogger } = context;
+export async function executeAPPROVALPhase(context, _sdId) {
+  const { decisionLogger } = context;
 
   console.log(chalk.blue('\n✅ Executing APPROVAL Phase'));
 
-  // Check if approval already exists
-  const { data: existingApproval } = await supabase
-    .from('leo_approval_requests')
-    .select('id, status, approved_at')
-    .eq('sd_id', sdId)
-    .in('status', ['approved', 'pending'])
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (existingApproval && existingApproval.length > 0) {
-    const approval = existingApproval[0];
-    if (approval.status === 'approved') {
-      console.log(chalk.green(`✓ Approval already granted at ${approval.approved_at}`));
-      decisionLogger.log({
-        type: 'APPROVAL_CHECK',
-        action: 'already_approved',
-        reason: `SD already approved at ${approval.approved_at}`,
-        approvalId: approval.id
-      });
-      return;
-    } else {
-      console.log(chalk.yellow('⚠️  Approval pending - will be handled by LEAD-FINAL-APPROVAL handoff'));
-      decisionLogger.log({
-        type: 'APPROVAL_CHECK',
-        action: 'pending',
-        reason: 'Approval request exists but pending. Use handoff.js LEAD-FINAL-APPROVAL to complete.',
-        approvalId: approval.id
-      });
-      return;
-    }
-  }
-
-  // Create approval request but don't wait interactively
-  console.log(chalk.cyan('\n🛡️ Creating approval request...'));
-
-  const approvalRequest = {
-    id: `APPROVAL-${Date.now()}`,
-    sd_id: sdId,
-    requested_at: new Date(),
-    status: 'pending',
-    type: 'LEAD_FINAL_APPROVAL'
-  };
-
-  await supabase
-    .from('leo_approval_requests')
-    .insert(approvalRequest);
+  // Approval is handled by the handoff validation system
+  console.log(chalk.green('✓ Approval handled by LEAD-FINAL-APPROVAL handoff'));
 
   decisionLogger.log({
-    type: 'APPROVAL_REQUEST',
-    action: 'created',
-    reason: 'Approval request created. Complete via LEAD-FINAL-APPROVAL handoff.',
+    type: 'APPROVAL_CHECK',
+    action: 'auto_pass',
+    reason: 'Approval handled by handoff validation system.',
     approvalId: approvalRequest.id
   });
 

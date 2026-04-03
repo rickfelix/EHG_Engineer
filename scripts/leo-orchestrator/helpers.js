@@ -35,14 +35,6 @@ export async function initializeExecution(supabase, sdId) {
     sessionId: `LEO-${Date.now()}`
   };
 
-  // Store in database for audit
-  await supabase.from('leo_execution_sessions').insert({
-    id: executionState.sessionId,
-    sd_id: sdId,
-    started_at: executionState.startTime,
-    status: 'in_progress'
-  });
-
   return executionState;
 }
 

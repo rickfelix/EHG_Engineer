@@ -254,62 +254,12 @@ export async function executeVERIFICATIONPhase(_sdId) {
 export async function executeAPPROVALPhase(supabase, sdId, decisionLogger) {
   console.log(chalk.blue('\n\u2705 Executing APPROVAL Phase'));
 
-  // Check if approval already exists
-  const { data: existingApproval } = await supabase
-    .from('leo_approval_requests')
-    .select('id, status, approved_at')
-    .eq('sd_id', sdId)
-    .in('status', ['approved', 'pending'])
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (existingApproval && existingApproval.length > 0) {
-    const approval = existingApproval[0];
-    if (approval.status === 'approved') {
-      console.log(chalk.green(`\u2713 Approval already granted at ${approval.approved_at}`));
-      decisionLogger.log({
-        type: 'APPROVAL_CHECK',
-        action: 'already_approved',
-        reason: `SD already approved at ${approval.approved_at}`,
-        approvalId: approval.id
-      });
-      return;
-    } else {
-      // Pending approval
-      console.log(chalk.yellow('\u26a0\ufe0f  Approval pending - will be handled by LEAD-FINAL-APPROVAL handoff'));
-      decisionLogger.log({
-        type: 'APPROVAL_CHECK',
-        action: 'pending',
-        reason: 'Approval request exists but pending. Use handoff.js LEAD-FINAL-APPROVAL to complete.',
-        approvalId: approval.id
-      });
-      return;
-    }
-  }
-
-  // v2.0.0: Create approval request but don't wait interactively
-  console.log(chalk.cyan('\n\ud83d\udee1\ufe0f Creating approval request...'));
-
-  const approvalRequest = {
-    id: `APPROVAL-${Date.now()}`,
-    sd_id: sdId,
-    requested_at: new Date(),
-    status: 'pending',
-    type: 'LEAD_FINAL_APPROVAL'
-  };
-
-  await supabase
-    .from('leo_approval_requests')
-    .insert(approvalRequest);
+  // Approval is handled by the handoff validation system
+  console.log(chalk.green('\u2713 Approval handled by LEAD-FINAL-APPROVAL handoff'));
 
   decisionLogger.log({
-    type: 'APPROVAL_REQUEST',
-    action: 'created',
-    reason: 'Approval request created. Complete via LEAD-FINAL-APPROVAL handoff.',
-    approvalId: approvalRequest.id
+    type: 'APPROVAL_CHECK',
+    action: 'auto_pass',
+    reason: 'Approval handled by handoff validation system.'
   });
-
-  console.log(chalk.yellow(`\n\ud83d\udccb APPROVAL REQUEST CREATED: ${approvalRequest.id}`));
-  console.log(chalk.yellow('   Complete approval using: node scripts/handoff.js LEAD-FINAL-APPROVAL <SD-ID>'));
-  console.log(chalk.yellow('   Or approve via database: UPDATE leo_approval_requests SET status=\'approved\' WHERE id=\'...\';'));
 }

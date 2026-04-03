@@ -177,11 +177,12 @@ export class HandoffRepository {
    * @returns {Promise<array>} Sub-agent results
    */
   async getSubAgentResults(sdId, phase = null) {
+    // Table leo_sub_agent_executions does not exist — use sub_agent_execution_results instead
     let query = this.supabase
-      .from('leo_sub_agent_executions')
+      .from('sub_agent_execution_results')
       .select('*')
       .eq('sd_id', sdId)
-      .order('started_at', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (phase) {
       query = query.eq('phase', phase);
