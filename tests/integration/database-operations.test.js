@@ -40,8 +40,8 @@ class DatabaseLoader {
   async loadExecutionSequences() {
     if (!this.isConnected) return [];
     const supabase = createSupabaseClient();
-    const { data } = await supabase.from('execution_sequences').select('*');
-    return data || [];
+    // Table execution_sequences does not exist
+    return [];
   }
 
   async updateChecklistItem(docType, docId, checklistType, index, checked) {

@@ -55,13 +55,10 @@ async function fetchSDWithBacklog(sdId) {
   // Fetch backlog items for consolidated SDs
   let backlogItems = [];
   if (isConsolidated) {
-    const { data: items, error: _itemsError } = await supabase
-      .from('consolidated_backlog_v3')
-      .select('*')
-      .eq('sd_id', sdId)
-      .order('priority_score', { ascending: false });
+    // Table consolidated_backlog_v3 does not exist yet
+    const items = [];
 
-    if (items) {
+    if (items.length > 0) {
       backlogItems = items;
       console.log(chalk.cyan(`📋 Found ${items.length} backlog items`));
     }
