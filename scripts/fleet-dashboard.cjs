@@ -23,7 +23,7 @@ function pad(str, len) {
 // ── Data Loading ──
 
 async function loadData() {
-  const [sessRes, allSessRes, childRes, workRes, coordRes, rawSessRes] = await Promise.all([
+  const [sessRes, allSessRes, childRes, workRes, coordRes, rawSessRes, drainRes] = await Promise.all([
     supabase
       .from('v_active_sessions')
       .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track')
@@ -55,11 +55,19 @@ async function loadData() {
       .select('session_id, sd_id, tty, status, heartbeat_at, pid')
       .not('sd_id', 'is', null)
       .order('heartbeat_at', { ascending: false })
-      .limit(30)
+      .limit(30),
+    // Drain agent sessions (virtual sessions with parent)
+    supabase
+      .from('claude_sessions')
+      .select('session_id, sd_id, status, heartbeat_at, is_virtual, parent_session_id, agent_slot, last_progress_at')
+      .eq('is_virtual', true)
+      .in('status', ['active', 'idle'])
+      .order('agent_slot', { ascending: true })
   ]);
 
   const sessions = sessRes.data || [];
   const allSessions = allSessRes.data || [];
+  const drainAgents = drainRes.data || [];
   const children = childRes.data || [];
   const workable = workRes.data || [];
   const coordMessages = coordRes.data || [];
@@ -109,7 +117,8 @@ async function loadData() {
     sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap,
     claimedSdIds, activeSessions, staleSessions, idleSessions,
     completedChildren, totalChildren, orchPct,
-    unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells
+    unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells,
+    drainAgents
   };
 }
 
@@ -156,6 +165,43 @@ function printWorkers(d) {
     }
   }
 
+  console.log('');
+}
+
+// ── Section: Drain Agents ──
+function printDrainAgents(d) {
+  if (!d.drainAgents || d.drainAgents.length === 0) return;
+
+  console.log('');
+  console.log('DRAIN AGENTS [virtual sessions]');
+  console.log('─'.repeat(72));
+  console.log('  ' + pad('Slot', 6) + pad('SD', 35) + pad('Status', 10) + pad('Progress', 12) + 'Heartbeat');
+  console.log('  ' + '─'.repeat(72));
+
+  // Group by parent_session_id
+  const byParent = {};
+  for (const a of d.drainAgents) {
+    const parent = a.parent_session_id || 'unknown';
+    if (!byParent[parent]) byParent[parent] = [];
+    byParent[parent].push(a);
+  }
+
+  for (const [parentId, agents] of Object.entries(byParent)) {
+    const shortParent = parentId.substring(0, 12);
+    console.log('  Parent: ' + shortParent + '...');
+    for (const a of agents) {
+      const slotLabel = a.agent_slot != null ? String(a.agent_slot) : '?';
+      const sd = a.sd_id || '(idle)';
+      const shortSd = sd.length > 33 ? sd.replace(/^SD-.*?-/, '').substring(0, 33) : sd;
+      const progressAge = a.last_progress_at
+        ? Math.round((Date.now() - new Date(a.last_progress_at).getTime()) / 1000) + 's ago'
+        : 'none';
+      const hbAge = a.heartbeat_at
+        ? Math.round((Date.now() - new Date(a.heartbeat_at).getTime()) / 1000) + 's ago'
+        : '?';
+      console.log('  ' + pad(slotLabel, 6) + pad(shortSd, 35) + pad(a.status, 10) + pad(progressAge, 12) + hbAge);
+    }
+  }
   console.log('');
 }
 
@@ -666,8 +712,10 @@ async function main() {
     qa:            () => printQA(d),
     forecast:      async () => await printForecast(d),
     predictions:   async () => await printPredictions(d),
+    drain:         () => printDrainAgents(d),
     all:           async () => {
       printWorkers(d);
+      printDrainAgents(d);
       printOrchestrator(d);
       printAvailable(d);
       printCoordination(d);
