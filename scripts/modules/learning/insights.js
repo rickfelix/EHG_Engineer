@@ -229,7 +229,7 @@ export function formatInsightsForDisplay(insights) {
 }
 
 // CLI interface
-if (process.argv[1].includes('insights')) {
+if (process.argv[1]?.includes('insights')) {
   buildInsightsReport()
     .then(insights => {
       console.log(formatInsightsForDisplay(insights));
