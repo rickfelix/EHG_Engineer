@@ -27,6 +27,7 @@
  * - LEO_COMPACT_CRITICAL_MINUTES: Minutes before CRITICAL (default: 90)
  * - LEO_COMPACT_CRITICAL_TURNS: User turns before CRITICAL (default: 80)
  * - LEO_COMPACT_COOLDOWN_MINUTES: Minutes between nudges (default: 30)
+ * - CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: Context % threshold for auto-fire (default: 80)
  *
  * Exit codes:
  *   0 - Always (advisory mode - doesn't block)
@@ -46,6 +47,7 @@ const WARNING_TURNS = parseInt(process.env.LEO_COMPACT_WARNING_TURNS || '40');
 const CRITICAL_MINUTES = parseInt(process.env.LEO_COMPACT_CRITICAL_MINUTES || '90');
 const CRITICAL_TURNS = parseInt(process.env.LEO_COMPACT_CRITICAL_TURNS || '80');
 const COOLDOWN_MINUTES = parseInt(process.env.LEO_COMPACT_COOLDOWN_MINUTES || '30');
+const AUTOCOMPACT_PCT_OVERRIDE = parseInt(process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE || '80');
 
 // Flags
 const TIME_ONLY = process.argv.includes('--time-only');
@@ -59,6 +61,9 @@ const STATE_FILE = path.join(STATE_DIR, `session-${SESSION_ID}.json`);
 // Flag file that Claude sees - signals it should auto-invoke /context-compact
 const FLAG_DIR = path.join(os.homedir(), '.claude', 'flags');
 const FLAG_FILE = path.join(FLAG_DIR, 'context-compact-needed.json');
+
+// Trigger file written to signal Claude Code to auto-fire compaction (AUTO-PROCEED mode)
+const TRIGGER_FILE = path.join(FLAG_DIR, 'trigger-compaction.json');
 
 // Compaction marker written by PreCompact hook when auto-compaction occurs
 const COMPACTION_MARKER = path.join(FLAG_DIR, 'last-compaction.json');
@@ -106,6 +111,18 @@ function writeFlag(level, sessionAge, counts) {
     toolCalls: counts.toolCallCount,
     timestamp: new Date().toISOString()
   }, null, 2));
+}
+
+function writeTriggerFlag(sessionAge) {
+  ensureDir(FLAG_DIR);
+  fs.writeFileSync(TRIGGER_FILE, JSON.stringify({
+    sessionId: SESSION_ID,
+    sessionAgeMinutes: sessionAge,
+    reason: `Context at CRITICAL threshold (AUTO-PROCEED active, threshold: ${AUTOCOMPACT_PCT_OVERRIDE}%)`,
+    level: 'CRITICAL',
+    timestamp: new Date().toISOString()
+  }, null, 2));
+  console.log(`[context-compact-nudge] AUTO-COMPACT triggered (AUTO-PROCEED active, threshold: ${AUTOCOMPACT_PCT_OVERRIDE}%)`);
 }
 
 function clearFlag() {
@@ -217,8 +234,8 @@ function main() {
     if (level) {
       const source = TIME_ONLY ? 'AUTO-PROCEED' : 'interactive';
 
-      // Check if AUTO-PROCEED is active — downgrade CRITICAL to ADVISORY
-      // to avoid interrupting autonomous execution (SD-LEO-INFRA-AUTO-PROCEED-CONTEXT-001)
+      // Check if AUTO-PROCEED is active — auto-fire compaction instead of advisory
+      // (SD-LEO-INFRA-LEO-PRIMITIVE-PARITY-001-A)
       let isAutoProceed = false;
       try {
         const apStatePath = path.join(process.cwd(), '.claude', 'auto-proceed-state.json');
@@ -229,7 +246,8 @@ function main() {
       } catch { /* fail-safe: default to non-auto-proceed (show CRITICAL) */ }
 
       if (level === 'CRITICAL' && isAutoProceed) {
-        console.log('[context-compact-nudge] ADVISORY (AUTO-PROCEED active): Context compaction recommended at next SD boundary.');
+        // AUTO-PROCEED active: auto-fire compaction instead of printing advisory
+        writeTriggerFlag(Math.round(sessionAgeMinutes));
       } else if (level === 'CRITICAL') {
         console.log(`[context-compact-nudge] CRITICAL (${source}): Run /context-compact NOW to prevent API serialization errors.`);
       } else {
