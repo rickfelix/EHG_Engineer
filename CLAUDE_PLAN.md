@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-03-27 4:44:07 PM
+**Generated**: 2026-04-03 8:21:57 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -195,6 +195,30 @@ LEAD Phase                    PLAN Phase                   EXEC Phase
 ```
 
 
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
+
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -232,30 +256,6 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
-
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
 
 ## Phase-Specific Sub-Agent Guidance: PLAN
 
@@ -444,23 +444,6 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 | "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
 | "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
-
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -531,6 +514,23 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
+
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## PLAN Pre-EXEC Checklist
 
@@ -692,33 +692,6 @@ When a pipeline has cascading failures, the architecture plan MUST:
 
 **Detection**: The gate checks architecture plan content for failure chain diagrams and upstream-first child ordering language.
 
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
-
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -817,6 +790,48 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 ```
 
 
+## 🔬 BMAD Method Enhancements
+
+## BMAD Enhancements
+
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
+
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
+
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
+
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -868,21 +883,6 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
-
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -2073,45 +2073,15 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 
 
 - **userStoryQualityValidation** (Gate 1)
-  - Weight: 0.15
+  - Weight: 0.173
   - Required: Yes
   - Criteria: 4 criteria defined (uses_ai, min_score, description...)
 
 
 - **prdQualityValidation** (Gate 1)
-  - Weight: 0.15
+  - Weight: 0.172
   - Required: Yes
   - Criteria: uses_ai: true; min_score: 50; description: "PRD quality validation - lowered for refactor SDs"
-
-
-- **designSubAgentExecution** (Gate 1)
-  - Weight: 0.12
-  - Required: Yes
-  - Criteria: checks: ["execution_exists","verdict_not_fail"]; description: "DESIGN sub-agent executed and analysis stored"; sub_agent_code: "DESIGN"
-
-
-- **databaseSubAgentExecution** (Gate 1)
-  - Weight: 0.12
-  - Required: Yes
-  - Criteria: checks: ["execution_exists","design_informed"]; description: "DATABASE sub-agent executed and informed by DESIGN"; sub_agent_code: "DATABASE"
-
-
-- **bmadContextEngineering** (Gate 1)
-  - Weight: 0.1
-  - Required: Yes
-  - Criteria: checks: ["implementation_context","checkpoint_plan"]; description: "User story context engineering >= 80% coverage"; min_coverage: 80
-
-
-- **goalSummaryValidation** (Gate 1)
-  - Weight: 0.08
-  - Required: Yes
-  - Criteria: max_length: 300; description: "Goal summary present and <= 300 chars"
-
-
-- **testingStrategyValidation** (Gate 1)
-  - Weight: 0.1
-  - Required: Yes
-  - Criteria: description: "Testing strategy defines unit_tests and e2e_tests"; required_sections: ["unit_tests","e2e_tests"]
 
 
 - **uiComponentsImplemented** (Gate 2A)
@@ -2228,6 +2198,36 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
   - Criteria: min_length: 100; description: "Executive summary is complete and specific"
 
 
+- **designSubAgentExecution** (Gate 1)
+  - Weight: 0.138
+  - Required: Yes
+  - Criteria: checks: ["execution_exists","verdict_not_fail"]; description: "DESIGN sub-agent executed and analysis stored"; sub_agent_code: "DESIGN"
+
+
+- **databaseSubAgentExecution** (Gate 1)
+  - Weight: 0.138
+  - Required: Yes
+  - Criteria: checks: ["execution_exists","design_informed"]; description: "DATABASE sub-agent executed and informed by DESIGN"; sub_agent_code: "DATABASE"
+
+
+- **bmadContextEngineering** (Gate 1)
+  - Weight: 0.115
+  - Required: Yes
+  - Criteria: checks: ["implementation_context","checkpoint_plan"]; description: "User story context engineering >= 80% coverage"; min_coverage: 80
+
+
+- **testingStrategyValidation** (Gate 1)
+  - Weight: 0.115
+  - Required: Yes
+  - Criteria: description: "Testing strategy defines unit_tests and e2e_tests"; required_sections: ["unit_tests","e2e_tests"]
+
+
+- **goalSummaryValidation** (Gate 1)
+  - Weight: 0.092
+  - Required: Yes
+  - Criteria: max_length: 300; description: "Goal summary present and <= 300 chars"
+
+
 - **keyDecisionsDocumented** (Gate Q)
   - Weight: 0
   - Required: No
@@ -2337,13 +2337,13 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 
 
 - **documentationStandardsCompliance** (Gate 1)
-  - Weight: 0.05
+  - Weight: 0.057
   - Required: No
   - Criteria: checks: ["sd_type_is_documentation","prd_has_standards_section","standards_checklist_present"]; description: "For documentation SDs, validates PRD includes documentation standards checklist"; applies_only_to: "documentation"
 
 
 ---
 
-*Generated from database: 2026-03-27*
+*Generated from database: 2026-04-03*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
