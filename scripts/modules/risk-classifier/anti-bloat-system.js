@@ -128,39 +128,8 @@ export class AntiBloatSystem {
       return { persisted: false, reason: 'no_database' };
     }
 
-    try {
-      const { data, error } = await this.supabase
-        .from('improvement_rejection_reasons')
-        .insert({
-          improvement_id: rejection.improvement_id,
-          category: rejection.category,
-          decision: rejection.decision,
-          score: rejection.score,
-          safety_score: rejection.safety_score,
-          tier: rejection.tier,
-          rule: rejection.rule,
-          human_reason: rejection.human_reason,
-          metadata: rejection.metadata,
-          created_at: rejection.timestamp
-        })
-        .select()
-        .single();
-
-      if (error) {
-        // Table may not exist yet - graceful fallback
-        if (error.code === '42P01') {
-          this.logger.warn('[AntiBloatSystem] Table improvement_rejection_reasons does not exist');
-          return { persisted: false, reason: 'table_not_exists' };
-        }
-        this.logger.error('[AntiBloatSystem] Persist failed:', error.message);
-        return { persisted: false, reason: error.message };
-      }
-
-      return { persisted: true, id: data.id, record: data };
-    } catch (err) {
-      this.logger.error('[AntiBloatSystem] Persist error:', err.message);
-      return { persisted: false, reason: err.message };
-    }
+    // improvement_rejection_reasons table does not exist — skip persistence
+    return { persisted: false, reason: 'table_not_available' };
   }
 
   /**
@@ -220,57 +189,15 @@ export class AntiBloatSystem {
       };
     }
 
-    try {
-      const { data, error } = await this.supabase
-        .from('v_protocol_size')
-        .select('*')
-        .single();
-
-      if (error) {
-        // View may not exist yet
-        if (error.code === '42P01' || error.code === 'PGRST116') {
-          return {
-            available: false,
-            reason: 'view_not_exists',
-            current_tokens: 0,
-            max_tokens: HEALTH_THRESHOLDS.MAX_PROTOCOL_TOKENS,
-            usage_percent: 0,
-            status: 'UNKNOWN'
-          };
-        }
-        throw error;
-      }
-
-      const currentTokens = data?.approx_tokens || 0;
-      const usagePercent = Math.round((currentTokens / HEALTH_THRESHOLDS.MAX_PROTOCOL_TOKENS) * 100);
-
-      let status = 'HEALTHY';
-      if (usagePercent >= HEALTH_THRESHOLDS.TOKEN_BUDGET_CRITICAL) {
-        status = 'CRITICAL';
-      } else if (usagePercent >= HEALTH_THRESHOLDS.TOKEN_BUDGET_WARNING) {
-        status = 'WARNING';
-      }
-
-      return {
-        available: true,
-        current_tokens: currentTokens,
-        max_tokens: HEALTH_THRESHOLDS.MAX_PROTOCOL_TOKENS,
-        usage_percent: usagePercent,
-        status,
-        budget_remaining: HEALTH_THRESHOLDS.MAX_PROTOCOL_TOKENS - currentTokens,
-        sections_count: data?.total_sections || 0
-      };
-    } catch (err) {
-      this.logger.error('[AntiBloatSystem] Token budget query error:', err.message);
-      return {
-        available: false,
-        reason: err.message,
-        current_tokens: 0,
-        max_tokens: HEALTH_THRESHOLDS.MAX_PROTOCOL_TOKENS,
-        usage_percent: 0,
-        status: 'ERROR'
-      };
-    }
+    // v_protocol_size view does not exist — return unavailable status
+    return {
+      available: false,
+      reason: 'view_not_available',
+      current_tokens: 0,
+      max_tokens: HEALTH_THRESHOLDS.MAX_PROTOCOL_TOKENS,
+      usage_percent: 0,
+      status: 'UNKNOWN'
+    };
   }
 
   /**
@@ -439,38 +366,12 @@ export class AntiBloatSystem {
       };
     }
 
-    try {
-      const { data, error } = await this.supabase
-        .from('v_improvement_pipeline')
-        .select('*')
-        .limit(100);
-
-      if (error) {
-        // View may not exist yet
-        if (error.code === '42P01' || error.code === 'PGRST116') {
-          return {
-            available: false,
-            reason: 'view_not_exists',
-            analytics: this.getLocalAnalytics()
-          };
-        }
-        throw error;
-      }
-
-      return {
-        available: true,
-        total_records: data?.length || 0,
-        pipeline_data: data,
-        analytics: this.getLocalAnalytics()
-      };
-    } catch (err) {
-      this.logger.error('[AntiBloatSystem] Pipeline analytics error:', err.message);
-      return {
-        available: false,
-        reason: err.message,
-        analytics: this.getLocalAnalytics()
-      };
-    }
+    // v_improvement_pipeline view does not exist — return local analytics only
+    return {
+      available: false,
+      reason: 'view_not_available',
+      analytics: this.getLocalAnalytics()
+    };
   }
 
   /**

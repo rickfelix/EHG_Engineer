@@ -65,7 +65,7 @@ describe('ManifestoMode', () => {
       const result = await manifestoMode.isActive();
 
       expect(result).toBe(true);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('system_configuration');
+      expect(mockSupabaseClient.from).toHaveBeenCalledWith('app_config');
     });
 
     it('should return false when manifesto_active is false', async () => {

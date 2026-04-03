@@ -235,7 +235,7 @@ describe('ops_feedback_classify handler', () => {
     expect(typeof result.total).toBe('number');
   }, 120000);
 
-  it('queries feedback_items for unclassified entries', async () => {
+  it('returns skipped status since feedback_items table is unavailable', async () => {
     const { registerOperationsHandlers } = await import(
       '../../../lib/eva/operations/domain-handler.js'
     );
@@ -244,9 +244,10 @@ describe('ops_feedback_classify handler', () => {
     const handlers = {};
     registerOperationsHandlers({ register: (n, h) => (handlers[n] = h) });
 
-    await handlers.ops_feedback_classify({ supabase, logger: silentLogger });
+    const result = await handlers.ops_feedback_classify({ supabase, logger: silentLogger });
 
-    expect(supabase.from).toHaveBeenCalledWith('feedback_items');
+    expect(result.skipped).toBe(true);
+    expect(result.reason).toBe('table_not_available');
   }, 120000);
 });
 

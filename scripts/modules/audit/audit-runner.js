@@ -567,39 +567,9 @@ async function reportToFeedback(findings, runId, auditResult) {
   let successCount = 0;
   let failureCount = 0;
 
-  for (const finding of findings) {
-    try {
-      const { error } = await supabase
-        .from('feedback_items')
-        .insert({
-          source: 'self_audit',
-          source_id: runId,
-          sd_id: finding.sd_id,
-          severity: finding.severity,
-          category: 'audit_finding',
-          title: finding.rule_name,
-          description: finding.message,
-          metadata: {
-            rule_id: finding.rule_id,
-            evidence: finding.evidence,
-            checklist_artifact_key: finding.checklist_artifact_key,
-            finding_id: finding.finding_id,
-            source_run_id: runId
-          },
-          status: 'new'
-        });
-
-      if (error) {
-        console.warn(`  Failed to post finding ${finding.finding_id}:`, error.message);
-        failureCount++;
-      } else {
-        successCount++;
-      }
-    } catch (err) {
-      console.warn('  Exception posting finding:', err.message);
-      failureCount++;
-    }
-  }
+  // feedback_items table does not exist — skip posting findings
+  console.log(`  feedback_items table not available — ${findings.length} finding(s) not posted`);
+  failureCount = findings.length;
 
   auditResult.devops_summary.feedback_post_success_count = successCount;
   auditResult.devops_summary.feedback_post_failure_count = failureCount;
