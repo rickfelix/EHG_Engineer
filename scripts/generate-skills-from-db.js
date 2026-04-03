@@ -143,6 +143,34 @@ node scripts/handoff.js execute <PHASE> <SD-ID>
 4. NEVER retry blindly — read the error message and fix the specific issue
 `,
   },
+  'leo-settings': {
+    frontmatter: {
+      description: 'View and modify LEO session settings (AUTO-PROCEED, Orchestrator Chaining). Use when user says /leo settings or needs to change session configuration.',
+    },
+    header: `# LEO Settings — View and Modify Session Configuration
+
+**Purpose**: Display and modify AUTO-PROCEED and Orchestrator Chaining settings.
+This skill handles global defaults, session overrides, and settings display.
+All database queries use canonical scripts.
+
+## Quick Reference
+\`\`\`
+/leo settings     — View and modify settings
+\`\`\`
+
+## Settings Protocol
+`,
+    footer: `
+## Settings Precedence
+CLI flags > Session overrides > Global defaults > Hard-coded defaults
+
+## Anti-Drift Rules
+1. ALWAYS query current settings before displaying (never assume values)
+2. ALWAYS use AskUserQuestion for configuration changes
+3. NEVER modify settings without user confirmation
+4. Session settings override global defaults — display which layer is active
+`,
+  },
 };
 
 /**
