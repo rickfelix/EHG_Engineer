@@ -458,16 +458,7 @@ export async function recordUserDecision(orchestratorId, decision, options = {},
     return { success: false, error: `Failed to record decision: ${updateError.message}` };
   }
 
-  // Log the decision for audit
-  await supabase.from('audit_logs').insert({
-    entity_type: 'orchestrator_decision',
-    entity_id: orchestratorId,
-    action: `all_blocked_${decision}`,
-    details: decisionRecord,
-    severity: decision === 'cancel' ? 'warning' : 'info'
-  }).catch(() => {
-    // Audit log failure shouldn't block the main operation
-  });
+  // Table audit_logs does not exist yet — skip audit logging
 
   return { success: true, decision: decisionRecord };
 }

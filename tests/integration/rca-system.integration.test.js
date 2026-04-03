@@ -32,13 +32,14 @@ describe('RCA System Integration', () => {
     supabase = createDatabaseClient();
 
     // Create test Strategic Directive
+    // Table strategic_directives (legacy) replaced by strategic_directives_v2
     const { data: sd } = await supabase
-      .from('strategic_directives')
+      .from('strategic_directives_v2')
       .insert({
-        directive_id: 'SD-RCA-INT-TEST',
+        sd_key: 'SD-RCA-INT-TEST',
         title: 'RCA Integration Test Directive',
-        status: 'ACTIVE',
-        priority: 'MEDIUM'
+        status: 'draft',
+        priority: 'medium'
       })
       .select()
       .single();
@@ -55,9 +56,9 @@ describe('RCA System Integration', () => {
         .eq('sd_id', testSDId);
 
       await supabase
-        .from('strategic_directives')
+        .from('strategic_directives_v2')
         .delete()
-        .eq('directive_id', testSDId);
+        .eq('sd_key', testSDId);
     }
   });
 

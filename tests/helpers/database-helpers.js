@@ -184,7 +184,7 @@ export async function deleteTestDirective(directiveId) {
   const supabase = getSupabaseClient();
 
   // Delete in order (respecting foreign key constraints)
-  await supabase.from('deliverables').delete().eq('strategic_directive_id', directiveId);
+  // Table 'deliverables' does not exist — skip
   await supabase.from('user_stories').delete().eq('strategic_directive_id', directiveId);
   await supabase.from('product_requirements_v2').delete().eq('strategic_directive_id', directiveId);
   await supabase.from('strategic_directives_v2').delete().eq('id', directiveId);
@@ -273,8 +273,9 @@ export async function createTestHandoff(directiveId, data = {}) {
     ...data,
   };
 
+  // Table 'handoffs' does not exist — use sd_phase_handoffs instead
   const { data: created, error } = await supabase
-    .from('handoffs')
+    .from('sd_phase_handoffs')
     .insert([handoff])
     .select()
     .single();

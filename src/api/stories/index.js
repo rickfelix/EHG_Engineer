@@ -26,7 +26,7 @@ const generateSchema = z.object({
   prd_id: z.string(),  // Can be UUID or string ID
   mode: z.enum(['dry_run', 'create', 'upsert']).default('create')
 }).refine(data => data.sd_key || data.sd_id, {
-  message: "Either sd_key or sd_id must be provided"
+  message: 'Either sd_key or sd_id must be provided'
 });
 
 const verifySchema = z.object({
@@ -65,16 +65,11 @@ export async function generateStories(req, res) {
 
     if (error) throw error;
 
-    // Audit log (if table exists)
+    // Audit log removed — story_audit_log table does not exist
     try {
-      await supabase.from('story_audit_log').insert({
-        operation: 'generate',
-        sd_key: sdIdentifier,
-        user_id: req.user?.id || 'api',
-        payload: data
-      });
+      // No-op: table was never created
     } catch (e) {
-      // Audit log table might not exist, continue
+      // No-op
     }
 
     return res.json(result);
@@ -163,14 +158,7 @@ export async function verifyStories(req, res) {
       if (!error) updates.push(storyKey);
     }
 
-    // Audit log
-    await supabase.from('story_audit_log').insert({
-      operation: 'verify',
-      sd_key: sdKey,
-      story_key: data.story_keys.join(','),
-      user_id: req.user?.id || 'ci-system',
-      payload: data
-    });
+    // Audit log removed — story_audit_log table does not exist
 
     return res.json({
       status: 'success',

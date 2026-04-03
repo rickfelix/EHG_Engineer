@@ -127,28 +127,8 @@ class ContextSwitcher {
   }
 
   async recordContextSwitch(fromApp, toApp) {
-    try {
-      // Record in database
-      const { error } = await this.supabase
-        .from('application_context')
-        .insert({
-          session_id: `session-${Date.now()}`,
-          current_application_id: toApp,
-          previous_application_id: fromApp,
-          context_data: {
-            timestamp: new Date().toISOString(),
-            user: process.env.USER || 'unknown'
-          },
-          switched_by: 'HUMAN'
-        });
-      
-      if (error) {
-        console.warn('⚠️  Failed to record context switch in database:', error.message);
-      }
-    } catch (error) {
-      // Database recording is optional, don't fail the switch
-      console.warn('⚠️  Could not record context switch:', error.message);
-    }
+    // Table application_context does not exist yet — skip recording
+    console.log(`   Context switch: ${fromApp} → ${toApp} (not persisted — table not yet created)`);
   }
 
   async switchContext(targetAppId) {

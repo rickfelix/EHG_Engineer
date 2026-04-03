@@ -300,20 +300,7 @@ async function handleGitHubWebhook(req, res) {
     const isSignatureValid = process.env.NODE_ENV === 'development' ||
       (config?.webhook_secret_hash && verifyGitHubSignature(payload, signature, config.webhook_secret_hash));
 
-    // Store webhook event for audit
-    const { error: webhookError } = await supabase
-      .from('github_webhook_events')
-      .insert({
-        event_type: event,
-        delivery_id: deliveryId,
-        event_payload: parsedPayload,
-        signature_valid: isSignatureValid,
-        processed_successfully: false
-      });
-
-    if (webhookError) {
-      console.error('Failed to store webhook event:', webhookError);
-    }
+    // Table github_webhook_events does not exist yet — skip audit storage
 
     if (!isSignatureValid) {
       console.error('❌ Invalid webhook signature');
@@ -347,38 +334,14 @@ async function handleGitHubWebhook(req, res) {
         console.log(`ℹ️ Unhandled event type: ${event}`);
     }
 
-    // Update webhook event as processed
-    if (deliveryId) {
-      await supabase
-        .from('github_webhook_events')
-        .update({
-          processed_successfully: result.success,
-          processed_at: new Date().toISOString(),
-          processing_error: result.success ? null : result.error
-        })
-        .eq('delivery_id', deliveryId);
-    }
+    // Table github_webhook_events does not exist yet — skip status update
 
     return res.status(200).json(result);
 
   } catch (error) {
     console.error('❌ Webhook processing error:', error);
 
-    // Log error to database if possible
-    if (req.headers['x-github-delivery']) {
-      try {
-        await supabase
-          .from('github_webhook_events')
-          .update({
-            processed_successfully: false,
-            processed_at: new Date().toISOString(),
-            processing_error: error.message
-          })
-          .eq('delivery_id', req.headers['x-github-delivery']);
-      } catch (logError) {
-        console.error('Failed to log webhook error:', logError);
-      }
-    }
+    // Table github_webhook_events does not exist yet — skip error logging
 
     return res.status(500).json({
       error: 'Internal server error',

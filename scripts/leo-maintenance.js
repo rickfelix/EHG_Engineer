@@ -332,10 +332,8 @@ class LEOMaintenanceManager {
         }
       }
 
-      // Hook resolution stats
-      const { data: resolutionStats } = await supabase
-        .from('hook_resolution_stats')
-        .select('*');
+      // Table hook_resolution_stats does not exist yet
+      const resolutionStats = [];
 
       if (resolutionStats && resolutionStats.length > 0) {
         console.log(chalk.cyan('\nHook Resolution:'));
