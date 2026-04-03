@@ -171,6 +171,38 @@ CLI flags > Session overrides > Global defaults > Hard-coded defaults
 4. Session settings override global defaults — display which layer is active
 `,
   },
+  'leo-resume': {
+    frontmatter: {
+      description: 'Restore session state after crash, compaction, or interruption. Use when user says /leo resume or needs to recover session context.',
+    },
+    header: `# LEO Resume — Restore Session State
+
+**Purpose**: Restore session state after a crash, compaction, or interruption.
+Uses the canonical leo-resume.js script (CISO: no raw JSON interpolation into prompt).
+
+## Quick Reference
+\`\`\`bash
+# Check and restore session state
+node scripts/leo-resume.js
+
+# Check only (no display)
+node scripts/leo-resume.js --check-only
+\`\`\`
+
+## Resume Protocol
+`,
+    footer: `
+## Canonical Scripts
+- \`node scripts/leo-resume.js\` — Read and display session state
+- \`node scripts/leo-resume.js --check-only\` — Check if state file exists
+
+## Anti-Drift Rules
+1. ALWAYS use the canonical script (never read state file directly in prompt)
+2. ALWAYS load CLAUDE_CORE.md + phase file after restoring state
+3. NEVER interpolate raw JSON state into the prompt context (CISO constraint)
+4. If no saved state, run /leo next instead of guessing
+`,
+  },
 };
 
 /**
