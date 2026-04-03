@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-LEO-INFRA-ENFORCE-EXECUTION-SMOKE-001",
+  "currentSd": "SD-LEO-FIX-FIX-STAGE-VENTURE-001",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing Enforce Execution Smoke Test for Code-Producing Infrastructure SDs",
+  "currentTask": "Implementing Fix 8 Stage-Zero and Pipeline Bugs in Venture Monitoring",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
   "clearedAt": "2026-03-31T23:50:07.264Z",
-  "lastUpdatedAt": "2026-04-01T10:22:38.226Z"
+  "lastUpdatedAt": "2026-04-03T21:06:51.461Z"
 }
