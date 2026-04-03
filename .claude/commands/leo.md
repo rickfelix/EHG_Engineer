@@ -201,141 +201,15 @@ Show an AI-generated narrative summary of project evolution based on merged GitH
    Display the script's stdout output directly to the user.
 
 ### If argument is "settings" or "s":
-Display and modify AUTO-PROCEED and Orchestrator Chaining settings.
 
-1. **First, query both global defaults and session settings:**
-   ```bash
-   node -e "
-   require('dotenv').config();
-   const { createClient } = require('@supabase/supabase-js');
-   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+**DELEGATES TO**: `/leo-settings` skill (`.claude/commands/leo-settings.md`)
 
-   async function getSettings() {
-     // Get global defaults
-     const { data: globalData } = await supabase.rpc('get_leo_global_defaults');
-     const globals = globalData?.[0] || { auto_proceed: true, chain_orchestrators: false };
+Invoke the `leo-settings` skill using the Skill tool:
+```
+Skill tool: skill="leo-settings"
+```
 
-     // Get session settings
-     const { data: sessionData } = await supabase
-       .from('claude_sessions')
-       .select('session_id, metadata')
-       .eq('status', 'active')
-       .order('heartbeat_at', { ascending: false })
-       .limit(1)
-       .single();
-
-     const sessionAP = sessionData?.metadata?.auto_proceed;
-     const sessionChain = sessionData?.metadata?.chain_orchestrators;
-
-     console.log('GLOBAL_AUTO_PROCEED=' + globals.auto_proceed);
-     console.log('GLOBAL_CHAIN=' + globals.chain_orchestrators);
-     console.log('SESSION_ID=' + (sessionData?.session_id || 'none'));
-     console.log('SESSION_AUTO_PROCEED=' + (sessionAP === undefined ? 'inherited' : sessionAP));
-     console.log('SESSION_CHAIN=' + (sessionChain === undefined ? 'inherited' : sessionChain));
-   }
-
-   getSettings();
-   "
-   ```
-
-2. **Display current settings:**
-   ```
-   ⚙️  LEO Settings
-
-   Global Defaults (apply to new sessions):
-      Auto-Proceed: ON/OFF
-      Orchestrator Chaining: ON/OFF
-
-   Current Session:
-      Auto-Proceed: ON/OFF (or "inherited from global")
-      Orchestrator Chaining: ON/OFF (or "inherited from global")
-
-   Precedence: CLI flags > Session > Global > Default
-   ```
-
-3. **Ask what to configure:**
-   ```javascript
-   {
-     "questions": [
-       {
-         "question": "What would you like to configure?",
-         "header": "Settings",
-         "multiSelect": false,
-         "options": [
-           {"label": "Change session settings", "description": "Modify AUTO-PROCEED and Chaining for THIS session only"},
-           {"label": "Change global defaults", "description": "Modify defaults for ALL future sessions"},
-           {"label": "View only", "description": "Just display current settings without changing"}
-         ]
-       }
-     ]
-   }
-   ```
-
-4. **If "Change session settings" selected:**
-   Same flow as `/leo init` - ask about both preferences and update session metadata.
-
-5. **If "Change global defaults" selected:**
-   ```javascript
-   {
-     "questions": [
-       {
-         "question": "Set global AUTO-PROCEED default for new sessions:",
-         "header": "Auto-Proceed",
-         "multiSelect": false,
-         "options": [
-           {"label": "ON (Recommended)", "description": "New sessions auto-proceed through SD workflow"},
-           {"label": "OFF", "description": "New sessions pause at each phase transition"}
-         ]
-       },
-       {
-         "question": "Set global Orchestrator Chaining default for new sessions:",
-         "header": "Chaining",
-         "multiSelect": false,
-         "options": [
-           {"label": "OFF (Recommended)", "description": "Pause at orchestrator completion for review"},
-           {"label": "ON", "description": "Auto-continue to next orchestrator (power user mode)"}
-         ]
-       }
-     ]
-   }
-   ```
-
-   Then update global defaults:
-   ```bash
-   node -e "
-   require('dotenv').config();
-   const { createClient } = require('@supabase/supabase-js');
-   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-   const autoProceed = process.argv[2] === 'true';
-   const chainOrchestrators = process.argv[3] === 'true';
-   supabase.rpc('set_leo_global_defaults', {
-     p_auto_proceed: autoProceed,
-     p_chain_orchestrators: chainOrchestrators,
-     p_updated_by: 'claude-session'
-   }).then(({data, error}) => {
-     if (error) console.error('Error:', error.message);
-     else console.log('Global defaults updated: auto_proceed=' + autoProceed + ', chain_orchestrators=' + chainOrchestrators);
-   });
-   " <true|false> <true|false>
-   ```
-
-6. **Display confirmation:**
-   ```
-   ✅ Settings Updated
-
-   [If session was changed]
-   Session Settings:
-      Auto-Proceed: ON/OFF
-      Orchestrator Chaining: ON/OFF
-
-   [If global was changed]
-   Global Defaults:
-      Auto-Proceed: ON/OFF
-      Orchestrator Chaining: ON/OFF
-
-   Note: Session settings override global defaults.
-   New sessions will inherit from global defaults.
-   ```
+The leo-settings skill handles querying current settings, displaying them, and modifying global defaults or session overrides.
 
 ### If argument is "restart" or "r":
 Run the LEO stack restart command:
