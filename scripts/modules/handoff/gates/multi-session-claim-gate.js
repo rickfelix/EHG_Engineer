@@ -55,6 +55,40 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
   console.log(`   SD: ${sdId}`);
 
   try {
+    // SD-LEO-FIX-FIX-CLAIM-CONFLICT-001: Release stale sessions from the same
+    // hostname + terminal_id before checking for conflicts. Each handoff.js run
+    // creates a new session, leaving the previous run's session "active" until
+    // staleness timeout. This caused self-referential claim conflicts.
+    try {
+      await supabase.rpc('release_same_conversation_claims', {
+        p_sd_id: sdId,
+        p_hostname: currentHostname,
+        p_terminal_id: currentTerminalId,
+        p_current_session_id: currentSessionId
+      });
+    } catch (_) {
+      // RPC may not exist yet — fall back to direct cleanup
+      const { data: staleClaims } = await supabase
+        .from('claude_sessions')
+        .select('session_id, hostname, terminal_id')
+        .eq('sd_id', sdId)
+        .eq('status', 'active')
+        .eq('hostname', currentHostname);
+
+      const toRelease = (staleClaims || []).filter(s => {
+        if (s.session_id === currentSessionId) return false;
+        return isSameConversation(currentTerminalId, s.terminal_id) !== false;
+      });
+
+      for (const s of toRelease) {
+        await supabase
+          .from('claude_sessions')
+          .update({ sd_id: null, status: 'idle', released_at: new Date().toISOString() })
+          .eq('session_id', s.session_id);
+        console.log(`   🧹 Released stale same-conversation claim: ${s.session_id.substring(0, 24)}...`);
+      }
+    }
+
     // Query v_active_sessions for any active claim on this SD
     const { data, error } = await supabase
       .from('v_active_sessions')
