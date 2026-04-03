@@ -37,15 +37,9 @@ async function gatherPerformanceReview() {
     .limit(1)
     .single();
 
-  // Get OKR data
-  const { data: objectives } = await supabase
-    .from('okr_objectives')
-    .select('id, title, status, progress')
-    .eq('status', 'active');
-
-  const { data: keyResults } = await supabase
-    .from('okr_key_results')
-    .select('id, objective_id, title, progress');
+  // OKR tables (okr_objectives, okr_key_results) do not exist yet
+  const objectives = [];
+  const keyResults = [];
 
   // Get baseline info
   const { data: baseline } = await supabase
@@ -195,14 +189,8 @@ function renderConsultantFindings(data) {
 // ─── Section 4: Intake Review ────────────────────────────────
 
 async function gatherIntakeReview() {
-  const { data: pending } = await supabase
-    .from('eva_intake_queue')
-    .select('id, title, source, classification, created_at')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false })
-    .limit(10);
-
-  return { pending: pending || [] };
+  // Table eva_intake_queue does not exist yet
+  return { pending: [] };
 }
 
 function renderIntakeReview(data) {
