@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-03-27T20:44:07.173Z",
-  "git_commit": "7a225ca5",
-  "db_snapshot_hash": "82336bc777136c79",
+  "generated_at": "2026-04-03T12:21:56.995Z",
+  "git_commit": "f88b4815",
+  "db_snapshot_hash": "b9ae40daf1e08509",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 5752,
       "estimated_tokens": 1438,
-      "content_hash": "177fcfa30ebc74ae",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE.md"
+      "content_hash": "18211f291aa3fea4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 53270,
-      "estimated_tokens": 13318,
-      "content_hash": "5c71e6d381d7c516",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE_CORE.md"
+      "chars": 56573,
+      "estimated_tokens": 14144,
+      "content_hash": "8722510bf7447224",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 54061,
       "estimated_tokens": 13516,
-      "content_hash": "23d253f52fdcf83e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE_LEAD.md"
+      "content_hash": "f9bb5d2aa7a84eae",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 82853,
-      "estimated_tokens": 20714,
-      "content_hash": "1f1d0d2fa9502f10",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE_PLAN.md"
+      "chars": 82863,
+      "estimated_tokens": 20716,
+      "content_hash": "a6557c05d2b826f4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 69658,
-      "estimated_tokens": 17415,
-      "content_hash": "7acc2692aaa31e91",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE_EXEC.md"
+      "chars": 70683,
+      "estimated_tokens": 17671,
+      "content_hash": "3d0bc348910b6f20",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 6618,
       "estimated_tokens": 1655,
-      "content_hash": "e84ea937f73832b3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE_DIGEST.md"
+      "content_hash": "b6e6fead427baeac",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 10419,
       "estimated_tokens": 2605,
-      "content_hash": "a67b549b752d1458",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "583222aff58ee03b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 4801,
       "estimated_tokens": 1201,
-      "content_hash": "821abc8db1591e9d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "935cfa911286321e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 5031,
       "estimated_tokens": 1258,
-      "content_hash": "b1db5e431474013e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "e45b9b002fee9727",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 9485,
       "estimated_tokens": 2372,
-      "content_hash": "fd6dc455a35b36b7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-002\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "c018c1f2104847dd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAUDE-PROTOCOL-HARDENING-001\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }
