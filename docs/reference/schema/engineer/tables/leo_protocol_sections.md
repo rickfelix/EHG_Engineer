@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-01T23:36:53.453Z
-**Rows**: 236
+**Generated**: 2026-04-03T14:11:52.650Z
+**Rows**: 240
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (17 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -35,6 +35,7 @@
 | scoring_normalized_total | `numeric(6,2)` | YES | - | - |
 | scoring_computed_at | `timestamp with time zone` | YES | - | - |
 | scoring_computed_by | `uuid` | YES | - | - |
+| skill_key | `character varying(50)` | YES | - | Maps section to generated skill file in .claude/commands/<skill_key>.md. NULL = not part of any skill. |
 
 ## Constraints
 
@@ -58,6 +59,10 @@
 - `idx_leo_protocol_sections_protocol`
   ```sql
   CREATE INDEX idx_leo_protocol_sections_protocol ON public.leo_protocol_sections USING btree (protocol_id)
+  ```
+- `idx_leo_protocol_sections_skill_key`
+  ```sql
+  CREATE INDEX idx_leo_protocol_sections_skill_key ON public.leo_protocol_sections USING btree (skill_key) WHERE (skill_key IS NOT NULL)
   ```
 - `idx_leo_protocol_sections_type`
   ```sql
