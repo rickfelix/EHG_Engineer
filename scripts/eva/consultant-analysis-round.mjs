@@ -311,11 +311,8 @@ async function analyzeCrossVentureReuse() {
 
 // ─── Domain 7: OKR Drift Detection ───────────────────────────
 async function analyzeOKRDrift() {
-  const { data: keyResults } = await supabase
-    .from('okr_key_results')
-    .select('id, title, current_value, target_value, progress_percentage, status, updated_at')
-    .in('status', ['on_track', 'at_risk', 'behind'])
-    .limit(50);
+  // Table okr_key_results does not exist yet
+  const keyResults = [];
 
   if (!keyResults || keyResults.length === 0) return [];
 

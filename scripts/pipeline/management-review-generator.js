@@ -96,14 +96,9 @@ async function gatherSDData() {
 }
 
 async function gatherOKRData() {
-  const { data: objectives } = await supabase
-    .from('okr_objectives')
-    .select('id, title, status, progress')
-    .eq('status', 'active');
-
-  const { data: keyResults } = await supabase
-    .from('okr_key_results')
-    .select('id, objective_id, title, status, current_value, target_value, progress');
+  // OKR tables (okr_objectives, okr_key_results) do not exist yet
+  const objectives = [];
+  const keyResults = [];
 
   const snapshot = (objectives || []).map(obj => {
     const krs = (keyResults || []).filter(kr => kr.objective_id === obj.id);
@@ -216,13 +211,9 @@ async function gatherVentureData() {
 }
 
 async function gatherPipelineData(baselineData, sdData) {
-  const { data: intake } = await supabase
-    .from('eva_intake_queue')
-    .select('id')
-    .eq('status', 'pending');
-
+  // Table eva_intake_queue does not exist yet
   return {
-    intakePending: (intake || []).length,
+    intakePending: 0,
     baselineVersion: baselineData.version || 0,
     baselineItems: baselineData.totalItems || 0,
     sdsInFlight: sdData.inProgress + sdData.active,
