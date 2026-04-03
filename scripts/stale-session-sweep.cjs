@@ -213,7 +213,7 @@ async function main() {
   // 1. Get all sessions with SD claims
   const { data: sessions, error: sessErr } = await supabase
     .from('v_active_sessions')
-    .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track')
+    .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id')
     .not('sd_id', 'is', null)
     .order('heartbeat_age_seconds', { ascending: true });
 
@@ -233,9 +233,14 @@ async function main() {
   // and appear dead even when the session is actively running.
   // Classification uses HEARTBEAT AGE ONLY as the liveness signal.
   const VERY_STALE_SECONDS = STALE_THRESHOLD_SECONDS * 3; // 15min = definitely dead
+  // SD-LEO-INFRA-PARALLEL-AGENT-QUEUE-001: Virtual drain sessions use shorter thresholds
+  const VIRTUAL_STALE_THRESHOLD = 180; // 3 minutes for virtual drain agents
+  const VIRTUAL_VERY_STALE = VIRTUAL_STALE_THRESHOLD * 2; // 6 minutes = definitely dead
   const classified = sessions.map(s => {
-    const isStale = s.heartbeat_age_seconds > STALE_THRESHOLD_SECONDS;
-    const isVeryStale = s.heartbeat_age_seconds > VERY_STALE_SECONDS;
+    const threshold = s.is_virtual ? VIRTUAL_STALE_THRESHOLD : STALE_THRESHOLD_SECONDS;
+    const veryStaleThreshold = s.is_virtual ? VIRTUAL_VERY_STALE : VERY_STALE_SECONDS;
+    const isStale = s.heartbeat_age_seconds > threshold;
+    const isVeryStale = s.heartbeat_age_seconds > veryStaleThreshold;
 
     let status;
     if (!isStale) {
