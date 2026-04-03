@@ -90,26 +90,7 @@ argument-hint: [start <SD-ID>|assist|history|inbox|create|next|continue|complete
 
 ---
 
-### AUTO-PROCEED MODE (DEFAULT: ON)
-
-**The auto_proceed setting controls workflow behavior**:
-
-**When AUTO-PROCEED is ON (default):**
-- **Phase transitions**: Execute LEAD→PLAN→EXEC handoffs automatically
-- **Validation gates**: Run gates; only stop on blocking failures
-- **Post-completion**: Run full ship/document/learn sequence automatically
-- **Next SD**: After completing one SD, show the next SD in queue
-- **DO NOT** use AskUserQuestion for "what's next?" or "should I proceed?"
-
-**When AUTO-PROCEED is OFF:**
-- **Pause at phase transitions**: Ask before executing handoffs
-- **Confirm post-completion**: Ask before running ship/document/learn
-- **User controls pace**: Wait for explicit "proceed" before continuing
-
-**ALWAYS STOP AND ASK (regardless of setting):**
-- A blocking error requires human decision
-- Tests fail after 2 retry attempts
-- Merge conflicts require human resolution
+**AUTO-PROCEED**: See CLAUDE.md for full behavior. Default ON. Always stop on blocking errors, test failures (2 retries), merge conflicts.
 
 ---
 
@@ -934,86 +915,23 @@ Restore session state after a crash, compaction, or interruption using the Unifi
 
 ### If argument is "start" followed by SD-ID (e.g., `/leo start SD-XXX-001`)
 
-**Unified SD initialization with automatic protocol file loading.**
+**DELEGATES TO**: `/sd-start` skill (`.claude/commands/sd-start.md`)
 
-This is the RECOMMENDED way to begin work on an SD. It combines claiming + context loading.
+Parse the SD-ID from the argument and invoke the `sd-start` skill using the Skill tool:
+```
+Skill tool: skill="sd-start", args="<SD-ID>"
+```
 
-1. **Parse the SD-ID** from the argument (e.g., `start SD-LEO-SELF-IMPROVE-002C` → `SD-LEO-SELF-IMPROVE-002C`)
-
-2. **Claim the SD:**
-   ```bash
-   npm run sd:start <SD-ID>
-   ```
-
-3. **MANDATORY: Activate worktree if shown in output (PAT-WORKTREE-LIFECYCLE-001):**
-   - Look for the line `>>> WORKTREE_CWD=<path>` in the sd-start output
-   - If present, you **MUST** `cd` to that path and use it as your working directory for ALL subsequent operations (file edits, git commands, shipping)
-   - Example: if output contains `>>> WORKTREE_CWD=C:\Users\rickf\Projects\_EHG\EHG_Engineer\.worktrees\SD-XXX-001`, run:
-     ```bash
-     cd "C:\Users\rickf\Projects\_EHG\EHG_Engineer\.worktrees\SD-XXX-001"
-     ```
-   - If `>>> WORKTREE_CWD` is NOT in the output, continue working in the current directory
-   - **Why**: Without this step, edits go to the main repo on `main` branch instead of the SD's isolated worktree branch, causing merge conflicts and lost isolation
-
-4. **Get the current phase from output** (look for `Phase: LEAD` or similar)
-
-5. **MANDATORY: Read protocol files based on phase:**
-
-   **Step 1: ALWAYS read CLAUDE_CORE.md first (contains sub-agent prompt quality standard, SD type requirements, gate thresholds):**
-   ```
-   Read tool: CLAUDE_CORE.md
-   ```
-
-   **Step 2: Read phase-specific digest file:**
-
-   | Phase | Files to Read (use Read tool) |
-   |-------|-------------------------------|
-   | LEAD | `CLAUDE_LEAD.md` |
-   | PLAN | `CLAUDE_PLAN.md` |
-   | EXEC | `CLAUDE_EXEC.md` |
-
-   **Execute BOTH file reads immediately** - do not just mention them, actually use the Read tool:
-   ```
-   Read tool: CLAUDE_CORE.md   (ALWAYS - contains Five-Point Brief, model routing, SD types)
-   Read tool: CLAUDE_LEAD.md   (if phase is LEAD)
-   Read tool: CLAUDE_PLAN.md   (if phase is PLAN)
-   Read tool: CLAUDE_EXEC.md   (if phase is EXEC)
-   ```
-
-6. **Check for orchestrator/child status:**
-   - If SD has children (orchestrator) → run `node scripts/orchestrator-preflight.js <SD-ID>`
-   - If SD has parent (child) → run `node scripts/child-sd-preflight.js <SD-ID>`
-
-7. **Display unified output:**
-   ```
-   ✅ SD Started: <SD-ID>
-      Title: <title>
-      Phase: <phase>
-      Type: <sd_type>
-      Progress: <progress>%
-
-   📚 Protocol Context Loaded: CLAUDE_<PHASE>.md
-      (File has been read and context is active)
-
-   📋 Next Action: <recommended handoff command>
-   ```
-
-**Why use `/leo start` instead of just `/leo SD-XXX`:**
-- Explicit about protocol file loading (not buried in requirements)
-- Shows confirmation that context was loaded
-- Reduces "forgot to read CLAUDE_LEAD.md" failures
+The sd-start skill handles the full protocol: claim, worktree activation, phase context loading, orchestrator/child preflight, and display.
 
 ### If argument looks like an SD ID (SD-* pattern)
 
-When the argument matches `SD-*` pattern (e.g., `SD-FEATURE-001`):
-1. Run `npm run sd:start <SD-ID>` to claim and show info
-2. **If output contains `>>> WORKTREE_CWD=<path>`, cd to that path** (PAT-WORKTREE-LIFECYCLE-001)
-3. Check if orchestrator (has children) → run preflight
-4. Check if child SD (has parent) → run child preflight
-5. Load appropriate CLAUDE_*.md context based on phase
-6. Proceed with LEAD→PLAN→EXEC workflow
+**DELEGATES TO**: `/sd-start` skill
 
-**NOTE**: Consider using `/leo start <SD-ID>` instead for explicit protocol file loading with confirmation.
+When the argument matches `SD-*` pattern (e.g., `SD-FEATURE-001`), invoke the `sd-start` skill:
+```
+Skill tool: skill="sd-start", args="<SD-ID>"
+```
 
 ### If argument is "audit" or "au":
 Run the LEO audit discovery report to show issue patterns, compliance alerts, and retrospective insights.
@@ -1119,275 +1037,33 @@ This command is part of the **Command Ecosystem**. For full workflow context, se
 
 The `/leo` command connects to other commands at key workflow points:
 
-### After LEAD-FINAL-APPROVAL (SD Completion)
+### After SD Completion
 
-When an SD reaches LEAD-FINAL-APPROVAL and is marked complete, **check session auto_proceed preference** to determine workflow:
+Post-completion is handled by `/leo complete` (see above). The sequence is:
+1. `/ship` → `/heal sd` → `/document` (feature SDs) → `/learn` → `sd:next`
 
-```
-✅ SD Completed: SD-XXX-001
+AUTO-PROCEED controls whether each step runs automatically or asks first.
+Always stop on: blocking errors, test failures after 2 retries, merge conflicts.
 
-[If auto_proceed=true]
-🚀 Auto-Proceeding with Post-Completion Sequence...
+### Orchestrator, Child SD, and Context Loading
 
-[If auto_proceed=false]
-📋 SD Complete. Ready for post-completion sequence.
-   Run /leo complete or confirm to proceed.
-```
+**DELEGATES TO**: `/sd-start` skill (`.claude/commands/sd-start.md`)
 
-| Step | Command | Condition | If auto_proceed=true | If auto_proceed=false |
-|------|---------|-----------|---------------------|----------------------|
-| 1 | `/restart` | UI/feature SD, or long session | Auto-run | Ask first |
-| 2 | Visual review | If UI changes | Auto-review | Auto-review |
-| 3 | `/ship` | Always | Auto-invoke | Ask first |
-| 4 | `/heal sd --sd-id <key>` | Always | Auto-invoke | Ask first |
-| 5 | `/document` | Feature/API SD | Auto-invoke | Ask first |
-| 6 | `/learn` | Always | Auto-invoke | Ask first |
-| 7 | `/leo next` | After completion | Auto-show | Ask first |
+The `/sd-start` skill handles all SD initialization concerns:
+- Orchestrator detection and preflight (`node scripts/orchestrator-preflight.js`)
+- Child SD dependency validation (`node scripts/child-sd-preflight.js`)
+- Mandatory context loading (CLAUDE.md, CLAUDE_CORE.md, phase-specific files)
+- Worktree activation (PAT-WORKTREE-LIFECYCLE-001)
 
-**AUTO-PROCEED MODE (check session preference)**:
+When `/leo start <SD-ID>` or `/leo <SD-ID>` is invoked, all of these are executed automatically by the sd-start skill.
 
-Check session auto_proceed setting before deciding workflow behavior:
-```bash
-node -e "
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-supabase.from('claude_sessions')
-  .select('metadata')
-  .eq('status', 'active')
-  .order('heartbeat_at', { ascending: false })
-  .limit(1)
-  .single()
-  .then(({data}) => {
-    const autoProceed = data?.metadata?.auto_proceed ?? true; // Default ON
-    console.log('AUTO_PROCEED=' + autoProceed);
-  });
-"
-```
+### Strategic Directive Creation
 
-**If AUTO_PROCEED=true (default):**
-1. **Phase transitions**: Execute handoffs without confirmation
-2. **Post-completion**: Run the full sequence above without asking
-3. **Next SD**: After completion, automatically show the next SD in queue
-- DO NOT use AskUserQuestion for workflow progression
+**DELEGATES TO**: `/leo create` sub-command (handled above in this file)
 
-**If AUTO_PROCEED=false:**
-1. **Phase transitions**: Ask user before executing handoffs
-2. **Post-completion**: Confirm before running each step
-3. **Next SD**: Ask before showing queue
-- Use AskUserQuestion at each decision point
+SD creation reads CLAUDE.md, CLAUDE_CORE.md, and the field reference automatically.
+SD Type Quick Reference:
 
-**For UI/Feature SDs (when auto_proceed=true):**
-```
-1. Invoke /restart skill → Wait for servers
-2. Perform visual review → Report findings
-3. Invoke /ship skill → Create PR, merge
-4. Invoke /heal sd --sd-id <key> → Verify promises (non-blocking)
-5. Invoke /document skill → Update docs
-6. Invoke /learn skill → Capture patterns
-7. Run npm run sd:next → Show next work
-```
-
-**For Infrastructure/Database SDs (when auto_proceed=true):**
-```
-1. Invoke /ship skill → Create PR, merge
-2. Invoke /heal sd --sd-id <key> → Verify promises (non-blocking)
-3. Invoke /learn skill → Capture patterns
-4. Run npm run sd:next → Show next work
-```
-
-**Always stop and ask user if (regardless of auto_proceed):**
-- A blocking error occurs that cannot be auto-resolved
-- Tests fail after 2 retry attempts
-- Merge conflicts require human decision
-
-### Starting New Work
-
-After `/leo next` shows the SD queue:
-- If continuing an SD → Load appropriate CLAUDE_*.md context
-- If starting fresh → Suggest `/restart` if long session (>2 hours)
-
-### Orchestrator SD Detection (MANDATORY)
-
-**CRITICAL**: When starting work on an SD that has children (orchestrator pattern), you MUST run the preflight check BEFORE any implementation work.
-
-#### Detection Query
-```bash
-# Check if SD is an orchestrator (has children)
-node -e "
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-supabase.from('strategic_directives_v2').select('id').eq('parent_sd_id', 'SD-XXX-001').then(({data}) => {
-  console.log('Children:', data?.length || 0);
-  if (data?.length > 0) console.log('⚠️ ORCHESTRATOR DETECTED - Run preflight!');
-});
-"
-```
-
-#### Preflight Check (MANDATORY for orchestrators)
-When an orchestrator is detected, run the preflight check:
-```bash
-node scripts/orchestrator-preflight.js SD-XXX-001
-```
-
-The preflight will:
-1. Show all children and their SD types
-2. Display workflow requirements PER CHILD (PRD required, E2E required, min handoffs, gate threshold)
-3. Require explicit confirmation before proceeding
-
-#### Why This Matters
-
-Without the preflight:
-- **Efficiency bias** causes Claude to treat children as sub-tasks
-- **Completion bias** causes "ship code" to be confused with "complete SD"
-- Children get code shipped but don't go through full LEAD→PLAN→EXEC
-- Database shows 'draft'/'in_progress' while code is on main
-
-With the preflight:
-- Workflow requirements are visible BEFORE work starts (not just at completion validation)
-- Each child's SD-type-specific requirements are explicit
-- Explicit confirmation prevents rationalization
-
-#### Autonomous Orchestrator Workflow
-
-When starting work on an orchestrator SD:
-1. **Run preflight automatically** - `node scripts/orchestrator-preflight.js SD-XXX-001`
-2. **Display the requirements** - Let the user see child workflow requirements and claim status
-3. **Identify the target child** - Pick the first unclaimed, non-completed child from preflight output
-4. **Claim the child explicitly** - Run `npm run sd:start <CHILD-SD-ID>` to formally claim it. **Do NOT skip this step.** The parent's `sd:start` auto-routing does NOT substitute for an explicit child claim.
-5. **Proceed with full workflow** - Full LEAD→PLAN→EXEC for the claimed child
-
-**CRITICAL**: `sd:start` on the parent may auto-route to a child's worktree. Treat this as a recommendation, NOT a commitment. Always verify the child is unclaimed before starting work. If `sd:start` output shows `WORKTREE_CWD` for a child you did not explicitly claim, **STOP and run `sd:start` on the child first.**
-
-Children are independent SDs requiring full workflow. The preflight is for visibility, not approval.
-
-### Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), you MUST run the child SD preflight validation.
-
-#### Detection
-When starting work on an SD that has a `parent_sd_id`:
-1. Automatically detect it as a child SD
-2. Run preflight validation BEFORE any work
-
-#### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### Context Loading Requirements (MANDATORY)
-
-**CRITICAL**: Before starting work on ANY SD (new, existing, or child), you MUST load the required context files in this order:
-
-#### Step 1: ALWAYS Read CLAUDE.md and CLAUDE_CORE.md First
-```
-Read tool: CLAUDE.md
-Read tool: CLAUDE_CORE.md
-```
-
-**CLAUDE.md provides**:
-- Sub-agent trigger keywords (CRITICAL for proactive invocation)
-- Skill intent detection patterns
-- AUTO-PROCEED mode configuration
-- Session initialization guidance
-
-**CLAUDE_CORE.md provides**:
-- SD type definitions and workflow requirements
-- PRD requirements, handoff counts, gate thresholds
-- Sub-agent configuration and model routing
-- Validation gate definitions
-
-**This applies to ALL SDs including children of orchestrators.**
-
-#### Step 2: Load Phase-Specific Context
-Based on the SD's `current_phase`, load the appropriate digest file:
-
-| Phase | File to Load |
-|-------|--------------|
-| LEAD_APPROVAL, LEAD_FINAL_APPROVAL | CLAUDE_LEAD.md |
-| PLAN_*, PRD_* | CLAUDE_PLAN.md |
-| EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC.md |
-
-#### Why This Matters
-Without loading CLAUDE.md and CLAUDE_CORE.md:
-- Sub-agent trigger keywords are unknown (agents won't invoke proactively)
-- SD type requirements are unknown
-- Gate thresholds may be violated
-- Required sub-agents may be skipped
-- Handoff chain may be incomplete
-
-**Skipping context loading is a protocol violation.**
-
-#### What It Validates
-1. **Dependency Chain**: Each SD in `dependency_chain` must be:
-   - Status: `completed`
-   - Progress: `100%`
-   - All required handoffs accepted (varies by SD type)
-
-2. **Parent Context**: Parent orchestrator is loaded for reference
-
-#### If BLOCKED
-- Stop immediately
-- Do not start LEAD phase
-- Complete blocking dependency first
-- Return to original SD after dependencies satisfied
-
-#### If PASS
-- Proceed with normal LEAD→PLAN→EXEC workflow
-- Parent context loaded for reference
-
-#### Example Output (BLOCKED)
-```
-❌ RESULT: BLOCKED
-   Cannot start SD-QUALITY-CLI-001 until dependencies are complete.
-
-   🚫 SD-QUALITY-DB-001 is not complete:
-      - Status: in_progress (expected: completed)
-      - Progress: 60% (expected: 100%)
-      - Handoffs: 2/4 (expected: 4)
-
-   ACTION: Complete SD-QUALITY-DB-001 first, then return to this SD.
-```
-
-#### Integration with sd:next
-The `npm run sd:next` command shows dependency status in the queue display.
-Child SDs with incomplete dependencies show as BLOCKED.
-
-### Strategic Directive Creation (MANDATORY REFERENCES)
-
-**CRITICAL**: When creating new strategic directives, you MUST read these reference documents BEFORE creating the SD:
-
-#### Required Reading
-1. **CLAUDE.md** - Router with sub-agent trigger keywords
-   - Contains actionable trigger keywords for proactive sub-agent invocation
-   - Skill intent detection patterns
-   - AUTO-PROCEED mode behavior
-
-2. **CLAUDE_CORE.md** - Core protocol guidance, SD types, workflow requirements
-   - Contains SD type definitions and their mandatory requirements
-   - Specifies PRD requirements, handoff counts, and gate thresholds per SD type
-   - Defines the LEAD→PLAN→EXEC workflow phases
-
-3. **docs/database/strategic_directives_v2_field_reference.md** - Complete field reference
-   - Defines all required and optional fields
-   - Explains `id` vs `uuid_id` usage
-   - Documents JSONB array structures (key_changes, success_criteria, dependencies, etc.)
-   - Shows status workflow and priority levels
-   - Provides LEO Protocol phase definitions
-
-#### SD Creation Checklist
-Before creating any SD, ensure you:
-- [ ] Read CLAUDE.md for sub-agent trigger keywords
-- [ ] Read CLAUDE_CORE.md for SD type requirements
-- [ ] Read field reference for required fields and formats
-- [ ] Use proper ID format: `SD-{CATEGORY}-{NUMBER}` (e.g., SD-FEATURE-001)
-- [ ] Set appropriate `sd_type` based on scope and requirements
-- [ ] Populate JSONB fields with correct structure
-- [ ] Set `current_phase` to 'LEAD_APPROVAL' for new SDs
-- [ ] Specify `parent_sd_id` if this is a child of an orchestrator
-
-#### SD Type Quick Reference (from CLAUDE_CORE.md)
 | SD Type | PRD Required | Min Handoffs | Gate Threshold |
 |---------|--------------|--------------|----------------|
 | `feature` | YES | 4 | 85% |
@@ -1395,5 +1071,3 @@ Before creating any SD, ensure you:
 | `enhancement` | Optional | 2 | 75% |
 | `fix` | NO | 1 | 70% |
 | `documentation` | NO | 1 | 60% |
-
-**Note**: Always verify current requirements from CLAUDE.md and CLAUDE_CORE.md as they may be updated.
