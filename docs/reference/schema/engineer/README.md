@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-03T23:17:43.642Z
-**Tables**: 620
+**Generated**: 2026-04-03T23:53:11.015Z
+**Tables**: 621
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (620)
+## All Tables (621)
 
 ### LEO Protocol
 
@@ -459,6 +459,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [pattern_resolution_signals](tables/pattern_resolution_signals.md)
 - [pattern_subagent_mapping](tables/pattern_subagent_mapping.md)
 - [pcvp_verification_log](tables/pcvp_verification_log.md)
+- [permission_audit_log](tables/permission_audit_log.md)
 - [persona_behavioral_data](tables/persona_behavioral_data.md)
 - [persona_config](tables/persona_config.md)
 - [pipeline_metrics](tables/pipeline_metrics.md)
