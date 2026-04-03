@@ -16,7 +16,7 @@ import chalk from 'chalk';
  * @param {string} phase - Phase to check
  * @returns {Promise<boolean>}
  */
-export async function checkPhaseCompletion(supabase, sdId, phase) {
+export async function checkPhaseCompletion(_supabase, _sdId, _phase) {
   // Phase completion tracked via sd_phase_handoffs, not phantom table
   return false;
 }

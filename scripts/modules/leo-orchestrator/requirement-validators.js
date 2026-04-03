@@ -231,12 +231,12 @@ function validateVerificationChecks(requirement, decisionLogger) {
   return true;
 }
 
-async function validateApprovalRequested(sdId, supabase) {
+async function validateApprovalRequested(_sdId, _supabase) {
   // Approval handled by handoff validation system - auto-pass
   return true;
 }
 
-async function validateHumanDecisionReceived(sdId, supabase) {
+async function validateHumanDecisionReceived(_sdId, _supabase) {
   // Approval handled by handoff validation system - auto-pass
   return true;
 }

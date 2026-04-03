@@ -94,7 +94,7 @@ export async function generateComplianceReport(supabase, sdId, executionState) {
  * @param {string} phase - Phase name
  * @returns {Promise<boolean>} Whether phase is complete
  */
-export async function checkPhaseCompletion(supabase, sdId, phase) {
+export async function checkPhaseCompletion(_supabase, _sdId, _phase) {
   // Phase completion tracked via sd_phase_handoffs, not phantom table
   return false;
 }

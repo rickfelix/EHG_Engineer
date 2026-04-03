@@ -181,8 +181,8 @@ export async function executeVERIFICATIONPhase(_context, _sdId) {
  * @param {Object} context - Orchestrator context
  * @param {string} sdId - Strategic Directive ID
  */
-export async function executeAPPROVALPhase(context, sdId) {
-  const { supabase, decisionLogger } = context;
+export async function executeAPPROVALPhase(context, _sdId) {
+  const { decisionLogger } = context;
 
   console.log(chalk.blue('\n✅ Executing APPROVAL Phase'));
 
