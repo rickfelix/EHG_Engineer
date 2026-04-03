@@ -108,19 +108,21 @@ function extractTableName(command) {
 
 /**
  * Extract column names from a Bash command (best-effort).
- * Looks for .select(), .eq(), .update(), .insert() patterns.
+ * Detects columns from Supabase client method patterns.
  * @param {string} command
  * @returns {Object<string, *>}
  */
 function extractParams(command) {
   const params = {};
-  // Match .eq('col', value) / .eq("col", value)
-  const eqPattern = /\.eq\(\s*['"`](\w+)['"`]/g;
   let match;
-  while ((match = eqPattern.exec(command)) !== null) {
+
+  // .eq('col', value), .neq('col', value), .gt('col', value), .lt('col', value), .gte/.lte
+  const filterPattern = /\.(?:eq|neq|gt|gte|lt|lte|like|ilike|is|contains|containedBy)\(\s*['"`](\w+)['"`]/g;
+  while ((match = filterPattern.exec(command)) !== null) {
     params[match[1]] = 'unknown';
   }
-  // Match .select('col1, col2') — extract column names
+
+  // .select('col1, col2') — extract column names
   const selectMatch = command.match(/\.select\(\s*['"`]([^'"`]+)['"`]\s*\)/);
   if (selectMatch && selectMatch[1] !== '*') {
     selectMatch[1].split(',').forEach(col => {
@@ -128,6 +130,34 @@ function extractParams(command) {
       if (clean && clean !== '*') params[clean] = 'unknown';
     });
   }
+
+  // .order('col') / .order('col', { ascending: true })
+  const orderPattern = /\.order\(\s*['"`](\w+)['"`]/g;
+  while ((match = orderPattern.exec(command)) !== null) {
+    params[match[1]] = 'unknown';
+  }
+
+  // .in('col', [...])
+  const inPattern = /\.in\(\s*['"`](\w+)['"`]/g;
+  while ((match = inPattern.exec(command)) !== null) {
+    params[match[1]] = 'unknown';
+  }
+
+  // .insert({ col: val, ... }) / .update({ col: val, ... }) / .upsert({ col: val, ... })
+  // Extract object keys from simple { key: val } patterns
+  const mutationPattern = /\.(?:insert|update|upsert)\(\s*\{([^}]+)\}/g;
+  while ((match = mutationPattern.exec(command)) !== null) {
+    const objectBody = match[1];
+    // Extract keys from "key: value" or "key : value" patterns
+    const keyPattern = /(\w+)\s*:/g;
+    let keyMatch;
+    while ((keyMatch = keyPattern.exec(objectBody)) !== null) {
+      params[keyMatch[1]] = 'unknown';
+    }
+  }
+
+  // .delete() doesn't have column params but may follow .eq() which is already handled
+
   return params;
 }
 
