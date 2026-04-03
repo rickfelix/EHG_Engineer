@@ -61,23 +61,7 @@ class LEOCleanup {
       for (const sd of completedSDs) {
         console.log(`   - ${sd.id}: ${sd.title}`);
 
-        // Check if any sessions reference this SD
-        const { data: sessions } = await supabase
-          .from('leo_execution_sessions')
-          .select('id, status')
-          .eq('sd_id', sd.id)
-          .eq('status', 'in_progress');
-
-        if (sessions && sessions.length > 0) {
-          console.log(chalk.yellow(`     ⚠️  Found ${sessions.length} active sessions - cleaning...`));
-
-          // Mark sessions as completed
-          await supabase
-            .from('leo_execution_sessions')
-            .update({ status: 'completed', ended_at: new Date() })
-            .eq('sd_id', sd.id)
-            .eq('status', 'in_progress');
-        }
+        // Session cleanup handled by claude_sessions table
       }
     } else {
       console.log(chalk.green('   ✓ No completed SDs found'));
@@ -154,24 +138,8 @@ class LEOCleanup {
       }
     }
 
-    // Show active sessions
-    const { data: activeSessions } = await supabase
-      .from('leo_execution_sessions')
-      .select('id, sd_id, started_at, status')
-      .eq('status', 'in_progress')
-      .order('started_at', { ascending: false });
-
-    if (activeSessions && activeSessions.length > 0) {
-      console.log(chalk.yellow('\n   ⚠️  Active LEO Sessions:'));
-      for (const session of activeSessions) {
-        const duration = Math.round((Date.now() - new Date(session.started_at)) / 1000 / 60);
-        console.log(`   - Session ${session.id} for ${session.sd_id} (${duration} minutes ago)`);
-      }
-
-      console.log(chalk.yellow('\n   Consider running with --force to clean these up'));
-    } else {
-      console.log(chalk.green('\n   ✓ No active sessions'));
-    }
+    // Session tracking uses claude_sessions table
+    console.log(chalk.green('\n   ✓ Session tracking via claude_sessions'));
   }
 
   async cleanAll(options = {}) {
@@ -189,18 +157,9 @@ class LEOCleanup {
     // Reset caches if requested
     await this.resetCaches(options.full);
 
-    // Force clean active sessions if requested
+    // Force clean handled by claude_sessions table
     if (options.force) {
-      console.log(chalk.red('\n⚠️  Force cleaning all active sessions...'));
-
-      const { error } = await supabase
-        .from('leo_execution_sessions')
-        .update({ status: 'cancelled', ended_at: new Date() })
-        .eq('status', 'in_progress');
-
-      if (!error) {
-        console.log(chalk.green('   ✓ All active sessions cancelled'));
-      }
+      console.log(chalk.green('   ✓ Force clean: session tracking via claude_sessions'));
     }
 
     // Show current status

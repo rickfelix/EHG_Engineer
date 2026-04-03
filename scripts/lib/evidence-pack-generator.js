@@ -160,49 +160,11 @@ export class EvidencePackGenerator {
    */
   async fetchSessionData() {
     try {
-      // Fetch execution session
-      const { data: session } = await this.supabase
-        .from('leo_execution_sessions')
-        .select('*')
-        .eq('id', this.sessionId)
-        .single();
-
-      if (session) {
-        this.evidence.dbSession = session;
-      }
-
-      // Fetch handoff executions from today
-      const today = new Date().toISOString().split('T')[0];
-      const { data: handoffs } = await this.supabase
-        .from('handoff_executions')
-        .select('*')
-        .gte('executed_at', today)
-        .order('executed_at', { ascending: true });
-
-      if (handoffs) {
-        this.evidence.dbHandoffs = handoffs;
-      }
-
-      // Fetch compliance reports
-      const { data: reports } = await this.supabase
-        .from('leo_compliance_reports')
-        .select('*')
-        .eq('session_id', this.sessionId);
-
-      if (reports) {
-        this.evidence.dbReports = reports;
-      }
-
-      // Fetch phase completions for this session
-      const { data: phases } = await this.supabase
-        .from('leo_phase_completions')
-        .select('*')
-        .eq('session_id', this.sessionId)
-        .order('completed_at', { ascending: true });
-
-      if (phases) {
-        this.evidence.dbPhases = phases;
-      }
+      // Phantom tables removed - set defaults
+      this.evidence.dbSession = null;
+      this.evidence.dbHandoffs = [];
+      this.evidence.dbReports = [];
+      this.evidence.dbPhases = [];
 
     } catch (error) {
       console.warn('⚠️  Could not fetch some session data:', error.message);

@@ -467,7 +467,7 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
     let subAgentResults = [];
     if (childIds.length > 0) {
       const { data: saData } = await supabase
-        .from('sub_agent_results')
+        .from('sub_agent_execution_results')
         .select('sd_id, sub_agent_type, verdict')
         .in('sd_id', childIds)
         .eq('sub_agent_type', 'TESTING');

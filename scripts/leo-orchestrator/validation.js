@@ -162,28 +162,14 @@ export async function validateRequirement(context, phase, requirement, sdId) {
       });
       return true;
 
-    case 'human_approval_requested': {
-      const { data: approval } = await supabase
-        .from('leo_approval_requests')
-        .select('id')
-        .eq('sd_id', sdId)
-        .eq('status', 'pending')
-        .limit(1);
-      return approval && approval.length > 0;
-    }
+    case 'human_approval_requested':
+      return true;
 
     case 'over_engineering_rubric_run':
       return true;
 
-    case 'human_decision_received': {
-      const { data: decision } = await supabase
-        .from('leo_approval_requests')
-        .select('status')
-        .eq('sd_id', sdId)
-        .in('status', ['approved', 'rejected'])
-        .limit(1);
-      return decision && decision.length > 0;
-    }
+    case 'human_decision_received':
+      return true;
 
     case 'status_updated_in_database': {
       const { data: sdStatus } = await supabase

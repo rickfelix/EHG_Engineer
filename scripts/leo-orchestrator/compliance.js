@@ -17,14 +17,8 @@ import chalk from 'chalk';
  * @returns {Promise<boolean>}
  */
 export async function checkPhaseCompletion(supabase, sdId, phase) {
-  const { data } = await supabase
-    .from('leo_phase_completions')
-    .select('completed_at')
-    .eq('sd_id', sdId)
-    .eq('phase', phase)
-    .single();
-
-  return !!data?.completed_at;
+  // Phase completion tracked via sd_phase_handoffs, not phantom table
+  return false;
 }
 
 /**
@@ -37,15 +31,7 @@ export async function checkPhaseCompletion(supabase, sdId, phase) {
  */
 export async function recordPhaseCompletion(supabase, phase, sdId, executionState) {
   executionState.completedPhases.push(phase);
-
-  await supabase
-    .from('leo_phase_completions')
-    .upsert({
-      sd_id: sdId,
-      phase,
-      completed_at: new Date(),
-      session_id: executionState.sessionId
-    });
+  // Phase completion tracked in executionState only (phantom table removed)
 }
 
 /**
@@ -75,10 +61,7 @@ export async function generateComplianceReport(supabase, sdId, executionState) {
   console.log(`Compliance Score: ${report.compliance_score}%`);
   console.log(`Duration: ${Math.round(report.duration / 1000)}s`);
 
-  // Store report
-  await supabase
-    .from('leo_compliance_reports')
-    .insert(report);
+  // Report logged to console only (phantom table removed)
 }
 
 /**
@@ -89,28 +72,8 @@ export async function generateComplianceReport(supabase, sdId, executionState) {
  * @param {Object} executionState - Current execution state
  */
 export async function handleExecutionFailure(supabase, error, executionState) {
-  // Update session status
-  await supabase
-    .from('leo_execution_sessions')
-    .update({
-      status: 'failed',
-      failed_at: new Date(),
-      error_message: error.message,
-      failed_phase: executionState.currentPhase
-    })
-    .eq('id', executionState.sessionId);
-
-  // Log violation
-  await supabase
-    .from('leo_violations')
-    .insert({
-      session_id: executionState.sessionId,
-      sd_id: executionState.sdId,
-      phase: executionState.currentPhase,
-      violation_type: 'execution_failure',
-      details: error.message,
-      timestamp: new Date()
-    });
+  // Failure logged to console only (phantom tables removed)
+  console.error(`Execution failure in phase ${executionState.currentPhase}: ${error.message}`);
 }
 
 /**
