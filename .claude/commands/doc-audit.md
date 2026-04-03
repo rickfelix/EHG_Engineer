@@ -7,7 +7,7 @@ tools:
   - Write
   - Glob
   - Grep
-model: sonnet
+model: opus
 ---
 
 # /doc-audit - Documentation Health Audit

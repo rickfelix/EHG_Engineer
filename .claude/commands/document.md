@@ -9,7 +9,7 @@ tools:
   - Glob
   - Edit
   - Task
-model: sonnet
+model: opus
 ---
 
 # Intelligent Documentation Command (/document)

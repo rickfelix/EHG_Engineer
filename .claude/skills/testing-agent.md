@@ -5,7 +5,7 @@ tools:
   - Bash
   - Read
   - Write
-model: sonnet
+model: opus
 agent: TESTING
 hooks:
   PreToolUse:
