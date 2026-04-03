@@ -79,3 +79,4 @@ Friday Meeting Complete
 - Only high-confidence findings (confidence_tier='high') appear in the meeting
 - Management review data comes from management-review-round.mjs
 - Decisions feed back into the confidence engine to improve future analysis
+- **Section 5d (Learning Insights)** runs every other week (even ISO weeks) — shows approval rates, recurrence monitoring, and top rejection reasons from `/learn insights`

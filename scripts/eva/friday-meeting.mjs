@@ -7,6 +7,7 @@
  * 3. Consultant Findings — high-confidence recommendations by domain
  * 4. Intake Review — pending intake items
  * 5. R&D Proposals — skunkworks batch proposals for chairman review
+ * 5d. Learning Insights — approval rates, recurrence, rejections (biweekly)
  * 6. Decisions — interactive accept/dismiss via AskUserQuestion
  *
  * SD-MAN-ORCH-FRIDAY-EVA-AUTONOMOUS-001-B
@@ -16,6 +17,7 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
 import { gatherRdProposals as _gatherRdProposals, renderRdProposals as _renderRdProposals, buildCombinedDecisionPayload as _buildCombinedDecisionPayload, processRdProposalDecision as _processRdProposalDecision } from '../../lib/skunkworks/friday-rd-section.js';
+import { buildInsightsReport, formatInsightsForDisplay } from '../modules/learning/insights.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -339,6 +341,34 @@ function renderPluginDiscoveries(data) {
   return lines.join('\n');
 }
 
+// ─── Section 5d: Learning Insights (biweekly) ──────────────
+
+function isInsightsWeek() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((now - start) / 86400000);
+  const weekNumber = Math.ceil((dayOfYear + start.getDay() + 1) / 7);
+  return weekNumber % 2 === 0;
+}
+
+async function gatherLearningInsights() {
+  if (!isInsightsWeek()) return null;
+  try {
+    return await buildInsightsReport();
+  } catch (err) {
+    logger.warn(`  Learning insights failed (non-blocking): ${err.message}`);
+    return null;
+  }
+}
+
+function renderLearningInsights(data) {
+  if (!data) return '';
+
+  const lines = ['', '  SECTION 5d: LEARNING INSIGHTS (biweekly)', '  ' + '─'.repeat(40)];
+  lines.push(formatInsightsForDisplay(data));
+  return lines.join('\n');
+}
+
 // ─── Section 6: Decisions ────────────────────────────────────
 
 function buildDecisionPayload(findings) {
@@ -536,7 +566,7 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log('═'.repeat(55));
 
   // Gather all data in parallel
-  const [perfData, capData, consultData, intakeData, rdData, fleetData, pluginData] = await Promise.all([
+  const [perfData, capData, consultData, intakeData, rdData, fleetData, pluginData, insightsData] = await Promise.all([
     gatherPerformanceReview(),
     gatherCapabilityReport(),
     gatherConsultantFindings(),
@@ -544,6 +574,7 @@ export async function fridayMeetingHandler(options = {}) {
     gatherRdProposals(),
     gatherFleetTelemetry(),
     gatherPluginDiscoveries(),
+    gatherLearningInsights(),
   ]);
 
   // Render sections 1-5b
@@ -554,6 +585,7 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log(renderRdProposals(rdData));
   logger.log(renderFleetTelemetry(fleetData));
   logger.log(renderPluginDiscoveries(pluginData));
+  logger.log(renderLearningInsights(insightsData));
 
   // Section 6: Decisions
   logger.log('');
@@ -570,6 +602,7 @@ export async function fridayMeetingHandler(options = {}) {
       intake: { pendingItems: intakeData.pending.length },
       rd_proposals: { pendingProposals: rdData.proposals.length, sources: Object.keys(rdData.grouped).length },
       plugin_pipeline: { scannedThisWeek: pluginData?.total || 0 },
+      learning_insights: { included: !!insightsData, isInsightsWeek: isInsightsWeek() },
     },
     decisions: { accepted: 0, dismissed: 0, deferred: 0, total: totalDecisionItems },
   };
