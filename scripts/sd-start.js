@@ -713,14 +713,19 @@ async function main() {
   }
 
   // 4.5. Resolve worktree (creates if needed in claim mode)
+  // SD-LEO-INFRA-AUTO-WORKTREE-START-001: single entry point for worktree creation
   let worktreeInfo = null;
   try {
     const repoRoot = execSync('git rev-parse --show-toplevel', {
       encoding: 'utf8', stdio: 'pipe'
     }).trim();
     worktreeInfo = await resolveWorkdir(effectiveId, 'claim', repoRoot);
-  } catch {
-    // Worktree resolution is optional - don't block SD start
+    if (worktreeInfo && !worktreeInfo.success) {
+      console.log(`${colors.yellow}   ⚠️  Worktree creation failed: ${worktreeInfo.error || worktreeInfo.errorCode}${colors.reset}`);
+    }
+  } catch (wtErr) {
+    console.log(`${colors.yellow}   ⚠️  Worktree resolution error: ${wtErr.message}${colors.reset}`);
+    // Non-blocking — SD start proceeds without worktree
   }
 
   // 4.9. SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Pre-claim health check
