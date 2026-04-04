@@ -129,11 +129,12 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
         const sameConvo = isSameConversation(currentTerminalId, claim.terminal_id);
         if (sameConvo === true) return false; // Definitely same conversation
         if (sameConvo === 'ambiguous') {
-          // Same SSE port, one missing PID suffix — likely same conversation
-          // For the multi-session gate, treat ambiguous as same-conversation (fail-open)
-          // because blocking a handoff from the same conversation is worse than allowing it
-          console.log(`   ℹ️  Ambiguous terminal_id match (${currentTerminalId} vs ${claim.terminal_id}) — treating as same conversation`);
-          return false;
+          // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: DENY-on-ambiguity
+          // Ambiguous identity (e.g., UUID vs win-cc format mismatch) now blocks
+          // rather than allowing passthrough. Blocking a handoff is recoverable;
+          // allowing duplicate work from a different session is not.
+          console.log(`   ⚠️  Ambiguous terminal_id match (${currentTerminalId} vs ${claim.terminal_id}) — BLOCKING (DENY-on-ambiguity)`);
+          return true;
         }
         // sameConvo === false → different conversation on same machine → conflict
       }
