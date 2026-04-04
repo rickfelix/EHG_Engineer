@@ -321,59 +321,16 @@ export class PlanToExecExecutor extends BaseExecutor {
     // STATE TRANSITION: Update SD current_phase to EXEC
     await transitionSdToExec(this.supabase, sdId, sd);
 
-    // Merge validation details (needed for worktree creation)
+    // SD-LEO-INFRA-AUTO-WORKTREE-START-001: Worktree creation moved to sd:start
+    // sd:start is the single entry point for worktree lifecycle. Branch creation
+    // remains here via GATE6_BRANCH_ENFORCEMENT; worktree creation is handled by
+    // resolve-sd-workdir.js mode=claim when sd:start runs.
     const branchResults = gateResults.gateResults.GATE6_BRANCH_ENFORCEMENT?.details || {};
-
-    // SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001: Create worktree after state transitions
-    let worktreeResult = null;
     const sdKey = sd.sd_key || sdId;
-    const worktreeBranch = branchResults.expectedBranch;
-
-    if (worktreeBranch) {
-      try {
-        console.log('\n🌲 Step 4: Worktree Creation');
-        console.log('-'.repeat(50));
-
-        // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Resolve venture repo root for cross-repo worktrees
-        let ventureRepoRoot = null;
-        const targetApp = sd.target_application;
-        if (targetApp && targetApp !== 'EHG_Engineer') {
-          const venturePath = getVenturePath(targetApp);
-          const validation = validateVentureRepo(venturePath);
-          if (validation.valid) {
-            ventureRepoRoot = venturePath;
-            console.log(`   🏢 Venture repo: ${targetApp} → ${venturePath}`);
-          } else {
-            console.warn(`   ⚠️  Venture repo not found: ${targetApp} (${validation.reason})`);
-            console.warn('   💡 Falling back to EHG_Engineer');
-          }
-        }
-
-        worktreeResult = createWorktree({ sdKey, branch: worktreeBranch, repoRoot: ventureRepoRoot });
-
-        if (worktreeResult.reused) {
-          console.log(`   ℹ️  Worktree already exists: .worktrees/${sdKey}`);
-        } else {
-          console.log(`   ✅ Worktree created: .worktrees/${sdKey}`);
-        }
-        console.log(`   📂 Path: ${worktreeResult.path}`);
-        console.log(`   🌿 Branch: ${worktreeResult.branch}`);
-
-        // Symlink node_modules from correct repo root
-        const moduleSourceRoot = ventureRepoRoot || getRepoRoot();
-        try {
-          symlinkNodeModules(worktreeResult.path, moduleSourceRoot);
-          console.log('   ✅ node_modules linked');
-        } catch (symlinkError) {
-          console.warn(`   ⚠️  Could not link node_modules: ${symlinkError.message}`);
-        }
-      } catch (worktreeError) {
-        console.warn(`   ⚠️  Worktree creation failed (non-blocking): ${worktreeError.message}`);
-        console.warn(`   📝 SD Key: ${sdKey}, Branch: ${worktreeBranch}`);
-        console.warn('   💡 Create manually: npm run session:worktree -- --sd-key ' + sdKey + ' --branch ' + worktreeBranch);
-      }
-    } else {
-      console.log('\n   ℹ️  Worktree creation skipped: no branch resolved from gate results');
+    const worktreeResult = null;
+    if (branchResults.expectedBranch) {
+      console.log(`\n   ℹ️  Branch created: ${branchResults.expectedBranch}`);
+      console.log('   ℹ️  Worktree will be created by sd:start (single entry point)');
     }
 
     // Display EXEC phase requirements (proactive guidance)

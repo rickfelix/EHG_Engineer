@@ -21,6 +21,7 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { getVenturePath } from '../lib/venture-resolver.js';
+import { sanitizeBranchName, checkDirtyWorktree, verifyGitignore } from '../lib/worktree-guards.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -179,6 +180,12 @@ function createWorktree(sdKey, repoRoot) {
     branch = `feat/${sdKey}`;
   }
 
+  // Sanitize branch name before git operations (SD-LEO-INFRA-AUTO-WORKTREE-START-001 US-004)
+  const branchCheck = sanitizeBranchName(branch);
+  if (!branchCheck.safe) {
+    throw new Error(`Unsafe branch name rejected: ${branchCheck.reason}`);
+  }
+
   // Create the worktree
   const branchExists = (() => {
     try {
@@ -206,6 +213,12 @@ function createWorktree(sdKey, repoRoot) {
   }, null, 2));
 
   ensureWorktreeEssentials(worktreePath, repoRoot);
+
+  // Verify .gitignore covers .env (SD-LEO-INFRA-AUTO-WORKTREE-START-001 US-003)
+  const gitignoreCheck = verifyGitignore(worktreePath);
+  if (!gitignoreCheck.ignored) {
+    emitLog({ event: 'worktree.gitignore_warning', sdKey, reason: gitignoreCheck.reason });
+  }
 
   return { path: worktreePath, branch, created: true };
 }
