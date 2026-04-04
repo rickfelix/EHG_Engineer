@@ -99,4 +99,56 @@ describe('pruneResolvedMemory()', () => {
 
     expect(readFixture(filePath)).toBe(before);
   });
+
+  // SD-LEO-INFRA-SELF-CURATION-INSTRUMENTATION-001 (FR-3): Staleness-based flagging
+  it('TS-7: flags stale entries with [STALE] tag', async () => {
+    const content = [
+      '# Memory\n\n',
+      '- [Old Project](project_old.md) — ancient project notes\n',
+      '- [Active Feedback](feedback_active.md) — recent feedback\n',
+    ].join('');
+    const filePath = writeFixture('memory7.md', content);
+
+    await pruneResolvedMemory([], filePath, {
+      staleEntries: [{ file: 'project_old.md', stalenessScore: 2.5 }]
+    });
+
+    const result = readFixture(filePath);
+    expect(result).toContain('project_old.md) — ancient project notes [STALE]');
+    expect(result).not.toContain('feedback_active.md) — recent feedback [STALE]');
+  });
+
+  it('TS-8: does not double-flag already stale entries', async () => {
+    const content = [
+      '# Memory\n\n',
+      '- [Old Project](project_old.md) — notes [STALE]\n',
+    ].join('');
+    const filePath = writeFixture('memory8.md', content);
+    const before = readFixture(filePath);
+
+    await pruneResolvedMemory([], filePath, {
+      staleEntries: [{ file: 'project_old.md', stalenessScore: 3.0 }]
+    });
+
+    expect(readFixture(filePath)).toBe(before);
+  });
+
+  it('TS-9: combines pattern removal and staleness flagging', async () => {
+    const content = [
+      '# Memory\n\n',
+      '- [Stale Ref](reference_stale.md) — old ref\n',
+      '- [Fresh Ref](reference_fresh.md) — new ref\n\n',
+      '## Pattern [PAT-AUTO-X]\n- resolved content\n',
+    ].join('');
+    const filePath = writeFixture('memory9.md', content);
+
+    await pruneResolvedMemory(['PAT-AUTO-X'], filePath, {
+      staleEntries: [{ file: 'reference_stale.md', stalenessScore: 1.5 }]
+    });
+
+    const result = readFixture(filePath);
+    expect(result).not.toContain('[PAT-AUTO-X]');
+    expect(result).toContain('reference_stale.md) — old ref [STALE]');
+    expect(result).not.toContain('reference_fresh.md) — new ref [STALE]');
+  });
 });
