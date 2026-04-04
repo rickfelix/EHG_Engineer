@@ -39,7 +39,8 @@ export {
   loadOKRScorecard,
   loadVisionScores,
   countActionableBaselineItems,
-  loadUnscheduledRoadmapItems
+  loadUnscheduledRoadmapItems,
+  loadFeedbackItems
 } from './data-loaders.js';
 
 // Display modules

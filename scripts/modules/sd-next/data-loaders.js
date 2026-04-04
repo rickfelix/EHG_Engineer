@@ -446,3 +446,31 @@ export async function countActionableBaselineItems(supabase, baselineItems) {
   }
   return actionableCount;
 }
+
+/**
+ * Load actionable feedback items for display in sd:next.
+ * Queries feedback table for untriaged (new) items, ordered by severity then age.
+ *
+ * @param {Object} supabase - Supabase client
+ * @returns {Object[]} Feedback items with id, title, status, priority, severity, category, created_at
+ */
+export async function loadFeedbackItems(supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('feedback')
+      .select('id, title, status, priority, severity, category, created_at')
+      .eq('status', 'new')
+      .order('severity', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(10);
+
+    if (error) {
+      logQueryFailure('loadFeedbackItems', error, { table: 'feedback' });
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    // Table may not exist in all environments
+    return [];
+  }
+}
