@@ -80,6 +80,9 @@ class BranchAnalyzer {
     // Step 6: Check branch age
     await this.getBranchAge();
 
+    // Step 6.5: Check active session protection
+    await this.checkSessionProtection();
+
     // Step 7: Determine verdict
     this.determineVerdict();
 
@@ -281,8 +284,33 @@ class BranchAnalyzer {
     }
   }
 
+  async checkSessionProtection() {
+    try {
+      const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data, error } = await this.supabase.from('claude_sessions')
+        .select('session_id, sd_id, current_branch, worktree_branch, heartbeat_at')
+        .in('status', ['active', 'idle']).gte('heartbeat_at', since);
+      if (error) throw error;
+      for (const s of data || []) {
+        if (s.current_branch === this.branchName || s.worktree_branch === this.branchName)
+          return void (this.analysis.sessionProtected = { sessionId: s.session_id, matchType: 'branch' });
+        if (s.sd_id && this.analysis.expectedSD && s.sd_id.toLowerCase() === this.analysis.expectedSD.toLowerCase())
+          return void (this.analysis.sessionProtected = { sessionId: s.session_id, matchType: 'sd_key' });
+      }
+    } catch (e) {
+      console.log(`   ⚠️ Session query failed — PROTECTED (fail-safe): ${e.message}`);
+      this.analysis.sessionProtected = { sessionId: 'PROTECT_ALL', matchType: 'fail-safe' };
+    }
+  }
+
   determineVerdict() {
     const a = this.analysis;
+
+    if (a.sessionProtected) {
+      a.verdict = 'KEEP';
+      a.reasons.push(`🔒 Active session: ${a.sessionProtected.sessionId} (match: ${a.sessionProtected.matchType})`);
+      return;
+    }
 
     // SAFE conditions
     const hasNoCommits = a.commits.length === 0;

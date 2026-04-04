@@ -80,6 +80,8 @@ class BranchCleanupV2 {
     );
 
     this.sdCache = new Map();
+    this.sessionProtected = new Map(); // branch -> {sessionId, sdId, heartbeatAt}
+    this.sessionProtectAll = false;
     this.stage1 = [];  // High certainty - auto delete
     this.stage2 = [];  // Needs review
     this.kept = [];    // Must keep (active, recent, etc.)
@@ -100,7 +102,7 @@ class BranchCleanupV2 {
     console.log(`Target: ${this.options.targetRepo}`);
     console.log('═'.repeat(60));
 
-    await this.loadSDData();
+    await Promise.all([this.loadSDData(), this.loadActiveSessionData()]);
 
     const repoPath = REPO_PATHS[this.options.targetRepo];
     if (!repoPath) {
@@ -159,6 +161,38 @@ class BranchCleanupV2 {
     } catch (error) {
       console.log(`⚠️ Could not load SD data: ${error.message}\n`);
     }
+  }
+
+  async loadActiveSessionData() {
+    try {
+      const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data, error } = await this.supabase.from('claude_sessions')
+        .select('session_id, sd_id, current_branch, worktree_branch, heartbeat_at')
+        .in('status', ['active', 'idle']).gte('heartbeat_at', since);
+      if (error) throw error;
+      for (const s of data || []) {
+        const e = { sessionId: s.session_id, sdId: s.sd_id, heartbeatAt: s.heartbeat_at };
+        if (s.current_branch) this.sessionProtected.set(s.current_branch, e);
+        if (s.worktree_branch) this.sessionProtected.set(s.worktree_branch, e);
+        if (s.sd_id) this.sessionProtected.set(`__sd__:${s.sd_id.toLowerCase()}`, e);
+      }
+      console.log(`🔒 ${data?.length || 0} active sessions → ${this.sessionProtected.size} protected branches\n`);
+    } catch (err) {
+      console.log(`⚠️ Session query failed — PROTECTING ALL (fail-safe): ${err.message}\n`);
+      this.sessionProtectAll = true;
+    }
+  }
+
+  isSessionProtected(branchName) {
+    if (this.sessionProtectAll) return { protected: true, reason: 'fail-safe' };
+    const direct = this.sessionProtected.get(branchName);
+    if (direct) return { protected: true, ...direct, matchType: 'branch' };
+    const sdMatch = branchName.match(/SD-[A-Z]+-[A-Z]+-[A-Z0-9-]+-\d{3}/i);
+    if (sdMatch) {
+      const e = this.sessionProtected.get(`__sd__:${sdMatch[0].toLowerCase()}`);
+      if (e) return { protected: true, ...e, matchType: 'sd_key' };
+    }
+    return { protected: false };
   }
 
   async getUnmergedBranches(repoPath) {
@@ -251,6 +285,17 @@ class BranchCleanupV2 {
       commits: 0,
       reason: ''
     };
+
+    // Check 0: Active session protection (absolute — KEEP, not REVIEW)
+    const sc = this.isSessionProtected(branch.name);
+    if (sc.protected) {
+      const age = sc.heartbeatAt ? `${Math.round((Date.now() - new Date(sc.heartbeatAt).getTime()) / 60000)}m` : '-';
+      info.reason = `🔒 Session ${sc.sessionId || 'all'} (${age}, ${sc.matchType || 'fail-safe'})`;
+      console.log(`   PROTECTED: ${branch.name} | ${sc.sessionId || 'PROTECT_ALL'} | ${sc.sdId || '-'} | ${sc.matchType || 'fail-safe'}`);
+      this.kept.push(info);
+      this.stats.kept++;
+      return 'kept';
+    }
 
     // Check 1: Too recent - must keep
     if (info.ageHours < MIN_STALE_HOURS) {
@@ -441,8 +486,12 @@ class BranchCleanupV2 {
       }
     }
 
-    // Kept
-    console.log(`\n🔒 KEPT: ${this.kept.length} branches (active/recent/has PR)`);
+    const sessionKept = this.kept.filter(b => b.reason.startsWith('🔒'));
+    if (sessionKept.length > 0) {
+      console.log(`\n🔒 SESSION-PROTECTED: ${sessionKept.length} branches`);
+      for (const b of sessionKept) console.log(`   🔒 ${b.name.substring(0, 50)} — ${b.reason}`);
+    }
+    console.log(`\n📌 KEPT: ${this.kept.length - sessionKept.length} branches (SD active/recent/has PR)`);
 
     // Summary
     console.log('\n' + '─'.repeat(60));
@@ -481,6 +530,7 @@ class BranchCleanupV2 {
         }
 
         this.stats.deleted++;
+        console.log(`   DELETED: ${branch.name} | no_session | stage1 | ${branch.reason}`);
       } catch {
         if (this.options.verbose) {
           console.log(`   ❌ Failed: ${branch.name}`);
