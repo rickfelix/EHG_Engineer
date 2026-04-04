@@ -20,7 +20,10 @@ const os = require('os');
 const THROTTLE_FILE = path.join(os.tmpdir(), 'claude-coordination-inbox-last-check.json');
 const HEARTBEAT_FILE = path.join(os.tmpdir(), 'claude-heartbeat-last-update.json');
 const IDENTITY_FILE = path.resolve(__dirname, '../../.claude/fleet-identity.json');
-const CHECK_INTERVAL_MS = 300_000; // Only check DB every 5 minutes
+// SD-LEO-INFRA-FLEET-COORDINATION-RESILIENCE-001 (FR-003):
+// Reduced from 300s to 60s for faster coordination message delivery.
+// Configurable via env var for tuning under high DB load.
+const CHECK_INTERVAL_MS = parseInt(process.env.COORDINATION_CHECK_INTERVAL_MS, 10) || 60_000;
 const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 

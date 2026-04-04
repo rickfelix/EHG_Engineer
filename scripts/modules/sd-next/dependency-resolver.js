@@ -65,24 +65,40 @@ export async function checkDependenciesResolved(supabase, dependencies) {
 
   const depKeys = deps.map(d => d.sd_id);
 
+  // SD-LEO-INFRA-FLEET-COORDINATION-RESILIENCE-001 (FR-002):
+  // Race guard — fetch status AND completion_date, then verify completion
+  // happened >2s ago to avoid near-simultaneous completion race conditions.
+  const COMPLETION_SETTLE_MS = parseInt(process.env.DEPENDENCY_SETTLE_MS, 10) || 2000;
+
   // Batch query: fetch all dependency SDs in one call
   const { data: sds } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, id, status')
+    .select('sd_key, id, status, completion_date')
     .or(`sd_key.in.(${depKeys.join(',')}),id.in.(${depKeys.join(',')})`)
     .limit(depKeys.length * 2);
 
   if (!sds) return false;
 
+  const now = Date.now();
+
   // Build lookup by both sd_key and id
-  const statusMap = new Map();
+  const sdMap = new Map();
   for (const sd of sds) {
-    statusMap.set(sd.sd_key, sd.status);
-    statusMap.set(sd.id, sd.status);
+    sdMap.set(sd.sd_key, sd);
+    sdMap.set(sd.id, sd);
   }
 
-  // Check all deps are completed
-  return depKeys.every(key => statusMap.get(key) === 'completed');
+  // Check all deps are completed with settle window
+  return depKeys.every(key => {
+    const sd = sdMap.get(key);
+    if (!sd || sd.status !== 'completed') return false;
+    // If completion_date exists, verify it settled (>2s ago)
+    if (sd.completion_date) {
+      const completedAt = new Date(sd.completion_date).getTime();
+      if (now - completedAt < COMPLETION_SETTLE_MS) return false;
+    }
+    return true;
+  });
 }
 
 /**
