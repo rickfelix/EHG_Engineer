@@ -31,6 +31,40 @@ const supabase = createSupabaseServiceClient();
 const STALE_THRESHOLD_SECONDS = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 const LOCAL_HOSTNAME = os.hostname();
 
+/**
+ * SD-LEO-INFRA-FLEET-COORDINATION-RESILIENCE-001 (FR-001):
+ * Reset SD current_phase to the last safe phase boundary when releasing a stale claim.
+ * Prevents SDs from being left in mid-phase limbo with no active claimer.
+ *
+ * Phase reset map: mid-phase states → safe boundary
+ */
+const PHASE_RESET_MAP = {
+  'EXEC': 'PLAN_PRD',
+  'EXEC_COMPLETE': 'PLAN_PRD',
+  'PLAN_VERIFICATION': 'PLAN_PRD',
+  'LEAD_APPROVAL': 'LEAD',
+  'LEAD_FINAL_APPROVAL': 'LEAD_FINAL',
+};
+
+async function resetSdPhaseOnRelease(sdKey, reason) {
+  const { data: sd } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, current_phase, status')
+    .eq('sd_key', sdKey)
+    .single();
+
+  if (!sd) return;
+
+  const resetTo = PHASE_RESET_MAP[sd.current_phase];
+  if (resetTo) {
+    await supabase
+      .from('strategic_directives_v2')
+      .update({ current_phase: resetTo })
+      .eq('sd_key', sdKey);
+    console.log('  PHASE_RESET: ' + sdKey + ' ' + sd.current_phase + ' → ' + resetTo + ' (' + reason + ')');
+  }
+}
+
 function isProcessRunning(pid) {
   if (!pid || typeof pid !== 'number') return false;
   try {
@@ -317,6 +351,7 @@ async function main() {
         .from('strategic_directives_v2')
         .update({ claiming_session_id: null, is_working_on: false })
         .eq('sd_key', s.sd_id);
+      await resetSdPhaseOnRelease(s.sd_id, 'SWEEP_SD_ALREADY_COMPLETED');
       actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — ' + s.sd_id + ' already completed');
     }
   }
@@ -491,6 +526,7 @@ async function main() {
     if (error) {
       actions.push('FAILED to release ' + s.session_id + ' (' + s.sd_id + '): ' + error.message);
     } else {
+      if (s.sd_id) await resetSdPhaseOnRelease(s.sd_id, 'SWEEP_PID_DEAD');
       actions.push('RELEASED ' + s.session_id + ' — PID ' + s.pid + ' dead — freed ' + s.sd_id);
     }
   }
@@ -539,6 +575,7 @@ async function main() {
 
       if (!error) {
         const tag = evict.status === 'ACTIVE' ? ' (was active)' : '';
+        await resetSdPhaseOnRelease(sdId, 'SWEEP_CONFLICT_RESOLUTION');
         actions.push('CONFLICT on ' + sdId + ': released ' + evict.session_id + tag + ' (kept ' + keeper.session_id + ')');
 
         // Send coordination message to the evicted session so it picks up other work
