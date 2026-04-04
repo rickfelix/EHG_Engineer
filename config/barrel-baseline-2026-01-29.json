@@ -3,8 +3,11 @@
   "created": "2026-01-29T00:00:00.000Z",
   "description": "Baseline snapshot of existing barrel imports (export * from patterns) for grandfathering",
   "source": "SD-LEO-INFRA-INTEGRATE-VERCEL-REACT-001",
-  "count": 32,
+  "count": 35,
   "files": [
+    "lib/agents/plan/index.js",
+    "scripts/modules/handoff/executors/plan-to-lead/index.js",
+    "scripts/modules/phase-0/index.js",
     "scripts/modules/phase-subagent-orchestrator/index.js",
     "scripts/modules/handoff/executors/exec-to-plan/index.js",
     "scripts/modules/handoff/executors/plan-to-exec/index.js",
