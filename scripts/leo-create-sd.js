@@ -441,6 +441,22 @@ async function createChild(parentKey, index = 0, overrides = {}) {
     }
   });
 
+  // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: Assert parent claim before returning child
+  // Verifies the creating session holds the parent SD claim
+  try {
+    const { claimGuard } = await import('../lib/claim-guard.mjs');
+    const claimResult = await claimGuard(parent.sd_key, null, { autoFallback: true });
+    if (!claimResult.success && !claimResult.fallback) {
+      console.error(`[createChild] ⛔ Parent SD ${parent.sd_key} is claimed by another session — child creation blocked`);
+      console.error(`   Owner: ${claimResult.owner?.session_id} (${claimResult.owner?.heartbeat_age_human})`);
+      throw new Error(`Parent SD ${parent.sd_key} is claimed by another active session`);
+    }
+  } catch (e) {
+    if (e.message?.includes('claimed by another')) throw e;
+    // Fail-open: DB errors don't block child creation
+    console.warn(`[createChild] ⚠️  Parent claim check failed (fail-open): ${e.message}`);
+  }
+
   return sd;
 }
 
