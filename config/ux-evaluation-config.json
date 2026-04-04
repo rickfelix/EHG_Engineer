@@ -6,8 +6,8 @@
 
   "model": {
     "provider": "openai",
-    "name": "gpt-5.2",
-    "fallback": "gpt-4o",
+    "name": "gpt-5.4",
+    "fallback": "gpt-5.4-mini",
     "maxTokens": {
       "standard": 1024,
       "critical": 2048
