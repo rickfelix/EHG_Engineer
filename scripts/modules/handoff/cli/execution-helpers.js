@@ -245,25 +245,15 @@ export async function displayExecutionResult(result, handoffType, sdId) {
 
     const nextStep = nextStepMap[handoffType.toUpperCase()];
     if (nextStep) {
-      // Update SD status in database
+      // RCA-FIX: Removed status write — the executor's state-transitions.js is the
+      // authoritative state setter. This display function was overwriting the executor's
+      // status (e.g., 'in_progress' → 'planning'), which then blocked subsequent handoffs
+      // because verify-l2p rejects 'planning'. See PAT-HANDOFF-STATUS-OVERWRITE-001.
       const supabase = createSupabaseServiceClient();
       const canonicalId = await normalizeSDId(supabase, sdId);
 
-      if (canonicalId) {
-        const { data: updateData, error: updateError } = await supabase
-          .from('strategic_directives_v2')
-          .update({ status: nextStep.status, updated_at: new Date().toISOString() })
-          .eq('id', canonicalId)
-          .select('id')
-          .single();
-
-        if (updateError) {
-          console.warn(`   ⚠️  Failed to update SD status: ${updateError.message}`);
-        } else if (!updateData) {
-          console.warn('   ⚠️  SD status update returned no data - possible silent failure');
-        } else if (sdId !== canonicalId) {
-          console.log(`   ℹ️  ID normalized: "${sdId}" -> "${canonicalId}"`);
-        }
+      if (canonicalId && sdId !== canonicalId) {
+        console.log(`   ℹ️  ID normalized: "${sdId}" -> "${canonicalId}"`);
       }
 
       console.log('');
