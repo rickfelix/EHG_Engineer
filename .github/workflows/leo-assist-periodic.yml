@@ -1,0 +1,47 @@
+name: "Clockwork: LEO Assist Periodic"
+
+on:
+  schedule:
+    # Every 4 hours during business hours (8am-8pm ET = 12-00 UTC), Mon-Fri
+    - cron: '0 12,16,20,0 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      max_items:
+        description: 'Max items to process per run'
+        default: '10'
+      dry_run:
+        description: 'Preview mode (no writes)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  assist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run LEO Assist
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          FLAGS="--max-items ${{ github.event.inputs.max_items || '10' }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+          node scripts/modules/inbox/assist-runner.js $FLAGS
