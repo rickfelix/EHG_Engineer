@@ -33,7 +33,8 @@ import {
   countActionableBaselineItems,
   loadOpenQuickFixes,
   triageQuickFixes,
-  loadUnscheduledRoadmapItems
+  loadUnscheduledRoadmapItems,
+  loadFeedbackItems
 } from './data-loaders.js';
 import {
   displayOKRScorecard,
@@ -103,6 +104,7 @@ export class SDNextSelector {
     this.openQuickFixes = [];
     this.qfTriageResults = new Map();
     this.unscheduledRoadmapItems = [];
+    this.feedbackItems = [];
   }
 
   /**
@@ -160,6 +162,7 @@ export class SDNextSelector {
       this.qfTriageResults = await triageQuickFixes(this.openQuickFixes, this.supabase);
     }
     this.unscheduledRoadmapItems = await loadUnscheduledRoadmapItems(this.supabase);
+    this.feedbackItems = await loadFeedbackItems(this.supabase);
     this.loadMultiRepoStatus();
 
     // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Detect local signals
@@ -190,6 +193,7 @@ export class SDNextSelector {
         sessionContext: this.getSessionContext()
       });
       const qfSummaryNoBaseline = displayQuickFixes(this.openQuickFixes, this.qfTriageResults, this.getSessionContext());
+      this.displayFeedbackItems();
       if (qfSummaryNoBaseline.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available` };
       }
@@ -207,6 +211,7 @@ export class SDNextSelector {
         sessionContext: this.getSessionContext()
       });
       const qfSummaryExhausted = displayQuickFixes(this.openQuickFixes, this.qfTriageResults, this.getSessionContext());
+      this.displayFeedbackItems();
       if (qfSummaryExhausted.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available` };
       }
@@ -218,6 +223,9 @@ export class SDNextSelector {
 
     // Display open quick fixes with re-triage escalation warnings
     const qfSummary = displayQuickFixes(this.openQuickFixes, this.qfTriageResults, this.getSessionContext());
+
+    // Display actionable feedback items (SD-LEO-INFRA-FEEDBACK-PIPELINE-ACTIVATION-001-C)
+    this.displayFeedbackItems();
 
     // Display recommendations and get structured action data
     const recommendation = await displayRecommendations(this.supabase, this.baselineItems, this.conflicts, this.getSessionContext(), qfSummary);
@@ -545,6 +553,34 @@ export class SDNextSelector {
     } catch {
       return ['ehg', 'EHG_Engineer'];
     }
+  }
+
+  /**
+   * Display actionable feedback items from the feedback table.
+   * SD-LEO-INFRA-FEEDBACK-PIPELINE-ACTIVATION-001-C
+   */
+  displayFeedbackItems() {
+    if (!this.feedbackItems || this.feedbackItems.length === 0) return;
+
+    const c = colors;
+    const severityBadge = (s) => {
+      const badges = { critical: `${c.red}P0${c.reset}`, high: `${c.yellow}P1${c.reset}`, medium: `${c.dim}P2${c.reset}`, low: `${c.dim}P3${c.reset}` };
+      return badges[s] || `${c.dim}P?${c.reset}`;
+    };
+    const daysAgo = (dateStr) => {
+      const ms = Date.now() - new Date(dateStr).getTime();
+      return Math.floor(ms / 86400000);
+    };
+
+    console.log(`\n${c.bold}${c.yellow}FEEDBACK INBOX${c.reset} (${this.feedbackItems.length} untriaged)`);
+    for (const item of this.feedbackItems) {
+      const age = daysAgo(item.created_at);
+      const badge = severityBadge(item.severity || item.priority);
+      const cat = item.category ? `${c.dim}[${item.category}]${c.reset} ` : '';
+      const title = (item.title || '').substring(0, 60);
+      console.log(`  ${badge} ${cat}${title}${age > 7 ? ` ${c.red}(${age}d)${c.reset}` : ` ${c.dim}(${age}d)${c.reset}`}`);
+    }
+    console.log(`${c.dim}  Run /inbox to triage${c.reset}`);
   }
 
   async displayTracks() {
