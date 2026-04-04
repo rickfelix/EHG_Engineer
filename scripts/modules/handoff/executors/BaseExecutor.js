@@ -8,6 +8,7 @@
 import ResultBuilder from '../ResultBuilder.js';
 import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
@@ -55,6 +56,14 @@ function getRepoPath(repoName) {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe']
       }).trim();
+      // QF-20260404-445: If resolved path is inside a deleted worktree (node_modules
+      // missing), fall back to __dirname-based resolution. This prevents
+      // ERR_MODULE_NOT_FOUND when handoffs run after worktree cleanup.
+      const nmPath = path.join(_cachedGitRoot, 'node_modules');
+      if (_cachedGitRoot.includes('.worktrees') && !fs.existsSync(nmPath)) {
+        console.debug('[BaseExecutor] Dead worktree detected, falling back to __dirname');
+        _cachedGitRoot = path.resolve(__dirname, '../../../../');
+      }
     } catch (e) {
       // Intentionally suppressed: Fallback when git rev-parse unavailable
       console.debug('[BaseExecutor] getRepoPath git rev-parse fallback:', e?.message || e);
