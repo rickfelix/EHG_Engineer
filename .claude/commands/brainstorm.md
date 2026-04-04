@@ -879,6 +879,18 @@ Review the discussion and identify items that fit these categories:
 | **Potential Conflict** | May conflict with existing features or planned work | Flag conflict, suggest investigation |
 | **Significant Departure** | Major shift from current direction, needs deeper analysis | Suggest structured follow-up brainstorm |
 
+**Outcome-to-DB mapping** (use the DB value in the INSERT statement, not the display label):
+
+| Display Label          | DB `outcome_type` value   |
+|------------------------|---------------------------|
+| Ready for SD           | `sd_created`              |
+| Quick Fix              | `quick_fix`               |
+| No Action              | `no_action`               |
+| Needs Triage           | `needs_triage`            |
+| Consideration Only     | `consideration_only`      |
+| Potential Conflict     | `conflict`                |
+| Significant Departure  | `significant_departure`   |
+
 Present the classification to the user:
 ```
 **Outcome Classification**: [bucket]
@@ -1448,9 +1460,9 @@ supabase.from('brainstorm_sessions')
 **After Step 9.5E validates both vision_key and plan_key exist**, check if the outcome_type should be upgraded:
 
 - If `outcome_type` is **"Needs Triage"** AND both vision_key and plan_key are captured:
-  - Auto-upgrade `outcome_type` to **"Ready for SD"**
+  - Auto-upgrade `outcome_type` to **`sd_created`**
   - Set `outcome_auto_classified` to `true` in the brainstorm session record
-  - Log: `"Step 9.6: Auto-upgraded outcome from 'needs_triage' to 'ready_for_sd' — vision+arch artifacts exist"`
+  - Log: `"Step 9.6: Auto-upgraded outcome from 'needs_triage' to 'sd_created' — vision+arch artifacts exist"`
   - **Rationale**: If the brainstorm produced complete vision and architecture documents, the outcome is substantive enough for SD creation regardless of the LLM classification.
 
 - If `outcome_type` is **"Potential Conflict"**: Do NOT auto-upgrade. Conflicts require human review even when artifacts exist.
@@ -1479,7 +1491,7 @@ supabase.from('brainstorm_sessions').insert({
   venture_ids: <VENTURE_IDS_ARRAY_OR_NULL>,
   cross_venture: <true|false>,
   outcome_type: '<outcome_bucket>',
-  session_quality_score: <0-100>,
+  session_quality_score: <0.0-1.0>,
   crystallization_score: <0.0-1.0 or null>,
   retrospective_status: 'pending',
   content: \`<BRAINSTORM_MARKDOWN_CONTENT>\`,
@@ -1503,14 +1515,28 @@ supabase.from('brainstorm_sessions').insert({
 
 **NEVER write brainstorm content to `brainstorm/*.md` files.** The PreToolUse hook will block it, and it violates the DB-only policy.
 
-**Session quality score** (0-100): Rate based on:
-- Did the user engage with all required questions? (+20 per question answered)
-- Was the evaluation framework used? (+20)
-- Was an outcome classification reached? (+20)
-- Did it lead to a clear next step? (+20)
-- Topic depth (substantive vs surface-level answers) (+20)
+<!-- DB SCHEMA REFERENCE (brainstorm_sessions) - verify against live DB before editing:
+  session_quality_score: numeric(4,3), CHECK 0.0-1.0
+  crystallization_score: numeric(4,3), CHECK 0.0-1.0
+  stage: CHECK ('ideation','validation','mvp','growth','scale',
+                'discovery','design','implement',
+                'intake','process','output',
+                'explore','decide','execute')
+  outcome_type: CHECK ('sd_created','quick_fix','no_action',
+                       'consideration_only','needs_triage',
+                       'conflict','significant_departure')
+  domain: CHECK ('venture','protocol','integration','architecture')
+  mode: CHECK ('conversational','structured')
+-->
 
-Cap at 100. This score feeds into the self-improvement loop.
+**Session quality score** (0.0-1.0): Rate based on:
+- Did the user engage with all required questions? (+0.20 per question answered)
+- Was the evaluation framework used? (+0.20)
+- Was an outcome classification reached? (+0.20)
+- Did it lead to a clear next step? (+0.20)
+- Topic depth (substantive vs surface-level answers) (+0.20)
+
+Cap at 1.0. This score feeds into the self-improvement loop.
 
 ---
 
