@@ -210,6 +210,10 @@ export async function resolveLearningItems(sd, supabase) {
       return; // Not a /learn-created SD
     }
 
+    // SD-LEO-INFRA-SELF-CURATION-INSTRUMENTATION-001 (FR-1):
+    // Record learning outcome to close the feedback loop
+    await recordLearningOutcome(sd, supabase);
+
     console.log('\n   📚 Resolving /learn items...');
 
     const sdId = sd.sd_key || sd.id;
@@ -281,6 +285,59 @@ export async function resolveLearningItems(sd, supabase) {
 }
 
 /**
+ * Record a learning outcome to agent_learning_outcomes when a /learn-originated SD completes.
+ * Closes the feedback loop: /learn → SD → ship → measured outcome.
+ * SD-LEO-INFRA-SELF-CURATION-INSTRUMENTATION-001 (FR-1)
+ *
+ * @param {Object} sd - SD record (must have metadata.source === 'learn_command')
+ * @param {Object} supabase - Supabase client
+ */
+async function recordLearningOutcome(sd, supabase) {
+  try {
+    const sdId = sd.sd_key || sd.id;
+
+    // Gather quality signals from handoff chain
+    const { data: handoffs } = await supabase
+      .from('sd_phase_handoffs')
+      .select('handoff_type, validation_score, status')
+      .eq('sd_id', sd.id)
+      .eq('status', 'accepted');
+
+    const leadHandoff = (handoffs || []).find(h => h.handoff_type === 'LEAD-TO-PLAN');
+    const execHandoff = (handoffs || []).find(h => h.handoff_type === 'PLAN-TO-EXEC');
+    const planHandoff = (handoffs || []).find(h => h.handoff_type === 'EXEC-TO-PLAN' || h.handoff_type === 'PLAN-TO-LEAD');
+
+    const { error } = await supabase
+      .from('agent_learning_outcomes')
+      .insert({
+        sd_id: sdId,
+        lead_decision: 'approved',
+        lead_confidence: leadHandoff?.validation_score || null,
+        lead_reasoning: 'Learning-originated SD completed successfully',
+        lead_decision_date: new Date().toISOString(),
+        plan_decision: 'approved',
+        plan_complexity_score: execHandoff?.validation_score || null,
+        plan_technical_feasibility: 'confirmed',
+        plan_implementation_risk: 'low',
+        plan_decision_date: new Date().toISOString(),
+        exec_final_quality_score: planHandoff?.validation_score || null,
+        exec_implementation_type: sd.sd_type || 'unknown',
+        exec_completion_date: new Date().toISOString(),
+        project_tags: [sd.category, sd.sd_type].filter(Boolean),
+        success_factors: ['completed_via_learn_pipeline'],
+      });
+
+    if (error) {
+      console.log(`   ⚠️  Learning outcome recording failed: ${error.message} (non-blocking)`);
+    } else {
+      console.log(`   📊 Learning outcome recorded for ${sdId}`);
+    }
+  } catch (err) {
+    console.log(`   ⚠️  recordLearningOutcome: ${err.message} (non-blocking)`);
+  }
+}
+
+/**
  * Remove MEMORY.md sections tagged with resolved pattern IDs.
  * Tags have the format [PAT-AUTO-XXXX] inline in a ## heading.
  * Fail-safe: never throws, never blocks SD completion.
@@ -289,10 +346,14 @@ export async function resolveLearningItems(sd, supabase) {
  * @param {string[]} resolvedPatternIds - Pattern IDs that were just resolved
  * @param {string} [memoryFilePath] - Override path (for testing)
  */
-export async function pruneResolvedMemory(resolvedPatternIds, memoryFilePath) {
+/**
+ * @param {string[]} resolvedPatternIds - Pattern IDs that were just resolved
+ * @param {string} [memoryFilePath] - Override path (for testing)
+ * @param {Object} [options] - Extended options
+ * @param {Array<{file: string, stalenessScore: number}>} [options.staleEntries] - Staleness-flagged entries
+ */
+export async function pruneResolvedMemory(resolvedPatternIds, memoryFilePath, options = {}) {
   try {
-    if (!resolvedPatternIds || resolvedPatternIds.length === 0) return;
-
     // Resolve MEMORY.md path: ~/.claude/projects/{encoded-cwd}/memory/MEMORY.md
     const filePath = memoryFilePath || (() => {
       const cwd = process.env.INIT_CWD || process.cwd();
@@ -308,22 +369,63 @@ export async function pruneResolvedMemory(resolvedPatternIds, memoryFilePath) {
     const sections = content.split(/(?=^## )/m);
 
     // Build set of pattern IDs for O(1) lookup
-    const resolvedSet = new Set(resolvedPatternIds.map(id => id.trim()));
+    const resolvedSet = new Set((resolvedPatternIds || []).map(id => id.trim()));
 
-    // Keep a section only if its heading does NOT contain a resolved [PAT-AUTO-XXXX] tag
+    // SD-LEO-INFRA-SELF-CURATION-INSTRUMENTATION-001 (FR-3):
+    // Build set of stale file names for staleness-based flagging
+    const staleFileSet = new Set(
+      (options.staleEntries || []).map(e => e.file.replace('.md', ''))
+    );
+
+    // Pattern-ID-based pruning: remove ## sections with resolved [PAT-AUTO-XXXX] tags
     const tagRegex = /\[PAT-AUTO-([^\]]+)\]/;
-    const pruned = sections.filter(section => {
+    let removedByPattern = 0;
+
+    const pruned = sections.map(section => {
       const headingLine = section.split('\n')[0];
       const match = headingLine.match(tagRegex);
-      if (!match) return true; // no tag — keep
-      const taggedId = `PAT-AUTO-${match[1]}`;
-      return !resolvedSet.has(taggedId); // keep if NOT in resolved set
-    });
+      if (match) {
+        const taggedId = `PAT-AUTO-${match[1]}`;
+        if (resolvedSet.has(taggedId)) {
+          removedByPattern++;
+          return null; // Remove
+        }
+      }
+      return section;
+    }).filter(Boolean);
 
-    if (pruned.length < sections.length) {
-      const removedCount = sections.length - pruned.length;
-      fs.writeFileSync(filePath, pruned.join(''), 'utf8');
-      console.log(`   🧹 Pruned ${removedCount} resolved pattern section(s) from MEMORY.md`);
+    // Staleness-based flagging: scan all lines for markdown links to stale files
+    let flaggedByAge = 0;
+    let finalContent = pruned.join('');
+
+    if (staleFileSet.size > 0) {
+      const lines = finalContent.split('\n');
+      const flagged = lines.map(line => {
+        if (line.includes('[STALE]')) return line; // Already flagged
+        const linkMatch = line.match(/\[.*?\]\(([^)]+\.md)\)/);
+        if (linkMatch) {
+          const linkedFile = linkMatch[1].replace('.md', '');
+          if (staleFileSet.has(linkedFile)) {
+            flaggedByAge++;
+            return line + ' [STALE]';
+          }
+        }
+        return line;
+      });
+      if (flaggedByAge > 0) {
+        finalContent = flagged.join('\n');
+      }
+    }
+
+    const totalChanges = removedByPattern + flaggedByAge;
+    if (totalChanges > 0) {
+      fs.writeFileSync(filePath, finalContent, 'utf8');
+      if (removedByPattern > 0) {
+        console.log(`   🧹 Pruned ${removedByPattern} resolved pattern section(s) from MEMORY.md`);
+      }
+      if (flaggedByAge > 0) {
+        console.log(`   🏷️  Flagged ${flaggedByAge} stale section(s) in MEMORY.md`);
+      }
     }
   } catch (err) {
     console.log(`   ⚠️  pruneResolvedMemory: ${err.message} (non-blocking)`);
@@ -394,10 +496,13 @@ export async function releaseSessionClaim(sd, supabase) {
   }
 }
 
+export { recordLearningOutcome };
+
 export default {
   checkAndCompleteParentSD,
   recordFailedCompletion,
   resolveLearningItems,
+  recordLearningOutcome,
   pruneResolvedMemory,
   releaseSessionClaim,
 };

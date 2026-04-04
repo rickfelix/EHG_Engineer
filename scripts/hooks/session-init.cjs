@@ -406,6 +406,16 @@ async function main() {
   } catch (err) {
     console.log(`[session-init] Orphan scan skipped: ${err.message}`);
   }
+
+  // SD-LEO-INFRA-SELF-CURATION-INSTRUMENTATION-001 (FR-2): Staleness scanner
+  try {
+    const staleResults = await scanForStaleness();
+    if (staleResults.staleCount > 0) {
+      console.log(`[session-init] Staleness scan: ${staleResults.staleCount} stale MEMORY file(s) (of ${staleResults.totalScanned})`);
+    }
+  } catch (err) {
+    console.log(`[session-init] Staleness scan skipped: ${err.message}`);
+  }
 }
 
 /**
@@ -544,6 +554,83 @@ async function createCorrectiveSDs(orphans) {
   }
 }
 
+/**
+ * Staleness Scanner - Scores MEMORY files by age and citation frequency
+ * SD-LEO-INFRA-SELF-CURATION-INSTRUMENTATION-001 (FR-2, FR-5)
+ *
+ * Scoring: staleness_score = age_days / 30 - (citation_count * 0.5)
+ * Flag threshold: score > 1.0 (roughly 30+ days without citations)
+ */
+const STALENESS_FLAG_THRESHOLD = 1.0;
+const STALENESS_SCAN_TIMEOUT_MS = 30000;
+
+async function scanForStaleness() {
+  const startTime = Date.now();
+  const results = { totalScanned: 0, staleCount: 0, staleFiles: [] };
+
+  try {
+    // Resolve MEMORY directory path
+    const cwd = process.env.INIT_CWD || process.cwd();
+    const encoded = cwd.replace(/[:\\/_ ]/g, '-');
+    const memoryDir = path.join(os.homedir(), '.claude', 'projects', encoded, 'memory');
+
+    if (!fs.existsSync(memoryDir)) return results;
+
+    const memoryIndexPath = path.join(memoryDir, 'MEMORY.md');
+    const memoryIndex = fs.existsSync(memoryIndexPath)
+      ? fs.readFileSync(memoryIndexPath, 'utf8')
+      : '';
+
+    const files = fs.readdirSync(memoryDir).filter(f => f.endsWith('.md') && f !== 'MEMORY.md');
+    const now = Date.now();
+
+    for (const file of files) {
+      if (Date.now() - startTime > STALENESS_SCAN_TIMEOUT_MS) {
+        console.log(`[staleness-scanner] Timeout after ${files.indexOf(file)} files`);
+        break;
+      }
+
+      const filePath = path.join(memoryDir, file);
+      const stat = fs.statSync(filePath);
+      const ageDays = (now - stat.mtimeMs) / (1000 * 60 * 60 * 24);
+
+      // Count citations: how many times is this file referenced in MEMORY.md?
+      const fileName = file.replace('.md', '');
+      const citationCount = (memoryIndex.match(new RegExp(fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+
+      const stalenessScore = (ageDays / 30) - (citationCount * 0.5);
+
+      results.totalScanned++;
+
+      if (stalenessScore > STALENESS_FLAG_THRESHOLD) {
+        results.staleCount++;
+        results.staleFiles.push({
+          file,
+          ageDays: Math.round(ageDays),
+          citationCount,
+          stalenessScore: Math.round(stalenessScore * 100) / 100
+        });
+      }
+    }
+
+    // Log top stale files (max 5)
+    if (results.staleFiles.length > 0) {
+      const top = results.staleFiles
+        .sort((a, b) => b.stalenessScore - a.stalenessScore)
+        .slice(0, 5);
+      for (const sf of top) {
+        console.log(`[staleness-scanner] STALE: ${sf.file} (age: ${sf.ageDays}d, citations: ${sf.citationCount}, score: ${sf.stalenessScore})`);
+      }
+    }
+
+    console.log(`[staleness-scanner] Scan complete in ${Date.now() - startTime}ms, ${results.totalScanned} files, ${results.staleCount} stale`);
+  } catch (error) {
+    console.log(`[staleness-scanner] Error: ${error.message}`);
+  }
+
+  return results;
+}
+
 // Execute if run directly
 if (require.main === module) {
   main();
@@ -557,5 +644,6 @@ module.exports = {
   requestPlanModeEntry,
   verifySDStateInDatabase,
   scanForOrphans,
+  scanForStaleness,
   PRD_REQUIREMENTS
 };
