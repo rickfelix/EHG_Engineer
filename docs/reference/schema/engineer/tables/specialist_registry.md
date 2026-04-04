@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-04T04:21:16.454Z
-**Rows**: 13
+**Generated**: 2026-04-04T15:03:01.010Z
+**Rows**: 14
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (16 total)
+## Columns (17 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -34,6 +34,7 @@
 | outcome_wins | `integer(32)` | YES | `0` | Count of deliberations where specialist position was adopted |
 | outcome_losses | `integer(32)` | YES | `0` | Count of deliberations where specialist position was not adopted |
 | last_selected_at | `timestamp with time zone` | YES | - | Timestamp of last panel selection for recency-based balancing |
+| standing_question | `text` | YES | - | The unique question this specialist brings to every deliberation |
 
 ## Constraints
 

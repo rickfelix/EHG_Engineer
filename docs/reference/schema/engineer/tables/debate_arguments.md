@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-04T04:21:16.454Z
-**Rows**: 172
+**Generated**: 2026-04-04T15:03:01.010Z
+**Rows**: 211
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (14 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,7 @@
 | confidence_score | `numeric(3,2)` | YES | - | - |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 | in_response_to_argument_id | `uuid` | YES | - | - |
+| structured_dissent | `jsonb` | YES | - | Structured dissent output: {assumption_challenged, counter_evidence, confidence_in_dissent} |
 
 ## Constraints
 
