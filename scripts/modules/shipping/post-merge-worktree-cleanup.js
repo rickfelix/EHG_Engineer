@@ -31,6 +31,15 @@ function getMainRepoPath(meta, wtPath) {
 function cleanupCurrentWorktree() {
   if (!isInsideWorktree()) return { cleaned: false, reason: 'not_in_worktree' };
   const wtPath = gitExec('git rev-parse --show-toplevel');
+  // QF-20260404-445: Warn if CWD is inside the worktree about to be deleted.
+  // On Windows, deleting the CWD directory corrupts the shell — subsequent
+  // commands (handoffs, node module resolution) fail with ERR_MODULE_NOT_FOUND.
+  const cwd = process.cwd().replace(/\\/g, '/');
+  const normalized = wtPath.replace(/\\/g, '/');
+  if (cwd.startsWith(normalized)) {
+    const result = cleanupWorktreeByPath(wtPath);
+    return { ...result, warning: 'CWD_INSIDE_TARGET', hint: 'cd to main repo BEFORE running cleanup to avoid shell corruption' };
+  }
   return cleanupWorktreeByPath(wtPath);
 }
 

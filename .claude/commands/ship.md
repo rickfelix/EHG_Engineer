@@ -459,23 +459,29 @@ This step runs automatically via PostToolUse hook - no manual action required.
 
 This prevents zombie worktree directories that point at deleted branches.
 
+**CRITICAL (QF-20260404-445 / PAT-WORKTREE-LIFECYCLE-001):** You MUST `cd` to the main repo BEFORE running cleanup. Deleting a worktree while CWD is inside it corrupts the Windows shell — all subsequent commands (including handoff scripts) fail with ERR_MODULE_NOT_FOUND.
+
 ```bash
-node scripts/modules/shipping/post-merge-worktree-cleanup.js
+# STEP 1: cd to main repo FIRST (before cleanup deletes the directory)
+cd C:\Users\rickf\Projects\_EHG\EHG_Engineer
+
+# STEP 2: Clean up using --sdKey mode (resolves worktree path externally, not from CWD)
+node scripts/modules/shipping/post-merge-worktree-cleanup.js --sdKey <SD-KEY-OR-QF-KEY>
 ```
 
 **If output contains `"cleaned": true`:**
 1. The worktree directory has been removed
-2. `cd` to the `mainRepoPath` from the output to return to the main repo
-3. Run `git checkout main && git pull` from the main repo
+2. You are already in the main repo (from Step 1 above)
+3. Run `git checkout main && git pull` to sync
 
 **If output contains `"cleaned": false`:**
-- No action needed (not inside a worktree)
+- No action needed (worktree not found or already cleaned)
 - Continue to Step 7
 
 **Example outputs:**
 ```json
-{"cleaned":true,"mainRepoPath":"C:/Users/rickf/Projects/_EHG/EHG_Engineer","workKey":"QF-20260211-001"}
-{"cleaned":false,"reason":"not_in_worktree"}
+{"cleaned":true,"mainRepoPath":"C:/Users/rickf/Projects/_EHG/EHG_Engineer","workKey":"QF-20260211-001","sdKey":"QF-20260211-001","resolvedFrom":"scan"}
+{"cleaned":false,"reason":"no_worktree_found","sdKey":"SD-XXX-001"}
 ```
 
 **Note:** The existing LEAD-FINAL-APPROVAL cleanup is kept as a safety net. It is idempotent — if this step already cleaned up, it reports "worktree_not_found" and moves on.
