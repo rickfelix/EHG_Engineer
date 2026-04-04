@@ -289,7 +289,7 @@ router.get('/backlog-summary/:sd_id', async (req, res) => {
             content: `Analyze this strategic directive with ${backlogItems.length} backlog items:\n\n${fullContext}\n\nCreate exactly 7 sentences that:\n1. Identify the core technical capabilities and specific features being built\n2. Highlight the highest priority items with their implementation details\n3. Describe the technical architecture, technologies, and integration points mentioned\n4. Note specific risks, dependencies, or technical challenges found in descriptions\n5. Summarize expected deliverables and measurable business outcomes\n6. Identify implementation phases, stages, and technical milestones\n7. Assess technical complexity, resource needs, and readiness based on all descriptions\n\nBe specific - mention actual features, technologies, and requirements found in the descriptions.`
           }
         ],
-        max_tokens: 400,
+        max_completion_tokens: 400,
         temperature: 0.3
       });
 

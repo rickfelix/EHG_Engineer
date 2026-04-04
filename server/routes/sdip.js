@@ -116,7 +116,7 @@ router.put('/submissions/:id/step/:stepNumber', async (req, res) => {
               }
             ],
             temperature: 0.3,
-            max_tokens: 150
+            max_completion_tokens: 150
           });
 
           stepData.intent_summary = completion.choices[0].message.content;
