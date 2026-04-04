@@ -55,7 +55,7 @@ Example bad intent: "Build a comprehensive reporting system with dashboards, fil
       }
     ],
     temperature: 0.3,
-    max_tokens: 120
+    max_completion_tokens: 120
   });
 
   return completion.choices[0].message.content.trim();
@@ -103,7 +103,7 @@ Focus on: architecture choices, data decisions, integration boundaries, acceptan
       }
     ],
     temperature: 0.4,
-    max_tokens: 600,
+    max_completion_tokens: 600,
     response_format: { type: 'json_object' }
   });
 
@@ -177,7 +177,7 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
       }
     ],
     temperature: 0.4,
-    max_tokens: 500
+    max_completion_tokens: 500
   });
 
   return completion.choices[0].message.content.trim();
@@ -305,7 +305,7 @@ Generate database-ready SD structure (JSON only, no markdown).`
       }
     ],
     temperature: 0.3,
-    max_tokens: 800,
+    max_completion_tokens: 800,
     response_format: { type: 'json_object' }
   });
 

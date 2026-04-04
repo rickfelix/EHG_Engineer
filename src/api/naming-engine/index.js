@@ -215,7 +215,7 @@ async function callLLM(prompt) {
         }
       ],
       temperature: 0.8,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
       response_format: { type: 'json_object' }
     })
   });
