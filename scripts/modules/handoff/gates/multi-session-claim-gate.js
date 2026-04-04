@@ -129,6 +129,22 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
         const sameConvo = isSameConversation(currentTerminalId, claim.terminal_id);
         if (sameConvo === true) return false; // Definitely same conversation
         if (sameConvo === 'ambiguous') {
+          // Quick-fix QF-20260404-512: Before blocking on ambiguity, check if
+          // the claiming session's PID is still alive. When terminal_id uses the
+          // unstable win-pid-* fallback, every Bash call gets a new PID, making
+          // the claiming PID dead by definition. A dead PID means the claim is
+          // from the same conversation's prior Bash invocation, not a competitor.
+          const claimPidMatch = claim.terminal_id?.match(/^win-pid-(\d+)$/);
+          if (claimPidMatch) {
+            const claimPid = parseInt(claimPidMatch[1], 10);
+            try {
+              process.kill(claimPid, 0); // Signal 0 = existence check, no actual kill
+            } catch {
+              // PID is dead — this is a stale claim from a prior Bash invocation
+              console.log(`   ✅ Ambiguous terminal_id but claiming PID ${claimPid} is dead — allowing (same conversation)`);
+              return false;
+            }
+          }
           // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: DENY-on-ambiguity
           // Ambiguous identity (e.g., UUID vs win-cc format mismatch) now blocks
           // rather than allowing passthrough. Blocking a handoff is recoverable;
