@@ -10,6 +10,7 @@
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { getOpenAIModel } from '../../../lib/config/model-config.js';
 
 const supabase = createSupabaseServiceClient();
 
@@ -66,7 +67,7 @@ export async function generateNames(req, res) {
         venture_id: brandGenome.venture_id,
         brand_genome_id: brand_genome_id,
         generation_session_id: sessionId,
-        llm_model: process.env.AI_MODEL || 'gpt-5-mini',
+        llm_model: process.env.AI_MODEL || getOpenAIModel('fast'),
         llm_provider: 'openai'
       })))
       .select();
