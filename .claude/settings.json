@@ -4,7 +4,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/statusline-context-tracker.ps1"
+    "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/statusline.cjs"
   },
   "hooks": {
     "PreCompact": [
