@@ -92,7 +92,7 @@ export const TYPE_PATTERNS = {
 /**
  * Valid SD statuses for LEAD-TO-PLAN handoff
  */
-export const VALID_SD_STATUSES = ['draft', 'active', 'in_progress', 'pending_approval'];
+export const VALID_SD_STATUSES = ['draft', 'active', 'in_progress', 'pending_approval', 'planning'];
 
 /**
  * Risk keywords that suggest SD should have risk documentation
