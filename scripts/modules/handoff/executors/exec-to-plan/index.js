@@ -38,6 +38,9 @@ import {
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
 import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.js';
 
+// Scope Completion Verification Gate (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
+import { createScopeCompletionGate } from '../../gates/scope-completion-gate.js';
+
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 
@@ -223,6 +226,9 @@ export class ExecToPlanExecutor extends BaseExecutor {
       // DFE Escalation advisory gate
       gates.push(createDFEEscalationGate(this.supabase));
 
+      // Scope Completion Verification (applies to children too)
+      gates.push(createScopeCompletionGate());
+
       return gates;
     }
 
@@ -288,6 +294,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
     // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
     gates.push(createWireframeQaValidationGate(this.prdRepo, this.supabase));
+
+    // Scope Completion Verification (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
+    // Verifies arch plan deliverables exist in codebase before marking EXEC complete
+    gates.push(createScopeCompletionGate());
 
     return gates;
   }
