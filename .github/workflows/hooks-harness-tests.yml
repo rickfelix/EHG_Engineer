@@ -1,0 +1,32 @@
+name: Hooks Harness Tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/hooks/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  harness-tests:
+    name: Run Hooks Harness Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run hooks harness tests
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
+        run: npm test -- tests/unit/hooks/
