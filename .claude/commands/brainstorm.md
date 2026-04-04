@@ -703,7 +703,7 @@ Evaluate architecture options across weighted dimensions:
 
 Present weighted scores and recommendation. Flag any option where a single dimension scores < 3 (critical weakness).
 
-Then proceed to Edge-Case Bucketing (Step 8).
+Then proceed to Top 3 Improvement Areas (Step 7.9).
 
 ---
 
@@ -787,7 +787,81 @@ options:
 
 If yes, run through the domain-specific evaluation from Step 6E-6I.
 
-Then proceed to Edge-Case Bucketing (Step 8).
+Then proceed to Top 3 Improvement Areas (Step 7.9).
+
+---
+
+## Step 7.9: Top 3 Improvement Areas (Board Consensus)
+
+After multi-perspective analysis completes (board deliberation or legacy team analysis), the board must identify and reach consensus on the **top 3 areas for improvement** related to whatever was evaluated.
+
+### 7.9A: Extract Candidate Improvement Areas
+
+Review all board positions (Round 1 + Round 2), specialist testimony, judiciary verdict, and domain-specific evaluation results. Extract **5-7 candidate improvement areas** — these are specific, actionable things that would make the evaluated topic stronger, more viable, or less risky.
+
+Each candidate must include:
+- **Area**: A concise label (e.g., "Customer validation depth", "API rate-limit resilience")
+- **Source**: Which board seat(s) or specialist raised it
+- **Rationale**: Why this matters — what risk it mitigates or opportunity it unlocks
+
+### 7.9B: Board Consensus Vote
+
+Spawn **all responding board seats in parallel** (same seats from Round 1) as Agents. Each seat receives the candidate list and votes:
+
+```
+You are the <SEAT_TITLE> (<SEAT_CODE>) on EHG's Board of Directors.
+
+The board has identified these candidate improvement areas for "<TOPIC>":
+
+<CANDIDATE_LIST>
+
+From your <SEAT_TITLE> perspective, rank your TOP 3 from this list (by number). For each pick, provide ONE sentence explaining why it's critical from your seat's vantage point.
+
+Format:
+1. [#N] — [one-sentence reason from your perspective]
+2. [#N] — [one-sentence reason]
+3. [#N] — [one-sentence reason]
+```
+
+### 7.9C: Tally and Rank
+
+Score each candidate by counting board votes (each #1 pick = 3 points, #2 = 2 points, #3 = 1 point). The top 3 by total points become the board's consensus improvement areas.
+
+For each of the top 3, compile a **rationale block**:
+- **Area**: The improvement area label
+- **Board Support**: N/M seats voted for this (list which seats)
+- **Composite Rationale**: Synthesize the strongest arguments from the voting seats into 2-3 sentences explaining why this matters
+
+If there is a tie for 3rd place, include all tied items (up to 4 total).
+
+### 7.9D: Present to Chairman (Multi-Select)
+
+Present the board's consensus top 3 to the chairman as a multi-select using AskUserQuestion:
+
+```
+question: "The board has reached consensus on the top areas for improvement. Select which to prioritize:"
+header: "Top Improvement Areas (Board Consensus)"
+options:
+  - label: "1. <AREA_1>"
+    description: "<COMPOSITE_RATIONALE_1> (Board support: <N>/6 seats — <SEAT_LIST>)"
+  - label: "2. <AREA_2>"
+    description: "<COMPOSITE_RATIONALE_2> (Board support: <N>/6 seats — <SEAT_LIST>)"
+  - label: "3. <AREA_3>"
+    description: "<COMPOSITE_RATIONALE_3> (Board support: <N>/6 seats — <SEAT_LIST>)"
+  - label: "All three"
+    description: "Accept the full board recommendation"
+  - label: "None — override"
+    description: "Reject board recommendation, proceed to outcome classification without improvement focus"
+```
+
+**Processing chairman's selection:**
+- Selected items become **improvement focus areas** — carry them forward into the brainstorm document (Step 9) under a `## Board-Recommended Improvement Areas` section, and into vision/architecture documents (Step 9.5) as prioritized items.
+- If "None — override" is selected, record the chairman override and proceed normally without improvement focus.
+- If only 1-2 items selected, record only those as prioritized.
+
+### 7.9E: Legacy Team Fallback
+
+If using legacy 3-persona analysis (Step 6D.1b) instead of board deliberation, extract the top 3 improvement areas from the Challenger's blind spots, Pragmatist's constraints, and Visionary's opportunities. Present the same multi-select to the chairman (Step 7.9D) but note "Team consensus" instead of "Board support" in the rationale.
 
 ---
 
@@ -1029,6 +1103,17 @@ Build the following markdown content in-memory (do NOT use the Write tool):
 - **Composite Risk**: [Low/Medium/High]
 
 </details>
+
+## Board-Recommended Improvement Areas
+(Included when Step 7.9 was executed. Omitted if chairman selected "None — override".)
+
+| Priority | Area | Board Support | Rationale |
+|----------|------|---------------|-----------|
+| 1 | [area label] | N/6 seats (CSO, CTO, ...) | [composite rationale] |
+| 2 | [area label] | N/6 seats (CRO, COO, ...) | [composite rationale] |
+| 3 | [area label] | N/6 seats (CFO, CISO, ...) | [composite rationale] |
+
+**Chairman Selection**: [All three / Items 1,2 / Item 1 only / Override — none selected]
 
 ## Out of Scope
 (Structured mode only)
