@@ -99,6 +99,52 @@ export function analyzeClaimRelationship({ claimingSessionId: _claimingSessionId
 }
 
 /**
+ * Check whether the SD itself shows evidence of recent active work,
+ * independent of session heartbeat status. Prevents treating an SD as
+ * orphaned when a session compacted, restarted, or is mid-long-execution.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} sdId - The SD UUID (id column)
+ * @param {Object} sd - SD row with current_phase, progress_percentage, updated_at
+ * @param {number} [recencyMinutes=30] - How recent updated_at must be to count as active
+ * @returns {Promise<{ hasEvidence: boolean, reasons: string[] }>}
+ */
+export async function hasActiveWorkEvidence(supabase, sdId, sd, recencyMinutes = 30) {
+  const reasons = [];
+
+  // 1. SD in EXEC with non-zero progress — real implementation work happened
+  if (sd.current_phase === 'EXEC' && (sd.progress_percentage || 0) > 0) {
+    reasons.push(`EXEC phase at ${sd.progress_percentage}% progress`);
+  }
+
+  // 2. SD updated_at is recent — someone touched this SD recently
+  if (sd.updated_at) {
+    const updatedAt = new Date(sd.updated_at);
+    const ageMinutes = (Date.now() - updatedAt.getTime()) / 60000;
+    if (ageMinutes < recencyMinutes) {
+      reasons.push(`updated ${Math.round(ageMinutes)}m ago`);
+    }
+  }
+
+  // 3. Recent phase handoff records — confirms pipeline activity
+  const { data: handoffs } = await supabase
+    .from('sd_phase_handoffs')
+    .select('from_phase, to_phase, created_at')
+    .eq('sd_id', sdId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (handoffs && handoffs.length > 0) {
+    const handoffAge = (Date.now() - new Date(handoffs[0].created_at).getTime()) / 60000;
+    if (handoffAge < recencyMinutes) {
+      reasons.push(`handoff ${handoffs[0].from_phase}→${handoffs[0].to_phase} ${Math.round(handoffAge)}m ago`);
+    }
+  }
+
+  return { hasEvidence: reasons.length > 0, reasons };
+}
+
+/**
  * Auto-release a stale dead claim. Only call when relationship is 'stale_dead'
  * (triple-confirmed: heartbeat stale + same host + PID dead).
  *

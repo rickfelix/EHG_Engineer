@@ -7,7 +7,7 @@ import { colors } from '../colors.js';
 import { isActionableForLead } from '../status-helpers.js';
 import { checkDependenciesResolved, checkMetadataDependency, resolveMetadataBlocker } from '../dependency-resolver.js';
 import { getEstimatedDuration, formatEstimateShort } from '../../../lib/duration-estimator.js';
-import { analyzeClaimRelationship } from '../claim-analysis.js';
+import { analyzeClaimRelationship, hasActiveWorkEvidence } from '../claim-analysis.js';
 
 /**
  * Display recommendations section and return structured action data.
@@ -254,7 +254,7 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
   for (const item of baselineItems) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, progress_percentage, dependencies, is_active, metadata, claiming_session_id')
+      .select('id, sd_key, title, status, current_phase, progress_percentage, dependencies, is_active, metadata, claiming_session_id, updated_at')
       .or(`sd_key.eq.${item.sd_id},id.eq.${item.sd_id}`)
       .single();
 
@@ -270,8 +270,28 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
             claimingSession,
             currentSession
           });
-          if (analysis.relationship === 'same_conversation' || analysis.relationship === 'stale_dead') {
+          if (analysis.relationship === 'same_conversation') {
             actionable = true;
+          } else if (analysis.relationship === 'stale_dead') {
+            // Don't assume orphaned — check if SD itself shows recent work
+            // (session may have compacted, restarted, or be mid-execution)
+            const evidence = await hasActiveWorkEvidence(supabase, sd.id, sd);
+            if (evidence.hasEvidence) {
+              console.log(`  ${colors.dim}⚠ ${sd.sd_key} claim looks stale but SD has active work: ${evidence.reasons.join(', ')}${colors.reset}`);
+              actionable = false; // Protect the claim
+            } else {
+              actionable = true; // Truly orphaned — no session AND no SD activity
+            }
+          }
+        } else if (!claimingSession) {
+          // Claiming session not in active list at all — could be compacted/restarted
+          // Cross-check SD-level evidence before assuming orphaned
+          const evidence = await hasActiveWorkEvidence(supabase, sd.id, sd);
+          if (evidence.hasEvidence) {
+            console.log(`  ${colors.dim}⚠ ${sd.sd_key} session missing but SD has active work: ${evidence.reasons.join(', ')}${colors.reset}`);
+            actionable = false; // Protect — session likely compacted
+          } else {
+            actionable = true; // No session + no SD activity = truly orphaned
           }
         }
         if (!actionable) continue;
