@@ -335,13 +335,17 @@ async function main() {
     // idx_claude_sessions_unique_terminal_active (one active/idle per terminal).
     // Using 'idle' silently fails when another session on the same terminal exists.
     const targetStatus = s.status === 'ACTIVE' ? 'idle' : 'released';
+    // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
     const { error } = await supabase
       .from('claude_sessions')
       .update({
         sd_id: null,
         status: targetStatus,
         released_at: now.toISOString(),
-        released_reason: 'SWEEP_SD_ALREADY_COMPLETED'
+        released_reason: 'SWEEP_SD_ALREADY_COMPLETED',
+        worktree_path: null,
+        has_uncommitted_changes: false,
+        current_branch: null
       })
       .eq('session_id', s.session_id);
 
@@ -360,13 +364,17 @@ async function main() {
   const orphanedClaims = classified.filter(s => !sdStatusMap[s.sd_id]);
   for (const s of orphanedClaims) {
     const targetStatus = s.status === 'ACTIVE' ? 'idle' : 'released';
+    // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
     const { error } = await supabase
       .from('claude_sessions')
       .update({
         sd_id: null,
         status: targetStatus,
         released_at: now.toISOString(),
-        released_reason: 'SWEEP_ORPHANED_CLAIM'
+        released_reason: 'SWEEP_ORPHANED_CLAIM',
+        worktree_path: null,
+        has_uncommitted_changes: false,
+        current_branch: null
       })
       .eq('session_id', s.session_id);
 
@@ -513,13 +521,20 @@ async function main() {
       continue;
     }
 
+    // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-1, FR-2): Atomically set is_alive=false
+    // and clear dirty fields when releasing dead session claims. Prevents successor sessions
+    // from inheriting stale worktree_path, has_uncommitted_changes, and current_branch.
     const { error } = await supabase
       .from('claude_sessions')
       .update({
         sd_id: null,
         status: 'released',
         released_at: now.toISOString(),
-        released_reason: 'SWEEP_PID_DEAD'
+        released_reason: 'SWEEP_PID_DEAD',
+        is_alive: false,
+        worktree_path: null,
+        has_uncommitted_changes: false,
+        current_branch: null
       })
       .eq('session_id', s.session_id);
 
@@ -563,13 +578,17 @@ async function main() {
       if (dead.find(d => d.session_id === evict.session_id)) continue;
 
       const targetStatus = evict.status === 'ACTIVE' ? 'idle' : 'released';
+      // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
       const { error } = await supabase
         .from('claude_sessions')
         .update({
           sd_id: null,
           status: targetStatus,
           released_at: now.toISOString(),
-          released_reason: 'SWEEP_CONFLICT_RESOLUTION'
+          released_reason: 'SWEEP_CONFLICT_RESOLUTION',
+          worktree_path: null,
+          has_uncommitted_changes: false,
+          current_branch: null
         })
         .eq('session_id', evict.session_id);
 
