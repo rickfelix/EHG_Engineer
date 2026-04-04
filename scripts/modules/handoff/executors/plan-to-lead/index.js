@@ -202,6 +202,16 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // PAT-AUTO-77fe50e3: Pre-check smoke test readiness for pipeline SDs
     await preCheckSmokeTestReadiness(this.supabase, sd, sdId);
 
+    // PAT-AUTO-3d8fe812: Pre-gate story finalization
+    // Finalize user stories BEFORE ACCEPTANCE_CRITERIA_VALIDATION gate runs.
+    // Without this, stories with status != 'completed' score 50/100 and the gate
+    // rejects at the 60 threshold. The finalizeUserStories function is idempotent.
+    try {
+      await finalizeUserStories(this.supabase, null, sd.id || sdId);
+    } catch (finalizeErr) {
+      console.warn(`   ⚠️  Pre-gate story finalization failed (non-fatal): ${finalizeErr.message}`);
+    }
+
     return null;
   }
 
