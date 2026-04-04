@@ -836,11 +836,12 @@ If there is a tie for 3rd place, include all tied items (up to 4 total).
 
 ### 7.9D: Present to Chairman (Multi-Select)
 
-Present the board's consensus top 3 to the chairman as a multi-select using AskUserQuestion:
+Present the board's consensus top 3 to the chairman using AskUserQuestion with `multiSelect: true`:
 
 ```
 question: "The board has reached consensus on the top areas for improvement. Select which to prioritize:"
-header: "Top Improvement Areas (Board Consensus)"
+header: "Improvements"
+multiSelect: true
 options:
   - label: "1. <AREA_1>"
     description: "<COMPOSITE_RATIONALE_1> (Board support: <N>/6 seats — <SEAT_LIST>)"
@@ -848,16 +849,14 @@ options:
     description: "<COMPOSITE_RATIONALE_2> (Board support: <N>/6 seats — <SEAT_LIST>)"
   - label: "3. <AREA_3>"
     description: "<COMPOSITE_RATIONALE_3> (Board support: <N>/6 seats — <SEAT_LIST>)"
-  - label: "All three"
-    description: "Accept the full board recommendation"
   - label: "None — override"
     description: "Reject board recommendation, proceed to outcome classification without improvement focus"
 ```
 
 **Processing chairman's selection:**
 - Selected items become **improvement focus areas** — carry them forward into the brainstorm document (Step 9) under a `## Board-Recommended Improvement Areas` section, and into vision/architecture documents (Step 9.5) as prioritized items.
-- If "None — override" is selected, record the chairman override and proceed normally without improvement focus.
-- If only 1-2 items selected, record only those as prioritized.
+- If "None — override" is selected (alone), record the chairman override and proceed normally without improvement focus.
+- Chairman can select any combination of 1, 2, or all 3 items — record only selected items as prioritized.
 
 ### 7.9E: Legacy Team Fallback
 
