@@ -20,6 +20,28 @@ import { colors } from './colors.js';
 
 /** Maximum time (ms) allowed for the displayTracks loop before preemption */
 const MAX_DISPLAY_DURATION_MS = 30000;
+
+/**
+ * Compute OKR impact score for an SD from its KR alignments.
+ * Inline implementation matching priority-scorer.js calculateOKRImpact logic.
+ * @param {Array} alignments - KR alignment records for this SD
+ * @param {Map} krMap - Map of KR id -> {id, status, code, title}
+ * @returns {number} OKR impact score (0-90)
+ */
+function computeOKRScore(alignments, krMap) {
+  const KR_URGENCY = { off_track: 3.0, at_risk: 2.0, on_track: 1.0, achieved: 0.0 };
+  const CONTRIB = { direct: 1.5, enabling: 1.0, supporting: 0.5 };
+  let total = 0;
+  for (const a of alignments) {
+    const kr = krMap.get(a.key_result_id);
+    if (!kr) continue;
+    const urgency = KR_URGENCY[kr.status] ?? 1.0;
+    const contrib = CONTRIB[a.contribution_type] ?? 0.5;
+    const weight = a.contribution_weight ?? 1.0;
+    total += 10 * urgency * contrib * weight;
+  }
+  return Math.min(total, 90); // Cap at 90
+}
 import { checkDependenciesResolved, scanMetadataForMisplacedDependencies } from './dependency-resolver.js';
 import { detectLocalSignals } from './local-signals.js';
 import {
@@ -615,32 +637,57 @@ export class SDNextSelector {
       }
     }
 
-    // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Guardrail 4 - OKR-Driven Queue Prioritization
-    // Batch-load KR alignments to boost SDs linked to at-risk/off-track KRs
-    const okrBoostMap = new Map(); // sd_id (UUID) -> boost factor
+    // SD-LEO-INFRA-OKR-PIPELINE-AUTOMATION-001: OKR-Driven Queue Prioritization
+    // Batch-load KR alignments and compute OKR impact scores per SD
+    const okrBoostMap = new Map(); // sd_id (UUID) -> boost factor (legacy)
+    const okrScoreMap = new Map(); // sd_id (UUID) -> OKR impact score (0-90)
+    let okrBlendWeight = 0.30; // Default 30% OKR influence
     try {
+      // Load configurable blend weight from chairman_dashboard_config
+      const { data: configRow } = await this.supabase
+        .from('chairman_dashboard_config')
+        .select('metadata')
+        .eq('config_key', 'default')
+        .single();
+      if (configRow?.metadata?.okr_blend_weight != null) {
+        okrBlendWeight = Number(configRow.metadata.okr_blend_weight);
+      }
+
       const sdUUIDs = filteredSDs.map(sd => sd.id);
       const { data: krAlignments } = await this.supabase
         .from('sd_key_result_alignment')
-        .select('sd_id, key_result_id, contribution_type, key_results!inner(status)')
+        .select('sd_id, key_result_id, contribution_type, contribution_weight, key_results!inner(id, status, code, title)')
         .in('sd_id', sdUUIDs);
 
       if (krAlignments && krAlignments.length > 0) {
+        // Group alignments by SD for batch scoring
+        const alignmentsBySD = new Map();
+        const krMap = new Map();
         for (const alignment of krAlignments) {
-          const krStatus = alignment.key_results?.status;
-          // Boost SDs linked to at-risk or off-track KRs
+          const kr = alignment.key_results;
+          if (kr) krMap.set(kr.id, kr);
+          if (!alignmentsBySD.has(alignment.sd_id)) alignmentsBySD.set(alignment.sd_id, []);
+          alignmentsBySD.get(alignment.sd_id).push(alignment);
+
+          // Legacy boost for backward compat
+          const krStatus = kr?.status;
           if (krStatus === 'at_risk' || krStatus === 'off_track') {
-            const boostFactor = krStatus === 'off_track' ? 0.5 : 0.7; // Lower = higher priority
+            const boostFactor = krStatus === 'off_track' ? 0.5 : 0.7;
             const existing = okrBoostMap.get(alignment.sd_id);
-            // Keep the strongest boost (lowest factor)
             if (!existing || boostFactor < existing) {
               okrBoostMap.set(alignment.sd_id, boostFactor);
             }
           }
         }
+
+        // Compute OKR impact score per SD using priority-scorer
+        for (const [sdId, alignments] of alignmentsBySD) {
+          const score = computeOKRScore(alignments, krMap);
+          okrScoreMap.set(sdId, score);
+        }
       }
     } catch {
-      // Non-fatal: OKR boost is additive, not blocking
+      // Non-fatal: OKR scoring is additive, not blocking
     }
 
     // Create baseline lookup map for ordering and track assignment
@@ -721,10 +768,12 @@ export class SDNextSelector {
         : 0;
       let compositeRank = gapWeight > 0 ? sequenceRank / (1 + gapWeight) : sequenceRank;
 
-      // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Guardrail 4 - OKR boost
-      // SDs linked to at-risk/off-track KRs get priority boost (lower rank = higher priority)
+      // SD-LEO-INFRA-OKR-PIPELINE-AUTOMATION-001: OKR impact scoring
+      // Higher OKR score = more strategic alignment = lower rank (higher priority)
+      const okrScore = okrScoreMap.get(sd.id) || 0;
       const okrBoost = okrBoostMap.get(sd.id) || 1.0;
-      compositeRank = compositeRank * okrBoost;
+      // Blend: subtract OKR-proportional amount from rank (max 90 * 0.30 = 27 rank points)
+      compositeRank = (compositeRank * okrBoost) - (okrScore * okrBlendWeight);
 
       // SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-A: Extract urgency from metadata
       const urgencyScore = sd.metadata?.urgency_score ?? null;
@@ -738,7 +787,8 @@ export class SDNextSelector {
         sequence_rank: sequenceRank,
         gap_weight: gapWeight,
         composite_rank: compositeRank,
-        okr_boost: okrBoost < 1.0 ? okrBoost : null, // Only set if boosted
+        okr_boost: okrBoost < 1.0 ? okrBoost : null,
+        okr_score: okrScore > 0 ? okrScore : null, // OKR impact score (0-90)
         urgency_score: urgencyScore,
         urgency_band: urgencyBand,
         urgency_numeric: urgencyNumeric,

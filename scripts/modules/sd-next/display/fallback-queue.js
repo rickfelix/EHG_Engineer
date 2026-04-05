@@ -16,6 +16,20 @@ import { displayTrackSection } from './tracks.js';
 export async function showFallbackQueue(supabase, options = {}) {
   const { skipBaselineWarning = false, sessionContext = {} } = options;
 
+  // SD-LEO-INFRA-OKR-PIPELINE-AUTOMATION-001: Load OKR scores for fallback ranking
+  // Load configurable blend weight
+  let okrBlendWeight = 0.30;
+  try {
+    const { data: configRow } = await supabase
+      .from('chairman_dashboard_config')
+      .select('metadata')
+      .eq('config_key', 'default')
+      .single();
+    if (configRow?.metadata?.okr_blend_weight != null) {
+      okrBlendWeight = Number(configRow.metadata.okr_blend_weight);
+    }
+  } catch { /* non-fatal */ }
+
   // No baseline - fall back to sequence_rank on SDs directly
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
@@ -31,6 +45,35 @@ export async function showFallbackQueue(supabase, options = {}) {
     return;
   }
 
+  // Batch-load OKR alignment scores for fallback SDs
+  const okrScores = new Map();
+  try {
+    const sdUUIDs = sds.map(s => s.id);
+    const { data: krAlignments } = await supabase
+      .from('sd_key_result_alignment')
+      .select('sd_id, key_result_id, contribution_type, contribution_weight, key_results!inner(id, status)')
+      .in('sd_id', sdUUIDs);
+
+    if (krAlignments && krAlignments.length > 0) {
+      const KR_URGENCY = { off_track: 3.0, at_risk: 2.0, on_track: 1.0, achieved: 0.0 };
+      const CONTRIB = { direct: 1.5, enabling: 1.0, supporting: 0.5 };
+      const bySD = new Map();
+      for (const a of krAlignments) {
+        if (!bySD.has(a.sd_id)) bySD.set(a.sd_id, []);
+        bySD.get(a.sd_id).push(a);
+      }
+      for (const [sdId, alignments] of bySD) {
+        let total = 0;
+        for (const a of alignments) {
+          const urgency = KR_URGENCY[a.key_results?.status] ?? 1.0;
+          const contrib = CONTRIB[a.contribution_type] ?? 0.5;
+          total += 10 * urgency * contrib * (a.contribution_weight ?? 1.0);
+        }
+        okrScores.set(sdId, Math.min(total, 90));
+      }
+    }
+  } catch { /* non-fatal */ }
+
   // Group by track from metadata
   const tracks = { A: [], B: [], C: [], STANDALONE: [], UNASSIGNED: [] };
 
@@ -42,12 +85,20 @@ export async function showFallbackQueue(supabase, options = {}) {
                      track === 'STANDALONE' ? 'STANDALONE' : 'UNASSIGNED';
 
     const depsResolved = await checkDependenciesResolved(supabase, sd.dependencies);
+    const okrScore = okrScores.get(sd.id) || 0;
 
     tracks[trackKey].push({
       ...sd,
       deps_resolved: depsResolved,
-      track: trackKey
+      track: trackKey,
+      okr_score: okrScore,
+      composite_rank: (sd.sequence_rank || 9999) - (okrScore * okrBlendWeight)
     });
+  }
+
+  // Sort each track by OKR-blended composite rank
+  for (const trackSDs of Object.values(tracks)) {
+    trackSDs.sort((a, b) => (a.composite_rank ?? 9999) - (b.composite_rank ?? 9999));
   }
 
   // Display tracks
