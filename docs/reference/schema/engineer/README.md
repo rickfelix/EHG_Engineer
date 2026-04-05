@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-05T00:43:44.768Z
-**Tables**: 623
+**Generated**: 2026-04-05T13:22:03.303Z
+**Tables**: 626
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (623)
+## All Tables (626)
 
 ### LEO Protocol
 
@@ -436,6 +436,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [nursery_evaluation_log](tables/nursery_evaluation_log.md)
 - [objectives](tables/objectives.md)
 - [okr_generation_log](tables/okr_generation_log.md)
+- [okr_snapshots](tables/okr_snapshots.md)
 - [okr_vision_alignment_records](tables/okr_vision_alignment_records.md)
 - [operations_audit_log](tables/operations_audit_log.md)
 - [opportunities](tables/opportunities.md)
@@ -469,6 +470,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [plan_subagent_queries](tables/plan_subagent_queries.md)
 - [plan_technical_validations](tables/plan_technical_validations.md)
 - [plan_verification_results](tables/plan_verification_results.md)
+- [policy_audit_log](tables/policy_audit_log.md)
+- [portfolio_allocation_policies](tables/portfolio_allocation_policies.md)
 - [portfolio_profile_allocations](tables/portfolio_profile_allocations.md)
 - [portfolios](tables/portfolios.md)
 - [postmortem_pattern_links](tables/postmortem_pattern_links.md)

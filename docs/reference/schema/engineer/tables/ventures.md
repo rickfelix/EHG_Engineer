@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-05T00:43:44.768Z
+**Generated**: 2026-04-05T13:22:03.303Z
 **Rows**: 1
 **RLS**: Enabled (2 policies)
 
@@ -127,7 +127,6 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)))
 - `ventures_health_status_check`: CHECK (((health_status)::text = ANY ((ARRAY['healthy'::character varying, 'warning'::character varying, 'critical'::character varying])::text[])))
 - `ventures_pipeline_mode_check`: CHECK ((pipeline_mode = ANY (ARRAY['building'::text, 'operations'::text, 'growth'::text, 'scaling'::text, 'exit_prep'::text, 'divesting'::text, 'sold'::text])))
-- `ventures_portfolio_synergy_score_check`: CHECK (((portfolio_synergy_score >= (0)::numeric) AND (portfolio_synergy_score <= (1)::numeric)))
 - `ventures_portfolio_synergy_score_range`: CHECK (((portfolio_synergy_score IS NULL) OR ((portfolio_synergy_score >= (0)::numeric) AND (portfolio_synergy_score <= (1)::numeric))))
 - `ventures_time_horizon_classification_check`: CHECK ((time_horizon_classification = ANY (ARRAY['build_now'::text, 'park_later'::text, 'window_closing'::text])))
 - `ventures_venture_type_check`: CHECK ((venture_type = ANY (ARRAY['ui'::text, 'backend'::text, 'mixed'::text, 'data'::text])))
