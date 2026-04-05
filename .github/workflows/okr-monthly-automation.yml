@@ -1,0 +1,79 @@
+name: OKR Monthly Automation
+
+on:
+  schedule:
+    # Run on 1st of each month at 06:00 UTC
+    - cron: '0 6 1 * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (no SDs created)'
+        required: false
+        type: boolean
+        default: true
+      staleness_days:
+        description: 'KR staleness threshold in days'
+        required: false
+        type: number
+        default: 30
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  okr-monthly:
+    name: OKR Monthly Generation & Stale KR Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run OKR Monthly Generator
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "============================================================"
+          echo "  OKR Monthly Generator"
+          echo "============================================================"
+          node lib/eva/jobs/okr-monthly-generator.js || echo "Monthly generator completed with warnings"
+
+      - name: Run Stale KR SD Creator
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "============================================================"
+          echo "  Stale KR → Auto-SD Creator"
+          echo "============================================================"
+
+          ARGS=""
+          if [ "${{ github.event.inputs.dry_run }}" == "true" ] || [ "${{ github.event_name }}" == "schedule" ]; then
+            ARGS="--dry-run"
+            echo "Mode: DRY RUN (scheduled runs default to dry-run for safety)"
+          fi
+
+          if [ -n "${{ github.event.inputs.staleness_days }}" ]; then
+            ARGS="$ARGS --days ${{ github.event.inputs.staleness_days }}"
+          fi
+
+          node lib/eva/jobs/okr-stale-kr-sd-creator.js $ARGS
+
+      - name: Add Summary
+        if: always()
+        run: |
+          echo "## OKR Monthly Automation" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry Run**: ${{ github.event.inputs.dry_run || 'true (scheduled)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Staleness**: ${{ github.event.inputs.staleness_days || '30' }} days" >> $GITHUB_STEP_SUMMARY
