@@ -349,6 +349,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.warn(`   ⚠️  Feedback auto-close failed (non-blocking): ${feedbackError.message}`);
     }
 
+    // SD-LEO-INFRA-REALITY-CHECK-VALIDATE-001: Auto-update aligned KR current_values
+    try {
+      const { updateKRFromSDCompletion } = await import('../../../../lib/eva/kr-reality-checker.js');
+      const krResult = await updateKRFromSDCompletion(sd.sd_key || sd.id, this.supabase);
+      if (krResult.updated.length > 0) {
+        console.log(`   ✅ KR auto-update: ${krResult.updated.join(', ')} updated to target`);
+      }
+    } catch (krError) {
+      console.warn(`   ⚠️  KR auto-update failed (non-blocking): ${krError.message}`);
+    }
+
     // Resolve patterns/improvements if this SD was created from /learn
     await resolveLearningItems(sd, this.supabase);
 
