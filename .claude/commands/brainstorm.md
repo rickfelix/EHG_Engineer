@@ -15,7 +15,36 @@ Parse `$ARGUMENTS` for:
 - **`--domain <domain>`**: One of `venture`, `protocol`, `integration`, `architecture`. If not provided, auto-detect or ask.
 - **`--stage <stage>`**: Phase within the selected domain (see Step 3). If not provided, ask the user.
 
-If no topic is provided, ask the user: "What would you like to brainstorm?"
+If no topic is provided, offer OKR-driven options using AskUserQuestion:
+
+```
+question: "What would you like to brainstorm?"
+header: "Brainstorm"
+options:
+  - label: "OKR progress — move the needle"
+    description: "Focus on advancing stalled or underperforming Key Results"
+  - label: "OKR system improvements"
+    description: "Protocol/tooling improvements to how OKRs work"
+  - label: "Monthly OKR review"
+    description: "Review current OKR health, close stale ones, set new targets"
+  - label: "New OKR creation"
+    description: "Define new objectives and key results for upcoming work"
+  - label: "Something else"
+    description: "Enter a custom brainstorm topic"
+```
+
+If the user selects an OKR option (1-4), query the database for current OKR state before proceeding:
+```sql
+SELECT o.id, o.objective_key, o.title, o.status,
+       kr.key_result_key, kr.title as kr_title, kr.current_value, kr.target_value, kr.status as kr_status
+FROM okrs o
+LEFT JOIN key_results kr ON kr.okr_id = o.id
+WHERE o.status IN ('active', 'at_risk', 'behind')
+ORDER BY o.objective_key, kr.key_result_key
+```
+Use the OKR data to ground the brainstorm in actual progress/gaps. Set the domain to `protocol` for options 2-3, `architecture` for option 4, and auto-detect for option 1 based on which KRs are selected.
+
+If the user selects "Something else", ask: "What would you like to brainstorm?" as a free-text follow-up.
 
 ---
 
