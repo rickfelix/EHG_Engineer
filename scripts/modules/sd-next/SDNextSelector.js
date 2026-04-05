@@ -612,7 +612,7 @@ export class SDNextSelector {
     // This ensures SDs appear even if baseline sync trigger failed (SD-LEO-INFRA-QUEUE-SIMPLIFY-001)
     const { data: allSDs, error: sdError } = await this.supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_score, vision_origin_score_id')
+      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_score, vision_origin_score_id, venture_id')
       .eq('is_active', true)
       .in('status', ['draft', 'active', 'in_progress', 'planning'])
       .order('created_at', { ascending: true });
@@ -688,6 +688,53 @@ export class SDNextSelector {
       }
     } catch {
       // Non-fatal: OKR scoring is additive, not blocking
+    }
+
+    // SD-LEO-INFRA-EHG-PORTFOLIO-ALLOCATION-001: Glide path policy boost
+    // Maps venture_id -> multiplier based on growth_strategy weight in active policy.
+    // Lower multiplier = higher priority (cash_engine gets lowest multiplier in profit-heavy phase).
+    const policyBoostMap = new Map(); // venture_id (UUID) -> rank multiplier
+    try {
+      const { data: activePolicy } = await this.supabase
+        .from('portfolio_allocation_policies')
+        .select('weights, phase_definitions')
+        .eq('is_active', true)
+        .limit(1)
+        .single();
+
+      if (activePolicy) {
+        // Get ventures with growth_strategy for SDs that have venture_id
+        const ventureIds = [...new Set(filteredSDs.map(sd => sd.venture_id).filter(Boolean))];
+        if (ventureIds.length > 0) {
+          const { data: ventures } = await this.supabase
+            .from('ventures')
+            .select('id, growth_strategy')
+            .in('id', ventureIds);
+
+          if (ventures) {
+            // Weight map: higher weight = more aligned = lower rank multiplier (higher priority)
+            // cash_engine with 0.60 weight -> multiplier 0.40 (big boost)
+            // moonshot with 0.10 weight -> multiplier 0.90 (small boost)
+            for (const v of ventures) {
+              const strategy = v.growth_strategy;
+              if (strategy && activePolicy.weights) {
+                // Look for matching weight key (e.g., revenue_potential for cash_engine)
+                // Simplified: map growth_strategy to a boost based on phase preference
+                const phaseDefs = activePolicy.phase_definitions || [];
+                const allowedCount = phaseDefs.filter(p =>
+                  (p.allowed_growth_strategies || []).includes(strategy)
+                ).length;
+                // More phases allow it = more universal = less boosted
+                // Fewer phases allow it = more specialized = more boosted in matching phase
+                const boost = allowedCount >= phaseDefs.length ? 1.0 : 0.7 + (allowedCount / phaseDefs.length) * 0.3;
+                policyBoostMap.set(v.id, boost);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Non-fatal: policy scoring is additive, not blocking
     }
 
     // Create baseline lookup map for ordering and track assignment
@@ -775,6 +822,14 @@ export class SDNextSelector {
       // Blend: subtract OKR-proportional amount from rank (max 90 * 0.30 = 27 rank points)
       compositeRank = (compositeRank * okrBoost) - (okrScore * okrBlendWeight);
 
+      // SD-LEO-INFRA-EHG-PORTFOLIO-ALLOCATION-001: Glide path policy boost
+      // Venture-scoped SDs get a multiplier based on their growth_strategy alignment
+      // with the active policy weights. Infrastructure SDs are policy-neutral (1.0x).
+      const policyBoost = policyBoostMap.get(sd.venture_id) ?? 1.0;
+      if (policyBoost !== 1.0) {
+        compositeRank = compositeRank * policyBoost;
+      }
+
       // SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-A: Extract urgency from metadata
       const urgencyScore = sd.metadata?.urgency_score ?? null;
       const urgencyBand = sd.metadata?.urgency_band ?? (urgencyScore !== null ? scoreToBand(urgencyScore) : 'P3');
@@ -789,6 +844,7 @@ export class SDNextSelector {
         composite_rank: compositeRank,
         okr_boost: okrBoost < 1.0 ? okrBoost : null,
         okr_score: okrScore > 0 ? okrScore : null, // OKR impact score (0-90)
+        policy_boost: policyBoost !== 1.0 ? policyBoost : null, // Glide path weight
         urgency_score: urgencyScore,
         urgency_band: urgencyBand,
         urgency_numeric: urgencyNumeric,
