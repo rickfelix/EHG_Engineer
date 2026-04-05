@@ -52,7 +52,6 @@ import {
   formatValidationResults
 } from '../../lib/prd-grounding-validator.js';
 import {
-import { isMainModule } from '../../lib/utils/is-main-module.js';
   extractPersonasFromSD,
   isPersonaIngestionEnabled,
   isPersonaPromptInjectionEnabled,
@@ -60,6 +59,7 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
   isVisionBriefApproved,
   buildPersonaContextString
 } from '../lib/persona-extractor.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 

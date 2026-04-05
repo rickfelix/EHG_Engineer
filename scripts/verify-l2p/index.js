@@ -34,12 +34,12 @@ import {
 import { autoDetectSdType, getTypeRecommendation as _getTypeRecommendation, getWorstCaseHandoffs as _getWorstCaseHandoffs } from './type-detection.js';
 import { checkEnvironmentReadiness, validateHandoffDocument } from './environment.js';
 import {
-import { isMainModule } from '../../lib/utils/is-main-module.js';
   createHandoffExecution,
   rejectHandoff,
   generateImprovementGuidance,
   updateSdStatusAfterHandoff
 } from './handoff-execution.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 // Cross-platform path resolution
 const __filename = fileURLToPath(import.meta.url);

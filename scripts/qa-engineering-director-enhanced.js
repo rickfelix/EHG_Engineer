@@ -16,7 +16,6 @@ import dotenv from 'dotenv';
 
 // Import from decomposed modules
 import {
-import { isMainModule } from '../lib/utils/is-main-module.js';
   DEFAULT_OPTIONS,
   executePreflightPhase,
   executeTestPlanningPhase,
@@ -26,6 +25,7 @@ import { isMainModule } from '../lib/utils/is-main-module.js';
   generateRecommendations,
   storeResults
 } from './qa-director/index.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 

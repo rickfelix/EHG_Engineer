@@ -26,13 +26,13 @@
 import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import {
-import { isMainModule } from '../lib/utils/is-main-module.js';
   orchestrate,
   getPhaseSubAgents,
   getPhaseSubAgentsForSd,
   isSubAgentRequired,
   VALID_PHASES
 } from './modules/phase-subagent-orchestrator/index.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 

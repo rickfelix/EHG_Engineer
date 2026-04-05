@@ -35,7 +35,6 @@ import {
 } from './sub-agents.js';
 
 import {
-import { isMainModule } from '../../lib/utils/is-main-module.js';
   loadPhaseRequirements,
   getNextPhase,
   markPhaseComplete,
@@ -222,3 +221,4 @@ export {
   PHASE_FLOW,
   PHASE_COMPLETE_MAP
 } from './phase-utils.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';

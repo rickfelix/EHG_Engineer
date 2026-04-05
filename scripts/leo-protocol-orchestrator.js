@@ -1,5 +1,5 @@
-import { isMainModule } from '../lib/utils/is-main-module.js';
 #!/usr/bin/env node
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 /**
  * LEO Protocol Master Orchestrator

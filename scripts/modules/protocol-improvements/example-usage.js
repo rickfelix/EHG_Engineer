@@ -6,7 +6,6 @@
  */
 
 import {
-import { isMainModule } from '../../../lib/utils/is-main-module.js';
   extractAndQueueAll,
   applyAllAutoApplicable,
   trackAllUnscored,
@@ -15,6 +14,7 @@ import { isMainModule } from '../../../lib/utils/is-main-module.js';
   getTopPriorityImprovements,
   runFullImprovementCycle as _runFullImprovementCycle
 } from './index.js';
+import { isMainModule } from '../../../lib/utils/is-main-module.js';
 
 async function main() {
   console.log('=== Protocol Improvements Module - Example Usage ===\n');

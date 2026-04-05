@@ -31,13 +31,13 @@ import {
   enforceRetrospective
 } from './compliance.js';
 import {
-import { isMainModule } from '../../lib/utils/is-main-module.js';
   initializeExecution,
   safeExec,
   trackOperation,
   enforceSessionPrologue,
   verifySDEligibility
 } from './helpers.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 

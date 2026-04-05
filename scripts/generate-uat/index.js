@@ -20,7 +20,6 @@ import chalk from 'chalk';
 import { TEST_SUITES } from './test-suite-config.js';
 import { generateTestFile } from './test-generators.js';
 import {
-import { isMainModule } from '../../lib/utils/is-main-module.js';
   generateAdminTests,
   generateCrossFunctionalTests,
   generateE2ETests
@@ -177,5 +176,6 @@ export {
   generateCrossFunctionalTests,
   generateE2ETests
 } from './suite-builders.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 export default { generateAllTests };
