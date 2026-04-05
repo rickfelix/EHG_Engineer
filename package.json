@@ -384,6 +384,7 @@
     "@babel/traverse": "^7.28.4",
     "@babel/types": "^7.29.0",
     "@doist/todoist-api-typescript": "^6.4.0",
+    "@google/stitch-sdk": "^0.1.0",
     "@octokit/rest": "^22.0.1",
     "@supabase/auth-js": "^2.98.0",
     "@supabase/functions-js": "^2.98.0",
