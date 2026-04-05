@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-04T15:03:01.010Z
-**Rows**: 300
+**Generated**: 2026-04-05T00:43:44.768Z
+**Rows**: 308
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -54,7 +54,7 @@
 - `brainstorm_sessions_outcome_type_check`: CHECK ((outcome_type = ANY (ARRAY['sd_created'::text, 'quick_fix'::text, 'no_action'::text, 'consideration_only'::text, 'needs_triage'::text, 'conflict'::text, 'significant_departure'::text])))
 - `brainstorm_sessions_retrospective_status_check`: CHECK ((retrospective_status = ANY (ARRAY['pending'::text, 'completed'::text, 'queued'::text, 'failed'::text])))
 - `brainstorm_sessions_session_quality_score_check`: CHECK (((session_quality_score >= (0)::numeric) AND (session_quality_score <= (1)::numeric)))
-- `brainstorm_sessions_stage_check`: CHECK ((stage = ANY (ARRAY['ideation'::text, 'validation'::text, 'mvp'::text, 'growth'::text, 'scale'::text])))
+- `brainstorm_sessions_stage_check`: CHECK ((stage = ANY (ARRAY['ideation'::text, 'validation'::text, 'mvp'::text, 'growth'::text, 'scale'::text, 'discovery'::text, 'design'::text, 'implement'::text, 'intake'::text, 'process'::text, 'output'::text, 'explore'::text, 'decide'::text, 'execute'::text])))
 
 ## Indexes
 
