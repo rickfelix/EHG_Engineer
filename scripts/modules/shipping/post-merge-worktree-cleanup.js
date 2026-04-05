@@ -4,8 +4,71 @@ import path from 'path';
 
 // Quick-fix QF-20260211-111: Post-merge worktree cleanup for /ship
 // FR-5: Added --sdKey support for external callers (SD-LEO-INFRA-UNIFIED-WORKTREE-LIFECYCLE-001)
+// SD-MAN-INFRA-WORKTREE-CODE-LOSS-001: Pre-cleanup commit check + archive-on-conflict
 const gitExec = (cmd, opts = {}) =>
   execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], ...opts }).trim();
+
+/**
+ * Check if a worktree has commits that have not been pushed to the remote.
+ * SD-MAN-INFRA-WORKTREE-CODE-LOSS-001 (FR-1)
+ */
+function hasUnpushedCommits(wtPath) {
+  try {
+    const log = execSync('git log origin/main..HEAD --oneline', {
+      cwd: wtPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore']
+    }).trim();
+    if (!log) return { unpushed: false, commits: [] };
+    const commits = log.split('\n').filter(Boolean);
+    return { unpushed: true, commits };
+  } catch {
+    // If origin/main doesn't exist or git fails, try @{upstream}
+    try {
+      const log = execSync('git log @{upstream}..HEAD --oneline', {
+        cwd: wtPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore']
+      }).trim();
+      if (!log) return { unpushed: false, commits: [] };
+      const commits = log.split('\n').filter(Boolean);
+      return { unpushed: true, commits };
+    } catch {
+      // Cannot determine remote state — treat as safe (unpushed)
+      return { unpushed: true, commits: ['(unable to determine remote state)'] };
+    }
+  }
+}
+
+/**
+ * Archive a worktree to .worktrees/_archive/ instead of deleting it.
+ * SD-MAN-INFRA-WORKTREE-CODE-LOSS-001 (FR-3, FR-4)
+ */
+function archiveWorktree(wtPath, sdKey) {
+  const mainRepoPath = getMainRepoPath(getWorktreeMetadata(wtPath), wtPath);
+  if (!mainRepoPath) return { archived: false, reason: 'cannot_resolve_main_repo' };
+
+  const archiveDir = path.join(mainRepoPath, '.worktrees', '_archive');
+  fs.mkdirSync(archiveDir, { recursive: true });
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const archiveName = `${sdKey || path.basename(wtPath)}-${timestamp}`;
+  const archivePath = path.join(archiveDir, archiveName);
+
+  try {
+    fs.renameSync(wtPath, archivePath);
+  } catch {
+    // Cross-device move on Windows — copy then delete
+    fs.cpSync(wtPath, archivePath, { recursive: true });
+    fs.rmSync(wtPath, { recursive: true, force: true });
+  }
+
+  // Prune git worktree references for the moved path
+  try {
+    execSync('git worktree prune', { cwd: mainRepoPath, stdio: 'pipe' });
+  } catch { /* best effort */ }
+
+  const logEntry = { event: 'worktree.archived', sdKey, reason: 'code_loss_prevention', archivePath, timestamp: new Date().toISOString() };
+  console.warn(JSON.stringify(logEntry));
+
+  return { archived: true, archivePath };
+}
 
 function isInsideWorktree() {
   try { return gitExec('git rev-parse --show-toplevel').includes('.worktrees'); }
@@ -46,12 +109,22 @@ function cleanupCurrentWorktree() {
 /**
  * Clean up a worktree by its absolute path.
  * Used by --sdKey mode after resolving from DB/scan.
+ * SD-MAN-INFRA-WORKTREE-CODE-LOSS-001: checks for unpushed commits before deletion.
  */
 function cleanupWorktreeByPath(wtPath) {
   if (!fs.existsSync(wtPath)) return { cleaned: false, reason: 'worktree_not_found' };
   const meta = getWorktreeMetadata(wtPath);
   const mainRepoPath = getMainRepoPath(meta, wtPath);
   if (!mainRepoPath) return { cleaned: false, reason: 'cannot_resolve_main_repo' };
+  const sdKey = meta?.workKey || meta?.sdKey || path.basename(wtPath);
+
+  // SD-MAN-INFRA-WORKTREE-CODE-LOSS-001 (FR-2): Block cleanup if unpushed commits
+  const { unpushed, commits } = hasUnpushedCommits(wtPath);
+  if (unpushed) {
+    const archive = archiveWorktree(wtPath, sdKey);
+    return { cleaned: false, reason: 'unpushed_commits', commits, ...archive, mainRepoPath, workKey: sdKey };
+  }
+
   try {
     execSync(`git worktree remove --force "${wtPath}"`, { cwd: mainRepoPath, encoding: 'utf8', stdio: 'pipe' });
   } catch {
@@ -60,7 +133,7 @@ function cleanupWorktreeByPath(wtPath) {
       execSync('git worktree prune', { cwd: mainRepoPath, stdio: 'pipe' });
     }
   }
-  return { cleaned: true, mainRepoPath, workKey: meta?.workKey || meta?.sdKey || null };
+  return { cleaned: true, mainRepoPath, workKey: sdKey };
 }
 
 /**
@@ -109,4 +182,4 @@ if (isMain) {
   }
 }
 
-export { isInsideWorktree, getWorktreeMetadata, getMainRepoPath, cleanupCurrentWorktree, cleanupBySDKey, cleanupWorktreeByPath };
+export { isInsideWorktree, getWorktreeMetadata, getMainRepoPath, cleanupCurrentWorktree, cleanupBySDKey, cleanupWorktreeByPath, hasUnpushedCommits, archiveWorktree };
