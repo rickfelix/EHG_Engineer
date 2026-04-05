@@ -12,6 +12,7 @@
  */
 
 import { auditAllSkills, persistAuditResults, getBaselineScores } from './modules/skill-assessment/skill-auditor.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 function parseArgs(args) {
   return {
@@ -142,12 +143,7 @@ Usage:
   console.log('');
 }
 
-// ESM entry point detection (Windows-compatible)
-const isMain = process.argv[1] && (
-  import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   main().catch(err => {
     console.error('Skill audit error:', err.message);
     process.exit(1);

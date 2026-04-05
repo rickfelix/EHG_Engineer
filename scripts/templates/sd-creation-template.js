@@ -25,6 +25,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import { validateTargetApplication } from '../validators/semantic-target-application-validator.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -359,7 +360,7 @@ async function createStrategicDirective() {
 }
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   createStrategicDirective()
     .then(() => {
       console.log('\n🚀 Next steps:');

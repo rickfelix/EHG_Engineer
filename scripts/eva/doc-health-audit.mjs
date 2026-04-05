@@ -32,6 +32,7 @@ import { GRADE_THRESHOLDS, classifyScore } from '../modules/doc-audit/rubric.js'
 import { printReport, printSignals, printStatus, printTrend, printAutoFixSummary, toJSON } from '../modules/doc-audit/reporter.js';
 import { autoFixAll } from '../modules/doc-audit/auto-fixer.js';
 import { generateSDKey } from '../modules/sd-key-generator.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '../..');
@@ -691,11 +692,7 @@ async function main() {
   }
 }
 
-// ESM entry point (handles Windows path differences)
-const isMainModule = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
-
-if (isMainModule) {
+if (isMainModule(import.meta.url)) {
   main();
 }
 

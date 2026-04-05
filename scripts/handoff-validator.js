@@ -12,6 +12,7 @@ import { checkRCAGate } from './root-cause-agent.js';
 import fsModule from 'fs';
 const fs = fsModule.promises;
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 dotenv.config();
 
 class HandoffValidator {
@@ -582,6 +583,6 @@ async function main() {
 }
 
 // Only run main if this script is executed directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main().catch(console.error);
 }

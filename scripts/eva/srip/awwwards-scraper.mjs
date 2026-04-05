@@ -16,6 +16,7 @@
  */
 
 import dotenv from 'dotenv';
+import { isMainModule } from '../../../lib/utils/is-main-module.js';
 dotenv.config();
 
 // ---------------------------------------------------------------------------
@@ -1397,11 +1398,6 @@ async function main() {
   }
 }
 
-// Only auto-execute when run directly (not when imported as a module in tests)
-const isDirectRun =
-  import.meta.url === `file://${process.argv[1]}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
-
-if (isDirectRun) {
+if (isMainModule(import.meta.url)) {
   main();
 }

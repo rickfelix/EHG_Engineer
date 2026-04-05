@@ -17,6 +17,7 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { processFindings } from '../../lib/eva/consultant/confidence-engine.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -433,8 +434,7 @@ export function registerConsultantAnalysisRound(scheduler) {
 }
 
 // Manual trigger support
-if (process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-    import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`)) {
+if (isMainModule(import.meta.url)) {
   console.log('[consultant-analysis] Manual trigger starting...');
   consultantAnalysisHandler().then(result => {
     console.log('[consultant-analysis] Result:', JSON.stringify(result, null, 2));

@@ -22,6 +22,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { publishVisionEvent, subscribeVisionEvent, VISION_EVENTS, registerVisionProcessGapDetectedHandlers } from '../../lib/eva/event-bus/index.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -248,11 +249,7 @@ export async function syncProcessGaps(supabase, options = {}) {
   return reportProcessGaps(supabase, options);
 }
 
-// CLI entry point
-const isMain = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-               import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const daysArg = args.find(a => a.startsWith('--days=')) || args.find((a, i) => a === '--days' && args[i + 1]);

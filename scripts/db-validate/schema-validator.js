@@ -13,6 +13,7 @@
  */
 
 import { createDatabaseClient } from '../lib/supabase-connection.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /**
  * Schema validation result
@@ -514,7 +515,7 @@ export const ENGINEER_CORE_TABLES = [
 ];
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   const project = args.find(a => a.startsWith('--project='))?.split('=')[1] || 'engineer';
   const verbose = args.includes('--verbose');

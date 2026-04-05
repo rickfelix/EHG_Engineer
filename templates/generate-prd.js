@@ -10,6 +10,7 @@ import { createSupabaseClient } from '../lib/supabase-client.js';
 import LEOProtocolOrchestrator from '../scripts/leo-protocol-orchestrator.js';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -161,7 +162,7 @@ class UniversalPRDGenerator {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   const generator = new UniversalPRDGenerator();
   const sdId = process.argv[2];
   const force = process.argv.includes('--force');

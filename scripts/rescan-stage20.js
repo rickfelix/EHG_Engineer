@@ -13,6 +13,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 /**
  * Rescan SD completion for a venture via RPC.
@@ -36,11 +37,7 @@ export async function rescanStage20(ventureId, options = {}) {
   return data;
 }
 
-// CLI entry point
-const isMain = import.meta.url === `file://${process.argv[1]}`
-  || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   const ventureIdx = process.argv.indexOf('--venture');
   const ventureId = ventureIdx >= 0 ? process.argv[ventureIdx + 1] : null;
 

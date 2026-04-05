@@ -217,11 +217,8 @@ export async function getCascadeSummary(supabase) {
 }
 
 // CLI entry point
-const __isMain = process.argv[1] && (
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` ||
-  import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`
-);
-if (__isMain) {
+import { isMainModule } from '../../../lib/utils/is-main-module.js';
+if (isMainModule(import.meta.url)) {
   const supabase = createSupabaseServiceClient();
 
   const args = process.argv.slice(2);

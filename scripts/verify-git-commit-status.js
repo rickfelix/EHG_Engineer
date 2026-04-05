@@ -25,6 +25,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 
 import { resolveRepoPath } from '../lib/repo-paths.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -491,8 +492,7 @@ async function main() {
 }
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main().catch(error => {
     console.error('\n❌ FATAL ERROR:', error.message);
     console.error(error.stack);

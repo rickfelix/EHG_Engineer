@@ -5,6 +5,7 @@
 
 import assert from 'assert';
 import http from 'http';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 describe('OpenAI Voice Integration Tests', () => {
   
@@ -279,7 +280,7 @@ function it(name, fn) {
 }
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runTests().then(success => {
     process.exit(success ? 0 : 1);
   });

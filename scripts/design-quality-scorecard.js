@@ -19,6 +19,7 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 dotenv.config();
 
 
@@ -347,11 +348,7 @@ async function main() {
   }
 }
 
-// ESM entry point with Windows compatibility
-const isMainModule = import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`
-  || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
-
-if (isMainModule) {
+if (isMainModule(import.meta.url)) {
   main().catch(e => {
     console.error('Fatal:', e.message);
     process.exit(1);

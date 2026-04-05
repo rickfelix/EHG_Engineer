@@ -15,6 +15,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -302,8 +303,7 @@ export function enhanceConstraintError(error) {
 /**
  * CLI Usage: Validate a retrospective object passed as JSON
  */
-if (import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   
   if (args.length === 0 || args.includes('--help')) {

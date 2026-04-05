@@ -21,6 +21,7 @@
 import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
 import { getValidationRequirements } from '../../lib/utils/sd-type-validation.js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -763,9 +764,7 @@ async function main() {
   process.exit(result.passed ? 0 : 1);
 }
 
-// Execute if run directly
-const isMainModule = import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`;
-if (isMainModule) {
+if (isMainModule(import.meta.url)) {
   main().catch(error => {
     console.error('Fatal error:', error);
     process.exit(1);

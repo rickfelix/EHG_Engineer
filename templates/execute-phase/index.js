@@ -158,7 +158,7 @@ class UniversalPhaseExecutor {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   const executor = new UniversalPhaseExecutor();
   const [,, phase, sdId] = process.argv;
   const force = process.argv.includes('--force');
@@ -221,3 +221,4 @@ export {
   PHASE_FLOW,
   PHASE_COMPLETE_MAP
 } from './phase-utils.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';

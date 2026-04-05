@@ -47,12 +47,9 @@ export {
 
 // CLI entry point - delegate to modular index
 import { addPRDToDatabase } from './prd/index.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
-// Only run CLI when executed directly
-const isMainModule = import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-                     process.argv[1]?.endsWith('add-prd-to-database.js');
-
-if (isMainModule) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   if (args.length < 1) {
     console.log('Usage: node scripts/add-prd-to-database.js <SD-ID> [PRD-Title]');

@@ -39,6 +39,7 @@ import {
   generateImprovementGuidance,
   updateSdStatusAfterHandoff
 } from './handoff-execution.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 // Cross-platform path resolution
 const __filename = fileURLToPath(import.meta.url);
@@ -520,7 +521,7 @@ async function main() {
 }
 
 // Execute if run directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main().catch(error => {
     console.error('Fatal error:', error);
     process.exit(1);

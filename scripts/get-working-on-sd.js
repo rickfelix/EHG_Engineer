@@ -13,6 +13,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 dotenv.config();
 
 const supabase = createClient(
@@ -195,12 +196,7 @@ async function getWorkingOnSD() {
 // Export for use in other scripts
 export default getWorkingOnSD;
 
-// Run if called directly (cross-platform: Windows uses file:///C:/... vs C:\...)
-const isMain = import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   getWorkingOnSD().then(sd => {
     if (sd) {
       // Return just the ID for scripting

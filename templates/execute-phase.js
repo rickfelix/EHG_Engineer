@@ -54,8 +54,9 @@ export {
 
 // CLI execution - delegate to the domain module
 import chalk from 'chalk';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   const { default: UniversalPhaseExecutor } = await import('./execute-phase/index.js');
 
   const executor = new UniversalPhaseExecutor();

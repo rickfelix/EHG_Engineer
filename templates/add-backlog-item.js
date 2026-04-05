@@ -10,6 +10,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -248,6 +249,6 @@ async function main() {
 export { UniversalBacklogItemCreator };
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

@@ -12,6 +12,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -245,7 +246,7 @@ Created By:  ${config.created_by}
 }
 
 // CLI interface
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const switcher = new ContextSwitcher();
   const command = process.argv[2];
   

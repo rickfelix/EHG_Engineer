@@ -25,6 +25,7 @@ import {
   generateRecommendations,
   storeResults
 } from './qa-director/index.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -158,8 +159,7 @@ export async function executeQADirector(sd_id, options = {}) {
 // ═══════════════════════════════════════════════════════════════════
 // CLI EXECUTION
 // ═══════════════════════════════════════════════════════════════════
-if (import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const sd_id = process.argv[2];
 
   if (!sd_id) {

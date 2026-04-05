@@ -48,6 +48,7 @@ import { evaluateVisionReadiness, formatRubricResult } from './modules/vision-re
 import { scoreSD } from './eva/vision-scorer.js';
 import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
 import { validateSDFields } from './modules/validate-sd-fields.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const supabase = createSupabaseServiceClient();
 
@@ -1807,9 +1808,6 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
   }
 }
 
-// Only run CLI when invoked directly (not when imported)
-const _isMainModule = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-                      import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
-if (_isMainModule) {
+if (isMainModule(import.meta.url)) {
   main();
 }

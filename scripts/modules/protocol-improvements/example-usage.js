@@ -14,6 +14,7 @@ import {
   getTopPriorityImprovements,
   runFullImprovementCycle as _runFullImprovementCycle
 } from './index.js';
+import { isMainModule } from '../../../lib/utils/is-main-module.js';
 
 async function main() {
   console.log('=== Protocol Improvements Module - Example Usage ===\n');
@@ -98,7 +99,7 @@ async function main() {
 }
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main()
     .then(() => process.exit(0))
     .catch(err => {

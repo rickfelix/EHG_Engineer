@@ -24,6 +24,7 @@ import {
 } from './analyzers.js';
 import { generateRecommendations } from './recommendations.js';
 import { saveReport, _generateHTMLReport, _generateMarkdownSummary } from './report-generators.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /**
  * PlaywrightDesignAnalyzer class
@@ -121,7 +122,7 @@ async function main() {
 }
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }
 

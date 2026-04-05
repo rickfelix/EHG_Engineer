@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { estimateLOC } from '../../lib/ai-loc-estimator.js';
 import { routeWorkItem } from '../../lib/utils/work-item-router.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -351,12 +352,7 @@ async function main() {
   }
 }
 
-// ESM entry point detection (Windows-compatible)
-const isMain = process.argv[1] && (
-  import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     console.error('Triage gate error:', err.message);
     process.exit(1);

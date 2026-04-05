@@ -9,6 +9,7 @@ import { program } from 'commander';
 import dotenv from 'dotenv';
 import chalk from 'chalk';
 import { validatePRDContent } from './prd-format-validator.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -309,6 +310,6 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

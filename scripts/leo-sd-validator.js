@@ -8,6 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 class SDValidator {
   constructor() {
@@ -385,7 +386,7 @@ class SDValidator {
 }
 
 // CLI interface
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   
   if (args.length < 1) {

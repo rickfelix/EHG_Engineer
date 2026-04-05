@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 /**
  * LEO Protocol Master Orchestrator
@@ -83,7 +84,7 @@ export {
 } from './leo-orchestrator/helpers.js';
 
 // CLI execution - delegate to modular index
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   import('./leo-orchestrator/index.js').then(_module => {
     // CLI handled by index.js
   }).catch(_err => {

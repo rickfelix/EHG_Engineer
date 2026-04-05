@@ -46,8 +46,9 @@ export {
 
 // CLI execution - delegate to modular index
 import { generateAll } from './workflow-docs-generator/index.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   generateAll().catch(err => {
     console.error('Generation failed:', err.message);
     process.exit(1);

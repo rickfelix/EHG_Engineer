@@ -19,6 +19,7 @@
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const VISION_RELEVANT_OUTCOMES = ['sd_created', 'significant_departure'];
 const MAX_LLM_CONTENT_CHARS = 15000;
@@ -249,10 +250,7 @@ async function main() {
 }
 
 // Windows-compatible ESM entry point
-if (process.argv[1] && (
-  import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`
-)) {
+if (isMainModule(import.meta.url)) {
   main().catch(err => { console.error('Fatal:', err.message); process.exit(1); });
 }
 

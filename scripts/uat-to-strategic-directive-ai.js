@@ -16,6 +16,7 @@ import dotenv from 'dotenv';
 import { getLLMClient } from '../lib/llm/client-factory.js';
 // SD-LEO-SDKEY-001: Centralized SD key generation
 import { generateSDKey } from './modules/sd-key-generator.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -603,8 +604,7 @@ async function main() {
 }
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }
 
