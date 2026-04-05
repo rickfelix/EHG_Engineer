@@ -136,7 +136,8 @@ export function checkRelevanceSignals(score) {
   let falsePositiveSignals = 0;
   let totalDims = 0;
 
-  for (const [, dim] of Object.entries(dims)) {
+  for (const [code, dim] of Object.entries(dims)) {
+    if (!/^[VA]\d{2}$/.test(code)) continue;
     if (!dim?.reasoning) continue;
     totalDims++;
     const reasoning = String(dim.reasoning).toUpperCase();
@@ -245,7 +246,7 @@ export async function generateCorrectiveSD(scoreId) {
   }
 
   // 1c. Overall-only detection — skip scores with < 3 dimensions (SD-MAN-INFRA-ENFORCE-PER-DIMENSION-003)
-  const dimKeys = Object.keys(score.dimension_scores || {});
+  const dimKeys = Object.keys(score.dimension_scores || {}).filter(k => /^[VA]\d{2}$/.test(k));
   if (dimKeys.length < 3) {
     console.log(`[corrective-sd-generator] Skipping: score has only ${dimKeys.length} dimension(s) — needs re-scoring with full 5-dimension breakdown`);
     console.log(`[corrective-sd-generator] RE_SCORE_NEEDED=true score_id=${scoreId} sd_id=${score.sd_id}`);
@@ -467,6 +468,7 @@ export function _extractWeakDimensions(dimensionScores, maxDims = 3) {
   if (entries.length === 0) return [];
 
   return entries
+    .filter(([dimId]) => /^[VA]\d{2}$/.test(dimId))
     .map(([dimId, dimData]) => {
       const score = typeof dimData === 'object' ? (dimData?.score ?? 100) : Number(dimData);
       const dimensionName = (typeof dimData === 'object' ? dimData?.name : null) || dimId;
