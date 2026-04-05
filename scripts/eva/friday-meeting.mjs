@@ -27,6 +27,98 @@ const supabase = createSupabaseServiceClient();
 
 const logger = console;
 
+// ─── OKR Helpers ────────────────────────────────────────────
+
+function computeKrProgress(kr) {
+  const baseline = kr.baseline_value ?? 0;
+  const current = kr.current_value ?? 0;
+  const target = kr.target_value ?? 100;
+  const range = target - baseline;
+  if (range === 0) return current >= target ? 100 : 0;
+  const raw = ((current - baseline) / range) * 100;
+  const progress = kr.direction === 'decrease' ? 100 - raw : raw;
+  return Math.round(Math.max(0, Math.min(100, progress)));
+}
+
+function okrProgressBar(pct, width = 20) {
+  const filled = Math.round((pct / 100) * width);
+  return '[' + '█'.repeat(filled) + '░'.repeat(width - filled) + ']';
+}
+
+function computeOkrDeltas(currentKrs, snapshots) {
+  if (!snapshots || snapshots.length < 2) return {};
+  const byKr = {};
+  for (const s of snapshots) {
+    if (!byKr[s.key_result_id]) byKr[s.key_result_id] = [];
+    byKr[s.key_result_id].push(s);
+  }
+  const deltas = {};
+  for (const kr of currentKrs) {
+    const history = (byKr[kr.id] || []).sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date));
+    if (history.length >= 2) {
+      deltas[kr.id] = (history[0].current_value ?? 0) - (history[1].current_value ?? 0);
+    }
+  }
+  return deltas;
+}
+
+function detectStaleKrs(currentKrs, snapshots, activeSdKrIds = new Set()) {
+  if (!snapshots || snapshots.length < 2) return new Set();
+  const byKr = {};
+  for (const s of snapshots) {
+    if (!byKr[s.key_result_id]) byKr[s.key_result_id] = [];
+    byKr[s.key_result_id].push(s);
+  }
+  const stale = new Set();
+  for (const kr of currentKrs) {
+    if (activeSdKrIds.has(kr.id)) continue;
+    const history = (byKr[kr.id] || []).sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date));
+    if (history.length >= 2 && history[0].current_value === history[1].current_value) {
+      stale.add(kr.id);
+    }
+  }
+  return stale;
+}
+
+function forecastKrCompletion(kr, snapshots) {
+  const history = (snapshots || [])
+    .filter(s => s.key_result_id === kr.id)
+    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+  if (history.length < 3) return null;
+  const target = kr.target_value ?? 100;
+  const current = kr.current_value ?? 0;
+  const remaining = target - current;
+  if (remaining <= 0) return 'Achieved';
+  const totalDelta = (history[history.length - 1].current_value ?? 0) - (history[0].current_value ?? 0);
+  const weeks = history.length - 1;
+  const weeklyRate = weeks > 0 ? totalDelta / weeks : 0;
+  if (weeklyRate <= 0) return 'No progress trend';
+  const weeksNeeded = Math.ceil(remaining / weeklyRate);
+  const estDate = new Date();
+  estDate.setDate(estDate.getDate() + weeksNeeded * 7);
+  return `~${weeksNeeded}w (est. ${estDate.toISOString().slice(0, 10)})`;
+}
+
+async function captureOkrSnapshot() {
+  const { data: krs } = await supabase
+    .from('key_results')
+    .select('id, current_value, target_value, confidence, status')
+    .eq('is_active', true);
+  if (!krs || krs.length === 0) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = krs.map(kr => ({
+    key_result_id: kr.id,
+    snapshot_date: today,
+    current_value: kr.current_value,
+    target_value: kr.target_value,
+    confidence: kr.confidence,
+    status: kr.status,
+  }));
+  // Idempotent: ON CONFLICT DO NOTHING is handled by the UNIQUE constraint;
+  // Supabase upsert with ignoreDuplicates achieves the same effect
+  await supabase.from('okr_snapshots').upsert(rows, { onConflict: 'key_result_id,snapshot_date', ignoreDuplicates: true });
+}
+
 // ─── Section 1: Performance Review ───────────────────────────
 
 async function gatherPerformanceReview() {
@@ -38,9 +130,32 @@ async function gatherPerformanceReview() {
     .limit(1)
     .single();
 
-  // OKR tables (okr_objectives, okr_key_results) do not exist yet
-  const objectives = [];
+  // Query real OKR data from objectives and key_results tables
+  const { data: objectives } = await supabase
+    .from('objectives')
+    .select('id, code, title, period')
+    .eq('is_active', true)
+    .order('sequence');
+
   const keyResults = [];
+  for (const obj of (objectives || [])) {
+    const { data: krs } = await supabase
+      .from('key_results')
+      .select('id, objective_id, code, title, baseline_value, current_value, target_value, unit, direction, status, confidence')
+      .eq('objective_id', obj.id)
+      .eq('is_active', true)
+      .order('sequence');
+    if (krs) keyResults.push(...krs);
+  }
+
+  // Query snapshot history for deltas, stale detection, and forecasting
+  let snapshots = [];
+  const { data: snapData, error: snapErr } = await supabase
+    .from('okr_snapshots')
+    .select('key_result_id, snapshot_date, current_value, target_value, confidence, status')
+    .order('snapshot_date', { ascending: false })
+    .limit(500);
+  if (!snapErr && snapData) snapshots = snapData;
 
   // Get baseline info
   const { data: baseline } = await supabase
@@ -62,7 +177,7 @@ async function gatherPerformanceReview() {
     completedItems = (items || []).filter(i => i.is_ready).length;
   }
 
-  return { review, objectives, keyResults, baseline, baselineItems, completedItems };
+  return { review, objectives: objectives || [], keyResults, snapshots, baseline, baselineItems, completedItems };
 }
 
 function renderPerformanceReview(data) {
@@ -87,15 +202,41 @@ function renderPerformanceReview(data) {
   lines.push('  Baseline: ' + (data.baseline ? `v${data.baseline.version} (${data.completedItems}/${data.baselineItems} items)` : 'No active baseline'));
 
   if (data.objectives?.length) {
+    const deltas = computeOkrDeltas(data.keyResults, data.snapshots);
+    const staleKrs = detectStaleKrs(data.keyResults, data.snapshots);
+
     lines.push('');
     lines.push('  OKR Progress:');
     for (const obj of data.objectives) {
-      const krs = (data.keyResults || []).filter(kr => kr.objective_id === obj.id);
+      const krs = data.keyResults.filter(kr => kr.objective_id === obj.id);
       const avgProgress = krs.length > 0
-        ? Math.round(krs.reduce((sum, kr) => sum + (kr.progress || 0), 0) / krs.length)
+        ? Math.round(krs.reduce((sum, kr) => sum + computeKrProgress(kr), 0) / krs.length)
         : 0;
-      lines.push(`    ${obj.title}: ${avgProgress}%`);
+      lines.push(`\n    ${obj.code}: ${obj.title} (${obj.period || 'ongoing'})  ${okrProgressBar(avgProgress)} ${avgProgress}%`);
+
+      for (const kr of krs) {
+        const progress = computeKrProgress(kr);
+        const bar = okrProgressBar(progress);
+        const statusIcon = kr.status === 'at_risk' ? '⚠️' : kr.status === 'achieved' ? '✅' : '●';
+        const delta = deltas[kr.id] != null ? ` (${deltas[kr.id] >= 0 ? '+' : ''}${deltas[kr.id]})` : '';
+        const staleFlag = staleKrs.has(kr.id) ? ' 🔴 STALE' : '';
+        lines.push(`      ${statusIcon} ${kr.code}: ${kr.title}`);
+        lines.push(`        ${bar} ${progress}%  [${kr.current_value ?? 0}/${kr.target_value ?? '?'} ${kr.unit || ''}]${delta}${staleFlag}`);
+
+        const forecast = forecastKrCompletion(kr, data.snapshots);
+        if (forecast) {
+          lines.push(`        Forecast: ${forecast}`);
+        }
+      }
     }
+
+    if (staleKrs.size > 0) {
+      lines.push('');
+      lines.push(`  ⚠️  ${staleKrs.size} stale KR(s) detected — consider creating corrective SDs via OKR-to-SD pipeline`);
+    }
+  } else {
+    lines.push('');
+    lines.push('  No active OKR objectives found.');
   }
 
   return lines.join('\n');
@@ -632,6 +773,9 @@ export async function fridayMeetingHandler(options = {}) {
       freeText: true,
     }));
   }
+
+  // Capture OKR snapshot for next-week delta comparison (idempotent)
+  await captureOkrSnapshot();
 
   // Persist meeting data with digest (non-blocking)
   await persistMeetingLog(results, coordinator, { digest });
