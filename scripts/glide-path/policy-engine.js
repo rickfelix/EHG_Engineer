@@ -110,7 +110,7 @@ function determinePhase(compositeScore, phaseDefs) {
   return sorted[sorted.length - 1] || null;
 }
 
-function assignGrowthStrategy(phase, phaseDefs) {
+function assignGrowthStrategy(phase, _phaseDefs) {
   if (!phase || !phase.allowed_growth_strategies || phase.allowed_growth_strategies.length === 0) {
     return 'capability_builder';
   }
@@ -119,7 +119,7 @@ function assignGrowthStrategy(phase, phaseDefs) {
   return phase.allowed_growth_strategies[0];
 }
 
-function computeSynergyScore(compositeScore, phase, policy) {
+function computeSynergyScore(compositeScore, phase, _policy) {
   if (!phase) return 0.5;
   const midpoint = ((phase.min_score || 0) + (phase.max_score || 100)) / 2;
   const range = ((phase.max_score || 100) - (phase.min_score || 0)) / 2;
@@ -128,7 +128,7 @@ function computeSynergyScore(compositeScore, phase, policy) {
   return Math.max(0, 1 - (distance / range));
 }
 
-function determineTimeHorizon(phase, phaseDefs) {
+function determineTimeHorizon(phase, _phaseDefs) {
   if (!phase) return 'park_later';
   const classification = phase.time_horizon_classification;
   if (classification === 'short') return 'build_now';
