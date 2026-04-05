@@ -20,6 +20,7 @@ import chalk from 'chalk';
 import { TEST_SUITES } from './test-suite-config.js';
 import { generateTestFile } from './test-generators.js';
 import {
+import { isMainModule } from '../../lib/utils/is-main-module.js';
   generateAdminTests,
   generateCrossFunctionalTests,
   generateE2ETests
@@ -164,7 +165,7 @@ async function generateTestRunner() {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   generateAllTests();
 }
 

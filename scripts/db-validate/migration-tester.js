@@ -17,6 +17,7 @@
 import fs from 'fs';
 import path from 'path';
 import { createDatabaseClient, splitPostgreSQLStatements } from '../lib/supabase-connection.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /**
  * Migration test result
@@ -416,7 +417,7 @@ export function getLatestMigrations(count = 5, migrationsDir = 'database/migrati
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   const project = args.find(a => a.startsWith('--project='))?.split('=')[1] || 'engineer';
   const migrationArg = args.find(a => a.startsWith('--migration='))?.split('=')[1];

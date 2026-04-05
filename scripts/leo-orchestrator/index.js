@@ -31,6 +31,7 @@ import {
   enforceRetrospective
 } from './compliance.js';
 import {
+import { isMainModule } from '../../lib/utils/is-main-module.js';
   initializeExecution,
   safeExec,
   trackOperation,
@@ -269,7 +270,7 @@ class LEOProtocolOrchestrator {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
 
   // Handle --help flag

@@ -18,6 +18,7 @@ import { dirname } from 'path';
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import { execSync } from 'child_process';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -511,7 +512,7 @@ export default HookSubAgentActivator;
 export { HookSubAgentActivator };
 
 // CLI testing
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const activator = new HookSubAgentActivator();
   const failureType = process.argv[2];
 

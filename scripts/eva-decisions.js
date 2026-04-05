@@ -28,6 +28,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 // ── Argument Parsing ──────────────────────────────────────────
 
@@ -392,11 +393,7 @@ async function main() {
   }
 }
 
-// Cross-platform entry point (Windows + Unix)
-const isMain = import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   main().catch(err => {
     console.error('Fatal error:', err.message);
     process.exit(1);

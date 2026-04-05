@@ -13,6 +13,7 @@ const __dirname = dirname(__filename);
 
 import fs from 'fs';
 import path from 'path';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 class LEOProtocolVersionDetector {
   constructor() {
@@ -133,8 +134,7 @@ class LEOProtocolVersionDetector {
 }
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const detector = new LEOProtocolVersionDetector();
   
   detector.scanProtocolFiles()

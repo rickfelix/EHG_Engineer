@@ -16,6 +16,7 @@ import dotenv from 'dotenv';
 
 // Import from decomposed modules
 import {
+import { isMainModule } from '../lib/utils/is-main-module.js';
   DEFAULT_OPTIONS,
   executePreflightPhase,
   executeTestPlanningPhase,
@@ -158,8 +159,7 @@ export async function executeQADirector(sd_id, options = {}) {
 // ═══════════════════════════════════════════════════════════════════
 // CLI EXECUTION
 // ═══════════════════════════════════════════════════════════════════
-if (import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const sd_id = process.argv[2];
 
   if (!sd_id) {

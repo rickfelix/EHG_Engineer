@@ -9,6 +9,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { isMainModule } from './lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -72,11 +73,18 @@ dotenv.config();→ import');
         return `export const ${name} = `;
       });
 
-      // Fix if (import.meta.url === `file://${process.argv[1]}`)
+      // Fix if (require.main === module) → isMainModule(import.meta.url)
       converted = converted.replace(/if\s*\(\s*require\.main\s*===\s*module\s*\)/g, () => {
         changes.push('require.main === module → ES module check');
-        return 'if (import.meta.url === `file://${process.argv[1]}`)';
+        return 'if (isMainModule(import.meta.url))';
       });
+
+      // Add isMainModule import if the pattern was replaced
+      if (converted.includes('isMainModule(import.meta.url)') && !converted.includes("from './lib/utils/is-main-module.js'") && !converted.includes("from '../lib/utils/is-main-module.js'")) {
+        const isMainImport = `import { isMainModule } from './lib/utils/is-main-module.js';\n`;
+        converted = isMainImport + converted;
+        changes.push('Added isMainModule import');
+      }
 
       // Add __dirname if needed
       if (converted.includes('__dirname') && !converted.includes('fileURLToPath')) {

@@ -34,6 +34,7 @@ import {
 import { autoDetectSdType, getTypeRecommendation as _getTypeRecommendation, getWorstCaseHandoffs as _getWorstCaseHandoffs } from './type-detection.js';
 import { checkEnvironmentReadiness, validateHandoffDocument } from './environment.js';
 import {
+import { isMainModule } from '../../lib/utils/is-main-module.js';
   createHandoffExecution,
   rejectHandoff,
   generateImprovementGuidance,
@@ -520,7 +521,7 @@ async function main() {
 }
 
 // Execute if run directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main().catch(error => {
     console.error('Fatal error:', error);
     process.exit(1);

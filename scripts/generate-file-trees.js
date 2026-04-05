@@ -24,6 +24,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 import { resolveRepoPath, ENGINEER_ROOT } from '../lib/repo-paths.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -320,7 +321,7 @@ class FileTreeGenerator {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const generator = new FileTreeGenerator();
   const force = process.argv.includes('--force');
 

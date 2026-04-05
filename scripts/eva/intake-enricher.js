@@ -15,6 +15,7 @@
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { extractYouTubeVideoId, extractYouTubeUrl, extractYouTubePlaylistId } from '../../lib/integrations/url-extractor.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 // Lazy imports for YouTube metadata + video analysis
 let _fetchVideoMetadata = null;
@@ -360,8 +361,7 @@ export async function enrichItems(options = {}) {
 }
 
 // CLI entry point
-if (process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-    import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`)) {
+if (isMainModule(import.meta.url)) {
   const verbose = process.argv.includes('--verbose') || process.argv.includes('-v');
   const dryRun = process.argv.includes('--dry-run');
   const limitIdx = process.argv.indexOf('--limit');

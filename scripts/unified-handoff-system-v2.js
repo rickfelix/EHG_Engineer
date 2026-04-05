@@ -29,6 +29,7 @@
 
 import { createHandoffSystem, HandoffOrchestrator } from './modules/handoff/index.js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 dotenv.config();
 
 /**
@@ -194,11 +195,7 @@ async function main() {
   }
 }
 
-// Execute if run directly (Windows-compatible)
-const _isMain = process.argv[1] && (
-  import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
-if (_isMain) {
+if (isMainModule(import.meta.url)) {
   main().catch(error => {
     console.error('Fatal error:', error);
     process.exit(1);

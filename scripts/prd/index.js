@@ -52,6 +52,7 @@ import {
   formatValidationResults
 } from '../../lib/prd-grounding-validator.js';
 import {
+import { isMainModule } from '../../lib/utils/is-main-module.js';
   extractPersonasFromSD,
   isPersonaIngestionEnabled,
   isPersonaPromptInjectionEnabled,
@@ -677,7 +678,7 @@ async function autoInvokePlanSubAgents(supabase, sdId, prdId, stakeholderPersona
 }
 
 // CLI entry point
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` || process.argv[1]?.endsWith('index.js')) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   if (args.length < 1) {
     console.log('Usage: node scripts/prd/index.js <SD-ID> [PRD-Title]');

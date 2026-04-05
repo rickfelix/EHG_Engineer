@@ -28,6 +28,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { inheritStrategicFields, inferSDType } from './child-sd-template.js';
 import { enrichChildrenFromPlan } from './plan-to-children-enricher.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -247,8 +248,7 @@ async function createOrchestrator() {
 }
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-    process.argv[1].includes('orchestrator-creation-template')) {
+if (isMainModule(import.meta.url)) {
   createOrchestrator().catch(console.error);
 }
 

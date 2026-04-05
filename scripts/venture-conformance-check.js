@@ -24,6 +24,7 @@
 import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { execFileSync } from 'child_process';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const REQUIRED_DIRS = [
   'src/components',
@@ -235,6 +236,6 @@ function main() {
 export { run as runConformanceCheck };
 
 // CLI entry point
-if (process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`)) {
+if (isMainModule(import.meta.url)) {
   main();
 }

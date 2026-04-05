@@ -9,6 +9,7 @@
 import fsModule from 'fs';
 const fs = fsModule.promises;
 import path from 'path';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 class SubAgentActivationSystem {
   constructor() {
@@ -428,7 +429,7 @@ class SubAgentActivationSystem {
 }
 
 // Run CLI if called directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   SubAgentActivationSystem.runCLI();
 }
 

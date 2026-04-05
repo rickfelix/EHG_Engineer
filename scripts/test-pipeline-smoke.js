@@ -20,6 +20,7 @@ import { createClient } from '@supabase/supabase-js';
 import { processFeedbackEndToEnd, getPipelineTrace, getPipelineHealth } from '../lib/data-plane/pipeline.js';
 import { _FeedbackToProposalWorker } from '../lib/data-plane/workers/feedback-to-proposal.js';
 import { EVENT_TYPES } from '../lib/data-plane/events.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 // Test configuration
 const _TEST_TIMEOUT_MS = 60000; // 60 seconds
@@ -290,11 +291,7 @@ async function runSmokeTest() {
   }
 }
 
-// Run if executed directly
-const isMain = import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  process.argv[1]?.endsWith('test-pipeline-smoke.js');
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   runSmokeTest()
     .then(results => {
       process.exit(results.passed ? 0 : 1);

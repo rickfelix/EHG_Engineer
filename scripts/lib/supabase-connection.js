@@ -16,6 +16,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -369,7 +370,7 @@ export function splitPostgreSQLStatements(sql) {
 }
 
 // If run directly, test the connection
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const projectKey = process.argv[2] || 'ehg';
   testConnection(projectKey)
     .then(success => process.exit(success ? 0 : 1))

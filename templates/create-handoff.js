@@ -12,6 +12,7 @@ import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -269,7 +270,7 @@ class UniversalHandoffCreator {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   const creator = new UniversalHandoffCreator();
   const [,, fromAgent, toAgent, sdId] = process.argv;
 

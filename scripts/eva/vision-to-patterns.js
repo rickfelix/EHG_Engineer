@@ -25,6 +25,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { publishVisionEvent, VISION_EVENTS } from '../../lib/eva/event-bus/vision-events.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -332,10 +333,7 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
 // CLI entry point
 // ============================================================================
 
-const isMainModule = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
-
-if (isMainModule) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const daysIdx = args.indexOf('--days');

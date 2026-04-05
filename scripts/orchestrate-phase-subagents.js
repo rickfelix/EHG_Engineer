@@ -26,6 +26,7 @@
 import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import {
+import { isMainModule } from '../lib/utils/is-main-module.js';
   orchestrate,
   getPhaseSubAgents,
   getPhaseSubAgentsForSd,
@@ -86,7 +87,7 @@ async function main() {
 }
 
 // Execute if run directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }
 

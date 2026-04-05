@@ -25,6 +25,7 @@ import { detectIntensityForSD } from './intensity-detector.js';
 // Content-based classification signals
 import { ContentBasedRubric } from './sd-type-content-rubric.js';
 import { SiblingContextAnalyzer } from './sd-type-sibling-context.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -514,9 +515,7 @@ BUILD REQUIREMENTS:
   console.log(JSON.stringify(result, null, 2));
 }
 
-// Execute if run directly
-const isMainModule = import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`;
-if (isMainModule) {
+if (isMainModule(import.meta.url)) {
   main().catch(error => {
     console.error('Fatal error:', error);
     process.exit(1);

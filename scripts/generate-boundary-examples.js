@@ -3,6 +3,7 @@ import { createSupabaseClient } from '../lib/supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -93,7 +94,7 @@ ${tables.slice(0, 5).map(t => `- \`${t.table_name}\``).join('\n')}
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const generator = new BoundaryExamplesGenerator();
   generator.generate()
     .then(content => {

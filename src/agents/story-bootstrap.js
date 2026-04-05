@@ -8,6 +8,7 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import StoryAgent from '../../agents/story/index.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -128,7 +129,7 @@ class StoryAgentBootstrap {
 export default StoryAgentBootstrap;
 
 // Allow standalone execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   const bootstrap = new StoryAgentBootstrap();
 
   bootstrap.initialize()

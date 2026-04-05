@@ -6,6 +6,7 @@
  */
 
 import {
+import { isMainModule } from '../../../lib/utils/is-main-module.js';
   extractAndQueueAll,
   applyAllAutoApplicable,
   trackAllUnscored,
@@ -98,7 +99,7 @@ async function main() {
 }
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main()
     .then(() => process.exit(0))
     .catch(err => {

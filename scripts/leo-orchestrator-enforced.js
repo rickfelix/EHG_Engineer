@@ -17,6 +17,7 @@ import UniversalHandoffCreator from '../templates/create-handoff.js';
 // import chalk from 'chalk';
 import fs from 'fs/promises';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 dotenv.config();
 
 class EnforcedOrchestrator extends LEOProtocolOrchestrator {
@@ -224,7 +225,7 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
 export default EnforcedOrchestrator;
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const orchestrator = new EnforcedOrchestrator();
   const sdId = process.argv[2];
   

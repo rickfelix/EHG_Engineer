@@ -26,6 +26,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -332,11 +333,7 @@ function printReport(result) {
   console.log('');
 }
 
-// CLI entry point
-const isMain = import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-               import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   checkBrainstormPipelineHealth({ fix: FIX, dryRun: DRY_RUN, staleDays: STALE_DAYS })
     .then(result => {
       printReport(result);

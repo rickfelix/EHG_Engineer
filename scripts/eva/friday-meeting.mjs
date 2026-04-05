@@ -19,6 +19,7 @@ import { getLLMClient } from '../../lib/llm/client-factory.js';
 import { gatherRdProposals as _gatherRdProposals, renderRdProposals as _renderRdProposals, buildCombinedDecisionPayload as _buildCombinedDecisionPayload, processRdProposalDecision as _processRdProposalDecision } from '../../lib/skunkworks/friday-rd-section.js';
 import { buildInsightsReport, formatInsightsForDisplay } from '../modules/learning/insights.js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -701,11 +702,7 @@ export function registerFridayMeetingRound(scheduler) {
   });
 }
 
-// CLI entry point
-const isDirectRun = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`
-  || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
-
-if (isDirectRun) {
+if (isMainModule(import.meta.url)) {
   fridayMeetingHandler({ interactive: true })
     .then(results => {
       logger.log('Results:', JSON.stringify(results, null, 2));

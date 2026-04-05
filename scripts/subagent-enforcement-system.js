@@ -10,6 +10,7 @@ import fsModule from 'fs';
 const fs = fsModule.promises;
 import path from 'path';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 dotenv.config();
 
 class SubAgentEnforcementSystem {
@@ -782,6 +783,6 @@ async function main() {
 export default SubAgentEnforcementSystem;
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   main().catch(console.error);
 }

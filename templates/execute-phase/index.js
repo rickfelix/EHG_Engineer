@@ -35,6 +35,7 @@ import {
 } from './sub-agents.js';
 
 import {
+import { isMainModule } from '../../lib/utils/is-main-module.js';
   loadPhaseRequirements,
   getNextPhase,
   markPhaseComplete,
@@ -158,7 +159,7 @@ class UniversalPhaseExecutor {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   const executor = new UniversalPhaseExecutor();
   const [,, phase, sdId] = process.argv;
   const force = process.argv.includes('--force');

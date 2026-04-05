@@ -552,8 +552,7 @@ ${rawResponse.substring(0, 1000)}`;
 // CLI entry point
 // ============================================================================
 
-const isMainModule = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 /**
  * Inline mode: output context for Claude Code to process in-conversation.
@@ -702,7 +701,7 @@ async function runPersistMode(sdKey, visionKey, archKey, scoreJson) {
   }
 }
 
-if (isMainModule) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
 
   const getArg = (flag) => {

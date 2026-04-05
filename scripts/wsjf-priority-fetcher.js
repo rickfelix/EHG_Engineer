@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createSupabaseClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -61,7 +62,7 @@ class WSJFPriorityFetcher {
 }
 
 // Main execution
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const fetcher = new WSJFPriorityFetcher();
   fetcher.getTop3Priorities()
     .then(results => {

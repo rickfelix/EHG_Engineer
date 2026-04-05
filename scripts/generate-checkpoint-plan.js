@@ -29,6 +29,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -282,10 +283,7 @@ async function main() {
   }
 }
 
-// Cross-platform entry point (Windows file:///C:/ vs process.argv C:\)
-const isMain = import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   main();
 }
 

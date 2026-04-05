@@ -23,6 +23,7 @@ import { resolve, join } from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -258,10 +259,7 @@ export async function main() {
 }
 
 // Windows-compatible ESM entry point
-if (process.argv[1] && (
-  import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`
-)) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     console.error('Fatal error:', err.message);
     process.exit(1);

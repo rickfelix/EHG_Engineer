@@ -328,12 +328,9 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 // ── Entry Point (Windows-compatible) ───────────────────────────────
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
-const isMainModule = import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` ||
-                     import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`;
-
-if (isMainModule) {
+if (isMainModule(import.meta.url)) {
   main().catch(err => {
     log.error('Fatal:', err.message);
     process.exit(1);

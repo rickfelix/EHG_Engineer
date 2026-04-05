@@ -23,6 +23,7 @@ import CircuitBreaker from './context7-circuit-breaker.js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
 import { getEmbeddingClient } from '../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -505,8 +506,7 @@ class KnowledgeRetrieval {
 export default KnowledgeRetrieval;
 
 // CLI interface
-if (import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
+if (isMainModule(import.meta.url)) {
   const sdId = process.argv[2];
   const techStack = process.argv[3];
 
