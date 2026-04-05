@@ -122,6 +122,9 @@ async function main() {
   const handlerTypes = [
     'stage.completed', 'decision.submitted', 'gate.evaluated', 'sd.completed',
     'venture.created', 'venture.killed', 'budget.exceeded', 'chairman.override', 'stage.failed',
+    'vision.scored', 'vision.gap_detected', 'vision.corrective_sd_created',
+    'vision.process_gap_detected', 'leo.pattern_resolved', 'vision.rescore_completed',
+    'feedback.quality_updated', 'vision.gap_accepted',
   ];
 
   const report = {
