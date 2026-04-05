@@ -903,11 +903,28 @@ async function main() {
     });
   }
 
+  // 7.5. SD-LEO-INFRA-OKR-AUTO-COMPLEXITY-001: Brainstorm gate for high-complexity auto-SDs
+  const needsBrainstorm = sd.metadata?.needs_brainstorm === true;
+  if (needsBrainstorm && sd.status === 'draft' && sd.current_phase === 'LEAD') {
+    console.log(`\n${colors.bgYellow}${colors.bold} BRAINSTORM REQUIRED ${colors.reset}`);
+    console.log(`${colors.yellow}   This SD was auto-generated from a stale OKR and classified as high-complexity.${colors.reset}`);
+    console.log(`${colors.yellow}   Run /brainstorm before proceeding to LEAD approval.${colors.reset}`);
+    console.log(`${colors.dim}   Complexity: score ${sd.metadata.complexity_score || '?'}, reasons: ${(sd.metadata.complexity_reasons || []).join(', ') || 'n/a'}${colors.reset}`);
+    console.log('\n>>> NEEDS_BRAINSTORM=true');
+  }
+
   // 8. Show next action
   const nextHandoff = await getNextHandoff(sd);
 
-  console.log(`\n${colors.bold}Next Action:${colors.reset}`);
-  console.log(`   ${colors.cyan}node scripts/handoff.js execute ${nextHandoff} ${effectiveId}${colors.reset}`);
+  if (needsBrainstorm && sd.status === 'draft') {
+    console.log(`\n${colors.bold}Next Action:${colors.reset}`);
+    console.log(`   ${colors.cyan}/brainstorm ${sd.title}${colors.reset}`);
+    console.log(`${colors.dim}   After brainstorm completes with vision+arch, then:${colors.reset}`);
+    console.log(`   ${colors.dim}node scripts/handoff.js execute ${nextHandoff} ${effectiveId}${colors.reset}`);
+  } else {
+    console.log(`\n${colors.bold}Next Action:${colors.reset}`);
+    console.log(`   ${colors.cyan}node scripts/handoff.js execute ${nextHandoff} ${effectiveId}${colors.reset}`);
+  }
 
   console.log(`\n${colors.dim}Session: ${session.session_id}${colors.reset}`);
   console.log('═'.repeat(50));

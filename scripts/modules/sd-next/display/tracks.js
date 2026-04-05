@@ -149,8 +149,13 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
   const ventureBadge = item.target_application && item.target_application !== 'EHG_Engineer'
     ? ` ${colors.cyan}[${item.target_application}]${colors.reset}`
     : '';
+  // SD-LEO-INFRA-OKR-AUTO-COMPLEXITY-001: Brainstorm-needed badge for high-complexity auto-SDs
+  const needsBrainstorm = item.metadata?.needs_brainstorm === true;
+  const brainstormBadge = needsBrainstorm
+    ? ` ${colors.yellow}[BRAINSTORM FIRST]${colors.reset}`
+    : '';
 
-  console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${ventureBadge}${urgencyBadge}${visionBadge}${gapBadge}... ${statusIcon}`);
+  console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${ventureBadge}${urgencyBadge}${brainstormBadge}${visionBadge}${gapBadge}... ${statusIcon}`);
 
   // Show claim details with PID-aware output
   if (isClaimedByOther) {
