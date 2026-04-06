@@ -423,6 +423,22 @@ async function main() {
       const { child, allComplete, reason, routingPath } = await findLeafWorkItem(effectiveId);
 
       if (allComplete) {
+        // Ensure session row exists before exit — handoff.js needs it for claim validity gate.
+        // Without this, the orchestrator completion handoff fails with no_deterministic_identity.
+        try {
+          const resolved = await resolveOwnSession(supabase, {
+            select: 'session_id',
+            warnOnFallback: false,
+            requireDeterministic: true
+          });
+          if (!resolved.data) {
+            const newSession = await getOrCreateSession();
+            if (newSession) {
+              console.log(`${colors.dim}(Session created: ${newSession.session_id})${colors.reset}`);
+            }
+          }
+        } catch { /* non-fatal — handoff will surface the error */ }
+
         console.log(`\n${colors.green}✅ All children completed${colors.reset}`);
         console.log(`   Run orchestrator completion: node scripts/handoff.js execute PLAN-TO-LEAD ${effectiveId}`);
         console.log('═'.repeat(50));
