@@ -293,7 +293,7 @@ async function handleSDTypeDetection(supabase, sdId, sdData) {
   // Guard 1: Orchestrator type is structural and immutable
   // SD-LEO-FIX-PRD-SCRIPT-TYPE-001
   if (currentSdType === 'orchestrator') {
-    console.log(`   ℹ️  Guard: orchestrator type is immutable — skipping auto-correction`);
+    console.log('   ℹ️  Guard: orchestrator type is immutable — skipping auto-correction');
     return;
   }
 
@@ -301,7 +301,7 @@ async function handleSDTypeDetection(supabase, sdId, sdData) {
   // SD-LEO-FIX-PRD-SCRIPT-TYPE-001
   const govMeta = sdData.governance_metadata;
   if (govMeta?.type_change_reason) {
-    console.log(`   ℹ️  Guard: governance_metadata.type_change_reason present — skipping auto-correction`);
+    console.log('   ℹ️  Guard: governance_metadata.type_change_reason present — skipping auto-correction');
     console.log(`      Reason on record: ${govMeta.type_change_reason}`);
     return;
   }
@@ -317,7 +317,7 @@ async function handleSDTypeDetection(supabase, sdId, sdData) {
     .eq('status', 'accepted')
     .limit(1);
   if (handoffs && handoffs.length > 0) {
-    console.log(`   ℹ️  Guard: accepted LEAD-TO-PLAN handoff exists — skipping auto-correction`);
+    console.log('   ℹ️  Guard: accepted LEAD-TO-PLAN handoff exists — skipping auto-correction');
     return;
   }
 
@@ -387,32 +387,32 @@ async function handlePersonaIngestion(sdData, sdId) {
   const briefApproved = isVisionBriefApproved(sdData);
   const skipVisionBrief = process.argv.includes('--skip-vision-brief');
 
-  if (isPersonaSoftGateEnabled() && isPersonaIngestionEnabled() && effectiveSdType === 'feature') {
-    const gatePass = hasRealPersonas && briefApproved;
-
-    if (!gatePass && !skipVisionBrief) {
-      console.log('\n   PERSONA SOFT GATE: Feature SD requires approved vision brief');
-
-      if (!hasRealPersonas) {
-        console.log('      No persona payload found in SD.metadata.vision_discovery');
-        console.log('      Feature SDs benefit from stakeholder personas for better PRD quality.\n');
-        console.log('   Generate vision brief:');
-        console.log('      node scripts/generate-vision-brief.js ' + sdId + ' --confirm\n');
-      } else if (!briefApproved) {
-        const currentStatus = sdData?.metadata?.vision_discovery?.approval?.status || 'unknown';
-        console.log(`      Persona payload exists but is not approved (status: ${currentStatus})`);
-        console.log('      Chairman must approve vision brief before PRD creation.\n');
-        console.log('   Approve vision brief:');
-        console.log('      node scripts/approve-vision-brief.js ' + sdId + '\n');
-      }
-
-      console.log('   Blocking PRD creation. To proceed without approval:');
-      console.log('      node scripts/add-prd-to-database.js ' + sdId + ' --skip-vision-brief\n');
-      process.exit(1);
-    } else if (!gatePass && skipVisionBrief) {
-      console.log('\n   Proceeding without approved vision brief (--skip-vision-brief flag provided)\n');
-    }
-  }
+  // PERSONA SOFT GATE — DISABLED
+  //
+  // This gate previously blocked PRD creation for feature SDs unless personas
+  // were generated and approved via the legacy vision-brief generator and
+  // approver scripts. Both have been archived to scripts/archive/one-time/
+  // and superseded by the EVA workflow:
+  //   /brainstorm → vision/arch documents in eva_vision_documents +
+  //                 eva_architecture_plans, registered via /eva review.
+  //
+  // Leaving the gate active produced a silently-broken UX: feature SDs would
+  // hit process.exit(1) with an error message instructing the user to run
+  // scripts that no longer exist. The only escape was --skip-vision-brief,
+  // which made the gate effectively advisory anyway.
+  //
+  // The block is preserved (commented) below for historical reference. To
+  // restore vision-brief gating, route through the EVA vision/archplan flow
+  // instead. See PR triaging the 48 broken script references for context.
+  //
+  // if (isPersonaSoftGateEnabled() && isPersonaIngestionEnabled() && effectiveSdType === 'feature') {
+  //   const gatePass = hasRealPersonas && briefApproved;
+  //   if (!gatePass && !skipVisionBrief) {
+  //     // ...blocked PRD creation with stale script references...
+  //     process.exit(1);
+  //   }
+  // }
+  void hasRealPersonas; void briefApproved; void skipVisionBrief; // gate disabled — preserve unused locals
 
   // Build persona context for sub-agent prompts
   if (isPersonaPromptInjectionEnabled() && stakeholderPersonas.length > 0) {

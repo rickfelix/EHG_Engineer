@@ -264,11 +264,8 @@ function printSummary() {
     if (results.warnings.length > 0) {
       console.log(`  ⚠️  ${results.warnings.length} warnings (non-blocking)`);
     }
-    console.log('\n  Ready to generate vision briefs and visualizations.\n');
-    console.log('  Quick start:');
-    console.log('    node scripts/generate-vision-brief.js <SD-ID> --confirm');
-    console.log('    node scripts/approve-vision-brief.js <SD-ID>');
-    console.log('    node scripts/generate-vision-visualization.js <SD-ID> --confirm\n');
+    console.log('\n  Ready to generate vision briefs and visualizations.');
+    console.log('  Use the EVA workflow: /brainstorm → /eva review → /leo create\n');
     return 0;
   } else {
     console.log('  ❌ GOVERNANCE PREFLIGHT: FAIL');
