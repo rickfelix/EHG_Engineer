@@ -1,0 +1,166 @@
+{
+  "_comment": "Stage artifact requirements for fn_advance_venture_stage RPC gate. Each entry defines an artifact that must exist before a venture can leave the specified stage.",
+  "requirements": [
+    {
+      "stage_number": 1,
+      "artifact_type": "truth_idea_brief",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Idea brief must be completed before leaving Stage 1 (Idea Capture)"
+    },
+    {
+      "stage_number": 3,
+      "artifact_type": "truth_validation_decision",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Validation decision required before leaving Stage 3 (Idea Validation)"
+    },
+    {
+      "stage_number": 4,
+      "artifact_type": "truth_competitive_analysis",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Competitive analysis required before leaving Stage 4 (Competitive Analysis)"
+    },
+    {
+      "stage_number": 5,
+      "artifact_type": "truth_financial_model",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Financial model required before leaving Stage 5 (Financial Modeling)"
+    },
+    {
+      "stage_number": 6,
+      "artifact_type": "engine_risk_matrix",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Risk matrix required before leaving Stage 6 (Risk Assessment)"
+    },
+    {
+      "stage_number": 7,
+      "artifact_type": "engine_pricing_model",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Pricing model required before leaving Stage 7 (Strategy Formulation)"
+    },
+    {
+      "stage_number": 8,
+      "artifact_type": "engine_business_model_canvas",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Business model canvas required before leaving Stage 8 (Business Model)"
+    },
+    {
+      "stage_number": 9,
+      "artifact_type": "engine_exit_strategy",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Exit strategy required before leaving Stage 9 (Exit Strategy)"
+    },
+    {
+      "stage_number": 10,
+      "artifact_type": "identity_persona_brand",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Persona and brand identity required before leaving Stage 10 (Brand Identity)"
+    },
+    {
+      "stage_number": 11,
+      "artifact_type": "identity_naming_visual",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Naming and visual identity required before leaving Stage 11 (Naming)"
+    },
+    {
+      "stage_number": 12,
+      "artifact_type": "identity_gtm_sales_strategy",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Go-to-market strategy required before leaving Stage 12 (GTM Strategy)"
+    },
+    {
+      "stage_number": 13,
+      "artifact_type": "blueprint_product_roadmap",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Product roadmap required before leaving Stage 13 (Product Roadmap)"
+    },
+    {
+      "stage_number": 14,
+      "artifact_type": "blueprint_data_model",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Data model required before leaving Stage 14 (Data Model)"
+    },
+    {
+      "stage_number": 15,
+      "artifact_type": "wireframe_screens",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Wireframe screens required before leaving Stage 15 (Wireframes/UX)"
+    },
+    {
+      "stage_number": 16,
+      "artifact_type": "blueprint_api_contract",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "API contract required before leaving Stage 16 (API Design)"
+    },
+    {
+      "stage_number": 17,
+      "artifact_type": "stitch_curation",
+      "required_status": "curated",
+      "is_blocking": true,
+      "description": "Stitch curation must be curated before leaving Stage 17 (Design Review)"
+    },
+    {
+      "stage_number": 18,
+      "artifact_type": "build_system_prompt",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "System prompt required before leaving Stage 18 (System Prompt)"
+    },
+    {
+      "stage_number": 21,
+      "artifact_type": "build_security_audit",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Security audit required before leaving Stage 21 (Security Audit)"
+    },
+    {
+      "stage_number": 22,
+      "artifact_type": "launch_test_plan",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Test plan required before leaving Stage 22 (Test Planning)"
+    },
+    {
+      "stage_number": 23,
+      "artifact_type": "launch_uat_report",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "UAT report required before leaving Stage 23 (User Acceptance)"
+    },
+    {
+      "stage_number": 24,
+      "artifact_type": "launch_deployment_runbook",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Deployment runbook required before leaving Stage 24 (Deployment)"
+    },
+    {
+      "stage_number": 25,
+      "artifact_type": "launch_marketing_checklist",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Marketing checklist required before leaving Stage 25 (Marketing Launch)"
+    },
+    {
+      "stage_number": 26,
+      "artifact_type": "launch_optimization_roadmap",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Optimization roadmap required before leaving Stage 26 (Post-Launch)"
+    }
+  ]
+}
