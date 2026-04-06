@@ -19,6 +19,8 @@ import {
   createVisionScoreGate,
   createLeadEvaluationGate,
   createCrossRepoConsumerImpactGate,
+  // Pre-PLAN Adversarial Critique Gate (SD-LEO-INFRA-PRE-PLAN-ADVERSARIAL-001)
+  createPrePlanCritiqueGate,
   // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
   createScopeReductionVerificationGate,
   createSdTypeCompatibilityGate,
@@ -121,6 +123,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Cross-Repo Consumer Impact Gate (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-048)
     // Advisory-only: warns when SD may affect consumers in other repos
     gates.push(createCrossRepoConsumerImpactGate());
+
+    // Pre-PLAN Adversarial Critique Gate (SD-LEO-INFRA-PRE-PLAN-ADVERSARIAL-001)
+    // Advisory-only: runs critiquePlanProposal and persists to plan_critiques
+    gates.push(createPrePlanCritiqueGate(this.supabase));
 
     // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
     // Routes ESCALATE decisions to chairman_decisions for governance

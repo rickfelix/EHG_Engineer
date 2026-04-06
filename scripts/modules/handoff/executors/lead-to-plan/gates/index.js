@@ -58,6 +58,13 @@ export {
   createCrossRepoConsumerImpactGate
 } from './cross-repo-consumer-impact.js';
 
+// Pre-PLAN Adversarial Critique Gate (SD-LEO-INFRA-PRE-PLAN-ADVERSARIAL-001)
+// Advisory only — runs critiquePlanProposal and persists to plan_critiques.
+export {
+  validatePrePlanCritique,
+  createPrePlanCritiqueGate
+} from './pre-plan-critique.js';
+
 // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
 export { createScopeReductionVerificationGate } from './scope-reduction-verification.js';
 export { createSdTypeCompatibilityGate } from './sd-type-compatibility.js';
