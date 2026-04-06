@@ -328,8 +328,17 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     // Fetch pattern statistics for maturity bonus
     const patternStats = await getPatternStats(sdData, supabase);
 
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Infrastructure SDs use LOW risk threshold (70%)
+    // Infrastructure SDs have fewer gates by design; penalizing with MEDIUM (80%) is unfair
+    const thresholdSd = !gate2Required && (!sdData?.risk_level && !sdData?.metadata?.risk_level)
+      ? { ...sdData, risk_level: 'LOW' }
+      : sdData;
+    if (thresholdSd !== sdData) {
+      console.log(`   ℹ️  Overriding risk level to LOW for '${sdType}' SD type (no explicit risk_level set)`);
+    }
+
     const thresholdResult = calculateAdaptiveThreshold({
-      sd: sdData,
+      sd: thresholdSd,
       priorGateScores,
       patternStats,
       gateNumber: 4
@@ -483,6 +492,10 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
   let sectionScore = 0;
   const sectionDetails = {};
 
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Infrastructure SDs get higher defaults when data absent
+  // Absence of gate data != poor performance; infrastructure SDs legitimately have fewer gates
+  const isInfraSdType = !gate2Required; // infrastructure, documentation, fix, corrective
+
   // B1: Time efficiency (10 points)
   console.log('\n   [B1] Time Efficiency...');
 
@@ -506,8 +519,11 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
       console.log(`   ⚠️  Sub-agent execution: ${totalTimeMins} minutes (5/10)`);
     }
   } else {
-    sectionScore += 7;
-    console.log('   ⚠️  Cannot verify execution time - using estimated default (7/10)');
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Higher default for infra SDs (data absent != poor)
+    const defaultScore = isInfraSdType ? 8 : 7;
+    sectionScore += defaultScore;
+    sectionDetails.b1_estimated = true;
+    console.log(`   ⚠️  Cannot verify execution time - estimated default (${defaultScore}/10${isInfraSdType ? ', infra SD' : ''})`);
   }
 
   // B2: Quality of recommendations (10 points)
@@ -519,9 +535,12 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
     sectionDetails.substantial_recommendations = true;
     console.log('   ✅ Sub-agents provided substantial recommendations');
   } else {
-    sectionScore += 7;
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Higher default for infra SDs (data absent != poor)
+    const defaultScore = isInfraSdType ? 8 : 7;
+    sectionScore += defaultScore;
+    sectionDetails.b2_estimated = true;
     validation.warnings.push('[B2] Recommendation quality not verified');
-    console.log('   ⚠️  Recommendation quality unclear - using estimated default (7/10)');
+    console.log(`   ⚠️  Recommendation quality unclear - estimated default (${defaultScore}/10${isInfraSdType ? ', infra SD' : ''})`);
   }
 
   // B3: Implementation fidelity (5 points)
@@ -560,6 +579,8 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
 async function validatePatternEffectiveness(sd_id, gateResults, validation, _supabase, { sdType = 'feature', gate2Required = true } = {}) {
   let sectionScore = 0;
   const sectionDetails = {};
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Infrastructure SDs get higher defaults when data absent
+  const isInfraSdType = !gate2Required;
 
   console.log('\n   [C] Pattern Effectiveness...');
 
@@ -577,8 +598,11 @@ async function validatePatternEffectiveness(sd_id, gateResults, validation, _sup
     validation.warnings.push(`[C1] Gate 1 score: ${gateResults.gate1.score}/100`);
     console.log(`   ⚠️  Gate 1 score: ${gateResults.gate1.score}/100 (3/6)`);
   } else {
-    sectionScore += 4;
-    console.log('   ⚠️  Gate 1 score unavailable - using estimated default (4/6)');
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Higher default for infra SDs
+    const defaultScore = isInfraSdType ? 5 : 4;
+    sectionScore += defaultScore;
+    sectionDetails.c1_estimated = true;
+    console.log(`   ⚠️  Gate 1 score unavailable - estimated default (${defaultScore}/6${isInfraSdType ? ', infra SD' : ''})`);
   }
 
   // C2: Gate 2 performance (6 points)
@@ -617,8 +641,11 @@ async function validatePatternEffectiveness(sd_id, gateResults, validation, _sup
     validation.warnings.push(`[C3] Gate 3 score: ${gateResults.gate3.score}/100`);
     console.log(`   ⚠️  Gate 3 score: ${gateResults.gate3.score}/100 (3/6)`);
   } else {
-    sectionScore += 4;
-    console.log('   ⚠️  Gate 3 score unavailable - using estimated default (4/6)');
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Higher default for infra SDs
+    const defaultScore = isInfraSdType ? 5 : 4;
+    sectionScore += defaultScore;
+    sectionDetails.c3_estimated = true;
+    console.log(`   ⚠️  Gate 3 score unavailable - estimated default (${defaultScore}/6${isInfraSdType ? ', infra SD' : ''})`);
   }
 
   // C4: Overall pattern ROI (7 points)
@@ -654,8 +681,11 @@ async function validatePatternEffectiveness(sd_id, gateResults, validation, _sup
       console.log(`   ⚠️  Average gate score: ${Math.round(avgScore)}/100 (2/7)`);
     }
   } else {
-    sectionScore += 4;
-    console.log('   ⚠️  Cannot calculate ROI (4/7)');
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Higher default for infra SDs
+    const defaultScore = isInfraSdType ? 5 : 4;
+    sectionScore += defaultScore;
+    sectionDetails.c4_estimated = true;
+    console.log(`   ⚠️  Cannot calculate ROI (${defaultScore}/7${isInfraSdType ? ', infra SD' : ''})`);
   }
 
   // Scale from 25 to 30 points (CRITICAL - phase-aware weighting)
