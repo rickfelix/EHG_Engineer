@@ -140,6 +140,19 @@ The Intelligent Session Lifecycle Management system ensures that Claude Code ses
 
 **Concept**: Each terminal has a unique identity (machine_id + terminal_id). When a new session starts from the same terminal, the old session is automatically released.
 
+**Fail-Closed Identity Resolution (PRs #2774, #2776, #2777)**:
+
+The `resolveOwnSession()` function (`lib/resolve-own-session.js`) uses a priority chain to find the current session's DB row:
+
+| Strategy | Source | Authoritative? | Notes |
+|----------|--------|---------------|-------|
+| 1 | `CLAUDE_SESSION_ID` env var | **YES** | Per-conversation UUID from `capture-session-id.cjs` SessionStart hook |
+| 2 | Marker file UUID | **YES** | From `.claude/session-identity/pid-*.json` |
+| 3 | Computed terminal_id | **Demoted** | SSE port 25565 shared by all CC Desktop windows — ambiguous for claim ops |
+| 4 | Heartbeat fallback | **REJECTED** | When `requireDeterministic=true`, this source causes `no_deterministic_identity` error |
+
+The `requireDeterministic` flag (used by claim gate and handoff operations) rejects Strategies 3 and 4, requiring either the env var or a marker file match. This prevents two CC windows from silently merging into one identity.
+
 **Implementation**:
 ```javascript
 // Session Manager

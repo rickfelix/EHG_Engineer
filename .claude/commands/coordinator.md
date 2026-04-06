@@ -56,6 +56,17 @@ Display the output directly to the user.
 
 **IMPORTANT — Assessment Rules:**
 
+**Session identity and CLAUDE_SESSION_ID (added 2026-04-06, PRs #2774/#2776/#2777):**
+- Each Claude Code conversation has a unique `CLAUDE_SESSION_ID` (UUID) set by the `capture-session-id.cjs` SessionStart hook.
+- The fail-closed claim gate (`lib/claim-validity-gate.js`) uses `assertValidClaim()` to verify 3 conditions: (1) deterministic identity via CLAUDE_SESSION_ID, (2) claim ownership matches `claiming_session_id` on the SD, (3) worktree isolation — cwd must be inside the SD's registered `worktree_path`.
+- **ClaimIdentityError patterns**: When the dashboard shows a worker blocked, check for these error reasons:
+  - `no_deterministic_identity` — CLAUDE_SESSION_ID env var not set. Worker needs to restart CC so the SessionStart hook fires.
+  - `foreign_claim` — SD claimed by a different session. Check if owning session is still alive or stale.
+  - `wrong_worktree` — Worker's cwd doesn't match the SD's registered worktree path. Likely the worktree was recreated.
+  - `ambiguous` — Multiple sessions share terminal_id without unique CLAUDE_SESSION_IDs.
+- **Terminal_id collisions**: Two CC Desktop windows on the same machine share SSE port 25565, producing identical terminal_ids. The stale-session-sweep's Layer 1 collision detection now uses `claude_session_id` from marker files (`pid-*.json`) to disambiguate and split them into separate DB sessions.
+- **All script invocations** (sd-start, handoff, etc.) must prefix with `CLAUDE_SESSION_ID=<uuid>` inline env var.
+
 **Heartbeat reliability (updated 2026-03-14):**
 The `heartbeat-hook.cjs` (PostToolUse) now updates heartbeats on every tool call (throttled to 30s). This makes heartbeat data significantly more reliable than before. A session that hasn't heartbeated in 2+ minutes is likely genuinely between operations, not "mid-operation with stale heartbeat."
 
