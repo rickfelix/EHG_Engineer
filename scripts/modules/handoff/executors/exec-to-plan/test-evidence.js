@@ -142,7 +142,7 @@ export async function autoValidateStories(supabase, sdId) {
   console.log('-'.repeat(50));
 
   try {
-    const { autoValidateUserStories } = await import('../../../auto-validate-user-stories-on-exec-complete.js');
+    const { autoValidateUserStories } = await import('../../../../auto-validate-user-stories-on-exec-complete.js');
     const validationResult = await autoValidateUserStories(sdId, supabase);
     if (validationResult.success) {
       console.log(`   ✅ Validated ${validationResult.validated_count} user stories`);
