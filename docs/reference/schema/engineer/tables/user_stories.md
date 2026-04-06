@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-06T14:26:44.289Z
-**Rows**: 7,042
+**Generated**: 2026-04-06T22:22:54.242Z
+**Rows**: 7,086
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (38 total)
+## Columns (40 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -56,6 +56,8 @@
 | example_code_patterns | `jsonb` | YES | `'[]'::jsonb` | BMAD Enhancement: Array of code examples, patterns, snippets to guide implementation |
 | testing_scenarios | `jsonb` | YES | `'[]'::jsonb` | BMAD Enhancement: Array of test scenarios with expected inputs/outputs |
 | given_when_then | `jsonb` | YES | `'[]'::jsonb` | Structured BDD scenarios extracted from acceptance criteria. Array of {given, when, then} objects. |
+| implementation_status | `text` | YES | `'pending'::text` | - |
+| metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 
 ## Constraints
 
