@@ -623,7 +623,11 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
       files_to_modify: parsed.files,
       steps_count: parsed.steps.length,
       files_count: parsed.files.length,
-      auto_detected: wasAutoDetected
+      auto_detected: wasAutoDetected,
+      ...(overrides.visionKey ? { vision_key: overrides.visionKey } : {}),
+      ...(overrides.archKey ? { arch_key: overrides.archKey } : {}),
+      ...(overrides.migrationReviewed ? { migration_reviewed: true } : {}),
+      ...(overrides.securityReviewed ? { security_reviewed: true } : {}),
     }
   });
 
@@ -1485,7 +1489,13 @@ Flags:
   --title "<title>"  Override title (for --from-plan or --child)
   --venture <name>   Generate venture-scoped SD key (SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM})
   --vision-key <key> Link SD to EVA vision document (stored in metadata, used for vision scoring)
+                     Supported in both direct creation AND --from-plan mode.
   --arch-key <key>   Link SD to EVA architecture plan (stored in metadata, used for vision scoring)
+                     Supported in both direct creation AND --from-plan mode.
+  --migration-reviewed  Set metadata.migration_reviewed=true to satisfy GR-MIGRATION-REVIEW
+                        guardrail (required when scope contains migration/schema keywords).
+  --security-reviewed   Set metadata.security_reviewed=true to satisfy GR-SECURITY-BASELINE
+                        guardrail (required when scope contains auth/credential/RLS keywords).
   --help             Show this help message
 
 Dependency Field Guide:
@@ -1543,15 +1553,38 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // Parse --title override (e.g., --from-plan --title "My Title")
       const titleIdx = args.indexOf('--title');
       const titleOverride = titleIdx !== -1 ? args[titleIdx + 1] : null;
+      // Parse --vision-key / --arch-key (link plan-created SD to registered vision/arch)
+      const visionKeyIdx = args.indexOf('--vision-key');
+      const visionKey = visionKeyIdx !== -1 ? args[visionKeyIdx + 1] : null;
+      const archKeyIdx = args.indexOf('--arch-key');
+      const archKey = archKeyIdx !== -1 ? args[archKeyIdx + 1] : null;
+      // Parse boolean review flags (satisfy GR-MIGRATION-REVIEW / GR-SECURITY-BASELINE)
+      const migrationReviewed = args.includes('--migration-reviewed');
+      const securityReviewed = args.includes('--security-reviewed');
       // Path is any arg that isn't a flag or a flag's value
       const flagValuePositions = new Set(
-        [typeIdx !== -1 ? typeIdx + 1 : -1, titleIdx !== -1 ? titleIdx + 1 : -1].filter(i => i > 0)
+        [
+          typeIdx !== -1 ? typeIdx + 1 : -1,
+          titleIdx !== -1 ? titleIdx + 1 : -1,
+          visionKeyIdx !== -1 ? visionKeyIdx + 1 : -1,
+          archKeyIdx !== -1 ? archKeyIdx + 1 : -1,
+        ].filter(i => i > 0)
       );
-      const knownPlanFlags = new Set(['--yes', '-y', '--type', '--title', '--from-plan']);
+      const knownPlanFlags = new Set([
+        '--yes', '-y', '--type', '--title', '--from-plan',
+        '--vision-key', '--arch-key', '--migration-reviewed', '--security-reviewed'
+      ]);
       const planPath = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !flagValuePositions.has(i) && !knownPlanFlags.has(arg)
       ) || null;
-      await createFromPlan(planPath, hasYesFlag, { typeOverride, titleOverride });
+      await createFromPlan(planPath, hasYesFlag, {
+        typeOverride,
+        titleOverride,
+        visionKey,
+        archKey,
+        migrationReviewed,
+        securityReviewed,
+      });
     } else if (args[0] === '--child') {
       // Parse --type and --title overrides for child creation
       const childOverrides = {};
