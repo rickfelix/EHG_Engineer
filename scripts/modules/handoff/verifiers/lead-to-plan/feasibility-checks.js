@@ -3,7 +3,7 @@
  *
  * Validates SD feasibility and development environment readiness.
  *
- * Extracted from scripts/verify-handoff-lead-to-plan.js for maintainability.
+ * Extracted from the legacy verify-handoff-lead-to-plan script (now removed) for maintainability.
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 

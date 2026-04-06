@@ -3,7 +3,7 @@
  *
  * SD-type-aware minimum story quality scores.
  *
- * Extracted from scripts/verify-handoff-plan-to-exec.js for maintainability.
+ * Extracted from the legacy verify-handoff-plan-to-exec script (now removed) for maintainability.
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 
