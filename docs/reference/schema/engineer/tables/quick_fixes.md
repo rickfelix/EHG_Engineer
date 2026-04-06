@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-06T10:29:00.448Z
-**Rows**: 51
+**Generated**: 2026-04-06T14:26:44.289Z
+**Rows**: 55
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -71,7 +71,7 @@
 - `quick_fixes_compliance_verdict_check`: CHECK ((compliance_verdict = ANY (ARRAY['PASS'::text, 'WARN'::text, 'FAIL'::text])))
 - `quick_fixes_found_during_check`: CHECK ((found_during = ANY (ARRAY['uat'::text, 'manual-testing'::text, 'code-review'::text])))
 - `quick_fixes_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
-- `quick_fixes_status_check`: CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'completed'::text, 'escalated'::text])))
+- `quick_fixes_status_check`: CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'completed'::text, 'escalated'::text, 'cancelled'::text, 'closed'::text])))
 - `quick_fixes_target_application_check`: CHECK ((target_application = ANY (ARRAY['EHG'::text, 'EHG_Engineer'::text])))
 - `quick_fixes_type_check`: CHECK ((type = ANY (ARRAY['bug'::text, 'polish'::text, 'typo'::text, 'documentation'::text])))
 

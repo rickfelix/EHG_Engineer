@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-06T10:29:00.448Z
-**Rows**: 2,378
+**Generated**: 2026-04-06T14:26:44.289Z
+**Rows**: 2,385
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (94 total)
+## Columns (95 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -116,6 +116,7 @@ Use the id column instead - it is the canonical identifier. |
 | quality_issues | `jsonb` | YES | `'[]'::jsonb` | - |
 | quality_checked_at | `timestamp with time zone` | YES | - | - |
 | transition_version | `integer(32)` | YES | `1` | Optimistic locking version for concurrent transition safety |
+| worktree_path | `text` | YES | - | Absolute path to the SD's git worktree. Populated by sd-start.js on claim acquisition. Consumed by lib/claim-validity-gate.js to enforce that handoff and related operations run from inside the worktree. Added by SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001. |
 
 ## Constraints
 
