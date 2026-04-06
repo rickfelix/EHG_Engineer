@@ -70,8 +70,8 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
   const sdId = item.sd_key || item.sd_id;
   const rankStr = item.sequence_rank ? `[${item.sequence_rank}]`.padEnd(5) : '     ';
 
-  // Check if claimed by another session
-  const claimedBySession = claimedSDs.get(sdId);
+  // Check if claimed by another session (session map OR SD-level claiming_session_id)
+  const claimedBySession = claimedSDs.get(sdId) || item.claiming_session_id || null;
   let isClaimedByOther = claimedBySession &&
     currentSession &&
     claimedBySession !== currentSession.session_id;
