@@ -1,11 +1,11 @@
-# telegram_forum_topics Table
+# team_assignments Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-04-06T10:21:00.608Z
-**Rows**: 8
+**Rows**: 0
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,49 +14,46 @@
 
 ---
 
-## Columns (10 total)
+## Columns (7 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| thread_id | `integer(32)` | **NO** | - | - |
-| topic_name | `text` | **NO** | - | - |
-| persona | `text` | **NO** | - | - |
-| system_prompt_key | `text` | **NO** | - | - |
-| allowed_tools | `jsonb` | **NO** | `'[]'::jsonb` | - |
-| is_read_only | `boolean` | **NO** | `true` | - |
-| description | `text` | YES | - | - |
+| venture_id | `uuid` | YES | - | - |
+| stage_number | `integer(32)` | YES | - | - |
+| status | `text` | **NO** | `'pending'::text` | - |
+| assignee | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `telegram_forum_topics_pkey`: PRIMARY KEY (id)
+- `team_assignments_pkey`: PRIMARY KEY (id)
 
-### Unique Constraints
-- `telegram_forum_topics_thread_id_key`: UNIQUE (thread_id)
+### Foreign Keys
+- `team_assignments_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
-- `telegram_forum_topics_persona_check`: CHECK ((persona = ANY (ARRAY['chairman'::text, 'builder'::text, 'shared'::text])))
+- `team_assignments_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'queued'::text, 'in_progress'::text, 'completed'::text, 'failed'::text, 'cancelled'::text])))
 
 ## Indexes
 
-- `telegram_forum_topics_pkey`
+- `idx_team_assignments_status`
   ```sql
-  CREATE UNIQUE INDEX telegram_forum_topics_pkey ON public.telegram_forum_topics USING btree (id)
+  CREATE INDEX idx_team_assignments_status ON public.team_assignments USING btree (status)
   ```
-- `telegram_forum_topics_thread_id_key`
+- `team_assignments_pkey`
   ```sql
-  CREATE UNIQUE INDEX telegram_forum_topics_thread_id_key ON public.telegram_forum_topics USING btree (thread_id)
+  CREATE UNIQUE INDEX team_assignments_pkey ON public.team_assignments USING btree (id)
   ```
 
 ## RLS Policies
 
-### 1. Service role full access (ALL)
+### 1. team_assignments_read (SELECT)
 
 - **Roles**: {public}
-- **Using**: `(auth.role() = 'service_role'::text)`
+- **Using**: `true`
 
 ---
 
