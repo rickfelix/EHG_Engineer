@@ -3,7 +3,7 @@
  *
  * Auto-detects SD type based on scope, title, and description keywords.
  *
- * Extracted from scripts/verify-handoff-lead-to-plan.js for maintainability.
+ * Extracted from the legacy verify-handoff-lead-to-plan script (now removed) for maintainability.
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 

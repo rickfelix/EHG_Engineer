@@ -4,7 +4,7 @@
  * Validates plan_presentation structure in handoff metadata.
  * SD-PLAN-PRESENT-001: Ensures PLAN->EXEC handoffs include implementation guidance.
  *
- * Extracted from scripts/verify-handoff-plan-to-exec.js for maintainability.
+ * Extracted from the legacy verify-handoff-plan-to-exec script (now removed) for maintainability.
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 

@@ -414,8 +414,8 @@ export async function main() {
     const prdId = args[2];
 
     if (!sdId) {
-      console.log('Usage: node verify-handoff-plan-to-exec.js verify SD-YYYY-XXX [PRD-ID]');
-      console.log('       node verify-handoff-plan-to-exec.js help');
+      console.log('Usage: node scripts/handoff.js execute PLAN-TO-EXEC SD-YYYY-XXX');
+      console.log('       (legacy CLI; use scripts/handoff.js for current workflow)');
       process.exit(1);
     }
 

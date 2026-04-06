@@ -315,7 +315,7 @@ function main() {
     patterns.forEach(pattern => {
       const matches = glob.sync(pattern, {
         cwd: scriptsDir,
-        ignore: ['fix-prd-scripts.js', 'audit-all-prd-scripts.js']
+        ignore: ['fix-prd-scripts.js']
       });
       matches.forEach(f => files.push(path.join(scriptsDir, f)));
     });
@@ -349,7 +349,6 @@ function main() {
     console.log('\n💡 Run without --dry-run to apply fixes');
   } else {
     console.log('\n✅ Fixes applied! Backup files created with .backup extension');
-    console.log('💡 Run audit again to verify: node scripts/audit-all-prd-scripts.js');
   }
 }
 
