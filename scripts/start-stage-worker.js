@@ -37,6 +37,7 @@ import { writeFileSync, unlinkSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { fork } from 'child_process';
+import chokidar from 'chokidar';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -170,6 +171,49 @@ function runSupervisor() {
 
     child.on('error', (err) => {
       console.error(`[supervisor] Worker spawn error: ${err.message}`);
+    });
+  }
+
+  // ── File Watcher (auto-restart on code changes) ──────────────────
+  // Watches core worker + bridge modules. On change, kills child; supervisor's
+  // existing exit handler spawns a fresh process with up-to-date code.
+  // Disable with STAGE_WORKER_WATCH=false.
+  let restartDebounce = null;
+  if (process.env.STAGE_WORKER_WATCH !== 'false') {
+    const projectRoot = resolve(__dirname, '..');
+    const watchPaths = [
+      resolve(projectRoot, 'lib/eva/stage-execution-worker.js'),
+      resolve(projectRoot, 'lib/eva/bridge'),
+      resolve(projectRoot, 'lib/eva/artifact-persistence-service.js'),
+    ];
+
+    const watcher = chokidar.watch(watchPaths, {
+      ignored: /(^|[/\\])\../, // dotfiles
+      ignoreInitial: true,
+      awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
+    });
+
+    watcher.on('change', (path) => {
+      if (shuttingDown) return;
+      console.log(`[supervisor] File changed: ${path}`);
+      // Debounce: batch multiple saves (e.g. git merges touching many files)
+      if (restartDebounce) clearTimeout(restartDebounce);
+      restartDebounce = setTimeout(() => {
+        if (shuttingDown || !child || child.killed) return;
+        console.log('[supervisor] Reloading worker to pick up code changes...');
+        // Don't count reload restarts against circuit breaker
+        restartTimestamps.length = 0;
+        child.kill('SIGTERM');
+        // supervisor's child.on('exit') will spawn a new one
+      }, 1000);
+    });
+
+    watcher.on('ready', () => {
+      console.log('[supervisor] File watcher active — auto-restart on code changes in lib/eva/');
+    });
+
+    watcher.on('error', (err) => {
+      console.warn(`[supervisor] File watcher error: ${err.message}`);
     });
   }
 
