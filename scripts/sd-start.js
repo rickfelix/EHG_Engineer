@@ -537,7 +537,9 @@ async function main() {
       warnOnFallback: false,
       requireDeterministic: true
     });
-    if (resolved.data && (resolved.source === 'env_var' || resolved.source === 'marker_file' || resolved.source === 'terminal_id')) {
+    // SD-MAN-INFRA-PARSE-SESSIONSTART-CLAUDE-001: Only accept env_var and marker_file.
+    // terminal_id is non-deterministic (shared SSE port across CC Desktop windows).
+    if (resolved.data && (resolved.source === 'env_var' || resolved.source === 'marker_file')) {
       session = resolved.data;
       const ccPid = resolved.data?.metadata?.cc_pid || process.pid;
       console.log(`${colors.dim}(Identity: source=${resolved.source} session=${session.session_id} cc_pid=${ccPid})${colors.reset}`);

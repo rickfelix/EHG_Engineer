@@ -11,9 +11,14 @@ This skill encodes the exact steps for claiming an SD, validating its status,
 and loading the correct phase context. All steps use canonical scripts.
 
 ## Quick Reference
+
+**CRITICAL**: Before running sd-start.js, you MUST pass the per-conversation CLAUDE_SESSION_ID
+as an inline env var. Find it in the SessionStart hook output at the start of this conversation
+(look for `CLAUDE_SESSION_ID=<uuid>`). This ensures each CC conversation has a unique identity.
+
 ```bash
-# Claim and start SD (use direct node to propagate CLAUDE_SESSION_ID)
-node scripts/sd-start.js <SD-ID>
+# Claim and start SD — CLAUDE_SESSION_ID from SessionStart output
+CLAUDE_SESSION_ID=<uuid> node scripts/sd-start.js <SD-ID>
 
 # If worktree path shown in output, cd to it:
 # cd <WORKTREE_CWD path>
@@ -22,6 +27,9 @@ node scripts/sd-start.js <SD-ID>
 # Read tool: CLAUDE_CORE.md
 # Read tool: CLAUDE_<PHASE>.md
 ```
+
+**All subsequent node script invocations** (handoff.js, child-sd-preflight.js, etc.) must also
+include `CLAUDE_SESSION_ID=<uuid>` as an inline env var prefix.
 
 ## Step-by-Step Protocol
 
