@@ -242,6 +242,38 @@ WHERE heartbeat_age_seconds > 180 AND heartbeat_age_seconds <= 300;
 
 **Proactive Action**: Warning notification to user
 
+## Claim Validity Gate (PRs #2774, #2776, #2777)
+
+The **fail-closed claim gate** (`lib/claim-validity-gate.js`) enforces three checks before any SD-modifying operation (sd-start, handoff):
+
+1. **Deterministic identity** — `resolveOwnSession()` must return `env_var` or `marker_file` source (not heartbeat fallback)
+2. **Claim ownership** — SD's `claiming_session_id` column must match the resolved session
+3. **Worktree isolation** — `process.cwd()` must be inside the SD's registered `worktree_path`
+
+### CLAUDE_SESSION_ID Inline Requirement
+
+All node script invocations that modify SD state must include the per-conversation UUID:
+
+```bash
+CLAUDE_SESSION_ID=<uuid> node scripts/sd-start.js SD-XXX-001
+CLAUDE_SESSION_ID=<uuid> node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
+```
+
+The UUID is set by `capture-session-id.cjs` (SessionStart hook) and available in all hooks via `process.env.CLAUDE_SESSION_ID`.
+
+### Worktree Path Column
+
+`strategic_directives_v2.worktree_path` stores the absolute path to the SD's git worktree. Set by `sd-start.js` when claiming. The claim gate checks `process.cwd()` starts with this path (normalized for Windows backslashes).
+
+### assertValidClaim Troubleshooting
+
+| Error Reason | Meaning | Fix |
+|-------------|---------|-----|
+| `no_deterministic_identity` | CLAUDE_SESSION_ID not set, no marker file | Restart CC so SessionStart hook fires |
+| `foreign_claim` | SD claimed by different session | Release stale claim or use different SD |
+| `wrong_worktree` | cwd doesn't match SD's worktree_path | `cd` to worktree or recreate via sd-start |
+| `ambiguous` | Multiple sessions share terminal_id | Run stale-session-sweep to split |
+
 ## Troubleshooting
 
 ### Manual Claim Release (Single Table — As of v5.0.0)
