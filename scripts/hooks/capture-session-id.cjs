@@ -190,6 +190,8 @@ function main() {
           // Non-fatal
         }
 
+        // Machine-readable line for downstream parsing (SD-MAN-INFRA-SESSION-IDENTITY-BIRTH-001)
+        console.log(`CLAUDE_SESSION_ID=${sessionId}`);
         console.log(`SessionStart:capture-session-id: ${sessionId}`);
       } catch {
         // Invalid JSON or other error — don't block session start

@@ -12,8 +12,8 @@ and loading the correct phase context. All steps use canonical scripts.
 
 ## Quick Reference
 ```bash
-# Claim and start SD
-npm run sd:start <SD-ID>
+# Claim and start SD (use direct node to propagate CLAUDE_SESSION_ID)
+node scripts/sd-start.js <SD-ID>
 
 # If worktree path shown in output, cd to it:
 # cd <WORKTREE_CWD path>
@@ -412,7 +412,7 @@ The `child-sd-preflight.js` script now displays a reminder:
 *Always verify current requirements from CLAUDE_CORE.md as they may be updated.*
 
 ## Canonical Scripts (NEVER bypass these)
-- `npm run sd:start <SD-ID>` — Claim + status check + worktree
+- `node scripts/sd-start.js <SD-ID>` — Claim + status check + worktree
 - `node scripts/handoff.js execute <PHASE> <SD-ID>` — Phase transitions
 - `node scripts/child-sd-preflight.js <SD-ID>` — Child SD validation
 - `node scripts/orchestrator-preflight.js <SD-ID>` — Orchestrator preflight
