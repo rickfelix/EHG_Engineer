@@ -268,7 +268,7 @@ export async function displayExecutionResult(result, handoffType, sdId) {
         // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-002: Machine-readable next command
         // Enables auto-chaining in CLI workflows (modeled after HEAL_NEXT_CMD pattern)
         console.log('');
-        console.log(`HANDOFF_NEXT_CMD=node scripts/unified-handoff-system.js execute ${nextStep.next} ${sdId}`);
+        console.log(`HANDOFF_NEXT_CMD=node scripts/handoff.js execute ${nextStep.next} ${sdId}`);
       } else {
         console.log(`   ${nextStep.message}`);
       }

@@ -67,8 +67,8 @@ function discoverEntryPoints(rootDir) {
 
   // 2. Known pipeline entry points
   const knownEntries = [
-    'scripts/leo-orchestrator.js',
-    'scripts/unified-handoff-system.js',
+    'scripts/leo-orchestrator-enforced.js',
+    'scripts/handoff.js',
     'scripts/sd-next.js',
     'scripts/eva/eva-pipeline.js',
     'scripts/generate-claude-md-from-db.js',
