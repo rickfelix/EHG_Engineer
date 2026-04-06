@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-03T14:02:48.388Z -->
-<!-- git_commit: 09a43fa4 -->
-<!-- db_snapshot_hash: b9ae40daf1e08509 -->
+<!-- generated_at: 2026-04-06T12:18:47.810Z -->
+<!-- git_commit: b29d6e66 -->
+<!-- db_snapshot_hash: 3663b201f9e83b33 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
@@ -156,16 +156,12 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 - Blocking error requires human decision (e.g., merge conflicts)
 - Tests fail after 2 retry attempts
 - Critical security or data-loss scenario
+- **NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, or any "warrants confirmation" rationalization. Phase boundaries are NOT pause points. If your reason for stopping is not in the three bullets above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
 
 ### "Child SD"
-**Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
-**NOT**: A sub-task or implementation detail of the parent.
-**Each child**: Has its own PRD, handoffs, retrospective, and completion validation.
+**Definition**: An INDEPENDENT Strategi
 
-### "Ship" vs "Complete"
-**Ship**: Code merged to main branch.
-**Complete**: Ship + database status 'completed' + all handoffs + retrospective.
-**CRITICAL**: Shipping is NECESSARY but NOT SUFFICIENT for completion.
+*...truncated. Read full file for complete section.*
 
 ## SD Type-Aware Workflow Paths
 
@@ -267,5 +263,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-04-03 10:02:48 AM*
+*DIGEST generated: 2026-04-06 8:18:47 AM*
 *Protocol: 4.3.3*

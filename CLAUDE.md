@@ -26,6 +26,7 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 
 AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no confirmation prompts.
 **Pause points** (even when ON): Orchestrator completion, blocking errors, test failures (2 retries), merge conflicts, all children blocked.
+**NOT pause triggers**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, "warrants confirmation". Phase boundaries are NOT pause points. If your reason isn't in the list above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
 
 ## SD Continuation
 
@@ -119,4 +120,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-04-03 10:02:48 AM | Protocol: LEO 4.3.3 | Source: Database*
+*Generated: 2026-04-06 8:18:47 AM | Protocol: LEO 4.3.3 | Source: Database*
