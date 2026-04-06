@@ -94,10 +94,10 @@
     },
     {
       "stage_number": 15,
-      "artifact_type": "wireframe_screens",
+      "artifact_type": "blueprint_wireframes",
       "required_status": "completed",
       "is_blocking": true,
-      "description": "Wireframe screens required before leaving Stage 15 (Wireframes/UX)"
+      "description": "Wireframes required before leaving Stage 15 (Wireframes/UX)"
     },
     {
       "stage_number": 16,

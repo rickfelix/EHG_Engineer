@@ -62,7 +62,7 @@ async function seed() {
     .from('stage_artifact_requirements')
     .select('artifact_type, is_blocking')
     .eq('stage_number', 15)
-    .eq('artifact_type', 'wireframe_screens')
+    .eq('artifact_type', 'blueprint_wireframes')
     .single();
 
   const { data: stage17 } = await supabase
@@ -73,9 +73,9 @@ async function seed() {
     .single();
 
   if (stage15) {
-    console.log(`  Stage 15: wireframe_screens, is_blocking=${stage15.is_blocking}`);
+    console.log(`  Stage 15: blueprint_wireframes, is_blocking=${stage15.is_blocking}`);
   } else {
-    console.error('  ❌ Stage 15 wireframe_screens requirement NOT found');
+    console.error('  ❌ Stage 15 blueprint_wireframes requirement NOT found');
   }
 
   if (stage17) {
