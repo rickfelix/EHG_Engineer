@@ -525,7 +525,30 @@ async function main() {
     }
   }
 
-  // 2. Validate claim identity + ownership BEFORE acquiring session.
+  // 2. Ensure session row exists BEFORE claim validation.
+  // SD-MAN-INFRA-SESSION-IDENTITY-BIRTH-001: The fail-closed gate (assertValidClaim)
+  // requires a claude_sessions row to match against. Previously, getOrCreateSession()
+  // ran AFTER assertValidClaim(), so new sessions always failed with
+  // no_deterministic_identity. Fix: resolve or create the session first, then validate.
+  let session = null;
+  try {
+    const resolved = await resolveOwnSession(supabase, {
+      select: 'session_id, sd_id, status, heartbeat_at, terminal_id',
+      warnOnFallback: false,
+      requireDeterministic: true
+    });
+    if (resolved.data && (resolved.source === 'env_var' || resolved.source === 'marker_file' || resolved.source === 'terminal_id')) {
+      session = resolved.data;
+      const ccPid = resolved.data?.metadata?.cc_pid || process.pid;
+      console.log(`${colors.dim}(Identity: source=${resolved.source} session=${session.session_id} cc_pid=${ccPid})${colors.reset}`);
+    }
+  } catch { /* fall through — will create new session */ }
+
+  if (!session) {
+    session = await getOrCreateSession();
+  }
+
+  // 2a. Validate claim identity + ownership now that session row exists.
   // SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001: Invoke the fail-closed gate so cross-CC collisions
   // are surfaced with a structured error instead of silently merged via "newest heartbeat".
   // allowMainRepoForAcquisition=true because sd-start is the one operation legitimately
@@ -541,27 +564,6 @@ async function main() {
       process.exit(2);
     }
     throw e;
-  }
-
-  // 2a. Get existing session by deterministic identity (env var or marker file).
-  // After context compaction, the old session's DB row still exists with the same
-  // session_id — reuse it instead of creating a duplicate.
-  let session = null;
-  try {
-    const resolved = await resolveOwnSession(supabase, {
-      select: 'session_id, sd_id, status, heartbeat_at, terminal_id',
-      warnOnFallback: false,
-      requireDeterministic: true
-    });
-    if (resolved.data && (resolved.source === 'env_var' || resolved.source === 'marker_file')) {
-      session = resolved.data;
-      const ccPid = resolved.data?.metadata?.cc_pid || process.pid;
-      console.log(`${colors.dim}(Identity: source=${resolved.source} session=${session.session_id} cc_pid=${ccPid})${colors.reset}`);
-    }
-  } catch { /* fall through — will create new session */ }
-
-  if (!session) {
-    session = await getOrCreateSession();
   }
 
   if (!session) {
