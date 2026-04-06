@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-04-03 10:02:48 AM
+**Generated**: 2026-04-06 8:18:47 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -85,41 +85,6 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
-
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -159,6 +124,41 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -370,6 +370,103 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
+## Multi-Repo SD Verification
+
+**CRITICAL**: When verifying whether an SD shipped code (completion gates, extent-of-condition audits, scope verification), you MUST search ALL EHG repositories — not just the current one.
+
+### Known Repositories
+| Repo | GitHub | Local Path | Content |
+|------|--------|-----------|---------|
+| EHG_Engineer | `rickfelix/EHG_Engineer` | `C:\Users\rickf\Projects\_EHG\EHG_Engineer` | Backend, CLI, infrastructure |
+| ehg | `rickfelix/ehg` | `C:\Users\rickf\Projects\_EHG\ehg` | Frontend React app |
+| commitcraft-ai | `rickfelix/commitcraft-ai` | `C:\Users\rickf\Projects\_EHG\commitcraft-ai` | CommitCraft AI app |
+
+### Verification Command
+```bash
+# Search across ALL repos for an SD key
+gh search commits "<SD-KEY>" --owner rickfelix --limit 10
+
+# Or iterate repos locally
+for repo in EHG_Engineer ehg commitcraft-ai; do
+  echo "=== $repo ===" && cd /c/Users/rickf/Projects/_EHG/$repo && git log --oneline --grep="<SD-KEY>" | head -5
+done
+```
+
+### Why This Matters
+Single-repo `git log --grep` misses cross-repo work entirely. During Apr 5 extent-of-condition analysis, 8 child SDs appeared as code gaps but were actually shipped to the `ehg` or `commitcraft-ai` repos. The `multi-repo-status.js` script already knows about all repos — audit tools should use the same list.
+
+**Pattern Reference**: PAT-MULTI-REPO-VERIFY-001
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
+## Execution Philosophy
+
+### Quality-First (PARAMOUNT)
+**Get it right, not fast.** Correctness > speed. 2-4 hours careful implementation beats 6-12 hours rework.
+
+### Testing-First (MANDATORY)
+- E2E testing is MANDATORY
+- 100% user story coverage required
+- Both unit tests AND E2E tests must pass
+
+### Database-First (REQUIRED)
+**Zero markdown files.** Database tables are single source of truth:
+- SDs → `strategic_directives_v2`
+- PRDs → `product_requirements_v2`
+- Handoffs → `sd_phase_handoffs`
+- Retrospectives → `retrospectives`
+
+### Validation-First (GATEKEEPING)
+- LEAD validates: Real problem? Feasible? Resources?
+- After approval: SCOPE LOCK - deliver what was approved
+
+### Anti-Bias Rules (MANDATORY)
+| Bias | Incorrect | Correct |
+|------|-----------|---------|
+| Efficiency | Skip workflow steps | Full workflow is non-negotiable |
+| Completion | "complete" = code works | "complete" = database status + validations |
+| Abstraction | Children are sub-tasks | Children are INDEPENDENT SDs |
+| Autonomy | No human gates | Each phase requires validation |
+
+**RULE**: When ANY bias-pattern detected, STOP and verify with user.
+
+**NEVER**:
+- Ship without completing full LEO Protocol
+- Skip LEAD approval for child SDs
+- Skip PRD creation for child SDs
+- Mark parent complete before all children complete in database
+
 ## Sub-Agent Routing Reference
 
 All 16 specialized sub-agents are available in EVERY phase (LEAD, PLAN, EXEC). Use the Task tool with the appropriate `subagent_type` to invoke them. See phase-specific guidance in each phase's CLAUDE file for recommended priorities.
@@ -412,76 +509,6 @@ apply_migration is blocked by PreToolUse hook — use database-agent instead.
 - **Error routing**: ANY database WRITE error triggers database-agent (reads use MCP tools directly); ANY test failure triggers testing-agent
 
 *Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
-
-## Execution Philosophy
-
-### Quality-First (PARAMOUNT)
-**Get it right, not fast.** Correctness > speed. 2-4 hours careful implementation beats 6-12 hours rework.
-
-### Testing-First (MANDATORY)
-- E2E testing is MANDATORY
-- 100% user story coverage required
-- Both unit tests AND E2E tests must pass
-
-### Database-First (REQUIRED)
-**Zero markdown files.** Database tables are single source of truth:
-- SDs → `strategic_directives_v2`
-- PRDs → `product_requirements_v2`
-- Handoffs → `sd_phase_handoffs`
-- Retrospectives → `retrospectives`
-
-### Validation-First (GATEKEEPING)
-- LEAD validates: Real problem? Feasible? Resources?
-- After approval: SCOPE LOCK - deliver what was approved
-
-### Anti-Bias Rules (MANDATORY)
-| Bias | Incorrect | Correct |
-|------|-----------|---------|
-| Efficiency | Skip workflow steps | Full workflow is non-negotiable |
-| Completion | "complete" = code works | "complete" = database status + validations |
-| Abstraction | Children are sub-tasks | Children are INDEPENDENT SDs |
-| Autonomy | No human gates | Each phase requires validation |
-
-**RULE**: When ANY bias-pattern detected, STOP and verify with user.
-
-**NEVER**:
-- Ship without completing full LEO Protocol
-- Skip LEAD approval for child SDs
-- Skip PRD creation for child SDs
-- Mark parent complete before all children complete in database
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## DB Ops Protocol (Common Pitfalls)
 
@@ -678,6 +705,7 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 - Blocking error requires human decision (e.g., merge conflicts)
 - Tests fail after 2 retry attempts
 - Critical security or data-loss scenario
+- **NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, or any "warrants confirmation" rationalization. Phase boundaries are NOT pause points. If your reason for stopping is not in the three bullets above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
 
 ### "Child SD"
 **Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
@@ -1242,59 +1270,57 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. LEAD_TO_PLAN Handoff Retrospective: LEO /simplify Enforcement and /batch Command Integration [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/5/2026 | **Score**: 100
+### 1. PLAN_TO_EXEC Handoff Retrospective: Intake Classification Schema and Taxonomy Module [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/8/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-ed7edb22] Gate HEAL_BEFORE_COMPLETE failed: score 99/100
-- [PAT-AUTO-8f97633d] Gate HEAL_BEFORE_COMPLETE failed: score 95/100
-
-**Action Items**:
-- [ ] Verify: Vision: simplify_enforcement alignment for SD-LEO-SIMPLIFY-ENFORCEMENT-A...
-- [ ] Validate: Vision: batch_dispatcher alignment for SD-LEO-SIMPLIFY-ENFORCEMENT-AND...
-
-### 2. LEAD_TO_PLAN Handoff Retrospective: Batch Command Expansion and Codebase-Wide Simplify [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/5/2026 | **Score**: 100
-
-**Key Improvements**:
-- Section-file-mapping.json has no validation against DB section_types - PR #1825 was only found becau...
-- The TESTING sub-agent gate (2A:uiComponentsImplemented) required manual DB insertion because spawnin...
-
-**Action Items**:
-- [ ] Add integration test for batch-dispatcher.mjs that verifies all 6 registered ope...
-- [ ] Monitor p-limit concurrency=3 default under production load. If Supabase connect...
-
-### 3. PLAN_TO_EXEC Handoff Retrospective: Phase 2: Scoring + Workers [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/5/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-074cd430] Gate HEAL_BEFORE_COMPLETE failed: score 77/100
-- [PAT-AUTO-c1db4046] Gate RETROSPECTIVE_QUALITY_GATE failed: score 21/100
+- [PAT-HANDOFFGHOST] Handoff script prints success but does not insert DB row. Script outputs HANDOFF_...
+- [PAT-AUTO-3d8fe812] Gate ACCEPTANCE_CRITERIA_VALIDATION failed: score 0/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
-### 4. LEAD_TO_PLAN Handoff Retrospective: Acquisition Readiness Gap Remediation Route Registration Separability Delta [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/5/2026 | **Score**: 100
+### 2. SD-LEO-FEAT-STRATEGIC-ROADMAP-ARTIFACT-001-C Completion [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/8/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-7c2b3edc] Gate HEAL_BEFORE_COMPLETE failed: score 94/100
-- [PAT-AUTO-074cd430] Gate HEAL_BEFORE_COMPLETE failed: score 77/100
+- PRD quality gates delayed by external LLM timeouts: Gemini and OpenAI both timed out after 60 second...
+- Child SD metadata missing parent_orchestrator flag required by designSubAgentExecution gate in gate-...
 
 **Action Items**:
-- [ ] Verify: Standalone routes /chairman/portfolio/exit-readiness and /chairman/ventu...
-- [ ] Validate: Both standalone pages and embedded tabs show identical data via shared...
+- [ ] Fix child SD metadata population in leo-create-sd.js to include parent_orchestra...
+- [ ] Fix user story creation to auto-set sd_id from PRD sd_id lookup
 
-### 5. PLAN_TO_EXEC Handoff Retrospective: Batch Command Expansion and Codebase-Wide Simplify [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/6/2026 | **Score**: 100
+### 3. PLAN_TO_EXEC Handoff Retrospective: Reality Gate DB-Driven Refactor [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/7/2026 | **Score**: 100
 
 **Key Improvements**:
-- Section-file-mapping.json has no validation against DB section_types - PR #1825 was only found becau...
-- The TESTING sub-agent gate (2A:uiComponentsImplemented) required manual DB insertion because spawnin...
+- [PAT-AUTO-4c76387f] Gate HEAL_BEFORE_COMPLETE failed: score 76/100
+- [PAT-AUTO-6ed421cf] Gate HEAL_BEFORE_COMPLETE failed: score 2/100
 
 **Action Items**:
-- [ ] Add integration test for batch-dispatcher.mjs that verifies all 6 registered ope...
-- [ ] Monitor p-limit concurrency=3 default under production load. If Supabase connect...
+- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+
+### 4. PLAN_TO_EXEC Handoff Retrospective: Brainstorm-to-SD Pipeline Enforcement Gate [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/7/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-3d8fe812] Gate ACCEPTANCE_CRITERIA_VALIDATION failed: score 0/100
+- [PAT-AUTO-4c76387f] Gate HEAL_BEFORE_COMPLETE failed: score 76/100
+
+**Action Items**:
+- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+
+### 5. LEAD_TO_PLAN Handoff Retrospective: Wave-to-SD Promotion and Baseline Integration [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/8/2026 | **Score**: 100
+
+**Key Improvements**:
+- PRD integration section required manual correction of key names
+- Retrospective quality gate required enrichment after auto-creation
+
+**Action Items**:
+- [ ] Add unit tests for baseline-manager createBaseline version increment logic
+- [ ] Add --format json flag to roadmap-baseline.js for machine-readable output
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1360,7 +1386,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-04-03*
+*Generated from database: 2026-04-06*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*

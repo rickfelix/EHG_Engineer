@@ -68,6 +68,7 @@ function generateRouter(data, _fileMapping) {
 
   const sessionPrologue = sections.find(s => s.section_type === 'session_prologue');
   const sessionInit = sections.find(s => s.section_type === 'session_init');
+  const autoProceedRouter = sections.find(s => s.section_type === 'auto_proceed_router');
 
   return `# CLAUDE.md - LEO Protocol Orchestrator
 
@@ -83,10 +84,7 @@ Invoke the RCA Sub-Agent (\`subagent_type="rca-agent"\`). Your prompt MUST conta
 
 ${sessionPrologue ? formatSection(sessionPrologue) : ''}
 
-## AUTO-PROCEED Mode
-
-AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no confirmation prompts.
-**Pause points** (even when ON): Orchestrator completion, blocking errors, test failures (2 retries), merge conflicts, all children blocked.
+${autoProceedRouter ? autoProceedRouter.content : ''}
 
 ## SD Continuation
 
@@ -223,13 +221,13 @@ function generateLead(data, fileMapping) {
 
   // SD-LEO-INFRA-VISION-PROTOCOL-FEEDBACK-001: live VGAP injection
   const visionGapSection = visionGapInsights.length > 0
-    ? `## ⚠️ Current Vision Gaps (Live — from issue_patterns)\n\n` +
-      `| Pattern ID | Dimension / Summary | Severity |\n` +
-      `|------------|--------------------|-----------|\n` +
+    ? '## ⚠️ Current Vision Gaps (Live — from issue_patterns)\n\n' +
+      '| Pattern ID | Dimension / Summary | Severity |\n' +
+      '|------------|--------------------|-----------|\n' +
       visionGapInsights.map(g =>
         `| ${g.pattern_id} | ${g.issue_summary ?? g.category} | ${g.severity?.toUpperCase() ?? 'unknown'} |`
       ).join('\n') +
-      `\n\n**Action**: When approving SDs, consider whether the SD addresses or exacerbates these gaps.\n`
+      '\n\n**Action**: When approving SDs, consider whether the SD addresses or exacerbates these gaps.\n'
     : '';
 
   // RCA Mandate is in the router — not duplicated here (LEAN LEAD)
@@ -335,11 +333,11 @@ function generateExec(data, fileMapping) {
 
   // SD-LEO-INFRA-VISION-PROTOCOL-FEEDBACK-001: live VGAP implementation reminders
   const visionRemindersSection = visionGapInsights.length > 0
-    ? `## 🔍 Implementation Reminders — Active Vision Gaps\n\n` +
+    ? '## 🔍 Implementation Reminders — Active Vision Gaps\n\n' +
       visionGapInsights.map(g =>
         `- **${g.pattern_id}** (${g.severity?.toUpperCase() ?? 'UNKNOWN'}): ${g.issue_summary ?? g.category} — ensure implementation does not worsen this gap`
       ).join('\n') +
-      `\n`
+      '\n'
     : '';
 
   // RCA Mandate is in the router — not duplicated here (LEAN EXEC)
