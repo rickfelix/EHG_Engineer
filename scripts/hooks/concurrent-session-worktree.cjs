@@ -446,7 +446,7 @@ async function main() {
 
   // SD-LEO-INFRA-CLAIM-SYSTEM-IMPROVEMENTS-001 (FR-003): Clean up stale sessions on startup.
   // Fire-and-forget — does not block session initialization.
-  const staleThreshold = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS || '300', 10);
+  const staleThreshold = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS || '600', 10);
   supabase.rpc('cleanup_stale_sessions', { p_stale_threshold_seconds: staleThreshold })
     .then(({ error }) => {
       if (error) {
