@@ -197,7 +197,7 @@ Claude Code provides these environment variables to hook scripts:
 | `CLAUDE_TOOL_NAME` | Name of tool being used | PreToolUse, PostToolUse |
 | `CLAUDE_TOOL_INPUT` | Tool input (JSON string) | PreToolUse, PostToolUse |
 | `CLAUDE_PROJECT_DIR` | Project root directory | All hooks |
-| `CLAUDE_SESSION_ID` | Current session ID | All hooks |
+| `CLAUDE_SESSION_ID` | Current session ID (per-conversation UUID, set by `capture-session-id.cjs` SessionStart hook from stdin JSON) | All hooks |
 
 ## Hook Output
 
@@ -567,6 +567,30 @@ const SESSION_MARKER_FILE = path.join(os.tmpdir(), 'leo-checkpoints', `marker-${
 **When It Runs**: Immediately before Claude Code performs context summarization/compaction (typically when context usage approaches limits).
 
 **Integration**: Works with `SessionStart` hook to restore context after compaction.
+
+### SessionStart Hook: Session Identity Capture
+
+**Location**: `scripts/hooks/capture-session-id.cjs`
+**Purpose**: Extracts the per-conversation `CLAUDE_SESSION_ID` from Claude Code's stdin JSON and exports it as an environment variable for all subsequent hooks and scripts.
+**Exit Behavior**: Exit 0 always (informational)
+
+**Output**: `CLAUDE_SESSION_ID=<uuid>` — printed to stdout so the harness injects it into the conversation environment.
+
+**How It Works**:
+1. Claude Code passes a JSON object on stdin to SessionStart hooks containing `session_id`
+2. This hook parses it and outputs `CLAUDE_SESSION_ID=<uuid>`
+3. All subsequent scripts (sd-start.js, handoff.js) receive this via `process.env.CLAUDE_SESSION_ID`
+
+**Why It Matters (PRs #2774, #2776, #2777)**:
+- The fail-closed claim gate (`lib/claim-validity-gate.js`) requires deterministic identity via `CLAUDE_SESSION_ID` env var
+- Without it, `resolveOwnSession()` cannot match the current conversation to its database session row
+- Two CC windows sharing a terminal_id (SSE port 25565) need per-conversation UUIDs for disambiguation
+
+**Inline Usage**: All `node scripts/*.js` invocations in skills must prefix with `CLAUDE_SESSION_ID=<uuid>`:
+```bash
+CLAUDE_SESSION_ID=b92f46e5-... node scripts/sd-start.js SD-XXX-001
+CLAUDE_SESSION_ID=b92f46e5-... node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
+```
 
 ### SessionStart Hook: Context Restoration Loader
 

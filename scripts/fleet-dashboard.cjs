@@ -2,9 +2,25 @@
 // Usage: node scripts/fleet-dashboard.cjs [workers|orchestrator|available|coordination|health|qa|forecast|all]
 
 const os = require('os');
+const fs = require('fs');
+const path = require('path');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
 const supabase = createSupabaseServiceClient();
+
+// Read CLAUDE_SESSION_ID from marker files for disambiguation
+function getMarkerSessionIds() {
+  const markerDir = path.resolve(__dirname, '../.claude/session-identity');
+  if (!fs.existsSync(markerDir)) return {};
+  const map = {};
+  for (const f of fs.readdirSync(markerDir).filter(f => /^pid-\d+\.json$/.test(f))) {
+    try {
+      const data = JSON.parse(fs.readFileSync(path.join(markerDir, f), 'utf8'));
+      if (data.session_id) map[data.session_id] = data.claude_session_id || null;
+    } catch { /* skip unreadable markers */ }
+  }
+  return map;
+}
 
 const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 
@@ -125,15 +141,23 @@ async function loadData() {
 // ── Section: Workers ──
 function printWorkers(d) {
   const now = new Date();
+  const markerIds = getMarkerSessionIds();
+
+  // Detect terminal_id collisions among active workers
+  const ttyCount = {};
+  for (const s of d.activeSessions) { ttyCount[s.tty] = (ttyCount[s.tty] || 0) + 1; }
+  const hasCollision = Object.values(ttyCount).some(c => c > 1);
+
   console.log('');
   console.log('WORKERS [' + now.toLocaleTimeString() + ']');
-  console.log('─'.repeat(72));
+  console.log('─'.repeat(hasCollision ? 84 : 72));
 
   if (d.activeSessions.length === 0) {
     console.log('  (no active workers)');
   } else {
-    console.log('  ' + pad('Terminal', 12) + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + 'Heartbeat');
-    console.log('  ' + '─'.repeat(72));
+    const csidHeader = hasCollision ? pad('CSID', 12) : '';
+    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + 'Heartbeat');
+    console.log('  ' + '─'.repeat(hasCollision ? 84 : 72));
     for (const s of d.activeSessions) {
       const child = d.children.find(c => c.sd_key === s.sd_id);
       const pct = child ? child.progress_percentage : 0;
@@ -142,7 +166,8 @@ function printWorkers(d) {
       const fails = s.handoff_fail_count != null ? String(s.handoff_fail_count) : '-';
       const wip = s.has_uncommitted_changes === true ? 'Y' : s.has_uncommitted_changes === false ? 'N' : '-';
       const struggleTag = (s.handoff_fail_count || 0) > 3 ? ' [STRUGGLING]' : '';
-      console.log('  ' + pad(s.tty, 12) + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + s.heartbeat_age_human + struggleTag);
+      const csid = hasCollision ? pad((markerIds[s.session_id] || '').substring(0, 10), 12) : '';
+      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + s.heartbeat_age_human + struggleTag);
     }
   }
 

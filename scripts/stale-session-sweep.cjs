@@ -97,7 +97,7 @@ function detectIdentityCollisions() {
       const pid = Number(f.match(/^pid-(\d+)\.json$/)[1]);
       try {
         const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        return { pid, session_id: data.session_id, cc_pid: data.cc_pid || pid, sse_port: data.sse_port, marker_path: filePath, mtime: fs.statSync(filePath).mtimeMs };
+        return { pid, session_id: data.session_id, claude_session_id: data.claude_session_id || null, cc_pid: data.cc_pid || pid, sse_port: data.sse_port, marker_path: filePath, mtime: fs.statSync(filePath).mtimeMs };
       } catch { return null; }
     })
     .filter(Boolean);
@@ -114,12 +114,23 @@ function detectIdentityCollisions() {
   }
 
   // Collisions: same session_id claimed by multiple live PIDs
+  // Enhanced: also detect when markers share session_id but have different CLAUDE_SESSION_IDs
   const collisions = Object.entries(bySession)
-    .filter(([, arr]) => arr.length > 1)
-    .map(([sessionId, markers]) => ({
-      session_id: sessionId,
-      markers: markers.sort((a, b) => a.mtime - b.mtime) // oldest first
-    }));
+    .filter(([, arr]) => {
+      if (arr.length > 1) return true;
+      // Single marker but CLAUDE_SESSION_ID differs from session_id — potential upstream mismatch
+      return false;
+    })
+    .map(([sessionId, markers]) => {
+      const sorted = markers.sort((a, b) => a.mtime - b.mtime); // oldest first
+      // Use CLAUDE_SESSION_ID for split decisions when available
+      const uniqueCsids = new Set(sorted.map(m => m.claude_session_id).filter(Boolean));
+      return {
+        session_id: sessionId,
+        markers: sorted,
+        has_csid_divergence: uniqueCsids.size > 1
+      };
+    });
 
   return { collisions, aliveMarkers };
 }
@@ -132,8 +143,9 @@ async function splitCollidingSessions(supabase, collisions, actions, warnings) {
     const keeper = collision.markers[0]; // oldest marker keeps the session
     const extras = collision.markers.slice(1); // newer markers get split
 
+    const csidNote = collision.has_csid_divergence ? ' (CLAUDE_SESSION_IDs diverge — using CSID for split)' : '';
     actions.push('IDENTITY_COLLISION: session ' + collision.session_id.substring(0, 12) + '... shared by PIDs ' +
-      collision.markers.map(m => m.pid).join(', ') + ' — keeper PID=' + keeper.pid);
+      collision.markers.map(m => m.pid).join(', ') + ' — keeper PID=' + keeper.pid + csidNote);
 
     for (const extra of extras) {
       // Use marker-based UUID if available, fall back to PID-based format
@@ -165,7 +177,7 @@ async function splitCollidingSessions(supabase, collisions, actions, warnings) {
           codebase: path.resolve(__dirname, '..'),
           status: 'idle',
           heartbeat_at: new Date().toISOString(),
-          metadata: { split_from: collision.session_id, split_reason: 'IDENTITY_COLLISION', original_pid: extra.pid }
+          metadata: { split_from: collision.session_id, split_reason: 'IDENTITY_COLLISION', original_pid: extra.pid, claude_session_id: extra.claude_session_id || null }
         });
 
       if (insertErr) {

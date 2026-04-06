@@ -71,11 +71,37 @@ async function main() {
     return;
   }
 
+  // Read CLAUDE_SESSION_IDs from marker files for collision detection
+  const markerDir = path.resolve(__dirname, '../.claude/session-identity');
+  const markerCsids = {};
+  if (fs.existsSync(markerDir)) {
+    for (const f of fs.readdirSync(markerDir).filter(f => /^pid-\d+\.json$/.test(f))) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(markerDir, f), 'utf8'));
+        if (data.session_id && data.claude_session_id) {
+          markerCsids[data.session_id] = data.claude_session_id;
+        }
+      } catch { /* skip */ }
+    }
+  }
+
+  // Deduplicate workers: if two share the same session_id but have different
+  // CLAUDE_SESSION_IDs in markers, treat them as distinct (pending sweep split)
+  const uniqueWorkers = [];
+  const seen = new Set();
+  for (const w of workers) {
+    const csid = markerCsids[w.session_id] || w.session_id;
+    if (!seen.has(csid)) {
+      seen.add(csid);
+      uniqueWorkers.push(w);
+    }
+  }
+
   // Separate workers into already-assigned and new
   const assigned = [];
   const needsAssignment = [];
 
-  for (const worker of workers) {
+  for (const worker of uniqueWorkers) {
     const identity = worker.metadata?.fleet_identity;
     if (identity?.callsign && identity?.color && !forceReassign) {
       assigned.push(worker);
