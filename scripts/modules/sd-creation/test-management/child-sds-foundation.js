@@ -82,8 +82,8 @@ export const cleanupSd = {
     ]
   },
   deliverables: [
-    'scripts/test-cleanup-analyzer.js - Identifies cleanup candidates',
-    'scripts/test-migration-runner.js - Executes migrations',
+    'test-cleanup-analyzer.js - Identifies cleanup candidates',
+    'test-migration-runner.js - Executes migrations',
     'Cleanup report with before/after metrics',
     'Migrated test files following new patterns',
     'Consolidated fixtures in tests/fixtures/',
@@ -177,7 +177,7 @@ export const cicdSd = {
   },
   deliverables: [
     '.github/workflows/test-results-capture.yml',
-    'scripts/ingest-test-results.js',
+    'ingest-test-results.js',
     'lib/testing/result-parser.js',
     'lib/testing/github-commenter.js',
     'Updated e2e-tests.yml with result upload',
@@ -229,7 +229,7 @@ export const automationSd = {
     'lib/testing/coverage-gap-analyzer.js',
     'lib/testing/ownership-assigner.js',
     'lib/testing/baseline-drift-detector.js',
-    'scripts/run-test-automation.js',
+    'run-test-automation.js',
     'Scheduled GitHub Action for daily analysis'
   ],
   success_criteria: [

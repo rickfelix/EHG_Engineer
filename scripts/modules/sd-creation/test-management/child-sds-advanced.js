@@ -35,7 +35,7 @@ export const selectionSd = {
     'lib/testing/file-test-mapper.js',
     'lib/testing/dependency-analyzer.js',
     'lib/testing/test-selector.js',
-    'scripts/select-tests-for-pr.js',
+    'select-tests-for-pr.js',
     'file_test_map table population',
     'GitHub Action integration for PR testing'
   ],
@@ -236,7 +236,7 @@ export const execSd = {
     ]
   },
   deliverables: [
-    'scripts/validate-test-management.js',
+    'validate-test-management.js',
     'E2E tests for test management system',
     'Performance benchmark report',
     'Rollback runbook',

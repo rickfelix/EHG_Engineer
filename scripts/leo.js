@@ -306,7 +306,8 @@ NOTE: GitHub owner defaults to "rickfelix" - no need to change!
 STEP 3: Register it
 Type this and press Enter:
 
-   node scripts/leo-register-from-env.js
+   (legacy: the env-based registration script has been archived;
+    use the dashboard or /sd-create instead)
 
 ═══════════════════════════════════════════════════
 
