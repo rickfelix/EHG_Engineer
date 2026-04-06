@@ -201,7 +201,7 @@ class LEADSubmissionReviewer {
     getRecommendedAction(actionType) {
         const actions = {
             'review': 'Review and create SD → node scripts/create-sd-from-submission.js',
-            'verify': 'Verify SD accuracy and create handoff → node scripts/unified-handoff-system.js',
+            'verify': 'Verify SD accuracy and create handoff → node scripts/handoff.js',
             'monitor': 'Monitor gate progression → node scripts/check-submission-status.js',
             'remediate': 'Archive or remediate → node scripts/archive-submission.js'
         };
