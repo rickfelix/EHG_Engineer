@@ -39,6 +39,11 @@ const SCAN_PATHS = [
   { glob: 'scripts/hooks/*.cjs', description: 'Hook scripts', tier: 'critical' },
   { glob: 'package.json', description: 'npm scripts', tier: 'critical' },
   { glob: 'templates/claude-md/**/*.md', description: 'Sub-agent templates', tier: 'critical' },
+  // Active code: catch cross-script shell-outs and dynamic imports referencing archived files
+  { glob: 'scripts/**/*.js', description: 'Active scripts (cross-references)', tier: 'critical', excludePattern: /archive|_deprecated|\/test\/|\.test\.|\.spec\./ },
+  { glob: 'scripts/**/*.mjs', description: 'Active scripts (cross-references)', tier: 'critical', excludePattern: /archive|_deprecated|\/test\/|\.test\.|\.spec\./ },
+  { glob: 'lib/**/*.js', description: 'Library code', tier: 'critical', excludePattern: /\/test\/|\.test\.|\.spec\./ },
+  { glob: 'lib/**/*.mjs', description: 'Library code', tier: 'critical', excludePattern: /\/test\/|\.test\.|\.spec\./ },
   // INFO tier — historical docs; broken refs are advisory, don't block commits
   { glob: 'docs/**/*.md', description: 'Documentation', tier: 'info', excludePattern: /archived|archive/ },
   { glob: 'templates/**/*.md', description: 'Templates', tier: 'info', excludePattern: /archived|claude-md/ },
@@ -51,6 +56,8 @@ const REFERENCE_PATTERNS = [
   // npm run that maps to scripts/ (we check package.json separately)
   // Direct path references: scripts/X.js (in docs, not inside code blocks showing file content)
   /(?:^|\s|["'`(])scripts\/([a-zA-Z0-9_.-]+\.(?:js|mjs|cjs))(?:\s|["'`)\n]|$)/gm,
+  // Relative import/require referencing scripts/X (e.g. await import('../../scripts/foo.js'))
+  /['"`][^'"`]*?(?:^|\/)scripts\/([a-zA-Z0-9_.-]+\.(?:js|mjs|cjs))['"`]/g,
 ];
 
 // Scripts that are legitimately not in scripts/ (they're modules, libs, etc.)
@@ -137,6 +144,8 @@ function extractReferences(filePath) {
 
         // Skip ignored patterns
         if (IGNORE_PATTERNS.some(p => p.test(scriptName))) continue;
+        // Skip single-letter placeholder names from doc comments (e.g. scripts/x.js, scripts/X.js)
+        if (/^[a-zA-Z]\.(js|mjs|cjs)$/.test(scriptName)) continue;
 
         if (!refs.has(scriptName)) refs.set(scriptName, []);
         refs.get(scriptName).push({

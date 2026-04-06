@@ -369,13 +369,13 @@ async function main() {
   console.log(`   Key: ${orchestratorKey}`);
   console.log(`   Children: ${phases.length}`);
   if (!dryRun) {
-    console.log(`\n   Next: node scripts/unified-handoff-system.js execute LEAD-TO-PLAN ${orchestratorKey}`);
+    console.log(`\n   Next: node scripts/handoff.js execute LEAD-TO-PLAN ${orchestratorKey}`);
   }
 }
 
 // Only run CLI when invoked directly
 const _isMainModule = import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
+                     import.meta.url === `file:///${process.argv[1]?.replace(/\\\\/g, '/')}` ||
                       import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, '/')}`;
 if (_isMainModule) {
   main().catch(err => {
