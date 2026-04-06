@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-06T14:26:44.289Z
-**Rows**: 352
+**Generated**: 2026-04-06T22:22:54.242Z
+**Rows**: 372
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -43,7 +43,7 @@
 - `debate_arguments_in_response_to_argument_id_fkey`: in_response_to_argument_id → debate_arguments(id)
 
 ### Check Constraints
-- `debate_arguments_argument_type_check`: CHECK ((argument_type = ANY (ARRAY['initial_position'::text, 'rebuttal'::text, 'clarification'::text, 'constitution_citation'::text, 'evidence'::text])))
+- `debate_arguments_argument_type_check`: CHECK ((argument_type = ANY (ARRAY['initial_position'::text, 'rebuttal'::text, 'clarification'::text, 'constitution_citation'::text, 'evidence'::text, 'specialist_testimony'::text])))
 - `debate_arguments_confidence_score_check`: CHECK (((confidence_score >= (0)::numeric) AND (confidence_score <= (1)::numeric)))
 - `debate_arguments_round_number_check`: CHECK ((round_number >= 1))
 
