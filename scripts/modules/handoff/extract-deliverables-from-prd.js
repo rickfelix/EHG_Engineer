@@ -114,10 +114,19 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
 
       if (Array.isArray(requirements)) {
         requirements.forEach((req, index) => {
+          // Derive a meaningful name: prefer title/name, then truncate requirement/description text,
+          // then fall back to "Requirement N". Generic "Requirement N" names cause CHILD_SCOPE_COVERAGE
+          // gate failures because the keyword matcher can't link them to parent deliverables.
+          const rawName = req.title || req.name
+            || req.requirement || req.description || req.details;
+          const deliverableName = rawName
+            ? rawName.length > 120 ? rawName.substring(0, 117) + '...' : rawName
+            : `Requirement ${index + 1}`;
+
           deliverables.push({
             sd_id: sdId,
-            deliverable_type: inferDeliverableType(req.title || req.name || req.description),
-            deliverable_name: req.title || req.name || `Requirement ${index + 1}`,
+            deliverable_type: inferDeliverableType(rawName || deliverableName),
+            deliverable_name: deliverableName,
             description: req.description || req.details || undefined,
             extracted_from: 'prd',
             priority: 'required',
