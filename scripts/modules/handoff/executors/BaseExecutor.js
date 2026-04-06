@@ -127,6 +127,33 @@ export class BaseExecutor {
       const sd = await this.sdRepo.getById(sdId);
       try { endSpan(step1Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
+      // Step 1.3: SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001 — Fail-closed claim identity + worktree isolation.
+      // Rejects handoff when:
+      //   (a) resolveOwnSession returns ambiguous/no_deterministic_identity (cross-CC collision),
+      //   (b) SD.claiming_session_id does not match our session (foreign claim),
+      //   (c) process.cwd() is not inside SD.worktree_path (wrong directory).
+      // No allowMainRepoForAcquisition flag here — handoffs MUST run from inside the worktree,
+      // enforced from LEAD phase onward via BaseExecutor inheritance.
+      try {
+        const { assertValidClaim, ClaimIdentityError } = await import('../../../../lib/claim-validity-gate.js');
+        const sdKeyForGate = sd?.sd_key || sdId;
+        await assertValidClaim(this.supabase, sdKeyForGate, {
+          operation: `handoff_${this.handoffType}`
+        });
+      } catch (e) {
+        if (e?.name === 'ClaimIdentityError') {
+          console.error(e.toBanner ? e.toBanner() : e.message);
+          try { endSpan(rootSpan, { result: 'claim_validity_gate_blocked' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }
+          return ResultBuilder.gateFailure('GATE_CLAIM_VALIDITY', {
+            issues: [`${e.reason}: ${e.message}`],
+            score: 0,
+            max_score: 100,
+            warnings: [e.remediation || '']
+          }, e.message);
+        }
+        throw e;
+      }
+
       // Step 1.5: Pre-handoff migration check (auto-execute pending migrations)
       let step1_5Span;
       try { step1_5Span = startSpan('step.migrationCheck', { span_type: 'phase', step_name: 'migrationCheck', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }

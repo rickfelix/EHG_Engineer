@@ -18,6 +18,7 @@ import os from 'os';
 import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
 import { resolveOwnSession } from '../lib/resolve-own-session.js';
+import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate.js';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
@@ -524,20 +525,40 @@ async function main() {
     }
   }
 
-  // 2. Get existing session by terminal_id first, then fall back to creating new one.
+  // 2. Validate claim identity + ownership BEFORE acquiring session.
+  // SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001: Invoke the fail-closed gate so cross-CC collisions
+  // are surfaced with a structured error instead of silently merged via "newest heartbeat".
+  // allowMainRepoForAcquisition=true because sd-start is the one operation legitimately
+  // allowed to run from the main repo (it creates the worktree).
+  try {
+    await assertValidClaim(supabase, effectiveId, {
+      operation: 'sd_start',
+      allowMainRepoForAcquisition: true
+    });
+  } catch (e) {
+    if (e instanceof ClaimIdentityError) {
+      console.error(e.toBanner());
+      process.exit(2);
+    }
+    throw e;
+  }
+
+  // 2a. Get existing session by deterministic identity (env var or marker file).
   // After context compaction, the old session's DB row still exists with the same
-  // terminal_id — reuse it instead of creating a duplicate.
+  // session_id — reuse it instead of creating a duplicate.
   let session = null;
   try {
     const resolved = await resolveOwnSession(supabase, {
       select: 'session_id, sd_id, status, heartbeat_at, terminal_id',
-      warnOnFallback: false
+      warnOnFallback: false,
+      requireDeterministic: true
     });
-    if (resolved.data && resolved.source !== 'heartbeat_fallback') {
+    if (resolved.data && (resolved.source === 'env_var' || resolved.source === 'marker_file')) {
       session = resolved.data;
-      console.log(`${colors.dim}(Reusing session ${session.session_id} via ${resolved.source})${colors.reset}`);
+      const ccPid = resolved.data?.metadata?.cc_pid || process.pid;
+      console.log(`${colors.dim}(Identity: source=${resolved.source} session=${session.session_id} cc_pid=${ccPid})${colors.reset}`);
     }
-  } catch { /* fall through */ }
+  } catch { /* fall through — will create new session */ }
 
   if (!session) {
     session = await getOrCreateSession();
@@ -799,6 +820,17 @@ async function main() {
     console.log(`   Source: ${worktreeInfo.source}${worktreeInfo.worktree.created ? ' (newly created)' : ''}`);
     // Machine-readable directive for agent consumption (PAT-WORKTREE-LIFECYCLE-001)
     console.log(`\n>>> WORKTREE_CWD=${worktreeInfo.cwd}`);
+
+    // SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001: Persist worktree_path so claim-validity-gate
+    // can enforce cwd isolation on subsequent handoff/PRD operations. Non-fatal on error.
+    try {
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ worktree_path: worktreeInfo.cwd })
+        .eq('sd_key', effectiveId);
+    } catch (e) {
+      console.warn(`   ${colors.yellow}⚠️  Failed to persist worktree_path: ${e?.message || e}${colors.reset}`);
+    }
 
     // QF-20260314-250: Child claim verification gate
     // Warn when orchestrator sd:start resolves to a child's worktree
