@@ -190,6 +190,41 @@ function main() {
           // Non-fatal
         }
 
+        // Write delegation markers for any active worktrees so worktree
+        // processes can inherit this session's identity (SD-LEO-INFRA-WORKTREE-SESSION-IDENTITY-001)
+        try {
+          const worktreeDir = path.resolve(__dirname, '../../.worktrees');
+          if (fs.existsSync(worktreeDir)) {
+            const entries = fs.readdirSync(worktreeDir, { withFileTypes: true })
+              .filter(e => e.isDirectory() && e.name.startsWith('SD-'));
+            for (const entry of entries) {
+              const delegationFile = path.join(markerDir, `delegation-${entry.name}.json`);
+              const worktreePath = path.join(worktreeDir, entry.name);
+              fs.writeFileSync(delegationFile, JSON.stringify({
+                session_id: sessionId,
+                sd_key: entry.name,
+                worktree_path: worktreePath,
+                delegated_at: new Date().toISOString(),
+                ttl_seconds: 7200,
+                cc_pid: ccPid,
+                source: 'delegation'
+              }, null, 2));
+            }
+          }
+          // Cleanup expired delegation markers
+          const delegationFiles = fs.readdirSync(markerDir)
+            .filter(f => f.startsWith('delegation-') && f.endsWith('.json'));
+          for (const f of delegationFiles) {
+            try {
+              const content = JSON.parse(fs.readFileSync(path.join(markerDir, f), 'utf8'));
+              const age = (Date.now() - new Date(content.delegated_at).getTime()) / 1000;
+              if (age > (content.ttl_seconds || 7200)) {
+                fs.unlinkSync(path.join(markerDir, f));
+              }
+            } catch { /* best effort */ }
+          }
+        } catch { /* Non-fatal — delegation is best-effort */ }
+
         // Machine-readable line for downstream parsing (SD-MAN-INFRA-SESSION-IDENTITY-BIRTH-001)
         console.log(`CLAUDE_SESSION_ID=${sessionId}`);
         console.log(`SessionStart:capture-session-id: ${sessionId}`);
