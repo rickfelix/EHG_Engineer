@@ -73,6 +73,7 @@ function createMockSupabase(overrides = {}) {
   const defaultChain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    neq: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     lt: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
@@ -346,6 +347,7 @@ describe('StageExecutionWorker', () => {
       const killChain = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        neq: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }), // reentry: no pre-approved
         single: vi.fn().mockResolvedValue({
