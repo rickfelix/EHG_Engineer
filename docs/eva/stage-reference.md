@@ -74,7 +74,7 @@ Stage 10 (Customer & Brand) [Phase 3 entry] ── CHAIRMAN BLOCKING
 
 Stage 13 (Product Roadmap) [Phase 4 entry]
   └─> Stage 14 (Technical Architecture) [requires: 13]
-       └─> Stage 15 (Resource Planning) [requires: 13, 14]
+       └─> Stage 15 (Design Studio) [requires: 13, 14]
             └─> Stage 16 (Financial Projections) [requires: 13, 14, 15]
 
 Stage 17 (Pre-Build Checklist) [Phase 5 entry]
@@ -424,21 +424,20 @@ Each block: `items` array with text, priority (1-3), optional evidence.
 
 ---
 
-#### Stage 15: Resource Planning
+#### Stage 15: Design Studio
 
 | Property | Value |
 |----------|-------|
-| **Work Type** | Risk identification + mitigation + budget coherence |
+| **Work Type** | Wireframe generation + UI/UX design exploration |
 | **Requires** | Stages 13, 14 |
 | **Chairman Gate** | None |
-| **Analysis Step** | `stage-15-risk-register.js` |
+| **Analysis Step** | `stage-15.js` (slug: `design-studio`) |
 
 **Output Schema:**
-- `risks` (array, min 1) - title, description, owner, severity (critical/high/medium/low), priority (immediate/short_term/long_term), phaseRef, mitigationPlan, contingencyPlan
+- `wireframes` (array) - component wireframes and UI layout designs
+- `design_decisions` - UI/UX rationale and component planning
 
-**Derived:** `total_risks`, `severity_breakdown`, `budget_coherence`
-
-**Exports:** `MIN_RISKS`, `SEVERITY_ENUM`, `PRIORITY_ENUM`
+**Derived:** `wireframe_count`, `component_coverage`
 
 ---
 
@@ -460,7 +459,7 @@ Each block: `items` array with text, priority (1-3), optional evidence.
 **Promotion Gate (Phase 4 -> 5):**
 - Stage 13: >= 3 milestones with deliverables, kill gate passed
 - Stage 14: All 5 architecture layers defined
-- Stage 15: >= 1 risk with severity, priority, mitigation
+- Stage 15: Design Studio wireframes generated
 - Stage 16: Positive runway and defined projections
 
 **Derived:** `runway_months`, `burn_rate`, `break_even_month`, `total_projected_revenue/costs`, `pnl`, `cash_balance_end`, `viability_warnings`
