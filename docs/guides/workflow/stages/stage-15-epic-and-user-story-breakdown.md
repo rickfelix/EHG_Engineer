@@ -6,10 +6,9 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 15: Risk Register
+# Stage 15: Design Studio
 
-> **Implementation Note**: This stage is implemented as **"Risk Register"** (`slug: risk-register`, `id: stage-15`) in `lib/eva/stage-templates/stage-15.js`. The original design spec called it "Epic & User Story Breakdown".
-<!-- Design spec title: Epic & User Story Breakdown -->
+> **Implementation Note**: This stage is implemented as **"Design Studio"** (`slug: design-studio`, `id: stage-15`) in `lib/eva/stage-templates/stage-15.js`. Previously known as "Risk Register" and before that "Epic & User Story Breakdown". Restructured in PRs #2798/#2799.
 
 ## Metadata
 - **Category**: Protocol
@@ -17,17 +16,17 @@ tags: [guide, auto-generated]
 - **Version**: 2.0.0
 - **Author**: Documentation Sub-Agent (DOCMON)
 - **Last Updated**: 2026-01-19
-- **Tags**: venture-workflow, stage-15, vision-v2, sd_required, phase-4
+- **Tags**: venture-workflow, stage-15, design-studio, phase-4
 - **Stage ID**: 15
 - **Phase**: 4 (THE BLUEPRINT)
-- **Work Type**: `sd_required`
-- **SD Required**: Yes (STORIES)
+- **Work Type**: `design_studio`
+- **SD Required**: No
 - **Advisory Enabled**: No
 - **Implementation Status**: ✅ Implemented in EHG
 
 ## Overview
 
-Feature decomposition into epics and user stories with acceptance criteria.
+Design Studio: wireframe generation, UI/UX design exploration, and component planning for the venture.
 
 ## Purpose
 
