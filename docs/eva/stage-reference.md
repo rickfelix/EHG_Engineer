@@ -459,7 +459,7 @@ Each block: `items` array with text, priority (1-3), optional evidence.
 **Promotion Gate (Phase 4 -> 5):**
 - Stage 13: >= 3 milestones with deliverables, kill gate passed
 - Stage 14: All 5 architecture layers defined
-- Stage 15: >= 1 risk with severity, priority, mitigation
+- Stage 15: Design Studio wireframes generated
 - Stage 16: Positive runway and defined projections
 
 **Derived:** `runway_months`, `burn_rate`, `break_even_month`, `total_projected_revenue/costs`, `pnl`, `cash_balance_end`, `viability_warnings`

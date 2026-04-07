@@ -72,7 +72,7 @@ This directory contains comprehensive documentation for each of the 25 stages in
 |-------|---------------------|-------------------|-----------|-------------|
 | [13](stage-13-tech-stack-interrogation.md) | **Product Roadmap** | Tech Stack Interrogation | **decision_gate** | No |
 | [14](stage-14-data-model-and-architecture.md) | Technical Architecture | Data Model & Architecture | artifact_only | No |
-| [15](stage-15-epic-and-user-story-breakdown.md) | Risk Register | Epic & User Story Breakdown | artifact_only | No |
+| [15](stage-15-epic-and-user-story-breakdown.md) | Design Studio | Design Studio | artifact_only | No |
 | [16](stage-16-spec-driven-schema-generation.md) | **Financial Projections** | Spec-Driven Schema Generation | **promotion_gate** | No |
 
 **Key Decision Points**: Stage 13 is a **kill gate** enforcing roadmap completeness. Stage 16 is the **Phase 4→5 Promotion Gate** requiring positive runway and defined projections.
