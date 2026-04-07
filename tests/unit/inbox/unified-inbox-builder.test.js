@@ -10,11 +10,13 @@ import {
   mapAuditLifecycle,
   mapSDLifecycle,
   mapIntakeLifecycle,
+  mapQuickFixLifecycle,
   normalizeFeedback,
   normalizePattern,
   normalizeAudit,
   normalizeSD,
   normalizeIntake,
+  normalizeQuickFix,
   normalizeAndDedupIntake,
   applyDeduplication,
   groupByLifecycle,
@@ -63,6 +65,16 @@ describe('Lifecycle mapping', () => {
     it('maps archived to COMPLETED', () => expect(mapIntakeLifecycle('archived', null)).toBe('COMPLETED'));
     it('maps archived with feedback_id to COMPLETED (archived takes precedence)', () => expect(mapIntakeLifecycle('archived', 'fb-123')).toBe('COMPLETED'));
     it('defaults null status without feedback to NEW', () => expect(mapIntakeLifecycle(null, null)).toBe('NEW'));
+  });
+
+  describe('mapQuickFixLifecycle', () => {
+    it('maps "open" to NEW', () => expect(mapQuickFixLifecycle('open')).toBe('NEW'));
+    it('maps "in_progress" to IN_PROGRESS', () => expect(mapQuickFixLifecycle('in_progress')).toBe('IN_PROGRESS'));
+    it('maps "escalated" to PENDING_SDS', () => expect(mapQuickFixLifecycle('escalated')).toBe('PENDING_SDS'));
+    it('maps "completed" to COMPLETED', () => expect(mapQuickFixLifecycle('completed')).toBe('COMPLETED'));
+    it('maps "cancelled" to COMPLETED', () => expect(mapQuickFixLifecycle('cancelled')).toBe('COMPLETED'));
+    it('maps "closed" to COMPLETED', () => expect(mapQuickFixLifecycle('closed')).toBe('COMPLETED'));
+    it('defaults unknown to NEW', () => expect(mapQuickFixLifecycle('foo')).toBe('NEW'));
   });
 });
 
@@ -224,6 +236,63 @@ describe('Normalizers', () => {
     expect(item.metadata.chairman_intent).toBeNull();
     expect(item.metadata.classification_confidence).toBeNull();
   });
+
+  it('normalizeQuickFix produces correct shape', () => {
+    const row = {
+      id: 'QF-20260407-001',
+      title: 'Fix breadcrumb navigation',
+      status: 'open',
+      severity: 'high',
+      tier: 1,
+      estimated_loc: 12,
+      actual_loc: null,
+      claiming_session_id: 'session_abc',
+      target_application: 'EHG_Engineer',
+      escalated_to_sd_id: null,
+      created_at: '2026-04-07T00:00:00Z',
+      updated_at: '2026-04-07T01:00:00Z'
+    };
+    const item = normalizeQuickFix(row);
+
+    expect(item.item_id).toBe('qf-QF-20260407-001');
+    expect(item.item_type).toBe('quick_fix');
+    expect(item.title).toBe('Fix breadcrumb navigation');
+    expect(item.lifecycle_status).toBe('NEW');
+    expect(item.source_ref).toEqual({ table: 'quick_fixes', pk: 'QF-20260407-001' });
+    expect(item.assigned_sd_id).toBeNull();
+    expect(item.priority).toBe('high');
+    expect(item.metadata.tier).toBe(1);
+    expect(item.metadata.estimated_loc).toBe(12);
+    expect(item.metadata.claiming_session_id).toBe('session_abc');
+    expect(item.metadata.target_application).toBe('EHG_Engineer');
+  });
+
+  it('normalizeQuickFix uses escalated_to_sd_id as assigned_sd_id', () => {
+    const row = {
+      id: 'QF-20260407-002', title: 'Escalated fix', status: 'escalated',
+      severity: 'medium', tier: 2, estimated_loc: 40, actual_loc: null,
+      claiming_session_id: null, target_application: 'EHG',
+      escalated_to_sd_id: 'sd-uuid-123',
+      created_at: '2026-04-07T00:00:00Z', updated_at: null
+    };
+    const item = normalizeQuickFix(row);
+
+    expect(item.assigned_sd_id).toBe('sd-uuid-123');
+    expect(item.lifecycle_status).toBe('PENDING_SDS');
+    expect(item.metadata.escalated_to_sd_id).toBe('sd-uuid-123');
+  });
+
+  it('normalizeQuickFix falls back to id when title is missing', () => {
+    const row = {
+      id: 'QF-20260407-003', title: null, status: 'open',
+      severity: null, tier: null, estimated_loc: null, actual_loc: null,
+      claiming_session_id: null, target_application: null, escalated_to_sd_id: null,
+      created_at: '2026-04-07T00:00:00Z', updated_at: null
+    };
+    const item = normalizeQuickFix(row);
+    expect(item.title).toBe('QF-20260407-003');
+    expect(item.priority).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -382,6 +451,37 @@ describe('Smart deduplication', () => {
 
     const { topLevelItems } = applyDeduplication(fb, [], [], sd);
     expect(topLevelItems).toHaveLength(2); // fb + sd (not linked)
+  });
+
+  it('links escalated quick fix to target SD via assigned_sd_id', () => {
+    const sd = [makeSD('SD-001', 'uuid-001')];
+    const qf = [{
+      item_id: 'qf-QF-001', item_type: 'quick_fix', title: 'Escalated QF',
+      lifecycle_status: 'PENDING_SDS', created_at: '2026-04-07T00:00:00Z',
+      updated_at: '2026-04-07T00:00:00Z', source_ref: { table: 'quick_fixes', pk: 'QF-001' },
+      assigned_sd_id: 'uuid-001', linked_items: null, priority: 'high', metadata: {}
+    }];
+
+    const { topLevelItems, linkedCount } = applyDeduplication([], [], [], sd, qf);
+    expect(topLevelItems).toHaveLength(1); // only the SD
+    expect(topLevelItems[0].item_type).toBe('sd');
+    expect(topLevelItems[0].linked_items).toHaveLength(1);
+    expect(topLevelItems[0].linked_items[0].item_type).toBe('quick_fix');
+    expect(linkedCount.quick_fix).toBe(1);
+  });
+
+  it('keeps non-escalated quick fix as top-level item', () => {
+    const sd = [makeSD('SD-001', 'uuid-001')];
+    const qf = [{
+      item_id: 'qf-QF-002', item_type: 'quick_fix', title: 'Open QF',
+      lifecycle_status: 'NEW', created_at: '2026-04-07T00:00:00Z',
+      updated_at: '2026-04-07T00:00:00Z', source_ref: { table: 'quick_fixes', pk: 'QF-002' },
+      assigned_sd_id: null, linked_items: null, priority: 'medium', metadata: {}
+    }];
+
+    const { topLevelItems } = applyDeduplication([], [], [], sd, qf);
+    expect(topLevelItems).toHaveLength(2); // sd + qf both top-level
+    expect(topLevelItems.some(i => i.item_type === 'quick_fix')).toBe(true);
   });
 });
 
