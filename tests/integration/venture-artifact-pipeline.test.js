@@ -216,6 +216,14 @@ describe('Venture Artifact Pipeline E2E', () => {
   });
 
   it('should handle artifact versioning (v2 replaces v1 as current)', async () => {
+    // Mark v1 as not current BEFORE inserting v2
+    // (partial unique index enforces one is_current=true per venture/stage/type)
+    const v1Id = createdArtifactIds[0]; // First artifact was stage 1
+    await supabase
+      .from('venture_artifacts')
+      .update({ is_current: false })
+      .eq('id', v1Id);
+
     // Insert v2 of stage 1 artifact
     const { data: v2, error } = await supabase
       .from('venture_artifacts')
@@ -237,13 +245,6 @@ describe('Venture Artifact Pipeline E2E', () => {
     expect(v2.version).toBe(2);
     expect(v2.is_current).toBe(true);
     createdArtifactIds.push(v2.id);
-
-    // Mark v1 as not current
-    const v1Id = createdArtifactIds[0]; // First artifact was stage 1
-    await supabase
-      .from('venture_artifacts')
-      .update({ is_current: false })
-      .eq('id', v1Id);
 
     // Verify only v2 is current for stage 1
     const { data: currentArtifacts } = await supabase
