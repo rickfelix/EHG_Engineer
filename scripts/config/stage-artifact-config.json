@@ -9,6 +9,13 @@
       "description": "Idea brief must be completed before leaving Stage 1 (Idea Capture)"
     },
     {
+      "stage_number": 2,
+      "artifact_type": "truth_ai_critique",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "AI critique must be completed before leaving Stage 2 (AI Review)"
+    },
+    {
       "stage_number": 3,
       "artifact_type": "truth_validation_decision",
       "required_status": "completed",
@@ -119,6 +126,20 @@
       "required_status": "completed",
       "is_blocking": true,
       "description": "System prompt required before leaving Stage 18 (System Prompt)"
+    },
+    {
+      "stage_number": 19,
+      "artifact_type": "blueprint_sprint_plan",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "Sprint plan required before leaving Stage 19 (Sprint Planning)"
+    },
+    {
+      "stage_number": 20,
+      "artifact_type": "build_mvp_build",
+      "required_status": "completed",
+      "is_blocking": true,
+      "description": "MVP build required before leaving Stage 20 (Build Execution)"
     },
     {
       "stage_number": 21,
