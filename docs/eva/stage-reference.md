@@ -428,16 +428,16 @@ Each block: `items` array with text, priority (1-3), optional evidence.
 
 | Property | Value |
 |----------|-------|
-| **Work Type** | Wireframe generation + UI/UX design exploration |
+| **Work Type** | Wireframe generation + visual convergence + design materialization |
 | **Requires** | Stages 13, 14 |
 | **Chairman Gate** | None |
-| **Analysis Step** | `stage-15.js` (slug: `design-studio`) |
+| **Analysis Step** | `stage-15-wireframe-generator.js` + `stage-19-visual-convergence.js` |
 
 **Output Schema:**
-- `wireframes` (array) - component wireframes and UI layout designs
-- `design_decisions` - UI/UX rationale and component planning
+- `wireframes` (object, optional) - screens array from wireframe generation
+- `wireframe_convergence` (object, optional) - visual convergence report from 5 expert LLM passes
 
-**Derived:** `wireframe_count`, `component_coverage`
+**Note:** Risk register logic moved to Stage 14 (PR #2798).
 
 ---
 
