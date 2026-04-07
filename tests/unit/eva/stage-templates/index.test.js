@@ -169,7 +169,7 @@ describe('index.js - Stage templates registry', () => {
     it('should have correct Phase 4 template titles', () => {
       expect(stage13.title).toBe('Product Roadmap');
       expect(stage14.title).toBe('Technical Architecture');
-      expect(stage15.title).toBe('Resource Planning');
+      expect(stage15.title).toBe('Design Studio');
       expect(stage16.title).toBe('Financial Projections');
     });
   });

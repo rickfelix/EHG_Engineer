@@ -585,29 +585,27 @@ stages:
       - Relationship clarity
 
   - id: 15
-    title: "Risk Register"
-    design_spec_title: "Epic & User Story Breakdown"
-    description: "Risk identification, severity/priority classification, mitigation planning, and budget coherence validation."
+    title: "Design Studio"
+    design_spec_title: "Design Studio"
+    description: "Wireframe generation, visual convergence, and design materialization. Translates technical architecture into visual design artifacts."
     phase_number: 4
     phase_name: "THE BLUEPRINT"
-    work_type: sd_required
-    sd_required: true
-    sd_suffix: "STORIES"
+    work_type: artifact_only
+    sd_required: false
+    sd_suffix: null
     advisory_enabled: false
     depends_on: [14]
     inputs:
-      - Data model
-      - Business requirements
-      - User journeys
+      - Brand genome (Stage 10)
+      - Technical architecture (Stage 14)
     outputs:
-      - Epic definitions
-      - User story pack
-      - Acceptance criteria
+      - Blueprint wireframes
+      - Visual convergence report
     artifacts:
-      - blueprint_user_story_pack
+      - blueprint_wireframes
     metrics:
-      - Story completeness
-      - INVEST compliance
+      - Wireframe completeness
+      - Visual convergence score
 
   - id: 16
     title: "Financial Projections"
