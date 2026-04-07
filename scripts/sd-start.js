@@ -762,11 +762,18 @@ async function main() {
     }).trim();
     worktreeInfo = await resolveWorkdir(effectiveId, 'claim', repoRoot);
     if (worktreeInfo && !worktreeInfo.success) {
-      console.log(`${colors.yellow}   ⚠️  Worktree creation failed: ${worktreeInfo.error || worktreeInfo.errorCode}${colors.reset}`);
+      // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree failure
+      // instead of silently continuing on main (which caused data loss from wrong-branch commits)
+      const detail = worktreeInfo.error || worktreeInfo.errorCode || 'unknown';
+      console.error(`${colors.red}   ❌  Worktree creation failed: ${detail}${colors.reset}`);
+      console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
+      process.exit(1);
     }
   } catch (wtErr) {
-    console.log(`${colors.yellow}   ⚠️  Worktree resolution error: ${wtErr.message}${colors.reset}`);
-    // Non-blocking — SD start proceeds without worktree
+    // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree error
+    console.error(`${colors.red}   ❌  Worktree resolution error: ${wtErr.message}${colors.reset}`);
+    console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
+    process.exit(1);
   }
 
   // 4.9. SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Pre-claim health check
