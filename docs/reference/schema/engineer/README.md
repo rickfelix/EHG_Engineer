@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-07T23:30:48.538Z
-**Tables**: 630
+**Generated**: 2026-04-07T23:47:56.225Z
+**Tables**: 631
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (630)
+## All Tables (631)
 
 ### LEO Protocol
 
@@ -222,6 +222,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [brainstorm_question_effectiveness](tables/brainstorm_question_effectiveness.md)
 - [brainstorm_question_interactions](tables/brainstorm_question_interactions.md)
 - [brainstorm_sessions](tables/brainstorm_sessions.md)
+- [brainstorm_vote_tallies](tables/brainstorm_vote_tallies.md)
 - [brand_genome_submissions](tables/brand_genome_submissions.md)
 - [brand_variants](tables/brand_variants.md)
 - [campaign_content](tables/campaign_content.md)
