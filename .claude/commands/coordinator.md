@@ -88,6 +88,14 @@ The dashboard may show additional columns from the heartbeat intelligence system
 
 When these columns show `-` (not yet populated), fall back to heartbeat-age-only assessment.
 
+**Worktree lock contention (added 2026-04-06, PRs #2795/#2796):**
+- `sd-start.js` now **hard-fails** (`process.exit(1)`) when worktree creation fails, instead of silently falling back to main (which caused data loss from wrong-branch commits + `reset --hard`).
+- Lock primitives in `lib/worktree-guards.js` use atomic `openSync('wx')` with PID-based staleness detection (`process.kill(pid, 0)`).
+- **LOCK_CONTENTION pattern**: When a worker reports "Worktree lock held by session X (PID Y)", this is **not a bug** — it means another session is actively creating that worktree. The correct response is to route the worker to a different SD, not retry or investigate.
+- **Stale lock auto-steal**: If the lock-holding PID is dead (`ESRCH`), the next claimant automatically steals the lock. Locks older than 1 hour with unverifiable PID are also treated as stale. Manual intervention is rarely needed.
+- **Orphaned `.lock` files**: During sweep, if `.worktrees/<SD-KEY>.lock` files exist with dead PIDs, they can be safely removed — but the lock system handles this automatically on next claim attempt.
+- **Never work around hard-fail**: If `sd-start` exits with worktree failure, do NOT advise workers to run without worktree isolation. The hard-fail is intentional — working on main without isolation caused the original data loss incident.
+
 **Status language:**
 - **"Stale" now more likely means genuinely inactive** — the PostToolUse hook ensures active sessions heartbeat every 30s.
 - A session that heartbeated 5+ minutes ago with no enriched signals is likely between tasks or exiting.
@@ -197,6 +205,7 @@ Automated QA Fixes (run every sweep):
   - Bare shell enrichment: empty SD descriptions auto-populated from docs
   - Aging warnings: STALE_WARNING messages sent to aging workers
   - WORKTREE_CONFLICT: two workers on same branch flagged (QF on main excluded)
+  - LOCK_CONTENTION: worker hard-failed on worktree lock — route to different SD, do not retry same SD
   - WORKER_STRUGGLING: handoff_fail_count > 3 flagged, /rca suggested at > 5
   - WIP_GUARD: stale sessions with uncommitted changes held, not released
   - Standard: dead claims released, conflicts resolved, orphans cleaned
