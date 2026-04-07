@@ -74,7 +74,7 @@ Stage 10 (Customer & Brand) [Phase 3 entry] ── CHAIRMAN BLOCKING
 
 Stage 13 (Product Roadmap) [Phase 4 entry]
   └─> Stage 14 (Technical Architecture) [requires: 13]
-       └─> Stage 15 (Resource Planning) [requires: 13, 14]
+       └─> Stage 15 (Design Studio) [requires: 13, 14]
             └─> Stage 16 (Financial Projections) [requires: 13, 14, 15]
 
 Stage 17 (Pre-Build Checklist) [Phase 5 entry]
@@ -424,21 +424,20 @@ Each block: `items` array with text, priority (1-3), optional evidence.
 
 ---
 
-#### Stage 15: Resource Planning
+#### Stage 15: Design Studio
 
 | Property | Value |
 |----------|-------|
-| **Work Type** | Risk identification + mitigation + budget coherence |
+| **Work Type** | Wireframe generation + visual convergence + design materialization |
 | **Requires** | Stages 13, 14 |
 | **Chairman Gate** | None |
-| **Analysis Step** | `stage-15-risk-register.js` |
+| **Analysis Step** | `stage-15-wireframe-generator.js` + `stage-19-visual-convergence.js` |
 
 **Output Schema:**
-- `risks` (array, min 1) - title, description, owner, severity (critical/high/medium/low), priority (immediate/short_term/long_term), phaseRef, mitigationPlan, contingencyPlan
+- `wireframes` (object, optional) - screens array from wireframe generation
+- `wireframe_convergence` (object, optional) - visual convergence report from 5 expert LLM passes
 
-**Derived:** `total_risks`, `severity_breakdown`, `budget_coherence`
-
-**Exports:** `MIN_RISKS`, `SEVERITY_ENUM`, `PRIORITY_ENUM`
+**Note:** Risk register logic moved to Stage 14 (PR #2798).
 
 ---
 
