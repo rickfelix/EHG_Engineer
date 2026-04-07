@@ -12,6 +12,7 @@
  * 6. MCP write operation block (SD-LEO-INFRA-MCP-READ-WRITE-001) - HARD BLOCK (exit 2)
  * 7. Schema pre-flight validation (SD-LEO-ORCH-SELF-HEALING-DATABASE-001-C) - TIERED (blocking/advisory/skip)
  * 8. Permission audit trail (SD-LEO-INFRA-LEO-PRIMITIVE-PARITY-001-C) - ASYNC WRITE (fire-and-forget)
+ * 9. SD creation skill enforcement (ENF-SD-CREATE-SKILL) - HARD BLOCK (exit 2)
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -291,6 +292,24 @@ async function main() {
   } catch {
     // Not JSON or empty - nothing to enforce
     process.exit(0);
+  }
+
+  // --- ENFORCEMENT 9: SD Creation Must Use /sd-create Skill ---
+  // Blocks direct invocation of leo-create-sd.js via Bash.
+  // SD creation must go through the /sd-create skill (Skill tool) to ensure
+  // full wizard workflow: description enrichment, vision readiness, post-creation chaining.
+  // Ref: feedback_always_use_sd_create_skill.md (2026-04-07)
+  if (TOOL_NAME === 'Bash') {
+    const cmd = input.command || '';
+    if (/leo-create-sd\.js/.test(cmd) && !/--help/.test(cmd)) {
+      auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-SD-CREATE-SKILL', 'SD creation skill enforcement', 'block', {});
+      process.stderr.write(
+        'PROTOCOL VIOLATION (ENF-SD-CREATE-SKILL): Direct leo-create-sd.js invocation blocked.\n' +
+        'Use the /sd-create skill instead: Skill tool with skill="sd-create"\n' +
+        'The skill provides description enrichment, vision readiness assessment, and post-creation chaining.\n'
+      );
+      process.exit(2);
+    }
   }
 
   // --- ENFORCEMENT 1: Background Execution Ban (NC-006) ---
