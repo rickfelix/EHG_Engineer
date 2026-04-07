@@ -25,17 +25,23 @@ function createMockSupabase() {
     }),
   });
 
+  const selectChain = () => ({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: { id: `art-${insertedRows.length}` },
+        error: null,
+      }),
+    }),
+  });
+
   const fromMock = vi.fn().mockImplementation(() => ({
     insert: vi.fn().mockImplementation((row) => {
       insertedRows.push(row);
-      return {
-        select: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({
-            data: { id: `art-${insertedRows.length}` },
-            error: null,
-          }),
-        }),
-      };
+      return selectChain();
+    }),
+    upsert: vi.fn().mockImplementation((row) => {
+      insertedRows.push(row);
+      return selectChain();
     }),
     update: updateMock,
   }));

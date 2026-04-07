@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-07T03:44:57.304Z
-**Rows**: 0
+**Generated**: 2026-04-07T23:30:48.538Z
+**Rows**: 10
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -127,6 +127,11 @@
 - **With Check**: `true`
 
 ## Triggers
+
+### trg_chairman_approval_side_effects
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION on_chairman_approval_side_effects()`
 
 ### trg_chairman_decision_unblock
 
