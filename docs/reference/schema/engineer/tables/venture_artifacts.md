@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-07T03:44:57.304Z
-**Rows**: 0
+**Generated**: 2026-04-07T23:30:48.538Z
+**Rows**: 33
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -98,6 +98,10 @@
 - `idx_venture_artifacts_embedding_ivfflat`
   ```sql
   CREATE INDEX idx_venture_artifacts_embedding_ivfflat ON public.venture_artifacts USING ivfflat (artifact_embedding vector_cosine_ops) WITH (lists='1')
+  ```
+- `idx_venture_artifacts_idempotent`
+  ```sql
+  CREATE UNIQUE INDEX idx_venture_artifacts_idempotent ON public.venture_artifacts USING btree (venture_id, lifecycle_stage, artifact_type) WHERE (is_current = true)
   ```
 - `idx_venture_artifacts_quality_score`
   ```sql
