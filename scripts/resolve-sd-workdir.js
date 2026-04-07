@@ -21,7 +21,7 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { getVenturePath } from '../lib/venture-resolver.js';
-import { sanitizeBranchName, checkDirtyWorktree, verifyGitignore } from '../lib/worktree-guards.js';
+import { sanitizeBranchName, checkDirtyWorktree, verifyGitignore, acquireWorktreeLock, releaseLock } from '../lib/worktree-guards.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -186,7 +186,7 @@ function createWorktree(sdKey, repoRoot) {
     throw new Error(`Unsafe branch name rejected: ${branchCheck.reason}`);
   }
 
-  // Create the worktree
+  // Create the worktree (with cross-process lock to prevent parallel corruption)
   const branchExists = (() => {
     try {
       execSync(`git show-ref --verify --quiet refs/heads/${branch}`, { cwd: repoRoot, stdio: 'pipe' });
@@ -194,14 +194,21 @@ function createWorktree(sdKey, repoRoot) {
     } catch { return false; }
   })();
 
-  if (branchExists) {
-    execSync(`git worktree add "${worktreePath}" "${branch}"`, {
-      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-    });
-  } else {
-    execSync(`git worktree add -b "${branch}" "${worktreePath}"`, {
-      cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
-    });
+  let lockPath;
+  try {
+    lockPath = acquireWorktreeLock(sdKey, process.env.CLAUDE_SESSION_ID || 'unknown', worktreesDir);
+
+    if (branchExists) {
+      execSync(`git worktree add "${worktreePath}" "${branch}"`, {
+        cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
+      });
+    } else {
+      execSync(`git worktree add -b "${branch}" "${worktreePath}"`, {
+        cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
+      });
+    }
+  } finally {
+    if (lockPath) releaseLock(lockPath);
   }
 
   // Write metadata
