@@ -301,7 +301,7 @@ async function main() {
   // Ref: feedback_always_use_sd_create_skill.md (2026-04-07)
   if (TOOL_NAME === 'Bash') {
     const cmd = input.command || '';
-    if (/leo-create-sd\.js/.test(cmd) && !/--help/.test(cmd)) {
+    if (/leo-create-sd\.js/.test(cmd) && !/--help/.test(cmd) && !/SD_CREATE_VIA_SKILL=1/.test(cmd)) {
       auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-SD-CREATE-SKILL', 'SD creation skill enforcement', 'block', {});
       process.stderr.write(
         'PROTOCOL VIOLATION (ENF-SD-CREATE-SKILL): Direct leo-create-sd.js invocation blocked.\n' +
