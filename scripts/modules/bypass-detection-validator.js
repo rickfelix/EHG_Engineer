@@ -41,6 +41,7 @@ const ACKNOWLEDGED_VIOLATION_IDS = new Set([
   '743e7b5a-c7b7-490e-a88f-0255c1db16d1', // SD-LEO-INFRA-INTELLIGENT-DYNAMIC-BOARD-001-A lead_final_approval
   '12e9834e-e9dc-4359-934c-5907db62254f', // 50184a09-... lead_final_approval
   'ab441614-78e8-4a20-be29-cc1f6f81572d', // SD-LEO-INFRA-FEEDBACK-PIPELINE-ACTIVATION-001-C lead_final_approval
+  '4b31f972-786b-47dc-988f-51f6b9fadcd6', // SD-WORKER-GATE-FIX-KILL-ORCH-001 lead_final_approval (67s timing skew)
 ]);
 
 /**
