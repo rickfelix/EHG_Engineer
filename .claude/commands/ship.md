@@ -372,7 +372,7 @@ const result = computeRiskScore(
 **2. Run review gate:**
 
 ```javascript
-import { runReview, evaluateFindings, parseReviewFindings } from './lib/ship/review-gate.js';
+import { runReview, evaluateFindings, parseReviewFindings, evaluateAdversarialFindings } from './lib/ship/review-gate.js';
 
 const gateResult = runReview(diffContent, result.tier);
 
@@ -383,30 +383,46 @@ if (gateResult.verdict === 'block') {
 }
 
 if (gateResult.verdict === 'review_needed') {
-  // Use gateResult.reviewPrompt as self-review prompt
-  // Parse the LLM response:
-  const parsed = parseReviewFindings(llmResponse);
-  const evaluation = evaluateFindings(parsed.findings, gateResult.tierEnforcement);
+  if (gateResult.multiAgent) {
+    // DEEP TIER: Spawn adversarial agent for independent review
+    // Use the Agent tool with gateResult.adversarialPrompt
+    // Example: Agent({ description: "Adversarial code review", prompt: gateResult.adversarialPrompt })
+    // Pass the agent's response to evaluateAdversarialFindings():
+    const adversarialResult = evaluateAdversarialFindings(agentResponse);
+    // If agent returned null/failed: adversarialResult.verdict === 'block' (hard-fail, never degrades)
+    // If agent found issues: adversarialResult.verdict === 'block' with findings
+    // If agent found nothing: adversarialResult.verdict === 'pass'
 
-  if (evaluation.verdict === 'block') {
-    // Auto-fix attempt (max 2 rounds), then halt if unfixable
+    if (adversarialResult.verdict === 'block') {
+      // Auto-fix attempt (max 2 rounds), then halt if unfixable
+      // On agent failure (reason starts with 'agent_failure'): HALT immediately, no auto-fix
+    }
+  } else {
+    // LIGHT/STANDARD: Self-review with gateResult.reviewPrompt
+    const parsed = parseReviewFindings(llmResponse);
+    const evaluation = evaluateFindings(parsed.findings, gateResult.tierEnforcement);
+
+    if (evaluation.verdict === 'block') {
+      // Auto-fix attempt (max 2 rounds), then halt if unfixable
+    }
   }
-  // evaluation.verdict === 'pass' → proceed to merge
+  // verdict === 'pass' → proceed to merge
 }
 ```
 
 **3. Tier behavior summary:**
 
-| Tier | Enforcement | CRITICAL | Warnings | Info |
-|------|-------------|----------|----------|------|
-| Light | Advisory | BLOCK | Log only | Log only |
-| Standard | Blocking | BLOCK | BLOCK (auto-fix attempt) | Log only |
-| Deep | Blocking | BLOCK | BLOCK (auto-fix attempt) | Log only |
+| Tier | Enforcement | CRITICAL | Warnings | Info | Review Method |
+|------|-------------|----------|----------|------|---------------|
+| Light | Advisory | BLOCK | Log only | Log only | Self-review |
+| Standard | Blocking | BLOCK | BLOCK (auto-fix attempt) | Log only | Self-review |
+| Deep | Blocking | BLOCK | BLOCK (auto-fix attempt) | Log only | Multi-agent adversarial |
 
 **4. Output status:**
 
 ```
 Review Gate: [TIER] tier (score: X.XX, keyword override: yes/no)
+  Review method: self-review / multi-agent adversarial
   Findings: N critical, M warnings, P info
   Verdict: PASS / BLOCK (reason)
 ```
