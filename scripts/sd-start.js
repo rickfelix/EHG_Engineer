@@ -34,6 +34,44 @@ const supabase = createSupabaseServiceClient();
 const MAX_FALLBACK_ATTEMPTS = 3;
 
 /**
+ * Display fleet roster — all active sessions with their claimed SDs and heartbeat ages.
+ * SD-FLEETAWARE-SESSION-IDENTITY-HARDENING-ORCH-001-A
+ */
+async function displayFleetRoster() {
+  try {
+    const { data: sessions } = await supabase
+      .from('v_active_sessions')
+      .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, pid')
+      .in('computed_status', ['active', 'idle', 'stale']);
+
+    if (!sessions || sessions.length === 0) {
+      console.log(`\n${colors.dim}  No active fleet sessions${colors.reset}`);
+      return;
+    }
+
+    console.log(`\n${colors.bold}📡 Fleet Roster (${sessions.length} session${sessions.length !== 1 ? 's' : ''}):${colors.reset}`);
+    for (const s of sessions) {
+      const shortId = s.session_id.substring(0, 12);
+      const hbAge = s.heartbeat_age_human || formatHbAge(s.heartbeat_age_seconds);
+      const staleTag = (s.heartbeat_age_seconds || 0) > 900 ? ` ${colors.red}STALE${colors.reset}` : '';
+      const sdLabel = s.sd_id
+        ? `→ ${s.sd_title || s.sd_id}`
+        : `${colors.dim}(idle)${colors.reset}`;
+      console.log(`   ${shortId}  ${hbAge}${staleTag}  ${sdLabel}`);
+    }
+  } catch {
+    // Non-blocking — roster display is informational
+  }
+}
+
+function formatHbAge(seconds) {
+  if (!seconds || seconds < 0) return 'just now';
+  if (seconds < 60) return `${Math.round(seconds)}s ago`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+  return `${Math.round(seconds / 3600)}h ago`;
+}
+
+/**
  * Check if auto-proceed is active for the current session.
  * Returns true by default (auto-proceed is ON unless explicitly disabled).
  */
@@ -579,6 +617,7 @@ async function main() {
   } catch (e) {
     if (e instanceof ClaimIdentityError) {
       console.error(e.toBanner());
+      await displayFleetRoster();
       process.exit(2);
     }
     throw e;
@@ -716,6 +755,7 @@ async function main() {
         skippedSDs.forEach(s => {
           console.log(`   ${colors.dim}• ${s.sdKey} — ${s.reason}${s.owner ? ` (by ${s.owner})` : ''}${colors.reset}`);
         });
+        await displayFleetRoster();
         console.log(`\n${colors.bold}Action:${colors.reset} Wait for a session to release, or run ${colors.cyan}npm run sd:next${colors.reset} to review the queue.`);
         console.log('═'.repeat(50));
         process.exit(1);
@@ -731,6 +771,7 @@ async function main() {
     } else if (!claimResult.success) {
       // Non-fallback path: show error and exit (original behavior)
       console.log(formatClaimFailure(claimResult));
+      await displayFleetRoster();
       console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
       console.log('═'.repeat(50));
       process.exit(1);

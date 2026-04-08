@@ -116,8 +116,16 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
       case 'stale_remote':
         statusIcon = `${colors.yellow}STALE${colors.reset}`;
         break;
-      default: // other_active
-        statusIcon = `${colors.yellow}CLAIMED${colors.reset}`;
+      default: { // other_active — include heartbeat age inline for quick scanning
+        const claimingSessionForBadge = activeSessions.find(s => s.session_id === claimedBySession);
+        const hbAge = claimingSessionForBadge
+          ? formatHeartbeatAge(claimingSessionForBadge.heartbeat_age_seconds)
+          : null;
+        const shortSid = claimedBySession.substring(0, 8);
+        statusIcon = hbAge
+          ? `${colors.yellow}CLAIMED by ${shortSid} (${hbAge})${colors.reset}`
+          : `${colors.yellow}CLAIMED${colors.reset}`;
+      }
     }
   } else if (isClaimedByOther) {
     statusIcon = `${colors.yellow}CLAIMED${colors.reset}`;
