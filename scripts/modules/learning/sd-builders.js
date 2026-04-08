@@ -140,7 +140,7 @@ export function buildSuccessMetrics(items) {
         metric: `${desc}... implementation`,
         baseline: `${evidence} evidence item(s) supporting this improvement`,
         target: 'Implementation validated via smoke tests and sub-agent verification',
-        actual: '0% - pending implementation',
+        actual: null,
         measurement: 'Verify implementation exists in codebase and passes validation'
       });
     }
@@ -150,7 +150,7 @@ export function buildSuccessMetrics(items) {
     metric: 'PLAN-TO-LEAD handoff gate score',
     baseline: 'N/A (new SD)',
     target: '≥55% on first attempt without manual metadata patching',
-    actual: 'pending',
+    actual: null,
     measurement: 'RETROSPECTIVE_QUALITY_GATE score from handoff validation'
   });
 
@@ -160,7 +160,7 @@ export function buildSuccessMetrics(items) {
       metric: 'Manual intervention reduction',
       baseline: 'Frequent manual patches needed for SD quality fields',
       target: 'Zero manual DB updates for SD quality fields post-implementation',
-      actual: 'pending',
+      actual: null,
       measurement: 'Count of manual database updates for SD quality fields in 30 days'
     });
   }
