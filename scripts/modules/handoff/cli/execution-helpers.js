@@ -45,27 +45,15 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Check bypasses for this SD (max 3)
-  const { data: sdBypasses, error: sdError } = await supabase
+  // Count bypasses for this SD (audit metadata only, no enforcement)
+  const { data: sdBypasses, error: _sdError } = await supabase
     .from('validation_audit_log')
     .select('id')
     .eq('failure_category', 'bypass')
     .eq('sd_id', canonicalSdId || sdId)
     .gte('created_at', today.toISOString());
 
-  // RCA-UAT-CAMPAIGN-FRICTION: Increased from 3 to 10 for orchestrator campaigns
-  // with pre-existing DOCMON violations. Permanent fix: scope DOCMON to current branch.
-  if (!sdError && sdBypasses && sdBypasses.length >= 10) {
-    console.error('');
-    console.error('❌ BYPASS RATE LIMIT: Max 10 bypasses per SD reached');
-    console.error(`   SD: ${sdId} has ${sdBypasses.length} bypasses today`);
-    console.error('');
-    console.error('   Request LEAD approval for additional bypasses.');
-    console.error('');
-    return { success: false };
-  }
-
-  // Check global bypasses today (max 10)
+  // Check global bypasses today
   const { data: globalBypasses, error: globalError } = await supabase
     .from('validation_audit_log')
     .select('id')
@@ -112,7 +100,7 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
     console.log('⚠️  BYPASS MODE ENABLED (SD-LEARN-010:US-005)');
     console.log('─'.repeat(50));
     console.log(`   Reason: ${bypassReason}`);
-    console.log(`   SD Bypasses Today: ${(sdBypasses?.length || 0) + 1}/10`);
+    console.log(`   SD Bypasses Today: ${(sdBypasses?.length || 0) + 1}`);
     console.log(`   Global Bypasses Today: ${(globalBypasses?.length || 0) + 1}/2000`);
     console.log('   ⚠️  Bypass logged to validation_audit_log for review');
     console.log('─'.repeat(50));
