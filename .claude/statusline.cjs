@@ -199,10 +199,14 @@ try {
 } catch (_) { /* intentionally silent: auto-proceed display is optional */ }
 
 // Fleet identity (assigned by coordinator via assign-fleet-identities.cjs)
+// Per-session file keyed by CLAUDE_SESSION_ID; falls back to shared file
 let fleetCallsign = '';
 let fleetColor = '';
 try {
-  const identityFile = path.join(__dirname, 'fleet-identity.json');
+  const csid = process.env.CLAUDE_SESSION_ID || sessionId;
+  const perSessionFile = path.join(__dirname, `fleet-identity-${csid}.json`);
+  const sharedFile = path.join(__dirname, 'fleet-identity.json');
+  const identityFile = fs.existsSync(perSessionFile) ? perSessionFile : sharedFile;
   if (fs.existsSync(identityFile)) {
     const identity = JSON.parse(fs.readFileSync(identityFile, 'utf8'));
     fleetCallsign = identity.callsign || '';
