@@ -846,38 +846,65 @@ The board has identified these candidate improvement areas for "<TOPIC>":
 
 From your <SEAT_TITLE> perspective, rank your TOP 3 from this list (by number). For each pick, provide ONE sentence explaining why it's critical from your seat's vantage point.
 
-Format:
-1. [#N] — [one-sentence reason from your perspective]
-2. [#N] — [one-sentence reason]
-3. [#N] — [one-sentence reason]
+IMPORTANT: Return your response as a JSON object:
+{
+  "seat": "<SEAT_CODE>",
+  "rankings": [<1st_choice_number>, <2nd_choice_number>, <3rd_choice_number>],
+  "reasons": {
+    "<1st_choice_number>": "<one-sentence reason>",
+    "<2nd_choice_number>": "<one-sentence reason>",
+    "<3rd_choice_number>": "<one-sentence reason>"
+  }
+}
+```
+
+**After all board agents return**, collect votes using the tally module (`lib/brainstorm/tally-module.js`):
+
+```javascript
+import { collectVotes, scoreBorda, paretoSignal, formatTallyDisplay } from './lib/brainstorm/tally-module.js';
+
+// boardVotes = array of { seat, rankings } from agent responses
+const voteMatrix = collectVotes(boardVotes, candidateCount);
 ```
 
 ### 7.9C: Tally and Rank
 
-Score each candidate by counting board votes (each #1 pick = 3 points, #2 = 2 points, #3 = 1 point). The top 3 by total points become the board's consensus improvement areas.
+Use Borda count scoring via the tally module for deterministic, auditable ranking:
+
+```javascript
+const scores = scoreBorda(voteMatrix);
+const pareto = paretoSignal(scores);
+const display = formatTallyDisplay(scores, pareto, candidateLabels);
+```
+
+Display the ASCII tally results to the user. The top 3 by Borda score become the board's consensus improvement areas.
 
 For each of the top 3, compile a **rationale block**:
 - **Area**: The improvement area label
-- **Board Support**: N/M seats voted for this (list which seats)
+- **Board Support**: N/M seats voted for this (list which seats from `scores[i].voters`)
 - **Composite Rationale**: Synthesize the strongest arguments from the voting seats into 2-3 sentences explaining why this matters
 
-If there is a tie for 3rd place, include all tied items (up to 4 total).
+The Pareto signal indicates consensus strength:
+- **Concentrated** (top 2 ≥ 80%): Strong agreement — present with confidence
+- **Dispersed** (top 2 < 80%): Weak consensus — flag to chairman that opinions are spread
+
+If there is a tie for 3rd place, Borda stable sort breaks ties by candidate number. Include all tied items (up to 4 total).
 
 ### 7.9D: Present to Chairman (Multi-Select)
 
-Present the board's consensus top 3 to the chairman using AskUserQuestion with `multiSelect: true`:
+Present the board's consensus top 3 to the chairman using AskUserQuestion with `multiSelect: true`. Include the Pareto signal in the header:
 
 ```
 question: "The board has reached consensus on the top areas for improvement. Select which to prioritize:"
-header: "Improvements"
+header: "Improvements (Board consensus: <PARETO_SIGNAL> — top 2 = <TOP_TWO_PERCENT>%)"
 multiSelect: true
 options:
   - label: "1. <AREA_1>"
-    description: "<COMPOSITE_RATIONALE_1> (Board support: <N>/6 seats — <SEAT_LIST>)"
+    description: "<COMPOSITE_RATIONALE_1> (Board support: <N>/6 seats — <SEAT_LIST>) [<SCORE> pts, <PERCENTAGE>%]"
   - label: "2. <AREA_2>"
-    description: "<COMPOSITE_RATIONALE_2> (Board support: <N>/6 seats — <SEAT_LIST>)"
+    description: "<COMPOSITE_RATIONALE_2> (Board support: <N>/6 seats — <SEAT_LIST>) [<SCORE> pts, <PERCENTAGE>%]"
   - label: "3. <AREA_3>"
-    description: "<COMPOSITE_RATIONALE_3> (Board support: <N>/6 seats — <SEAT_LIST>)"
+    description: "<COMPOSITE_RATIONALE_3> (Board support: <N>/6 seats — <SEAT_LIST>) [<SCORE> pts, <PERCENTAGE>%]"
   - label: "None — override"
     description: "Reject board recommendation, proceed to outcome classification without improvement focus"
 ```
