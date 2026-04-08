@@ -8,27 +8,12 @@
  * invocation creates a new composite session_id.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
-// Mock getTerminalId to return a stable birth certificate UUID
 const BIRTH_CERT_UUID = 'b169cf41-cafa-4385-927a-a01defe86811';
 const COMPOSITE_TERMINAL_ID = 'win-cc-25565-49844';
 
-vi.mock('../../lib/terminal-identity.js', () => ({
-  getTerminalId: vi.fn(() => BIRTH_CERT_UUID),
-  getMachineId: vi.fn(() => 'test-machine-id'),
-}));
-
 describe('Session Identity Stability', () => {
-  let generateSessionId;
-
-  beforeEach(async () => {
-    // Dynamic import to pick up mocks
-    const mod = await import('../../lib/session-manager.mjs');
-    // generateSessionId is not exported, but we can test via getOrCreateSession behavior.
-    // Instead, test the UUID detection regex directly.
-  });
-
   describe('Birth certificate UUID detection', () => {
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
