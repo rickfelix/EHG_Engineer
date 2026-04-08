@@ -44,7 +44,7 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
     // FIX: 2026-02-05 - Added sd_type for SD-type-aware workflow continuation
     let query = supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage, sd_type')
+      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage, sd_type, claiming_session_id')
       .eq('parent_sd_id', parentSdId)
       .in('status', ['draft', 'active']);
 
@@ -84,13 +84,39 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
     // Sort by urgency (highest priority first)
     const sorted = sortByUrgency(withUrgency);
 
-    // If we found a ready child (without blockers), return the highest urgency one
+    // SD-FLEETAWARE-SESSION-IDENTITY-HARDENING-ORCH-001-B: Claim-aware child selection
+    // Skip children actively claimed by other sessions; auto-release stale claims.
     if (sorted && sorted.length > 0) {
-      const selected = sorted[0];
-      const reason = selected.urgency_band
-        ? `Next child found (${selected.urgency_band}, score: ${selected.urgency_score})`
-        : 'Next child found';
-      return { sd: selected, allComplete: false, reason };
+      for (const candidate of sorted) {
+        if (!candidate.claiming_session_id) {
+          const reason = candidate.urgency_band
+            ? `Next child found (${candidate.urgency_band}, score: ${candidate.urgency_score})`
+            : 'Next child found';
+          return { sd: candidate, allComplete: false, reason };
+        }
+        // Check if the claiming session is active or stale
+        const { data: claimer } = await supabase
+          .from('v_active_sessions')
+          .select('session_id, heartbeat_age_seconds, computed_status')
+          .eq('session_id', candidate.claiming_session_id)
+          .maybeSingle();
+
+        const hbAge = claimer?.heartbeat_age_seconds ?? Infinity;
+        if (claimer && hbAge < 300) {
+          // Active claim (< 5min heartbeat) — skip to next sibling
+          console.log(`   [child-sd-selector] Skipping ${candidate.sd_key} — claimed by active session (${Math.round(hbAge)}s ago)`);
+          continue;
+        }
+        if (hbAge > 900) {
+          // Stale claim (> 15min) — auto-release and return this child
+          console.log(`   [child-sd-selector] Auto-releasing stale claim on ${candidate.sd_key} (${Math.round(hbAge)}s stale)`);
+          await supabase.rpc('release_sd', { p_session_id: candidate.claiming_session_id, p_reason: 'stale_child_auto_release' }).catch(() => {});
+          return { sd: candidate, allComplete: false, reason: 'Stale claim released, child available' };
+        }
+        // Between 5-15min — ambiguous, skip to be safe
+        console.log(`   [child-sd-selector] Skipping ${candidate.sd_key} — claim age ambiguous (${Math.round(hbAge)}s)`);
+      }
+      // All candidates are claimed — fall through to "no ready children"
     }
 
     // No ready children - check if all children are complete
