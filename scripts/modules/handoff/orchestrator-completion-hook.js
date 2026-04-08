@@ -789,6 +789,37 @@ export async function executeOrchestratorCompletionHook(
     return { fired: false, autoProceed: false, correlationId };
   }
 
+  // SD-FLEETAWARE-SESSION-IDENTITY-HARDENING-ORCH-001-B: Active child claim guard
+  // Before completing, verify no children have active claims from other sessions.
+  try {
+    const { data: claimedChildren } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, claiming_session_id')
+      .eq('parent_sd_id', orchestratorId)
+      .not('claiming_session_id', 'is', null);
+
+    if (claimedChildren && claimedChildren.length > 0) {
+      // Check if any claims are from active sessions (heartbeat < 5min)
+      const activeClaimChildren = [];
+      for (const child of claimedChildren) {
+        const { data: claimer } = await supabase
+          .from('v_active_sessions')
+          .select('heartbeat_age_seconds')
+          .eq('session_id', child.claiming_session_id)
+          .maybeSingle();
+        if (claimer && (claimer.heartbeat_age_seconds || 0) < 300) {
+          activeClaimChildren.push(child.sd_key);
+        }
+      }
+      if (activeClaimChildren.length > 0) {
+        console.log(`\n   ⚠️  COMPLETION PAUSED: ${activeClaimChildren.length} child(ren) have active claims:`);
+        activeClaimChildren.forEach(sk => console.log(`      • ${sk}`));
+        console.log('   Waiting for active work to complete before finalizing orchestrator.');
+        return { fired: false, autoProceed: false, correlationId, pausedBy: activeClaimChildren };
+      }
+    }
+  } catch { /* Non-blocking — guard is advisory */ }
+
   // Resolve AUTO-PROCEED mode
   const autoProceedResult = await resolveAutoProceed({
     supabase,
