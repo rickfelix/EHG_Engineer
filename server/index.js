@@ -56,6 +56,7 @@ import evaPipelineRoutes from './routes/eva-pipeline.js';
 import evaExitRoutes from './routes/eva-exit.js';
 import evaChatRoutes from './routes/eva-chat.js';
 import evaEconomicLensRoutes from './routes/eva-economic-lens.js';
+import evaPostStageHookRoutes from './routes/eva-post-stage-hook.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
 
 // Import Story API
@@ -159,6 +160,8 @@ app.use('/api/eva/pipeline', requireAuth, evaPipelineRoutes);
 app.use('/api/eva/exit', requireAuth, evaExitRoutes);
 app.use('/api/eva/chat', requireAuth, evaChatRoutes);
 app.use('/api/eva/economic-lens', requireAuth, evaEconomicLensRoutes);
+// Post-stage hook: service-role auth (handles its own auth middleware)
+app.use('/api/v2/eva/post-stage-hook', evaPostStageHookRoutes);
 // Dashboard routes: read-only, optional auth
 app.use('/api', optionalAuth, dashboardRoutes);
 
