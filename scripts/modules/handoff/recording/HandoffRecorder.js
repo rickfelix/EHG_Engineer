@@ -139,7 +139,7 @@ export class HandoffRecorder {
       template_id: template?.id,
       from_agent: handoffType.split('-')[0],
       to_agent: handoffType.split('-')[2],
-      sd_key: sdUuid,
+      sd_id: sdUuid,
       prd_id: result.prdId,
       handoff_type: handoffType,
       status: 'accepted',
@@ -258,7 +258,7 @@ export class HandoffRecorder {
       template_id: template?.id,
       from_phase: handoffType.split('-')[0],
       to_phase: handoffType.split('-')[2],
-      sd_key: sdUuid,
+      sd_id: sdUuid,
       handoff_type: handoffType,
       status: 'rejected',
       ...rejectionContent,
@@ -358,7 +358,7 @@ export class HandoffRecorder {
 
     const execution = {
       id: executionId,
-      sd_key: sdUuid,
+      sd_id: sdUuid,
       handoff_type: handoffType,
       status: 'failed',
       executive_summary: `System error during ${handoffType} handoff: ${errorMessage}`,
@@ -421,7 +421,7 @@ export class HandoffRecorder {
       const { data: subAgentResults } = await this.supabase
         .from('sub_agent_execution_results')
         .select('*')
-        .eq('sd_key', sdUuid)
+        .eq('sd_id', sdUuid)
         .order('created_at', { ascending: false })
         .limit(10);
 
@@ -559,7 +559,7 @@ export class HandoffRecorder {
       // By placing status AFTER the spread, we guarantee it's always 'pending_acceptance'.
       const handoffRecord = {
         id: handoffId,
-        sd_key: sdUuid,
+        sd_id: sdUuid,
         from_phase: fromPhase,
         to_phase: toPhase,
         handoff_type: handoffType,
@@ -602,7 +602,7 @@ export class HandoffRecorder {
           const { data: existing } = await this.supabase
             .from('sd_phase_handoffs')
             .select('id')
-            .eq('sd_key', sdUuid)
+            .eq('sd_id', sdUuid)
             .eq('from_phase', fromPhase)
             .eq('to_phase', toPhase)
             .eq('status', 'accepted')
@@ -800,7 +800,7 @@ export class HandoffRecorder {
         error_stack: context.stack || null,
         operation: operation,
         component: 'HandoffRecorder',
-        sd_key: context.sdId || null,
+        sd_id: context.sdId || null,
         attempt_count: context.attemptCount || 1,
         is_recoverable: errorAnalysis.isRetryable,
         recovery_guidance: errorAnalysis.guidance,
@@ -849,7 +849,7 @@ export class HandoffRecorder {
         .from('validation_audit_log')
         .insert({
           correlation_id: `handoff-${details.executionId}`,
-          sd_key: sdUuid,
+          sd_id: sdUuid,
           validator_name: `handoff_${handoffType.toLowerCase().replace(/-/g, '_')}`,
           failure_reason: details.status === 'accepted'
             ? `Handoff ${handoffType} accepted with score ${details.score}%`

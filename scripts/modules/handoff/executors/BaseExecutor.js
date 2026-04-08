@@ -245,7 +245,7 @@ export class BaseExecutor {
       const gitContext = new SharedGitContext();
       const validationContext = {
         sdId,
-        sd_key: sd?.id || sdId,  // Use UUID when available for database queries
+        sd_id: sd?.id || sdId,  // Use UUID when available for database queries
         sd: sd ? structuredClone(sd) : null,  // Deep copy to prevent mutation
         prd: prd ? structuredClone(prd) : null,  // SD-LEO-001: Include PRD in context for validators
         prdId: prd?.id,  // Also provide prdId for convenience
@@ -676,7 +676,7 @@ export class BaseExecutor {
       const { data: existingExecution } = await this.supabase
         .from('sub_agent_execution_results')
         .select('id, verdict')
-        .eq('sd_key', sd.id)
+        .eq('sd_id', sd.id)
         .eq('sub_agent_code', 'DATABASE')
         .limit(1);
 
