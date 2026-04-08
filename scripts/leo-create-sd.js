@@ -438,7 +438,11 @@ async function createChild(parentKey, index = 0, overrides = {}) {
       source: 'leo',
       parent_sd_key: parent.sd_key,
       child_index: childIndex,
-      inherited_from_parent: Object.keys(inheritedFields)
+      inherited_from_parent: Object.keys(inheritedFields),
+      ...(overrides.migrationReviewed ? { migration_reviewed: true } : {}),
+      ...(overrides.securityReviewed ? { security_reviewed: true } : {}),
+      ...(overrides.visionKey ? { vision_key: overrides.visionKey } : {}),
+      ...(overrides.archKey ? { arch_key: overrides.archKey } : {}),
     }
   });
 
@@ -1596,10 +1600,26 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       if (childTitleIdx !== -1 && args[childTitleIdx + 1]) {
         childOverrides.title = args[childTitleIdx + 1];
       }
+      // Parse review flags for child creation (GR-MIGRATION-REVIEW / GR-SECURITY-BASELINE)
+      if (args.includes('--migration-reviewed')) childOverrides.migrationReviewed = true;
+      if (args.includes('--security-reviewed')) childOverrides.securityReviewed = true;
+      // Parse --vision-key / --arch-key for child creation
+      const childVisionKeyIdx = args.indexOf('--vision-key');
+      if (childVisionKeyIdx !== -1 && args[childVisionKeyIdx + 1]) {
+        childOverrides.visionKey = args[childVisionKeyIdx + 1];
+      }
+      const childArchKeyIdx = args.indexOf('--arch-key');
+      if (childArchKeyIdx !== -1 && args[childArchKeyIdx + 1]) {
+        childOverrides.archKey = args[childArchKeyIdx + 1];
+      }
       // args[1] = parent key, args[2] = index (skip flag positions)
       const childParentKey = args[1];
+      const flagValuePositionsChild = new Set(
+        [childTypeIdx, childTitleIdx, childVisionKeyIdx, childArchKeyIdx]
+          .filter(i => i !== -1).map(i => i + 1)
+      );
       const childIndexArg = args.find((a, i) =>
-        i >= 2 && !a.startsWith('-') && i !== childTypeIdx + 1 && i !== childTitleIdx + 1
+        i >= 2 && !a.startsWith('-') && !flagValuePositionsChild.has(i) && i !== childTypeIdx + 1 && i !== childTitleIdx + 1
       );
       await createChild(childParentKey, parseInt(childIndexArg || '0', 10), childOverrides);
     } else {

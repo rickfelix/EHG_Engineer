@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-07T03:44:57.304Z
+**Generated**: 2026-04-07T23:30:48.538Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -41,6 +41,9 @@
 - `customer_personas_canonical_id_fkey`: canonical_id → customer_personas(id)
 - `customer_personas_source_venture_id_fkey`: source_venture_id → ventures(id)
 
+### Unique Constraints
+- `uq_customer_personas_name_industry`: UNIQUE (name, industry)
+
 ## Indexes
 
 - `customer_personas_pkey`
@@ -50,6 +53,10 @@
 - `idx_customer_personas_canonical`
   ```sql
   CREATE UNIQUE INDEX idx_customer_personas_canonical ON public.customer_personas USING btree (name, COALESCE(industry, ''::text)) WHERE (canonical_id IS NULL)
+  ```
+- `uq_customer_personas_name_industry`
+  ```sql
+  CREATE UNIQUE INDEX uq_customer_personas_name_industry ON public.customer_personas USING btree (name, industry)
   ```
 
 ## RLS Policies
