@@ -151,12 +151,44 @@ describe('stitch-exporter', () => {
       expect(result.design_md_path).toContain('DESIGN.md'); // Still generated
     });
 
-    it('injects SRI hashes into exported HTML', async () => {
+    it('sanitizes HTML to remove script tags (SD-LEO-FIX-GOOGLE-STITCH-PIPELINE-001-A)', async () => {
       mockStitchClient.listScreens.mockResolvedValue([
         { screen_id: 's1', name: 'Home' },
       ]);
       mockStitchClient.exportScreenHtml.mockResolvedValue(
-        '<html><script src="https://cdn.jsdelivr.net/lib.js"></script></html>'
+        '<div>Safe content</div><script>alert("xss")</script><p>Normal</p>'
+      );
+      mockStitchClient.exportScreenImage.mockResolvedValue(Buffer.from('png'));
+
+      await exportStitchArtifacts('v1', 'proj-1', '/tmp/out');
+
+      const writtenHtml = writeFile.mock.calls.find(c => c[0].includes('.html'))?.[1];
+      expect(writtenHtml).not.toContain('<script>');
+      expect(writtenHtml).toContain('Safe content');
+    });
+
+    it('preserves SVG elements in sanitized HTML (SD-LEO-FIX-GOOGLE-STITCH-PIPELINE-001-A)', async () => {
+      mockStitchClient.listScreens.mockResolvedValue([
+        { screen_id: 's1', name: 'Home' },
+      ]);
+      mockStitchClient.exportScreenHtml.mockResolvedValue(
+        '<div><svg><circle cx="50" cy="50" r="40"></circle></svg></div>'
+      );
+      mockStitchClient.exportScreenImage.mockResolvedValue(Buffer.from('png'));
+
+      await exportStitchArtifacts('v1', 'proj-1', '/tmp/out');
+
+      const writtenHtml = writeFile.mock.calls.find(c => c[0].includes('.html'))?.[1];
+      expect(writtenHtml).toContain('<svg>');
+      expect(writtenHtml).toContain('<circle');
+    });
+
+    it('injects SRI hashes into exported HTML link tags', async () => {
+      mockStitchClient.listScreens.mockResolvedValue([
+        { screen_id: 's1', name: 'Home' },
+      ]);
+      mockStitchClient.exportScreenHtml.mockResolvedValue(
+        '<link href="https://fonts.googleapis.com/css2?family=Inter" rel="stylesheet">'
       );
       mockStitchClient.exportScreenImage.mockResolvedValue(Buffer.from('png'));
 
