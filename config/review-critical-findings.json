@@ -1,0 +1,96 @@
+{
+  "version": "1.0.0",
+  "description": "Closed enumeration of findings that ALWAYS block merge regardless of review tier.",
+  "critical_patterns": [
+    {
+      "id": "CRIT-001",
+      "name": "hardcoded_secret",
+      "description": "Hardcoded secrets, API keys, or credentials in source code",
+      "patterns": [
+        "SUPABASE_SERVICE_ROLE_KEY\\s*=",
+        "sk[-_]live[-_]",
+        "sk[-_]test[-_]",
+        "-----BEGIN (RSA |EC )?PRIVATE KEY-----",
+        "password\\s*[:=]\\s*['\"][^'\"]{8,}['\"]",
+        "api[_-]?key\\s*[:=]\\s*['\"][A-Za-z0-9]{20,}['\"]"
+      ],
+      "severity": "critical",
+      "auto_fixable": false
+    },
+    {
+      "id": "CRIT-002",
+      "name": "sql_injection",
+      "description": "String concatenation in SQL queries without parameterization",
+      "patterns": [
+        "\\$\\{.*\\}.*(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)",
+        "\\+\\s*['\"]\\s*(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)",
+        "\\.query\\s*\\(\\s*`[^`]*\\$\\{"
+      ],
+      "severity": "critical",
+      "auto_fixable": false
+    },
+    {
+      "id": "CRIT-003",
+      "name": "auth_bypass",
+      "description": "Disabled or bypassed authentication/authorization checks",
+      "patterns": [
+        "anon\\s*:\\s*true.*(?:service_role|admin)",
+        "\\.rls\\s*\\(\\s*false\\s*\\)",
+        "SECURITY\\s+DEFINER.*(?:DELETE|UPDATE|INSERT).*WITHOUT",
+        "disable.*(?:auth|rls|security)"
+      ],
+      "severity": "critical",
+      "auto_fixable": false
+    },
+    {
+      "id": "CRIT-004",
+      "name": "schema_corruption",
+      "description": "Destructive schema operations without safeguards",
+      "patterns": [
+        "DROP\\s+TABLE(?!\\s+IF\\s+EXISTS)",
+        "TRUNCATE\\s+TABLE",
+        "ALTER\\s+TABLE.*DROP\\s+COLUMN(?!\\s+IF\\s+EXISTS)",
+        "DROP\\s+DATABASE"
+      ],
+      "severity": "critical",
+      "auto_fixable": false
+    },
+    {
+      "id": "CRIT-005",
+      "name": "data_loss",
+      "description": "Operations that could cause irreversible data loss",
+      "patterns": [
+        "rm\\s+-rf\\s+/(?!tmp)",
+        "\\.delete\\(\\)(?!.*\\.eq\\()",
+        "git\\s+(reset|checkout)\\s+--hard",
+        "git\\s+push\\s+--force\\s+origin\\s+main"
+      ],
+      "severity": "critical",
+      "auto_fixable": false
+    },
+    {
+      "id": "CRIT-006",
+      "name": "permission_escalation",
+      "description": "Elevation of privileges or bypassing access controls",
+      "patterns": [
+        "service_role_key.*(?:client|browser|frontend)",
+        "setRole\\s*\\(\\s*['\"]service_role['\"]",
+        "GRANT\\s+ALL.*TO\\s+(?:anon|public)"
+      ],
+      "severity": "critical",
+      "auto_fixable": false
+    },
+    {
+      "id": "CRIT-007",
+      "name": "service_role_exposure",
+      "description": "Service role key used in client-accessible code",
+      "patterns": [
+        "NEXT_PUBLIC.*SERVICE_ROLE",
+        "VITE.*SERVICE_ROLE",
+        "window\\..*service.?role"
+      ],
+      "severity": "critical",
+      "auto_fixable": false
+    }
+  ]
+}
