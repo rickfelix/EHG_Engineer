@@ -56,9 +56,9 @@ export async function selfHeal(supabase, currentSessionId, options = {}) {
     const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_SECONDS * 1000).toISOString();
     const { data: staleSessions, error: queryErr } = await supabase
       .from('claude_sessions')
-      .select('session_id, sd_id, heartbeat_at, pid, hostname')
+      .select('session_id, sd_key, heartbeat_at, pid, hostname')
       .in('status', ['active', 'idle'])
-      .not('sd_id', 'is', null)
+      .not('sd_key', 'is', null)
       .lt('heartbeat_at', staleThreshold);
 
     if (queryErr) {
@@ -84,7 +84,7 @@ export async function selfHeal(supabase, currentSessionId, options = {}) {
 
       // Ghost claim confirmed: stale heartbeat + same host + dead PID
       if (dryRun) {
-        released.push(`[dry-run] Would release ${session.sd_id} from ${session.session_id} (PID ${pid} dead)`);
+        released.push(`[dry-run] Would release ${session.sd_key} from ${session.session_id} (PID ${pid} dead)`);
         continue;
       }
 
@@ -94,10 +94,10 @@ export async function selfHeal(supabase, currentSessionId, options = {}) {
       });
 
       if (releaseErr) {
-        errors.push(`Failed to release ${session.sd_id}: ${releaseErr.message}`);
+        errors.push(`Failed to release ${session.sd_key}: ${releaseErr.message}`);
       } else {
-        released.push(session.sd_id);
-        console.log(`[self-heal] Ghost claim released: ${session.sd_id} (session ${session.session_id}, PID ${pid} dead)`);
+        released.push(session.sd_key);
+        console.log(`[self-heal] Ghost claim released: ${session.sd_key} (session ${session.session_id}, PID ${pid} dead)`);
       }
     }
   } catch (e) {

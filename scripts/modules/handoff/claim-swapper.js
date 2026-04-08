@@ -31,7 +31,7 @@ export async function swapClaim(supabase, { sessionId, oldSdKey, newSdKey }) {
     let query = supabase
       .from('claude_sessions')
       .update({
-        sd_id: newSdKey,
+        sd_key: newSdKey,
         claimed_at: new Date().toISOString(),
         released_at: null,
         heartbeat_at: new Date().toISOString()
@@ -39,10 +39,10 @@ export async function swapClaim(supabase, { sessionId, oldSdKey, newSdKey }) {
       .eq('session_id', sessionId);
 
     if (oldSdKey) {
-      query = query.eq('sd_id', oldSdKey);
+      query = query.eq('sd_key', oldSdKey);
     }
 
-    const { data, error } = await query.select('session_id, sd_id');
+    const { data, error } = await query.select('session_id, sd_key');
 
     if (error) {
       return { success: false, reason: `DB error: ${error.message}` };
@@ -76,11 +76,11 @@ export async function releaseClaim(supabase, sessionId, sdKey) {
     const { data, error } = await supabase
       .from('claude_sessions')
       .update({
-        sd_id: null,
+        sd_key: null,
         released_at: new Date().toISOString()
       })
       .eq('session_id', sessionId)
-      .eq('sd_id', sdKey)
+      .eq('sd_key', sdKey)
       .select('session_id');
 
     if (error) {

@@ -125,7 +125,7 @@ export async function readStateFromDb() {
 
     const { data, error } = await supabase
       .from('claude_sessions')
-      .select('metadata, sd_id')
+      .select('metadata, sd_key')
       .eq('session_id', sessionId)
       .single();
 
@@ -136,7 +136,7 @@ export async function readStateFromDb() {
     const execState = data.metadata?.execution_state || {};
     const dbState = {
       ...DEFAULT_STATE,
-      currentSd: data.sd_id || execState.currentSd || null,
+      currentSd: data.sd_key || execState.currentSd || null,
       currentPhase: execState.currentPhase || null,
       currentTask: execState.currentTask || null,
       isActive: execState.isActive ?? false,

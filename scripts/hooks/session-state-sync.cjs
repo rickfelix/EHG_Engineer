@@ -118,7 +118,7 @@ async function main() {
     // Get database state
     const { data: session, error } = await supabase
       .from('claude_sessions')
-      .select('sd_id, metadata')
+      .select('sd_key, metadata')
       .eq('session_id', sessionId)
       .single();
 
@@ -127,7 +127,7 @@ async function main() {
     }
 
     const localState = readLocalState(sessionId);
-    const dbSdId = session.sd_id;
+    const dbSdId = session.sd_key;
     const dbExecState = session.metadata?.execution_state || {};
 
     // Check for mismatches
@@ -194,7 +194,7 @@ async function attemptSDReclaim(currentSessionId) {
   // Check if current session already has a claim
   const { data: session } = await supabase
     .from('claude_sessions')
-    .select('sd_id')
+    .select('sd_key')
     .eq('session_id', currentSessionId)
     .single();
 
@@ -221,7 +221,7 @@ async function attemptSDReclaim(currentSessionId) {
   const { data: existingClaims } = await supabase
     .from('claude_sessions')
     .select('session_id, heartbeat_at, status')
-    .eq('sd_id', sdKey)
+    .eq('sd_key', sdKey)
     .eq('status', 'active');
 
   if (existingClaims && existingClaims.length > 0) {

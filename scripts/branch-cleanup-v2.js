@@ -167,14 +167,14 @@ class BranchCleanupV2 {
     try {
       const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
       const { data, error } = await this.supabase.from('claude_sessions')
-        .select('session_id, sd_id, current_branch, worktree_branch, heartbeat_at')
+        .select('session_id, sd_key, current_branch, worktree_branch, heartbeat_at')
         .in('status', ['active', 'idle']).gte('heartbeat_at', since);
       if (error) throw error;
       for (const s of data || []) {
-        const e = { sessionId: s.session_id, sdId: s.sd_id, heartbeatAt: s.heartbeat_at };
+        const e = { sessionId: s.session_id, sdId: s.sd_key, heartbeatAt: s.heartbeat_at };
         if (s.current_branch) this.sessionProtected.set(s.current_branch, e);
         if (s.worktree_branch) this.sessionProtected.set(s.worktree_branch, e);
-        if (s.sd_id) this.sessionProtected.set(`__sd__:${s.sd_id.toLowerCase()}`, e);
+        if (s.sd_key) this.sessionProtected.set(`__sd__:${s.sd_key.toLowerCase()}`, e);
       }
       console.log(`🔒 ${data?.length || 0} active sessions → ${this.sessionProtected.size} protected branches\n`);
     } catch (err) {

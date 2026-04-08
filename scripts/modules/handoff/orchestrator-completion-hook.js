@@ -156,10 +156,10 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
     try {
       const { data: claimedSessions } = await supabase
         .from('claude_sessions')
-        .select('sd_id')
-        .not('sd_id', 'is', null)
+        .select('sd_key')
+        .not('sd_key', 'is', null)
         .in('status', ['active', 'idle']);
-      claimedSdKeys = (claimedSessions || []).map(s => s.sd_id).filter(Boolean);
+      claimedSdKeys = (claimedSessions || []).map(s => s.sd_key).filter(Boolean);
     } catch (e) {
       // Intentionally suppressed: Fail-open, proceed without claim filtering
       console.debug('[OrchestratorCompletionHook] claim query suppressed:', e?.message || e);
@@ -468,8 +468,8 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
     if (childIds.length > 0) {
       const { data: saData } = await supabase
         .from('sub_agent_execution_results')
-        .select('sd_id, sub_agent_type, verdict')
-        .in('sd_id', childIds)
+        .select('sd_key, sub_agent_type, verdict')
+        .in('sd_key', childIds)
         .eq('sub_agent_type', 'TESTING');
       subAgentResults = saData || [];
     }
@@ -703,7 +703,7 @@ async function invokeParentHeal(supabase, orchestratorId, orchestratorTitle, cor
   const { data: existing } = await supabase
     .from('eva_vision_scores')
     .select('id')
-    .eq('sd_id', sdKey)
+    .eq('sd_key', sdKey)
     .gte('scored_at', today + 'T00:00:00Z')
     .limit(1);
 

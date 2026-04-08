@@ -117,7 +117,7 @@ function emitAutoClaimDirective(suggestedSd, availableSds) {
     // Structured action line (same pattern as sd-next.js AUTO_PROCEED_ACTION)
     console.log('AUTO_PROCEED_ACTION:' + JSON.stringify({
       action: 'start',
-      sd_id: sdId,
+      sd_key: sdId,
       reason: 'Coordination inbox: idle session with available work'
     }));
   }
@@ -163,7 +163,7 @@ async function main() {
   try {
     const { data: sessionData } = await supabase
       .from('claude_sessions')
-      .select('sd_id')
+      .select('sd_key')
       .eq('session_id', sessionId)
       .single();
     isIdle = !sessionData?.sd_id;

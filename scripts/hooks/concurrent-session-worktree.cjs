@@ -135,7 +135,7 @@ function isInsideWorktree() {
 async function findConcurrentSessions(supabase, mySessionId, codebase, branch) {
   const { data, error } = await supabase
     .from('v_active_sessions')
-    .select('session_id, hostname, heartbeat_age_seconds, computed_status, sd_id, tty, pid, current_branch, terminal_id')
+    .select('session_id, hostname, heartbeat_age_seconds, computed_status, sd_key, tty, pid, current_branch, terminal_id')
     .eq('codebase', codebase)
     .in('computed_status', ['active', 'idle']);
 

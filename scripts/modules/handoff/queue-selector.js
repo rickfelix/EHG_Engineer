@@ -84,10 +84,10 @@ export async function getClaimedSdKeys(supabase) {
   try {
     const { data: claimedSessions } = await supabase
       .from('claude_sessions')
-      .select('sd_id')
-      .not('sd_id', 'is', null)
+      .select('sd_key')
+      .not('sd_key', 'is', null)
       .in('status', ['active', 'idle']);
-    return (claimedSessions || []).map(s => s.sd_id).filter(Boolean);
+    return (claimedSessions || []).map(s => s.sd_key).filter(Boolean);
   } catch {
     // Fail-open: proceed without claim filtering
     return [];

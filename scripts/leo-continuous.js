@@ -367,7 +367,7 @@ async function getNextParentSD(_afterSdId = null) {
   const { data: nextItem } = await supabase
     .from('sd_baseline_items')
     .select(`
-      sd_id,
+      sd_key,
       sequence_rank,
       strategic_directives_v2 (
         id, sd_key, title, status, current_phase, parent_sd_id
