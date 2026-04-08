@@ -199,16 +199,33 @@ try {
 } catch (_) { /* intentionally silent: auto-proceed display is optional */ }
 
 // Fleet identity (assigned by coordinator via assign-fleet-identities.cjs)
-// Per-session file keyed by CLAUDE_SESSION_ID; falls back to shared file
+// Try per-session files first (keyed by DB session_id), then shared file.
+// Scan .claude/fleet-identity-*.json for any file whose content matches this session.
 let fleetCallsign = '';
 let fleetColor = '';
 try {
-  const csid = process.env.CLAUDE_SESSION_ID || sessionId;
-  const perSessionFile = path.join(__dirname, `fleet-identity-${csid}.json`);
-  const sharedFile = path.join(__dirname, 'fleet-identity.json');
-  const identityFile = fs.existsSync(perSessionFile) ? perSessionFile : sharedFile;
-  if (fs.existsSync(identityFile)) {
-    const identity = JSON.parse(fs.readFileSync(identityFile, 'utf8'));
+  let identity = null;
+  // Strategy 1: find per-session file by scanning all fleet-identity-*.json files
+  const identityFiles = fs.readdirSync(__dirname).filter(f => /^fleet-identity-.+\.json$/.test(f));
+  if (identityFiles.length === 1) {
+    // Only one per-session file — must be ours (single worker case)
+    identity = JSON.parse(fs.readFileSync(path.join(__dirname, identityFiles[0]), 'utf8'));
+  } else if (identityFiles.length > 1) {
+    // Multiple per-session files — try to match by CLAUDE_SESSION_ID or sessionId
+    const csid = process.env.CLAUDE_SESSION_ID || sessionId;
+    const exactMatch = identityFiles.find(f => f.includes(csid));
+    if (exactMatch) {
+      identity = JSON.parse(fs.readFileSync(path.join(__dirname, exactMatch), 'utf8'));
+    }
+  }
+  // Strategy 2: fall back to shared file
+  if (!identity) {
+    const sharedFile = path.join(__dirname, 'fleet-identity.json');
+    if (fs.existsSync(sharedFile)) {
+      identity = JSON.parse(fs.readFileSync(sharedFile, 'utf8'));
+    }
+  }
+  if (identity) {
     fleetCallsign = identity.callsign || '';
     fleetColor = identity.color || '';
   }
