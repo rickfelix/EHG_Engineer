@@ -199,26 +199,19 @@ try {
 } catch (_) { /* intentionally silent: auto-proceed display is optional */ }
 
 // Fleet identity (assigned by coordinator via assign-fleet-identities.cjs)
-// Try per-session files first (keyed by DB session_id), then shared file.
-// Scan .claude/fleet-identity-*.json for any file whose content matches this session.
+// Match per-session file by session ID. Never assume — always require ID match.
 let fleetCallsign = '';
 let fleetColor = '';
 try {
   let identity = null;
-  // Strategy 1: find per-session file by scanning all fleet-identity-*.json files
-  const identityFiles = fs.readdirSync(__dirname).filter(f => /^fleet-identity-.+\.json$/.test(f));
-  if (identityFiles.length === 1) {
-    // Only one per-session file — must be ours (single worker case)
-    identity = JSON.parse(fs.readFileSync(path.join(__dirname, identityFiles[0]), 'utf8'));
-  } else if (identityFiles.length > 1) {
-    // Multiple per-session files — try to match by CLAUDE_SESSION_ID or sessionId
-    const csid = process.env.CLAUDE_SESSION_ID || sessionId;
-    const exactMatch = identityFiles.find(f => f.includes(csid));
-    if (exactMatch) {
-      identity = JSON.parse(fs.readFileSync(path.join(__dirname, exactMatch), 'utf8'));
-    }
+  // sessionId comes from Claude Code's JSON input (line 77). With the session identity
+  // fix (2026-04-08), this equals the DB session_id (birth certificate UUID).
+  const csid = process.env.CLAUDE_SESSION_ID || sessionId;
+  const perSessionFile = path.join(__dirname, `fleet-identity-${csid}.json`);
+  if (fs.existsSync(perSessionFile)) {
+    identity = JSON.parse(fs.readFileSync(perSessionFile, 'utf8'));
   }
-  // Strategy 2: fall back to shared file
+  // Fall back to shared file only if no per-session file matches
   if (!identity) {
     const sharedFile = path.join(__dirname, 'fleet-identity.json');
     if (fs.existsSync(sharedFile)) {
