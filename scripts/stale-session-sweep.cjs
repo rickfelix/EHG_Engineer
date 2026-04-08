@@ -259,8 +259,8 @@ async function main() {
   // 1. Get all sessions with SD claims
   const { data: sessions, error: sessErr } = await supabase
     .from('v_active_sessions')
-    .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id')
-    .not('sd_id', 'is', null)
+    .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id')
+    .not('sd_key', 'is', null)
     .order('heartbeat_age_seconds', { ascending: true });
 
   if (sessErr) {
@@ -340,14 +340,14 @@ async function main() {
   // 3. Detect conflicts (multiple sessions claiming same SD)
   const bySD = {};
   classified.forEach(s => {
-    if (!bySD[s.sd_id]) bySD[s.sd_id] = [];
-    bySD[s.sd_id].push(s);
+    if (!bySD[s.sd_key]) bySD[s.sd_key] = [];
+    bySD[s.sd_key].push(s);
   });
 
   const conflicts = Object.entries(bySD).filter(([, arr]) => arr.length > 1);
 
   // 3b. QA — detect sessions working on completed SDs
-  const claimedSdKeys = [...new Set(classified.map(s => s.sd_id).filter(Boolean))];
+  const claimedSdKeys = [...new Set(classified.map(s => s.sd_key).filter(Boolean))];
   const { data: claimedSdStatus } = await supabase
     .from('strategic_directives_v2')
     .select('sd_key, status, completion_date')
@@ -357,7 +357,7 @@ async function main() {
   (claimedSdStatus || []).forEach(sd => { sdStatusMap[sd.sd_key] = sd; });
 
   const workingOnCompleted = classified.filter(s => {
-    const sd = sdStatusMap[s.sd_id];
+    const sd = sdStatusMap[s.sd_key];
     return sd && sd.status === 'completed';
   });
 
@@ -370,7 +370,7 @@ async function main() {
     const { error } = await supabase
       .from('claude_sessions')
       .update({
-        sd_id: null,
+        sd_key: null,
         status: targetStatus,
         released_at: now.toISOString(),
         released_reason: 'SWEEP_SD_ALREADY_COMPLETED',
@@ -385,21 +385,21 @@ async function main() {
       await supabase
         .from('strategic_directives_v2')
         .update({ claiming_session_id: null, is_working_on: false })
-        .eq('sd_key', s.sd_id);
-      await resetSdPhaseOnRelease(s.sd_id, 'SWEEP_SD_ALREADY_COMPLETED');
-      actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — ' + s.sd_id + ' already completed');
+        .eq('sd_key', s.sd_key);
+      await resetSdPhaseOnRelease(s.sd_key, 'SWEEP_SD_ALREADY_COMPLETED');
+      actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — ' + s.sd_key + ' already completed');
     }
   }
 
   // 3c. QA — detect sessions claiming SDs that don't exist
-  const orphanedClaims = classified.filter(s => !sdStatusMap[s.sd_id]);
+  const orphanedClaims = classified.filter(s => !sdStatusMap[s.sd_key]);
   for (const s of orphanedClaims) {
     const targetStatus = s.status === 'ACTIVE' ? 'idle' : 'released';
     // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
     const { error } = await supabase
       .from('claude_sessions')
       .update({
-        sd_id: null,
+        sd_key: null,
         status: targetStatus,
         released_at: now.toISOString(),
         released_reason: 'SWEEP_ORPHANED_CLAIM',
@@ -410,7 +410,7 @@ async function main() {
       .eq('session_id', s.session_id);
 
     if (!error) {
-      actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — SD ' + s.sd_id + ' not found in DB');
+      actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — SD ' + s.sd_key + ' not found in DB');
     }
   }
 
@@ -423,7 +423,7 @@ async function main() {
     .select('sd_key, status, current_phase, progress_percentage, completion_date')
     .eq('status', 'pending_approval');
 
-  const activeClaimSdIds = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_id));
+  const activeClaimSdIds = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_key));
   const stuckApproval = (allPendingApproval || []).filter(sd => !activeClaimSdIds.has(sd.sd_key));
 
   for (const sd of stuckApproval) {
@@ -548,7 +548,7 @@ async function main() {
     // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: WIP release guard
     // Sessions with uncommitted changes are protected from automatic release
     if (s.has_uncommitted_changes === true) {
-      warnings.push('WIP_GUARD: ' + s.session_id + ' has uncommitted changes — NOT releasing (SD: ' + s.sd_id + ')');
+      warnings.push('WIP_GUARD: ' + s.session_id + ' has uncommitted changes — NOT releasing (SD: ' + s.sd_key + ')');
       continue;
     }
 
@@ -558,7 +558,7 @@ async function main() {
     const { error } = await supabase
       .from('claude_sessions')
       .update({
-        sd_id: null,
+        sd_key: null,
         status: 'released',
         released_at: now.toISOString(),
         released_reason: 'SWEEP_PID_DEAD',
@@ -570,10 +570,10 @@ async function main() {
       .eq('session_id', s.session_id);
 
     if (error) {
-      actions.push('FAILED to release ' + s.session_id + ' (' + s.sd_id + '): ' + error.message);
+      actions.push('FAILED to release ' + s.session_id + ' (' + s.sd_key + '): ' + error.message);
     } else {
-      if (s.sd_id) {
-        await resetSdPhaseOnRelease(s.sd_id, 'SWEEP_PID_DEAD');
+      if (s.sd_key) {
+        await resetSdPhaseOnRelease(s.sd_key, 'SWEEP_PID_DEAD');
         // Clear claiming_session_id on the SD so the next worker can claim it
         // without hitting foreign_claim in the claim validity gate.
         await supabase
@@ -581,7 +581,7 @@ async function main() {
           .update({ claiming_session_id: null, is_working_on: false })
           .eq('claiming_session_id', s.session_id);
       }
-      actions.push('RELEASED ' + s.session_id + ' — PID ' + s.pid + ' dead — freed ' + s.sd_id);
+      actions.push('RELEASED ' + s.session_id + ' — PID ' + s.pid + ' dead — freed ' + s.sd_key);
     }
   }
 
@@ -603,7 +603,7 @@ async function main() {
   // Flag workers with repeated handoff failures
   for (const s of classified.filter(c => c.status === 'ACTIVE' && (c.handoff_fail_count || 0) > 3)) {
     const tier = s.handoff_fail_count >= 7 ? 'REASSIGN' : s.handoff_fail_count >= 5 ? 'RCA' : 'WARN';
-    warnings.push('WORKER_STRUGGLING: ' + s.session_id + ' has ' + s.handoff_fail_count + ' handoff failures (tier: ' + tier + ', SD: ' + s.sd_id + ')');
+    warnings.push('WORKER_STRUGGLING: ' + s.session_id + ' has ' + s.handoff_fail_count + ' handoff failures (tier: ' + tier + ', SD: ' + s.sd_key + ')');
   }
 
   // 5. Resolve conflicts — keep freshest, release ALL others (including active)
@@ -621,7 +621,7 @@ async function main() {
       const { error } = await supabase
         .from('claude_sessions')
         .update({
-          sd_id: null,
+          sd_key: null,
           status: targetStatus,
           released_at: now.toISOString(),
           released_reason: 'SWEEP_CONFLICT_RESOLUTION',
@@ -664,7 +664,7 @@ async function main() {
 
   // Dependency-aware availability: only suggest SDs whose deps are all completed
   const completedKeys = new Set(allSDs.filter(c => c.status === 'completed').map(c => c.sd_key));
-  const claimedByActive = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_id));
+  const claimedByActive = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_key));
 
   const available = allSDs
     .filter(c => {
@@ -692,8 +692,8 @@ async function main() {
   // 6b. QA — Claim Integrity: detect idle sessions with no SD claim and nudge them
   const { data: idleSessions } = await supabase
     .from('v_active_sessions')
-    .select('session_id, sd_id, heartbeat_age_seconds, heartbeat_age_human, computed_status, tty')
-    .is('sd_id', null)
+    .select('session_id, sd_key, heartbeat_age_seconds, heartbeat_age_human, computed_status, tty')
+    .is('sd_key', null)
     .order('heartbeat_age_seconds', { ascending: true });
 
   const aliveIdle = (idleSessions || []).filter(s => s.heartbeat_age_seconds < STALE_THRESHOLD_SECONDS);
@@ -737,7 +737,7 @@ async function main() {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
       .select('sd_key, claiming_session_id, is_working_on')
-      .eq('sd_key', s.sd_id)
+      .eq('sd_key', s.sd_key)
       .single();
 
     if (!sd) continue;
@@ -747,17 +747,17 @@ async function main() {
       await supabase
         .from('strategic_directives_v2')
         .update({ claiming_session_id: s.session_id, is_working_on: true })
-        .eq('sd_key', s.sd_id)
+        .eq('sd_key', s.sd_key)
         .select();
-      actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_id + ' → ' + s.session_id.substring(0, 20));
+      actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_key + ' → ' + s.session_id.substring(0, 20));
     } else if (!sd.is_working_on) {
       // Fix incomplete claim: claiming_session_id matches but is_working_on is false
       await supabase
         .from('strategic_directives_v2')
         .update({ is_working_on: true })
-        .eq('sd_key', s.sd_id)
+        .eq('sd_key', s.sd_key)
         .select();
-      actions.push('CLAIM_FIX: set is_working_on=true on ' + s.sd_id);
+      actions.push('CLAIM_FIX: set is_working_on=true on ' + s.sd_key);
     }
   }
 
@@ -813,11 +813,11 @@ async function main() {
       .from('session_coordination')
       .insert({
         target_session: s.session_id,
-        target_sd: s.sd_id,
+        target_sd: s.sd_key,
         message_type: 'WORK_ASSIGNMENT',
-        subject: 'Next work available when ' + s.sd_id.split('-').pop() + ' completes',
-        body: 'When you complete ' + s.sd_id + ', pick up the next unclaimed child.\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
-        payload: { available_sds: available, current_sd: s.sd_id },
+        subject: 'Next work available when ' + s.sd_key.split('-').pop() + ' completes',
+        body: 'When you complete ' + s.sd_key + ', pick up the next unclaimed child.\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
+        payload: { available_sds: available, current_sd: s.sd_key },
         sender_type: 'sweep'
       });
   }
@@ -859,11 +859,11 @@ async function main() {
       .from('session_coordination')
       .insert({
         target_session: s.session_id,
-        target_sd: s.sd_id,
+        target_sd: s.sd_key,
         message_type: 'CLAIM_RELEASED',
-        subject: 'SD ' + s.sd_id.split('-').pop() + ' already completed — pick next SD',
-        body: 'Your SD ' + s.sd_id + ' is already completed. Your claim was released. Please pick up one of: ' + (available.length > 0 ? available.join(', ') : 'run /leo next for available SDs'),
-        payload: { released_sd: s.sd_id, reason: 'SD_ALREADY_COMPLETED', available_sds: available },
+        subject: 'SD ' + s.sd_key.split('-').pop() + ' already completed — pick next SD',
+        body: 'Your SD ' + s.sd_key + ' is already completed. Your claim was released. Please pick up one of: ' + (available.length > 0 ? available.join(', ') : 'run /leo next for available SDs'),
+        payload: { released_sd: s.sd_key, reason: 'SD_ALREADY_COMPLETED', available_sds: available },
         sender_type: 'sweep'
       });
   }
@@ -881,10 +881,10 @@ async function main() {
   // Active workers
   console.log('ACTIVE WORKERS (' + activeSessions.length + '):');
   activeSessions.forEach(s => {
-    const child = (children || []).find(c => c.sd_key === s.sd_id);
+    const child = (children || []).find(c => c.sd_key === s.sd_key);
     const pct = child ? child.progress_percentage : '?';
     const tag = s.status === 'ALIVE_NO_HEARTBEAT' ? ' (PID alive, loading)' : '';
-    console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_id || '?').padEnd(50) + bar(pct) + ' ' + pct + '%' + tag);
+    console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_key || '?').padEnd(50) + bar(pct) + ' ' + pct + '%' + tag);
   });
   console.log('');
 
@@ -894,7 +894,7 @@ async function main() {
     console.log('STALE/DEAD (' + stale.length + '):');
     stale.forEach(s => {
       const tag = s.status === 'DEAD' ? 'RELEASED' : s.status;
-      console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_id || '?').padEnd(50) + tag + ' (' + s.heartbeat_age_human + ')');
+      console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_key || '?').padEnd(50) + tag + ' (' + s.heartbeat_age_human + ')');
     });
     console.log('');
   }

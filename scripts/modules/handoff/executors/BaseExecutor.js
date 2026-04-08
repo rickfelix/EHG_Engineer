@@ -110,7 +110,7 @@ export class BaseExecutor {
       rootSpan = startSpan('workflow.execute', {
         span_type: 'workflow',
         workflow_execution_id: executionId,
-        sd_id: sdId,
+        sd_key: sdId,
         handoff_type: this.handoffType,
         executor_class: this.constructor.name,
         telemetry_version: '1',
@@ -123,7 +123,7 @@ export class BaseExecutor {
     try {
       // Step 1: Load SD
       let step1Span;
-      try { step1Span = startSpan('step.loadSD', { span_type: 'phase', step_name: 'loadSD', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      try { step1Span = startSpan('step.loadSD', { span_type: 'phase', step_name: 'loadSD', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const sd = await this.sdRepo.getById(sdId);
       try { endSpan(step1Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
@@ -156,14 +156,14 @@ export class BaseExecutor {
 
       // Step 1.5: Pre-handoff migration check (auto-execute pending migrations)
       let step1_5Span;
-      try { step1_5Span = startSpan('step.migrationCheck', { span_type: 'phase', step_name: 'migrationCheck', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      try { step1_5Span = startSpan('step.migrationCheck', { span_type: 'phase', step_name: 'migrationCheck', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       await this._checkAndExecutePendingMigrations(sd, options);
       try { endSpan(step1_5Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
       // Step 1.8: PAT-MSESS-BYP-001 - Multi-session claim conflict check (BLOCKING)
       // Prevents duplicate work when another Claude Code instance is already working on this SD
       let step1_8Span;
-      try { step1_8Span = startSpan('step.claimConflictCheck', { span_type: 'phase', step_name: 'claimConflictCheck', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      try { step1_8Span = startSpan('step.claimConflictCheck', { span_type: 'phase', step_name: 'claimConflictCheck', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const claimConflict = await this._checkMultiSessionClaimConflict(sdId, sd);
       try { endSpan(step1_8Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       if (claimConflict && !claimConflict.pass) {
@@ -178,7 +178,7 @@ export class BaseExecutor {
 
       // Step 2: Pre-execution setup (optional, override in subclass)
       let step2Span;
-      try { step2Span = startSpan('step.setup', { span_type: 'phase', step_name: 'setup', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      try { step2Span = startSpan('step.setup', { span_type: 'phase', step_name: 'setup', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const setupResult = await this.setup(sdId, sd, options);
       try { endSpan(step2Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       if (setupResult && !setupResult.success) {
@@ -188,7 +188,7 @@ export class BaseExecutor {
 
       // Step 2.5: Auto-claim SD for this session (sets is_working_on = true)
       let step2_5Span;
-      try { step2_5Span = startSpan('step.claimAndPrepare', { span_type: 'phase', step_name: 'claimAndPrepare', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      try { step2_5Span = startSpan('step.claimAndPrepare', { span_type: 'phase', step_name: 'claimAndPrepare', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const claimResult = await this._claimSDForSession(sdId, sd);
       if (claimResult && !claimResult.success) {
         try { endSpan(step2_5Span, { result: 'claim_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
@@ -205,7 +205,7 @@ export class BaseExecutor {
 
       // Step 3: Run required gates (with database rule integration - SD-VALIDATION-REGISTRY-001)
       let step3Span;
-      try { step3Span = startSpan('step.gateValidation', { span_type: 'phase', step_name: 'gateValidation', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      try { step3Span = startSpan('step.gateValidation', { span_type: 'phase', step_name: 'gateValidation', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const hardcodedGates = await this.getRequiredGates(sd, options);
 
       // SD-MAN-GEN-CORRECTIVE-VISION-GAP-012 (V04): Inject DFE escalation gate globally
@@ -382,8 +382,8 @@ export class BaseExecutor {
         const sdKey = sd?.sd_key || sdId;
         const { data: currentClaim } = await this.supabase
           .from('claude_sessions')
-          .select('session_id, sd_id')
-          .eq('sd_id', sdKey)
+          .select('session_id, sd_key')
+          .eq('sd_key', sdKey)
           .eq('status', 'active')
           .limit(1)
           .single();
@@ -392,8 +392,8 @@ export class BaseExecutor {
         if (!currentClaim && sd?.id) {
           const { data: uuidClaim } = await this.supabase
             .from('claude_sessions')
-            .select('session_id, sd_id')
-            .eq('sd_id', sd.id)
+            .select('session_id, sd_key')
+            .eq('sd_key', sd.id)
             .eq('status', 'active')
             .limit(1)
             .single();
@@ -416,7 +416,7 @@ export class BaseExecutor {
 
       // Step 4: Execute type-specific logic
       let step4Span;
-      try { step4Span = startSpan('step.executeSpecific', { span_type: 'phase', step_name: 'executeSpecific', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+      try { step4Span = startSpan('step.executeSpecific', { span_type: 'phase', step_name: 'executeSpecific', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const executionResult = await this.executeSpecific(sdId, sd, options, gateResults);
       try { endSpan(step4Span, { result: executionResult.success ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       if (!executionResult.success) {
@@ -736,8 +736,8 @@ export class BaseExecutor {
     // single source of truth. Active claims are sessions with sd_id set and status='active'.
     const { data: existingClaims } = await this.supabase
       .from('claude_sessions')
-      .select('session_id, sd_id, claimed_at')
-      .eq('sd_id', claimId)
+      .select('session_id, sd_key, claimed_at')
+      .eq('sd_key', claimId)
       .in('status', ['active', 'idle']);
 
     const activeClaim = (existingClaims || []).find(c => {

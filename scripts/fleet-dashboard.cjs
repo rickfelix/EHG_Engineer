@@ -59,12 +59,12 @@ async function loadData() {
   const [sessRes, allSessRes, childRes, workRes, coordRes, rawSessRes, drainRes] = await Promise.all([
     supabase
       .from('v_active_sessions')
-      .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id')
-      .not('sd_id', 'is', null)
+      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id')
+      .not('sd_key', 'is', null)
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
       .from('v_active_sessions')
-      .select('session_id, sd_id, computed_status, tty, heartbeat_age_seconds, heartbeat_age_human')
+      .select('session_id, sd_key, computed_status, tty, heartbeat_age_seconds, heartbeat_age_human')
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
       .from('strategic_directives_v2')
@@ -85,14 +85,14 @@ async function loadData() {
       .limit(20),
     supabase
       .from('claude_sessions')
-      .select('session_id, sd_id, tty, status, heartbeat_at, pid')
-      .not('sd_id', 'is', null)
+      .select('session_id, sd_key, tty, status, heartbeat_at, pid')
+      .not('sd_key', 'is', null)
       .order('heartbeat_at', { ascending: false })
       .limit(30),
     // Drain agent sessions (virtual sessions with parent)
     supabase
       .from('claude_sessions')
-      .select('session_id, sd_id, status, heartbeat_at, is_virtual, parent_session_id, agent_slot, last_progress_at')
+      .select('session_id, sd_key, status, heartbeat_at, is_virtual, parent_session_id, agent_slot, last_progress_at')
       .eq('is_virtual', true)
       .in('status', ['active', 'idle'])
       .order('agent_slot', { ascending: true })
@@ -106,7 +106,7 @@ async function loadData() {
   const coordMessages = coordRes.data || [];
   const rawSessions = rawSessRes.data || [];
 
-  const claimedSdIds = new Set(sessions.map(s => s.sd_id));
+  const claimedSdIds = new Set(sessions.map(s => s.sd_key));
   // Cross-reference heartbeat age with PID marker liveness:
   // A session with stale heartbeat but living CC PID is loading context or between tool calls.
   // terminal_id format: "win-cc-{port}-{ccPid}" — extract ccPid and check marker files.
@@ -119,7 +119,7 @@ async function loadData() {
   const activeSessions = sessions.filter(s => s.heartbeat_age_seconds < STALE_THRESHOLD || hasPidAlive(s));
   const staleSessions = sessions.filter(s => s.heartbeat_age_seconds >= STALE_THRESHOLD && !hasPidAlive(s));
   const DEAD_THRESHOLD = STALE_THRESHOLD * 3; // 15min
-  const idleSessions = allSessions.filter(s => !s.sd_id && s.heartbeat_age_seconds < DEAD_THRESHOLD);
+  const idleSessions = allSessions.filter(s => !s.sd_key && s.heartbeat_age_seconds < DEAD_THRESHOLD);
 
   const completedChildren = children.filter(c => c.status === 'completed').length;
   const totalChildren = children.length;
@@ -129,7 +129,7 @@ async function loadData() {
   const unclaimedStandalone = workable.filter(sd => !claimedSdIds.has(sd.sd_key));
 
   // Build SD status map for QA checks (includes all SDs, not just orchestrator children)
-  const allSdKeys = [...new Set(rawSessions.map(s => s.sd_id).filter(Boolean))];
+  const allSdKeys = [...new Set(rawSessions.map(s => s.sd_key).filter(Boolean))];
   let sdStatusMap = {};
   children.forEach(c => { sdStatusMap[c.sd_key] = c; });
   // Fetch any non-child SDs that workers are claiming
@@ -185,10 +185,10 @@ function printWorkers(d) {
     console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + 'Heartbeat');
     console.log('  ' + '─'.repeat(hasCollision ? 84 : 72));
     for (const s of d.activeSessions) {
-      const child = d.children.find(c => c.sd_key === s.sd_id);
+      const child = d.children.find(c => c.sd_key === s.sd_key);
       const pct = child ? child.progress_percentage : 0;
       const phase = s.current_phase || (child ? child.current_phase : '?');
-      const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+      const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
       const fails = s.handoff_fail_count != null ? String(s.handoff_fail_count) : '-';
       const wip = s.has_uncommitted_changes === true ? 'Y' : s.has_uncommitted_changes === false ? 'N' : '-';
       const struggleTag = (s.handoff_fail_count || 0) > 3 ? ' [STRUGGLING]' : '';
@@ -201,7 +201,7 @@ function printWorkers(d) {
     console.log('');
     console.log('  Stale (' + d.staleSessions.length + '):');
     for (const s of d.staleSessions) {
-      const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+      const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
       console.log('  ' + pad(s.tty, 12) + pad(shortSd, 10) + s.heartbeat_age_human);
     }
   }
@@ -410,12 +410,12 @@ function printQA(d) {
 
   // QA 1: Working on completed SD
   const onCompleted = recentRaw.filter(s => {
-    const sd = d.sdStatusMap[s.sd_id];
+    const sd = d.sdStatusMap[s.sd_key];
     return sd && sd.status === 'completed';
   });
   onCompleted.forEach(s => {
-    const sd = d.sdStatusMap[s.sd_id];
-    const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+    const sd = d.sdStatusMap[s.sd_key];
+    const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
     issues.push({
       severity: 'HIGH',
       check: 'COMPLETED_SD',
@@ -426,8 +426,8 @@ function printQA(d) {
   // QA 2: Duplicate claims
   const bySd = {};
   recentRaw.forEach(s => {
-    if (!bySd[s.sd_id]) bySd[s.sd_id] = [];
-    bySd[s.sd_id].push(s);
+    if (!bySd[s.sd_key]) bySd[s.sd_key] = [];
+    bySd[s.sd_key].push(s);
   });
   Object.entries(bySd).filter(([, arr]) => arr.length > 1).forEach(([sdId, claimants]) => {
     const shortSd = sdId.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
@@ -439,17 +439,17 @@ function printQA(d) {
   });
 
   // QA 3: Orphaned claims (SD not in DB)
-  recentRaw.filter(s => !d.sdStatusMap[s.sd_id]).forEach(s => {
+  recentRaw.filter(s => !d.sdStatusMap[s.sd_key]).forEach(s => {
     issues.push({
       severity: 'MED',
       check: 'ORPHAN',
-      msg: s.tty + ' claims ' + s.sd_id.substring(0, 30) + '… — SD not found in DB'
+      msg: s.tty + ' claims ' + s.sd_key.substring(0, 30) + '… — SD not found in DB'
     });
   });
 
   // QA 4: Claim with bad session status
-  recentRaw.filter(s => s.sd_id && !['active', 'idle'].includes(s.status)).forEach(s => {
-    const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+  recentRaw.filter(s => s.sd_key && !['active', 'idle'].includes(s.status)).forEach(s => {
+    const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
     issues.push({
       severity: 'LOW',
       check: 'BAD_STATUS',
@@ -469,7 +469,7 @@ function printQA(d) {
 
   // QA 6: SDs stuck in pending_approval with no active claiming session
   const pendingApproval = Object.values(d.sdStatusMap).filter(sd => sd.status === 'pending_approval');
-  const activeClaimSdIds = new Set(recentRaw.map(s => s.sd_id).filter(Boolean));
+  const activeClaimSdIds = new Set(recentRaw.map(s => s.sd_key).filter(Boolean));
   pendingApproval.filter(sd => !activeClaimSdIds.has(sd.sd_key)).forEach(sd => {
     const shortSd = sd.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
     issues.push({
@@ -688,7 +688,7 @@ async function printPredictions(d) {
   for (const s of d.activeSessions) {
     if (s.heartbeat_age_seconds >= STALE_WARNING) {
       const remaining = Math.round(STALE_THRESHOLD - s.heartbeat_age_seconds);
-      const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+      const shortSd = s.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
       signals.push({
         icon: '~~',
         label: 'AGING',
@@ -715,10 +715,10 @@ async function printPredictions(d) {
       .from('session_coordination')
       .insert({
         target_session: s.session_id,
-        target_sd: s.sd_id,
+        target_sd: s.sd_key,
         message_type: 'STALE_WARNING',
-        subject: 'Heartbeat aging on ' + s.sd_id.split('-').pop() + ' — approaching stale threshold',
-        body: 'Your session on ' + s.sd_id + ' has not heartbeated in ' + s.heartbeat_age_human + '. If you are still working, send a heartbeat. If stuck, consider releasing the claim.',
+        subject: 'Heartbeat aging on ' + s.sd_key.split('-').pop() + ' — approaching stale threshold',
+        body: 'Your session on ' + s.sd_key + ' has not heartbeated in ' + s.heartbeat_age_human + '. If you are still working, send a heartbeat. If stuck, consider releasing the claim.',
         payload: { session_id: s.session_id, heartbeat_age: s.heartbeat_age_seconds, stale_threshold: STALE_THRESHOLD },
         sender_type: 'dashboard'
       }).then(() => {}).catch(() => {}); // Non-blocking

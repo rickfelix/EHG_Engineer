@@ -196,7 +196,7 @@ async function validateArtifacts(sd, children) {
   const { data: prd } = await supabase
     .from('product_requirements_v2')
     .select('id, functional_requirements, metadata')
-    .eq('sd_id', sd.sd_key || sd.id)
+    .eq('sd_key', sd.sd_key || sd.id)
     .single();
 
   if (prd) {
@@ -288,7 +288,7 @@ async function getHandoffCount(sdId) {
   const { data, error } = await supabase
     .from('sd_phase_handoffs')
     .select('id')
-    .eq('sd_id', sdId);
+    .eq('sd_key', sdId);
 
   if (error) return 0;
   return data?.length || 0;
@@ -298,7 +298,7 @@ async function hasPRD(sdId) {
   const { data, error } = await supabase
     .from('product_requirements_v2')
     .select('id')
-    .eq('sd_id', sdId)
+    .eq('sd_key', sdId)
     .single();
 
   return !error && data;
@@ -459,8 +459,8 @@ async function printPreflightReport(sd, children, detection, validation) {
   // Query active session claims for child claim status
   const { data: activeClaims } = await supabase
     .from('claude_sessions')
-    .select('session_id, sd_id')
-    .not('sd_id', 'is', null)
+    .select('session_id, sd_key')
+    .not('sd_key', 'is', null)
     .in('status', ['active', 'busy', 'idle']);
   const claimMap = new Map((activeClaims || []).map(c => [c.sd_id, c.session_id]));
 

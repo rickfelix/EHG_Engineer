@@ -100,7 +100,7 @@ function evaluateWorktreeReminder(session, activeCount) {
       body: 'You are on the main branch while ' + activeCount + ' workers are active. ' +
         'This risks git conflicts and corrupted node_modules.\n\n' +
         'REQUIRED: Create an isolated worktree for your SD:\n' +
-        '  node scripts/resolve-sd-workdir.js ' + (session.sd_id || '<SD-ID>') + '\n\n' +
+        '  node scripts/resolve-sd-workdir.js ' + (session.sd_key || '<SD-ID>') + '\n\n' +
         'This gives you a dedicated copy of the repo. Do this BEFORE starting any code changes.'
     };
   }
@@ -122,7 +122,7 @@ function evaluateSmallPRReminder(session, sdDetails) {
     : (minutesClaimed / 60).toFixed(1) + ' hours';
 
   return {
-    subject: 'Working on ' + session.sd_id + ' for ' + duration + ' — check PR size',
+    subject: 'Working on ' + session.sd_key + ' for ' + duration + ' — check PR size',
     body: 'LEO targets PRs at 100 LOC or less (max 400 with justification).\n\n' +
       'Run: git diff --stat\n\n' +
       'If your diff is growing beyond 100 LOC, consider:\n' +
@@ -143,7 +143,7 @@ function evaluateLearnReminder(session, sdDetails) {
   if (!nearComplete) return null;
 
   return {
-    subject: session.sd_id + ' is at ' + (sdDetails.progress_percentage || '?') + '% — remember /learn',
+    subject: session.sd_key + ' is at ' + (sdDetails.progress_percentage || '?') + '% — remember /learn',
     body: 'Your SD appears near completion. When done:\n\n' +
       '1. Run /learn to generate the retrospective\n' +
       '2. The retrospective is REQUIRED for the quality gate\n' +
@@ -158,7 +158,7 @@ function evaluateGateCompliance(session) {
 
   if (fails >= 5) {
     return {
-      subject: session.sd_id + ' has ' + fails + ' gate failures — invoke /rca',
+      subject: session.sd_key + ' has ' + fails + ' gate failures — invoke /rca',
       body: 'Persistent handoff gate failures detected. Do NOT keep retrying the same approach.\n\n' +
         'REQUIRED: Invoke the RCA sub-agent:\n' +
         '  subagent_type="rca-agent"\n\n' +
@@ -169,7 +169,7 @@ function evaluateGateCompliance(session) {
   }
 
   return {
-    subject: session.sd_id + ' has ' + fails + ' gate failures — check root cause',
+    subject: session.sd_key + ' has ' + fails + ' gate failures — check root cause',
     body: 'You have ' + fails + ' handoff gate failures. Common causes:\n\n' +
       '1. Missing retrospective with SD-specific content (not boilerplate)\n' +
       '2. PRD missing required fields (executive_summary, functional_requirements, etc.)\n' +
@@ -201,7 +201,7 @@ function evaluateSubagentRouting(session, sdDetails) {
   if (isTestWork) agents.push('testing-agent (for test creation and coverage)');
 
   return {
-    subject: 'Use specialized sub-agents for ' + session.sd_id,
+    subject: 'Use specialized sub-agents for ' + session.sd_key,
     body: 'Your SD involves ' + (isDbWork ? 'database' : 'testing') + ' work and has gate failures.\n\n' +
       'Use specialized sub-agents instead of manual implementation:\n' +
       agents.map(a => '  - ' + a).join('\n') + '\n\n' +
@@ -262,7 +262,7 @@ function evaluatePriorityRebalance(session, sdDetails, availableSDs) {
 
   return {
     subject: highAvailable.length + ' HIGH priority SD(s) available — you are on ' + currentPriority,
-    body: 'You are working on ' + session.sd_id + ' (priority: ' + currentPriority + ').\n\n' +
+    body: 'You are working on ' + session.sd_key + ' (priority: ' + currentPriority + ').\n\n' +
       'Higher priority SDs are unclaimed:\n' +
       highAvailable.slice(0, 5).map(sd => '  - ' + sd.sd_key + ' (' + sd.priority + '): ' + (sd.title || '').substring(0, 50)).join('\n') + '\n\n' +
       'Consider finishing your current SD quickly, or if early in the process, switching to a HIGH priority item.',
@@ -306,8 +306,8 @@ async function main() {
   // v_active_sessions lacks handoff_fail_count/has_uncommitted_changes — query base table
   const { data: sessions, error: sessErr } = await supabase
     .from('claude_sessions')
-    .select('session_id, sd_id, tty, current_branch, claimed_at, handoff_fail_count, has_uncommitted_changes, current_phase, heartbeat_at')
-    .not('sd_id', 'is', null)
+    .select('session_id, sd_key, tty, current_branch, claimed_at, handoff_fail_count, has_uncommitted_changes, current_phase, heartbeat_at')
+    .not('sd_key', 'is', null)
     .in('status', ['active', 'idle'])
     .order('heartbeat_at', { ascending: false });
 
@@ -327,7 +327,7 @@ async function main() {
   }
 
   // 2. Load SD details for all claimed SDs
-  const claimedSdKeys = [...new Set(activeSessions.map(s => s.sd_id).filter(Boolean))];
+  const claimedSdKeys = [...new Set(activeSessions.map(s => s.sd_key).filter(Boolean))];
   const { data: sdData } = await supabase
     .from('strategic_directives_v2')
     .select('sd_key, title, description, status, current_phase, progress_percentage, priority, dependencies, claiming_session_id')
@@ -344,7 +344,7 @@ async function main() {
     .limit(100);
 
   const allSDs = allPendingSDs || [];
-  const activeClaims = new Set(activeSessions.map(s => s.sd_id));
+  const activeClaims = new Set(activeSessions.map(s => s.sd_key));
 
   // 4. Find recently completed SDs (last 15 minutes) for dependency unlock
   const recentCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
@@ -367,40 +367,40 @@ async function main() {
 
   // 6. Evaluate coaching for each active worker
   for (const session of activeSessions) {
-    const sdDetails = sdMap[session.sd_id];
+    const sdDetails = sdMap[session.sd_key];
 
     // WORKTREE_REMINDER
     const worktree = evaluateWorktreeReminder(session, activeSessions.length);
     if (worktree) {
-      const ok = await sendCoaching(session.session_id, 'WORKTREE_REMINDER', worktree.subject, worktree.body, { sd_id: session.sd_id });
+      const ok = await sendCoaching(session.session_id, 'WORKTREE_REMINDER', worktree.subject, worktree.body, { sd_key: session.sd_key });
       (ok ? sent : skipped).push({ session: session.tty, type: 'WORKTREE_REMINDER' });
     }
 
     // SMALL_PR_REMINDER
     const smallPR = evaluateSmallPRReminder(session, sdDetails);
     if (smallPR) {
-      const ok = await sendCoaching(session.session_id, 'SMALL_PR_REMINDER', smallPR.subject, smallPR.body, { sd_id: session.sd_id });
+      const ok = await sendCoaching(session.session_id, 'SMALL_PR_REMINDER', smallPR.subject, smallPR.body, { sd_key: session.sd_key });
       (ok ? sent : skipped).push({ session: session.tty, type: 'SMALL_PR_REMINDER' });
     }
 
     // LEARN_REMINDER
     const learn = evaluateLearnReminder(session, sdDetails);
     if (learn) {
-      const ok = await sendCoaching(session.session_id, 'LEARN_REMINDER', learn.subject, learn.body, { sd_id: session.sd_id });
+      const ok = await sendCoaching(session.session_id, 'LEARN_REMINDER', learn.subject, learn.body, { sd_key: session.sd_key });
       (ok ? sent : skipped).push({ session: session.tty, type: 'LEARN_REMINDER' });
     }
 
     // GATE_COMPLIANCE
     const gate = evaluateGateCompliance(session);
     if (gate) {
-      const ok = await sendCoaching(session.session_id, 'GATE_COMPLIANCE', gate.subject, gate.body, { sd_id: session.sd_id, fails: session.handoff_fail_count });
+      const ok = await sendCoaching(session.session_id, 'GATE_COMPLIANCE', gate.subject, gate.body, { sd_key: session.sd_key, fails: session.handoff_fail_count });
       (ok ? sent : skipped).push({ session: session.tty, type: 'GATE_COMPLIANCE' });
     }
 
     // SUBAGENT_ROUTING
     const subagent = evaluateSubagentRouting(session, sdDetails);
     if (subagent) {
-      const ok = await sendCoaching(session.session_id, 'SUBAGENT_ROUTING', subagent.subject, subagent.body, { sd_id: session.sd_id });
+      const ok = await sendCoaching(session.session_id, 'SUBAGENT_ROUTING', subagent.subject, subagent.body, { sd_key: session.sd_key });
       (ok ? sent : skipped).push({ session: session.tty, type: 'SUBAGENT_ROUTING' });
     }
 
@@ -421,14 +421,14 @@ async function main() {
     // AUTO_PROCEED_CHAINING (standing directive — 45min cooldown to reduce noise)
     const autoProceed = evaluateAutoProceedChaining();
     if (autoProceed) {
-      const ok = await sendCoaching(session.session_id, 'AUTO_PROCEED_CHAINING', autoProceed.subject, autoProceed.body, { sd_id: session.sd_id }, STANDING_COOLDOWN_MINUTES);
+      const ok = await sendCoaching(session.session_id, 'AUTO_PROCEED_CHAINING', autoProceed.subject, autoProceed.body, { sd_key: session.sd_key }, STANDING_COOLDOWN_MINUTES);
       (ok ? sent : skipped).push({ session: session.tty, type: 'AUTO_PROCEED_CHAINING' });
     }
 
     // LEO_PROTOCOL_COMPLIANCE (standing directive — 45min cooldown to reduce noise)
     const leoCompliance = evaluateLeoProtocolCompliance(session, sdDetails);
     if (leoCompliance) {
-      const ok = await sendCoaching(session.session_id, 'LEO_PROTOCOL_COMPLIANCE', leoCompliance.subject, leoCompliance.body, { sd_id: session.sd_id, phase: sdDetails?.current_phase }, STANDING_COOLDOWN_MINUTES);
+      const ok = await sendCoaching(session.session_id, 'LEO_PROTOCOL_COMPLIANCE', leoCompliance.subject, leoCompliance.body, { sd_key: session.sd_key, phase: sdDetails?.current_phase }, STANDING_COOLDOWN_MINUTES);
       (ok ? sent : skipped).push({ session: session.tty, type: 'LEO_PROTOCOL_COMPLIANCE' });
     }
   }
@@ -439,10 +439,10 @@ async function main() {
   console.log('');
   console.log('ACTIVE WORKERS: ' + activeSessions.length);
   activeSessions.forEach(s => {
-    const sd = sdMap[s.sd_id];
+    const sd = sdMap[s.sd_key];
     const phase = sd ? sd.current_phase : '?';
     const pct = sd ? (sd.progress_percentage || 0) + '%' : '?';
-    console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_id || '?').padEnd(45) + phase.padEnd(10) + pct);
+    console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_key || '?').padEnd(45) + phase.padEnd(10) + pct);
   });
   console.log('');
 

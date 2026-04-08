@@ -130,7 +130,7 @@ export async function hasActiveWorkEvidence(supabase, sdId, sd, recencyMinutes =
   const { data: handoffs } = await supabase
     .from('sd_phase_handoffs')
     .select('from_phase, to_phase, created_at')
-    .eq('sd_id', sdId)
+    .eq('sd_key', sdId)
     .order('created_at', { ascending: false })
     .limit(1);
 
@@ -166,7 +166,7 @@ export async function autoReleaseStaleDeadClaim(supabase, sessionId) {
   const { error: directErr } = await supabase
     .from('claude_sessions')
     .update({
-      sd_id: null,
+      sd_key: null,
       released_at: new Date().toISOString(),
       released_reason: 'auto_release_dead_pid',
       status: 'idle'

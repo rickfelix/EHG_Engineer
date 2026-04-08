@@ -71,7 +71,7 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       const { data: staleClaims } = await supabase
         .from('claude_sessions')
         .select('session_id, hostname, terminal_id')
-        .eq('sd_id', sdId)
+        .eq('sd_key', sdId)
         .eq('status', 'active')
         .eq('hostname', currentHostname);
 
@@ -83,7 +83,7 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       for (const s of toRelease) {
         await supabase
           .from('claude_sessions')
-          .update({ sd_id: null, status: 'idle', released_at: new Date().toISOString() })
+          .update({ sd_key: null, status: 'idle', released_at: new Date().toISOString() })
           .eq('session_id', s.session_id);
         console.log(`   🧹 Released stale same-conversation claim: ${s.session_id.substring(0, 24)}...`);
       }
@@ -92,8 +92,8 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
     // Query v_active_sessions for any active claim on this SD
     const { data, error } = await supabase
       .from('v_active_sessions')
-      .select('session_id, sd_id, sd_title, hostname, tty, terminal_id, heartbeat_age_human, heartbeat_age_seconds, computed_status, codebase')
-      .eq('sd_id', sdId)
+      .select('session_id, sd_key, sd_title, hostname, tty, terminal_id, heartbeat_age_human, heartbeat_age_seconds, computed_status, codebase')
+      .eq('sd_key', sdId)
       .in('computed_status', ['active']);
 
     if (error) {

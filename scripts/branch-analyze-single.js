@@ -288,13 +288,13 @@ class BranchAnalyzer {
     try {
       const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
       const { data, error } = await this.supabase.from('claude_sessions')
-        .select('session_id, sd_id, current_branch, worktree_branch, heartbeat_at')
+        .select('session_id, sd_key, current_branch, worktree_branch, heartbeat_at')
         .in('status', ['active', 'idle']).gte('heartbeat_at', since);
       if (error) throw error;
       for (const s of data || []) {
         if (s.current_branch === this.branchName || s.worktree_branch === this.branchName)
           return void (this.analysis.sessionProtected = { sessionId: s.session_id, matchType: 'branch' });
-        if (s.sd_id && this.analysis.expectedSD && s.sd_id.toLowerCase() === this.analysis.expectedSD.toLowerCase())
+        if (s.sd_key && this.analysis.expectedSD && s.sd_key.toLowerCase() === this.analysis.expectedSD.toLowerCase())
           return void (this.analysis.sessionProtected = { sessionId: s.session_id, matchType: 'sd_key' });
       }
     } catch (e) {

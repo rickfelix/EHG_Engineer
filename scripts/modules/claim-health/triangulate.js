@@ -101,12 +101,12 @@ export async function triangulate(supabase, sdKey = null) {
   // Signal 1: Get all active/idle session claims from DB
   let sessionQuery = supabase
     .from('claude_sessions')
-    .select('session_id, sd_id, status, heartbeat_at, terminal_id, pid, hostname')
+    .select('session_id, sd_key, status, heartbeat_at, terminal_id, pid, hostname')
     .in('status', ['active', 'idle'])
-    .not('sd_id', 'is', null);
+    .not('sd_key', 'is', null);
 
   if (sdKey) {
-    sessionQuery = sessionQuery.eq('sd_id', sdKey);
+    sessionQuery = sessionQuery.eq('sd_key', sdKey);
   }
 
   const { data: sessions } = await sessionQuery;
@@ -129,7 +129,7 @@ export async function triangulate(supabase, sdKey = null) {
   // Build claim map from sessions
   const sessionClaims = new Map();
   for (const s of (sessions || [])) {
-    sessionClaims.set(s.sd_id, s);
+    sessionClaims.set(s.sd_key, s);
   }
 
   // Build working-on map from SDs

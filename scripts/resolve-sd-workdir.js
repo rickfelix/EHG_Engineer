@@ -104,7 +104,7 @@ async function resolveFromDB(sdKey) {
     const { data } = await supabase
       .from('claude_sessions')
       .select('worktree_path, session_id')
-      .eq('sd_id', sdKey)
+      .eq('sd_key', sdKey)
       .eq('status', 'active')
       .order('heartbeat_at', { ascending: false })
       .limit(1)
@@ -273,7 +273,7 @@ async function persistWorktreePath(sdKey, worktreePath, worktreeBranch) {
     const { error } = await supabase
       .from('claude_sessions')
       .update(updateFields)
-      .eq('sd_id', sdKey)
+      .eq('sd_key', sdKey)
       .in('status', ['active', 'idle']);
 
     if (error) {

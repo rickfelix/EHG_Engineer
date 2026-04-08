@@ -187,7 +187,7 @@ export class HandoffRecorder {
         await this.supabase
           .from('claude_sessions')
           .update({ handoff_fail_count: 0 })
-          .eq('sd_id', sdId)
+          .eq('sd_key', sdId)
           .eq('status', 'active');
       } catch (resetErr) {
         console.warn(`   [handoff-fail-count] Reset non-blocking: ${resetErr.message}`);
@@ -317,7 +317,7 @@ export class HandoffRecorder {
           await this.supabase
             .from('claude_sessions')
             .update({ handoff_fail_count: this.supabase.raw('COALESCE(handoff_fail_count, 0) + 1') })
-            .eq('sd_id', sdId)
+            .eq('sd_key', sdId)
             .eq('status', 'active');
         } catch (fallbackErr) {
           console.warn(`   [handoff-fail-count] Non-blocking: ${fallbackErr.message}`);

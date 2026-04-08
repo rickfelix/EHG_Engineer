@@ -99,7 +99,7 @@ async function main() {
   // Check if current session already has a claim
   const { data: currentSession } = await supabase
     .from('claude_sessions')
-    .select('sd_id')
+    .select('sd_key')
     .eq('session_id', currentSessionId)
     .single();
 
@@ -126,8 +126,8 @@ async function main() {
   // Check if the SD is currently claimed by another session
   const { data: existingClaims } = await supabase
     .from('claude_sessions')
-    .select('session_id, sd_id, heartbeat_at, status')
-    .eq('sd_id', sdKey)
+    .select('session_id, sd_key, heartbeat_at, status')
+    .eq('sd_key', sdKey)
     .eq('status', 'active');
 
   if (existingClaims && existingClaims.length > 0) {

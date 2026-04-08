@@ -51,7 +51,7 @@ async function main() {
   const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
   let query = supabase
     .from('claude_sessions')
-    .select('session_id, sd_id, metadata, heartbeat_at')
+    .select('session_id, sd_key, metadata, heartbeat_at')
     .gte('heartbeat_at', fiveMinAgo)
     .neq('status', 'terminated');
 

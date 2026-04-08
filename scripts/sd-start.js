@@ -41,7 +41,7 @@ async function displayFleetRoster() {
   try {
     const { data: sessions } = await supabase
       .from('v_active_sessions')
-      .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, pid')
+      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, pid')
       .in('computed_status', ['active', 'idle', 'stale']);
 
     if (!sessions || sessions.length === 0) {
@@ -54,8 +54,8 @@ async function displayFleetRoster() {
       const shortId = s.session_id.substring(0, 12);
       const hbAge = s.heartbeat_age_human || formatHbAge(s.heartbeat_age_seconds);
       const staleTag = (s.heartbeat_age_seconds || 0) > 900 ? ` ${colors.red}STALE${colors.reset}` : '';
-      const sdLabel = s.sd_id
-        ? `→ ${s.sd_title || s.sd_id}`
+      const sdLabel = s.sd_key
+        ? `→ ${s.sd_title || s.sd_key}`
         : `${colors.dim}(idle)${colors.reset}`;
       console.log(`   ${shortId}  ${hbAge}${staleTag}  ${sdLabel}`);
     }
@@ -98,11 +98,11 @@ async function getNextWorkableSD(excludeKeys = []) {
   // Get all active sessions to identify claimed SDs
   const { data: activeSessions } = await supabase
     .from('claude_sessions')
-    .select('sd_id')
-    .not('sd_id', 'is', null)
+    .select('sd_key')
+    .not('sd_key', 'is', null)
     .in('status', ['active', 'idle']);
 
-  const claimedSdKeys = new Set((activeSessions || []).map(s => s.sd_id));
+  const claimedSdKeys = new Set((activeSessions || []).map(s => s.sd_key));
 
   // Query for workable SDs: not completed, not cancelled, not blocked
   const { data: candidates } = await supabase
@@ -147,8 +147,8 @@ function getPhaseContextFile(phase) {
 async function verifyHandoffIntegrity(sdUuid) {
   const { data: handoffs, error } = await supabase
     .from('sd_phase_handoffs')
-    .select('id, sd_id, from_phase, to_phase, status, created_at, rejection_reason, resolved_at')
-    .eq('sd_id', sdUuid)
+    .select('id, sd_key, from_phase, to_phase, status, created_at, rejection_reason, resolved_at')
+    .eq('sd_key', sdUuid)
     .order('created_at', { ascending: false })
     .limit(1);
 
@@ -279,7 +279,7 @@ async function getActiveClaimSessionIds() {
   const { data } = await supabase
     .from('claude_sessions')
     .select('session_id')
-    .not('sd_id', 'is', null)
+    .not('sd_key', 'is', null)
     .in('status', ['active', 'idle']);
   return new Set((data || []).map(r => r.session_id));
 }
@@ -587,7 +587,7 @@ async function main() {
   let session = null;
   try {
     const resolved = await resolveOwnSession(supabase, {
-      select: 'session_id, sd_id, status, heartbeat_at, terminal_id',
+      select: 'session_id, sd_key, status, heartbeat_at, terminal_id',
       warnOnFallback: false,
       requireDeterministic: true
     });
@@ -833,7 +833,7 @@ async function main() {
       const { data: handoffs } = await supabase
         .from('sd_phase_handoffs')
         .select('from_phase, to_phase, status')
-        .eq('sd_id', sd.id)
+        .eq('sd_key', sd.id)
         .eq('status', 'accepted');
       const hasRequired = (handoffs || []).some(h => h.from_phase === req.from && h.to_phase === req.to);
       if (!hasRequired) {
@@ -984,7 +984,7 @@ async function main() {
     const { data: handoffRows } = await supabase
       .from('sd_phase_handoffs')
       .select('id', { count: 'exact', head: false })
-      .eq('sd_id', sd.id);
+      .eq('sd_key', sd.id);
     const handoffCount = handoffRows?.length || 0;
     if (handoffCount >= 3) {
       console.log(`\n${colors.yellow}⚠️  PRIOR WORK WARNING: This SD has ${handoffCount} prior handoffs.${colors.reset}`);
