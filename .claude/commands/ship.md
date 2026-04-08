@@ -432,6 +432,27 @@ Review Gate: [TIER] tier (score: X.XX, keyword override: yes/no)
 - If unfixable CRITICAL: halt for chairman review
 - If Deep tier agent failure/timeout: hard-fail (do NOT degrade to Standard)
 
+**6. Log findings (MANDATORY):**
+
+After the review gate completes (regardless of verdict), log the findings for audit trail:
+
+```javascript
+import { logFindings } from './lib/ship/review-findings-logger.js';
+
+await logFindings({
+  prNumber: <PR#>,
+  reviewTier: result.tier,
+  riskScore: result.score,
+  findings: parsedFindings || [],
+  verdict: finalVerdict, // 'pass' or 'block'
+  sdKey: '<SD-KEY or null>',
+  branch: '<branch-name>',
+  multiAgent: gateResult.multiAgent || false
+});
+```
+
+This creates an audit record in `ship_review_findings` for every PR shipped through the gate.
+
 ---
 
 ### Step 6: Ask About Merging (MANDATORY)
