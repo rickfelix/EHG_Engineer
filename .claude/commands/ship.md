@@ -348,6 +348,76 @@ resolve(process.argv[2] || branch, 'ship', repoRoot).then(r => {
 
 ### Step 5: Return the PR URL to the user
 
+### Step 5.5: Adaptive Review Gate (MANDATORY)
+
+After the PR is created, run the adaptive code review gate before merging.
+
+**1. Compute risk tier:**
+
+Gather diff stats from the PR and compute the review tier:
+
+```javascript
+import { computeRiskScore } from './lib/ship/review-risk-scorer.js';
+
+// diffStats from `gh pr diff <PR#> --stat` or git diff
+const result = computeRiskScore(
+  { linesChanged: <LOC>, filesChanged: [<file paths>] },
+  <sdTier>,        // 1, 2, or 3 from SD metadata
+  undefined,       // auto-infer change type
+  '<sd description>' // for risk keyword scanning
+);
+// result = { tier: 'light'|'standard'|'deep', score, signals, riskKeywordOverride }
+```
+
+**2. Run review gate:**
+
+```javascript
+import { runReview, evaluateFindings, parseReviewFindings } from './lib/ship/review-gate.js';
+
+const gateResult = runReview(diffContent, result.tier);
+
+if (gateResult.verdict === 'block') {
+  // CRITICAL finding from closed enumeration — merge blocked
+  console.log('CRITICAL:', gateResult.criticalFindings.map(f => f.name));
+  // HALT — do not proceed to merge
+}
+
+if (gateResult.verdict === 'review_needed') {
+  // Use gateResult.reviewPrompt as self-review prompt
+  // Parse the LLM response:
+  const parsed = parseReviewFindings(llmResponse);
+  const evaluation = evaluateFindings(parsed.findings, gateResult.tierEnforcement);
+
+  if (evaluation.verdict === 'block') {
+    // Auto-fix attempt (max 2 rounds), then halt if unfixable
+  }
+  // evaluation.verdict === 'pass' → proceed to merge
+}
+```
+
+**3. Tier behavior summary:**
+
+| Tier | Enforcement | CRITICAL | Warnings | Info |
+|------|-------------|----------|----------|------|
+| Light | Advisory | BLOCK | Log only | Log only |
+| Standard | Blocking | BLOCK | BLOCK (auto-fix attempt) | Log only |
+| Deep | Blocking | BLOCK | BLOCK (auto-fix attempt) | Log only |
+
+**4. Output status:**
+
+```
+Review Gate: [TIER] tier (score: X.XX, keyword override: yes/no)
+  Findings: N critical, M warnings, P info
+  Verdict: PASS / BLOCK (reason)
+```
+
+**5. On BLOCK:**
+- If auto-fixable: apply fix, re-run review (max 2 rounds)
+- If unfixable CRITICAL: halt for chairman review
+- If Deep tier agent failure/timeout: hard-fail (do NOT degrade to Standard)
+
+---
+
 ### Step 6: Ask About Merging (MANDATORY)
 
 **AUTO-PROCEED Detection**: Before asking, check if AUTO-PROCEED mode is active:
