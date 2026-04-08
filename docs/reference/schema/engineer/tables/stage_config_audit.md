@@ -1,11 +1,11 @@
-# leo_gate_reviews Table
+# stage_config_audit Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-04-08T23:38:51.192Z
-**Rows**: 438
+**Rows**: 0
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -19,41 +19,49 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| prd_id | `text` | **NO** | - | - |
-| gate | `text` | **NO** | - | - |
-| score | `numeric(5,2)` | **NO** | - | - |
-| evidence | `jsonb` | **NO** | `'{}'::jsonb` | - |
-| created_at | `timestamp with time zone` | **NO** | `now()` | - |
-| created_by | `text` | YES | `'system'::text` | - |
+| stage_number | `integer(32)` | **NO** | - | - |
+| changed_column | `text` | **NO** | - | - |
+| old_value | `text` | YES | - | - |
+| new_value | `text` | YES | - | - |
+| changed_by | `text` | **NO** | `CURRENT_USER` | - |
+| changed_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `leo_gate_reviews_pkey`: PRIMARY KEY (id)
-
-### Check Constraints
-- `leo_gate_reviews_gate_check`: CHECK ((gate = ANY (ARRAY['0'::text, '1'::text, 'Q'::text, '2A'::text, '2B'::text, '2C'::text, '2D'::text, '3'::text])))
-- `leo_gate_reviews_score_check`: CHECK (((score >= (0)::numeric) AND (score <= (100)::numeric)))
+- `stage_config_audit_pkey`: PRIMARY KEY (id)
 
 ## Indexes
 
-- `leo_gate_reviews_pkey`
+- `stage_config_audit_pkey`
   ```sql
-  CREATE UNIQUE INDEX leo_gate_reviews_pkey ON public.leo_gate_reviews USING btree (id)
+  CREATE UNIQUE INDEX stage_config_audit_pkey ON public.stage_config_audit USING btree (id)
   ```
 
 ## RLS Policies
 
-### 1. authenticated_read_leo_gate_reviews (SELECT)
+### 1. deny_write_stage_config_audit (ALL)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `false`
+
+### 2. select_stage_config_audit (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. service_role_all_leo_gate_reviews (ALL)
+## Triggers
 
-- **Roles**: {service_role}
-- **Using**: `true`
-- **With Check**: `true`
+### trg_stage_config_audit_immutable
+
+- **Timing**: BEFORE DELETE
+- **Action**: `EXECUTE FUNCTION fn_stage_config_audit_immutable()`
+
+### trg_stage_config_audit_immutable
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION fn_stage_config_audit_immutable()`
 
 ---
 

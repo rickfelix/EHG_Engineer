@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-08T20:53:13.344Z
+**Generated**: 2026-04-08T23:38:51.192Z
 **Rows**: 25
-**RLS**: Disabled
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -48,6 +48,26 @@
   ```sql
   CREATE UNIQUE INDEX stage_config_stage_key_key ON public.stage_config USING btree (stage_key)
   ```
+
+## RLS Policies
+
+### 1. deny_write_stage_config (ALL)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `false`
+
+### 2. select_stage_config (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+## Triggers
+
+### trg_stage_config_audit
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_stage_config_audit_trigger()`
 
 ---
 
