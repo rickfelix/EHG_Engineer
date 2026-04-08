@@ -141,6 +141,17 @@ start_app() {
         clean_port 8080 "EHG App" || return 1
     fi
 
+    # Auto-install if node_modules missing (fleet ops can clobber them)
+    if [ ! -x "$APP_DIR/node_modules/.bin/vite" ]; then
+        log "WARN" "${YELLOW}[WARN] node_modules missing in EHG App - running npm install...${NC}"
+        (cd "$APP_DIR" && npm install --loglevel error 2>&1 > /dev/null)
+        if [ ! -x "$APP_DIR/node_modules/.bin/vite" ]; then
+            log "ERROR" "${RED}[ERROR] npm install failed - vite still missing${NC}"
+            return 1
+        fi
+        log "INFO" "${GREEN}[OK] Dependencies restored${NC}"
+    fi
+
     cd "$APP_DIR"
     local app_log="$LOG_DIR/app-$(date +%Y%m%d-%H%M%S).log"
     PORT=8080 npm run dev -- --host 0.0.0.0 >> "$app_log" 2>&1 &

@@ -178,6 +178,20 @@ function Start-App {
         }
     }
 
+    # Auto-install if node_modules missing (fleet ops can clobber them)
+    $viteBin = Join-Path $AppDir "node_modules\.bin\vite.cmd"
+    if (-not (Test-Path $viteBin)) {
+        Write-Log "WARN" "[WARN] node_modules missing in EHG App - running npm install..." "Yellow"
+        Push-Location $AppDir
+        & npm install --loglevel error 2>&1 | Out-Null
+        Pop-Location
+        if (-not (Test-Path $viteBin)) {
+            Write-Log "ERROR" "[ERROR] npm install failed - vite still missing" "Red"
+            return $false
+        }
+        Write-Log "INFO" "[OK] Dependencies restored" "Green"
+    }
+
     Push-Location $AppDir
 
     $appLog = Join-Path $LogDir "app-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
