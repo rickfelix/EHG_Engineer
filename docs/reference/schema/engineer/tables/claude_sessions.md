@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-07T23:47:56.225Z
-**Rows**: 11,508
+**Generated**: 2026-04-08T20:53:13.344Z
+**Rows**: 11,553
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -20,7 +20,7 @@
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | session_id | `text` | **NO** | - | - |
-| sd_id | `text` | YES | - | - |
+| sd_key | `text` | YES | - | - |
 | track | `text` | YES | - | - |
 | tty | `text` | YES | - | - |
 | pid | `integer(32)` | YES | - | - |
@@ -92,9 +92,9 @@
   ```sql
   CREATE INDEX idx_claude_sessions_parent_session ON public.claude_sessions USING btree (parent_session_id) WHERE (parent_session_id IS NOT NULL)
   ```
-- `idx_claude_sessions_sd`
+- `idx_claude_sessions_sd_key`
   ```sql
-  CREATE INDEX idx_claude_sessions_sd ON public.claude_sessions USING btree (sd_id) WHERE (sd_id IS NOT NULL)
+  CREATE INDEX idx_claude_sessions_sd_key ON public.claude_sessions USING btree (sd_key) WHERE (sd_key IS NOT NULL)
   ```
 - `idx_claude_sessions_status`
   ```sql
@@ -110,7 +110,7 @@
   ```
 - `idx_claude_sessions_unique_active_claim`
   ```sql
-  CREATE UNIQUE INDEX idx_claude_sessions_unique_active_claim ON public.claude_sessions USING btree (sd_id) WHERE ((sd_id IS NOT NULL) AND (status = ANY (ARRAY['active'::text, 'idle'::text])))
+  CREATE UNIQUE INDEX idx_claude_sessions_unique_active_claim ON public.claude_sessions USING btree (sd_key) WHERE ((sd_key IS NOT NULL) AND (status = ANY (ARRAY['active'::text, 'idle'::text])))
   ```
 - `idx_claude_sessions_unique_terminal_active`
   ```sql
