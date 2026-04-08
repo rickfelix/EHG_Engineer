@@ -8,18 +8,35 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
 const supabase = createSupabaseServiceClient();
 
-// Read CLAUDE_SESSION_ID from marker files for disambiguation
+function isProcessRunning(pid) {
+  if (!pid || typeof pid !== 'number') return false;
+  try { process.kill(pid, 0); return true; }
+  catch (err) { return err.code === 'EPERM'; }
+}
+
+// Read CLAUDE_SESSION_ID from marker files for disambiguation + PID liveness
 function getMarkerSessionIds() {
   const markerDir = path.resolve(__dirname, '../.claude/session-identity');
   if (!fs.existsSync(markerDir)) return {};
   const map = {};
   for (const f of fs.readdirSync(markerDir).filter(f => /^pid-\d+\.json$/.test(f))) {
     try {
+      const pid = Number(f.match(/^pid-(\d+)\.json$/)[1]);
       const data = JSON.parse(fs.readFileSync(path.join(markerDir, f), 'utf8'));
-      if (data.session_id) map[data.session_id] = data.claude_session_id || null;
+      if (data.session_id) map[data.session_id] = { claude_session_id: data.claude_session_id || null, pid, alive: isProcessRunning(pid) };
     } catch { /* skip unreadable markers */ }
   }
   return map;
+}
+
+// Returns a Set of alive CC PIDs (as strings) from marker files
+function getAliveCcPids() {
+  const markers = getMarkerSessionIds();
+  const alive = new Set();
+  for (const info of Object.values(markers)) {
+    if (info.alive) alive.add(String(info.pid));
+  }
+  return alive;
 }
 
 const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
@@ -42,7 +59,7 @@ async function loadData() {
   const [sessRes, allSessRes, childRes, workRes, coordRes, rawSessRes, drainRes] = await Promise.all([
     supabase
       .from('v_active_sessions')
-      .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track')
+      .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id')
       .not('sd_id', 'is', null)
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
@@ -90,8 +107,17 @@ async function loadData() {
   const rawSessions = rawSessRes.data || [];
 
   const claimedSdIds = new Set(sessions.map(s => s.sd_id));
-  const activeSessions = sessions.filter(s => s.heartbeat_age_seconds < STALE_THRESHOLD);
-  const staleSessions = sessions.filter(s => s.heartbeat_age_seconds >= STALE_THRESHOLD);
+  // Cross-reference heartbeat age with PID marker liveness:
+  // A session with stale heartbeat but living CC PID is loading context or between tool calls.
+  // terminal_id format: "win-cc-{port}-{ccPid}" — extract ccPid and check marker files.
+  const aliveCcPids = getAliveCcPids();
+  const hasPidAlive = (s) => {
+    if (!s.terminal_id) return false;
+    const parts = s.terminal_id.split('-');
+    return aliveCcPids.has(parts[parts.length - 1]);
+  };
+  const activeSessions = sessions.filter(s => s.heartbeat_age_seconds < STALE_THRESHOLD || hasPidAlive(s));
+  const staleSessions = sessions.filter(s => s.heartbeat_age_seconds >= STALE_THRESHOLD && !hasPidAlive(s));
   const DEAD_THRESHOLD = STALE_THRESHOLD * 3; // 15min
   const idleSessions = allSessions.filter(s => !s.sd_id && s.heartbeat_age_seconds < DEAD_THRESHOLD);
 
