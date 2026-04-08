@@ -7,6 +7,7 @@
 -- 3. Drop old indexes, recreate with sd_key
 -- 4. Update 5 RPC functions (claim_sd, release_sd, release_session, cleanup_stale_sessions, switch_sd_claim)
 -- 5. Recreate v_active_sessions view
+-- 6. Update sync_is_working_on_with_session trigger function
 
 BEGIN;
 
@@ -584,5 +585,40 @@ FROM claude_sessions cs
     LEFT JOIN quick_fixes qf ON cs.sd_key = qf.id
 WHERE cs.status <> 'released'
 ORDER BY cs.track, cs.claimed_at DESC;
+
+-- ============================================================
+-- STEP 6: Update sync_is_working_on_with_session trigger function
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.sync_is_working_on_with_session()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF TG_OP = 'UPDATE' AND OLD.sd_key IS NULL AND NEW.sd_key IS NOT NULL AND NEW.status = 'active' THEN
+    UPDATE strategic_directives_v2
+    SET is_working_on = true,
+        active_session_id = NEW.session_id,
+        updated_at = NOW()
+    WHERE sd_key = NEW.sd_key;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' AND (
+    (OLD.sd_key IS NOT NULL AND NEW.sd_key IS NULL) OR
+    (OLD.status = 'active' AND NEW.status != 'active' AND OLD.sd_key IS NOT NULL)
+  ) THEN
+    UPDATE strategic_directives_v2
+    SET is_working_on = false,
+        active_session_id = NULL,
+        updated_at = NOW()
+    WHERE sd_key = OLD.sd_key
+      AND active_session_id = OLD.session_id;
+    RETURN NEW;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
 
 COMMIT;
