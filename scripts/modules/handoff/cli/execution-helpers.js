@@ -46,7 +46,7 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
   today.setHours(0, 0, 0, 0);
 
   // Count bypasses for this SD (audit metadata only, no enforcement)
-  const { data: sdBypasses, error: sdError } = await supabase
+  const { data: sdBypasses, error: _sdError } = await supabase
     .from('validation_audit_log')
     .select('id')
     .eq('failure_category', 'bypass')
