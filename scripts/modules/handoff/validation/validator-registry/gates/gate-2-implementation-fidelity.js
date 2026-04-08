@@ -12,6 +12,38 @@ import { shouldSkipCodeValidation } from '../../../../../../lib/utils/sd-type-va
 import { validateWireframeQA } from '../../../validators/wireframe-qa-validator.js';
 
 /**
+ * SD-LEO-FIX-FIX-GATE-SUB-001: Check if a sub-validator is exempt via gate2_exempt_sections.
+ *
+ * The main Gate 2 function (implementation-fidelity/index.js) applies exemptions at the
+ * section level, but sub-validators here extract aggregate section scores that can be
+ * dragged down by non-exempt sub-sections within the same section. This helper checks
+ * individual exemption keys so each sub-validator respects its own exemption independently.
+ *
+ * @param {object} result - Gate 2 validation result
+ * @param {string[]} exemptionKeys - Keys to check (e.g., ['A_design'], ['B1_migrations'])
+ * @returns {{exempt: boolean, result?: object}} Exemption decision
+ */
+function checkSubValidatorExemption(result, exemptionKeys) {
+  const exemptSections = result?.details?.gate2_exempt_sections || [];
+  if (exemptSections.length === 0) return { exempt: false };
+
+  const matchedKey = exemptionKeys.find(key => exemptSections.includes(key));
+  if (!matchedKey) return { exempt: false };
+
+  return {
+    exempt: true,
+    result: {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      warnings: [`Sub-validator exempt via gate2_exempt_sections (${matchedKey})`],
+      details: { exempt: true, exemptionKey: matchedKey }
+    }
+  };
+}
+
+/**
  * Get Gate 2 result from preloaded context or fetch it fresh.
  * @param {object} context - Validator context
  * @returns {Promise<object>} Gate 2 validation result
@@ -33,6 +65,10 @@ export function registerGate2Validators(registry) {
   // Section A: UI Components Implementation
   registry.register('uiComponentsImplemented', async (context) => {
     const result = await getGate2Result(context);
+
+    // SD-LEO-FIX-FIX-GATE-SUB-001: Check sub-validator exemption before score extraction
+    const exemption = checkSubValidatorExemption(result, ['A_design']);
+    if (exemption.exempt) return exemption.result;
 
     // Extract Section A score - check multiple paths for compatibility
     const sectionA = result?.sections?.A || result?.sectionScores?.A ||
@@ -67,6 +103,10 @@ export function registerGate2Validators(registry) {
   registry.register('migrationsCreatedAndExecuted', async (context) => {
     const result = await getGate2Result(context);
 
+    // SD-LEO-FIX-FIX-GATE-SUB-001: Check sub-validator exemption before score extraction
+    const exemption = checkSubValidatorExemption(result, ['B1_migrations']);
+    if (exemption.exempt) return exemption.result;
+
     const sectionB = result?.sections?.B || result?.sectionScores?.B ||
       result?.details?.database_fidelity || {};
     const scoreFromGateScores = result?.gate_scores?.database_fidelity;
@@ -87,16 +127,28 @@ export function registerGate2Validators(registry) {
   }, 'Database migrations validation (CRITICAL)');
 
   registry.register('rlsPoliciesImplemented', async (context) => {
+    // SD-LEO-FIX-FIX-GATE-SUB-001: Check own exemption key before delegating
+    const result = await getGate2Result(context);
+    const exemption = checkSubValidatorExemption(result, ['B2_rls']);
+    if (exemption.exempt) return exemption.result;
     return registry.validators.get('migrationsCreatedAndExecuted').validate(context);
   }, 'RLS policies validation');
 
   registry.register('migrationComplexityAligned', async (context) => {
+    // SD-LEO-FIX-FIX-GATE-SUB-001: Check own exemption key before delegating
+    const result = await getGate2Result(context);
+    const exemption = checkSubValidatorExemption(result, ['B3_complexity']);
+    if (exemption.exempt) return exemption.result;
     return registry.validators.get('migrationsCreatedAndExecuted').validate(context);
   }, 'Migration complexity alignment');
 
   // Section C: Data Flow
   registry.register('databaseQueriesIntegrated', async (context) => {
     const result = await getGate2Result(context);
+
+    // SD-LEO-FIX-FIX-GATE-SUB-001: Check sub-validator exemption before score extraction
+    const exemption = checkSubValidatorExemption(result, ['C_dataflow', 'C1_queries']);
+    if (exemption.exempt) return exemption.result;
 
     const sectionC = result?.sections?.C || result?.sectionScores?.C ||
       result?.details?.data_flow_alignment || {};
@@ -118,16 +170,28 @@ export function registerGate2Validators(registry) {
   }, 'Database queries integration');
 
   registry.register('formUiIntegration', async (context) => {
+    // SD-LEO-FIX-FIX-GATE-SUB-001: Check own exemption key before delegating
+    const result = await getGate2Result(context);
+    const exemption = checkSubValidatorExemption(result, ['C2_form_integration']);
+    if (exemption.exempt) return exemption.result;
     return registry.validators.get('databaseQueriesIntegrated').validate(context);
   }, 'Form/UI integration');
 
   registry.register('dataValidationImplemented', async (context) => {
+    // SD-LEO-FIX-FIX-GATE-SUB-001: Check own exemption key before delegating
+    const result = await getGate2Result(context);
+    const exemption = checkSubValidatorExemption(result, ['C_dataflow']);
+    if (exemption.exempt) return exemption.result;
     return registry.validators.get('databaseQueriesIntegrated').validate(context);
   }, 'Data validation implementation');
 
   // Section D: E2E Testing
   registry.register('e2eTestCoverage', async (context) => {
     const result = await getGate2Result(context);
+
+    // SD-LEO-FIX-FIX-GATE-SUB-001: Check sub-validator exemption before score extraction
+    const exemption = checkSubValidatorExemption(result, ['D_testing', 'D1_unit_tests', 'D2_migration_tests']);
+    if (exemption.exempt) return exemption.result;
 
     const sectionD = result?.sections?.D || result?.sectionScores?.D ||
       result?.details?.enhanced_testing || {};
