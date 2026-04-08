@@ -572,7 +572,15 @@ async function main() {
     if (error) {
       actions.push('FAILED to release ' + s.session_id + ' (' + s.sd_id + '): ' + error.message);
     } else {
-      if (s.sd_id) await resetSdPhaseOnRelease(s.sd_id, 'SWEEP_PID_DEAD');
+      if (s.sd_id) {
+        await resetSdPhaseOnRelease(s.sd_id, 'SWEEP_PID_DEAD');
+        // Clear claiming_session_id on the SD so the next worker can claim it
+        // without hitting foreign_claim in the claim validity gate.
+        await supabase
+          .from('strategic_directives_v2')
+          .update({ claiming_session_id: null, is_working_on: false })
+          .eq('claiming_session_id', s.session_id);
+      }
       actions.push('RELEASED ' + s.session_id + ' — PID ' + s.pid + ' dead — freed ' + s.sd_id);
     }
   }
