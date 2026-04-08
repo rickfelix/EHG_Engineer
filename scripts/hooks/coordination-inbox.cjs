@@ -19,7 +19,14 @@ const os = require('os');
 
 const THROTTLE_FILE = path.join(os.tmpdir(), 'claude-coordination-inbox-last-check.json');
 const HEARTBEAT_FILE = path.join(os.tmpdir(), 'claude-heartbeat-last-update.json');
-const IDENTITY_FILE = path.resolve(__dirname, '../../.claude/fleet-identity.json');
+const IDENTITY_DIR = path.resolve(__dirname, '../../.claude');
+// Per-session identity file keyed by CLAUDE_SESSION_ID (birth certificate UUID).
+// Falls back to shared file for sessions without a UUID.
+function getIdentityFile() {
+  const csid = process.env.CLAUDE_SESSION_ID;
+  if (csid) return path.join(IDENTITY_DIR, `fleet-identity-${csid}.json`);
+  return path.join(IDENTITY_DIR, 'fleet-identity.json');
+}
 // SD-LEO-INFRA-FLEET-COORDINATION-RESILIENCE-001 (FR-003):
 // Reduced from 300s to 60s for faster coordination message delivery.
 // Configurable via env var for tuning under high DB load.
@@ -190,10 +197,10 @@ async function main() {
         'INFO': 'INFO'
       }[msg.message_type] || msg.message_type;
 
-      // Handle SET_IDENTITY: write identity file for statusline integration
+      // Handle SET_IDENTITY: write per-session identity file for statusline integration
       if (msg.message_type === 'SET_IDENTITY' && msg.payload) {
         try {
-          fs.writeFileSync(IDENTITY_FILE, JSON.stringify({
+          fs.writeFileSync(getIdentityFile(), JSON.stringify({
             color: msg.payload.color,
             callsign: msg.payload.callsign,
             display_name: msg.payload.display_name,

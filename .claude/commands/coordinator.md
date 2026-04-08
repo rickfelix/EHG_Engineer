@@ -56,15 +56,20 @@ Display the output directly to the user.
 
 **IMPORTANT — Assessment Rules:**
 
-**Session identity and CLAUDE_SESSION_ID (added 2026-04-06, PRs #2774/#2776/#2777):**
+**Session identity and CLAUDE_SESSION_ID (added 2026-04-06, updated 2026-04-08):**
 - Each Claude Code conversation has a unique `CLAUDE_SESSION_ID` (UUID) set by the `capture-session-id.cjs` SessionStart hook.
 - The fail-closed claim gate (`lib/claim-validity-gate.js`) uses `assertValidClaim()` to verify 3 conditions: (1) deterministic identity via CLAUDE_SESSION_ID, (2) claim ownership matches `claiming_session_id` on the SD, (3) worktree isolation — cwd must be inside the SD's registered `worktree_path`.
+- **Session stability (2026-04-08):** `generateSessionId()` now uses the birth certificate UUID as `session_id` when `getTerminalId()` returns a UUID. This means workers maintain the **same session_id across all script invocations** within a conversation. Previously, each invocation could generate a new session_id, causing false stale detection and claim loss.
+- **PID liveness skip:** `findExistingSession()` now skips PID liveness checks for UUID-based sessions. This prevents valid sessions from being skipped when child processes have ephemeral PIDs.
+- **UUID caching:** `getTerminalId()` caches the resolved UUID in `process.env.CLAUDE_SESSION_ID`, propagating identity to child processes without re-walking marker files.
+- **NPX exclusion:** `findClaudeCodePid()` excludes `npx`, `npx.exe`, `npx.cmd` to prevent misidentifying intermediary launchers as Claude Code.
 - **ClaimIdentityError patterns**: When the dashboard shows a worker blocked, check for these error reasons:
   - `no_deterministic_identity` — CLAUDE_SESSION_ID env var not set. Worker needs to restart CC so the SessionStart hook fires.
   - `foreign_claim` — SD claimed by a different session. Check if owning session is still alive or stale.
   - `wrong_worktree` — Worker's cwd doesn't match the SD's registered worktree path. Likely the worktree was recreated.
-  - `ambiguous` — Multiple sessions share terminal_id without unique CLAUDE_SESSION_IDs.
+  - `ambiguous` — Multiple sessions share terminal_id without unique CLAUDE_SESSION_IDs. (Should be rare after 2026-04-08 fix.)
 - **Terminal_id collisions**: Two CC Desktop windows on the same machine share SSE port 25565, producing identical terminal_ids. The stale-session-sweep's Layer 1 collision detection now uses `claude_session_id` from marker files (`pid-*.json`) to disambiguate and split them into separate DB sessions.
+- **Terminal churn diagnostic:** If multiple workers attempt the same SD and all stall at ~5-10m with different terminal IDs each time, suspect session identity instability (not the SD itself). Check if the session identity fix is deployed — prior to 2026-04-08, this was a known failure mode.
 - **All script invocations** (sd-start, handoff, etc.) must prefix with `CLAUDE_SESSION_ID=<uuid>` inline env var.
 
 **Heartbeat reliability (updated 2026-03-14):**
@@ -335,147 +340,151 @@ line 5:   (_)
 
 ### Smart Estimation Process
 
-Do NOT use the naive `remaining SDs / velocity` formula. The dashboard's aggregate velocity (e.g., 7.4 SDs/hr) reflects past conditions (different SD types, different worker counts) and is misleading for forward-looking estimates.
+Do NOT use the naive `remaining SDs / velocity` formula. The dashboard's aggregate velocity reflects past conditions and is misleading for forward-looking estimates.
 
-**Primary method: Data-driven estimation from historical handoff durations.** Velocity is only used as a sanity check.
+**Primary method: Per-SD phase-aware estimation with elapsed time tracking.** Velocity is only a sanity check.
 
-**Step 1: Determine worker count**
-Use the derived worker count from the Assessment Rules (ghost filter + 5-min heartbeat window). Exclude the coordinator session.
+#### Step 1: Query live SD state (every dashboard cycle)
 
-**Phase-aware ETA (when enriched signals available):**
-If the dashboard shows Phase columns for workers, use per-phase medians instead of flat SD medians:
-- Worker in LEAD → subtract 0% (full SD estimate)
-- Worker in PLAN → subtract LEAD median from estimate
-- Worker in EXEC → use only EXEC median as remaining time
-This produces significantly more accurate ETAs than treating all workers as "0% progress."
-
-**Step 2: Query historical completion data (once per coordinator session)**
-
-On the **first dashboard cycle** (or after `/coordinator start`), run `node scripts/fleet-eta-stats.cjs` to get data-driven baselines. This script queries `sd_phase_handoffs` grouped by SD, cross-referenced with `strategic_directives_v2` metadata, and returns median/p25/p75 durations by type bucket.
-
-If the script is unavailable, query manually:
+Query the database for each remaining SD's current position:
 ```bash
-node -e "require('dotenv').config(); /* ... query sd_phase_handoffs + strategic_directives_v2 ... */"
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+(async () => {
+  const { data } = await sb.from('strategic_directives_v2')
+    .select('sd_key, title, current_phase, progress_percentage, status, sd_type, parent_sd_id')
+    .not('status', 'in', '(\"completed\",\"cancelled\")')
+    .order('created_at', { ascending: true });
+  data.forEach(d => console.log(JSON.stringify(d)));
+})();
+"
 ```
 
-The key query: group handoffs by `sd_id`, compute first→last handoff timestamp as total duration, then join with `strategic_directives_v2` to get `sd_type` and `parent_sd_id` (child vs standalone).
+This gives you the **exact phase and progress** for each SD. Use this — not the dashboard's truncated labels.
 
-**Cache the results** for subsequent cycles — no need to re-query every 5 minutes.
+#### Step 2: Query historical baselines (once per coordinator session)
 
-**Step 3: Classify remaining SDs using data-driven baselines**
+On the first dashboard cycle, run `node scripts/fleet-eta-stats.cjs` to get per-type-bucket and per-phase medians. **Cache the results** — no need to re-query every 5 minutes.
 
-Use the queried historical data to estimate each remaining SD. The table below shows **data-backed reference values** (as of early 2026, n=30 SDs with handoff data). These are fallbacks if the query is unavailable — always prefer live query results.
+**Reference values** (fallback if query unavailable):
 
-| Type Bucket | n | Median | p25 | p75 | Use For |
-|-------------|---|--------|-----|-----|---------|
-| child/infrastructure | 41 | 47m | 27m | 69m | Orchestrator children (most common) |
-| child/feature | 6 | 181m | 84m | 400m | Feature-type children |
-| child/database | 5 | 115m | 100m | 607m | Database migration children |
-| child/documentation | 4 | 7m | 5m | 67m | Documentation children (fast) |
+| Type Bucket | n | Active Median | p25 | p75 | Use For |
+|-------------|---|---------------|-----|-----|---------|
+| child/infrastructure | 41 | 41m | 20m | 50m | Orchestrator children (most common) |
+| child/feature | 6 | 80m | 72m | 82m | Feature-type children |
+| child/database | 5 | 60m | 53m | 76m | Database migration children |
+| child/documentation | 4 | 7m | 5m | 66m | Documentation children (fast) |
 | child/uat | 2 | 85m | 62m | 85m | UAT children |
-| standalone/infrastructure | 2 | 103m | 3m | 103m | Standalone infra/learn-fix SDs |
-| standalone/feature | 1 | 218m | — | — | Standalone feature SDs (thin data!) |
-| standalone/orchestrator | 9 | 80m | 5m | 367m | Orchestrator parent SDs |
+| standalone/infrastructure | 2 | 54m | 3m | 54m | Standalone infra/learn-fix SDs |
+| standalone/feature | 1 | 137m | — | — | Standalone feature SDs (thin data!) |
+| standalone/orchestrator | 9 | 7m | 5m | 13m | Orchestrator parent SDs |
 
-**Per-phase reference values** (median total time in phase, from `fleet-eta-stats.cjs`):
-| Phase | child/infrastructure (n=41) | child/feature (n=6) | standalone/feature (n=1) | standalone/infra (n=2) |
-|-------|---------------------------|--------------------|-----------------------|---------------------|
-| LEAD | 2m | 25m | 98m | 16m |
-| PLAN | 10m | 79m | 51m | 64m |
-| EXEC | 28m | 67m | 71m | 24m |
+**Per-phase reference values** (median active time in phase):
+| Phase | child/infrastructure | child/feature | standalone/orchestrator |
+|-------|---------------------|--------------|------------------------|
+| LEAD | 2m | 25m | 0m |
+| PLAN | 10m | 79m | 8m |
+| EXEC | 28m | 67m | 2m |
 
-Note: SDs go through **multiple handoff attempts** per phase (retries, gate failures). A typical SD has 8-15 total handoff events. The per-phase values above are per-attempt, not total time in phase.
+#### Step 3: Estimate each remaining SD individually
 
-**To estimate remaining time for a specific SD:**
-1. Look up its `sd_type` + child/standalone bucket → get median total duration
-2. Check its `current_phase` and `progress_percentage`
-3. Estimate remaining = `median × (1 - progress/100)`, adjusted for phase position:
-   - If past LEAD → subtract ~10-15% from total estimate
-   - If in PLAN (partially complete) → subtract LEAD time + completed PLAN portion
-   - If in EXEC → use only remaining EXEC estimate
+For each SD, compute remaining time using its **current phase position**:
 
-**Important data caveats:**
-- `complexity_level` is uniformly "moderate" across all SDs — it does NOT differentiate difficulty
-- `story_count` (must_have + h + m + l counts) is zero for nearly all SDs — not a useful signal
-- `intensity_level` is mostly null — not populated
-- `created_at` vs `completion_date` on the SD table is **unreliable** (bulk imports cause negative durations) — always use handoff timestamps instead
-- Small sample sizes per bucket mean wide confidence intervals — flag uncertainty when n < 5
-- Durations include idle gaps between work sessions, so they overestimate active work time
+**Phase-based remaining time calculation:**
+1. Look up the SD's type bucket → get per-phase medians (LEAD, PLAN, EXEC)
+2. Based on `current_phase`, sum only the **remaining phases**:
+   - SD in LEAD → remaining = (LEAD remaining) + PLAN median + EXEC median
+   - SD in PLAN → remaining = (PLAN remaining) + EXEC median
+   - SD in EXEC → remaining = EXEC remaining only
+3. Within the current phase, use `progress_percentage` to estimate how much of that phase is left:
+   - `phase_remaining = phase_median × (1 - progress/100)`
+4. **Subtract elapsed time on the current attempt.** Track when each worker claimed its SD (from sweep/dashboard data). If a worker has been on an SD for 15 minutes and the estimate says 20 minutes remaining, the displayed remaining should be ~5 minutes, not 20.
 
-**Step 4: Map dependency chains**
-Check the dashboard for dependency constraints:
+**Example:** Child C is `child/infrastructure`, currently in LEAD at 30%.
+- LEAD remaining: 2m × 0.70 = ~1.4m (but if worker has been in LEAD for 12m already, LEAD is clearly slower than median — use max(median_remaining, 2m) as floor)
+- PLAN: 10m
+- EXEC: 28m
+- **Total remaining: ~40m** (adjusted for this SD running slower than median)
+
+**Slower-than-median adjustment:** If the worker has already spent **more time in a phase than the phase median**, the SD is running slower than typical. In this case:
+- Do NOT use (median - elapsed) which would go negative
+- Instead, set current phase remaining to a **floor of 2 minutes** (it could finish any moment)
+- Add a `(slower than typical)` flag to the stats line
+
+#### Step 4: Identify auto-completing SDs (zero additional time)
+
+**Orchestrator parents auto-complete when all children finish.** When all of an orchestrator's children are completed (or the last one is in-progress), the parent's remaining time = last child's remaining time + ~2 minutes for auto-completion overhead. Do NOT add the parent's full median on top.
+
+Specifically:
+- If parent is blocked on children → parent remaining = last child remaining + 2m
+- If parent has no remaining children in-progress → parent remaining = 2m (auto-complete)
+- **Never double-count** by adding parent time + child time independently
+
+#### Step 5: Map dependency chains
+
+Check for dependency constraints:
 - **BLOCKED SDs**: Cannot start until blocker completes. Start time = blocker's finish time.
-- **Sequential children**: If children must run in order, they form a chain — sum their times.
-- **Parent-child deps**: Siblings that depend on each other cannot be parallelized.
-- **Cross-orchestrator deps**: Standalone SDs depending on an orchestrator must wait.
+- **Sequential children**: Form a chain — sum their times.
+- **Parent-child auto-complete**: Parent time = last child time + 2m (not additive).
+- **Independent SDs**: Schedule freely in parallel.
 
-Build a dependency graph:
-- **Independent SDs**: Schedule freely in parallel rounds.
-- **Chain SDs**: Sum times for total chain duration.
-- **Blocked SDs**: Add blocker's remaining time before their own duration.
+Build a dependency graph and identify the **critical path** (longest chain).
 
-**Step 5: Calculate parallel schedule with constraints**
+#### Step 6: Calculate parallel schedule
+
 Using the dependency graph:
-1. Identify all **immediately runnable** SDs (no unmet dependencies).
-2. Assign to workers (N = worker count), longest-first. Round time = longest SD in the round.
-3. When an SD finishes, check if it **unblocks** dependent SDs. Add newly runnable SDs to the pool.
-4. Continue until all SDs scheduled.
-5. **Critical path** = longest chain of sequential dependencies. ETA can never be shorter than critical path.
-6. Total time = max(sum of parallel rounds, critical path duration).
+1. Identify all **immediately runnable** SDs.
+2. Assign to workers (N = derived worker count), longest-first.
+3. When an SD finishes, add newly unblocked SDs to the pool.
+4. Total time = max(sum of parallel rounds, critical path duration).
 
-**Step 6: Sanity check against per-worker velocity**
-Only as a sanity check — NOT as the primary estimate:
-- Compute **per-worker velocity**: `total recent completions / (active workers × hours)`. This normalizes for worker count.
-- If the data-driven estimate and per-worker velocity estimate differ by **more than 50%**, flag it:
-  ```
-  ⚠ Velocity sanity check: data estimate (~2h 30m) vs velocity estimate (~1h 10m) —
-     velocity may reflect faster child SDs, trusting data estimate
-  ```
-- If they're within 50%, the data estimate is credible — use it as-is.
-- **Never average** data and velocity estimates. Data is primary. Velocity is a smell test.
+#### Step 7: Elapsed time tracking (CRITICAL — prevents static ETAs)
 
-**Step 7: Apply rolling average (last 3 cycles)**
+**The ETA MUST decrease between cycles.** To ensure this:
 
-Maintain a mental log of the last 3 dashboard cycles' values:
-- **Worker count** from each cycle (derived per Step 1)
-- **ETA duration** from each cycle (computed per Steps 3-6)
+1. **Record a `baseline_timestamp`** on the first cycle when an ETA is computed for a given set of remaining SDs.
+2. On each subsequent cycle, compute: `displayed_remaining = max(0, original_estimate - (now - baseline_timestamp))`
+3. **Reset the baseline** when:
+   - An SD completes (recompute from scratch)
+   - A worker's phase changes (recompute for that SD)
+   - Worker count changes by ≥2 (fleet restructured)
+4. If the worker is still in the same phase with the same progress after multiple cycles, the SD is **stalling**. Flag it:
+   ```
+   ⚠ SD-XXX-001: in LEAD at 30% for 15m+ (median LEAD = 2m) — may be struggling
+   ```
 
-Apply a rolling average to smooth out noise from session churn:
-- **Averaged workers** = mean of last 3 worker counts, rounded to nearest integer
-- **Averaged ETA duration** = mean of last 3 ETA durations in minutes
+**Anti-pattern: never show the same "~33m remaining" across 3+ consecutive cycles.** If the number isn't changing, something is wrong with the calculation.
 
-Use the averaged values for the displayed estimate. This prevents:
-- A single cycle with ghost inflation from spiking the worker count
-- A single stale sweep from crashing the ETA to unrealistic levels
-- Jitter between cycles from making the display feel unreliable
+#### Step 8: Compute finish time and display
 
-**Bootstrap**: For the first 1-2 cycles (before 3 data points exist), use whatever data is available. Label the estimate with `(1 sample)` or `(2 samples)` until 3 cycles have accumulated.
+`Estimated finish = current time + total remaining from Steps 3-6`
 
-**Reset the rolling window** when:
-- An SD completes (the remaining work fundamentally changed)
-- A new orchestrator starts (different SD mix)
-- Worker count changes by more than 2 in a single cycle (fleet restructured)
-
-**Step 8: Compute finish time**
-`Estimated finish = current time + averaged ETA duration`
-
-Display confidence based on data quality:
+**Confidence display:**
 - n ≥ 5 for the SD's type bucket → show estimate without qualifier
 - n = 2-4 → append `(±30%)`
 - n = 1 → append `(±50%, thin data)`
-- n = 0 (no historical match) → fall back to reference table above, append `(no historical match)`
+- n = 0 → fall back to reference table, append `(no historical match)`
+- If SD is running slower than median → append `(slower than typical)`
 
-If blocked SDs exist with no clear unblock time, note in stats:
+**Velocity sanity check** (secondary, not primary):
+- Compute per-worker velocity: `recent completions / (workers × hours)`
+- If data estimate and velocity estimate differ by >50%, flag it but trust the data estimate
+
+**Stats line examples:**
 ```
-  5 SDs left  |  3 workers  |  data-driven (n=19 infra)  |  1 blocked (awaiting SD-X)
+  2 SDs left  |  1 worker  |  phase-based  |  LEAD 30% → ~38m left
+  3 SDs left  |  2 workers  |  phase-based  |  1 in EXEC, 2 in LEAD  |  ETA 10:15 AM
+  1 SD left   |  1 worker   |  phase-based  |  EXEC 60% → ~11m left (slower than typical)
 ```
 
 ### Dynamic values to render
-- **Big ASCII time**: The estimated finish time (hour, minutes, AM/PM) in figlet-style block letters
+- **Big ASCII time**: The estimated finish time in figlet-style block letters
 - **Progress bar**: Proportional fill based on completed / total SDs
 - **Percentage**: completed / total as percent
-- **Time left**: human-readable duration (e.g., `~2h 10m`, `~35m`)
-- **Stats line**: SDs remaining, averaged worker count, estimation method (e.g., `phase-based, 3-cycle avg`)
+- **Time left**: human-readable duration that **decreases every cycle** (e.g., `~38m`, `~33m`, `~28m`)
+- **Stats line**: SDs remaining, worker count, current phase position, estimation method
 
 **Only display when**: the forecast section has pending SDs > 0. Do NOT display alongside the Queue Cleared Celebration banner.
 
