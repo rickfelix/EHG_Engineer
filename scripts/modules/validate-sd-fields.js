@@ -115,7 +115,7 @@ function autoPopulateMissingFields(sdData) {
   }
 
   if (!isPopulated(sdData.success_metrics)) {
-    sdData.success_metrics = [{ metric: 'Implementation completeness', target: '100%', actual: 'pending' }];
+    sdData.success_metrics = [{ metric: 'Implementation completeness', target: '100%', actual: null }];
     actions.push('success_metrics: populated with default metric');
   }
 

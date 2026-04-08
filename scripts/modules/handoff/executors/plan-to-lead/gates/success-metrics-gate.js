@@ -151,7 +151,7 @@ export function createSuccessMetricsGate(supabase) {
       // from handoff evidence to prevent 0/100 scores on SDs that completed work
       // but didn't manually fill in success_metrics.actual
       // SD-LEARN-FIX-ADDRESS-PAT-AUTO-080: Also treat 'pending'/'tbd' as empty
-      const PENDING_PATTERN = /^(pending|tbd|to\s*be\s*determined|not\s*yet|awaiting)$/i;
+      const PENDING_PATTERN = /^(pending|tbd|to\s*be\s*determined|not\s*yet|awaiting|[\d.]+%?\s*-?\s*pending.*)$/i;
       const isEmptyOrPending = (val) => val == null || String(val).trim() === '' || PENDING_PATTERN.test(String(val).trim());
       const hasEmptyActuals = metrics.some(m => isEmptyOrPending(m.actual));
       if (hasEmptyActuals) {
