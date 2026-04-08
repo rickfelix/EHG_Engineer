@@ -20,10 +20,10 @@ const os = require('os');
 const THROTTLE_FILE = path.join(os.tmpdir(), 'claude-coordination-inbox-last-check.json');
 const HEARTBEAT_FILE = path.join(os.tmpdir(), 'claude-heartbeat-last-update.json');
 const IDENTITY_DIR = path.resolve(__dirname, '../../.claude');
-// Per-session identity file keyed by CLAUDE_SESSION_ID (birth certificate UUID).
-// Falls back to shared file for sessions without a UUID.
-function getIdentityFile() {
-  const csid = process.env.CLAUDE_SESSION_ID;
+// Per-session identity file keyed by session ID (birth certificate UUID or resolved).
+// Falls back to shared file for sessions without a resolvable ID.
+function getIdentityFile(resolvedSessionId) {
+  const csid = resolvedSessionId || process.env.CLAUDE_SESSION_ID;
   if (csid) return path.join(IDENTITY_DIR, `fleet-identity-${csid}.json`);
   return path.join(IDENTITY_DIR, 'fleet-identity.json');
 }
@@ -200,7 +200,7 @@ async function main() {
       // Handle SET_IDENTITY: write per-session identity file for statusline integration
       if (msg.message_type === 'SET_IDENTITY' && msg.payload) {
         try {
-          fs.writeFileSync(getIdentityFile(), JSON.stringify({
+          fs.writeFileSync(getIdentityFile(sessionId), JSON.stringify({
             color: msg.payload.color,
             callsign: msg.payload.callsign,
             display_name: msg.payload.display_name,
