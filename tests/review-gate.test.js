@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkCriticalFindings, runReview, evaluateFindings, parseReviewFindings, buildReviewPrompt } from '../lib/ship/review-gate.js';
+import { checkCriticalFindings, runReview, evaluateFindings, parseReviewFindings, buildReviewPrompt, buildAdversarialPrompt, evaluateAdversarialFindings } from '../lib/ship/review-gate.js';
 
 describe('review-gate', () => {
   describe('checkCriticalFindings', () => {
@@ -75,6 +75,7 @@ describe('review-gate', () => {
       const result = runReview(diff, 'light');
       assert.equal(result.verdict, 'review_needed');
       assert.equal(result.tierEnforcement, 'advisory');
+      assert.equal(result.multiAgent, false);
       assert.ok(result.reviewPrompt);
     });
 
@@ -82,12 +83,18 @@ describe('review-gate', () => {
       const diff = '+ const x = 42;';
       const result = runReview(diff, 'standard');
       assert.equal(result.tierEnforcement, 'blocking');
+      assert.equal(result.multiAgent, false);
+      assert.ok(result.reviewPrompt);
     });
 
-    it('returns blocking enforcement for Deep tier', () => {
+    it('returns multi-agent adversarial for Deep tier', () => {
       const diff = '+ const x = 42;';
       const result = runReview(diff, 'deep');
+      assert.equal(result.verdict, 'review_needed');
       assert.equal(result.tierEnforcement, 'blocking');
+      assert.equal(result.multiAgent, true);
+      assert.ok(result.adversarialPrompt);
+      assert.equal(result.reviewPrompt, null);
     });
   });
 
@@ -163,6 +170,85 @@ describe('review-gate', () => {
       const result = parseReviewFindings(response);
       assert.equal(result.findings.length, 0);
       assert.ok(result.summary.includes('parsing failed'));
+    });
+  });
+
+  describe('buildAdversarialPrompt', () => {
+    it('includes security and correctness focus areas', () => {
+      const prompt = buildAdversarialPrompt('+ const x = 1;');
+      assert.ok(prompt.includes('SECURITY'));
+      assert.ok(prompt.includes('CORRECTNESS'));
+      assert.ok(prompt.includes('DATA INTEGRITY'));
+    });
+
+    it('includes adversarial framing', () => {
+      const prompt = buildAdversarialPrompt('+ const x = 1;');
+      assert.ok(prompt.includes('adversarial'));
+      assert.ok(prompt.includes('did NOT write this code'));
+    });
+
+    it('includes JSON output format', () => {
+      const prompt = buildAdversarialPrompt('+ const x = 1;');
+      assert.ok(prompt.includes('"findings"'));
+      assert.ok(prompt.includes('CRITICAL|WARNING|INFO'));
+    });
+
+    it('truncates long diffs at 12000 chars', () => {
+      const longDiff = 'x'.repeat(15000);
+      const prompt = buildAdversarialPrompt(longDiff);
+      assert.ok(prompt.includes('[diff truncated]'));
+    });
+
+    it('rejects theoretical issues in instructions', () => {
+      const prompt = buildAdversarialPrompt('+ const x = 1;');
+      assert.ok(prompt.includes('CONCRETE problems'));
+      assert.ok(prompt.includes('Do not manufacture findings'));
+    });
+  });
+
+  describe('evaluateAdversarialFindings', () => {
+    it('hard-fails on null response (agent failure)', () => {
+      const result = evaluateAdversarialFindings(null);
+      assert.equal(result.verdict, 'block');
+      assert.ok(result.reason.includes('agent_failure'));
+    });
+
+    it('hard-fails on undefined response', () => {
+      const result = evaluateAdversarialFindings(undefined);
+      assert.equal(result.verdict, 'block');
+      assert.ok(result.reason.includes('agent_failure'));
+    });
+
+    it('hard-fails on empty string response', () => {
+      const result = evaluateAdversarialFindings('');
+      assert.equal(result.verdict, 'block');
+      assert.ok(result.reason.includes('agent_failure'));
+    });
+
+    it('passes when agent finds no issues', () => {
+      const response = '{"findings": [], "summary": "No issues detected"}';
+      const result = evaluateAdversarialFindings(response);
+      assert.equal(result.verdict, 'pass');
+      assert.equal(result.findings.length, 0);
+    });
+
+    it('blocks on CRITICAL finding from agent', () => {
+      const response = '{"findings": [{"type": "CRITICAL", "description": "Auth bypass", "location": "auth.js:15"}], "summary": "Critical issue"}';
+      const result = evaluateAdversarialFindings(response);
+      assert.equal(result.verdict, 'block');
+      assert.equal(result.findings.length, 1);
+    });
+
+    it('blocks on WARNING finding (deep tier is always blocking)', () => {
+      const response = '{"findings": [{"type": "WARNING", "description": "Missing null check", "location": "api.js:42"}], "summary": "Warning found"}';
+      const result = evaluateAdversarialFindings(response);
+      assert.equal(result.verdict, 'block');
+    });
+
+    it('passes on INFO-only findings', () => {
+      const response = '{"findings": [{"type": "INFO", "description": "Style suggestion"}], "summary": "Minor only"}';
+      const result = evaluateAdversarialFindings(response);
+      assert.equal(result.verdict, 'pass');
     });
   });
 });
