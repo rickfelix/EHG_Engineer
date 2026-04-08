@@ -259,7 +259,7 @@ async function main() {
   // 1. Get all sessions with SD claims
   const { data: sessions, error: sessErr } = await supabase
     .from('v_active_sessions')
-    .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id')
+    .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id')
     .not('sd_id', 'is', null)
     .order('heartbeat_age_seconds', { ascending: true });
 
@@ -273,11 +273,19 @@ async function main() {
     return;
   }
 
+  // 2a. Identity collision detection (Layer 1) — run BEFORE classification
+  // so aliveMarkers are available for PID-based liveness cross-referencing.
+  const { collisions, aliveMarkers } = detectIdentityCollisions();
+
+  // Build a set of alive CC PIDs from marker files.
+  // Marker filename = pid-{ccPid}.json, and DB terminal_id = "win-cc-{port}-{ccPid}".
+  // Match by extracting ccPid from terminal_id and checking if that PID's marker is alive.
+  const aliveCcPids = new Set(aliveMarkers.map(m => String(m.pid)));
+
   // 2. Classify each session
-  // NOTE: PID checks are unreliable on Windows — claude_sessions stores the PID
-  // of a bash child process, not the parent node.exe. These child PIDs are ephemeral
-  // and appear dead even when the session is actively running.
-  // Classification uses HEARTBEAT AGE ONLY as the liveness signal.
+  // Primary signal: heartbeat age. Secondary signal: PID marker liveness.
+  // A session with a stale heartbeat but a living PID is likely loading context
+  // or between tool calls (heartbeat fires on PostToolUse only).
   const VERY_STALE_SECONDS = STALE_THRESHOLD_SECONDS * 3; // 15min = definitely dead
   // SD-LEO-INFRA-PARALLEL-AGENT-QUEUE-001: Virtual drain sessions use shorter thresholds
   const VIRTUAL_STALE_THRESHOLD = 180; // 3 minutes for virtual drain agents
@@ -288,20 +296,31 @@ async function main() {
     const isStale = s.heartbeat_age_seconds > threshold;
     const isVeryStale = s.heartbeat_age_seconds > veryStaleThreshold;
 
+    // Cross-reference with PID marker files: if the CC process is alive on this
+    // machine, the session is running even without recent heartbeats.
+    // terminal_id format: "win-cc-{port}-{ccPid}" — extract the ccPid suffix.
+    let hasPidAlive = false;
+    if (s.terminal_id) {
+      const parts = s.terminal_id.split('-');
+      const ccPid = parts[parts.length - 1]; // last segment is the ccPid
+      hasPidAlive = aliveCcPids.has(ccPid);
+    }
+
     let status;
     if (!isStale) {
       status = 'ACTIVE';
+    } else if (hasPidAlive) {
+      // PID is alive but heartbeat is stale — session is loading context,
+      // compacting, or between tool calls. NOT stale.
+      status = 'ALIVE_NO_HEARTBEAT';
     } else if (isVeryStale) {
-      status = 'DEAD'; // No heartbeat for 15min+ = definitely gone
+      status = 'DEAD'; // No heartbeat for 15min+ AND no living PID = definitely gone
     } else {
-      status = 'STALE_UNKNOWN'; // Between 5-15min = might be busy/compacting
+      status = 'STALE_UNKNOWN'; // Between 5-15min, no PID match = might be on another host
     }
 
-    return { ...s, isStale, status };
+    return { ...s, isStale: isStale && !hasPidAlive, status };
   });
-
-  // 2b. Identity collision detection (Layer 1)
-  const { collisions, aliveMarkers } = detectIdentityCollisions();
   if (collisions.length > 0) {
     await splitCollidingSessions(supabase, collisions, actions, warnings);
   }
@@ -660,7 +679,7 @@ async function main() {
     })
     .map(c => c.sd_key);
 
-  const activeSessions = classified.filter(s => s.status === 'ACTIVE');
+  const activeSessions = classified.filter(s => s.status === 'ACTIVE' || s.status === 'ALIVE_NO_HEARTBEAT');
 
   // 6b. QA — Claim Integrity: detect idle sessions with no SD claim and nudge them
   const { data: idleSessions } = await supabase
@@ -856,12 +875,13 @@ async function main() {
   activeSessions.forEach(s => {
     const child = (children || []).find(c => c.sd_key === s.sd_id);
     const pct = child ? child.progress_percentage : '?';
-    console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_id || '?').padEnd(50) + bar(pct) + ' ' + pct + '%');
+    const tag = s.status === 'ALIVE_NO_HEARTBEAT' ? ' (PID alive, loading)' : '';
+    console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_id || '?').padEnd(50) + bar(pct) + ' ' + pct + '%' + tag);
   });
   console.log('');
 
-  // Stale sessions
-  const stale = classified.filter(s => s.status !== 'ACTIVE');
+  // Stale sessions (exclude ALIVE_NO_HEARTBEAT — shown above with active workers)
+  const stale = classified.filter(s => s.status !== 'ACTIVE' && s.status !== 'ALIVE_NO_HEARTBEAT');
   if (stale.length > 0) {
     console.log('STALE/DEAD (' + stale.length + '):');
     stale.forEach(s => {

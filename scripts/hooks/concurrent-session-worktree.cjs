@@ -29,6 +29,27 @@ const path = require('path');
 const os = require('os');
 const { detectCodebase } = require('./lib/detect-context.cjs');
 
+// PID liveness check — complements heartbeat for sessions still loading context
+function isProcessRunning(pid) {
+  if (!pid || typeof pid !== 'number') return false;
+  try { process.kill(pid, 0); return true; }
+  catch (err) { return err.code === 'EPERM'; }
+}
+
+function getAliveMarkerSessionIds() {
+  const markerDir = path.resolve(__dirname, '../../.claude/session-identity');
+  if (!fs.existsSync(markerDir)) return new Set();
+  const alive = new Set();
+  for (const f of fs.readdirSync(markerDir).filter(f => /^pid-\d+\.json$/.test(f))) {
+    try {
+      const pid = Number(f.match(/^pid-(\d+)\.json$/)[1]);
+      if (!isProcessRunning(pid)) continue;
+      alive.add(String(pid)); // CC PID as string, matches terminal_id suffix
+    } catch { /* skip */ }
+  }
+  return alive;
+}
+
 // Configuration
 const STALENESS_WINDOW_S = parseInt(process.env.WORKTREE_STALENESS_WINDOW_S || '300', 10);
 const RECHECK_DELAY_MS = parseInt(process.env.WORKTREE_RECHECK_DELAY_MS || '1000', 10);
@@ -114,7 +135,7 @@ function isInsideWorktree() {
 async function findConcurrentSessions(supabase, mySessionId, codebase, branch) {
   const { data, error } = await supabase
     .from('v_active_sessions')
-    .select('session_id, hostname, heartbeat_age_seconds, computed_status, sd_id, tty, pid, current_branch')
+    .select('session_id, hostname, heartbeat_age_seconds, computed_status, sd_id, tty, pid, current_branch, terminal_id')
     .eq('codebase', codebase)
     .in('computed_status', ['active', 'idle']);
 
@@ -126,9 +147,17 @@ async function findConcurrentSessions(supabase, mySessionId, codebase, branch) {
   // Filter out our own session, stale sessions, and sessions on different branches
   // Sessions on different branches of the same codebase are EXPECTED multi-instance work
   // Only flag as concurrent when sessions share the SAME codebase AND SAME branch
+  const aliveCcPids = getAliveMarkerSessionIds();
   return (data || []).filter(s => {
     if (s.session_id === mySessionId) return false;
-    if (s.heartbeat_age_seconds > STALENESS_WINDOW_S) return false;
+    // A session is alive if it heartbeated recently OR its CC PID is still running
+    // terminal_id format: "win-cc-{port}-{ccPid}" — extract ccPid suffix
+    let pidAlive = false;
+    if (s.terminal_id) {
+      const parts = s.terminal_id.split('-');
+      pidAlive = aliveCcPids.has(parts[parts.length - 1]);
+    }
+    if (s.heartbeat_age_seconds > STALENESS_WINDOW_S && !pidAlive) return false;
 
     // Branch-aware filtering: if both sessions have branch info,
     // only flag as concurrent if they're on the same branch or main
