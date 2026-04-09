@@ -1795,7 +1795,11 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
             process.exit(0);
           }
         } catch (routeErr) {
-          console.warn(`\n⚠️  Auto-routing failed, continuing with single SD creation: ${routeErr.message}`);
+          // QF-20260409-561 (P1): Fail loud; silent fallback violated feedback_auto_decompose_sd_hierarchy.
+          console.error(`\n❌ Orchestrator auto-routing FAILED: ${routeErr.message}`);
+          console.error(`   Check orphans: SELECT sd_key FROM strategic_directives_v2 WHERE metadata->>'vision_key'='${visionKey}';`);
+          console.error(`   Clean via database-agent, then re-run (create-orchestrator-from-plan.js will resume).`);
+          process.exit(1);
         }
 
         // Advisory: warn about uncovered architecture phases (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)

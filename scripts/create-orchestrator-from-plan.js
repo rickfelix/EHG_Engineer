@@ -25,6 +25,9 @@ import { scoreSDAtConception } from './leo-create-sd.js';
 
 dotenv.config();
 
+// QF-20260409-561 (P0): DB-authoritative sd_type list (mirrors sd_type_check constraint).
+const DB_VALID_SD_TYPES = ['feature','implementation','infrastructure','bugfix','refactor','documentation','orchestrator','database','security','performance','enhancement','docs','discovery_spike','ux_debt','uat'];
+
 /**
  * Parse architecture plan content for implementation phases.
  */
@@ -160,8 +163,27 @@ async function main() {
   console.log(`   📊 Generated ${allMetrics.length} traceable success metric(s)`);
 
   // Create orchestrator SD
-  const orchestratorId = randomUUID();
+  let orchestratorId = randomUUID();
   const orchestratorKey = generateSDKey(title, '-ORCH');
+  let orchestratorAlreadyExists = false;
+
+  // QF-20260409-561 (P2): Idempotency pre-check — resume partial prior runs instead of colliding.
+  if (!dryRun) {
+    const { data: existingOrch } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, metadata')
+      .eq('sd_key', orchestratorKey)
+      .maybeSingle();
+    if (existingOrch) {
+      if (existingOrch.metadata?.vision_key !== visionKey || existingOrch.metadata?.arch_key !== archKey) {
+        console.error(`\n❌ Key collision: ${orchestratorKey} exists with different vision/arch. Clean up or rename.`);
+        process.exit(1);
+      }
+      console.log(`\n   ♻️  Resuming existing orchestrator: ${orchestratorKey}`);
+      orchestratorId = existingOrch.id;
+      orchestratorAlreadyExists = true;
+    }
+  }
 
   // Build strategic objectives from phases
   const strategicObjectives = phases.map(p => `Phase ${p.number}: ${p.title}`);
@@ -211,7 +233,8 @@ async function main() {
   if (dryRun) {
     console.log('\n📋 DRY RUN — Orchestrator SD:');
     console.log(JSON.stringify(orchestratorSD, null, 2));
-  } else {
+  } else if (!orchestratorAlreadyExists) {
+    // QF-20260409-561 (P2): Only insert if not already present (idempotency).
     const { error: orchError } = await supabase
       .from('strategic_directives_v2')
       .insert(orchestratorSD);
@@ -257,7 +280,9 @@ async function main() {
       // FR-004: Handle separate_orchestrator phases (no parent, orchestrator type)
       const isSeparateOrchestrator = phase.child_designation === 'separate_orchestrator';
       const typeResult = inferSDType(phase.title, phase.description || '', phase.content || '');
-      const childType = isSeparateOrchestrator ? 'orchestrator' : (typeof typeResult === 'string' ? typeResult : (typeResult?.sdType || 'feature'));
+      let childType = isSeparateOrchestrator ? 'orchestrator' : (typeof typeResult === 'string' ? typeResult : (typeResult?.sdType || 'feature'));
+      // QF-20260409-561 (P0): Validate against sd_type_check constraint; fall back to 'implementation'.
+      if (!DB_VALID_SD_TYPES.includes(childType)) { console.warn(`   ⚠️  Phase ${phase.number}: '${childType}' invalid → 'implementation'`); childType = 'implementation'; }
 
       // Inherit strategic fields from orchestrator
       const inherited = inheritStrategicFields(orchestratorSD, {
