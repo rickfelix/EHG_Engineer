@@ -39,6 +39,7 @@ import {
 } from '../lib/execute/execute-team-factory.mjs';
 import { recordFailure, initState as initCircuitBreaker } from '../lib/execute/execute-circuit-breaker.mjs';
 import { terminateVirtualSession } from '../lib/virtual-session-factory.mjs';
+import { getOrCreateSession } from '../lib/session-manager.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -134,12 +135,20 @@ class Supervisor {
    */
   spawnWorker(slot) {
     const binary = getClaudeBinary();
+    // QF-20260409-889: On Windows, `.cmd` files cannot be launched directly
+    // via child_process.spawn (EINVAL). Use the documented workaround:
+    // `cmd.exe /d /s /c claude.cmd <args>`. CreateProcess still escapes each
+    // arg individually (preserving the large quoted prompt), while cmd.exe /c
+    // runs the target literally. `shell:true` is NOT used because DEP0190 in
+    // Node 20+ stopped escaping args in shell mode.
+    const isWin = process.platform === 'win32';
+    const spawnCmd = isWin ? 'cmd.exe' : binary;
     const env = buildWorkerEnv(slot.slot, this.teamId, this.parentSessionId);
     const logPath = path.join(this.logDir, `${slot.callsign.toLowerCase()}.log`);
     const out = fs.openSync(logPath, 'a');
     const err = fs.openSync(logPath, 'a');
 
-    const args = [
+    const claudeArgs = [
       '--print',
       '--dangerously-skip-permissions',
       '-p',
@@ -156,11 +165,12 @@ class Supervisor {
       `When done, exit cleanly.`
     ];
 
+    const spawnArgs = isWin ? ['/d', '/s', '/c', binary, ...claudeArgs] : claudeArgs;
     this.log(`Slot ${slot.slot} (${slot.callsign}): spawning ${binary} → ${logPath}`);
 
     let child;
     try {
-      child = spawn(binary, args, {
+      child = spawn(spawnCmd, spawnArgs, {
         cwd: REPO_ROOT,
         detached: true,
         stdio: ['ignore', out, err],
@@ -324,6 +334,19 @@ async function main() {
   // Run pre-flight first — even in dry-run mode
   const preflight = await runPreflight(supabase);
 
+  // QF-20260409-889: Resolve a real chairman session row BEFORE createTeam().
+  // process.env.CLAUDE_SESSION_ID is NOT auto-exported from the CC host, so
+  // trusting it here caused virtual-session inserts to violate the FK
+  // claude_sessions_parent_session_id_fkey (the orphan_supervisor_<pid>
+  // fallback string is never inserted). Mirror the sd-drain.mjs pattern:
+  // ensure a real claude_sessions row exists, use its session_id as parent.
+  // Skip in dry-run to avoid touching the DB.
+  let parentSessionId = null;
+  if (!opts.dryRun) {
+    const parentSession = await getOrCreateSession();
+    parentSessionId = parentSession.session_id;
+  }
+
   if (opts.dryRun) {
     // Build slot identities locally just for the preview
     const { buildSlotIdentities } = await import('../lib/execute/execute-team-factory.mjs');
@@ -342,7 +365,7 @@ async function main() {
     const cbInit = initCircuitBreaker();
     const { teamId, error: createErr } = await createTeam({
       supabase,
-      spawnedBySession: process.env.CLAUDE_SESSION_ID || null,
+      spawnedBySession: parentSessionId,
       workerCount: opts.workers,
       trackFilter: opts.track,
       supervisorPid: process.pid,
@@ -389,7 +412,7 @@ async function main() {
     teamId,
     slots,
     opts,
-    parentSessionId: process.env.CLAUDE_SESSION_ID || null
+    parentSessionId
   });
   supervisor.installSignalHandlers();
   await supervisor.spawnAll();
