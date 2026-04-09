@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-08T23:38:51.192Z
+**Generated**: 2026-04-09T00:36:32.652Z
 **Tables**: 633
 **Source**: Supabase PostgreSQL introspection
 
@@ -71,7 +71,7 @@ Lifecycle: discovered → evaluating → adapted/rejected → outdated |
 | [audit_finding_sd_mapping](tables/audit_finding_sd_mapping.md) | 76 | ✅ | 3 | Maps runtime audit findings to Strategic Directives with full traceability.
    Created from triangulated recommendations (Claude + OpenAI + Antigravity).
    Key invariant: original_issue_id is immutable - verbatim Chairman feedback preserved. |
-| [audit_log](tables/audit_log.md) | 2,014 | ✅ | 2 | Generic audit log for tracking system events, changes, and governance actions across all LEO Protocol entities. |
+| [audit_log](tables/audit_log.md) | 2,015 | ✅ | 2 | Generic audit log for tracking system events, changes, and governance actions across all LEO Protocol entities. |
 | [audit_triangulation_log](tables/audit_triangulation_log.md) | 0 | ✅ | 2 | - |
 | [auto_apply_allowlist](tables/auto_apply_allowlist.md) | 6 | ✅ | 2 | Tables that AUTO-tier is permitted to modify. Default-deny: unlisted tables are blocked. |
 | [auto_apply_denylist](tables/auto_apply_denylist.md) | 18 | ✅ | 2 | Tables that AUTO-tier must NEVER modify. Includes governance, safety, and critical system tables. |
@@ -102,8 +102,8 @@ Lifecycle: discovered → evaluating → adapted/rejected → outdated |
 | [chairman_approval_requests](tables/chairman_approval_requests.md) | 0 | ✅ | 1 | Centralized queue for chairman approval decisions. SD-STAGE-13-001. |
 | [chairman_constraints](tables/chairman_constraints.md) | 10 | ✅ | 1 | Strategic constraints from the chairman applied to every venture during Stage 0 synthesis. Evolves over time from kill gate outcomes and retrospectives. |
 | [chairman_dashboard_config](tables/chairman_dashboard_config.md) | 1 | ✅ | 4 | Chairman dashboard configuration including per-stage auto-proceed overrides (SD-LEO-FEAT-PER-STAGE-AUTO-PROCEED-001) |
-| [chairman_decision_audit](tables/chairman_decision_audit.md) | 1 | ❌ | 0 | - |
-| [chairman_decisions](tables/chairman_decisions.md) | 5 | ✅ | 2 | SD-HARDENING-V1-001: Chairman-only decision records.
+| [chairman_decision_audit](tables/chairman_decision_audit.md) | 0 | ❌ | 0 | - |
+| [chairman_decisions](tables/chairman_decisions.md) | 13 | ✅ | 2 | SD-HARDENING-V1-001: Chairman-only decision records.
 RLS hardened - only chairman (fn_is_chairman()) can access.
 SECURITY FIX: Replaced USING(true) from 20251216000001_chairman_unified_decisions.sql |
 | [chairman_directives](tables/chairman_directives.md) | 0 | ✅ | 4 | - |
@@ -219,7 +219,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_scheduler_metrics](tables/eva_scheduler_metrics.md) | 0 | ✅ | 2 | - |
 | [eva_scheduler_queue](tables/eva_scheduler_queue.md) | 1 | ✅ | 2 | - |
 | [eva_source_health](tables/eva_source_health.md) | 6 | ✅ | 2 | Data freshness tracking per EVA input source. Monitors sync status and health. |
-| [eva_stage_gate_results](tables/eva_stage_gate_results.md) | 14 | ✅ | 2 | Tracks EVA gate evaluations with kill gate enforcement (stages 3,5,13,23 require 70% score) |
+| [eva_stage_gate_results](tables/eva_stage_gate_results.md) | 12 | ✅ | 2 | Tracks EVA gate evaluations with kill gate enforcement (stages 3,5,13,23 require 70% score) |
 | [eva_sync_state](tables/eva_sync_state.md) | 4 | ✅ | 2 | - |
 | [eva_todoist_intake](tables/eva_todoist_intake.md) | 304 | ✅ | 2 | - |
 | [eva_trace_log](tables/eva_trace_log.md) | 0 | ✅ | 2 | - |
@@ -254,7 +254,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [feedback_events](tables/feedback_events.md) | 0 | ✅ | 2 | RLS enabled 2025-10-26 (migration 020) - User feedback events for continuous learning |
 | [feedback_quality_config](tables/feedback_quality_config.md) | 1 | ✅ | 2 | Configuration for Feedback Quality Layer. SD: SD-LEO-SELF-IMPROVE-001C |
 | [feedback_sd_map](tables/feedback_sd_map.md) | 0 | ✅ | 4 | - |
-| [financial_models](tables/financial_models.md) | 1 | ✅ | 4 | Venture capital financial models with templates (SaaS, marketplace, etc.) |
+| [financial_models](tables/financial_models.md) | 0 | ✅ | 4 | Venture capital financial models with templates (SaaS, marketplace, etc.) |
 | [financial_projections](tables/financial_projections.md) | 0 | ✅ | 1 | Financial projections for venture models (monthly/quarterly/yearly) |
 | [financial_scenarios](tables/financial_scenarios.md) | 0 | ✅ | 1 | Scenario analysis results (Monte Carlo, sensitivity, etc.) |
 | [fit_gate_scores](tables/fit_gate_scores.md) | 0 | ✅ | 3 | Asset Factory fit gate scoring with multi-criteria evaluation framework |
@@ -267,7 +267,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [genesis_tier_config](tables/genesis_tier_config.md) | 2 | ✅ | 2 | Configuration for Genesis simulation tiers. Defines features and requirements per tier. |
 | [github_operations](tables/github_operations.md) | 0 | ✅ | 2 | Tracks all GitHub operations initiated by the LEO Protocol GitHub Sub-Agent |
 | [global_competitors](tables/global_competitors.md) | 0 | ✅ | 2 | Global competitor catalog for cross-venture competitive intelligence. Supports deduplication via canonical_id. |
-| [governance_audit_log](tables/governance_audit_log.md) | 158,236 | ✅ | 2 | - |
+| [governance_audit_log](tables/governance_audit_log.md) | 158,237 | ✅ | 2 | - |
 | [governance_decisions](tables/governance_decisions.md) | 0 | ✅ | 1 | - |
 | [governance_policies](tables/governance_policies.md) | 0 | ✅ | 2 | - |
 | [governance_proposals](tables/governance_proposals.md) | 2 | ✅ | 2 | - |
@@ -371,7 +371,7 @@ Reference: docs/workflow/stages_v2.yaml |
 | [mental_model_effectiveness](tables/mental_model_effectiveness.md) | 0 | ✅ | 2 | Aggregate effectiveness scores correlated with venture outcomes |
 | [mental_models](tables/mental_models.md) | 18 | ✅ | 2 | Core mental model definitions for structured decision-making frameworks |
 | [missions](tables/missions.md) | 1 | ✅ | 1 | - |
-| [model_usage_log](tables/model_usage_log.md) | 12,366 | ✅ | 2 | RLS: Append-only for authenticated |
+| [model_usage_log](tables/model_usage_log.md) | 12,396 | ✅ | 2 | RLS: Append-only for authenticated |
 | [modeling_requests](tables/modeling_requests.md) | 0 | ✅ | 4 | Horizontal forecasting and modeling engine serving Stage 0 components including time-horizon positioning, build cost estimation, and market analysis |
 | [monthly_ceo_reports](tables/monthly_ceo_reports.md) | 0 | ✅ | 2 | Monthly CEO performance reports generated by the VentureCEORuntime agent |
 | [naming_favorites](tables/naming_favorites.md) | 0 | ✅ | 1 | - |
@@ -383,7 +383,7 @@ Reference: docs/workflow/stages_v2.yaml |
 | [okr_generation_log](tables/okr_generation_log.md) | 1 | ✅ | 3 | Audit trail for automated OKR generation runs |
 | [okr_snapshots](tables/okr_snapshots.md) | 2 | ✅ | 2 | Point-in-time snapshots of key result progress for trend tracking |
 | [okr_vision_alignment_records](tables/okr_vision_alignment_records.md) | 0 | ✅ | 2 | - |
-| [operations_audit_log](tables/operations_audit_log.md) | 27 | ✅ | 2 | - |
+| [operations_audit_log](tables/operations_audit_log.md) | 28 | ✅ | 2 | - |
 | [opportunities](tables/opportunities.md) | 0 | ✅ | 1 | - |
 | [opportunity_blueprints](tables/opportunity_blueprints.md) | 8 | ✅ | 2 | - |
 | [opportunity_categories](tables/opportunity_categories.md) | 0 | ✅ | 0 | - |
@@ -565,7 +565,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [stage_config_audit](tables/stage_config_audit.md) | 0 | ✅ | 2 | Append-only audit trail for stage_config mutations. SD-LEO-INFRA-UNIFIED-GATE-ENFORCEMENT-001 |
 | [stage_data_contracts](tables/stage_data_contracts.md) | 2 | ✅ | 2 | - |
 | [stage_events](tables/stage_events.md) | 2 | ✅ | 2 | - |
-| [stage_executions](tables/stage_executions.md) | 7 | ✅ | 1 | Per-execution tracking for stage-execution-worker. Each row is one processStage() attempt with heartbeat for crash detection. |
+| [stage_executions](tables/stage_executions.md) | 11 | ✅ | 1 | Per-execution tracking for stage-execution-worker. Each row is one processStage() attempt with heartbeat for crash detection. |
 | [stage_of_death_predictions](tables/stage_of_death_predictions.md) | 0 | ✅ | 1 | - |
 | [stage_proving_journal](tables/stage_proving_journal.md) | 0 | ✅ | 1 | Records per-stage assessment results from venture proving runs. Each entry captures Plan Agent, Reality Agent, Gap Analyst outputs and chairman decisions. |
 | [stage_zero_requests](tables/stage_zero_requests.md) | 1 | ✅ | 4 | Work queue for async Stage 0 opportunity analysis. UI inserts pending rows; Claude Code CLI claims and processes them. |
@@ -645,7 +645,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [validation_gate_registry](tables/validation_gate_registry.md) | 99 | ✅ | 2 | Database-first policy for validation gate applicability per SD type and validation profile. Part of SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001. |
 | [venture_archetypes](tables/venture_archetypes.md) | 14 | ✅ | 5 | Recurring venture patterns with visual themes and historical performance data. Stage 0 uses archetype recognition to trigger specific benchmarks, pitfalls, and strategies. |
 | [venture_artifact_summaries](tables/venture_artifact_summaries.md) | 0 | ❌ | 0 | Cached LLM-generated summaries of venture artifacts. Used by enrichment pipeline Pass 1 to avoid redundant LLM calls. |
-| [venture_artifacts](tables/venture_artifacts.md) | 11 | ✅ | 4 | - |
+| [venture_artifacts](tables/venture_artifacts.md) | 13 | ✅ | 4 | - |
 | [venture_asset_registry](tables/venture_asset_registry.md) | 0 | ✅ | 3 | Tracks assets owned by each venture for acquisition readiness assessment |
 | [venture_blueprints](tables/venture_blueprints.md) | 0 | ✅ | 1 | Pre-made venture templates for the Blueprint Browse entry path in Stage 0 |
 | [venture_briefs](tables/venture_briefs.md) | 1 | ✅ | 1 | Stage 0 output contract - structured brief produced by the synthesis engine that becomes Stage 1 input |
@@ -661,7 +661,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_drafts](tables/venture_drafts.md) | 704 | ✅ | 1 | - |
 | [venture_exit_profiles](tables/venture_exit_profiles.md) | 0 | ✅ | 4 | Per-venture exit model selection with version history |
 | [venture_exit_readiness](tables/venture_exit_readiness.md) | 0 | ✅ | 3 | 30-day clean-break exit tracking per venture. |
-| [venture_financial_contract](tables/venture_financial_contract.md) | 1 | ✅ | 2 | - |
+| [venture_financial_contract](tables/venture_financial_contract.md) | 0 | ✅ | 2 | - |
 | [venture_financial_projections](tables/venture_financial_projections.md) | 0 | ✅ | 1 | - |
 | [venture_fundamentals](tables/venture_fundamentals.md) | 0 | ✅ | 2 | Runtime configuration and standards for each EHG venture. Tracks tech stack version, SLO tier, isolation level, shared packages, and conformance scoring. |
 | [venture_market_analysis](tables/venture_market_analysis.md) | 0 | ✅ | 1 | - |
@@ -676,12 +676,12 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_sd_artifact_mapping](tables/venture_sd_artifact_mapping.md) | 0 | ❌ | 0 | Deterministic mapping of EVA artifact types to SD architecture layers, keyed by venture_type. Used by lifecycle-sd-bridge enrichment pipeline. |
 | [venture_separability_scores](tables/venture_separability_scores.md) | 0 | ✅ | 3 | - |
 | [venture_service_bindings](tables/venture_service_bindings.md) | 0 | ✅ | 3 | Which ventures consume which services, with pinned API version per binding. |
-| [venture_stage_transitions](tables/venture_stage_transitions.md) | 7 | ✅ | 1 | - |
+| [venture_stage_transitions](tables/venture_stage_transitions.md) | 6 | ✅ | 1 | - |
 | [venture_stage_work](tables/venture_stage_work.md) | 10 | ✅ | 5 | - |
 | [venture_templates](tables/venture_templates.md) | 0 | ✅ | 2 | Reusable patterns extracted from ventures completing Stage 25 |
 | [venture_tiers](tables/venture_tiers.md) | 0 | ✅ | 3 | Business maturity tier tracking (seed/growth/scale/exit). Distinct from ventures.tier integer. |
 | [venture_token_budgets](tables/venture_token_budgets.md) | 0 | ✅ | 3 | INDUSTRIAL-HARDENING-v3.0: Venture-level token budget tracking. Enforces Economic Circuit Breaker policy. Default 100k tokens per venture. |
-| [venture_token_ledger](tables/venture_token_ledger.md) | 7 | ✅ | 4 | Golden Nugget: Token/compute investment tracking per venture |
+| [venture_token_ledger](tables/venture_token_ledger.md) | 11 | ✅ | 4 | Golden Nugget: Token/compute investment tracking per venture |
 | [venture_tool_quotas](tables/venture_tool_quotas.md) | 0 | ✅ | 1 | - |
 | [ventures](tables/ventures.md) | 1 | ✅ | 2 | - |
 | [vertical_complexity_multipliers](tables/vertical_complexity_multipliers.md) | 5 | ✅ | 2 | Industry vertical complexity factors for Truth Normalization (SD-HARDENING-V2) |
@@ -691,9 +691,9 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [voice_usage_metrics](tables/voice_usage_metrics.md) | 0 | ✅ | 3 | - |
 | [wizard_analytics](tables/wizard_analytics.md) | 62 | ✅ | 3 | - |
 | [work_item_thresholds](tables/work_item_thresholds.md) | 1 | ✅ | 2 | - |
-| [worker_heartbeats](tables/worker_heartbeats.md) | 260 | ✅ | 1 | - |
+| [worker_heartbeats](tables/worker_heartbeats.md) | 264 | ✅ | 1 | - |
 | [workflow_checkpoints](tables/workflow_checkpoints.md) | 2 | ✅ | 2 | Stores workflow state checkpoints for recovery |
-| [workflow_executions](tables/workflow_executions.md) | 2,730 | ✅ | 3 | - |
+| [workflow_executions](tables/workflow_executions.md) | 2,737 | ✅ | 3 | - |
 | [workflow_recovery_state](tables/workflow_recovery_state.md) | 0 | ✅ | 2 | Tracks recovery attempts and status |
 | [workflow_trace_log](tables/workflow_trace_log.md) | 375,772 | ✅ | 2 | Stores workflow telemetry spans for bottleneck detection (SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A) |
 | [working_sd_sessions](tables/working_sd_sessions.md) | 0 | ✅ | 2 | - |
