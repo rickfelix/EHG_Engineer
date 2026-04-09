@@ -99,6 +99,7 @@ scripts/execute-*.mjs
 scripts/execute-*.js
 # Permanent deliverables — exclude from the broad execute-* sweep
 !scripts/execute-team.mjs
+!scripts/execute-stop.mjs
 scripts/export-*.mjs
 scripts/fetch-*.js
 scripts/fix-*.mjs
