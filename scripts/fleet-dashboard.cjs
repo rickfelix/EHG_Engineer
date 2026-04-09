@@ -1,10 +1,12 @@
 // Fleet Dashboard — Modular status display for the coordinator session
-// Usage: node scripts/fleet-dashboard.cjs [workers|orchestrator|available|coordination|health|qa|forecast|all]
+// Usage: node scripts/fleet-dashboard.cjs [workers|orchestrator|available|coordination|health|qa|forecast|team|all]
 
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+// SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B (Phase 2)
+const teamBanner = require('../lib/execute/team-banner.cjs');
 
 const supabase = createSupabaseServiceClient();
 
@@ -155,12 +157,17 @@ async function loadData() {
     });
   }
 
+  // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B (Phase 2)
+  // Load active execute_teams + their virtual claude_sessions for /coordinator team
+  const executeTeams = await teamBanner.loadExecuteTeams(supabase);
+
   return {
     sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap,
     claimedSdIds, activeSessions, staleSessions, idleSessions,
     completedChildren, totalChildren, orchPct,
     unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells,
-    drainAgents
+    drainAgents,
+    executeTeams
   };
 }
 
@@ -254,6 +261,13 @@ function printDrainAgents(d) {
     }
   }
   console.log('');
+}
+
+// ── Section: Execute Team Banner (Mockup A) ──
+// SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B (Phase 2 of /execute)
+// Pure helpers + loader live in lib/execute/team-banner.cjs (testable).
+function printTeam(d) {
+  teamBanner.printTeam(d.executeTeams || [], bar);
 }
 
 // ── Section: Orchestrator ──
@@ -764,7 +778,10 @@ async function main() {
     forecast:      async () => await printForecast(d),
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
+    team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     all:           async () => {
+      // Team banner appears at top of /coordinator all when active teams exist (otherwise no-op)
+      if (d.executeTeams && d.executeTeams.length > 0) printTeam(d);
       printWorkers(d);
       printDrainAgents(d);
       printOrchestrator(d);
@@ -781,7 +798,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, coordination, coaching, health, qa, forecast, predictions, all');
+    console.log('Sections: workers, orchestrator, available, coordination, coaching, health, qa, forecast, predictions, team, all');
     process.exit(1);
   }
 

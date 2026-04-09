@@ -17,6 +17,7 @@ Parse `$ARGUMENTS` to determine the subcommand:
 - `predictions` or `p` → Predictive signals (capacity, unlock forecast, heartbeat aging)
 - `sweep` or `s` → Run stale session sweep (release dead claims, resolve conflicts, QA fixes)
 - `identity` or `id` → Assign colors and callsigns to active workers
+- `team` or `t` → /execute team banner (active multi-session execution teams, Mockup A)
 - `help` → Show usage help
 
 ARGUMENTS: $ARGUMENTS
@@ -39,18 +40,21 @@ Map the argument to the appropriate action:
 - `predictions`, `p` → dashboard predictions section
 - `sweep`, `s` → run sweep script
 - `identity`, `id` → assign fleet identities
+- `team`, `t` → dashboard team section (/execute Mockup A banner — Phase 2)
 - `all`, no args → full dashboard
 - `help` → show help
 
 ### Step 2: Execute
 
-#### For dashboard sections (workers, orchestrator, available, coordination, health, qa, forecast, all):
+#### For dashboard sections (workers, orchestrator, available, coordination, health, qa, forecast, team, all):
 
 ```bash
 node scripts/fleet-dashboard.cjs <section>
 ```
 
-Where `<section>` is the full section name (e.g., `workers`, `orchestrator`, `forecast`).
+Where `<section>` is the full section name (e.g., `workers`, `orchestrator`, `forecast`, `team`).
+
+The `team` section renders the /execute multi-session team banner (Mockup A from VISION-EXECUTE-COMMAND-L2-001). It shows each active worker's callsign, current SD, phase, progress bar, and heartbeat. When no `execute_teams` rows have status `active` or `stopping`, the section prints `(no active teams)`.
 
 Display the output directly to the user.
 
