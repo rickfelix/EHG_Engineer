@@ -25,16 +25,8 @@ import { scoreSDAtConception } from './leo-create-sd.js';
 
 dotenv.config();
 
-// QF-20260409-561 (P0 from sd_type_check RCA): Authoritative list of DB-valid sd_type values.
-// Source: database/migrations/20260206_register_uat_sd_type.sql:76-86 (live constraint).
-// Mirrored here at the call site to prevent inferSDType returning values the DB rejects
-// (e.g., 'testing' from 'e2e' keyword — see RCA for sd_type_check violation).
-// Systemic schema-code drift tracked in follow-up SD (P1: unified VALID_DB_SD_TYPES module).
-const DB_VALID_SD_TYPES = [
-  'feature', 'implementation', 'infrastructure', 'bugfix', 'refactor',
-  'documentation', 'orchestrator', 'database', 'security', 'performance',
-  'enhancement', 'docs', 'discovery_spike', 'ux_debt', 'uat'
-];
+// QF-20260409-561 (P0): DB-authoritative sd_type list (mirrors sd_type_check constraint).
+const DB_VALID_SD_TYPES = ['feature','implementation','infrastructure','bugfix','refactor','documentation','orchestrator','database','security','performance','enhancement','docs','discovery_spike','ux_debt','uat'];
 
 /**
  * Parse architecture plan content for implementation phases.
@@ -175,29 +167,20 @@ async function main() {
   const orchestratorKey = generateSDKey(title, '-ORCH');
   let orchestratorAlreadyExists = false;
 
-  // QF-20260409-561 (P2): Idempotency pre-check for resume-on-retry.
-  // A prior interrupted run may have left a partial orchestrator + child rows
-  // that would collide on the unique sd_key constraint. Detect and reuse.
+  // QF-20260409-561 (P2): Idempotency pre-check — resume partial prior runs instead of colliding.
   if (!dryRun) {
     const { data: existingOrch } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, status, metadata')
+      .select('id, metadata')
       .eq('sd_key', orchestratorKey)
       .maybeSingle();
-
     if (existingOrch) {
-      const sameVision = existingOrch.metadata?.vision_key === visionKey;
-      const sameArch = existingOrch.metadata?.arch_key === archKey;
-      if (!sameVision || !sameArch) {
-        console.error(`\n❌ SD key collision: '${orchestratorKey}' exists but points to a different vision/arch pair.`);
-        console.error(`   Existing: vision=${existingOrch.metadata?.vision_key || 'null'}, arch=${existingOrch.metadata?.arch_key || 'null'}`);
-        console.error(`   Requested: vision=${visionKey || 'null'}, arch=${archKey || 'null'}`);
-        console.error('   Cannot auto-resume across features. Clean up the existing row or change the title.');
+      if (existingOrch.metadata?.vision_key !== visionKey || existingOrch.metadata?.arch_key !== archKey) {
+        console.error(`\n❌ Key collision: ${orchestratorKey} exists with different vision/arch. Clean up or rename.`);
         process.exit(1);
       }
-      console.log(`\n   ♻️  Resuming existing orchestrator: ${orchestratorKey} (${existingOrch.id})`);
-      console.log(`      Status: ${existingOrch.status} — children loop will skip already-covered phases`);
-      orchestratorId = existingOrch.id; // Reuse id so children attach to the same parent
+      console.log(`\n   ♻️  Resuming existing orchestrator: ${orchestratorKey}`);
+      orchestratorId = existingOrch.id;
       orchestratorAlreadyExists = true;
     }
   }
@@ -298,14 +281,8 @@ async function main() {
       const isSeparateOrchestrator = phase.child_designation === 'separate_orchestrator';
       const typeResult = inferSDType(phase.title, phase.description || '', phase.content || '');
       let childType = isSeparateOrchestrator ? 'orchestrator' : (typeof typeResult === 'string' ? typeResult : (typeResult?.sdType || 'feature'));
-
-      // QF-20260409-561 (P0): Validate inferred type against DB constraint; fall back to 'implementation' if invalid.
-      // inferSDType has buckets (e.g., 'testing') that are NOT in the sd_type_check constraint,
-      // causing INSERT failures mid-loop. Safer to fall back than to crash and leave a partial orchestrator.
-      if (!DB_VALID_SD_TYPES.includes(childType)) {
-        console.warn(`   ⚠️  Phase ${phase.number}: inferred type '${childType}' is not in DB sd_type_check — falling back to 'implementation'`);
-        childType = 'implementation';
-      }
+      // QF-20260409-561 (P0): Validate against sd_type_check constraint; fall back to 'implementation'.
+      if (!DB_VALID_SD_TYPES.includes(childType)) { console.warn(`   ⚠️  Phase ${phase.number}: '${childType}' invalid → 'implementation'`); childType = 'implementation'; }
 
       // Inherit strategic fields from orchestrator
       const inherited = inheritStrategicFields(orchestratorSD, {
