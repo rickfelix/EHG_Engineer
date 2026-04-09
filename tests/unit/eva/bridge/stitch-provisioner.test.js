@@ -190,7 +190,7 @@ describe('stitch-provisioner', () => {
     it('creates project and saves curation prompts without generating screens', async () => {
       mockStitchClient.createProject.mockResolvedValue({
         project_id: 'proj-789',
-        url: 'https://stitch.withgoogle.com/project/proj-789',
+        url: 'https://stitch.withgoogle.com/projects/proj-789',
       });
 
       const result = await provisionStitchProject(
