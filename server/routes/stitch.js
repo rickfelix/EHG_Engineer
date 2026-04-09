@@ -101,16 +101,19 @@ router.post('/export', asyncHandler(async (req, res) => {
   }
 
   // Invoke the exporter behind a hard timeout. The exporter never throws on
-  // adapter / persistence failure (per its documented contract); it returns a
-  // manifest with a status field. Throws are reserved for caller-error and
-  // unexpected exceptions, which we map to 500.
+  // adapter / persistence failure (per its documented contract); it returns
+  // { manifest, html_files, png_files, design_md_path }. We unwrap the
+  // `manifest` field so the response shape is { manifest } — NOT { manifest:
+  // { manifest, html_files, ... } } — and avoid leaking filesystem paths.
+  // Throws are reserved for caller-error and unexpected exceptions, which we
+  // map to 500.
   try {
-    const manifest = await withTimeout(
+    const result = await withTimeout(
       exportStitchArtifacts(ventureId, projectId, null, { persistTo: 'venture_artifacts' }),
       EXPORT_TIMEOUT_MS,
       'stitch export'
     );
-    return res.status(200).json({ manifest });
+    return res.status(200).json({ manifest: result.manifest });
   } catch (err) {
     if (err && err.code === 'TIMEOUT') {
       return res.status(504).json({
