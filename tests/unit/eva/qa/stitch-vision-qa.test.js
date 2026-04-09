@@ -51,22 +51,46 @@ function makeSupabaseMock({
   configRow = { taste_gate_config: { stitch_qa_daily_budget_usd: 0.50 } },
   todaySpendRows = [],
   configError = null,
-  insertResult = { data: { id: 'qa-row-id' }, error: null },
+  insertResults = [{ data: { id: 'qa-row-id' }, error: null }],
+  // Current is_current=true stitch_qa_report row for the venture (pre-flip).
+  // First select returns this; subsequent calls return [] (as if flipped).
+  currentQaReport = null,
 } = {}) {
-  const calls = { from: [], select: [], insert: [], eq: [] };
-
+  const calls = { from: [], select: [], insert: [], eq: [], update: [] };
+  let insertIdx = 0;
+  let currentQaConsumed = false;
+  // Track how the current chain is being used so we can route .single vs .then correctly.
   const makeChain = (table) => {
-    const chain = {};
+    const chain = { _table: table, _eqs: [] };
     chain.select = (cols) => { calls.select.push({ table, cols }); return chain; };
     chain.insert = (row) => {
       calls.insert.push({ table, row });
       return {
         select: () => ({
-          single: () => Promise.resolve(insertResult),
+          single: () => {
+            const res = insertResults[Math.min(insertIdx, insertResults.length - 1)];
+            insertIdx++;
+            return Promise.resolve(res);
+          },
         }),
       };
     };
-    chain.eq = (col, val) => { calls.eq.push({ table, col, val }); return chain; };
+    chain.update = (patch) => {
+      const updateChain = { _patch: patch, _table: table };
+      updateChain.eq = (col, val) => {
+        calls.update.push({ table, patch, col, val });
+        return {
+          then: (resolve, reject) =>
+            Promise.resolve({ data: null, error: null }).then(resolve, reject),
+        };
+      };
+      return updateChain;
+    };
+    chain.eq = (col, val) => {
+      calls.eq.push({ table, col, val });
+      chain._eqs.push({ col, val });
+      return chain;
+    };
     chain.gte = () => chain;
     chain.limit = () => chain;
     chain.single = () => {
@@ -75,8 +99,23 @@ function makeSupabaseMock({
       }
       return Promise.resolve({ data: null, error: null });
     };
+    // Awaiting the chain directly (without .single) resolves here.
+    // For venture_artifacts we have three distinct shapes:
+    //   1. getRemainingDailyBudget: .select('metadata').eq(artifact_type,'stitch_qa_report').gte(...) → returns todaySpendRows
+    //   2. persistQaReport precheck: .select('id, version').eq(venture_id,...)....eq(is_current, true).limit(1) → returns [currentQaReport] or []
+    //   3. Any other: []
     chain.then = (resolve, reject) => {
       if (table === 'venture_artifacts') {
+        const eqCols = chain._eqs.map((e) => e.col);
+        const isPrecheck = eqCols.includes('venture_id') && eqCols.includes('lifecycle_stage') && eqCols.includes('is_current');
+        if (isPrecheck && currentQaReport && !currentQaConsumed) {
+          currentQaConsumed = true;
+          return Promise.resolve({ data: [currentQaReport], error: null }).then(resolve, reject);
+        }
+        if (isPrecheck) {
+          return Promise.resolve({ data: [], error: null }).then(resolve, reject);
+        }
+        // Daily budget sum
         return Promise.resolve({ data: todaySpendRows, error: null }).then(resolve, reject);
       }
       return Promise.resolve({ data: [], error: null }).then(resolve, reject);
@@ -303,6 +342,123 @@ describe('stitch-vision-qa', () => {
 
       const result = await reviewStitchExport('venture-1', sampleManifest(1));
       expect(result.status).toBe('vision_api_unavailable');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Idempotency: respect the partial unique index on venture_artifacts
+  // (venture_id, lifecycle_stage, artifact_type) WHERE is_current=true
+  //
+  // Regression tests for adversarial review findings #1 and #2.
+  // -----------------------------------------------------------------------
+  describe('reviewStitchExport — idempotency + unique index handling', () => {
+    it('flips existing is_current=true row before inserting new one (no unique violation)', async () => {
+      const { client: sb, calls } = makeSupabaseMock({
+        currentQaReport: { id: 'prior-qa-row', version: 3 },
+      });
+      setSupabaseClientLoader(() => sb);
+      setAnthropicClientLoader(() => makeAnthropicMock());
+
+      const result = await reviewStitchExport('venture-1', sampleManifest(2));
+
+      expect(result.status).toBe('completed');
+      expect(result.qa_report_id).toBe('qa-row-id');
+
+      // Assert the existing row was flipped: UPDATE was called with patch {is_current:false}
+      // targeting the prior row's id.
+      const flipCall = calls.update.find(
+        (u) => u.table === 'venture_artifacts' && u.patch?.is_current === false && u.val === 'prior-qa-row'
+      );
+      expect(flipCall).toBeDefined();
+
+      // Assert the new row's version was bumped to prior + 1
+      const insertedRow = calls.insert.find((c) => c.table === 'venture_artifacts')?.row;
+      expect(insertedRow?.version).toBe(4);
+      expect(insertedRow?.is_current).toBe(true);
+    });
+
+    it('skips flip step when no existing is_current row exists', async () => {
+      const { client: sb, calls } = makeSupabaseMock({
+        currentQaReport: null, // no existing row
+      });
+      setSupabaseClientLoader(() => sb);
+      setAnthropicClientLoader(() => makeAnthropicMock());
+
+      const result = await reviewStitchExport('venture-1', sampleManifest(2));
+
+      expect(result.status).toBe('completed');
+      // No UPDATE calls (nothing to flip)
+      const flipCalls = calls.update.filter(
+        (u) => u.table === 'venture_artifacts' && u.patch?.is_current === false
+      );
+      expect(flipCalls).toHaveLength(0);
+
+      // New row version starts at 1
+      const insertedRow = calls.insert.find((c) => c.table === 'venture_artifacts')?.row;
+      expect(insertedRow?.version).toBe(1);
+    });
+
+    it('retries insert once on 23505 unique_violation from concurrent exporter', async () => {
+      // First insert: simulated unique violation (concurrent exporter snuck in)
+      // Second insert: succeeds after retry flips the intruder
+      const { client: sb, calls } = makeSupabaseMock({
+        currentQaReport: null,
+        insertResults: [
+          { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "idx_venture_artifacts_idempotent"' } },
+          { data: { id: 'qa-row-after-retry' }, error: null },
+        ],
+      });
+      setSupabaseClientLoader(() => sb);
+      setAnthropicClientLoader(() => makeAnthropicMock());
+
+      const result = await reviewStitchExport('venture-1', sampleManifest(1));
+
+      expect(result.status).toBe('completed');
+      expect(result.qa_report_id).toBe('qa-row-after-retry');
+
+      // Two insert attempts happened
+      const inserts = calls.insert.filter((c) => c.table === 'venture_artifacts');
+      expect(inserts).toHaveLength(2);
+    });
+
+    it('returns null qa_report_id when both insert attempts fail', async () => {
+      const { client: sb } = makeSupabaseMock({
+        currentQaReport: null,
+        insertResults: [
+          { data: null, error: { code: '23505', message: 'duplicate key' } },
+          { data: null, error: { code: 'OTHER', message: 'persistence still failed' } },
+        ],
+      });
+      setSupabaseClientLoader(() => sb);
+      setAnthropicClientLoader(() => makeAnthropicMock());
+
+      const result = await reviewStitchExport('venture-1', sampleManifest(1));
+
+      expect(result.status).toBe('completed'); // QA completed; only persistence failed
+      expect(result.qa_report_id).toBeNull();
+    });
+
+    it('sanitizes API-key-shaped tokens in error_message before persistence', async () => {
+      const { client: sb, calls } = makeSupabaseMock({
+        currentQaReport: null,
+      });
+      setSupabaseClientLoader(() => sb);
+      // Simulate an adapter error that leaks an API-key-shaped token in its message.
+      // Using a direct throwError so the message is NOT pre-truncated by JSON.parse.
+      setAnthropicClientLoader(() =>
+        makeAnthropicMock({
+          throwError: new Error('Upstream auth failed: sk-proj-ABCDEF1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ leaked'),
+        })
+      );
+
+      const result = await reviewStitchExport('venture-1', sampleManifest(1));
+
+      // All screens failed → degraded manifest
+      expect(result.status).toBe('vision_api_unavailable');
+
+      const insertedRow = calls.insert.find((c) => c.table === 'venture_artifacts')?.row;
+      expect(insertedRow?.metadata?.error_message).not.toContain('sk-proj-ABCDEF');
+      expect(insertedRow?.metadata?.error_message).toContain('<redacted-key>');
     });
   });
 });

@@ -8,8 +8,8 @@
 --         Brief AccessExclusive lock on the catalog only. Zero downtime.
 --         Existing rows are not re-validated.
 --
--- All 89 existing values below are preserved verbatim from pg_get_constraintdef()
--- (including 'stitch_design_export' added by Child A migration).
+-- All 90 existing values below are preserved verbatim from pg_get_constraintdef()
+-- (including 'stitch_design_export' added by Child A migration on 2026-04-09).
 -- The ONLY new addition is 'stitch_qa_report' at the end of the list.
 
 BEGIN;
