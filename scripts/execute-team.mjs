@@ -147,7 +147,13 @@ class Supervisor {
       `Pick the next workable SD from the queue via /leo next, then execute the full ` +
       `LEAD→PLAN→EXEC→SHIP→LEARN lifecycle. Never call AskUserQuestion. Never auto-approve ` +
       `pending_approval SDs. Use intelligent assumptions on ambiguity. Invoke the RCA sub-agent ` +
-      `on failure. When done, exit cleanly.`
+      `on failure. ` +
+      // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-C (Phase 3): graceful shutdown protocol
+      `BETWEEN SDs (after /learn, before /leo next): query session_coordination for STOP_REQUESTED ` +
+      `messages with target_session=${slot.virtual_session_id}. If found, exit 0 cleanly without ` +
+      `claiming the next SD. Also check for SAVE_WARNING messages — if present, run "git stash save ` +
+      `\\"WIP from team ${this.teamId}\\"" before exit to preserve in-progress work. ` +
+      `When done, exit cleanly.`
     ];
 
     this.log(`Slot ${slot.slot} (${slot.callsign}): spawning ${binary} → ${logPath}`);
@@ -228,14 +234,15 @@ class Supervisor {
     return true;
   }
 
-  async halt(reason) {
+  async halt(reason, gracePeriodSec = 60) {
     if (this.halted) return;
     this.halted = true;
-    this.log(`Halting team: ${reason}`);
+    this.log(`Halting team: ${reason} (grace period ${gracePeriodSec}s)`);
     await updateTeamStatus(this.supabase, this.teamId, 'stopping', { stop_reason: reason });
 
     // Send SIGTERM to all active children
-    for (const [slot, child] of this.activeChildren.entries()) {
+    const childrenAtHalt = new Map(this.activeChildren); // snapshot
+    for (const [slot, child] of childrenAtHalt.entries()) {
       try {
         this.log(`Slot ${slot}: sending SIGTERM to PID ${child.pid}`);
         process.kill(child.pid, 'SIGTERM');
@@ -244,17 +251,45 @@ class Supervisor {
       }
     }
 
+    // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-C (Phase 3):
+    // Grace period polling — wait up to gracePeriodSec for clean child exits.
+    // The 'exit' event handler in spawnWorker removes children from activeChildren on exit,
+    // so we just poll until either all gone or grace period exceeded.
+    const graceMs = Math.max(0, gracePeriodSec) * 1000;
+    const pollIntervalMs = 1000;
+    const startWait = Date.now();
+    let escalated = false;
+
+    while (this.activeChildren.size > 0 && (Date.now() - startWait) < graceMs) {
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
+
+    // Escalate to SIGKILL for any unresponsive children
+    if (this.activeChildren.size > 0) {
+      escalated = true;
+      this.log(`Grace period exceeded — escalating to SIGKILL for ${this.activeChildren.size} unresponsive child(ren)`);
+      for (const [slot, child] of this.activeChildren.entries()) {
+        try {
+          this.log(`Slot ${slot}: sending SIGKILL to PID ${child.pid}`);
+          process.kill(child.pid, 'SIGKILL');
+        } catch (e) {
+          this.log(`Slot ${slot}: SIGKILL failed: ${e.message}`);
+        }
+      }
+    }
+
     // Release virtual sessions
     for (const slot of this.slots) {
       await terminateVirtualSession(slot.virtual_session_id, `team_halted_${reason}`);
     }
 
-    // Wait briefly for SIGTERM to take effect, then mark stopped
-    setTimeout(async () => {
-      await updateTeamStatus(this.supabase, this.teamId, 'stopped', { stop_reason: reason });
-      this.log(`Team stopped`);
-      process.exit(reason === 'sigterm' ? 0 : 1);
-    }, 1500);
+    // Final status update — include escalation note if applicable
+    const finalReason = escalated ? `${reason}_grace_period_exceeded_kill_escalated` : reason;
+    await updateTeamStatus(this.supabase, this.teamId, 'stopped', { stop_reason: finalReason });
+    this.log(`Team stopped (${finalReason})`);
+
+    // Exit non-zero only if a non-graceful path triggered halt and we had to escalate
+    process.exitCode = (reason === 'sigterm' && !escalated) ? 0 : (escalated ? 1 : 0);
   }
 
   installSignalHandlers() {
