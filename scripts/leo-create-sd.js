@@ -1795,7 +1795,24 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
             process.exit(0);
           }
         } catch (routeErr) {
-          console.warn(`\n⚠️  Auto-routing failed, continuing with single SD creation: ${routeErr.message}`);
+          // QF-20260409-561 (P1): Fail loud instead of silent fallback to monolithic SD.
+          // Silent fallback previously violated feedback_auto_decompose_sd_hierarchy rule —
+          // it collapsed a multi-phase architecture into a single fat SD, masking real errors
+          // (e.g., partial-run orphans from a prior interrupted invocation).
+          console.error('\n❌ Orchestrator auto-routing FAILED');
+          console.error(`   Error: ${routeErr.message}`);
+          console.error('');
+          console.error('   This likely indicates a partial state from a prior interrupted run.');
+          console.error('   Silent fallback to monolithic SD is DISABLED (violates decomposition rule).');
+          console.error('');
+          console.error('   Recovery steps:');
+          console.error(`     1. Check for orphaned SDs linked to vision/arch:`);
+          console.error(`        SELECT sd_key FROM strategic_directives_v2 WHERE metadata->>'vision_key' = '${visionKey}';`);
+          console.error('     2. If orphans exist, clean them up via subagent_type="database-agent"');
+          console.error('     3. Re-run this command after cleanup (create-orchestrator-from-plan.js will resume)');
+          console.error('');
+          console.error('   Do NOT create a monolithic SD as a workaround — the architecture plan specifies decomposition.');
+          process.exit(1);
         }
 
         // Advisory: warn about uncovered architecture phases (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
