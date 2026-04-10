@@ -1657,9 +1657,22 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         process.exit(1);
       }
 
+      // Phase 0 exemption: vision + arch keys mean upstream brainstorm already
+      // performed intent discovery, scoping, and out-of-scope contract to a
+      // higher standard than Phase 0 alone. Skip the gate.
+      const hasVisionKey = args.includes('--vision-key');
+      const hasArchKey = args.includes('--arch-key');
+      const phase0Exempt = hasVisionKey && hasArchKey;
+
       // SD-LEO-FIX-PHASE0-INTEGRATION-001: Phase 0 Intent Discovery Gate
       // Check if Phase 0 is required for this SD type before proceeding
-      const gateResult = checkGate(type);
+      const gateResult = phase0Exempt
+        ? { action: 'proceed', required: false, message: 'Phase 0 exempt: vision + arch keys provided from brainstorm pipeline.' }
+        : checkGate(type);
+
+      if (phase0Exempt) {
+        console.log('✓ Phase 0 exempt: vision + arch keys provided (upstream brainstorm governance)');
+      }
 
       if (gateResult.action === 'start') {
         // Phase 0 required but not started

@@ -6,6 +6,7 @@ on:
     paths:
       - 'tools/gates/**'
       - 'scripts/**'
+      - 'lib/**'
       - '.eslintrc*'
       - 'package.json'
       - '.github/workflows/leo-drift-check.yml'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'tools/gates/**'
       - 'scripts/**'
+      - 'lib/**'
       - '.eslintrc*'
       - 'package.json'
       - '.github/workflows/leo-drift-check.yml'

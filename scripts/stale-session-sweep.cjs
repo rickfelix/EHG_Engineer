@@ -733,7 +733,7 @@ async function main() {
   }
 
   // Also check: sessions with sd_id but SD's claiming_session_id doesn't match (broken claim)
-  for (const s of classified.filter(c => c.status === 'ACTIVE' && c.sd_id)) {
+  for (const s of classified.filter(c => c.status === 'ACTIVE' && c.sd_key)) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
       .select('sd_key, claiming_session_id, is_working_on')
@@ -828,11 +828,11 @@ async function main() {
       .from('session_coordination')
       .insert({
         target_session: d.session_id,
-        target_sd: d.sd_id,
+        target_sd: d.sd_key,
         message_type: 'CLAIM_RELEASED',
-        subject: 'Claim on ' + d.sd_id + ' was released (PID dead)',
+        subject: 'Claim on ' + (d.sd_key || 'unknown') + ' was released (PID dead)',
         body: 'Your session was detected as dead (PID ' + d.pid + '). Claim released. Available: ' + available.join(', '),
-        payload: { released_sd: d.sd_id, reason: 'PID_DEAD', available_sds: available },
+        payload: { released_sd: d.sd_key, reason: 'PID_DEAD', available_sds: available },
         sender_type: 'sweep'
       });
   }
@@ -846,9 +846,9 @@ async function main() {
         target_session: evict.session_id,
         target_sd: evict.sd_id,
         message_type: 'CLAIM_RELEASED',
-        subject: 'Duplicate claim on ' + evict.sd_id.split('-').pop() + ' resolved — pick next SD',
-        body: 'Another session is already working on ' + evict.sd_id + '. Your claim was released to avoid duplicate work. Please claim one of: ' + (otherAvailable.length > 0 ? otherAvailable.join(', ') : 'run /leo next for available SDs') + '\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
-        payload: { released_sd: evict.sd_id, reason: 'CONFLICT_RESOLUTION', available_sds: otherAvailable },
+        subject: 'Duplicate claim on ' + (evict.sd_key || '').split('-').pop() + ' resolved — pick next SD',
+        body: 'Another session is already working on ' + evict.sd_key + '. Your claim was released to avoid duplicate work. Please claim one of: ' + (otherAvailable.length > 0 ? otherAvailable.join(', ') : 'run /leo next for available SDs') + '\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
+        payload: { released_sd: evict.sd_key, reason: 'CONFLICT_RESOLUTION', available_sds: otherAvailable },
         sender_type: 'sweep'
       });
   }
