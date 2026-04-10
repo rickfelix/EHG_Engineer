@@ -41,6 +41,12 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
 const MAX_LLM_CONTENT_CHARS = 15000;
 
+// B2 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): Testable Success Criteria heuristic
+// Extracted to lib/eva/testable-criteria-heuristic.js for reuse and testability.
+import { validateSuccessCriteriaTestability } from '../../lib/eva/testable-criteria-heuristic.js';
+// B1 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): Always/Ask First/Never tri-tier validator
+import { validateTriTierBoundaries, formatTriTierWarnings } from '../../lib/eva/tri-tier-section-validator.js';
+
 // ============================================================================
 // Argument parsing
 // ============================================================================
@@ -209,6 +215,46 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
       if (sectionCount > 0) {
         console.log(`   Auto-parsed ${sectionCount} sections from source file`);
       }
+    }
+  }
+
+  // B2 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): Testable Success Criteria check
+  // Warning-only mode: print issues to stdout, do not block upsert.
+  // Promotion to blocking requires <15% false-positive rate over 2-week window.
+  if (sections) {
+    try {
+      const testabilityResult = validateSuccessCriteriaTestability(sections);
+      if (testabilityResult.issues.length > 0) {
+        console.warn(`\n   ⚠️  B2: Found ${testabilityResult.issues.length} potentially vague success criteria (warning-only mode):`);
+        for (const issue of testabilityResult.issues.slice(0, 5)) {
+          console.warn(`      • "${issue.criterion}"`);
+          console.warn(`        ${issue.reason}`);
+        }
+        if (testabilityResult.issues.length > 5) {
+          console.warn(`      ... and ${testabilityResult.issues.length - 5} more`);
+        }
+        console.warn(`      (B2 is in warning-only mode for the first 2 weeks. Promotion to blocking requires FP rate <15%.)`);
+      }
+    } catch (b2Err) {
+      // Fail open: do not block upsert on B2 validator errors
+      console.warn(`   ⚠️  B2 testability check errored (non-blocking): ${b2Err.message}`);
+    }
+  }
+
+  // B1 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): Always/Ask First/Never tri-tier check
+  // Warning-only mode: print issues to stdout, do not block upsert.
+  // Existing vision documents are unaffected — only new upserts are validated.
+  // Promotion to blocking requires chairman acceptance (Vision SC #7).
+  if (content) {
+    try {
+      const triTierResult = validateTriTierBoundaries(content);
+      const formatted = formatTriTierWarnings(triTierResult.issues);
+      if (formatted) {
+        console.warn(formatted);
+      }
+    } catch (b1Err) {
+      // Fail open: do not block upsert on B1 validator errors
+      console.warn(`   ⚠️  B1 tri-tier check errored (non-blocking): ${b1Err.message}`);
     }
   }
 
