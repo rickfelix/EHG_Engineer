@@ -82,6 +82,12 @@ scripts/delete-orphan-*.mjs
 
 # One-off database/migration scripts (use process scripts instead)
 # Covers .js, .mjs, and .cjs variants
+scripts/auto-approve-*.mjs
+scripts/dump-*.mjs
+scripts/inspect-*.mjs
+scripts/inspect-*.cjs
+scripts/test-stitch-*.mjs
+scripts/cleanup-orphan-*.mjs
 scripts/add-*.js
 scripts/add-*.cjs
 scripts/analyze-*.cjs
@@ -159,6 +165,18 @@ database/*.json
 audit_rls.js
 repro_*.js
 test-pr*.sh
+/analyze_*.mjs
+/analyze_*.js
+/check-*.cjs
+/investigate-*.cjs
+/investigate-*.js
+/extract_*.mjs
+/detailed_*.mjs
+/process_*.mjs
+/generate_*.mjs
+/bs-*.mjs
+/final-*.cjs
+/_tmp_*
 
 # Archived one-off scripts with hardcoded credentials
 scripts/archived-sd-scripts/
@@ -180,6 +198,8 @@ scripts/archived-sd-scripts/
 /.regression/
 /.signals/
 /.temp/
+/.leo-validation/
+/.quickfix-evidence/
 /plans/
 
 # Git worktree session directories (created by npm run session:worktree)
@@ -216,6 +236,8 @@ src/client/dist/
 
 # Claude session identity markers (generated per-session, never commit)
 .claude/session-identity/
+.claude/fleet-identity*.json
+.claude/scheduled_tasks.lock
 
 # Claude session state (modified during protocol operations, local only)
 .claude/unified-session-state.json
