@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-10T11:39:11.244Z
-**Tables**: 634
+**Generated**: 2026-04-10T15:40:00.276Z
+**Tables**: 638
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (634)
+## All Tables (638)
 
 ### LEO Protocol
 
@@ -140,6 +140,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [retrospective_templates](tables/retrospective_templates.md)
 - [retrospective_triggers](tables/retrospective_triggers.md)
 - [retrospectives](tables/retrospectives.md)
+- [retrospectives_audit](tables/retrospectives_audit.md)
 
 ### Handoffs & Phases
 
@@ -333,6 +334,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_event_schemas](tables/eva_event_schemas.md)
 - [eva_events](tables/eva_events.md)
 - [eva_events_dlq](tables/eva_events_dlq.md)
+- [eva_friday_decisions](tables/eva_friday_decisions.md)
+- [eva_friday_meeting_agenda](tables/eva_friday_meeting_agenda.md)
 - [eva_idea_categories](tables/eva_idea_categories.md)
 - [eva_interactions](tables/eva_interactions.md)
 - [eva_orchestration_events](tables/eva_orchestration_events.md)
@@ -679,6 +682,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [workflow_executions](tables/workflow_executions.md)
 - [workflow_recovery_state](tables/workflow_recovery_state.md)
 - [workflow_trace_log](tables/workflow_trace_log.md)
+- [worktree_gate_metrics](tables/worktree_gate_metrics.md)
 
 ---
 

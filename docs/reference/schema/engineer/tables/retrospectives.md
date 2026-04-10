@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-10T11:39:11.244Z
-**Rows**: 3,716
+**Generated**: 2026-04-10T15:40:00.276Z
+**Rows**: 3,741
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -252,6 +252,21 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION update_retrospective_timestamp()`
+
+### trg_retrospectives_audit_trigger
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION trg_retrospectives_audit()`
+
+### trg_retrospectives_audit_trigger
+
+- **Timing**: AFTER DELETE
+- **Action**: `EXECUTE FUNCTION trg_retrospectives_audit()`
+
+### trg_retrospectives_audit_trigger
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION trg_retrospectives_audit()`
 
 ### trg_validate_retrospective_coverage
 

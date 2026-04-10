@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-10T11:39:11.244Z
-**Rows**: 538
+**Generated**: 2026-04-10T15:40:00.276Z
+**Rows**: 547
 **RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,12 +14,12 @@
 
 ---
 
-## Columns (28 total)
+## Columns (29 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `uuid_generate_v4()` | - |
-| pattern_id | `character varying(20)` | **NO** | - | - |
+| pattern_id | `character varying(50)` | **NO** | - | - |
 | category | `character varying(100)` | **NO** | - | - |
 | severity | `character varying(20)` | **NO** | `'medium'::character varying` | - |
 | issue_summary | `text` | **NO** | - | - |
@@ -46,6 +46,7 @@
 | data_quality_status | `text` | YES | - | - |
 | content_embedding | `USER-DEFINED` | YES | - | pgvector embedding (1536-dim) for semantic search across issue patterns |
 | embedding_updated_at | `timestamp with time zone` | YES | - | - |
+| auto_block_on_match | `boolean` | YES | `false` | When true, matching this pattern blocks handoff progression. Default false (passive tracking only). |
 
 ## Constraints
 
@@ -61,7 +62,7 @@
 - `issue_patterns_pattern_id_key`: UNIQUE (pattern_id)
 
 ### Check Constraints
-- `issue_patterns_source_check`: CHECK (((source)::text = ANY ((ARRAY['retrospective'::character varying, 'feedback_cluster'::character varying, 'manual'::character varying, 'quick_fix_cluster'::character varying, 'auto_rca'::character varying])::text[])))
+- `issue_patterns_source_check`: CHECK (((source)::text = ANY (ARRAY[('retrospective'::character varying)::text, ('feedback_cluster'::character varying)::text, ('manual'::character varying)::text, ('quick_fix_cluster'::character varying)::text, ('auto_rca'::character varying)::text, ('narrative-knowledge-audit'::character varying)::text])))
 - `issue_patterns_status_check`: CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'assigned'::character varying, 'resolved'::character varying, 'obsolete'::character varying])::text[])))
 
 ## Indexes
