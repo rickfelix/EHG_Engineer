@@ -8,6 +8,7 @@
 
 import {
   SD_REQUIREMENTS,
+  SD_TYPE_OVERRIDES,
   RISK_KEYWORDS,
   TARGET_APP_PATTERNS,
   SMART_KEYWORDS
@@ -20,6 +21,14 @@ import { autoDetectSdType } from './type-detection.js';
  * @returns {Object} Validation result with score, errors, warnings
  */
 export function validateStrategicDirective(sd) {
+  // Resolve SD-type-aware thresholds (PAT-AUTO-24215d2a fix)
+  const sdType = (sd.sd_type || '').toLowerCase();
+  const typeOverrides = SD_TYPE_OVERRIDES[sdType] || {};
+  const effectiveReqs = {
+    minimumObjectives: typeOverrides.minimumObjectives ?? SD_REQUIREMENTS.minimumObjectives,
+    minimumMetrics: typeOverrides.minimumMetrics ?? SD_REQUIREMENTS.minimumMetrics,
+  };
+
   const validation = {
     valid: true,
     score: 0,
@@ -39,7 +48,7 @@ export function validateStrategicDirective(sd) {
   });
 
   // Validate strategic objectives (20 points)
-  validateStrategicObjectives(sd, validation);
+  validateStrategicObjectives(sd, validation, effectiveReqs);
 
   // Validate success metrics OR success_criteria (20 points)
   validateSuccessMetrics(sd, validation);
@@ -67,7 +76,8 @@ export function validateStrategicDirective(sd) {
 /**
  * Validate strategic objectives field
  */
-function validateStrategicObjectives(sd, validation) {
+function validateStrategicObjectives(sd, validation, effectiveReqs = {}) {
+  const minObjectives = effectiveReqs.minimumObjectives ?? SD_REQUIREMENTS.minimumObjectives;
   if (!sd.strategic_objectives) return;
 
   const objectivesText = sd.strategic_objectives.toString();
@@ -75,7 +85,7 @@ function validateStrategicObjectives(sd, validation) {
   if (typeof sd.strategic_objectives === 'string' && objectivesText.length >= 100) {
     validation.score += 20;
   } else if (Array.isArray(sd.strategic_objectives)) {
-    if (sd.strategic_objectives.length >= SD_REQUIREMENTS.minimumObjectives) {
+    if (sd.strategic_objectives.length >= minObjectives) {
       validation.score += 20;
 
       sd.strategic_objectives.forEach(obj => {
@@ -84,7 +94,7 @@ function validateStrategicObjectives(sd, validation) {
         }
       });
     } else {
-      validation.errors.push(`Insufficient strategic objectives: ${sd.strategic_objectives.length}/${SD_REQUIREMENTS.minimumObjectives}`);
+      validation.errors.push(`Insufficient strategic objectives: ${sd.strategic_objectives.length}/${minObjectives}`);
       validation.valid = false;
     }
   } else if (objectivesText.length < 100) {

@@ -28,6 +28,21 @@ export const SD_REQUIREMENTS = {
 };
 
 /**
+ * SD-type-aware overrides for validation thresholds.
+ * Bugfix/fix/refactor/docs SDs have lighter requirements than features.
+ * PAT-AUTO-24215d2a: Legacy verifier blocked bugfix SDs at 70% because
+ * minimumObjectives:2 is unreasonable for single-purpose fixes.
+ */
+export const SD_TYPE_OVERRIDES = {
+  bugfix:        { minimumScore: 60, minimumObjectives: 1, minimumMetrics: 1 },
+  fix:           { minimumScore: 60, minimumObjectives: 1, minimumMetrics: 1 },
+  refactor:      { minimumScore: 70, minimumObjectives: 1, minimumMetrics: 2 },
+  documentation: { minimumScore: 60, minimumObjectives: 1, minimumMetrics: 1 },
+  infrastructure:{ minimumScore: 70, minimumObjectives: 1, minimumMetrics: 2 },
+  database:      { minimumScore: 70, minimumObjectives: 1, minimumMetrics: 2 },
+};
+
+/**
  * PRD Readiness Check Configuration
  */
 export const PRD_READINESS_CHECKS = {
