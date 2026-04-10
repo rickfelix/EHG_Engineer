@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "rules": {
+    "delete": [
+      {"pattern": "/*.txt", "exclude": ["README.txt", "LICENSE.txt"], "reason": "Root-level text outputs"},
+      {"pattern": "/*.md", "exclude": ["README.md", "CLAUDE*.md", "CONTRIBUTING.md", "CHANGELOG.md"], "reason": "Root-level markdown outputs"},
+      {"pattern": "/_tmp_*", "reason": "Explicitly temporary files"},
+      {"pattern": "/check-*.cjs", "reason": "One-off DB check scripts"},
+      {"pattern": "/check-*.js", "reason": "One-off DB check scripts"},
+      {"pattern": "/investigate-*.{js,cjs}", "reason": "One-off investigation scripts"},
+      {"pattern": "/analyze_*.{js,mjs}", "reason": "One-off analysis scripts"},
+      {"pattern": "/analyze_*.cjs", "reason": "One-off analysis scripts"},
+      {"pattern": "/extract_*.mjs", "reason": "One-off extraction scripts"},
+      {"pattern": "/detailed_*.mjs", "reason": "One-off analysis scripts"},
+      {"pattern": "/process_*.mjs", "reason": "One-off processing scripts"},
+      {"pattern": "/generate_*.mjs", "reason": "One-off generation scripts"},
+      {"pattern": "/bs-*.mjs", "reason": "One-off brainstorm scripts"},
+      {"pattern": "/final-*.cjs", "reason": "One-off check scripts"},
+      {"pattern": "/*.json", "exclude": ["package.json", "package-lock.json", "tsconfig.json", "vitest.config.*"], "reason": "Root-level data dumps"},
+      {"pattern": "scripts/test-stitch-*.mjs", "reason": "Stitch debug scripts"},
+      {"pattern": "scripts/cleanup-orphan-*.mjs", "reason": "One-off cleanup scripts"},
+      {"pattern": "scripts/auto-approve-*.mjs", "reason": "One-off approval scripts"},
+      {"pattern": "scripts/dump-*.mjs", "reason": "One-off dump scripts"},
+      {"pattern": "scripts/inspect-*.{mjs,cjs}", "reason": "One-off inspection scripts"}
+    ],
+    "gitignore": [
+      {"pattern": ".claude/fleet-identity*.json", "reason": "Session-generated fleet identity"},
+      {"pattern": ".claude/scheduled_tasks.lock", "reason": "Runtime lock file"},
+      {"pattern": ".leo-validation/", "reason": "Runtime validation directory"},
+      {"pattern": ".quickfix-evidence/", "reason": "Runtime QF evidence directory"}
+    ],
+    "commit": [
+      {"pattern": "database/migrations/*.sql", "reason": "Applied but untracked migrations"}
+    ]
+  },
+  "learned": [],
+  "protected_paths": [
+    "lib/",
+    "scripts/modules/",
+    ".claude/commands/",
+    ".claude/skills/",
+    ".claude/agents/",
+    "tests/",
+    "templates/",
+    "docs/reference/"
+  ]
+}
