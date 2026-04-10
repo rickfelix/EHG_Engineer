@@ -211,6 +211,17 @@ Skill tool: skill="leo-settings"
 
 The leo-settings skill handles querying current settings, displaying them, and modifying global defaults or session overrides.
 
+### If argument is "cleanup" or "cl" or "tidy":
+
+**DELEGATES TO**: `/leo-cleanup` skill (`.claude/commands/leo-cleanup.md`)
+
+Invoke the `leo-cleanup` skill using the Skill tool:
+```
+Skill tool: skill="leo-cleanup"
+```
+
+The leo-cleanup skill handles scanning, categorization, interactive review, and rule learning.
+
 ### If argument is "restart" or "r":
 Run the LEO stack restart command:
 ```bash
@@ -571,6 +582,7 @@ LEO Commands:
   /leo assist    (a)     - Autonomous inbox processing (issues + enhancements)
   /leo audit     (au)    - Show audit discovery report (patterns, alerts, retros)
   /leo analytics (an)    - Show self-improvement analytics dashboard
+  /leo cleanup   (cl)    - Scan and clean untracked files (pattern rules)
   /leo restart   (r)     - Restart all LEO servers
   /leo inbox     (inb)   - Show feedback inbox (view only)
   /leo next      (n)     - Show SD queue (what to work on)
