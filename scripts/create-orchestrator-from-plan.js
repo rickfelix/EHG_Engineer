@@ -29,6 +29,72 @@ dotenv.config();
 const DB_VALID_SD_TYPES = ['feature','implementation','infrastructure','bugfix','refactor','documentation','orchestrator','database','security','performance','enhancement','docs','discovery_spike','ux_debt','uat'];
 
 /**
+ * C1 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): VERTICAL-SLICE CHECK
+ *
+ * Heuristic detection of horizontal-layer child SDs vs end-to-end vertical slices.
+ * Vertical slices touch BOTH backend AND frontend (or business logic that spans
+ * both). Horizontal layers touch only ONE domain (e.g., DB-only migration,
+ * UI-only component additions, validation-only logic).
+ *
+ * Returns { non_vertical: boolean, justification: string|null }.
+ *
+ * The flag is advisory — LEAD reviews flagged children at LEAD_APPROVAL phase
+ * and either approves with rationale (writing the justification) or restructures
+ * the decomposition. The flag does NOT block child creation.
+ */
+function detectNonVertical(title, description, content) {
+  const haystack = `${title || ''} ${description || ''} ${content || ''}`.toLowerCase();
+
+  // Backend / data layer signals
+  const backendPatterns = [
+    /\b(database|schema|migration|postgres|supabase|sql|table|column|index|rls|trigger)\b/,
+    /\b(rpc|function|stored procedure|backend|server|api endpoint|rest|graphql)\b/,
+    /\b(model|orm|persistence|repository|query)\b/
+  ];
+
+  // Frontend / UI layer signals
+  const frontendPatterns = [
+    /\b(ui|component|page|route|view|layout|form|button|modal|dashboard|panel)\b/,
+    /\b(react|tsx|jsx|tailwind|shadcn|frontend|browser|client-side)\b/,
+    /\b(wireframe|mockup|design|responsive|accessibility|a11y)\b/
+  ];
+
+  // Logic / glue layer signals (neutral — does not push toward horizontal)
+  const logicPatterns = [
+    /\b(validation|business logic|rule|workflow|orchestration|integration|adapter)\b/
+  ];
+
+  const hasBackend = backendPatterns.some(re => re.test(haystack));
+  const hasFrontend = frontendPatterns.some(re => re.test(haystack));
+  const hasLogicOnly = logicPatterns.some(re => re.test(haystack));
+
+  // Vertical slice: touches both backend AND frontend
+  if (hasBackend && hasFrontend) {
+    return { non_vertical: false, justification: null };
+  }
+
+  // Horizontal: backend only
+  if (hasBackend && !hasFrontend) {
+    return {
+      non_vertical: true,
+      justification: 'Auto-detected horizontal layer: phase content references backend/data domain only (database, schema, migration, API, query) without any frontend/UI signals. LEAD: confirm this is intentional (e.g., schema-must-precede-logic) or restructure as a vertical slice.'
+    };
+  }
+
+  // Horizontal: frontend only
+  if (hasFrontend && !hasBackend) {
+    return {
+      non_vertical: true,
+      justification: 'Auto-detected horizontal layer: phase content references frontend/UI domain only (component, page, layout, design) without any backend/data signals. LEAD: confirm this is intentional (e.g., UI polish on existing API) or restructure as a vertical slice.'
+    };
+  }
+
+  // Logic-only or content-light: assume vertical until proven otherwise
+  // (do not over-flag — chairman explicitly cut automated enforcement of C1)
+  return { non_vertical: false, justification: null };
+}
+
+/**
  * Parse architecture plan content for implementation phases.
  */
 function parsePhases(content) {
@@ -284,6 +350,14 @@ async function main() {
       // QF-20260409-561 (P0): Validate against sd_type_check constraint; fall back to 'implementation'.
       if (!DB_VALID_SD_TYPES.includes(childType)) { console.warn(`   ⚠️  Phase ${phase.number}: '${childType}' invalid → 'implementation'`); childType = 'implementation'; }
 
+      // C1 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): VERTICAL-SLICE CHECK
+      // Detect horizontal-layer children for LEAD review at LEAD_APPROVAL phase.
+      // Advisory only — does not block child creation.
+      const sliceCheck = detectNonVertical(phase.title, phase.description, phase.content);
+      if (sliceCheck.non_vertical) {
+        console.log(`   ⚠️  Phase ${phase.number}: NON-VERTICAL flag set — ${sliceCheck.justification.slice(0, 80)}...`);
+      }
+
       // Inherit strategic fields from orchestrator
       const inherited = inheritStrategicFields(orchestratorSD, {
         phaseNumber: phase.number,
@@ -325,12 +399,19 @@ async function main() {
         risks: inherited.risks || [],
         stakeholders: [],
         target_application: 'EHG_Engineer',
+        non_vertical: sliceCheck.non_vertical,
+        non_vertical_justification: sliceCheck.justification,
         metadata: {
           vision_key: visionKey,
           arch_key: archKey,
           phase_number: phase.number,
           parent_orchestrator: orchestratorKey,
-          auto_generated: true
+          auto_generated: true,
+          vertical_slice_check: {
+            non_vertical: sliceCheck.non_vertical,
+            justification: sliceCheck.justification,
+            detector_version: 'C1-v1-heuristic'
+          }
         },
         key_changes: [phase.title],
         created_at: new Date().toISOString(),
