@@ -105,12 +105,22 @@ function parsePhases(content) {
   let current = null;
 
   for (const line of lines) {
-    const match = line.match(/^#{1,4}\s*(Phase|Implementation Phase|Step)\s+(\d+)[:\s-]*(.*)/i);
+    // Format 1: Heading — ### Phase 1: Title
+    const headingMatch = line.match(/^#{1,4}\s*(Phase|Implementation Phase|Step)\s+(\d+)[:\s-]*(.*)/i);
+    // Format 2: Bullet — - **Phase 1 (MVP, ~3 days)**: Title
+    const bulletMatch = !headingMatch && line.match(/^\s*[-*]\s*\*\*(?:Phase|Step)\s+(\d+)\b[^*]*\*\*[:\s-]*(.*)/i);
+    // Format 3: Numbered — 1. **Phase 1**: Title
+    const numberedMatch = !headingMatch && !bulletMatch && line.match(/^\s*\d+\.\s*\*\*(?:Phase|Step)\s+(\d+)\b[^*]*\*\*[:\s-]*(.*)/i);
+
+    const match = headingMatch || bulletMatch || numberedMatch;
     if (match) {
       if (current) phases.push(current);
+      // headingMatch has phase number in group 2, bullet/numbered in group 1
+      const phaseNum = headingMatch ? parseInt(match[2], 10) : parseInt(match[1], 10);
+      const titleText = headingMatch ? (match[3] || '').trim() : (match[2] || '').trim();
       current = {
-        number: parseInt(match[2], 10),
-        title: match[3].trim() || `Phase ${match[2]}`,
+        number: phaseNum,
+        title: titleText || `Phase ${phaseNum}`,
         description: '',
         content: ''
       };
