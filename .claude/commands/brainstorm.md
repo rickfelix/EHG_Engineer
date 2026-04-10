@@ -816,6 +816,35 @@ options:
 
 If yes, run through the domain-specific evaluation from Step 6E-6I.
 
+Then proceed to Step 7E (Not-Doing Contract).
+
+### 7E: Not-Doing Contract (UN_DONE_PROPOSAL — Conversational Mode)
+
+**Mirror of structured-mode Step 6C.** Before outcome classification, capture an explicit "Not Doing" list — things that are intentionally OUT OF SCOPE for this brainstorm. Conversational mode previously skipped this contract; A1 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001) closes the gap so every brainstorm leaves session with locked scope boundaries.
+
+Use AskUserQuestion to prompt the chairman:
+
+```
+question: "What is explicitly OUT OF SCOPE for this brainstorm? List 2-5 things that might seem related but are NOT being included. (Press Other to free-form, or pick a quick option.)"
+header: "Not Doing"
+multiSelect: false
+options:
+  - label: "Nothing — keep open"
+    description: "Skip the contract; scope is intentionally broad. (Recorded as empty array.)"
+  - label: "Adjacent features"
+    description: "Things in the same surface area that are NOT being built (you'll list them after)"
+  - label: "Scale concerns"
+    description: "Edge cases / scale we are NOT targeting yet (you'll list them after)"
+```
+
+If the user picks "Nothing — keep open", record `not_doing: []` and proceed.
+
+Otherwise, follow up with a free-text request: "List the specific items, one per line." Parse the response into a JSON array of strings (one per line, trim whitespace, drop empty entries).
+
+**Persistence**: Pass the resulting array to Step 10's metadata as `not_doing: <array>`. The array will be rendered in Step 9's brainstorm document under the `## Out of Scope` section.
+
+**Skip condition**: If the brainstorm was invoked from `/distill` (pre-seeded source) AND the chairman has already specified out-of-scope in the distill input, set `not_doing` from that source and skip the prompt.
+
 Then proceed to Top 3 Improvement Areas (Step 7.9).
 
 ---
@@ -1183,10 +1212,10 @@ Build the following markdown content in-memory (do NOT use the Write tool):
 **Chairman Selection**: [All three / Items 1,2 / Item 1 only / Override — none selected]
 
 ## Out of Scope
-(Structured mode only)
-- [Item 1]
-- [Item 2]
-- [Item 3]
+(Captured in Step 6C for structured mode OR Step 7E for conversational mode. Render from `metadata.not_doing` if present, else empty list.)
+- [Item 1 from not_doing array]
+- [Item 2 from not_doing array]
+- [Item 3 from not_doing array]
 
 ## Open Questions
 - [Unresolved questions that emerged during brainstorming]
@@ -1557,7 +1586,8 @@ supabase.from('brainstorm_sessions').insert({
     team_used: <true|false>,
     team_perspectives: <{challenger: {...}, visionary: {...}, pragmatist: {...}, synthesis: {...}} or null>,
     team_agents_responded: <0|1|2|3>,
-    related_ventures: [<venture_names>]
+    related_ventures: [<venture_names>],
+    not_doing: <ARRAY_OF_STRINGS_FROM_STEP_6C_OR_7E>  // A1: Not-Doing contract — empty array if chairman picked "Nothing — keep open"
   }
 }).select().single().then(({data, error}) => {
   if (error) console.error('Session record error:', error.message);
