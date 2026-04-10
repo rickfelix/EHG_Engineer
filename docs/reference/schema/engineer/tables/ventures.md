@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-10T15:40:00.276Z
+**Generated**: 2026-04-10T17:29:29.773Z
 **Rows**: 1
 **RLS**: Enabled (2 policies)
 
@@ -257,6 +257,11 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 - **Timing**: BEFORE INSERT
 - **Action**: `EXECUTE FUNCTION trg_enforce_stage0_origin()`
+
+### trg_sync_stage_work_on_advance
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION fn_sync_stage_work_on_advance()`
 
 ### trg_validate_stage_column
 
