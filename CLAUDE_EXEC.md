@@ -1289,6 +1289,35 @@ npm run sd:branch SD-XXX-001    # Creates and switches to branch
 | infrastructure, refactor | 40% line coverage | ADVISORY (warning only) |
 | All others | 40% line coverage | ADVISORY |
 
+### D1 Bugfix TDD Prove-It Gate (PreToolUse Hook)
+
+**Source**: SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001 (Commit 4 of 5: D1)
+
+In addition to post-edit coverage thresholds, **bugfix SDs are subject to a TDD red-before-green PreToolUse hook**. The hook fires on `Edit`, `Write`, and `MultiEdit` tool calls when:
+
+1. The active claimed SD has `sd_type='bugfix'`
+2. The target file path is in `src/` or `lib/`
+3. No failing test commit exists in `__tests__/` since `claim_started_at`
+
+**Behavior**: BLOCK with TDD message instructing chairman to commit a failing test first.
+
+**Required workflow for bugfix SDs**:
+1. Write a test in `__tests__/` that reproduces the bug
+2. Run the test, confirm it FAILS (red state)
+3. `git add __tests__/ && git commit -m "test(SD-FIX-XXX): reproduce bug"`
+4. NOW edit `src/`/`lib/` to fix the bug (green state)
+5. Existing 60% line coverage gate runs at EXEC-TO-PLAN (or PLAN-TO-LEAD for infrastructure)
+
+**Exemptions**:
+- Non-bugfix SDs (feature, infrastructure, refactor, etc.) — hook does not fire
+- QFs (Tier 1) — do not claim SDs via sd-start, hook does not fire
+- Edits to non-`src/lib/` paths (docs, tests, scripts, .claude) — hook does not fire
+- SDs claimed BEFORE the D1 ship date — hook reads SD state at exec time, no retroactive enforcement
+
+**Fail-open guarantee**: ANY error in the D1 hook (DB unavailable, git unavailable, fetch timeout, malformed state file) is caught and the edit is ALLOWED with a non-blocking warning to stderr. The hook MUST NEVER block legitimate work due to its own bugs.
+
+**Implementation**: `scripts/hooks/pre-tool-enforce.cjs` Enforcement 10. 1.5s fetch timeout for DB lookup; 3s timeout for git command. Decision logic unit-tested in `__tests__/scripts/d1-bugfix-tdd-gate.test.cjs` (16 test cases).
+
 ### What It Checks
 
 1. **Detects changed code files** via `git diff` (supports .js, .ts, .tsx, .jsx, .mjs, .cjs, .py, .rb, .go, .rs, .java, .cs, .php, .sql)

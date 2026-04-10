@@ -474,6 +474,106 @@ async function main() {
     }
   }
 
+  // --- ENFORCEMENT 10: D1 Bugfix TDD Prove-It Gate (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001) ---
+  // Blocks Edit/Write/MultiEdit on src/|lib/ paths for sd_type='bugfix' SDs
+  // until a failing test commit exists in __tests__/ since claim_started_at.
+  // Enforces TDD red-before-green discipline for bugfix work.
+  //
+  // Exemptions:
+  // - Non-bugfix SDs (feature, infrastructure, refactor, etc.)
+  // - SDs claimed BEFORE D1 ship date (no claim_started_at recorded yet)
+  // - Edits to non-src/lib paths (docs, tests, scripts, etc.)
+  // - Errors fail OPEN (allow Edit) — bug in hook MUST NOT block legitimate work
+  if (TOOL_NAME === 'Edit' || TOOL_NAME === 'Write' || TOOL_NAME === 'MultiEdit') {
+    try {
+      const filePath = (input.file_path || '').replace(/\\/g, '/');
+      // Only enforce on src/|lib/ paths (skip __tests__, docs, scripts, .claude, etc.)
+      const isProductionPath = /(^|\/)(src|lib)\//.test(filePath);
+      if (isProductionPath) {
+        const fs = require('fs');
+        const path = require('path');
+        const { execSync } = require('child_process');
+        const stateFile = path.resolve(__dirname, '../../.claude/unified-session-state.json');
+        if (fs.existsSync(stateFile)) {
+          const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+          const claimedSdKey = state.sd?.id || state.sd?.sd_key;
+          if (claimedSdKey && /^SD-/.test(claimedSdKey)) {
+            // Fetch sd_type and claim metadata via Supabase REST (timeout-safe)
+            const supabaseUrl = process.env.SUPABASE_URL;
+            const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+            if (supabaseUrl && serviceKey) {
+              const restUrl = `${supabaseUrl}/rest/v1/strategic_directives_v2?sd_key=eq.${encodeURIComponent(claimedSdKey)}&select=sd_type,metadata,created_at`;
+              const ctrl = new AbortController();
+              const timeoutId = setTimeout(() => ctrl.abort(), 1500); // 1.5s budget — fail open if slower
+              try {
+                const resp = await fetch(restUrl, {
+                  headers: { 'apikey': serviceKey, 'Authorization': 'Bearer ' + serviceKey },
+                  signal: ctrl.signal
+                });
+                clearTimeout(timeoutId);
+                if (resp.ok) {
+                  const rows = await resp.json();
+                  const sd = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+                  if (sd && sd.sd_type === 'bugfix') {
+                    // SD is a bugfix — check for failing test commit since claim
+                    const claimStartedAt = state.sd?.claimed_at || state.sd?.heartbeat_at || null;
+                    let hasTestCommit = false;
+                    try {
+                      // Use git plumbing to check for any test file added/modified since claim
+                      // (3s timeout, fail open on errors)
+                      const sinceArg = claimStartedAt ? `--since="${claimStartedAt}"` : '--max-count=20';
+                      const gitOut = execSync(
+                        `git log ${sinceArg} --name-only --diff-filter=AM --pretty=format: -- "__tests__/*" "*test*.cjs" "*test*.mjs" "*.test.js" "*.test.ts" "*.spec.js" "*.spec.ts"`,
+                        { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }
+                      );
+                      hasTestCommit = gitOut.trim().length > 0;
+                    } catch {
+                      hasTestCommit = true; // Fail open on git errors
+                    }
+                    if (!hasTestCommit) {
+                      auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'D1-BUGFIX-TDD', 'Bugfix TDD prove-it gate', 'block', { sd_key: claimedSdKey, file_path: filePath });
+                      process.stderr.write(
+                        `\nD1 BUGFIX TDD GATE (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001):\n` +
+                        `  Blocked: Edit on production path "${filePath}"\n` +
+                        `  Active SD: ${claimedSdKey} (sd_type=bugfix)\n` +
+                        `  Reason: No failing test commit found in __tests__/ since claim_started_at.\n` +
+                        `  Required: Commit a failing test that demonstrates the bug BEFORE editing src/|lib/.\n` +
+                        `\n` +
+                        `  Workflow:\n` +
+                        `    1. Write a test in __tests__/ that reproduces the bug\n` +
+                        `    2. Run the test, confirm it FAILS (red)\n` +
+                        `    3. git add __tests__/ && git commit -m "test(${claimedSdKey}): reproduce bug"\n` +
+                        `    4. NOW you can edit src/|lib/ to fix the bug (green)\n` +
+                        `\n` +
+                        `  Exemptions:\n` +
+                        `    - Non-bugfix SDs (feature, infrastructure, etc.) bypass this gate\n` +
+                        `    - QFs (Tier 1) do not claim SDs and are not affected\n` +
+                        `    - This gate fails OPEN on errors — if you see this message, it intentionally fired\n`
+                      );
+                      process.exit(2);
+                    }
+                  }
+                  // Non-bugfix or test-commit-present: allow
+                }
+                // Non-200 response: fail open
+              } catch (fetchErr) {
+                clearTimeout(timeoutId);
+                // Network error or timeout: fail open (do NOT block on hook errors)
+              }
+            }
+            // Missing credentials: fail open
+          }
+          // No claimed SD: fail open
+        }
+        // No state file: fail open
+      }
+      // Not a production path: skip check
+    } catch (d1Err) {
+      // Catch-all fail-open: ANY error in D1 logic must NOT block edits
+      process.stderr.write('[pre-tool-enforce] D1 hook errored (fail-open): ' + d1Err.message + '\n');
+    }
+  }
+
   // Final allow decision — audit the pass-through
   auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ALLOW', 'Tool call permitted by all enforcement rules', 'allow', {});
   process.exitCode = 0; // Allow
