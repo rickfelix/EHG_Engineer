@@ -44,6 +44,8 @@ const MAX_LLM_CONTENT_CHARS = 15000;
 // B2 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): Testable Success Criteria heuristic
 // Extracted to lib/eva/testable-criteria-heuristic.js for reuse and testability.
 import { validateSuccessCriteriaTestability } from '../../lib/eva/testable-criteria-heuristic.js';
+// B1 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): Always/Ask First/Never tri-tier validator
+import { validateTriTierBoundaries, formatTriTierWarnings } from '../../lib/eva/tri-tier-section-validator.js';
 
 // ============================================================================
 // Argument parsing
@@ -236,6 +238,23 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     } catch (b2Err) {
       // Fail open: do not block upsert on B2 validator errors
       console.warn(`   ⚠️  B2 testability check errored (non-blocking): ${b2Err.message}`);
+    }
+  }
+
+  // B1 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): Always/Ask First/Never tri-tier check
+  // Warning-only mode: print issues to stdout, do not block upsert.
+  // Existing vision documents are unaffected — only new upserts are validated.
+  // Promotion to blocking requires chairman acceptance (Vision SC #7).
+  if (content) {
+    try {
+      const triTierResult = validateTriTierBoundaries(content);
+      const formatted = formatTriTierWarnings(triTierResult.issues);
+      if (formatted) {
+        console.warn(formatted);
+      }
+    } catch (b1Err) {
+      // Fail open: do not block upsert on B1 validator errors
+      console.warn(`   ⚠️  B1 tri-tier check errored (non-blocking): ${b1Err.message}`);
     }
   }
 
