@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-09T20:19:29.104Z
-**Rows**: 2,495
+**Generated**: 2026-04-10T09:32:01.719Z
+**Rows**: 2,498
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (95 total)
+## Columns (97 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -117,6 +117,8 @@ Use the id column instead - it is the canonical identifier. |
 | quality_checked_at | `timestamp with time zone` | YES | - | - |
 | transition_version | `integer(32)` | YES | `1` | Optimistic locking version for concurrent transition safety |
 | worktree_path | `text` | YES | - | Absolute path to the SD's git worktree. Populated by sd-start.js on claim acquisition. Consumed by lib/claim-validity-gate.js to enforce that handoff and related operations run from inside the worktree. Added by SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001. |
+| non_vertical | `boolean` | **NO** | `false` | C1 advisory flag: TRUE if this SD is a horizontal-layer slice (DB-only, logic-only, or UI-only) rather than an end-to-end vertical slice. Set by create-orchestrator-from-plan.js heuristic. LEAD reviews flagged children at LEAD_APPROVAL. |
+| non_vertical_justification | `text` | YES | - | C1: LEAD or chairman rationale when approving a non-vertical child SD (e.g., "Schema migration must precede backend logic, intentional split"). Required when non_vertical=true and SD reaches PLAN-TO-EXEC handoff. |
 
 ## Constraints
 
@@ -234,6 +236,10 @@ Use the id column instead - it is the canonical identifier. |
 - `idx_sd_working_on`
   ```sql
   CREATE INDEX idx_sd_working_on ON public.strategic_directives_v2 USING btree (is_working_on) WHERE (is_working_on = true)
+  ```
+- `idx_sds_non_vertical`
+  ```sql
+  CREATE INDEX idx_sds_non_vertical ON public.strategic_directives_v2 USING btree (parent_sd_id) WHERE (non_vertical = true)
   ```
 - `idx_sdv2_scope_keywords_gin`
   ```sql
