@@ -263,16 +263,34 @@ Use AskUserQuestion with options: "Yes, that captures it" and "Let me refine".
 
 ### 6C: UN_DONE_PROPOSAL - Out of Scope List
 
-Generate a list of at least 3 things that are explicitly OUT OF SCOPE:
+Review the brainstorm conversation so far and generate **specific, contextual exclusions** — not generic categories. For each candidate exclusion, assign a confidence level:
 
+**High confidence** — features explicitly discussed as "future/later", unanimously deprioritized by the board, or clearly deferred during discovery. Examples: a capability the chairman explicitly said "we'll add that later", a feature the board unanimously deferred to Phase 4+.
+→ **Auto-record these. Do NOT ask the chairman.** List them as "Auto-excluded (high confidence)" in the document.
+
+**Medium confidence** — adjacent to the topic, came up in discussion but wasn't explicitly ruled in or out, or board had split opinions. These are the borderline cases where reasonable people might disagree.
+→ **Present ONLY these to the chairman** as a multi-select AskUserQuestion for confirmation.
+
+**Low confidence** — tangentially related, might surprise the chairman if excluded.
+→ Include as options in the AskUserQuestion but flag them as needing confirmation.
+
+Use AskUserQuestion with `multiSelect: true` to present medium/low confidence items:
 ```
-**Explicitly Out of Scope:**
-1. [Thing that might seem related but isn't part of this]
-2. [Adjacent feature/capability we're NOT building]
-3. [Scale/complexity we're NOT targeting yet]
+question: "I've auto-excluded [N] obvious items (listed below). These borderline items need your call — select which are out of scope:"
+header: "Not Doing"
+multiSelect: true
+options:
+  - label: "[Specific medium-confidence exclusion]"
+    description: "[Why this is related but potentially out of scope — with rationale]"
+  - label: "[Specific medium-confidence exclusion]"
+    description: "[Rationale]"
+  - label: "Nothing else — keep scope broad"
+    description: "Only the auto-excluded items are out of scope"
 ```
 
-Ask user to confirm or adjust the out-of-scope list.
+Include the auto-excluded high-confidence items in the question text so the chairman can see them and override if needed.
+
+**Do NOT present generic categories** like "Adjacent features" or "Scale concerns." Every option must name a specific feature/capability with a rationale derived from this brainstorm's discussion.
 
 ### 6D: Crystallization Score
 
@@ -820,28 +838,36 @@ Then proceed to Step 7E (Not-Doing Contract).
 
 ### 7E: Not-Doing Contract (UN_DONE_PROPOSAL — Conversational Mode)
 
-**Mirror of structured-mode Step 6C.** Before outcome classification, capture an explicit "Not Doing" list — things that are intentionally OUT OF SCOPE for this brainstorm. Conversational mode previously skipped this contract; A1 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001) closes the gap so every brainstorm leaves session with locked scope boundaries.
+**Same logic as structured-mode Step 6C.** Before outcome classification, capture an explicit "Not Doing" list with confidence-based triage.
 
-Use AskUserQuestion to prompt the chairman:
+Review the brainstorm conversation and board deliberation to generate **specific, contextual exclusions**:
 
+**High confidence** — features explicitly discussed as "future/later", unanimously deprioritized by the board, or clearly deferred during the conversation (e.g., chairman said "we'll add voice later").
+→ **Auto-record these. Do NOT ask the chairman.** List them in the question text so the chairman can see them and override if needed, but do not require confirmation.
+
+**Medium confidence** — adjacent to the topic, came up in discussion but wasn't explicitly ruled in or out, or board had split opinions. These are the borderline cases.
+→ **Present ONLY these to the chairman** as a multi-select AskUserQuestion.
+
+**Low confidence** — tangentially related, might surprise the chairman if excluded.
+→ Include as options but flag them.
+
+Use AskUserQuestion with `multiSelect: true`:
 ```
-question: "What is explicitly OUT OF SCOPE for this brainstorm? List 2-5 things that might seem related but are NOT being included. (Press Other to free-form, or pick a quick option.)"
+question: "I've auto-excluded [N] obvious items: [list them]. These borderline items need your call — select which are also out of scope:"
 header: "Not Doing"
-multiSelect: false
+multiSelect: true
 options:
-  - label: "Nothing — keep open"
-    description: "Skip the contract; scope is intentionally broad. (Recorded as empty array.)"
-  - label: "Adjacent features"
-    description: "Things in the same surface area that are NOT being built (you'll list them after)"
-  - label: "Scale concerns"
-    description: "Edge cases / scale we are NOT targeting yet (you'll list them after)"
+  - label: "[Specific medium-confidence exclusion]"
+    description: "[Why this is related but potentially out of scope — rationale from the discussion]"
+  - label: "[Specific medium/low-confidence exclusion]"
+    description: "[Rationale]"
+  - label: "Nothing else — keep scope broad"
+    description: "Only the auto-excluded items are out of scope"
 ```
 
-If the user picks "Nothing — keep open", record `not_doing: []` and proceed.
+**Do NOT present generic categories** like "Adjacent features" or "Scale concerns." Every option must name a specific feature/capability with a rationale derived from this brainstorm's discussion. Do NOT waste the chairman's time confirming obvious exclusions — the value is in the borderline calls.
 
-Otherwise, follow up with a free-text request: "List the specific items, one per line." Parse the response into a JSON array of strings (one per line, trim whitespace, drop empty entries).
-
-**Persistence**: Pass the resulting array to Step 10's metadata as `not_doing: <array>`. The array will be rendered in Step 9's brainstorm document under the `## Out of Scope` section.
+**Persistence**: Combine auto-excluded items + chairman-confirmed items into the `not_doing` array. Pass to Step 10's metadata. The array will be rendered in Step 9's brainstorm document under the `## Out of Scope` section.
 
 **Skip condition**: If the brainstorm was invoked from `/distill` (pre-seeded source) AND the chairman has already specified out-of-scope in the distill input, set `not_doing` from that source and skip the prompt.
 
