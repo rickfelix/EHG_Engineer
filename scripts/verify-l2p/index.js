@@ -102,9 +102,15 @@ export class LeadToPlanVerifier {
       // 3. Validate Strategic Directive Completeness
       const sdValidation = validateStrategicDirective(sd);
 
-      console.log(`\n📊 SD Completeness Score: ${sdValidation.percentage}%`);
+      // PAT-AUTO-24215d2a: Use SD-type-aware minimum score threshold
+      const sdType = (sd.sd_type || '').toLowerCase();
+      const { SD_TYPE_OVERRIDES } = await import('./constants.js');
+      const typeOverrides = SD_TYPE_OVERRIDES[sdType] || {};
+      const effectiveMinScore = typeOverrides.minimumScore ?? this.sdRequirements.minimumScore;
 
-      if (!sdValidation.valid || sdValidation.percentage < this.sdRequirements.minimumScore) {
+      console.log(`\n📊 SD Completeness Score: ${sdValidation.percentage}% (threshold: ${effectiveMinScore}%, type: ${sdType})`);
+
+      if (!sdValidation.valid || sdValidation.percentage < effectiveMinScore) {
         return rejectHandoff(this.supabase, sdId, 'SD_INCOMPLETE', 'Strategic Directive does not meet completeness standards', {
           sdValidation,
           requiredScore: this.sdRequirements.minimumScore,
