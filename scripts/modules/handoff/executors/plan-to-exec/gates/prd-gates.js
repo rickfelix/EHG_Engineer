@@ -163,7 +163,7 @@ export function createArchitectureVerificationGate(prdRepo, determineTargetRepos
         // Run architecture verification
         const archResult = await verifyArchitecture(targetPath);
 
-        if (!archResult.success) {
+        if (archResult.score === 0) {
           console.log('\n   ❌ ARCHITECTURE VERIFICATION FAILED');
           return {
             passed: false,
@@ -171,7 +171,7 @@ export function createArchitectureVerificationGate(prdRepo, determineTargetRepos
             max_score: 100,
             issues: [
               'BLOCKING: Could not verify application architecture',
-              ...archResult.errors
+              ...(archResult.issues || [])
             ],
             warnings: archResult.warnings,
             remediation: [
