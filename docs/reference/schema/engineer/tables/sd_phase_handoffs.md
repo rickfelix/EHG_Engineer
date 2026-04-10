@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-09T20:19:29.104Z
-**Rows**: 18,236
+**Generated**: 2026-04-10T09:32:01.719Z
+**Rows**: 18,270
 **RLS**: Enabled (11 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -61,10 +61,10 @@
 
 ### Check Constraints
 - `chk_handoff_validation_threshold`: CHECK (((validation_score IS NULL) OR ((status)::text = 'blocked'::text) OR ((validation_score >= 0) AND (validation_score <= 100))))
-- `sd_phase_handoffs_from_phase_check`: CHECK (((from_phase)::text = ANY ((ARRAY['LEAD'::character varying, 'PLAN'::character varying, 'EXEC'::character varying])::text[])))
-- `sd_phase_handoffs_handoff_type_check`: CHECK (((handoff_type)::text = ANY ((ARRAY['LEAD-TO-PLAN'::character varying, 'PLAN-TO-EXEC'::character varying, 'EXEC-TO-PLAN'::character varying, 'PLAN-TO-LEAD'::character varying, 'LEAD-FINAL-APPROVAL'::character varying])::text[])))
+- `sd_phase_handoffs_from_phase_check`: CHECK (((from_phase)::text = ANY (ARRAY['LEAD'::text, 'PLAN'::text, 'EXEC'::text, 'PLAN_PRD'::text, 'PLAN_VERIFICATION'::text, 'EXEC_COMPLETE'::text, 'LEAD_APPROVAL'::text, 'LEAD_COMPLETE'::text, 'LEAD_FINAL'::text, 'LEAD_FINAL_APPROVAL'::text, 'COMPLETED'::text, 'CANCELLED'::text])))
+- `sd_phase_handoffs_handoff_type_check`: CHECK (((handoff_type)::text = ANY (ARRAY['LEAD-TO-PLAN'::text, 'PLAN-TO-EXEC'::text, 'EXEC-TO-PLAN'::text, 'PLAN-TO-LEAD'::text, 'LEAD-FINAL-APPROVAL'::text, 'BYPASS-COMPLETION'::text])))
 - `sd_phase_handoffs_status_check`: CHECK (((status)::text = ANY ((ARRAY['pending_acceptance'::character varying, 'accepted'::character varying, 'rejected'::character varying, 'blocked'::character varying])::text[])))
-- `sd_phase_handoffs_to_phase_check`: CHECK (((to_phase)::text = ANY ((ARRAY['LEAD'::character varying, 'PLAN'::character varying, 'EXEC'::character varying])::text[])))
+- `sd_phase_handoffs_to_phase_check`: CHECK (((to_phase)::text = ANY (ARRAY['LEAD'::text, 'PLAN'::text, 'EXEC'::text, 'PLAN_PRD'::text, 'PLAN_VERIFICATION'::text, 'EXEC_COMPLETE'::text, 'LEAD_APPROVAL'::text, 'LEAD_COMPLETE'::text, 'LEAD_FINAL'::text, 'LEAD_FINAL_APPROVAL'::text, 'COMPLETED'::text, 'CANCELLED'::text])))
 - `sd_phase_handoffs_validation_score_check`: CHECK (((validation_score >= 0) AND (validation_score <= 100)))
 - `validation_details_max_size`: CHECK (((validation_details IS NULL) OR (length((validation_details)::text) <= 102400)))
 
