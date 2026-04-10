@@ -15,7 +15,7 @@
  */
 
 import { DrainOrchestrator } from '../lib/drain-orchestrator.mjs';
-import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { getOrCreateSession } from '../lib/session-manager.mjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -88,19 +88,15 @@ Examples:
 }
 
 // ── Resolve parent session ────────────────────────────────────────
+// QF-20260409-402: Previously returned `drain_parent_${Date.now()}` when no
+// active non-virtual session existed. That synthesized string violates
+// claude_sessions_parent_session_id_fkey when used as parent for virtual
+// drain sessions (same root cause fixed for execute-team in QF-20260409-889).
+// Now calls getOrCreateSession() which guarantees a real claude_sessions row.
 
 async function resolveParentSession() {
-  const supabase = createSupabaseServiceClient();
-  const { data } = await supabase
-    .from('claude_sessions')
-    .select('session_id')
-    .eq('status', 'active')
-    .eq('is_virtual', false)
-    .order('heartbeat_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  return data?.session_id || `drain_parent_${Date.now()}`;
+  const session = await getOrCreateSession();
+  return session.session_id;
 }
 
 // ── Main ──────────────────────────────────────────────────────────

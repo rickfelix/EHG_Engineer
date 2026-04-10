@@ -21,7 +21,7 @@
  * Children B/C/Parent build on top.
  */
 
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -251,14 +251,24 @@ class Supervisor {
     await updateTeamStatus(this.supabase, this.teamId, 'stopping', { stop_reason: reason });
 
     // Send SIGTERM to all active children
+    // QF-20260409-087: On Windows, process.kill(cmdExePid, 'SIGTERM') is
+    // TerminateProcess — it kills the cmd.exe shell but leaves the claude.cmd
+    // /node grandchildren as orphans. Skip the initial SIGTERM on Windows and
+    // rely on workers seeing STOP_REQUESTED via session_coordination polling
+    // to exit cleanly. Survivors get taskkill /T /F after the grace period.
+    const isWin = process.platform === 'win32';
     const childrenAtHalt = new Map(this.activeChildren); // snapshot
-    for (const [slot, child] of childrenAtHalt.entries()) {
-      try {
-        this.log(`Slot ${slot}: sending SIGTERM to PID ${child.pid}`);
-        process.kill(child.pid, 'SIGTERM');
-      } catch (e) {
-        this.log(`Slot ${slot}: kill failed: ${e.message}`);
+    if (!isWin) {
+      for (const [slot, child] of childrenAtHalt.entries()) {
+        try {
+          this.log(`Slot ${slot}: sending SIGTERM to PID ${child.pid}`);
+          process.kill(child.pid, 'SIGTERM');
+        } catch (e) {
+          this.log(`Slot ${slot}: kill failed: ${e.message}`);
+        }
       }
+    } else {
+      this.log(`Windows: skipping SIGTERM (would leak orphans); workers exit via STOP_REQUESTED polling, survivors taskkilled after grace period`);
     }
 
     // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-C (Phase 3):
@@ -275,15 +285,22 @@ class Supervisor {
     }
 
     // Escalate to SIGKILL for any unresponsive children
+    // QF-20260409-087: Use taskkill /T /F on Windows to kill the whole process
+    // tree rooted at cmd.exe; plain SIGKILL would leak claude.cmd/node orphans.
     if (this.activeChildren.size > 0) {
       escalated = true;
-      this.log(`Grace period exceeded — escalating to SIGKILL for ${this.activeChildren.size} unresponsive child(ren)`);
+      this.log(`Grace period exceeded — force-killing ${this.activeChildren.size} unresponsive child(ren)`);
       for (const [slot, child] of this.activeChildren.entries()) {
         try {
-          this.log(`Slot ${slot}: sending SIGKILL to PID ${child.pid}`);
-          process.kill(child.pid, 'SIGKILL');
+          if (isWin) {
+            this.log(`Slot ${slot}: taskkill /T /F PID ${child.pid} (tree)`);
+            execSync(`taskkill /T /F /PID ${child.pid}`, { stdio: 'ignore' });
+          } else {
+            this.log(`Slot ${slot}: sending SIGKILL to PID ${child.pid}`);
+            process.kill(child.pid, 'SIGKILL');
+          }
         } catch (e) {
-          this.log(`Slot ${slot}: SIGKILL failed: ${e.message}`);
+          this.log(`Slot ${slot}: force-kill failed: ${e.message}`);
         }
       }
     }
