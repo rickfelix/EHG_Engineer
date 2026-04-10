@@ -1785,10 +1785,14 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
             .select('content, sections')
             .eq('plan_key', archKey)
             .single();
-          const hasStructuredPhases = archPlan?.sections?.implementation_phases?.length > 0;
-          const hasContentPhases = archPlan?.content && /^##?\s*(Phase|Implementation Phase|Step)\s+\d/im.test(archPlan.content);
-          if (hasStructuredPhases || hasContentPhases) {
-            console.log('\n🔄 Auto-routing to orchestrator creator (architecture plan has phases)...');
+          const structuredPhaseCount = archPlan?.sections?.implementation_phases?.length || 0;
+          const hasMultipleStructuredPhases = structuredPhaseCount >= 2;
+          const contentPhaseMatches = archPlan?.content
+            ? (archPlan.content.match(/^##?\s*(Phase|Implementation Phase|Step)\s+\d/gim) || [])
+            : [];
+          const hasMultipleContentPhases = contentPhaseMatches.length >= 2;
+          if (hasMultipleStructuredPhases || hasMultipleContentPhases) {
+            console.log(`\n🔄 Auto-routing to orchestrator creator (${structuredPhaseCount || contentPhaseMatches.length} phases detected)...`);
             const { execSync } = await import('child_process');
             const cmd = `node scripts/create-orchestrator-from-plan.js --vision-key ${visionKey} --arch-key ${archKey} --title "${title}" --auto-children`;
             execSync(cmd, { stdio: 'inherit', cwd: process.cwd() });
@@ -1798,7 +1802,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
           // QF-20260409-561 (P1): Fail loud; silent fallback violated feedback_auto_decompose_sd_hierarchy.
           console.error(`\n❌ Orchestrator auto-routing FAILED: ${routeErr.message}`);
           console.error(`   Check orphans: SELECT sd_key FROM strategic_directives_v2 WHERE metadata->>'vision_key'='${visionKey}';`);
-          console.error(`   Clean via database-agent, then re-run (create-orchestrator-from-plan.js will resume).`);
+          console.error('   Clean via database-agent, then re-run (create-orchestrator-from-plan.js will resume).');
           process.exit(1);
         }
 
