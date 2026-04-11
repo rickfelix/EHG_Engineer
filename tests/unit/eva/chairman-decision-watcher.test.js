@@ -211,6 +211,57 @@ describe('createOrReusePendingDecision', () => {
     });
   });
 
+  // SD-MAN-FIX-FIX-DUPLICATE-ARTIFACTS-001: decision_type defaults to 'stage_gate'
+  it('sets decision_type to stage_gate by default', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null }), // No existing
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 10, supabase, logger,
+    });
+
+    expect(insertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ decision_type: 'stage_gate' }),
+    );
+  });
+
+  // SD-MAN-FIX-FIX-DUPLICATE-ARTIFACTS-001: custom decision_type is preserved
+  it('uses custom decision_type when provided', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null }), // No existing
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 10, decisionType: 'review',
+      supabase, logger,
+    });
+
+    expect(insertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ decision_type: 'review' }),
+    );
+  });
+
   // SD-VW-FIX-WORKER-GATE-REENTRY-001: Test re-entry after approval
   it('handles 23505 when existing decision is already approved', async () => {
     let fromCallCount = 0;
