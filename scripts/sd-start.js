@@ -24,6 +24,7 @@ import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
+import { classifyWorktreeError } from '../lib/worktree-manager.js';
 import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
 import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
 
@@ -806,13 +807,17 @@ async function main() {
       // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree failure
       // instead of silently continuing on main (which caused data loss from wrong-branch commits)
       const detail = worktreeInfo.error || worktreeInfo.errorCode || 'unknown';
+      const { hint } = classifyWorktreeError(detail);
       console.error(`${colors.red}   ❌  Worktree creation failed: ${detail}${colors.reset}`);
+      if (hint) console.error(`${colors.yellow}   💡  ${hint}${colors.reset}`);
       console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
       process.exit(1);
     }
   } catch (wtErr) {
     // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree error
+    const { hint } = classifyWorktreeError(wtErr.message);
     console.error(`${colors.red}   ❌  Worktree resolution error: ${wtErr.message}${colors.reset}`);
+    if (hint) console.error(`${colors.yellow}   💡  ${hint}${colors.reset}`);
     console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
     process.exit(1);
   }
