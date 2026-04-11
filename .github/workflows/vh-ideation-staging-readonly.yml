@@ -39,7 +39,12 @@ jobs:
       - name: Export ideation reports (read-only)
         env:
           PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
-        run: psql -v ON_ERROR_STOP=1 -f ops/checks/vh_ideation_integrity_staging.sql
+        run: |
+          if [ -z "${{ secrets.PGHOST_STAGING }}" ]; then
+            echo "::warning::PGHOST_STAGING secret not configured. Skipping ideation staging checks."
+            exit 0
+          fi
+          psql -v ON_ERROR_STOP=1 -f ops/checks/vh_ideation_integrity_staging.sql
 
       - name: Summarize counts
         run: |
