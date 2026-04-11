@@ -919,6 +919,59 @@ async function main() {
     }
   }
 
+  // 5.45. SD-MAN-INFRA-FLEET-NPM-INSTALL-001: node_modules health check with coordination lock
+  // If worktree's node_modules is broken, coordinate npm install across fleet
+  if (worktreeInfo?.success && worktreeInfo.cwd) {
+    try {
+      const { acquireLock, waitForLock, releaseLock } = require('../lib/npm-install-lock.cjs');
+      const fs = await import('fs');
+      const path = await import('path');
+
+      // Check if node_modules is functional by testing a critical dependency
+      const testPath = path.join(worktreeInfo.cwd, 'node_modules', '@supabase', 'supabase-js');
+      if (!fs.existsSync(testPath)) {
+        console.log(`\n${colors.yellow}   ⚠️  node_modules missing or broken — coordinating install...${colors.reset}`);
+        const lock = await acquireLock(supabase, session.session_id);
+
+        if (lock.held) {
+          console.log(`   ⏳ Session ${lock.holder.slice(0, 8)} is installing dependencies — waiting...`);
+          const waitResult = await waitForLock(supabase, {
+            timeout: 120000,
+            pollInterval: 5000,
+            onPoll: ({ elapsed }) => {
+              console.log(`   ⏳ Still waiting... (${Math.round(elapsed / 1000)}s)`);
+            }
+          });
+          if (waitResult.resolved) {
+            console.log(`   ${colors.green}✓ Dependencies ready (${waitResult.reason})${colors.reset}`);
+          } else {
+            console.log(`   ${colors.yellow}⚠️  Lock wait timed out — attempting install anyway${colors.reset}`);
+          }
+        } else if (lock.acquired) {
+          console.log('   🔒 Lock acquired — running npm install...');
+          try {
+            // Install in the repo root (worktrees symlink from there)
+            const repoRoot = execSync('git rev-parse --show-toplevel', {
+              encoding: 'utf8', cwd: worktreeInfo.cwd, stdio: 'pipe'
+            }).trim();
+            execSync('npm install --ignore-scripts', {
+              cwd: repoRoot, stdio: 'pipe', timeout: 120000
+            });
+            console.log(`   ${colors.green}✓ npm install complete${colors.reset}`);
+          } catch (npmErr) {
+            console.log(`   ${colors.yellow}⚠️  npm install failed: ${npmErr.message?.split('\n')[0]}${colors.reset}`);
+          } finally {
+            await releaseLock(supabase, session.session_id);
+            console.log('   🔓 Lock released');
+          }
+        }
+      }
+    } catch (lockErr) {
+      // Non-fatal — lock system failure should not block sd-start
+      console.debug(`[sd-start] node_modules lock check error: ${lockErr?.message || lockErr}`);
+    }
+  }
+
   // 5.5. Show duration estimate
   try {
     // Note: legacy_id was deprecated - using sd_key instead
