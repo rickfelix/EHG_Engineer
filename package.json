@@ -379,7 +379,7 @@
     "okr:sync": "node scripts/okr-priority-sync.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.88.0",
     "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.28.4",
     "@babel/types": "^7.29.0",
@@ -389,7 +389,7 @@
     "@supabase/auth-js": "^2.98.0",
     "@supabase/functions-js": "^2.98.0",
     "@supabase/realtime-js": "^2.97.0",
-    "@supabase/supabase-js": "^2.101.1",
+    "@supabase/supabase-js": "^2.103.0",
     "acorn": "^8.16.0",
     "axios": "1.13.5",
     "chalk": "^5.6.2",
@@ -397,13 +397,13 @@
     "cli-table3": "^0.6.5",
     "commander": "^14.0.1",
     "cors": "^2.8.5",
-    "dotenv": "^17.4.0",
+    "dotenv": "^17.4.1",
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
     "express-validator": "^7.2.1",
     "fast-xml-parser": "^5.5.5",
     "find-process": "^2.0.0",
-    "formdata-node": "^4.4.1",
+    "formdata-node": "^6.0.3",
     "google-auth-library": "^10.5.0",
     "google-play-scraper": "^10.1.2",
     "googleapis": "^171.4.0",
@@ -434,7 +434,7 @@
     "eslint-plugin-boundaries": "^5.1.0",
     "eslint-plugin-playwright": "^2.3.0",
     "husky": "^9.1.7",
-    "minimatch": "^10.2.4",
+    "minimatch": "^10.2.5",
     "pg": "^8.18.0",
     "puppeteer": "^24.23.0",
     "typescript": "^5.9.2",
@@ -443,6 +443,7 @@
   },
   "overrides": {
     "axios": "1.13.5",
+    "web-streams-polyfill": "4.0.0",
     "tar-fs": "3.0.9",
     "puppeteer-core": {
       "ws": "8.18.3"
