@@ -38,18 +38,16 @@ async function extractTokens(ref) {
   const prompt = buildDesignTokenPrompt(ref);
 
   // Dynamic import to avoid loading LLM factory at module level
-  const { createLLMClient } = await import('../lib/llm/client-factory.js');
-  const client = await createLLMClient({ tier: 'sonnet', purpose: 'generation' });
+  const { getLLMClient } = await import('../lib/llm/client-factory.js');
+  const client = getLLMClient({ purpose: 'generation' });
 
-  const response = await client.chat.completions.create({
-    model: client._model || 'default',
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 500,
-    temperature: 0.3,
-  });
+  const response = await client.complete(
+    'You are a design analyst. Extract structured design tokens from website metadata. Respond with ONLY valid JSON.',
+    prompt
+  );
 
-  const text = response.choices?.[0]?.message?.content || '';
-  const usage = response.usage || {};
+  const text = typeof response === 'string' ? response : (response?.text || response?.content || '');
+  const usage = response?.usage || {};
 
   // Parse JSON from response (handle potential markdown fencing)
   let cleaned = text.trim();
@@ -117,7 +115,7 @@ async function main() {
         failed++;
       } else {
         enriched++;
-        totalTokens += (usage.total_tokens || 0);
+        totalTokens += (usage.inputTokens || 0) + (usage.outputTokens || 0);
       }
     } catch (err) {
       console.error(`❌ ${ref.site_name}: ${err.message}`);
