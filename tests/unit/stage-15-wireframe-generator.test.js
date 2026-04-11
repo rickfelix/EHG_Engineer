@@ -55,6 +55,8 @@ import {
   buildBrandContext,
   buildTechContext,
   buildExternalContext,
+  buildUserStoryContext,
+  buildIASitemapContext,
 } from '../../lib/eva/stage-templates/analysis-steps/stage-15-wireframe-generator.js';
 
 // ── Test Helpers ────────────────────────────────────────────────────
@@ -246,7 +248,7 @@ describe('Stage 15 Wireframe Generator', () => {
         expect(screen).toHaveProperty('key_components');
         expect(screen).toHaveProperty('interaction_notes');
         expect(typeof screen.name).toBe('string');
-        expect(typeof screen.ascii_layout).toBe('string');
+        expect(Array.isArray(screen.ascii_layout)).toBe(true);
         expect(Array.isArray(screen.key_components)).toBe(true);
       }
     });
@@ -617,6 +619,213 @@ describe('Stage 15 Wireframe Generator', () => {
       const { phContext, awwwardsContext } = buildExternalContext([], []);
       expect(phContext).toBe('');
       expect(awwwardsContext).toBe('');
+    });
+  });
+
+  // ─── Enrichment field enforcement (SD-S15-WIREFRAME-BESTPRACTICE-ORCH-001-B) ───
+
+  describe('enrichment field enforcement', () => {
+    it('every screen has error_state, empty_state, responsive_notes', async () => {
+      const stage10Data = createMockStage10Data();
+      const personaNames = stage10Data.customerPersonas.map(p => p.name);
+      mockComplete.mockResolvedValue({ _parsed: createFullLLMResponse(personaNames) });
+
+      const result = await analyzeStage15WireframeGenerator({
+        ventureId: 'v-1',
+        stage10Data,
+        logger: silentLogger,
+      });
+
+      for (const screen of result.screens) {
+        expect(screen).toHaveProperty('error_state');
+        expect(screen).toHaveProperty('empty_state');
+        expect(screen).toHaveProperty('responsive_notes');
+        expect(typeof screen.error_state).toBe('string');
+        expect(typeof screen.empty_state).toBe('string');
+        expect(typeof screen.responsive_notes).toBe('string');
+        expect(screen.error_state.length).toBeGreaterThan(0);
+        expect(screen.empty_state.length).toBeGreaterThan(0);
+        expect(screen.responsive_notes.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('preserves LLM-provided enrichment fields when present', async () => {
+      const stage10Data = createMockStage10Data(1);
+      mockComplete.mockResolvedValue({
+        _parsed: {
+          screens: [{
+            name: 'Dashboard',
+            purpose: 'Main view',
+            persona: 'Persona 1',
+            ascii_layout: ['+---+', '| X |', '+---+', '|   |', '+---+'],
+            key_components: ['Chart'],
+            interaction_notes: 'View data',
+            error_state: 'Show "Unable to load dashboard" with retry button',
+            empty_state: 'Display welcome wizard for first-time users',
+            responsive_notes: 'Single column on mobile, sidebar collapses to hamburger menu',
+          }],
+          navigation_flows: [{ name: 'Flow', steps: ['Dashboard'], persona: 'Persona 1', description: 'Main' }],
+          persona_coverage: { 'Persona 1': { primary_screens: ['Dashboard'], secondary_screens: [], coverage_score: 90 } },
+        },
+      });
+
+      const result = await analyzeStage15WireframeGenerator({
+        ventureId: 'v-1',
+        stage10Data,
+        logger: silentLogger,
+      });
+
+      const screen = result.screens.find(s => s.name === 'Dashboard');
+      expect(screen.error_state).toContain('Unable to load dashboard');
+      expect(screen.empty_state).toContain('welcome wizard');
+      expect(screen.responsive_notes).toContain('hamburger menu');
+    });
+
+    it('provides defaults for enrichment fields when LLM omits them', async () => {
+      const stage10Data = createMockStage10Data(1);
+      mockComplete.mockResolvedValue({
+        _parsed: {
+          screens: [{
+            name: 'Dashboard',
+            purpose: 'Main view',
+            persona: 'Persona 1',
+            ascii_layout: ['+---+', '| X |', '+---+', '|   |', '+---+'],
+            key_components: ['Chart'],
+            interaction_notes: 'View data',
+            // No error_state, empty_state, or responsive_notes
+          }],
+          navigation_flows: [{ name: 'Flow', steps: ['Dashboard'], persona: 'Persona 1', description: 'Main' }],
+          persona_coverage: { 'Persona 1': { primary_screens: ['Dashboard'], secondary_screens: [], coverage_score: 90 } },
+        },
+      });
+
+      const result = await analyzeStage15WireframeGenerator({
+        ventureId: 'v-1',
+        stage10Data,
+        logger: silentLogger,
+      });
+
+      const screen = result.screens.find(s => s.name === 'Dashboard');
+      expect(screen.error_state).toBeTruthy();
+      expect(screen.empty_state).toBeTruthy();
+      expect(screen.responsive_notes).toBeTruthy();
+    });
+
+    it('enrichment fields survive screen padding to MIN_SCREENS', async () => {
+      const stage10Data = createMockStage10Data(1);
+      mockComplete.mockResolvedValue({
+        _parsed: {
+          screens: [{
+            name: 'Dashboard',
+            purpose: 'Main',
+            persona: 'Persona 1',
+            ascii_layout: '+---+\n|   |\n+---+\n|   |\n+---+',
+            key_components: ['Chart'],
+            interaction_notes: 'Notes',
+          }],
+          navigation_flows: [],
+          persona_coverage: {},
+        },
+      });
+
+      const result = await analyzeStage15WireframeGenerator({
+        ventureId: 'v-1',
+        stage10Data,
+        logger: silentLogger,
+      });
+
+      expect(result.screens.length).toBeGreaterThanOrEqual(MIN_SCREENS);
+      for (const screen of result.screens) {
+        expect(screen.error_state).toBeTruthy();
+        expect(screen.empty_state).toBeTruthy();
+        expect(screen.responsive_notes).toBeTruthy();
+      }
+    });
+  });
+
+  // ─── buildUserStoryContext ─────────────────────────────────────
+
+  describe('buildUserStoryContext', () => {
+    it('formats epics and stories into context string', () => {
+      const pack = {
+        epics: [
+          { name: 'Auth Epic', stories: [{ title: 'Login' }, { title: 'Signup' }, { title: 'Forgot Password' }] },
+          { name: 'Dashboard Epic', stories: [{ title: 'Metrics View' }] },
+        ],
+        mvp_story_count: 4,
+        total_story_points: 21,
+      };
+      const result = buildUserStoryContext(pack);
+
+      expect(result).toContain('Auth Epic');
+      expect(result).toContain('3 stories');
+      expect(result).toContain('Login');
+      expect(result).toContain('Dashboard Epic');
+      expect(result).toContain('MVP Story Count: 4');
+      expect(result).toContain('Total Story Points: 21');
+    });
+
+    it('returns empty string for null input', () => {
+      expect(buildUserStoryContext(null)).toBe('');
+    });
+
+    it('returns empty string for empty epics', () => {
+      expect(buildUserStoryContext({ epics: [] })).toBe('');
+    });
+
+    it('returns empty string for missing epics array', () => {
+      expect(buildUserStoryContext({ mvp_story_count: 1 })).toBe('');
+    });
+
+    it('truncates to first 3 stories per epic', () => {
+      const pack = {
+        epics: [{
+          name: 'Big Epic',
+          stories: [
+            { title: 'S1' }, { title: 'S2' }, { title: 'S3' },
+            { title: 'S4' }, { title: 'S5' },
+          ],
+        }],
+      };
+      const result = buildUserStoryContext(pack);
+
+      expect(result).toContain('S1');
+      expect(result).toContain('S3');
+      expect(result).not.toContain('S4');
+    });
+  });
+
+  // ─── buildIASitemapContext ─────────────────────────────────────
+
+  describe('buildIASitemapContext', () => {
+    it('formats IA pages and navigation into context string', () => {
+      const ia = {
+        pages: [
+          { name: 'Dashboard', path: '/dashboard', purpose: 'Main view', priority: 'primary' },
+          { name: 'Settings', path: '/settings', purpose: 'Config', priority: 'utility' },
+        ],
+        navigation: { primary: ['Dashboard'], secondary: [], utility: ['Settings'] },
+        total_pages: 2,
+      };
+      const result = buildIASitemapContext(ia);
+
+      expect(result).toContain('Dashboard');
+      expect(result).toContain('/dashboard');
+      expect(result).toContain('Settings');
+      expect(result).toContain('Primary nav: Dashboard');
+      expect(result).toContain('Total pages: 2');
+    });
+
+    it('returns empty string for null input', () => {
+      expect(buildIASitemapContext(null)).toBe('');
+    });
+
+    it('returns empty string for empty pages', () => {
+      expect(buildIASitemapContext({ pages: [] })).toBe('');
+    });
+
+    it('returns empty string when pages is not an array', () => {
+      expect(buildIASitemapContext({ pages: 'not-an-array' })).toBe('');
     });
   });
 
