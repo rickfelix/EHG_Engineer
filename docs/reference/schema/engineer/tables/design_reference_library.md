@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-11T03:50:59.641Z
+**Generated**: 2026-04-11T17:33:07.943Z
 **Rows**: 137
 **RLS**: Disabled
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (17 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -35,6 +35,7 @@
 | awwwards_page_url | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| design_tokens | `jsonb` | YES | - | Structured design tokens (colors, typography, spacing, etc.) extracted from reference site via LLM analysis |
 
 ## Constraints
 

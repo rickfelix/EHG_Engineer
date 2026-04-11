@@ -1,4 +1,4 @@
-# product_hunt_cache Table
+# design_pattern_usage Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
@@ -14,44 +14,47 @@
 
 ---
 
-## Columns (7 total)
+## Columns (6 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| venture_id | `uuid` | YES | - | - |
-| category | `text` | **NO** | - | - |
-| products | `jsonb` | **NO** | `'[]'::jsonb` | - |
-| fetched_at | `timestamp with time zone` | YES | `now()` | - |
-| expires_at | `timestamp with time zone` | YES | `(now() + '24:00:00'::interval)` | - |
-| created_at | `timestamp with time zone` | YES | `now()` | - |
+| venture_id | `uuid` | **NO** | - | - |
+| pattern_id | `text` | **NO** | - | - |
+| reference_id | `uuid` | YES | - | - |
+| used_at | `timestamp with time zone` | YES | `now()` | - |
+| metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 
 ## Constraints
 
 ### Primary Key
-- `product_hunt_cache_pkey`: PRIMARY KEY (id)
+- `design_pattern_usage_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
-- `product_hunt_cache_venture_id_fkey`: venture_id → ventures(id)
+- `design_pattern_usage_reference_id_fkey`: reference_id → design_reference_library(id)
 
 ## Indexes
 
-- `idx_phc_expires`
+- `design_pattern_usage_pkey`
   ```sql
-  CREATE INDEX idx_phc_expires ON public.product_hunt_cache USING btree (expires_at)
+  CREATE UNIQUE INDEX design_pattern_usage_pkey ON public.design_pattern_usage USING btree (id)
   ```
-- `idx_phc_venture_category`
+- `idx_dpu_pattern_id`
   ```sql
-  CREATE INDEX idx_phc_venture_category ON public.product_hunt_cache USING btree (venture_id, category)
+  CREATE INDEX idx_dpu_pattern_id ON public.design_pattern_usage USING btree (pattern_id)
   ```
-- `product_hunt_cache_pkey`
+- `idx_dpu_venture_id`
   ```sql
-  CREATE UNIQUE INDEX product_hunt_cache_pkey ON public.product_hunt_cache USING btree (id)
+  CREATE INDEX idx_dpu_venture_id ON public.design_pattern_usage USING btree (venture_id)
+  ```
+- `idx_dpu_venture_pattern`
+  ```sql
+  CREATE INDEX idx_dpu_venture_pattern ON public.design_pattern_usage USING btree (venture_id, pattern_id)
   ```
 
 ## RLS Policies
 
-### 1. Service role full access (ALL)
+### 1. Allow service role full access (ALL)
 
 - **Roles**: {public}
 - **Using**: `(auth.role() = 'service_role'::text)`
