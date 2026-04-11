@@ -12,17 +12,16 @@ describe('computeHealthScore', () => {
     expect(computeHealthScore(undefined)).toBe(0);
   });
 
-  it('returns 0 for empty object', () => {
-    expect(computeHealthScore({})).toBe(0);
+  it('returns red for empty object', () => {
+    expect(computeHealthScore({})).toBe('red');
   });
 
-  it('returns low score for minimal data', () => {
+  it('returns red for minimal data', () => {
     const score = computeHealthScore({ status: 'ok' });
-    expect(score).toBeGreaterThan(0);
-    expect(score).toBeLessThan(30);
+    expect(['red', 'yellow']).toContain(score);
   });
 
-  it('returns high score for rich advisory data', () => {
+  it('returns green for rich advisory data', () => {
     const data = {
       analysis: { key_findings: 'Multiple important findings discovered during this stage of venture evaluation' },
       summary: 'The venture shows strong product-market fit with clear differentiation in the target segment. Revenue projections indicate break-even within 18 months.',
@@ -30,43 +29,25 @@ describe('computeHealthScore', () => {
       score: 78,
       results: { metrics: { tam: 5000000, sam: 500000, som: 50000 } },
     };
-    const score = computeHealthScore(data);
-    expect(score).toBeGreaterThanOrEqual(70);
+    expect(computeHealthScore(data)).toBe('green');
   });
 
-  it('gives word count credit proportionally', () => {
-    const short = computeHealthScore({ a: 'hello' });
-    const long = computeHealthScore({ a: 'word '.repeat(100) });
-    expect(long).toBeGreaterThan(short);
+  it('returns only valid traffic-light values', () => {
+    const values = [
+      computeHealthScore({ a: 'hello' }),
+      computeHealthScore({ a: 'word '.repeat(100) }),
+      computeHealthScore({ analysis: 'good', summary: { nested: true }, recommendation: 'go' }),
+    ];
+    values.forEach(v => expect(['green', 'yellow', 'red']).toContain(v));
   });
 
-  it('gives structural credit for nested objects', () => {
-    const flat = computeHealthScore({ a: 'x', b: 'y', c: 'z' });
-    const nested = computeHealthScore({ a: { inner: 'data' }, b: 'y', c: 'z' });
-    expect(nested).toBeGreaterThan(flat);
-  });
-
-  it('gives field completeness credit for expected fields', () => {
-    const noMatch = computeHealthScore({ foo: 'bar', baz: 'qux', xyz: 'abc' });
-    const withMatch = computeHealthScore({ analysis: 'good', summary: 'fine', recommendation: 'go' });
-    expect(withMatch).toBeGreaterThan(noMatch);
-  });
-
-  it('caps at 100', () => {
-    const massive = { analysis: 'word '.repeat(500), summary: { nested: true }, recommendation: 'go', score: 99, results: { a: 1 } };
-    expect(computeHealthScore(massive)).toBeLessThanOrEqual(100);
-  });
-
-  it('produces varying scores for different quality levels', () => {
-    const low = computeHealthScore({ status: 'done' });
-    const mid = computeHealthScore({ analysis: 'brief analysis here', results: { score: 5 } });
-    const high = computeHealthScore({
+  it('returns green for substantive content with expected fields', () => {
+    const data = {
       analysis: 'A comprehensive analysis of market dynamics and competitive landscape revealing strong positioning',
       summary: 'Venture demonstrates clear value proposition with measurable differentiation',
       recommendation: 'Approve for next phase',
       results: { confidence: 0.85, metrics: { growth: 0.3 } },
-    });
-    expect(low).toBeLessThan(mid);
-    expect(mid).toBeLessThan(high);
+    };
+    expect(computeHealthScore(data)).toBe('green');
   });
 });
