@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-11T17:33:07.943Z
+**Generated**: 2026-04-11T20:02:47.590Z
 **Rows**: 137
 **RLS**: Disabled
 
@@ -46,7 +46,7 @@
 - `design_reference_library_url_key`: UNIQUE (url)
 
 ### Check Constraints
-- `design_reference_library_archetype_category_check`: CHECK ((archetype_category = ANY (ARRAY['saas'::text, 'marketplace'::text, 'ai_product'::text, 'e_commerce'::text, 'fintech'::text, 'healthtech'::text, 'edtech'::text, 'media'::text, 'creator_tools'::text, 'services'::text, 'deeptech'::text, 'real_estate'::text, 'corporate'::text, 'portfolio'::text, 'e-commerce'::text])))
+- `design_reference_library_archetype_category_check`: CHECK ((archetype_category = ANY (ARRAY['saas'::text, 'marketplace'::text, 'ai_product'::text, 'e_commerce'::text, 'fintech'::text, 'healthtech'::text, 'edtech'::text, 'media'::text, 'creator_tools'::text, 'services'::text, 'deeptech'::text, 'real_estate'::text])))
 
 ## Indexes
 
