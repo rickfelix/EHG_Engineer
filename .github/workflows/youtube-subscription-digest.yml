@@ -22,7 +22,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - run: npm ci --omit=dev
+      - run: npm ci --omit=dev --ignore-scripts
 
       - name: Run YouTube Subscription Digest
         env:

@@ -163,8 +163,6 @@ jobs:
 
       - name: Sign artifact with Sigstore
         id: sign
-        env:
-          COSIGN_EXPERIMENTAL: 1
         run: |
           echo "🔏 Signing artifact with Sigstore keyless..."
 

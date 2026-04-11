@@ -39,10 +39,15 @@ jobs:
           DATABASE_URL: ${{ secrets.SUPABASE_POOLER_URL }}
         run: |
           set -e
-          
+
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::SUPABASE_POOLER_URL secret not configured. Skipping staging integrity checks."
+            exit 0
+          fi
+
           echo "🔍 Running backlog integrity checks against staging..."
           mkdir -p reports
-          
+
           # Execute the staging SQL file
           psql "$DATABASE_URL" -f ops/checks/backlog_integrity_staging.sql
           
@@ -56,6 +61,10 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_POOLER_URL }}
         run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::SUPABASE_POOLER_URL secret not configured. Skipping."
+            exit 0
+          fi
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/checks/backlog_sequence_staging.sql
           # Move sequencing CSV to reports/
           mv sequence_candidates.csv reports/ 2>/dev/null || true
