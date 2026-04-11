@@ -522,4 +522,89 @@ describe('StageExecutionWorker', () => {
       expect(result).toEqual(mockData);
     });
   });
+
+  // ── Startup Recovery (SD-FIX-WORKER-STARTUP-LOCK-RECOVERY-001) ──
+
+  describe('_onStartupRecovery', () => {
+    beforeEach(() => {
+      worker = new StageExecutionWorker({ supabase, logger });
+    });
+
+    it('resets ventures with foreign lock_id on startup', async () => {
+      const orphaned = [
+        { id: 'v1', name: 'Venture A', orchestrator_lock_id: 'old-worker-1' },
+      ];
+      const chain = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        neq: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        then: vi.fn(),
+      };
+      // First from('ventures') call: select query returns orphaned
+      // Second from('ventures') call: update succeeds
+      let callCount = 0;
+      supabase.from.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // SELECT query chain
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockResolvedValue({ data: orphaned, error: null }),
+              }),
+            }),
+          };
+        }
+        // UPDATE chain
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }),
+        };
+      });
+
+      await worker._onStartupRecovery();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Startup recovery: resetting Venture A'),
+      );
+      expect(logger.log).toHaveBeenCalledWith(
+        expect.stringContaining('Startup recovery complete: 1 venture(s) reset'),
+      );
+    });
+
+    it('does nothing when no orphaned ventures exist', async () => {
+      supabase.from.mockImplementation(() => ({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            neq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
+        }),
+      }));
+
+      await worker._onStartupRecovery();
+
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('continues worker startup on query error', async () => {
+      supabase.from.mockImplementation(() => ({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            neq: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB down' } }),
+          }),
+        }),
+      }));
+
+      await worker._onStartupRecovery();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Startup recovery query failed: DB down'),
+      );
+      // Worker should not throw — start() continues
+    });
+  });
 });
