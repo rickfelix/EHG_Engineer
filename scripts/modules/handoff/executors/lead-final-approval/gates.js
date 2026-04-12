@@ -346,6 +346,68 @@ export function createRetrospectiveExistsGate(supabase) {
 }
 
 /**
+ * Create PR Precheck Gate: Fast-fail on open PRs before heavyweight gates.
+ * Prevents retry storms where sessions run LEAD-FINAL-APPROVAL without merging PRs.
+ * (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-081)
+ *
+ * @returns {Object} Gate definition
+ */
+export function createPRPrecheckGate() {
+  return {
+    name: 'PR_PRECHECK',
+    validator: async (ctx) => {
+      console.log('\n⚡ PR PRECHECK: Quick open-PR scan');
+      console.log('-'.repeat(50));
+
+      const sdId = ctx.sd.sd_key || ctx.sd.id;
+      const branchPatterns = [`feat/${sdId}`, `fix/${sdId}`, `docs/${sdId}`, `test/${sdId}`];
+
+      try {
+        const { execSync } = await import('child_process');
+        const repos = ['rickfelix/ehg', 'rickfelix/EHG_Engineer'];
+
+        for (const repo of repos) {
+          try {
+            const result = execSync(
+              `gh pr list --repo ${repo} --state open --json number,headRefName --limit 50`,
+              { encoding: 'utf8', timeout: 15000 }
+            );
+            const prs = JSON.parse(result || '[]');
+            const matching = prs.filter(pr =>
+              branchPatterns.some(p => pr.headRefName.toLowerCase().includes(p.toLowerCase()))
+            );
+
+            if (matching.length > 0) {
+              console.log(`   ❌ Open PR(s) found in ${repo} — run /ship first`);
+              return {
+                passed: false,
+                score: 0,
+                max_score: 100,
+                issues: [
+                  `Open PR(s) detected for ${sdId} in ${repo}. Run /ship to merge before LEAD-FINAL-APPROVAL.`,
+                  'Required order: EXEC → /ship (merge PR) → LEAD-FINAL-APPROVAL'
+                ],
+                warnings: [],
+                details: { fastFail: true, repo, matchCount: matching.length }
+              };
+            }
+          } catch (_e) {
+            // Skip repo if gh fails — full PR_MERGE gate will catch it
+          }
+        }
+
+        console.log('   ✅ No open PRs detected — proceeding to full validation');
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: [] };
+      } catch (_e) {
+        // Non-blocking: if precheck fails, let the full gate handle it
+        console.log('   ⚠️  Precheck skipped — full PR_MERGE gate will validate');
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['Precheck skipped due to error'] };
+      }
+    }
+  };
+}
+
+/**
  * Create Gate 4: PR merge verification
  *
  * PAT-SHIP-ORDER-001: Correct ordering is:
@@ -926,6 +988,9 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
     gates.push(createSdStartGate(sd.sd_key || sd.id || 'unknown'));
   }
 
+  // PR Precheck — fast-fail before heavyweight gates (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-081)
+  gates.push(createPRPrecheckGate());
+
   gates.push(createPlanToLeadHandoffGate(supabase));
   gates.push(createUserStoriesCompleteGate(supabase, prdRepo));
   gates.push(createRetrospectiveExistsGate(supabase));
@@ -949,6 +1014,7 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
 
 export default {
   createSdStartGate,
+  createPRPrecheckGate,
   createPlanToLeadHandoffGate,
   createUserStoriesCompleteGate,
   createRetrospectiveExistsGate,
