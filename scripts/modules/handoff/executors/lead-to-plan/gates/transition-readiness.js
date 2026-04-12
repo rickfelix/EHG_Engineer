@@ -164,6 +164,11 @@ export async function validateTransitionReadiness(sd, supabase) {
     } else {
       issues.push('success_metrics AND success_criteria are both empty - must define at least one measurable success metric');
       console.log('   ❌ success_metrics and success_criteria are both empty or missing');
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-080: Add format guidance to prevent retry loops
+      console.log('   💡 FIX: Populate one of these fields on the SD:');
+      console.log('      success_metrics: [{ metric: "Name", target: "Goal", actual: "TBD" }]');
+      console.log('      success_criteria: [{ criterion: "What", measure: "How to verify" }]');
+      console.log('      Either field works — success_criteria is used as fallback if success_metrics is empty.');
       score -= 25;
     }
   } else if (Array.isArray(successMetrics)) {

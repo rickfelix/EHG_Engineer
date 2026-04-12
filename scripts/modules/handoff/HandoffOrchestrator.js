@@ -230,6 +230,21 @@ export class HandoffOrchestrator {
         supabase: this.supabase
       });
 
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-080: Show gate scores and thresholds
+      if (result.gateResults && Object.keys(result.gateResults).length > 0) {
+        console.log('');
+        console.log('📊 GATE SCORES (Precheck)');
+        console.log('─'.repeat(60));
+        for (const [gateName, gr] of Object.entries(result.gateResults)) {
+          const pct = gr.maxScore > 0 ? Math.round((gr.score / gr.maxScore) * 100) : 0;
+          const threshold = gr.threshold || 70;
+          const status = gr.passed !== false ? '✅' : '❌';
+          console.log(`   ${status} ${gateName}: ${pct}% (threshold: ${threshold}%)`);
+        }
+        console.log(`   📈 Overall: ${result.normalizedScore || 0}%`);
+        console.log('─'.repeat(60));
+      }
+
       // Add actionable remediation for each failed gate
       if (result.failedGates.length > 0) {
         console.log('');

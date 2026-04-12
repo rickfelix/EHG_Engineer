@@ -173,8 +173,12 @@ export function createSuccessMetricsGate(supabase) {
           const EVIDENCE_STATUSES = new Set(['completed', 'ready', 'done', 'validated']);
           const completedStories = stories?.filter(s => EVIDENCE_STATUSES.has(s.status))?.length || 0;
 
+          // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-080: Show auto-population status per metric
+          const emptyMetrics = metrics.filter(m => isEmptyOrPending(m.actual));
+          console.log(`   📋 Auto-population check: ${emptyMetrics.length} metric(s) missing actual values`);
           if (acceptedCount > 0 || completedStories > 0) {
-            console.log(`   🔄 Auto-populating missing actuals from evidence (${acceptedCount} handoffs, ${completedStories}/${totalStories} stories)`);
+            console.log(`   🔄 Auto-populating from evidence: ${acceptedCount} handoff(s), ${completedStories}/${totalStories} stories`);
+            console.log(`      Source: ${acceptedCount > 0 ? 'handoff evidence' : ''}${acceptedCount > 0 && completedStories > 0 ? ' + ' : ''}${completedStories > 0 ? 'story completion' : ''}`);
             for (const metric of metrics) {
               if (!isEmptyOrPending(metric.actual)) continue;
               const name = (metric.metric || metric.name || '').toLowerCase();
@@ -199,6 +203,10 @@ export function createSuccessMetricsGate(supabase) {
             await supabase.from('strategic_directives_v2')
               .update({ success_metrics: metrics })
               .eq('id', sdUuid);
+          } else {
+            // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-080: Explain why auto-population skipped
+            console.log(`   ⚠️  No evidence found for auto-population (0 handoffs, 0 completed stories)`);
+            console.log(`      💡 Complete user stories or handoffs to provide evidence for metric actuals`);
           }
         } catch (autoPopErr) {
           console.log(`   ⚠️  Auto-populate failed: ${autoPopErr.message} (continuing with manual values)`);
