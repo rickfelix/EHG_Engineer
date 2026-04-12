@@ -360,6 +360,9 @@ export class HandoffRecorder {
     const execution = {
       id: executionId,
       sd_id: sdUuid,
+      from_phase: handoffType.split('-')[0],
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-076: Match recordFailure() phase parsing
+      to_phase: (() => { const p = handoffType.split('-')[2]; return ['LEAD', 'PLAN', 'EXEC'].includes(p) ? p : 'LEAD'; })(),
       handoff_type: handoffType,
       status: 'failed',
       executive_summary: `System error during ${handoffType} handoff: ${errorMessage}`,
@@ -369,6 +372,7 @@ export class HandoffRecorder {
       resource_utilization: '',
       action_items: '- [ ] Investigate and fix system error\n- [ ] Retry handoff',
       completeness_report: 'System Error - handoff incomplete',
+      rejection_reason: errorMessage,
       validation_score: 0,
       validation_passed: false,
       validation_details: {
@@ -389,6 +393,15 @@ export class HandoffRecorder {
       } else {
         console.log(`📝 System error recorded: ${executionId}`);
       }
+
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-076: Governance audit trail (match recordFailure pattern)
+      await this._logGovernanceAudit(handoffType, sdUuid, {
+        status: 'failed',
+        score: 0,
+        executionId,
+        reasonCode: 'SYSTEM_ERROR',
+        errorMessage
+      });
     } catch (e) {
       console.error('Could not record system error:', e.message);
     }
