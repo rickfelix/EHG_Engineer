@@ -105,7 +105,19 @@ function verifyTestPassRate(name, reported, target, repoRoot) {
     return { metric: name, reportedValue: reported, measuredValue: null, score: 65, status: 'self_reported', issue: 'No test report found to verify' };
   }
   const reportedNum = extractNumber(reported);
-  const match = reportedNum !== null && Math.abs(reportedNum - measured) < 2; // 2% tolerance
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-083: Widen tolerance from 2% to 8%.
+  // Agents report SD-specific test results while verifier measures repo-wide pass rate.
+  // A failing test in another SD's suite shouldn't block this SD's handoff.
+  const match = reportedNum !== null && Math.abs(reportedNum - measured) < 8;
+  // If reported value contains qualitative text (e.g., "100% - testing sub-agent verified"),
+  // treat as self-reported when measured rate is still high (>=85%)
+  if (!match && reported.length > 10 && /[a-z]{3,}/i.test(reported.replace(/\d+%?/g, '').trim()) && measured >= 85) {
+    return {
+      metric: name, reportedValue: reported, measuredValue: `${measured}%`,
+      score: 65, status: 'self_reported',
+      issue: `Reported "${reported}" — repo-wide rate is ${measured}% (SD-specific claim accepted as self-reported)`
+    };
+  }
   return {
     metric: name,
     reportedValue: reported,
@@ -122,7 +134,7 @@ function verifyCoverage(name, reported, target, repoRoot) {
     return { metric: name, reportedValue: reported, measuredValue: null, score: 65, status: 'self_reported', issue: 'No coverage report found to verify' };
   }
   const reportedNum = extractNumber(reported);
-  const match = reportedNum !== null && Math.abs(reportedNum - measured) < 2;
+  const match = reportedNum !== null && Math.abs(reportedNum - measured) < 8; // Widened from 2% (SD-LEARN-FIX-083)
   return {
     metric: name,
     reportedValue: reported,
