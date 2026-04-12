@@ -413,13 +413,6 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.log('   ℹ️  AUTO-PROCEED state retained (child SD - continuation possible)');
     }
 
-    // Check if this SD has a parent that should be auto-completed
-    // SD-LEO-ENH-AUTO-PROCEED-001-05: Capture chaining info for orchestrator continuation
-    let orchestratorChainingInfo = { orchestratorCompleted: false };
-    if (sd.parent_sd_id) {
-      orchestratorChainingInfo = await checkAndCompleteParentSD(sd, this.supabase);
-    }
-
     const handoffId = `LEAD-FINAL-${sdId}-${Date.now()}`;
 
     console.log('\n🎉 SD COMPLETION: Final approval granted');
@@ -427,7 +420,10 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     console.log(`   Title: ${sd.title}`);
     console.log(`   Handoff ID: ${handoffId}`);
 
-    // Automated Shipping: PR Merge & Branch Cleanup
+    // SD-LEO-INFRA-AUTO-CHAIN-MERGE-001: Ship BEFORE orchestrator completion.
+    // Previously, auto-chain fired before PR merge, causing next SD to start
+    // while current SD's code was still unshipped. Now shipping runs first so
+    // the merge result can gate the auto-chain decision.
     let shippingResults = { merge: null, cleanup: null };
     try {
       console.log('\n🚢 [AUTO-SHIP] Merge & Cleanup Decisions');
@@ -456,6 +452,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       }
     } catch (shippingError) {
       console.warn(`   ⚠️  Auto-shipping error (non-blocking): ${shippingError.message}`);
+    }
+
+    // Check if this SD has a parent that should be auto-completed
+    // SD-LEO-ENH-AUTO-PROCEED-001-05: Capture chaining info for orchestrator continuation
+    // SD-LEO-INFRA-AUTO-CHAIN-MERGE-001: Pass shippingResults so auto-chain can gate on merge
+    let orchestratorChainingInfo = { orchestratorCompleted: false };
+    if (sd.parent_sd_id) {
+      orchestratorChainingInfo = await checkAndCompleteParentSD(sd, this.supabase, { shippingResults });
     }
 
     // SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001: Cleanup worktree on SD completion
