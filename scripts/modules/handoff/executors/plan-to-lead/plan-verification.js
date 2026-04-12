@@ -89,9 +89,13 @@ async function validateParentSDCompletion(supabase, prd, childSDs, validation) {
  * Validate standard SD completion
  */
 async function validateStandardSDCompletion(supabase, prd, sd, validation) {
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-080: Track component scores for breakdown output
+  let prdScore = 0, handoffScore = 0, storiesScore = 0;
+
   // Check PRD status
   if (prd.status === 'verification' || prd.status === 'completed') {
     validation.score += 30;
+    prdScore = 30;
   } else {
     validation.issues.push(`PRD status is '${prd.status}', expected 'verification' or 'completed'`);
   }
@@ -102,6 +106,7 @@ async function validateStandardSDCompletion(supabase, prd, sd, validation) {
 
   if (isLightweightSDType(sdType)) {
     validation.score += 40;
+    handoffScore = 40;
     validation.warnings.push(`Infrastructure SD: EXEC-TO-PLAN is OPTIONAL (sd_type='${sdType}')`);
   } else {
     const { data: execHandoff } = await supabase
@@ -114,6 +119,7 @@ async function validateStandardSDCompletion(supabase, prd, sd, validation) {
 
     if (execHandoff && execHandoff.length > 0) {
       validation.score += 40;
+      handoffScore = 40;
     } else {
       validation.issues.push('No EXEC→PLAN handoff found');
     }
@@ -131,11 +137,20 @@ async function validateStandardSDCompletion(supabase, prd, sd, validation) {
     );
     if (completedStories.length === userStories.length) {
       validation.score += 30;
+      storiesScore = 30;
     } else {
       validation.warnings.push(`${completedStories.length}/${userStories.length} user stories completed`);
-      validation.score += Math.round(30 * (completedStories.length / userStories.length));
+      storiesScore = Math.round(30 * (completedStories.length / userStories.length));
+      validation.score += storiesScore;
     }
   }
+
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-080: Show component score breakdown
+  console.log('   📊 Plan Verification Breakdown:');
+  console.log(`      PRD status:    ${prdScore}/30 ${prdScore === 30 ? '✅' : '❌'}`);
+  console.log(`      EXEC handoff:  ${handoffScore}/40 ${handoffScore === 40 ? '✅' : isLightweightSDType(sdType) ? '(N/A - infra)' : '❌'}`);
+  console.log(`      User stories:  ${storiesScore}/30 ${storiesScore === 30 ? '✅' : `(${userStories?.length || 0} total)`}`);
+  console.log(`      Total:         ${validation.score}/100 (threshold: 70)`);
 
   validation.complete = validation.score >= 70;
   return validation;
