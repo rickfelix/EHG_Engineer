@@ -762,6 +762,7 @@ async function invokeParentHeal(supabase, orchestratorId, orchestratorTitle, cor
  * @param {number} childCount - Number of completed children
  * @param {object} options - Hook options
  * @param {object} options.supabase - Supabase client (optional)
+ * @param {object} [options.shippingResults] - PR merge/cleanup results (SD-LEO-INFRA-AUTO-CHAIN-MERGE-001)
  * @returns {Promise<{ fired: boolean, autoProceed: boolean, correlationId: string }>}
  */
 export async function executeOrchestratorCompletionHook(
@@ -1045,6 +1046,46 @@ export async function executeOrchestratorCompletionHook(
       completedSdKey = sdData?.sd_key;
     } catch {
       // Non-fatal
+    }
+
+    // SD-LEO-INFRA-AUTO-CHAIN-MERGE-001: PR_MERGE gate — block auto-chain if PR not merged.
+    // shippingResults is threaded from lead-final-approval/index.js through helpers.js.
+    // When shipping did not occur (no shippingResults or no merge attempt), allow auto-chain
+    // to proceed (backward compatible for documentation SDs or manual shipping).
+    const mergeSuccess = options.shippingResults?.merge?.executionResult?.success;
+    const mergeDeferred = options.shippingResults?.merge?.executionResult?.deferred;
+    const mergeEscalated = options.shippingResults?.merge?.shouldEscalate;
+    const shippingAttempted = options.shippingResults?.merge != null;
+
+    if (shippingAttempted && !mergeSuccess) {
+      const prUrl = options.shippingResults?.merge?.executionResult?.pr_url
+        || options.shippingResults?.merge?.pr_url || 'unknown';
+      const reason = mergeDeferred ? 'deferred' : mergeEscalated ? 'escalated to human' : 'failed';
+
+      console.log('\n   ═══════════════════════════════════════════════════════');
+      console.log('   🚫 PR_MERGE GATE: Auto-chain blocked — code not shipped');
+      console.log('   ═══════════════════════════════════════════════════════');
+      console.log(`      PR:     ${prUrl}`);
+      console.log(`      Reason: Merge ${reason}`);
+      console.log(`      Action: Run /ship manually, then re-run LEAD-FINAL-APPROVAL`);
+      console.log('   ═══════════════════════════════════════════════════════');
+
+      hookDetails.prMergeGate = { blocked: true, reason, prUrl };
+      await recordHookEvent(supabase, orchestratorId, correlationId, hookDetails);
+
+      return {
+        fired: true,
+        autoProceed: false,
+        chainContinue: false,
+        correlationId,
+        mergeBlocked: true,
+        mergeReason: reason
+      };
+    }
+
+    if (shippingAttempted && mergeSuccess) {
+      console.log('   ✅ PR_MERGE GATE: Merge confirmed — auto-chain allowed');
+      hookDetails.prMergeGate = { blocked: false };
     }
 
     const chainResult = await executeAutoChain(supabase, {

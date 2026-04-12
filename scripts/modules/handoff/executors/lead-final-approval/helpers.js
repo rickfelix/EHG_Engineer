@@ -23,9 +23,11 @@ import { publishVisionEvent, VISION_EVENTS } from '../../../../../lib/eva/event-
  *
  * @param {Object} sd - SD record
  * @param {Object} supabase - Supabase client
+ * @param {Object} [options] - Options
+ * @param {Object} [options.shippingResults] - PR merge/cleanup results from auto-shipping (SD-LEO-INFRA-AUTO-CHAIN-MERGE-001)
  * @returns {Promise<{ orchestratorCompleted: boolean, chainContinue?: boolean, nextOrchestrator?: string }>}
  */
-export async function checkAndCompleteParentSD(sd, supabase) {
+export async function checkAndCompleteParentSD(sd, supabase, { shippingResults } = {}) {
   console.log('\n   Checking parent SD completion...');
 
   // Default return for non-completion cases
@@ -71,7 +73,7 @@ export async function checkAndCompleteParentSD(sd, supabase) {
               parentSD.id,
               parentSD.title,
               siblings.length,
-              { supabase }
+              { supabase, shippingResults }
             );
 
             return {
@@ -98,7 +100,7 @@ export async function checkAndCompleteParentSD(sd, supabase) {
               parentSD.id,
               parentSD.title,
               siblings.length,
-              { supabase }
+              { supabase, shippingResults }
             );
 
             return {
@@ -146,7 +148,7 @@ export async function checkAndCompleteParentSD(sd, supabase) {
             parentSD.id,
             parentSD.title,
             siblings.length,
-            { supabase }
+            { supabase, shippingResults }
           );
 
           return {
