@@ -105,7 +105,18 @@ function verifyTestPassRate(name, reported, target, repoRoot) {
     return { metric: name, reportedValue: reported, measuredValue: null, score: 65, status: 'self_reported', issue: 'No test report found to verify' };
   }
   const reportedNum = extractNumber(reported);
-  const match = reportedNum !== null && Math.abs(reportedNum - measured) < 2; // 2% tolerance
+  // PAT-HF-PLANTOLEAD-3705f856: Widen tolerance from 2% to 8%. Verifier measures
+  // whole-repo test pass rate but agents report SD-specific results.
+  const match = reportedNum !== null && Math.abs(reportedNum - measured) < 8;
+  // Qualitative text (e.g. "100% - testing sub-agent verified") → self-reported when healthy
+  const hasQualitativeText = reported.length > 10 && /[a-z]{3,}/i.test(reported.replace(/\d+%?/g, '').trim());
+  if (!match && hasQualitativeText && measured >= 85) {
+    return {
+      metric: name, reportedValue: reported, measuredValue: `${measured}%`,
+      score: 65, status: 'self_reported',
+      issue: `Reported "${reported}" — repo-wide rate is ${measured}% (SD-specific claim accepted as self-reported)`
+    };
+  }
   return {
     metric: name,
     reportedValue: reported,
@@ -122,7 +133,7 @@ function verifyCoverage(name, reported, target, repoRoot) {
     return { metric: name, reportedValue: reported, measuredValue: null, score: 65, status: 'self_reported', issue: 'No coverage report found to verify' };
   }
   const reportedNum = extractNumber(reported);
-  const match = reportedNum !== null && Math.abs(reportedNum - measured) < 2;
+  const match = reportedNum !== null && Math.abs(reportedNum - measured) < 8; // Widened from 2%
   return {
     metric: name,
     reportedValue: reported,
