@@ -440,6 +440,15 @@ export function createPRMergeVerificationGate() {
           try {
             const repoPath = repo === 'rickfelix/ehg' ? getRepoPath('EHG') : getRepoPath('EHG_Engineer');
 
+            // SD-LLM-CONTRACT-PIPELINE-TEST-ORCH-001-B RCA: prune stale remote-tracking refs
+            // before checking branches. Without this, squash-merged branches whose remote was
+            // deleted on GitHub still appear in `git branch -r` and trigger false failures.
+            try {
+              execSync('git fetch --prune origin', { encoding: 'utf8', cwd: repoPath, timeout: 30000 });
+            } catch (_fetchErr) {
+              console.log('   ⚠️  Could not fetch latest remote state — branch check may use stale data');
+            }
+
             const branchList = execSync('git branch -r', { encoding: 'utf8', cwd: repoPath, timeout: 10000 });
 
             for (const pattern of branchPatterns) {
