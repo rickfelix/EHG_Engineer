@@ -6,10 +6,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock Supabase
+const mockMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
 const mockSingle = vi.fn();
 const mockLimit = vi.fn(() => ({ single: mockSingle }));
-const mockSelect = vi.fn(() => ({ limit: mockLimit }));
-const mockFrom = vi.fn(() => ({ select: mockSelect }));
+const mockEq3 = vi.fn(() => ({ maybeSingle: mockMaybeSingle, single: mockSingle }));
+const mockEq2 = vi.fn(() => ({ eq: mockEq3, maybeSingle: mockMaybeSingle, single: mockSingle }));
+const mockEq1 = vi.fn(() => ({ eq: mockEq2 }));
+const mockSelect = vi.fn(() => ({ limit: mockLimit, eq: mockEq1 }));
+const mockInsert = vi.fn().mockResolvedValue({ error: null });
+const mockFrom = vi.fn(() => ({ select: mockSelect, insert: mockInsert }));
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ from: mockFrom })),
@@ -33,6 +38,8 @@ describe('stitch-adapter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setClientLoader(async () => mockClient);
+    // Default: no existing project (idempotency check returns null)
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
   });
 
   function setStitchEnabled(enabled) {
