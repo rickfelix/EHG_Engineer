@@ -257,7 +257,8 @@ export class HandoffRecorder {
       id: executionId,
       template_id: template?.id,
       from_phase: handoffType.split('-')[0],
-      to_phase: handoffType.split('-')[2],
+      // LEAD-FINAL-APPROVAL splits to 'APPROVAL' which violates CHECK constraint (LEAD/PLAN/EXEC only)
+      to_phase: (() => { const p = handoffType.split('-')[2]; return ['LEAD', 'PLAN', 'EXEC'].includes(p) ? p : 'LEAD'; })(),
       sd_id: sdUuid,
       handoff_type: handoffType,
       status: 'rejected',
