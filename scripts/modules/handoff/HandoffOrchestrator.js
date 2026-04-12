@@ -22,6 +22,7 @@ import {
   createHandoffMetadata
 } from './auto-proceed-resolver.js';
 import { captureHandoffGate } from '../../../lib/flywheel/capture.js';
+import { runPrerequisitePreflight } from './pre-checks/prerequisite-preflight.js';
 
 export class HandoffOrchestrator {
   constructor(options = {}) {
@@ -124,6 +125,34 @@ export class HandoffOrchestrator {
         );
       }
 
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-078: Quick prerequisite preflight
+      // Catches common 0% gate causes before running expensive full validation
+      const preflight = await runPrerequisitePreflight(this.supabase, normalizedType, sdId);
+      if (!preflight.passed) {
+        console.log('');
+        console.log('🚫 PREREQUISITE PREFLIGHT FAILED');
+        console.log('─'.repeat(50));
+        console.log('   The following prerequisites must be met before running gates:');
+        console.log('');
+        for (const issue of preflight.issues) {
+          console.log(`   ❌ [${issue.code}] ${issue.message}`);
+          console.log(`      💡 ${issue.remediation}`);
+          console.log('');
+        }
+        console.log('─'.repeat(50));
+        console.log('   Fix these issues first, then retry the handoff.');
+        console.log('');
+
+        // Record as failure with clear reason
+        const preflightResult = ResultBuilder.rejected(
+          'PREREQUISITE_PREFLIGHT_FAILED',
+          `Prerequisite preflight failed: ${preflight.issues.map(i => i.code).join(', ')}`
+        );
+        preflightResult.preflightIssues = preflight.issues;
+        await this.recorder.recordFailure(normalizedType, sdId, preflightResult, null);
+        return preflightResult;
+      }
+
       // Execute the handoff with AUTO-PROCEED metadata
       const result = await executor.execute(sdId, enhancedOptions);
 
@@ -205,6 +234,20 @@ export class HandoffOrchestrator {
           passedGates: [],
           failedGates: [{ name: 'SD_EXISTS', issues: ['SD not found'] }]
         };
+      }
+
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-078: Run quick preflight first
+      const preflight = await runPrerequisitePreflight(this.supabase, normalizedType, sdId);
+      if (!preflight.passed) {
+        console.log('');
+        console.log('🚫 PREREQUISITE PREFLIGHT ISSUES (fix these first):');
+        for (const issue of preflight.issues) {
+          console.log(`   ❌ [${issue.code}] ${issue.message}`);
+          console.log(`      💡 ${issue.remediation}`);
+        }
+        console.log('');
+        console.log('   Continuing with full gate check to find additional issues...');
+        console.log('');
       }
 
       // Get executor and gates

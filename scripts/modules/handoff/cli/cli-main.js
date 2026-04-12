@@ -822,7 +822,7 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
         'LEAD-TO-PLAN': 'Create PRD, then run PLAN-TO-EXEC',
         'PLAN-TO-EXEC': 'Implement features, then run EXEC-TO-PLAN',
         'EXEC-TO-PLAN': 'Verify implementation, then run PLAN-TO-LEAD',
-        'PLAN-TO-LEAD': 'Final review, then run LEAD-FINAL-APPROVAL',
+        'PLAN-TO-LEAD': 'Run /ship to merge PR, then run LEAD-FINAL-APPROVAL',
       };
       const nextWork = phaseWorkMap[normalizedType] || 'Continue with next phase work';
       console.log(`\n✅ AUTO-PROCEED: Handoff ${currentHandoffType} complete`);
