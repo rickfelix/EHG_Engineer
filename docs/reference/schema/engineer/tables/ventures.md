@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-12T18:57:55.663Z
+**Generated**: 2026-04-12T21:52:33.070Z
 **Rows**: 1
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (84 total)
+## Columns (85 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -107,6 +107,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | growth_strategy | `USER-DEFINED` | YES | - | Portfolio growth strategy classification: cash_engine (proven revenue), capability_builder (reusable tech/business capabilities), moonshot (high risk/high ceiling) |
 | venture_type | `text` | YES | - | Classifies the venture by its primary technology focus: ui (frontend/design), backend (API/services), mixed (full-stack), or data (analytics/ML). NULL for unclassified ventures. Added by SD-LEO-INFRA-SRIP-WIREFRAME-GATING-001. |
 | autonomy_level | `text` | YES | `'L0'::text` | Venture autonomy level: L0=Manual, L1=Guided, L2=Supervised, L3=Autonomous, L4=Full Auto |
+| target_platform | `text` | **NO** | `'both'::text` | Platform targeting: web (desktop only), mobile (mobile only), both (mobile-first + desktop) |
 
 ## Constraints
 
@@ -128,6 +129,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `ventures_health_status_check`: CHECK (((health_status)::text = ANY ((ARRAY['healthy'::character varying, 'warning'::character varying, 'critical'::character varying])::text[])))
 - `ventures_pipeline_mode_check`: CHECK ((pipeline_mode = ANY (ARRAY['building'::text, 'operations'::text, 'growth'::text, 'scaling'::text, 'exit_prep'::text, 'divesting'::text, 'sold'::text])))
 - `ventures_portfolio_synergy_score_range`: CHECK (((portfolio_synergy_score IS NULL) OR ((portfolio_synergy_score >= (0)::numeric) AND (portfolio_synergy_score <= (1)::numeric))))
+- `ventures_target_platform_check`: CHECK ((target_platform = ANY (ARRAY['web'::text, 'mobile'::text, 'both'::text])))
 - `ventures_time_horizon_classification_check`: CHECK ((time_horizon_classification = ANY (ARRAY['build_now'::text, 'park_later'::text, 'window_closing'::text])))
 - `ventures_venture_type_check`: CHECK ((venture_type = ANY (ARRAY['ui'::text, 'backend'::text, 'mixed'::text, 'data'::text])))
 - `ventures_vertical_category_check`: CHECK ((vertical_category = ANY (ARRAY['healthcare'::text, 'fintech'::text, 'edtech'::text, 'logistics'::text, 'other'::text])))
