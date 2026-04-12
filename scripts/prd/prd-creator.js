@@ -49,6 +49,13 @@ export function truncateGoalSummary(text, limit = 300) {
  * @returns {Promise<Object>} Created PRD data
  */
 export async function createPRDEntry(supabase, prdId, sdId, sdIdValue, prdTitle, stakeholderPersonas = []) {
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-001/FR-002: Pre-validate at creation time
+  // Prevents downstream PLAN-TO-EXEC gate retry noise (PAT-RETRO-PLANTOEXEC-7927809d, PAT-HF-PLANTOEXEC-083d9542)
+  const candidateSummary = `Technical requirements and implementation plan for ${prdTitle || sdId}. This PRD defines the scope, architecture, acceptance criteria, and test strategy for the strategic directive.`;
+  if (!candidateSummary || candidateSummary.length < 50) {
+    throw new Error(`PRD creation blocked: executive_summary would be too short (${candidateSummary?.length || 0} chars, minimum 50). Provide a descriptive prdTitle.`);
+  }
+
   // PAT-SDCREATE-001: Pre-check for existing PRD by sd_id to prevent duplicates
   // Two creation paths (deferred auto-generation + manual add-prd-to-database.js) can create
   // PRDs with different IDs for the same SD, causing .single() query failures downstream
@@ -165,6 +172,19 @@ export async function createPRDWithValidatedContent(
   llmContent,
   stakeholderPersonas = []
 ) {
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-001: Validate executive_summary at creation
+  // Check the provided value explicitly (empty/short strings should not silently fall through to defaults)
+  if (llmContent.executive_summary !== undefined && llmContent.executive_summary !== null) {
+    if (typeof llmContent.executive_summary !== 'string' || llmContent.executive_summary.trim().length < 50) {
+      throw new Error(`PRD creation blocked: executive_summary is too short (${llmContent.executive_summary?.length || 0} chars, minimum 50). Generate or provide a substantive executive summary.`);
+    }
+  }
+
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-002: Validate functional_requirements at creation
+  if (!llmContent.functional_requirements || !Array.isArray(llmContent.functional_requirements) || llmContent.functional_requirements.length === 0) {
+    throw new Error('PRD creation blocked: functional_requirements is empty. At least 1 functional requirement is needed. Generate requirements from SD scope before creating PRD.');
+  }
+
   // PAT-SDCREATE-001: Pre-check for existing PRD by sd_id to prevent duplicates
   // Two creation paths (deferred auto-generation + manual add-prd-to-database.js) can create
   // PRDs with different IDs for the same SD, causing .single() query failures downstream
