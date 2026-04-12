@@ -288,12 +288,12 @@ async function runDirect() {
 
   writePid(process.pid);
 
-  // Graceful shutdown
-  function shutdown(signal) {
+  // Graceful shutdown — await lock release before exit (QF: stale lock fix)
+  async function shutdown(signal) {
     console.log(`\n[stage-worker] Received ${signal}, shutting down...`);
-    worker.stop();
+    await worker.stop();
     removePid();
-    setTimeout(() => process.exit(0), 2000);
+    process.exit(0);
   }
 
   process.on('SIGINT', () => shutdown('SIGINT'));
