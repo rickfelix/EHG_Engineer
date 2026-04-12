@@ -201,14 +201,15 @@ async function checkLeadFinalApprovalPrereqs(supabase, sdId) {
   const issues = [];
 
   // Check PLAN-TO-LEAD handoff exists
-  const { data: planToLead } = await supabase
+  const { data: planToLeadRows } = await supabase
     .from('sd_phase_handoffs')
     .select('id, status')
     .eq('sd_id', sdId)
     .eq('to_phase', 'LEAD')
     .eq('from_phase', 'PLAN')
     .in('status', ['accepted', 'completed'])
-    .single();
+    .limit(1);
+  const planToLead = planToLeadRows?.[0] || null;
 
   if (!planToLead) {
     issues.push({
@@ -219,11 +220,12 @@ async function checkLeadFinalApprovalPrereqs(supabase, sdId) {
   }
 
   // Check retrospective exists
-  const { data: retro } = await supabase
+  const { data: retros } = await supabase
     .from('retrospectives')
     .select('id')
     .eq('sd_id', sdId)
-    .single();
+    .limit(1);
+  const retro = retros?.[0] || null;
 
   if (!retro) {
     issues.push({
