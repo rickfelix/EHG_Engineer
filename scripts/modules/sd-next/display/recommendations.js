@@ -272,6 +272,8 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
           });
           if (analysis.relationship === 'same_conversation') {
             actionable = true;
+          } else if (analysis.relationship === 'stale_inactive') {
+            actionable = true; // Session explicitly released/stale/idle
           } else if (analysis.relationship === 'stale_dead') {
             // Don't assume orphaned — check if SD itself shows recent work
             // (session may have compacted, restarted, or be mid-execution)

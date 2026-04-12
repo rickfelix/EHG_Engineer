@@ -191,6 +191,19 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
           console.log(`${colors.yellow}${indent}        └─ Session ${shortId} (${ageMin}m) — PID ${claimAnalysis.pid} is alive, likely busy${colors.reset}`);
           console.log(`${colors.dim}${indent}        └─ Heartbeat stale but process running — risky to release${colors.reset}`);
           break;
+        case 'stale_inactive': {
+          console.log(`${colors.red}${indent}        └─ Session ${shortId} (${ageMin}m) — session ${claimAnalysis.displayLabel}${colors.reset}`);
+          if (supabase) {
+            const released = await autoReleaseStaleDeadClaim(supabase, claimedBySession);
+            if (released) {
+              console.log(`${colors.green}${indent}        └─ Auto-released inactive session claim${colors.reset}`);
+              claimedSDs.delete(sdId);
+            }
+          } else {
+            console.log(`${colors.yellow}${indent}        └─ Release: /claim release ${claimedBySession}${colors.reset}`);
+          }
+          break;
+        }
         case 'stale_remote':
           console.log(`${colors.yellow}${indent}        └─ Session ${shortId} (${ageMin}m) — different host, cannot verify PID${colors.reset}`);
           console.log(`${colors.yellow}${indent}        └─ Release: /claim release ${claimedBySession}${colors.reset}`);
