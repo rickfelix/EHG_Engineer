@@ -24,6 +24,7 @@ import { getStaleThresholdSeconds } from '../../../lib/claim/stale-threshold.js'
  * Relationships:
  *   same_conversation - Post-compaction same conversation (terminal_id match)
  *   other_active      - Different session, heartbeat fresh
+ *   stale_inactive    - Session status is released/stale/idle (safe to auto-release)
  *   stale_dead        - Stale heartbeat + same host + PID dead (safe to auto-release)
  *   stale_alive       - Stale heartbeat + same host + PID alive (risky)
  *   stale_remote      - Stale heartbeat + different host (can't check PID)
@@ -59,6 +60,17 @@ export function analyzeClaimRelationship({ claimingSessionId: _claimingSessionId
         pid: claimPid
       };
     }
+  }
+
+  // Session explicitly released/stale/idle → safe to auto-release regardless of heartbeat
+  const sessionStatus = claimingSession?.status || 'unknown';
+  if (['released', 'stale', 'idle'].includes(sessionStatus)) {
+    return {
+      relationship: 'stale_inactive',
+      canAutoRelease: true,
+      displayLabel: 'STALE (inactive)',
+      pid: claimPid
+    };
   }
 
   // Fresh heartbeat → active different session
