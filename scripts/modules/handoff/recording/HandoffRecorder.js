@@ -655,6 +655,7 @@ export class HandoffRecorder {
     } catch (error) {
       // SD-LEO-PROTOCOL-V435-001 US-004: Silent error logging with recovery paths
       console.error('⚠️  Could not create handoff artifact:', error.message);
+      console.error('⚠️  ARTIFACT ERROR STACK:', error.stack?.slice(0, 500));
 
       // Log error silently to database for debugging
       await this._logErrorSilently('createArtifact', {
@@ -665,8 +666,11 @@ export class HandoffRecorder {
         stack: safeTruncate(error.stack || '', 500)
       });
 
-      // Return null but don't throw - the handoff execution was still recorded
-      return null;
+      // SD-DUALPLAT-MOBILE-WEB-ORCH-001 RCA: If artifact creation fails,
+      // the handoff reports PASS but sd_phase_handoffs has no accepted record.
+      // This causes sequence validator to block the next handoff.
+      // THROW instead of returning null so the handoff correctly reports failure.
+      throw error;
     }
   }
 
