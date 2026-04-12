@@ -60,7 +60,11 @@ export function createUserStoryExistenceGate(supabase) {
       }
 
       // Determine if stories are required
-      const storiesRequired = profile?.requires_user_stories ?? profile?.requires_e2e_tests ?? true;
+      // Hardcoded fallback: types that never need user stories (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-082)
+      const NO_STORIES_TYPES = new Set(['infrastructure', 'documentation', 'docs', 'orchestrator', 'bugfix', 'quick_fix', 'qa', 'uat', 'ux_debt']);
+      const storiesRequired = profile
+        ? (profile.requires_user_stories ?? false)
+        : !NO_STORIES_TYPES.has(sdType);
 
       console.log(`   SD Type: ${sdType}`);
       console.log(`   Stories Required: ${storiesRequired ? 'YES' : 'NO'}`);
