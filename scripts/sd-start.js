@@ -451,6 +451,25 @@ async function main() {
 
   let effectiveId = sd.sd_key || sd.id;
 
+  // 1.1 SD-LEO-INFRA-CONDITIONAL-QUEUE-GOVERNANCE-001: Reject claims on deferred SDs
+  if (sd.metadata?.do_not_advance_without_trigger === true) {
+    console.log(`\n${colors.red}❌ SD is DEFERRED — cannot be claimed${colors.reset}`);
+    console.log('   This SD has a governance gate: do_not_advance_without_trigger=true');
+    if (sd.metadata?.trigger_condition) {
+      const tc = sd.metadata.trigger_condition;
+      console.log(`\n   ${colors.cyan}Trigger condition:${colors.reset}`);
+      console.log(`   Type: ${tc.type || 'unknown'}`);
+      console.log(`   Threshold: ${tc.threshold || 'unknown'}`);
+      if (tc.decision_venue) console.log(`   Decision venue: ${tc.decision_venue}`);
+      if (tc.chairman_decision_required) console.log(`   ${colors.yellow}Chairman decision required${colors.reset}`);
+    }
+    if (sd.metadata?.auto_cancel_after_days) {
+      console.log(`   Auto-cancel: ${sd.metadata.auto_cancel_after_days} days from creation`);
+    }
+    console.log(`\n   ${colors.dim}This SD will be promoted automatically when trigger conditions are met via EVA Friday.${colors.reset}`);
+    process.exit(1);
+  }
+
   // 1.5. Orchestrator detection — route to child instead of claiming parent
   const explicitChild = process.argv.includes('--child') ? process.argv[process.argv.indexOf('--child') + 1] : null;
   if (!explicitChild) {

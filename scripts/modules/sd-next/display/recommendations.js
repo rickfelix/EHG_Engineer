@@ -259,6 +259,9 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
       .single();
 
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
+      // SD-LEO-INFRA-CONDITIONAL-QUEUE-GOVERNANCE-001: Skip deferred SDs from recommendations
+      if (sd.metadata?.do_not_advance_without_trigger === true) continue;
+
       // SD-LEO-INFRA-CLAIM-GUARD-001: Skip SDs claimed by OTHER sessions (use claiming_session_id)
       if (sd.claiming_session_id && sd.claiming_session_id !== currentSessionId) {
         // Check if this is same conversation or stale-dead — these are actionable

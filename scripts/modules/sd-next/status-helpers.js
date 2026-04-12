@@ -73,6 +73,11 @@ export function getPhaseAwareStatus(item) {
     return `${colors.cyan}PLANNING${colors.reset}`;
   }
 
+  // Governance: deferred SDs with trigger conditions
+  if (item.is_deferred || item.metadata?.do_not_advance_without_trigger === true) {
+    return `${colors.dim}DEFERRED${colors.reset}`;
+  }
+
   // Draft status = needs LEAD review first
   if (status === 'draft') {
     return `${colors.yellow}DRAFT${colors.reset}`;

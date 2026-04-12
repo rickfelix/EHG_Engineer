@@ -758,6 +758,9 @@ export class SDNextSelector {
       }
       if (sd.status === 'completed' || sd.status === 'cancelled') continue;
 
+      // Governance: skip deferred SDs from recommendation pipeline (keep in display with badge)
+      const isDeferred = sd.metadata?.do_not_advance_without_trigger === true;
+
       // QA: Check for dependency info in metadata with empty dependencies column
       const depsEmpty = !sd.dependencies || (Array.isArray(sd.dependencies) && sd.dependencies.length === 0);
       if (depsEmpty && sd.metadata) {
@@ -849,6 +852,7 @@ export class SDNextSelector {
         urgency_band: urgencyBand,
         urgency_numeric: urgencyNumeric,
         deps_resolved: depsResolved,
+        is_deferred: isDeferred,
         childDepStatus,
         actual: this.actuals[sd.sd_key] || this.actuals[sd.id]
       });
