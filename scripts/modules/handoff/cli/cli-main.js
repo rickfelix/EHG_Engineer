@@ -684,6 +684,40 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     }
   }
 
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-003: Worktree validity pre-check
+  // Fast-fail before gate cascade to prevent stale_worktree retry noise (PAT-RETRO-PLANTOEXEC-7927809d)
+  if (workflowInfo?.sd?.metadata?.worktree_path) {
+    try {
+      const { execSync } = await import('child_process');
+      const worktreePath = workflowInfo.sd.metadata.worktree_path;
+      const worktreeList = execSync('git worktree list --porcelain', { timeout: 3000, encoding: 'utf8' });
+      const normalizedPath = worktreePath.replace(/\\/g, '/').toLowerCase();
+      const isRegistered = worktreeList
+        .split('\n')
+        .filter(line => line.startsWith('worktree '))
+        .some(line => line.replace('worktree ', '').replace(/\\/g, '/').toLowerCase() === normalizedPath);
+
+      if (!isRegistered) {
+        console.error('');
+        console.error('❌ STALE WORKTREE DETECTED (Pre-Gate Fast-Fail)');
+        console.error('═'.repeat(50));
+        console.error(`   Worktree path: ${worktreePath}`);
+        console.error('   This worktree is no longer registered with git.');
+        console.error('');
+        console.error('   REMEDIATION:');
+        console.error(`   Run: node scripts/sd-start.js ${sdId}`);
+        console.error('   This will recreate the worktree and re-claim the SD.');
+        console.error('═'.repeat(50));
+        return { success: false };
+      }
+    } catch (worktreeErr) {
+      // Non-blocking: worktree check failure should not prevent handoff
+      if (process.env.DEBUG) {
+        console.log(`   ℹ️  Worktree pre-check skipped: ${worktreeErr.message}`);
+      }
+    }
+  }
+
   // Pre-gate blocker detection (SD-MAN-INFRA-VISION-HEAL-PLATFORM-001-02)
   if (!bypassValidation) {
     try {

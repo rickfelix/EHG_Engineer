@@ -474,9 +474,22 @@ export class PlanToLeadExecutor extends BaseExecutor {
     console.log('   Complete:', planValidation.complete);
 
     if (!planValidation.complete) {
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-077 FR-004: Provide specific incomplete items
+      // instead of generic PLAN_INCOMPLETE (PAT-HF-PLANTOLEAD-7927809d, PAT-RETRO-PLANTOLEAD-7927809d)
+      const incompleteDetails = [];
+      if (planValidation.issues?.length > 0) {
+        incompleteDetails.push(...planValidation.issues.map(i => typeof i === 'string' ? i : i.message || JSON.stringify(i)));
+      }
+      if (planValidation.failedChecks?.length > 0) {
+        incompleteDetails.push(...planValidation.failedChecks.map(c => `Check failed: ${c}`));
+      }
+      const detailStr = incompleteDetails.length > 0
+        ? `Incomplete items: ${incompleteDetails.join('; ')}`
+        : `Score: ${planValidation.score}, Issues: ${planValidation.issues?.length || 0}, Warnings: ${planValidation.warnings?.length || 0}`;
+
       return ResultBuilder.rejected(
         'PLAN_INCOMPLETE',
-        'PLAN verification not complete - cannot handoff to LEAD for approval',
+        `PLAN verification not complete - cannot handoff to LEAD for approval. ${detailStr}`,
         planValidation
       );
     }
