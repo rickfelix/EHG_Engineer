@@ -6,18 +6,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock Supabase
+const mockMaybeSingle = vi.fn();
 const mockSingle = vi.fn();
 const mockLimit = vi.fn(() => ({ single: mockSingle }));
 const mockOrder = vi.fn(() => ({ limit: mockLimit }));
-const mockEq2 = vi.fn(() => ({ order: mockOrder, single: mockSingle }));
+const mockEq4 = vi.fn(() => ({ limit: vi.fn(() => ({ maybeSingle: mockMaybeSingle })), maybeSingle: mockMaybeSingle, single: mockSingle }));
+const mockEq3 = vi.fn(() => ({ order: mockOrder, single: mockSingle, maybeSingle: mockMaybeSingle, eq: mockEq4 }));
+const mockEq2 = vi.fn(() => ({ order: mockOrder, single: mockSingle, eq: mockEq3, maybeSingle: mockMaybeSingle }));
 const mockEq1 = vi.fn(() => ({ eq: mockEq2, order: mockOrder }));
 const mockSelect = vi.fn(() => ({ eq: mockEq1, limit: mockLimit }));
 const mockUpsert = vi.fn().mockResolvedValue({ error: null });
 const mockUpdate = vi.fn(() => ({ eq: mockEq1 }));
+const mockInsert = vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { id: 'art-1' }, error: null }) })) }));
 const mockFrom = vi.fn(() => ({
   select: mockSelect,
   upsert: mockUpsert,
   update: mockUpdate,
+  insert: mockInsert,
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -59,6 +64,9 @@ describe('stitch-provisioner', () => {
       },
       error: null,
     });
+
+    // Default: no existing project (idempotency check returns null)
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
   });
 
   // -----------------------------------------------------------------------
@@ -192,6 +200,7 @@ describe('stitch-provisioner', () => {
         project_id: 'proj-789',
         url: 'https://stitch.withgoogle.com/projects/proj-789',
       });
+      mockStitchClient.generateScreens.mockResolvedValue([]);
 
       const result = await provisionStitchProject(
         'venture-123',
@@ -202,11 +211,13 @@ describe('stitch-provisioner', () => {
 
       expect(result.status).toBe('awaiting_curation');
       expect(result.project_id).toBe('proj-789');
-      expect(result.curation_prompts).toHaveLength(2);
+      // 2 screens × 2 platforms (mobile+desktop) = 4 prompts in dual-platform mode
+      expect(result.curation_prompts).toHaveLength(4);
       expect(mockStitchClient.createProject).toHaveBeenCalledOnce();
-      // Should NOT call generateScreens (hybrid flow)
-      expect(mockStitchClient.generateScreens).not.toHaveBeenCalled();
-      expect(mockUpsert).toHaveBeenCalled(); // artifacts stored
+      // generateScreens is now called for fire-and-forget screen generation
+      expect(mockStitchClient.generateScreens).toHaveBeenCalled();
+      // artifacts stored via insert or upsert
+      expect(mockInsert.mock.calls.length + mockUpsert.mock.calls.length).toBeGreaterThan(0);
     });
 
     it('returns no_op when no screens in artifacts', async () => {
