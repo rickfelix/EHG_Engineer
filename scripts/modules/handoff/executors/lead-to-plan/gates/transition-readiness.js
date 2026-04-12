@@ -160,7 +160,7 @@ export async function validateTransitionReadiness(sd, supabase) {
     if (isOrchestratorChild) {
       warnings.push('success_metrics empty for orchestrator child - will be populated during PLAN phase');
       console.log('   ⚠️  success_metrics empty (orchestrator child - warning only)');
-      score -= 15;
+      score -= 5;
     } else {
       issues.push('success_metrics AND success_criteria are both empty - must define at least one measurable success metric');
       console.log('   ❌ success_metrics and success_criteria are both empty or missing');

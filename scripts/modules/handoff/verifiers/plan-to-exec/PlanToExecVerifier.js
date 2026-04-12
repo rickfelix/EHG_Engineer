@@ -175,11 +175,25 @@ export class PlanToExecVerifier {
         }
 
         if (!stories || stories.length === 0) {
-          console.log('   ❌ No user stories found');
-          return rejectHandoff(this.supabase,sdId, 'NO_USER_STORIES', 'User stories are MANDATORY before EXEC phase.', {
-            userStoriesCount: 0,
-            requiredMinimum: 1
-          });
+          // Fallback: check if PRD content has embedded user_stories before rejecting
+          // Some workflows store stories in the PRD JSON but haven't migrated them to the table
+          const prdForStoryCheck = prds && prds.length > 0 ? (Array.isArray(prds) ? prds[0] : prds) : null;
+          const prdContent = prdForStoryCheck?.content;
+          const embeddedStories = typeof prdContent === 'object' && prdContent?.user_stories;
+          const hasEmbeddedStories = Array.isArray(embeddedStories) && embeddedStories.length > 0;
+
+          if (hasEmbeddedStories) {
+            console.log(`   ⚠️  No user stories in table, but found ${embeddedStories.length} in PRD content (fallback)`);
+            console.log('   💡 Run add-prd-to-database.js to migrate stories to the user_stories table');
+            userStories = embeddedStories;
+          } else {
+            console.log('   ❌ No user stories found');
+            return rejectHandoff(this.supabase,sdId, 'NO_USER_STORIES', 'User stories are MANDATORY before EXEC phase.', {
+              userStoriesCount: 0,
+              requiredMinimum: 1,
+              hint: 'If stories exist in the PRD, run add-prd-to-database.js to sync them to the user_stories table.'
+            });
+          }
         }
 
         userStories = stories;
