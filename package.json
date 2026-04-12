@@ -35,6 +35,7 @@
     "test:smoke": "vitest run tests/smoke.test.js",
     "test:unit": "vitest run tests/unit/",
     "test:integration": "vitest run tests/integration/",
+    "test:pipeline": "vitest run tests/integration/pipeline-s0-s17.test.js --testTimeout 1200000",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest watch",
     "test:e2e": "playwright test --config=playwright.config.js",
