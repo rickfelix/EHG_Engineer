@@ -76,10 +76,13 @@ export function createPrdExistsGate(prdRepo) {
         }
 
         // Check PRD status
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-085: Improved error messaging with exact fix command
         const validStatuses = ['approved', 'ready_for_exec', 'in_progress'];
         if (!validStatuses.includes(prd.status)) {
           console.log(`   ⚠️  PRD exists but status is '${prd.status}'`);
-          console.log('   ❌ PRD must be approved before EXEC phase');
+          console.log(`   ❌ PRD must be one of [${validStatuses.join(', ')}] before EXEC phase`);
+          console.log('   💡 Fix: Update PRD status to \'approved\' via add-prd-to-database.js or:');
+          console.log(`      UPDATE product_requirements_v2 SET status = 'approved' WHERE sd_id = '${ctx.sdId || ctx.sd?.id || 'SD-ID'}';`);
 
           return {
             passed: false,
@@ -91,8 +94,9 @@ export function createPrdExistsGate(prdRepo) {
             ],
             warnings: [],
             remediation: [
-              `Update PRD status from '${prd.status}' to 'approved'`,
-              'Complete any required PRD review steps',
+              `Update PRD status from '${prd.status}' to 'approved':`,
+              `  node scripts/add-prd-to-database.js --sd-id ${ctx.sdId || ctx.sd?.sd_key || 'SD-ID'} --approve`,
+              `  Or run: UPDATE product_requirements_v2 SET status = 'approved' WHERE sd_id = '${ctx.sdId || ctx.sd?.id || 'SD-ID'}';`,
               'Then retry this handoff'
             ].join('\n')
           };

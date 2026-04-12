@@ -170,22 +170,33 @@ export function buildSuccessMetrics(items) {
 
 /**
  * Build smoke_test_steps from selected items
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-085: Returns objects with instruction + expected_outcome
+ * fields, matching the schema expected by the SMOKE_TEST_SPECIFICATION gate.
  * @param {Array} items - Selected patterns and improvements
- * @returns {Array} smoke_test_steps array
+ * @returns {Array} smoke_test_steps array of {instruction, expected_outcome} objects
  */
 export function buildSmokeTestSteps(items) {
   const steps = [];
 
   for (const item of items) {
     if (item.pattern_id) {
-      steps.push(`Verify ${item.pattern_id} no longer occurs in the codebase`);
+      steps.push({
+        instruction: `Trigger the workflow that previously caused ${item.pattern_id} and verify it no longer fails`,
+        expected_outcome: `${item.pattern_id} pattern does not recur — gate passes on first attempt`
+      });
     } else {
-      const desc = (item.description || 'improvement').slice(0, 60);
-      steps.push(`Verify ${desc}... is implemented correctly`);
+      const desc = (item.description || 'improvement').slice(0, 80);
+      steps.push({
+        instruction: `Verify ${desc} is implemented correctly`,
+        expected_outcome: 'Implementation matches requirements with no regressions'
+      });
     }
   }
 
-  steps.push('Run relevant tests to confirm no regressions');
+  steps.push({
+    instruction: 'Run relevant tests to confirm no regressions',
+    expected_outcome: 'All existing tests pass, no new failures introduced'
+  });
   return steps;
 }
 

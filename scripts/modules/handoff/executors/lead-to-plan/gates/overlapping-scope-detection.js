@@ -25,17 +25,33 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
+ * Extract pattern IDs (PAT-*) from text for /learn SD differentiation.
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-085: /learn SDs share generic titles
+ * but target different pattern IDs — include these as discriminating keywords.
+ */
+function extractPatternIds(text) {
+  if (!text) return [];
+  const matches = text.match(/PAT-[A-Z0-9-]+/g) || [];
+  return matches.map(id => id.toLowerCase());
+}
+
+/**
  * Extract meaningful keywords from text.
  */
 function extractKeywords(text) {
   if (!text) return new Set();
   const normalized = typeof text === 'string' ? text : JSON.stringify(text);
-  return new Set(
+  const words = new Set(
     normalized.toLowerCase()
       .replace(/[^a-z0-9\s-]/g, ' ')
       .split(/\s+/)
       .filter(w => w.length > 3 && !STOP_WORDS.has(w))
   );
+  // Add pattern IDs as discriminating keywords for /learn SDs
+  for (const patId of extractPatternIds(text)) {
+    words.add(patId);
+  }
+  return words;
 }
 
 /**
