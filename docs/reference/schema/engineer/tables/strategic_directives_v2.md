@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-12T00:45:56.544Z
-**Rows**: 2,553
+**Generated**: 2026-04-12T18:57:55.663Z
+**Rows**: 2,579
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -136,6 +136,7 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_sd_key_key`: UNIQUE (sd_key)
 
 ### Check Constraints
+- `chk_deferred_requires_trigger_condition`: CHECK ((NOT ((((metadata ->> 'do_not_advance_without_trigger'::text))::boolean = true) AND ((metadata -> 'trigger_condition'::text) IS NULL))))
 - `chk_sd_v2_triage`: CHECK (((rolled_triage IS NULL) OR (rolled_triage = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text, 'Future'::text]))))
 - `key_changes_is_array`: CHECK (((key_changes IS NULL) OR (jsonb_typeof(key_changes) = 'array'::text)))
 - `key_principles_is_array`: CHECK (((key_principles IS NULL) OR (jsonb_typeof(key_principles) = 'array'::text)))
@@ -589,6 +590,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER INSERT
 - **Action**: `EXECUTE FUNCTION check_sd_creation_source()`
+
+### trg_sd_governance_metadata_audit
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION trg_audit_governance_metadata()`
 
 ### trg_sync_sd_code_user_facing
 
