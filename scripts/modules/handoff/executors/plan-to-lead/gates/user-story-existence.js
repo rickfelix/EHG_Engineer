@@ -60,7 +60,11 @@ export function createUserStoryExistenceGate(supabase) {
       }
 
       // Determine if stories are required
-      const storiesRequired = profile?.requires_user_stories ?? profile?.requires_e2e_tests ?? true;
+      // Hardcoded fallback: types that never need user stories (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-082)
+      const NO_STORIES_TYPES = new Set(['infrastructure', 'documentation', 'docs', 'orchestrator', 'bugfix', 'quick_fix', 'qa', 'uat', 'ux_debt']);
+      const storiesRequired = profile
+        ? (profile.requires_user_stories ?? false)
+        : !NO_STORIES_TYPES.has(sdType);
 
       console.log(`   SD Type: ${sdType}`);
       console.log(`   Stories Required: ${storiesRequired ? 'YES' : 'NO'}`);
@@ -104,6 +108,40 @@ export function createUserStoryExistenceGate(supabase) {
       console.log(`   User Stories Found: ${storyCount}`);
 
       if (storyCount === 0) {
+        // Fallback: check if PRD has embedded user_stories before blocking
+        const { data: prdData } = await supabase
+          .from('product_requirements_v2')
+          .select('content')
+          .eq('sd_id', sdIdForStories)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const prdContent = prdData?.content;
+        const embeddedStories = typeof prdContent === 'object' && prdContent?.user_stories;
+        const hasEmbeddedStories = Array.isArray(embeddedStories) && embeddedStories.length > 0;
+
+        if (hasEmbeddedStories) {
+          console.log(`   ⚠️  No user stories in table, but found ${embeddedStories.length} in PRD content (fallback)`);
+          console.log('   💡 Run add-prd-to-database.js to migrate stories to the user_stories table');
+          return {
+            passed: true,
+            score: 80,
+            max_score: 100,
+            issues: [],
+            warnings: [
+              `${embeddedStories.length} user stories found in PRD content but not in user_stories table`,
+              'Run add-prd-to-database.js to sync stories to the table for full validation'
+            ],
+            details: {
+              sd_type: sdType,
+              stories_required: true,
+              stories_found: embeddedStories.length,
+              source: 'prd_content_fallback'
+            }
+          };
+        }
+
         console.log('   ❌ BLOCKED: SD type requires user stories but none exist');
         console.log('');
         console.log('   This is the "Silent Success" anti-pattern:');

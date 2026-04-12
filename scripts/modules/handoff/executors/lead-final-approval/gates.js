@@ -279,12 +279,23 @@ export function createRetrospectiveExistsGate(supabase) {
         .single();
 
       if (!retrospective) {
+        const sdKey = ctx.sd?.sd_key || ctx.sdId || 'unknown';
         return {
           passed: false,
           score: 0,
           max_score: 100,
           issues: ['No retrospective found - run RETRO sub-agent first'],
-          warnings: []
+          warnings: [],
+          remediation: `Quality retrospective required for final approval.\n`
+            + `   --- TASK TOOL INVOCATION ---\n`
+            + `   subagent_type: "retro-agent"\n`
+            + `   prompt: |\n`
+            + `     Symptom: No quality retrospective found for ${sdKey}. LEAD-FINAL-APPROVAL blocked.\n`
+            + `     Location: sd_retrospectives table WHERE sd_id='${ctx.sd?.id || sdKey}'\n`
+            + `     Frequency: Blocking final approval\n`
+            + `     Prior attempts: Retrospective not yet generated\n`
+            + `     Desired outcome: Generate retrospective for ${sdKey} with quality score >= 60%. Include SD-specific learnings, not boilerplate.\n`
+            + `   --- END INVOCATION ---`
         };
       }
 
