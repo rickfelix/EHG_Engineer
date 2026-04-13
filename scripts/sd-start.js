@@ -924,6 +924,26 @@ async function main() {
       console.warn(`   ${colors.yellow}⚠️  Failed to persist worktree_path: ${e?.message || e}${colors.reset}`);
     }
 
+    // SD-CLAIMQUEUE-COHERENCE-WIRE-HEARTBEATAWARE-ORCH-001-C: Write CLAUDE_SESSION_ID
+    // into worktree .env so handoffs/child-preflight can resolve identity via dotenv.
+    if (session?.session_id && worktreeInfo.cwd) {
+      try {
+        const wtEnvPath = worktreeInfo.cwd.replace(/[\\/]$/, '') + '/.env';
+        const fs = await import('fs');
+        let envContent = '';
+        try { envContent = fs.readFileSync(wtEnvPath, 'utf8'); } catch { /* no .env yet */ }
+        const line = `CLAUDE_SESSION_ID=${session.session_id}`;
+        if (envContent.includes('CLAUDE_SESSION_ID=')) {
+          envContent = envContent.replace(/^CLAUDE_SESSION_ID=.*$/m, line);
+        } else {
+          envContent = envContent.trimEnd() + (envContent ? '\n' : '') + line + '\n';
+        }
+        fs.writeFileSync(wtEnvPath, envContent);
+      } catch (e) {
+        console.warn(`   ${colors.yellow}⚠️  Failed to write CLAUDE_SESSION_ID to worktree .env: ${e?.message || e}${colors.reset}`);
+      }
+    }
+
     // QF-20260314-250: Child claim verification gate
     // Warn when orchestrator sd:start resolves to a child's worktree
     const wtBranch = worktreeInfo.worktree.branch || '';
