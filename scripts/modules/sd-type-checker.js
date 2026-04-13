@@ -567,6 +567,48 @@ export async function getApplicableStreams(sdType, prdText, supabase) {
   return result;
 }
 
+// Risk keywords that force Tier 3 regardless of LOC
+const RISK_KEYWORDS = ['auth', 'migration', 'schema', 'security', 'rls', 'feature'];
+
+/**
+ * Get the work-item tier for an SD based on LOC and risk keywords.
+ * Tier 1 (≤30 LOC, no risk keywords): auto-approve quick fix
+ * Tier 2 (31-75 LOC, no risk keywords): standard quick fix
+ * Tier 3 (>75 LOC or risk keywords): full SD workflow
+ *
+ * @param {Object} sd - Strategic Directive object (needs scope or description)
+ * @returns {number} 1, 2, or 3
+ */
+export function getTierForSD(sd) {
+  if (!sd) return 3; // Safe default: strictest tier
+
+  // Check risk keywords in title, description, scope, and category
+  const searchText = [
+    sd.title || '',
+    sd.description || '',
+    sd.scope || '',
+    sd.category || ''
+  ].join(' ').toLowerCase();
+
+  if (RISK_KEYWORDS.some(kw => searchText.includes(kw))) {
+    return 3;
+  }
+
+  // Estimate LOC from scope or key_changes
+  const locMatch = (sd.scope || sd.description || '').match(/(\d+)\s*(?:LOC|lines?\s*of\s*code)/i);
+  const estimatedLoc = locMatch ? parseInt(locMatch[1], 10) : null;
+
+  // If LOC explicitly stated, use it
+  if (estimatedLoc !== null) {
+    if (estimatedLoc <= 30) return 1;
+    if (estimatedLoc <= 75) return 2;
+    return 3;
+  }
+
+  // Default to Tier 3 if LOC cannot be determined (safe default)
+  return 3;
+}
+
 /**
  * Clear stream requirements cache (useful for testing)
  */
@@ -601,6 +643,7 @@ export default {
   getThresholdProfile,
   getPRDQualityThresholdSync,
   getSkippedSubAgents,
+  getTierForSD,
   clearCache,
   getCacheStats,
   // Stream functions (SD-LEO-STREAMS-001)

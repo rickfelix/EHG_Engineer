@@ -319,6 +319,20 @@ export class ValidationOrchestrator {
       ? Math.round(weightedScoreSum / totalWeight)
       : 0;
 
+    // SD-PROTOCOL-COMPLETION-INTEGRITY-AUTOHEAL-ORCH-001-A: Per-gate score transparency
+    results.gate_scores = Object.entries(results.gateResults).map(([name, result]) => ({
+      gate: name,
+      score: result.score,
+      maxScore: result.maxScore,
+      passed: result.passed
+    }));
+
+    // Flag zero-score gates in warnings for visibility
+    const zeroScoreGates = results.gate_scores.filter(g => g.score === 0 && !g.passed);
+    for (const zg of zeroScoreGates) {
+      results.warnings.push(`Zero-score gate: ${zg.gate} (0/${zg.maxScore})`);
+    }
+
     // SD-LEO-INFRA-HARDENING-001: Enforce SD-type-specific thresholds
     // This ensures security SDs require 90%, features require 85%, etc.
     // SD-MAN-FEAT-VISION-DASHBOARD-VALIDATE-001: Check registry for DISABLED override
