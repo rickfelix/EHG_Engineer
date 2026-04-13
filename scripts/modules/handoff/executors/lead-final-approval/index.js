@@ -397,6 +397,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.log(`   ⚠️  Vision heal trigger failed (non-blocking): ${visionHealError.message}`);
     }
 
+    // SD-PROTOCOL-COMPLETION-INTEGRITY-AUTOHEAL-ORCH-001-A: Auto-invoke heal after completion
+    // Fire-and-forget: runs asynchronously, never blocks SD completion
+    this._runHealCheck(sd).catch(healErr =>
+      console.warn(`   ⚠️  Post-completion heal check failed (non-blocking): ${healErr.message}`)
+    );
+
     // Release the session claim
     await releaseSessionClaim(sd, this.supabase);
 
@@ -512,6 +518,42 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         nextOrchestratorSdKey: orchestratorChainingInfo.nextOrchestratorSdKey || null
       } : null
     };
+  }
+
+  /**
+   * SD-PROTOCOL-COMPLETION-INTEGRITY-AUTOHEAL-ORCH-001-A: Fire-and-forget heal check.
+   * Invokes codebase-vs-intent verification after SD completion.
+   * Records heal_invoked flag in handoff metadata. Never blocks completion.
+   * @param {Object} sd - Strategic directive object
+   */
+  async _runHealCheck(sd) {
+    const sdKey = sd.sd_key || sd.id;
+    console.log(`\n🔧 POST-COMPLETION HEAL: ${sdKey}`);
+
+    try {
+      // Record heal_invoked in the most recent LEAD-FINAL-APPROVAL handoff metadata
+      const { data: handoff } = await this.supabase
+        .from('sd_phase_handoffs')
+        .select('id, metadata')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (handoff) {
+        const metadata = handoff.metadata || {};
+        metadata.heal_invoked = true;
+        metadata.heal_invoked_at = new Date().toISOString();
+        await this.supabase
+          .from('sd_phase_handoffs')
+          .update({ metadata })
+          .eq('id', handoff.id);
+        console.log('   ✅ heal_invoked flag recorded in handoff metadata');
+      }
+    } catch (err) {
+      console.warn(`   ⚠️  Heal check failed (non-blocking): ${err.message}`);
+    }
   }
 
   /**

@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 import { resolveRepoPath, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
+import { getTierForSD } from '../../../sd-type-checker.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
@@ -303,33 +304,37 @@ export function createRetrospectiveExistsGate(supabase) {
       console.log(`   Quality score: ${retrospective.quality_score}`);
       console.log(`   Status: ${retrospective.status}`);
 
-      // SD-type auto-pass logic (aligned with RETROSPECTIVE_QUALITY_GATE in plan-to-lead)
-      // Non-feature SD types produce inherently thin retrospectives that fail quality thresholds.
-      // See: scripts/modules/handoff/executors/plan-to-lead/gates/retrospective-quality.js
+      // SD-PROTOCOL-COMPLETION-INTEGRITY-AUTOHEAL-ORCH-001-A: Tier-based retro gate enforcement
+      // Replaces type-based auto-pass with tier classification.
+      // Tier 1-2 (≤75 LOC, no risk keywords): exempt — small fixes don't need full retros
+      // Tier 3 (>75 LOC or risk keywords): retrospective required
+      const tier = getTierForSD(ctx.sd);
       const sdType = ctx.sd?.sd_type || ctx.sd?.category || 'feature';
-      const autoPassTypes = ['infrastructure', 'process', 'documentation', 'bugfix', 'bug_fix', 'corrective', 'enhancement'];
 
-      if (autoPassTypes.includes(sdType)) {
+      if (tier <= 2) {
         const score = Math.max(retrospective.quality_score || 55, 55);
-        console.log(`   🔧 AUTO-PASS: ${sdType} SD — thin retrospective expected`);
+        console.log(`   ⏭️  SKIP: Tier ${tier} SD — retrospective gate exempt`);
         console.log(`   Score floor: ${score}/100`);
         return {
           passed: true,
+          skipped: true,
           score,
           max_score: 100,
           issues: [],
-          warnings: [`${sdType} auto-pass: Thin retrospective expected for ${sdType} SDs`],
+          warnings: [],
+          skip_reason: `Tier ${tier} SD (${sdType}) — retrospective gate exempt for small work items`,
           details: {
-            auto_pass: true,
+            skipped: true,
+            skip_reason: `Tier ${tier} SD exempt from retrospective quality enforcement`,
+            tier,
             sd_type: sdType,
             retrospectiveId: retrospective.id,
-            qualityScore: retrospective.quality_score,
-            reason: `${sdType} SDs produce narrow-scope retrospectives that fail AI rubric thresholds`
+            qualityScore: retrospective.quality_score
           }
         };
       }
 
-      // Feature SDs: require quality_score >= 60
+      // Tier 3 SDs: require quality_score >= 60
       const minScore = 60;
       if (retrospective.quality_score < minScore) {
         return {
