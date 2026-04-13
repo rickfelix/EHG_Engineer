@@ -36,7 +36,7 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
         issues: [{
           code: 'SD_NOT_FOUND',
           message: `Strategic Directive ${sdId} not found in database`,
-          remediation: `Verify the SD key is correct. Run: node -e "..." to check.`
+          remediation: 'Verify the SD key is correct. Run: node -e "..." to check.'
         }]
       };
     }
@@ -101,7 +101,7 @@ function checkLeadToPlanPrereqs(sd) {
       code: 'JSONB_FIELDS_INCOMPLETE',
       message: `SD has ${populated.length}/${requiredCount} required JSONB fields populated (type: ${sdType})`,
       remediation: `Populate these fields before LEAD-TO-PLAN: ${missing.join(', ')}. ` +
-        `Expected structure: success_criteria=[{criterion,measure}], key_changes=[{change,type}], risks=[{risk,mitigation}]`
+        'Expected structure: success_criteria=[{criterion,measure}], key_changes=[{change,type}], risks=[{risk,mitigation}]'
     });
   }
 
@@ -149,7 +149,7 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
   const { data: prd } = await supabase
     .from('product_requirements_v2')
     .select('id, status, executive_summary')
-    .eq('sd_id', sdId)
+    .eq('sd_id', sd.id)
     .single();
 
   if (!prd) {
@@ -180,7 +180,7 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
   const { data: stories, error: storiesErr } = await supabase
     .from('user_stories')
     .select('story_key')
-    .eq('sd_id', sdId);
+    .eq('sd_id', sd.id);
 
   if (storiesErr || !stories || stories.length === 0) {
     issues.push({
@@ -231,7 +231,7 @@ async function checkLeadFinalApprovalPrereqs(supabase, sdId) {
     issues.push({
       code: 'RETROSPECTIVE_MISSING',
       message: 'No retrospective found for this SD',
-      remediation: `Create a retrospective before LEAD-FINAL-APPROVAL. This is generated during the /learn step.`
+      remediation: 'Create a retrospective before LEAD-FINAL-APPROVAL. This is generated during the /learn step.'
     });
   }
 
