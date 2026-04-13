@@ -310,7 +310,7 @@ function Stop-Workers {
     $staleWorkers = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -match 'stage-zero|stage-execution-worker|start-stage-worker|eva-master-scheduler|subagent-worker' }
     if ($staleWorkers) {
-        Write-Log "WARN" "[WORKERS] $($staleWorkers.Count) stale worker(s) still running — force killing..." "Yellow"
+        Write-Log "WARN" "[WORKERS] $($staleWorkers.Count) stale worker(s) still running - force killing..." "Yellow"
         foreach ($stale in $staleWorkers) {
             try {
                 & taskkill /T /F /PID $stale.ProcessId 2>&1 | Out-Null
