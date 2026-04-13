@@ -736,12 +736,12 @@ export class BaseExecutor {
     // single source of truth. Active claims are sessions with sd_id set and status='active'.
     const { data: existingClaims } = await this.supabase
       .from('claude_sessions')
-      .select('session_id, sd_key, claimed_at')
+      .select('session_id, sd_key, claimed_at, heartbeat_at')
       .eq('sd_key', claimId)
       .in('status', ['active', 'idle']);
 
     const activeClaim = (existingClaims || []).find(c => {
-      const ageSeconds = (Date.now() - new Date(c.claimed_at).getTime()) / 1000;
+      const ageSeconds = (Date.now() - new Date(c.heartbeat_at || c.claimed_at).getTime()) / 1000;
       return ageSeconds < 900;
     });
 
@@ -775,7 +775,7 @@ export class BaseExecutor {
     try {
       const { resolveOwnSession } = await import('../../../../lib/resolve-own-session.js');
       const resolved = await resolveOwnSession(this.supabase, {
-        select: 'session_id, sd_id, status, heartbeat_at',
+        select: 'session_id, sd_key, status, heartbeat_at',
         warnOnFallback: false
       });
       if (resolved.data && resolved.source !== 'heartbeat_fallback') {

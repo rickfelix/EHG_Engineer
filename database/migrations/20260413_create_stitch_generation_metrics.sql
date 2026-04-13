@@ -4,7 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS stitch_generation_metrics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  venture_id UUID REFERENCES ventures(id),
+  venture_id UUID REFERENCES ventures(id) ON DELETE CASCADE,
   screen_name TEXT NOT NULL,
   device_type TEXT NOT NULL,
   prompt_char_count INTEGER,
