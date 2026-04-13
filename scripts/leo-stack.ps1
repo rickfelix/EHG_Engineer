@@ -305,6 +305,19 @@ function Stop-Workers {
     if ($orphanCount -gt 0) {
         Write-Log "WARN" "[WORKERS] Killed $orphanCount orphan worker process(es) from previous sessions" "Yellow"
     }
+
+    # Verification: confirm no stale worker processes remain
+    $staleWorkers = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -match 'stage-zero|stage-execution-worker|start-stage-worker|eva-master-scheduler|subagent-worker' }
+    if ($staleWorkers) {
+        Write-Log "WARN" "[WORKERS] $($staleWorkers.Count) stale worker(s) still running — force killing..." "Yellow"
+        foreach ($stale in $staleWorkers) {
+            try {
+                & taskkill /T /F /PID $stale.ProcessId 2>&1 | Out-Null
+                Write-Log "INFO" "   Killed stale PID $($stale.ProcessId)" "Gray"
+            } catch { }
+        }
+    }
 }
 
 # Function to stop a server by PID file
@@ -320,7 +333,10 @@ function Stop-Server {
             $process = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
             if ($process) {
                 Write-Log "INFO" "Stopping $Name (PID: $pidValue)..." "Yellow"
-                Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
+                # Use taskkill /T to kill entire process tree (cmd → node supervisor → forked child)
+                # Stop-Process only kills the target PID; child processes become orphans on Windows
+                $taskKillResult = & taskkill /T /F /PID $pidValue 2>&1
+                Write-Log "INFO" "   taskkill: $taskKillResult" "Gray"
 
                 # Wait for process to exit
                 $waited = 0
