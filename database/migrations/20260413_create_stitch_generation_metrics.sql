@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS stitch_generation_metrics (
   device_type TEXT NOT NULL,
   prompt_char_count INTEGER,
   prompt_hash TEXT,
-  status TEXT NOT NULL CHECK (status IN ('success', 'error', 'fired')),
+  status TEXT NOT NULL CHECK (status IN ('success', 'error', 'fired', 'confirmed')),
   attempt_count INTEGER NOT NULL DEFAULT 1,
   duration_ms INTEGER,
   error_category TEXT,
