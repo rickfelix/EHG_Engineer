@@ -56,7 +56,7 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
 
       case 'LEAD_FINAL_APPROVAL':
       case 'LEAD-FINAL-APPROVAL':
-        issues.push(...await checkLeadFinalApprovalPrereqs(supabase, sdId));
+        issues.push(...await checkLeadFinalApprovalPrereqs(supabase, sd, sdId));
         break;
 
       // EXEC-TO-PLAN and PLAN-TO-LEAD have fewer prerequisite issues
@@ -197,14 +197,15 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
  * LEAD-FINAL-APPROVAL: Check prerequisite handoff chain + retrospective
  * Catches: PAT-HF-LEADFINALAPPROVAL (missing prerequisites)
  */
-async function checkLeadFinalApprovalPrereqs(supabase, sdId) {
+async function checkLeadFinalApprovalPrereqs(supabase, sd, sdId) {
   const issues = [];
+  const lookupId = sd?.id || sdId;
 
   // Check PLAN-TO-LEAD handoff exists
   const { data: planToLeadRows } = await supabase
     .from('sd_phase_handoffs')
     .select('id, status')
-    .eq('sd_id', sdId)
+    .eq('sd_id', lookupId)
     .eq('to_phase', 'LEAD')
     .eq('from_phase', 'PLAN')
     .in('status', ['accepted', 'completed'])
@@ -223,7 +224,7 @@ async function checkLeadFinalApprovalPrereqs(supabase, sdId) {
   const { data: retros } = await supabase
     .from('retrospectives')
     .select('id')
-    .eq('sd_id', sdId)
+    .eq('sd_id', lookupId)
     .limit(1);
   const retro = retros?.[0] || null;
 
