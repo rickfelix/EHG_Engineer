@@ -18,6 +18,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid } from '../middleware/validate.js';
 import { exportStitchArtifacts } from '../../lib/eva/bridge/stitch-exporter.js';
+import { getVentureMetrics, getFleetHealth, detectDegradation } from '../../lib/eva/bridge/stitch-metrics.js';
 
 const router = Router();
 
@@ -130,6 +131,36 @@ router.post('/export', asyncHandler(async (req, res) => {
       code: 'EXPORT_FAILED',
     });
   }
+}));
+
+/**
+ * GET /api/stitch/metrics/:ventureId
+ * Returns aggregated Stitch generation metrics for a venture.
+ * SD: SD-STITCH-GENERATION-OBSERVABILITY-AND-ORCH-001-C
+ */
+router.get('/metrics/:ventureId', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid venture ID' });
+  }
+  const days = parseInt(req.query.days || '30', 10);
+  const metrics = await getVentureMetrics(ventureId, days);
+  if (!metrics) {
+    return res.json({ venture_id: ventureId, total_screens: 0, message: 'No metrics data' });
+  }
+  res.json(metrics);
+}));
+
+/**
+ * GET /api/stitch/metrics
+ * Returns fleet-wide Stitch health summary.
+ */
+router.get('/metrics', asyncHandler(async (_req, res) => {
+  const [fleet, degraded] = await Promise.all([
+    getFleetHealth(7),
+    detectDegradation()
+  ]);
+  res.json({ fleet, degraded_ventures: degraded });
 }));
 
 export default router;

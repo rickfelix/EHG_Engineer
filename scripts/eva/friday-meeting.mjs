@@ -18,6 +18,7 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
 import { gatherRdProposals as _gatherRdProposals, renderRdProposals as _renderRdProposals, buildCombinedDecisionPayload as _buildCombinedDecisionPayload, processRdProposalDecision as _processRdProposalDecision } from '../../lib/skunkworks/friday-rd-section.js';
 import { buildInsightsReport, formatInsightsForDisplay } from '../modules/learning/insights.js';
+import { gatherStitchHealth, renderStitchHealth } from '../../lib/eva/bridge/stitch-metrics.js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
@@ -696,7 +697,7 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log('═'.repeat(55));
 
   // Gather all data in parallel
-  const [perfData, capData, consultData, intakeData, rdData, fleetData, pluginData, insightsData] = await Promise.all([
+  const [perfData, capData, consultData, intakeData, rdData, fleetData, pluginData, insightsData, stitchData] = await Promise.all([
     gatherPerformanceReview(),
     gatherCapabilityReport(),
     gatherConsultantFindings(),
@@ -705,6 +706,7 @@ export async function fridayMeetingHandler(options = {}) {
     gatherFleetTelemetry(),
     gatherPluginDiscoveries(),
     gatherLearningInsights(),
+    gatherStitchHealth().catch(err => { logger.warn('[friday-meeting] Stitch health gather failed:', err.message); return { fleet: { total_screens: 0 }, degraded_ventures: [], sd_suggestions: [], has_issues: false }; }),
   ]);
 
   // Render sections 1-5b
@@ -715,6 +717,7 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log(renderRdProposals(rdData));
   logger.log(renderFleetTelemetry(fleetData));
   logger.log(renderPluginDiscoveries(pluginData));
+  logger.log(renderStitchHealth(stitchData));
   logger.log(renderLearningInsights(insightsData));
 
   // Section 6: Decisions
