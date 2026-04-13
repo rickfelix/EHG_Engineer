@@ -163,4 +163,25 @@ router.get('/metrics', asyncHandler(async (_req, res) => {
   res.json({ fleet, degraded_ventures: degraded });
 }));
 
+/**
+ * POST /api/stitch/seed-repo
+ * Seeds a GitHub repo with venture docs for Replit Agent build.
+ * Body: { ventureId, repoUrl }
+ */
+router.post('/seed-repo', asyncHandler(async (req, res) => {
+  const { ventureId, repoUrl } = req.body;
+  if (!ventureId || !repoUrl) {
+    return res.status(400).json({ error: 'ventureId and repoUrl are required' });
+  }
+
+  try {
+    const { seedRepo } = await import('../../lib/eva/bridge/replit-repo-seeder.js');
+    const result = await seedRepo(ventureId, repoUrl);
+    res.json(result);
+  } catch (err) {
+    console.error('[stitch-route] seed-repo failed:', err);
+    res.status(500).json({ error: err.message, code: 'SEED_FAILED' });
+  }
+}));
+
 export default router;
