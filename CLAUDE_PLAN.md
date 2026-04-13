@@ -308,7 +308,7 @@ Before running `node scripts/add-prd-to-database.js`:
 | **executive_summary** | What? Why? Impact? | "This PRD defines X to solve Y, reducing Z by N%" |
 | **functional_requirements** | What must it do? How measured? | FR-1: System shall display X when Y occurs |
 | **technical_requirements** | What technologies? Constraints? | Must integrate with existing Supabase RLS |
-| **system_architecture** | How do components interact? | Data flows: API → Service → Database |
+| **system_architecture** | How do components interact? How will this be tested? | Data flows: API → Service → Database. Key functions exported for unit testing. |
 | **test_scenarios** | How do we verify? Edge cases? | TS-1: Given empty input, should show validation error |
 | **acceptance_criteria** | How do we know it's done? | All E2E tests pass, Russian Judge ≥70% |
 | **risks** | What could go wrong? Mitigations? | Risk: API rate limits. Mitigation: caching layer |

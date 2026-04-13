@@ -129,6 +129,19 @@ Before writing ANY code, EXEC MUST:
 - [ ] **Target location confirmed**: [where changes go]
 ```
 
+### Testability-Aware Implementation
+
+Before writing code, review the PRD's `test_scenarios` and `testing_strategy` and design your implementation to be testable:
+
+1. **Separate pure logic from side effects** — Extract business rules into pure functions that can be unit tested without mocking infrastructure
+2. **Export key functions independently** — Pipeline stages, validators, and transforms should be importable/callable outside their runtime context
+3. **Use injectable dependencies** — Database clients, API callers, and config should be parameters, not hardcoded imports, for functions that will need testing
+4. **Design clear seams** — When building multi-step workflows, each step should be independently testable with well-defined inputs/outputs
+
+Ask yourself: "If the testing-agent had to write tests for this, would the architecture make that easy or painful?"
+
+Skip for: documentation SDs, config-only changes, trivial fixes (<15 LOC)
+
 ### Common Mistakes to AVOID
 - ❌ Assuming component location based on naming similarity
 - ❌ Implementing without navigating to the URL first
