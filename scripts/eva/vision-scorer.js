@@ -27,6 +27,7 @@ import { spawnSync } from 'child_process';
 import { GRADE } from '../../lib/standards/grade-scale.js';
 import { publishVisionEvent, VISION_EVENTS, registerVisionScoredHandlers } from '../../lib/eva/event-bus/index.js';
 import { aggregateFeedbackQuality } from '../../lib/eva/feedback-dimension-aggregator.js';
+import { sanitizeSDForScoring } from '../../lib/eva/input-sanitizer.js';
 
 dotenv.config();
 
@@ -342,6 +343,12 @@ export async function scoreSD(options = {}) {
   let sdContext = null;
   if (sdKey) {
     sdContext = await loadSDContext(supabase, sdKey);
+    // SD-CONTEXTAWARE-VISION-SCORING-DYNAMIC-ORCH-001-B: Sanitize input before LLM
+    const { sd: sanitized, totalModifications } = sanitizeSDForScoring(sdContext, { logWarnings: true });
+    if (totalModifications.length > 0) {
+      console.log(`[VisionScorer] Input sanitized: ${totalModifications.length} modification(s)`);
+    }
+    sdContext = sanitized;
   }
 
   // Build prompts
