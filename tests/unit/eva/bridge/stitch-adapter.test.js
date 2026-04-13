@@ -122,17 +122,18 @@ describe('stitch-adapter', () => {
   });
 
   describe('tasteGateProvision', () => {
-    it('returns unavailable when stitch is disabled', async () => {
-      setStitchEnabled(false);
-      const result = await tasteGateProvision('v1', {}, {});
-      expect(result.status).toBe('unavailable');
+    it('returns deferred without creating a project (provisioning deferred to S15)', async () => {
+      const result = await tasteGateProvision('v1', {}, {}, { stage: 10 });
+      expect(result.status).toBe('deferred');
+      expect(result.reason).toBe('provision_deferred_to_s15');
+      expect(mockClient.createProject).not.toHaveBeenCalled();
     });
 
-    it('provisions successfully when enabled', async () => {
+    it('returns deferred regardless of stitch enabled state', async () => {
       setStitchEnabled(true);
-      mockClient.createProject.mockResolvedValue({ project_id: 'p2', url: 'http://stitch/p2' });
-      const result = await tasteGateProvision('v1', {}, {}, { ventureName: 'V', stage: 12 });
-      expect(result.status).toBe('success');
+      const result = await tasteGateProvision('v1', {}, {}, { ventureName: 'V', stage: 13 });
+      expect(result.status).toBe('deferred');
+      expect(mockClient.createProject).not.toHaveBeenCalled();
     });
   });
 
