@@ -180,12 +180,79 @@ function mapToGateScore(results) {
 }
 
 /**
+ * Look up the coverage threshold for a given SD type from sd_type_validation_profiles.
+ * Falls back to the legacy hardcoded 60/40 thresholds when the profile has no value.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} sdType - SD type string (e.g., 'feature', 'infrastructure')
+ * @returns {Promise<{threshold: number, blocking: boolean, source: string}>}
+ */
+async function getThresholdForSD(supabase, sdType) {
+  const LEGACY_BLOCKING_TYPES = ['feature', 'bugfix', 'security'];
+
+  if (!supabase) {
+    const isBlocking = LEGACY_BLOCKING_TYPES.includes(sdType);
+    return { threshold: isBlocking ? 60 : 40, blocking: isBlocking, source: 'hardcoded (no supabase client)' };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('sd_type_validation_profiles')
+      .select('coverage_threshold_pct, coverage_blocking')
+      .eq('sd_type', sdType)
+      .maybeSingle();
+
+    if (error || !data || data.coverage_threshold_pct == null) {
+      const isBlocking = LEGACY_BLOCKING_TYPES.includes(sdType);
+      return { threshold: isBlocking ? 60 : 40, blocking: isBlocking, source: 'hardcoded (profile NULL or missing)' };
+    }
+
+    return {
+      threshold: data.coverage_threshold_pct,
+      blocking: data.coverage_blocking !== false,
+      source: 'sd_type_validation_profiles'
+    };
+  } catch (e) {
+    console.debug('[TestCoverageQuality] Profile lookup suppressed:', e?.message || e);
+    const isBlocking = LEGACY_BLOCKING_TYPES.includes(sdType);
+    return { threshold: isBlocking ? 60 : 40, blocking: isBlocking, source: 'hardcoded (lookup error)' };
+  }
+}
+
+/**
+ * Log gate evaluation to gate_health_history for baseline defect leakage audit.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {Object} params - { sdKey, sdType, thresholdUsed, scoreAchieved, gateName, passed, source }
+ */
+async function logGateEvaluation(supabase, params) {
+  if (!supabase) return;
+  try {
+    await supabase.from('gate_health_history').insert({
+      gate_name: params.gateName || 'GATE_TEST_COVERAGE_QUALITY',
+      sd_key: params.sdKey || null,
+      score: params.scoreAchieved,
+      max_score: 100,
+      passed: params.passed,
+      metadata: {
+        threshold_used: params.thresholdUsed,
+        score_achieved: params.scoreAchieved,
+        sd_type: params.sdType,
+        source: params.source
+      }
+    });
+  } catch (e) {
+    console.debug('[TestCoverageQuality] Gate logging suppressed:', e?.message || e);
+  }
+}
+
+/**
  * Create the GATE_TEST_COVERAGE_QUALITY gate validator.
  *
- * @param {Object} _supabase - Supabase client (unused but kept for interface consistency)
+ * @param {Object} supabase - Supabase client for profile lookup and baseline logging
  * @returns {Object} Gate configuration { name, validator, required }
  */
-export function createTestCoverageQualityGate(_supabase) {
+export function createTestCoverageQualityGate(supabase) {
   return {
     name: 'GATE_TEST_COVERAGE_QUALITY',
     validator: async (ctx) => {
@@ -193,17 +260,19 @@ export function createTestCoverageQualityGate(_supabase) {
       console.log('-'.repeat(50));
 
       const sdType = ctx.sd?.sd_type || 'unknown';
+      const sdKey = ctx.sd?.sd_key || ctx.sd?.legacy_id || null;
       const liveExecution = process.env.ENABLE_LIVE_TEST_EXECUTION === 'true';
       const timeoutMs = parseInt(process.env.PLAYWRIGHT_GATE_TIMEOUT_MS || '60000', 10);
 
       console.log(`   📋 SD Type: ${sdType}`);
       console.log(`   📋 Mode: ${liveExecution ? 'LIVE (Playwright subprocess)' : 'ADVISORY (feature flag off)'}`);
 
-      const BLOCKING_TYPES = ['feature', 'bugfix', 'security'];
-      const isBlocking = BLOCKING_TYPES.includes(sdType);
-      const threshold = isBlocking ? 60 : 40;
+      // Look up threshold from sd_type_validation_profiles (falls back to 60/40)
+      const profile = await getThresholdForSD(supabase, sdType);
+      const isBlocking = profile.blocking;
+      const threshold = profile.threshold;
 
-      console.log(`   📋 Threshold: ${threshold}%`);
+      console.log(`   📋 Threshold: ${threshold}% (source: ${profile.source})`);
       console.log(`   📋 Blocking: ${isBlocking ? 'YES' : 'NO (advisory)'}`);
 
       // 1. Detect changed code files
@@ -340,6 +409,13 @@ export function createTestCoverageQualityGate(_supabase) {
       } else {
         console.log(`   ⚠️  ${status}: Score ${score}% below ${threshold}% threshold (advisory)`);
       }
+
+      // Baseline instrumentation: log evaluation for 30-day defect leakage audit
+      await logGateEvaluation(supabase, {
+        sdKey, sdType, thresholdUsed: threshold, scoreAchieved: score,
+        gateName: 'GATE_TEST_COVERAGE_QUALITY', passed: isBlocking ? passed : true,
+        source: profile.source
+      });
 
       return {
         passed: isBlocking ? passed : true,
