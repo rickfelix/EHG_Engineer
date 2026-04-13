@@ -149,7 +149,7 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
   const { data: prd } = await supabase
     .from('product_requirements_v2')
     .select('id, status, executive_summary')
-    .eq('sd_id', sdId)
+    .eq('sd_id', sd.id)
     .single();
 
   if (!prd) {
@@ -180,7 +180,7 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
   const { data: stories, error: storiesErr } = await supabase
     .from('user_stories')
     .select('story_key')
-    .eq('sd_id', sdId);
+    .eq('sd_id', sd.id);
 
   if (storiesErr || !stories || stories.length === 0) {
     issues.push({
