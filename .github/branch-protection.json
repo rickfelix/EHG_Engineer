@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Branch protection policy-as-code for EHG_Engineer. Applied via scripts/configure-branch-protection.js.",
+  "repository": "rickfelix/EHG_Engineer",
+  "branches": {
+    "main": {
+      "required_pull_request_reviews": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews": false,
+        "require_code_owner_reviews": false
+      },
+      "required_status_checks": {
+        "strict": false,
+        "contexts": []
+      },
+      "enforce_admins": false,
+      "required_linear_history": false,
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "restrictions": null
+    }
+  },
+  "metadata": {
+    "managed_by": "SD-NARRATIVE-KNOWLEDGE-TO-ENFORCED-ORCH-001-D",
+    "last_updated": "2026-04-10",
+    "notes": "Minimal policy: block force push and branch deletion on main. Review requirements kept at 0 for solo developer workflow."
+  }
+}
