@@ -1,0 +1,16 @@
+-- Migration: Update v_active_sessions stale threshold from 300s to 600s
+-- Applied: 2026-04-06 (via database-agent)
+-- SD: SD-CLAIMQUEUE-COHERENCE-WIRE-HEARTBEATAWARE-ORCH-001
+-- Purpose: Sync DB view threshold with stale-threshold.js (300s -> 600s, 10min = 2x heartbeat)
+--
+-- Changes applied to v_active_sessions view:
+--   1. seconds_until_stale: GREATEST(0, 300 -> 600 - EXTRACT(...))
+--   2. computed_status: WHEN EXTRACT(...) > 300 -> 600 THEN 'stale'
+--
+-- NOTE: This migration was applied directly to the database.
+-- The CREATE OR REPLACE VIEW statement is not reproduced here because
+-- pg_get_viewdef is not accessible via Supabase REST API.
+-- To regenerate: pg_dump --schema-only -t v_active_sessions
+
+-- Verification query (should show 600 in stale calculations):
+-- SELECT pg_get_viewdef('v_active_sessions'::regclass, true);

@@ -130,11 +130,24 @@ export async function showFallbackQueue(supabase, options = {}) {
   }
 
   // Show top ready SD per track (including unassigned)
+  // SD-CLAIMQUEUE-COHERENCE-WIRE-HEARTBEATAWARE-ORCH-001-B: Exclude claimed SDs from recommendations
+  let hasRecommendation = false;
   for (const [trackKey, trackSDs] of Object.entries(tracks)) {
-    const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on);
+    const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on && !s.claiming_session_id);
     if (ready) {
       const trackLabel = trackKey === 'UNASSIGNED' ? 'Unassigned' : `Track ${trackKey}`;
       console.log(`${colors.green}  ${trackLabel}:${colors.reset} ${ready.sd_key || ready.id} - ${ready.title.substring(0, 50)}...`);
+      hasRecommendation = true;
+    }
+  }
+
+  // Show informative message when all SDs are claimed
+  if (!hasRecommendation && !sds.find(s => s.is_working_on)) {
+    const claimedCount = sds.filter(s => s.claiming_session_id).length;
+    if (claimedCount > 0) {
+      console.log(`${colors.dim}  No unclaimed SDs available.`);
+      console.log(`  ${claimedCount} SD(s) claimed by other sessions.`);
+      console.log(`  Tip: Run /claim list for details.${colors.reset}`);
     }
   }
 

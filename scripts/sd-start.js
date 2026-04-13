@@ -924,6 +924,21 @@ async function main() {
       console.warn(`   ${colors.yellow}⚠️  Failed to persist worktree_path: ${e?.message || e}${colors.reset}`);
     }
 
+    // SD-CLAIMQUEUE-COHERENCE-WIRE-HEARTBEATAWARE-ORCH-001-C: Propagate session_id
+    // into worktree .env so handoff.js and other commands can resolve identity via dotenv.
+    // Fixes no_deterministic_identity in CLI mode where CLAUDE_ENV_FILE is unavailable.
+    try {
+      const wtEnvPath = path.join(worktreeInfo.cwd, '.env');
+      const fs = await import('fs');
+      const existing = fs.existsSync(wtEnvPath) ? fs.readFileSync(wtEnvPath, 'utf8') : '';
+      if (!existing.includes('CLAUDE_SESSION_ID=')) {
+        fs.appendFileSync(wtEnvPath, `\nCLAUDE_SESSION_ID=${session.session_id}\n`);
+        console.log(`   ${colors.dim}Session ID propagated to worktree .env${colors.reset}`);
+      }
+    } catch (envErr) {
+      console.warn(`   ${colors.yellow}⚠️  Failed to propagate session ID to worktree .env: ${envErr?.message || envErr}${colors.reset}`);
+    }
+
     // QF-20260314-250: Child claim verification gate
     // Warn when orchestrator sd:start resolves to a child's worktree
     const wtBranch = worktreeInfo.worktree.branch || '';

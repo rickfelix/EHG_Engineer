@@ -165,7 +165,7 @@ export async function triangulate(supabase, sdKey = null) {
       const heartbeatAge = sessionClaim.heartbeat_at
         ? (Date.now() - new Date(sessionClaim.heartbeat_at).getTime()) / 1000
         : Infinity;
-      signals.heartbeatStale = heartbeatAge > 300; // 5 minutes
+      signals.heartbeatStale = heartbeatAge > 600; // 10 minutes — synced with stale-threshold.js
     }
 
     const entry = {
