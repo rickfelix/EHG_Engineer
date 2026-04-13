@@ -46,6 +46,16 @@ const PATTERN_CATEGORIES = {
       'structured log', 'correlation id', 'trace id',
       'sentry', 'datadog', 'prometheus', 'grafana'
     ]
+  },
+  testability: {
+    label: 'Testability',
+    keywords: [
+      'testability', 'testable', 'dependency injection', 'injectable',
+      'pure function', 'side effect isolation', 'mock', 'stub',
+      'seam', 'interface boundary', 'test hook', 'test fixture',
+      'separation of concerns', 'single responsibility',
+      'factory', 'adapter pattern', 'inversion of control'
+    ]
   }
 };
 
