@@ -7,10 +7,12 @@
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 
+import { execSync } from 'child_process';
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { normalizeSDId } from '../../sd-id-normalizer.js';
 import { createTaskHydrator } from '../../../../lib/tasks/index.js';
 import { validateBypassReason } from '../bypass-rubric.js';
+import { resolveAutoProceed } from '../auto-proceed-resolver.js';
 
 /**
  * Check bypass rate limits and log to audit
@@ -269,6 +271,25 @@ export async function displayExecutionResult(result, handoffType, sdId) {
     // Emitted LAST so grep/tail can always find it regardless of output size
     const passDisplayScore = result.normalizedScore ?? result.qualityScore ?? Math.round((result.totalScore / result.maxScore) * 100) ?? 0;
     console.log(`\nHANDOFF_RESULT=PASS SD=${sdId} SCORE=${passDisplayScore} PHASE=${handoffType.toUpperCase()}`);
+
+    // SD-AUTOPROCEED-SHIP-ENFORCEMENT-ORCH-001: Emit post-action directive for LEAD-FINAL-APPROVAL
+    // When auto-proceed is ON and commits exist on branch, emit HANDOFF_POST_ACTION=ship
+    // so Claude treats /ship as a deterministic obligation, not a context-dependent suggestion.
+    if (handoffType.toUpperCase() === 'LEAD-FINAL-APPROVAL') {
+      try {
+        const supabase = createSupabaseServiceClient();
+        const autoProceedResult = await resolveAutoProceed({ supabase, verbose: false });
+        if (autoProceedResult.enabled) {
+          const commitOutput = execSync('git log origin/main..HEAD --oneline 2>/dev/null || true', { encoding: 'utf-8' }).trim();
+          if (commitOutput.length > 0) {
+            console.log(`\nHANDOFF_POST_ACTION=ship`);
+          }
+        }
+      } catch (e) {
+        // Non-blocking: if post-action check fails, handoff still succeeded
+        console.debug(`[post-action] Could not resolve post-action: ${e.message}`);
+      }
+    }
   } else {
     console.log('');
     console.log('❌ HANDOFF FAILED');

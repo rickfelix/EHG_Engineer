@@ -91,6 +91,11 @@
             "type": "command",
             "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/auto-learning-capture.cjs",
             "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/post-ship-enforcement.cjs",
+            "timeout": 3
           }
         ]
       },
