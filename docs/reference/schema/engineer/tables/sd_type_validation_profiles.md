@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-13T12:55:49.260Z
+**Generated**: 2026-04-13T15:18:40.578Z
 **Rows**: 18
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (29 total)
+## Columns (31 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -47,6 +47,8 @@
 | requires_uat_execution | `boolean` | YES | `false` | If true, UAT Agent must execute smoke test steps via Playwright MCP and capture evidence. |
 | gate2_exempt_sections | `ARRAY` | YES | `'{}'::text[]` | Array of Gate 2 section codes that are exempt for this SD type. Exempt sections award full points without validation. Valid codes: B1_migrations, B2_rls, B3_complexity, C1_queries, D2_migration_tests |
 | required_sub_agents | `jsonb` | YES | `'{}'::jsonb` | Phase-keyed sub-agent requirements. Format: {"PLAN": ["STORIES", "DESIGN"], "EXEC": ["TESTING"]} |
+| coverage_threshold_pct | `integer(32)` | YES | - | Test pass rate threshold (0-100). NULL = fallback to system default (60/40). Phase 2 will add severity-based overrides. |
+| coverage_blocking | `boolean` | YES | `true` | Whether failing the threshold blocks the handoff (TRUE) or is advisory only (FALSE). |
 
 ## Constraints
 
@@ -60,6 +62,7 @@
 - `sd_type_validation_profiles_min_handoffs_check`: CHECK (((min_handoffs >= 0) AND (min_handoffs <= 5)))
 - `sd_type_validation_profiles_plan_weight_check`: CHECK (((plan_weight >= 0) AND (plan_weight <= 100)))
 - `sd_type_validation_profiles_verify_weight_check`: CHECK (((verify_weight >= 0) AND (verify_weight <= 100)))
+- `security_floor`: CHECK ((NOT (((sd_type)::text = 'security'::text) AND (coverage_threshold_pct IS NOT NULL) AND (coverage_threshold_pct < 100))))
 - `valid_human_verification_type`: CHECK ((human_verification_type = ANY (ARRAY['ui_smoke_test'::text, 'api_test'::text, 'cli_verification'::text, 'documentation_review'::text, 'none'::text])))
 - `weights_sum_to_100`: CHECK ((((((lead_weight + plan_weight) + exec_weight) + verify_weight) + final_weight) = 100))
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-13T12:55:49.260Z
-**Rows**: 0
+**Generated**: 2026-04-13T15:18:40.578Z
+**Rows**: 17
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -41,7 +41,7 @@
 - `stitch_generation_metrics_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
-- `stitch_generation_metrics_status_check`: CHECK ((status = ANY (ARRAY['success'::text, 'error'::text, 'fired'::text])))
+- `stitch_generation_metrics_status_check`: CHECK ((status = ANY (ARRAY['success'::text, 'error'::text, 'fired'::text, 'confirmed'::text])))
 
 ## Indexes
 

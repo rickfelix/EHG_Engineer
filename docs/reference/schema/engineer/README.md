@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-13T12:55:49.260Z
+**Generated**: 2026-04-13T15:18:40.578Z
 **Tables**: 643
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
