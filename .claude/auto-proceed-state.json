@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-LEO-INFRA-EHG-PORTFOLIO-ALLOCATION-001",
+  "currentSd": "SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-092",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing EHG Portfolio Allocation Policy (Glide Path)",
+  "currentTask": "Implementing Resolve 5 operational patterns from /learn analysis",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
   "clearedAt": "2026-04-04T23:11:07.416Z",
-  "lastUpdatedAt": "2026-04-05T01:53:38.636Z"
+  "lastUpdatedAt": "2026-04-13T18:59:08.696Z"
 }
