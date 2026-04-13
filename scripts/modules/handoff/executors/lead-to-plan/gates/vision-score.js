@@ -1,9 +1,15 @@
 /**
  * Vision Score Gate for LEAD-TO-PLAN
  * SD: SD-MAN-INFRA-VISION-SCORE-GATE-HARDEN-001
+ * Enhanced: SD-CONTEXTAWARE-VISION-SCORING-DYNAMIC-ORCH-001-A
  *
  * Hard SD-type-aware enforcement gate — blocks handoff when vision score is
  * below the type-specific threshold or when no score exists.
+ *
+ * Dynamic threshold adjustment (SD-CONTEXTAWARE-VISION-SCORING-DYNAMIC-ORCH-001-A):
+ *   adjusted_threshold = base_threshold * (addressable_dims / total_dims)
+ *   Floor rule: min 3 addressable dimensions, score >= 60
+ *   Audit: every gate evaluation logged with full dimensional context
  *
  * Threshold tiers:
  *   feature / governance / security    → must score ≥ 90
@@ -44,6 +50,109 @@ export const SD_TYPE_THRESHOLDS = {
 
 /** Minimum dimension score before a named warning is emitted. */
 export const DIMENSION_WARNING_THRESHOLD = 75;
+
+/** Minimum addressable dimensions for auto-scoring (floor rule). */
+export const MIN_ADDRESSABLE_DIMENSIONS = 3;
+
+/** Minimum average score for addressable dimensions (floor rule). */
+export const FLOOR_MINIMUM_SCORE = 60;
+
+/**
+ * Dimension addressability by SD type.
+ * Maps SD type to a Set of dimension name patterns that the type CAN address.
+ * Dimensions not in this set are considered non-addressable for that SD type.
+ * Pattern matching is case-insensitive substring match.
+ *
+ * null = all dimensions addressable (no adjustment needed).
+ */
+export const SD_TYPE_ADDRESSABLE_DIMENSIONS = {
+  feature:        null, // features can address all dimensions
+  governance:     null,
+  security:       ['security', 'compliance', 'risk', 'architecture', 'reliability', 'data'],
+  infrastructure: ['architecture', 'reliability', 'scalability', 'performance', 'security', 'maintainability', 'automation', 'observability'],
+  enhancement:    null,
+  maintenance:    ['reliability', 'maintainability', 'performance', 'security', 'architecture'],
+  protocol:       ['process', 'governance', 'compliance', 'documentation', 'automation', 'quality'],
+  bugfix:         ['reliability', 'quality', 'performance', 'security'],
+  fix:            ['reliability', 'quality', 'performance', 'security'],
+  documentation:  ['documentation', 'knowledge', 'compliance', 'process'],
+  refactor:       ['architecture', 'maintainability', 'performance', 'scalability', 'reliability'],
+  orchestrator:   null,
+};
+
+/**
+ * Count addressable dimensions for an SD type given the total dimension names.
+ * Returns { addressable, total } counts.
+ *
+ * @param {string} sdType
+ * @param {Object|null} dimensionScores - JSONB { dimName: score, ... }
+ * @returns {{ addressable: number, total: number }}
+ */
+export function countAddressableDimensions(sdType, dimensionScores) {
+  if (!dimensionScores || typeof dimensionScores !== 'object') {
+    return { addressable: 0, total: 0 };
+  }
+
+  const dimNames = Object.keys(dimensionScores);
+  const total = dimNames.length;
+
+  const patterns = SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
+  if (patterns === null || patterns === undefined) {
+    return { addressable: total, total }; // all addressable
+  }
+
+  const addressable = dimNames.filter(name => {
+    const lower = name.toLowerCase();
+    return patterns.some(p => lower.includes(p.toLowerCase()));
+  }).length;
+
+  return { addressable, total };
+}
+
+/**
+ * Calculate dynamic threshold based on addressable dimension ratio.
+ * Formula: adjusted = base * (addressable / total)
+ * Returns base threshold if all dims addressable or no dimension data.
+ *
+ * @param {number} baseThreshold
+ * @param {number} addressable
+ * @param {number} total
+ * @returns {number} Adjusted threshold (rounded to nearest integer)
+ */
+export function calculateDynamicThreshold(baseThreshold, addressable, total) {
+  if (total === 0 || addressable >= total) return baseThreshold;
+  return Math.round(baseThreshold * (addressable / total));
+}
+
+/**
+ * Log a vision gate evaluation to the database (audit trail).
+ * Non-blocking — failures are logged but do not affect the gate result.
+ *
+ * @param {Object} supabase
+ * @param {Object} auditData
+ */
+async function logGateEvaluation(supabase, auditData) {
+  if (!supabase) return;
+  try {
+    await supabase
+      .from('vision_scoring_audit_log')
+      .insert({
+        sd_id: auditData.sdId,
+        sd_type: auditData.sdType,
+        total_dims: auditData.totalDims,
+        addressable_count: auditData.addressableCount,
+        base_threshold: auditData.baseThreshold,
+        adjusted_threshold: auditData.adjustedThreshold,
+        score: auditData.score,
+        verdict: auditData.verdict,
+        floor_rule_triggered: auditData.floorRuleTriggered || false,
+        evaluation_context: auditData.context || null,
+      });
+  } catch (e) {
+    // Non-blocking: audit logging failure must not block the gate
+    console.debug('[VisionScore] Audit log insert suppressed:', e?.message || e);
+  }
+}
 
 const THRESHOLD_LABELS = {
   accept:        { emoji: '✅', label: 'ACCEPT',      desc: 'Strong vision alignment' },
@@ -115,7 +224,7 @@ function getDimensionWarnings(dimensionScores) {
 export async function validateVisionScore(sd, supabase) {
   const sdKey = sd.sd_key || sd.id;
   const sdType = (sd.sd_type || 'unknown').toLowerCase();
-  const threshold = SD_TYPE_THRESHOLDS[sdType] ?? SD_TYPE_THRESHOLDS._default;
+  const baseThreshold = SD_TYPE_THRESHOLDS[sdType] ?? SD_TYPE_THRESHOLDS._default;
 
   // ── Orchestrator-child exemption ──────────────────────────────────────
   // Children of an orchestrator are tactical decompositions of an already
@@ -125,7 +234,7 @@ export async function validateVisionScore(sd, supabase) {
   // The parent orchestrator already passed vision alignment at creation.
   if (sd.metadata?.parent_orchestrator || sd.metadata?.auto_generated) {
     console.log('\n🔍 GATE: Vision Alignment Score (Hard Enforcement)');
-    console.log(`   SD Type: ${sdType} | Required: ${threshold}/100`);
+    console.log(`   SD Type: ${sdType} | Required: ${baseThreshold}/100`);
     console.log('-'.repeat(50));
     console.log(`   ⏭️  Orchestrator child detected (parent: ${sd.metadata.parent_orchestrator || 'auto_generated'})`);
     console.log('   ✅ Orchestrator children exempt — parent already validated vision alignment');
@@ -145,7 +254,7 @@ export async function validateVisionScore(sd, supabase) {
   // Blocking them creates a circular dependency. RCA: PAT-CORR-VISION-GATE-001
   if (sd.vision_origin_score_id || sd.metadata?.source === 'corrective_sd_generator') {
     console.log('\n🔍 GATE: Vision Alignment Score (Hard Enforcement)');
-    console.log(`   SD Type: ${sdType} | Required: ${threshold}/100`);
+    console.log(`   SD Type: ${sdType} | Required: ${baseThreshold}/100`);
     console.log('-'.repeat(50));
     console.log(`   ⏭️  Corrective SD detected (origin_score: ${sd.vision_origin_score_id || 'metadata.source'})`);
     console.log('   ✅ Corrective SDs exempt from GATE_VISION_SCORE — they exist to fix vision gaps');
@@ -184,14 +293,26 @@ export async function validateVisionScore(sd, supabase) {
     }
   }
 
+  // ── Dynamic threshold adjustment ────────────────────────────────────────
+  const { addressable, total } = countAddressableDimensions(sdType, dimensionScores);
+  const threshold = calculateDynamicThreshold(baseThreshold, addressable, total);
+  const thresholdAdjusted = threshold !== baseThreshold;
+
   console.log('\n🔍 GATE: Vision Alignment Score (Hard Enforcement)');
-  console.log(`   SD Type: ${sdType} | Required: ${threshold}/100`);
+  console.log(`   SD Type: ${sdType} | Base Threshold: ${baseThreshold}/100`);
+  if (thresholdAdjusted) {
+    console.log(`   📐 Dynamic Threshold: ${threshold}/100 (${addressable}/${total} addressable dims)`);
+  }
   console.log('-'.repeat(50));
 
   // ── No score present → hard block ───────────────────────────────────────
   if (visionScore === null) {
     console.log('   ❌ No vision alignment score found — handoff BLOCKED');
     console.log(`   💡 Run: node scripts/eva/vision-scorer.js --sd-id ${sdKey || '<SD-KEY>'}`);
+    await logGateEvaluation(supabase, {
+      sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
+      baseThreshold, adjustedThreshold: threshold, score: null, verdict: 'blocked_no_score',
+    });
     return {
       passed: false,
       score: 0,
@@ -200,6 +321,59 @@ export async function validateVisionScore(sd, supabase) {
       remediation: `node scripts/eva/vision-scorer.js --sd-id ${sdKey || '<SD-KEY>'}`,
       warnings: [],
     };
+  }
+
+  // ── Floor rule: minimum addressable dimensions ───────────────────────────
+  // Only applies when some dims are non-addressable (addressable < total).
+  // If all dims are addressable, no adjustment needed regardless of count.
+  if (total > 0 && addressable < total && addressable < MIN_ADDRESSABLE_DIMENSIONS) {
+    console.log(`   ⚠️  Floor rule: only ${addressable}/${total} addressable dims (min: ${MIN_ADDRESSABLE_DIMENSIONS})`);
+    console.log('   🔍 Flagged for human review — too few addressable dimensions');
+    await logGateEvaluation(supabase, {
+      sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
+      baseThreshold, adjustedThreshold: threshold, score: visionScore,
+      verdict: 'human_review_floor_dims', floorRuleTriggered: true,
+      context: `Only ${addressable} addressable dimensions (minimum ${MIN_ADDRESSABLE_DIMENSIONS} required)`,
+    });
+    return {
+      passed: true,
+      score: 75,
+      maxScore: 100,
+      details: `Floor rule: ${addressable}/${total} addressable dims (min: ${MIN_ADDRESSABLE_DIMENSIONS}). Human review recommended.`,
+      warnings: [`Floor rule triggered: only ${addressable} addressable dims for ${sdType} SD (minimum ${MIN_ADDRESSABLE_DIMENSIONS})`],
+    };
+  }
+
+  // ── Floor rule: minimum average score for addressable dims ────────────────
+  if (total > 0 && addressable > 0 && addressable < total && dimensionScores) {
+    const patterns = SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
+    if (patterns) {
+      const addressableDimScores = Object.entries(dimensionScores)
+        .filter(([name]) => patterns.some(p => name.toLowerCase().includes(p.toLowerCase())))
+        .map(([, score]) => score)
+        .filter(s => typeof s === 'number');
+
+      if (addressableDimScores.length > 0) {
+        const avgScore = addressableDimScores.reduce((a, b) => a + b, 0) / addressableDimScores.length;
+        if (avgScore < FLOOR_MINIMUM_SCORE) {
+          console.log(`   ❌ Floor rule: addressable dim avg ${Math.round(avgScore)}/100 < ${FLOOR_MINIMUM_SCORE} minimum`);
+          await logGateEvaluation(supabase, {
+            sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
+            baseThreshold, adjustedThreshold: threshold, score: visionScore,
+            verdict: 'blocked_floor_score', floorRuleTriggered: true,
+            context: `Addressable dim avg ${Math.round(avgScore)} below floor minimum ${FLOOR_MINIMUM_SCORE}`,
+          });
+          return {
+            passed: false,
+            score: 0,
+            maxScore: 100,
+            details: `Floor rule: addressable dim avg ${Math.round(avgScore)}/100 below minimum ${FLOOR_MINIMUM_SCORE}`,
+            remediation: `Improve addressable dimension scores to avg >= ${FLOOR_MINIMUM_SCORE}`,
+            warnings: [],
+          };
+        }
+      }
+    }
   }
 
   const classification = THRESHOLD_LABELS[thresholdAction] || THRESHOLD_LABELS.escalate;
@@ -214,6 +388,10 @@ export async function validateVisionScore(sd, supabase) {
       console.log(`   📋 Chairman justification: ${override.justification}`);
       const dimWarnings = getDimensionWarnings(dimensionScores);
       dimWarnings.forEach(w => console.log(`   ⚠️  ${w}`));
+      await logGateEvaluation(supabase, {
+        sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
+        baseThreshold, adjustedThreshold: threshold, score: visionScore, verdict: 'pass_override',
+      });
       return {
         passed: true,
         score: 100,
@@ -224,13 +402,20 @@ export async function validateVisionScore(sd, supabase) {
     }
 
     console.log(`   ❌ Score ${visionScore}/100 BELOW ${sdType} threshold ${threshold} — handoff BLOCKED`);
+    if (thresholdAdjusted) {
+      console.log(`   ℹ️  (Adjusted from base ${baseThreshold} to ${threshold} for ${addressable}/${total} addressable dims)`);
+    }
     console.log(`   💡 Improve vision alignment: node scripts/eva/vision-scorer.js --sd-id ${sdKey}`);
     console.log('   💡 Or request Chairman override via validation_gate_registry');
+    await logGateEvaluation(supabase, {
+      sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
+      baseThreshold, adjustedThreshold: threshold, score: visionScore, verdict: 'blocked_below_threshold',
+    });
     return {
       passed: false,
       score: 0,
       maxScore: 100,
-      details: `Vision score ${visionScore}/100 does not meet ${sdType} threshold ${threshold}/100`,
+      details: `Vision score ${visionScore}/100 does not meet ${sdType} threshold ${threshold}/100${thresholdAdjusted ? ` (adjusted from ${baseThreshold} for ${addressable}/${total} dims)` : ''}`,
       remediation: `Score must reach ${threshold}/100 for ${sdType} SDs. Run: node scripts/eva/vision-scorer.js --sd-id ${sdKey}`,
       warnings: [],
     };
@@ -241,16 +426,21 @@ export async function validateVisionScore(sd, supabase) {
   dimWarnings.forEach(w => console.log(`   ⚠️  ${w}`));
 
   if (dimWarnings.length === 0) {
-    console.log(`   ✅ Score ${visionScore}/100 meets ${sdType} threshold ${threshold}`);
+    console.log(`   ✅ Score ${visionScore}/100 meets ${sdType} threshold ${threshold}${thresholdAdjusted ? ` (adjusted from ${baseThreshold})` : ''}`);
   } else {
     console.log(`   ✅ Score ${visionScore}/100 meets threshold — ${dimWarnings.length} dimension(s) below ${DIMENSION_WARNING_THRESHOLD}`);
   }
+
+  await logGateEvaluation(supabase, {
+    sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
+    baseThreshold, adjustedThreshold: threshold, score: visionScore, verdict: 'pass',
+  });
 
   return {
     passed: true,
     score: 100,
     maxScore: 100,
-    details: `Vision score: ${visionScore}/100 (${thresholdAction || 'unknown'}) — meets ${sdType} threshold ${threshold}`,
+    details: `Vision score: ${visionScore}/100 (${thresholdAction || 'unknown'}) — meets ${sdType} threshold ${threshold}${thresholdAdjusted ? ` (adjusted from ${baseThreshold} for ${addressable}/${total} dims)` : ''}`,
     warnings: dimWarnings,
   };
 }

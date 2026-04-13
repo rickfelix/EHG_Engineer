@@ -211,7 +211,10 @@ describe('validateVisionScore — score meets threshold', () => {
 
     // Should use cached 85, not DB 40
     expect(result.passed).toBe(true);
-    expect(supabase.from).not.toHaveBeenCalled(); // never hit DB
+    // Audit logging may call supabase.from('vision_scoring_audit_log'),
+    // but it should NOT call eva_vision_scores (the score lookup table)
+    const calls = supabase.from.mock.calls.map(c => c[0]);
+    expect(calls).not.toContain('eva_vision_scores');
   });
 });
 
