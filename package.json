@@ -380,7 +380,7 @@
     "okr:sync": "node scripts/okr-priority-sync.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.88.0",
+    "@anthropic-ai/sdk": "0.85.0",
     "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.28.4",
     "@babel/types": "^7.29.0",
