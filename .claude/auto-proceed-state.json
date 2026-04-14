@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-REPLIT-PIPELINE-S20S26-REDESIGN-ORCH-001-A-C",
+  "currentSd": "SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-096",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing Strengthen Design File References in Pipeline Prompt Templates",
+  "currentTask": "Implementing Fix Stale Worktree Gate Blocking",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
   "clearedAt": "2026-04-13T17:54:31.100Z",
-  "lastUpdatedAt": "2026-04-14T11:11:40.899Z"
+  "lastUpdatedAt": "2026-04-14T16:31:42.277Z"
 }
