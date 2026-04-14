@@ -59,7 +59,23 @@ function getRepoRoot(override) {
 function isValidWorktree(wtPath) {
   if (!fs.existsSync(wtPath)) return false;
   try {
+    // Check git recognizes this as a work tree
     execSync('git rev-parse --is-inside-work-tree', { cwd: wtPath, encoding: 'utf8', stdio: 'pipe' });
+
+    // Verify it's a *registered* git worktree, not just a directory inside
+    // the main repo. After branch deletion or git worktree prune, the directory
+    // may still exist but git no longer tracks it, causing module resolution
+    // failures when scripts run from the orphaned directory.
+    const absPath = path.resolve(wtPath).replace(/\\/g, '/');
+    const listed = execSync('git worktree list --porcelain', { encoding: 'utf8', stdio: 'pipe' });
+    const registeredPaths = listed
+      .split('\n')
+      .filter(l => l.startsWith('worktree '))
+      .map(l => l.replace('worktree ', '').trim().replace(/\\/g, '/'));
+    if (!registeredPaths.some(rp => absPath === rp.replace(/\\/g, '/'))) {
+      return false; // Directory exists but is not a registered worktree
+    }
+
     return true;
   } catch {
     return false;
