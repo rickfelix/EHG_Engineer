@@ -130,6 +130,7 @@ router.patch('/:id/stage', validateUuidParam('id'), asyncHandler(async (req, res
       .eq('venture_id', id)
       .eq('lifecycle_stage', stage)
       .eq('status', 'approved')
+      .is('deleted_at', null) // SD-FIX-STAGE-TIMING-ZEROS-ORCH-001-B: exclude soft-deleted
       .in('decision', ['pass', 'go', 'proceed', 'approve', 'conditional_pass', 'conditional_go', 'continue', 'release'])
       .limit(1);
 
