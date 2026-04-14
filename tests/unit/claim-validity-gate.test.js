@@ -121,14 +121,10 @@ describe('assertValidClaim — CHECK 3 enhanced', () => {
       current_phase: 'EXEC',
     });
 
-    try {
-      await assertValidClaim(sb, 'SD-STALE-001', { operation: 'test_op' });
-      expect.unreachable('should have thrown');
-    } catch (e) {
-      expect(e).toBeInstanceOf(ClaimIdentityError);
-      expect(e.reason).toBe('stale_worktree');
-      expect(e.remediation).toContain('npm run sd:start SD-STALE-001');
-    }
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-094: Stale worktrees now self-heal
+    // (clear path from DB) instead of throwing. The call should succeed.
+    const result = await assertValidClaim(sb, 'SD-STALE-001', { operation: 'test_op' });
+    expect(result.ownership).toBe('self');
   });
 
   it('auto-recovers when worktree found at .worktrees/<SD-KEY>/', async () => {

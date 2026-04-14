@@ -132,13 +132,16 @@ export class BaseExecutor {
       //   (a) resolveOwnSession returns ambiguous/no_deterministic_identity (cross-CC collision),
       //   (b) SD.claiming_session_id does not match our session (foreign claim),
       //   (c) process.cwd() is not inside SD.worktree_path (wrong directory).
-      // No allowMainRepoForAcquisition flag here — handoffs MUST run from inside the worktree,
-      // enforced from LEAD phase onward via BaseExecutor inheritance.
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-094: Orchestrator SDs are exempt from worktree
+      // isolation (check c) because they coordinate children and don't produce code directly.
+      // They still must pass identity (a) and ownership (b) checks.
+      const isOrchestrator = sd?.sd_type === 'orchestrator';
       try {
         const { assertValidClaim, ClaimIdentityError } = await import('../../../../lib/claim-validity-gate.js');
         const sdKeyForGate = sd?.sd_key || sdId;
         await assertValidClaim(this.supabase, sdKeyForGate, {
-          operation: `handoff_${this.handoffType}`
+          operation: `handoff_${this.handoffType}`,
+          allowMainRepoForAcquisition: isOrchestrator
         });
       } catch (e) {
         if (e?.name === 'ClaimIdentityError') {
