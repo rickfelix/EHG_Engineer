@@ -93,11 +93,14 @@ async function validateStandardSDCompletion(supabase, prd, sd, validation) {
   let prdScore = 0, handoffScore = 0, storiesScore = 0;
 
   // Check PRD status
-  if (prd.status === 'verification' || prd.status === 'completed') {
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-094: Accept 'in_progress' alongside 'verification'/'completed'.
+  // PLAN-TO-EXEC state transitions set PRD to 'in_progress', and this status persists through EXEC.
+  // Rejecting it here creates a circular failure where the handoff that set it blocks the next handoff.
+  if (prd.status === 'verification' || prd.status === 'completed' || prd.status === 'in_progress') {
     validation.score += 30;
     prdScore = 30;
   } else {
-    validation.issues.push(`PRD status is '${prd.status}', expected 'verification' or 'completed'`);
+    validation.issues.push(`PRD status is '${prd.status}', expected 'verification', 'completed', or 'in_progress'`);
   }
 
   // Check EXEC→PLAN handoff exists (or skip for lightweight SDs)
