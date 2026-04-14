@@ -867,4 +867,105 @@ describe('Stage 15 Wireframe Generator', () => {
       expect(userPrompt).toContain('PostgreSQL');
     });
   });
+
+  // ─── Mandatory screens: Landing Page + Signup ─────────────────
+  // SD-ADD-LANDING-PAGE-AND-ORCH-001
+
+  describe('mandatory landing page and signup screens', () => {
+    it('adds Landing Page screen when LLM does not generate one', async () => {
+      const stage10Data = createMockStage10Data();
+      const personaNames = stage10Data.customerPersonas.map(p => p.name);
+      // LLM returns screens WITHOUT a landing page
+      const llmResponse = createFullLLMResponse(personaNames);
+      mockComplete.mockResolvedValue({ _parsed: llmResponse });
+
+      const result = await analyzeStage15WireframeGenerator({
+        ventureId: 'v-1',
+        stage10Data,
+        logger: silentLogger,
+      });
+
+      const landingScreen = result.screens.find(s => /landing/i.test(s.name));
+      expect(landingScreen).toBeDefined();
+      expect(landingScreen.name).toBe('Landing Page');
+      expect(landingScreen.key_components).toContain('CTA button');
+    });
+
+    it('adds Signup screen when LLM does not generate one', async () => {
+      const stage10Data = createMockStage10Data();
+      const personaNames = stage10Data.customerPersonas.map(p => p.name);
+      const llmResponse = createFullLLMResponse(personaNames);
+      mockComplete.mockResolvedValue({ _parsed: llmResponse });
+
+      const result = await analyzeStage15WireframeGenerator({
+        ventureId: 'v-1',
+        stage10Data,
+        logger: silentLogger,
+      });
+
+      const signupScreen = result.screens.find(s => /sign\s*up/i.test(s.name));
+      expect(signupScreen).toBeDefined();
+      expect(signupScreen.key_components).toContain('Email input');
+    });
+
+    it('does not duplicate Landing Page when LLM already generates one', async () => {
+      const stage10Data = createMockStage10Data();
+      const personaNames = stage10Data.customerPersonas.map(p => p.name);
+      const llmResponse = createFullLLMResponse(personaNames);
+      // Add a Landing Page to the LLM response
+      llmResponse.screens.push({
+        name: 'Landing Page',
+        purpose: 'Marketing page',
+        persona: personaNames[0],
+        ascii_layout: ['+---+', '|LP |', '+---+', '|   |', '+---+'],
+        key_components: ['Hero section'],
+        interaction_notes: 'First impression',
+      });
+      mockComplete.mockResolvedValue({ _parsed: llmResponse });
+
+      const result = await analyzeStage15WireframeGenerator({
+        ventureId: 'v-1',
+        stage10Data,
+        logger: silentLogger,
+      });
+
+      const landingScreens = result.screens.filter(s => /landing/i.test(s.name));
+      expect(landingScreens.length).toBe(1);
+    });
+
+    it('adds User Acquisition navigation flow when missing', async () => {
+      const stage10Data = createMockStage10Data();
+      const personaNames = stage10Data.customerPersonas.map(p => p.name);
+      const llmResponse = createFullLLMResponse(personaNames);
+      mockComplete.mockResolvedValue({ _parsed: llmResponse });
+
+      const result = await analyzeStage15WireframeGenerator({
+        ventureId: 'v-1',
+        stage10Data,
+        logger: silentLogger,
+      });
+
+      const acquisitionFlow = result.navigation_flows.find(f => /acquisition/i.test(f.name));
+      expect(acquisitionFlow).toBeDefined();
+      expect(acquisitionFlow.steps).toContain('Landing Page');
+      expect(acquisitionFlow.steps).toContain('Signup');
+    });
+
+    it('prompt includes landing page and signup requirements', async () => {
+      const stage10Data = createMockStage10Data();
+      const personaNames = stage10Data.customerPersonas.map(p => p.name);
+      mockComplete.mockResolvedValue({ _parsed: createFullLLMResponse(personaNames) });
+
+      await analyzeStage15WireframeGenerator({
+        ventureId: 'v-1',
+        stage10Data,
+        logger: silentLogger,
+      });
+
+      const userPrompt = mockComplete.mock.calls[0][1];
+      expect(userPrompt).toContain('Landing Page');
+      expect(userPrompt).toContain('Signup');
+      expect(userPrompt).toContain('User Acquisition');
+    });
+  });
 });
