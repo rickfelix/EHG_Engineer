@@ -409,7 +409,7 @@ async function createChild(parentKey, index = 0, overrides = {}) {
   // Resolve child type: explicit override > parent type (but NEVER inherit 'orchestrator')
   // Orchestrator is a coordination pattern, not a child work type.
   // Children are independent SDs with their own types (feature, infrastructure, etc.)
-  let childType = overrides.type || parent.sd_type || 'feature';
+  let childType = mapToDbType(overrides.type || parent.sd_type || 'feature');
   if (childType === 'orchestrator') {
     childType = 'feature';
     console.log('   ℹ️  Parent type \'orchestrator\' not inherited — child defaults to \'feature\'');
@@ -780,7 +780,7 @@ function mapPriority(feedbackPriority) {
 const VALID_DB_SD_TYPES = [
   'feature', 'infrastructure', 'bugfix', 'database', 'security',
   'refactor', 'documentation', 'docs', 'orchestrator', 'performance',
-  'enhancement', 'uat', 'library', 'fix', 'implementation', 'qa'
+  'enhancement', 'uat', 'library', 'fix', 'qa'
 ];
 
 function mapToDbType(userType) {
@@ -803,7 +803,7 @@ function mapToDbType(userType) {
     orch: 'orchestrator',
     qa: 'qa',
     testing: 'qa',
-    implementation: 'implementation',
+    implementation: 'infrastructure',  // Map to infrastructure — 'implementation' not in handoff gate VALID_SD_TYPES
     enhancement: 'feature'  // Map enhancement to feature
   };
   const mapped = map[userType?.toLowerCase()] || 'feature';
