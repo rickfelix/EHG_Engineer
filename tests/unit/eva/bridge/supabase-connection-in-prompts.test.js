@@ -17,7 +17,7 @@ describe('Supabase connection in Replit prompts', () => {
     expect(section).toContain('## Supabase Database Connection');
     expect(section).toContain('VITE_SUPABASE_URL=' + projectUrl);
     expect(section).toContain('VITE_SUPABASE_ANON_KEY');
-    expect(section).toContain("import { createClient }");
+    expect(section).toContain('import { createClient }');
   });
 
   it('includes security guidance', () => {
@@ -61,8 +61,8 @@ function buildTestSection(projectUrl) {
     "import { createClient } from '@supabase/supabase-js';",
     '',
     'const supabase = createClient(',
-    "  import.meta.env.VITE_SUPABASE_URL,",
-    "  import.meta.env.VITE_SUPABASE_ANON_KEY",
+    '  import.meta.env.VITE_SUPABASE_URL,',
+    '  import.meta.env.VITE_SUPABASE_ANON_KEY',
     ');',
     '```',
     '',
