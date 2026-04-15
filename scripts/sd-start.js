@@ -1101,7 +1101,9 @@ async function main() {
   } else {
     console.log(`\n${colors.bold}Next Action:${colors.reset}`);
     console.log(`   ${colors.cyan}CLAUDE_SESSION_ID=${session.session_id} node scripts/handoff.js execute ${nextHandoff} ${effectiveId}${colors.reset}`);
-    console.log(`${colors.dim}   All subsequent node script invocations must include CLAUDE_SESSION_ID=<uuid> as an inline env var prefix.${colors.reset}`);
+    console.log(`${colors.dim}   ⚠  Save this CLAUDE_SESSION_ID — all subsequent node script calls (handoff.js, etc.) require it.${colors.reset}`);
+    console.log(`${colors.dim}   After context compaction, re-check SessionStart hook output or use the session ID shown above.${colors.reset}`);
+    console.log(`${colors.dim}   Omitting it causes no_deterministic_identity failures at claim-validity gate.${colors.reset}`);
   }
 
   console.log(`\n${colors.dim}Session: ${session.session_id}${colors.reset}`);

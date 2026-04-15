@@ -167,11 +167,14 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
       });
     }
 
-    if (!prd.executive_summary || prd.executive_summary.length < 50) {
+    const summaryLen = typeof prd.executive_summary === 'string'
+      ? prd.executive_summary.length
+      : (prd.executive_summary ? JSON.stringify(prd.executive_summary).length : 0);
+    if (summaryLen < 50) {
       issues.push({
         code: 'PRD_SUMMARY_SHORT',
-        message: `PRD executive_summary is ${(prd.executive_summary || '').length} chars (minimum: 50)`,
-        remediation: 'Add a substantive executive_summary to the PRD (50+ chars)'
+        message: `PRD executive_summary is ${summaryLen} chars (minimum: 50)`,
+        remediation: `Add a substantive executive_summary to the PRD (50+ chars). SQL fix:\n  node -e "require('dotenv').config(); const {createClient}=require('@supabase/supabase-js'); const s=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY); s.from('product_requirements_v2').update({executive_summary:'<your summary text>'}).eq('id','${prd.id}').then(r=>console.log(r.error||'Updated'));"`
       });
     }
   }
