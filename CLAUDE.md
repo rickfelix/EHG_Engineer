@@ -72,6 +72,7 @@ Risk keywords (auth, migration, schema, feature) always force Tier 3.
 
 ### Intent Detection Keywords
 When the user says any of the following, run `npm run sd:next` FIRST:
+> Why: Without checking the queue first, the session may pick up stale context from a session summary or start the wrong SD. `sd:next` is the only authoritative source of current state — what's claimed, what's blocked, and which SD has momentum.
 - "start LEO", "start the LEO protocol"
 - "what should we work on", "what's next"
 - "identify next work", "next SD", "next strategic directive"
@@ -128,7 +129,9 @@ Load the authoritative rules for your current phase:
 - **LEAD Phase**: Read `CLAUDE_LEAD.md`
 - **PLAN Phase**: Read `CLAUDE_PLAN.md`
 - **EXEC Phase**: Read `CLAUDE_EXEC.md`
+> Why: Each phase file contains gate requirements, anti-patterns, and sub-agent triggers specific to that phase. Reading the wrong file (or none) means operating without the relevant constraints — the most common cause of handoff failures is a gate requirement that wasn't loaded.
 Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models, near token limits).
+> Why: Full phase files can exceed token budgets on smaller models. The DIGEST variants preserve the critical rules at ~85% compression — enough to pass gates, not enough to catch every edge case.
 
 ## Essential Commands
 - **Pick Work**: `npm run sd:next`
@@ -140,4 +143,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-04-15 9:11:59 AM | Protocol: LEO 4.3.3 | Source: Database*
+*Generated: 2026-04-15 9:19:17 AM | Protocol: LEO 4.3.3 | Source: Database*

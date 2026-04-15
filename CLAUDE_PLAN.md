@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-04-15 9:11:59 AM
+**Generated**: 2026-04-15 9:19:17 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -101,6 +101,7 @@ node scripts/add-prd-to-database.js --sd-id=<SD-ID>
 **Step 5: Validate PRD with Sub-Agents (MANDATORY)**
 
 ⚠️ **CRITICAL**: Use Task tool with specialized sub-agents, NOT the sub-agent-executor script:
+> Why: `sub-agent-executor.js` is built for automated pipelines — it lacks the session context and interactive error-handling that interactive sessions need. The Task tool routes agents with full conversation context and stores results in `sub_agent_execution_results` where gates can find them.
 
 ```
 # CORRECT - Use Task tool with subagent_type
@@ -130,6 +131,7 @@ Launch 1-3 Plan agents based on complexity:
 - **3 agents**: Complex decision with multiple valid paths
 
 Do NOT launch 3 agents for every task—that wastes time on simple decisions.
+> Why: Three perspectives costs 3× the context. For a decision where the answer is clear, the extra agents produce noise without signal. Match the number of perspectives to the actual uncertainty in the decision.
 
 ## Branch Creation (Automated at LEAD-TO-PLAN)
 
@@ -444,6 +446,23 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 | "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
 | "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -514,23 +533,6 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## PLAN Pre-EXEC Checklist
 
