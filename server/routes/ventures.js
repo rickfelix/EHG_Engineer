@@ -214,6 +214,17 @@ router.post('/:id/artifacts', validateUuidParam('id'), asyncHandler(async (req, 
     return res.status(500).json({ error: error.message });
   }
 
+  // Post-INSERT dedup: demote any concurrent duplicate is_current=true rows that snuck in
+  // during the mark-then-insert TOCTOU window.
+  await dbLoader.supabase
+    .from('venture_artifacts')
+    .update({ is_current: false })
+    .eq('venture_id', id)
+    .eq('lifecycle_stage', stage)
+    .eq('artifact_type', artifact_type)
+    .eq('is_current', true)
+    .neq('id', data.id);
+
   res.status(201).json({
     id: data.id,
     venture_id: data.venture_id,
