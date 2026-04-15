@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-04-15 9:11:59 AM
+**Generated**: 2026-04-15 9:19:17 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation
 
@@ -39,6 +39,7 @@ Pre-existing codebase issues are tracked in `sd_baseline_issues` table to preven
 
 ### LEAD Gate: BASELINE_DEBT_CHECK
 - **BLOCKS** if: Stale critical issues (>30 days) exist without owner
+> Why: Unowned critical issues compound silently. After 30 days without an assigned owner the risk has almost certainly grown, and new SDs built on top inherit the debt. Forcing ownership at LEAD prevents technical debt from becoming invisible.
 - **WARNS** if: Total open issues > 10 or stale non-critical > 5
 
 ### Lifecycle
@@ -163,6 +164,7 @@ node lib/sub-agent-executor.js VALIDATION <SD-ID>
 ### SD Type Classification (NEW - LEO v4.3.3)
 
 **IMPORTANT**: If SD is NOT a code change, set `sd_type` appropriately:
+> Why: `sd_type` controls which sub-agents run at validation time. A mis-typed SD skips required checks — a `documentation` type skips TESTING gates, an `infrastructure` type skips GITHUB gates. Wrong type = wrong gate profile = false-pass handoffs that surface as production failures.
 
 | sd_type | Description | Validation Requirements |
 |---------|-------------|------------------------|
@@ -279,6 +281,7 @@ Each SD has a health score (0.0 - 1.0):
 Before approving parallel work on multiple SDs:
 1. Check `sd_conflict_matrix` for file/component overlap
 2. SDs touching same files should NOT run in parallel
+> Why: Parallel edits to the same files guarantee merge conflicts. Even if both branches pass tests individually, the merge can resolve incorrectly — and tests only catch this after both branches are in review, doubling the rework cost.
 3. Use `npm run sd:next` to see track assignments
 
 
@@ -291,6 +294,7 @@ Strategic Directives (SDs) are the primary unit of work in the LEO Protocol. Thi
 ### Step 1: Create SD Record in Database
 
 **MANDATORY**: Use process scripts - never create SDs manually in the database.
+> Why: Direct DB inserts bypass `sd_key` format enforcement, required-field validation, and JSONB constraint checks. The resulting records fail gate checks in unpredictable ways — often many phases later when the only fix is recreating the SD from scratch.
 
 #### Option A: Direct SD Creation
 ```bash

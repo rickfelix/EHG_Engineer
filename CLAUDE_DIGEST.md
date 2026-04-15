@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-15T13:11:58.994Z -->
-<!-- git_commit: 33e08791 -->
-<!-- db_snapshot_hash: a08c22f75efba9a2 -->
+<!-- generated_at: 2026-04-15T13:19:17.003Z -->
+<!-- git_commit: 23181f8d -->
+<!-- db_snapshot_hash: 6eae12af9d239d82 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
@@ -104,6 +104,7 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 
 ### Intent Detection Keywords
 When the user says any of the following, run `npm run sd:next` FIRST:
+> Why: Without checking the queue first, the session may pick up stale context from a session summary or start the wrong SD. `sd:next` is the only authoritative source of current state — what's claimed, what's blocked, and which SD has momentum.
 - "start LEO", "start the LEO protocol"
 - "what should we work on", "what's next"
 - "identify next work", "next SD", "next strategic directive"
@@ -159,5 +160,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-04-15 9:11:59 AM*
+*DIGEST generated: 2026-04-15 9:19:17 AM*
 *Protocol: 4.3.3*

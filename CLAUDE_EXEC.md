@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-04-15 9:11:59 AM
+**Generated**: 2026-04-15 9:19:17 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -133,6 +133,7 @@ Before writing ANY code, EXEC MUST:
 ```
 
 ### Testability-Aware Implementation
+> Why: Code that mixes logic and side effects forces the testing-agent to mock everything, producing brittle tests. Testable architecture — pure functions, injectable dependencies, clear seams — lets the testing-agent write unit tests that actually catch regressions.
 
 Before writing code, review the PRD's `test_scenarios` and `testing_strategy` and design your implementation to be testable:
 
@@ -189,70 +190,6 @@ npm run sd:status SD-XXX-001
 See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for complete documentation.
 
 **If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
-
-
-## Branch Creation (Automated at LEAD-TO-PLAN)
-
-## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
-
-### Automatic Branch Creation
-
-As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
-
-1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
-2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
-3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
-4. Database is updated with branch name for tracking
-
-### Manual Branch Creation (If Needed)
-
-If branch creation fails or you need to create one manually:
-
-```bash
-# Create branch for an SD (looks up title from database)
-npm run sd:branch SD-XXX-001
-
-# Create with auto-stash (non-interactive)
-npm run sd:branch:auto SD-XXX-001
-
-# Check if branch exists
-npm run sd:branch:check SD-XXX-001
-
-# Full command with options
-# Branch was auto-created at LEAD-TO-PLAN handoff
-```
-
-### Branch Naming Convention
-
-| SD Type | Branch Prefix | Example |
-|---------|---------------|---------|
-| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
-| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
-| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
-| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
-| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
-
-### Branch Hygiene Rules
-
-From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
-- **≤7 days stale** at PLAN-TO-EXEC handoff
-- **One SD per branch** (no mixing work)
-- **Merge main at phase transitions**
-
-### When Branch is Created
-
-```
-LEAD Phase                    PLAN Phase                   EXEC Phase
-    |                              |                            |
-    |   LEAD-TO-PLAN handoff       |                            |
-    |---[Branch Created Here]----->|                            |
-    |                              |   PRD Creation             |
-    |                              |   Sub-agent validation     |
-    |                              |                            |
-    |                              |   PLAN-TO-EXEC handoff     |
-    |                              |---[Branch Validated]------>|
-    |                              |                            |
-```
 
 
 ## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
@@ -343,11 +280,76 @@ If `research_confidence_score = 0.00`, you skipped this step.
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
 
+## Branch Creation (Automated at LEAD-TO-PLAN)
+
+## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
+
+### Automatic Branch Creation
+
+As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
+
+1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
+2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
+3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
+4. Database is updated with branch name for tracking
+
+### Manual Branch Creation (If Needed)
+
+If branch creation fails or you need to create one manually:
+
+```bash
+# Create branch for an SD (looks up title from database)
+npm run sd:branch SD-XXX-001
+
+# Create with auto-stash (non-interactive)
+npm run sd:branch:auto SD-XXX-001
+
+# Check if branch exists
+npm run sd:branch:check SD-XXX-001
+
+# Full command with options
+# Branch was auto-created at LEAD-TO-PLAN handoff
+```
+
+### Branch Naming Convention
+
+| SD Type | Branch Prefix | Example |
+|---------|---------------|---------|
+| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
+| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
+| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
+| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
+| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
+
+### Branch Hygiene Rules
+
+From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
+- **≤7 days stale** at PLAN-TO-EXEC handoff
+- **One SD per branch** (no mixing work)
+- **Merge main at phase transitions**
+
+### When Branch is Created
+
+```
+LEAD Phase                    PLAN Phase                   EXEC Phase
+    |                              |                            |
+    |   LEAD-TO-PLAN handoff       |                            |
+    |---[Branch Created Here]----->|                            |
+    |                              |   PRD Creation             |
+    |                              |   Sub-agent validation     |
+    |                              |                            |
+    |                              |   PLAN-TO-EXEC handoff     |
+    |                              |---[Branch Validated]------>|
+    |                              |                            |
+```
+
+
 ## Vision/Architecture Doc Pre-Check
 
 ## Vision/Architecture Doc Pre-Check (Step 0.25)
 
 **Before implementing ANY SD**, verify vision and architecture coverage:
+> Why: Implementation without vision/architecture governance creates features that work in isolation but contradict strategic intent. Discovering misalignment after EXEC is complete forces expensive rework. The pre-check takes 2 minutes; the rework takes 2+ sessions.
 
 1. **Query EVA**: `SELECT key, title FROM eva_vision_documents WHERE status = 'active' AND key ILIKE '%' || <domain> || '%'`
 2. **Query Architecture**: `SELECT key, title FROM eva_architecture_plans WHERE vision_key = <vision_key> AND needs_review_since IS NULL`
@@ -411,7 +413,8 @@ During the EXEC phase, use sub-agents proactively for implementation quality and
 - **uat-agent**: For user acceptance test execution before handoff
 
 ### When to Invoke
-- **On ANY database WRITE error**: Immediately invoke database-agent (do not attempt workarounds). For read errors, check MCP tool configuration first.
+- **On ANY database WRITE error**: Immediately invoke database-agent (do not attempt workarounds).
+> Why: Write errors on Supabase have specific failure modes — RLS violations, constraint failures, pooler routing issues — that require database-agent patterns. Attempting workarounds here typically corrupts partial state, making the actual fix harder than the original error. For read errors, check MCP tool configuration first.
 - **Before PR creation**: Run testing-agent for coverage, security-agent for review
 - **During refactoring**: Run regression-agent to validate backward compatibility
 - **On test failures**: Run rca-agent for root cause analysis, then testing-agent
@@ -419,8 +422,44 @@ During the EXEC phase, use sub-agents proactively for implementation quality and
 
 ### Important
 Sub-agents are FIRST RESPONDERS in EXEC phase. When you encounter a problem that matches an agent's domain, invoke the agent IMMEDIATELY rather than attempting manual solutions.
+> Why: Manual attempts before invoking the right agent waste context and produce lower-quality output. Retrospective data (PAT-RECURSION-005) shows manual sub-agent simulation consistently leads to rework — the agent has domain-specific tooling the orchestrator cannot replicate inline.
 
 *Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
+
+## Migration Script Pattern (MANDATORY)
+
+**Issue Pattern**: PAT-DB-MIGRATION-001
+
+When writing migration scripts, you MUST use the established pattern:
+
+### Correct Pattern
+```javascript
+import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
+import { readFileSync } from 'fs';
+
+const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
+const client = await createDatabaseClient('engineer', { verify: true });
+const statements = splitPostgreSQLStatements(migrationSQL);
+
+for (const statement of statements) {
+  await client.query(statement);
+}
+
+await client.end();
+```
+
+### NEVER Use This Pattern
+```javascript
+// WRONG - exec_sql RPC does not exist
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(url, key);
+await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
+```
+
+### Before Writing Migration Scripts
+1. Search for existing patterns: `Glob *migration*.js`
+2. Read `scripts/run-sql-migration.js` as canonical template
+3. Use `lib/supabase-connection.js` utilities
 
 ## 📚 Skill Integration (EXEC Phase)
 
@@ -498,41 +537,6 @@ Skills provide patterns, templates, and examples. Apply them to your specific im
 Skills are for **creative guidance** (how to build).
 Sub-agents are for **validation** (did you build it right).
 Use skills during EXEC, save sub-agents for PLAN_VERIFY.
-
-## Migration Script Pattern (MANDATORY)
-
-**Issue Pattern**: PAT-DB-MIGRATION-001
-
-When writing migration scripts, you MUST use the established pattern:
-
-### Correct Pattern
-```javascript
-import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
-import { readFileSync } from 'fs';
-
-const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
-const client = await createDatabaseClient('engineer', { verify: true });
-const statements = splitPostgreSQLStatements(migrationSQL);
-
-for (const statement of statements) {
-  await client.query(statement);
-}
-
-await client.end();
-```
-
-### NEVER Use This Pattern
-```javascript
-// WRONG - exec_sql RPC does not exist
-import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(url, key);
-await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
-```
-
-### Before Writing Migration Scripts
-1. Search for existing patterns: `Glob *migration*.js`
-2. Read `scripts/run-sql-migration.js` as canonical template
-3. Use `lib/supabase-connection.js` utilities
 
 ## Validation Rules (SD-LEARN-008)
 
@@ -949,86 +953,6 @@ UI Parity Status:
 - Gate 2.5 Status: PASS/FAIL
 ```
 
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
-
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
-
-**Every completed Strategic Directive and Quick-Fix MUST end with:**
-
-1. **Commit** - All changes committed with proper message format
-2. **Push** - Branch pushed to remote
-3. **Merge to Main** - Feature branch merged into main
-
-### For Quick-Fixes
-
-The `complete-quick-fix.js` script handles this automatically:
-
-```bash
-node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
-```
-
-The script will:
-1. Verify tests pass and UAT completed
-2. Commit and push changes
-3. **Prompt to merge PR to main** (or local merge if no PR)
-4. Delete the feature branch
-
-### For Strategic Directives
-
-After LEAD approval, execute the following:
-
-```bash
-# 1. Ensure all changes committed
-git add .
-git commit -m "feat(SD-YYYY-XXX): [description]
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-# 2. Push to remote
-git push origin feature/SD-YYYY-XXX
-
-# 3. Create PR if not exists
-gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
-
-# 4. Merge PR (preferred method)
-gh pr merge --merge --delete-branch
-
-# OR local merge fallback
-git checkout main
-git pull origin main
-git merge --no-ff feature/SD-YYYY-XXX
-git push origin main
-git branch -d feature/SD-YYYY-XXX
-git push origin --delete feature/SD-YYYY-XXX
-```
-
-### Merge Checklist
-
-Before merging, verify:
-- [ ] All tests passing (unit + E2E)
-- [ ] CI/CD pipeline green
-- [ ] Code review completed (if required)
-- [ ] No merge conflicts
-- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
-
-### Anti-Patterns
-
-❌ **NEVER** leave feature branches unmerged after completion
-❌ **NEVER** skip the push step
-❌ **NEVER** merge without verifying tests pass
-❌ **NEVER** force push to main
-
-### Verification
-
-After merge, confirm:
-```bash
-git checkout main
-git pull origin main
-git log --oneline -5  # Should show your merge commit
-```
-
 ## 🌿 Branch Hygiene Gate (MANDATORY)
 
 ## Branch Hygiene Gate (MANDATORY)
@@ -1118,6 +1042,86 @@ When starting implementation:
 3. If multiple SDs detected → split branches
 4. If >100 files changed → assess scope creep
 5. Document branch health in handoff notes
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
+
+**Every completed Strategic Directive and Quick-Fix MUST end with:**
+
+1. **Commit** - All changes committed with proper message format
+2. **Push** - Branch pushed to remote
+3. **Merge to Main** - Feature branch merged into main
+
+### For Quick-Fixes
+
+The `complete-quick-fix.js` script handles this automatically:
+
+```bash
+node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
+```
+
+The script will:
+1. Verify tests pass and UAT completed
+2. Commit and push changes
+3. **Prompt to merge PR to main** (or local merge if no PR)
+4. Delete the feature branch
+
+### For Strategic Directives
+
+After LEAD approval, execute the following:
+
+```bash
+# 1. Ensure all changes committed
+git add .
+git commit -m "feat(SD-YYYY-XXX): [description]
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 2. Push to remote
+git push origin feature/SD-YYYY-XXX
+
+# 3. Create PR if not exists
+gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
+
+# 4. Merge PR (preferred method)
+gh pr merge --merge --delete-branch
+
+# OR local merge fallback
+git checkout main
+git pull origin main
+git merge --no-ff feature/SD-YYYY-XXX
+git push origin main
+git branch -d feature/SD-YYYY-XXX
+git push origin --delete feature/SD-YYYY-XXX
+```
+
+### Merge Checklist
+
+Before merging, verify:
+- [ ] All tests passing (unit + E2E)
+- [ ] CI/CD pipeline green
+- [ ] Code review completed (if required)
+- [ ] No merge conflicts
+- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
+
+### Anti-Patterns
+
+❌ **NEVER** leave feature branches unmerged after completion
+❌ **NEVER** skip the push step
+❌ **NEVER** merge without verifying tests pass
+❌ **NEVER** force push to main
+
+### Verification
+
+After merge, confirm:
+```bash
+git checkout main
+git pull origin main
+git log --oneline -5  # Should show your merge commit
+```
 
 ## Auto-Merge Workflow for SD Completion
 
