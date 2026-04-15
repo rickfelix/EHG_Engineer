@@ -444,6 +444,18 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
     console.log(`   ⚠️  Could not run git check: ${e.message}`);
   }
 
+  // Step 1.5: Phase-specific proactive tips (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-107)
+  const normalizedType = (precheckType || '').toUpperCase();
+  if (normalizedType === 'EXEC-TO-PLAN') {
+    console.log('');
+    console.log('📋 EXEC-TO-PLAN CHECKLIST REMINDERS');
+    console.log('─'.repeat(50));
+    console.log('   ⚠️  For bugfix/feature SDs, TESTING sub-agent MUST run before this gate passes.');
+    console.log('   If not done: node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>');
+    console.log('   ⚠️  User stories must have status=completed and match the SD key format SD-KEY:US-NNN.');
+    console.log('');
+  }
+
   // Step 2: Run all handoff gates
   console.log('');
   console.log('STEP 2: HANDOFF GATE VALIDATION');
