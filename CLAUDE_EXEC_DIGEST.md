@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-15T13:19:17.003Z -->
-<!-- git_commit: 23181f8d -->
+<!-- generated_at: 2026-04-15T13:28:07.435Z -->
+<!-- git_commit: 399bcdce -->
 <!-- db_snapshot_hash: 6eae12af9d239d82 -->
 <!-- file_content_hash: pending -->
 
@@ -151,17 +151,20 @@ EXEC MUST verify these branch hygiene requirements BEFORE starting implementatio
 
 **Threshold**: Feature branch must be ≤7 days stale at PLAN-TO-EXEC handoff
 **Action**: If exceeded, rebase or merge main before proceeding
+> Why: Branches older than 7 days accumulate merge conflicts at an accelerating rate. Beyond 14 days, the conflict surface area exceeds what an LLM can safely resolve in one session — the SD-STAGE4 incident demonstrated that a 13-day branch became unsalvageable.
 
 ### 2. Single-SD Branch Rule (No Mixing)
 
 **Rule**: One SD per branch - no mixing unrelated work
 **Anti-Pattern**: "Kitchen sink" branches that accumulate work from multiple SDs
 **Action**: If multiple SDs detected, create separate branches
+> Why: Mixed-SD branches make rollbacks impossible and confuse the review-gate risk scorer. A single-SD branch means any revert is safe — reverting a mixed branch would silently undo unrelated shipped work.
 
 ### 3. Merge Main at Phase Transitions
 
 **At PLAN-TO-EXEC**:
 **Rule**: Sync with main at each phase transition (LEAD→PLAN, PLAN→EXEC, EXEC→PLAN)
+> Why: Phase transitions are natural synchronization points — the branch is stable, tests are passing, and a PR review window just occurred. Syncing here keeps conflict resolution small and predictable rather than deferred to an explosive final merge.
 **Benefit**: Catches conflicts early, prevents accumulation
 
 ### 4. Maximum Branch Lifetime (14 Days)
@@ -208,5 +211,5 @@ When starting implementation:
 
 ---
 
-*DIGEST generated: 2026-04-15 9:19:17 AM*
+*DIGEST generated: 2026-04-15 9:28:07 AM*
 *Protocol: 4.3.3*

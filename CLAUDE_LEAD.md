@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-04-15 9:19:17 AM
+**Generated**: 2026-04-15 9:28:07 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation
 
@@ -17,9 +17,11 @@
 
 **1. Autonomous Continuation**
 Continue through the strategic directive and its children SDs autonomously until completion or blocker. Do not stop to ask for permission at each step.
+> Why: Stopping to ask permission at each phase boundary breaks flow and increases context-switching overhead. When AUTO-PROCEED is ON, the user has explicitly delegated phase transition decisions — mid-execution pauses consume user attention without adding value.
 
 **2. Quality Over Speed**
 Prioritize quality over speed. Do not cut corners. Ensure tests pass, code is clean, and documentation is updated.
+> Why: Speed-first delivery shifts cost — tests skipped under deadline pressure become permanent gaps, clean code deferred becomes untouchable tech debt, and missing docs generate ongoing support work. Quality gates exist to frontload these costs while context is still hot.
 
 ### Handoff Directives (Apply at Phase Start)
 
@@ -502,6 +504,7 @@ if (existing) {
 
 **Cause**: Invalid JSON in `metadata`, `success_criteria`, or other JSONB fields
 **Solution**: Ensure JSONB fields are valid JSON objects/arrays, not strings
+> Why: JSONB fields are validated at insert time by PostgreSQL — a malformed string does not become an error until a downstream read fails silently. Supabase type inference will not catch a plain string where an object is expected, so the error surfaces during gate evaluation rather than at creation.
 
 ### Handoff Validation Errors
 
@@ -856,6 +859,7 @@ node scripts/lead-review-submissions.js
 
 ### The Question
 > "Can users see and interpret the outputs this feature produces?"
+> Why: Backend work without UI coverage creates dark data — correct at the API level but invisible to users and therefore unverifiable during acceptance testing. Dark data accumulates into untested surface area that no gate pipeline can catch.
 
 ### Evaluation Criteria
 
@@ -897,6 +901,7 @@ This question is MANDATORY for all SDs that produce user-facing data. It should 
 
 ### The Question
 > "Describe the 30-second demo that proves this SD delivered value."
+> Why: If you cannot describe a demo, the SD is defining behavior at the wrong layer of abstraction — observable by engineers but not by users. The 30-second demo forces the SD to ground out in user-visible value rather than internal correctness.
 
 If you cannot answer this question concretely, the SD is too vague to approve.
 
@@ -929,6 +934,7 @@ Feature SDs MUST include `smoke_test_steps` JSONB array:
 
 **If NO**:
 - **BLOCK approval** until `smoke_test_steps` is populated
+> Why: `smoke_test_steps` is the contract between PLAN and EXEC. Without it, EXEC has no acceptance criteria and the AIQualityEvaluator caps scores at 70% — gates will fail and the SD will be sent back for rework anyway.
 - Prompt: "What will a user SEE that proves this works?"
 
 ### SD Type Exemptions
