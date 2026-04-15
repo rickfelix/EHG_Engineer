@@ -6,7 +6,9 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
-# sd_claims Table
+# sd_claims Table (DROPPED)
+
+> **This table no longer exists.** It was dropped in migration `20260218_consolidate_sd_claims_into_claude_sessions.sql`. Claim state now lives in `claude_sessions` (columns: `sd_key`, `released_at`, `released_reason`). See also `claiming_session_id` and `is_working_on` on `strategic_directives_v2`.
 
 > ⚠️ **DROPPED** — This table was removed on 2026-02-18 by SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001.
 > Claim state now lives exclusively in `claude_sessions.sd_id` + `status='active'`.

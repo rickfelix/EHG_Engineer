@@ -83,27 +83,50 @@ function bar(pct, width = 20) {
 }
 
 // --- Layer 1: Terminal Identity Collision Detection ---
-// Reads .claude/session-identity/pid-*.json marker files to detect when multiple
+// Reads .claude/session-identity/ marker files to detect when multiple
 // live Claude Code processes share the same session_id (identity collision).
+// Supports both pid-*.json (CLI sessions) and fallback-*.json (Desktop sessions).
 // Returns: [{ pid, session_id, marker_path, cc_pid, sse_port }]
 function detectIdentityCollisions() {
   const markerDir = path.resolve(__dirname, '../.claude/session-identity');
   if (!fs.existsSync(markerDir)) return { collisions: [], aliveMarkers: [] };
 
   const markers = fs.readdirSync(markerDir)
-    .filter(f => /^pid-\d+\.json$/.test(f))
+    .filter(f => /^pid-\d+\.json$/.test(f) || /^fallback-\d+-\d+\.json$/.test(f))
     .map(f => {
       const filePath = path.resolve(markerDir, f);
-      const pid = Number(f.match(/^pid-(\d+)\.json$/)[1]);
       try {
         const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        // pid-*.json: PID is in the filename; fallback-*.json: PID is in the JSON body
+        const pidMatch = f.match(/^pid-(\d+)\.json$/);
+        const pid = pidMatch ? Number(pidMatch[1]) : Number(data.pid);
+        if (!pid || isNaN(pid)) return null;
         return { pid, session_id: data.session_id, claude_session_id: data.claude_session_id || null, cc_pid: data.cc_pid || pid, sse_port: data.sse_port, marker_path: filePath, mtime: fs.statSync(filePath).mtimeMs };
       } catch { return null; }
     })
     .filter(Boolean);
 
-  // Check which PIDs are alive
-  const aliveMarkers = markers.filter(m => isProcessRunning(m.pid));
+  // Check which PIDs are alive.
+  // For CLI markers (pid-*.json), check the specific PID.
+  // For Desktop markers (fallback-*.json), the recorded PID is ephemeral —
+  // the actual CC Desktop process runs as claude.exe with a different PID.
+  // Detect if ANY claude.exe is running; if so, recent fallback markers are alive.
+  let hasClaudeDesktop = false;
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync('tasklist /FI "IMAGENAME eq claude.exe" /NH 2>nul', { encoding: 'utf8', timeout: 5000 });
+    hasClaudeDesktop = out.includes('claude.exe');
+  } catch { /* tasklist unavailable or timed out — fall back to PID check only */ }
+
+  const FALLBACK_MARKER_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour — fallback markers older than this are stale
+  const aliveMarkers = markers.filter(m => {
+    // CLI sessions: direct PID liveness check
+    if (isProcessRunning(m.pid)) return true;
+    // Desktop sessions: if claude.exe is running and marker is recent, consider alive
+    const isFallbackMarker = path.basename(m.marker_path).startsWith('fallback-');
+    if (isFallbackMarker && hasClaudeDesktop && (Date.now() - m.mtime) < FALLBACK_MARKER_MAX_AGE_MS) return true;
+    return false;
+  });
 
   // Group alive markers by session_id
   const bySession = {};
@@ -277,9 +300,9 @@ async function main() {
   // so aliveMarkers are available for PID-based liveness cross-referencing.
   const { collisions, aliveMarkers } = detectIdentityCollisions();
 
-  // Build a set of alive CC PIDs from marker files.
-  // Marker filename = pid-{ccPid}.json, and DB terminal_id = "win-cc-{port}-{ccPid}".
-  // Match by extracting ccPid from terminal_id and checking if that PID's marker is alive.
+  // Build a set of alive CC PIDs from marker files (pid-*.json + fallback-*.json).
+  // DB terminal_id formats: "win-cc-{port}-{ccPid}" (CLI) or "win-{PID}" (Desktop).
+  // Match by extracting the last segment from terminal_id and checking the alive set.
   const aliveCcPids = new Set(aliveMarkers.map(m => String(m.pid)));
 
   // 2. Classify each session
@@ -298,7 +321,8 @@ async function main() {
 
     // Cross-reference with PID marker files: if the CC process is alive on this
     // machine, the session is running even without recent heartbeats.
-    // terminal_id format: "win-cc-{port}-{ccPid}" — extract the ccPid suffix.
+    // terminal_id formats: "win-cc-{port}-{ccPid}" (CLI) or "win-{PID}" (Desktop).
+    // Extract the last segment as the PID to check against alive markers.
     let hasPidAlive = false;
     if (s.terminal_id) {
       const parts = s.terminal_id.split('-');
@@ -306,15 +330,23 @@ async function main() {
       hasPidAlive = aliveCcPids.has(ccPid);
     }
 
+    // Desktop sessions use heuristic liveness (claude.exe running + recent marker).
+    // Cap the protection: if heartbeat is >30 min stale, treat as dead even with
+    // a "live" marker — the specific session has likely exited while claude.exe
+    // continues running for other sessions.
+    const DESKTOP_DEAD_CAP_SECONDS = 1800; // 30 minutes
+    const isDesktopSession = s.terminal_id && /^win-\d+$/.test(s.terminal_id);
+    const exceedsDesktopCap = isDesktopSession && s.heartbeat_age_seconds > DESKTOP_DEAD_CAP_SECONDS;
+
     let status;
     if (!isStale) {
       status = 'ACTIVE';
-    } else if (hasPidAlive) {
+    } else if (hasPidAlive && !exceedsDesktopCap) {
       // PID is alive but heartbeat is stale — session is loading context,
       // compacting, or between tool calls. NOT stale.
       status = 'ALIVE_NO_HEARTBEAT';
-    } else if (isVeryStale) {
-      status = 'DEAD'; // No heartbeat for 15min+ AND no living PID = definitely gone
+    } else if (isVeryStale || exceedsDesktopCap) {
+      status = 'DEAD'; // No heartbeat for 15min+ (CLI) or 30min+ (Desktop) AND no living PID
     } else {
       status = 'STALE_UNKNOWN'; // Between 5-15min, no PID match = might be on another host
     }
