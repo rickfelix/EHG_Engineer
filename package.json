@@ -382,7 +382,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.85.0",
     "@babel/parser": "^7.29.0",
-    "@babel/traverse": "^7.28.4",
+    "@babel/traverse": "^7.29.0",
     "@babel/types": "^7.29.0",
     "@doist/todoist-api-typescript": "^6.4.0",
     "@google/stitch-sdk": "^0.1.0",
