@@ -134,6 +134,61 @@ async function boostTrendConfidence(trendId) {
   }
 }
 
+// ─── Recommendation Decay (SD-EVA-FRIDAY-MEETING-ENHANCEMENT-ORCH-001-C) ──────
+
+const DECAY_AMOUNT = 0.02;
+const DECAY_FLOOR = 0.1;
+
+/**
+ * Apply relevance decay to pending recommendations that have not been interacted
+ * with this cycle. Reduces feedback_weight by DECAY_AMOUNT, floored at DECAY_FLOOR.
+ * Idempotent: skips recs where last_decay_at matches cycleDate.
+ *
+ * @param {string} cycleDate - ISO date string identifying this cycle (e.g. '2026-04-18')
+ * @returns {Promise<{ decayed: number }>}
+ */
+export async function applyRecommendationDecay(cycleDate) {
+  if (!cycleDate) return { decayed: 0 };
+
+  // Fetch pending recs not yet decayed this cycle
+  const { data: recs, error } = await supabase
+    .from('eva_consultant_recommendations')
+    .select('id, feedback_weight, metadata')
+    .eq('status', 'pending');
+
+  if (error) {
+    console.error('[recommendation-feedback] applyRecommendationDecay fetch error:', error.message);
+    return { decayed: 0 };
+  }
+
+  if (!recs || recs.length === 0) return { decayed: 0 };
+
+  const toDecay = recs.filter(r => {
+    const lastDecayAt = r.metadata?.last_decay_at;
+    return !lastDecayAt || lastDecayAt < cycleDate;
+  });
+
+  let decayed = 0;
+  for (const rec of toDecay) {
+    const current = typeof rec.feedback_weight === 'number' ? rec.feedback_weight : 1.0;
+    const newWeight = Math.max(DECAY_FLOOR, current - DECAY_AMOUNT);
+    const updatedMetadata = { ...(rec.metadata || {}), last_decay_at: cycleDate };
+
+    const { error: updateErr } = await supabase
+      .from('eva_consultant_recommendations')
+      .update({ feedback_weight: newWeight, metadata: updatedMetadata })
+      .eq('id', rec.id);
+
+    if (updateErr) {
+      console.error(`[recommendation-feedback] decay update failed for ${rec.id}:`, updateErr.message);
+    } else {
+      decayed++;
+    }
+  }
+
+  return { decayed };
+}
+
 // ─── Main ──────────────────────────────────────────────────
 
 async function main() {
