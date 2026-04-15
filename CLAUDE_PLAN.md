@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-04-15 9:19:17 AM
+**Generated**: 2026-04-15 9:28:07 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -18,9 +18,11 @@
 
 **1. Autonomous Continuation**
 Continue through the strategic directive and its children SDs autonomously until completion or blocker. Do not stop to ask for permission at each step.
+> Why: Stopping to ask permission at each phase boundary breaks flow and increases context-switching overhead. When AUTO-PROCEED is ON, the user has explicitly delegated phase transition decisions — mid-execution pauses consume user attention without adding value.
 
 **2. Quality Over Speed**
 Prioritize quality over speed. Do not cut corners. Ensure tests pass, code is clean, and documentation is updated.
+> Why: Speed-first delivery shifts cost — tests skipped under deadline pressure become permanent gaps, clean code deferred becomes untouchable tech debt, and missing docs generate ongoing support work. Quality gates exist to frontload these costs while context is still hot.
 
 ### Handoff Directives (Apply at Phase Start)
 
@@ -336,6 +338,7 @@ Before submitting PLAN→EXEC handoff, ask yourself:
 - **Assumptions**: What am I assuming that should be validated?
 
 If confidence < 7, revisit the PRD before handoff.
+> Why: A confidence score below 7 means the PRD contains unresolved assumptions. Assumptions carried into EXEC produce ad-hoc decisions that bypass PLAN validation — these are the most common source of EXEC-TO-PLAN rejections and rework loops.
 
 ## Stubbed/Mocked Code Detection
 
@@ -819,21 +822,6 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 ```
 
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -885,6 +873,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 

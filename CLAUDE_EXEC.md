@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-04-15 9:19:17 AM
+**Generated**: 2026-04-15 9:28:07 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -17,9 +17,11 @@
 
 **1. Autonomous Continuation**
 Continue through the strategic directive and its children SDs autonomously until completion or blocker. Do not stop to ask for permission at each step.
+> Why: Stopping to ask permission at each phase boundary breaks flow and increases context-switching overhead. When AUTO-PROCEED is ON, the user has explicitly delegated phase transition decisions — mid-execution pauses consume user attention without adding value.
 
 **2. Quality Over Speed**
 Prioritize quality over speed. Do not cut corners. Ensure tests pass, code is clean, and documentation is updated.
+> Why: Speed-first delivery shifts cost — tests skipped under deadline pressure become permanent gaps, clean code deferred becomes untouchable tech debt, and missing docs generate ongoing support work. Quality gates exist to frontload these costs while context is still hot.
 
 ### Handoff Directives (Apply at Phase Start)
 
@@ -953,96 +955,6 @@ UI Parity Status:
 - Gate 2.5 Status: PASS/FAIL
 ```
 
-## 🌿 Branch Hygiene Gate (MANDATORY)
-
-## Branch Hygiene Gate (MANDATORY)
-
-**Evidence from Retrospectives**: SD-STAGE4-UX-EDGE-CASES-001 revealed a feature branch with 14 commits, 450 files, and 13 days of divergence became unsalvageable due to accumulated unrelated changes.
-
-### MANDATORY Before PLAN-TO-EXEC Handoff
-
-EXEC MUST verify these branch hygiene requirements BEFORE starting implementation:
-
-### 1. Branch Freshness (≤7 Days Stale)
-
-```bash
-# Check days since branch diverged from main
-git log main..HEAD --oneline | wc -l  # Should be reasonable
-git log --oneline main..HEAD --format="%ar" | tail -1  # Check age
-```
-
-**Threshold**: Feature branch must be ≤7 days stale at PLAN-TO-EXEC handoff
-**Action**: If exceeded, rebase or merge main before proceeding
-
-### 2. Single-SD Branch Rule (No Mixing)
-
-```bash
-# All commits should reference the same SD-ID
-git log main..HEAD --oneline | grep -E "SD-[A-Z0-9-]+"
-```
-
-**Rule**: One SD per branch - no mixing unrelated work
-**Anti-Pattern**: "Kitchen sink" branches that accumulate work from multiple SDs
-**Action**: If multiple SDs detected, create separate branches
-
-### 3. Merge Main at Phase Transitions
-
-**At PLAN-TO-EXEC**:
-```bash
-git fetch origin main
-git merge origin/main --no-edit  # Or rebase if preferred
-```
-
-**Rule**: Sync with main at each phase transition (LEAD→PLAN, PLAN→EXEC, EXEC→PLAN)
-**Benefit**: Catches conflicts early, prevents accumulation
-
-### 4. Maximum Branch Lifetime (14 Days)
-
-| Age | Action |
-|-----|--------|
-| 0-7 days | ✅ Proceed normally |
-| 7-10 days | ⚠️ Warning - sync with main |
-| 10-14 days | 🔴 Must sync before any handoff |
-| >14 days | ❌ Create fresh branch, cherry-pick changes |
-
-### Branch Health Check Script
-
-```bash
-# Quick branch health check
-echo "=== Branch Health Check ==="
-DIVERGE_COMMIT=$(git merge-base main HEAD)
-DAYS_OLD=$(( ( $(date +%s) - $(git log -1 --format=%ct $DIVERGE_COMMIT) ) / 86400 ))
-COMMIT_COUNT=$(git rev-list --count main..HEAD 2>/dev/null || echo 0)
-FILE_COUNT=$(git diff --name-only main...HEAD 2>/dev/null | wc -l || echo 0)
-
-echo "Days since divergence: $DAYS_OLD"
-echo "Commits on branch: $COMMIT_COUNT"
-echo "Files changed: $FILE_COUNT"
-
-if [ $DAYS_OLD -gt 7 ]; then
-  echo "⚠️ WARNING: Branch is stale (>7 days). Sync with main before EXEC."
-fi
-if [ $FILE_COUNT -gt 100 ]; then
-  echo "⚠️ WARNING: Many files changed (>100). Consider splitting work."
-fi
-```
-
-### Why This Matters
-
-- **Prevents unsalvageable branches**: 13-day divergence = 450 file conflicts
-- **Isolates SD work**: One SD per branch = clean merges and rollbacks
-- **Catches conflicts early**: Regular syncing = smaller conflict resolution
-- **Maintains velocity**: Fresh branches = fast PRs and reviews
-
-### EXEC Agent Action
-
-When starting implementation:
-1. Run branch health check
-2. If >7 days stale → merge main first
-3. If multiple SDs detected → split branches
-4. If >100 files changed → assess scope creep
-5. Document branch health in handoff notes
-
 ## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
 
 ## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
@@ -1122,6 +1034,99 @@ git checkout main
 git pull origin main
 git log --oneline -5  # Should show your merge commit
 ```
+
+## 🌿 Branch Hygiene Gate (MANDATORY)
+
+## Branch Hygiene Gate (MANDATORY)
+
+**Evidence from Retrospectives**: SD-STAGE4-UX-EDGE-CASES-001 revealed a feature branch with 14 commits, 450 files, and 13 days of divergence became unsalvageable due to accumulated unrelated changes.
+
+### MANDATORY Before PLAN-TO-EXEC Handoff
+
+EXEC MUST verify these branch hygiene requirements BEFORE starting implementation:
+
+### 1. Branch Freshness (≤7 Days Stale)
+
+```bash
+# Check days since branch diverged from main
+git log main..HEAD --oneline | wc -l  # Should be reasonable
+git log --oneline main..HEAD --format="%ar" | tail -1  # Check age
+```
+
+**Threshold**: Feature branch must be ≤7 days stale at PLAN-TO-EXEC handoff
+**Action**: If exceeded, rebase or merge main before proceeding
+> Why: Branches older than 7 days accumulate merge conflicts at an accelerating rate. Beyond 14 days, the conflict surface area exceeds what an LLM can safely resolve in one session — the SD-STAGE4 incident demonstrated that a 13-day branch became unsalvageable.
+
+### 2. Single-SD Branch Rule (No Mixing)
+
+```bash
+# All commits should reference the same SD-ID
+git log main..HEAD --oneline | grep -E "SD-[A-Z0-9-]+"
+```
+
+**Rule**: One SD per branch - no mixing unrelated work
+**Anti-Pattern**: "Kitchen sink" branches that accumulate work from multiple SDs
+**Action**: If multiple SDs detected, create separate branches
+> Why: Mixed-SD branches make rollbacks impossible and confuse the review-gate risk scorer. A single-SD branch means any revert is safe — reverting a mixed branch would silently undo unrelated shipped work.
+
+### 3. Merge Main at Phase Transitions
+
+**At PLAN-TO-EXEC**:
+```bash
+git fetch origin main
+git merge origin/main --no-edit  # Or rebase if preferred
+```
+
+**Rule**: Sync with main at each phase transition (LEAD→PLAN, PLAN→EXEC, EXEC→PLAN)
+> Why: Phase transitions are natural synchronization points — the branch is stable, tests are passing, and a PR review window just occurred. Syncing here keeps conflict resolution small and predictable rather than deferred to an explosive final merge.
+**Benefit**: Catches conflicts early, prevents accumulation
+
+### 4. Maximum Branch Lifetime (14 Days)
+
+| Age | Action |
+|-----|--------|
+| 0-7 days | ✅ Proceed normally |
+| 7-10 days | ⚠️ Warning - sync with main |
+| 10-14 days | 🔴 Must sync before any handoff |
+| >14 days | ❌ Create fresh branch, cherry-pick changes |
+
+### Branch Health Check Script
+
+```bash
+# Quick branch health check
+echo "=== Branch Health Check ==="
+DIVERGE_COMMIT=$(git merge-base main HEAD)
+DAYS_OLD=$(( ( $(date +%s) - $(git log -1 --format=%ct $DIVERGE_COMMIT) ) / 86400 ))
+COMMIT_COUNT=$(git rev-list --count main..HEAD 2>/dev/null || echo 0)
+FILE_COUNT=$(git diff --name-only main...HEAD 2>/dev/null | wc -l || echo 0)
+
+echo "Days since divergence: $DAYS_OLD"
+echo "Commits on branch: $COMMIT_COUNT"
+echo "Files changed: $FILE_COUNT"
+
+if [ $DAYS_OLD -gt 7 ]; then
+  echo "⚠️ WARNING: Branch is stale (>7 days). Sync with main before EXEC."
+fi
+if [ $FILE_COUNT -gt 100 ]; then
+  echo "⚠️ WARNING: Many files changed (>100). Consider splitting work."
+fi
+```
+
+### Why This Matters
+
+- **Prevents unsalvageable branches**: 13-day divergence = 450 file conflicts
+- **Isolates SD work**: One SD per branch = clean merges and rollbacks
+- **Catches conflicts early**: Regular syncing = smaller conflict resolution
+- **Maintains velocity**: Fresh branches = fast PRs and reviews
+
+### EXEC Agent Action
+
+When starting implementation:
+1. Run branch health check
+2. If >7 days stale → merge main first
+3. If multiple SDs detected → split branches
+4. If >100 files changed → assess scope creep
+5. Document branch health in handoff notes
 
 ## Auto-Merge Workflow for SD Completion
 
@@ -1443,77 +1448,6 @@ The ACCEPTANCE_CRITERIA_VALIDATION gate scores stories as follows:
 
 Threshold: overall score >= 60 AND no story scores 0.
 
-## Playwright MCP Integration
-
-## 🎭 Playwright MCP Integration
-
-**Status**: ✅ READY (Installed 2025-10-12)
-
-### Overview
-Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
-
-### Installed Components
-- **Chrome**: Google Chrome browser for MCP operations
-- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
-- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
-- **System Dependencies**: All required Linux libraries installed
-
-### Available MCP Tools
-
-#### Navigation
-- `mcp__playwright__browser_navigate` - Navigate to URL
-- `mcp__playwright__browser_navigate_back` - Go back to previous page
-
-#### Interaction
-- `mcp__playwright__browser_click` - Click elements
-- `mcp__playwright__browser_fill` - Fill form fields
-- `mcp__playwright__browser_select` - Select dropdown options
-- `mcp__playwright__browser_hover` - Hover over elements
-- `mcp__playwright__browser_type` - Type text into elements
-
-#### Verification
-- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
-- `mcp__playwright__browser_take_screenshot` - Take screenshots
-- `mcp__playwright__browser_evaluate` - Execute JavaScript
-
-#### Management
-- `mcp__playwright__browser_close` - Close browser
-- `mcp__playwright__browser_tabs` - Manage tabs
-
-### Testing Integration
-
-**When to Use Playwright MCP**:
-1. ✅ Visual regression testing
-2. ✅ UI component verification
-3. ✅ Screenshot capture for evidence
-4. ✅ Accessibility tree validation
-5. ✅ Cross-browser testing
-
-**When to Use Standard Playwright**:
-1. ✅ E2E test suites (`npm run test:e2e`)
-2. ✅ CI/CD pipeline tests
-3. ✅ Automated test runs
-4. ✅ User story validation
-
-### Usage Example
-
-```javascript
-// Using Playwright MCP for visual verification
-await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
-await mcp__playwright__browser_snapshot(); // Get accessibility tree
-await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
-await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
-```
-
-### QA Director Integration
-
-The QA Engineering Director sub-agent now has access to:
-- Playwright MCP for visual testing
-- Standard Playwright for E2E automation
-- Both Chrome (MCP) and Chromium (tests) browsers
-
-**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
-
 ## Triangulated Runtime Audit Protocol
 
 ### Purpose
@@ -1731,6 +1665,77 @@ See: `/runtime-audit` skill for full template
 - `codebase-search` - Finding code references
 - `schema-design` - Database schema issues
 
+
+## Playwright MCP Integration
+
+## 🎭 Playwright MCP Integration
+
+**Status**: ✅ READY (Installed 2025-10-12)
+
+### Overview
+Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
+
+### Installed Components
+- **Chrome**: Google Chrome browser for MCP operations
+- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
+- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
+- **System Dependencies**: All required Linux libraries installed
+
+### Available MCP Tools
+
+#### Navigation
+- `mcp__playwright__browser_navigate` - Navigate to URL
+- `mcp__playwright__browser_navigate_back` - Go back to previous page
+
+#### Interaction
+- `mcp__playwright__browser_click` - Click elements
+- `mcp__playwright__browser_fill` - Fill form fields
+- `mcp__playwright__browser_select` - Select dropdown options
+- `mcp__playwright__browser_hover` - Hover over elements
+- `mcp__playwright__browser_type` - Type text into elements
+
+#### Verification
+- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
+- `mcp__playwright__browser_take_screenshot` - Take screenshots
+- `mcp__playwright__browser_evaluate` - Execute JavaScript
+
+#### Management
+- `mcp__playwright__browser_close` - Close browser
+- `mcp__playwright__browser_tabs` - Manage tabs
+
+### Testing Integration
+
+**When to Use Playwright MCP**:
+1. ✅ Visual regression testing
+2. ✅ UI component verification
+3. ✅ Screenshot capture for evidence
+4. ✅ Accessibility tree validation
+5. ✅ Cross-browser testing
+
+**When to Use Standard Playwright**:
+1. ✅ E2E test suites (`npm run test:e2e`)
+2. ✅ CI/CD pipeline tests
+3. ✅ Automated test runs
+4. ✅ User story validation
+
+### Usage Example
+
+```javascript
+// Using Playwright MCP for visual verification
+await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
+await mcp__playwright__browser_snapshot(); // Get accessibility tree
+await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
+await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
+```
+
+### QA Director Integration
+
+The QA Engineering Director sub-agent now has access to:
+- Playwright MCP for visual testing
+- Standard Playwright for E2E automation
+- Both Chrome (MCP) and Chromium (tests) browsers
+
+**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
 
 ## Edge Case Testing Checklist
 

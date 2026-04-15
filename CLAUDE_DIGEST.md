@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-15T13:19:17.003Z -->
-<!-- git_commit: 23181f8d -->
+<!-- generated_at: 2026-04-15T13:28:07.435Z -->
+<!-- git_commit: 399bcdce -->
 <!-- db_snapshot_hash: 6eae12af9d239d82 -->
 <!-- file_content_hash: pending -->
 
@@ -160,5 +160,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-04-15 9:19:17 AM*
+*DIGEST generated: 2026-04-15 9:28:07 AM*
 *Protocol: 4.3.3*
