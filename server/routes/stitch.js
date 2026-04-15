@@ -19,11 +19,16 @@ import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid } from '../middleware/validate.js';
 import { exportStitchArtifacts } from '../../lib/eva/bridge/stitch-exporter.js';
 import { getVentureMetrics, getFleetHealth, detectDegradation } from '../../lib/eva/bridge/stitch-metrics.js';
+import { checkCurationStatus } from '../../lib/eva/bridge/stitch-provisioner.js';
 
 const router = Router();
 
 /** Max length for the projectId string parameter (defensive, not from any DB constraint) */
 const MAX_PROJECT_ID_LENGTH = 256;
+
+/** Per-venture rate limiter for check-curation endpoint (1 call per 10s per venture) */
+const curationRateLimiter = new Map();
+const RATE_LIMIT_TTL_MS = 10_000;
 
 /** Hard request timeout for the export call (60s). Exporter is async + may invoke external Stitch API. */
 const EXPORT_TIMEOUT_MS = 60_000;
@@ -68,6 +73,60 @@ function withTimeout(promise, ms, label = 'operation') {
     );
   });
 }
+
+/**
+ * POST /api/stitch/:ventureId/check-curation
+ *
+ * Triggers backend verification of Stitch screen generation status.
+ * Calls checkCurationStatus() which queries the Stitch API via listScreens(),
+ * updates the venture_artifacts curation record, and returns current state.
+ *
+ * Auth: requireAuth (mounted in server/index.js)
+ * Rate limit: 1 call per 10s per venture
+ *
+ * Returns:
+ *   200 { ready, screen_count, ... }  — curation status from Stitch API
+ *   400 { error, code }               — invalid ventureId
+ *   429 { error, code }               — rate limited
+ *   500 { error, code }               — Stitch API or internal error
+ *
+ * SD: SD-WIRE-STITCH-CURATION-STATUS-ORCH-001-A
+ */
+router.post('/:ventureId/check-curation', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({
+      error: 'Validation failed',
+      message: 'Invalid ventureId format. Expected UUID.',
+      code: 'INVALID_VENTURE_ID',
+    });
+  }
+
+  // Per-venture rate limiting
+  const now = Date.now();
+  const lastCall = curationRateLimiter.get(ventureId);
+  if (lastCall && now - lastCall < RATE_LIMIT_TTL_MS) {
+    return res.status(429).json({
+      error: 'Too Many Requests',
+      message: `Rate limited. Try again in ${Math.ceil((RATE_LIMIT_TTL_MS - (now - lastCall)) / 1000)}s.`,
+      code: 'RATE_LIMITED',
+    });
+  }
+  curationRateLimiter.set(ventureId, now);
+
+  try {
+    const result = await checkCurationStatus(ventureId);
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[stitch-route] check-curation failed:', err);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: sanitizeErrorMessage(err?.message),
+      code: 'CURATION_CHECK_FAILED',
+    });
+  }
+}));
 
 /**
  * POST /api/stitch/export
