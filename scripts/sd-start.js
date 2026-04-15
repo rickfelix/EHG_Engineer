@@ -1097,10 +1097,11 @@ async function main() {
     console.log(`\n${colors.bold}Next Action:${colors.reset}`);
     console.log(`   ${colors.cyan}/brainstorm ${sd.title}${colors.reset}`);
     console.log(`${colors.dim}   After brainstorm completes with vision+arch, then:${colors.reset}`);
-    console.log(`   ${colors.dim}node scripts/handoff.js execute ${nextHandoff} ${effectiveId}${colors.reset}`);
+    console.log(`   ${colors.dim}CLAUDE_SESSION_ID=${session.session_id} node scripts/handoff.js execute ${nextHandoff} ${effectiveId}${colors.reset}`);
   } else {
     console.log(`\n${colors.bold}Next Action:${colors.reset}`);
-    console.log(`   ${colors.cyan}node scripts/handoff.js execute ${nextHandoff} ${effectiveId}${colors.reset}`);
+    console.log(`   ${colors.cyan}CLAUDE_SESSION_ID=${session.session_id} node scripts/handoff.js execute ${nextHandoff} ${effectiveId}${colors.reset}`);
+    console.log(`${colors.dim}   All subsequent node script invocations must include CLAUDE_SESSION_ID=<uuid> as an inline env var prefix.${colors.reset}`);
   }
 
   console.log(`\n${colors.dim}Session: ${session.session_id}${colors.reset}`);
