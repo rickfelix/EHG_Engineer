@@ -446,6 +446,15 @@ async function createChild(parentKey, index = 0, overrides = {}) {
     }
   });
 
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-101: Inherit parent worktree_path
+  // Children share the parent's worktree — prevents wrong_worktree gate failures
+  if (parent.worktree_path) {
+    await supabase
+      .from('strategic_directives_v2')
+      .update({ worktree_path: parent.worktree_path })
+      .eq('sd_key', sdKey);
+  }
+
   // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: Assert parent claim before returning child
   // Verifies the creating session holds the parent SD claim
   try {
