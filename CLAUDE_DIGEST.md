@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-06T12:18:47.810Z -->
-<!-- git_commit: b29d6e66 -->
-<!-- db_snapshot_hash: 3663b201f9e83b33 -->
+<!-- generated_at: 2026-04-15T13:11:58.994Z -->
+<!-- git_commit: 33e08791 -->
+<!-- db_snapshot_hash: a08c22f75efba9a2 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
@@ -84,12 +84,19 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 ## Session Prologue (Short)
 
 1. **Follow LEAD→PLAN→EXEC** - Target gate pass rate varies by SD type (60-90%, typically 85%)
+> Why: Each phase produces a gate-validated artifact (strategic intent → PRD → code). Skipping phases means the next gate has no artifact to validate against, causing failures that are expensive to unwind.
 2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
+> Why: Sub-agents run formal, database-backed gate checks stored in `sub_agent_execution_results`. Handoff gates query this table — without sub-agent runs, gates block regardless of actual code quality.
 3. **Database-first** - No markdown files as source of truth
+> Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
 4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, handoff.js ⚠️
+> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases.
 5. **Small PRs** - Target ≤100 lines, max 400 with justification
+> Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospective analysis shows ≤100 LOC correlates with faster cycle time and fewer post-merge defects.
 6. **Priority-first** - Use `npm run prio:top3` to justify work
+> Why: Without priority justification, the highest-ROI SD can be overlooked in favour of something familiar. `prio:top3` enforces objective ordering, not recency ordering.
 7. **Version check** - If stale protocol detected, run `node scripts/generate-claude-md-from-db.js`
+> Why: CLAUDE.md is auto-generated from the DB. Operating on a stale file means reading outdated rules without knowing it — the session follows a protocol that has since been superseded.
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
@@ -152,5 +159,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-04-06 8:18:47 AM*
+*DIGEST generated: 2026-04-15 9:11:59 AM*
 *Protocol: 4.3.3*

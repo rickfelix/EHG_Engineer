@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-06T12:18:47.810Z -->
-<!-- git_commit: b29d6e66 -->
-<!-- db_snapshot_hash: 3663b201f9e83b33 -->
+<!-- generated_at: 2026-04-15T13:11:58.994Z -->
+<!-- git_commit: 33e08791 -->
+<!-- db_snapshot_hash: a08c22f75efba9a2 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_EXEC_DIGEST.md - EXEC Phase (Enforcement)
@@ -17,6 +17,7 @@
 Before writing ANY code, EXEC MUST:
 
 0. **AMBIGUITY RESOLUTION** 🔍 CRITICAL FIRST STEP
+   > Why: Ambiguous requirements produce code that solves the wrong problem. Discovering misalignment at EXEC-TO-PLAN costs far more to unwind than a 5-minute clarification upfront.
    - Review PRD for unclear requirements, missing details, or conflicting specifications
    - Do NOT proceed with implementation if ANY ambiguity exists
    - Use 3-tier escalation to resolve:
@@ -35,6 +36,7 @@ Before writing ANY code, EXEC MUST:
 
 **Example Ambiguity Resolution**:
 0.5. **PRD INTEGRATION SECTION CHECK** 📋 CRITICAL
+   > Why: This section defines who consumes the feature, what breaks if it fails, and what observability to wire in. Skipping it produces features that work in isolation but break downstream consumers or ship without rollback paths.
    - Read PRD `integration_operationalization` section BEFORE coding
    - Extract and document:
      - **Consumers**: Who/what uses this feature? What breaks if it fails?
@@ -47,23 +49,11 @@ Before writing ANY code, EXEC MUST:
    - Document: "Integration context reviewed: [X consumers, Y dependencies, Z metrics]"
 
 1. **APPLICATION CHECK** ⚠️ CRITICAL
+   > Why: `EHG_Engineer` is the backend API repo. Committing UI to it means CI runs in the wrong repo, changes never reach the frontend build pipeline, and the feature is invisible to users despite appearing "done."
    - **ALL UI changes** (user AND admin) go to `C:/Users/rickf/Projects/_EHG/ehg/`
    - **User features**: `C:/Users/rickf/Projects/_EHG/ehg/src/components/` and `/src/pages/`
    - **Admin features**: `C:/Users/rickf/Projects/_EHG/ehg/src/components/admin/` and `/src/pages/admin/`
-   - **Stage components**: `C:/Users/rickf/Projects/_EHG/ehg/src/components/stages/admin/`
-   - **Backend API only**: `C:/Users/rickf/Projects/_EHG/EHG_Engineer/` (routes, scripts, no UI)
-   - Verify: `cd C:/Users/rickf/Projects/_EHG/ehg && pwd`
-   - Check GitHub: `git remote -v` should show `rickfelix/ehg.git` for frontend
-
-2. **URL Verification** ✅
-   - Navigate to the EXACT URL specified in the PRD
-   - Confirm the page loads and is accessible
-   - Take a screenshot for evidence
-   - Document: "Verified: [URL] is accessible"
-
-3. **Component Identification** 🎯
-   - Identify the exact file path of the target component
-   - Confirm component exists at 
+   - **Stage components**: `C:
 
 *...truncated. Read full file for complete section.*
 
@@ -218,5 +208,5 @@ When starting implementation:
 
 ---
 
-*DIGEST generated: 2026-04-06 8:18:47 AM*
+*DIGEST generated: 2026-04-15 9:11:59 AM*
 *Protocol: 4.3.3*

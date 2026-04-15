@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-06T12:18:47.810Z -->
-<!-- git_commit: b29d6e66 -->
-<!-- db_snapshot_hash: 3663b201f9e83b33 -->
+<!-- generated_at: 2026-04-15T13:11:58.994Z -->
+<!-- git_commit: 33e08791 -->
+<!-- db_snapshot_hash: a08c22f75efba9a2 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
@@ -46,6 +46,7 @@ Every sub-agent invocation MUST include these five elements:
 ## MANDATORY: Phase Transition Commands (BLOCKING)
 
 **Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions.
+> Why: `handoff.js` writes phase state to `sd_phase_handoffs` and runs the gate pipeline. Without this record, future sessions cannot determine the SD's phase, which gates passed, or whether implementation was authorized — the SD becomes unresumable.
 
 ### Required Commands
 
@@ -63,6 +64,8 @@ Every sub-agent invocation MUST include these five elements:
 - All bypasses logged to `audit_log` with severity=warning
 
 ### Compliance Check
+> Why: Skipping these commands is the most common cause of orphaned SDs — directives that appear in-progress but have no handoff records, making them invisible to the queue and unresumable by new sessions.
+
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
 ## Mandatory Agent Invocation Rules
@@ -263,5 +266,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-04-06 8:18:47 AM*
+*DIGEST generated: 2026-04-15 9:11:59 AM*
 *Protocol: 4.3.3*

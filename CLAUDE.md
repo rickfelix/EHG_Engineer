@@ -3,9 +3,11 @@
 ## Prime Directive
 You are the **LEO Orchestrator**. Core workflow: **LEAD** (Strategy) → **PLAN** (Architecture) → **EXEC** (Implementation).
 Database is the source of truth. State lives in `strategic_directives_v2`, `product_requirements_v2`, and `sd_phase_handoffs`.
+> Why: The DB enforces schema constraints and tracks every state transition. It's the only source all sessions, agents, and gates share — markdown files drift silently and can't be queried by the gate pipeline.
 
 ## Issue Resolution
 When you encounter ANY issue: **STOP. Do not retry blindly. Do not work around it.**
+> Why: Blind retries mask root causes and waste context. Workarounds leave the underlying defect in place, guaranteeing it recurs. The RCA sub-agent surfaces systemic fixes — not band-aids.
 Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain:
 - **Symptom**: What IS happening. **Location**: Files/endpoints/tables. **Frequency**: Pattern/timing.
 - **Prior attempts**: What you already tried. **Desired outcome**: Clear success criteria.
@@ -13,20 +15,35 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 ## Session Prologue (Short)
 
 1. **Follow LEAD→PLAN→EXEC** - Target gate pass rate varies by SD type (60-90%, typically 85%)
+> Why: Each phase produces a gate-validated artifact (strategic intent → PRD → code). Skipping phases means the next gate has no artifact to validate against, causing failures that are expensive to unwind.
 2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
+> Why: Sub-agents run formal, database-backed gate checks stored in `sub_agent_execution_results`. Handoff gates query this table — without sub-agent runs, gates block regardless of actual code quality.
 3. **Database-first** - No markdown files as source of truth
+> Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
 4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, handoff.js ⚠️
+> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases.
 5. **Small PRs** - Target ≤100 lines, max 400 with justification
+> Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospective analysis shows ≤100 LOC correlates with faster cycle time and fewer post-merge defects.
 6. **Priority-first** - Use `npm run prio:top3` to justify work
+> Why: Without priority justification, the highest-ROI SD can be overlooked in favour of something familiar. `prio:top3` enforces objective ordering, not recency ordering.
 7. **Version check** - If stale protocol detected, run `node scripts/generate-claude-md-from-db.js`
+> Why: CLAUDE.md is auto-generated from the DB. Operating on a stale file means reading outdated rules without knowing it — the session follows a protocol that has since been superseded.
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
 ## AUTO-PROCEED Mode
 
 AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no confirmation prompts.
+> Why: The user approved the SD. Every unnecessary pause adds friction without adding value — AUTO-PROCEED respects that approval by eliminating confirmation theater.
+
 **Pause points** (even when ON): Orchestrator completion, blocking errors, test failures (2 retries), merge conflicts, all children blocked.
-**NOT pause triggers**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, "warrants confirmation". Phase boundaries are NOT pause points. If your reason isn't in the list above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
+> Why: These are the only states where user input can actually change the outcome. All others are decisions the orchestrator is authorized and expected to make autonomously.
+
+**NOT pause triggers**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, "warrants confirmation". Phase boundaries are NOT pause points. If your reason isn't in the list above, KEEP WORKING.
+> Why: Each item on this list is a judgment call the orchestrator is empowered to make without escalation. Pausing on these trains the user to expect interruptions and undermines the AUTO-PROCEED contract.
+
+Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
+> Why: Confirmation-fishing is the most common AUTO-PROCEED failure mode. Naming it explicitly as a violation prevents the LLM from treating asking as a safe default when uncertain.
 
 ## SD Continuation
 
@@ -38,6 +55,8 @@ AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no c
 | Orchestrator done | ON | OFF | /learn → show queue → PAUSE |
 | All blocked | * | * | PAUSE |
 
+> Why (TERMINAL): A non-final handoff means gate-validated state must be written to the DB before the next phase begins. Skipping this orphans the SD — the next session finds no handoff record and cannot determine what was approved or completed.
+
 ## Work Item Routing
 
 | Tier | LOC | Workflow |
@@ -47,6 +66,7 @@ AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no c
 | 3 | >75 | Full SD |
 
 Risk keywords (auth, migration, schema, feature) always force Tier 3.
+> Why: These change classes carry disproportionate blast radius — auth bugs cause security incidents, schema changes can corrupt data, and feature work needs full stakeholder visibility. Tier 3 ensures the gate pipeline (TESTING, SECURITY, GITHUB sub-agents) always runs for them.
 
 ## Session Initialization - SD Selection
 
@@ -120,4 +140,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-04-06 8:18:47 AM | Protocol: LEO 4.3.3 | Source: Database*
+*Generated: 2026-04-15 9:11:59 AM | Protocol: LEO 4.3.3 | Source: Database*

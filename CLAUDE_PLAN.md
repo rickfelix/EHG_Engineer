@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-04-06 8:18:47 AM
+**Generated**: 2026-04-15 9:11:59 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -444,23 +444,6 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 | "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
 | "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
-
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -531,6 +514,23 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
+
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## PLAN Pre-EXEC Checklist
 
@@ -692,6 +692,33 @@ When a pipeline has cascading failures, the architecture plan MUST:
 
 **Detection**: The gate checks architecture plan content for failure chain diagrams and upstream-first child ordering language.
 
+## 🔬 BMAD Method Enhancements
+
+## BMAD Enhancements
+
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
+
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
+
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
+
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
+
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -789,33 +816,6 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 # → PRD includes research findings in technical_approach
 ```
 
-
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
 
 ## CI/CD Pipeline Verification
 
@@ -1660,6 +1660,34 @@ for (const childId of childIds) {
 
 > **Team Capabilities**: When planning complex SDs, consider whether team spawning (any agent leading specialists) could parallelize cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
+## PRD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off PRD creation scripts like:**
+- `create-prd-sd-*.js`
+- `insert-prd-*.js`
+- `enhance-prd-*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/add-prd-to-database.js
+```
+
+### Why This Matters
+- One-off scripts bypass PRD quality validation
+- They create massive maintenance burden (100+ orphaned scripts)
+- They fragment PRD creation patterns
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-prd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/add-prd-to-database.js`
+2. Follow the modular PRD creation system in `scripts/prd/`
+3. PRD is properly validated against quality rubrics
+
 ## Vision V2 PRD Requirements (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Integration in PRDs
@@ -1700,34 +1728,6 @@ Key spec requirements addressed:
 ### Implementation Guidance (from SD metadata)
 
 All Vision V2 SDs have `creation_mode: CREATE_FROM_NEW` - implement fresh per specs, learn from existing code but do not modify it.
-
-## PRD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off PRD creation scripts like:**
-- `create-prd-sd-*.js`
-- `insert-prd-*.js`
-- `enhance-prd-*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/add-prd-to-database.js
-```
-
-### Why This Matters
-- One-off scripts bypass PRD quality validation
-- They create massive maintenance burden (100+ orphaned scripts)
-- They fragment PRD creation patterns
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-prd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/add-prd-to-database.js`
-2. Follow the modular PRD creation system in `scripts/prd/`
-3. PRD is properly validated against quality rubrics
 
 ## Quality Assessment Integration in Handoffs
 
@@ -1944,6 +1944,70 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 - Bug fixes and urgent patches: KR linkage is optional
 - Infrastructure SDs: Link if the work measurably advances a KR
 - Feature SDs: Always attempt KR linkage
+
+## PRD Creation — Inline Mode is the Default for Claude Code
+
+**CRITICAL**: When running `node scripts/add-prd-to-database.js <SD-ID> "<title>"` from a Claude Code session, the script defaults to **inline mode** (`LLM_PRD_INLINE=true`). This is the correct mode. **Do NOT set `LLM_PRD_INLINE=false`** from within Claude Code.
+
+### What inline mode does
+
+The script prints the PRD generation system prompt + user prompt to stdout between delimiters:
+```
+===PRD_GENERATION_PROMPT_START===
+SYSTEM_PROMPT:
+...
+USER_PROMPT:
+...
+===PRD_GENERATION_PROMPT_END===
+```
+
+Followed by:
+```
+>>> PRD_VERIFICATION_FAILED=true
+>>> PRD_SD_ID=<uuid>
+Claude Code: You MUST insert the PRD record into product_requirements_v2 before proceeding.
+```
+
+**This is NOT an error.** It is a handoff from the script to Claude Code. The script is telling you: "I printed the prompt, now YOU (Opus 4.6) generate the PRD JSON and INSERT it."
+
+### Why external API mode is wrong for Claude Code
+
+Setting `LLM_PRD_INLINE=false` routes through `lib/llm/client-factory.js`, which calls Anthropic/Google/OpenAI over HTTP. From within a Claude Code session this:
+1. Pays twice for the same model (Claude Code IS Opus 4.6)
+2. Often times out due to sandboxing/network restrictions
+3. Hits `LLM_PROVIDER=google` in `.env` by default → Gemini timeout
+4. Reference: SD-LEO-FIX-REPLACE-EXTERNAL-API-001 was specifically created to eliminate this external call for Claude Code
+
+### Correct workflow
+
+1. Run `node scripts/add-prd-to-database.js SD-XXX-001 "PRD Title"` (default flags, no `LLM_PRD_INLINE` override).
+2. Read the **full prompt** between the delimiters — do NOT truncate with `| tail` since you need the system prompt's JSON schema.
+3. Generate the PRD JSON yourself matching the schema, using the parent SD's plan_content / arch doc / vision doc as source material.
+4. INSERT the generated JSON into `product_requirements_v2` directly. Required fields: `executive_summary`, `functional_requirements`, `system_architecture`, `acceptance_criteria`, `test_scenarios`, `implementation_approach`, `risks`. The `id` field is manual text format `PRD-<sd_key>`; `sd_id` references `strategic_directives_v2.id` (UUID, not sd_key). Status must be `approved` before PLAN-TO-EXEC.
+5. Also INSERT user stories into `user_stories` with `implementation_context` JSONB (NOT NULL).
+6. Run `node scripts/handoff.js precheck PLAN-TO-EXEC <SD-ID>` to verify.
+
+### Anti-pattern to avoid
+
+```bash
+# WRONG — routes to external API, times out, creates audit noise
+LLM_PROVIDER=anthropic LLM_PRD_INLINE=false node scripts/add-prd-to-database.js ...
+```
+
+```bash
+# WRONG — truncates the prompt so you can't see the schema
+node scripts/add-prd-to-database.js SD-XXX "Title" 2>&1 | tail -30
+```
+
+```bash
+# RIGHT — default inline mode, full output captured
+node scripts/add-prd-to-database.js SD-XXX "Title" 2>&1 | tee /tmp/prd-prompt.txt
+```
+
+### Misreading inline-mode output as a failure (historical incident)
+
+On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decomposition, the PRD creation step was blocked for ~30 minutes because the `WARNING: No PRD record found` message was interpreted as a script failure rather than as the inline-mode handoff signal. The fix attempt (`LLM_PRD_INLINE=false`) then hit external API timeouts, compounding the confusion. Root cause: the warning's phrasing ("You MUST insert the PRD record") is delivered in a warning/error tone, but it is in fact the normal inline-mode completion message.
+
 
 ## Handoff Templates
 
@@ -2344,6 +2408,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 
 ---
 
-*Generated from database: 2026-04-06*
+*Generated from database: 2026-04-15*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

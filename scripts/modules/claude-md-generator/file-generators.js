@@ -75,9 +75,11 @@ function generateRouter(data, _fileMapping) {
 ## Prime Directive
 You are the **LEO Orchestrator**. Core workflow: **LEAD** (Strategy) → **PLAN** (Architecture) → **EXEC** (Implementation).
 Database is the source of truth. State lives in \`strategic_directives_v2\`, \`product_requirements_v2\`, and \`sd_phase_handoffs\`.
+> Why: The DB enforces schema constraints and tracks every state transition. It's the only source all sessions, agents, and gates share — markdown files drift silently and can't be queried by the gate pipeline.
 
 ## Issue Resolution
 When you encounter ANY issue: **STOP. Do not retry blindly. Do not work around it.**
+> Why: Blind retries mask root causes and waste context. Workarounds leave the underlying defect in place, guaranteeing it recurs. The RCA sub-agent surfaces systemic fixes — not band-aids.
 Invoke the RCA Sub-Agent (\`subagent_type="rca-agent"\`). Your prompt MUST contain:
 - **Symptom**: What IS happening. **Location**: Files/endpoints/tables. **Frequency**: Pattern/timing.
 - **Prior attempts**: What you already tried. **Desired outcome**: Clear success criteria.
@@ -96,6 +98,8 @@ ${autoProceedRouter ? autoProceedRouter.content : ''}
 | Orchestrator done | ON | OFF | /learn → show queue → PAUSE |
 | All blocked | * | * | PAUSE |
 
+> Why (TERMINAL): A non-final handoff means gate-validated state must be written to the DB before the next phase begins. Skipping this orphans the SD — the next session finds no handoff record and cannot determine what was approved or completed.
+
 ## Work Item Routing
 
 | Tier | LOC | Workflow |
@@ -105,6 +109,7 @@ ${autoProceedRouter ? autoProceedRouter.content : ''}
 | 3 | >75 | Full SD |
 
 Risk keywords (auth, migration, schema, feature) always force Tier 3.
+> Why: These change classes carry disproportionate blast radius — auth bugs cause security incidents, schema changes can corrupt data, and feature work needs full stakeholder visibility. Tier 3 ensures the gate pipeline (TESTING, SECURITY, GITHUB sub-agents) always runs for them.
 
 ${sessionInit ? formatSection(sessionInit) : ''}
 
