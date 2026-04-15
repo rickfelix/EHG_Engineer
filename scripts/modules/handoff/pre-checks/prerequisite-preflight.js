@@ -127,10 +127,20 @@ function checkLeadToPlanPrereqs(sd) {
   } else {
     const validSteps = smokeSteps.filter(s => s.instruction && s.expected_outcome);
     if (validSteps.length === 0) {
+      const invalidStep = smokeSteps[0];
+      const missingFields = [];
+      if (!invalidStep?.instruction) missingFields.push('instruction');
+      if (!invalidStep?.expected_outcome) missingFields.push('expected_outcome');
       issues.push({
         code: 'SMOKE_TEST_INVALID',
-        message: 'smoke_test_steps exist but none have both instruction and expected_outcome',
-        remediation: 'Each step needs: {instruction: "...", expected_outcome: "..."}'
+        message: `smoke_test_steps[0] is missing required field(s): ${missingFields.join(', ')}`,
+        remediation: [
+          'Each step must have both fields. Example:',
+          '  smoke_test_steps: [',
+          '    { instruction: "Run: node scripts/handoff.js execute LEAD-TO-PLAN SD-EXAMPLE-001",',
+          '      expected_outcome: "HANDOFF_RESULT=PASS printed to stdout" }',
+          '  ]'
+        ].join('\n')
       });
     }
   }
