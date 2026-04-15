@@ -456,6 +456,21 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
     console.log('');
   }
 
+  // PLAN-TO-EXEC checklist (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-109)
+  if (normalizedType === 'PLAN-TO-EXEC') {
+    console.log('');
+    console.log('📋 PLAN-TO-EXEC CHECKLIST REMINDERS');
+    console.log('─'.repeat(50));
+    console.log('   ⚠️  PRD executive_summary must be 50+ chars — one-liners cause PRD_SUMMARY_SHORT (0%).');
+    console.log('   Fix: update executive_summary in product_requirements_v2 WHERE sd_id=\'<SD-ID>\'.');
+    console.log('   ⚠️  User stories must exist BEFORE this gate. Format: story_key=\'SD-KEY:US-001\'.');
+    console.log('   Create via DB insert into user_stories with fields: story_key, sd_id, title, user_role,');
+    console.log('   user_want, user_benefit, acceptance_criteria, implementation_context.');
+    console.log('   ⚠️  CLAUDE_SESSION_ID must be set or no_deterministic_identity blocks the claim gate.');
+    console.log('   Run: CLAUDE_SESSION_ID=<uuid> node scripts/handoff.js execute PLAN-TO-EXEC <SD-ID>');
+    console.log('');
+  }
+
   // Step 2: Run all handoff gates
   console.log('');
   console.log('STEP 2: HANDOFF GATE VALIDATION');
