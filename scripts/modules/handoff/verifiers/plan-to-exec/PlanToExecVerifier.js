@@ -273,11 +273,15 @@ export class PlanToExecVerifier {
 
         console.log(`\n📊 PRD Quality Score: ${prdValidation.percentage || prdValidation.score}%`);
 
-        if (!prdValidation.valid || (prdValidation.percentage || prdValidation.score) < this.prdRequirements.minimumScore) {
-          return rejectHandoff(this.supabase,sdId, 'PRD_QUALITY', 'PRD does not meet quality standards', {
+        const actualScore = prdValidation.percentage || prdValidation.score;
+        if (!prdValidation.valid || actualScore < this.prdRequirements.minimumScore) {
+          const topErrors = (prdValidation?.errors || []).slice(0, 3);
+          const errorSuffix = topErrors.length > 0 ? `: ${topErrors.join('; ')}` : '';
+          const prdQualityMsg = `PRD does not meet quality standards (score: ${actualScore}% / required: ${this.prdRequirements.minimumScore}%)${errorSuffix}`;
+          return rejectHandoff(this.supabase, sdId, 'PRD_QUALITY', prdQualityMsg, {
             prdValidation,
             requiredScore: this.prdRequirements.minimumScore,
-            actualScore: prdValidation.percentage || prdValidation.score
+            actualScore
           });
         }
       }
