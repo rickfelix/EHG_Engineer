@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-04-06 8:18:47 AM
+**Generated**: 2026-04-15 9:11:59 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -13,6 +13,7 @@
 ## Migration Execution Protocol
 
 **CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+> Why: Hand-rolled migration scripts reliably fail in the specific edge cases that matter most — missing SUPABASE_DB_PASSWORD, pooler URL routing, SSL mode selection, and retry logic on transient failures. The database-agent encodes these hard-won patterns, preventing migrations from getting stuck at connection setup.
 
 The DATABASE sub-agent handles common blockers automatically:
 - **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
@@ -85,6 +86,41 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
+
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -125,46 +161,12 @@ bash scripts/leo-stack.sh restart   # All 3 servers
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
 
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
-
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
 ## MANDATORY: Phase Transition Commands (BLOCKING)
 
 **Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions.
+> Why: `handoff.js` writes phase state to `sd_phase_handoffs` and runs the gate pipeline. Without this record, future sessions cannot determine the SD's phase, which gates passed, or whether implementation was authorized — the SD becomes unresumable.
 
 ### Required Commands
 
@@ -209,6 +211,8 @@ node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001 \
 ```bash
 npm run handoff:compliance SD-ID
 ```
+
+> Why: Skipping these commands is the most common cause of orphaned SDs — directives that appear in-progress but have no handoff records, making them invisible to the queue and unresumable by new sessions.
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
@@ -370,66 +374,6 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
-## Multi-Repo SD Verification
-
-**CRITICAL**: When verifying whether an SD shipped code (completion gates, extent-of-condition audits, scope verification), you MUST search ALL EHG repositories — not just the current one.
-
-### Known Repositories
-| Repo | GitHub | Local Path | Content |
-|------|--------|-----------|---------|
-| EHG_Engineer | `rickfelix/EHG_Engineer` | `C:\Users\rickf\Projects\_EHG\EHG_Engineer` | Backend, CLI, infrastructure |
-| ehg | `rickfelix/ehg` | `C:\Users\rickf\Projects\_EHG\ehg` | Frontend React app |
-| commitcraft-ai | `rickfelix/commitcraft-ai` | `C:\Users\rickf\Projects\_EHG\commitcraft-ai` | CommitCraft AI app |
-
-### Verification Command
-```bash
-# Search across ALL repos for an SD key
-gh search commits "<SD-KEY>" --owner rickfelix --limit 10
-
-# Or iterate repos locally
-for repo in EHG_Engineer ehg commitcraft-ai; do
-  echo "=== $repo ===" && cd /c/Users/rickf/Projects/_EHG/$repo && git log --oneline --grep="<SD-KEY>" | head -5
-done
-```
-
-### Why This Matters
-Single-repo `git log --grep` misses cross-repo work entirely. During Apr 5 extent-of-condition analysis, 8 child SDs appeared as code gaps but were actually shipped to the `ehg` or `commitcraft-ai` repos. The `multi-repo-status.js` script already knows about all repos — audit tools should use the same list.
-
-**Pattern Reference**: PAT-MULTI-REPO-VERIFY-001
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
-
 ## Execution Philosophy
 
 ### Quality-First (PARAMOUNT)
@@ -466,6 +410,39 @@ Before marking any stage/feature as complete:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Sub-Agent Routing Reference
 
@@ -568,38 +545,6 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
-
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -640,6 +585,38 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Why**: SD-LEO-INFRA-CENTRALIZED-POST-STAGE-001 revealed that the S17 doc-gen hook failed silently on every run since it was shipped (wrong column name in query). Because the error was caught as non-fatal, the pipeline continued without vision/architecture docs, and S19 generated an unvalidated sprint plan.
 
 **Rule**: "Non-fatal" means the hook threw an unexpected exception. "Hook ran but wrote zero rows to its target table" is a **data integrity failure** that must surface.
+
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -1262,6 +1239,18 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 
 
+## Hot Issue Patterns (Auto-Updated)
+
+**CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
+
+| Pattern ID | Category | Severity | Count | Trend | Top Solution |
+|------------|----------|----------|-------|-------|--------------|
+| PAT-HF-LEADTOPLAN-c73db06a | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
+
+### Prevention Checklists
+
+
+*Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
 
@@ -1270,57 +1259,59 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. PLAN_TO_EXEC Handoff Retrospective: Intake Classification Schema and Taxonomy Module [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/8/2026 | **Score**: 100
+### 1. LEAD_TO_PLAN Handoff Retrospective: Address PAT-AUTO-47da445b: Gate GATE_SD_QUALITY failed: score 65/100 [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/17/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-d98a39ea] Gate GATE_SD_QUALITY failed: score 48/100
+- [PAT-AUTO-027ca171] Gate GATE_SD_TRANSITION_READINESS failed: score 75/100
+
+**Action Items**:
+- [ ] Verify: PAT-AUTO-47da445b root cause addressed for SD-LEARN-FIX-ADDRESS-PAT-AUTO...
+- [ ] Validate: SD completes LEO workflow without manual metadata patching for SD-LEAR...
+
+### 2. PLAN_TO_EXEC Handoff Retrospective: Address PAT-AUTO-47da445b: Gate GATE_SD_QUALITY failed: score 65/100 [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/17/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-34bd21e7] Gate GATE_SD_QUALITY failed: score 80/100
+- [PAT-AUTO-d98a39ea] Gate GATE_SD_QUALITY failed: score 48/100
+
+**Action Items**:
+- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+
+### 3. LEAD_TO_PLAN Handoff Retrospective: Claim Guard UUID Compatibility — Fix isSameConversation for Marker-Based Identity [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/16/2026 | **Score**: 100
 
 **Key Improvements**:
 - [PAT-HANDOFFGHOST] Handoff script prints success but does not insert DB row. Script outputs HANDOFF_...
-- [PAT-AUTO-3d8fe812] Gate ACCEPTANCE_CRITERIA_VALIDATION failed: score 0/100
+- [PAT-AUTO-83731782] Agent .md files are gitignored - edit .partial files instead. Generated from .pa...
 
 **Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+- [ ] [PAT-MAN-1dc1fa6a] Create corrective SDs to expand event bus adoption: migrate d...
+- [ ] [PAT-MAN-6badf37f] Create corrective SDs to strengthen CLI as authoritative work...
 
-### 2. SD-LEO-FEAT-STRATEGIC-ROADMAP-ARTIFACT-001-C Completion [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/8/2026 | **Score**: 100
+### 4. SD Completion: Comprehensive Venture Workflow Stage Fixes [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 3/16/2026 | **Score**: 100
 
 **Key Improvements**:
-- PRD quality gates delayed by external LLM timeouts: Gemini and OpenAI both timed out after 60 second...
-- Child SD metadata missing parent_orchestrator flag required by designSubAgentExecution gate in gate-...
+- Venture workflow stage transition errors were not caught by existing monitoring - need better observ...
+- SRIP service wiring was incomplete from initial implementation - service integration checklist neede...
 
 **Action Items**:
-- [ ] Fix child SD metadata population in leo-create-sd.js to include parent_orchestra...
-- [ ] Fix user story creation to auto-set sd_id from PRD sd_id lookup
+- [ ] Add automated stage transition regression tests for Stages 10-11
+- [ ] Implement stage transition monitoring dashboard alerts
 
-### 3. PLAN_TO_EXEC Handoff Retrospective: Reality Gate DB-Driven Refactor [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/7/2026 | **Score**: 100
+### 5. LEAD_TO_PLAN Handoff Retrospective: Dead Script Archival Campaign [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/17/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-4c76387f] Gate HEAL_BEFORE_COMPLETE failed: score 76/100
-- [PAT-AUTO-6ed421cf] Gate HEAL_BEFORE_COMPLETE failed: score 2/100
+- [PAT-AUTO-6c5bbd7c] Gate HEAL_BEFORE_COMPLETE failed: score 65/100
+- [PAT-AUTO-34bd21e7] Gate GATE_SD_QUALITY failed: score 80/100
 
 **Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
-
-### 4. PLAN_TO_EXEC Handoff Retrospective: Brainstorm-to-SD Pipeline Enforcement Gate [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/7/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-3d8fe812] Gate ACCEPTANCE_CRITERIA_VALIDATION failed: score 0/100
-- [PAT-AUTO-4c76387f] Gate HEAL_BEFORE_COMPLETE failed: score 76/100
-
-**Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
-
-### 5. LEAD_TO_PLAN Handoff Retrospective: Wave-to-SD Promotion and Baseline Integration [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/8/2026 | **Score**: 100
-
-**Key Improvements**:
-- PRD integration section required manual correction of key names
-- Retrospective quality gate required enrichment after auto-creation
-
-**Action Items**:
-- [ ] Add unit tests for baseline-manager createBaseline version increment logic
-- [ ] Add --format json flag to roadmap-baseline.js for machine-readable output
+- [ ] Confirm SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-001 produces no regressions — run exis...
+- [ ] Complete SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-001 implementation according to PRD a...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1386,7 +1377,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-04-06*
+*Generated from database: 2026-04-15*
 *Protocol Version: 4.3.3*
-*Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
+*Includes: Proposals (0) + Hot Patterns (1) + Lessons (5)*
 *Load this file first in all sessions*

@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-06T12:18:47.810Z -->
-<!-- git_commit: b29d6e66 -->
-<!-- db_snapshot_hash: 3663b201f9e83b33 -->
+<!-- generated_at: 2026-04-15T13:11:58.994Z -->
+<!-- git_commit: 33e08791 -->
+<!-- db_snapshot_hash: a08c22f75efba9a2 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_PLAN_DIGEST.md - PLAN Phase (Enforcement)
@@ -107,6 +107,39 @@ These are kept for reference but should NEVER be used as templates.
 2. Follow the modular PRD creation system in `scripts/prd/`
 3. PRD is properly validated against quality rubrics
 
+## PRD Creation — Inline Mode is the Default for Claude Code
+
+**CRITICAL**: When running `node scripts/add-prd-to-database.js <SD-ID> "<title>"` from a Claude Code session, the script defaults to **inline mode** (`LLM_PRD_INLINE=true`). This is the correct mode. **Do NOT set `LLM_PRD_INLINE=false`** from within Claude Code.
+
+### What inline mode does
+
+The script prints the PRD generation system prompt + user prompt to stdout between delimiters:
+Followed by:
+**This is NOT an error.** It is a handoff from the script to Claude Code. The script is telling you: "I printed the prompt, now YOU (Opus 4.6) generate the PRD JSON and INSERT it."
+
+### Why external API mode is wrong for Claude Code
+
+Setting `LLM_PRD_INLINE=false` routes through `lib/llm/client-factory.js`, which calls Anthropic/Google/OpenAI over HTTP. From within a Claude Code session this:
+1. Pays twice for the same model (Claude Code IS Opus 4.6)
+2. Often times out due to sandboxing/network restrictions
+3. Hits `LLM_PROVIDER=google` in `.env` by default → Gemini timeout
+4. Reference: SD-LEO-FIX-REPLACE-EXTERNAL-API-001 was specifically created to eliminate this external call for Claude Code
+
+### Correct workflow
+
+1. Run `node scripts/add-prd-to-database.js SD-XXX-001 "PRD Title"` (default flags, no `LLM_PRD_INLINE` override).
+2. Read the **full prompt** between the delimiters — do NOT truncate with `| tail` since you need the system prompt's JSON schema.
+3. Generate the PRD JSON yourself matching the schema, using the parent SD's plan_content / arch doc / vision doc as source material.
+4. INSERT the generated JSON into `product_requirements_v2` directly. Required fields: `executive_summary`, `functional_requirements`, `system_architecture`, `acceptance_criteria`, `test_scenarios`, `implementation_approach`, `risks`. The `id` field is manual text format `PRD-<sd_key>`; `sd_id` references `strategic_directives_v2.id` (UUID, not sd_key). Status must be `approved` before PLAN-TO-EXEC.
+5. Also INSERT user stories into `user_stories` with `implementation_context` JSONB (NOT NULL).
+6. Run `node scripts/handoff.js precheck PLAN-TO-EXEC <SD-ID>` to verify.
+
+### Anti-pattern to avoid
+
+### Misreading inline-mode output as a failure (historical incident)
+
+On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decomposition, the PRD creation step was blocked for ~30 minutes because the `WARNING: No PRD record found` message was interpreted as a script failure rather than as the inline-mode handoff signal. The fix attempt (`LLM_PRD_INLINE=false`) then hit external API timeouts, compounding the confusion. Root cause: the warning's phrasing ("You MUST insert the PRD record") is delivered in a warning/error tone, but it is in fact the normal inline-mode completion message.
+
 ## ESCALATE TO FULL FILE WHEN
 
 - Debugging specific gate scoring or failure reasons
@@ -124,5 +157,5 @@ These are kept for reference but should NEVER be used as templates.
 
 ---
 
-*DIGEST generated: 2026-04-06 8:18:47 AM*
+*DIGEST generated: 2026-04-15 9:11:59 AM*
 *Protocol: 4.3.3*
