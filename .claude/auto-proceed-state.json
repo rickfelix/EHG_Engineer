@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-096",
+  "currentSd": "SD-EVA-FRIDAY-MEETING-ENHANCEMENT-ORCH-001-D",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing Fix Stale Worktree Gate Blocking",
+  "currentTask": "Implementing Knowledge Base VIEW over Learning Decisions and Issue Patterns PRD",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
-  "clearedAt": "2026-04-13T17:54:31.100Z",
-  "lastUpdatedAt": "2026-04-14T16:31:42.277Z"
+  "clearedAt": "2026-04-15T00:32:06.617Z",
+  "lastUpdatedAt": "2026-04-15T13:53:04.796Z"
 }
