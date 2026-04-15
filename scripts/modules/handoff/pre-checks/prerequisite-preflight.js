@@ -127,10 +127,20 @@ function checkLeadToPlanPrereqs(sd) {
   } else {
     const validSteps = smokeSteps.filter(s => s.instruction && s.expected_outcome);
     if (validSteps.length === 0) {
+      const invalidStep = smokeSteps[0];
+      const missingFields = [];
+      if (!invalidStep?.instruction) missingFields.push('instruction');
+      if (!invalidStep?.expected_outcome) missingFields.push('expected_outcome');
       issues.push({
         code: 'SMOKE_TEST_INVALID',
-        message: 'smoke_test_steps exist but none have both instruction and expected_outcome',
-        remediation: 'Each step needs: {instruction: "...", expected_outcome: "..."}'
+        message: `smoke_test_steps[0] is missing required field(s): ${missingFields.join(', ')}`,
+        remediation: [
+          'Each step must have both fields. Example:',
+          '  smoke_test_steps: [',
+          '    { instruction: "Run: node scripts/handoff.js execute LEAD-TO-PLAN SD-EXAMPLE-001",',
+          '      expected_outcome: "HANDOFF_RESULT=PASS printed to stdout" }',
+          '  ]'
+        ].join('\n')
       });
     }
   }
@@ -167,11 +177,14 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
       });
     }
 
-    if (!prd.executive_summary || prd.executive_summary.length < 50) {
+    const summaryLen = typeof prd.executive_summary === 'string'
+      ? prd.executive_summary.length
+      : (prd.executive_summary ? JSON.stringify(prd.executive_summary).length : 0);
+    if (summaryLen < 50) {
       issues.push({
         code: 'PRD_SUMMARY_SHORT',
-        message: `PRD executive_summary is ${(prd.executive_summary || '').length} chars (minimum: 50)`,
-        remediation: 'Add a substantive executive_summary to the PRD (50+ chars)'
+        message: `PRD executive_summary is ${summaryLen} chars (minimum: 50)`,
+        remediation: `Add a substantive executive_summary to the PRD (50+ chars). SQL fix:\n  node -e "require('dotenv').config(); const {createClient}=require('@supabase/supabase-js'); const s=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY); s.from('product_requirements_v2').update({executive_summary:'<your summary text>'}).eq('id','${prd.id}').then(r=>console.log(r.error||'Updated'));"`
       });
     }
   }
