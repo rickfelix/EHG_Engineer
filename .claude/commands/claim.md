@@ -141,13 +141,12 @@ async function releaseClaim() {
     console.log('  Error releasing claim: ' + releaseError.message);
     console.log('');
 
-    // Fallback: try direct update if RPC fails
+    // Fallback: try direct update on claude_sessions if RPC fails
     console.log('  Attempting direct release...');
     const { error: directError } = await supabase
-      .from('sd_claims')
-      .update({ released_at: new Date().toISOString(), release_reason: 'manual' })
-      .eq('session_id', sessionId)
-      .is('released_at', null);
+      .from('claude_sessions')
+      .update({ sd_key: null, released_at: new Date().toISOString(), released_reason: 'manual' })
+      .eq('session_id', sessionId);
 
     if (directError) {
       console.log('  Direct release also failed: ' + directError.message);

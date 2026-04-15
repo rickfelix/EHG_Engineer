@@ -17,7 +17,7 @@
  *
  * Detection Strategy (Database-First, Survives Branch Deletion):
  * 1. Check claude_sessions.sd_id for active SD claim
- * 2. Check sd_claims for recently released SD
+ * 2. Check claude_sessions for recently released SD
  * 3. Check quick_fixes for in-progress QF
  * 4. Check is_working_on flag
  * 5. Grep commit messages for SD-xxx/QF-xxx references
@@ -160,20 +160,20 @@ async function checkSDWorkStatus() {
       return { isSDWork: true, source: 'active_session', sdId: activeSessions.sd_id };
     }
 
-    // Query 2: Check sd_claims for recently released SD (within 10 minutes)
+    // Query 2: Check claude_sessions for recently released SD (within 10 minutes)
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { data: recentRelease } = await supabase
-      .from('sd_claims')
-      .select('sd_id')
-      .eq('release_reason', 'completed')
+      .from('claude_sessions')
+      .select('sd_key')
+      .eq('released_reason', 'completed')
       .gte('released_at', tenMinutesAgo)
       .order('released_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (recentRelease?.sd_id) {
-      log('info', 'sd_work_detected', { source: 'recent_release', sd_id: recentRelease.sd_id });
-      return { isSDWork: true, source: 'recent_release', sdId: recentRelease.sd_id };
+    if (recentRelease?.sd_key) {
+      log('info', 'sd_work_detected', { source: 'recent_release', sd_id: recentRelease.sd_key });
+      return { isSDWork: true, source: 'recent_release', sdId: recentRelease.sd_key };
     }
 
     // Query 3: Check for active Quick Fix

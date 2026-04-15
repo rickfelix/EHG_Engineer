@@ -510,7 +510,7 @@ This step runs automatically via PostToolUse hook - no manual action required.
 1. **Detects merge success**: Hook monitors `gh pr merge` commands
 2. **Checks SD/QF status**: Queries database to determine if this is SD/QF work
    - Checks `v_active_sessions` for active SD claim
-   - Checks `sd_claims` for recently completed SDs
+   - Checks `claude_sessions` for recently released SDs
    - Checks `quick_fixes` for in-progress QFs
    - Checks `is_working_on` flag
    - Greps commit messages for SD-*/QF-* patterns
