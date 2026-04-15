@@ -149,6 +149,10 @@ const DECAY_FLOOR = 0.1;
  */
 export async function applyRecommendationDecay(cycleDate) {
   if (!cycleDate) return { decayed: 0 };
+  // Normalize to ISO date string regardless of whether a Date object or string was passed
+  const cycleDateStr = cycleDate instanceof Date
+    ? cycleDate.toISOString().slice(0, 10)
+    : String(cycleDate).slice(0, 10);
 
   // Fetch pending recs not yet decayed this cycle
   const { data: recs, error } = await supabase
@@ -165,14 +169,14 @@ export async function applyRecommendationDecay(cycleDate) {
 
   const toDecay = recs.filter(r => {
     const lastDecayAt = r.metadata?.last_decay_at;
-    return !lastDecayAt || lastDecayAt < cycleDate;
+    return !lastDecayAt || lastDecayAt < cycleDateStr;
   });
 
   let decayed = 0;
   for (const rec of toDecay) {
     const current = typeof rec.feedback_weight === 'number' ? rec.feedback_weight : 1.0;
     const newWeight = Math.max(DECAY_FLOOR, current - DECAY_AMOUNT);
-    const updatedMetadata = { ...(rec.metadata || {}), last_decay_at: cycleDate };
+    const updatedMetadata = { ...(rec.metadata || {}), last_decay_at: cycleDateStr };
 
     const { error: updateErr } = await supabase
       .from('eva_consultant_recommendations')
