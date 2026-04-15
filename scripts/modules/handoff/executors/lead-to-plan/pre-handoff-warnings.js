@@ -42,6 +42,108 @@ function displayTypeRequirements(sd) {
 }
 
 /**
+ * PAT-HF-LEADTOPLAN-b891d12d: Surface translation fidelity gaps BEFORE gates run.
+ *
+ * When an SD has an architecture plan linked (arch_key), query the most recent
+ * eva_translation_gates result for this SD and show any gaps with remediation
+ * instructions. This turns a blocking gate failure into an actionable pre-check
+ * that teams can fix before the handoff is attempted.
+ *
+ * Called from LeadToPlanExecutor.setup() — runs before gate validation.
+ *
+ * @param {Object} sd - Strategic Directive
+ * @param {Object} supabase - Supabase client
+ */
+export async function displayTranslationFidelityPreview(sd, supabase) {
+  const archKey = sd?.metadata?.arch_key || sd?.metadata?.architecture_plan_key;
+  if (!archKey) return;
+
+  console.log('\n🔍 TRANSLATION FIDELITY PRE-CHECK (Architecture Plan → SD)');
+  console.log('='.repeat(70));
+  console.log(`   Arch Plan: ${archKey}`);
+
+  try {
+    const sdKey = sd?.sd_key || sd?.id;
+    const { data, error } = await supabase
+      .from('eva_translation_gates')
+      .select('coverage_score, gaps, passed, created_at')
+      .eq('gate_type', 'architecture_to_sd')
+      .filter('target_ref->>key', 'eq', sdKey)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.log(`   ⚠️  Could not query gate history: ${error.message}`);
+      _showTranslationChecklist();
+      console.log('');
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      console.log('   ℹ️  No prior gate result found — checklist for first run:');
+      _showTranslationChecklist();
+      console.log('');
+      return;
+    }
+
+    const latest = data[0];
+    const age = Math.round((Date.now() - new Date(latest.created_at).getTime()) / 60000);
+
+    if (latest.passed) {
+      console.log(`   ✅ Last run PASSED (score: ${latest.coverage_score}/100, ${age}m ago)`);
+      console.log('');
+      return;
+    }
+
+    console.log(`   ❌ Last run FAILED (score: ${latest.coverage_score}/100, ${age}m ago)`);
+    console.log('   Fix these gaps in SD description / key_changes / success_criteria BEFORE retrying:\n');
+
+    const gaps = latest.gaps || [];
+    const critical = gaps.filter(g => g.severity === 'critical');
+    const major = gaps.filter(g => g.severity === 'major');
+    const minor = gaps.filter(g => g.severity === 'minor');
+
+    for (const gap of critical) {
+      console.log(`   ❌ [CRITICAL] ${gap.item}`);
+      console.log(`      Source: ${gap.source}`);
+    }
+    for (const gap of major) {
+      console.log(`   ⚠️  [MAJOR]    ${gap.item}`);
+      console.log(`      Source: ${gap.source}`);
+    }
+    for (const gap of minor) {
+      console.log(`   ℹ️  [MINOR]    ${gap.item}`);
+    }
+
+    if (critical.length > 0 || major.length > 0) {
+      console.log('\n   📋 Remediation: Update the SD fields to explicitly mention each gap above.');
+      console.log('      • description: add workflow constraints, tool restrictions, platform rules');
+      console.log('      • key_changes: list specific API endpoints, components, and constraints');
+      console.log('      • success_criteria: include vision-level success criteria');
+    }
+
+    console.log('');
+  } catch (err) {
+    console.log(`   ⚠️  Translation fidelity preview error: ${err.message}`);
+    _showTranslationChecklist();
+    console.log('');
+  }
+}
+
+/**
+ * General checklist for orchestrator SDs derived from architecture plans.
+ * Shown when no historical gate result is available.
+ */
+function _showTranslationChecklist() {
+  console.log('   📋 Orchestrator SD checklist (common translation gaps):');
+  console.log('      • description:    workflow sequencing constraints (e.g., mobile-first, desktop inherits)');
+  console.log('      • description:    tool/system restrictions (e.g., "generate X via Claude, not Stitch")');
+  console.log('      • key_changes:    all API endpoints (e.g., /qa, /upload) mentioned in arch plan');
+  console.log('      • key_changes:    platform-specific requirements (PWA, mobile touch targets)');
+  console.log('      • success_criteria: strategic success criteria from Vision Document');
+}
+
+/**
  * Display pre-handoff warnings from recent retrospectives
  *
  * @param {string} handoffType - Type of handoff

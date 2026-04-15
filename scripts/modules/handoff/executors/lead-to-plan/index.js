@@ -44,7 +44,7 @@ import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
 
 // Helper modules
 import { transitionSdToPlan } from './state-transitions.js';
-import { displayPreHandoffWarnings } from './pre-handoff-warnings.js';
+import { displayPreHandoffWarnings, displayTranslationFidelityPreview } from './pre-handoff-warnings.js';
 import { createHandoffRetrospective } from './retrospective.js';
 
 // External verifier (will be lazy loaded)
@@ -68,8 +68,11 @@ export class LeadToPlanExecutor extends BaseExecutor {
     return 'LEAD-TO-PLAN';
   }
 
-  async setup(_sdId, _sd, _options) {
+  async setup(_sdId, sd, _options) {
     await this._loadVerifier();
+    // PAT-HF-LEADTOPLAN-b891d12d: Show translation fidelity gaps BEFORE gates run.
+    // Surfaces known gaps from prior failed runs so they can be fixed without a full retry cycle.
+    await displayTranslationFidelityPreview(sd, this.supabase);
     return null;
   }
 

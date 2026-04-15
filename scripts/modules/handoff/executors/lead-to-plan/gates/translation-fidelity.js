@@ -129,7 +129,8 @@ export function createTranslationFidelityGate(supabase) {
           score,
           confidence: 1.0,
           issues: passed ? [] : [
-            `Translation fidelity score ${score}/100 below threshold ${passingScore} (${sdType})`,
+            ...(score < passingScore ? [`Translation fidelity score ${score}/100 below threshold ${passingScore} (${sdType})`] : []),
+            ...(criticalGaps.length > 0 ? [`Translation fidelity blocked by ${criticalGaps.length} critical gap(s) in architecture → SD translation`] : []),
             ...criticalGaps.map(g => `Critical gap: ${g.item}`)
           ],
           warnings: result.gaps
