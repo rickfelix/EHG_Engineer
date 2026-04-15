@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-13T18:24:13.364Z
-**Rows**: 3
+**Generated**: 2026-04-15T15:49:47.783Z
+**Rows**: 9
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (25 total)
+## Columns (26 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -40,9 +40,10 @@
 | mitigation_actions | `jsonb` | YES | `'[]'::jsonb` | Chairman actions on mitigations: [{ mitigation_id, action: accept|reject, reason, acted_at, idempotency_key }] |
 | decided_by | `text` | YES | - | - |
 | blocking | `boolean` | YES | `false` | When true, this decision blocks downstream SD progression. Set by chairman-sla-enforcer.js when SLA is violated with blockOnViolation=true. Read by enforceDecisionSLAs() to skip further escalation on already-blocking decisions. SD-MAN-GEN-CORRECTIVE-VISION-GAP-014 |
-| decision_type | `text` | YES | - | - |
+| decision_type | `text` | **NO** | - | - |
 | context | `jsonb` | YES | - | - |
 | attempt_number | `integer(32)` | **NO** | `1` | Attempt number for decision re-entry. Enables immutable history — each retry creates a new row instead of updating. |
+| deleted_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -79,6 +80,10 @@
 - `idx_chairman_decisions_decided_by`
   ```sql
   CREATE INDEX idx_chairman_decisions_decided_by ON public.chairman_decisions USING btree (decided_by) WHERE (decided_by IS NOT NULL)
+  ```
+- `idx_chairman_decisions_deleted_at`
+  ```sql
+  CREATE INDEX idx_chairman_decisions_deleted_at ON public.chairman_decisions USING btree (deleted_at) WHERE (deleted_at IS NULL)
   ```
 - `idx_chairman_decisions_dfe_context_gin`
   ```sql
