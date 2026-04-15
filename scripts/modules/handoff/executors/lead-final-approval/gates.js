@@ -287,16 +287,16 @@ export function createRetrospectiveExistsGate(supabase) {
           max_score: 100,
           issues: ['No retrospective found - run RETRO sub-agent first'],
           warnings: [],
-          remediation: `Quality retrospective required for final approval.\n`
-            + `   --- TASK TOOL INVOCATION ---\n`
-            + `   subagent_type: "retro-agent"\n`
-            + `   prompt: |\n`
+          remediation: 'Quality retrospective required for final approval.\n'
+            + '   --- TASK TOOL INVOCATION ---\n'
+            + '   subagent_type: "retro-agent"\n'
+            + '   prompt: |\n'
             + `     Symptom: No quality retrospective found for ${sdKey}. LEAD-FINAL-APPROVAL blocked.\n`
             + `     Location: sd_retrospectives table WHERE sd_id='${ctx.sd?.id || sdKey}'\n`
-            + `     Frequency: Blocking final approval\n`
-            + `     Prior attempts: Retrospective not yet generated\n`
+            + '     Frequency: Blocking final approval\n'
+            + '     Prior attempts: Retrospective not yet generated\n'
             + `     Desired outcome: Generate retrospective for ${sdKey} with quality score >= 60%. Include SD-specific learnings, not boilerplate.\n`
-            + `   --- END INVOCATION ---`
+            + '   --- END INVOCATION ---'
         };
       }
 
@@ -543,11 +543,31 @@ export function createPRMergeVerificationGate() {
                   ).trim();
 
                   if (parseInt(commitCount) > 0) {
-                    unmergedBranches.push({
-                      branch: cleanBranch,
-                      repo: repo,
-                      commits: parseInt(commitCount)
-                    });
+                    // Check if this branch has a merged PR (squash-merge artifact)
+                    // After squash merge, the remote branch may still exist briefly or
+                    // the worktree branch diverges from main. If the PR is merged, skip.
+                    let prMerged = false;
+                    try {
+                      const prStatus = execSync(
+                        `gh pr list --head "${cleanBranch}" --state merged --json number --limit 1`,
+                        { encoding: 'utf8', cwd: repoPath, timeout: 15000 }
+                      ).trim();
+                      const mergedPrs = JSON.parse(prStatus || '[]');
+                      if (mergedPrs.length > 0) {
+                        prMerged = true;
+                        console.log(`   ✅ ${cleanBranch} has merged PR #${mergedPrs[0].number} — squash-merge artifact, skipping`);
+                      }
+                    } catch (_prErr) {
+                      // gh CLI unavailable or failed — fall through to unmerged check
+                    }
+
+                    if (!prMerged) {
+                      unmergedBranches.push({
+                        branch: cleanBranch,
+                        repo: repo,
+                        commits: parseInt(commitCount)
+                      });
+                    }
                   }
                 } catch (_e) {
                   // Intentionally suppressed: branch comparison failed, skip
