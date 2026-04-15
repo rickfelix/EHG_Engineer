@@ -84,6 +84,8 @@ async function main() {
   let totalWritten = 0;
   let totalDeduped = 0;
   let totalInjection = 0;
+  const zeroErrorThreshold = parseInt(process.env.SENTRY_ZERO_ERROR_THRESHOLD || '5', 10);
+  const suspectedBroken = [];
 
   for (const venture of ventures) {
     const sentryConfig = venture.metadata?.sentry;
@@ -126,13 +128,32 @@ async function main() {
         totalInjection += result.injectionFlagged;
       }
 
-      // Update last poll timestamp
+      // Zero-error health monitoring: track consecutive polls with no errors
+      const prevCount = sentryConfig.consecutive_zero_error_count || 0;
+      const updatedSentryConfig = {
+        ...sentryConfig,
+        lastPollAt: new Date().toISOString()
+      };
+
+      if (errors.length === 0) {
+        updatedSentryConfig.consecutive_zero_error_count = prevCount + 1;
+        if (updatedSentryConfig.consecutive_zero_error_count >= zeroErrorThreshold) {
+          updatedSentryConfig.potentially_broken_sdk = true;
+          suspectedBroken.push(venture.name);
+          console.log(`[${venture.name}] ⚠️  ${updatedSentryConfig.consecutive_zero_error_count} consecutive zero-error polls — SDK may be broken`);
+        }
+      } else {
+        // Errors received — reset zero-error tracking
+        updatedSentryConfig.consecutive_zero_error_count = 0;
+        updatedSentryConfig.potentially_broken_sdk = false;
+      }
+
       await supabase
         .from('ventures')
         .update({
           metadata: {
             ...venture.metadata,
-            sentry: { ...sentryConfig, lastPollAt: new Date().toISOString() }
+            sentry: updatedSentryConfig
           }
         })
         .eq('id', venture.id);
@@ -149,6 +170,18 @@ async function main() {
   console.log(`Errors written:  ${totalWritten}`);
   console.log(`Deduped:         ${totalDeduped}`);
   console.log(`Injection flags: ${totalInjection}`);
+
+  if (suspectedBroken.length > 0) {
+    console.log('');
+    console.log('⚠️  Suspected Broken SDKs');
+    console.log('-------------------------');
+    for (const name of suspectedBroken) {
+      console.log(`  • ${name} (${zeroErrorThreshold}+ consecutive zero-error polls)`);
+    }
+    console.log('');
+    console.log('These ventures may have a silently broken Sentry SDK.');
+    console.log('Verify SDK initialization and DSN configuration.');
+  }
 }
 
 main().catch(err => {
