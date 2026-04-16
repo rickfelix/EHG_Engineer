@@ -34,3 +34,6 @@ export { createWireframeQaValidationGate } from './wireframe-qa-validation.js';
 
 // Cross-Child Integration (SD-LEO-INFRA-CROSS-CHILD-INTEGRATION-001)
 export { createCrossChildIntegrationGate } from './cross-child-integration-gate.js';
+
+// Wiring Validation (SD-LEO-WIRING-VERIFICATION-FRAMEWORK-ORCH-001-D)
+export { createWiringValidationGate } from './wiring-validation.js';
