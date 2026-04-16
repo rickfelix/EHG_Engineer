@@ -54,6 +54,36 @@ const DETECTORS = {
 
 const VALID_STATUSES = new Set(['passed', 'failed', 'warning', 'pending']);
 
+// Detector scripts use shorthand status strings ("pass"/"fail"/"warn"/"error"/"skip").
+// Normalize to the leo_wiring_check_status DB enum values.
+// Convention: "skip" = detector ran but check not applicable (no arch plan, no
+// vision doc, etc.); surface as warning so the row persists and the gate emits
+// a non-blocking notice rather than swallowing the skip silently.
+const STATUS_ALIASES = {
+  pass: 'passed',
+  passed: 'passed',
+  fail: 'failed',
+  failed: 'failed',
+  error: 'failed',
+  warn: 'warning',
+  warning: 'warning',
+  skip: 'warning',
+  skipped: 'warning',
+  pending: 'pending',
+};
+
+function normalizeStatus(raw) {
+  if (typeof raw !== 'string') return null;
+  const mapped = STATUS_ALIASES[raw.toLowerCase()];
+  return VALID_STATUSES.has(mapped) ? mapped : null;
+}
+
+function normalizeSignals(raw) {
+  if (Array.isArray(raw)) return raw.length;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 // ---------------------------------------------------------------------------
 // CLI parsing
 // ---------------------------------------------------------------------------
@@ -76,7 +106,7 @@ function parseArgs(argv) {
     else if (a === '--json') { opts.json = true; }
     else if (a === '--root') { opts.root = resolve(args[++i]); }
     else if (a === '-h' || a === '--help') {
-      process.stderr.write(`Usage: wiring-validation-runner.js <SD-KEY> [--checks list] [--no-persist] [--base ref] [--json] [--root path]\n`);
+      process.stderr.write('Usage: wiring-validation-runner.js <SD-KEY> [--checks list] [--no-persist] [--base ref] [--json] [--root path]\n');
       process.exit(0);
     }
     else if (!a.startsWith('--') && !opts.sdKey) { opts.sdKey = a; }
@@ -106,17 +136,23 @@ function parseArgs(argv) {
 function extractTrailingJson(stdout) {
   const trimmed = stdout.trim();
   if (!trimmed) return null;
-  // Fast path: whole output is JSON.
+  // Fast path: whole output is JSON (object or array — detectors emit either).
   try { return JSON.parse(trimmed); } catch { /* fall through */ }
-  // Scan from end for balanced-brace block.
+  // Scan from end for balanced block. Track both } and ] closers so array
+  // payloads (orphan-detector, spec-code-drift) are recovered when detectors
+  // print log lines before the JSON.
   let depth = 0;
   let end = -1;
+  let closer = null;
   for (let i = trimmed.length - 1; i >= 0; i--) {
     const c = trimmed[i];
-    if (c === '}') { if (depth === 0) end = i; depth++; }
-    else if (c === '{') {
+    if (c === '}' || c === ']') {
+      if (depth === 0) { end = i; closer = c; }
+      depth++;
+    } else if (c === '{' || c === '[') {
       depth--;
-      if (depth === 0) {
+      if (depth === 0 && closer &&
+          ((c === '{' && closer === '}') || (c === '[' && closer === ']'))) {
         const candidate = trimmed.slice(i, end + 1);
         try { return JSON.parse(candidate); } catch { /* keep scanning */ }
       }
@@ -151,20 +187,24 @@ function invokeDetector(repoRoot, scriptRel, sdKey, extraArgs = []) {
   }
   const parsed = extractTrailingJson(stdout);
   if (!parsed) return { ok: false, reason: 'unparseable', raw: stdout.slice(-400), path: scriptPath };
-  // Normalize to array of rows.
-  const rows = Array.isArray(parsed.results) && parsed.results.length
-    ? parsed.results
-    : [parsed];
+  // Normalize to array of rows. Three shapes supported:
+  //   - top-level array (orphan-detector, spec-code-drift-detector emit this)
+  //   - { results: [...] } wrapper
+  //   - single row object
+  const rows = Array.isArray(parsed)               ? parsed
+             : Array.isArray(parsed.results)        ? parsed.results
+             : [parsed];
   const normalized = [];
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
     if (!row.check_type) continue;
-    if (!VALID_STATUSES.has(row.status)) continue;
+    const status = normalizeStatus(row.status);
+    if (!status) continue;
     normalized.push({
       sd_key:           row.sd_key || sdKey,
       check_type:       row.check_type,
-      status:           row.status,
-      signals_detected: Number(row.signals_detected) || 0,
+      status,
+      signals_detected: normalizeSignals(row.signals_detected),
       evidence:         row.evidence && typeof row.evidence === 'object' ? row.evidence : {},
     });
   }

@@ -163,17 +163,26 @@ END $$;
 
 CREATE OR REPLACE FUNCTION leo_wiring_required_check_types()
 RETURNS leo_wiring_check_type[] AS $$
+  -- Bootstrap phase: only orphan_detection is universally applicable.
+  -- spec_code_drift requires an arch plan (skipped for manually-enriched SDs).
+  -- vision_traceability requires a vision document with UX elements.
+  -- pipeline_integration is emitted by the orphan detector alongside orphans.
+  -- e2e_demo applies to feature SDs only.
+  --
+  -- As the framework matures and SDs are consistently created through the
+  -- vision → arch → SD pipeline, additional required checks will be added.
+  -- Per-SD opt-out for non-applicable checks happens via waivers.
   SELECT ARRAY[
-    'orphan_detection'::leo_wiring_check_type,
-    'spec_code_drift'::leo_wiring_check_type
-    -- vision_traceability / pipeline_integration / e2e_demo added as C/E land
+    'orphan_detection'::leo_wiring_check_type
   ];
 $$ LANGUAGE sql IMMUTABLE;
 
 COMMENT ON FUNCTION leo_wiring_required_check_types() IS
-  'Required check_types for wiring_validated derivation. Currently A + B only '
-  '(shipped detectors). Extend as C/E land. Kept as function (not constant) '
-  'to support future per-orchestrator override without schema changes.';
+  'Required check_types for wiring_validated derivation. Bootstrap phase: '
+  'orphan_detection only. Other checks are captured (persisted when the '
+  'runner invokes them) but not required for the derived boolean. Chairman '
+  'can upgrade a check from optional to required by redefining this function '
+  'as the framework matures.';
 
 
 -- ---------------------------------------------------------------------------

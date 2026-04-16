@@ -24,12 +24,16 @@ function extractTrailingJson(stdout) {
   try { return JSON.parse(trimmed); } catch { /* fall through */ }
   let depth = 0;
   let end = -1;
+  let closer = null;
   for (let i = trimmed.length - 1; i >= 0; i--) {
     const c = trimmed[i];
-    if (c === '}') { if (depth === 0) end = i; depth++; }
-    else if (c === '{') {
+    if (c === '}' || c === ']') {
+      if (depth === 0) { end = i; closer = c; }
+      depth++;
+    } else if (c === '{' || c === '[') {
       depth--;
-      if (depth === 0) {
+      if (depth === 0 && closer &&
+          ((c === '{' && closer === '}') || (c === '[' && closer === ']'))) {
         const candidate = trimmed.slice(i, end + 1);
         try { return JSON.parse(candidate); } catch { /* keep scanning */ }
       }
@@ -94,22 +98,42 @@ describe('extractTrailingJson', () => {
 });
 
 describe('runner — row normalization semantics', () => {
-  // Detectors may emit a single row or a results array; runner handles both.
+  // Detectors emit one of three shapes; runner supports all.
+  // Status aliases: pass→passed, fail/error→failed, warn→warning, pending→pending.
+  const STATUS_ALIASES = {
+    pass: 'passed', passed: 'passed',
+    fail: 'failed', failed: 'failed', error: 'failed',
+    warn: 'warning', warning: 'warning',
+    pending: 'pending',
+  };
+  const VALID = new Set(['passed', 'failed', 'warning', 'pending']);
+
+  function normalizeStatus(raw) {
+    if (typeof raw !== 'string') return null;
+    const m = STATUS_ALIASES[raw.toLowerCase()];
+    return VALID.has(m) ? m : null;
+  }
+  function normalizeSignals(raw) {
+    if (Array.isArray(raw)) return raw.length;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  }
+
   function normalizeFromDetectorOutput(detectorJson, sdKey) {
-    const VALID_STATUSES = new Set(['passed', 'failed', 'warning', 'pending']);
-    const rows = Array.isArray(detectorJson.results) && detectorJson.results.length
-      ? detectorJson.results
-      : [detectorJson];
+    const rows = Array.isArray(detectorJson)              ? detectorJson
+               : Array.isArray(detectorJson.results)       ? detectorJson.results
+               : [detectorJson];
     const out = [];
     for (const r of rows) {
       if (!r || typeof r !== 'object') continue;
       if (!r.check_type) continue;
-      if (!VALID_STATUSES.has(r.status)) continue;
+      const status = normalizeStatus(r.status);
+      if (!status) continue;
       out.push({
         sd_key: r.sd_key || sdKey,
         check_type: r.check_type,
-        status: r.status,
-        signals_detected: Number(r.signals_detected) || 0,
+        status,
+        signals_detected: normalizeSignals(r.signals_detected),
         evidence: r.evidence && typeof r.evidence === 'object' ? r.evidence : {},
       });
     }
@@ -136,6 +160,31 @@ describe('runner — row normalization semantics', () => {
     expect(rows[1].signals_detected).toBe(2);
   });
 
+  it('accepts top-level array detector output (real orphan/spec-code-drift shape)', () => {
+    const rows = normalizeFromDetectorOutput(
+      [
+        { sd_key: 'SD-X', check_type: 'orphan_detection', status: 'pass', signals_detected: [] },
+        { sd_key: 'SD-X', check_type: 'spec_code_drift',  status: 'error', signals_detected: [{ endpoint: '/api/a' }] },
+      ],
+      'SD-X'
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0].status).toBe('passed');           // pass → passed alias
+    expect(rows[1].status).toBe('failed');           // error → failed alias
+    expect(rows[1].signals_detected).toBe(1);        // array length
+  });
+
+  it('maps status aliases: pass/fail/error/warn', () => {
+    const rows = normalizeFromDetectorOutput([
+      { check_type: 'orphan_detection', status: 'pass' },
+      { check_type: 'spec_code_drift',  status: 'fail' },
+      { check_type: 'vision_traceability', status: 'error' },
+      { check_type: 'pipeline_integration', status: 'warn' },
+      { check_type: 'e2e_demo', status: 'pending' },
+    ], 'SD-X');
+    expect(rows.map(r => r.status)).toEqual(['passed', 'failed', 'failed', 'warning', 'pending']);
+  });
+
   it('filters invalid status values', () => {
     const rows = normalizeFromDetectorOutput({
       results: [
@@ -147,12 +196,20 @@ describe('runner — row normalization semantics', () => {
     expect(rows).toHaveLength(1);
   });
 
-  it('coerces signals_detected to number', () => {
+  it('coerces numeric signals_detected', () => {
     const rows = normalizeFromDetectorOutput(
       { check_type: 'orphan_detection', status: 'passed', signals_detected: '42' },
       'SD-X'
     );
     expect(rows[0].signals_detected).toBe(42);
+  });
+
+  it('converts signals_detected array to count', () => {
+    const rows = normalizeFromDetectorOutput(
+      { check_type: 'orphan_detection', status: 'passed', signals_detected: [{ file: 'a' }, { file: 'b' }, { file: 'c' }] },
+      'SD-X'
+    );
+    expect(rows[0].signals_detected).toBe(3);
   });
 
   it('defaults evidence to empty object if absent or invalid', () => {
@@ -161,6 +218,26 @@ describe('runner — row normalization semantics', () => {
       'SD-X'
     );
     expect(rows[0].evidence).toEqual({});
+  });
+});
+
+describe('extractTrailingJson — arrays', () => {
+  it('parses top-level JSON array (detector format)', () => {
+    const out = '[{"sd_key":"SD-X","check_type":"orphan_detection","status":"pass"}]';
+    const parsed = extractTrailingJson(out);
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed[0].check_type).toBe('orphan_detection');
+  });
+
+  it('parses JSON array after leading log lines', () => {
+    const out = [
+      '[detector] starting',
+      '[detector] done',
+      '[{"sd_key":"SD-X","check_type":"orphan_detection","status":"pass","signals_detected":[]}]'
+    ].join('\n');
+    const parsed = extractTrailingJson(out);
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed).toHaveLength(1);
   });
 });
 
