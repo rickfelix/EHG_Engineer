@@ -118,8 +118,55 @@ async function loadData() {
     const parts = s.terminal_id.split('-');
     return aliveCcPids.has(parts[parts.length - 1]);
   };
-  const activeSessions = sessions.filter(s => s.heartbeat_age_seconds < STALE_THRESHOLD || hasPidAlive(s));
-  const staleSessions = sessions.filter(s => s.heartbeat_age_seconds >= STALE_THRESHOLD && !hasPidAlive(s));
+  // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side telemetry merge ──
+  const telemetryById = new Map();
+  try {
+    const ids = sessions.map(s => s.session_id).filter(Boolean);
+    if (ids.length > 0) {
+      const { data: teleRows } = await supabase
+        .from('claude_sessions')
+        .select('session_id,current_tool,current_tool_expected_end_at,expected_silence_until,process_alive_at,last_activity_kind,commits_since_claim,files_modified_since_claim')
+        .in('session_id', ids);
+      for (const row of teleRows || []) telemetryById.set(row.session_id, row);
+    }
+  } catch (e) {
+    // Graceful — pre-migration clones have no telemetry columns.
+  }
+  for (const s of sessions) {
+    const t = telemetryById.get(s.session_id);
+    if (t) Object.assign(s, {
+      current_tool: t.current_tool,
+      current_tool_expected_end_at: t.current_tool_expected_end_at,
+      expected_silence_until: t.expected_silence_until,
+      process_alive_at: t.process_alive_at,
+      last_activity_kind: t.last_activity_kind,
+      commits_since_claim: t.commits_since_claim,
+      files_modified_since_claim: t.files_modified_since_claim,
+    });
+  }
+  const hasTickAlive = (s) => {
+    if (!s.process_alive_at) return false;
+    const age = Date.now() - Date.parse(s.process_alive_at);
+    return Number.isFinite(age) && age >= 0 && age <= 90 * 1000;
+  };
+  const hasExpectedSilence = (s) => {
+    if (!s.expected_silence_until) return false;
+    const delta = Date.parse(s.expected_silence_until) - Date.now();
+    return Number.isFinite(delta) && delta > 0 && delta <= 30 * 60 * 1000;
+  };
+
+  const activeSessions = sessions.filter(s =>
+    s.heartbeat_age_seconds < STALE_THRESHOLD ||
+    hasPidAlive(s) ||
+    hasTickAlive(s) ||
+    hasExpectedSilence(s)
+  );
+  const staleSessions = sessions.filter(s =>
+    s.heartbeat_age_seconds >= STALE_THRESHOLD &&
+    !hasPidAlive(s) &&
+    !hasTickAlive(s) &&
+    !hasExpectedSilence(s)
+  );
   const DEAD_THRESHOLD = STALE_THRESHOLD * 3; // 15min
   const idleSessions = allSessions.filter(s => !s.sd_key && s.heartbeat_age_seconds < DEAD_THRESHOLD);
 
@@ -171,6 +218,38 @@ async function loadData() {
   };
 }
 
+// ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: activity formatters ────────────────
+function formatActivity(s) {
+  const tool = s.current_tool;
+  const kind = s.last_activity_kind;
+  const endAtIso = s.current_tool_expected_end_at;
+
+  if (tool) {
+    if (endAtIso) {
+      const now = Date.now();
+      const endMs = Date.parse(endAtIso);
+      if (Number.isFinite(endMs) && endMs > now) {
+        const remainMin = Math.round((endMs - now) / 60000);
+        return String(tool) + ' ' + remainMin + 'm';
+      }
+    }
+    return String(tool);
+  }
+  if (kind === 'thinking') return 'thinking';
+  if (kind === 'idle') return 'idle';
+  if (kind === 'exiting') return 'exiting';
+  return '';
+}
+
+function formatSilentUntil(s) {
+  if (!s.expected_silence_until) return '';
+  const endMs = Date.parse(s.expected_silence_until);
+  if (!Number.isFinite(endMs)) return '';
+  const deltaMin = Math.round((endMs - Date.now()) / 60000);
+  if (deltaMin <= 0) return '';
+  return '+' + deltaMin + 'm';
+}
+
 // ── Section: Workers ──
 function printWorkers(d) {
   const now = new Date();
@@ -189,8 +268,8 @@ function printWorkers(d) {
     console.log('  (no active workers)');
   } else {
     const csidHeader = hasCollision ? pad('CSID', 12) : '';
-    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + 'Heartbeat');
-    console.log('  ' + '─'.repeat(hasCollision ? 84 : 72));
+    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + pad('Activity', 18) + pad('Silent until', 14) + 'Heartbeat');
+    console.log('  ' + '─'.repeat(hasCollision ? 120 : 108));
     for (const s of d.activeSessions) {
       const child = d.children.find(c => c.sd_key === s.sd_key);
       const pct = child ? child.progress_percentage : 0;
@@ -200,7 +279,9 @@ function printWorkers(d) {
       const wip = s.has_uncommitted_changes === true ? 'Y' : s.has_uncommitted_changes === false ? 'N' : '-';
       const struggleTag = (s.handoff_fail_count || 0) > 3 ? ' [STRUGGLING]' : '';
       const csid = hasCollision ? pad((markerIds[s.session_id] || '').substring(0, 10), 12) : '';
-      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + s.heartbeat_age_human + struggleTag);
+      const activity = formatActivity(s);
+      const silent = formatSilentUntil(s);
+      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(activity, 18) + pad(silent, 14) + s.heartbeat_age_human + struggleTag);
     }
   }
 
@@ -408,6 +489,34 @@ function printHealth(d) {
   console.log('  Stale:   ' + d.staleSessions.length + ' sessions');
   console.log('  Orch:    ' + d.completedChildren + '/' + d.totalChildren + ' children complete (' + d.orchPct + '%)');
   console.log('  Status:  ' + health);
+
+  // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: 4-section liveness breakdown ──
+  const nowMs = Date.now();
+  let confirmed = 0, recent = 0, silent = 0, unknown = 0;
+  for (const s of d.activeSessions) {
+    const tickMs = s.process_alive_at ? nowMs - Date.parse(s.process_alive_at) : Infinity;
+    const silenceDelta = s.expected_silence_until
+      ? Date.parse(s.expected_silence_until) - nowMs
+      : -Infinity;
+    const hbSec = s.heartbeat_age_seconds != null ? s.heartbeat_age_seconds : Infinity;
+
+    if (Number.isFinite(tickMs) && tickMs >= 0 && tickMs <= 90 * 1000) {
+      confirmed++;
+    } else if (hbSec < 5 * 60) {
+      recent++;
+    } else if (silenceDelta > 0 && silenceDelta <= 30 * 60 * 1000) {
+      silent++;
+    } else {
+      unknown++;
+    }
+  }
+  if (d.activeSessions.length > 0) {
+    console.log('  ──');
+    console.log('  Confirmed alive (tick<90s): ' + confirmed);
+    console.log('  Recent activity (hb<5m):    ' + recent);
+    console.log('  Expected silent (≤30m):     ' + silent);
+    console.log('  Unknown (no signals):       ' + unknown);
+  }
   console.log('');
 }
 
