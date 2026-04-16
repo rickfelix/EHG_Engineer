@@ -22,7 +22,7 @@
  * check_types from the `results` array.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, relative, join, extname, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -69,12 +69,18 @@ function parseArgs(argv) {
 // Git diff: list new files added on this branch
 // ---------------------------------------------------------------------------
 function listNewFiles(repoRoot, base) {
+  // Sanitize base to a git-safe ref (alphanumeric, dash, underscore, slash, dot)
+  // Prevents command injection via CLI --base arg.
+  if (!/^[\w./-]+$/.test(base)) {
+    process.stderr.write(`[orphan-detector] invalid base ref rejected: ${base}\n`);
+    return [];
+  }
   try {
-    const out = execSync(`git diff --name-status --diff-filter=A ${base}...HEAD`, {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const out = execFileSync(
+      'git',
+      ['diff', '--name-status', '--diff-filter=A', `${base}...HEAD`],
+      { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+    );
     return out
       .split('\n')
       .map((l) => l.trim())
