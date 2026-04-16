@@ -1,10 +1,10 @@
 ---
 category: Reference
 status: Draft
-version: 1.0.0
+version: 1.1.0
 author: Claude Code
-last_updated: 2026-03-20
-tags: [fleet, coordinator, workers, sessions, coordination]
+last_updated: 2026-04-16
+tags: [fleet, coordinator, workers, sessions, coordination, monte-carlo, liveness]
 ---
 
 # Fleet Coordination System
@@ -189,12 +189,67 @@ Claims are tracked via `claude_sessions.sd_id`. A partial unique index enforces 
 | Check claims | `SELECT * FROM claude_sessions WHERE sd_id IS NOT NULL AND status != 'terminated'` |
 | Fix stuck | `UPDATE claude_sessions SET sd_id=NULL, status='idle', released_at=NOW() WHERE session_id='...'` |
 
+## Probabilistic Liveness (Monte Carlo)
+
+SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 layers a probabilistic model on top of the binary thresholds above so the dashboard and sweep can reason about worker liveness with uncertainty.
+
+**Pipeline** (subprocess, runs per dashboard/sweep cycle):
+
+```
+v_active_sessions  ┐
+claude_sessions    │   scripts/fleet-liveness-mc.cjs
+  (phase, wt)      ├──▶  computeLiveness → {pAlive, ci_low, ci_high, samples}
+marker files       │   runFleetMC       → {workers[], etaDistribution}
+sub_agent_exec     │                          │
+sd_phase_handoffs  │                          ▼
+git log on wt      ┘                fleet_liveness_estimates (INSERT per cycle)
+                                    + calibration back-fill (actual_liveness_t5 after 5m)
+```
+
+**Signals fused**: heartbeat age, joint `(pid_alive, port_open)` confusion matrix (correlation ~99% — independence would inflate), recent commit on worker branch (<3m short-circuit), fresh heartbeat (<5m short-circuit — matches legacy sweep behavior), sub-agent in flight, transition window (<5m since last handoff). Conditional priors (gap distributions per phase × scope bucket) are bootstrapped from the last 30 days of handoff + sub-agent telemetry, with sparse-bucket fallback to phase-level priors.
+
+**Dashboard integration**: `fleet-dashboard.cjs` subprocess-invokes the MC script before rendering. Workers section shows `▓░░ 0.62`-style P(alive) bars. Fleet header changes from "Active: M" to "Effective: X.Y / N assigned" (sum of P(alive)). Forecast block shows p50/p80/p95 + probability table for 30/60/90/120 min horizons. Subprocess failure falls back to pre-MC display with a warning banner (no crash).
+
+**Sweep gating**: `stale-session-sweep.cjs` consults the latest estimate per DEAD session within 5m. Decision tree:
+
+| State | Action | released_reason |
+|-------|--------|-----------------|
+| `has_uncommitted_changes=true` | HOLD | `WIP_GUARD` (fires first, independent of MC) |
+| `heartbeat ≥ 20m` | RELEASE | `SWEEP_HARD_CAP_20M` (hard cap overrides MC) |
+| `heartbeat < 20m` and `p_alive > 0.3` | HOLD | `WIP_GUARD_MC` |
+| Otherwise | RELEASE | `SWEEP_PID_DEAD` |
+
+The 20-minute hard cap is the orthogonal safety net: even if the model mis-classifies a hung worker as alive, the claim is released before it strands the SD.
+
+**Calibration loop**: Per cycle, `backfillCalibration()` updates rows with `observed_at` older than 5m, setting `actual_liveness_t5 = true` iff the worker emitted a heartbeat within 5m of the estimate or committed on its branch within 5m. Idempotent — second call in the same cycle updates 0 rows.
+
+**Feature flags**:
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `FLEET_MC_ENABLED` | `true` | Disables MC invocation in dashboard; renders pre-MC display |
+| `FLEET_MC_SWEEP_GATE` | `true` | Disables MC consultation in sweep; falls back to `SWEEP_PID_DEAD` |
+| `FLEET_MC_DRAWS` | `1000` | Samples per worker per cycle |
+| `FLEET_MC_PRIOR_FILE` | unset | Path to JSON file overriding empirical priors |
+| `FLEET_MC_MARKER_DIR` | auto | Override `.claude/session-identity/` location (tests, worktrees) |
+| `FLEET_MC_PALIVE_HOLD_THRESHOLD` | `0.3` | P(alive) above which sweep HOLDs release |
+| `FLEET_MC_HARD_CAP_SEC` | `1200` | Heartbeat age at which sweep force-releases regardless of MC |
+
+**Rollback**: Set `FLEET_MC_ENABLED=false` in the fleet shell → dashboard returns to binary classification, sweep returns to pre-MC behavior, all in <1 minute. No code revert needed. The `fleet_liveness_estimates` table is append-only and can remain in place.
+
+**Observability to monitor** (from PRD):
+- `actual_liveness_t5` TRUE/FALSE ratio (model accuracy proxy)
+- `released_reason` distribution: WIP_GUARD_MC vs WIP_GUARD vs SWEEP_PID_DEAD vs SWEEP_HARD_CAP_20M
+- MC wall-clock p95 (logged to stderr per cycle)
+- Hard-cap fire count (>5% of releases indicates systematic overconfidence)
+
 ## Related Documentation
 
 - [Worker Registry Guide](./worker-registry-guide.md) — LEO Stack background workers (different from Claude Code sessions)
 - [Central Planner](./central-planner.md) — SD prioritization and queue ordering
 - [Session Coordination Table](./schema/engineer/tables/session_coordination.md) — Database schema
 - [Claude Sessions Table](./schema/engineer/tables/claude_sessions.md) — Database schema
+- [Fleet Liveness Estimates Table](./schema/engineer/tables/fleet_liveness_estimates.md) — Monte Carlo output schema (SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001)
 
 ---
 
