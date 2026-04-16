@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-16T01:07:03.421Z
-**Rows**: 2,703
+**Generated**: 2026-04-16T19:26:31.310Z
+**Rows**: 2,717
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (97 total)
+## Columns (98 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -119,6 +119,7 @@ Use the id column instead - it is the canonical identifier. |
 | worktree_path | `text` | YES | - | Absolute path to the SD's git worktree. Populated by sd-start.js on claim acquisition. Consumed by lib/claim-validity-gate.js to enforce that handoff and related operations run from inside the worktree. Added by SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001. |
 | non_vertical | `boolean` | **NO** | `false` | C1 advisory flag: TRUE if this SD is a horizontal-layer slice (DB-only, logic-only, or UI-only) rather than an end-to-end vertical slice. Set by create-orchestrator-from-plan.js heuristic. LEAD reviews flagged children at LEAD_APPROVAL. |
 | non_vertical_justification | `text` | YES | - | C1: LEAD or chairman rationale when approving a non-vertical child SD (e.g., "Schema migration must precede backend logic, intentional split"). Required when non_vertical=true and SD reaches PLAN-TO-EXEC handoff. |
+| wiring_validated | `boolean` | YES | - | Derived boolean maintained by trg_zz_maintain_wiring_validated on leo_wiring_validations insert/update. true = all required checks passed-or-waived; false = at least one required check failed unwaived; null = required checks missing. Gate logic reads this column, not the underlying validation rows. |
 
 ## Constraints
 
