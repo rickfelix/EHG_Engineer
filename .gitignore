@@ -9,6 +9,7 @@ handoff-result.txt
 *.log
 verification-packages/
 .worktrees/
+.cache/
 
 # Backup files (git already provides versioning)
 *.backup
