@@ -1,0 +1,16 @@
+{
+  "sd_key": "SD-FIXTURE-FAILING-001",
+  "sd_type": "feature",
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "echo hello world",
+      "expected_outcome": "hello world"
+    },
+    {
+      "step_number": 2,
+      "instruction": "echo actual",
+      "expected_outcome": "not-actual"
+    }
+  ]
+}
