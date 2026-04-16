@@ -4,9 +4,14 @@
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B (Phase 2)
 const teamBanner = require('../lib/execute/team-banner.cjs');
+// SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-004): subprocess-invoke the MC
+// engine to enrich workers with P(alive). Failures fall back to existing
+// binary display, preserving pre-MC behavior.
+const FLEET_MC_ENABLED = (process.env.FLEET_MC_ENABLED ?? 'true').toLowerCase() !== 'false';
 
 const supabase = createSupabaseServiceClient();
 
@@ -53,6 +58,47 @@ function bar(pct, width = 20) {
 
 function pad(str, len) {
   return (str || '').substring(0, len).padEnd(len);
+}
+
+// SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-004)
+// Invoke fleet-liveness-mc.cjs as a subprocess and return parsed JSON. On any
+// failure — spawn error, non-zero exit, shape mismatch — return null so the
+// caller can fall back to the pre-MC display without crashing the dashboard.
+function fetchMcEstimates(sessionIdFilter) {
+  if (!FLEET_MC_ENABLED) return null;
+  const script = path.resolve(__dirname, 'fleet-liveness-mc.cjs');
+  if (!fs.existsSync(script)) return null;
+  const args = ['--json'];
+  if (Array.isArray(sessionIdFilter) && sessionIdFilter.length > 0) {
+    args.push('--workers', sessionIdFilter.join(','));
+  }
+  try {
+    const res = spawnSync('node', [script, ...args], {
+      encoding: 'utf8',
+      timeout: 10000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    if (res.status !== 0) return null;
+    const parsed = JSON.parse(res.stdout || '{}');
+    if (!Array.isArray(parsed.workers)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function pBar(p, width = 10) {
+  const filled = Math.max(0, Math.min(width, Math.round((p || 0) * width)));
+  return '\u2593'.repeat(filled) + '\u2591'.repeat(width - filled);
+}
+
+function formatEtaTime(iso) {
+  if (!iso) return '-';
+  try {
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return '-';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch { return '-'; }
 }
 
 // ── Data Loading ──
@@ -161,12 +207,22 @@ async function loadData() {
   // Load active execute_teams + their virtual claude_sessions for /coordinator team
   const executeTeams = await teamBanner.loadExecuteTeams(supabase);
 
+  // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-004): enrich workers with P(alive).
+  // Failure returns null → downstream renderers detect `mc == null` and fall
+  // back to existing binary display. Also show a warning banner once.
+  const mc = fetchMcEstimates(sessions.map(s => s.session_id));
+  const mcByWorker = {};
+  if (mc && Array.isArray(mc.workers)) {
+    for (const w of mc.workers) mcByWorker[w.session_id] = w;
+  }
+
   return {
     sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap,
     claimedSdIds, activeSessions, staleSessions, idleSessions,
     completedChildren, totalChildren, orchPct,
     unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells,
     drainAgents,
+    mc, mcByWorker,
     executeTeams
   };
 }
@@ -181,16 +237,32 @@ function printWorkers(d) {
   for (const s of d.activeSessions) { ttyCount[s.tty] = (ttyCount[s.tty] || 0) + 1; }
   const hasCollision = Object.values(ttyCount).some(c => c > 1);
 
+  // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-004): header switches from
+  // "Active: M" to "Effective: X.Y / N assigned" (sum of P(alive)).
+  const mcOk = d.mc && d.mcByWorker;
+  const assigned = d.activeSessions.length;
+  let headerSuffix = '';
+  if (mcOk && assigned > 0) {
+    const sumP = d.activeSessions.reduce((acc, s) => {
+      const w = d.mcByWorker[s.session_id];
+      return acc + (w ? Number(w.p_alive) || 0 : 0);
+    }, 0);
+    headerSuffix = `  Effective: ${sumP.toFixed(1)} / ${assigned} assigned`;
+  } else if (!mcOk && FLEET_MC_ENABLED && assigned > 0) {
+    headerSuffix = '  [MC unavailable — falling back to binary classification]';
+  }
+
   console.log('');
-  console.log('WORKERS [' + now.toLocaleTimeString() + ']');
-  console.log('─'.repeat(hasCollision ? 84 : 72));
+  console.log('WORKERS [' + now.toLocaleTimeString() + ']' + headerSuffix);
+  console.log('─'.repeat(hasCollision ? 100 : 88));
 
   if (d.activeSessions.length === 0) {
     console.log('  (no active workers)');
   } else {
     const csidHeader = hasCollision ? pad('CSID', 12) : '';
-    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + 'Heartbeat');
-    console.log('  ' + '─'.repeat(hasCollision ? 84 : 72));
+    const mcHeader = mcOk ? pad('P(alive)', 16) : '';
+    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + mcHeader + 'Heartbeat');
+    console.log('  ' + '─'.repeat(hasCollision ? 100 : 88));
     for (const s of d.activeSessions) {
       const child = d.children.find(c => c.sd_key === s.sd_key);
       const pct = child ? child.progress_percentage : 0;
@@ -200,7 +272,11 @@ function printWorkers(d) {
       const wip = s.has_uncommitted_changes === true ? 'Y' : s.has_uncommitted_changes === false ? 'N' : '-';
       const struggleTag = (s.handoff_fail_count || 0) > 3 ? ' [STRUGGLING]' : '';
       const csid = hasCollision ? pad((markerIds[s.session_id] || '').substring(0, 10), 12) : '';
-      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + s.heartbeat_age_human + struggleTag);
+      const mcRow = d.mcByWorker && d.mcByWorker[s.session_id];
+      const mcCell = mcOk
+        ? pad((mcRow ? pBar(mcRow.p_alive, 10) + ' ' + mcRow.p_alive.toFixed(2) : pad('-', 15)), 16)
+        : '';
+      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + mcCell + s.heartbeat_age_human + struggleTag);
     }
   }
 
@@ -519,6 +595,26 @@ async function printForecast(d) {
   const now = new Date();
   console.log('FORECAST');
   console.log('─'.repeat(72));
+
+  // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-004): MC-informed distribution
+  // block. Shows p50/p80/p95 plus P(done by H:MM) probabilities for 30/60/90/120
+  // minute horizons. Falls back silently if MC unavailable (pre-MC velocity
+  // block below still renders).
+  if (d.mc && d.mc.etaDistribution) {
+    const eta = d.mc.etaDistribution;
+    const probTable = Array.isArray(eta.probability_table) ? eta.probability_table : [];
+    console.log('  MC DISTRIBUTION (prior: ' + (d.mc.prior_source || 'unknown') + ')');
+    console.log('  p50 ' + formatEtaTime(eta.p50) + '   p80 ' + formatEtaTime(eta.p80) + '   p95 ' + formatEtaTime(eta.p95));
+    if (probTable.length > 0) {
+      const bits = probTable.map(row => {
+        const pct = (Number(row.p_done) || 0) * 100;
+        return row.horizon_min + 'm: ' + pct.toFixed(0) + '%';
+      });
+      console.log('  P(done by): ' + bits.join('  '));
+    }
+    console.log('');
+  }
+
   const orchCompleted = d.children.filter(c => c.status === 'completed' && c.completion_date);
   const orchRemaining = d.children.filter(c => c.status !== 'completed');
 
