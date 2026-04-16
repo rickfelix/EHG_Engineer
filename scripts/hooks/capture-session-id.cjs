@@ -193,6 +193,31 @@ function main() {
         // Machine-readable line for downstream parsing (SD-MAN-INFRA-SESSION-IDENTITY-BIRTH-001)
         console.log(`CLAUDE_SESSION_ID=${sessionId}`);
         console.log(`SessionStart:capture-session-id: ${sessionId}`);
+
+        // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: spawn detached session-tick ──
+        // Writes process_alive_at every 30s until the parent CC exits.
+        // Fire-and-forget — never blocks SessionStart.
+        try {
+          const { spawn } = require('child_process');
+          const tickScript = path.resolve(__dirname, '../session-tick.cjs');
+          if (fs.existsSync(tickScript)) {
+            const child = spawn(process.execPath, [tickScript], {
+              detached: true,
+              stdio: 'ignore',
+              env: {
+                ...process.env,
+                CLAUDE_SESSION_ID: sessionId,
+                CC_PARENT_PID: String(ccPid),
+              },
+              windowsHide: true,
+            });
+            if (child && typeof child.unref === 'function') child.unref();
+          }
+        } catch (tickErr) {
+          if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+            console.error(`SessionStart:session-tick: spawn failed: ${tickErr.message}`);
+          }
+        }
       } catch {
         // Invalid JSON or other error — don't block session start
       }
