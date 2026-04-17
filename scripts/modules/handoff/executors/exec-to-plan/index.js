@@ -7,6 +7,7 @@
  */
 
 import BaseExecutor from '../BaseExecutor.js';
+import { isOrchestratorChild, getParentIdentifier } from '../../lib/sd-classification.js';
 
 // Gate creators
 import {
@@ -214,10 +215,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Orchestrator children get a reduced gate set — they are tactical decompositions
     // of a parent SD and should not face standalone SD requirements like full
     // implementation fidelity, sub-agent orchestration, or E2E test mapping.
-    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated;
-    if (isOrchestratorChild) {
+    const isOrchChild = isOrchestratorChild(sd);
+    if (isOrchChild) {
       console.log('\n   📋 ORCHESTRATOR CHILD GATE SET (reduced) for EXEC-TO-PLAN');
-      console.log(`   Parent: ${sd.metadata.parent_orchestrator || 'auto_generated'}`);
+      console.log(`   Parent: ${getParentIdentifier(sd)}`);
 
       // BMAD validation
       gates.push(createBMADValidationGate(this.supabase));

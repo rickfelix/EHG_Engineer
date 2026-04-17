@@ -13,6 +13,7 @@
 
 import ResultBuilder from '../ResultBuilder.js';
 import { validatorRegistry } from './ValidatorRegistry.js';
+import { isOrchestratorChild } from '../lib/sd-classification.js';
 import { shouldSkipCodeValidation } from '../../../../lib/utils/sd-type-validation.js';
 import {
   createSkippedResult,
@@ -745,8 +746,7 @@ export class ValidationOrchestrator {
   async buildGatesFromRules(hardcodedGates, handoffType, context = {}) {
     // Orchestrator children use a reduced gate set defined by the executor.
     // Skip database-driven rules to prevent heavy gates from being re-injected.
-    const isOrchestratorChild = context.sd?.metadata?.parent_orchestrator || context.sd?.metadata?.auto_generated;
-    if (isOrchestratorChild) {
+    if (isOrchestratorChild(context.sd)) {
       console.log('   ⏭️  Orchestrator child: skipping database-driven gate rules');
       return hardcodedGates;
     }

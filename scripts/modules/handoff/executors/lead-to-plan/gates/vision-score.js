@@ -27,6 +27,8 @@
  * (non-blocking — valid=true is still returned when overall score passes).
  */
 
+import { isOrchestratorChild, getParentIdentifier } from '../../../lib/sd-classification.js';
+
 /** Threshold per SD type. Exported for tests. */
 export const SD_TYPE_THRESHOLDS = {
   // Tier 1 — highest bar
@@ -232,17 +234,18 @@ export async function validateVisionScore(sd, supabase) {
   // strategic vision produces false-negatives (e.g., a "40→25 migration"
   // refactor scores 57/100 because it only touches 2-3 dimensions).
   // The parent orchestrator already passed vision alignment at creation.
-  if (sd.metadata?.parent_orchestrator || sd.metadata?.auto_generated) {
+  if (isOrchestratorChild(sd)) {
+    const parentId = getParentIdentifier(sd);
     console.log('\n🔍 GATE: Vision Alignment Score (Hard Enforcement)');
     console.log(`   SD Type: ${sdType} | Required: ${baseThreshold}/100`);
     console.log('-'.repeat(50));
-    console.log(`   ⏭️  Orchestrator child detected (parent: ${sd.metadata.parent_orchestrator || 'auto_generated'})`);
+    console.log(`   ⏭️  Orchestrator child detected (parent: ${parentId})`);
     console.log('   ✅ Orchestrator children exempt — parent already validated vision alignment');
     return {
       passed: true,
       score: 100,
       maxScore: 100,
-      details: `Orchestrator child exempt from standalone vision scoring (parent: ${sd.metadata.parent_orchestrator || 'auto_generated'})`,
+      details: `Orchestrator child exempt from standalone vision scoring (parent: ${parentId})`,
       warnings: ['Orchestrator child: vision scoring deferred to parent orchestrator'],
     };
   }

@@ -17,6 +17,7 @@ import {
   buildSemanticResult,
   buildSkipResult
 } from '../../../validation/semantic-gate-utils.js';
+import { isOrchestratorChild } from '../../../lib/sd-classification.js';
 
 const GATE_NAME = 'TRANSLATION_FIDELITY';
 
@@ -64,7 +65,7 @@ export function createTranslationFidelityGate(supabase) {
       }
 
       // Orchestrator children are exempt — parent already validated
-      if (sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated) {
+      if (isOrchestratorChild(sd)) {
         console.log('   ⏭️  Orchestrator child detected — exempt from standalone fidelity check');
         return buildSemanticResult({
           passed: true, score: 100, confidence: 1.0,

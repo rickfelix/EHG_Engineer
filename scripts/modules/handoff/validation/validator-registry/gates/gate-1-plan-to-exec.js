@@ -9,6 +9,7 @@ import { validateBMADForPlanToExec } from '../../../../bmad-validation.js';
 import { isLightweightSDType } from '../../sd-type-applicability-policy.js';
 import { getStoryMinimumScoreByCategory } from '../../../verifiers/plan-to-exec/story-quality.js';
 import { validateWireframeArtifact } from '../../../validators/wireframe-artifact-validator.js';
+import { isOrchestratorChild } from '../../../../lib/sd-classification.js';
 
 /**
  * Register Gate 1 validators
@@ -102,7 +103,7 @@ export function registerGate1Validators(registry) {
 
     // Orchestrator children are tactical decompositions — DESIGN sub-agent
     // is run at the orchestrator level, not per-child.
-    if (sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated) {
+    if (isOrchestratorChild(sd)) {
       return {
         passed: true,
         score: 100,
@@ -150,7 +151,7 @@ export function registerGate1Validators(registry) {
     const { sd, sd_id, supabase } = context;
 
     // Orchestrator children — DATABASE sub-agent runs at orchestrator level
-    if (sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated) {
+    if (isOrchestratorChild(sd)) {
       return {
         passed: true,
         score: 100,

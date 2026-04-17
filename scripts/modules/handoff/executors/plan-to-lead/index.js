@@ -7,6 +7,7 @@
  */
 
 import BaseExecutor from '../BaseExecutor.js';
+import { isOrchestratorChild, getParentIdentifier } from '../../lib/sd-classification.js';
 import ResultBuilder from '../../ResultBuilder.js';
 import { isInfrastructureSDSync } from '../../../sd-type-checker.js';
 import { enrichRetrospectivePreGate } from '../../retrospective-enricher.js';
@@ -233,10 +234,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // Orchestrator children get a reduced gate set — they are tactical decompositions
     // that should not face standalone SD requirements like heal scoring, retrospective
     // quality, traceability, or architecture plan validation.
-    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated;
-    if (isOrchestratorChild) {
+    const isOrchChild = isOrchestratorChild(sd);
+    if (isOrchChild) {
       console.log('\n   📋 ORCHESTRATOR CHILD GATE SET (reduced) for PLAN-TO-LEAD');
-      console.log(`   Parent: ${sd.metadata.parent_orchestrator || 'auto_generated'}`);
+      console.log(`   Parent: ${getParentIdentifier(sd)}`);
 
       // Git commit enforcement
       gates.push(createGitCommitEnforcementGate(this.supabase, sd, appPath));
