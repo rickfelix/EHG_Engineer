@@ -9,7 +9,7 @@ import { validateBMADForPlanToExec } from '../../../../bmad-validation.js';
 import { isLightweightSDType } from '../../sd-type-applicability-policy.js';
 import { getStoryMinimumScoreByCategory } from '../../../verifiers/plan-to-exec/story-quality.js';
 import { validateWireframeArtifact } from '../../../validators/wireframe-artifact-validator.js';
-import { isOrchestratorChild } from '../../../../lib/sd-classification.js';
+import { isOrchestratorChild } from '../../../lib/sd-classification.js';
 
 /**
  * Register Gate 1 validators
