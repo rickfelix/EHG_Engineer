@@ -20,6 +20,9 @@ import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.
 // DFE Escalation Gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
 import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
 
+// Scope Completion Verification Gate (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-002)
+import { createScopeCompletionGate } from '../../gates/scope-completion-gate.js';
+
 // Gate creators
 import {
   createPrerequisiteCheckGate,
@@ -240,6 +243,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
       // Git commit enforcement
       gates.push(createGitCommitEnforcementGate(this.supabase, sd, appPath));
+
+      // Scope Completion Verification — ensures orchestrator children get deliverables check
+      // SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-002: added to prevent zero-verification bypass
+      gates.push(createScopeCompletionGate());
 
       return gates;
     }

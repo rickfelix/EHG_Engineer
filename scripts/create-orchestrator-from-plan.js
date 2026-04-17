@@ -417,6 +417,7 @@ async function main() {
           phase_number: phase.number,
           parent_orchestrator: orchestratorKey,
           auto_generated: true,
+          wiring_required: true,
           vertical_slice_check: {
             non_vertical: sliceCheck.non_vertical,
             justification: sliceCheck.justification,

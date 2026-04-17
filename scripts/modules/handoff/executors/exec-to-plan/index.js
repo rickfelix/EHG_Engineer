@@ -225,6 +225,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
       // LOC threshold validation
       gates.push(createLOCThresholdValidationGate(this.supabase));
 
+      // Implementation Fidelity gate — ensures orchestrator children get scope verification
+      // SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-002: restored to prevent zero-verification bypass
+      gates.push(createGate2ImplementationFidelityGate(this.supabase));
+
       // DFE Escalation advisory gate
       gates.push(createDFEEscalationGate(this.supabase));
 

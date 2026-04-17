@@ -29,7 +29,7 @@ function extractDeliverables(content) {
   const deliverables = [];
 
   // Match file paths (e.g., lib/brainstorm/provider-rotation.js, scripts/foo.js)
-  const filePathPattern = /(?:^|\s)((?:lib|scripts|src|database)\/[\w/.-]+\.(?:js|mjs|cjs|ts|sql))/gm;
+  const filePathPattern = /(?:^|\s|`)((?:lib|scripts|src|database)\/[\w/.-]+\.(?:js|mjs|cjs|ts|sql))/gm;
   let match;
   while ((match = filePathPattern.exec(content)) !== null) {
     const filePath = match[1].trim();
@@ -43,7 +43,7 @@ function extractDeliverables(content) {
   }
 
   // Match "New table: <name>" or "CREATE TABLE <name>"
-  const tablePattern = /(?:New table|CREATE TABLE(?:\s+IF NOT EXISTS)?)\s*:?\s*(\w+)/gi;
+  const tablePattern = /(?:New table|CREATE TABLE(?:\s+IF NOT EXISTS)?)\s*:?\s*(\w{3,})/gi;
   while ((match = tablePattern.exec(content)) !== null) {
     const tableName = match[1].trim();
     if (!deliverables.some(d => d.checkPattern === tableName)) {
@@ -242,7 +242,14 @@ export async function validateScopeCompletion(sdKey) {
   const missing = checklist.filter(c => c.status === 'missing').length;
   const ambiguous = checklist.filter(c => c.status === 'ambiguous').length;
   const total = checklist.length;
-  const score = Math.round(((found + ambiguous * 0.5) / total) * 100);
+  let score = Math.round(((found + ambiguous * 0.5) / total) * 100);
+
+  // Minimum-deliverables guard: fewer than 2 deliverables caps score at 50%
+  // to prevent a single false-positive match from scoring 100%
+  if (total < 2) {
+    console.log(`   ⚠️  Fewer than 2 deliverables extracted (${total}) — score capped at 50%`);
+    score = Math.min(score, 50);
+  }
 
   console.log(`\n   Results: ${found} found, ${ambiguous} ambiguous, ${missing} missing (${total} total)`);
   console.log(`   Score: ${score}/100`);
