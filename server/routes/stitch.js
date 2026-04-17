@@ -20,6 +20,9 @@ import { isValidUuid } from '../middleware/validate.js';
 import { exportStitchArtifacts } from '../../lib/eva/bridge/stitch-exporter.js';
 import { getVentureMetrics, getFleetHealth, detectDegradation } from '../../lib/eva/bridge/stitch-metrics.js';
 import { checkCurationStatus } from '../../lib/eva/bridge/stitch-provisioner.js';
+import { generateArchetypes, ArchetypeGenerationError } from '../../lib/eva/stage-17/archetype-generator.js';
+import { submitPass1Selection, submitPass2Selection, isDesignPassComplete, SelectionError } from '../../lib/eva/stage-17/selection-flow.js';
+import { runQARubric, uploadToGitHub, UploadError } from '../../lib/eva/stage-17/qa-rubric.js';
 
 const router = Router();
 
@@ -240,6 +243,255 @@ router.post('/seed-repo', asyncHandler(async (req, res) => {
   } catch (err) {
     console.error('[stitch-route] seed-repo failed:', err);
     res.status(500).json({ error: err.message, code: 'SEED_FAILED' });
+  }
+}));
+
+// ── Stage 17 Design Refinement Endpoints ────────────────────────────────────
+// SD-FIX-S17-WIRING-GAPS-ORCH-001-A: Wire 4 orphaned S17 modules into production API path.
+// Auth is applied at the router mount level (requireAuth in server/index.js).
+
+/** Per-venture rate limiter for archetype generation (1 call per 10s per venture). */
+const archetypeRateLimiter = new Map();
+const ARCHETYPE_RATE_LIMIT_TTL_MS = 10_000;
+
+// Clean up stale rate limiter entries every 60s
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, ts] of archetypeRateLimiter) {
+    if (now - ts > ARCHETYPE_RATE_LIMIT_TTL_MS) archetypeRateLimiter.delete(key);
+  }
+  for (const [key, ts] of curationRateLimiter) {
+    if (now - ts > RATE_LIMIT_TTL_MS) curationRateLimiter.delete(key);
+  }
+}, 60_000).unref();
+
+/**
+ * POST /api/stitch/:ventureId/stage17/archetypes
+ *
+ * Generates 6 HTML design archetypes per screen by invoking archetype-generator.js.
+ * Rate-limited to 1 call per 10s per venture (generation is expensive — Claude API calls).
+ *
+ * Returns:
+ *   200 { screenCount, artifactIds }
+ *   400 { error, code } — invalid ventureId or missing source artifacts
+ *   429 { error, code, retryAfter } — rate limited
+ *   500 { error, code } — generation error
+ *
+ * SD-FIX-S17-WIRING-GAPS-ORCH-001-A (US-001, US-008)
+ */
+router.post('/:ventureId/stage17/archetypes', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+
+  // Per-venture rate limiting
+  const now = Date.now();
+  const lastCall = archetypeRateLimiter.get(ventureId);
+  if (lastCall && now - lastCall < ARCHETYPE_RATE_LIMIT_TTL_MS) {
+    const retryAfter = Math.ceil((ARCHETYPE_RATE_LIMIT_TTL_MS - (now - lastCall)) / 1000);
+    return res.status(429).json({
+      error: 'Too Many Requests',
+      code: 'RATE_LIMITED',
+      retryAfter,
+    });
+  }
+  archetypeRateLimiter.set(ventureId, now);
+
+  const supabase = req.app.locals.supabase || req.supabase;
+  try {
+    const result = await generateArchetypes(ventureId, supabase);
+    return res.status(200).json(result);
+  } catch (err) {
+    if (err instanceof ArchetypeGenerationError) {
+      return res.status(400).json({ error: err.message, code: 'ARCHETYPE_GENERATION_FAILED' });
+    }
+    console.error('[stitch-route] stage17/archetypes failed:', err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err?.message), code: 'ARCHETYPE_ERROR' });
+  }
+}));
+
+/**
+ * POST /api/stitch/:ventureId/stage17/select
+ *
+ * Pass 1 selection: Chairman selects 2 of 6 archetypes → triggers 4 refined variants.
+ * Body: { screenId: string, selectedIds: string[2] }
+ *
+ * Returns:
+ *   200 { refinedArtifactIds: string[4] }
+ *   400 { error, code } — validation error (wrong count, invalid IDs)
+ *   500 { error, code }
+ *
+ * SD-FIX-S17-WIRING-GAPS-ORCH-001-A (US-002)
+ */
+router.post('/:ventureId/stage17/select', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+  const { screenId, selectedIds } = req.body || {};
+
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+
+  if (!screenId || typeof screenId !== 'string') {
+    return res.status(400).json({ error: 'screenId is required', code: 'MISSING_SCREEN_ID' });
+  }
+
+  if (!Array.isArray(selectedIds) || selectedIds.length !== 2) {
+    return res.status(400).json({ error: 'selectedIds must be an array of exactly 2 IDs', code: 'INVALID_SELECTION_COUNT' });
+  }
+
+  const supabase = req.app.locals.supabase || req.supabase;
+  try {
+    const refinedArtifactIds = await submitPass1Selection(ventureId, screenId, selectedIds, supabase);
+    return res.status(200).json({ refinedArtifactIds });
+  } catch (err) {
+    if (err instanceof SelectionError) {
+      return res.status(400).json({ error: err.message, code: 'SELECTION_ERROR' });
+    }
+    console.error('[stitch-route] stage17/select failed:', err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err?.message), code: 'SELECT_ERROR' });
+  }
+}));
+
+/**
+ * POST /api/stitch/:ventureId/stage17/refine
+ *
+ * Pass 2 selection: Chairman picks final approved design from 4 refined variants.
+ * Body: { screenId: string, platform: "mobile"|"desktop", artifactId: string }
+ *
+ * Returns:
+ *   200 { approvedArtifactId: string }
+ *   400 { error, code } — invalid platform or missing fields
+ *   500 { error, code }
+ *
+ * SD-FIX-S17-WIRING-GAPS-ORCH-001-A (US-003)
+ */
+router.post('/:ventureId/stage17/refine', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+  const { screenId, platform, artifactId } = req.body || {};
+
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+
+  if (!screenId || typeof screenId !== 'string') {
+    return res.status(400).json({ error: 'screenId is required', code: 'MISSING_SCREEN_ID' });
+  }
+
+  if (!platform || !['mobile', 'desktop'].includes(platform)) {
+    return res.status(400).json({ error: 'platform must be "mobile" or "desktop"', code: 'INVALID_PLATFORM' });
+  }
+
+  if (!artifactId || typeof artifactId !== 'string') {
+    return res.status(400).json({ error: 'artifactId is required', code: 'MISSING_ARTIFACT_ID' });
+  }
+
+  const supabase = req.app.locals.supabase || req.supabase;
+  try {
+    const result = await submitPass2Selection(ventureId, screenId, platform, artifactId, supabase);
+    return res.status(200).json({ approvedArtifactId: result });
+  } catch (err) {
+    if (err instanceof SelectionError) {
+      return res.status(400).json({ error: err.message, code: 'SELECTION_ERROR' });
+    }
+    console.error('[stitch-route] stage17/refine failed:', err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err?.message), code: 'REFINE_ERROR' });
+  }
+}));
+
+/**
+ * POST /api/stitch/:ventureId/stage17/approve
+ *
+ * Checks whether all 14 design sessions (7 screens × 2 platforms) are complete.
+ *
+ * Returns:
+ *   200 { complete: boolean, threshold: 14, current: number }
+ *   400 { error, code } — invalid ventureId
+ *   500 { error, code }
+ *
+ * SD-FIX-S17-WIRING-GAPS-ORCH-001-A (US-004)
+ */
+router.post('/:ventureId/stage17/approve', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+
+  const supabase = req.app.locals.supabase || req.supabase;
+  try {
+    const result = await isDesignPassComplete(ventureId, supabase);
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[stitch-route] stage17/approve failed:', err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err?.message), code: 'APPROVE_ERROR' });
+  }
+}));
+
+/**
+ * POST /api/stitch/:ventureId/stage17/qa
+ *
+ * Runs 3-layer QA rubric on all Stage 17 approved design artifacts.
+ * Layer 1: Completeness (14/14 sessions approved)
+ * Layer 2: HTML product spec validation
+ * Layer 3: Brand token consistency vs locked manifest
+ *
+ * Returns:
+ *   200 { layers, overallScore, counts }
+ *   400 { error, code } — invalid ventureId
+ *   500 { error, code }
+ *
+ * SD-FIX-S17-WIRING-GAPS-ORCH-001-A (US-005)
+ */
+router.post('/:ventureId/stage17/qa', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+
+  const supabase = req.app.locals.supabase || req.supabase;
+  try {
+    const result = await runQARubric(ventureId, supabase);
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[stitch-route] stage17/qa failed:', err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err?.message), code: 'QA_ERROR' });
+  }
+}));
+
+/**
+ * POST /api/stitch/:ventureId/stage17/upload
+ *
+ * Uploads all 14 approved HTML designs to the venture GitHub repository.
+ * Blocks if HIGH-severity QA gaps exist (must pass QA first).
+ * Validates HTML contains no external <script src="..."> (allow-same-origin sandbox policy).
+ *
+ * Returns:
+ *   200 { filesUploaded, commitSha }
+ *   400 { error, code, gaps } — blocked by QA gaps or script validation
+ *   500 { error, code }
+ *
+ * SD-FIX-S17-WIRING-GAPS-ORCH-001-A (US-006)
+ */
+router.post('/:ventureId/stage17/upload', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+
+  const supabase = req.app.locals.supabase || req.supabase;
+  try {
+    const result = await uploadToGitHub(ventureId, supabase, {});
+    return res.status(200).json(result);
+  } catch (err) {
+    if (err instanceof UploadError) {
+      return res.status(400).json({ error: err.message, code: 'UPLOAD_BLOCKED', gaps: err.gaps });
+    }
+    console.error('[stitch-route] stage17/upload failed:', err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err?.message), code: 'UPLOAD_ERROR' });
   }
 }));
 
