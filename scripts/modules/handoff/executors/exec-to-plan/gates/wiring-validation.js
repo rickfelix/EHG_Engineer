@@ -146,30 +146,30 @@ export function createWiringValidationGate(supabase) {
 function buildRemediation(sdKey, kind, failedChecks = []) {
   const runCmd = `node scripts/wiring-validators/wiring-validation-runner.js ${sdKey}`;
   const inspectSql =
-    `SELECT check_type, status, signals_detected, waived_by, waive_reason ` +
+    'SELECT check_type, status, signals_detected, waived_by, waive_reason ' +
     `FROM leo_wiring_validations WHERE sd_key = '${sdKey}';`;
   const bypass = `node scripts/handoff.js execute EXEC-TO-PLAN ${sdKey} --bypass-wiring --bypass-reason "<justification>"`;
   const waive = `SELECT waive_wiring_check('${sdKey}', '<check_type>', '<reason>');`;
 
   const lines = [];
   if (kind === 'checks_missing') {
-    lines.push(`Run the wiring validation runner to populate check results:`);
+    lines.push('Run the wiring validation runner to populate check results:');
     lines.push(`  ${runCmd}`);
   } else if (kind === 'checks_failed') {
-    lines.push(`Re-run the wiring validator(s) after fixing the signals detected:`);
+    lines.push('Re-run the wiring validator(s) after fixing the signals detected:');
     lines.push(`  ${runCmd}`);
     if (failedChecks.length > 0) {
       lines.push(`Failing check(s): ${failedChecks.map(c => c.check_type).join(', ')}`);
     }
-    lines.push(`If a failing check is a known false positive, file a per-check waiver:`);
+    lines.push('If a failing check is a known false positive, file a per-check waiver:');
     lines.push(`  ${waive}`);
   } else {
-    lines.push(`Diagnose the wiring_validated read failure; then:`);
+    lines.push('Diagnose the wiring_validated read failure; then:');
     lines.push(`  ${runCmd}`);
   }
-  lines.push(`Inspect current state:`);
+  lines.push('Inspect current state:');
   lines.push(`  ${inspectSql}`);
-  lines.push(`If you must proceed despite failures, use --bypass-wiring (rate-limited, audited):`);
+  lines.push('If you must proceed despite failures, use --bypass-wiring (rate-limited, audited):');
   lines.push(`  ${bypass}`);
   lines.push(`Framework context: vision document ${VISION_DOC_KEY}.`);
   return lines.join('\n');

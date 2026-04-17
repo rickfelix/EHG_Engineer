@@ -26,6 +26,14 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
+// SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-005): MC gating constants.
+// Feature-flag MC consultation at sweep independently from dashboard so that
+// roll-out can be staged (dashboard first → sweep later after calibration).
+const FLEET_MC_SWEEP_GATE = (process.env.FLEET_MC_SWEEP_GATE ?? 'true').toLowerCase() !== 'false';
+const FLEET_MC_PALIVE_HOLD_THRESHOLD = Number(process.env.FLEET_MC_PALIVE_HOLD_THRESHOLD) || 0.3;
+const FLEET_MC_HARD_CAP_SEC = Number(process.env.FLEET_MC_HARD_CAP_SEC) || 1200; // 20 minutes
+const FLEET_MC_ESTIMATE_STALENESS_SEC = Number(process.env.FLEET_MC_ESTIMATE_STALENESS_SEC) || 300; // 5m
+
 const supabase = createSupabaseServiceClient();
 
 const STALE_THRESHOLD_SECONDS = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
@@ -640,14 +648,62 @@ async function main() {
     }
   }
 
-  // 4. Auto-release dead sessions (with WIP guard)
+  // 4. Auto-release dead sessions (with WIP guard + MC liveness gate)
   const dead = classified.filter(s => s.status === 'DEAD');
+
+  // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-005): Pre-fetch the latest MC
+  // estimate per dead-classified session (single query, then index). An
+  // estimate older than FLEET_MC_ESTIMATE_STALENESS_SEC is treated as
+  // unavailable — we fall through to pre-MC behavior rather than trusting
+  // a stale probability.
+  const mcBySession = new Map();
+  if (FLEET_MC_SWEEP_GATE && dead.length > 0) {
+    const sinceIso = new Date(Date.now() - FLEET_MC_ESTIMATE_STALENESS_SEC * 1000).toISOString();
+    const { data: mcRows, error: mcErr } = await supabase
+      .from('fleet_liveness_estimates')
+      .select('session_id, observed_at, p_alive, p_alive_ci_low, p_alive_ci_high, mc_samples')
+      .in('session_id', dead.map(d => d.session_id))
+      .gte('observed_at', sinceIso)
+      .order('observed_at', { ascending: false });
+    if (mcErr) {
+      warnings.push('MC_GATE: lookup failed: ' + mcErr.message + ' — falling back to pre-MC sweep');
+    } else {
+      for (const row of mcRows || []) {
+        if (!mcBySession.has(row.session_id)) mcBySession.set(row.session_id, row);
+      }
+    }
+  }
+
   for (const s of dead) {
     // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: WIP release guard
-    // Sessions with uncommitted changes are protected from automatic release
+    // Sessions with uncommitted changes are protected from automatic release.
+    // This check fires BEFORE MC consultation per AC-3: existing WIP_GUARD
+    // must fire independently regardless of MC state.
     if (s.has_uncommitted_changes === true) {
       warnings.push('WIP_GUARD: ' + s.session_id + ' has uncommitted changes — NOT releasing (SD: ' + s.sd_key + ')');
       continue;
+    }
+
+    // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-005): MC liveness gate.
+    // Rules:
+    //   - heartbeat >= 20m → force release (SWEEP_HARD_CAP_20M). MC ignored.
+    //   - heartbeat <  20m AND P(alive) > 0.3 → HOLD (WIP_GUARD_MC), do not release.
+    //   - otherwise → proceed with existing SWEEP_PID_DEAD release.
+    const hbSec = s.heartbeat_age_seconds || 0;
+    let releaseReason = 'SWEEP_PID_DEAD';
+    if (FLEET_MC_SWEEP_GATE) {
+      if (hbSec >= FLEET_MC_HARD_CAP_SEC) {
+        releaseReason = 'SWEEP_HARD_CAP_20M';
+      } else {
+        const mc = mcBySession.get(s.session_id);
+        if (mc && Number(mc.p_alive) > FLEET_MC_PALIVE_HOLD_THRESHOLD) {
+          warnings.push(
+            'WIP_GUARD_MC: ' + s.session_id + ' P(alive)=' + Number(mc.p_alive).toFixed(2) +
+            ' > ' + FLEET_MC_PALIVE_HOLD_THRESHOLD + ' threshold, hb=' + Math.round(hbSec) + 's — HOLDING (SD: ' + s.sd_key + ')'
+          );
+          continue;
+        }
+      }
     }
 
     // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-1, FR-2): Atomically set is_alive=false
@@ -659,7 +715,7 @@ async function main() {
         sd_key: null,
         status: 'released',
         released_at: now.toISOString(),
-        released_reason: 'SWEEP_PID_DEAD',
+        released_reason: releaseReason,
         is_alive: false,
         worktree_path: null,
         has_uncommitted_changes: false,
@@ -671,7 +727,7 @@ async function main() {
       actions.push('FAILED to release ' + s.session_id + ' (' + s.sd_key + '): ' + error.message);
     } else {
       if (s.sd_key) {
-        await resetSdPhaseOnRelease(s.sd_key, 'SWEEP_PID_DEAD');
+        await resetSdPhaseOnRelease(s.sd_key, releaseReason);
         // Clear claiming_session_id on the SD so the next worker can claim it
         // without hitting foreign_claim in the claim validity gate.
         await supabase
@@ -679,7 +735,7 @@ async function main() {
           .update({ claiming_session_id: null, is_working_on: false })
           .eq('claiming_session_id', s.session_id);
       }
-      actions.push('RELEASED ' + s.session_id + ' — PID ' + s.pid + ' dead — freed ' + s.sd_key);
+      actions.push('RELEASED ' + s.session_id + ' — reason=' + releaseReason + ' — freed ' + s.sd_key);
     }
   }
 

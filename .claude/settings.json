@@ -76,6 +76,11 @@
             "type": "command",
             "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/coordination-inbox.cjs",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/post-tool-clear-telemetry.cjs",
+            "timeout": 3
           }
         ]
       },
