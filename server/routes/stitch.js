@@ -254,6 +254,9 @@ router.post('/seed-repo', asyncHandler(async (req, res) => {
 const archetypeRateLimiter = new Map();
 const ARCHETYPE_RATE_LIMIT_TTL_MS = 10_000;
 
+/** Active archetype generation AbortControllers keyed by ventureId. */
+const activeArchetypeGenerations = new Map();
+
 // Clean up stale rate limiter entries every 60s
 setInterval(() => {
   const now = Date.now();
@@ -300,16 +303,63 @@ router.post('/:ventureId/stage17/archetypes', asyncHandler(async (req, res) => {
   archetypeRateLimiter.set(ventureId, now);
 
   const supabase = req.app.locals.supabase || req.supabase;
-  try {
-    const result = await generateArchetypes(ventureId, supabase);
-    return res.status(200).json(result);
-  } catch (err) {
-    if (err instanceof ArchetypeGenerationError) {
-      return res.status(400).json({ error: err.message, code: 'ARCHETYPE_GENERATION_FAILED' });
-    }
-    console.error('[stitch-route] stage17/archetypes failed:', err);
-    return res.status(500).json({ error: sanitizeErrorMessage(err?.message), code: 'ARCHETYPE_ERROR' });
+
+  // Fire-and-forget: return 202 immediately, run generation in background.
+  // Each archetype is written to venture_artifacts as it completes — the frontend
+  // polls the artifact count for progress. A synchronous response would timeout
+  // (84 LLM calls × 30-60s each = 42-84 minutes).
+  // Cancel any existing generation for this venture before starting a new one
+  const existing = activeArchetypeGenerations.get(ventureId);
+  if (existing) {
+    existing.abort();
+    console.info(`[stitch-route] Cancelled previous archetype generation for ${ventureId.slice(0, 8)}`);
   }
+
+  const ac = new AbortController();
+  activeArchetypeGenerations.set(ventureId, ac);
+
+  res.status(202).json({ status: 'generating', message: 'Archetype generation started. Monitor progress via artifact count.' });
+
+  generateArchetypes(ventureId, supabase, { signal: ac.signal })
+    .then(result => {
+      const label = result.cancelled ? 'cancelled' : 'complete';
+      console.log(`[stitch-route] stage17/archetypes ${label}: ${result.artifactIds?.length ?? 0} archetypes for ${ventureId.slice(0, 8)}`);
+    })
+    .catch(err => {
+      console.error('[stitch-route] stage17/archetypes background failed:', err.message ?? err);
+    })
+    .finally(() => {
+      activeArchetypeGenerations.delete(ventureId);
+    });
+  return;
+}));
+
+/**
+ * POST /api/stitch/:ventureId/stage17/archetypes/cancel
+ *
+ * Cancels an in-progress archetype generation for the given venture.
+ * The generator checks the AbortSignal between screens, so cancellation
+ * takes effect after the current screen finishes (up to ~7 min).
+ *
+ * Returns:
+ *   200 { cancelled: true }  — generation was running and has been signalled to stop
+ *   404 { cancelled: false } — no active generation found for this venture
+ */
+router.post('/:ventureId/stage17/archetypes/cancel', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+
+  const ac = activeArchetypeGenerations.get(ventureId);
+  if (ac) {
+    ac.abort();
+    activeArchetypeGenerations.delete(ventureId);
+    console.info(`[stitch-route] Archetype generation cancelled for ${ventureId.slice(0, 8)}`);
+    return res.json({ cancelled: true, message: 'Generation will stop after the current screen completes.' });
+  }
+
+  return res.status(404).json({ cancelled: false, message: 'No active archetype generation found for this venture.' });
 }));
 
 /**
