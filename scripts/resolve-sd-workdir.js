@@ -157,6 +157,83 @@ function resolveFromScan(sdKey, repoRoot) {
 }
 
 /**
+ * SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-003:
+ * Max worktrees under .worktrees/. Parity with lib/worktree-manager.js.
+ * Helper dirs (_archive, qf) are excluded from the count.
+ */
+const MAX_WORKTREE_COUNT = 10;
+const WORKTREE_QUOTA_HELPERS = new Set(['_archive', 'qf', 'sd', 'adhoc']);
+
+/**
+ * Count actual SD worktree subdirs, excluding layout/helper dirs.
+ */
+function countWorktreeDirs(worktreesDir) {
+  if (!fs.existsSync(worktreesDir)) return 0;
+  try {
+    return fs.readdirSync(worktreesDir).filter((entry) => {
+      if (WORKTREE_QUOTA_HELPERS.has(entry)) return false;
+      try {
+        return fs.statSync(path.join(worktreesDir, entry)).isDirectory();
+      } catch { return false; }
+    }).length;
+  } catch { return 0; }
+}
+
+/**
+ * SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-001:
+ * After `git worktree add`, verify the worktree is actually registered in
+ * `git worktree list --porcelain` AND a `.git` pointer file exists. Required
+ * because Windows `git worktree add` can exit 0 on partial failure.
+ *
+ * Uses a bounded retry loop (10 × 100ms, total 1s) to accommodate observed
+ * latency in git worktree metadata propagation. Throws with a diagnostic
+ * error message on final failure.
+ */
+function verifyWorktreeRegistered(worktreePath, repoRoot) {
+  const expected = path.resolve(worktreePath).replace(/\\/g, '/');
+  const maxAttempts = 10;
+  const delayMs = 100;
+  let lastListed = [];
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const listed = execSync('git worktree list --porcelain', {
+        cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
+      });
+      lastListed = listed
+        .split('\n')
+        .filter((l) => l.startsWith('worktree '))
+        .map((l) => path.resolve(l.replace('worktree ', '').trim()).replace(/\\/g, '/'));
+
+      if (lastListed.includes(expected)) {
+        // Also verify the .git pointer file exists (Windows edge case)
+        if (!fs.existsSync(path.join(worktreePath, '.git'))) {
+          throw new Error(
+            `git worktree add reported success but ${worktreePath} has no .git pointer file. ` +
+            `Remediation: rm -rf "${worktreePath}" && git worktree prune`
+          );
+        }
+        return true;
+      }
+    } catch (err) {
+      // execSync failure will be retried; re-throw only on final attempt
+      if (attempt === maxAttempts - 1) throw err;
+    }
+    // Busy wait (no async context here) — acceptable given 100ms total 1s max
+    const deadline = Date.now() + delayMs;
+    while (Date.now() < deadline) { /* spin */ }
+  }
+
+  const err = new Error(
+    `git worktree add reported success but ${worktreePath} is not registered in git worktree list. ` +
+    `Remediation: rm -rf "${worktreePath}" && git worktree prune\n` +
+    `Listed paths (${lastListed.length}):\n  - ${lastListed.join('\n  - ')}`
+  );
+  err.errorCode = 'WORKTREE_POST_CONDITION_FAILED';
+  throw err;
+}
+
+/**
  * Create a new worktree for the SD
  */
 function createWorktree(sdKey, repoRoot) {
@@ -165,6 +242,34 @@ function createWorktree(sdKey, repoRoot) {
 
   if (!fs.existsSync(worktreesDir)) {
     fs.mkdirSync(worktreesDir, { recursive: true });
+  }
+
+  // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-002: Pre-condition check.
+  // If worktreePath exists, either reuse (if valid) or reject with remediation.
+  // Prevents silent-trample scenarios from prior failed runs.
+  if (fs.existsSync(worktreePath)) {
+    if (isValidWorktree(worktreePath)) {
+      const existingBranch = getWorktreeBranch(worktreePath);
+      return { path: worktreePath, branch: existingBranch || `feat/${sdKey}`, created: false };
+    }
+    const err = new Error(
+      `Path ${worktreePath} exists but is not a registered worktree. ` +
+      `Remove it with: rm -rf "${worktreePath}" && git worktree prune`
+    );
+    err.errorCode = 'WORKTREE_PRE_CONDITION_FAILED';
+    throw err;
+  }
+
+  // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-003: Quota enforcement.
+  // Parity with lib/worktree-manager.js::createWorkTypeWorktree quota check.
+  const existingCount = countWorktreeDirs(worktreesDir);
+  if (existingCount >= MAX_WORKTREE_COUNT) {
+    const err = new Error(
+      `Worktree limit reached (${existingCount}/${MAX_WORKTREE_COUNT}). ` +
+      `Run cleanup or remove stale worktrees before creating new ones.`
+    );
+    err.errorCode = 'WORKTREE_QUOTA_EXCEEDED';
+    throw err;
   }
 
   // Look for an existing feature branch
@@ -227,6 +332,10 @@ function createWorktree(sdKey, repoRoot) {
     if (lockPath) releaseLock(lockPath);
   }
 
+  // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-001: Post-condition verify.
+  // Ensure git worktree list includes the new path AND .git pointer exists.
+  verifyWorktreeRegistered(worktreePath, repoRoot);
+
   // Write metadata
   fs.writeFileSync(path.join(worktreePath, '.worktree.json'), JSON.stringify({
     sdKey,
@@ -235,7 +344,10 @@ function createWorktree(sdKey, repoRoot) {
     repoRoot
   }, null, 2));
 
-  ensureWorktreeEssentials(worktreePath, repoRoot);
+  const essentials = ensureWorktreeEssentials(worktreePath, repoRoot);
+  if (!essentials.ok) {
+    emitLog({ event: 'worktree.essentials_partial', sdKey, errors: essentials.errors });
+  }
 
   // Verify .gitignore covers .env (SD-LEO-INFRA-AUTO-WORKTREE-START-001 US-003)
   const gitignoreCheck = verifyGitignore(worktreePath);
@@ -252,6 +364,11 @@ function createWorktree(sdKey, repoRoot) {
  * created worktrees also get patched up.
  */
 function ensureWorktreeEssentials(worktreePath, repoRoot) {
+  // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-004: Structured error return
+  // instead of swallowed catches. Best-effort semantics preserved (no throw) but
+  // failures are surfaced so callers can log and operators can diagnose.
+  const errors = [];
+
   // Symlink node_modules (avoids duplicating ~500MB)
   const sourceModules = path.join(repoRoot, 'node_modules');
   const targetModules = path.join(worktreePath, 'node_modules');
@@ -262,7 +379,9 @@ function ensureWorktreeEssentials(worktreePath, repoRoot) {
       } else {
         fs.symlinkSync(sourceModules, targetModules, 'dir');
       }
-    } catch { /* best effort */ }
+    } catch (err) {
+      errors.push({ step: 'symlink_node_modules', message: err.message });
+    }
   }
 
   // Copy .env (gitignored, so never present in worktrees)
@@ -271,8 +390,12 @@ function ensureWorktreeEssentials(worktreePath, repoRoot) {
   if (fs.existsSync(sourceEnv) && !fs.existsSync(targetEnv)) {
     try {
       fs.copyFileSync(sourceEnv, targetEnv);
-    } catch { /* best effort */ }
+    } catch (err) {
+      errors.push({ step: 'copy_env', message: err.message });
+    }
   }
+
+  return { ok: errors.length === 0, errors };
 }
 
 /**
@@ -361,7 +484,8 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
     } else {
       const branch = getWorktreeBranch(dbResult.path);
       emitLog({ event: 'worktree.resolved', sdKey, source: 'db', resolvedCwd: dbResult.path, outcome: 'success' });
-      ensureWorktreeEssentials(dbResult.path, repoRoot);
+      const dbEssentials = ensureWorktreeEssentials(dbResult.path, repoRoot);
+      if (!dbEssentials.ok) emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'db', errors: dbEssentials.errors });
       return {
         sdKey, cwd: dbResult.path, source: 'db', success: true,
         worktree: { exists: true, path: dbResult.path, branch },
@@ -379,7 +503,8 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
     // Persist to DB for future lookups
     await persistWorktreePath(sdKey, scanResult.path, branch);
 
-    ensureWorktreeEssentials(scanResult.path, repoRoot);
+    const scanEssentials = ensureWorktreeEssentials(scanResult.path, repoRoot);
+    if (!scanEssentials.ok) emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'scan', errors: scanEssentials.errors });
     return {
       sdKey, cwd: scanResult.path, source: 'scan', success: true,
       worktree: { exists: true, path: scanResult.path, branch }
