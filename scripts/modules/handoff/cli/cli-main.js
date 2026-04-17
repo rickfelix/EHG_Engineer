@@ -419,6 +419,16 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
     return { success: false };
   }
 
+  // SD-LEARN-FIX-ADDRESS-PAT-RETRO-001: Universal CLAUDE_SESSION_ID pre-flight check
+  if (!process.env.CLAUDE_SESSION_ID) {
+    console.warn('');
+    console.warn('⚠️  CLAUDE_SESSION_ID is not set.');
+    console.warn('   This will cause no_deterministic_identity gate failures (0% score).');
+    console.warn('   Fix: prefix with session ID from sd-start output:');
+    console.warn(`   CLAUDE_SESSION_ID=<uuid> node scripts/handoff.js precheck ${precheckType} ${precheckSdId}`);
+    console.warn('');
+  }
+
   // Step 0: Multi-repo status check
   console.log('');
   console.log('STEP 0: MULTI-REPO STATUS CHECK');
@@ -466,8 +476,6 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
     console.log('   ⚠️  User stories must exist BEFORE this gate. Format: story_key=\'SD-KEY:US-001\'.');
     console.log('   Create via DB insert into user_stories with fields: story_key, sd_id, title, user_role,');
     console.log('   user_want, user_benefit, acceptance_criteria, implementation_context.');
-    console.log('   ⚠️  CLAUDE_SESSION_ID must be set or no_deterministic_identity blocks the claim gate.');
-    console.log('   Run: CLAUDE_SESSION_ID=<uuid> node scripts/handoff.js execute PLAN-TO-EXEC <SD-ID>');
     console.log('');
   }
 
@@ -607,6 +615,16 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     if (!bypassCheck.success) {
       return { success: false };
     }
+  }
+
+  // SD-LEARN-FIX-ADDRESS-PAT-RETRO-001: Universal CLAUDE_SESSION_ID pre-flight check
+  if (!process.env.CLAUDE_SESSION_ID) {
+    console.warn('');
+    console.warn('⚠️  CLAUDE_SESSION_ID is not set.');
+    console.warn('   This will cause no_deterministic_identity gate failures (0% score).');
+    console.warn('   Fix: prefix with session ID from sd-start output:');
+    console.warn(`   CLAUDE_SESSION_ID=<uuid> node scripts/handoff.js execute ${handoffType} ${sdId}`);
+    console.warn('');
   }
 
   // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Guardrail 5 - Handoff Sequence Enforcement
