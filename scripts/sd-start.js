@@ -957,7 +957,11 @@ async function main() {
   // If worktree's node_modules is broken, coordinate npm install across fleet
   if (worktreeInfo?.success && worktreeInfo.cwd) {
     try {
-      const { acquireLock, waitForLock, releaseLock } = require('../lib/npm-install-lock.cjs');
+      // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-005: ESM fix.
+      // This file is ESM (type=module). Use createRequire for CJS interop.
+      const { createRequire } = await import('node:module');
+      const esmRequire = createRequire(import.meta.url);
+      const { acquireLock, waitForLock, releaseLock } = esmRequire('../lib/npm-install-lock.cjs');
       const fs = await import('fs');
       const path = await import('path');
 
