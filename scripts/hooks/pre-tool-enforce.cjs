@@ -574,6 +574,47 @@ async function main() {
     }
   }
 
+  // --- ENFORCEMENT 10: Source-Side Telemetry Writer (SD-LEO-INFRA-WORKER-SOURCE-SIDE-001) ---
+  // Non-blocking write of tool/timeout/silence signals to claude_sessions.
+  // Fire-and-forget — never waits, never blocks, swallows all errors.
+  try {
+    const _sessId = process.env.CLAUDE_SESSION_ID || '';
+    if (_sessId) {
+      const {
+        computeExpectedSilenceMs,
+        computeExpectedEndMs,
+        classifyActivityKind,
+      } = require('./lib/tool-timeout.cjs');
+      const { writeTelemetry } = require('./lib/session-telemetry-writer.cjs');
+
+      const silenceMs = computeExpectedSilenceMs(TOOL_NAME, input);
+      const endMs = computeExpectedEndMs(TOOL_NAME, input);
+      const kind = classifyActivityKind(TOOL_NAME);
+      const now = Date.now();
+      const argsHash = _auditContextHash(TOOL_INPUT_RAW);
+
+      const patch = {
+        heartbeat_at: new Date(now).toISOString(),
+      };
+      if (TOOL_NAME) patch.current_tool = TOOL_NAME;
+      patch.current_tool_args_hash = argsHash;
+      if (endMs !== null) {
+        patch.current_tool_expected_end_at = new Date(now + endMs).toISOString();
+      }
+      if (silenceMs !== null) {
+        patch.expected_silence_until = new Date(now + silenceMs).toISOString();
+      }
+      if (kind) patch.last_activity_kind = kind;
+
+      writeTelemetry(_sessId, patch);
+    }
+  } catch (telErr) {
+    // Never block on telemetry errors. Debug-only log.
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      process.stderr.write(`[pre-tool-enforce] telemetry write swallowed: ${telErr.message}\n`);
+    }
+  }
+
   // Final allow decision — audit the pass-through
   auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ALLOW', 'Tool call permitted by all enforcement rules', 'allow', {});
   process.exitCode = 0; // Allow

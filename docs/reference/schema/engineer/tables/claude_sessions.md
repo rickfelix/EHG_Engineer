@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-16T01:07:03.421Z
-**Rows**: 11,731
+**Generated**: 2026-04-16T20:19:17.442Z
+**Rows**: 11,743
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (36 total)
+## Columns (44 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -54,6 +54,14 @@
 | parent_session_id | `text` | YES | - | References the real session running the sd:drain command |
 | agent_slot | `integer(32)` | YES | - | Slot index (0-2) within the parent drainer |
 | last_progress_at | `timestamp with time zone` | YES | - | Updated on meaningful work completion (handoff, commit, test pass) — distinct from heartbeat liveness |
+| current_tool | `text` | YES | - | Name of the tool the worker is currently executing (Bash, Agent, Edit, etc). NULL when idle. |
+| current_tool_args_hash | `text` | YES | - | SHA-256 (first 16 hex chars) of the tool arguments — audit trail without leaking args. |
+| current_tool_expected_end_at | `timestamp with time zone` | YES | - | Timestamp when the current tool should complete (tool.timeout + 30s buffer). Used by sweep to skip release. |
+| last_activity_kind | `text` | YES | - | Worker state: executing (short tool), waiting_tool (long tool), waiting_agent, thinking, idle, exiting. |
+| commits_since_claim | `integer(32)` | YES | `0` | Git commits on SD branch since claimed_at (throttled 30s in PostToolUse). |
+| files_modified_since_claim | `integer(32)` | YES | `0` | Files modified since claimed_at (throttled 30s in PostToolUse). |
+| process_alive_at | `timestamp with time zone` | YES | - | Last tick from detached session-tick.cjs process. Authoritative liveness — if < 90s old, worker is alive. |
+| expected_silence_until | `timestamp with time zone` | YES | - | Worker-declared silent period (Bash timeout, Agent invocation). Sweep enforces 30-minute hard cap — values beyond that are IGNORED to prevent masking dead workers. |
 
 ## Constraints
 
@@ -67,6 +75,7 @@
 - `claude_sessions_session_id_key`: UNIQUE (session_id)
 
 ### Check Constraints
+- `claude_sessions_last_activity_kind_check`: CHECK (((last_activity_kind IS NULL) OR (last_activity_kind = ANY (ARRAY['executing'::text, 'waiting_tool'::text, 'waiting_agent'::text, 'thinking'::text, 'idle'::text, 'exiting'::text]))))
 - `claude_sessions_status_check`: CHECK ((status = ANY (ARRAY['active'::text, 'idle'::text, 'stale'::text, 'released'::text])))
 - `claude_sessions_track_check`: CHECK ((track = ANY (ARRAY['A'::text, 'B'::text, 'C'::text, 'STANDALONE'::text])))
 
@@ -80,6 +89,10 @@
   ```sql
   CREATE UNIQUE INDEX claude_sessions_session_id_key ON public.claude_sessions USING btree (session_id)
   ```
+- `idx_claude_sessions_expected_silence`
+  ```sql
+  CREATE INDEX idx_claude_sessions_expected_silence ON public.claude_sessions USING btree (expected_silence_until) WHERE (expected_silence_until IS NOT NULL)
+  ```
 - `idx_claude_sessions_heartbeat`
   ```sql
   CREATE INDEX idx_claude_sessions_heartbeat ON public.claude_sessions USING btree (heartbeat_at DESC)
@@ -91,6 +104,10 @@
 - `idx_claude_sessions_parent_session`
   ```sql
   CREATE INDEX idx_claude_sessions_parent_session ON public.claude_sessions USING btree (parent_session_id) WHERE (parent_session_id IS NOT NULL)
+  ```
+- `idx_claude_sessions_process_alive`
+  ```sql
+  CREATE INDEX idx_claude_sessions_process_alive ON public.claude_sessions USING btree (process_alive_at DESC) WHERE (process_alive_at IS NOT NULL)
   ```
 - `idx_claude_sessions_sd_key`
   ```sql

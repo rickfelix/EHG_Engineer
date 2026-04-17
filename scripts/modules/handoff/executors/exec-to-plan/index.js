@@ -32,7 +32,9 @@ import {
   createSmokeTestValidationGate,
   createUserStoryCoverageGate,
   // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
-  createWireframeQaValidationGate
+  createWireframeQaValidationGate,
+  // Wiring Validation (SD-LEO-WIRING-VERIFICATION-FRAMEWORK-ORCH-001-D)
+  createWiringValidationGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -294,6 +296,12 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
     // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
     gates.push(createWireframeQaValidationGate(this.prdRepo, this.supabase));
+
+    // Wiring Validation Gate (SD-LEO-WIRING-VERIFICATION-FRAMEWORK-ORCH-001-D)
+    // Opts in when sd.metadata.wiring_required=true OR parent has wiring_enforcement=true.
+    // Reads strategic_directives_v2.wiring_validated (trigger-maintained) to block on
+    // missing or failed cross-verifier checks.
+    gates.push(createWiringValidationGate(this.supabase));
 
     // Scope Completion Verification (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
     // Verifies arch plan deliverables exist in codebase before marking EXEC complete

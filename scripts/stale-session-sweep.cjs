@@ -313,6 +313,62 @@ async function main() {
   // Match by extracting the last segment from terminal_id and checking the alive set.
   const aliveCcPids = new Set(aliveMarkers.map(m => String(m.pid)));
 
+  // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side telemetry lookup ────────
+  // Fetch process_alive_at / expected_silence_until / current_tool_expected_end_at
+  // for all session_ids in this sweep. These signals take precedence over
+  // heartbeat-based stale detection (see classification below).
+  //
+  // All signals honor a 30-minute hard cap — a worker cannot declare silence
+  // beyond that window, preventing a misconfigured hook from masking a dead
+  // worker.
+  const SILENCE_HARD_CAP_MS = 30 * 60 * 1000;
+  const TICK_ALIVE_WINDOW_MS = 90 * 1000;
+  const telemetryMap = new Map();
+  try {
+    const sessionIds = sessions.map(s => s.session_id).filter(Boolean);
+    if (sessionIds.length > 0) {
+      const { data: telemetryRows } = await supabase
+        .from('claude_sessions')
+        .select('session_id,process_alive_at,expected_silence_until,current_tool,current_tool_expected_end_at,last_activity_kind')
+        .in('session_id', sessionIds);
+      for (const row of telemetryRows || []) {
+        telemetryMap.set(row.session_id, row);
+      }
+    }
+  } catch (teleErr) {
+    // Graceful degradation — if the 8 new columns aren't present yet (pre-
+    // migration clone), fall through to heartbeat-only logic.
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.error('[sweep] telemetry fetch swallowed: ' + teleErr.message);
+    }
+  }
+
+  function evaluateSourceSideSignals(sessionId, nowMs) {
+    const t = telemetryMap.get(sessionId);
+    if (!t) return null;
+    if (t.expected_silence_until) {
+      const endMs = Date.parse(t.expected_silence_until);
+      const deltaMs = endMs - nowMs;
+      if (deltaMs > 0 && deltaMs <= SILENCE_HARD_CAP_MS) {
+        return { alive: true, reason: 'silent until ' + t.expected_silence_until };
+      }
+    }
+    if (t.process_alive_at) {
+      const tickMs = Date.parse(t.process_alive_at);
+      const ageMs = nowMs - tickMs;
+      if (ageMs >= 0 && ageMs <= TICK_ALIVE_WINDOW_MS) {
+        return { alive: true, reason: 'tick alive ' + Math.round(ageMs / 1000) + 's ago' };
+      }
+    }
+    if (t.current_tool_expected_end_at) {
+      const endMs = Date.parse(t.current_tool_expected_end_at);
+      if (endMs - nowMs > 0) {
+        return { alive: true, reason: 'tool ' + (t.current_tool || 'running') + ' expected until ' + t.current_tool_expected_end_at };
+      }
+    }
+    return null;
+  }
+
   // 2. Classify each session
   // Primary signal: heartbeat age. Secondary signal: PID marker liveness.
   // A session with a stale heartbeat but a living PID is likely loading context
@@ -346,8 +402,13 @@ async function main() {
     const isDesktopSession = s.terminal_id && /^win-\d+$/.test(s.terminal_id);
     const exceedsDesktopCap = isDesktopSession && s.heartbeat_age_seconds > DESKTOP_DEAD_CAP_SECONDS;
 
+    // SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: source-side signals FIRST.
+    const sourceSide = evaluateSourceSideSignals(s.session_id, now.getTime());
+
     let status;
-    if (!isStale) {
+    if (sourceSide && sourceSide.alive) {
+      status = 'ALIVE_SOURCE_SIDE';
+    } else if (!isStale) {
       status = 'ACTIVE';
     } else if (hasPidAlive && !exceedsDesktopCap) {
       // PID is alive but heartbeat is stale — session is loading context,
@@ -359,7 +420,12 @@ async function main() {
       status = 'STALE_UNKNOWN'; // Between 5-15min, no PID match = might be on another host
     }
 
-    return { ...s, isStale: isStale && !hasPidAlive, status };
+    return {
+      ...s,
+      isStale: isStale && !hasPidAlive && !(sourceSide && sourceSide.alive),
+      status,
+      sourceSideReason: sourceSide?.reason || null,
+    };
   });
   if (collisions.length > 0) {
     await splitCollidingSessions(supabase, collisions, actions, warnings);
@@ -1037,9 +1103,32 @@ async function main() {
     console.log('');
   }
 
-  // Alive markers summary (useful for debugging)
-  if (aliveMarkers.length > 0) {
-    console.log('MARKER FILES (' + aliveMarkers.length + ' alive):');
+  // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: PROCESS TICKS (DB-sourced) ─────
+  // Prefer process_alive_at from claude_sessions (authoritative tick signal)
+  // over filesystem marker files for liveness reporting. Marker files remain
+  // in use for identity-collision detection (Layer 1 above) but are no longer
+  // the primary operator-facing liveness display.
+  const nowMsForTicks = now.getTime();
+  const tickRows = [];
+  for (const [sid, t] of telemetryMap.entries()) {
+    if (!t.process_alive_at) continue;
+    const ageMs = nowMsForTicks - Date.parse(t.process_alive_at);
+    if (Number.isFinite(ageMs) && ageMs < 10 * 60 * 1000) {
+      tickRows.push({ sid, ageMs, tool: t.current_tool || null });
+    }
+  }
+  if (tickRows.length > 0) {
+    console.log('PROCESS TICKS (' + tickRows.length + ' fresh):');
+    tickRows.sort((a, b) => a.ageMs - b.ageMs);
+    for (const r of tickRows) {
+      const ageSec = Math.round(r.ageMs / 1000);
+      const toolPart = r.tool ? '  tool=' + r.tool : '';
+      console.log('  session=' + r.sid.substring(0, 12) + '...  tick=' + ageSec + 's ago' + toolPart);
+    }
+    console.log('');
+  } else if (aliveMarkers.length > 0) {
+    // Pre-migration fallback: show marker files when tick data is unavailable.
+    console.log('MARKER FILES (' + aliveMarkers.length + ' alive, legacy):');
     for (const m of aliveMarkers) {
       console.log('  PID=' + String(m.pid).padEnd(8) + 'session=' + (m.session_id || '?').substring(0, 12) + '...' + '  port=' + (m.sse_port || '?'));
     }

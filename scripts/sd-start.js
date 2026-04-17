@@ -15,6 +15,7 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { execSync } from 'child_process';
 import os from 'os';
+import path from 'node:path';
 import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
 import { resolveOwnSession } from '../lib/resolve-own-session.js';
@@ -915,11 +916,25 @@ async function main() {
 
     // SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001: Persist worktree_path so claim-validity-gate
     // can enforce cwd isolation on subsequent handoff/PRD operations. Non-fatal on error.
+    // SD-LEARN-FIX-ADDRESS-PAT-PLANTOEXEC-001: Basename guard. Refuses to persist a
+    // sibling SD's worktree_path (root cause of wrong_worktree in PAT-HF-PLANTOEXEC-dcb7e880).
     try {
-      await supabase
-        .from('strategic_directives_v2')
-        .update({ worktree_path: worktreeInfo.cwd })
-        .eq('sd_key', effectiveId);
+      // Normalize separators so path.basename works on POSIX and Windows alike.
+      const cwdNormalized = (worktreeInfo.cwd || '').replace(/\\/g, '/');
+      const observedBasename = path.basename(cwdNormalized);
+      if (observedBasename !== effectiveId) {
+        console.warn(
+          `   ${colors.yellow}⚠️  Skipping worktree_path persistence — basename mismatch:${colors.reset}\n` +
+          `      Observed: ${observedBasename}\n` +
+          `      Expected: ${effectiveId}\n` +
+          `      Resolved: ${worktreeInfo.cwd}`
+        );
+      } else {
+        await supabase
+          .from('strategic_directives_v2')
+          .update({ worktree_path: worktreeInfo.cwd })
+          .eq('sd_key', effectiveId);
+      }
     } catch (e) {
       console.warn(`   ${colors.yellow}⚠️  Failed to persist worktree_path: ${e?.message || e}${colors.reset}`);
     }

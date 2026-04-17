@@ -1,0 +1,21 @@
+{
+  "sd_key": "SD-FIXTURE-PASSING-001",
+  "sd_type": "feature",
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "echo hello world",
+      "expected_outcome": "hello world"
+    },
+    {
+      "step_number": 2,
+      "instruction": "echo status ok count 42",
+      "expected_outcome": "/status ok count \\d+/"
+    },
+    {
+      "step_number": 3,
+      "instruction": "echo result: 7",
+      "expected_outcome": "result: 7"
+    }
+  ]
+}
