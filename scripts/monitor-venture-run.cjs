@@ -9,8 +9,8 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const VENTURE_ID = '8cc661a8-baea-4f20-8405-35a94b59cbed';
-const VENTURE_NAME = 'Podcast Repurpose Engine';
+const VENTURE_ID = 'ef9a1d12-9703-4a97-b432-4a3ea8452647';
+const VENTURE_NAME = 'Aeterna Wills';
 const STOP_AT_STAGE = 17;
 const POLL_MS = 30000;
 
@@ -102,6 +102,11 @@ async function getStageTransitions() {
 }
 
 async function approveDecision(decisionId, stage) {
+  // Defense-in-depth: never approve at or past STOP_AT_STAGE
+  if (stage >= STOP_AT_STAGE) {
+    console.log(`[${ts()}]    BLOCKED: Refusing to approve S${stage} — at or past STOP_AT_STAGE (${STOP_AT_STAGE})`);
+    return { data: null, error: { message: `Stage ${stage} >= STOP_AT_STAGE ${STOP_AT_STAGE}` } };
+  }
   const gateType = KILL_GATES.has(stage) ? 'kill_gate' : PROMOTION_GATES.has(stage) ? 'promotion_gate' : 'standard';
   const { data, error } = await sb.rpc('approve_chairman_decision', {
     p_decision_id: decisionId,
