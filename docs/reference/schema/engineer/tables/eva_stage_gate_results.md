@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-17T00:57:18.886Z
-**Rows**: 6
+**Generated**: 2026-04-18T11:37:59.183Z
+**Rows**: 136
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -19,7 +19,7 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| venture_id | `uuid` | **NO** | - | - |
+| venture_id | `uuid` | YES | - | - |
 | stage_number | `integer(32)` | **NO** | - | - |
 | gate_type | `text` | **NO** | - | entry = pre-stage check, exit = post-stage check, kill = critical threshold gate |
 | overall_score | `numeric(5,2)` | YES | - | - |
