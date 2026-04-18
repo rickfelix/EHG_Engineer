@@ -58,6 +58,7 @@ import evaChatRoutes from './routes/eva-chat.js';
 import evaEconomicLensRoutes from './routes/eva-economic-lens.js';
 import stitchRoutes from './routes/stitch.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
+import { resumeIncompleteArchetypeJobs } from '../lib/eva/stage-17/auto-resume.js';
 
 // Import Story API
 import * as storiesAPI from '../src/api/stories.js';
@@ -281,6 +282,12 @@ async function startServer() {
     if (sd2025) {
       console.log('✨ SD-2025-001 (OpenAI Realtime Voice) is loaded and ready!');
     }
+
+    // S17 archetype generation auto-resume on startup
+    // SD-S17-ARCHETYPE-GENERATION-RESILIENCE-ORCH-001-A
+    resumeIncompleteArchetypeJobs().catch(err =>
+      console.error('[startup] Auto-resume scan failed:', err.message)
+    );
   });
 }
 
