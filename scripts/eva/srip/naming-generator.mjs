@@ -87,7 +87,7 @@ Generate ${count} naming candidates as JSON array.`;
       { maxTokens: 1024 }
     );
 
-    const responseText = response.text || response.content?.[0]?.text || '[]';
+    const responseText = response.content || response.text || '[]';
     // Extract JSON from response
     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
     const candidates = jsonMatch ? JSON.parse(jsonMatch[0]) : [];

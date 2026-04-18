@@ -193,7 +193,7 @@ Return JSON: {"score": <number>, "rationale": "<brief explanation>", "improvemen
         { maxTokens: 500 }
       );
 
-      const text = response.text || response.content?.[0]?.text || '';
+      const text = response.content || response.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
@@ -268,7 +268,7 @@ export async function generateWireframes({
       { maxTokens: 4000 }
     );
 
-    const text = response.text || response.content?.[0]?.text || '';
+    const text = response.content || response.text || '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {

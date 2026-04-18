@@ -15,11 +15,11 @@ function makeMockLLMClient(responses) {
   let callIdx = 0;
   return {
     complete: vi.fn(async () => {
-      const content = typeof responses === 'function'
+      const raw = typeof responses === 'function'
         ? responses(callIdx++)
         : (Array.isArray(responses) ? responses[callIdx++] || responses[responses.length - 1] : responses);
-      const text = typeof content === 'string' ? content : JSON.stringify(content);
-      return { text, content: [{ text }] };
+      const content = typeof raw === 'string' ? raw : JSON.stringify(raw);
+      return { content, provider: 'mock', model: 'mock', durationMs: 0, usage: {} };
     }),
   };
 }
