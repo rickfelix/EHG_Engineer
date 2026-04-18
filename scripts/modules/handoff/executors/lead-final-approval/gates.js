@@ -25,6 +25,10 @@ export { createSmokeTestGate };
 import { createAutomatedUatGate } from './gates/automated-uat-gate.js';
 export { createAutomatedUatGate };
 
+// Wiring Validation Gate (SD-LEO-INFRA-CROSS-REPO-ORPHAN-001)
+import { createWiringValidationGate } from '../exec-to-plan/gates/wiring-validation.js';
+export { createWiringValidationGate };
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -1044,6 +1048,10 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
 
   // Automated UAT Gate (SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001-D)
   gates.push(createAutomatedUatGate(supabase));
+
+  // Wiring Validation Gate — catch orphaned components before final merge
+  // (SD-LEO-INFRA-CROSS-REPO-ORPHAN-001)
+  gates.push(createWiringValidationGate(supabase));
 
   return gates;
 }
