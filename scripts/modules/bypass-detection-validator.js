@@ -31,19 +31,10 @@ const CLOCK_SKEW_TOLERANCE_MS = 60 * 1000;
 // SD-LEO-SELF-IMPROVE-001L RCA: Historical SDs created before rules existed
 const BYPASS_DETECTION_DEPLOYMENT_DATE = new Date('2026-02-01T00:00:00Z').getTime();
 
-// Acknowledged historical violations in completed SDs.
-// These have been reviewed and are known timing issues from fast automated execution,
-// not actual protocol bypasses. Keyed by artifact_id to be precise.
-// RCA: /leo assist 2026-04-04 — these 4 findings cause every CI run to fail,
-// generating 60+ duplicate feedback entries.
-const ACKNOWLEDGED_VIOLATION_IDS = new Set([
-  'b11d5f20-0562-411d-a1a9-ce58551c16da', // SD-LEO-INFRA-INTELLIGENT-DYNAMIC-BOARD-001-A exec_to_plan
-  '743e7b5a-c7b7-490e-a88f-0255c1db16d1', // SD-LEO-INFRA-INTELLIGENT-DYNAMIC-BOARD-001-A lead_final_approval
-  '12e9834e-e9dc-4359-934c-5907db62254f', // 50184a09-... lead_final_approval
-  'ab441614-78e8-4a20-be29-cc1f6f81572d', // SD-LEO-INFRA-FEEDBACK-PIPELINE-ACTIVATION-001-C lead_final_approval
-  '4b31f972-786b-47dc-988f-51f6b9fadcd6', // SD-WORKER-GATE-FIX-KILL-ORCH-001 lead_final_approval (67s timing skew)
-  '5c8050ec-116e-42d9-b4e1-370d8e31ce88', // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-083 lead_final_approval (303s timing, completed SD)
-]);
+// Historical violation allowlist removed — completed SDs are now excluded from
+// the query entirely (see runBypassDetection), making per-artifact allowlisting
+// unnecessary. Previous entries (6 artifact IDs from RCA 2026-04-04) were all
+// timing anomalies in completed SDs.
 
 /**
  * Define prerequisite relationships for LEO Protocol phases
@@ -248,7 +239,8 @@ async function runBypassDetection(options = {}) {
     let query = supabase
       .from('strategic_directives_v2')
       .select('id, sd_key')
-      .not('status', 'eq', 'cancelled');
+      .not('status', 'eq', 'cancelled')
+      .not('status', 'eq', 'completed');
 
     if (recentOnly) {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -271,9 +263,7 @@ async function runBypassDetection(options = {}) {
 
   for (const id of sdIds) {
     const findings = await validateSDTimeline(id, supabase);
-    // Filter out acknowledged historical violations
-    const newFindings = findings.filter(f => !ACKNOWLEDGED_VIOLATION_IDS.has(f.artifact_id));
-    allFindings.push(...newFindings);
+    allFindings.push(...findings);
   }
 
   const duration = Date.now() - startTime;

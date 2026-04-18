@@ -619,34 +619,55 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
    */
   async autoCloseFeedback(sd) {
     const sdId = sd.id;
+    const sdKey = sd.sd_key;
     const now = new Date().toISOString();
+    const terminalStatuses = '(resolved,wont_fix,shipped,duplicate,invalid)';
 
-    // Find feedback items linked to this SD that aren't already terminal
-    const { data: linkedFeedback, error: queryError } = await this.supabase
+    // 1. Find feedback items linked by SD ID (strategic_directive_id or resolution_sd_id)
+    const { data: linkedById, error: idError } = await this.supabase
       .from('feedback')
-      .select('id, status, strategic_directive_id, resolution_sd_id')
+      .select('id')
       .or(`strategic_directive_id.eq.${sdId},resolution_sd_id.eq.${sdId}`)
-      .not('status', 'in', '(resolved,wont_fix,shipped,duplicate,invalid)');
+      .not('status', 'in', terminalStatuses);
 
-    if (queryError) {
-      throw new Error(`Failed to query linked feedback: ${queryError.message}`);
+    if (idError) {
+      throw new Error(`Failed to query linked feedback: ${idError.message}`);
     }
 
-    if (!linkedFeedback || linkedFeedback.length === 0) {
+    // 2. Find CI failure feedback linked by branch name (e.g. feat/SD-KEY-HERE)
+    let linkedByBranch = [];
+    if (sdKey) {
+      const { data: branchFeedback, error: branchError } = await this.supabase
+        .from('feedback')
+        .select('id')
+        .eq('category', 'ci_failure')
+        .ilike('title', `%${sdKey}%`)
+        .not('status', 'in', terminalStatuses);
+
+      if (!branchError && branchFeedback) {
+        linkedByBranch = branchFeedback;
+      }
+    }
+
+    // Deduplicate IDs
+    const allIds = [...new Set([
+      ...(linkedById || []).map(f => f.id),
+      ...linkedByBranch.map(f => f.id)
+    ])];
+
+    if (allIds.length === 0) {
       return { closedCount: 0 };
     }
-
-    const feedbackIds = linkedFeedback.map(f => f.id);
 
     const { data: updated, error: updateError } = await this.supabase
       .from('feedback')
       .update({
         status: 'resolved',
         resolved_at: now,
-        resolution_notes: `Auto-resolved: linked SD ${sd.sd_key || sdId} completed via LEAD-FINAL-APPROVAL`,
+        resolution_notes: `Auto-resolved: SD ${sdKey || sdId} completed via LEAD-FINAL-APPROVAL`,
         updated_at: now
       })
-      .in('id', feedbackIds)
+      .in('id', allIds)
       .select('id');
 
     if (updateError) {
