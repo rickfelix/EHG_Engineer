@@ -25,3 +25,6 @@ export { createFailureChainOrderingGate } from './failure-chain-ordering.js';
 // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
 export { createScopeAuditGate } from './scope-audit.js';
 export { createChildScopeCoverageGate } from './child-scope-coverage.js';
+
+// Orchestrator Completion Validation Gates (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001)
+export { createIntegrationSmokeTestGate } from './integration-smoke-test-gate.js';
