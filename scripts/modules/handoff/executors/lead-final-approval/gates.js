@@ -29,6 +29,10 @@ export { createAutomatedUatGate };
 import { createWiringValidationGate } from '../exec-to-plan/gates/wiring-validation.js';
 export { createWiringValidationGate };
 
+// Wire Check Gate — AST call graph reachability (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001-C)
+import { createWireCheckGate } from './gates/wire-check-gate.js';
+export { createWireCheckGate };
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -1053,6 +1057,10 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // (SD-LEO-INFRA-CROSS-REPO-ORPHAN-001)
   gates.push(createWiringValidationGate(supabase));
 
+  // Wire Check Gate — AST call graph reachability for new files
+  // (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001-C)
+  gates.push(createWireCheckGate(supabase));
+
   return gates;
 }
 
@@ -1068,5 +1076,6 @@ export default {
   createPhaseCoverageExitGate,
   createSmokeTestGate,
   createAutomatedUatGate,
+  createWireCheckGate,
   getRequiredGates
 };
