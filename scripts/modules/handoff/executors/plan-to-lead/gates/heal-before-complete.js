@@ -225,12 +225,9 @@ IMPORTANT: Focus your evaluation on whether the KEY CHANGES and SUCCESS CRITERIA
 Based on the delivery evidence, score how well this SD's promises appear to be delivered.
 Respond with ONLY a JSON object: {"score": <0-100>, "reasoning": "<one sentence>"}`;
 
-    // Use Claude Haiku directly — fast, reliable, cheap
-    const { AnthropicAdapter } = await import('../../../../../../lib/sub-agents/vetting/provider-adapters.js');
-    const haiku = new AnthropicAdapter({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      model: 'claude-haiku-4-5-20251001'
-    });
+    // Use client factory — fast tier, respects local LLM routing
+    const { getFastClient } = await import('../../../../../../lib/llm/client-factory.js');
+    const haiku = getFastClient();
 
     const semanticPromise = haiku.complete(
       'You are a concise SD delivery verification assistant. Respond with ONLY valid JSON.',
@@ -246,7 +243,7 @@ Respond with ONLY a JSON object: {"score": <0-100>, "reasoning": "<one sentence>
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       semanticScore = Math.max(0, Math.min(100, parsed.score));
-      details.semantic = { score: semanticScore, reasoning: parsed.reasoning || '', model: 'claude-haiku-4-5-20251001' };
+      details.semantic = { score: semanticScore, reasoning: parsed.reasoning || '', model: haiku.model || 'fast-tier' };
       console.log(`   🧠 Semantic score: ${semanticScore}/100 (Haiku: "${parsed.reasoning || 'no reasoning'}")`);
     } else {
       console.log('   ⚠️  Haiku response could not be parsed — using structural score only');

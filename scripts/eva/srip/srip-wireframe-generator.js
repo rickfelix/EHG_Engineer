@@ -182,21 +182,18 @@ async function scoreWithSpecialists(llmClient, screens, flows) {
 
   for (const agent of SPECIALIST_AGENTS) {
     try {
-      const response = await llmClient.chat.completions.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 500,
-        messages: [{
-          role: 'user',
-          content: `As a ${agent.role} specializing in ${agent.focus}, score these wireframes 1-10:
+      const response = await llmClient.complete(
+        `You are a ${agent.role} specializing in ${agent.focus}.`,
+        `Score these wireframes 1-10:
 
 Screens: ${wireframeSummary}
 Flows: ${flows.map(f => f.name).join(', ')}
 
-Return JSON: {"score": <number>, "rationale": "<brief explanation>", "improvements": ["<suggestion>"]}`
-        }],
-      });
+Return JSON: {"score": <number>, "rationale": "<brief explanation>", "improvements": ["<suggestion>"]}`,
+        { maxTokens: 500 }
+      );
 
-      const text = response.choices?.[0]?.message?.content || '';
+      const text = response.text || response.content?.[0]?.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
@@ -261,18 +258,17 @@ export async function generateWireframes({
   let specialistScores = [];
 
   for (let cycle = 0; cycle <= MAX_REFINEMENT_CYCLES; cycle++) {
-    const response = await llmClient.chat.completions.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4000,
-      messages: [{
-        role: 'user',
-        content: cycle === 0
-          ? prompt
-          : `${prompt}\n\nPREVIOUS SPECIALIST FEEDBACK (improve based on this):\n${specialistScores.map(s => `${s.agent}: Score ${s.score}/10 - ${s.rationale}\nImprovements: ${s.improvements.join(', ')}`).join('\n\n')}`,
-      }],
-    });
+    const userPrompt = cycle === 0
+      ? prompt
+      : `${prompt}\n\nPREVIOUS SPECIALIST FEEDBACK (improve based on this):\n${specialistScores.map(s => `${s.agent}: Score ${s.score}/10 - ${s.rationale}\nImprovements: ${s.improvements.join(', ')}`).join('\n\n')}`;
 
-    const text = response.choices?.[0]?.message?.content || '';
+    const response = await llmClient.complete(
+      'You are an expert wireframe designer. Return valid JSON.',
+      userPrompt,
+      { maxTokens: 4000 }
+    );
+
+    const text = response.text || response.content?.[0]?.text || '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {

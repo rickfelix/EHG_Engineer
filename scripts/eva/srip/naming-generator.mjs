@@ -81,16 +81,13 @@ Industry Signals: ${techStack.detected || 'web application'}
 Generate ${count} naming candidates as JSON array.`;
 
   try {
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      messages: [
-        { role: 'user', content: userPrompt },
-      ],
-      system: systemPrompt,
-    });
+    const response = await client.complete(
+      systemPrompt,
+      userPrompt,
+      { maxTokens: 1024 }
+    );
 
-    const responseText = response.content[0]?.text || '[]';
+    const responseText = response.text || response.content?.[0]?.text || '[]';
     // Extract JSON from response
     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
     const candidates = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
