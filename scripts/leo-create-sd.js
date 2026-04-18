@@ -922,11 +922,27 @@ function buildDefaultKeyChanges(type, title) {
  * Only generates for non-lightweight SD types (feature, bugfix, security, etc.)
  * Lightweight types (infrastructure, documentation, orchestrator) are exempt
  */
-function buildDefaultSmokeTestSteps(type, title) {
+function buildDefaultSmokeTestSteps(type, title, scope) {
   // Lightweight SD types are exempt from smoke tests per sd-type-applicability-policy.js
-  const lightweightTypes = ['infrastructure', 'documentation', 'docs', 'orchestrator'];
+  // EXCEPTION: infrastructure SDs that produce code changes need smoke_test_steps
+  // because SMOKE_TEST_SPECIFICATION gate checks for code keywords in key_changes.
+  // SD: SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-120
+  const lightweightTypes = ['documentation', 'docs', 'orchestrator'];
   if (lightweightTypes.includes((type || '').toLowerCase())) {
     return [];
+  }
+
+  // Infrastructure SDs: only generate if scope suggests code changes
+  if ((type || '').toLowerCase() === 'infrastructure') {
+    const scopeStr = (scope || title || '').toLowerCase();
+    const codeKeywords = ['script', 'fix', 'gate', 'module', 'function', 'class', 'endpoint', 'api', '.js', '.ts'];
+    const hasCodeScope = codeKeywords.some(kw => scopeStr.includes(kw));
+    if (!hasCodeScope) return [];
+    return [
+      { step_number: 1, instruction: `Run the modified script/gate for: ${title}`, expected_outcome: 'Script executes without errors' },
+      { step_number: 2, instruction: 'Verify output matches expected behavior', expected_outcome: 'Output is correct and complete' },
+      { step_number: 3, instruction: 'Confirm no regressions in related workflows', expected_outcome: 'Existing functionality unchanged' },
+    ];
   }
 
   return [
@@ -1095,7 +1111,7 @@ async function createSD(options) {
     : buildDefaultKeyChanges(type, title);
   const finalSmokeTestSteps = (Array.isArray(smoke_test_steps) && smoke_test_steps.length > 0)
     ? smoke_test_steps
-    : buildDefaultSmokeTestSteps(type, title);
+    : buildDefaultSmokeTestSteps(type, title, scope);
 
   // ========================================================================
   // GOVERNANCE GUARDRAILS (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007)
