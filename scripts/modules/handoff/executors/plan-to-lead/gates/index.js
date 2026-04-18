@@ -26,5 +26,5 @@ export { createFailureChainOrderingGate } from './failure-chain-ordering.js';
 export { createScopeAuditGate } from './scope-audit.js';
 export { createChildScopeCoverageGate } from './child-scope-coverage.js';
 
-// Orchestrator Completion Validation Gates (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001)
-export { createIntegrationSmokeTestGate } from './integration-smoke-test-gate.js';
+// Acceptance Criteria Traceability (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001-B)
+export { createAcceptanceCriteriaTraceabilityGate } from './acceptance-criteria-traceability.js';
