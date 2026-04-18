@@ -231,7 +231,7 @@ describe('wire-check-gate', () => {
   it('should have correct gate name and structure', () => {
     const gate = createWireCheckGate(null);
     expect(gate.name).toBe('WIRE_CHECK_GATE');
-    expect(gate.required).toBe(false);
+    expect(gate.required).toBe(true);
     expect(typeof gate.validator).toBe('function');
   });
 
