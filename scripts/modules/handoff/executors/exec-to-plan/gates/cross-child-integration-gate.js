@@ -204,8 +204,8 @@ export function detectMismatches(contractMaps) {
 export function createCrossChildIntegrationGate(supabase) {
   return {
     name: GATE_NAME,
-    required: false, // Advisory mode
-    weight: 5,
+    required: true,
+    weight: 15,
     async validator(ctx) {
       const { sd } = ctx;
 
@@ -258,22 +258,31 @@ export function createCrossChildIntegrationGate(supabase) {
       const mismatches = detectMismatches(contractMaps);
 
       const totalContracts = contractMaps.reduce((sum, c) => sum + c.tables.length, 0);
-      const warnings = mismatches.map(m => m.details);
-      const hasWarnings = mismatches.filter(m => m.severity === 'warning').length > 0;
+      const criticalMismatches = mismatches.filter(m => m.severity === 'warning');
+      const infoMismatches = mismatches.filter(m => m.severity === 'info');
+      const hasCritical = criticalMismatches.length > 0;
+      const hasInfo = infoMismatches.length > 0;
 
-      // Advisory: always pass, report warnings
-      const score = hasWarnings ? 70 : 100;
+      // Block on warning-severity mismatches (producer/consumer gaps),
+      // pass with warnings for info-severity (minor contract differences)
+      const score = hasCritical ? 40 : hasInfo ? 80 : 100;
+      const passed = !hasCritical;
+
+      const issues = hasCritical
+        ? criticalMismatches.map(m => m.details)
+        : [];
+      const warnings = infoMismatches.map(m => m.details);
 
       const result = {
-        passed: true, // Advisory — never blocks
+        passed,
         score,
         max_score: 100,
-        issues: [],
+        issues,
         warnings,
         details: {
           gate: GATE_NAME,
-          advisory: true,
-          blocking: false,
+          advisory: false,
+          blocking: hasCritical,
           children_analyzed: children.length,
           children_with_manifests: manifestsByChild.size,
           contracts_extracted: totalContracts,
@@ -287,7 +296,7 @@ export function createCrossChildIntegrationGate(supabase) {
           cross_child_integration: {
             contracts_extracted: totalContracts,
             mismatches: mismatches,
-            verdict: hasWarnings ? 'WARN' : 'PASS',
+            verdict: hasCritical ? 'FAIL' : hasInfo ? 'WARN' : 'PASS',
           },
         },
       };

@@ -40,6 +40,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT_DEFAULT = resolve(__dirname, '..', '..');
 
+/**
+ * Resolve the root path for orphan-detector.
+ * orphan-detector expects the PARENT of EHG_Engineer as root so that
+ * sibling repos (ehg/src) resolve correctly.
+ * In a worktree (.worktrees/SD-X/), the runner root points to the
+ * worktree dir — walk up to find the main EHG_Engineer root first.
+ */
+function resolveOrphanDetectorRoot(runnerRoot) {
+  const normalized = runnerRoot.replace(/\\/g, '/');
+  const worktreeIdx = normalized.indexOf('/.worktrees/');
+  if (worktreeIdx !== -1) {
+    const mainRepoRoot = normalized.substring(0, worktreeIdx);
+    return resolve(mainRepoRoot, '..');
+  }
+  return resolve(runnerRoot, '..');
+}
+
 // ---------------------------------------------------------------------------
 // Detector registry — maps check_type → script path (relative to repo root).
 // Scripts must emit JSON on stdout matching the leo_wiring_validations shape.
@@ -250,7 +267,9 @@ async function main() {
   const allRows = [];
   const detectorReport = [];
   for (const { check_type, script } of runOrder) {
-    const extra = script.includes('orphan-detector') ? ['--base', opts.base] : [];
+    const extra = script.includes('orphan-detector')
+      ? ['--base', opts.base, '--root', resolveOrphanDetectorRoot(opts.root)]
+      : [];
     process.stderr.write(`[wiring-runner]   running ${script} (for ${check_type}) ...\n`);
     const result = invokeDetector(opts.root, script, opts.sdKey, extra);
     if (!result.ok) {
