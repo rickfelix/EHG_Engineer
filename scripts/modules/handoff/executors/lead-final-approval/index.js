@@ -637,7 +637,6 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // 2. Find CI failure feedback linked by branch name (e.g. feat/SD-KEY-HERE)
     let linkedByBranch = [];
     if (sdKey) {
-      const branchPattern = `feat/${sdKey}`;
       const { data: branchFeedback, error: branchError } = await this.supabase
         .from('feedback')
         .select('id')
