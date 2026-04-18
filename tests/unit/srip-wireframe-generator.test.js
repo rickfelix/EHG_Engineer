@@ -14,16 +14,13 @@ const specialistJson = { score: 7, rationale: 'Good structure', improvements: ['
 function makeMockLLMClient(responses) {
   let callIdx = 0;
   return {
-    chat: {
-      completions: {
-        create: vi.fn(async () => {
-          const content = typeof responses === 'function'
-            ? responses(callIdx++)
-            : (Array.isArray(responses) ? responses[callIdx++] || responses[responses.length - 1] : responses);
-          return { choices: [{ message: { content: typeof content === 'string' ? content : JSON.stringify(content) } }] };
-        }),
-      },
-    },
+    complete: vi.fn(async () => {
+      const raw = typeof responses === 'function'
+        ? responses(callIdx++)
+        : (Array.isArray(responses) ? responses[callIdx++] || responses[responses.length - 1] : responses);
+      const content = typeof raw === 'string' ? raw : JSON.stringify(raw);
+      return { content, provider: 'mock', model: 'mock', durationMs: 0, usage: {} };
+    }),
   };
 }
 
@@ -166,6 +163,6 @@ describe('SRIP Wireframe Generator', () => {
     });
 
     // 1 generation + 4 specialist scores = 5 calls minimum
-    expect(llm.chat.completions.create).toHaveBeenCalledTimes(5);
+    expect(llm.complete).toHaveBeenCalledTimes(5);
   });
 });
