@@ -69,7 +69,7 @@ async function seed() {
     .from('stage_artifact_requirements')
     .select('artifact_type, is_blocking, required_status')
     .eq('stage_number', 17)
-    .eq('artifact_type', 'stitch_curation')
+    .eq('artifact_type', 's17_archetypes')
     .single();
 
   if (stage15) {
@@ -79,9 +79,9 @@ async function seed() {
   }
 
   if (stage17) {
-    console.log(`  Stage 17: stitch_curation, required_status=${stage17.required_status}, is_blocking=${stage17.is_blocking}`);
+    console.log(`  Stage 17: s17_archetypes, required_status=${stage17.required_status}, is_blocking=${stage17.is_blocking}`);
   } else {
-    console.error('  ❌ Stage 17 stitch_curation requirement NOT found');
+    console.error('  ❌ Stage 17 s17_archetypes requirement NOT found');
   }
 }
 

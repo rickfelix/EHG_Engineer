@@ -115,10 +115,10 @@
     },
     {
       "stage_number": 17,
-      "artifact_type": "stitch_curation",
-      "required_status": "curated",
+      "artifact_type": "s17_archetypes",
+      "required_status": "completed",
       "is_blocking": true,
-      "description": "Stitch curation must be curated before leaving Stage 17 (Design Review)"
+      "description": "S17 archetypes must be completed before leaving Stage 17 (Design Review)"
     },
     {
       "stage_number": 18,
