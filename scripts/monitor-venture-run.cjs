@@ -1,7 +1,9 @@
 /**
- * Venture Pipeline Monitor — LegacyGuard AI push-through run
- * Push S3-S16 via chairman approval + API advance, stop at S17
- * Monitors Stitch integration artifacts and flags pipeline issues
+ * Venture Pipeline Monitor — NichePulse run
+ * Push S3-S16 via chairman approval RPC, stop at S17
+ * Monitors wireframe_screens artifact (Stitch replacement) and flags pipeline issues
+ *
+ * SD-LEO-ORCH-REPLACE-GOOGLE-STITCH-001: Stitch replaced with wireframe_screens artifact path
  */
 'use strict';
 
@@ -9,38 +11,61 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const VENTURE_ID = 'ef9a1d12-9703-4a97-b432-4a3ea8452647';
-const VENTURE_NAME = 'Aeterna Wills';
+const VENTURE_ID = '7397c1f7-35b9-44b1-a795-c0dddd42eb54';
+const VENTURE_NAME = 'API Compliance Shield';
 const STOP_AT_STAGE = 17;
 const POLL_MS = 30000;
 
 // Gate classification (from gate-constants.js)
-const KILL_GATES = new Set([3, 5, 13]);       // can terminate venture
-const PROMOTION_GATES = new Set([10, 17]);     // mode transition
-const ALL_GATES = new Set([3, 5, 10, 13, 17]); // all blocking gates up to S17
+const KILL_GATES = new Set([3, 5, 13, 24]);
+const PROMOTION_GATES = new Set([10, 17, 18, 19, 23, 25]);
+const BLOCKING_GATES = new Set([3, 5, 10, 13, 17, 18, 19, 20, 23, 24, 25]);
 
 const STAGE_NAMES = {
-  1:'Ideation', 2:'Research', 3:'Validation', 4:'Market Analysis', 5:'Business Model',
-  6:'Competitor Analysis', 7:'MVP Definition', 8:'Technical Assessment', 9:'Financial Modeling',
-  10:'Team Formation', 11:'Prototype', 12:'User Testing', 13:'Pivot/Persevere',
-  14:'Go-to-Market', 15:'Launch Prep', 16:'Soft Launch', 17:'Design Refinement (STITCH CURATION)'
+  0:'Stage Zero', 1:'Ideation', 2:'Research', 3:'Validation [KILL]', 4:'Market Analysis',
+  5:'Business Model [KILL]', 6:'Competitor Analysis', 7:'MVP Definition', 8:'Technical Assessment',
+  9:'Financial Modeling', 10:'Brand Identity [PROMO]', 11:'Naming & Visual', 12:'GTM Strategy',
+  13:'Tech Stack [KILL]', 14:'Architecture', 15:'Blueprint & Wireframes',
+  16:'Sprint Planning', 17:'Design Refinement [PROMO]'
 };
 
-const STITCH_ARTIFACT_TYPES = [
-  'stitch_curation', 'stitch_project', 'stitch_provisioned',
-  'convergence_result', 'wireframe_final', 'stitch_export', 'stitch_design_export',
-  'design_token_manifest', 'archetype_selection', 'style_brief',
-  's17_archetypes', 's17_session_state', 's17_approved', 's17_variant_scores',
-  'stage_17_approved_mobile', 'stage_17_approved_desktop'
+// Post-Stitch-replacement: monitor wireframe_screens instead of stitch artifacts
+const DESIGN_ARTIFACT_TYPES = [
+  'wireframe_screens',        // NEW: S15 post-hook writes this (replaces stitch provisioning)
+  'blueprint_wireframes',     // S15 wireframes
+  'design_token_manifest',    // S17 brand tokens
+  's17_archetypes',           // S17 archetype variants
+  's17_session_state',        // S17 session resume
+  's17_approved',             // S17 final selections
+  's17_approved_png',         // NEW: Playwright PNG screenshots
+  's17_variant_scores',       // S17 scoring results
+  // Legacy (should NOT appear for new ventures post-Stitch-replacement)
+  'stitch_curation', 'stitch_project', 'stitch_design_export',
 ];
+
+// Stage artifact expectations (what we expect at each stage)
+const EXPECTED_ARTIFACTS = {
+  1: ['truth_idea_brief'],
+  2: ['truth_ai_critique'],
+  3: ['truth_validation_decision'],
+  4: ['truth_competitive_analysis'],
+  5: ['truth_financial_model'],
+  10: ['identity_persona_brand'],
+  11: ['identity_naming_visual', 'identity_brand_name'],
+  14: ['blueprint_technical_architecture'],
+  15: ['blueprint_wireframes', 'blueprint_user_story_pack'],
+  16: ['blueprint_sprint_plan'],
+};
 
 let lastStage = null;
 let issues = [];
 let pollCount = 0;
-let stageTimings = {};  // stage -> { entered: Date, exited: Date }
-let artifactLog = [];   // cumulative artifact log for post-run analysis
+let stageTimings = {};
+let artifactLog = [];
+let stitchCallDetected = false; // Flag if any stitch artifacts appear (shouldn't for new ventures)
 
 function ts() { return new Date().toISOString().slice(11, 19); }
+function pad(n) { return String(n).padStart(2, ' '); }
 
 async function getVentureState() {
   const { data, error } = await sb.from('ventures')
@@ -55,7 +80,7 @@ async function getVentureState() {
 
 async function getPendingDecision(stage) {
   const { data } = await sb.from('chairman_decisions')
-    .select('id, status, decision, lifecycle_stage')
+    .select('id, status, decision, lifecycle_stage, decision_type')
     .eq('venture_id', VENTURE_ID)
     .eq('lifecycle_stage', stage)
     .eq('status', 'pending')
@@ -82,11 +107,11 @@ async function getAllArtifacts() {
   return data || [];
 }
 
-async function checkStitchArtifacts() {
+async function checkDesignArtifacts() {
   const { data } = await sb.from('venture_artifacts')
     .select('lifecycle_stage, artifact_type, title, created_at, metadata')
     .eq('venture_id', VENTURE_ID)
-    .in('artifact_type', STITCH_ARTIFACT_TYPES)
+    .in('artifact_type', DESIGN_ARTIFACT_TYPES)
     .order('created_at', { ascending: false })
     .limit(20);
   return data || [];
@@ -102,15 +127,14 @@ async function getStageTransitions() {
 }
 
 async function approveDecision(decisionId, stage) {
-  // Defense-in-depth: never approve at or past STOP_AT_STAGE
   if (stage >= STOP_AT_STAGE) {
     console.log(`[${ts()}]    BLOCKED: Refusing to approve S${stage} — at or past STOP_AT_STAGE (${STOP_AT_STAGE})`);
     return { data: null, error: { message: `Stage ${stage} >= STOP_AT_STAGE ${STOP_AT_STAGE}` } };
   }
-  const gateType = KILL_GATES.has(stage) ? 'kill_gate' : PROMOTION_GATES.has(stage) ? 'promotion_gate' : 'standard';
+  const gateType = KILL_GATES.has(stage) ? 'KILL' : PROMOTION_GATES.has(stage) ? 'PROMO' : 'STD';
   const { data, error } = await sb.rpc('approve_chairman_decision', {
     p_decision_id: decisionId,
-    p_rationale: `Monitor auto-push: advancing ${VENTURE_NAME} S${stage} ${gateType} gate`,
+    p_rationale: `Monitor auto-push: advancing ${VENTURE_NAME} S${stage} [${gateType}]`,
     p_decided_by: 'venture_monitor'
   });
   return { data, error };
@@ -132,7 +156,7 @@ async function poll() {
     if (lastStage !== null && stageTimings[lastStage]) {
       stageTimings[lastStage].exited = new Date();
       const dur = ((stageTimings[lastStage].exited - stageTimings[lastStage].entered) / 1000).toFixed(0);
-      console.log(`[${ts()}]    [TIMING] S${lastStage} completed in ${dur}s`);
+      console.log(`[${ts()}]    [TIMING] S${pad(lastStage)} completed in ${dur}s`);
     }
     stageTimings[stage] = { entered: new Date(), exited: null };
   }
@@ -141,23 +165,32 @@ async function poll() {
   const gateLabel = KILL_GATES.has(stage) ? ' [KILL GATE]' : PROMOTION_GATES.has(stage) ? ' [PROMO GATE]' : '';
 
   const prefix = stageChanged ? '>> STAGE CHANGE ->' : `   Poll #${pollCount}     `;
-  console.log(`[${ts()}] ${prefix} S${stage} (${stageName})${gateLabel} | orch=${state.orchestrator_state} | wf=${state.workflow_status}`);
+  console.log(`[${ts()}] ${prefix} S${pad(stage)} (${stageName})${gateLabel} | orch=${state.orchestrator_state} | wf=${state.workflow_status}`);
 
   // STOP at S17
   if (stage >= STOP_AT_STAGE) {
-    console.log(`\n[${ts()}] REACHED S${STOP_AT_STAGE} — STOPPING AUTO-PUSH. Design refinement begins naturally.`);
+    console.log(`\n[${ts()}] ${'='.repeat(60)}`);
+    console.log(`[${ts()}] REACHED S${STOP_AT_STAGE} — STOPPING AUTO-PUSH`);
+    console.log(`[${ts()}] Design refinement begins naturally (archetype generation via wireframe_screens)`);
+    console.log(`[${ts()}] ${'='.repeat(60)}`);
 
-    // Stitch artifact summary
-    const stitchArts = await checkStitchArtifacts();
-    if (stitchArts.length > 0) {
-      console.log(`[${ts()}] STITCH ARTIFACTS (${stitchArts.length}):`);
-      stitchArts.forEach(a => {
-        const meta = a.metadata ? ` | keys: ${Object.keys(a.metadata).join(',')}` : '';
-        console.log(`   S${a.lifecycle_stage} | ${a.artifact_type} | ${a.title}${meta}`);
-      });
+    // Design artifact summary (post-Stitch-replacement monitoring)
+    const designArts = await checkDesignArtifacts();
+    const legacyStitch = designArts.filter(a => ['stitch_curation', 'stitch_project', 'stitch_design_export'].includes(a.artifact_type));
+    const newPath = designArts.filter(a => ['wireframe_screens', 's17_archetypes', 's17_approved_png'].includes(a.artifact_type));
+
+    console.log(`\n[${ts()}] STITCH REPLACEMENT CHECK:`);
+    if (legacyStitch.length > 0) {
+      console.log(`   WARNING: ${legacyStitch.length} legacy Stitch artifact(s) found — Stitch should be disabled!`);
+      legacyStitch.forEach(a => console.log(`   LEGACY: S${a.lifecycle_stage} | ${a.artifact_type} | ${a.title}`));
+      issues.push({ stage, type: 'stitch_not_disabled', msg: `${legacyStitch.length} legacy stitch artifacts found`, ts: ts() });
+      stitchCallDetected = true;
     } else {
-      console.log(`[${ts()}] WARNING: No stitch artifacts yet — worker may still be provisioning`);
-      issues.push({ stage, type: 'no_stitch_artifacts', msg: 'No stitch artifacts at S17 entry', ts: ts() });
+      console.log(`   OK: No legacy Stitch artifacts — Stitch replacement working correctly`);
+    }
+    if (newPath.length > 0) {
+      console.log(`   NEW PATH: ${newPath.length} wireframe/archetype artifact(s):`);
+      newPath.forEach(a => console.log(`   S${a.lifecycle_stage} | ${a.artifact_type} | ${a.title}`));
     }
 
     // Full artifact summary
@@ -165,28 +198,37 @@ async function poll() {
     const all = await getAllArtifacts();
     const byStage = {};
     all.forEach(a => { (byStage[a.lifecycle_stage] = byStage[a.lifecycle_stage] || []).push(a.artifact_type); });
-    Object.keys(byStage).sort((a,b)=>+a-+b).forEach(s => {
-      console.log(`   S${s}: ${byStage[s].join(', ')}`);
+    Object.keys(byStage).sort((a,b) => +a - +b).forEach(s => {
+      console.log(`   S${pad(s)}: ${byStage[s].join(', ')}`);
     });
 
     // Stage timing summary
     console.log(`\n[${ts()}] STAGE TIMING SUMMARY:`);
-    Object.keys(stageTimings).sort((a,b)=>+a-+b).forEach(s => {
+    let totalSec = 0;
+    Object.keys(stageTimings).sort((a,b) => +a - +b).forEach(s => {
       const t = stageTimings[s];
       if (t.entered) {
         const dur = ((t.exited || new Date()) - t.entered) / 1000;
+        totalSec += dur;
         const durStr = dur > 60 ? `${(dur/60).toFixed(1)}m` : `${dur.toFixed(0)}s`;
-        console.log(`   S${s}: ${durStr}`);
+        console.log(`   S${pad(s)}: ${durStr}`);
       }
     });
+    console.log(`   TOTAL: ${(totalSec/60).toFixed(1)}m`);
 
     // Transition log
     const transitions = await getStageTransitions();
     if (transitions.length > 0) {
       console.log(`\n[${ts()}] TRANSITION LOG:`);
       transitions.reverse().forEach(t => {
-        console.log(`   S${t.from_stage} -> S${t.to_stage} | ${t.transition_type || 'normal'} | ${t.created_at}`);
+        console.log(`   S${pad(t.from_stage)} -> S${pad(t.to_stage)} | ${t.transition_type || 'normal'} | ${t.created_at}`);
       });
+    }
+
+    // Issues summary
+    if (issues.length > 0) {
+      console.log(`\n[${ts()}] ISSUES DETECTED (${issues.length}):`);
+      issues.forEach(i => console.log(`   [S${i.stage}] ${i.type}: ${i.msg} (${i.ts})`));
     }
 
     return false;
@@ -196,24 +238,41 @@ async function poll() {
   if (stageChanged) {
     const arts = await getArtifacts(stage);
     if (arts.length > 0) {
-      console.log(`[${ts()}]    ARTIFACTS S${stage}: ${arts.map(a => a.artifact_type).join(', ')}`);
+      console.log(`[${ts()}]    ARTIFACTS S${pad(stage)}: ${arts.map(a => a.artifact_type).join(', ')}`);
       artifactLog.push(...arts.map(a => ({ stage, type: a.artifact_type, title: a.title, at: a.created_at })));
     }
 
-    // Stitch tracking from S11+ (design tokens start here)
-    if (stage >= 11) {
-      const stitchArts = await checkStitchArtifacts();
-      if (stitchArts.length > 0) {
-        console.log(`[${ts()}]    STITCH: ${stitchArts.map(a => `S${a.lifecycle_stage}:${a.artifact_type}`).join(', ')}`);
-      } else if (stage >= 15) {
-        // S15 should have stitch provisioning
-        console.log(`[${ts()}]    STITCH WARNING: No stitch artifacts by S${stage} — expected provisioning at S15`);
-        issues.push({ stage, type: 'stitch_missing', msg: `No stitch artifacts by S${stage}`, ts: ts() });
-      }
+    // Validate expected artifacts for previous stage
+    if (lastStage !== null) {
+      const prevArts = await getArtifacts(stage - 1);
+      validateStageArtifacts(stage - 1, prevArts);
     }
 
-    // Validate expected artifacts per stage
-    validateStageArtifacts(stage, arts);
+    // Post-Stitch monitoring: track wireframe_screens at S15+
+    if (stage >= 15) {
+      const designArts = await checkDesignArtifacts();
+      if (designArts.length > 0) {
+        console.log(`[${ts()}]    DESIGN: ${designArts.map(a => `S${a.lifecycle_stage}:${a.artifact_type}`).join(', ')}`);
+      }
+
+      // Check for wireframe_screens specifically at S15+
+      const wfScreens = designArts.filter(a => a.artifact_type === 'wireframe_screens');
+      if (wfScreens.length > 0) {
+        const screenCount = wfScreens[0].metadata?.screenCount ?? 'unknown';
+        console.log(`[${ts()}]    WIREFRAME_SCREENS: ${screenCount} screens stored (Stitch replacement working)`);
+      } else if (stage >= 16) {
+        console.log(`[${ts()}]    WARNING: No wireframe_screens artifact at S${stage} — S15 hook may have failed`);
+        issues.push({ stage, type: 'wireframe_screens_missing', msg: `No wireframe_screens by S${stage}`, ts: ts() });
+      }
+
+      // Alert if legacy stitch artifacts appear
+      const legacy = designArts.filter(a => ['stitch_curation', 'stitch_project', 'stitch_design_export'].includes(a.artifact_type));
+      if (legacy.length > 0) {
+        console.log(`[${ts()}]    ALERT: Legacy Stitch artifacts detected — Stitch should be disabled!`);
+        issues.push({ stage, type: 'stitch_not_disabled', msg: `Legacy stitch artifact: ${legacy[0].artifact_type}`, ts: ts() });
+        stitchCallDetected = true;
+      }
+    }
   }
 
   // Handle blocked / pending orchestrator
@@ -222,18 +281,38 @@ async function poll() {
   if (isBlocked) {
     const pending = await getPendingDecision(stage);
     if (pending) {
-      const gateDesc = ALL_GATES.has(stage) ? `gate S${stage}` : `S${stage}`;
-      console.log(`[${ts()}]    APPROVING ${gateDesc} decision ${pending.id.slice(0,8)}...`);
+      const typeLabel = pending.decision_type || 'unknown';
+      console.log(`[${ts()}]    APPROVING S${pad(stage)} (${typeLabel}) decision ${pending.id.slice(0,8)}...`);
       const { data, error } = await approveDecision(pending.id, stage);
       if (error) {
         const msg = `S${stage} approval failed: ${error.message}`;
         console.log(`[${ts()}]    FAILED: ${msg}`);
         issues.push({ stage, type: 'approval_failed', msg, ts: ts() });
       } else {
-        console.log(`[${ts()}]    APPROVED S${stage} — worker will advance`);
+        console.log(`[${ts()}]    APPROVED S${pad(stage)} — worker will advance`);
       }
     } else {
-      console.log(`[${ts()}]    WAITING: S${stage} blocked — worker processing (LLM in-flight)...`);
+      // Check if there are older pending decisions (from re-entry attempts)
+      const { data: allPending } = await sb.from('chairman_decisions')
+        .select('id, lifecycle_stage, status, decision_type, attempt_number')
+        .eq('venture_id', VENTURE_ID)
+        .eq('status', 'pending')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      if (allPending && allPending.length > 0) {
+        const nearest = allPending[0];
+        console.log(`[${ts()}]    FOUND pending decision at S${nearest.lifecycle_stage} (attempt ${nearest.attempt_number || 1}) — approving...`);
+        const { error } = await approveDecision(nearest.id, nearest.lifecycle_stage);
+        if (error) {
+          console.log(`[${ts()}]    FAILED: ${error.message}`);
+        } else {
+          console.log(`[${ts()}]    APPROVED S${nearest.lifecycle_stage} (cross-stage) — worker should unblock`);
+        }
+      } else {
+        console.log(`[${ts()}]    WAITING: S${pad(stage)} blocked — worker processing (LLM in-flight)...`);
+      }
     }
   }
 
@@ -242,28 +321,24 @@ async function poll() {
 
 function validateStageArtifacts(stage, arts) {
   const types = new Set(arts.map(a => a.artifact_type));
+  const expected = EXPECTED_ARTIFACTS[stage];
+  if (!expected) return;
 
-  // Stage-specific artifact expectations (use actual artifact_type values from ARTIFACT_TYPES registry)
-  if (stage === 11 && !types.has('identity_naming_visual') && !types.has('identity_brand_name') && !types.has('design_token_manifest')) {
-    issues.push({ stage, type: 'missing_artifact', msg: 'S11 missing identity_naming_visual or design_token_manifest', ts: ts() });
-    console.log(`[${ts()}]    ISSUE: S11 expected identity_naming_visual/design_token_manifest artifact`);
-  }
-  if (stage === 15 && !types.has('blueprint_wireframes') && !types.has('blueprint_user_story_pack')) {
-    issues.push({ stage, type: 'missing_artifact', msg: 'S15 missing blueprint_wireframes artifact', ts: ts() });
-    console.log(`[${ts()}]    ISSUE: S15 expected blueprint_wireframes artifact`);
-  }
-  if (stage === 16 && !types.has('stitch_curation') && !types.has('stitch_project')) {
-    issues.push({ stage, type: 'missing_artifact', msg: 'S16 missing stitch_curation/stitch_project', ts: ts() });
-    console.log(`[${ts()}]    ISSUE: S16 expected stitch_curation or stitch_project artifact`);
+  const missing = expected.filter(e => !types.has(e));
+  if (missing.length > 0) {
+    const msg = `S${stage} missing expected: ${missing.join(', ')}`;
+    issues.push({ stage, type: 'missing_artifact', msg, ts: ts() });
+    console.log(`[${ts()}]    ISSUE: ${msg}`);
   }
 }
 
 async function main() {
   console.log(`\n${'='.repeat(70)}`);
   console.log(` VENTURE MONITOR — ${VENTURE_NAME} (${VENTURE_ID.slice(0,8)})`);
-  console.log(` Poll every ${POLL_MS/1000}s | Auto-push S3-S16 | STOP at S17`);
+  console.log(` Poll every ${POLL_MS/1000}s | Auto-push S3-S16 | STOP at S${STOP_AT_STAGE}`);
   console.log(` Kill gates: S3, S5, S13 | Promotion gates: S10, S17`);
-  console.log(` Stitch watch: S11+ tokens, S15+ wireframes, S17 curation`);
+  console.log(` Stitch replacement: watching wireframe_screens (S15), s17_archetypes (S17)`);
+  console.log(` Legacy Stitch artifacts should NOT appear for new ventures`);
   console.log(`${'='.repeat(70)}\n`);
 
   const cont = await poll();
@@ -280,9 +355,12 @@ async function main() {
         console.log(`\n[MONITOR] Monitoring complete.`);
         if (issues.length > 0) {
           console.log(`\nISSUES DETECTED (${issues.length}):`);
-          console.log(JSON.stringify(issues, null, 2));
+          issues.forEach(i => console.log(`  [S${i.stage}] ${i.type}: ${i.msg}`));
         } else {
           console.log('No issues detected. Pipeline ran cleanly to S17.');
+        }
+        if (stitchCallDetected) {
+          console.log('\nSTITCH REPLACEMENT FAILURE: Legacy Stitch artifacts were created. RCA needed.');
         }
         process.exit(0);
       }
