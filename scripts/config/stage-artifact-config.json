@@ -94,10 +94,10 @@
     },
     {
       "stage_number": 14,
-      "artifact_type": "blueprint_data_model",
+      "artifact_type": "blueprint_technical_architecture",
       "required_status": "completed",
       "is_blocking": true,
-      "description": "Data model required before leaving Stage 14 (Data Model)"
+      "description": "Technical architecture required before leaving Stage 14 (Technical Architecture & Risk Register)"
     },
     {
       "stage_number": 15,
