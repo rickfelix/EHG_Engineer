@@ -178,6 +178,19 @@ function Start-App {
         }
     }
 
+    # Auto-pull latest from remote before starting (SD-MAN-REFAC-S17-SIMPLIFY-FRONTEND-001)
+    Push-Location $AppDir
+    $gitPull = & git pull origin main 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $changes = ($gitPull | Select-String "files changed|Already up to date" | Out-String).Trim()
+        if ($changes -and -not ($changes -match "Already up to date")) {
+            Write-Log "INFO" "[UI] Pulled latest: $changes" "Cyan"
+        }
+    } else {
+        Write-Log "WARN" "[UI] git pull failed (non-blocking): $gitPull" "Yellow"
+    }
+    Pop-Location
+
     # Auto-install if node_modules missing (fleet ops can clobber them)
     $viteBin = Join-Path $AppDir "node_modules\.bin\vite.cmd"
     if (-not (Test-Path $viteBin)) {
