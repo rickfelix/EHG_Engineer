@@ -283,6 +283,12 @@ async function startServer() {
       console.log('✨ SD-2025-001 (OpenAI Realtime Voice) is loaded and ready!');
     }
 
+    // Validate artifact type constraints (prevent dual-constraint bug)
+    import('../lib/eva/artifact-type-constraint-validator.js').then(({ validateArtifactTypeConstraints }) => {
+      const startupSupabase = dbLoader.getClient?.() || require('../lib/supabase-client.js').createSupabaseServiceClient?.();
+      if (startupSupabase) validateArtifactTypeConstraints(startupSupabase).catch(() => {});
+    }).catch(() => {});
+
     // S17 archetype generation auto-resume on startup
     // SD-S17-ARCHETYPE-GENERATION-RESILIENCE-ORCH-001-A
     resumeIncompleteArchetypeJobs().catch(err =>
