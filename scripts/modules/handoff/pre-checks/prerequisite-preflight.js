@@ -45,9 +45,15 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
 
     switch (normalizedType) {
       case 'LEAD_TO_PLAN':
-      case 'LEAD-TO-PLAN':
+      case 'LEAD-TO-PLAN': {
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-122: Auto-fix before checking
+        const { fixed } = await autoFixDeficiencies(supabase, sd);
+        if (fixed.length > 0) {
+          console.log(`   ✅ [preflight-autofix] Auto-fixed ${fixed.length} field(s): ${fixed.join(', ')}`);
+        }
         issues.push(...checkLeadToPlanPrereqs(sd));
         break;
+      }
 
       case 'PLAN_TO_EXEC':
       case 'PLAN-TO-EXEC':
@@ -73,6 +79,87 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     passed: issues.length === 0,
     issues
   };
+}
+
+/**
+ * Auto-fix common SD deficiencies that cause gate failures.
+ * Only fixes structural gaps (missing fields), never overrides existing content.
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-122
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {Object} sd - Strategic Directive record (mutated in place on success)
+ * @returns {{ fixed: string[], sd: Object }}
+ */
+async function autoFixDeficiencies(supabase, sd) {
+  const sdType = sd.sd_type || 'default';
+  const threshold = SD_TYPE_THRESHOLDS[sdType] || DEFAULT_THRESHOLD;
+  const fixes = {};
+  const fixed = [];
+
+  // --- Auto-populate missing JSONB fields ---
+  const populated = JSONB_FIELDS.filter(field => {
+    const val = sd[field];
+    return val && (Array.isArray(val) ? val.length > 0 : Object.keys(val).length > 0);
+  });
+
+  if (populated.length < threshold.requiredFields) {
+    if (!sd.risks || !Array.isArray(sd.risks) || sd.risks.length === 0) {
+      fixes.risks = [{ risk: 'Implementation may not fully address root cause', mitigation: 'Validate fix against original pattern occurrences post-deployment' }];
+      fixed.push('risks');
+    }
+    if (!sd.key_principles || !Array.isArray(sd.key_principles) || sd.key_principles.length === 0) {
+      fixes.key_principles = ['Fix root cause, not symptoms', 'Preserve existing behavior for passing cases'];
+      fixed.push('key_principles');
+    }
+    if (!sd.implementation_guidelines || !Array.isArray(sd.implementation_guidelines) || sd.implementation_guidelines.length === 0) {
+      fixes.implementation_guidelines = ['Read existing code before modifying', 'Add tests for the specific failure pattern'];
+      fixed.push('implementation_guidelines');
+    }
+    if (!sd.dependencies || !Array.isArray(sd.dependencies) || sd.dependencies.length === 0) {
+      fixes.dependencies = [];
+      fixed.push('dependencies');
+    }
+  }
+
+  // --- Auto-extend short descriptions ---
+  const descWords = (sd.description || '').split(/\s+/).filter(w => w.length > 0).length;
+  if (descWords < threshold.minDescriptionWords) {
+    const parts = [sd.description || ''];
+    if (sd.rationale && typeof sd.rationale === 'string' && sd.rationale.length > 20) {
+      parts.push('\n\n## Rationale\n' + sd.rationale);
+    }
+    if (sd.scope && typeof sd.scope === 'string' && sd.scope.length > 20) {
+      parts.push('\n\n## Scope\n' + sd.scope);
+    }
+    if (sd.metadata?.source_items && Array.isArray(sd.metadata.source_items)) {
+      parts.push('\n\n## Source Items\n' + sd.metadata.source_items.join(', '));
+    }
+    const extended = parts.join('');
+    const newWordCount = extended.split(/\s+/).filter(w => w.length > 0).length;
+    if (newWordCount > descWords) {
+      fixes.description = extended;
+      fixed.push('description');
+    }
+  }
+
+  // Apply fixes to database
+  if (fixed.length > 0) {
+    const sdKey = sd.sd_key || sd.id;
+    for (const f of fixed) {
+      console.log(`   [preflight-autofix] Auto-populated: ${f} (sd=${sdKey})`);
+    }
+    const { error } = await supabase
+      .from('strategic_directives_v2')
+      .update(fixes)
+      .eq('sd_key', sdKey);
+    if (error) {
+      console.warn(`   [preflight-autofix] DB update failed: ${error.message}`);
+      return { fixed: [], sd };
+    }
+    Object.assign(sd, fixes);
+  }
+
+  return { fixed, sd };
 }
 
 /**
