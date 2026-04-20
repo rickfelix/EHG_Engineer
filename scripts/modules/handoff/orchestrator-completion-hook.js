@@ -792,6 +792,11 @@ export async function executeOrchestratorCompletionHook(
 
   // SD-FLEETAWARE-SESSION-IDENTITY-HARDENING-ORCH-001-B: Active child claim guard
   // Before completing, verify no children have active claims from other sessions.
+  // SD-LEO-INFRA-ORCHESTRATOR-GATE-FIXES-ORCH-001-A: Exclude the caller session
+  // (the session that just completed the last child) from the active claim check.
+  // Without this, the just-completed child's claim always appears "active" because
+  // claiming_session_id isn't cleared until after LEAD-FINAL-APPROVAL returns.
+  const callerSessionId = options.callerSessionId || null;
   try {
     const { data: claimedChildren } = await supabase
       .from('strategic_directives_v2')
@@ -801,8 +806,12 @@ export async function executeOrchestratorCompletionHook(
 
     if (claimedChildren && claimedChildren.length > 0) {
       // Check if any claims are from active sessions (heartbeat < 5min)
+      // Exclude the caller session — it's the one triggering this completion
       const activeClaimChildren = [];
       for (const child of claimedChildren) {
+        if (callerSessionId && child.claiming_session_id === callerSessionId) {
+          continue; // Skip — this is the session completing the last child
+        }
         const { data: claimer } = await supabase
           .from('v_active_sessions')
           .select('heartbeat_age_seconds')

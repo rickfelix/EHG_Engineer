@@ -69,11 +69,13 @@ export async function checkAndCompleteParentSD(sd, supabase, { shippingResults }
 
             // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
             // SD-LEO-ENH-AUTO-PROCEED-001-05: Returns chaining info if enabled
+            // SD-LEO-INFRA-ORCHESTRATOR-GATE-FIXES-ORCH-001-A: pass callerSessionId
+            // so the hook excludes the current session from active claim checks
             const hookResult = await executeOrchestratorCompletionHook(
               parentSD.id,
               parentSD.title,
               siblings.length,
-              { supabase, shippingResults }
+              { supabase, shippingResults, callerSessionId: sd.claiming_session_id }
             );
 
             return {
@@ -96,11 +98,12 @@ export async function checkAndCompleteParentSD(sd, supabase, { shippingResults }
 
             // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
             // SD-LEO-ENH-AUTO-PROCEED-001-05: Returns chaining info if enabled
+            // SD-LEO-INFRA-ORCHESTRATOR-GATE-FIXES-ORCH-001-A: pass callerSessionId
             const hookResult = await executeOrchestratorCompletionHook(
               parentSD.id,
               parentSD.title,
               siblings.length,
-              { supabase, shippingResults }
+              { supabase, shippingResults, callerSessionId: sd.claiming_session_id }
             );
 
             return {
