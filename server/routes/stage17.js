@@ -169,7 +169,7 @@ router.post('/:ventureId/refine', asyncHandler(async (req, res) => {
   const supabase = req.app.locals.supabase || req.supabase;
   try {
     const result = await submitPass2Selection(ventureId, screenId, platform, artifactId, supabase);
-    return res.status(200).json({ approvedArtifactId: result });
+    return res.status(200).json({ approvedArtifactId: result.approvedArtifactId, replaced: result.replaced });
   } catch (err) {
     if (err instanceof SelectionError) {
       return res.status(400).json({ error: err.message, code: 'SELECTION_ERROR' });
