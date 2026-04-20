@@ -232,7 +232,9 @@ export async function validateVisionScore(sd, supabase) {
   // strategic vision produces false-negatives (e.g., a "40→25 migration"
   // refactor scores 57/100 because it only touches 2-3 dimensions).
   // The parent orchestrator already passed vision alignment at creation.
-  if (sd.metadata?.parent_orchestrator || sd.metadata?.auto_generated) {
+  // SD-LEO-INFRA-ORCHESTRATOR-GATE-FIXES-ORCH-001-C: also check parent_sd_id
+  // (leo-create-sd.js sets parent_sd_key in metadata, not parent_orchestrator)
+  if (sd.metadata?.parent_orchestrator || sd.metadata?.auto_generated || sd.parent_sd_id) {
     console.log('\n🔍 GATE: Vision Alignment Score (Hard Enforcement)');
     console.log(`   SD Type: ${sdType} | Required: ${baseThreshold}/100`);
     console.log('-'.repeat(50));
