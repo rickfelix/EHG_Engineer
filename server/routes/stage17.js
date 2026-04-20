@@ -12,7 +12,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid } from '../middleware/validate.js';
-import { generateArchetypes, ArchetypeGenerationError } from '../../lib/eva/stage-17/archetype-generator.js';
+import { generateArchetypes } from '../../lib/eva/stage-17/archetype-generator.js';
 import { submitPass1Selection, submitPass2Selection, isDesignPassComplete, SelectionError } from '../../lib/eva/stage-17/selection-flow.js';
 import { runQARubric, uploadToGitHub, UploadError } from '../../lib/eva/stage-17/qa-rubric.js';
 
