@@ -57,7 +57,6 @@ import evaExitRoutes from './routes/eva-exit.js';
 import evaChatRoutes from './routes/eva-chat.js';
 import evaEconomicLensRoutes from './routes/eva-economic-lens.js';
 import stage17Routes from './routes/stage17.js';
-import stitchRoutes from './routes/stitch.js'; // Legacy alias — remove after frontend migration
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
 import { resumeIncompleteArchetypeJobs } from '../lib/eva/stage-17/auto-resume.js';
 
@@ -162,10 +161,8 @@ app.use('/api/eva/pipeline', requireAuth, evaPipelineRoutes);
 app.use('/api/eva/exit', requireAuth, evaExitRoutes);
 app.use('/api/eva/chat', requireAuth, evaChatRoutes);
 app.use('/api/eva/economic-lens', requireAuth, evaEconomicLensRoutes);
-// Stage 17 Design Refinement — canonical path
+// Stage 17 Design Refinement
 app.use('/api/stage17', requireAuth, stage17Routes);
-// Legacy /api/stitch alias — kept for frontend backward compat until migrated
-app.use('/api/stitch', requireAuth, stitchRoutes);
 // Dashboard routes: read-only, optional auth
 app.use('/api', optionalAuth, dashboardRoutes);
 

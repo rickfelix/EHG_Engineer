@@ -1,8 +1,7 @@
 /**
  * Stage 17 Design Refinement API Routes
  *
- * Canonical path: /api/stage17
- * Legacy alias: /api/stitch (kept for frontend backward compatibility)
+ * Path: /api/stage17
  *
  * SD-LEO-ORCH-REPLACE-GOOGLE-STITCH-001-B: Stitch-specific routes removed.
  * Retained: S17 archetype generation, selection, approval, QA, and upload endpoints.
