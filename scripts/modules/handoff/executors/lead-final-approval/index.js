@@ -25,6 +25,9 @@ import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.j
 // Worktree cleanup (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
 import { cleanupWorktree, validateSdKey } from '../../../../../lib/worktree-manager.js';
 
+// Workflow definitions for prerequisite chain diagnosis (SD-LEARN-FIX-ADDRESS-PAT-RETRO-002)
+import { getWorkflowForType } from '../../cli/workflow-definitions.js';
+
 /**
  * Auto-rescore the original SD after a corrective SD completes.
  * SD-MAN-INFRA-VISION-RESCORE-ON-COMPLETION-001
@@ -220,10 +223,37 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         console.log('   ℹ️  SD is already completed - will verify and confirm');
         options._alreadyCompleted = true;
       } else {
+        // Diagnose which prerequisite handoffs are missing (SD-LEARN-FIX-ADDRESS-PAT-RETRO-002)
+        const workflow = getWorkflowForType(sd.sd_type || 'feature');
+        const requiredHandoffs = workflow.required.filter(h => h !== 'LEAD-FINAL-APPROVAL');
+        let missingHandoffs = [...requiredHandoffs];
+        let nextCommand = `node scripts/handoff.js execute LEAD-TO-PLAN ${sdId}`;
+
+        try {
+          const { data: completedHandoffs } = await this.supabase
+            .from('sd_phase_handoffs')
+            .select('handoff_type')
+            .eq('sd_id', sd.id)
+            .eq('status', 'accepted');
+
+          const completedTypes = new Set((completedHandoffs || []).map(h => h.handoff_type));
+          missingHandoffs = requiredHandoffs.filter(h => !completedTypes.has(h));
+
+          if (missingHandoffs.length > 0) {
+            nextCommand = `node scripts/handoff.js execute ${missingHandoffs[0]} ${sdId}`;
+          }
+        } catch (err) {
+          // Non-fatal: fall back to generic message if query fails
+        }
+
+        const missingList = missingHandoffs.length > 0
+          ? `\n   Missing handoffs: ${missingHandoffs.join(' → ')}\n   Next command: ${nextCommand}`
+          : '';
+
         return ResultBuilder.rejected(
           'INVALID_STATUS',
-          `SD status must be 'pending_approval' for final approval (current: '${sd.status}'). Run PLAN-TO-LEAD handoff first.`,
-          { currentStatus: sd.status, requiredStatus: 'pending_approval' }
+          `SD status must be 'pending_approval' for final approval (current: '${sd.status}').${missingList}`,
+          { currentStatus: sd.status, requiredStatus: 'pending_approval', missingHandoffs, nextCommand }
         );
       }
     }
