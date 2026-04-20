@@ -15,6 +15,8 @@ import { isValidUuid } from '../middleware/validate.js';
 import { generateArchetypes } from '../../lib/eva/stage-17/archetype-generator.js';
 import { submitPass1Selection, submitPass2Selection, isDesignPassComplete, SelectionError } from '../../lib/eva/stage-17/selection-flow.js';
 import { runQARubric, uploadToGitHub, UploadError } from '../../lib/eva/stage-17/qa-rubric.js';
+import { recommendStrategies } from '../../lib/eva/stage-17/strategy-recommender.js';
+import { createOrReusePendingDecision } from '../../lib/eva/chairman-decision-watcher.js';
 
 const router = Router();
 
@@ -34,6 +36,27 @@ function sanitizeErrorMessage(message) {
 }
 
 // ── Stage 17 Design Refinement Endpoints ────────────────────────────────────
+
+/**
+ * POST /api/stage17/:ventureId/strategy-recommendation
+ * Returns ranked design strategies based on upstream venture data.
+ * SD-S17-STRATEGYFIRST-DESIGN-DIRECTION-ORCH-001-A
+ */
+router.post('/:ventureId/strategy-recommendation', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+
+  const supabase = req.app.locals.supabase || req.supabase;
+  const result = await recommendStrategies(ventureId, supabase);
+
+  return res.status(200).json({
+    status: 'success',
+    data: result,
+  });
+}));
 
 /** Per-venture rate limiter for archetype generation (1 call per 10s per venture). */
 const archetypeRateLimiter = new Map();
@@ -82,7 +105,11 @@ router.post('/:ventureId/archetypes', asyncHandler(async (req, res) => {
 
   res.status(202).json({ status: 'generating', message: 'Archetype generation started. Monitor progress via artifact count.' });
 
-  generateArchetypes(ventureId, supabase, { signal: ac.signal })
+  // SD-S17-STRATEGYFIRST: pass preview and strategy query params
+  const previewMode = req.query.preview === 'true';
+  const strategyFilter = req.query.strategy || undefined;
+
+  generateArchetypes(ventureId, supabase, { signal: ac.signal, preview: previewMode, strategy: strategyFilter })
     .then(result => {
       const label = result.cancelled ? 'cancelled' : 'complete';
       console.log(`[stage17-route] stage17/archetypes ${label}: ${result.artifactIds?.length ?? 0} archetypes for ${ventureId.slice(0, 8)}`);
@@ -180,7 +207,10 @@ router.post('/:ventureId/refine', asyncHandler(async (req, res) => {
 }));
 
 /**
- * POST /api/stage17/:ventureId/approve — Check completion
+ * POST /api/stage17/:ventureId/approve — Check completion and auto-approve chairman gate
+ *
+ * When all screens have approved artifacts, creates/updates the chairman
+ * decision for stage 17 to 'approved' so the worker can advance to stage 18.
  */
 router.post('/:ventureId/approve', asyncHandler(async (req, res) => {
   const { ventureId } = req.params;
@@ -190,8 +220,28 @@ router.post('/:ventureId/approve', asyncHandler(async (req, res) => {
 
   const supabase = req.app.locals.supabase || req.supabase;
   try {
-    const result = await isDesignPassComplete(ventureId, supabase);
-    return res.status(200).json(result);
+    const complete = await isDesignPassComplete(ventureId, supabase);
+    if (!complete) {
+      return res.status(200).json({ complete: false });
+    }
+
+    // All screens approved — auto-approve the chairman gate so the worker advances
+    const { id: decisionId } = await createOrReusePendingDecision({
+      ventureId,
+      stageNumber: 17,
+      briefData: { stage: 17, gate_recommendation: 'PASS', source: 'design_selection_complete' },
+      summary: 'All design screens approved — auto-advancing',
+      supabase,
+    });
+
+    if (decisionId) {
+      await supabase
+        .from('chairman_decisions')
+        .update({ status: 'approved', decision: 'approve', resolved_at: new Date().toISOString() })
+        .eq('id', decisionId);
+    }
+
+    return res.status(200).json({ complete: true, decisionId });
   } catch (err) {
     console.error('[stage17-route] stage17/approve failed:', err);
     return res.status(500).json({ error: sanitizeErrorMessage(err?.message), code: 'APPROVE_ERROR' });
