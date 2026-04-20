@@ -76,7 +76,10 @@ export async function createSDFromLearning(items, type, options = {}) {
     status: 'draft',
     priority: type === 'quick-fix' ? 'medium' : 'high',
     category: type === 'quick-fix' ? 'bug_fix' : 'infrastructure',
-    sd_type: type === 'quick-fix' ? 'feature' : 'infrastructure',
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-123: Quick-fix corrective SDs are 'bugfix' not 'feature'.
+    // 'feature' requires 100-word descriptions (too strict for auto-generated content);
+    // 'bugfix' requires 50 words (achievable) and semantically matches corrective patterns.
+    sd_type: type === 'quick-fix' ? 'bugfix' : 'infrastructure',
     current_phase: 'LEAD',
     target_application: 'EHG_Engineer',
     created_by: 'LEARN-Agent',
