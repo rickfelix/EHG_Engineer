@@ -13,8 +13,8 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const VENTURE_ID = '3dc5d898-7fa5-45bb-84e2-6c15fe7e7ef3';
-const VENTURE_NAME = 'ImpactPath';
+const VENTURE_ID = 'c1b214ad-af1e-4c7a-ba1b-d18fb1f59c06';
+const VENTURE_NAME = 'Blueprint Governance';
 const STOP_AT_STAGE = 17;
 const POLL_MS = 30000;
 
