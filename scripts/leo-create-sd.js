@@ -1111,7 +1111,7 @@ async function createSD(options) {
     : buildDefaultKeyChanges(type, title);
   const finalSmokeTestSteps = (Array.isArray(smoke_test_steps) && smoke_test_steps.length > 0)
     ? smoke_test_steps
-    : buildDefaultSmokeTestSteps(type, title, scope);
+    : buildDefaultSmokeTestSteps(type, title, options.scope ?? description);
 
   // ========================================================================
   // GOVERNANCE GUARDRAILS (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007)
