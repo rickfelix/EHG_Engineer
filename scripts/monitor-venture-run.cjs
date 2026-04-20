@@ -1,9 +1,11 @@
 /**
- * Venture Pipeline Monitor — NichePulse run
- * Push S3-S16 via chairman approval RPC, stop at S17
+ * Venture Pipeline Monitor — ImpactPath run
+ * Push S3-S16 via chairman approval RPC, HARD STOP at S17
  * Monitors wireframe_screens artifact (Stitch replacement) and flags pipeline issues
  *
  * SD-LEO-ORCH-REPLACE-GOOGLE-STITCH-001: Stitch replaced with wireframe_screens artifact path
+ * SD-S17-DESIGN-MASTERY-PIPELINE-ORCH-001: Watch for strategy-driven variants, design mastering,
+ *   cross-variant awareness, strategy stats feedback loop
  */
 'use strict';
 
@@ -11,8 +13,8 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const VENTURE_ID = '7397c1f7-35b9-44b1-a795-c0dddd42eb54';
-const VENTURE_NAME = 'API Compliance Shield';
+const VENTURE_ID = '3dc5d898-7fa5-45bb-84e2-6c15fe7e7ef3';
+const VENTURE_NAME = 'ImpactPath';
 const STOP_AT_STAGE = 17;
 const POLL_MS = 30000;
 
@@ -31,14 +33,16 @@ const STAGE_NAMES = {
 
 // Post-Stitch-replacement: monitor wireframe_screens instead of stitch artifacts
 const DESIGN_ARTIFACT_TYPES = [
-  'wireframe_screens',        // NEW: S15 post-hook writes this (replaces stitch provisioning)
+  'wireframe_screens',        // S15 post-hook writes this (replaces stitch provisioning)
   'blueprint_wireframes',     // S15 wireframes
   'design_token_manifest',    // S17 brand tokens
   's17_archetypes',           // S17 archetype variants
   's17_session_state',        // S17 session resume
   's17_approved',             // S17 final selections
-  's17_approved_png',         // NEW: Playwright PNG screenshots
+  's17_approved_png',         // Playwright PNG screenshots
   's17_variant_scores',       // S17 scoring results
+  's17_design_system',        // NEW: Design mastering output (SD-S17-DESIGN-MASTERY-PIPELINE-ORCH-001-B)
+  's17_strategy_stats',       // NEW: Strategy effectiveness tracking (SD-S17-DESIGN-MASTERY-PIPELINE-ORCH-001-C)
   // Legacy (should NOT appear for new ventures post-Stitch-replacement)
   'stitch_curation', 'stitch_project', 'stitch_design_export',
 ];
@@ -335,9 +339,10 @@ function validateStageArtifacts(stage, arts) {
 async function main() {
   console.log(`\n${'='.repeat(70)}`);
   console.log(` VENTURE MONITOR — ${VENTURE_NAME} (${VENTURE_ID.slice(0,8)})`);
-  console.log(` Poll every ${POLL_MS/1000}s | Auto-push S3-S16 | STOP at S${STOP_AT_STAGE}`);
+  console.log(` Poll every ${POLL_MS/1000}s | Auto-push S3-S16 | HARD STOP at S${STOP_AT_STAGE}`);
   console.log(` Kill gates: S3, S5, S13 | Promotion gates: S10, S17`);
   console.log(` Stitch replacement: watching wireframe_screens (S15), s17_archetypes (S17)`);
+  console.log(` Design mastery: s17_design_system, s17_strategy_stats, cross-variant awareness`);
   console.log(` Legacy Stitch artifacts should NOT appear for new ventures`);
   console.log(`${'='.repeat(70)}\n`);
 
