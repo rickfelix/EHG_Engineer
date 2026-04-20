@@ -25,7 +25,10 @@ const args = process.argv.slice(2);
 const sdIdArg = args[2]; // e.g., node handoff.js execute LEAD-TO-PLAN <SD-ID>
 if (args[0] === 'execute' && sdIdArg) {
   try {
-    const result = await claimGuard(sdIdArg, null, { autoFallback: true });
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-124: Pass session ID from env var
+    // Fixes PAT-HF-LEADTOPLAN-144bd0c5 (13 failures due to no_deterministic_identity)
+    const sessionId = process.env.CLAUDE_SESSION_ID || null;
+    const result = await claimGuard(sdIdArg, sessionId, { autoFallback: true });
     if (!result.success && !result.fallback) {
       console.error(`[handoff.js] Claim check failed for ${sdIdArg}: ${result.error}`);
       if (result.owner) {
