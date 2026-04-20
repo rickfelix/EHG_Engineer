@@ -53,24 +53,51 @@ export function createPrerequisiteCheckGate(supabase) {
         };
       }
 
-      // SD-LEARN-010:US-002: ERR_CHAIN_INCOMPLETE error code for missing predecessor handoffs
+      // SD-LEARN-010:US-002 + SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-122:
+      // Enhanced chain diagnostic — check both UUID and sd_key, report status mismatches
       if (!leadToPlanHandoff || leadToPlanHandoff.length === 0) {
-        console.log('   ❌ ERR_CHAIN_INCOMPLETE: Missing LEAD-TO-PLAN handoff');
+        console.log('   ❌ ERR_CHAIN_INCOMPLETE: Missing accepted LEAD-TO-PLAN handoff');
         console.log('   ⚠️  LEO Protocol requires LEAD-TO-PLAN before PLAN-TO-EXEC');
-        console.log('');
-        console.log('   LEO Protocol handoff sequence:');
-        console.log('   1. LEAD-TO-PLAN  (approval to plan)   ← MISSING');
-        console.log('   2. PLAN-TO-EXEC  (approval to execute) ← blocked');
-        console.log('   3. EXEC-TO-PLAN  (execution complete)');
-        console.log('   4. PLAN-TO-LEAD  (final approval)');
+
+        // Diagnostic: check if handoff exists with non-accepted status
+        const sdKey = ctx.sd?.sd_key || ctx.sdId;
+        const { data: anyHandoffs } = await supabase
+          .from('sd_phase_handoffs')
+          .select('id, status, sd_id, handoff_type, created_at')
+          .or(`sd_id.eq.${sdUuid},sd_id.eq.${sdKey}`)
+          .eq('handoff_type', 'LEAD-TO-PLAN')
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        if (anyHandoffs && anyHandoffs.length > 0) {
+          console.log('');
+          console.log('   🔍 DIAGNOSTIC: LEAD-TO-PLAN handoff(s) found but not accepted:');
+          for (const h of anyHandoffs) {
+            console.log(`      - ID: ${h.id.substring(0, 8)}... | status: ${h.status} | sd_id: ${h.sd_id.substring(0, 12)}... | ${new Date(h.created_at).toLocaleString()}`);
+          }
+          console.log(`      Expected: status='accepted', sd_id='${sdUuid}'`);
+          console.log('');
+          console.log('   💡 The handoff may have failed to persist its artifact.');
+          console.log('      Re-run: CLAUDE_SESSION_ID=<session> node scripts/handoff.js execute LEAD-TO-PLAN ' + sdKey);
+        } else {
+          console.log('');
+          console.log('   🔍 DIAGNOSTIC: No LEAD-TO-PLAN handoff found at all');
+          console.log(`      Searched: sd_id='${sdUuid}' AND sd_id='${sdKey}'`);
+          console.log('');
+          console.log('   LEO Protocol handoff sequence:');
+          console.log('   1. LEAD-TO-PLAN  (approval to plan)   ← MISSING');
+          console.log('   2. PLAN-TO-EXEC  (approval to execute) ← blocked');
+          console.log('   3. EXEC-TO-PLAN  (execution complete)');
+          console.log('   4. PLAN-TO-LEAD  (final approval)');
+        }
 
         return {
           passed: false,
           score: 0,
           max_score: 100,
-          issues: ['ERR_CHAIN_INCOMPLETE: Missing LEAD-TO-PLAN handoff - complete prerequisite before PLAN-TO-EXEC'],
+          issues: [`ERR_CHAIN_INCOMPLETE: No accepted LEAD-TO-PLAN handoff for sd_id=${sdUuid}. Found ${anyHandoffs?.length || 0} non-accepted record(s).`],
           warnings: [],
-          remediation: 'Complete LEAD-TO-PLAN handoff before attempting PLAN-TO-EXEC. Run: node scripts/handoff.js execute LEAD-TO-PLAN <SD-ID>'
+          remediation: `Re-run LEAD-TO-PLAN: CLAUDE_SESSION_ID=<session> node scripts/handoff.js execute LEAD-TO-PLAN ${sdKey}`
         };
       }
 
