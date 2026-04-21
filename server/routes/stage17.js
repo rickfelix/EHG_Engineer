@@ -178,7 +178,7 @@ router.post('/:ventureId/select', asyncHandler(async (req, res) => {
  */
 router.post('/:ventureId/refine', asyncHandler(async (req, res) => {
   const { ventureId } = req.params;
-  const { screenId, platform, artifactId } = req.body || {};
+  const { screenId, platform, artifactId, uploadedHtml } = req.body || {};
 
   if (!isValidUuid(ventureId)) {
     return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
@@ -189,11 +189,39 @@ router.post('/:ventureId/refine', asyncHandler(async (req, res) => {
   if (!platform || !['mobile', 'desktop'].includes(platform)) {
     return res.status(400).json({ error: 'platform must be "mobile" or "desktop"', code: 'INVALID_PLATFORM' });
   }
+
+  const supabase = req.app.locals.supabase || req.supabase;
+
+  // Upload path: external HTML auto-approved as the design for this screen
+  if (uploadedHtml && typeof uploadedHtml === 'string') {
+    try {
+      const { writeArtifact } = await import('../../lib/eva/artifact-persistence-service.js');
+      const artifactType = platform === 'mobile' ? 'stage_17_approved_mobile' : 'stage_17_approved_desktop';
+
+      const approvedArtifactId = await writeArtifact(supabase, {
+        ventureId,
+        lifecycleStage: 17,
+        artifactType,
+        title: `${screenId} — Uploaded Design`,
+        content: uploadedHtml,
+        artifactData: { html: uploadedHtml, source: 'manual_upload' },
+        source: 'manual-upload',
+        metadata: { screenId, platform, uploadedAt: new Date().toISOString() },
+      });
+
+      console.log(`[stage17-route] Uploaded HTML approved for ${screenId} (${uploadedHtml.length} chars)`);
+      return res.status(200).json({ approvedArtifactId, replaced: false, uploaded: true });
+    } catch (err) {
+      console.error('[stage17-route] Upload approval failed:', err);
+      return res.status(500).json({ error: sanitizeErrorMessage(err?.message), code: 'UPLOAD_ERROR' });
+    }
+  }
+
+  // Standard path: approve an existing variant
   if (!artifactId || typeof artifactId !== 'string') {
     return res.status(400).json({ error: 'artifactId is required', code: 'MISSING_ARTIFACT_ID' });
   }
 
-  const supabase = req.app.locals.supabase || req.supabase;
   try {
     const result = await submitPass2Selection(ventureId, screenId, platform, artifactId, supabase);
     return res.status(200).json({ approvedArtifactId: result.approvedArtifactId, replaced: result.replaced });
