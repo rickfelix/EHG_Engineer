@@ -143,4 +143,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-04-15 9:28:07 AM | Protocol: LEO 4.3.3 | Source: Database*
+*Generated: 2026-04-22 9:01:21 AM | Protocol: LEO 4.3.3 | Source: Database*

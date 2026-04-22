@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-04-15 9:28:07 AM
+**Generated**: 2026-04-22 9:01:21 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -9,24 +9,6 @@
 > For Strunkian writing standards, see `docs/reference/strunkian-writing-standards.md`.
 
 ---
-
-## Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-> Why: Hand-rolled migration scripts reliably fail in the specific edge cases that matter most — missing SUPABASE_DB_PASSWORD, pooler URL routing, SSL mode selection, and retry logic on transient failures. The database-agent encodes these hard-won patterns, preventing migrations from getting stuck at connection setup.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
 
 ## Cascade Invalidation System
 
@@ -60,6 +42,24 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 ### Key Columns
 - `eva_architecture_plans.needs_review_since` — auto-set by trigger, NULL when resolved
 - `eva_architecture_plans.vision_version_aligned_to` — tracks which vision version the plan was last aligned with
+
+## Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+> Why: Hand-rolled migration scripts reliably fail in the specific edge cases that matter most — missing SUPABASE_DB_PASSWORD, pooler URL routing, SSL mode selection, and retry logic on transient failures. The database-agent encodes these hard-won patterns, preventing migrations from getting stuck at connection setup.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
 
 ## 🏗️ Application Architecture - UNIFIED FRONTEND
 
@@ -216,6 +216,48 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## 🤖 Built-in Agent Integration
+
+## Built-in Agent Integration
+
+### Three-Layer Agent Architecture
+
+LEO Protocol uses three complementary agent layers:
+
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
+
 ## Claude Code Plan Mode Integration
 
 **Status**: ACTIVE | **Version**: 1.0.0
@@ -259,47 +301,37 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
-## 🤖 Built-in Agent Integration
+## Work Tracking Policy
 
-## Built-in Agent Integration
+**ALL changes to main must be tracked** as either:
 
-### Three-Layer Agent Architecture
+### Strategic Directive (SD) - For Substantial Work
+- Features, refactors, infrastructure (>50 LOC)
+- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
+- Command: `npm run sd:create`
 
-LEO Protocol uses three complementary agent layers:
+### Quick-Fix (QF) - For Small Fixes
+- Bugs, polish, docs (<=50 LOC)
+- Branch: `quick-fix/QF-YYYYMMDD-NNN`
+- Command: `node scripts/create-quick-fix.js --interactive`
 
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+### Why This Matters
+- All work tracked in database
+- Lessons learned captured
+- Quality gates enforced
+- Progress metrics accurate
 
-### Integration Principle
-
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
-
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
+### Emergency Bypass (Logged)
+```bash
+EMERGENCY_PUSH="critical: reason here" git push
 ```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
+This logs to audit_log and should be followed by retroactive SD/QF creation.
 
-This is faster than sequential exploration and provides comprehensive coverage.
+### Pre-Push Enforcement
+The pre-push hook automatically:
+1. Detects SD/QF from branch name
+2. Verifies completion status in database
+3. Blocks if not ready for merge
 
 ## Sub-Agent Model Routing
 
@@ -342,37 +374,38 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
-## Work Tracking Policy
+## 🖥️ UI Parity Requirement (MANDATORY)
 
-**ALL changes to main must be tracked** as either:
+**Every backend data contract field MUST have a corresponding UI representation.**
 
-### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>50 LOC)
-- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
-- Command: `npm run sd:create`
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
 
-### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (<=50 LOC)
-- Branch: `quick-fix/QF-YYYYMMDD-NNN`
-- Command: `node scripts/create-quick-fix.js --interactive`
+### Requirements
 
-### Why This Matters
-- All work tracked in database
-- Lessons learned captured
-- Quality gates enforced
-- Progress metrics accurate
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
 
-### Emergency Bypass (Logged)
-```bash
-EMERGENCY_PUSH="critical: reason here" git push
-```
-This logs to audit_log and should be followed by retroactive SD/QF creation.
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
 
-### Pre-Push Enforcement
-The pre-push hook automatically:
-1. Detects SD/QF from branch name
-2. Verifies completion status in database
-3. Blocks if not ready for merge
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -410,39 +443,6 @@ The pre-push hook automatically:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Sub-Agent Routing Reference
 
@@ -499,6 +499,19 @@ apply_migration is blocked by PreToolUse hook — use database-agent instead.
 **Numeric Scale Checks**: Fields like `progress` (0-100) and `priority` (text enum: critical/high/medium/low) have CHECK constraints. Supabase returns a generic error on violation — always validate before insert.
 
 **Silent Empty Returns**: Supabase returns `{ data: [], error: null }` when column names are wrong. Always `.select('*').limit(1)` on unfamiliar tables first to discover actual column names.
+
+**NOT NULL Pre-Validation**: Before inserting rows, check which columns are NOT NULL without defaults. Query `information_schema.columns` if unsure:
+```sql
+SELECT column_name, is_nullable, column_default FROM information_schema.columns
+WHERE table_name = '<table>' AND is_nullable = 'NO' AND column_default IS NULL;
+```
+> Why: Supabase returns generic constraint errors on NOT NULL violations. Pre-checking avoids trial-and-error inserts.
+
+**Migration Safety — IF EXISTS**: All DDL in migration scripts must use defensive guards:
+- `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`
+- `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+- `DROP TABLE IF EXISTS`, `DROP INDEX IF EXISTS`
+> Why: Migrations may run against databases in different states (dev vs prod, partial prior runs). Without IF EXISTS, re-running a migration fails on the first already-applied statement.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -949,6 +962,23 @@ Two handoff-related tables exist - use the correct one:
 
 When a handoff gate fails, **diagnose before retrying**. Blind retries waste time and mask systemic issues.
 
+### Pre-Flight Checklist (Before ANY Gate Attempt)
+Run these checks before invoking `handoff.js execute`:
+1. **Git status clean**: `git status` shows no uncommitted changes. Gates validate against committed state.
+2. **Correct DB column**: Verify `smoke_test_steps` and other gate-checked fields are written to the right column (not a similarly-named one).
+3. **Bash quoting**: For long content strings, use heredocs — never backticks. Backticks trigger command substitution and break silently:
+```bash
+# WRONG - backticks in content cause silent breakage
+node script.js --content "Steps: \`test\` the flow"
+
+# RIGHT - heredoc for multi-line content
+node script.js --content "$(cat <<'CONTENT'
+Steps: test the flow with special chars
+CONTENT
+)"
+```
+> Why: 40%+ of gate failures in retrospectives trace to uncommitted changes, wrong columns, or bash quoting — all preventable with a 30-second pre-flight check.
+
 ### Classification
 | Type | Signal | Action |
 |------|--------|--------|
@@ -1237,20 +1267,25 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 | Link KRs to vision dimensions | CEO (EVA) | No (via `okr-command.mjs link`) |
 | Create/approve SDs | LEO Protocol | Yes (LEAD phase gates) |
 
+## Claim Heartbeat Protocol
+
+### Heartbeat Thresholds
+| Heartbeat Age | Status | Action |
+|--------------|--------|--------|
+| < 5 minutes | **ACTIVE** | NEVER release. Session is live. |
+| 5-10 minutes | **Uncertain** | Check `claude_sessions` for session activity before acting. |
+| > 10 minutes | **Stale** | Safe to release and reclaim. |
+
+### Rules
+1. **Never release another session's active claim** (heartbeat < 5 min). A 0-minute heartbeat means the session just checked in — it is maximally alive.
+2. If the SD you want is claimed by an active session, **pick a different SD**. Do not wait, do not release.
+3. Before releasing any claim, query: `SELECT sd_key, heartbeat_at, NOW() - heartbeat_at AS age FROM claude_sessions WHERE released_at IS NULL`
+4. Only the owning session should release its own claim under normal operation.
+
+> Why: A prior incident had Claude misinterpret a 0-minute heartbeat as stale and release an active session's claim, blocking that session's work. The cost of wrongly releasing is high (lost context, blocked SD); the cost of picking a different SD is low.
 
 
-## Hot Issue Patterns (Auto-Updated)
 
-**CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
-
-| Pattern ID | Category | Severity | Count | Trend | Top Solution |
-|------------|----------|----------|-------|-------|--------------|
-| PAT-HF-LEADTOPLAN-c73db06a | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
-
-### Prevention Checklists
-
-
-*Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
 
@@ -1259,59 +1294,60 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. LEAD_TO_PLAN Handoff Retrospective: Address PAT-AUTO-47da445b: Gate GATE_SD_QUALITY failed: score 65/100 [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/17/2026 | **Score**: 100
+### 1. PLAN_TO_EXEC Handoff Retrospective: Iterator Stage 19 Visual Convergence Loop [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/23/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-d98a39ea] Gate GATE_SD_QUALITY failed: score 48/100
-- [PAT-AUTO-027ca171] Gate GATE_SD_TRANSITION_READINESS failed: score 75/100
-
-**Action Items**:
-- [ ] Verify: PAT-AUTO-47da445b root cause addressed for SD-LEARN-FIX-ADDRESS-PAT-AUTO...
-- [ ] Validate: SD completes LEO workflow without manual metadata patching for SD-LEAR...
-
-### 2. PLAN_TO_EXEC Handoff Retrospective: Address PAT-AUTO-47da445b: Gate GATE_SD_QUALITY failed: score 65/100 [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/17/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-34bd21e7] Gate GATE_SD_QUALITY failed: score 80/100
-- [PAT-AUTO-d98a39ea] Gate GATE_SD_QUALITY failed: score 48/100
+- [PAT-AUTO-c9b12816] google API error: 404 - Google API error 404: {
+  "error": {
+    "code": 404,
+  ...
+- [PAT-AUTO-0634bf78] Gate 4:valueDelivered failed: score 70/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
-### 3. LEAD_TO_PLAN Handoff Retrospective: Claim Guard UUID Compatibility — Fix isSameConversation for Marker-Based Identity [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/16/2026 | **Score**: 100
+### 2. PLAN_TO_EXEC Handoff Retrospective: Address PAT-AUTO-c9b12816: google API error: 404 - Google API error 404: {
+  "error": { [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/23/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-HANDOFFGHOST] Handoff script prints success but does not insert DB row. Script outputs HANDOFF_...
-- [PAT-AUTO-83731782] Agent .md files are gitignored - edit .partial files instead. Generated from .pa...
+- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
+- [PAT-AUTO-0634bf78] Gate 4:valueDelivered failed: score 70/100
 
 **Action Items**:
-- [ ] [PAT-MAN-1dc1fa6a] Create corrective SDs to expand event bus adoption: migrate d...
-- [ ] [PAT-MAN-6badf37f] Create corrective SDs to strengthen CLI as authoritative work...
+- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
-### 4. SD Completion: Comprehensive Venture Workflow Stage Fixes [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 3/16/2026 | **Score**: 100
+### 3. SD Completion Retrospective: Product Hunt GraphQL Integration [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/23/2026 | **Score**: 100
 
 **Key Improvements**:
-- Venture workflow stage transition errors were not caught by existing monitoring - need better observ...
-- SRIP service wiring was incomplete from initial implementation - service integration checklist neede...
+- Nested worktree session claim conflicts caused 30 minutes of debugging time
+- PRD inline mode requires manual DB inserts when standard scripts are unavailable in worktree
 
 **Action Items**:
-- [ ] Add automated stage transition regression tests for Stages 10-11
-- [ ] Implement stage transition monitoring dashboard alerts
+- [ ] Document nested worktree session claim conflict pattern in MEMORY.md
+- [ ] Monitor Product Hunt API rate limit usage in production for 2 weeks
 
-### 5. LEAD_TO_PLAN Handoff Retrospective: Dead Script Archival Campaign [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/17/2026 | **Score**: 100
+### 4. PLAN_TO_EXEC Handoff Retrospective: Awwwards Curated Design Reference Library [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/23/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-6c5bbd7c] Gate HEAL_BEFORE_COMPLETE failed: score 65/100
-- [PAT-AUTO-34bd21e7] Gate GATE_SD_QUALITY failed: score 80/100
+- [PAT-AUTO-0634bf78] Gate 4:valueDelivered failed: score 70/100
+- [PAT-AUTO-f5086216] Gate 2C:databaseQueriesIntegrated failed: score 52/100
 
 **Action Items**:
-- [ ] Confirm SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-001 produces no regressions — run exis...
-- [ ] Complete SD-LEO-INFRA-DEAD-SCRIPT-ARCHIVAL-001 implementation according to PRD a...
+- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+
+### 5. PLAN_TO_EXEC Handoff Retrospective: B1: leo_adrs Population During Stage 14 [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
+- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
+
+**Action Items**:
+- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1377,7 +1413,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-04-15*
+*Generated from database: 2026-04-22*
 *Protocol Version: 4.3.3*
-*Includes: Proposals (0) + Hot Patterns (1) + Lessons (5)*
+*Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*
