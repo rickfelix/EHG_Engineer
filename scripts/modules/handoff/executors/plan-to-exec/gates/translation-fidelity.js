@@ -64,7 +64,7 @@ export function createTranslationFidelityGate(supabase) {
       }
 
       // Orchestrator children are exempt — parent already validated
-      if (sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated) {
+      if (sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated || sd?.parent_sd_id) {
         console.log('   ⏭️  Orchestrator child detected — exempt from standalone fidelity check');
         return buildSemanticResult({
           passed: true, score: 100, confidence: 1.0,

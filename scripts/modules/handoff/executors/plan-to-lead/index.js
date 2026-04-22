@@ -236,7 +236,7 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // Orchestrator children get a reduced gate set — they are tactical decompositions
     // that should not face standalone SD requirements like heal scoring, retrospective
     // quality, traceability, or architecture plan validation.
-    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated;
+    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated || sd?.parent_sd_id;
     if (isOrchestratorChild) {
       console.log('\n   📋 ORCHESTRATOR CHILD GATE SET (reduced) for PLAN-TO-LEAD');
       console.log(`   Parent: ${sd.metadata.parent_orchestrator || 'auto_generated'}`);

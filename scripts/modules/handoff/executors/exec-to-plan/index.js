@@ -34,7 +34,9 @@ import {
   // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
   createWireframeQaValidationGate,
   // Wiring Validation (SD-LEO-WIRING-VERIFICATION-FRAMEWORK-ORCH-001-D)
-  createWiringValidationGate
+  createWiringValidationGate,
+  // UI Interactivity Check (SD-MAN-INFRA-LEO-GATE-IMPROVEMENTS-001)
+  createUiInteractivityCheckGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -214,7 +216,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Orchestrator children get a reduced gate set — they are tactical decompositions
     // of a parent SD and should not face standalone SD requirements like full
     // implementation fidelity, sub-agent orchestration, or E2E test mapping.
-    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated;
+    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated || sd?.parent_sd_id;
     if (isOrchestratorChild) {
       console.log('\n   📋 ORCHESTRATOR CHILD GATE SET (reduced) for EXEC-TO-PLAN');
       console.log(`   Parent: ${sd.metadata.parent_orchestrator || 'auto_generated'}`);
@@ -306,6 +308,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Reads strategic_directives_v2.wiring_validated (trigger-maintained) to block on
     // missing or failed cross-verifier checks.
     gates.push(createWiringValidationGate(this.supabase));
+
+    // UI Interactivity Check (SD-MAN-INFRA-LEO-GATE-IMPROVEMENTS-001)
+    // Blocks display-only EHG frontend components — must have onClick/onSubmit
+    gates.push(createUiInteractivityCheckGate(this.supabase));
 
     // Scope Completion Verification (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
     // Verifies arch plan deliverables exist in codebase before marking EXEC complete

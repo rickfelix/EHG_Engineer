@@ -37,3 +37,6 @@ export { createCrossChildIntegrationGate } from './cross-child-integration-gate.
 
 // Wiring Validation (SD-LEO-WIRING-VERIFICATION-FRAMEWORK-ORCH-001-D)
 export { createWiringValidationGate } from './wiring-validation.js';
+
+// UI Interactivity Check (SD-MAN-INFRA-LEO-GATE-IMPROVEMENTS-001)
+export { createUiInteractivityCheckGate } from './ui-interactivity-check.js';
