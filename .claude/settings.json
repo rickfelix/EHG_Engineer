@@ -89,7 +89,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command \"if ($env:CLAUDE_TOOL_INPUT -match 'handoff') { Write-Output '[REMINDER] Quality over speed. Follow the LEO protocol diligently.' }\"",
+            "command": "powershell.exe -NoProfile -Command \"if (\\$env:CLAUDE_TOOL_INPUT -match 'handoff') { Write-Output '[REMINDER] Quality over speed. Follow the LEO protocol diligently.' }\"",
             "timeout": 2
           },
           {
