@@ -134,7 +134,7 @@ export class PlanToExecExecutor extends BaseExecutor {
     // pattern checklists run at the orchestrator level, not per-child.
     // Children keep: protocol, prerequisites, PRD exists, architecture,
     // BMAD, contract compliance, branch enforcement, planning completeness.
-    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated;
+    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated || sd?.parent_sd_id;
     if (isOrchestratorChild) {
       console.log('\n   📋 ORCHESTRATOR CHILD GATE SET (reduced — heavy gates run at parent level)');
       console.log(`      Parent: ${sd.metadata.parent_orchestrator || 'auto_generated'}`);
