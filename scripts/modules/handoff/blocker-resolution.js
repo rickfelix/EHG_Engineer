@@ -27,7 +27,8 @@ import { checkGovernancePolicies } from '../../lib/governance-policy-checker.js'
 // Configuration constants (exported for use in other modules)
 export const DEFAULT_MAX_RETRIES = 3;
 export const DEFAULT_MAX_CHAIN_DEPTH = 6; // Raised from 2 to support 6-level deep hierarchies (V09)
-export const DETECTION_TIMEOUT_MS = 2000;
+// SD-MAN-FIX-LEO-INFRASTRUCTURE-HANDOFF-001: Increased from 2s to 5s for deep dependency chains
+export const DETECTION_TIMEOUT_MS = 5000;
 
 // Blocker detection patterns from error messages
 export const BLOCKER_PATTERNS = [

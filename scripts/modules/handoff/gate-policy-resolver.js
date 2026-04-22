@@ -16,7 +16,8 @@
 let _policyCache = null;
 let _policyCacheTimestamp = 0;
 const CACHE_TTL_MS = parseInt(process.env.GATE_POLICY_CACHE_TTL_SECONDS || '60', 10) * 1000;
-const DB_TIMEOUT_MS = parseInt(process.env.GATE_POLICY_DB_TIMEOUT_MS || '200', 10);
+// SD-MAN-FIX-LEO-INFRASTRUCTURE-HANDOFF-001: Increased from 200ms to 2000ms to prevent AbortError under load
+const DB_TIMEOUT_MS = parseInt(process.env.GATE_POLICY_DB_TIMEOUT_MS || '2000', 10);
 
 // Metrics counters (simple in-process counters)
 let _metrics = {
