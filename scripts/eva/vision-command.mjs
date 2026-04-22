@@ -36,6 +36,7 @@ import { getValidationClient } from '../../lib/llm/client-factory.js';
 import { parseMarkdownToSections, buildDefaultMapping } from './markdown-to-sections-parser.mjs';
 import { buildSectionKeyMapping, getSectionSchema, validateSections } from './document-section-registry.mjs';
 import { renderSectionsToMarkdown, renderSectionsSummary } from './sections-to-markdown-renderer.mjs';
+import { readStdin } from '../../lib/utils/read-stdin.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -145,10 +146,25 @@ async function cmdExtract({ source, content: contentArg }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson, content: contentArg }) {
+async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson, content: contentArg, stdin: stdinFlag }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
   if (!level || !['L1', 'L2'].includes(level)) { console.error('--level must be L1 or L2'); process.exit(1); }
-  if (!source && !sectionsJson && !contentArg) { console.error('--source, --sections, or --content is required'); process.exit(1); }
+  if (!source && !sectionsJson && !contentArg && !stdinFlag) { console.error('--source, --sections, --content, or --stdin is required'); process.exit(1); }
+
+  // Read content from stdin when --stdin is set. Cross-platform alternative to
+  // --content which hits OS CLI length limits (~8K on Windows) for large docs.
+  if (stdinFlag && !contentArg) {
+    try {
+      contentArg = await readStdin();
+    } catch (e) {
+      console.error('Failed to read stdin:', e.message);
+      process.exit(1);
+    }
+    if (!contentArg || contentArg.trim().length === 0) {
+      console.error('--stdin was set but no content was read from stdin');
+      process.exit(1);
+    }
+  }
 
   const supabase = createSupabaseServiceClient();
 
