@@ -1,0 +1,9 @@
+{
+  "id": "LINT-PHRASE-001",
+  "severity": "warn",
+  "description": "Sections with section_type='pause_policy' must reference AUTO-PROCEED so readers can trace pause semantics back to the overarching contract.",
+  "pattern_type": "required_phrase",
+  "pattern": "AUTO-PROCEED",
+  "section_type_filter": "pause_policy",
+  "enabled": true
+}

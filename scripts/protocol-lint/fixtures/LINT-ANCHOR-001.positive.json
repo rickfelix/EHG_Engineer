@@ -1,0 +1,24 @@
+{
+  "description": "Two sections sharing the same anchor_topic should trigger LINT-ANCHOR-001 on both.",
+  "sections": [
+    {
+      "id": "sec-pause-a",
+      "section_name": "Pause Points (in AUTO-PROCEED)",
+      "anchor_topic": "pause-policy"
+    },
+    {
+      "id": "sec-pause-b",
+      "section_name": "When To Pause",
+      "anchor_topic": "pause-policy"
+    },
+    {
+      "id": "sec-unrelated",
+      "section_name": "Heartbeat",
+      "anchor_topic": "heartbeat-policy"
+    }
+  ],
+  "expected_violations": [
+    { "rule_id": "LINT-ANCHOR-001", "section_id": "sec-pause-a" },
+    { "rule_id": "LINT-ANCHOR-001", "section_id": "sec-pause-b" }
+  ]
+}
