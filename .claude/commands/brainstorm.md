@@ -152,7 +152,7 @@ node -e "
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-supabase.from('ventures').select('id, name, status').eq('status', 'active').then(({data}) => {
+supabase.from('ventures').select('id, name, status, industry').eq('status', 'active').then(({data}) => {
   console.log('VENTURES:', JSON.stringify(data));
 });
 "
@@ -196,7 +196,7 @@ const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const industry = process.argv[2] || '';
 if (!industry) { console.log('DOMAIN_CONTEXT: none'); process.exit(0); }
-import('../lib/domain-intelligence/domain-expert-integration.js').then(mod => {
+import('./lib/domain-intelligence/domain-expert-integration.js').then(mod => {
   mod.buildDomainContext(supabase, industry).then(ctx => {
     if (ctx) console.log('DOMAIN_CONTEXT:', ctx);
     else console.log('DOMAIN_CONTEXT: none');
@@ -208,6 +208,40 @@ import('../lib/domain-intelligence/domain-expert-integration.js').then(mod => {
 **If DOMAIN_CONTEXT is not "none"**: Include the returned context block in your session awareness. Use it to inform your questions and provide more relevant guidance. Store the context in session metadata for traceability.
 
 **If DOMAIN_CONTEXT is "none"**: Proceed normally — this is the cold-start case where no prior domain knowledge has been accumulated yet.
+
+---
+
+## Step 4.6: Create Session Row (Early)
+
+Create the `brainstorm_sessions` row now, before any downstream step that needs to reference it by ID (board deliberation in 6D.1a, vision/arch metadata writes in 9.5E, outcome auto-upgrade in 9.6). Step 10 will UPDATE this same row with the final content, outcome, and scores — it is no longer an INSERT.
+
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+supabase.from('brainstorm_sessions').insert({
+  domain: '<DOMAIN>',
+  topic: '<TOPIC>',
+  mode: '<structured|conversational>',
+  stage: '<PHASE>',
+  outcome_type: 'needs_triage',
+  retrospective_status: 'pending',
+  metadata: { status: 'in_progress', created_by_step: '4.6' }
+}).select('id').single().then(({data, error}) => {
+  if (error) console.error('Session create error:', error.message);
+  else console.log('SESSION_ID=' + data.id);
+});
+"
+```
+
+**Capture `SESSION_ID`.** It is consumed by:
+- Step 6D.1a (board debate linkage via `createBoardDebateSession`)
+- Step 9.5E (vision_key / plan_key / arch_quality_score metadata UPDATE)
+- Step 9.6 (outcome_type auto-upgrade UPDATE)
+- Step 10 (final content + scores UPDATE)
+
+The placeholder `outcome_type: 'needs_triage'` satisfies the DB CHECK constraint; Step 10 sets the final value. `venture_ids`, `cross_venture`, and scores are left null here and filled by Step 10.
 
 ---
 
@@ -244,7 +278,15 @@ supabase.from('brainstorm_question_effectiveness')
 "
 ```
 
-If effectiveness data exists, reorder optional questions so higher-effectiveness ones are asked first. Required questions are always asked regardless.
+**Reordering algorithm** (apply only if `Q_ORDER` is not "default"):
+
+1. Load the domain+phase question bank from the Question Banks section below. This gives a list of `{id, question, required}` in bank-defined order.
+2. Split into `required = [...]` (Required = Yes) and `optional = [...]` (Required = No). **Required questions keep bank order and are always asked first.**
+3. Build `effectiveness = Map<question_id, score>` from `Q_ORDER`.
+4. Sort `optional` by: `effectiveness.get(q.id) ?? -1` descending, breaking ties by original bank index (stable). Questions with no effectiveness entry fall to the end of the optional list.
+5. Final ask order = `required ++ optional_sorted`.
+
+Do NOT drop any required question even if it has a low effectiveness score. Effectiveness only reorders; it never skips.
 
 **After each answer**, briefly acknowledge the response before asking the next question.
 
@@ -875,9 +917,19 @@ Then proceed to Top 3 Improvement Areas (Step 7.9).
 
 ---
 
-## Step 7.9: Top 3 Improvement Areas (Board Consensus)
+## Step 7.9: Top 3 Improvement Areas (Panel Consensus)
 
-After multi-perspective analysis completes (board deliberation or legacy team analysis), the board must identify and reach consensus on the **top 3 areas for improvement** related to whatever was evaluated.
+After multi-perspective analysis completes, the responding panel must identify and reach consensus on the **top 3 areas for improvement** related to whatever was evaluated.
+
+**Skip condition — no multi-perspective input**:
+- If `--no-team` was set (no board deliberation AND no legacy persona analysis ran), **skip Step 7.9 entirely** and proceed straight to Step 8. There is no panel to vote.
+- If board deliberation ran but quorum failed and the legacy fallback also could not run, skip to Step 8.
+
+**Panel sizing — which mode actually ran determines voter count and labels**:
+- **Board mode** (Step 6D.1a succeeded with quorum): `PANEL_TOTAL = number of seats that produced substantive Round 1 positions` (4–6). Labels use seat codes (CSO, CRO, CTO, CISO, COO, CFO). Use "Board support" in rationale text.
+- **Legacy mode** (Step 6D.1b ran): `PANEL_TOTAL = 3`. Labels are `Challenger`, `Visionary`, `Pragmatist`. Use "Team consensus" in rationale text.
+
+All seat/role references below are parameterized by the mode that ran. Do not hardcode "6 seats" when legacy mode is active.
 
 ### 7.9A: Extract Candidate Improvement Areas
 
@@ -888,9 +940,9 @@ Each candidate must include:
 - **Source**: Which board seat(s) or specialist raised it
 - **Rationale**: Why this matters — what risk it mitigates or opportunity it unlocks
 
-### 7.9B: Board Consensus Vote
+### 7.9B: Panel Consensus Vote
 
-Spawn **all responding board seats in parallel** (same seats from Round 1) as Agents. Each seat receives the candidate list and votes:
+Spawn **all responding panel members in parallel** (the seats from Round 1 in board mode, or the 3 personas in legacy mode) as Agents. Each member receives the candidate list and votes:
 
 ```
 You are the <SEAT_TITLE> (<SEAT_CODE>) on EHG's Board of Directors.
@@ -955,13 +1007,13 @@ header: "Improvements (Board consensus: <PARETO_SIGNAL> — top 2 = <TOP_TWO_PER
 multiSelect: true
 options:
   - label: "1. <AREA_1>"
-    description: "<COMPOSITE_RATIONALE_1> (Board support: <N>/6 seats — <SEAT_LIST>) [<SCORE> pts, <PERCENTAGE>%]"
+    description: "<COMPOSITE_RATIONALE_1> (<SUPPORT_LABEL>: <N>/<PANEL_TOTAL> — <MEMBER_LIST>) [<SCORE> pts, <PERCENTAGE>%]"
   - label: "2. <AREA_2>"
-    description: "<COMPOSITE_RATIONALE_2> (Board support: <N>/6 seats — <SEAT_LIST>) [<SCORE> pts, <PERCENTAGE>%]"
+    description: "<COMPOSITE_RATIONALE_2> (<SUPPORT_LABEL>: <N>/<PANEL_TOTAL> — <MEMBER_LIST>) [<SCORE> pts, <PERCENTAGE>%]"
   - label: "3. <AREA_3>"
-    description: "<COMPOSITE_RATIONALE_3> (Board support: <N>/6 seats — <SEAT_LIST>) [<SCORE> pts, <PERCENTAGE>%]"
+    description: "<COMPOSITE_RATIONALE_3> (<SUPPORT_LABEL>: <N>/<PANEL_TOTAL> — <MEMBER_LIST>) [<SCORE> pts, <PERCENTAGE>%]"
   - label: "None — override"
-    description: "Reject board recommendation, proceed to outcome classification without improvement focus"
+    description: "Reject panel recommendation, proceed to outcome classification without improvement focus"
 ```
 
 **Processing chairman's selection:**
@@ -984,6 +1036,8 @@ Review the discussion and identify items that fit these categories:
 | Bucket | Description | Action |
 |--------|-------------|--------|
 | **Ready for SD** | Clear scope, defined success criteria, ready to implement | Suggest `/leo create` |
+| **Quick Fix** | Small bug or polish (≤50 LOC), no full SD needed | Suggest `/quick-fix` |
+| **No Action** | Reviewed and decided not to pursue | Record decision, no follow-up |
 | **Needs Triage** | Doesn't fit neatly into existing categories, needs classification | Tag for follow-up review |
 | **Consideration Only** | Worth noting but not ready for implementation | Record in document, no SD |
 | **Potential Conflict** | May conflict with existing features or planned work | Flag conflict, suggest investigation |
@@ -1013,7 +1067,7 @@ Present the classification to the user:
 
 **BLOCKING GATE** — Do NOT proceed to vision/architecture generation until the chairman reviews flagged items.
 
-After outcome classification (Step 8), but BEFORE vision and architecture creation (Step 8.5/9.5), present a structured review checkpoint. This catches over-optimistic claims, unvalidated assumptions, and vague assertions before they propagate into planning documents.
+After outcome classification (Step 8), but BEFORE vision and architecture creation (Step 9.5), present a structured review checkpoint. This catches over-optimistic claims, unvalidated assumptions, and vague assertions before they propagate into planning documents.
 
 **When to fire**: Every brainstorm classified as "Ready for SD", "Needs Triage", or "Potential Conflict". Skip only for "Consideration Only" or "Significant Departure".
 
@@ -1060,7 +1114,7 @@ Present items one at a time so the chairman can make individual decisions.
 
 After all items are reviewed:
 
-- **If ANY item received "Needs more research"**: HALT the pipeline. Do NOT proceed to Step 8.5 or Step 9.5. Instead:
+- **If ANY item received "Needs more research"**: HALT the pipeline. Do NOT proceed to Step 9 or Step 9.5. Instead:
   ```
   ⛔ Pipeline Halted — Research Needed
 
@@ -1073,7 +1127,7 @@ After all items are reviewed:
 
 - **If items received "Flag for deeper analysis"**: Record the flags. These will be injected as risk notes into the vision document (Step 9.5A) under a new `## Chairman Review Flags` section.
 
-- **If all items "Accept as-is"**: Proceed normally to Step 8.5.
+- **If all items "Accept as-is"**: Proceed normally to Step 9.
 
 ### 8.7D: Record Decisions
 
@@ -1081,24 +1135,6 @@ Store the chairman review decisions in the brainstorm document metadata section:
 ```markdown
 - **Chairman Review**: [N items reviewed, M accepted, F flagged, R research-needed]
 ```
-
----
-
-## Step 8.5: Vision & Architecture Plan Creation (MANDATORY)
-
-**ANTI-PATTERN**: Skipping vision and architecture documents to go straight to SD creation. Brainstorms that skip planning documents produce SDs with incomplete thinking — the exact problem the Universal Planning Completeness Framework addresses.
-
-**ALWAYS proceed to Step 9.5** (Vision & Architecture Document Pipeline) after saving the brainstorm document. This is not conditional — every brainstorm that reaches "Ready for SD" classification gets a vision document and architecture plan.
-
-**Why this is mandatory**:
-- Vision documents capture the *what* and *why* — without them, SDs drift from original intent
-- Architecture plans capture the *how* — without them, implementation decisions are made ad-hoc during EXEC
-- EVA/HEAL scoring requires registered vision documents to validate SD alignment
-- The brainstorm already contains all the raw material — synthesis into formal documents is low-cost, high-value
-
-**Exception**: Only "Consideration Only" and "Significant Departure" classifications may skip vision/arch creation, since those outcomes indicate the idea is not ready for implementation.
-
-No AskUserQuestion needed — proceed directly to Step 9.5 after Step 9.
 
 ---
 
@@ -1314,12 +1350,14 @@ Run the vision command with dimensions derived from the vision doc's success cri
 
 ```bash
 node scripts/eva/vision-command.mjs upsert \
-  --vision-key VISION-<TOPIC-KEY>-L2-001 \
+  --vision-key VISION-<CONTEXT>-L2-<NNN> \
   --level L2 \
   --content '<VISION_CONTENT_FROM_STEP_9.5A>' \
   --brainstorm-id <SESSION_ID> \
   --dimensions '<JSON_ARRAY>'
 ```
+
+Substitute `<CONTEXT>` and `<NNN>` using the derivation + collision-scan rules below.
 
 **IMPORTANT**: Use `--content` to pass the in-memory vision content directly. Do NOT use `--source` with a file path — that would create a markdown file, violating the DB-only policy.
 
@@ -1329,7 +1367,42 @@ node scripts/eva/vision-command.mjs upsert \
 - Weights should sum to ~1.0 — verify before passing (warn if outside 0.9-1.1)
 - Use `timeout: 30000` for the command
 
-**Key format**: `VISION-<CONTEXT>-L2-NNN` where CONTEXT = venture_id when available, topic key otherwise
+**Key format**: `VISION-<CONTEXT>-L2-<NNN>`
+
+**CONTEXT derivation**:
+- If a venture was identified in Step 4 and has a short `venture_id` (e.g., `VEN-042`, `EHG-CORE`), use it verbatim (uppercased, non-alphanumerics replaced with `-`).
+- Otherwise, derive a **topic slug** from the brainstorm topic:
+  1. Lowercase the topic string.
+  2. Replace every run of non-alphanumeric characters with a single `-`.
+  3. Trim leading/trailing `-`.
+  4. Uppercase the result.
+  5. Truncate to 40 characters at a word boundary (split on `-`, keep whole segments).
+  - Example: `"AI-powered customer support chatbot"` → `AI-POWERED-CUSTOMER-SUPPORT-CHATBOT`.
+- If derivation produces an empty string (topic was all punctuation), fall back to `SESSION-<first 8 chars of SESSION_ID>`.
+
+**NNN collision handling** — do NOT hardcode `001`. Before calling `vision-command.mjs upsert`, query for the next available suffix:
+
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const prefix = 'VISION-<CONTEXT>-L2-';
+supabase.from('eva_vision_documents')
+  .select('vision_key')
+  .like('vision_key', prefix + '%')
+  .then(({data}) => {
+    const used = (data || []).map(r => {
+      const m = r.vision_key.match(/-(\d{3})\$/);
+      return m ? parseInt(m[1], 10) : 0;
+    });
+    const next = (used.length ? Math.max(...used) : 0) + 1;
+    console.log('NEXT_NNN=' + String(next).padStart(3, '0'));
+  });
+"
+```
+
+Use the captured `NEXT_NNN` as the suffix. The same rules apply to `ARCH-<CONTEXT>-<NNN>` in Step 9.5D (scan `eva_architecture_plans` with prefix `ARCH-<CONTEXT>-`).
 
 **CRITICAL — Key Capture and Error Handling:**
 1. Parse the command output for the returned vision key (look for `VISION-` pattern in stdout)
@@ -1471,18 +1544,20 @@ Architecture plans MUST reference specific details from the brainstorm conversat
 
 ```bash
 node scripts/eva/archplan-command.mjs upsert \
-  --plan-key ARCH-<TOPIC-KEY>-001 \
-  --vision-key VISION-<TOPIC-KEY>-L2-001 \
+  --plan-key ARCH-<CONTEXT>-<NNN> \
+  --vision-key <VISION_KEY_FROM_STEP_9.5B> \
   --content '<ARCHITECTURE_CONTENT_FROM_STEP_9.5C>' \
   --dimensions '<JSON_ARRAY>'
 ```
+
+Use the **same** `<CONTEXT>` you derived in Step 9.5B (so vision and arch share an ID root). Compute `<NNN>` with the collision scan against `eva_architecture_plans` (prefix `ARCH-<CONTEXT>-`). `<VISION_KEY_FROM_STEP_9.5B>` is the exact key returned by the vision upsert — do NOT re-derive it.
 
 **IMPORTANT**: Use `--content` to pass the in-memory architecture content directly. Do NOT use `--source` with a file path — that would require creating a markdown file, violating the DB-only policy. The `--sections` flag is also available as an alternative for structured JSON input.
 
 Architecture dimensions focus on structural/implementation aspects (6-8 dimensions).
 Weights should sum to ~1.0 — verify before passing (warn if outside 0.9-1.1).
 
-**Key format**: `ARCH-<CONTEXT>-NNN` where CONTEXT = venture_id when available, topic key otherwise
+**Key format**: `ARCH-<CONTEXT>-<NNN>`. CONTEXT derivation and NNN collision-scan rules are the same as Step 9.5B (reuse the same CONTEXT you derived there so vision and arch share an ID root; scan `eva_architecture_plans` with prefix `ARCH-<CONTEXT>-` for next NNN).
 
 **CRITICAL — Key Capture and Error Handling:**
 1. Parse the command output for the returned plan key (look for `ARCH-` pattern in stdout)
@@ -1583,29 +1658,31 @@ supabase.from('brainstorm_sessions')
 
 ## Step 10: Session Retrospective
 
-Record the session with the in-memory brainstorm content stored in the `content` column:
+Finalize the session row created in Step 4.6 with the in-memory brainstorm content, the classified outcome, scores, and the remaining metadata. This is an **UPDATE**, not an INSERT — the row already exists.
 
-**IMPORTANT**: Pass the brainstorm markdown content (built in-memory above) as the `content` field value.
-Do NOT set `document_path` — that field is deprecated. All brainstorm content goes in the `content` column.
+**IMPORTANT**:
+- Use the `SESSION_ID` captured in Step 4.6.
+- Pass the brainstorm markdown content (built in-memory above) as the `content` field value.
+- Do NOT set `document_path` — that field is deprecated. All brainstorm content goes in the `content` column.
+- The UPDATE must **merge** with existing metadata so vision_key / plan_key / arch_quality_score written by Step 9.5E (and any early values from Step 4.6) are preserved.
 
 ```bash
 node -e "
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-supabase.from('brainstorm_sessions').insert({
-  domain: '<DOMAIN>',
-  topic: '<TOPIC>',
-  mode: '<structured|conversational>',
-  stage: '<PHASE>',
-  venture_ids: <VENTURE_IDS_ARRAY_OR_NULL>,
-  cross_venture: <true|false>,
-  outcome_type: '<outcome_bucket>',
-  session_quality_score: <0.0-1.0>,
-  crystallization_score: <0.0-1.0 or null>,
-  retrospective_status: 'pending',
-  content: \`<BRAINSTORM_MARKDOWN_CONTENT>\`,
-  metadata: {
+(async () => {
+  // Fetch existing metadata so we can merge (vision_key, plan_key, arch_quality_score from Step 9.5E live here)
+  const { data: existing, error: readErr } = await supabase
+    .from('brainstorm_sessions')
+    .select('metadata')
+    .eq('id', '<SESSION_ID>')
+    .single();
+  if (readErr) { console.error('Session read error:', readErr.message); process.exit(1); }
+  const existingMeta = (existing && existing.metadata) || {};
+
+  const finalMeta = Object.assign({}, existingMeta, {
+    status: 'finalized',
     questions_asked: <count>,
     questions_skipped: <count>,
     evaluation_performed: <true|false>,
@@ -1613,12 +1690,27 @@ supabase.from('brainstorm_sessions').insert({
     team_perspectives: <{challenger: {...}, visionary: {...}, pragmatist: {...}, synthesis: {...}} or null>,
     team_agents_responded: <0|1|2|3>,
     related_ventures: [<venture_names>],
-    not_doing: <ARRAY_OF_STRINGS_FROM_STEP_6C_OR_7E>  // A1: Not-Doing contract — empty array if chairman picked "Nothing — keep open"
-  }
-}).select().single().then(({data, error}) => {
-  if (error) console.error('Session record error:', error.message);
-  else console.log('SESSION_ID=' + data.id);
-});
+    not_doing: <ARRAY_OF_STRINGS_FROM_STEP_6C_OR_7E>  // A1: Not-Doing contract — empty array if chairman picked 'Nothing — keep open'
+  });
+
+  const { data, error } = await supabase
+    .from('brainstorm_sessions')
+    .update({
+      // Columns potentially unknown at Step 4.6 — fill now
+      venture_ids: <VENTURE_IDS_ARRAY_OR_NULL>,
+      cross_venture: <true|false>,
+      outcome_type: '<outcome_bucket>',  // final classified value (Step 8 / 9.6 upgraded)
+      session_quality_score: <0.0-1.0>,
+      crystallization_score: <0.0-1.0 or null>,
+      content: \`<BRAINSTORM_MARKDOWN_CONTENT>\`,
+      metadata: finalMeta
+    })
+    .eq('id', '<SESSION_ID>')
+    .select('id')
+    .single();
+  if (error) console.error('Session update error:', error.message);
+  else console.log('SESSION_FINALIZED=' + data.id);
+})();
 "
 ```
 
@@ -1696,12 +1788,13 @@ options:
 
 **Auto-chaining when "Create SDs" or "Review documents first" is selected (vision/arch keys available):**
 
-1. **Invoke /eva review** with the registered keys:
-   - Use the Skill tool to invoke `review-vision` with args: `--vision-key <VISION_KEY> --plan-key <PLAN_KEY>`
-   - The vision_key and plan_key come from Step 9.5E (stored during that step)
-   - Do NOT ask the user to type the keys — they are auto-populated
+1. **Optional — invoke the vision-review skill** (only if "Review documents first" was selected):
+   - Inspect the session's available-skills list for a vision-review skill (candidate names: `review-vision`, `eva-review`, `eva`). Note: the plain `review` skill is for pull requests, not vision docs — do not invoke it here.
+   - If a matching skill is present: invoke it with args `--vision-key <VISION_KEY> --plan-key <PLAN_KEY>`.
+   - If no matching skill is present: report to the user `⚠️ No vision-review skill available in this session — skipping review step and proceeding to SD creation.` and continue to step 2.
+   - The vision_key and plan_key come from Step 9.5E (stored during that step). Do NOT ask the user to type them.
 
-2. **After review completes, invoke /leo create** with the keys:
+2. **Invoke /leo create** with the keys (runs for both "Create SDs" and "Review documents first" paths):
    - Use the Skill tool to invoke `leo` with args: `create --vision-key <VISION_KEY> --arch-key <PLAN_KEY>`
    - The keys are passed as CLI flags so the created SD has vision/arch traceability in its metadata
    - Do NOT ask the user for the keys — they are auto-populated from Step 9.5
