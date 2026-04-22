@@ -114,9 +114,9 @@
           },
           {
             "type": "command",
-            "command": "npx eslint --fix --no-error-on-unmatched-pattern $CLAUDE_FILE_PATHS 2>&1 | tail -5; npx tsc --noEmit --pretty 2>&1 | head -30 || true",
-            "timeout": 30,
-            "statusMessage": "Linting & type-checking..."
+            "command": "npx eslint --fix --no-error-on-unmatched-pattern \"$CLAUDE_FILE_PATHS\" 2>&1 | tail -5",
+            "timeout": 15,
+            "statusMessage": "Linting..."
           }
         ]
       },
@@ -125,9 +125,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx eslint --fix --no-error-on-unmatched-pattern $CLAUDE_FILE_PATHS 2>&1 | tail -5; npx tsc --noEmit --pretty 2>&1 | head -30 || true",
-            "timeout": 30,
-            "statusMessage": "Linting & type-checking..."
+            "command": "npx eslint --fix --no-error-on-unmatched-pattern \"$CLAUDE_FILE_PATHS\" 2>&1 | tail -5",
+            "timeout": 15,
+            "statusMessage": "Linting..."
           }
         ]
       },

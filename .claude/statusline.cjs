@@ -79,6 +79,7 @@ const cwd = data.cwd || 'unknown';
 
 // Model abbreviation
 function abbreviateModel(m) {
+  if (/Opus.*4\.7/i.test(m)) return 'O4.7';
   if (/Opus.*4\.6/i.test(m)) return 'O4.6';
   if (/Opus.*4\.5/i.test(m)) return 'O4.5';
   if (/Opus.*4/i.test(m)) return 'O4';
