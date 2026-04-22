@@ -296,6 +296,7 @@
     "session:cleanup": "node scripts/claude-session-coordinator.mjs cleanup",
     "session:info": "node scripts/claude-session-coordinator.mjs info",
     "session:worktree": "node scripts/session-worktree.js",
+    "session:check-concurrency": "node scripts/session-check-concurrency.js",
     "handoff": "node scripts/handoff.js",
     "handoff:dry-run": "node scripts/unified-handoff-system-v2.js execute --dry-run",
     "handoff:list": "node scripts/handoff.js list",
