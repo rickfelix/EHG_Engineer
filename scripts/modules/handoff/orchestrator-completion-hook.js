@@ -406,7 +406,8 @@ const DEFAULT_TEST_PATTERNS = [
 /**
  * Maximum time (ms) allowed for the audit to complete.
  */
-const AUDIT_TIMEOUT_MS = 2000;
+// SD-MAN-FIX-LEO-INFRASTRUCTURE-HANDOFF-001: Increased from 2s to 10s for multi-child orchestrators
+const AUDIT_TIMEOUT_MS = 10000;
 
 /**
  * Run post-orchestrator completeness audit across all children.
@@ -945,9 +946,11 @@ export async function executeOrchestratorCompletionHook(
       const GAP_ANALYSIS_TIMEOUT = 60000;
       const gapStartTime = Date.now();
 
+      let gapAnalysisTruncated = false;
       for (const child of completedChildren) {
         if (Date.now() - gapStartTime > GAP_ANALYSIS_TIMEOUT) {
-          console.log(`   ⚠️  Gap analysis timeout after ${completedChildren.indexOf(child)}/${completedChildren.length} children`);
+          console.log(`   ⚠️  Gap analysis timeout after ${completedChildren.indexOf(child)}/${completedChildren.length} children — results truncated`);
+          gapAnalysisTruncated = true;
           break;
         }
         try {
@@ -959,8 +962,9 @@ export async function executeOrchestratorCompletionHook(
       }
 
       hookDetails.gapAnalysis = {
-        status: 'completed',
+        status: gapAnalysisTruncated ? 'truncated' : 'completed',
         children_analyzed: gapResults.length,
+        total_children: completedChildren.length,
         total_gaps: gapResults.reduce((sum, r) => sum + r.gaps, 0),
         avg_coverage: gapResults.filter(r => r.coverage !== null).length > 0
           ? Math.round(gapResults.filter(r => r.coverage !== null).reduce((sum, r) => sum + r.coverage, 0) / gapResults.filter(r => r.coverage !== null).length)
@@ -1076,7 +1080,7 @@ export async function executeOrchestratorCompletionHook(
       console.log('   ═══════════════════════════════════════════════════════');
       console.log(`      PR:     ${prUrl}`);
       console.log(`      Reason: Merge ${reason}`);
-      console.log(`      Action: Run /ship manually, then re-run LEAD-FINAL-APPROVAL`);
+      console.log('      Action: Run /ship manually, then re-run LEAD-FINAL-APPROVAL');
       console.log('   ═══════════════════════════════════════════════════════');
 
       hookDetails.prMergeGate = { blocked: true, reason, prUrl };
