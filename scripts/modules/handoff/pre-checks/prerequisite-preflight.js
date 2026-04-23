@@ -104,8 +104,13 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     return { passed: true, issues: [] };
   }
 
+  // SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-006 / Issue #4): info-severity entries
+  // are informational, not failures. Treat them as non-blocking so an exempt
+  // sd_type (e.g., USER_STORIES_BYPASSED on infrastructure SDs) does not block
+  // the handoff. All entries are still returned for display.
+  const blockingIssues = issues.filter(i => i && i.severity !== 'info');
   return {
-    passed: issues.length === 0,
+    passed: blockingIssues.length === 0,
     issues
   };
 }
