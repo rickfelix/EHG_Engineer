@@ -104,8 +104,9 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     return { passed: true, issues: [] };
   }
 
+  const blockingIssues = issues.filter(i => i.severity !== 'info');
   return {
-    passed: issues.length === 0,
+    passed: blockingIssues.length === 0,
     issues
   };
 }
