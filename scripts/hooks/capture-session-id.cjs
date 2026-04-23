@@ -67,17 +67,35 @@ function logSpawnError(sessionId, ccPid, err, code) {
   console.error(`SessionStart:session-tick: spawn failed: ${entry.error_message} (code=${entry.error_code} platform=${entry.platform})`);
 }
 
+// SD-LEO-INFRA-SESSION-PID-MARKER-001: timeouts sized so max internal work
+// (tree_walk + scan) stays under the registered hook timeout in settings.json.
+// Hook timeout = 15s; internal budget = tree_walk(6s) + scan(3s) = 9s → 6s margin.
+const TREE_WALK_TIMEOUT_MS = 6000;
+const SCAN_TIMEOUT_MS = 3000;
+
+function logDiscoveryEvent(fields) {
+  // Structured JSON log on stderr (hook stdout is reserved for env-file exports).
+  // Always-on at INFO per PRD FR-3.
+  const entry = { event: 'capture-session-id.discovery', timestamp: new Date().toISOString(), ...fields };
+  try { console.error(JSON.stringify(entry)); } catch { /* best effort */ }
+}
+
 /**
  * Find the Claude Code node.exe PID by walking the process ancestry chain.
  * Mirrors the logic in lib/terminal-identity.js findClaudeCodePid(), but in CJS
  * for use in this hook. Falls back to process scan if tree walk fails.
  *
+ * @param {string} entryPath - SessionStart source from Claude Code (startup|resume|compact|reconnect|unknown)
  * @returns {string|null} Claude Code process PID
  */
-function findClaudeCodePid() {
-  if (process.platform !== 'win32') return null;
+function findClaudeCodePid(entryPath = 'unknown') {
+  if (process.platform !== 'win32') {
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'none', outcome: 'skipped_non_windows', platform: process.platform });
+    return null;
+  }
 
   // Method 1: Walk process ancestry
+  const walkStart = process.hrtime.bigint();
   try {
     const script = [
       `$p = ${process.pid}`,
@@ -94,7 +112,7 @@ function findClaudeCodePid() {
     const raw = execSync(`powershell -NoProfile -EncodedCommand ${encoded}`, {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'ignore'],
-      timeout: 10000
+      timeout: TREE_WALK_TIMEOUT_MS
     }).trim();
 
     if (raw) {
@@ -109,16 +127,28 @@ function findClaudeCodePid() {
         if (proc.name === 'node.exe' || proc.name === 'node') {
           const parent = chain[i + 1];
           if (!parent || !['node.exe', 'node', 'bash.exe', 'bash', 'sh.exe', 'sh'].includes(parent.name)) {
+            const dur = Number((process.hrtime.bigint() - walkStart) / 1000000n);
+            logDiscoveryEvent({ entry_path: entryPath, method_used: 'tree_walk', outcome: 'success', duration_ms: dur, chain_depth: chain.length });
             return proc.pid;
           }
         }
       }
     }
-  } catch { /* fall through to scan */ }
+    const dur = Number((process.hrtime.bigint() - walkStart) / 1000000n);
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'tree_walk', outcome: 'no_match', duration_ms: dur });
+  } catch (err) {
+    const dur = Number((process.hrtime.bigint() - walkStart) / 1000000n);
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'tree_walk', outcome: 'error', duration_ms: dur, error: err && err.message ? String(err.message).slice(0, 200) : 'unknown' });
+    /* fall through to scan */
+  }
 
   // Method 2: Scan all node.exe processes for SSE port match
   const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
-  if (!ssePort) return null;
+  if (!ssePort) {
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'scan', outcome: 'skipped_no_sse_port' });
+    return null;
+  }
+  const scanStart = process.hrtime.bigint();
   try {
     const script = [
       'Get-CimInstance Win32_Process -Filter "Name=\'node.exe\'" -ErrorAction SilentlyContinue |',
@@ -130,10 +160,19 @@ function findClaudeCodePid() {
     const raw = execSync(`powershell -NoProfile -EncodedCommand ${encoded}`, {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'ignore'],
-      timeout: 5000
+      timeout: SCAN_TIMEOUT_MS
     }).trim();
-    if (raw && /^\d+$/.test(raw)) return raw;
-  } catch { /* give up */ }
+    const dur = Number((process.hrtime.bigint() - scanStart) / 1000000n);
+    if (raw && /^\d+$/.test(raw)) {
+      logDiscoveryEvent({ entry_path: entryPath, method_used: 'scan', outcome: 'success', duration_ms: dur, sse_port: ssePort });
+      return raw;
+    }
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'scan', outcome: 'no_match', duration_ms: dur, sse_port: ssePort });
+  } catch (err) {
+    const dur = Number((process.hrtime.bigint() - scanStart) / 1000000n);
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'scan', outcome: 'error', duration_ms: dur, error: err && err.message ? String(err.message).slice(0, 200) : 'unknown' });
+    /* give up */
+  }
 
   return null;
 }
@@ -180,7 +219,12 @@ function main() {
         // (process.ppid is often cmd.exe, not Claude Code). This PID matches what
         // getTerminalId() → findClaudeCodePid() discovers at Bash tool runtime.
         const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
-        const ccPid = findClaudeCodePid() || process.ppid || process.pid;
+        const entryPath = data.source || 'unknown';
+        const discoveredPid = findClaudeCodePid(entryPath);
+        const ccPid = discoveredPid || process.ppid || process.pid;
+        if (!discoveredPid) {
+          logDiscoveryEvent({ entry_path: entryPath, method_used: 'fallback_ppid', outcome: 'degraded', fallback_ppid: ccPid });
+        }
         const markerDir = path.resolve(__dirname, '../../.claude/session-identity');
         try {
           if (!fs.existsSync(markerDir)) {
@@ -288,9 +332,10 @@ function main() {
       resolve();
     });
 
-    // Timeout after 8 seconds if stdin doesn't close.
-    // Increased from 2s to accommodate PowerShell process tree walk on Windows.
-    setTimeout(resolve, 8000);
+    // Timeout must exceed the internal PowerShell budget (tree_walk + scan = 9s).
+    // Registered hook timeout in .claude/settings.json is 15s; 12s leaves 3s margin
+    // for marker write + cleanup before Claude Code kills the process.
+    setTimeout(resolve, 12000);
   });
 }
 
