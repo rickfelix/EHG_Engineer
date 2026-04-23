@@ -5,12 +5,19 @@
  *   - Every test is scoped by a unique TEST_RUN_ID prefix.
  *   - afterEach / afterAll deletes all rows matching that prefix to keep the
  *     shared Supabase project clean across parallel CI runs.
- *   - Seed helpers insert rows needed by the flag-mode under test
- *     (feedback_items, issue_patterns, uat_test_results) and return the
- *     created primary keys so the test can invoke the real SD-creation path.
+ *   - Seed helpers insert rows needed by the flag-mode under test and
+ *     return the created primary keys so the test can invoke the real
+ *     SD-creation path.
  *
- * All helpers use createSupabaseServiceClient from scripts/lib/supabase-connection.js.
- * Do not open a new client pattern in tests — use this helper.
+ * Schema alignment (verified 2026-04-23 against live DB):
+ *   - uat_test_results columns: id, run_id, test_case_id, status,
+ *     error_message, failure_category, metadata (no failure_reason, no
+ *     test_name, no priority — those fields live on uat_test_cases).
+ *   - issue_patterns columns: pattern_id, category, severity, issue_summary,
+ *     occurrence_count, status, first_seen_at, last_seen_at.
+ *   - feedback_items table DOES NOT EXIST in this Supabase project — the
+ *     --from-feedback flag mode is tested via the mapping contract alone,
+ *     not a DB round-trip through a non-existent table.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -52,34 +59,6 @@ export function newTestRunId() {
 }
 
 /**
- * Seed a feedback_items row for --from-feedback mode tests.
- *
- * @param {string} testRunId - prefix from newTestRunId()
- * @param {object} overrides - optional field overrides
- * @returns {Promise<{id: string, row: object}>}
- */
-export async function seedFeedback(testRunId, overrides = {}) {
-  const supabase = await getSupabase();
-  if (!supabase) throw new Error('Supabase credentials missing — cannot seed feedback');
-
-  const id = `${testRunId}-feedback-${randomUUID().slice(0, 4)}`;
-  const row = {
-    id,
-    feedback_type: overrides.feedback_type || 'issue',
-    title: overrides.title || `${testRunId} seeded feedback`,
-    description: overrides.description || `Seeded by integration test ${testRunId}`,
-    priority: overrides.priority || 'P2',
-    status: overrides.status || 'triaged',
-    source: overrides.source || 'integration-test',
-    ...overrides,
-  };
-
-  const { data, error } = await supabase.from('feedback_items').insert(row).select().single();
-  if (error) throw new Error(`seedFeedback failed: ${error.message}`);
-  return { id, row: data };
-}
-
-/**
  * Seed an issue_patterns row for --from-learn mode tests.
  *
  * @param {string} testRunId - prefix from newTestRunId()
@@ -90,7 +69,11 @@ export async function seedPattern(testRunId, overrides = {}) {
   const supabase = await getSupabase();
   if (!supabase) throw new Error('Supabase credentials missing — cannot seed pattern');
 
-  const pattern_id = `PAT-${testRunId}-${randomUUID().slice(0, 4)}`.toUpperCase();
+  // pattern_id format: PAT-<short>-<NUM> — observed in DB as "PAT-001",
+  // "DB-TRIG-PROF-001". Keep it short (≤24 chars) and all-caps to match the
+  // existing corpus.
+  const shortId = randomUUID().slice(0, 6).toUpperCase();
+  const pattern_id = `PAT-E2E-${shortId}`;
   const row = {
     pattern_id,
     category: overrides.category || 'testing',
@@ -98,8 +81,6 @@ export async function seedPattern(testRunId, overrides = {}) {
     issue_summary: overrides.issue_summary || `${testRunId} seeded pattern`,
     occurrence_count: overrides.occurrence_count ?? 3,
     status: overrides.status || 'active',
-    first_seen_at: new Date().toISOString(),
-    last_seen_at: new Date().toISOString(),
     ...overrides,
   };
 
@@ -109,31 +90,30 @@ export async function seedPattern(testRunId, overrides = {}) {
 }
 
 /**
- * Seed a uat_test_results row for --from-uat mode tests.
+ * Build a simulated UAT failure payload for --from-uat mode tests.
+ *
+ * NOTE: We do NOT insert into uat_test_results because `run_id` is a FK to
+ * `uat_test_runs` and seeding a run record (plus a matching test_case_id FK
+ * to uat_test_cases) would pollute a chain of production tables. The
+ * UATToSDConverter takes a payload object in practice, so simulating the
+ * payload is the same contract surface the production code exercises.
  *
  * @param {string} testRunId - prefix from newTestRunId()
  * @param {object} overrides - optional field overrides
- * @returns {Promise<{id: string, row: object}>}
+ * @returns {{id: string, row: object}} In-memory UAT payload
  */
-export async function seedUATResult(testRunId, overrides = {}) {
-  const supabase = await getSupabase();
-  if (!supabase) throw new Error('Supabase credentials missing — cannot seed uat result');
-
-  const id = `${testRunId}-uat-${randomUUID().slice(0, 4)}`;
+export function buildUATPayload(testRunId, overrides = {}) {
+  const id = randomUUID();
   const row = {
     id,
-    test_id: overrides.test_id || `UAT-${testRunId}`,
-    test_name: overrides.test_name || `${testRunId} seeded UAT`,
+    test_case_id: overrides.test_case_id || `${testRunId}-tc`,
+    run_id: overrides.run_id || `${testRunId}-run`,
     status: overrides.status || 'failed',
-    failure_reason: overrides.failure_reason || `${testRunId}: regression seed`,
-    priority: overrides.priority || 'high',
-    created_at: new Date().toISOString(),
+    error_message: overrides.error_message || `${testRunId}: regression seed`,
+    failure_category: overrides.failure_category || 'regression',
     ...overrides,
   };
-
-  const { data, error } = await supabase.from('uat_test_results').insert(row).select().single();
-  if (error) throw new Error(`seedUATResult failed: ${error.message}`);
-  return { id, row: data };
+  return { id, row };
 }
 
 /**
@@ -154,16 +134,19 @@ export async function cleanup(testRunId) {
   }
 
   const errors = [];
-  const tables = [
-    { name: 'strategic_directives_v2', col: 'sd_key' },
-    { name: 'strategic_directives_v2', col: 'id' },
-    { name: 'feedback_items', col: 'id' },
-    { name: 'issue_patterns', col: 'pattern_id' },
-    { name: 'uat_test_results', col: 'id' },
+  // strategic_directives_v2: filter by sd_key prefix (testRunId is embedded
+  // in the semantic via title). We ALSO clean by id for rows we inserted.
+  // issue_patterns: pattern_id uses PAT-E2E-<short> prefix.
+  // uat_test_results: id is a UUID (not testRunId-prefixed), so we clean by
+  // error_message which always contains testRunId.
+  const strategies = [
+    { name: 'strategic_directives_v2', col: 'sd_key', filter: `${testRunId}%` },
+    { name: 'strategic_directives_v2', col: 'id', filter: `${testRunId}%` },
+    { name: 'strategic_directives_v2', col: 'title', filter: `${testRunId}%` },
+    { name: 'issue_patterns', col: 'issue_summary', filter: `${testRunId}%` },
   ];
 
-  for (const { name, col } of tables) {
-    const filter = col === 'pattern_id' ? `PAT-${testRunId.toUpperCase()}%` : `${testRunId}%`;
+  for (const { name, col, filter } of strategies) {
     const { error } = await supabase.from(name).delete().ilike(col, filter);
     if (error) errors.push({ table: name, col, error: error.message });
   }
