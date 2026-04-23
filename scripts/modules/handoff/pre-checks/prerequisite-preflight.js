@@ -14,34 +14,26 @@
  */
 
 import { SD_TYPE_THRESHOLDS, DEFAULT_THRESHOLD, JSONB_FIELDS } from '../../sd-quality-scoring.js';
+import { shouldBypassUserStories } from '../../../../lib/protocol-policies/orchestrator-bypass.js';
 
 /**
- * SD-LEARN-FIX-ADDRESS-PAT-RETRO-003 (US-001):
  * Determines whether an SD requires user stories at PLAN-TO-EXEC time.
  *
- * Aligns with the "Required Sub-Agents by Type" matrix in CLAUDE_CORE.md —
- * only feature (and conservatively, bugfix) SDs require STORIES. Infrastructure,
- * documentation, database, security, and refactor types are exempt.
+ * Thin wrapper around lib/protocol-policies/orchestrator-bypass.js —
+ * preserved as a named export for backward compatibility with existing
+ * tests (tests/unit/handoff/prerequisite-preflight-stories-exemption.test.js)
+ * and direct callers. New code should import shouldBypassUserStories from
+ * the policy registry directly.
  *
- * Returns true (stories required) for unknown/null types as a safe default.
- *
- * Future: SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 will centralize this in
- * lib/protocol-policies/orchestrator-bypass.js. When that ships, refactor
- * this to import the shared helper.
+ * SD-LEARN-FIX-ADDRESS-PAT-RETRO-003 (US-001) introduced the helper.
+ * SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-001) centralized the rule set.
  *
  * @param {string|null|undefined} sdType - The sd_type field value
  * @returns {boolean} true if the SD requires user stories at PLAN-TO-EXEC
  */
 export function shouldRequireUserStories(sdType) {
-  const STORY_EXEMPT_TYPES = new Set([
-    'infrastructure',
-    'documentation',
-    'database',
-    'security',
-    'refactor'
-  ]);
   if (!sdType || typeof sdType !== 'string') return true;
-  return !STORY_EXEMPT_TYPES.has(sdType);
+  return !shouldBypassUserStories(sdType);
 }
 
 /**
