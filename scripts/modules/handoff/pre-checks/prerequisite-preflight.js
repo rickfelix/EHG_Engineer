@@ -104,8 +104,12 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     return { passed: true, issues: [] };
   }
 
+  // Quick-fix QF-20260423-725: Filter informational entries before determining pass/fail.
+  // Info entries (e.g. USER_STORIES_BYPASSED for exempt SD types per PR #3240) must not
+  // block the handoff — they are audit trail, not blockers.
+  const blockingIssues = issues.filter(i => i.severity !== 'info');
   return {
-    passed: issues.length === 0,
+    passed: blockingIssues.length === 0,
     issues
   };
 }
