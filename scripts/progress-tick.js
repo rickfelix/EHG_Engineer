@@ -12,13 +12,13 @@
  *
  * Behavior:
  *   - Writes strategic_directives_v2.progress_percentage = GREATEST(current, pct).
- *     Monotonic: a lower pct than the current value is a no-op.
+ *     Monotonic: a lower or equal pct than the current value is a no-op.
  *   - Honors existing handoff-boundary writers (trigger_sd_progress_recalc,
  *     lead-final-approval/helpers.js). Those run at phase boundaries; this CLI
  *     lets workers advance the value in between.
  *
  * Exit codes:
- *   0  success (or no-op when pct <= current)
+ *   0  success (or monotonic no-op)
  *   1  invalid input (unknown SD, pct out of range, missing args)
  *   2  database error (connection, constraint violation)
  *
@@ -26,8 +26,13 @@
  *   - p95 latency < 200ms on warm connection (single SELECT + single UPDATE)
  *   - Fail-soft: never throws; caller (worker process) always continues
  *   - Idempotent: re-running with same pct is a no-op
- *   - Monotonic: pct < current progress_percentage is a no-op
- *   - Bounded: pct outside [0,100] rejected client-side and by DB CHECK.
+ *   - Monotonic: pct <= current progress_percentage is a no-op
+ *   - Bounded: pct outside [0,100] rejected client-side
+ *
+ * Note: Uses `process.exitCode` instead of `process.exit(N)` to avoid a
+ * Node 24 + Windows libuv assertion (`UV_HANDLE_CLOSING` during active async
+ * handle teardown). The main() function returns naturally and the configured
+ * exitCode is honored at shutdown.
  */
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
@@ -51,7 +56,8 @@ async function main() {
   const args = process.argv.slice(2);
   if (args.length < 2) {
     usage();
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const sdKey = args[0];
@@ -61,12 +67,14 @@ async function main() {
   const pct = Number.parseInt(pctRaw, 10);
   if (!Number.isInteger(pct) || pct < 0 || pct > 100 || String(pct) !== String(pctRaw).trim()) {
     console.error(`ERROR: pct must be an integer in [0,100], got: ${pctRaw}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.error('ERROR: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env');
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -79,11 +87,13 @@ async function main() {
 
   if (sdErr) {
     console.error(`ERROR: SD lookup failed: ${sdErr.message}`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
   if (!sd) {
     console.error(`ERROR: SD not found: ${sdKey}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const current = sd.progress_percentage || 0;
@@ -91,7 +101,7 @@ async function main() {
   // Monotonic no-op: don't move backwards
   if (pct <= current) {
     console.log(`${new Date().toISOString()} ${sdKey} ${sd.current_phase || '-'} tick=${pct} (no-op; current=${current})${label ? ' ' + label : ''}`);
-    process.exit(0);
+    return;
   }
 
   const { error: updErr } = await supabase
@@ -101,15 +111,16 @@ async function main() {
 
   if (updErr) {
     console.error(`ERROR: tick write failed: ${updErr.message}`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   console.log(`${new Date().toISOString()} ${sdKey} ${sd.current_phase || '-'} tick=${pct}${label ? ' ' + label : ''}`);
-  process.exit(0);
 }
 
 main().catch(err => {
-  // Fail-soft: even unexpected errors exit with code 2 (DB/infra error) rather than throwing
+  // Fail-soft: even unexpected errors mark the process as failed (DB/infra error)
+  // rather than throwing.
   console.error(`ERROR: unexpected failure: ${err.message}`);
-  process.exit(2);
+  process.exitCode = 2;
 });
