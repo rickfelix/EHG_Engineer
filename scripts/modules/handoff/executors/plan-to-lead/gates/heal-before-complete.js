@@ -287,6 +287,12 @@ const SD_TYPE_THRESHOLDS = {
   refactor: 85,
   infrastructure: 80,
   documentation: 80,
+  // `bugfix` is the canonical db-stored value (sd-key-generator maps fix → bugfix).
+  // Threshold lower than feature/security because bugfix SDs address a narrow slice
+  // of dimensions and are mathematically unable to hit higher thresholds against the
+  // full vision rubric. A follow-up SD should port type-aware dimension filtering
+  // from GATE_VISION_SCORE's SD_TYPE_ADDRESSABLE_DIMENSIONS into this gate.
+  bugfix: 60,
 };
 
 /**
