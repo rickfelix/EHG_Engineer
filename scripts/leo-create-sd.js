@@ -455,6 +455,26 @@ async function createChild(parentKey, index = 0, overrides = {}) {
       .eq('sd_key', sdKey);
   }
 
+  // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A (US-001):
+  // Persist scope_slice when provided via --scope-slice flag.
+  // Note: separate UPDATE to avoid changing createSD signature; schema added 2026-04-23.
+  // Persistence failure is FATAL — silent fallback would invert the safety direction
+  // (caller requested strictness; undo on failure to avoid surprise soft-pass behavior).
+  // Review finding (PR #3232 adversarial review).
+  if (overrides.scopeSlice) {
+    const { error: sliceErr } = await supabase
+      .from('strategic_directives_v2')
+      .update({ scope_slice: overrides.scopeSlice })
+      .eq('sd_key', sdKey);
+    if (sliceErr) {
+      console.error(`[createChild] ❌ Failed to persist scope_slice: ${sliceErr.message}`);
+      // Roll back the child SD row so the caller can retry from a clean state.
+      await supabase.from('strategic_directives_v2').delete().eq('sd_key', sdKey);
+      throw new Error(`scope_slice persistence failed for ${sdKey}: ${sliceErr.message}. Child SD row rolled back.`);
+    }
+    console.log(`   scope_slice set: ${JSON.stringify(overrides.scopeSlice)}`);
+  }
+
   // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: Assert parent claim before returning child
   // Verifies the creating session holds the parent SD claim
   try {
@@ -1525,6 +1545,9 @@ Flags:
                         guardrail (required when scope contains migration/schema keywords).
   --security-reviewed   Set metadata.security_reviewed=true to satisfy GR-SECURITY-BASELINE
                         guardrail (required when scope contains auth/credential/RLS keywords).
+  --scope-slice <JSON>  (--child only) Declare the slice of parent orchestrator scope this
+                        child claims. JSON shape: {stages?: number[], deliverable_globs?: string[]}.
+                        Example: --scope-slice='{"stages":[18]}'
   --help             Show this help message
 
 Dependency Field Guide:
@@ -1637,12 +1660,52 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       if (childArchKeyIdx !== -1 && args[childArchKeyIdx + 1]) {
         childOverrides.archKey = args[childArchKeyIdx + 1];
       }
+      // Parse --scope-slice for child creation (SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A, US-001)
+      // Accepts both `--scope-slice=<json>` and `--scope-slice <json>` forms.
+      let childScopeSliceIdx = -1;
+      let childScopeSliceRaw = null;
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === '--scope-slice') {
+          childScopeSliceIdx = i;
+          childScopeSliceRaw = args[i + 1];
+          break;
+        }
+        if (args[i].startsWith('--scope-slice=')) {
+          childScopeSliceIdx = i;
+          childScopeSliceRaw = args[i].slice('--scope-slice='.length);
+          break;
+        }
+      }
+      if (childScopeSliceRaw != null) {
+        try {
+          const parsed = JSON.parse(childScopeSliceRaw);
+          if (typeof parsed !== 'object' || parsed == null || Array.isArray(parsed)) {
+            throw new Error('scope_slice must be a JSON object');
+          }
+          if (parsed.stages !== undefined && !Array.isArray(parsed.stages)) {
+            throw new Error('scope_slice.stages must be an array of numbers');
+          }
+          if (parsed.deliverable_globs !== undefined && !Array.isArray(parsed.deliverable_globs)) {
+            throw new Error('scope_slice.deliverable_globs must be an array of glob strings');
+          }
+          childOverrides.scopeSlice = parsed;
+        } catch (err) {
+          console.error(`\n❌ Invalid --scope-slice JSON: ${err.message}`);
+          console.error(`   Received: ${childScopeSliceRaw}`);
+          console.error(`   Expected shape: {"stages": [18], "deliverable_globs": ["src/stage18/**"]}`);
+          process.exit(1);
+        }
+      }
       // args[1] = parent key, args[2] = index (skip flag positions)
       const childParentKey = args[1];
       const flagValuePositionsChild = new Set(
         [childTypeIdx, childTitleIdx, childVisionKeyIdx, childArchKeyIdx]
           .filter(i => i !== -1).map(i => i + 1)
       );
+      // --scope-slice value (next arg) is also a flag value to skip when finding the index arg
+      if (childScopeSliceIdx !== -1 && args[childScopeSliceIdx] === '--scope-slice') {
+        flagValuePositionsChild.add(childScopeSliceIdx + 1);
+      }
       const childIndexArg = args.find((a, i) =>
         i >= 2 && !a.startsWith('-') && !flagValuePositionsChild.has(i) && i !== childTypeIdx + 1 && i !== childTitleIdx + 1
       );

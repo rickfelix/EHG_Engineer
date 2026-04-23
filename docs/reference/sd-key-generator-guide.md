@@ -514,8 +514,40 @@ The `/leo create` command uses SDKeyGenerator through `leo-create-sd.js`:
 /leo create --from-uat <test-id>
 /leo create --from-learn <pattern-id>
 /leo create --from-feedback <feedback-id>
-/leo create --from-plan [path]      # NEW: Create from Claude Code plan
-/leo create --child <parent-key> [index]
+/leo create --from-plan [path]      # Create from Claude Code plan
+/leo create --child <parent-key> [index] [--scope-slice <JSON>]
+```
+
+### `--scope-slice` flag (child SDs only)
+
+When creating a child of an orchestrator, use `--scope-slice` to declare the
+slice of parent scope this child claims. The scope-completion gate will then
+filter parent deliverables through this slice before scoring, preventing
+false-positive completion failures on inherited children.
+
+**Shape**: `{stages?: number[], deliverable_globs?: string[]}` — both fields
+optional; if both are present, filter is intersection (deliverable must match
+both).
+
+**Example**:
+```bash
+# Child claims only stage-18 deliverables from parent arch plan
+/leo create --child SD-PARENT-ORCH-001 --scope-slice='{"stages":[18]}'
+
+# Child claims specific file globs
+/leo create --child SD-PARENT-ORCH-001 --scope-slice='{"deliverable_globs":["src/auth/**"]}'
+
+# Intersection: stage-18 AND inside src/
+/leo create --child SD-PARENT-ORCH-001 --scope-slice='{"stages":[18],"deliverable_globs":["src/**"]}'
+```
+
+Malformed JSON exits non-zero with a clear error. Omitting the flag produces
+a child with `scope_slice=NULL` (gate falls back to pre-slice behavior, or to
+a soft-pass when `metadata.inherited_from_parent` is set).
+
+See `database/migrations/20260423_add_scope_slice_to_sds.sql` for the column
+definition and `scripts/modules/handoff/gates/scope-completion-gate.js` for
+filter/soft-pass implementation.
 ```
 
 See `.claude/commands/leo.md` for full command documentation.
