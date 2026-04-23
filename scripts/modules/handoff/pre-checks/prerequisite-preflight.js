@@ -14,34 +14,26 @@
  */
 
 import { SD_TYPE_THRESHOLDS, DEFAULT_THRESHOLD, JSONB_FIELDS } from '../../sd-quality-scoring.js';
+import { shouldBypassUserStories } from '../../../../lib/protocol-policies/orchestrator-bypass.js';
 
 /**
- * SD-LEARN-FIX-ADDRESS-PAT-RETRO-003 (US-001):
  * Determines whether an SD requires user stories at PLAN-TO-EXEC time.
  *
- * Aligns with the "Required Sub-Agents by Type" matrix in CLAUDE_CORE.md —
- * only feature (and conservatively, bugfix) SDs require STORIES. Infrastructure,
- * documentation, database, security, and refactor types are exempt.
+ * Thin wrapper around lib/protocol-policies/orchestrator-bypass.js —
+ * preserved as a named export for backward compatibility with existing
+ * tests (tests/unit/handoff/prerequisite-preflight-stories-exemption.test.js)
+ * and direct callers. New code should import shouldBypassUserStories from
+ * the policy registry directly.
  *
- * Returns true (stories required) for unknown/null types as a safe default.
- *
- * Future: SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 will centralize this in
- * lib/protocol-policies/orchestrator-bypass.js. When that ships, refactor
- * this to import the shared helper.
+ * SD-LEARN-FIX-ADDRESS-PAT-RETRO-003 (US-001) introduced the helper.
+ * SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-001) centralized the rule set.
  *
  * @param {string|null|undefined} sdType - The sd_type field value
  * @returns {boolean} true if the SD requires user stories at PLAN-TO-EXEC
  */
 export function shouldRequireUserStories(sdType) {
-  const STORY_EXEMPT_TYPES = new Set([
-    'infrastructure',
-    'documentation',
-    'database',
-    'security',
-    'refactor'
-  ]);
   if (!sdType || typeof sdType !== 'string') return true;
-  return !STORY_EXEMPT_TYPES.has(sdType);
+  return !shouldBypassUserStories(sdType);
 }
 
 /**
@@ -104,10 +96,13 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     return { passed: true, issues: [] };
   }
 
-  // Quick-fix QF-20260423-725: Filter informational entries before determining pass/fail.
-  // Info entries (e.g. USER_STORIES_BYPASSED for exempt SD types per PR #3240) must not
-  // block the handoff — they are audit trail, not blockers.
-  const blockingIssues = issues.filter(i => i.severity !== 'info');
+  // SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-006 / Issue #4) + QF-20260423-725:
+  // info-severity entries are informational, not failures. Treat them as
+  // non-blocking so an exempt sd_type (e.g., USER_STORIES_BYPASSED on
+  // infrastructure SDs per PR #3240) does not block the handoff. All entries
+  // are still returned for display. Null-safe filter — QF landed identical fix
+  // in parallel; kept defensive guard in case preflight ever emits null entries.
+  const blockingIssues = issues.filter(i => i && i.severity !== 'info');
   return {
     passed: blockingIssues.length === 0,
     issues
@@ -335,7 +330,10 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
           `Create user stories linked to ${sdId}. story_key format: '${sdId}:US-001'.`,
           'Required fields: story_key, sd_id, title, user_role, user_want, user_benefit,',
           '  acceptance_criteria (array), implementation_context (string).',
-          'Example story_key values: ' + sdId + ':US-001, ' + sdId + ':US-002'
+          "Valid status values: 'draft', 'ready', 'in_progress', 'completed', 'blocked', 'cancelled'.",
+          "  (ready / in_progress / completed satisfy the STORIES precondition.)",
+          'Example story_key values: ' + sdId + ':US-001, ' + sdId + ':US-002',
+          'Field reference: docs/database/user_stories_field_reference.md'
         ].join('\n')
       });
     }

@@ -759,9 +759,13 @@ export class BaseExecutor {
         .eq('session_id', activeClaim.session_id);
 
       // Start heartbeat for the existing session (not a new one)
+      // SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-007): cooperative mode here —
+      // the claim predated this subprocess (caller already owns it), so we
+      // must NOT release on exit. Preserves caller claim across handoff.js
+      // invocation (fixes feedback_handoff_releases_claim.md pattern).
       const heartbeatStatus = heartbeatManager.isHeartbeatActive();
       if (!heartbeatStatus.active) {
-        heartbeatManager.startHeartbeat(activeClaim.session_id);
+        heartbeatManager.startHeartbeat(activeClaim.session_id, { ownershipMode: 'cooperative' });
       }
 
       // Show duration estimate (non-blocking)
