@@ -20,6 +20,7 @@ import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
 import { resolveOwnSession } from '../lib/resolve-own-session.js';
 import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate.js';
+import sessionIdentitySot from '../lib/session-identity-sot.js';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
@@ -631,6 +632,24 @@ async function main() {
 
   if (!session) {
     session = await getOrCreateSession();
+  }
+
+  // 2.1 SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-B (FR-1, TR-1, TR-2):
+  // Atomically reconcile the three identity sources so claim-validity-gate sees
+  // all three in agreement. No-op when SESSION_IDENTITY_SOT_ENABLED is unset/false.
+  // Uses a file lock (.claude/session-identity/.lock) to serialize concurrent boots
+  // and tmp+fsync+rename for crash-safe writes.
+  try {
+    const reconcile = sessionIdentitySot.reconcileAtBoot(session.session_id, {
+      repoRoot: sessionIdentitySot.discoverRepoRoot() || undefined
+    });
+    if (reconcile.applied) {
+      console.log(`${colors.dim}(Identity SOT: reconciled — pointer=${reconcile.wrotePointer ? 'updated' : 'skipped'} envFile=${reconcile.wroteEnvFile ? 'updated' : 'n/a'})${colors.reset}`);
+    }
+  } catch (reconcileErr) {
+    // Reconciliation errors are non-fatal during burn-in; log and continue so the
+    // legacy identity path can still succeed. Disagreements surface at claim gate.
+    console.warn(`${colors.yellow}⚠ session-identity reconciliation error (non-blocking): ${reconcileErr.message}${colors.reset}`);
   }
 
   // 2a. Validate claim identity + ownership now that session row exists.
