@@ -26,6 +26,14 @@ export async function storeAndCompressResults(supabase, sd_id, fullReport, curre
   console.log('─'.repeat(60));
 
   // 1. Prepare full report for database storage
+  // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-C:
+  //   populate native phase column.  currentPhase is the caller-supplied
+  //   phase context (default 'EXEC'); fullReport.phase is a secondary
+  //   source some callers populate directly.
+  const phaseValue = (typeof currentPhase === 'string' && currentPhase.trim())
+    || (typeof fullReport.phase === 'string' && fullReport.phase.trim())
+    || null;
+
   const fullReportRecord = {
     sd_id,
     sub_agent_code: fullReport.sub_agent_code || 'QA',
@@ -37,10 +45,12 @@ export async function storeAndCompressResults(supabase, sd_id, fullReport, curre
     recommendations: fullReport.recommendations || [],
     detailed_analysis: JSON.stringify(fullReport.phases || {}),
     execution_time: fullReport.execution_time_seconds || 0,
+    phase: phaseValue,
     metadata: {
       target_app: fullReport.targetApp,
       time_saved: fullReport.time_saved,
-      summary: fullReport.summary
+      summary: fullReport.summary,
+      ...(phaseValue ? { phase: phaseValue } : {})
     }
   };
 
