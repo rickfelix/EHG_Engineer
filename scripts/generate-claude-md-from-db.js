@@ -13,6 +13,8 @@ import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
 
 import { CLAUDEMDGeneratorV3 } from './modules/claude-md-generator/index.js';
+import { getActiveProtocol } from './modules/claude-md-generator/db-queries.js';
+import { runRegenLintHook } from './protocol-lint/regen-hook.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,9 +42,24 @@ if (import.meta.url === `file:///${normalizedArgv}`) {
     const baseDir = path.join(__dirname, '..');
     const mappingPath = path.join(__dirname, 'section-file-mapping.json');
 
+    // Pre-regen lint hook (SD-PROTOCOL-LINTER-001). Aborts before file
+    // writes when a severity=block violation is detected. All current seed
+    // rules ship as warn-only so this is currently advisory.
+    const lintDecision = await runRegenLintHook({
+      supabase,
+      argv: process.argv,
+      getActiveProtocol
+    });
+    if (lintDecision.abort) {
+      process.exit(1);
+    }
+
     const generator = new CLAUDEMDGeneratorV3(supabase, baseDir, mappingPath);
     await generator.generate();
   }
 
-  main().catch(console.error);
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
 }
