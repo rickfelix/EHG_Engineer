@@ -28,3 +28,7 @@ export { createWireframeRequiredGate } from './wireframe-required.js';
 // Translation Fidelity Gate — PLAN-TO-EXEC (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
 // Second invocation: catches drift after PRD/planning work
 export { createTranslationFidelityGate } from './translation-fidelity.js';
+
+// Bugfix Coverage Preflight — advisory only, shifts EXEC-TO-PLAN discovery left
+// Part of SD-LEARN-FIX-ADDRESS-PAT-EXECTOPLAN-001 (FR-3) addressing PAT-HF-EXECTOPLAN-a14ec7de
+export { createBugfixCoveragePreflightGate } from './bugfix-coverage-preflight.js';
