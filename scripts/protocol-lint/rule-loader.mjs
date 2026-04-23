@@ -30,9 +30,12 @@ async function loadDeclarativeRules(dir) {
   const files = await safeReaddir(dir);
   const out = [];
   for (const name of files.filter(f => f.endsWith('.json'))) {
-    const raw = await readFile(join(dir, name), 'utf8');
+    const fullPath = join(dir, name);
+    const raw = await readFile(fullPath, 'utf8');
     const spec = JSON.parse(raw);
-    out.push(compileDeclarativeRule(spec));
+    const rule = compileDeclarativeRule(spec);
+    rule.source_path = toRepoRelative(fullPath);
+    out.push(rule);
   }
   return out;
 }
@@ -41,12 +44,20 @@ async function loadCodeRules(dir) {
   const files = await safeReaddir(dir);
   const out = [];
   for (const name of files.filter(f => f.endsWith('.mjs'))) {
-    const mod = await import(pathToFileURL(join(dir, name)).href);
+    const fullPath = join(dir, name);
+    const mod = await import(pathToFileURL(fullPath).href);
     const rule = mod.default;
     if (!rule || !rule.id || typeof rule.check !== 'function') continue;
-    out.push(rule);
+    // Do not mutate the imported module's default export; clone so source_path
+    // is attached without causing cross-call pollution under vitest module caching.
+    out.push({ ...rule, source_path: toRepoRelative(fullPath) });
   }
   return out;
+}
+
+function toRepoRelative(fullPath) {
+  const idx = fullPath.replace(/\\/g, '/').indexOf('/scripts/');
+  return idx === -1 ? fullPath : fullPath.replace(/\\/g, '/').slice(idx + 1);
 }
 
 async function safeReaddir(dir) {

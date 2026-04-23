@@ -23,6 +23,8 @@
  */
 
 import { runProtocolLint } from './engine.mjs';
+import { loadRules } from './rule-loader.mjs';
+import { startRun, recordRun, checkBypassRateLimit } from './audit-writer.mjs';
 
 /**
  * Extract the value for a `--flag "value"` argv pair. Returns undefined if
@@ -54,7 +56,7 @@ export async function runRegenLintHook({ supabase, argv, getActiveProtocol }) {
     return { abort: false, reason: 'disabled_env' };
   }
 
-  // --skip-lint (slice 4 will add rate-limiting to leo_lint_run_history)
+  // --skip-lint — rate-limited to 3 bypasses per 7 days (audit-writer enforces)
   const skipLint = argv.includes('--skip-lint');
   if (skipLint) {
     const reason = extractFlagValue(argv, '--skip-reason');
@@ -62,31 +64,41 @@ export async function runRegenLintHook({ supabase, argv, getActiveProtocol }) {
       console.error('[protocol-lint] --skip-lint requires --skip-reason "<text>"');
       return { abort: true, reason: 'missing_skip_reason' };
     }
-    console.log(`[protocol-lint] SKIPPED via --skip-lint. reason: ${reason}`);
+    const check = await checkBypassRateLimit({ supabase, reason, initiator: 'regen' });
+    if (!check.allowed) {
+      console.error(`[protocol-lint] Bypass budget exhausted: ${check.used}/${check.budget} used in the last 7 days.`);
+      return { abort: true, reason: 'bypass_budget_exhausted' };
+    }
+    console.log(`[protocol-lint] SKIPPED via --skip-lint (${check.used}/${check.budget} this week). reason: ${reason}`);
     return { abort: false, reason: 'bypass_skip_lint' };
   }
 
-  // Normal path: fetch sections and run the linter
+  // Normal path: fetch sections, run the linter, persist the run + violations
+  const rules = await loadRules();
   const protocol = await getActiveProtocol(supabase);
   const sections = protocol?.sections || [];
-  const result = await runProtocolLint({ mode: 'regen', ctx: { sections } });
 
-  printSummary(result);
+  const runId = await startRun({ supabase, trigger: 'regen', initiator: 'regen' });
+  const result = await runProtocolLint({ mode: 'regen', ctx: { sections }, rules });
+  await recordRun({ supabase, runId, rules, result });
+
+  printSummary(result, runId);
 
   if (result.critical_count > 0) {
     console.error('[protocol-lint] ❌ Aborting regen — critical violations present.');
     console.error('[protocol-lint]    Fix the violations above or re-run with --skip-lint --skip-reason "<text>".');
-    return { abort: true, reason: 'critical_violations', result };
+    return { abort: true, reason: 'critical_violations', result, runId };
   }
 
-  return { abort: false, reason: 'clean_or_warn_only', result };
+  return { abort: false, reason: 'clean_or_warn_only', result, runId };
 }
 
-function printSummary(result) {
+function printSummary(result, runId) {
   const total = result.violations.length;
   const blocking = result.critical_count;
   const warn = total - blocking;
 
+  console.log(`[protocol-lint] run_id=${runId}`);
   console.log(`[protocol-lint] ${result.rules_evaluated} rule(s) evaluated in ${result.duration_ms}ms`);
 
   if (total === 0) {
