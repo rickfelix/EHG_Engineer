@@ -70,6 +70,10 @@ function writeTelemetry(sessionId, patch, options) {
     'expected_silence_until',
     'heartbeat_at',   // convenient — hooks often bump this alongside telemetry
     'metadata',       // needed for last_git_metric_at throttle state
+    'current_branch', // SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001 — hooks may
+                      // stamp branch when they know it; resolution happens
+                      // upstream via lib/session-writer.cjs, never on this
+                      // hot path.
   ]);
 
   const body = {};
@@ -139,6 +143,8 @@ async function writeTelemetryAwait(sessionId, patch, options) {
     'expected_silence_until',
     'heartbeat_at',
     'metadata',
+    'current_branch', // SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001 — see
+                      // writeTelemetry whitelist for rationale.
   ]);
 
   const body = {};
