@@ -52,10 +52,15 @@ async function extendHeartbeat(sessionId) {
     }
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createSupabaseServiceClient();
+    // stampBranch keeps current_branch fresh on pre-compact heartbeat extension
+    // — see lib/session-writer.cjs and SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001.
+    const { createRequire } = await import('module');
+    const req = createRequire(import.meta.url);
+    const { stampBranch } = req('../../lib/session-writer.cjs');
     // Include 'released' so sessions that were swept while between SDs can recover
     const { error } = await supabase
       .from('claude_sessions')
-      .update({ heartbeat_at: new Date().toISOString(), status: 'active' })
+      .update(stampBranch({ heartbeat_at: new Date().toISOString(), status: 'active' }))
       .eq('session_id', sessionId)
       .in('status', ['active', 'idle', 'released']);
     if (error) {
