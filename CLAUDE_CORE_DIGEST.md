@@ -1,12 +1,12 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-22T13:01:21.412Z -->
-<!-- git_commit: af3b313f -->
-<!-- db_snapshot_hash: 1d8fe83996199ce0 -->
+<!-- generated_at: 2026-04-23T01:43:54.948Z -->
+<!-- git_commit: dd4af67c -->
+<!-- db_snapshot_hash: 1b7482beab585910 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
 
-**Protocol**: LEO 4.3.3
+**Protocol**: LEO 4.4.1
 **Purpose**: Essential enforcement rules (<10k chars)
 
 ---
@@ -149,20 +149,19 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 4. Retrospective created
 5. LEO Protocol validation trigger passes
 
-**NOT complete**: Code shipped but database shows 'draft'/'in_progress'
+**NOT complete**: Code shipped but database shows 'draft' / 'in_progress' / 'active'
 
 ### "Continue autonomously"
 **Definition**: Execute the current SD through its full LEO Protocol workflow WITHOUT stopping to ask for user confirmation at each step.
 **NOT**: Skip workflow steps for efficiency.
-**AUTO-PROCEED**: Phase transitions, post-completion sequence, and next SD selection all happen automatically.
-**ONLY STOP IF**:
-- Blocking error requires human decision (e.g., merge conflicts)
-- Tests fail after 2 retry attempts
-- Critical security or data-loss scenario
-- **NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, or any "warrants confirmation" rationalization. Phase boundaries are NOT pause points. If your reason for stopping is not in the three bullets above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
+**AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table (which handoffs are TERMINAL / require phase work) and Chaining setting (orchestrator-to-orchestrator).
 
-### "Child SD"
-**Definition**: An INDEPENDENT Strategi
+**ONLY STOP IF** (Canonical Pause Points — same list as AUTO-PROCEED Mode):
+1. **Orchestrator completion** — after all children, when Chaining is OFF
+2. **Blocking error requiring human decision** — merge conflicts, ambiguous requirements
+3. **Test failures after 2 retry attempts**
+4. **All children blocked**
+5. **Critical security or data-loss scenario** (includes DB/code status mis
 
 *...truncated. Read full file for complete section.*
 
@@ -199,7 +198,7 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 |---------|-------------|-------|
 | `feature` | **YES** | Human-verifiable outcome |
 | `bugfix` | **YES** | Verify fix works |
-| `infrastructure` | **EXEMPT** | Internal tooling |
+| `infrastructure` | **EXEMPT** | Internal tooling (no customer-facing UI) |
 | `documentation` | No | No runtime behavior |
 
 ### Pre-Handoff Check
@@ -266,5 +265,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-04-22 9:01:21 AM*
-*Protocol: 4.3.3*
+*DIGEST generated: 2026-04-23 9:43:55 PM*
+*Protocol: 4.4.1*

@@ -1,12 +1,12 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-22T13:01:21.412Z -->
-<!-- git_commit: af3b313f -->
-<!-- db_snapshot_hash: 1d8fe83996199ce0 -->
+<!-- generated_at: 2026-04-23T01:43:54.948Z -->
+<!-- git_commit: dd4af67c -->
+<!-- db_snapshot_hash: 1b7482beab585910 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
 
-**Protocol**: LEO 4.3.3
+**Protocol**: LEO 4.4.1
 **Purpose**: Minimal router for gate enforcement (<3k chars)
 
 ---
@@ -89,9 +89,9 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 > Why: Sub-agents run formal, database-backed gate checks stored in `sub_agent_execution_results`. Handoff gates query this table — without sub-agent runs, gates block regardless of actual code quality.
 3. **Database-first** - No markdown files as source of truth
 > Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
-4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, handoff.js ⚠️
-> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases.
-5. **Small PRs** - Target ≤100 lines, max 400 with justification
+4. **USE PROCESS SCRIPTS** - ⚠️ Never bypass add-prd-to-database.js or handoff.js outside a documented emergency path ⚠️
+> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases. Documented exceptions exist (`--bypass-validation --bypass-reason` on handoff.js, rate-limited to 3/SD and 10/day; `EMERGENCY_PUSH` for push enforcement) — use them with a ticket reference in the reason field.
+5. **Small PRs** - ≤100 LOC ideal; up to 400 LOC with justification per tiered PR Size Guidelines
 > Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospective analysis shows ≤100 LOC correlates with faster cycle time and fewer post-merge defects.
 6. **Priority-first** - Use `npm run prio:top3` to justify work
 > Why: Without priority justification, the highest-ROI SD can be overlooked in favour of something familiar. `prio:top3` enforces objective ordering, not recency ordering.
@@ -99,6 +99,8 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 > Why: CLAUDE.md is auto-generated from the DB. Operating on a stale file means reading outdated rules without knowing it — the session follows a protocol that has since been superseded.
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
+8. **Parallel-session safety** - In shared-working-tree sessions, run `npm run session:check-concurrency` before Write/Edit work; if contention is detected, isolate with `npm run session:worktree`
+> Why: Parallel Claude Code sessions sharing one working tree cause tool-result "internal error" messages when one session's `git checkout` mutates files mid-PostToolUse-hook in another session. The SessionStart auto-worktree hook (`scripts/hooks/concurrent-session-worktree.cjs`) catches some cases but is point-in-time; the CLI gives any session an explicit isolation check.
 
 ## Session Initialization - SD Selection
 
@@ -160,5 +162,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-04-22 9:01:21 AM*
-*Protocol: 4.3.3*
+*DIGEST generated: 2026-04-23 9:43:55 PM*
+*Protocol: 4.4.1*
