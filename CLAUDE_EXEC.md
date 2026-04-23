@@ -119,6 +119,20 @@ Before writing ANY code, EXEC MUST:
    - Identify exact location for new features
    - Document: "Current state captured, changes will go at [location]"
 
+### Progress Ticks (Intra-Phase Signaling)
+
+For any phase expected to run longer than ~10 minutes, emit progress ticks at natural checkpoints so the fleet dashboard can distinguish productive workers from stalled ones (SD-LEO-INFRA-SD-INTRAPHASE-PROGRESS-001):
+
+```bash
+node scripts/progress-tick.js <SD-KEY> 25 "exploration-done"
+node scripts/progress-tick.js <SD-KEY> 50 "first-file-committed"
+node scripts/progress-tick.js <SD-KEY> 75 "tests-green"
+```
+
+Ticks are monotonic (a lower or equal `pct` is a no-op), fail-soft (CLI errors never kill the worker), and bounded `[0, 100]`. `sd-start.js` auto-emits a 5% entry tick on claim success; handoff-boundary writers still own the canonical 100 at phase completion. You only need to emit the intermediate checkpoints relevant to your phase.
+
+See [docs/reference/progress-ticks.md](docs/reference/progress-ticks.md) for the full contract, recommended cadence, and rollback procedure.
+
 ### Implementation Checklist Template
 ```markdown
 ## EXEC Pre-Implementation Checklist

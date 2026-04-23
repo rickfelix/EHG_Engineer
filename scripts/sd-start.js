@@ -1142,6 +1142,26 @@ async function main() {
     console.log(`${colors.dim}   Omitting it causes no_deterministic_identity failures at claim-validity gate.${colors.reset}`);
   }
 
+  // SD-LEO-INFRA-SD-INTRAPHASE-PROGRESS-001: Emit a 5% entry tick on claim success so
+  // the fleet dashboard immediately shows a non-zero progress signal for an active
+  // worker. Monotonic — a higher existing progress_percentage (e.g. during re-acquire
+  // mid-phase) is preserved. Fail-soft: any error is logged but does not affect flow.
+  try {
+    const { data: current } = await supabase
+      .from('strategic_directives_v2')
+      .select('progress_percentage')
+      .eq('id', sd.id)
+      .single();
+    if ((current?.progress_percentage || 0) < 5) {
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ progress_percentage: 5 })
+        .eq('id', sd.id);
+    }
+  } catch (e) {
+    console.warn(`${colors.dim}   (entry-tick skipped: ${e?.message || e})${colors.reset}`);
+  }
+
   console.log(`\n${colors.dim}Session: ${session.session_id}${colors.reset}`);
   console.log('═'.repeat(50));
 }
