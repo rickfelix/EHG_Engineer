@@ -25,7 +25,13 @@ import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
-import { classifyWorktreeError } from '../lib/worktree-manager.js';
+// SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-008 / D2): consume the extended
+// classification policy so 'outside_repo' / 'false_success' /
+// 'target_changed_after_claim' hints surface with stable codes. The base
+// classifier (lib/worktree-manager.js::classifyWorktreeError) is still used
+// internally by the policy for the transient / already-checked-out / etc.
+// patterns, so no behavior regresses for existing error shapes.
+import { classify as classifyWorktreeFailure } from '../lib/protocol-policies/worktree-failure-classification.js';
 import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
 import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
 
@@ -842,18 +848,24 @@ async function main() {
       // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree failure
       // instead of silently continuing on main (which caused data loss from wrong-branch commits)
       const detail = worktreeInfo.error || worktreeInfo.errorCode || 'unknown';
-      const { hint } = classifyWorktreeError(detail);
+      const classified = classifyWorktreeFailure(detail);
       console.error(`${colors.red}   ❌  Worktree creation failed: ${detail}${colors.reset}`);
-      if (hint) console.error(`${colors.yellow}   💡  ${hint}${colors.reset}`);
+      if (classified.code && classified.code !== 'unknown') {
+        console.error(`${colors.dim}      [code: ${classified.code} | severity: ${classified.severity}]${colors.reset}`);
+      }
+      if (classified.hint) console.error(`${colors.yellow}   💡  ${classified.hint}${colors.reset}`);
       console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
       await releaseClaimOnWorktreeFailure('creation');
       process.exit(1);
     }
   } catch (wtErr) {
     // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree error
-    const { hint } = classifyWorktreeError(wtErr.message);
+    const classified = classifyWorktreeFailure(wtErr);
     console.error(`${colors.red}   ❌  Worktree resolution error: ${wtErr.message}${colors.reset}`);
-    if (hint) console.error(`${colors.yellow}   💡  ${hint}${colors.reset}`);
+    if (classified.code && classified.code !== 'unknown') {
+      console.error(`${colors.dim}      [code: ${classified.code} | severity: ${classified.severity}]${colors.reset}`);
+    }
+    if (classified.hint) console.error(`${colors.yellow}   💡  ${classified.hint}${colors.reset}`);
     console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
     await releaseClaimOnWorktreeFailure('resolution');
     process.exit(1);
