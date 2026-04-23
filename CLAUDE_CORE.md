@@ -755,6 +755,14 @@ const solution = await kb.getSolution('PAT-003');
 - High severity: 7+ occurrences
 - Increasing trend: 4+ occurrences
 
+## claude_sessions.current_branch Contract
+
+**Invariant** (SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001): `current_branch` is non-null for every session row whose originating process runs inside a git working tree. NULL is reserved for sessions that legitimately have no git context — primarily virtual sessions (drain agents with no cwd) and the narrow window between process start and first heartbeat. Any other NULL row on an active non-virtual session is a bug.
+
+**Enforcement**: Application-layer. Every `claude_sessions.update(...)` call that performs a heartbeat-style write routes through `stampBranch()` in `lib/session-writer.cjs`, which resolves the branch via `git rev-parse --abbrev-ref HEAD`. Claim/release/status-only writes do not need `current_branch` and do not call `stampBranch`. A regression guard at `tests/unit/session-writer/no-bypass.test.js` fails CI if a new writer bypasses the helper.
+
+**Why not a NOT NULL constraint**: Pre-existing NULL rows would require a data migration. Virtual sessions are legitimately NULL. COALESCE semantics in `update_session_heartbeat_with_branch` already prevent null-overwrite from transient detector failures.
+
 ## Genesis Codebase Locations
 
 **CRITICAL**: Genesis spans TWO codebases:

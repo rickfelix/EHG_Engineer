@@ -27,7 +27,9 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { createClient } = require('@supabase/supabase-js');
 const { detectCodebase } = require('./lib/detect-context.cjs');
+const { stampBranch } = require('../../lib/session-writer.cjs');
 
 // PID liveness check — complements heartbeat for sessions still loading context
 function isProcessRunning(pid) {
@@ -580,9 +582,13 @@ async function main() {
         const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         if (sbUrl && sbKey) {
           const supabase = createClient(sbUrl, sbKey);
+          // stampBranch resolves current_branch via git and includes it in the
+          // UPDATE so downstream branch-aware concurrency routing stays accurate.
+          // See lib/session-writer.cjs. Part of SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001.
+          const payload = stampBranch({ worktree_path: worktreePath, worktree_branch: worktreeBranch }, worktreePath);
           supabase
             .from('claude_sessions')
-            .update({ worktree_path: worktreePath, worktree_branch: worktreeBranch })
+            .update(payload)
             .eq('session_id', mySessionId)
             .then(({ error }) => {
               if (error) logEvent('session.worktree.db_persist_failed', { error: error.message });
