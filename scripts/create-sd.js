@@ -21,6 +21,8 @@ import dotenv from 'dotenv';
 import readline from 'readline';
 // SD-LEO-SDKEY-001: Centralized SD key generation
 import { generateSDKey as generateCentralizedSDKey } from './modules/sd-key-generator.js';
+// SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: cross-check scope vs target_application
+import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-validation/target-application-crosscheck.js';
 
 dotenv.config();
 
@@ -479,6 +481,21 @@ async function main() {
 
   // Close readline
   rl.close();
+
+  // SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: cross-check scope vs target_application
+  // Catches mismatches before INSERT. WARN by default; BLOCK via env var.
+  const crosscheck = validateTargetApplication({
+    scope: sdData.scope,
+    target_application: sdData.target_application
+  });
+  if (crosscheck.verdict !== 'PASS') {
+    console.log('\n' + formatCrosscheckResult(crosscheck));
+  }
+  if (crosscheck.verdict === 'BLOCK') {
+    console.error('\n❌ SD creation halted: target_application cross-check BLOCK.');
+    console.error('   Fix: correct --scope text or set target_application before retry.');
+    process.exit(1);
+  }
 
   // Create the SD
   console.log('\n📝 Creating Strategic Directive...');
