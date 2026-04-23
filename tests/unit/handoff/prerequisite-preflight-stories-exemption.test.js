@@ -194,3 +194,83 @@ describe('checkPlanToExecPrereqs USER_STORIES bypass behavior', () => {
     expect(codes).not.toContain('USER_STORIES_BYPASSED');
   });
 });
+
+// QF-20260423-666: passed must filter out info-severity entries so
+// USER_STORIES_BYPASSED (informational) does not block the handoff.
+describe('QF-20260423-666: passed filters info-severity entries', () => {
+  function makeMockSupabase({ sdRow, prdRow, storyRows = [] }) {
+    return {
+      from: (table) => {
+        if (table === 'user_stories') {
+          return {
+            select: () => ({
+              eq: async () => ({ data: storyRows, error: null })
+            })
+          };
+        }
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          single: async () => {
+            if (table === 'strategic_directives_v2') return { data: sdRow, error: null };
+            if (table === 'product_requirements_v2') return { data: prdRow || null, error: null };
+            return { data: null, error: null };
+          }
+        };
+        return builder;
+      }
+    };
+  }
+
+  it('returns passed=true when only info entries exist (infrastructure + approved PRD + no stories)', async () => {
+    const sd = {
+      id: 'SD-TEST-INFRA-PASS-001',
+      sd_key: 'SD-TEST-INFRA-PASS-001',
+      sd_type: 'infrastructure',
+      smoke_test_steps: [],
+      success_criteria: [{ criterion: 'x', measure: 'y' }]
+    };
+    const prd = { id: 'PRD-1', status: 'approved', executive_summary: 'a'.repeat(60) };
+    const supabase = makeMockSupabase({ sdRow: sd, prdRow: prd, storyRows: [] });
+
+    const result = await runPrerequisitePreflight(supabase, 'PLAN-TO-EXEC', 'SD-TEST-INFRA-PASS-001');
+    const codes = result.issues.map((i) => i.code);
+    expect(codes).toEqual(['USER_STORIES_BYPASSED']);
+    expect(result.issues[0].severity).toBe('info');
+    expect(result.passed).toBe(true);
+  });
+
+  it('still returns passed=false when a non-info blocker is present (missing PRD on infra SD)', async () => {
+    const sd = {
+      id: 'SD-TEST-INFRA-BLOCKED-001',
+      sd_key: 'SD-TEST-INFRA-BLOCKED-001',
+      sd_type: 'infrastructure',
+      smoke_test_steps: [],
+      success_criteria: [{ criterion: 'x', measure: 'y' }]
+    };
+    // No PRD row -> PRD_MISSING blocker (no severity field -> counted as blocker)
+    const supabase = makeMockSupabase({ sdRow: sd, prdRow: null, storyRows: [] });
+
+    const result = await runPrerequisitePreflight(supabase, 'PLAN-TO-EXEC', 'SD-TEST-INFRA-BLOCKED-001');
+    const codes = result.issues.map((i) => i.code);
+    expect(codes).toContain('PRD_MISSING');
+    expect(codes).toContain('USER_STORIES_BYPASSED');
+    expect(result.passed).toBe(false);
+  });
+
+  it('returns passed=false for feature SD missing stories (USER_STORIES_MISSING has no info severity)', async () => {
+    const sd = {
+      id: 'SD-TEST-FEAT-BLOCK-001',
+      sd_key: 'SD-TEST-FEAT-BLOCK-001',
+      sd_type: 'feature',
+      smoke_test_steps: [],
+      success_criteria: [{ criterion: 'x', measure: 'y' }]
+    };
+    const prd = { id: 'PRD-1', status: 'approved', executive_summary: 'a'.repeat(60) };
+    const supabase = makeMockSupabase({ sdRow: sd, prdRow: prd, storyRows: [] });
+
+    const result = await runPrerequisitePreflight(supabase, 'PLAN-TO-EXEC', 'SD-TEST-FEAT-BLOCK-001');
+    expect(result.issues.some((i) => i.code === 'USER_STORIES_MISSING')).toBe(true);
+    expect(result.passed).toBe(false);
+  });
+});

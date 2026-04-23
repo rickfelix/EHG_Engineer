@@ -231,10 +231,10 @@ function checkLeadToPlanPrereqs(sd) {
       message: `SD description has ${descWords} words (minimum: ${minWords} for ${sdType}) — need ${wordsNeeded} more word(s)`,
       remediation: [
         `Add ${wordsNeeded} more word(s) to the description. Consider expanding with:`,
-        `  - Technical approach: which files/modules change and how`,
-        `  - Root cause context: why this problem exists`,
-        `  - Success definition: what "fixed" looks like`,
-        `Update command:`,
+        '  - Technical approach: which files/modules change and how',
+        '  - Root cause context: why this problem exists',
+        '  - Success definition: what "fixed" looks like',
+        'Update command:',
         `  node -e "require('dotenv').config(); const {createClient}=require('@supabase/supabase-js'); const s=createClient(process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY); s.from('strategic_directives_v2').update({description:'<expanded description here>'}).eq('sd_key','${sdKey}').then(r=>console.log(r.error||'Updated'));"`
       ].join('\n')
     });
@@ -331,7 +331,7 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
           'Required fields: story_key, sd_id, title, user_role, user_want, user_benefit,',
           '  acceptance_criteria (array), implementation_context (string).',
           "Valid status values: 'draft', 'ready', 'in_progress', 'completed', 'blocked', 'cancelled'.",
-          "  (ready / in_progress / completed satisfy the STORIES precondition.)",
+          '  (ready / in_progress / completed satisfy the STORIES precondition.)',
           'Example story_key values: ' + sdId + ':US-001, ' + sdId + ':US-002',
           'Field reference: docs/database/user_stories_field_reference.md'
         ].join('\n')
