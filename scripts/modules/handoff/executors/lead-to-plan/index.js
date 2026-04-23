@@ -30,7 +30,9 @@ import {
   // SD Quality Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001-A)
   createSdQualityGate,
   // Translation Fidelity Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
-  createTranslationFidelityGate
+  createTranslationFidelityGate,
+  // Marketing Schema Drift Gate (SD-EHG-MARKETING-DISTRIBUTION-INFRASTRUCTURE-ORCH-001-A)
+  createMarketingSchemaDriftGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -148,6 +150,11 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // LLM-powered: verifies SD captures architecture plan and vision intent
     // Skips when no arch plan linked; caches results for 1 hour
     gates.push(createTranslationFidelityGate(this.supabase));
+
+    // Marketing Schema Drift Gate (SD-EHG-MARKETING-DISTRIBUTION-INFRASTRUCTURE-ORCH-001-A)
+    // Scoped to Marketing Distribution phase B/C/D SDs; runs verify-marketing-schema.mjs
+    // and blocks LEAD-TO-PLAN when live DB drifts from committed manifest.
+    gates.push(createMarketingSchemaDriftGate());
 
     return gates;
   }

@@ -1,0 +1,942 @@
+{
+  "$schema": "marketing-schema-manifest-v1",
+  "version": "1.0.0",
+  "generated_at": "2026-04-23T22:40:55.886Z",
+  "source": "introspection",
+  "tables": [
+    {
+      "table": "campaign_content",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "campaign_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "content_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "platform",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "scheduled_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "dispatched_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "dispatch_status",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "idempotency_key",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "external_post_id",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "metadata",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        }
+      ]
+    },
+    {
+      "table": "campaign_enrollments",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "lead_email",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "campaign_id",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "current_step",
+          "data_type": "integer",
+          "is_nullable": false
+        },
+        {
+          "name": "opened_previous",
+          "data_type": "boolean",
+          "is_nullable": false
+        },
+        {
+          "name": "next_step_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "status",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "metadata",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        }
+      ]
+    },
+    {
+      "table": "channel_budgets",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "platform",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "monthly_budget_cents",
+          "data_type": "integer",
+          "is_nullable": false
+        },
+        {
+          "name": "daily_limit_cents",
+          "data_type": "integer",
+          "is_nullable": true
+        },
+        {
+          "name": "daily_stop_loss_multiplier",
+          "data_type": "numeric",
+          "is_nullable": false
+        },
+        {
+          "name": "current_month_spend_cents",
+          "data_type": "integer",
+          "is_nullable": false
+        },
+        {
+          "name": "current_day_spend_cents",
+          "data_type": "integer",
+          "is_nullable": false
+        },
+        {
+          "name": "budget_month",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "status",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        }
+      ]
+    },
+    {
+      "table": "daily_rollups",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "rollup_date",
+          "data_type": "date",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "platform",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "content_id",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "variant_id",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "impressions",
+          "data_type": "integer",
+          "is_nullable": false
+        },
+        {
+          "name": "engagements",
+          "data_type": "integer",
+          "is_nullable": false
+        },
+        {
+          "name": "clicks",
+          "data_type": "integer",
+          "is_nullable": false
+        },
+        {
+          "name": "conversions",
+          "data_type": "integer",
+          "is_nullable": false
+        },
+        {
+          "name": "spend_cents",
+          "data_type": "integer",
+          "is_nullable": false
+        },
+        {
+          "name": "engagement_rate",
+          "data_type": "numeric",
+          "is_nullable": true
+        },
+        {
+          "name": "ctr",
+          "data_type": "numeric",
+          "is_nullable": true
+        },
+        {
+          "name": "conversion_rate",
+          "data_type": "numeric",
+          "is_nullable": true
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        }
+      ]
+    },
+    {
+      "table": "distribution_channels",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "name",
+          "data_type": "character varying",
+          "is_nullable": false
+        },
+        {
+          "name": "channel_type",
+          "data_type": "character varying",
+          "is_nullable": false
+        },
+        {
+          "name": "platform",
+          "data_type": "character varying",
+          "is_nullable": true
+        },
+        {
+          "name": "config",
+          "data_type": "jsonb",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_defaults",
+          "data_type": "jsonb",
+          "is_nullable": true
+        },
+        {
+          "name": "is_active",
+          "data_type": "boolean",
+          "is_nullable": true
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        }
+      ]
+    },
+    {
+      "table": "distribution_history",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "queue_item_id",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "channel_id",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "content_title",
+          "data_type": "character varying",
+          "is_nullable": true
+        },
+        {
+          "name": "content_snippet",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "platform",
+          "data_type": "character varying",
+          "is_nullable": false
+        },
+        {
+          "name": "status",
+          "data_type": "character varying",
+          "is_nullable": false
+        },
+        {
+          "name": "tracking_url",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_source",
+          "data_type": "character varying",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_medium",
+          "data_type": "character varying",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_campaign",
+          "data_type": "character varying",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_content",
+          "data_type": "character varying",
+          "is_nullable": true
+        },
+        {
+          "name": "scheduled_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "posted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "clicks",
+          "data_type": "integer",
+          "is_nullable": true
+        },
+        {
+          "name": "impressions",
+          "data_type": "integer",
+          "is_nullable": true
+        },
+        {
+          "name": "engagement_rate",
+          "data_type": "numeric",
+          "is_nullable": true
+        },
+        {
+          "name": "error_message",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "posted_by",
+          "data_type": "uuid",
+          "is_nullable": true
+        }
+      ]
+    },
+    {
+      "table": "marketing_attribution",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "content_id",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "variant_id",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "campaign_id",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "platform",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "utm_source",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_medium",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_campaign",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_content",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "event_type",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "event_value",
+          "data_type": "jsonb",
+          "is_nullable": true
+        },
+        {
+          "name": "occurred_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        }
+      ]
+    },
+    {
+      "table": "marketing_campaigns",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "name",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "description",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "status",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "start_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "end_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "objective",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "metadata",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        }
+      ]
+    },
+    {
+      "table": "marketing_channels",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "platform",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "integration_type",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "credentials",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "rate_limits",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "status",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        }
+      ]
+    },
+    {
+      "table": "marketing_content",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "content_type",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "channel_family",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "concept_tags",
+          "data_type": "ARRAY",
+          "is_nullable": true
+        },
+        {
+          "name": "lifecycle_state",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "metadata",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        }
+      ]
+    },
+    {
+      "table": "marketing_content_queue",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "content_id",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "title",
+          "data_type": "character varying",
+          "is_nullable": false
+        },
+        {
+          "name": "content_body",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "content_type",
+          "data_type": "character varying",
+          "is_nullable": true
+        },
+        {
+          "name": "target_channels",
+          "data_type": "ARRAY",
+          "is_nullable": true
+        },
+        {
+          "name": "status",
+          "data_type": "character varying",
+          "is_nullable": false
+        },
+        {
+          "name": "reviewed_by",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "reviewed_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "review_notes",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "scheduled_for",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_campaign",
+          "data_type": "character varying",
+          "is_nullable": true
+        },
+        {
+          "name": "utm_content",
+          "data_type": "character varying",
+          "is_nullable": true
+        },
+        {
+          "name": "priority",
+          "data_type": "integer",
+          "is_nullable": true
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "created_by",
+          "data_type": "uuid",
+          "is_nullable": true
+        }
+      ]
+    },
+    {
+      "table": "marketing_content_variants",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "content_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "variant_key",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "headline",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "body",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "cta",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "asset_image_key",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "asset_video_key",
+          "data_type": "text",
+          "is_nullable": true
+        },
+        {
+          "name": "metadata",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        }
+      ]
+    },
+    {
+      "table": "marketing_feedback_cycles",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "content_id",
+          "data_type": "uuid",
+          "is_nullable": true
+        },
+        {
+          "name": "cycle_type",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "signal_payload",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "status",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "metadata",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        },
+        {
+          "name": "closed_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        }
+      ]
+    },
+    {
+      "table": "marketing_pipeline_runs",
+      "rls_enabled": true,
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "venture_id",
+          "data_type": "uuid",
+          "is_nullable": false
+        },
+        {
+          "name": "pipeline_type",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "invocation_id",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "status",
+          "data_type": "text",
+          "is_nullable": false
+        },
+        {
+          "name": "started_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false
+        },
+        {
+          "name": "completed_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": true
+        },
+        {
+          "name": "error_details",
+          "data_type": "jsonb",
+          "is_nullable": true
+        },
+        {
+          "name": "metrics",
+          "data_type": "jsonb",
+          "is_nullable": false
+        },
+        {
+          "name": "metadata",
+          "data_type": "jsonb",
+          "is_nullable": false
+        }
+      ]
+    }
+  ]
+}
