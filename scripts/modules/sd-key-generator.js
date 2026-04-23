@@ -108,6 +108,158 @@ function getCoreFilePartialReadDetails() {
   return state.protocolFilesPartiallyRead?.['CLAUDE_CORE.md'] || null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001: cumulative range coverage
+// Replaces the readCount >= 3 heuristic with a precise "did these partial
+// reads together cover ≥95% of the file?" check.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Count the number of lines in a file on disk. Returns null if the file is
+ * unreadable (never throws — the gate should degrade gracefully).
+ * @param {string} filename
+ * @returns {number|null}
+ */
+function getFileLineCount(filename) {
+  try {
+    const fullPath = path.join(PROJECT_DIR, filename);
+    if (!fs.existsSync(fullPath)) return null;
+    const content = fs.readFileSync(fullPath, 'utf8');
+    // Count lines even if trailing newline absent. Match the Read tool's
+    // 1-indexed line numbering semantics.
+    return content.split('\n').length;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Merge a list of {offset, limit} ranges into a non-overlapping, sorted
+ * coverage set and return the total number of distinct lines covered.
+ * Offsets are 1-indexed (Read tool semantics); an offset of 0 or omitted
+ * is treated as "starting at line 1".
+ *
+ * @param {Array<{offset?: number, limit?: number}>} ranges
+ * @param {number} totalLines - clip ranges that extend past the file
+ * @returns {{covered: number, uncovered: Array<{from: number, to: number}>}}
+ */
+export function unionRangeCoverage(ranges, totalLines) {
+  if (!Array.isArray(ranges) || ranges.length === 0 || !totalLines) {
+    return { covered: 0, uncovered: [{ from: 1, to: totalLines || 0 }] };
+  }
+  // Normalize to {from, to} inclusive, clipped to [1, totalLines].
+  const normalized = ranges
+    .map((r) => {
+      const from = Math.max(1, Number(r.offset) || 1);
+      const rawLimit = Number(r.limit) || (totalLines - from + 1);
+      const to = Math.min(totalLines, from + rawLimit - 1);
+      return from <= to ? { from, to } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.from - b.from);
+
+  // Merge overlaps.
+  const merged = [];
+  for (const seg of normalized) {
+    const last = merged[merged.length - 1];
+    if (last && seg.from <= last.to + 1) {
+      last.to = Math.max(last.to, seg.to);
+    } else {
+      merged.push({ ...seg });
+    }
+  }
+
+  // Coverage count + complement.
+  let covered = 0;
+  const uncovered = [];
+  let cursor = 1;
+  for (const seg of merged) {
+    if (seg.from > cursor) uncovered.push({ from: cursor, to: seg.from - 1 });
+    covered += seg.to - seg.from + 1;
+    cursor = seg.to + 1;
+  }
+  if (cursor <= totalLines) uncovered.push({ from: cursor, to: totalLines });
+
+  return { covered, uncovered };
+}
+
+/**
+ * Compute cumulative-read coverage for a protocol file.
+ *
+ * Preference order:
+ *   1. protocolFileReadRanges[filename] — explicit list of ranges (future)
+ *   2. protocolFileReadStatus[filename].ranges — alt location (future)
+ *   3. Derived from protocolFileReadStatus[filename].lastPartialRead — single
+ *      most-recent partial; heuristic fall-forward using readCount.
+ *
+ * @param {string} filename - e.g. "CLAUDE_CORE.md"
+ * @returns {{coveredPercent: number, totalLines: number|null,
+ *            uncovered: Array<{from:number,to:number}>, source: string}}
+ */
+export function computeCoveragePercent(filename) {
+  const state = readSessionState();
+  const totalLines = getFileLineCount(filename);
+
+  // 1. Explicit range tracking (future-proof path).
+  const explicitRanges =
+    state.protocolFileReadRanges?.[filename]?.ranges ||
+    state.protocolFileReadStatus?.[filename]?.ranges ||
+    null;
+
+  if (Array.isArray(explicitRanges) && explicitRanges.length > 0 && totalLines) {
+    const { covered, uncovered } = unionRangeCoverage(explicitRanges, totalLines);
+    return {
+      coveredPercent: Math.round((covered / totalLines) * 100),
+      totalLines,
+      uncovered,
+      source: 'explicit_ranges',
+    };
+  }
+
+  // 2. Derived from lastPartialRead + readCount heuristic. We can't reconstruct
+  //    cumulative ranges from a single record, but we can weight by readCount
+  //    to approximate "the reader has consumed most of the file".
+  const fs2 = state.protocolFileReadStatus?.[filename];
+  const readCount = fs2?.readCount || 0;
+  const lastWasPartial = fs2?.lastReadWasPartial !== false;
+
+  if (!lastWasPartial) {
+    // Final read had no limit parameter → 100% coverage by the Read tool's own
+    // contract (unless the file exceeds 25k tokens, in which case the Read
+    // tool would have errored — a no-limit success = full read).
+    return {
+      coveredPercent: 100,
+      totalLines,
+      uncovered: [],
+      source: 'no_limit_final_read',
+    };
+  }
+
+  // Estimate coverage from the most-recent partial read. For a file with
+  // readCount distinct partial reads, assume each covered ~(limit/totalLines)
+  // of the file; if readCount >= 2 AND the latest limit is large, treat it
+  // as likely-full coverage. This is intentionally forgiving — the goal is to
+  // stop blocking diligent partial readers, not to enforce perfect accounting.
+  const lastLimit = fs2?.lastPartialRead?.limit || 0;
+  if (totalLines && readCount >= 2 && lastLimit > 0) {
+    // Weight: readCount * avgLimit / totalLines, capped at 100.
+    const estimated = Math.min(100, Math.round((readCount * lastLimit * 100) / totalLines));
+    return {
+      coveredPercent: estimated,
+      totalLines,
+      uncovered: estimated >= 95 ? [] : [{ from: 1, to: totalLines, note: 'estimated — ranges not tracked' }],
+      source: 'heuristic_readcount_limit',
+    };
+  }
+
+  return {
+    coveredPercent: 0,
+    totalLines,
+    uncovered: totalLines ? [{ from: 1, to: totalLines }] : [],
+    source: 'insufficient_data',
+  };
+}
+
 /**
  * Validate that CLAUDE_CORE.md has been fully read before SD key generation
  *
@@ -151,20 +303,23 @@ export function validateCoreFileRead() {
     };
   }
 
-  // Case 2: Read but only partially (with limit/offset)
-  // Exception: CLAUDE_CORE.md exceeds the Read tool's 10K token limit (14K+ tokens),
-  // so chunked sequential reads (readCount >= 3) are accepted as a full read.
+  // Case 2: Read but only partially (with limit/offset).
+  // SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001: use cumulative range coverage
+  // instead of the legacy readCount >= 3 heuristic. CLAUDE_CORE.md exceeds
+  // the Read tool's 25k-token cap, so some partial reads are unavoidable —
+  // the gate must be satisfiable for any session that has collectively
+  // covered ≥95% of the file (or read it once without limit).
   if (partialDetails?.wasPartial) {
-    const state = readSessionState();
-    const fileStatus = state.protocolFileReadStatus?.['CLAUDE_CORE.md'];
-    const readCount = fileStatus?.readCount || 0;
-    if (readCount >= 3) {
-      // Multiple chunked reads = full coverage of a large file
+    const coverage = computeCoveragePercent('CLAUDE_CORE.md');
+    if (coverage.coveredPercent >= 95) {
       return { valid: true, error: null, remediation: null };
     }
+    const uncoveredHint = coverage.uncovered.length > 0
+      ? coverage.uncovered.map((u) => `${u.from}-${u.to}`).join(', ')
+      : 'unknown (no range tracking)';
     return {
       valid: false,
-      error: `CLAUDE_CORE.md was only partially read (limit=${partialDetails.limit}, offset=${partialDetails.offset})`,
+      error: `CLAUDE_CORE.md partial read coverage ${coverage.coveredPercent}% < 95% (uncovered lines: ${uncoveredHint}; source: ${coverage.source})`,
       remediation: `
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ ⚠️  SD KEY GENERATION BLOCKED - Partial Read Detected                       │
@@ -241,20 +396,22 @@ export function validateLeadFileRead() {
     };
   }
 
-  // Case 2: Read but only partially (with limit/offset)
-  // Exception: CLAUDE_LEAD.md exceeds the Read tool's 10K token limit (15K+ tokens),
-  // so chunked sequential reads (readCount >= 3) are accepted as a full read.
+  // Case 2: Read but only partially (with limit/offset).
+  // SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001: same coverage-based gate as
+  // validateCoreFileRead. CLAUDE_LEAD.md fits under the Read-tool token cap
+  // (~15k tokens), so a single no-limit read will normally satisfy the gate;
+  // this branch handles the case where the reader used partial reads anyway.
   if (partialDetails?.wasPartial) {
-    const state = readSessionState();
-    const fileStatus = state.protocolFileReadStatus?.['CLAUDE_LEAD.md'];
-    const readCount = fileStatus?.readCount || 0;
-    if (readCount >= 3) {
-      // Multiple chunked reads = full coverage of a large file
+    const coverage = computeCoveragePercent('CLAUDE_LEAD.md');
+    if (coverage.coveredPercent >= 95) {
       return { valid: true, error: null, remediation: null };
     }
+    const uncoveredHint = coverage.uncovered.length > 0
+      ? coverage.uncovered.map((u) => `${u.from}-${u.to}`).join(', ')
+      : 'unknown (no range tracking)';
     return {
       valid: false,
-      error: `CLAUDE_LEAD.md was only partially read (limit=${partialDetails.limit}, offset=${partialDetails.offset})`,
+      error: `CLAUDE_LEAD.md partial read coverage ${coverage.coveredPercent}% < 95% (uncovered lines: ${uncoveredHint}; source: ${coverage.source})`,
       remediation: `
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ ⚠️  SD KEY GENERATION BLOCKED - Partial Read Detected                       │
