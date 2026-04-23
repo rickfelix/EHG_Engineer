@@ -229,6 +229,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         let missingHandoffs = [...requiredHandoffs];
         let nextCommand = `node scripts/handoff.js execute LEAD-TO-PLAN ${sdId}`;
 
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126 (PAT-HF-LEADFINALAPPROVAL-d94c34d8):
+        // Distinguish three cases when SD.status !== 'pending_approval':
+        //   (1) PLAN-TO-LEAD never ran → classical missing-handoff (existing behavior)
+        //   (2) PLAN-TO-LEAD RAN but UPDATE to pending_approval failed silently → silent-failure scenario
+        //   (3) SD legitimately stuck in draft for some other reason → manual triage
+        let silentFailureDetected = false;
         try {
           const { data: completedHandoffs } = await this.supabase
             .from('sd_phase_handoffs')
@@ -241,9 +247,30 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
           if (missingHandoffs.length > 0) {
             nextCommand = `node scripts/handoff.js execute ${missingHandoffs[0]} ${sdId}`;
+          } else if (completedTypes.has('PLAN-TO-LEAD')) {
+            // Case (2): PLAN-TO-LEAD is in the accepted-handoff log but SD.status was
+            // never transitioned to 'pending_approval'. State-transitions.js now throws
+            // on this, but pre-fix SDs may exhibit this state.
+            silentFailureDetected = true;
           }
         } catch (err) {
           // Non-fatal: fall back to generic message if query fails
+        }
+
+        if (silentFailureDetected) {
+          return ResultBuilder.rejected(
+            'INVALID_STATUS',
+            `SD status is '${sd.status}' but PLAN-TO-LEAD handoff is already recorded as accepted — ` +
+            `the status UPDATE to 'pending_approval' was never applied (silent pre-fix failure). ` +
+            `Remediation: manually update SD ${sdId} status to 'pending_approval' in strategic_directives_v2, ` +
+            `OR re-run PLAN-TO-LEAD (which now throws on UPDATE failure per SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126).`,
+            {
+              currentStatus: sd.status,
+              requiredStatus: 'pending_approval',
+              silentFailureDetected: true,
+              planToLeadRecorded: true
+            }
+          );
         }
 
         const missingList = missingHandoffs.length > 0
