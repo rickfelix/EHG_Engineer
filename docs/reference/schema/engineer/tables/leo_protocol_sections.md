@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-22T22:11:25.679Z
+**Generated**: 2026-04-23T00:33:31.410Z
 **Rows**: 248
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,7 @@
 | scoring_computed_at | `timestamp with time zone` | YES | - | - |
 | scoring_computed_by | `uuid` | YES | - | - |
 | skill_key | `character varying(50)` | YES | - | Maps section to generated skill file in .claude/commands/<skill_key>.md. NULL = not part of any skill. |
+| anchor_topic | `text` | YES | - | Tags a section as the authoritative source for a specific topic (e.g., "9-question-gate", "pause-points"). Enables anchor-uniqueness rule: more than one section with the same anchor_topic is a violation. SD-PROTOCOL-LINTER-001. |
 
 ## Constraints
 
@@ -56,6 +57,10 @@
 
 ## Indexes
 
+- `idx_leo_protocol_sections_anchor_topic`
+  ```sql
+  CREATE INDEX idx_leo_protocol_sections_anchor_topic ON public.leo_protocol_sections USING btree (anchor_topic) WHERE (anchor_topic IS NOT NULL)
+  ```
 - `idx_leo_protocol_sections_protocol`
   ```sql
   CREATE INDEX idx_leo_protocol_sections_protocol ON public.leo_protocol_sections USING btree (protocol_id)
