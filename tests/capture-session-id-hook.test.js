@@ -1,11 +1,13 @@
 /**
  * Regression tests for capture-session-id.cjs hook
  * SD-LEO-INFRA-SESSION-PID-MARKER-001
+ * SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001 (FR-1 matcher scope)
  *
  * Covers:
  *   TS-5: 3 concurrent invocations produce 3 pid-*.json markers
  *   TR-2: settings.json registered timeout ≥ internal PowerShell budget + margin
  *   FR-3: Discovery log line emitted on every invocation
+ *   FR-1: hook fires on all SessionStart sub-events (no matcher:"startup" gate)
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -88,6 +90,29 @@ describe('capture-session-id.cjs — timing budget invariant', () => {
     const outer = extractOuterSetTimeout(src);
     const registeredMs = getRegisteredHookTimeoutSeconds() * 1000;
     expect(outer).toBeLessThan(registeredMs);
+  });
+});
+
+describe('capture-session-id.cjs — SessionStart matcher scope (FR-1)', () => {
+  it('hook is NOT gated behind matcher:"startup"', () => {
+    // Regression: when the hook was registered with matcher:"startup", it fired only
+    // for fresh sessions — resume/compact/reconnect sub-events produced no marker,
+    // no env var export, and no tick daemon. This stranded ~67% of sessions with
+    // stale heartbeats. The hook must fire for all SessionStart sub-events.
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    const sessionStart = settings?.hooks?.SessionStart || [];
+    const hostingBlocks = sessionStart.filter(entry =>
+      (entry.hooks || []).some(h =>
+        typeof h.command === 'string' && h.command.includes('capture-session-id.cjs')
+      )
+    );
+    expect(hostingBlocks.length).toBeGreaterThanOrEqual(1);
+    for (const block of hostingBlocks) {
+      expect(
+        block.matcher,
+        `capture-session-id.cjs must not be behind matcher:"${block.matcher}" — that skips resume/compact/reconnect events`
+      ).toBeUndefined();
+    }
   });
 });
 
