@@ -80,6 +80,40 @@ function logDiscoveryEvent(fields) {
   try { console.error(JSON.stringify(entry)); } catch { /* best effort */ }
 }
 
+// ── SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-B (FR-4, FR-5, TR-1) ──
+// Inline helpers so this hook stays dependency-free per the file header contract.
+// These mirror lib/session-identity-sot.js but cannot import it (ESM from CJS hook).
+
+/** Returns true when the SOT feature flag is enabled. */
+function sotIsEnabled() {
+  const v = process.env.SESSION_IDENTITY_SOT_ENABLED;
+  if (!v) return false;
+  return v === '1' || v === 'true' || v === 'TRUE' || v === 'yes' || v === 'on';
+}
+
+/**
+ * Atomic write: tmp + fsync + rename. Crash-safe per TR-1.
+ * Tmp file is cleaned up on any error so partial state never surfaces.
+ */
+function sotAtomicWrite(targetPath, content) {
+  const dir = path.dirname(targetPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = `${targetPath}.tmp.${process.pid}.${Date.now()}`;
+  let fd = null;
+  try {
+    fd = fs.openSync(tmpPath, 'w');
+    fs.writeSync(fd, content, 0, 'utf8');
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = null;
+    fs.renameSync(tmpPath, targetPath);
+  } catch (err) {
+    if (fd !== null) { try { fs.closeSync(fd); } catch { /* ignore */ } }
+    try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+    throw err;
+  }
+}
+
 /**
  * Find the Claude Code node.exe PID by walking the process ancestry chain.
  * Mirrors the logic in lib/terminal-identity.js findClaudeCodePid(), but in CJS
@@ -197,27 +231,14 @@ function main() {
           return;
         }
 
-        // Strategy 1: Write to CLAUDE_ENV_FILE (makes env var available to Bash tool)
-        const envFile = process.env.CLAUDE_ENV_FILE;
-        if (envFile) {
-          try {
-            // Use export syntax per Claude Code docs; append to preserve other hooks' vars
-            fs.appendFileSync(envFile, `export CLAUDE_SESSION_ID=${sessionId}\n`);
-          } catch (e) {
-            console.error(`SessionStart:capture-session-id: CLAUDE_ENV_FILE write failed: ${e.message}`);
-          }
-        } else {
-          // Diagnostic: log which env vars Claude Code provides to hooks
-          const claudeVars = Object.keys(process.env)
-            .filter(k => k.startsWith('CLAUDE'))
-            .join(', ');
-          console.error(`SessionStart:capture-session-id: CLAUDE_ENV_FILE not set. Claude vars: [${claudeVars}]`);
-        }
+        // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-B (FR-4):
+        // When the SOT feature flag is on, the canonical <sid>.json marker MUST be
+        // written (and fsync'd) BEFORE CLAUDE_ENV_FILE receives the export. This
+        // ordering guarantees that any tool observing the env var can always read
+        // the canonical marker back. When the flag is off we preserve the legacy
+        // order (env var first) to avoid perturbing sessions that haven't opted in.
+        const sotOrdering = sotIsEnabled();
 
-        // Strategy 2: Write session marker files keyed by Claude Code PID.
-        // Walk the process tree to find the actual Claude Code node.exe ancestor
-        // (process.ppid is often cmd.exe, not Claude Code). This PID matches what
-        // getTerminalId() → findClaudeCodePid() discovers at Bash tool runtime.
         const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
         const entryPath = data.source || 'unknown';
         const discoveredPid = findClaudeCodePid(entryPath);
@@ -226,6 +247,32 @@ function main() {
           logDiscoveryEvent({ entry_path: entryPath, method_used: 'fallback_ppid', outcome: 'degraded', fallback_ppid: ccPid });
         }
         const markerDir = path.resolve(__dirname, '../../.claude/session-identity');
+        const envFile = process.env.CLAUDE_ENV_FILE;
+
+        const writeEnvFile = () => {
+          if (envFile) {
+            try {
+              // Use export syntax per Claude Code docs; append to preserve other hooks' vars
+              fs.appendFileSync(envFile, `export CLAUDE_SESSION_ID=${sessionId}\n`);
+            } catch (e) {
+              console.error(`SessionStart:capture-session-id: CLAUDE_ENV_FILE write failed: ${e.message}`);
+            }
+          } else {
+            // Diagnostic: log which env vars Claude Code provides to hooks
+            const claudeVars = Object.keys(process.env)
+              .filter(k => k.startsWith('CLAUDE'))
+              .join(', ');
+            console.error(`SessionStart:capture-session-id: CLAUDE_ENV_FILE not set. Claude vars: [${claudeVars}]`);
+          }
+        };
+
+        // Strategy 1 (legacy order): write env var first when SOT flag is off.
+        if (!sotOrdering) writeEnvFile();
+
+        // Strategy 2: Write session marker files keyed by Claude Code PID.
+        // Walk the process tree to find the actual Claude Code node.exe ancestor
+        // (process.ppid is often cmd.exe, not Claude Code). This PID matches what
+        // getTerminalId() → findClaudeCodePid() discovers at Bash tool runtime.
         try {
           if (!fs.existsSync(markerDir)) {
             fs.mkdirSync(markerDir, { recursive: true });
@@ -240,13 +287,31 @@ function main() {
             captured_at: new Date().toISOString()
           };
 
-          // Write PID-keyed marker (primary lookup for getTerminalId)
+          // Write PID-keyed marker (primary lookup for getTerminalId).
+          // Use atomic write under SOT ordering so the marker lands crash-safe.
           const pidFile = path.join(markerDir, `pid-${ccPid}.json`);
-          fs.writeFileSync(pidFile, JSON.stringify(marker, null, 2));
+          if (sotOrdering) {
+            sotAtomicWrite(pidFile, JSON.stringify(marker, null, 2));
+          } else {
+            fs.writeFileSync(pidFile, JSON.stringify(marker, null, 2));
+          }
 
-          // Write per-session marker (for audit/debugging)
+          // Write per-session marker (for audit/debugging — this is the canonical SOT marker).
           const markerFile = path.join(markerDir, `${sessionId}.json`);
-          fs.writeFileSync(markerFile, JSON.stringify(marker, null, 2));
+          if (sotOrdering) {
+            sotAtomicWrite(markerFile, JSON.stringify(marker, null, 2));
+          } else {
+            fs.writeFileSync(markerFile, JSON.stringify(marker, null, 2));
+          }
+
+          // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-B (FR-1):
+          // When SOT is enabled, atomically update the /current pointer to match.
+          // This is the third identity source — once it's written, claim-validity-gate
+          // sees all three in agreement.
+          if (sotOrdering) {
+            const currentPointer = path.join(markerDir, 'current');
+            sotAtomicWrite(currentPointer, sessionId);
+          }
 
           // Cleanup old markers — preserve markers for alive PIDs, only delete dead ones
           // Fix: previous "keep last 3" logic deleted the current conversation's marker
@@ -280,6 +345,11 @@ function main() {
         } catch {
           // Non-fatal
         }
+
+        // Strategy 1 (SOT order): write env var AFTER marker + pointer.
+        // Guarantees FR-4 — env var is never set to a session id whose canonical
+        // file doesn't exist yet.
+        if (sotOrdering) writeEnvFile();
 
         // Machine-readable line for downstream parsing (SD-MAN-INFRA-SESSION-IDENTITY-BIRTH-001)
         console.log(`CLAUDE_SESSION_ID=${sessionId}`);
