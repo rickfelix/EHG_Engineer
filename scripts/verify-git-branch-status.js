@@ -41,6 +41,31 @@ const EHG_ROOT = resolveRepoPath('ehg');
 
 const execAsync = promisify(exec);
 
+/**
+ * Truncate a hyphen-separated slug at the last word boundary within maxLen.
+ *
+ * SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-008 / Issue #5): previously
+ * `slug.substring(0, 40)` cut mid-word, producing branch names like
+ * `feat/SD-LEO-I...` or truncating a meaningful word in half. This helper
+ * keeps the last hyphen at or before maxLen so words stay intact.
+ *
+ * Fallback: if there is no hyphen within maxLen (unusual — slug is built
+ * from hyphen-separated words by construction), hard-cut at maxLen.
+ *
+ * @param {string} slug - Hyphen-separated lowercase string (already normalized)
+ * @param {number} maxLen - Maximum length
+ * @returns {string}
+ */
+export function truncateSlugAtWordBoundary(slug, maxLen) {
+  if (typeof slug !== 'string' || typeof maxLen !== 'number' || maxLen <= 0) return '';
+  if (slug.length <= maxLen) return slug;
+  const lastHyphen = slug.lastIndexOf('-', maxLen);
+  // Require at least one hyphen in the first maxLen chars AND > position 0
+  // (so we don't return an empty string for pathological inputs).
+  if (lastHyphen <= 0) return slug.substring(0, maxLen);
+  return slug.substring(0, lastHyphen);
+}
+
 class GitBranchVerifier {
   /**
    * @param {string} sdId - Strategic Directive ID
@@ -105,13 +130,13 @@ class GitBranchVerifier {
     // Create slug from title (lowercase, replace spaces with hyphens, remove special chars)
     let slug = '';
     if (title && title.trim().length > 0) {
-      slug = title
+      const raw = title
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
         .replace(/\s+/g, '-')          // Spaces to hyphens
         .replace(/-+/g, '-')           // Collapse multiple hyphens
-        .replace(/^-|-$/g, '')         // Trim hyphens
-        .substring(0, 40);             // Max 40 chars
+        .replace(/^-|-$/g, '');        // Trim hyphens
+      slug = truncateSlugAtWordBoundary(raw, 40);
     }
 
     // Construct branch name
