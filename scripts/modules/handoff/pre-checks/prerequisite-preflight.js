@@ -16,6 +16,35 @@
 import { SD_TYPE_THRESHOLDS, DEFAULT_THRESHOLD, JSONB_FIELDS } from '../../sd-quality-scoring.js';
 
 /**
+ * SD-LEARN-FIX-ADDRESS-PAT-RETRO-003 (US-001):
+ * Determines whether an SD requires user stories at PLAN-TO-EXEC time.
+ *
+ * Aligns with the "Required Sub-Agents by Type" matrix in CLAUDE_CORE.md —
+ * only feature (and conservatively, bugfix) SDs require STORIES. Infrastructure,
+ * documentation, database, security, and refactor types are exempt.
+ *
+ * Returns true (stories required) for unknown/null types as a safe default.
+ *
+ * Future: SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 will centralize this in
+ * lib/protocol-policies/orchestrator-bypass.js. When that ships, refactor
+ * this to import the shared helper.
+ *
+ * @param {string|null|undefined} sdType - The sd_type field value
+ * @returns {boolean} true if the SD requires user stories at PLAN-TO-EXEC
+ */
+export function shouldRequireUserStories(sdType) {
+  const STORY_EXEMPT_TYPES = new Set([
+    'infrastructure',
+    'documentation',
+    'database',
+    'security',
+    'refactor'
+  ]);
+  if (!sdType || typeof sdType !== 'string') return true;
+  return !STORY_EXEMPT_TYPES.has(sdType);
+}
+
+/**
  * Run prerequisite preflight checks for a given handoff type.
  * Returns { passed, issues[] } where each issue has { code, message, remediation }.
  */
@@ -285,22 +314,33 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
     }
   }
 
-  // Check user stories exist
-  const { data: stories, error: storiesErr } = await supabase
-    .from('user_stories')
-    .select('story_key')
-    .eq('sd_id', sd.id);
+  // SD-LEARN-FIX-ADDRESS-PAT-RETRO-003 (US-001/US-002):
+  // Skip USER_STORIES_MISSING for SD types where STORIES is not required per
+  // CLAUDE_CORE.md sub-agent matrix. Feature/bugfix still enforce.
+  if (shouldRequireUserStories(sd.sd_type)) {
+    const { data: stories, error: storiesErr } = await supabase
+      .from('user_stories')
+      .select('story_key')
+      .eq('sd_id', sd.id);
 
-  if (storiesErr || !stories || stories.length === 0) {
+    if (storiesErr || !stories || stories.length === 0) {
+      issues.push({
+        code: 'USER_STORIES_MISSING',
+        message: 'No user stories found for this SD',
+        remediation: [
+          `Create user stories linked to ${sdId}. story_key format: '${sdId}:US-001'.`,
+          'Required fields: story_key, sd_id, title, user_role, user_want, user_benefit,',
+          '  acceptance_criteria (array), implementation_context (string).',
+          'Example story_key values: ' + sdId + ':US-001, ' + sdId + ':US-002'
+        ].join('\n')
+      });
+    }
+  } else {
     issues.push({
-      code: 'USER_STORIES_MISSING',
-      message: 'No user stories found for this SD',
-      remediation: [
-        `Create user stories linked to ${sdId}. story_key format: '${sdId}:US-001'.`,
-        'Required fields: story_key, sd_id, title, user_role, user_want, user_benefit,',
-        '  acceptance_criteria (array), implementation_context (string).',
-        'Example story_key values: ' + sdId + ':US-001, ' + sdId + ':US-002'
-      ].join('\n')
+      code: 'USER_STORIES_BYPASSED',
+      severity: 'info',
+      message: `sd_type '${sd.sd_type}' exempt from STORIES requirement per CLAUDE_CORE.md sub-agent matrix`,
+      remediation: 'No action required — informational entry only.'
     });
   }
 
