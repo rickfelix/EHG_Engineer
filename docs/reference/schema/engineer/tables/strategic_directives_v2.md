@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-23T10:15:08.485Z
+**Generated**: 2026-04-23T10:28:51.042Z
 **Rows**: 2,815
 **RLS**: Enabled (7 policies)
 
@@ -30,12 +30,12 @@
 | scope | `text` | **NO** | - | SCOPE: Boundaries of what is included/excluded in this directive. Defines deliverables and explicitly states what is out of scope. |
 | key_changes | `jsonb` | YES | `'[]'::jsonb` | KEY CHANGES: Array of major changes introduced by this directive. Format: [{ change: "Description", impact: "Impact assessment" }] |
 | strategic_objectives | `jsonb` | YES | `'[]'::jsonb` | STRATEGIC OBJECTIVES: Array of specific objectives this directive aims to achieve. Format: [{ objective: "Goal", metric: "Success measure" }] |
-| success_criteria | `jsonb` | YES | `'[]'::jsonb` | SUCCESS CRITERIA: Array of measurable criteria that define successful completion. Format: [{ criterion: "What", measure: "How to measure" }] |
-| key_principles | `jsonb` | YES | `'[]'::jsonb` | KEY PRINCIPLES: Array of guiding principles for implementation. Format: [{ principle: "Name", description: "Explanation" }] |
+| success_criteria | `jsonb` | YES | - | SUCCESS CRITERIA: Array of measurable criteria that define successful completion. Format: [{ criterion: "What", measure: "How to measure" }] |
+| key_principles | `jsonb` | YES | - | KEY PRINCIPLES: Array of guiding principles for implementation. Format: [{ principle: "Name", description: "Explanation" }] |
 | implementation_guidelines | `jsonb` | YES | `'[]'::jsonb` | IMPLEMENTATION GUIDELINES: Array of specific guidelines for EXEC phase. Format: [{ guideline: "Instruction", rationale: "Why" }] |
 | dependencies | `jsonb` | YES | `'[]'::jsonb` | DEPENDENCIES: Array of technical or business dependencies. Format: [{ dependency: "What", type: "technical/business", status: "ready/blocked" }] |
 | risks | `jsonb` | YES | `'[]'::jsonb` | RISKS: Array of identified risks and mitigation strategies. Format: [{ risk: "Description", severity: "high/medium/low", mitigation: "Strategy" }] |
-| success_metrics | `jsonb` | YES | `'[]'::jsonb` | SUCCESS METRICS: Array of quantifiable metrics to measure success. Format: [{ metric: "Name", target: "Target value", actual: "Current value" }] |
+| success_metrics | `jsonb` | YES | - | SUCCESS METRICS: Array of quantifiable metrics to measure success. Format: [{ metric: "Name", target: "Target value", actual: "Current value" }] |
 | stakeholders | `jsonb` | YES | `'[]'::jsonb` | STAKEHOLDERS: Array of stakeholders and their roles. Format: [{ name: "Person/Team", role: "Role", contact: "Email/Slack" }] |
 | approved_by | `character varying(100)` | YES | - | APPROVED BY: Name/ID of person who approved this directive (typically LEAD agent or human reviewer). NULL if not yet approved. |
 | approval_date | `timestamp without time zone` | YES | - | APPROVAL DATE: Timestamp when directive was approved and moved to active status. NULL if not yet approved. |
