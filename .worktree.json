@@ -1,6 +1,9 @@
 {
-  "sdKey": "SD-S17-DESIGN-MASTERY-PIPELINE-ORCH-001-C",
-  "expectedBranch": "feat/SD-S17-DESIGN-MASTERY-PIPELINE-ORCH-001-C",
-  "createdAt": "2026-04-19T21:24:09.742Z",
+  "sdKey": "QF-20260422-507",
+  "workType": "QF",
+  "workKey": "QF-20260422-507",
+  "expectedBranch": "qf/QF-20260422-507",
+  "createdAt": "2026-04-23T02:09:32.298Z",
+  "hostname": "Legion-Laptop",
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
