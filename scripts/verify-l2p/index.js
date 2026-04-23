@@ -113,7 +113,7 @@ export class LeadToPlanVerifier {
       if (!sdValidation.valid || sdValidation.percentage < effectiveMinScore) {
         return rejectHandoff(this.supabase, sdId, 'SD_INCOMPLETE', 'Strategic Directive does not meet completeness standards', {
           sdValidation,
-          requiredScore: this.sdRequirements.minimumScore,
+          requiredScore: effectiveMinScore,
           actualScore: sdValidation.percentage
         });
       }
@@ -172,7 +172,7 @@ export class LeadToPlanVerifier {
       console.log('\n✅ HANDOFF APPROVED');
       console.log('='.repeat(50));
       console.log('✅ Strategic Directive is complete and approved');
-      console.log(`✅ SD completeness score: ${sdValidation.percentage}% (≥${this.sdRequirements.minimumScore}%)`);
+      console.log(`✅ SD completeness score: ${sdValidation.percentage}% (≥${effectiveMinScore}%)`);
       console.log('✅ Business objectives clearly defined');
       console.log('✅ Success metrics are measurable');
       console.log('✅ Feasibility confirmed');
