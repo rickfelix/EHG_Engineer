@@ -20,6 +20,53 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+// SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001: spawn telemetry.
+// Writes errors to .claude/pids/spawn-errors.log (NDJSON) and stderr.
+// Rotates at SPAWN_LOG_MAX_BYTES, keeps SPAWN_LOG_KEEP_FILES most recent.
+const SPAWN_LOG_MAX_BYTES = 1024 * 1024; // 1 MB
+const SPAWN_LOG_KEEP_FILES = 3;
+
+function getSpawnLogPath() {
+  return path.resolve(__dirname, '../../.claude/pids/spawn-errors.log');
+}
+
+function rotateSpawnLogIfNeeded(logPath) {
+  try {
+    if (!fs.existsSync(logPath)) return;
+    const size = fs.statSync(logPath).size;
+    if (size < SPAWN_LOG_MAX_BYTES) return;
+    // Shift .log → .log.1 → .log.2 → .log.3; drop oldest.
+    for (let i = SPAWN_LOG_KEEP_FILES; i >= 1; i--) {
+      const src = i === 1 ? logPath : `${logPath}.${i - 1}`;
+      const dst = `${logPath}.${i}`;
+      if (fs.existsSync(src)) {
+        try { fs.renameSync(src, dst); } catch { /* best effort */ }
+      }
+    }
+  } catch { /* rotation failures must not block */ }
+}
+
+function logSpawnError(sessionId, ccPid, err, code) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    session_id: sessionId,
+    cc_parent_pid: ccPid,
+    error_message: err && err.message ? String(err.message) : String(err),
+    error_code: code || (err && err.code) || 'UNKNOWN',
+    platform: process.platform,
+    node_version: process.version,
+  };
+  const logPath = getSpawnLogPath();
+  try {
+    const dir = path.dirname(logPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    rotateSpawnLogIfNeeded(logPath);
+    fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
+  } catch { /* last resort: stderr still runs below */ }
+  // Errors always surface to stderr regardless of LEO_TELEMETRY_DEBUG.
+  console.error(`SessionStart:session-tick: spawn failed: ${entry.error_message} (code=${entry.error_code} platform=${entry.platform})`);
+}
+
 /**
  * Find the Claude Code node.exe PID by walking the process ancestry chain.
  * Mirrors the logic in lib/terminal-identity.js findClaudeCodePid(), but in CJS
@@ -197,10 +244,14 @@ function main() {
         // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: spawn detached session-tick ──
         // Writes process_alive_at every 30s until the parent CC exits.
         // Fire-and-forget — never blocks SessionStart.
+        // SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001: spawn errors are default-on logged
+        // to .claude/pids/spawn-errors.log + stderr so silent failures surface.
         try {
           const { spawn } = require('child_process');
           const tickScript = path.resolve(__dirname, '../session-tick.cjs');
-          if (fs.existsSync(tickScript)) {
+          if (!fs.existsSync(tickScript)) {
+            logSpawnError(sessionId, ccPid, new Error(`tick script not found at ${tickScript}`), 'ENOENT');
+          } else {
             const child = spawn(process.execPath, [tickScript], {
               detached: true,
               stdio: 'ignore',
@@ -212,11 +263,19 @@ function main() {
               windowsHide: true,
             });
             if (child && typeof child.unref === 'function') child.unref();
+            // child.on('error', ...) captures post-spawn errors (ENOENT/EACCES on
+            // execPath) that the outer try/catch never sees because spawn is async.
+            if (child && typeof child.on === 'function') {
+              child.on('error', (err) => {
+                logSpawnError(sessionId, ccPid, err, err.code || 'SPAWN_ERROR');
+              });
+            }
+            if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+              console.error(`SessionStart:session-tick: spawned tick_pid=${child.pid}`);
+            }
           }
         } catch (tickErr) {
-          if (process.env.LEO_TELEMETRY_DEBUG === '1') {
-            console.error(`SessionStart:session-tick: spawn failed: ${tickErr.message}`);
-          }
+          logSpawnError(sessionId, ccPid, tickErr, tickErr.code || 'SYNC_THROW');
         }
       } catch {
         // Invalid JSON or other error — don't block session start
