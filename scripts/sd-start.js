@@ -35,6 +35,12 @@ import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 import { classify as classifyWorktreeFailure } from '../lib/protocol-policies/worktree-failure-classification.js';
 import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
 import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
+import {
+  evaluateInstallDecision,
+  writeMarker as writeFleetLockMarker,
+  peerSessionSnapshot,
+  emitFractureForDiff
+} from '../lib/fleet-lock-hash.mjs';
 // SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: cross-check scope vs target_application
 import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-validation/target-application-crosscheck.js';
 
@@ -1029,22 +1035,45 @@ async function main() {
     }
   }
 
-  // 5.45. SD-MAN-INFRA-FLEET-NPM-INSTALL-001: node_modules health check with coordination lock
-  // If worktree's node_modules is broken, coordinate npm install across fleet
+  // 5.45. SD-MAN-INFRA-FLEET-NPM-INSTALL-001 + SD-LEO-INFRA-FLEET-SAFE-NODE-001:
+  //   node_modules health check with lockfile-hash skip + coordination lock +
+  //   install-race fracture telemetry.
+  //
+  //   Flow:
+  //     (a) Evaluate install decision via sha256(package-lock.json)[:12] vs
+  //         node_modules/.fleet-lock-hash marker, plus canary-module presence.
+  //     (b) If skip -> log and continue (no npm spawn, no lock contention).
+  //     (c) If install required -> snapshot peer sessions, acquire lock,
+  //         run npm install, on success write the marker, snapshot peers
+  //         again, and emit FRACTURE_CODE into any peer that was released
+  //         during the install window.
   if (worktreeInfo?.success && worktreeInfo.cwd) {
     try {
-      // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-005: ESM fix.
-      // This file is ESM (type=module). Use createRequire for CJS interop.
-      const { createRequire } = await import('node:module');
-      const esmRequire = createRequire(import.meta.url);
-      const { acquireLock, waitForLock, releaseLock } = esmRequire('../lib/npm-install-lock.cjs');
-      const fs = await import('fs');
-      const path = await import('path');
+      // Resolve repo root once (worktrees symlink node_modules from there).
+      const installRepoRoot = execSync('git rev-parse --show-toplevel', {
+        encoding: 'utf8', cwd: worktreeInfo.cwd, stdio: 'pipe'
+      }).trim();
 
-      // Check if node_modules is functional by testing a critical dependency
-      const testPath = path.join(worktreeInfo.cwd, 'node_modules', '@supabase', 'supabase-js');
-      if (!fs.existsSync(testPath)) {
-        console.log(`\n${colors.yellow}   ⚠️  node_modules missing or broken — coordinating install...${colors.reset}`);
+      const forceInstall = process.argv.includes('--force-install');
+      const decision = await evaluateInstallDecision({
+        repoRoot: installRepoRoot,
+        forceInstall
+      });
+
+      if (decision.skip) {
+        console.log(`   ${colors.green}✓ ${decision.reason}${colors.reset}`);
+      } else {
+        console.log(`\n${colors.yellow}   ⚠️  ${decision.reason} — coordinating install...${colors.reset}`);
+
+        // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-005: ESM fix.
+        // This file is ESM (type=module). Use createRequire for CJS interop.
+        const { createRequire } = await import('node:module');
+        const esmRequire = createRequire(import.meta.url);
+        const { acquireLock, waitForLock, releaseLock } = esmRequire('../lib/npm-install-lock.cjs');
+
+        const peersBefore = await peerSessionSnapshot(supabase, session.session_id);
+        let installSucceeded = false;
+
         const lock = await acquireLock(supabase, session.session_id);
 
         if (lock.held) {
@@ -1058,20 +1087,19 @@ async function main() {
           });
           if (waitResult.resolved) {
             console.log(`   ${colors.green}✓ Dependencies ready (${waitResult.reason})${colors.reset}`);
+            // Assume the other session wrote the marker.  Re-probe hash next run.
+            installSucceeded = true;
           } else {
-            console.log(`   ${colors.yellow}⚠️  Lock wait timed out — attempting install anyway${colors.reset}`);
+            console.log(`   ${colors.yellow}⚠️  Lock wait timed out${colors.reset}`);
           }
         } else if (lock.acquired) {
           console.log('   🔒 Lock acquired — running npm install...');
           try {
-            // Install in the repo root (worktrees symlink from there)
-            const repoRoot = execSync('git rev-parse --show-toplevel', {
-              encoding: 'utf8', cwd: worktreeInfo.cwd, stdio: 'pipe'
-            }).trim();
             execSync('npm install --ignore-scripts', {
-              cwd: repoRoot, stdio: 'pipe', timeout: 120000
+              cwd: installRepoRoot, stdio: 'pipe', timeout: 120000
             });
             console.log(`   ${colors.green}✓ npm install complete${colors.reset}`);
+            installSucceeded = true;
           } catch (npmErr) {
             console.log(`   ${colors.yellow}⚠️  npm install failed: ${npmErr.message?.split('\n')[0]}${colors.reset}`);
           } finally {
@@ -1079,10 +1107,32 @@ async function main() {
             console.log('   🔓 Lock released');
           }
         }
+
+        // Marker write: only on a successful install we performed.  If we
+        // waited on a peer lock, we do not write (the peer owns the marker).
+        if (installSucceeded && lock.acquired && decision.currentHash) {
+          const writeResult = await writeFleetLockMarker(
+            installRepoRoot,
+            session.session_id,
+            decision.currentHash
+          );
+          if (writeResult.written) {
+            console.log(`   📌 fleet-lock-hash marker written (${decision.currentHash})`);
+          }
+        }
+
+        // Fracture emission: peers present before install but gone after.
+        const peersAfter = await peerSessionSnapshot(supabase, session.session_id);
+        const emit = await emitFractureForDiff(supabase, peersBefore, peersAfter);
+        if (emit.emitted > 0) {
+          console.log(
+            `   ${colors.yellow}⚠️  fracture code emitted for ${emit.emitted} peer session(s)${colors.reset}`
+          );
+        }
       }
-    } catch (lockErr) {
-      // Non-fatal — lock system failure should not block sd-start
-      console.debug(`[sd-start] node_modules lock check error: ${lockErr?.message || lockErr}`);
+    } catch (installErr) {
+      // Non-fatal — install path failure must not block sd-start overall.
+      console.debug(`[sd-start] install decision/coordination error: ${installErr?.message || installErr}`);
     }
   }
 
