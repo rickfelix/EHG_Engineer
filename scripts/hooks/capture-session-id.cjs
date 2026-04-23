@@ -67,17 +67,69 @@ function logSpawnError(sessionId, ccPid, err, code) {
   console.error(`SessionStart:session-tick: spawn failed: ${entry.error_message} (code=${entry.error_code} platform=${entry.platform})`);
 }
 
+// SD-LEO-INFRA-SESSION-PID-MARKER-001: timeouts sized so max internal work
+// (tree_walk + scan) stays under the registered hook timeout in settings.json.
+// Hook timeout = 15s; internal budget = tree_walk(6s) + scan(3s) = 9s → 6s margin.
+const TREE_WALK_TIMEOUT_MS = 6000;
+const SCAN_TIMEOUT_MS = 3000;
+
+function logDiscoveryEvent(fields) {
+  // Structured JSON log on stderr (hook stdout is reserved for env-file exports).
+  // Always-on at INFO per PRD FR-3.
+  const entry = { event: 'capture-session-id.discovery', timestamp: new Date().toISOString(), ...fields };
+  try { console.error(JSON.stringify(entry)); } catch { /* best effort */ }
+}
+
+// ── SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-B (FR-4, FR-5, TR-1) ──
+// Inline helpers so this hook stays dependency-free per the file header contract.
+// These mirror lib/session-identity-sot.js but cannot import it (ESM from CJS hook).
+
+/** Returns true when the SOT feature flag is enabled. */
+function sotIsEnabled() {
+  const v = process.env.SESSION_IDENTITY_SOT_ENABLED;
+  if (!v) return false;
+  return v === '1' || v === 'true' || v === 'TRUE' || v === 'yes' || v === 'on';
+}
+
+/**
+ * Atomic write: tmp + fsync + rename. Crash-safe per TR-1.
+ * Tmp file is cleaned up on any error so partial state never surfaces.
+ */
+function sotAtomicWrite(targetPath, content) {
+  const dir = path.dirname(targetPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = `${targetPath}.tmp.${process.pid}.${Date.now()}`;
+  let fd = null;
+  try {
+    fd = fs.openSync(tmpPath, 'w');
+    fs.writeSync(fd, content, 0, 'utf8');
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = null;
+    fs.renameSync(tmpPath, targetPath);
+  } catch (err) {
+    if (fd !== null) { try { fs.closeSync(fd); } catch { /* ignore */ } }
+    try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+    throw err;
+  }
+}
+
 /**
  * Find the Claude Code node.exe PID by walking the process ancestry chain.
  * Mirrors the logic in lib/terminal-identity.js findClaudeCodePid(), but in CJS
  * for use in this hook. Falls back to process scan if tree walk fails.
  *
+ * @param {string} entryPath - SessionStart source from Claude Code (startup|resume|compact|reconnect|unknown)
  * @returns {string|null} Claude Code process PID
  */
-function findClaudeCodePid() {
-  if (process.platform !== 'win32') return null;
+function findClaudeCodePid(entryPath = 'unknown') {
+  if (process.platform !== 'win32') {
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'none', outcome: 'skipped_non_windows', platform: process.platform });
+    return null;
+  }
 
   // Method 1: Walk process ancestry
+  const walkStart = process.hrtime.bigint();
   try {
     const script = [
       `$p = ${process.pid}`,
@@ -94,7 +146,7 @@ function findClaudeCodePid() {
     const raw = execSync(`powershell -NoProfile -EncodedCommand ${encoded}`, {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'ignore'],
-      timeout: 10000
+      timeout: TREE_WALK_TIMEOUT_MS
     }).trim();
 
     if (raw) {
@@ -109,16 +161,28 @@ function findClaudeCodePid() {
         if (proc.name === 'node.exe' || proc.name === 'node') {
           const parent = chain[i + 1];
           if (!parent || !['node.exe', 'node', 'bash.exe', 'bash', 'sh.exe', 'sh'].includes(parent.name)) {
+            const dur = Number((process.hrtime.bigint() - walkStart) / 1000000n);
+            logDiscoveryEvent({ entry_path: entryPath, method_used: 'tree_walk', outcome: 'success', duration_ms: dur, chain_depth: chain.length });
             return proc.pid;
           }
         }
       }
     }
-  } catch { /* fall through to scan */ }
+    const dur = Number((process.hrtime.bigint() - walkStart) / 1000000n);
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'tree_walk', outcome: 'no_match', duration_ms: dur });
+  } catch (err) {
+    const dur = Number((process.hrtime.bigint() - walkStart) / 1000000n);
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'tree_walk', outcome: 'error', duration_ms: dur, error: err && err.message ? String(err.message).slice(0, 200) : 'unknown' });
+    /* fall through to scan */
+  }
 
   // Method 2: Scan all node.exe processes for SSE port match
   const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
-  if (!ssePort) return null;
+  if (!ssePort) {
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'scan', outcome: 'skipped_no_sse_port' });
+    return null;
+  }
+  const scanStart = process.hrtime.bigint();
   try {
     const script = [
       'Get-CimInstance Win32_Process -Filter "Name=\'node.exe\'" -ErrorAction SilentlyContinue |',
@@ -130,10 +194,19 @@ function findClaudeCodePid() {
     const raw = execSync(`powershell -NoProfile -EncodedCommand ${encoded}`, {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'ignore'],
-      timeout: 5000
+      timeout: SCAN_TIMEOUT_MS
     }).trim();
-    if (raw && /^\d+$/.test(raw)) return raw;
-  } catch { /* give up */ }
+    const dur = Number((process.hrtime.bigint() - scanStart) / 1000000n);
+    if (raw && /^\d+$/.test(raw)) {
+      logDiscoveryEvent({ entry_path: entryPath, method_used: 'scan', outcome: 'success', duration_ms: dur, sse_port: ssePort });
+      return raw;
+    }
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'scan', outcome: 'no_match', duration_ms: dur, sse_port: ssePort });
+  } catch (err) {
+    const dur = Number((process.hrtime.bigint() - scanStart) / 1000000n);
+    logDiscoveryEvent({ entry_path: entryPath, method_used: 'scan', outcome: 'error', duration_ms: dur, error: err && err.message ? String(err.message).slice(0, 200) : 'unknown' });
+    /* give up */
+  }
 
   return null;
 }
@@ -158,30 +231,48 @@ function main() {
           return;
         }
 
-        // Strategy 1: Write to CLAUDE_ENV_FILE (makes env var available to Bash tool)
-        const envFile = process.env.CLAUDE_ENV_FILE;
-        if (envFile) {
-          try {
-            // Use export syntax per Claude Code docs; append to preserve other hooks' vars
-            fs.appendFileSync(envFile, `export CLAUDE_SESSION_ID=${sessionId}\n`);
-          } catch (e) {
-            console.error(`SessionStart:capture-session-id: CLAUDE_ENV_FILE write failed: ${e.message}`);
-          }
-        } else {
-          // Diagnostic: log which env vars Claude Code provides to hooks
-          const claudeVars = Object.keys(process.env)
-            .filter(k => k.startsWith('CLAUDE'))
-            .join(', ');
-          console.error(`SessionStart:capture-session-id: CLAUDE_ENV_FILE not set. Claude vars: [${claudeVars}]`);
+        // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-B (FR-4):
+        // When the SOT feature flag is on, the canonical <sid>.json marker MUST be
+        // written (and fsync'd) BEFORE CLAUDE_ENV_FILE receives the export. This
+        // ordering guarantees that any tool observing the env var can always read
+        // the canonical marker back. When the flag is off we preserve the legacy
+        // order (env var first) to avoid perturbing sessions that haven't opted in.
+        const sotOrdering = sotIsEnabled();
+
+        const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
+        const entryPath = data.source || 'unknown';
+        const discoveredPid = findClaudeCodePid(entryPath);
+        const ccPid = discoveredPid || process.ppid || process.pid;
+        if (!discoveredPid) {
+          logDiscoveryEvent({ entry_path: entryPath, method_used: 'fallback_ppid', outcome: 'degraded', fallback_ppid: ccPid });
         }
+        const markerDir = path.resolve(__dirname, '../../.claude/session-identity');
+        const envFile = process.env.CLAUDE_ENV_FILE;
+
+        const writeEnvFile = () => {
+          if (envFile) {
+            try {
+              // Use export syntax per Claude Code docs; append to preserve other hooks' vars
+              fs.appendFileSync(envFile, `export CLAUDE_SESSION_ID=${sessionId}\n`);
+            } catch (e) {
+              console.error(`SessionStart:capture-session-id: CLAUDE_ENV_FILE write failed: ${e.message}`);
+            }
+          } else {
+            // Diagnostic: log which env vars Claude Code provides to hooks
+            const claudeVars = Object.keys(process.env)
+              .filter(k => k.startsWith('CLAUDE'))
+              .join(', ');
+            console.error(`SessionStart:capture-session-id: CLAUDE_ENV_FILE not set. Claude vars: [${claudeVars}]`);
+          }
+        };
+
+        // Strategy 1 (legacy order): write env var first when SOT flag is off.
+        if (!sotOrdering) writeEnvFile();
 
         // Strategy 2: Write session marker files keyed by Claude Code PID.
         // Walk the process tree to find the actual Claude Code node.exe ancestor
         // (process.ppid is often cmd.exe, not Claude Code). This PID matches what
         // getTerminalId() → findClaudeCodePid() discovers at Bash tool runtime.
-        const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
-        const ccPid = findClaudeCodePid() || process.ppid || process.pid;
-        const markerDir = path.resolve(__dirname, '../../.claude/session-identity');
         try {
           if (!fs.existsSync(markerDir)) {
             fs.mkdirSync(markerDir, { recursive: true });
@@ -196,13 +287,31 @@ function main() {
             captured_at: new Date().toISOString()
           };
 
-          // Write PID-keyed marker (primary lookup for getTerminalId)
+          // Write PID-keyed marker (primary lookup for getTerminalId).
+          // Use atomic write under SOT ordering so the marker lands crash-safe.
           const pidFile = path.join(markerDir, `pid-${ccPid}.json`);
-          fs.writeFileSync(pidFile, JSON.stringify(marker, null, 2));
+          if (sotOrdering) {
+            sotAtomicWrite(pidFile, JSON.stringify(marker, null, 2));
+          } else {
+            fs.writeFileSync(pidFile, JSON.stringify(marker, null, 2));
+          }
 
-          // Write per-session marker (for audit/debugging)
+          // Write per-session marker (for audit/debugging — this is the canonical SOT marker).
           const markerFile = path.join(markerDir, `${sessionId}.json`);
-          fs.writeFileSync(markerFile, JSON.stringify(marker, null, 2));
+          if (sotOrdering) {
+            sotAtomicWrite(markerFile, JSON.stringify(marker, null, 2));
+          } else {
+            fs.writeFileSync(markerFile, JSON.stringify(marker, null, 2));
+          }
+
+          // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-B (FR-1):
+          // When SOT is enabled, atomically update the /current pointer to match.
+          // This is the third identity source — once it's written, claim-validity-gate
+          // sees all three in agreement.
+          if (sotOrdering) {
+            const currentPointer = path.join(markerDir, 'current');
+            sotAtomicWrite(currentPointer, sessionId);
+          }
 
           // Cleanup old markers — preserve markers for alive PIDs, only delete dead ones
           // Fix: previous "keep last 3" logic deleted the current conversation's marker
@@ -236,6 +345,11 @@ function main() {
         } catch {
           // Non-fatal
         }
+
+        // Strategy 1 (SOT order): write env var AFTER marker + pointer.
+        // Guarantees FR-4 — env var is never set to a session id whose canonical
+        // file doesn't exist yet.
+        if (sotOrdering) writeEnvFile();
 
         // Machine-readable line for downstream parsing (SD-MAN-INFRA-SESSION-IDENTITY-BIRTH-001)
         console.log(`CLAUDE_SESSION_ID=${sessionId}`);
@@ -288,9 +402,10 @@ function main() {
       resolve();
     });
 
-    // Timeout after 8 seconds if stdin doesn't close.
-    // Increased from 2s to accommodate PowerShell process tree walk on Windows.
-    setTimeout(resolve, 8000);
+    // Timeout must exceed the internal PowerShell budget (tree_walk + scan = 9s).
+    // Registered hook timeout in .claude/settings.json is 15s; 12s leaves 3s margin
+    // for marker write + cleanup before Claude Code kills the process.
+    setTimeout(resolve, 12000);
   });
 }
 

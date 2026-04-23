@@ -235,8 +235,12 @@ src/client/dist/
 # Account handoff exchange (local session state between account switches)
 .claude/handoff/
 
-# Claude session identity markers (generated per-session, never commit)
-.claude/session-identity/
+# Claude session identity markers (generated per-session, never commit).
+# We ignore the contents — not the directory itself — so that the schema
+# README (whitelisted below per FR-6 of SD-LEO-PROTOCOL-INFRASTRUCTURE-
+# RELATIONSHIPAWARE-ORCH-001-B) can be tracked.
+.claude/session-identity/*
+!.claude/session-identity/README.md
 .claude/fleet-identity*.json
 .claude/scheduled_tasks.lock
 
