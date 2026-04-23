@@ -1,0 +1,16 @@
+{
+  "description": "Two sections declaring the same QF LOC threshold (50 everywhere) should NOT trigger LINT-THRESH-001.",
+  "sections": [
+    {
+      "id": "sec-routing",
+      "section_name": "Work Item Routing",
+      "content": "Use Quick-Fix for bugs at 50 LOC or less. Above that, open a full SD."
+    },
+    {
+      "id": "sec-qf-rules",
+      "section_name": "Quick-Fix Rules",
+      "content": "The Quick-Fix path is appropriate for changes up to 50 LOC of targeted code."
+    }
+  ],
+  "expected_violations": []
+}

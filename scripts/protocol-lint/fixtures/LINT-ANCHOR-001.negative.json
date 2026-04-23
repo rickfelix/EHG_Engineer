@@ -1,0 +1,21 @@
+{
+  "description": "Sections with distinct anchor_topic values should NOT trigger LINT-ANCHOR-001.",
+  "sections": [
+    {
+      "id": "sec-pause",
+      "section_name": "Pause Points",
+      "anchor_topic": "pause-policy"
+    },
+    {
+      "id": "sec-heartbeat",
+      "section_name": "Heartbeat Thresholds",
+      "anchor_topic": "heartbeat-policy"
+    },
+    {
+      "id": "sec-untagged",
+      "section_name": "Related Reading",
+      "anchor_topic": null
+    }
+  ],
+  "expected_violations": []
+}

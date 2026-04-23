@@ -1,0 +1,14 @@
+{
+  "description": "A pause_policy section that omits AUTO-PROCEED should trigger LINT-PHRASE-001.",
+  "sections": [
+    {
+      "id": "sec-1",
+      "section_name": "Pause Points",
+      "section_type": "pause_policy",
+      "content": "Pause when all children are blocked, or when tests fail twice in a row."
+    }
+  ],
+  "expected_violations": [
+    { "rule_id": "LINT-PHRASE-001", "section_id": "sec-1" }
+  ]
+}

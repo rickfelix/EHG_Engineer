@@ -1,0 +1,18 @@
+{
+  "description": "A pause_policy section that mentions AUTO-PROCEED should NOT trigger LINT-PHRASE-001.",
+  "sections": [
+    {
+      "id": "sec-1",
+      "section_name": "Pause Points",
+      "section_type": "pause_policy",
+      "content": "AUTO-PROCEED pauses only at the five listed triggers. Blocking errors, failed retries, merge conflicts, data-loss scenarios, and all-children-blocked."
+    },
+    {
+      "id": "sec-2",
+      "section_name": "Unrelated",
+      "section_type": "routing",
+      "content": "No AUTO-PROCEED mention needed here — section_type does not match."
+    }
+  ],
+  "expected_violations": []
+}
