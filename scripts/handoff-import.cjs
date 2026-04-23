@@ -51,17 +51,28 @@ function formatAge(ms) {
 function restoreStateFiles() {
   const stateDir = path.join(HANDOFF_DIR, 'state');
   const restored = [];
+  const backedUp = [];
 
-  if (!fs.existsSync(stateDir)) return restored;
+  if (!fs.existsSync(stateDir)) return { restored, backedUp, backupDir: null };
+
+  // Backup any existing destination state files before overwrite so the
+  // destination account can roll back if the handoff contained wrong state.
+  const backupDir = path.join(CLAUDE_DIR, `handoff-backup-${Date.now()}`);
 
   const files = fs.readdirSync(stateDir).filter(f => f.endsWith('.json'));
   for (const file of files) {
     const src = path.join(stateDir, file);
     const dest = path.join(CLAUDE_DIR, file);
+
+    if (fs.existsSync(dest)) {
+      if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+      fs.copyFileSync(dest, path.join(backupDir, file));
+      backedUp.push(file);
+    }
     fs.copyFileSync(src, dest);
     restored.push(file);
   }
-  return restored;
+  return { restored, backedUp, backupDir: backedUp.length > 0 ? backupDir : null };
 }
 
 function analyzeMemoryFiles() {
@@ -159,11 +170,15 @@ function main() {
   }
   console.log('');
 
-  // 3. Restore state files
+  // 3. Restore state files (backing up any existing destination copies first)
   console.log('  Restoring state files...');
-  const restoredState = restoreStateFiles();
+  const stateResult = restoreStateFiles();
+  const restoredState = stateResult.restored;
   for (const f of restoredState) {
     console.log(`    Restored: ${f}`);
+  }
+  if (stateResult.backedUp.length > 0) {
+    console.log(`    Backed up ${stateResult.backedUp.length} existing file(s) to: ${path.relative(PROJECT_ROOT, stateResult.backupDir)}`);
   }
   if (restoredState.length === 0) {
     console.log('    No state files to restore');
@@ -177,7 +192,8 @@ function main() {
   // Copy non-conflicting files
   copyNonConflictingMemory(analysis);
 
-  // Report
+  // Report (summarize identicals — common case for same-machine account switches
+  // where both accounts share ~/.claude/projects/<path>/memory/)
   console.log('');
   console.log('  Memory Merge Results:');
   for (const f of analysis.copy) {
@@ -186,8 +202,8 @@ function main() {
   for (const f of analysis.keep) {
     console.log(`    ${f}: KEPT (only at destination, not in handoff)`);
   }
-  for (const f of analysis.identical) {
-    console.log(`    ${f}: IDENTICAL (no changes needed)`);
+  if (analysis.identical.length > 0) {
+    console.log(`    ${analysis.identical.length} file(s): IDENTICAL (no changes needed)`);
   }
   for (const f of analysis.merge) {
     console.log(`    ${f}: NEEDS MERGE (different in handoff vs destination)`);
@@ -209,12 +225,22 @@ function main() {
   }
   console.log('');
 
-  // 6. Output structured data for Claude to use
+  // 6. Output structured data for Claude to use. If an active SD exists the
+  // destination account does NOT yet own the DB claim (claiming_session_id is
+  // still the source account's session). Emit an explicit re-acquire command
+  // so /handoff-in can run it before suggesting /leo continue.
+  const reacquireCmd = metadata.activeSD
+    ? `node scripts/sd-start.js ${metadata.activeSD.sdKey}`
+    : null;
+
   const output = {
     success: true,
     age: ageStr,
     isStale,
     restoredState,
+    stateBackupDir: stateResult.backupDir
+      ? path.relative(PROJECT_ROOT, stateResult.backupDir)
+      : null,
     memoryAnalysis: {
       copied: analysis.copy,
       kept: analysis.keep,
@@ -224,10 +250,14 @@ function main() {
     activeSD: metadata.activeSD,
     sessionSettings: metadata.sessionSettings,
     handoffMemoryDir: path.join(HANDOFF_DIR, 'memory'),
-    memoryDestDir: MEMORY_DEST
+    memoryDestDir: MEMORY_DEST,
+    nextCmd: reacquireCmd
   };
 
   console.log('HANDOFF_IMPORT_RESULT=' + JSON.stringify(output));
+  if (reacquireCmd) {
+    console.log(`HANDOFF_NEXT_CMD=${reacquireCmd}`);
+  }
   console.log('');
 
   // 7. Suggest next action
@@ -237,7 +267,8 @@ function main() {
   }
 
   if (metadata.activeSD) {
-    console.log(`  Suggested: /leo continue (to resume ${metadata.activeSD.sdKey})`);
+    console.log(`  Suggested (re-acquire claim): ${reacquireCmd}`);
+    console.log(`  Then: /leo continue (to resume ${metadata.activeSD.sdKey})`);
   } else {
     console.log('  Suggested: npm run sd:next (to see the queue)');
   }

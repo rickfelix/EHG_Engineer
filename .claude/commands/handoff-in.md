@@ -59,14 +59,29 @@ The script already printed the briefing. Summarize the key points for the user:
 - Git state (branch, recent commits)
 - Any pending actions
 
-### Step 4: Suggest Next Action
+### Step 4: Re-acquire the DB Claim (CRITICAL)
+
+If `HANDOFF_IMPORT_RESULT.activeSD` is non-null, the DB `claiming_session_id` is still the **source account's** session. You must re-acquire the claim on this account before any phase work, or the claim gate will reject handoffs with `no_deterministic_identity`.
+
+The script emits a `HANDOFF_NEXT_CMD=` line with the exact command. Run it:
+
+```bash
+node scripts/sd-start.js <sd-key>
+```
+
+`sd-start.js` will claim the SD for this account's session and set up the worktree/phase context. Verify `claiming_session_id` in the output matches the current session before continuing.
+
+**If no active SD** (`activeSD` is null): skip to Step 5.
+
+### Step 5: Suggest Next Action
 
 Based on the briefing:
-- **If active SD exists**: Suggest running `/leo continue` or `npm run sd:next`
+- **If active SD exists AND re-acquired**: Suggest running `/leo continue`
 - **If no active SD**: Suggest running `npm run sd:next` to see the queue
 - **If handoff is stale (>24h)**: Warn that the context may be outdated and suggest checking `npm run sd:next` fresh
+- **If `stateBackupDir` is set**: Mention that the destination's previous state files were backed up to that path (rollback is `cp <backup>/*.json .claude/`)
 
-### Step 5: Summary
+### Step 6: Summary
 
 Display a clean summary:
 
