@@ -110,6 +110,9 @@ function parseArgs() {
     description: null,
     parent: null,
     priority: null,
+    scope: null,
+    category: null,
+    sdId: null,
     interactive: false,
     help: false
   };
@@ -134,6 +137,15 @@ function parseArgs() {
         break;
       case '--priority':
         parsed.priority = args[++i];
+        break;
+      case '--scope':
+        parsed.scope = args[++i];
+        break;
+      case '--category':
+        parsed.category = args[++i];
+        break;
+      case '--sd-id':
+        parsed.sdId = args[++i];
         break;
       case '--interactive':
       case '-i':
@@ -168,6 +180,9 @@ Options:
   --description, -d       SD description
   --parent, -p <sd_key>   Parent SD key for child SDs
   --priority              Priority: critical, high, medium, low
+  --scope <text>          SD scope (required; inserted as NOT NULL column)
+  --category <text>       SD category (optional; defaults from --type when omitted)
+  --sd-id <sd_key>        Override auto-generated SD key with a specific value
   --interactive, -i       Interactive mode (prompts for all fields)
   --help, -h              Show this help
 
@@ -335,8 +350,19 @@ async function main() {
   let description = args.description;
   let parentKey = args.parent;
   let priority = args.priority;
+  let scope = args.scope;
+  let category = args.category;
+  const sdIdOverride = args.sdId;
 
-  // Interactive mode or missing required fields
+  // Strict non-interactive validation for --scope: fail fast when not prompting
+  if (!args.interactive && !scope) {
+    console.error('❌ --scope is required (strategic_directives_v2.scope is NOT NULL)');
+    console.error('   Example: --scope "EHG_Engineer only; CLI scripts and migration"');
+    console.error('   Or run with --interactive to be prompted');
+    process.exit(1);
+  }
+
+  // Interactive mode or missing required fields (legacy behavior for --type/--title)
   if (args.interactive || !sdType || !title) {
     rl = createReadline();
 
@@ -373,6 +399,20 @@ async function main() {
       console.log(`\nPriority (default: ${SD_TYPES[sdType].defaultPriority})`);
       priority = await prompt(rl, 'Priority [critical/high/medium/low]: ') || SD_TYPES[sdType].defaultPriority;
     }
+
+    if (!scope) {
+      while (!scope) {
+        scope = await prompt(rl, 'Scope (required, what is in/out of scope): ');
+        if (!scope) {
+          console.log('   ⚠️  Scope is required (column is NOT NULL in strategic_directives_v2)');
+        }
+      }
+    }
+
+    if (!category) {
+      const defaultCat = sdType.charAt(0).toUpperCase() + sdType.slice(1);
+      category = await prompt(rl, `Category (default: ${defaultCat}): `) || defaultCat;
+    }
   }
 
   // Validate SD type
@@ -387,7 +427,8 @@ async function main() {
   // Initialize SD data
   // SD-LEO-SDKEY-001: Use centralized async key generator
   // SD-LEO-FIX-CREATION-COLUMN-MAPPING-001: id=human-readable key per schema
-  const sdKey = await generateSdKey(title, sdType);
+  // SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 1: accept --sd-id, --scope, --category flags
+  const sdKey = sdIdOverride || await generateSdKey(title, sdType);
   const sdData = {
     id: sdKey,  // Human-readable key (per schema: id=VARCHAR for main identifier)
     sd_key: sdKey,  // Same for backward compatibility
@@ -397,7 +438,8 @@ async function main() {
     sd_type: sdType,
     status: 'draft',
     priority: priority || typeConfig.defaultPriority,
-    category: sdType.charAt(0).toUpperCase() + sdType.slice(1),
+    category: category || (sdType.charAt(0).toUpperCase() + sdType.slice(1)),
+    scope: scope,  // NOT NULL in strategic_directives_v2 — required by --scope flag
     success_criteria: JSON.stringify([`${title} - verified complete`]),
     target_application: 'EHG_Engineer'
   };
