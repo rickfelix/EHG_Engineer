@@ -328,7 +328,10 @@ async function checkPlanToExecPrereqs(supabase, sd, sdId) {
           `Create user stories linked to ${sdId}. story_key format: '${sdId}:US-001'.`,
           'Required fields: story_key, sd_id, title, user_role, user_want, user_benefit,',
           '  acceptance_criteria (array), implementation_context (string).',
-          'Example story_key values: ' + sdId + ':US-001, ' + sdId + ':US-002'
+          "Valid status values: 'draft', 'ready', 'in_progress', 'completed', 'blocked', 'cancelled'.",
+          "  (ready / in_progress / completed satisfy the STORIES precondition.)",
+          'Example story_key values: ' + sdId + ':US-001, ' + sdId + ':US-002',
+          'Field reference: docs/database/user_stories_field_reference.md'
         ].join('\n')
       });
     }
