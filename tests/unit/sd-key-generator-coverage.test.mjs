@@ -142,7 +142,7 @@ test('FR-5 end-to-end: two partial reads covering 100% → gate PASSES', async (
           ranges: [{ offset: 1, limit: 500 }, { offset: 501, limit: 500 }],
         },
       },
-      protocolFilesRead: { 'CLAUDE_CORE.md': true, 'CLAUDE_LEAD.md': true },
+      protocolFilesRead: ['CLAUDE_CORE.md', 'CLAUDE_LEAD.md'],
     });
     const mod = await importFreshModule();
     const core = mod.validateCoreFileRead();
@@ -176,7 +176,7 @@ test('FR-5 end-to-end: 40% coverage → gate REJECTS with uncovered range', asyn
           ranges: [{ offset: 1, limit: 400 }],
         },
       },
-      protocolFilesRead: { 'CLAUDE_CORE.md': true },
+      protocolFilesRead: ['CLAUDE_CORE.md'],
     });
     const mod = await importFreshModule();
     const core = mod.validateCoreFileRead();

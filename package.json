@@ -37,6 +37,8 @@
     "protocol:lint:promote": "node scripts/protocol-lint/cli.mjs promote",
     "protocol:lint:review": "node scripts/protocol-lint/cli.mjs review",
     "test:smoke": "vitest run tests/smoke.test.js",
+    "test:session-tick": "node --test tests/unit/session-tick-heartbeat.test.mjs",
+    "test:sd-key-generator-gate": "node --test tests/unit/sd-key-generator-coverage.test.mjs",
     "test:unit": "vitest run tests/unit/",
     "test:integration": "vitest run tests/integration/",
     "test:pipeline": "vitest run tests/integration/pipeline-s0-s17.test.js --testTimeout 1200000",
