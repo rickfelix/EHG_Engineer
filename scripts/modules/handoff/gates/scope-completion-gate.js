@@ -180,6 +180,82 @@ function grepRecursive(dir, pattern) {
   return null;
 }
 
+// Convert a glob (**/ for 0+ path segments, * for chars-in-segment, ? for one char) to RegExp.
+function globToRegExp(glob) {
+  let src = '';
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === '*' && glob[i + 1] === '*') {
+      if (glob[i + 2] === '/') {
+        // **/ matches zero or more path segments
+        src += '(?:.*/)?';
+        i += 2; // skip **/
+      } else {
+        // ** alone matches any chars
+        src += '.*';
+        i += 1; // skip second *
+      }
+    } else if (c === '*') {
+      src += '[^/]*';
+    } else if (c === '?') {
+      src += '.';
+    } else if ('.+^${}()|[]\\'.includes(c)) {
+      src += '\\' + c;
+    } else {
+      src += c;
+    }
+  }
+  return new RegExp('^' + src + '$');
+}
+
+// True when the child SD inherits arch scope from its parent but has not declared a scope_slice.
+// Added for SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A.
+function isInheritedWithoutSlice(sd) {
+  if (sd?.scope_slice != null) return false;
+  const flag = sd?.metadata?.inherited_from_parent;
+  if (flag === true) return true;
+  if (Array.isArray(flag) && flag.length > 0) return true;
+  return false;
+}
+
+// Filter parent arch plan deliverables through the child's scope_slice.
+// stages: keep deliverables whose name/path references one of the listed stage numbers.
+// deliverable_globs: keep deliverables whose checkPattern matches one of the globs.
+// When both set, deliverable must match BOTH (intersection).
+function filterBySlice(deliverables, scopeSlice) {
+  if (!scopeSlice || typeof scopeSlice !== 'object') return deliverables;
+
+  const stages = Array.isArray(scopeSlice.stages) ? scopeSlice.stages : null;
+  const globs = Array.isArray(scopeSlice.deliverable_globs) ? scopeSlice.deliverable_globs : null;
+
+  if ((!stages || stages.length === 0) && (!globs || globs.length === 0)) {
+    return deliverables;
+  }
+
+  const globRegexes = globs ? globs.map(globToRegExp) : null;
+
+  return deliverables.filter(d => {
+    const target = (d.checkPattern || d.name || '').toLowerCase();
+
+    if (stages && stages.length > 0) {
+      const stageMatches = stages.some(n => {
+        const s = String(n);
+        const patterns = [`stage${s}`, `stage_${s}`, `stage-${s}`, `stage ${s}`, `/${s}/`, `s${s}_`, `_s${s}`];
+        return patterns.some(p => target.includes(p));
+      });
+      if (!stageMatches) return false;
+    }
+
+    if (globRegexes && globRegexes.length > 0) {
+      const cleanPath = d.checkPattern || d.name || '';
+      const globMatches = globRegexes.some(rx => rx.test(cleanPath));
+      if (!globMatches) return false;
+    }
+
+    return true;
+  });
+}
+
 /**
  * Validate that all architecture plan deliverables are present in the codebase.
  *
@@ -193,12 +269,33 @@ export async function validateScopeCompletion(sdKey) {
 
   const supabase = createSupabaseServiceClient();
 
-  // 1. Get the SD's arch_key from metadata
+  // 1. Get the SD's arch_key + scope_slice from metadata
   const { data: sd } = await supabase
     .from('strategic_directives_v2')
-    .select('metadata')
+    .select('metadata, scope_slice, parent_sd_id')
     .eq('sd_key', sdKey)
     .single();
+
+  // Soft-pass path (SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A):
+  // children that inherit parent arch_key but have not declared a scope_slice
+  // would otherwise be scored against the full parent deliverable set.
+  if (isInheritedWithoutSlice(sd)) {
+    console.log('   ℹ️  SD inherits scope from parent but has no scope_slice declared — soft-pass');
+    return {
+      pass: true,
+      score: 70,
+      issues: [],
+      warnings: [
+        `SD inherits scope from parent orchestrator (metadata.inherited_from_parent set) but has no scope_slice declared. Gate returns soft-pass (score=70). Declare scope_slice on the child to score only the claimed subset of parent deliverables.`
+      ],
+      checklist: [],
+      details: {
+        type: 'inherited-no-slice',
+        inherited_from_parent: sd.metadata.inherited_from_parent,
+        parent_sd_id: sd.parent_sd_id || null
+      }
+    };
+  }
 
   const archKey = sd?.metadata?.arch_key;
   if (!archKey) {
@@ -221,8 +318,17 @@ export async function validateScopeCompletion(sdKey) {
   console.log(`   Architecture plan: ${archKey}`);
 
   // 3. Extract deliverables
-  const deliverables = extractDeliverables(archPlan.content);
-  console.log(`   Deliverables extracted: ${deliverables.length}`);
+  let deliverables = extractDeliverables(archPlan.content);
+  const rawDeliverableCount = deliverables.length;
+  console.log(`   Deliverables extracted: ${rawDeliverableCount}`);
+
+  // 3a. Apply child's scope_slice filter if declared
+  if (sd?.scope_slice) {
+    deliverables = filterBySlice(deliverables, sd.scope_slice);
+    if (deliverables.length < rawDeliverableCount) {
+      console.log(`   scope_slice filter applied: ${deliverables.length}/${rawDeliverableCount} deliverables retained`);
+    }
+  }
 
   if (deliverables.length === 0) {
     console.log('   ⚠️  No parseable deliverables found in architecture plan');
@@ -290,4 +396,4 @@ export function createScopeCompletionGate() {
   };
 }
 
-export { extractDeliverables, checkDeliverable, grepRecursive };
+export { extractDeliverables, checkDeliverable, grepRecursive, filterBySlice, globToRegExp, isInheritedWithoutSlice };
