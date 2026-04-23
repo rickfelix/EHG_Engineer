@@ -1,7 +1,7 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-04-22 9:01:21 AM
-**Protocol**: LEO 4.3.3
+**Generated**: 2026-04-23 9:43:55 PM
+**Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
@@ -100,10 +100,12 @@ Task(subagent_type="Explore", prompt="Identify affected areas and dependencies")
 - Similar patterns? → Inform PRD design, reuse existing code
 - Affected areas identified? → Scope boundaries are clear
 
-**Step 3: Run Formal Validation**
-```bash
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+**Step 3: Run Formal Validation (Task tool in interactive sessions)**
 ```
+Task(subagent_type="validation-agent", prompt="Execute VALIDATION analysis for SD-XXX. Check for duplicate implementations, overlapping SDs, and existing infrastructure. Store results in sub_agent_execution_results table.")
+```
+
+> **Interactive vs automated**: Use the Task tool in interactive sessions — it routes with full context and writes to `sub_agent_execution_results` where gates look for evidence. The `node lib/sub-agent-executor.js VALIDATION <SD-ID>` CLI is reserved for automated pipelines (CI jobs, cron scripts) where no session context exists. This rule is consistent across LEAD, PLAN, and EXEC.
 
 ### Why This Order?
 
@@ -134,7 +136,7 @@ Task(subagent_type="Explore", prompt="very thorough - Search for existing user p
 
 Claude: "Found existing user preferences in the EHG app. Let me now run formal validation to check for duplicates."
 
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+Task(subagent_type="validation-agent", prompt="Execute VALIDATION analysis for SD-XXX...")
 ```
 
 ## SD to Quick Fix Reverse Rubric (LEO v4.3.3)
@@ -415,9 +417,9 @@ node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md
 | `documentation` | None | Minimal validation |
 | `performance` | None | PERFORMANCE sub-agent recommended |
 
-### Step 2: LEAD Strategic Validation (9-Question Gate)
+### Step 2: LEAD Strategic Validation (Canonical 9-Question Gate)
 
-LEAD MUST answer these questions before approval:
+LEAD MUST answer all 9 questions before approval. This is the single canonical list — prior docs that reference "6-Question" or "8-Question" gates are superseded.
 
 1. **Need Validation**: Is this solving a real user problem?
 2. **Solution Assessment**: Does it align with business objectives?
@@ -426,8 +428,8 @@ LEAD MUST answer these questions before approval:
 5. **Existing Tools**: Can we leverage existing infrastructure?
 6. **Risk Assessment**: What are key risks and mitigations?
 7. **UI Inspectability**: Can users see and interpret the outputs?
-8. **Scope Reduction**: What was REMOVED? (Target >10% reduction)
-9. **Human-Verifiable Outcome**: What's the 30-second demo? (`smoke_test_steps`)
+8. **Scope Reduction (Deletion Audit)**: What was REMOVED? (Target >10% reduction, record in `scope_reduction_percentage`)
+9. **Human-Verifiable Outcome**: What's the 30-second demo? (populate `smoke_test_steps`)
 
 ### Step 3: Execute Handoff Chain
 
@@ -438,7 +440,7 @@ node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
 # PLAN → EXEC (PRD complete, ready for implementation)
 node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
 
-# EXEC → PLAN (Implementation complete, ready for verification)
+# EXEC → PLAN (Implementation complete, ready for verification) — CONDITIONAL by sd_type
 node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
 
 # PLAN → LEAD (Verification complete, ready for final approval)
@@ -449,10 +451,23 @@ node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 
 | Handoff | Key Gates | Threshold |
 |---------|-----------|-----------|
-| LEAD-TO-PLAN | SD_TRANSITION_READINESS, TARGET_APPLICATION, BASELINE_DEBT_CHECK | 85% |
-| PLAN-TO-EXEC | PREREQUISITE_CHECK, BMAD_VALIDATION, BRANCH_ENFORCEMENT | 85% |
-| EXEC-TO-PLAN | IMPLEMENTATION_FIDELITY, TESTING_REQUIRED, GIT_COMMIT | 85% |
-| PLAN-TO-LEAD | SUB_AGENT_ORCHESTRATION, RETROSPECTIVE_QUALITY | 85% |
+| LEAD-TO-PLAN | SD_TRANSITION_READINESS, TARGET_APPLICATION, BASELINE_DEBT_CHECK | SD-type-specific † |
+| PLAN-TO-EXEC | PREREQUISITE_CHECK, BMAD_VALIDATION, BRANCH_ENFORCEMENT | SD-type-specific † |
+| EXEC-TO-PLAN | IMPLEMENTATION_FIDELITY, TESTING_REQUIRED, GIT_COMMIT | SD-type-specific † |
+| PLAN-TO-LEAD | SUB_AGENT_ORCHESTRATION, RETROSPECTIVE_QUALITY | SD-type-specific † |
+
+**† SD-type-specific thresholds** (see "SD Type-Aware Workflow Paths" in CLAUDE_CORE.md for the canonical table):
+
+| SD Type | Threshold |
+|---------|-----------|
+| `feature`, `bugfix`, `database` | 85% |
+| `security` | 90% |
+| `refactor` | 75-90% (by intensity) |
+| `infrastructure` | 80% |
+| `orchestrator` | 70% |
+| `documentation` | 60% |
+
+**Default** when type is ambiguous: 85%.
 
 ### Reference Documents
 
@@ -855,7 +870,7 @@ node scripts/lead-review-submissions.js
 
 ## Strategic Validation Question 7: UI Inspectability
 
-**Added in LEO v4.3.3** - Part of LEAD Pre-Approval Gate
+**Part of the canonical 9-Question LEAD Pre-Approval Gate** (see "Strategic Directive Creation Process" → Step 2 in CLAUDE_LEAD.md for the full list).
 
 ### The Question
 > "Can users see and interpret the outputs this feature produces?"
@@ -882,16 +897,20 @@ node scripts/lead-review-submissions.js
 - Either expand SD scope to include UI OR
 - Create linked child SD for UI implementation
 
-### Integration with 6-Question Gate
+### Position in the 9-Question Gate
 
-This question is MANDATORY for all SDs that produce user-facing data. It should be evaluated alongside:
-1. Is this minimal scope?
-2. Does it fit the current phase?
-3. Are there simpler alternatives?
-4. What is the maintenance cost?
-5. Does it follow existing patterns?
-6. Is it required for the stated goal?
-**7. Can users see and interpret the outputs?** ← NEW
+This question is Q7 in the canonical 9-question sequence:
+1. Need Validation
+2. Solution Assessment
+3. Feasibility Review
+4. Value Analysis
+5. Existing Tools
+6. Risk Assessment
+**7. UI Inspectability** ← this question
+8. Scope Reduction (deletion audit, target >10%)
+9. Human-Verifiable Outcome (30-second demo / smoke_test_steps)
+
+This question is MANDATORY for all SDs that produce user-facing data.
 
 ## 🎯 Strategic Validation Question 9: Human-Verifiable Outcome
 
@@ -1503,6 +1522,6 @@ Check `objectives` (active, current period) and `key_results` (status != 'achiev
 
 ---
 
-*Generated from database: 2026-04-22*
-*Protocol Version: 4.3.3*
+*Generated from database: 2026-04-23*
+*Protocol Version: 4.4.1*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

@@ -48,7 +48,8 @@
       "db_ops_protocol",
       "gate_failure_protocol",
       "pipeline_debugging_protocol",
-      "claim_heartbeat_protocol"
+      "claim_heartbeat_protocol",
+      "protocol_lint_tooling"
     ],
     "_removed_sections_note": "weighted_keyword_scoring (implementation detail of keyword-intent-scorer.js, hook handles routing), mandatory_agent_invocation (covered by PreToolUse hook routing advisory), sub_agent_prompt_quality (duplicate of Five-Point Brief in CLAUDE.md router), sustainable_issue_resolution (overlaps RCA mandate and execution philosophy), skill_integration (skills are self-documenting, reference pointer sufficient), communication_context (common sense for Opus 4.6), parallel_execution (common sense - read-safe, write-sequential), development_workflow (duplicate of application_architecture), strunkian_writing_standards (moved to docs/reference/), rca_multi_expert_protocol (RCA agent knows its own collaboration protocol)"
   },

@@ -20,9 +20,9 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 > Why: Sub-agents run formal, database-backed gate checks stored in `sub_agent_execution_results`. Handoff gates query this table — without sub-agent runs, gates block regardless of actual code quality.
 3. **Database-first** - No markdown files as source of truth
 > Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
-4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, handoff.js ⚠️
-> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases.
-5. **Small PRs** - Target ≤100 lines, max 400 with justification
+4. **USE PROCESS SCRIPTS** - ⚠️ Never bypass add-prd-to-database.js or handoff.js outside a documented emergency path ⚠️
+> Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases. Documented exceptions exist (`--bypass-validation --bypass-reason` on handoff.js, rate-limited to 3/SD and 10/day; `EMERGENCY_PUSH` for push enforcement) — use them with a ticket reference in the reason field.
+5. **Small PRs** - ≤100 LOC ideal; up to 400 LOC with justification per tiered PR Size Guidelines
 > Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospective analysis shows ≤100 LOC correlates with faster cycle time and fewer post-merge defects.
 6. **Priority-first** - Use `npm run prio:top3` to justify work
 > Why: Without priority justification, the highest-ROI SD can be overlooked in favour of something familiar. `prio:top3` enforces objective ordering, not recency ordering.
@@ -30,20 +30,27 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 > Why: CLAUDE.md is auto-generated from the DB. Operating on a stale file means reading outdated rules without knowing it — the session follows a protocol that has since been superseded.
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
+8. **Parallel-session safety** - In shared-working-tree sessions, run `npm run session:check-concurrency` before Write/Edit work; if contention is detected, isolate with `npm run session:worktree`
+> Why: Parallel Claude Code sessions sharing one working tree cause tool-result "internal error" messages when one session's `git checkout` mutates files mid-PostToolUse-hook in another session. The SessionStart auto-worktree hook (`scripts/hooks/concurrent-session-worktree.cjs`) catches some cases but is point-in-time; the CLI gives any session an explicit isolation check.
 
 ## AUTO-PROCEED Mode
 
 AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no confirmation prompts.
 > Why: The user approved the SD. Every unnecessary pause adds friction without adding value — AUTO-PROCEED respects that approval by eliminating confirmation theater.
 
-**Pause points** (even when ON): Orchestrator completion, blocking errors, test failures (2 retries), merge conflicts, all children blocked.
-> Why: These are the only states where user input can actually change the outcome. All others are decisions the orchestrator is authorized and expected to make autonomously.
+**Canonical Pause Points** (applies to AUTO-PROCEED, Continue Autonomously, and Orchestrator STOP):
+1. **Orchestrator completion** — after all children complete, pause for /learn review (only when Chaining is OFF; see SD Continuation Truth Table)
+2. **Blocking error requiring human decision** — e.g., merge conflicts, ambiguous requirements escalated from EXEC
+3. **Test failures after 2 retry attempts** — auto-retry exhausted, RCA sub-agent invoked before pause
+4. **All children blocked** — no ready work remains, human decision required
+5. **Critical security or data-loss scenario** — includes DB/code status mismatch (code shipped but DB shows incomplete)
 
-**NOT pause triggers**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, "warrants confirmation". Phase boundaries are NOT pause points. If your reason isn't in the list above, KEEP WORKING.
-> Why: Each item on this list is a judgment call the orchestrator is empowered to make without escalation. Pausing on these trains the user to expect interruptions and undermines the AUTO-PROCEED contract.
-
-Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
+**NOT pause triggers**: scope size, "substantial" upcoming work, decomposition into children, PRD creation, large refactors, phase boundaries, or any "warrants confirmation" rationalization. If your reason is not on the five-point list above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
 > Why: Confirmation-fishing is the most common AUTO-PROCEED failure mode. Naming it explicitly as a violation prevents the LLM from treating asking as a safe default when uncertain.
+
+> **For the authoritative transition matrix** (which handoffs require phase work before the next handoff, when chaining kicks in, orchestrator completion behavior), see the **SD Continuation Truth Table** below. It is canonical when any other doc conflicts with it.
+
+> **Chaining default**: **OFF** (pause at orchestrator boundary). See "Orchestrator Chaining Mode" for full details.
 
 ## SD Continuation
 
@@ -143,4 +150,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-04-22 9:01:21 AM | Protocol: LEO 4.3.3 | Source: Database*
+*Generated: 2026-04-23 9:43:54 PM | Protocol: LEO 4.4.1 | Source: Database*

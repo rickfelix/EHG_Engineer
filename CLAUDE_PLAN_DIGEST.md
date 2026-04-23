@@ -1,12 +1,12 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-22T13:01:21.412Z -->
-<!-- git_commit: af3b313f -->
-<!-- db_snapshot_hash: 1d8fe83996199ce0 -->
+<!-- generated_at: 2026-04-23T01:43:54.948Z -->
+<!-- git_commit: dd4af67c -->
+<!-- db_snapshot_hash: 1b7482beab585910 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_PLAN_DIGEST.md - PLAN Phase (Enforcement)
 
-**Protocol**: LEO 4.3.3
+**Protocol**: LEO 4.4.1
 **Purpose**: PRD requirements and constraints (<5k chars)
 
 ---
@@ -157,5 +157,5 @@ On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decompositi
 
 ---
 
-*DIGEST generated: 2026-04-22 9:01:21 AM*
-*Protocol: 4.3.3*
+*DIGEST generated: 2026-04-23 9:43:55 PM*
+*Protocol: 4.4.1*

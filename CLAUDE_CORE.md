@@ -1,7 +1,7 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-04-22 9:01:21 AM
-**Protocol**: LEO 4.3.3
+**Generated**: 2026-04-23 9:43:55 PM
+**Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 
 > Sub-agent routing enforced by PreToolUse hook. See `scripts/hooks/pre-tool-enforce.cjs`.
@@ -86,46 +86,6 @@ Task tool with subagent_type="database-agent":
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### ⚠️ MANDATORY: Read Entire Files (No Partial Reads)
-
-**When reading any file that contains instructions, requirements, or critical context, you MUST read the ENTIRE file from start to finish.**
-
-**General Rule**: If a file is important enough to read, read it completely. Partial reads lead to missed requirements.
-
-**Files that MUST be read in full (no `limit` parameter):**
-- CLAUDE.md, CLAUDE_CORE.md, CLAUDE_LEAD.md, CLAUDE_PLAN.md, CLAUDE_EXEC.md
-- PRD content from database
-- Any file containing protocol instructions, requirements, or acceptance criteria
-- Configuration files (.json, .yaml, .env.example)
-- Test files when debugging failures
-- Migration files when working on database changes
-
-**When `limit` parameter IS acceptable:**
-- Log files (reading recent entries)
-- Large data files where you only need a sample
-- Files explicitly marked as "preview only"
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
-
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -160,6 +120,48 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
+
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### ⚠️ MANDATORY: Read Complete Files (Chunked Reads Allowed)
+
+**When reading any file that contains instructions, requirements, or critical context, you MUST read the complete file end-to-end — no skipping sections.**
+
+**General Rule**: If a file is important enough to read, read it completely. Partial reads lead to missed requirements.
+
+**Files that MUST be read completely:**
+- CLAUDE.md, CLAUDE_CORE.md, CLAUDE_LEAD.md, CLAUDE_PLAN.md, CLAUDE_EXEC.md
+- PRD content from database
+- Any file containing protocol instructions, requirements, or acceptance criteria
+- Configuration files (.json, .yaml, .env.example)
+- Test files when debugging failures
+- Migration files when working on database changes
+
+**Chunked reads**: Some CLAUDE files exceed the single-Read token cap. In that case, use sequential `offset`/`limit` calls until you reach end of file — the rule is "no skipped sections", not "one call". Do not substitute a Grep sample for full reading; Grep is for targeted lookups, not comprehension of protocol files.
+
+**When `limit` parameter alone (sample-only read) IS acceptable:**
+- Log files (reading recent entries)
+- Large data files where you only need a sample
+- Files explicitly marked as "preview only"
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -306,14 +308,16 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 **ALL changes to main must be tracked** as either:
 
 ### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>50 LOC)
+- Features, refactors, infrastructure (>75 LOC, see Work Item Routing)
 - Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
 - Command: `npm run sd:create`
 
 ### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (<=50 LOC)
+- Bugs, polish, docs (≤75 LOC per Tier 1/Tier 2 in Work Item Routing)
 - Branch: `quick-fix/QF-YYYYMMDD-NNN`
 - Command: `node scripts/create-quick-fix.js --interactive`
+
+> **LOC thresholds** are defined once in **Work Item Routing** (CLAUDE.md): Tier 1 ≤30 (auto-approve QF), Tier 2 31-75 (standard QF), Tier 3 >75 (full SD). Risk keywords (auth, migration, schema, feature) always force Tier 3 regardless of LOC.
 
 ### Why This Matters
 - All work tracked in database
@@ -374,39 +378,6 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
-
 ## Execution Philosophy
 
 ### Quality-First (PARAMOUNT)
@@ -443,6 +414,39 @@ Before marking any stage/feature as complete:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Sub-Agent Routing Reference
 
@@ -558,6 +562,38 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
+
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -599,38 +635,6 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 **Rule**: "Non-fatal" means the hook threw an unexpected exception. "Hook ran but wrote zero rows to its target table" is a **data integrity failure** that must surface.
 
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
-
 ## 🔄 Git Commit Guidelines
 
 **Git Commit Guidelines**: `<type>(<SD-ID>): <subject>` format MANDATORY
@@ -638,7 +642,7 @@ node scripts/child-sd-preflight.js SD-XXX-001
 **Required**: Type (feat/fix/docs/etc), SD-ID scope, imperative subject, AI attribution in footer
 **Timing**: After checklist items, before context switches, at logical breakpoints
 **Branch Strategy**: `eng/` prefix for EHG_Engineer, standard prefixes for EHG app features
-**Size**: <100 lines ideal, <200 max
+**Size**: ≤100 LOC ideal; 101-200 LOC acceptable with brief justification; 201-400 LOC requires detailed rationale; >400 LOC generally prohibited. See **PR Size Guidelines** in CLAUDE_CORE.md for the canonical tiered table.
 
 **Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
 
@@ -685,17 +689,21 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 4. Retrospective created
 5. LEO Protocol validation trigger passes
 
-**NOT complete**: Code shipped but database shows 'draft'/'in_progress'
+**NOT complete**: Code shipped but database shows 'draft' / 'in_progress' / 'active'
 
 ### "Continue autonomously"
 **Definition**: Execute the current SD through its full LEO Protocol workflow WITHOUT stopping to ask for user confirmation at each step.
 **NOT**: Skip workflow steps for efficiency.
-**AUTO-PROCEED**: Phase transitions, post-completion sequence, and next SD selection all happen automatically.
-**ONLY STOP IF**:
-- Blocking error requires human decision (e.g., merge conflicts)
-- Tests fail after 2 retry attempts
-- Critical security or data-loss scenario
-- **NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, or any "warrants confirmation" rationalization. Phase boundaries are NOT pause points. If your reason for stopping is not in the three bullets above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
+**AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table (which handoffs are TERMINAL / require phase work) and Chaining setting (orchestrator-to-orchestrator).
+
+**ONLY STOP IF** (Canonical Pause Points — same list as AUTO-PROCEED Mode):
+1. **Orchestrator completion** — after all children, when Chaining is OFF
+2. **Blocking error requiring human decision** — merge conflicts, ambiguous requirements
+3. **Test failures after 2 retry attempts**
+4. **All children blocked**
+5. **Critical security or data-loss scenario** (includes DB/code status mismatch)
+
+**NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, or any "warrants confirmation" rationalization. Phase boundaries are NOT pause points. If your reason for stopping is not on the five-point list above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
 
 ### "Child SD"
 **Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
@@ -780,21 +788,29 @@ Parent SDs coordinate children; **every child goes through full LEAD→PLAN→EX
 | Type | Workflow | Use Case |
 |------|----------|----------|
 | `standalone` | LEAD→PLAN→EXEC | Normal SDs |
-| `parent` | LEAD→PLAN→waits→Complete | Multi-phase coordinator |
+| `parent` | LEAD→PLAN→EXEC (coordinates children)→Complete | Multi-phase coordinator |
 | `child` | LEAD→PLAN→EXEC→Complete | Sequential execution units |
+
+**Why parents enter EXEC**: The DB trigger `enforce_sd_phase_transition_rules` blocks child activation while the parent is in PLAN. The parent MUST transition to EXEC before any child can start — this is the parent's "EXEC work": coordinating, sequencing, and monitoring children rather than writing application code itself. See "Parent-Child SD Phase Governance" for the resolution pattern when a parent returns to PLAN for v2 planning.
 
 ### Key Rules
 1. **Every child gets full LEAD→PLAN→EXEC** - no shortcuts
 2. **Parent PLAN creates children** - PLAN agent proposes decomposition
-3. **Parent SDs bypass user story gates** - stories exist in child SDs
-4. **Children execute sequentially** - Child B waits for Child A
-5. **Parent completes last** - after all children finish
+3. **Parent enters EXEC before first child activation** - required by DB trigger; parent's EXEC work is coordination, not coding
+4. **Parent SDs bypass user story gates** - stories exist in child SDs
+5. **Children execute sequentially** - Child B waits for Child A
+6. **Parent completes last** - after all children finish
 
-### Orchestrator STOP Conditions
-STOP and verify ONLY if:
-- **Blocking dependency**: Child depends on incomplete child
-- **Critical error**: Tests fail after 2 retries, merge conflicts
-- **Database status mismatch**: Code shipped but DB shows incomplete
+### Canonical Pause Points (Orchestrator / Parent)
+
+**Canonical Pause Points** (applies to AUTO-PROCEED, Continue Autonomously, and Orchestrator STOP):
+1. **Orchestrator completion** — after all children complete, pause for /learn review (only when Chaining is OFF; see SD Continuation Truth Table)
+2. **Blocking error requiring human decision** — e.g., merge conflicts, ambiguous requirements escalated from EXEC
+3. **Test failures after 2 retry attempts** — auto-retry exhausted, RCA sub-agent invoked before pause
+4. **All children blocked** — no ready work remains, human decision required
+5. **Critical security or data-loss scenario** — includes DB/code status mismatch (code shipped but DB shows incomplete)
+
+**NOT pause triggers**: scope size, "substantial" upcoming work, decomposition into children, PRD creation, large refactors, phase boundaries, or any "warrants confirmation" rationalization. If your reason is not on the five-point list above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
 
 ### Child SD Completion Checklist
 - [ ] Child has PRD in `product_requirements_v2`
@@ -825,7 +841,7 @@ SELECT get_next_child_sd('SD-PARENT-001');
 | `database` | 85% | All 5 | May skip UI-dependent E2E |
 | `security` | 90% | All 5 | Strictest validation |
 | `refactor` | 75-90% | All 5 | Varies by intensity |
-| `infrastructure` | 80% | 4 (skip EXEC-TO-PLAN) | No production code |
+| `infrastructure` | 80% | 4 (skip EXEC-TO-PLAN) | No customer-facing UI; CI/scripts ARE production backend code |
 | `documentation` | 60% | 4 (skip EXEC-TO-PLAN) | No code changes |
 | `orchestrator` | 70% | Coordinates children | USER_STORY gate bypassed |
 
@@ -856,7 +872,7 @@ LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → PLAN-TO-LEAD → LEAD-FINAL-APPROVA
 |---------|-------------|-------|
 | `feature` | **YES** | Human-verifiable outcome |
 | `bugfix` | **YES** | Verify fix works |
-| `infrastructure` | **EXEMPT** | Internal tooling |
+| `infrastructure` | **EXEMPT** | Internal tooling (no customer-facing UI) |
 | `documentation` | No | No runtime behavior |
 
 ### Pre-Handoff Check
@@ -1022,6 +1038,40 @@ node scripts/handoff.js history SD-XXX-001
 
 ### Rule
 **Never patch a downstream stage to compensate for upstream data.** The fix belongs where the bad data originates.
+
+## Protocol Consistency Linter
+
+Static checks for the LEO Protocol CLAUDE.md family. Detects threshold drift, enum drift, version drift, duplicate authoritative lists, and other consistency violations.
+
+### Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run protocol:lint` | On-demand audit. Writes violations to `leo_lint_violations`. Exit non-zero on blocking violations. |
+| `npm run protocol:lint:test` | Run rule fixtures (positive/negative). CI uses this to verify rules. |
+| `npm run protocol:lint:promote <rule-id>` | Promote a warn-severity rule to block-severity. Requires 2+ clean regen runs. |
+
+### Auto-run
+The linter runs inside `generate-claude-md-from-db.js` after DB fetch and before file writes. Block-severity violations abort the regen — CLAUDE*.md files are not overwritten when drift is detected.
+
+### Bypass (rate-limited)
+```bash
+node scripts/generate-claude-md-from-db.js --skip-lint --skip-reason "<text>"
+```
+Limit: 3 bypasses per repository per week. All bypasses logged to `leo_lint_run_history`.
+
+### Where things live
+| Item | Location |
+|------|----------|
+| Declarative rules (JSON pattern) | `scripts/protocol-lint/rules/declarative/*.json` |
+| Code rules (semantic) | `scripts/protocol-lint/rules/code/*.mjs` |
+| Fixtures (positive + negative per rule) | `scripts/protocol-lint/fixtures/*.json` |
+| Engine | `scripts/protocol-lint/engine.mjs` |
+| Audit tables | `leo_lint_violations`, `leo_lint_run_history`, `leo_lint_rules` |
+
+### Adding a rule
+New rules ship at `severity='warn'`. After 2+ consecutive regen runs with zero violations on a rule, run `npm run protocol:lint:promote <rule-id>` to elevate to `severity='block'`. Every rule must include a positive fixture (triggers detection) and a negative fixture (does not trigger).
+
+*Added: SD-PROTOCOL-LINTER-001*
 
 ## 🗄️ Supabase Database Operations
 
@@ -1286,6 +1336,20 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 
 
+## Hot Issue Patterns (Auto-Updated)
+
+**CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
+
+| Pattern ID | Category | Severity | Count | Trend | Top Solution |
+|------------|----------|----------|-------|-------|--------------|
+| PAT-HF-EXECTOPLAN-0bda95fe | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
+| PAT-RETRO-EXECTOPLAN-0bda95fe | session_retrospective | [HIGH] high | 5 | [STABLE] | N/A |
+| PAT-HF-PLANTOEXEC-eaccd2b3 | handoff_failure | [HIGH] high | 4 | [STABLE] | N/A |
+
+### Prevention Checklists
+
+
+*Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
 
@@ -1294,52 +1358,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. PLAN_TO_EXEC Handoff Retrospective: Iterator Stage 19 Visual Convergence Loop [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/23/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-c9b12816] google API error: 404 - Google API error 404: {
-  "error": {
-    "code": 404,
-  ...
-- [PAT-AUTO-0634bf78] Gate 4:valueDelivered failed: score 70/100
-
-**Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
-
-### 2. PLAN_TO_EXEC Handoff Retrospective: Address PAT-AUTO-c9b12816: google API error: 404 - Google API error 404: {
-  "error": { [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/23/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
-- [PAT-AUTO-0634bf78] Gate 4:valueDelivered failed: score 70/100
-
-**Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
-
-### 3. SD Completion Retrospective: Product Hunt GraphQL Integration [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/23/2026 | **Score**: 100
-
-**Key Improvements**:
-- Nested worktree session claim conflicts caused 30 minutes of debugging time
-- PRD inline mode requires manual DB inserts when standard scripts are unavailable in worktree
-
-**Action Items**:
-- [ ] Document nested worktree session claim conflict pattern in MEMORY.md
-- [ ] Monitor Product Hunt API rate limit usage in production for 2 weeks
-
-### 4. PLAN_TO_EXEC Handoff Retrospective: Awwwards Curated Design Reference Library [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/23/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-0634bf78] Gate 4:valueDelivered failed: score 70/100
-- [PAT-AUTO-f5086216] Gate 2C:databaseQueriesIntegrated failed: score 52/100
-
-**Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
-
-### 5. PLAN_TO_EXEC Handoff Retrospective: B1: leo_adrs Population During Stage 14 [QUALITY]
+### 1. PLAN_TO_EXEC Handoff Retrospective: C3: Auto-Iterate PRD Quality Loop [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1348,6 +1367,48 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+
+### 2. PLAN_TO_EXEC Handoff Retrospective: C5: Auto-Decompose SD Hierarchy from Architecture Plans [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
+- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
+
+**Action Items**:
+- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+
+### 3. PLAN_TO_EXEC Handoff Retrospective: B1: leo_adrs Population During Stage 14 [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
+- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
+
+**Action Items**:
+- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+
+### 4. LEAD_TO_PLAN Handoff Retrospective: C3: Auto-Iterate PRD Quality Loop [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
+- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
+
+**Action Items**:
+- [ ] Verify: PRDs below threshold are auto-enriched for SD-LEO-INFRA-STREAM-SPRINT-BR...
+- [ ] Validate: Enrichment is deterministic (no LLM) for SD-LEO-INFRA-STREAM-SPRINT-BR...
+
+### 5. LEAD_TO_PLAN Handoff Retrospective: Corrective: Vision Gap — semantic (semantic) (score 79/100) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
+- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
+
+**Action Items**:
+- [ ] Verify: Semantic dimension score >= 93 for SD-MAN-GEN-CORRECTIVE-VISION-GAP-019
+- [ ] Validate: Evidence artifacts committed for SD-MAN-GEN-CORRECTIVE-VISION-GAP-019
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1413,7 +1474,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-04-22*
-*Protocol Version: 4.3.3*
-*Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
+*Generated from database: 2026-04-23*
+*Protocol Version: 4.4.1*
+*Includes: Proposals (0) + Hot Patterns (3) + Lessons (5)*
 *Load this file first in all sessions*

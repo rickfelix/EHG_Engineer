@@ -1,7 +1,7 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-04-22 9:01:21 AM
-**Protocol**: LEO 4.3.3
+**Generated**: 2026-04-23 9:43:55 PM
+**Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
@@ -194,70 +194,6 @@ See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for c
 **If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
 
 
-## Branch Creation (Automated at LEAD-TO-PLAN)
-
-## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
-
-### Automatic Branch Creation
-
-As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
-
-1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
-2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
-3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
-4. Database is updated with branch name for tracking
-
-### Manual Branch Creation (If Needed)
-
-If branch creation fails or you need to create one manually:
-
-```bash
-# Create branch for an SD (looks up title from database)
-npm run sd:branch SD-XXX-001
-
-# Create with auto-stash (non-interactive)
-npm run sd:branch:auto SD-XXX-001
-
-# Check if branch exists
-npm run sd:branch:check SD-XXX-001
-
-# Full command with options
-# Branch was auto-created at LEAD-TO-PLAN handoff
-```
-
-### Branch Naming Convention
-
-| SD Type | Branch Prefix | Example |
-|---------|---------------|---------|
-| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
-| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
-| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
-| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
-| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
-
-### Branch Hygiene Rules
-
-From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
-- **≤7 days stale** at PLAN-TO-EXEC handoff
-- **One SD per branch** (no mixing work)
-- **Merge main at phase transitions**
-
-### When Branch is Created
-
-```
-LEAD Phase                    PLAN Phase                   EXEC Phase
-    |                              |                            |
-    |   LEAD-TO-PLAN handoff       |                            |
-    |---[Branch Created Here]----->|                            |
-    |                              |   PRD Creation             |
-    |                              |   Sub-agent validation     |
-    |                              |                            |
-    |                              |   PLAN-TO-EXEC handoff     |
-    |                              |---[Branch Validated]------>|
-    |                              |                            |
-```
-
-
 ## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
 
 **Source**: Analysis of 175 high-quality retrospectives (score ≥60)
@@ -346,6 +282,70 @@ If `research_confidence_score = 0.00`, you skipped this step.
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
 
+## Branch Creation (Automated at LEAD-TO-PLAN)
+
+## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
+
+### Automatic Branch Creation
+
+As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
+
+1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
+2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
+3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
+4. Database is updated with branch name for tracking
+
+### Manual Branch Creation (If Needed)
+
+If branch creation fails or you need to create one manually:
+
+```bash
+# Create branch for an SD (looks up title from database)
+npm run sd:branch SD-XXX-001
+
+# Create with auto-stash (non-interactive)
+npm run sd:branch:auto SD-XXX-001
+
+# Check if branch exists
+npm run sd:branch:check SD-XXX-001
+
+# Full command with options
+# Branch was auto-created at LEAD-TO-PLAN handoff
+```
+
+### Branch Naming Convention
+
+| SD Type | Branch Prefix | Example |
+|---------|---------------|---------|
+| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
+| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
+| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
+| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
+| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
+
+### Branch Hygiene Rules
+
+From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
+- **≤7 days stale** at PLAN-TO-EXEC handoff
+- **One SD per branch** (no mixing work)
+- **Merge main at phase transitions**
+
+### When Branch is Created
+
+```
+LEAD Phase                    PLAN Phase                   EXEC Phase
+    |                              |                            |
+    |   LEAD-TO-PLAN handoff       |                            |
+    |---[Branch Created Here]----->|                            |
+    |                              |   PRD Creation             |
+    |                              |   Sub-agent validation     |
+    |                              |                            |
+    |                              |   PLAN-TO-EXEC handoff     |
+    |                              |---[Branch Validated]------>|
+    |                              |                            |
+```
+
+
 ## Vision/Architecture Doc Pre-Check
 
 ## Vision/Architecture Doc Pre-Check (Step 0.25)
@@ -361,12 +361,14 @@ If `research_confidence_score = 0.00`, you skipped this step.
 |-----------|-----------|--------|
 | Exists, current | Exists, current | Proceed — implementation is governed |
 | Exists, current | Missing or stale | Flag to PLAN — create/update arch plan first |
-| Missing | — | Check if SD is tactical (fix/QF) — OK to proceed. If strategic (feature/infra), flag for brainstorm |
+| Missing | — | Check if SD is tactical (bugfix/QF) — OK to proceed. If strategic (feature/infrastructure), flag for brainstorm |
 
 ### Skip Conditions
-- `sd_type` is `fix` or `documentation` — skip this check
+- `sd_type` is `bugfix` or `documentation` — skip this check
 - SD has `--from-uat` or `--from-feedback` provenance — skip (corrective work)
 - Parent orchestrator already passed this check — skip for children
+
+> Note: `bugfix` is the canonical sd_type value; the SDKeyGenerator maps user-facing `fix` → `bugfix` automatically (see CLAUDE_LEAD.md "SDKeyGenerator Errors").
 
 ## EXEC Phase Negative Constraints
 
@@ -428,6 +430,41 @@ Sub-agents are FIRST RESPONDERS in EXEC phase. When you encounter a problem that
 
 *Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
+## Migration Script Pattern (MANDATORY)
+
+**Issue Pattern**: PAT-DB-MIGRATION-001
+
+When writing migration scripts, you MUST use the established pattern:
+
+### Correct Pattern
+```javascript
+import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
+import { readFileSync } from 'fs';
+
+const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
+const client = await createDatabaseClient('engineer', { verify: true });
+const statements = splitPostgreSQLStatements(migrationSQL);
+
+for (const statement of statements) {
+  await client.query(statement);
+}
+
+await client.end();
+```
+
+### NEVER Use This Pattern
+```javascript
+// WRONG - exec_sql RPC does not exist
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(url, key);
+await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
+```
+
+### Before Writing Migration Scripts
+1. Search for existing patterns: `Glob *migration*.js`
+2. Read `scripts/run-sql-migration.js` as canonical template
+3. Use `lib/supabase-connection.js` utilities
+
 ## 📚 Skill Integration (EXEC Phase)
 
 ## Skill Integration During EXEC
@@ -456,12 +493,15 @@ Skills provide patterns, templates, and examples. Apply them to your specific im
 
 ### Skills vs Sub-Agents in EXEC
 
+Both are valid in EXEC — use them for different purposes:
+
 | Layer | When | Purpose | Example |
 |-------|------|---------|---------|
-| **Skills** | During implementation | Pattern guidance (creative) | "How do I structure this component?" |
-| **Sub-agents** | After implementation | Validation (verification) | "Is this migration safe?" |
+| **Skills** | While writing code | Creative guidance — "how do I structure this?" | `skill: "component-architecture"` |
+| **Sub-agents (first responders)** | On errors or domain-specific tasks | Immediate domain expertise | DB write error → `database-agent`; test failure → `rca-agent` then `testing-agent` |
+| **Sub-agents (validation gates)** | Before EXEC-TO-PLAN handoff | Formal, database-backed validation | `testing-agent` for coverage, `uat-agent` for acceptance |
 
-**Do NOT** invoke sub-agents during EXEC implementation. Save validation for PLAN_VERIFY phase.
+**Clarification**: Sub-agents ARE first responders in EXEC — invoke them immediately when you encounter a problem matching their domain (see "Phase-Specific Sub-Agent Guidance: EXEC" in this file). What belongs in PLAN_VERIFY is the *full formal validation sweep* (Gate 2 DESIGN + DATABASE fidelity, Gate 2.5 UI parity, Russian Judge quality scoring). Do not pre-run PLAN_VERIFY gates mid-implementation — but DO invoke domain sub-agents the instant you need them.
 
 ### Common Skill Chains by Task
 
@@ -502,43 +542,8 @@ Skills provide patterns, templates, and examples. Apply them to your specific im
 ### Remember
 
 Skills are for **creative guidance** (how to build).
-Sub-agents are for **validation** (did you build it right).
-Use skills during EXEC, save sub-agents for PLAN_VERIFY.
-
-## Migration Script Pattern (MANDATORY)
-
-**Issue Pattern**: PAT-DB-MIGRATION-001
-
-When writing migration scripts, you MUST use the established pattern:
-
-### Correct Pattern
-```javascript
-import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
-import { readFileSync } from 'fs';
-
-const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
-const client = await createDatabaseClient('engineer', { verify: true });
-const statements = splitPostgreSQLStatements(migrationSQL);
-
-for (const statement of statements) {
-  await client.query(statement);
-}
-
-await client.end();
-```
-
-### NEVER Use This Pattern
-```javascript
-// WRONG - exec_sql RPC does not exist
-import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(url, key);
-await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
-```
-
-### Before Writing Migration Scripts
-1. Search for existing patterns: `Glob *migration*.js`
-2. Read `scripts/run-sql-migration.js` as canonical template
-3. Use `lib/supabase-connection.js` utilities
+Sub-agents act as **first responders** on domain-specific errors AND as **formal validators** before EXEC-TO-PLAN.
+Use both during EXEC — the distinction is about *purpose*, not *phase*.
 
 ## Validation Rules (SD-LEARN-008)
 
@@ -737,6 +742,24 @@ EXEC→PLAN handoffs now have **intelligent verification**:
 | **300-600** | ✅ **OPTIMAL** | Sweet spot |
 | **>800** | **MUST split** | Too complex |
 
+## TODO Comment Standard
+
+## TODO Comment Standard (When Deferring Work)
+
+**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
+
+### Standard TODO Format
+
+```typescript
+// TODO (SD-ID): Action required
+// Requires: Dependencies, prerequisites
+// Estimated effort: X-Y hours
+// Current state: Mock/temporary/placeholder
+```
+
+**Success Pattern** (SD-UAT-003):
+> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
+
 ## Human-Like E2E Testing Fixtures
 
 ### Human-Like E2E Testing Enhancements (LEO v4.4)
@@ -820,24 +843,6 @@ All human-like test results are automatically included in the LEO evidence pack:
 - `test_results.attachments.accessibility` - axe-core violations
 - `test_results.attachments.chaos` - resilience test results
 - `test_results.attachments.llm_ux` - LLM evaluation scores
-
-## TODO Comment Standard
-
-## TODO Comment Standard (When Deferring Work)
-
-**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
-
-### Standard TODO Format
-
-```typescript
-// TODO (SD-ID): Action required
-// Requires: Dependencies, prerequisites
-// Estimated effort: X-Y hours
-// Current state: Mock/temporary/placeholder
-```
-
-**Success Pattern** (SD-UAT-003):
-> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
 ## EXEC Dual Test Requirement
 
@@ -1994,6 +1999,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-04-22*
-*Protocol Version: 4.3.3*
+*Generated from database: 2026-04-23*
+*Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

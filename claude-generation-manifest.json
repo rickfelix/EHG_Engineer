@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-04-22T13:01:21.412Z",
-  "git_commit": "af3b313f",
-  "db_snapshot_hash": "1d8fe83996199ce0",
+  "generated_at": "2026-04-23T01:43:54.948Z",
+  "git_commit": "dd4af67c",
+  "db_snapshot_hash": "1b7482beab585910",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 9902,
-      "estimated_tokens": 2476,
-      "content_hash": "f299942eec1b49a4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
+      "chars": 11288,
+      "estimated_tokens": 2822,
+      "content_hash": "d83252b81625b7fd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 60557,
-      "estimated_tokens": 15140,
-      "content_hash": "b37b95aa5fde06f9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
+      "chars": 65841,
+      "estimated_tokens": 16461,
+      "content_hash": "2914ac08f6c32116",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 56640,
-      "estimated_tokens": 14160,
-      "content_hash": "6bbd4a6f956c9c0d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
+      "chars": 58959,
+      "estimated_tokens": 14740,
+      "content_hash": "5ca2a4dfe315133a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 87716,
       "estimated_tokens": 21929,
-      "content_hash": "ab55a3fc54eed3e2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
+      "content_hash": "5e0910818bdfbb73",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 75753,
-      "estimated_tokens": 18939,
-      "content_hash": "59f79511c6cb1c46",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
+      "chars": 76697,
+      "estimated_tokens": 19175,
+      "content_hash": "cf59d1696d4475bf",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 8286,
-      "estimated_tokens": 2072,
-      "content_hash": "42c8473c948bd2db",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
+      "chars": 9141,
+      "estimated_tokens": 2286,
+      "content_hash": "a87d11c58704a8cc",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 10903,
-      "estimated_tokens": 2726,
-      "content_hash": "774ee2fe021ac359",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
+      "chars": 10927,
+      "estimated_tokens": 2732,
+      "content_hash": "589fe60b6ffbb8d7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 4801,
       "estimated_tokens": 1201,
-      "content_hash": "4cf50fbabeae936e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "20e29712e69272d6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 7809,
       "estimated_tokens": 1953,
-      "content_hash": "7dde434d1937faf9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "af2213646f23f4ff",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10207,
       "estimated_tokens": 2552,
-      "content_hash": "af343b824c8e1e36",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "33a222c035c83811",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }
