@@ -33,24 +33,31 @@ describe('globToRegExp', () => {
 });
 
 describe('isInheritedWithoutSlice', () => {
-  it('returns true when inherited_from_parent is a non-empty array and scope_slice is null', () => {
-    expect(isInheritedWithoutSlice({ metadata: { inherited_from_parent: ['title', 'desc'] }, scope_slice: null })).toBe(true);
+  const parentId = 'parent-uuid-123';
+
+  it('returns true when inherited_from_parent is a non-empty array AND parent_sd_id is set AND scope_slice is null', () => {
+    expect(isInheritedWithoutSlice({ parent_sd_id: parentId, metadata: { inherited_from_parent: ['title', 'desc'] }, scope_slice: null })).toBe(true);
   });
 
-  it('returns true when inherited_from_parent === true and scope_slice is undefined', () => {
-    expect(isInheritedWithoutSlice({ metadata: { inherited_from_parent: true } })).toBe(true);
+  it('returns true when inherited_from_parent === true AND parent_sd_id is set AND scope_slice is undefined', () => {
+    expect(isInheritedWithoutSlice({ parent_sd_id: parentId, metadata: { inherited_from_parent: true } })).toBe(true);
   });
 
-  it('returns false when scope_slice is set (even if inheritance flag is also set)', () => {
-    expect(isInheritedWithoutSlice({ metadata: { inherited_from_parent: true }, scope_slice: { stages: [1] } })).toBe(false);
+  it('returns false when scope_slice is set (even if inheritance flag + parent are also set)', () => {
+    expect(isInheritedWithoutSlice({ parent_sd_id: parentId, metadata: { inherited_from_parent: true }, scope_slice: { stages: [1] } })).toBe(false);
   });
 
   it('returns false when no inheritance flag and no scope_slice', () => {
-    expect(isInheritedWithoutSlice({ metadata: {}, scope_slice: null })).toBe(false);
+    expect(isInheritedWithoutSlice({ parent_sd_id: parentId, metadata: {}, scope_slice: null })).toBe(false);
   });
 
   it('returns false when inherited_from_parent is an empty array', () => {
-    expect(isInheritedWithoutSlice({ metadata: { inherited_from_parent: [] }, scope_slice: null })).toBe(false);
+    expect(isInheritedWithoutSlice({ parent_sd_id: parentId, metadata: { inherited_from_parent: [] }, scope_slice: null })).toBe(false);
+  });
+
+  it('returns false when inherited_from_parent is set but parent_sd_id is missing (PR #3232 review: prevent metadata-only soft-pass)', () => {
+    expect(isInheritedWithoutSlice({ parent_sd_id: null, metadata: { inherited_from_parent: true }, scope_slice: null })).toBe(false);
+    expect(isInheritedWithoutSlice({ metadata: { inherited_from_parent: ['title'] }, scope_slice: null })).toBe(false);
   });
 
   it('returns false on missing SD object', () => {

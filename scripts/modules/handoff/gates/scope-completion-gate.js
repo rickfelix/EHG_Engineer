@@ -209,9 +209,11 @@ function globToRegExp(glob) {
 }
 
 // True when the child SD inherits arch scope from its parent but has not declared a scope_slice.
-// Added for SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A.
+// Requires BOTH a real parent_sd_id AND metadata.inherited_from_parent to prevent soft-pass
+// abuse via metadata-only flag. Added for SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A.
 function isInheritedWithoutSlice(sd) {
   if (sd?.scope_slice != null) return false;
+  if (!sd?.parent_sd_id) return false;
   const flag = sd?.metadata?.inherited_from_parent;
   if (flag === true) return true;
   if (Array.isArray(flag) && flag.length > 0) return true;
@@ -323,7 +325,8 @@ export async function validateScopeCompletion(sdKey) {
   console.log(`   Deliverables extracted: ${rawDeliverableCount}`);
 
   // 3a. Apply child's scope_slice filter if declared
-  if (sd?.scope_slice) {
+  const sliceDeclared = sd?.scope_slice != null;
+  if (sliceDeclared) {
     deliverables = filterBySlice(deliverables, sd.scope_slice);
     if (deliverables.length < rawDeliverableCount) {
       console.log(`   scope_slice filter applied: ${deliverables.length}/${rawDeliverableCount} deliverables retained`);
@@ -331,6 +334,20 @@ export async function validateScopeCompletion(sdKey) {
   }
 
   if (deliverables.length === 0) {
+    // When scope_slice was declared AND raw deliverables existed but the filter eliminated
+    // all of them, this is not a free pass — the author-controlled slice is mis-targeted.
+    // Review finding (PR #3232 adversarial review): prevent gate evasion via matchless slice.
+    if (sliceDeclared && rawDeliverableCount > 0) {
+      console.log(`   ❌ scope_slice filtered all ${rawDeliverableCount} deliverables — mis-targeted slice`);
+      return {
+        pass: false,
+        score: 0,
+        issues: [`scope_slice filtered out all ${rawDeliverableCount} parent arch plan deliverables — the slice matches no parent deliverable. Review stages/deliverable_globs values against parent arch plan.`],
+        warnings: [],
+        checklist: [],
+        details: { type: 'slice-matches-nothing', raw_deliverable_count: rawDeliverableCount, scope_slice: sd.scope_slice }
+      };
+    }
     console.log('   ⚠️  No parseable deliverables found in architecture plan');
     return { pass: true, score: 100, issues: [], warnings: ['No deliverables extracted from architecture plan'], checklist: [] };
   }

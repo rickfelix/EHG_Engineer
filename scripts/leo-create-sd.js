@@ -458,16 +458,21 @@ async function createChild(parentKey, index = 0, overrides = {}) {
   // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A (US-001):
   // Persist scope_slice when provided via --scope-slice flag.
   // Note: separate UPDATE to avoid changing createSD signature; schema added 2026-04-23.
+  // Persistence failure is FATAL — silent fallback would invert the safety direction
+  // (caller requested strictness; undo on failure to avoid surprise soft-pass behavior).
+  // Review finding (PR #3232 adversarial review).
   if (overrides.scopeSlice) {
     const { error: sliceErr } = await supabase
       .from('strategic_directives_v2')
       .update({ scope_slice: overrides.scopeSlice })
       .eq('sd_key', sdKey);
     if (sliceErr) {
-      console.warn(`[createChild] ⚠️  Failed to persist scope_slice (non-fatal): ${sliceErr.message}`);
-    } else {
-      console.log(`   scope_slice set: ${JSON.stringify(overrides.scopeSlice)}`);
+      console.error(`[createChild] ❌ Failed to persist scope_slice: ${sliceErr.message}`);
+      // Roll back the child SD row so the caller can retry from a clean state.
+      await supabase.from('strategic_directives_v2').delete().eq('sd_key', sdKey);
+      throw new Error(`scope_slice persistence failed for ${sdKey}: ${sliceErr.message}. Child SD row rolled back.`);
     }
+    console.log(`   scope_slice set: ${JSON.stringify(overrides.scopeSlice)}`);
   }
 
   // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: Assert parent claim before returning child
