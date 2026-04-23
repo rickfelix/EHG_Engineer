@@ -59,7 +59,7 @@
           {
             "type": "command",
             "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/capture-session-id.cjs",
-            "timeout": 3
+            "timeout": 15
           }
         ]
       }

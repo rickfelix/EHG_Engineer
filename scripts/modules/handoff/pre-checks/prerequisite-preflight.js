@@ -96,10 +96,12 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     return { passed: true, issues: [] };
   }
 
-  // SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-006 / Issue #4): info-severity entries
-  // are informational, not failures. Treat them as non-blocking so an exempt
-  // sd_type (e.g., USER_STORIES_BYPASSED on infrastructure SDs) does not block
-  // the handoff. All entries are still returned for display.
+  // SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-006 / Issue #4) + QF-20260423-725:
+  // info-severity entries are informational, not failures. Treat them as
+  // non-blocking so an exempt sd_type (e.g., USER_STORIES_BYPASSED on
+  // infrastructure SDs per PR #3240) does not block the handoff. All entries
+  // are still returned for display. Null-safe filter — QF landed identical fix
+  // in parallel; kept defensive guard in case preflight ever emits null entries.
   const blockingIssues = issues.filter(i => i && i.severity !== 'info');
   return {
     passed: blockingIssues.length === 0,

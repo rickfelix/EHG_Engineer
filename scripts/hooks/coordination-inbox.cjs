@@ -73,9 +73,12 @@ async function updateHeartbeat(supabase, sessionId) {
   if (!shouldHeartbeat()) return;
   markHeartbeat();
   try {
+    // stampBranch keeps current_branch fresh on inbox-hook heartbeats — see
+    // lib/session-writer.cjs and SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001.
+    const { stampBranch } = require('../../lib/session-writer.cjs');
     await supabase
       .from('claude_sessions')
-      .update({ heartbeat_at: new Date().toISOString() })
+      .update(stampBranch({ heartbeat_at: new Date().toISOString() }))
       .eq('session_id', sessionId);
   } catch { /* fail silently */ }
 }

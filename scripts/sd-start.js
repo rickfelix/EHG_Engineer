@@ -34,6 +34,8 @@ import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 import { classify as classifyWorktreeFailure } from '../lib/protocol-policies/worktree-failure-classification.js';
 import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
 import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
+// SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: cross-check scope vs target_application
+import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-validation/target-application-crosscheck.js';
 
 dotenv.config();
 
@@ -233,7 +235,7 @@ async function getSDDetails(sdId) {
   // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id')
+    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope')
     .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
@@ -821,6 +823,32 @@ async function main() {
     // Non-blocking — cross-path verification is defense-in-depth
   }
 
+  // 4.4. SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: scope vs target_application cross-check
+  // Catches SDs where scope text and target_application disagree, which causes
+  // sd-start to open a worktree in the wrong repo. Ships as WARN by default;
+  // promotable to BLOCK via TARGET_APP_CROSSCHECK_VERDICT=BLOCK env var.
+  try {
+    const crosscheck = validateTargetApplication({
+      scope: sd.scope,
+      target_application: sd.target_application
+    });
+    if (crosscheck.verdict !== 'PASS') {
+      console.log(`\n${colors.yellow}${formatCrosscheckResult(crosscheck)}${colors.reset}`);
+    }
+    if (crosscheck.verdict === 'BLOCK') {
+      console.error(`${colors.red}   ❌  Cross-check BLOCK: refusing worktree creation.${colors.reset}`);
+      console.error(`${colors.dim}   Fix: correct target_application or revise SD scope text.${colors.reset}`);
+      await supabase.rpc('release_sd', {
+        p_session_id: session.session_id,
+        p_reason: 'manual'
+      }).catch(() => {});
+      process.exit(1);
+    }
+  } catch (ccErr) {
+    // Non-blocking — cross-check is defense-in-depth
+    console.log(`${colors.dim}[crosscheck] skipped: ${ccErr.message}${colors.reset}`);
+  }
+
   // 4.5. Resolve worktree (creates if needed in claim mode)
   // SD-LEO-INFRA-AUTO-WORKTREE-START-001: single entry point for worktree creation
   //
@@ -1152,6 +1180,26 @@ async function main() {
     console.log(`${colors.dim}   ⚠  Save this CLAUDE_SESSION_ID — all subsequent node script calls (handoff.js, etc.) require it.${colors.reset}`);
     console.log(`${colors.dim}   After context compaction, re-check SessionStart hook output or use the session ID shown above.${colors.reset}`);
     console.log(`${colors.dim}   Omitting it causes no_deterministic_identity failures at claim-validity gate.${colors.reset}`);
+  }
+
+  // SD-LEO-INFRA-SD-INTRAPHASE-PROGRESS-001: Emit a 5% entry tick on claim success so
+  // the fleet dashboard immediately shows a non-zero progress signal for an active
+  // worker. Monotonic — a higher existing progress_percentage (e.g. during re-acquire
+  // mid-phase) is preserved. Fail-soft: any error is logged but does not affect flow.
+  try {
+    const { data: current } = await supabase
+      .from('strategic_directives_v2')
+      .select('progress_percentage')
+      .eq('id', sd.id)
+      .single();
+    if ((current?.progress_percentage || 0) < 5) {
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ progress_percentage: 5 })
+        .eq('id', sd.id);
+    }
+  } catch (e) {
+    console.warn(`${colors.dim}   (entry-tick skipped: ${e?.message || e})${colors.reset}`);
   }
 
   console.log(`\n${colors.dim}Session: ${session.session_id}${colors.reset}`);
