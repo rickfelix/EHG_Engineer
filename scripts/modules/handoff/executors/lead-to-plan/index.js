@@ -16,6 +16,8 @@ import {
   createBaselineDebtGate,
   createSmokeTestSpecificationGate,
   createPlaceholderContentGate,
+  // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-D Fix 1
+  createSdMetricsSufficiencyGate,
   createVisionScoreGate,
   createLeadEvaluationGate,
   createCrossRepoConsumerImpactGate,
@@ -109,6 +111,11 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // SD Quality Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001-A)
     // BLOCKING: validates field completeness, content depth, structural correctness
     gates.push(createSdQualityGate());
+
+    // SD Metrics Sufficiency Gate (SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-D Fix 1)
+    // BLOCKING: promotes the verifier's minimumMetrics check into the gate chain
+    // so handoff.js precheck and execute report the same verdict.
+    gates.push(createSdMetricsSufficiencyGate());
 
     // LEO v4.4.1: Proactive Branch Creation Gate (DISABLED)
     // See: ./gates/branch-preparation.js for code preserved for reference

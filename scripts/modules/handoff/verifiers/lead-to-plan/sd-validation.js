@@ -8,6 +8,130 @@
  */
 
 /**
+ * Deduplicate metrics array by identity fields before counting.
+ *
+ * SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-D Fix 3:
+ *   literal-duplicate entries in success_metrics (common in auto-generated
+ *   SDs) inflate the minimumMetrics count.  Two entries with the same
+ *   identity subset (metric name + target + measurement) are considered
+ *   the same unique metric and collapsed.
+ *
+ * Non-object entries dedup by their full JSON form.
+ * Object entries dedup only by identity fields; irrelevant fields like
+ * `owner` do not participate in uniqueness.
+ *
+ * Gated by env var FLEET_METRICS_DEDUP — set to 'false' to disable.
+ *
+ * @param {Array} metrics - Input metrics array (possibly with duplicates)
+ * @returns {Array} - Array of unique metrics in first-seen order
+ */
+export function dedupMetrics(metrics) {
+  if (!Array.isArray(metrics)) return metrics;
+  if (process.env.FLEET_METRICS_DEDUP === 'false') return metrics;
+
+  const seen = new Set();
+  const unique = [];
+  for (const m of metrics) {
+    let key;
+    if (!m || typeof m !== 'object') {
+      key = JSON.stringify(m);
+    } else {
+      // Use only identity fields (metric name, target/goal, measurement).
+      // Accepts both success_metrics shape (metric/target/measurement) and
+      // success_criteria shape (criterion/measure/goal).
+      key = JSON.stringify({
+        metric: m.metric ?? m.criterion ?? null,
+        target: m.target ?? m.goal ?? null,
+        measurement: m.measurement ?? m.measure ?? null
+      });
+    }
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(m);
+    }
+  }
+  return unique;
+}
+
+/**
+ * Shared metrics-sufficiency check.
+ *
+ * SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-D Fix 1:
+ *   Canonical implementation of the minimumMetrics + measurability +
+ *   dedup (Fix 3) check.  Both the LEAD-TO-PLAN verifier AND the
+ *   GATE_SD_METRICS_SUFFICIENCY gate call this function so precheck
+ *   (gates only) and execute (gates + verifier) agree.
+ *
+ * @param {Object} sd - Strategic Directive
+ * @returns {{ pass: boolean, uniqueCount: number, originalCount: number,
+ *            collapsedCount: number, issues: string[], warnings: string[] }}
+ */
+export function validateMetricsSufficiency(sd) {
+  const hasSuccessMetrics = sd.success_metrics &&
+    (Array.isArray(sd.success_metrics) ? sd.success_metrics.length > 0 : sd.success_metrics);
+  const hasSuccessCriteria = sd.success_criteria &&
+    (typeof sd.success_criteria === 'string' ? sd.success_criteria.length > 0 :
+     Array.isArray(sd.success_criteria) ? sd.success_criteria.length > 0 : sd.success_criteria);
+  const metricsSource = hasSuccessMetrics ? sd.success_metrics :
+                        hasSuccessCriteria ? sd.success_criteria : null;
+
+  if (!metricsSource) {
+    return {
+      pass: false,
+      uniqueCount: 0, originalCount: 0, collapsedCount: 0,
+      issues: ['Missing success_metrics or success_criteria'],
+      warnings: []
+    };
+  }
+
+  let metrics = [];
+  try {
+    metrics = Array.isArray(metricsSource)
+      ? metricsSource
+      : (typeof metricsSource === 'string' ? JSON.parse(metricsSource) : []);
+  } catch (e) {
+    console.debug('[SDValidation] metrics parse suppressed:', e?.message || e);
+    metrics = [metricsSource];
+  }
+
+  // Fix 3: dedup before comparison
+  const uniqueMetrics = dedupMetrics(metrics);
+  const originalCount = Array.isArray(metrics) ? metrics.length : 0;
+  const uniqueCount = Array.isArray(uniqueMetrics) ? uniqueMetrics.length : 0;
+  const collapsedCount = originalCount - uniqueCount;
+  const warnings = [];
+
+  if (!Array.isArray(uniqueMetrics) || uniqueCount < SD_REQUIREMENTS.minimumMetrics) {
+    const dupNote = collapsedCount > 0
+      ? ` (${originalCount} entries collapsed to ${uniqueCount} unique after dedup — add distinct metrics rather than copies)`
+      : '';
+    return {
+      pass: false,
+      uniqueCount, originalCount, collapsedCount,
+      issues: [`Insufficient success_metrics/criteria: ${uniqueCount}/${SD_REQUIREMENTS.minimumMetrics}${dupNote}`],
+      warnings
+    };
+  }
+
+  // Measurable-target warning
+  if (uniqueMetrics.length > 0 && typeof uniqueMetrics[0] === 'object') {
+    const measurableCount = uniqueMetrics.filter(m => m.target || m.goal).length;
+    if (measurableCount < uniqueMetrics.length * 0.8) {
+      warnings.push('Some success metrics lack measurable targets');
+    }
+  }
+  if (collapsedCount > 0) {
+    warnings.push(`Dedup collapsed ${collapsedCount} duplicate metric(s) — SD still meets minimumMetrics with ${uniqueCount} unique.`);
+  }
+
+  return {
+    pass: true,
+    uniqueCount, originalCount, collapsedCount,
+    issues: [], warnings
+  };
+}
+
+/**
  * SD Quality Requirements (LEO Protocol v4.3.3)
  */
 export const SD_REQUIREMENTS = {
@@ -84,47 +208,17 @@ export function validateStrategicDirective(sd) {
   }
 
   // Validate success metrics OR success_criteria (20 points)
-  const hasSuccessMetrics = sd.success_metrics &&
-    (Array.isArray(sd.success_metrics) ? sd.success_metrics.length > 0 : sd.success_metrics);
-  const hasSuccessCriteria = sd.success_criteria &&
-    (typeof sd.success_criteria === 'string' ? sd.success_criteria.length > 0 :
-     Array.isArray(sd.success_criteria) ? sd.success_criteria.length > 0 : sd.success_criteria);
-  const metricsSource = hasSuccessMetrics ? sd.success_metrics :
-                        hasSuccessCriteria ? sd.success_criteria : null;
-  if (metricsSource) {
-    let metrics = [];
-    try {
-      metrics = Array.isArray(metricsSource)
-        ? metricsSource
-        : (typeof metricsSource === 'string' ? JSON.parse(metricsSource) : []);
-    } catch (e) {
-      // Intentionally suppressed: If parsing fails, treat as single item
-      console.debug('[SDValidation] metrics parse suppressed:', e?.message || e);
-      metrics = [metricsSource];
-    }
-
-    if (Array.isArray(metrics) && metrics.length >= SD_REQUIREMENTS.minimumMetrics) {
-      validation.score += 20;
-
-      // Check for measurable metrics (only if objects with target/goal)
-      if (metrics.length > 0 && typeof metrics[0] === 'object') {
-        let measurableCount = 0;
-        metrics.forEach(metric => {
-          if (metric.target || metric.goal) {
-            measurableCount++;
-          }
-        });
-
-        if (measurableCount < metrics.length * 0.8) {
-          validation.warnings.push('Some success metrics lack measurable targets');
-        }
-      }
-    } else {
-      validation.errors.push(`Insufficient success metrics/criteria: ${metrics?.length || 0}/${SD_REQUIREMENTS.minimumMetrics}`);
-      validation.valid = false;
-    }
+  // SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-D Fix 1:
+  //   delegated to validateMetricsSufficiency() so the same logic runs in
+  //   both the verifier (here) and the GATE_SD_METRICS_SUFFICIENCY gate
+  //   (called during precheck).  This eliminates precheck/execute drift.
+  const metricsResult = validateMetricsSufficiency(sd);
+  if (metricsResult.pass) {
+    validation.score += 20;
+    validation.warnings.push(...metricsResult.warnings);
   } else {
-    validation.errors.push('Missing success_metrics or success_criteria');
+    validation.errors.push(...metricsResult.issues);
+    validation.warnings.push(...metricsResult.warnings);
     validation.valid = false;
   }
 
