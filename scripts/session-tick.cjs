@@ -98,6 +98,11 @@ async function tickOnce() {
   const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
 
   try {
+    // SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001 FR-4: update BOTH columns.
+    // claim-guard.mjs keys claim TTL on heartbeat_at (300s stale threshold).
+    // Updating only process_alive_at leaves the claim vulnerable to stale-claim
+    // cleanup during long Edit/Write/Read bursts that don't invoke any CLI script.
+    const now = new Date().toISOString();
     await fetch(url, {
       method: 'PATCH',
       headers: {
@@ -107,7 +112,8 @@ async function tickOnce() {
         Prefer: 'return=minimal',
       },
       body: JSON.stringify({
-        process_alive_at: new Date().toISOString(),
+        process_alive_at: now,
+        heartbeat_at: now,
       }),
       signal: controller.signal,
     });
