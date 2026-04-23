@@ -817,6 +817,21 @@ async function main() {
 
   // 4.5. Resolve worktree (creates if needed in claim mode)
   // SD-LEO-INFRA-AUTO-WORKTREE-START-001: single entry point for worktree creation
+  //
+  // Quick-fix QF-20260422-507: if worktree setup fails after claim acquisition,
+  // release the claim before exiting so we don't leak orphan claims that block
+  // parallel sessions until TTL expires. Uses same release_sd RPC as lines 692/715.
+  const releaseClaimOnWorktreeFailure = async (phase) => {
+    try {
+      await supabase.rpc('release_sd', {
+        p_session_id: session.session_id,
+        p_reason: 'manual'
+      });
+      console.error(`${colors.dim}   ↩ Released claim on ${effectiveId} after worktree ${phase} failure${colors.reset}`);
+    } catch (releaseErr) {
+      console.error(`${colors.red}   ⚠ Failed to release claim: ${releaseErr.message}${colors.reset}`);
+    }
+  };
   let worktreeInfo = null;
   try {
     const repoRoot = execSync('git rev-parse --show-toplevel', {
@@ -831,6 +846,7 @@ async function main() {
       console.error(`${colors.red}   ❌  Worktree creation failed: ${detail}${colors.reset}`);
       if (hint) console.error(`${colors.yellow}   💡  ${hint}${colors.reset}`);
       console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
+      await releaseClaimOnWorktreeFailure('creation');
       process.exit(1);
     }
   } catch (wtErr) {
@@ -839,6 +855,7 @@ async function main() {
     console.error(`${colors.red}   ❌  Worktree resolution error: ${wtErr.message}${colors.reset}`);
     if (hint) console.error(`${colors.yellow}   💡  ${hint}${colors.reset}`);
     console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
+    await releaseClaimOnWorktreeFailure('resolution');
     process.exit(1);
   }
 
