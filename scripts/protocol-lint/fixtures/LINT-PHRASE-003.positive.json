@@ -1,0 +1,7 @@
+{
+  "description": "Section using stale phrase 'Do NOT invoke sub-agents' should trigger LINT-PHRASE-003.",
+  "sections": [
+    { "id": "sec-1", "section_name": "EXEC Rules", "content": "Do NOT invoke sub-agents during EXEC — stay focused on implementation." }
+  ],
+  "expected_violations": [{ "rule_id": "LINT-PHRASE-003", "section_id": "sec-1" }]
+}

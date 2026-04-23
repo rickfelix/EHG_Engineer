@@ -1,0 +1,7 @@
+{
+  "description": "Section referring to the stale '6-Question Gate' should trigger LINT-PHRASE-002.",
+  "sections": [
+    { "id": "sec-1", "section_name": "LEAD Validation", "content": "LEAD MUST complete the 6-Question Gate before approval." }
+  ],
+  "expected_violations": [{ "rule_id": "LINT-PHRASE-002", "section_id": "sec-1" }]
+}

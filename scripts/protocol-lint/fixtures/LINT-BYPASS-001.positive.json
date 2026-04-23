@@ -1,0 +1,8 @@
+{
+  "description": "A 'NEVER bypass handoff.js' claim coexisting with a documented --bypass-validation flag should trigger LINT-BYPASS-001.",
+  "sections": [
+    { "id": "sec-absolute", "section_name": "Handoff Rules", "content": "NEVER bypass handoff.js — this is a hard invariant of the protocol." },
+    { "id": "sec-bypass", "section_name": "Emergency Overrides", "content": "handoff.js accepts --bypass-validation --bypass-reason \"ticket\" for production outages. Rate-limited to 3 per SD, 10 per day." }
+  ],
+  "expected_violations": [{ "rule_id": "LINT-BYPASS-001", "section_id": "sec-absolute" }]
+}

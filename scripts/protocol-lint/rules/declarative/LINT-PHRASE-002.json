@@ -1,0 +1,8 @@
+{
+  "id": "LINT-PHRASE-002",
+  "severity": "warn",
+  "description": "LEAD strategic validation gate is canonically the '9-Question Gate'. '6-Question Gate' references are stale and should be migrated. Detects class #4 of the 2026-04-22 drift audit.",
+  "pattern_type": "forbidden_phrase",
+  "pattern": "6-Question Gate",
+  "enabled": true
+}

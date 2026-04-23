@@ -1,0 +1,7 @@
+{
+  "description": "Section using canonical '9-Question Gate' should NOT trigger LINT-PHRASE-002.",
+  "sections": [
+    { "id": "sec-1", "section_name": "LEAD Validation", "content": "LEAD MUST complete the 9-Question Gate before approval." }
+  ],
+  "expected_violations": []
+}

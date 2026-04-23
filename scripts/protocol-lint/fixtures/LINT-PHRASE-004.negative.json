@@ -1,0 +1,7 @@
+{
+  "description": "Section describing infrastructure work accurately should NOT trigger LINT-PHRASE-004.",
+  "sections": [
+    { "id": "sec-1", "section_name": "Infra SD Rules", "content": "Infrastructure SDs typically target build scripts, generators, and tooling, but may also ship production code (e.g., migrations, server modules)." }
+  ],
+  "expected_violations": []
+}

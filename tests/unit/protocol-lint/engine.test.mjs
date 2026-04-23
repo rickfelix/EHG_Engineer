@@ -1,11 +1,12 @@
 /**
  * Fixture-driven tests for the Protocol Consistency Linter engine.
  *
- * For every rule that ships a positive fixture, there MUST be a matching
- * negative fixture. Coverage test `every rule has both fixtures` enforces
- * this — CI fails if a rule is added without its negative case.
+ * Rule IDs are derived from the fixtures directory so adding a new rule
+ * (with fixtures) automatically extends coverage without test churn.
+ * Coverage gate `every rule has both fixtures` enforces positive AND
+ * negative fixture per rule.
  *
- * SD-PROTOCOL-LINTER-001, slice 2/n.
+ * SD-PROTOCOL-LINTER-001, slice 5/n.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -17,7 +18,15 @@ import { runProtocolLint } from '../../../scripts/protocol-lint/engine.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, '..', '..', '..', 'scripts', 'protocol-lint', 'fixtures');
 
-const RULE_IDS = ['LINT-PHRASE-001', 'LINT-THRESH-001', 'LINT-ANCHOR-001'];
+const RULE_IDS = await (async () => {
+  const files = await readdir(FIXTURES_DIR);
+  const ids = new Set();
+  for (const f of files) {
+    const m = f.match(/^(LINT-[A-Z]+-\d{3})\.(positive|negative)\.json$/);
+    if (m) ids.add(m[1]);
+  }
+  return [...ids].sort();
+})();
 
 async function loadFixture(name) {
   return JSON.parse(await readFile(join(FIXTURES_DIR, name), 'utf8'));
@@ -44,6 +53,10 @@ describe('Protocol Lint Engine', () => {
       expect(files, `missing negative fixture for ${id}`).toContain(`${id}.negative.json`);
     }
   });
+
+  it('at least 12 rules are registered', () => {
+    expect(RULE_IDS.length).toBeGreaterThanOrEqual(12);
+  });
 });
 
 describe.each(RULE_IDS)('Rule fixture round-trip: %s', (ruleId) => {
@@ -53,7 +66,6 @@ describe.each(RULE_IDS)('Rule fixture round-trip: %s', (ruleId) => {
     const hits = result.violations.filter(v => v.rule_id === ruleId);
     expect(hits.length, `expected ${ruleId} to produce violations on positive fixture`).toBeGreaterThan(0);
 
-    // If fixture declares expected_violations, every declared section_id should be flagged.
     const expected = fixture.expected_violations || [];
     for (const exp of expected.filter(e => e.rule_id === ruleId && e.section_id)) {
       expect(hits.some(h => h.section_id === exp.section_id),

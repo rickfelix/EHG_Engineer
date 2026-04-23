@@ -1,0 +1,9 @@
+{
+  "description": "In-content version claim at or below active protocol version should NOT trigger LINT-VERSION-001.",
+  "protocol": { "protocol_version": "4.3.3" },
+  "sections": [
+    { "id": "sec-1", "section_name": "Historical Rule", "content": "Added in v4.2.0 — this behavior is now canonical." },
+    { "id": "sec-2", "section_name": "Current Rule", "content": "Since v4.3.0 the gate threshold is SD-type specific." }
+  ],
+  "expected_violations": []
+}

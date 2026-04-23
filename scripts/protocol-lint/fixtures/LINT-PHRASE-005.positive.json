@@ -1,0 +1,7 @@
+{
+  "description": "A continuation_policy section omitting TERMINAL should trigger LINT-PHRASE-005.",
+  "sections": [
+    { "id": "sec-1", "section_name": "SD Continuation", "section_type": "continuation_policy", "content": "Handoffs pause unless both AUTO-PROCEED and Chaining are ON." }
+  ],
+  "expected_violations": [{ "rule_id": "LINT-PHRASE-005", "section_id": "sec-1" }]
+}

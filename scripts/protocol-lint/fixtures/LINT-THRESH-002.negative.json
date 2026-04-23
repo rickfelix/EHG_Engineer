@@ -1,0 +1,8 @@
+{
+  "description": "Sections agreeing on the same PR size ceiling should NOT trigger LINT-THRESH-002.",
+  "sections": [
+    { "id": "sec-a", "section_name": "PR Rules", "content": "PR size max 400 LOC with justification." },
+    { "id": "sec-b", "section_name": "PR Guidelines", "content": "Max PR is 400 LOC when split isn't practical." }
+  ],
+  "expected_violations": []
+}

@@ -1,0 +1,8 @@
+{
+  "id": "LINT-ENUM-001",
+  "severity": "warn",
+  "description": "Canonical sd_type for bugs is 'bugfix', never 'fix'. Detects class #5 of the 2026-04-22 drift audit.",
+  "pattern_type": "forbidden_phrase",
+  "pattern": "sd_type = 'fix'",
+  "enabled": true
+}

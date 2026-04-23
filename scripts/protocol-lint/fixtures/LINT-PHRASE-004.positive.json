@@ -1,0 +1,7 @@
+{
+  "description": "Section claiming 'No production code' should trigger LINT-PHRASE-004.",
+  "sections": [
+    { "id": "sec-1", "section_name": "Infra SD Rules", "content": "Infrastructure SDs: No production code is produced — tooling changes only." }
+  ],
+  "expected_violations": [{ "rule_id": "LINT-PHRASE-004", "section_id": "sec-1" }]
+}

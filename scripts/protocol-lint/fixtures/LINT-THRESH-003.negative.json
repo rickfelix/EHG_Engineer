@@ -1,0 +1,7 @@
+{
+  "description": "Only type-specific ranges declared (no universal claim) should NOT trigger LINT-THRESH-003.",
+  "sections": [
+    { "id": "sec-typed", "section_name": "SD Type Thresholds", "content": "Per sd_type: feature 85%, infrastructure 80%, documentation 60%. Range is 60-90% across types." }
+  ],
+  "expected_violations": []
+}

@@ -1,0 +1,8 @@
+{
+  "id": "LINT-PHRASE-003",
+  "severity": "warn",
+  "description": "Sub-agents ARE first responders in EXEC (see CLAUDE_CORE sub-agent routing). 'Do NOT invoke sub-agents' phrasing contradicts the canonical rule. Detects class #8 of the 2026-04-22 drift audit.",
+  "pattern_type": "forbidden_phrase",
+  "pattern": "Do NOT invoke sub-agents",
+  "enabled": true
+}
