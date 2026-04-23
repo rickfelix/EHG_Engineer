@@ -45,7 +45,7 @@ export function createUiInteractivityCheckGate(supabase) {
           ? `target_application=${targetApp} (not EHG)`
           : `sd_type=${sdType} (not feature)`;
         console.log(`   ℹ️  Skipped: ${reason}`);
-        return { score: 100, max_score: 100, issues: [], warnings: [`Skipped: ${reason}`] };
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: [`Skipped: ${reason}`] };
       }
 
       const sdKey = sd.sd_key || ctx.sdKey;
@@ -68,7 +68,7 @@ export function createUiInteractivityCheckGate(supabase) {
 
         if (!branchName) {
           console.log(`   ℹ️  No branch found for ${sdKey} in EHG repo — advisory pass`);
-          return { score: 80, max_score: 100, issues: [], warnings: ['No SD branch found in EHG repo'] };
+          return { passed: true, score: 80, max_score: 100, issues: [], warnings: ['No SD branch found in EHG repo'] };
         }
 
         // Get component files changed on this branch vs main
@@ -79,7 +79,7 @@ export function createUiInteractivityCheckGate(supabase) {
 
         if (!diffOutput) {
           console.log('   ℹ️  No component files changed on this branch');
-          return { score: 100, max_score: 100, issues: [], warnings: ['No component files changed'] };
+          return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No component files changed'] };
         }
 
         const changedFiles = diffOutput.split('\n')
@@ -87,7 +87,7 @@ export function createUiInteractivityCheckGate(supabase) {
 
         if (changedFiles.length === 0) {
           console.log('   ℹ️  No .tsx/.ts component files changed');
-          return { score: 100, max_score: 100, issues: [], warnings: ['No component files changed'] };
+          return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No component files changed'] };
         }
 
         // Check each changed file for interactive patterns
@@ -117,7 +117,7 @@ export function createUiInteractivityCheckGate(supabase) {
             ? [`${displayOnlyFiles.length} display-only file(s): ${displayOnlyFiles.join(', ')}`]
             : [];
           console.log(`   ✅ Found ${interactiveFiles} interactive component(s)`);
-          return { score: 100, max_score: 100, issues: [], warnings };
+          return { passed: true, score: 100, max_score: 100, issues: [], warnings };
         }
 
         // Zero interactive components — block
@@ -126,6 +126,7 @@ export function createUiInteractivityCheckGate(supabase) {
         displayOnlyFiles.forEach(f => console.log(`      - ${f}`));
 
         return {
+          passed: false,
           score: 30,
           max_score: 100,
           issues: [
@@ -138,6 +139,7 @@ export function createUiInteractivityCheckGate(supabase) {
       } catch (err) {
         console.log(`   ⚠️  Interactivity check failed (advisory): ${err.message?.slice(0, 100)}`);
         return {
+          passed: true,
           score: 70,
           max_score: 100,
           issues: [],
