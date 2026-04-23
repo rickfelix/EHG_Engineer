@@ -161,7 +161,7 @@ function resolveFromScan(sdKey, repoRoot) {
  * Max worktrees under .worktrees/. Parity with lib/worktree-manager.js.
  * Helper dirs (_archive, qf) are excluded from the count.
  */
-const MAX_WORKTREE_COUNT = 10;
+const MAX_WORKTREE_COUNT = 20;
 const WORKTREE_QUOTA_HELPERS = new Set(['_archive', 'qf', 'sd', 'adhoc']);
 
 /**
@@ -266,7 +266,7 @@ function createWorktree(sdKey, repoRoot) {
   if (existingCount >= MAX_WORKTREE_COUNT) {
     const err = new Error(
       `Worktree limit reached (${existingCount}/${MAX_WORKTREE_COUNT}). ` +
-      `Run cleanup or remove stale worktrees before creating new ones.`
+      'Run cleanup or remove stale worktrees before creating new ones.'
     );
     err.errorCode = 'WORKTREE_QUOTA_EXCEEDED';
     throw err;
