@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-23T20:30:05.760Z
-**Tables**: 649
+**Generated**: 2026-04-23T22:47:27.849Z
+**Tables**: 652
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (649)
+## All Tables (652)
 
 ### LEO Protocol
 
@@ -232,6 +232,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [brand_genome_submissions](tables/brand_genome_submissions.md)
 - [brand_variants](tables/brand_variants.md)
 - [campaign_content](tables/campaign_content.md)
+- [campaign_enrollments](tables/campaign_enrollments.md)
 - [capability_reuse_log](tables/capability_reuse_log.md)
 - [capital_transactions](tables/capital_transactions.md)
 - [cascade_invalidation_flags](tables/cascade_invalidation_flags.md)
@@ -436,6 +437,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [marketing_content](tables/marketing_content.md)
 - [marketing_content_queue](tables/marketing_content_queue.md)
 - [marketing_content_variants](tables/marketing_content_variants.md)
+- [marketing_feedback_cycles](tables/marketing_feedback_cycles.md)
+- [marketing_pipeline_runs](tables/marketing_pipeline_runs.md)
 - [mental_model_applications](tables/mental_model_applications.md)
 - [mental_model_archetype_affinity](tables/mental_model_archetype_affinity.md)
 - [mental_model_effectiveness](tables/mental_model_effectiveness.md)
