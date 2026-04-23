@@ -39,6 +39,7 @@
     "test:smoke": "vitest run tests/smoke.test.js",
     "test:unit": "vitest run tests/unit/",
     "test:integration": "vitest run tests/integration/",
+    "test:integration:sd-creation": "vitest run tests/integration/sd-creation/",
     "test:pipeline": "vitest run tests/integration/pipeline-s0-s17.test.js --testTimeout 1200000",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest watch",

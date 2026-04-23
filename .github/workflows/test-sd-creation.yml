@@ -1,0 +1,60 @@
+name: SD Creation Integration Tests
+
+# Runs the flag-based SD creation regression suite on every PR against
+# non-fork branches and on push to main. Fork PRs are skipped because the
+# suite needs SUPABASE_SERVICE_ROLE_KEY which is not available to them.
+#
+# Added by SD-MAN-INFRA-E2E-REGRESSION-TEST-001.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/leo-create-sd.js'
+      - 'scripts/modules/sd-key-generator.js'
+      - 'scripts/modules/plan-parser.js'
+      - 'scripts/modules/learning/sd-creation.js'
+      - 'scripts/sd-from-feedback.js'
+      - 'scripts/uat-to-strategic-directive-ai.js'
+      - 'tests/integration/sd-creation/**'
+      - 'package.json'
+      - '.github/workflows/test-sd-creation.yml'
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sd-creation-tests:
+    # Skip fork PRs — they cannot access SUPABASE_SERVICE_ROLE_KEY secret
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run SD creation integration tests
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: npm run test:integration:sd-creation
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### SD Creation Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "Covers: interactive, --child, --from-feedback, --from-learn, --from-plan, --from-uat" >> $GITHUB_STEP_SUMMARY
+          echo "Suite: tests/integration/sd-creation/" >> $GITHUB_STEP_SUMMARY
+          echo "Fixture: tests/integration/sd-creation/fixtures/supabase-seed.js" >> $GITHUB_STEP_SUMMARY
