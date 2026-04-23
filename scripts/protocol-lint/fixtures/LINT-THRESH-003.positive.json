@@ -1,0 +1,8 @@
+{
+  "description": "A universal 85% claim coexisting with an SD-type-specific 60-90% range should trigger LINT-THRESH-003 on the universal claim.",
+  "sections": [
+    { "id": "sec-universal", "section_name": "Gate Threshold", "content": "All handoffs require 85% to pass." },
+    { "id": "sec-typed", "section_name": "SD Type Thresholds", "content": "Per sd_type: feature 85%, infrastructure 80%, documentation 60%. Range is 60-90% across types." }
+  ],
+  "expected_violations": [{ "rule_id": "LINT-THRESH-003", "section_id": "sec-universal" }]
+}

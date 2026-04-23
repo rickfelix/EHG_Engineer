@@ -1,0 +1,11 @@
+{
+  "description": "Sections declaring different PR size ceilings (200 vs 400) should trigger LINT-THRESH-002 on each.",
+  "sections": [
+    { "id": "sec-a", "section_name": "PR Rules", "content": "PR size max 200 LOC for enhancements." },
+    { "id": "sec-b", "section_name": "PR Guidelines", "content": "Max PR is 400 LOC with strong justification." }
+  ],
+  "expected_violations": [
+    { "rule_id": "LINT-THRESH-002", "section_id": "sec-a" },
+    { "rule_id": "LINT-THRESH-002", "section_id": "sec-b" }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "description": "Sections using canonical sd_type='bugfix' should NOT trigger LINT-ENUM-001.",
+  "sections": [
+    { "id": "sec-1", "section_name": "SD Types", "content": "Set sd_type = 'bugfix' when the work is a bug resolution." }
+  ],
+  "expected_violations": []
+}

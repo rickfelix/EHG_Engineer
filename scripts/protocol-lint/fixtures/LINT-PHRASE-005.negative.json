@@ -1,0 +1,8 @@
+{
+  "description": "A continuation_policy section explicitly referencing TERMINAL should NOT trigger LINT-PHRASE-005.",
+  "sections": [
+    { "id": "sec-1", "section_name": "SD Continuation", "section_type": "continuation_policy", "content": "Non-final handoffs are TERMINAL under AUTO-PROCEED — phase work is required before the next handoff fires." },
+    { "id": "sec-2", "section_name": "Unrelated", "section_type": "pause_policy", "content": "AUTO-PROCEED pauses at blocking errors." }
+  ],
+  "expected_violations": []
+}

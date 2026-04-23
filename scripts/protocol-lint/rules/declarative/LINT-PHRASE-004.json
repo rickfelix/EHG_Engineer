@@ -1,0 +1,8 @@
+{
+  "id": "LINT-PHRASE-004",
+  "severity": "warn",
+  "description": "Infrastructure SDs CAN include production code; 'No production code' for infrastructure is a stale claim that contradicts observed reality (e.g., script modules, generators, migrations). Detects class #13 of the 2026-04-22 drift audit.",
+  "pattern_type": "forbidden_phrase",
+  "pattern": "No production code",
+  "enabled": true
+}

@@ -1,0 +1,7 @@
+{
+  "description": "Section describing canonical sub-agent usage should NOT trigger LINT-PHRASE-003.",
+  "sections": [
+    { "id": "sec-1", "section_name": "EXEC Rules", "content": "Sub-agents are first responders during EXEC. Invoke DATABASE on schema tasks, TESTING on coverage gaps." }
+  ],
+  "expected_violations": []
+}

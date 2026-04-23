@@ -1,0 +1,8 @@
+{
+  "description": "Content claiming v4.5.0 when active protocol is v4.3.3 should trigger LINT-VERSION-001.",
+  "protocol": { "protocol_version": "4.3.3" },
+  "sections": [
+    { "id": "sec-1", "section_name": "New Rule", "content": "Added in v4.5.0 — this behavior is new." }
+  ],
+  "expected_violations": [{ "rule_id": "LINT-VERSION-001", "section_id": "sec-1" }]
+}

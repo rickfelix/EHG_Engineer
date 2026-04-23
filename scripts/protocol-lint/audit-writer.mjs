@@ -69,14 +69,26 @@ export async function recordRun({ supabase, runId, rules, result, bypassReason }
     const rows = result.violations.map(v => ({
       run_id: runId,
       rule_id: v.rule_id,
-      section_id: v.section_id || null,
+      // section_id is TEXT (post-corrective-migration) — coerce any int/UUID to string.
+      section_id: v.section_id == null ? null : String(v.section_id),
       file_path: v.file_path || null,
       severity: v.severity,
       message: v.message,
       context: v.context || {}
     }));
     const { error: vErr } = await supabase.from('leo_lint_violations').insert(rows);
-    if (vErr) throw new Error(`violation insert failed: ${vErr.message}`);
+    if (vErr) {
+      // Tolerate the known-in-flight schema drift where section_id is still
+      // UUID pre-corrective-migration. Log loudly; do not abort — the
+      // in-memory result remains useful to callers. Remove this shim once
+      // 20260422_protocol_linter_section_id_type_fix.sql has been applied
+      // to every environment.
+      if (/invalid input syntax for type uuid/i.test(vErr.message)) {
+        console.warn('[audit-writer] violation persistence skipped — corrective migration 20260422_protocol_linter_section_id_type_fix.sql not yet applied. Error:', vErr.message);
+      } else {
+        throw new Error(`violation insert failed: ${vErr.message}`);
+      }
+    }
   }
 
   // 3. Finalise the run row

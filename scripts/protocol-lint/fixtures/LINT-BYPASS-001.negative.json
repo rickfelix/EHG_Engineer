@@ -1,0 +1,8 @@
+{
+  "description": "NEVER claims against subjects with no documented bypass should NOT trigger LINT-BYPASS-001.",
+  "sections": [
+    { "id": "sec-1", "section_name": "Security Rules", "content": "NEVER bypass authentication checks on admin endpoints." },
+    { "id": "sec-2", "section_name": "Unrelated Overrides", "content": "handoff.js accepts --bypass-validation for production outages with a rate-limited --bypass-reason." }
+  ],
+  "expected_violations": []
+}

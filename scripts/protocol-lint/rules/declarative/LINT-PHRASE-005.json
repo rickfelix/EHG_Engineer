@@ -1,0 +1,9 @@
+{
+  "id": "LINT-PHRASE-005",
+  "severity": "warn",
+  "description": "Sections with section_type='continuation_policy' must reference TERMINAL so readers can trace handoff-phase semantics. Detects class #9 of the 2026-04-22 drift audit.",
+  "pattern_type": "required_phrase",
+  "pattern": "TERMINAL",
+  "section_type_filter": "continuation_policy",
+  "enabled": true
+}

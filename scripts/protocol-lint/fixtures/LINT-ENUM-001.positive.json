@@ -1,0 +1,7 @@
+{
+  "description": "A section using the stale 'fix' sd_type should trigger LINT-ENUM-001.",
+  "sections": [
+    { "id": "sec-1", "section_name": "SD Types", "content": "Set sd_type = 'fix' when the work is a bug resolution." }
+  ],
+  "expected_violations": [{ "rule_id": "LINT-ENUM-001", "section_id": "sec-1" }]
+}
