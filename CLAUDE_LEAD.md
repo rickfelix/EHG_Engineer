@@ -945,9 +945,15 @@ Feature SDs MUST include `smoke_test_steps` JSONB array:
 | bugfix | ✅ YES | Fix must be observable |
 | security | ⚠️ API test | Verify auth/authz works |
 | database | ⚠️ API test | Verify data flows correctly |
-| infrastructure | ❌ NO | Internal tooling |
+| infrastructure | ⚠️ CONDITIONAL | REQUIRED if SD produces code (see below); exempt for pure protocol/policy changes |
 | documentation | ❌ NO | No runtime behavior |
 | refactor | ❌ NO | Behavior unchanged by definition |
+
+**Code-producing infrastructure SDs require `smoke_test_steps`** (SD-LEO-INFRA-ENFORCE-EXECUTION-SMOKE-001). The gate auto-detects code production by scanning `scope`, `key_changes`, and `title` for:
+- Code file references: `.js`, `.ts`, `.cjs`, `.mjs`, `.jsx`, `.tsx`, `.py`, `.sh`, `.ps1`, `.bash`
+- Code-production keywords: `script`, `utility`, `function`, `module`, `handler`, `gate`, `validator`, `middleware`, `endpoint`, `api`, `worker`, `plugin`, `hook`, `adapter`, `factory`, `engine`, `executor`, `runner`
+
+If any match, the LEAD-TO-PLAN preflight will block with `SMOKE_TEST_MISSING`. Plain config/doc/protocol infrastructure SDs (e.g. "update CLAUDE.md", "add environment variable") are exempt. Detection logic: `scripts/modules/handoff/validation/sd-type-applicability-policy.js::detectCodeProduction`.
 
 ### Integration with Validation Gates
 
