@@ -87,3 +87,11 @@ export {
 // Translation Fidelity Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
 // LLM-powered comparison of architecture plan → SD to detect translation gaps
 export { createTranslationFidelityGate } from './translation-fidelity.js';
+
+// Marketing Schema Drift Gate (SD-EHG-MARKETING-DISTRIBUTION-INFRASTRUCTURE-ORCH-001-A)
+// Runs verify-marketing-schema.mjs as a precheck for Marketing Distribution
+// phases B/C/D; blocks LEAD-TO-PLAN when live DB drifts from committed manifest.
+export {
+  validateMarketingSchemaDrift,
+  createMarketingSchemaDriftGate
+} from './marketing-schema-drift.js';

@@ -144,6 +144,10 @@ scripts/verify-*.cjs
 !scripts/verify-git-branch-status.js
 !scripts/verify-git-commit-status.js
 !scripts/verify-app-architecture.js
+# Marketing schema contract verifier (SD-EHG-MARKETING-DISTRIBUTION-INFRASTRUCTURE-ORCH-001-A)
+# Wired into CI (.github/workflows/marketing-schema-verify.yml) and LEAD-TO-PLAN
+# pre-handoff gate for Marketing Distribution phases B/C/D.
+!scripts/verify-marketing-schema.mjs
 # Exception: verify-l2p/ directory is production code (modular handoff verifier)
 scripts/comprehensive-*.mjs
 scripts/infrastructure-*.mjs
