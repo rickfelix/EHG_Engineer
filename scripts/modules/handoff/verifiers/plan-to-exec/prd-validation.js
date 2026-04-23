@@ -81,6 +81,29 @@ export function basicPRDValidation(prd) {
     }
   }
 
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126 (PAT-HF-PLANTOEXEC-4c03f832 — 5 occurrences):
+  // Previously validated PRESENCE of implementation_approach only. Thin stubs
+  // (1-phase, no file refs) passed this gate but failed downstream quality rubrics.
+  // Now also validate SHAPE: require either a substantive string (>=200 chars)
+  // OR an object with phases[] containing >=2 entries.
+  const implApproach = prd.implementation_approach
+    ?? prd?.metadata?.implementation_approach
+    ?? null;
+  if (implApproach !== null && implApproach !== undefined) {
+    const isThinString = typeof implApproach === 'string' && implApproach.trim().length < 200;
+    const isThinObject = typeof implApproach === 'object'
+      && !Array.isArray(implApproach)
+      && (!Array.isArray(implApproach.phases) || implApproach.phases.length < 2);
+    if (isThinString || isThinObject) {
+      validation.warnings.push(
+        `Thin implementation_approach: ${isThinString
+          ? `string only ${implApproach.trim().length} chars (min 200)`
+          : `object has ${implApproach?.phases?.length || 0} phases (min 2)`
+        }. Downstream quality rubric may reject.`
+      );
+    }
+  }
+
   validation.percentage = Math.round((validation.score / 70) * 100); // Adjust for available points
   return validation;
 }

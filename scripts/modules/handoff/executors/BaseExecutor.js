@@ -139,10 +139,32 @@ export class BaseExecutor {
       try {
         const { assertValidClaim, ClaimIdentityError } = await import('../../../../lib/claim-validity-gate.js');
         const sdKeyForGate = sd?.sd_key || sdId;
-        await assertValidClaim(this.supabase, sdKeyForGate, {
-          operation: `handoff_${this.handoffType}`,
-          allowMainRepoForAcquisition: isOrchestrator
-        });
+
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126 (PAT-RETRO/HF-EXECTOPLAN-0bda95fe residual):
+        // Close the marker-file race. capture-session-id hook writes
+        // .claude/session-identity/<sid>.json but can lag behind handoff invocation
+        // by ~100-250ms on cold sessions. One-shot retry with 250ms delay on
+        // no_deterministic_identity failures closes the race without adding
+        // latency to the happy path (retry fires only on failure).
+        let attempt = 0;
+        const maxAttempts = 2;
+        while (true) {
+          try {
+            await assertValidClaim(this.supabase, sdKeyForGate, {
+              operation: `handoff_${this.handoffType}`,
+              allowMainRepoForAcquisition: isOrchestrator
+            });
+            break; // success
+          } catch (retryable) {
+            attempt += 1;
+            const isFirstRetryWindow = attempt < maxAttempts
+              && retryable?.name === 'ClaimIdentityError'
+              && retryable?.reason === 'no_deterministic_identity';
+            if (!isFirstRetryWindow) throw retryable;
+            console.warn(`[claim-validity] no_deterministic_identity on attempt ${attempt} — waiting 250ms for marker-file to settle, then retrying once.`);
+            await new Promise(r => setTimeout(r, 250));
+          }
+        }
       } catch (e) {
         if (e?.name === 'ClaimIdentityError') {
           console.error(e.toBanner ? e.toBanner() : e.message);
