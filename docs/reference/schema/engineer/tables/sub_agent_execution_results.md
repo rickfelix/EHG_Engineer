@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-23T10:28:51.042Z
-**Rows**: 20,556
+**Generated**: 2026-04-23T19:41:40.179Z
+**Rows**: 20,577
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (23 total)
+## Columns (24 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,6 +41,7 @@
 | summary | `text` | YES | - | Extracted summary from Task tool output (first 500 chars if from text) |
 | raw_output | `jsonb` | YES | - | Full Task result payload (truncated to 256KB with truncated flag if larger) |
 | source | `text` | YES | `'manual'::text` | Where this record came from: manual, task_hook, sub_agent_executor |
+| phase | `text` | YES | - | First-class handoff phase (e.g., LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL). Promoted from metadata->>'phase' by SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-C. During burn-in, writers dual-write to this column AND metadata.phase; readers may consult either. |
 
 ## Constraints
 
@@ -100,6 +101,10 @@
 - `idx_sub_agent_results_sd_id`
   ```sql
   CREATE INDEX idx_sub_agent_results_sd_id ON public.sub_agent_execution_results USING btree (sd_id)
+  ```
+- `idx_sub_agent_results_sd_phase_agent`
+  ```sql
+  CREATE INDEX idx_sub_agent_results_sd_phase_agent ON public.sub_agent_execution_results USING btree (sd_id, phase, sub_agent_code)
   ```
 - `idx_sub_agent_results_sub_agent_code`
   ```sql
