@@ -20,14 +20,29 @@ import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
 import { resolveOwnSession } from '../lib/resolve-own-session.js';
 import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate.js';
+import sessionIdentitySot from '../lib/session-identity-sot.js';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
-import { classifyWorktreeError } from '../lib/worktree-manager.js';
+// SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-008 / D2): consume the extended
+// classification policy so 'outside_repo' / 'false_success' /
+// 'target_changed_after_claim' hints surface with stable codes. The base
+// classifier (lib/worktree-manager.js::classifyWorktreeError) is still used
+// internally by the policy for the transient / already-checked-out / etc.
+// patterns, so no behavior regresses for existing error shapes.
+import { classify as classifyWorktreeFailure } from '../lib/protocol-policies/worktree-failure-classification.js';
 import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
 import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
+import {
+  evaluateInstallDecision,
+  writeMarker as writeFleetLockMarker,
+  peerSessionSnapshot,
+  emitFractureForDiff
+} from '../lib/fleet-lock-hash.mjs';
+// SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: cross-check scope vs target_application
+import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-validation/target-application-crosscheck.js';
 
 dotenv.config();
 
@@ -227,7 +242,7 @@ async function getSDDetails(sdId) {
   // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id')
+    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope')
     .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
@@ -625,6 +640,24 @@ async function main() {
     session = await getOrCreateSession();
   }
 
+  // 2.1 SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-B (FR-1, TR-1, TR-2):
+  // Atomically reconcile the three identity sources so claim-validity-gate sees
+  // all three in agreement. No-op when SESSION_IDENTITY_SOT_ENABLED is unset/false.
+  // Uses a file lock (.claude/session-identity/.lock) to serialize concurrent boots
+  // and tmp+fsync+rename for crash-safe writes.
+  try {
+    const reconcile = sessionIdentitySot.reconcileAtBoot(session.session_id, {
+      repoRoot: sessionIdentitySot.discoverRepoRoot() || undefined
+    });
+    if (reconcile.applied) {
+      console.log(`${colors.dim}(Identity SOT: reconciled — pointer=${reconcile.wrotePointer ? 'updated' : 'skipped'} envFile=${reconcile.wroteEnvFile ? 'updated' : 'n/a'})${colors.reset}`);
+    }
+  } catch (reconcileErr) {
+    // Reconciliation errors are non-fatal during burn-in; log and continue so the
+    // legacy identity path can still succeed. Disagreements surface at claim gate.
+    console.warn(`${colors.yellow}⚠ session-identity reconciliation error (non-blocking): ${reconcileErr.message}${colors.reset}`);
+  }
+
   // 2a. Validate claim identity + ownership now that session row exists.
   // SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001: Invoke the fail-closed gate so cross-CC collisions
   // are surfaced with a structured error instead of silently merged via "newest heartbeat".
@@ -815,6 +848,32 @@ async function main() {
     // Non-blocking — cross-path verification is defense-in-depth
   }
 
+  // 4.4. SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: scope vs target_application cross-check
+  // Catches SDs where scope text and target_application disagree, which causes
+  // sd-start to open a worktree in the wrong repo. Ships as WARN by default;
+  // promotable to BLOCK via TARGET_APP_CROSSCHECK_VERDICT=BLOCK env var.
+  try {
+    const crosscheck = validateTargetApplication({
+      scope: sd.scope,
+      target_application: sd.target_application
+    });
+    if (crosscheck.verdict !== 'PASS') {
+      console.log(`\n${colors.yellow}${formatCrosscheckResult(crosscheck)}${colors.reset}`);
+    }
+    if (crosscheck.verdict === 'BLOCK') {
+      console.error(`${colors.red}   ❌  Cross-check BLOCK: refusing worktree creation.${colors.reset}`);
+      console.error(`${colors.dim}   Fix: correct target_application or revise SD scope text.${colors.reset}`);
+      await supabase.rpc('release_sd', {
+        p_session_id: session.session_id,
+        p_reason: 'manual'
+      }).catch(() => {});
+      process.exit(1);
+    }
+  } catch (ccErr) {
+    // Non-blocking — cross-check is defense-in-depth
+    console.log(`${colors.dim}[crosscheck] skipped: ${ccErr.message}${colors.reset}`);
+  }
+
   // 4.5. Resolve worktree (creates if needed in claim mode)
   // SD-LEO-INFRA-AUTO-WORKTREE-START-001: single entry point for worktree creation
   //
@@ -842,18 +901,24 @@ async function main() {
       // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree failure
       // instead of silently continuing on main (which caused data loss from wrong-branch commits)
       const detail = worktreeInfo.error || worktreeInfo.errorCode || 'unknown';
-      const { hint } = classifyWorktreeError(detail);
+      const classified = classifyWorktreeFailure(detail);
       console.error(`${colors.red}   ❌  Worktree creation failed: ${detail}${colors.reset}`);
-      if (hint) console.error(`${colors.yellow}   💡  ${hint}${colors.reset}`);
+      if (classified.code && classified.code !== 'unknown') {
+        console.error(`${colors.dim}      [code: ${classified.code} | severity: ${classified.severity}]${colors.reset}`);
+      }
+      if (classified.hint) console.error(`${colors.yellow}   💡  ${classified.hint}${colors.reset}`);
       console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
       await releaseClaimOnWorktreeFailure('creation');
       process.exit(1);
     }
   } catch (wtErr) {
     // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree error
-    const { hint } = classifyWorktreeError(wtErr.message);
+    const classified = classifyWorktreeFailure(wtErr);
     console.error(`${colors.red}   ❌  Worktree resolution error: ${wtErr.message}${colors.reset}`);
-    if (hint) console.error(`${colors.yellow}   💡  ${hint}${colors.reset}`);
+    if (classified.code && classified.code !== 'unknown') {
+      console.error(`${colors.dim}      [code: ${classified.code} | severity: ${classified.severity}]${colors.reset}`);
+    }
+    if (classified.hint) console.error(`${colors.yellow}   💡  ${classified.hint}${colors.reset}`);
     console.error(`${colors.red}   Cannot proceed without worktree isolation. Pick a different SD or resolve the conflict.${colors.reset}`);
     await releaseClaimOnWorktreeFailure('resolution');
     process.exit(1);
@@ -970,22 +1035,45 @@ async function main() {
     }
   }
 
-  // 5.45. SD-MAN-INFRA-FLEET-NPM-INSTALL-001: node_modules health check with coordination lock
-  // If worktree's node_modules is broken, coordinate npm install across fleet
+  // 5.45. SD-MAN-INFRA-FLEET-NPM-INSTALL-001 + SD-LEO-INFRA-FLEET-SAFE-NODE-001:
+  //   node_modules health check with lockfile-hash skip + coordination lock +
+  //   install-race fracture telemetry.
+  //
+  //   Flow:
+  //     (a) Evaluate install decision via sha256(package-lock.json)[:12] vs
+  //         node_modules/.fleet-lock-hash marker, plus canary-module presence.
+  //     (b) If skip -> log and continue (no npm spawn, no lock contention).
+  //     (c) If install required -> snapshot peer sessions, acquire lock,
+  //         run npm install, on success write the marker, snapshot peers
+  //         again, and emit FRACTURE_CODE into any peer that was released
+  //         during the install window.
   if (worktreeInfo?.success && worktreeInfo.cwd) {
     try {
-      // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-005: ESM fix.
-      // This file is ESM (type=module). Use createRequire for CJS interop.
-      const { createRequire } = await import('node:module');
-      const esmRequire = createRequire(import.meta.url);
-      const { acquireLock, waitForLock, releaseLock } = esmRequire('../lib/npm-install-lock.cjs');
-      const fs = await import('fs');
-      const path = await import('path');
+      // Resolve repo root once (worktrees symlink node_modules from there).
+      const installRepoRoot = execSync('git rev-parse --show-toplevel', {
+        encoding: 'utf8', cwd: worktreeInfo.cwd, stdio: 'pipe'
+      }).trim();
 
-      // Check if node_modules is functional by testing a critical dependency
-      const testPath = path.join(worktreeInfo.cwd, 'node_modules', '@supabase', 'supabase-js');
-      if (!fs.existsSync(testPath)) {
-        console.log(`\n${colors.yellow}   ⚠️  node_modules missing or broken — coordinating install...${colors.reset}`);
+      const forceInstall = process.argv.includes('--force-install');
+      const decision = await evaluateInstallDecision({
+        repoRoot: installRepoRoot,
+        forceInstall
+      });
+
+      if (decision.skip) {
+        console.log(`   ${colors.green}✓ ${decision.reason}${colors.reset}`);
+      } else {
+        console.log(`\n${colors.yellow}   ⚠️  ${decision.reason} — coordinating install...${colors.reset}`);
+
+        // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-005: ESM fix.
+        // This file is ESM (type=module). Use createRequire for CJS interop.
+        const { createRequire } = await import('node:module');
+        const esmRequire = createRequire(import.meta.url);
+        const { acquireLock, waitForLock, releaseLock } = esmRequire('../lib/npm-install-lock.cjs');
+
+        const peersBefore = await peerSessionSnapshot(supabase, session.session_id);
+        let installSucceeded = false;
+
         const lock = await acquireLock(supabase, session.session_id);
 
         if (lock.held) {
@@ -999,20 +1087,19 @@ async function main() {
           });
           if (waitResult.resolved) {
             console.log(`   ${colors.green}✓ Dependencies ready (${waitResult.reason})${colors.reset}`);
+            // Assume the other session wrote the marker.  Re-probe hash next run.
+            installSucceeded = true;
           } else {
-            console.log(`   ${colors.yellow}⚠️  Lock wait timed out — attempting install anyway${colors.reset}`);
+            console.log(`   ${colors.yellow}⚠️  Lock wait timed out${colors.reset}`);
           }
         } else if (lock.acquired) {
           console.log('   🔒 Lock acquired — running npm install...');
           try {
-            // Install in the repo root (worktrees symlink from there)
-            const repoRoot = execSync('git rev-parse --show-toplevel', {
-              encoding: 'utf8', cwd: worktreeInfo.cwd, stdio: 'pipe'
-            }).trim();
             execSync('npm install --ignore-scripts', {
-              cwd: repoRoot, stdio: 'pipe', timeout: 120000
+              cwd: installRepoRoot, stdio: 'pipe', timeout: 120000
             });
             console.log(`   ${colors.green}✓ npm install complete${colors.reset}`);
+            installSucceeded = true;
           } catch (npmErr) {
             console.log(`   ${colors.yellow}⚠️  npm install failed: ${npmErr.message?.split('\n')[0]}${colors.reset}`);
           } finally {
@@ -1020,10 +1107,32 @@ async function main() {
             console.log('   🔓 Lock released');
           }
         }
+
+        // Marker write: only on a successful install we performed.  If we
+        // waited on a peer lock, we do not write (the peer owns the marker).
+        if (installSucceeded && lock.acquired && decision.currentHash) {
+          const writeResult = await writeFleetLockMarker(
+            installRepoRoot,
+            session.session_id,
+            decision.currentHash
+          );
+          if (writeResult.written) {
+            console.log(`   📌 fleet-lock-hash marker written (${decision.currentHash})`);
+          }
+        }
+
+        // Fracture emission: peers present before install but gone after.
+        const peersAfter = await peerSessionSnapshot(supabase, session.session_id);
+        const emit = await emitFractureForDiff(supabase, peersBefore, peersAfter);
+        if (emit.emitted > 0) {
+          console.log(
+            `   ${colors.yellow}⚠️  fracture code emitted for ${emit.emitted} peer session(s)${colors.reset}`
+          );
+        }
       }
-    } catch (lockErr) {
-      // Non-fatal — lock system failure should not block sd-start
-      console.debug(`[sd-start] node_modules lock check error: ${lockErr?.message || lockErr}`);
+    } catch (installErr) {
+      // Non-fatal — install path failure must not block sd-start overall.
+      console.debug(`[sd-start] install decision/coordination error: ${installErr?.message || installErr}`);
     }
   }
 
@@ -1140,6 +1249,26 @@ async function main() {
     console.log(`${colors.dim}   ⚠  Save this CLAUDE_SESSION_ID — all subsequent node script calls (handoff.js, etc.) require it.${colors.reset}`);
     console.log(`${colors.dim}   After context compaction, re-check SessionStart hook output or use the session ID shown above.${colors.reset}`);
     console.log(`${colors.dim}   Omitting it causes no_deterministic_identity failures at claim-validity gate.${colors.reset}`);
+  }
+
+  // SD-LEO-INFRA-SD-INTRAPHASE-PROGRESS-001: Emit a 5% entry tick on claim success so
+  // the fleet dashboard immediately shows a non-zero progress signal for an active
+  // worker. Monotonic — a higher existing progress_percentage (e.g. during re-acquire
+  // mid-phase) is preserved. Fail-soft: any error is logged but does not affect flow.
+  try {
+    const { data: current } = await supabase
+      .from('strategic_directives_v2')
+      .select('progress_percentage')
+      .eq('id', sd.id)
+      .single();
+    if ((current?.progress_percentage || 0) < 5) {
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ progress_percentage: 5 })
+        .eq('id', sd.id);
+    }
+  } catch (e) {
+    console.warn(`${colors.dim}   (entry-tick skipped: ${e?.message || e})${colors.reset}`);
   }
 
   console.log(`\n${colors.dim}Session: ${session.session_id}${colors.reset}`);

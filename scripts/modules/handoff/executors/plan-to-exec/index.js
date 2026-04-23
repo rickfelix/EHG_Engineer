@@ -30,7 +30,9 @@ import {
   // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
   createWireframeRequiredGate,
   // Translation Fidelity Gate — second invocation (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
-  createTranslationFidelityGate
+  createTranslationFidelityGate,
+  // Bugfix Coverage Preflight — advisory (SD-LEARN-FIX-ADDRESS-PAT-EXECTOPLAN-001, FR-3)
+  createBugfixCoveragePreflightGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -246,6 +248,11 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Translation Fidelity Gate — second invocation (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
     // Re-evaluates architecture→SD alignment after PRD/planning work to catch drift
     gates.push(createTranslationFidelityGate(this.supabase));
+
+    // Bugfix Coverage Preflight (SD-LEARN-FIX-ADDRESS-PAT-EXECTOPLAN-001, FR-3)
+    // Advisory — shifts EXEC-TO-PLAN discovery left by enumerating upcoming requirements
+    // (user story AC coverage + TESTING sub-agent) at PLAN-TO-EXEC time. Never blocks.
+    gates.push(createBugfixCoveragePreflightGate(this.supabase));
 
     return gates;
   }

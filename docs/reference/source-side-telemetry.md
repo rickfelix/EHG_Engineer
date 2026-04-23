@@ -29,7 +29,8 @@ All signals live in `public.claude_sessions`. Every reader treats **NULL as "inf
 | `last_activity_kind` | TEXT (CHECK) | Pre/PostToolUse hooks | `executing`, `waiting_tool`, `waiting_agent`, `thinking`, `idle`, `exiting`. |
 | `commits_since_claim` | INT | PostToolUse hook (throttled 30s) | Git commits on the SD branch since `claimed_at`. |
 | `files_modified_since_claim` | INT | PostToolUse hook (throttled 30s) | Files touched since `claimed_at`. |
-| `process_alive_at` | TIMESTAMPTZ | `scripts/session-tick.cjs` | Authoritative short-window liveness. Refreshed every 30s. |
+| `process_alive_at` | TIMESTAMPTZ | `scripts/session-tick.cjs` | Source-side fleet-liveness signal. Refreshed every 30s. Consumed by sweep dashboards. |
+| `heartbeat_at` | TIMESTAMPTZ | `scripts/session-tick.cjs` + claim-guard | Claim-TTL authority. `lib/claim-guard.mjs` flags the claim as stale at 300s and releasable at 900s. Refreshed by the tick every 30s alongside `process_alive_at` (since SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001 FR-4). Before FR-4 the tick updated only `process_alive_at`, leaving long Edit/Write/Read sessions vulnerable to stale-claim cleanup. |
 | `expected_silence_until` | TIMESTAMPTZ | PreToolUse hook | Worker-declared silent window. **Hard-capped at 30 minutes** in both hook and sweep. |
 
 ## Writers
@@ -70,7 +71,7 @@ spawn(process.execPath, [tickScript], {
 
 The tick:
 1. Writes marker at `.claude/pids/tick-<session_id>.json` so sweep can find orphans.
-2. Every **30 seconds**: `UPDATE claude_sessions SET process_alive_at = NOW()` via raw `fetch` (no SDK — keeps cold-start small).
+2. Every **30 seconds**: `UPDATE claude_sessions SET process_alive_at = NOW(), heartbeat_at = NOW()` via raw `fetch` (no SDK — keeps cold-start small). Both columns are written from a single `now` timestamp per SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001 FR-4 so claim-TTL (`heartbeat_at`) and fleet-liveness (`process_alive_at`) stay in lockstep.
 3. Every **5 seconds**: `process.kill(CC_PARENT_PID, 0)` — on `ESRCH` it deletes its marker and `process.exit(0)` within seconds of the parent dying.
 
 ## Readers

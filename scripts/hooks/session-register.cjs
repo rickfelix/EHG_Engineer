@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { stampBranch } = require('../../lib/session-writer.cjs');
 
 /**
  * Detect the current repo context from CWD or CLAUDE_PROJECT_DIR.
@@ -89,18 +90,24 @@ async function main() {
 
   const now = new Date().toISOString();
 
-  // Upsert session — create if new, update heartbeat if existing
+  // Upsert session — create if new, update heartbeat if existing.
+  // stampBranch() resolves current_branch via `git rev-parse --abbrev-ref HEAD`
+  // and leaves the column absent if we cannot resolve (e.g. not a git tree,
+  // detached HEAD) rather than writing NULL. See lib/session-writer.cjs and
+  // SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001.
+  const payload = stampBranch({
+    session_id: sessionId,
+    hostname: getHostname(),
+    tty: getTTY(),
+    codebase: detectCurrentRepo(),
+    status: 'active',
+    heartbeat_at: now,
+    started_at: now
+  });
+
   const { error } = await supabase
     .from('claude_sessions')
-    .upsert({
-      session_id: sessionId,
-      hostname: getHostname(),
-      tty: getTTY(),
-      codebase: detectCurrentRepo(),
-      status: 'active',
-      heartbeat_at: now,
-      started_at: now
-    }, {
+    .upsert(payload, {
       onConflict: 'session_id',
       ignoreDuplicates: false
     });

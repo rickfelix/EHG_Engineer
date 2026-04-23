@@ -84,12 +84,14 @@ async function getActiveSD() {
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
 
-    // Check for SD marked as working on
+    // Check for SD marked as working on (exclude completed/cancelled —
+    // is_working_on can be stale after an SD finishes)
     const { data: workingOn } = await supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, status, priority, current_phase, progress, description')
       .eq('is_working_on', true)
-      .lt('progress', 100);
+      .lt('progress', 100)
+      .not('status', 'in', '("completed","cancelled","deferred","archived")');
 
     if (workingOn && workingOn.length > 0) {
       return workingOn[0];
