@@ -316,8 +316,12 @@ export class PlanToExecVerifier {
       }
 
       // 5. Check PLAN phase completion
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126 (PAT-HF-PLANTOEXEC-eaccd2b3):
+      // Parent-orchestrator allow-list must include 'in_progress' to match
+      // prerequisite-preflight.js:268 — parents re-entering PLAN-TO-EXEC after
+      // a child cycle see their PRD in 'in_progress' legitimately.
       const validStatuses = isParentOrchestrator
-        ? ['approved', 'ready_for_exec', 'planning', 'draft']
+        ? ['approved', 'ready_for_exec', 'planning', 'draft', 'in_progress']
         : ['approved', 'ready_for_exec', 'in_progress'];
 
       if (!validStatuses.includes(prd.status)) {
