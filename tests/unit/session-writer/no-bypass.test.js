@@ -56,8 +56,6 @@ const ALLOWLIST = new Set([
   'scripts/modules/handoff/gates/multi-session-claim-gate.js',
   'scripts/modules/handoff/recording/HandoffRecorder.js',
   'scripts/modules/sd-next/claim-analysis.js',
-  'scripts/hooks/coordination-inbox.cjs',
-  'scripts/hooks/precompact-unified.js',
 
   // Category C — archived / one-time
   'scripts/archive/one-time/stale-session-sweep.cjs',
