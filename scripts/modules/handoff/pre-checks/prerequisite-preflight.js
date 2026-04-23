@@ -104,8 +104,13 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     return { passed: true, issues: [] };
   }
 
+  // QF-20260423-666: Info-severity entries (e.g. USER_STORIES_BYPASSED) are
+  // informational and MUST NOT flip `passed` to false.  Count only entries
+  // without an info severity as blockers.  The full list is still returned so
+  // callers can log exemptions for telemetry.
+  const blockingIssues = issues.filter(i => i.severity !== 'info');
   return {
-    passed: issues.length === 0,
+    passed: blockingIssues.length === 0,
     issues
   };
 }
@@ -232,10 +237,10 @@ function checkLeadToPlanPrereqs(sd) {
       message: `SD description has ${descWords} words (minimum: ${minWords} for ${sdType}) — need ${wordsNeeded} more word(s)`,
       remediation: [
         `Add ${wordsNeeded} more word(s) to the description. Consider expanding with:`,
-        `  - Technical approach: which files/modules change and how`,
-        `  - Root cause context: why this problem exists`,
-        `  - Success definition: what "fixed" looks like`,
-        `Update command:`,
+        '  - Technical approach: which files/modules change and how',
+        '  - Root cause context: why this problem exists',
+        '  - Success definition: what "fixed" looks like',
+        'Update command:',
         `  node -e "require('dotenv').config(); const {createClient}=require('@supabase/supabase-js'); const s=createClient(process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY); s.from('strategic_directives_v2').update({description:'<expanded description here>'}).eq('sd_key','${sdKey}').then(r=>console.log(r.error||'Updated'));"`
       ].join('\n')
     });
