@@ -125,82 +125,58 @@ async function validateSDTimeline(sdId, supabase) {
     console.warn(`Failed to fetch retrospectives for ${sdId}: ${retroError.message}`);
   }
 
-  // Build timestamp map for handoffs
-  const handoffTimestamps = {};
+  // Quick-fix QF-20260423-000: Group handoffs by type preserving all chains.
+  // An SD may have 2+ complete handoff chains (e.g. infrastructure SDs that re-handoff
+  // post-merge). The previous handoff_type-keyed map collapsed multi-chain histories
+  // and produced false positives by pairing Chain 1 artifacts with Chain 2 prerequisites.
+  const handoffsByType = {};
   for (const handoff of handoffs || []) {
-    handoffTimestamps[handoff.handoff_type] = {
+    if (!handoffsByType[handoff.handoff_type]) handoffsByType[handoff.handoff_type] = [];
+    handoffsByType[handoff.handoff_type].push({
       id: handoff.id,
       created_at: new Date(handoff.created_at).getTime(),
       accepted_at: handoff.accepted_at ? new Date(handoff.accepted_at).getTime() : null
-    };
+    });
   }
 
-  // Validate EXEC-TO-PLAN after PLAN-TO-EXEC
-  if (handoffTimestamps['EXEC-TO-PLAN'] && handoffTimestamps['PLAN-TO-EXEC']) {
-    const execToPlan = handoffTimestamps['EXEC-TO-PLAN'];
-    const planToExec = handoffTimestamps['PLAN-TO-EXEC'];
+  // Chain-aware pairing: for each artifact, a bypass exists only when NO accepted
+  // prerequisite of the required type predates the artifact (within skew tolerance).
+  const TIMELINE_RULES = [
+    { artifactType: 'EXEC-TO-PLAN',        prereqType: 'PLAN-TO-EXEC', artifactKey: 'handoff_exec_to_plan' },
+    { artifactType: 'PLAN-TO-LEAD',        prereqType: 'EXEC-TO-PLAN', artifactKey: 'handoff_plan_to_lead' },
+    { artifactType: 'LEAD-FINAL-APPROVAL', prereqType: 'PLAN-TO-LEAD', artifactKey: 'handoff_lead_final_approval' }
+  ];
 
-    // Grandfather clause: Skip artifacts created before bypass detection deployment
-    if (execToPlan.created_at < BYPASS_DETECTION_DEPLOYMENT_DATE) {
-      // Skip - artifact predates bypass detection rules
-    } else if (planToExec.accepted_at && execToPlan.created_at < planToExec.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
-      findings.push({
-        sd_id: sdId,
-        artifact_type: 'handoff_exec_to_plan',
-        artifact_id: execToPlan.id,
-        artifact_timestamp: new Date(execToPlan.created_at).toISOString(),
-        expected_min_timestamp: new Date(planToExec.accepted_at - CLOCK_SKEW_TOLERANCE_MS).toISOString(),
-        prerequisite_type: 'PLAN-TO-EXEC',
-        prerequisite_timestamp: new Date(planToExec.accepted_at).toISOString(),
-        time_delta_seconds: Math.round((planToExec.accepted_at - execToPlan.created_at) / 1000),
-        failure_category: 'bypass'
-      });
-    }
-  }
+  for (const rule of TIMELINE_RULES) {
+    const artifacts = handoffsByType[rule.artifactType] || [];
+    const prereqs = handoffsByType[rule.prereqType] || [];
+    if (prereqs.length === 0) continue; // No prerequisite rows exist — no pairing possible
 
-  // Validate PLAN-TO-LEAD after EXEC-TO-PLAN
-  if (handoffTimestamps['PLAN-TO-LEAD'] && handoffTimestamps['EXEC-TO-PLAN']) {
-    const planToLead = handoffTimestamps['PLAN-TO-LEAD'];
-    const execToPlan = handoffTimestamps['EXEC-TO-PLAN'];
+    for (const artifact of artifacts) {
+      // Grandfather clause: skip artifacts created before bypass detection deployment
+      if (artifact.created_at < BYPASS_DETECTION_DEPLOYMENT_DATE) continue;
 
-    // Grandfather clause: Skip artifacts created before bypass detection deployment
-    if (planToLead.created_at < BYPASS_DETECTION_DEPLOYMENT_DATE) {
-      // Skip - artifact predates bypass detection rules
-    } else if (execToPlan.accepted_at && planToLead.created_at < execToPlan.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
-      findings.push({
-        sd_id: sdId,
-        artifact_type: 'handoff_plan_to_lead',
-        artifact_id: planToLead.id,
-        artifact_timestamp: new Date(planToLead.created_at).toISOString(),
-        expected_min_timestamp: new Date(execToPlan.accepted_at - CLOCK_SKEW_TOLERANCE_MS).toISOString(),
-        prerequisite_type: 'EXEC-TO-PLAN',
-        prerequisite_timestamp: new Date(execToPlan.accepted_at).toISOString(),
-        time_delta_seconds: Math.round((execToPlan.accepted_at - planToLead.created_at) / 1000),
-        failure_category: 'bypass'
-      });
-    }
-  }
+      // Accepted prerequisite is valid when accepted_at <= artifact.created_at + skew tolerance
+      const validPrereq = prereqs.find(p => p.accepted_at !== null &&
+        p.accepted_at <= artifact.created_at + CLOCK_SKEW_TOLERANCE_MS);
 
-  // Validate LEAD-FINAL-APPROVAL after PLAN-TO-LEAD
-  if (handoffTimestamps['LEAD-FINAL-APPROVAL'] && handoffTimestamps['PLAN-TO-LEAD']) {
-    const leadFinal = handoffTimestamps['LEAD-FINAL-APPROVAL'];
-    const planToLead = handoffTimestamps['PLAN-TO-LEAD'];
-
-    // Grandfather clause: Skip artifacts created before bypass detection deployment
-    if (leadFinal.created_at < BYPASS_DETECTION_DEPLOYMENT_DATE) {
-      // Skip - artifact predates bypass detection rules
-    } else if (planToLead.accepted_at && leadFinal.created_at < planToLead.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
-      findings.push({
-        sd_id: sdId,
-        artifact_type: 'handoff_lead_final_approval',
-        artifact_id: leadFinal.id,
-        artifact_timestamp: new Date(leadFinal.created_at).toISOString(),
-        expected_min_timestamp: new Date(planToLead.accepted_at - CLOCK_SKEW_TOLERANCE_MS).toISOString(),
-        prerequisite_type: 'PLAN-TO-LEAD',
-        prerequisite_timestamp: new Date(planToLead.accepted_at).toISOString(),
-        time_delta_seconds: Math.round((planToLead.accepted_at - leadFinal.created_at) / 1000),
-        failure_category: 'bypass'
-      });
+      if (!validPrereq) {
+        // Bypass: no accepted prerequisite exists on or before this artifact's creation.
+        // Use earliest prerequisite accepted_at for the error message.
+        const earliestPrereq = prereqs.find(p => p.accepted_at !== null);
+        if (!earliestPrereq) continue; // No accepted prerequisite at all — nothing to compare
+        findings.push({
+          sd_id: sdId,
+          artifact_type: rule.artifactKey,
+          artifact_id: artifact.id,
+          artifact_timestamp: new Date(artifact.created_at).toISOString(),
+          expected_min_timestamp: new Date(earliestPrereq.accepted_at - CLOCK_SKEW_TOLERANCE_MS).toISOString(),
+          prerequisite_type: rule.prereqType,
+          prerequisite_timestamp: new Date(earliestPrereq.accepted_at).toISOString(),
+          time_delta_seconds: Math.round((earliestPrereq.accepted_at - artifact.created_at) / 1000),
+          failure_category: 'bypass'
+        });
+      }
     }
   }
 
