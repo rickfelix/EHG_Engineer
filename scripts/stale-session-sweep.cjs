@@ -727,6 +727,31 @@ async function main() {
       }
     }
 
+    // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 (FR4): Cross-check evidence-of-life before releasing.
+    // sweep historically used (heartbeat>threshold + PID dead + MC P(alive)<=0.3) as the
+    // release predicate, but this misses cross-shell processes whose CC conversation rotated
+    // session_id while the worktree is still warm. Defer to triangulate's multi-signal check
+    // for the SD this session claimed; if evidence-of-life present, HOLD (do not release).
+    if (s.sd_key) {
+      try {
+        // Lazy import — keep CJS sweep file independent of ESM triangulate at module load
+        const { checkPreClaimEvidence } = await import('./modules/claim-health/triangulate.js');
+        const evidence = await checkPreClaimEvidence(supabase, s.sd_key, { mySessionId: s.session_id });
+        if (!evidence.allowReclaim) {
+          warnings.push(
+            'WIP_GUARD_CROSS_SIGNAL: ' + s.session_id + ' SD=' + s.sd_key +
+            ' has evidence-of-life (' + (evidence.evidence || []).join(',') +
+            ') classification=' + evidence.classification + ' — HOLDING release (SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001)'
+          );
+          continue;
+        }
+      } catch (egErr) {
+        // Evidence gate must fail-open: if the import or query fails, fall through to
+        // existing release behavior. The original heartbeat/PID/MC gates above remain in force.
+        warnings.push('CROSS_SIGNAL_GATE: skipped on ' + s.session_id + ' due to error: ' + egErr.message);
+      }
+    }
+
     // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-1, FR-2): Atomically set is_alive=false
     // and clear dirty fields when releasing dead session claims. Prevents successor sessions
     // from inheriting stale worktree_path, has_uncommitted_changes, and current_branch.
