@@ -3,6 +3,7 @@
 **Generated**: 2026-04-24 7:38:22 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
+**Effort**: medium (core context; phase-specific files tag their own effort for phase work)
 
 > Sub-agent routing enforced by PreToolUse hook. See `scripts/hooks/pre-tool-enforce.cjs`.
 > For Five-Point Brief (sub-agent prompt quality), see CLAUDE.md Issue Resolution section.

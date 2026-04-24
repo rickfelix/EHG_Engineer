@@ -3,6 +3,7 @@
 **Generated**: 2026-04-23 9:43:55 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
+**Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.
@@ -63,7 +64,7 @@ When a vision document is updated during PLAN phase (e.g., via brainstorm refine
 
 ### When to Use Plan Agents
 
-Before creating a PRD, consider launching multiple `Plan` agents to explore different approaches:
+Before creating a PRD, launch `Plan` agents to explore different approaches when the criteria below apply. Skip only for trivial bug fixes, typo changes, or single-approach tasks where the design is unambiguous:
 
 **Use Plan agents when**:
 - Multiple valid architectures exist
@@ -238,7 +239,7 @@ These anti-patterns are specific to the PLAN phase. Violating them leads to inco
 ### NC-PLAN-002: No PRD Without Exploration
 **Anti-Pattern**: Creating PRD immediately after SD approval without reading codebase
 **Why Wrong**: PRDs miss existing infrastructure, create duplicate work, conflict with patterns
-**Correct Approach**: Read ≥5 relevant files, document findings in exploration_summary
+**Correct Approach**: Read ≥5 relevant files, document findings at `strategic_directives_v2.exploration_summary.files_explored` (the exact path `phase-preflight.js` Discovery Gate reads)
 
 ### NC-PLAN-003: No Boilerplate Acceptance Criteria
 **Anti-Pattern**: Using generic criteria like "all tests pass", "code review done", "meets requirements"
@@ -292,7 +293,7 @@ Before running `node scripts/add-prd-to-database.js`:
 
 1. **Exploration Complete?** (Discovery Gate)
    - [ ] Read ≥5 relevant files
-   - [ ] Documented findings in exploration_summary
+   - [ ] Documented findings at `sd.exploration_summary.files_explored` (the exact JSONB path checked by `phase-preflight.js` Discovery Gate)
    - [ ] Identified existing patterns to follow
 
 2. **Requirements Specific?** (Russian Judge)
@@ -402,12 +403,13 @@ Before running `node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX`, verify ALL
 - [ ] Technical architecture documented
 
 ### 2. Integration & Operationalization Complete ✅
-- [ ] PRD has `integration_operationalization` section with 5 subsections:
-  - [ ] **Consumers & User Journeys**: Who/what uses this feature
-  - [ ] **Upstream/Downstream Dependencies**: External systems, failure modes
-  - [ ] **Data Contracts & Schema**: Tables, columns, API contracts
-  - [ ] **Runtime Configuration**: Env vars, feature flags, deployment sequence
-  - [ ] **Observability, Rollout & Rollback**: Metrics, rollout plan, rollback procedure
+- [ ] PRD has `integration_operationalization` section with 5 subsections.
+  Canonical JSONB keys below match the `product_requirements_v2` CHECK constraint verbatim — use these exact keys. Alternative names (`upstream_dependencies`, `runtime_configuration`, `observability_rollout_rollback`, etc.) are REJECTED by the constraint.
+  - [ ] `consumers` — **Consumers & User Journeys**: Who/what uses this feature
+  - [ ] `dependencies` — **Upstream/Downstream Dependencies**: External systems, failure modes (single array with `direction` field per entry; NOT split into `upstream_dependencies`/`downstream_dependencies`)
+  - [ ] `data_contracts` — **Data Contracts & Schema**: Tables, columns, API contracts
+  - [ ] `runtime_config` — **Runtime Configuration**: Env vars, feature flags, deployment sequence
+  - [ ] `observability_rollout` — **Observability, Rollout & Rollback**: Metrics, rollout plan, rollback procedure
 - [ ] For infrastructure SDs: Consumers identified OR justification provided (≥30 chars)
 - [ ] Dependencies have `name`, `direction`, `failure_mode` fields
 

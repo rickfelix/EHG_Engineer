@@ -1,8 +1,9 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-04-24 11:16:17 AM
+**Generated**: 2026-04-24 3:42:22 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
+**Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.
@@ -210,7 +211,7 @@ This SD qualifies for Quick Fix workflow.
 - Category: quality_assurance
 - Estimated scope: 50 LOC or less / verification only
 
-Consider using /quick-fix to reduce overhead.
+Use /quick-fix to reduce overhead.
 - Quick Fix skips: LEAD approval, PRD, sub-agents, full validation gates
 - Quick Fix keeps: Dual tests, server restart, UAT, PR creation
 

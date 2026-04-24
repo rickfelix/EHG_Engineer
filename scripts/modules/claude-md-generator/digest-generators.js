@@ -191,6 +191,7 @@ function generateCoreDigest(data, fileMapping, metadata) {
 
 **Protocol**: LEO ${protocol.version}
 **Purpose**: Essential enforcement rules (<10k chars)
+**Effort**: medium (core context; phase-specific files tag their own effort for phase work)
 
 ---
 
@@ -231,6 +232,7 @@ function generateLeadDigest(data, fileMapping, metadata) {
 
 **Protocol**: LEO ${protocol.version}
 **Purpose**: LEAD approval gates and constraints (<5k chars)
+**Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
 
 ---
 
@@ -274,6 +276,7 @@ function generatePlanDigest(data, fileMapping, metadata) {
 
 **Protocol**: LEO ${protocol.version}
 **Purpose**: PRD requirements and constraints (<5k chars)
+**Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
 
 ---
 
@@ -319,6 +322,7 @@ function generateExecDigest(data, fileMapping, metadata) {
 
 **Protocol**: LEO ${protocol.version}
 **Purpose**: Implementation requirements and constraints (<10k chars)
+**Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.7 guidance)
 
 ---
 

@@ -8,6 +8,7 @@
 
 **Protocol**: LEO 4.4.1
 **Purpose**: Implementation requirements and constraints (<10k chars)
+**Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.7 guidance)
 
 ---
 
