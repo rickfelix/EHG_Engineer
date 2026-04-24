@@ -34,6 +34,23 @@ export const THRESHOLDS = {
   ESCALATION:  GRADE.F,        // <70:  D or F — critical escalation SD
 };
 
+// QF-20260424-807: SD-heal persist (scripts/eva/heal-command.mjs cmdSDPersist) writes
+// dimension_scores keyed by friendly names instead of V01/A01 codes. Generator must
+// recognize both shapes so heal scores are counted, weak-extracted, and can drive
+// corrective SD generation through the same pipeline as vision scores.
+export const SD_HEAL_DIMENSION_KEYS = new Set([
+  'key_changes_delivered',
+  'success_criteria_met',
+  'success_metrics_achieved',
+  'smoke_tests_pass',
+  'capabilities_present',
+  'planning_traceability',
+]);
+
+export function _isKnownDimensionKey(key) {
+  return /^[VA]\d{2}$/.test(key) || SD_HEAL_DIMENSION_KEYS.has(key);
+}
+
 // SD type and priority per tier
 // Root Cause 2 fix: Use 'corrective' instead of 'feature' for gap-closure/escalation
 // Corrective type has 70% gate threshold (vs 85% for feature), lighter validation
@@ -246,7 +263,8 @@ export async function generateCorrectiveSD(scoreId) {
   }
 
   // 1c. Overall-only detection — skip scores with < 3 dimensions (SD-MAN-INFRA-ENFORCE-PER-DIMENSION-003)
-  const dimKeys = Object.keys(score.dimension_scores || {}).filter(k => /^[VA]\d{2}$/.test(k));
+  // QF-20260424-807: accept both V/A codes and SD-heal friendly dimension names.
+  const dimKeys = Object.keys(score.dimension_scores || {}).filter(_isKnownDimensionKey);
   if (dimKeys.length < 3) {
     console.log(`[corrective-sd-generator] Skipping: score has only ${dimKeys.length} dimension(s) — needs re-scoring with full 5-dimension breakdown`);
     console.log(`[corrective-sd-generator] RE_SCORE_NEEDED=true score_id=${scoreId} sd_id=${score.sd_id}`);
@@ -468,7 +486,7 @@ export function _extractWeakDimensions(dimensionScores, maxDims = 3) {
   if (entries.length === 0) return [];
 
   return entries
-    .filter(([dimId]) => /^[VA]\d{2}$/.test(dimId))
+    .filter(([dimId]) => _isKnownDimensionKey(dimId))
     .map(([dimId, dimData]) => {
       const score = typeof dimData === 'object' ? (dimData?.score ?? 100) : Number(dimData);
       const dimensionName = (typeof dimData === 'object' ? dimData?.name : null) || dimId;
