@@ -541,7 +541,9 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
 
   const parsed = parsePlanFile(content);
 
-  // Apply overrides from --type and --title flags
+  // Apply overrides from --type, --title, --priority flags. Explicit plan-file ## Type header
+  // (parsed.type) already won over inferSDType in parsePlanFile; --type overrides that further.
+  const priorityFromPlan = parsed.priority;
   if (overrides.typeOverride) {
     console.log(`   Type override: ${overrides.typeOverride} (was: ${parsed.type})`);
     parsed.type = overrides.typeOverride;
@@ -550,13 +552,26 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     console.log(`   Title override: ${overrides.titleOverride} (was: ${parsed.title})`);
     parsed.title = overrides.titleOverride;
   }
+  if (overrides.priorityOverride) {
+    console.log(`   Priority override: ${overrides.priorityOverride} (was: ${parsed.priority ?? 'default/medium'})`);
+    parsed.priority = overrides.priorityOverride;
+  }
+
+  // Determine priority source label for display. priorityFromPlan is the raw plan-file value
+  // (before any --priority override). parsed.priority is the final value that will be passed to createSD.
+  const prioritySource = overrides.priorityOverride ? 'override' : (priorityFromPlan ? 'from plan' : 'default');
+  const priorityDisplay = parsed.priority ?? 'medium';
 
   // Show parsed summary
   console.log('\n   ═══════════════════════════════════════════');
   console.log('   PLAN SUMMARY');
   console.log('   ═══════════════════════════════════════════');
   console.log(`   Title: ${parsed.title || '(untitled)'}`);
-  console.log(`   Type${overrides.typeOverride ? '' : ' (inferred)'}: ${parsed.type}`);
+  const typeSource = overrides.typeOverride ? 'override' : (priorityFromPlan !== undefined ? 'from plan' : 'inferred');
+  // Type source is independent — re-derive to avoid coupling with priority detection.
+  const typeLabel = overrides.typeOverride ? ' (override)' : (parsed.type && priorityFromPlan !== undefined ? ' (from plan or inferred)' : ' (inferred)');
+  console.log(`   Type${typeLabel}: ${parsed.type}`);
+  console.log(`   Priority (${prioritySource}): ${priorityDisplay}`);
   console.log(`   Goal: ${parsed.summary ? parsed.summary.substring(0, 80) + '...' : '(none found)'}`);
   console.log(`   Checklist items: ${parsed.steps.length}`);
   console.log(`   Files to modify: ${parsed.files.length}`);
@@ -639,8 +654,10 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     mitigation: r.mitigation || 'Address during implementation'
   }));
 
-  // Step 12: Create SD with all extracted fields
-  const sd = await createSD({
+  // Step 12: Create SD with all extracted fields.
+  // Pass priority through so plan authored `## Priority` and --priority CLI overrides reach the DB.
+  // When parsed.priority is null (no header, no override), omit the field so createSD's default ('medium') applies.
+  const createOptions = {
     sdKey,
     title: parsed.title,
     description: parsed.summary || parsed.title,
@@ -662,7 +679,9 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
       ...(overrides.migrationReviewed ? { migration_reviewed: true } : {}),
       ...(overrides.securityReviewed ? { security_reviewed: true } : {}),
     }
-  });
+  };
+  if (parsed.priority) createOptions.priority = parsed.priority;
+  const sd = await createSD(createOptions);
 
   // Step 13: Update additional fields that aren't in createSD signature
   const additionalUpdates = {};
@@ -1467,7 +1486,7 @@ async function createSD(options) {
   console.log(`   Priority: ${data.priority}`);
   console.log(`   Status:   ${data.status}`);
   console.log(`   Phase:    ${data.current_phase}`);
-  console.log(`   Dependencies: ${sdData.dependencies?.length ? sdData.dependencies.map(d => d.sd_id || d).join(', ') : '(none)'}`);
+  console.log(`   Dependencies: ${sdData.dependencies?.length ? sdData.dependencies.map(formatDependencyForDisplay).join(', ') : '(none)'}`);
   console.log('═'.repeat(60));
 
   // QA CHECK: Detect dependency info misplaced in metadata
@@ -1507,6 +1526,21 @@ async function createSD(options) {
   return data;
 }
 
+/**
+ * Format a dependency entry for human-readable console display.
+ * Returns a string via fallback chain: dep.dependency → dep.sd_key → dep.sd_id → dep.id → JSON.stringify.
+ * Avoids `[object Object]` output when the shape is {type, dependency, dependency_id} (canonical) or malformed.
+ *
+ * @param {Object|string} dep - Dependency entry (object or bare string key).
+ * @returns {string} Human-readable identifier (never "[object Object]").
+ */
+export function formatDependencyForDisplay(dep) {
+  if (dep == null) return 'null';
+  if (typeof dep === 'string') return dep;
+  if (typeof dep !== 'object') return String(dep);
+  return dep.dependency ?? dep.sd_key ?? dep.sd_id ?? dep.id ?? JSON.stringify(dep);
+}
+
 // Export for programmatic use (e.g., corrective-sd-generator)
 export { createSD };
 
@@ -1536,6 +1570,8 @@ Flags:
   --yes, -y          Skip confirmation for auto-detected plans
   --type <type>      Override SD type (for --from-plan or --child; children never inherit 'orchestrator')
   --title "<title>"  Override title (for --from-plan or --child)
+  --priority <p>     Override priority for --from-plan (critical|high|medium|low). Default from plan header
+                     ## Priority, falling back to "medium" if absent.
   --venture <name>   Generate venture-scoped SD key (SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM})
   --vision-key <key> Link SD to EVA vision document (stored in metadata, used for vision scoring)
                      Supported in both direct creation AND --from-plan mode.
@@ -1605,6 +1641,18 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // Parse --title override (e.g., --from-plan --title "My Title")
       const titleIdx = args.indexOf('--title');
       const titleOverride = titleIdx !== -1 ? args[titleIdx + 1] : null;
+      // Parse --priority override (e.g., --from-plan --priority high). Validated against enum below.
+      const priorityIdx = args.indexOf('--priority');
+      const priorityOverrideRaw = priorityIdx !== -1 ? args[priorityIdx + 1] : null;
+      let priorityOverride = null;
+      if (priorityOverrideRaw) {
+        const normalized = priorityOverrideRaw.toLowerCase();
+        if (!['critical', 'high', 'medium', 'low'].includes(normalized)) {
+          console.error(`\n❌ Invalid --priority value: "${priorityOverrideRaw}". Valid: critical, high, medium, low`);
+          process.exit(1);
+        }
+        priorityOverride = normalized;
+      }
       // Parse --vision-key / --arch-key (link plan-created SD to registered vision/arch)
       const visionKeyIdx = args.indexOf('--vision-key');
       const visionKey = visionKeyIdx !== -1 ? args[visionKeyIdx + 1] : null;
@@ -1618,12 +1666,13 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         [
           typeIdx !== -1 ? typeIdx + 1 : -1,
           titleIdx !== -1 ? titleIdx + 1 : -1,
+          priorityIdx !== -1 ? priorityIdx + 1 : -1,
           visionKeyIdx !== -1 ? visionKeyIdx + 1 : -1,
           archKeyIdx !== -1 ? archKeyIdx + 1 : -1,
         ].filter(i => i > 0)
       );
       const knownPlanFlags = new Set([
-        '--yes', '-y', '--type', '--title', '--from-plan',
+        '--yes', '-y', '--type', '--title', '--priority', '--from-plan',
         '--vision-key', '--arch-key', '--migration-reviewed', '--security-reviewed'
       ]);
       const planPath = args.find((arg, i) =>
@@ -1632,6 +1681,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       await createFromPlan(planPath, hasYesFlag, {
         typeOverride,
         titleOverride,
+        priorityOverride,
         visionKey,
         archKey,
         migrationReviewed,
