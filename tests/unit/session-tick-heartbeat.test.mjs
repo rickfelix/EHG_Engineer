@@ -50,3 +50,18 @@ test('FR-4: claim-guard still keys TTL on heartbeat_at (alignment sanity check)'
   // will fire a reminder to re-check the tick's PATCH body.
   assert.match(guardSrc, /heartbeat_at/);
 });
+
+test('QF-20260424-001: tickInterval is NOT unref\'d so the daemon stays alive', () => {
+  // Regression: both setInterval handles were previously unref'd, causing Node
+  // to exit ~260ms after the initial tickOnce() fetch resolved. Only ONE
+  // heartbeat_at write made it to the DB per spawn; the 30-second periodic
+  // re-tick never fired. This broke claim TTL for every parallel-session
+  // workflow and was the proximate cause of foreign_claim on active work.
+  // The parent-liveness interval MAY be unref'd (it does not need to hold the
+  // loop open), but the tick interval MUST NOT be.
+  assert.doesNotMatch(
+    tickSrc,
+    /tickInterval\.unref\??\.\?\(\)/,
+    'tickInterval.unref()/.unref?.() reintroduces the daemon-exits-early bug'
+  );
+});
