@@ -216,12 +216,27 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
   }
 
   async setup(sdId, sd, options) {
-    // Verify SD is in the correct state for final approval
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-127 FR-4: fail-fast status pre-gate.
+    // Logs BEFORE any downstream gate so operators see the status mismatch first
+    // (addresses PAT-RETRO-LEADFINALAPPROVAL-d94c34d8 — 60-120s wasted per attempt
+    // when draft SDs ran through the full gate chain before failing late).
+    console.log('   🔎 Pre-gate: verifying SD.status for LEAD-FINAL-APPROVAL');
+
     if (sd.status !== 'pending_approval') {
       // Allow completed SDs to be re-approved (idempotent)
       if (sd.status === 'completed') {
         console.log('   ℹ️  SD is already completed - will verify and confirm');
         options._alreadyCompleted = true;
+      } else if (sd.status === 'draft') {
+        // FR-4: draft SDs get a distinct code so tooling can differentiate
+        // "never approved" from "wrong state but approved at some point".
+        const nextCommand = `node scripts/handoff.js execute PLAN-TO-LEAD ${sdId}`;
+        console.log(`   ❌ SD status is 'draft' — LEAD-FINAL-APPROVAL requires 'pending_approval'. Run PLAN-TO-LEAD first.`);
+        return ResultBuilder.rejected(
+          'DRAFT_SD_NOT_APPROVED',
+          `SD status must be 'pending_approval' for final approval (current: 'draft'). Run PLAN-TO-LEAD first: ${nextCommand}`,
+          { currentStatus: 'draft', requiredStatus: 'pending_approval', nextCommand }
+        );
       } else {
         // Diagnose which prerequisite handoffs are missing (SD-LEARN-FIX-ADDRESS-PAT-RETRO-002)
         const workflow = getWorkflowForType(sd.sd_type || 'feature');

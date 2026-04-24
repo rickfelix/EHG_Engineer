@@ -21,6 +21,31 @@ const ROOT_DIR = path.resolve(__dirname, '../../../../../../');
 const GATE_NAME = 'WIRE_CHECK_GATE';
 
 /**
+ * Declarative exclusion rules applied after the git diff.
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-127 FR-1: test and spec files have no
+ * runtime entry point by design — exclude them from the reachability check
+ * so co-located tests do not false-positive PAT-AUTO-855d11b1.
+ *
+ * Patterns are canonical only (*.test.ext, *.spec.ext, __tests__/, tests/);
+ * intentionally NOT matching *.test-* or similar variants to avoid
+ * over-matching production files (mitigation for TS-7 negative control).
+ */
+export const EXCLUSION_PATTERNS = [
+  /\.test\.(js|mjs|cjs|jsx|tsx)$/,
+  /\.spec\.(js|mjs|cjs|jsx|tsx)$/,
+  /(^|\/)__tests__\//,
+  /^tests\//
+];
+
+/**
+ * @param {string} file - Forward-slash relative path from repo root
+ * @returns {boolean} true when the path matches any EXCLUSION_PATTERN
+ */
+export function isExcludedFromWireCheck(file) {
+  return EXCLUSION_PATTERNS.some((re) => re.test(file));
+}
+
+/**
  * Discover entry point files from package.json scripts and known pipeline scripts.
  *
  * @param {string} rootDir - Project root
@@ -130,11 +155,13 @@ export function createWireCheckGate(_supabase) {
           .split('\n')
           .map((f) => f.trim())
           .filter(Boolean)
-          // Only check files in lib/ and scripts/ (skip tests, configs, tmp files)
+          // Only check files in lib/ and scripts/ (skip configs)
           .filter((f) => f.startsWith('lib/') || f.startsWith('scripts/'))
           // Skip tmp/scratch files
           .filter((f) => !f.includes('/tmp-') && !f.includes('/.tmp-'))
-          .map((f) => f.replace(/\\/g, '/'));
+          .map((f) => f.replace(/\\/g, '/'))
+          // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-127 FR-1: skip test/spec files
+          .filter((f) => !isExcludedFromWireCheck(f));
       } catch (_err) {
         console.log('   Could not compute git diff — skipping');
         return {
