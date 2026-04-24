@@ -22,6 +22,7 @@
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 import { execSync } from 'child_process';
 import { buildSDSpecificKeyLearnings, buildSDSpecificActionItems, buildSDSpecificImprovementAreas } from '../../retrospective-enricher.js'; // SD-LEARN-FIX-ADDRESS-PAT-AUTO-030
+import { getMainRef } from '../../shared-git-context.js';
 
 /**
  * Query issue_patterns table for issues related to this SD
@@ -78,8 +79,10 @@ async function getRecentActiveIssues(supabase) {
 function getGitContext(sdId) {
   const result = { filesChanged: [], commitMessages: [], summary: '' };
   try {
-    // Get files changed vs main (limit to 20)
-    const diffOutput = execSync('git diff --name-only main...HEAD 2>/dev/null || git diff --name-only HEAD~5..HEAD 2>/dev/null', {
+    // Get files changed vs origin/main (limit to 20)
+    // SD-LEO-INFRA-WIRE-CHECK-GATE-001: use getMainRef() to handle stale local main
+    const { ref } = getMainRef();
+    const diffOutput = execSync(`git diff --name-only ${ref}...HEAD 2>/dev/null || git diff --name-only HEAD~5..HEAD 2>/dev/null`, {
       encoding: 'utf8', timeout: 10000
     }).trim();
     if (diffOutput) {

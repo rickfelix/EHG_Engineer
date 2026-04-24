@@ -14,6 +14,61 @@
  */
 import { execSync } from 'child_process';
 
+/**
+ * Resolve the canonical "main" ref for cross-branch diffs.
+ * SD-LEO-INFRA-WIRE-CHECK-GATE-001 — fixes systemic bug where handoff gates
+ * diffed against bare `main`, which is routinely stale/missing/divergent in
+ * worktree-heavy and parallel-session environments. `origin/main` is the
+ * authoritative ref.
+ *
+ * Strategy: try `git fetch origin main --quiet` (best-effort), prefer
+ * `origin/main`, fall back to local `main` (warn), then `origin/master`,
+ * then bare `main` as last resort.
+ *
+ * @param {Object} [opts]
+ * @param {string} [opts.cwd] - Working directory for git commands
+ * @param {boolean} [opts.skipFetch] - Skip the fetch step (tests/offline)
+ * @returns {{ref: string, source: 'origin'|'local-fallback'|'origin-master', warning?: string}}
+ */
+export function getMainRef(opts = {}) {
+  const { cwd, skipFetch = false } = opts;
+  const execOpts = { encoding: 'utf8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] };
+  if (cwd) execOpts.cwd = cwd;
+
+  if (!skipFetch) {
+    try {
+      execSync('git fetch origin main --quiet', { ...execOpts, timeout: 15000 });
+    } catch {
+      // Fetch failed (offline, no remote, sandboxed). Not fatal — verify what's local.
+    }
+  }
+
+  try {
+    execSync('git rev-parse --verify --quiet origin/main', execOpts);
+    return { ref: 'origin/main', source: 'origin' };
+  } catch { /* origin/main missing */ }
+
+  try {
+    execSync('git rev-parse --verify --quiet origin/master', execOpts);
+    return { ref: 'origin/master', source: 'origin-master' };
+  } catch { /* origin/master missing */ }
+
+  try {
+    execSync('git rev-parse --verify --quiet main', execOpts);
+    return {
+      ref: 'main',
+      source: 'local-fallback',
+      warning: 'origin/main not available; using local main (may be stale)',
+    };
+  } catch { /* no main at all */ }
+
+  return {
+    ref: 'main',
+    source: 'local-fallback',
+    warning: 'No main/master ref found locally or on origin; using literal "main"',
+  };
+}
+
 export class SharedGitContext {
   #branch = null;
   #gitRoot = null;
@@ -75,7 +130,8 @@ export class SharedGitContext {
             stdio: ['pipe', 'pipe', 'pipe']
           }).trim();
         } else {
-          output = execSync('git diff --name-only main...HEAD', {
+          const { ref } = getMainRef();
+          output = execSync(`git diff --name-only ${ref}...HEAD`, {
             encoding: 'utf8',
             timeout: 10000,
             stdio: ['pipe', 'pipe', 'pipe']
@@ -105,7 +161,8 @@ export class SharedGitContext {
             stdio: ['pipe', 'pipe', 'pipe']
           });
         } else {
-          this.#diffStat = execSync('git diff --stat main...HEAD', {
+          const { ref } = getMainRef();
+          this.#diffStat = execSync(`git diff --stat ${ref}...HEAD`, {
             encoding: 'utf8',
             timeout: 10000,
             stdio: ['pipe', 'pipe', 'pipe']

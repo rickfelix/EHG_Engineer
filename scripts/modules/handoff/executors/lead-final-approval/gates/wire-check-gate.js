@@ -13,6 +13,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildCallGraph } from '../../../../../../lib/static-analysis/call-graph-builder.js';
 import { checkReachability } from '../../../../../../lib/static-analysis/reachability-checker.js';
+import { getMainRef } from '../../../shared-git-context.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -152,10 +153,16 @@ export function createWireCheckGate(_supabase) {
       const rootDir = ROOT_DIR;
 
       // Step 1: Get new files from git diff (added files only)
+      // SD-LEO-INFRA-WIRE-CHECK-GATE-001: use getMainRef() so we diff against
+      // origin/main (authoritative) rather than bare 'main' which is routinely
+      // stale or missing in worktrees / parallel sessions.
       let newFiles = [];
+      const refResult = getMainRef({ cwd: rootDir });
+      const mainRef = refResult.ref;
+      const refWarnings = refResult.warning ? [refResult.warning] : [];
       try {
         const diff = execSync(
-          'git diff --name-only --diff-filter=A main...HEAD -- "*.js" "*.mjs" "*.cjs"',
+          `git diff --name-only --diff-filter=A ${mainRef}...HEAD -- "*.js" "*.mjs" "*.cjs"`,
           { encoding: 'utf8', cwd: rootDir, timeout: 10000 }
         );
         newFiles = diff
@@ -169,14 +176,21 @@ export function createWireCheckGate(_supabase) {
           .map((f) => f.replace(/\\/g, '/'))
           // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-127 FR-1: skip test/spec files
           .filter((f) => !isExcludedFromWireCheck(f));
-      } catch (_err) {
-        console.log('   Could not compute git diff — skipping');
+      } catch (err) {
+        // SD-LEO-INFRA-WIRE-CHECK-GATE-001: fail closed on diff errors so a
+        // required:true gate does not silently pass on infrastructure failure.
+        const message = err?.message || String(err);
+        console.log(`   ❌ git diff against ${mainRef} failed: ${message}`);
         return {
-          passed: true,
-          score: 80,
+          passed: false,
+          score: 0,
           max_score: 100,
-          issues: [],
-          warnings: ['Could not compute git diff against main — wire check skipped'],
+          issues: [
+            `WIRE_CHECK_GATE could not compute git diff against ${mainRef}: ${message}`,
+            `Required:true gate cannot validate without diff input. Investigate git availability or ref resolution.`,
+          ],
+          warnings: refWarnings,
+          details: { mainRef, refSource: refResult.source, error: message },
         };
       }
 

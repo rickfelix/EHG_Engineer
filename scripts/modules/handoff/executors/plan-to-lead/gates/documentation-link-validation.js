@@ -11,6 +11,7 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
+import { getMainRef } from '../../../shared-git-context.js';
 
 /**
  * Regex to match markdown links: [text](path)
@@ -105,8 +106,10 @@ function getChangedMarkdownFiles(cwd, gitContext) {
         encoding: 'utf8', cwd, timeout: 10000
       });
     } else {
-      // On feature branch, diff against main
-      diffOutput = execSync('git diff --name-only main...HEAD', {
+      // On feature branch, diff against origin/main
+      // SD-LEO-INFRA-WIRE-CHECK-GATE-001: use getMainRef() to handle stale local main
+      const { ref } = getMainRef({ cwd });
+      diffOutput = execSync(`git diff --name-only ${ref}...HEAD`, {
         encoding: 'utf8', cwd, timeout: 10000
       });
     }
