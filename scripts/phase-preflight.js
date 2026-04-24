@@ -18,9 +18,18 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
 import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
 import { validateDecompositionGate } from './modules/decomposition-gate.js';
+import { startHeartbeat } from '../lib/heartbeat-manager.mjs';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR1 call-site migration):
+// Phase preflight triggers sub-agent queries and issue-pattern lookups that
+// can exceed the 15-min claim TTL. Cooperative-mode heartbeat keeps the
+// parent session's claim alive during the run. No-op without CLAUDE_SESSION_ID.
+if (process.env.CLAUDE_SESSION_ID) {
+  startHeartbeat(process.env.CLAUDE_SESSION_ID, { ownershipMode: 'cooperative' });
+}
 
 // FIX: Use service role key for server-side scripts that need full database access
 // The anon key may have RLS restrictions or be invalid for backend operations
