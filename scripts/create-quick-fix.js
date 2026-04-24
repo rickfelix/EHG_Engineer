@@ -277,8 +277,27 @@ async function createQuickFix(options = {}) {
   console.log(`   Status: ${data.status}\n`);
 
   // Worktree Isolation for Quick-Fix work
+  // QF-20260424-674: worktree creation is gated on a held DB claim.
+  // Unclaimed QFs are queued with NO registered worktree — the session that
+  // later runs `/leo QF-<id>` is the one that materializes it.
   if (options.autoBranch !== false) { // Default to true
-    console.log('🌲 Worktree Isolation\n');
+    const creatorSessionId = process.env.CLAUDE_SESSION_ID;
+    if (!creatorSessionId) {
+      console.log('🌲 Worktree Isolation skipped — QF queued unclaimed.');
+      console.log(`   Run /leo ${qfId} to claim and create a worktree when picking up.\n`);
+      return printNextSteps(qfId, false, null);
+    }
+    // Atomically set claiming_session_id; if another session already holds it, bail.
+    const { data: claimed } = await supabase
+      .from('quick_fixes')
+      .update({ claiming_session_id: creatorSessionId, started_at: new Date().toISOString() })
+      .eq('id', qfId).is('claiming_session_id', null)
+      .select('id,claiming_session_id').maybeSingle();
+    if (!claimed) {
+      console.log('   ⚠️  Could not claim QF atomically — skipping worktree creation.\n');
+      return printNextSteps(qfId, false, null);
+    }
+    console.log(`🌲 Worktree Isolation (claimed by ${creatorSessionId})\n`);
 
     try {
       // Check if git repo
