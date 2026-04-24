@@ -32,7 +32,9 @@ import {
   // Translation Fidelity Gate — second invocation (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
   createTranslationFidelityGate,
   // Bugfix Coverage Preflight — advisory (SD-LEARN-FIX-ADDRESS-PAT-EXECTOPLAN-001, FR-3)
-  createBugfixCoveragePreflightGate
+  createBugfixCoveragePreflightGate,
+  // Cross-SD File-Overlap Temporal Gate (SD-LEO-INFRA-CROSS-FILE-OVERLAP-001 FR-2a)
+  createCrossSdFileOverlapTemporalGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -253,6 +255,11 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Advisory — shifts EXEC-TO-PLAN discovery left by enumerating upcoming requirements
     // (user story AC coverage + TESTING sub-agent) at PLAN-TO-EXEC time. Never blocks.
     gates.push(createBugfixCoveragePreflightGate(this.supabase));
+
+    // Cross-SD File-Overlap Temporal Gate — PLAN oracle (SD-LEO-INFRA-CROSS-FILE-OVERLAP-001 FR-2a)
+    // Detects file overlap with SDs shipped within the configured 48h window
+    // using PRD target_files as the comparison oracle. High-risk = FAIL, medium = WARN unless ack'd.
+    gates.push(createCrossSdFileOverlapTemporalGate(this.supabase));
 
     return gates;
   }

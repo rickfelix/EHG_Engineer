@@ -552,6 +552,7 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
 
   if (!handoffType || !sdId) {
     console.log('Usage: node scripts/handoff.js execute HANDOFF_TYPE SD-ID [PRD-ID] [--bypass-validation --bypass-reason "reason"]');
+    console.log('       node scripts/handoff.js execute HANDOFF_TYPE SD-ID --acknowledge-cross-sd-overlap --ack-reason "<SD-/QF-/PAT-/#issue> reason"');
     console.log('');
     console.log('Handoff Types (case-insensitive):');
     console.log('  LEAD-TO-PLAN        - Strategic to Planning handoff');
@@ -559,6 +560,10 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     console.log('  EXEC-TO-PLAN        - Execution to Verification handoff');
     console.log('  PLAN-TO-LEAD        - Verification to Final Approval handoff');
     console.log('  LEAD-FINAL-APPROVAL - Mark SD as completed (final step)');
+    console.log('');
+    console.log('Cross-SD Overlap Gate Flags (FR-3, SD-LEO-INFRA-CROSS-FILE-OVERLAP-001):');
+    console.log('  --acknowledge-cross-sd-overlap  Acknowledge a medium-risk file overlap warning');
+    console.log('  --ack-reason "TEXT"             Required with above; must cite SD-/QF-/PAT-/#issue');
     console.log('');
     console.log('TIP: Run "node scripts/handoff.js workflow SD-ID" to see recommended workflow');
     return { success: false };

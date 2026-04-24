@@ -36,6 +36,10 @@ export { createWireCheckGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
 
+// Cross-SD File-Overlap Temporal Gate — SHIP oracle (SD-LEO-INFRA-CROSS-FILE-OVERLAP-001 FR-2b)
+import { createCrossSdFileOverlapTemporalShipGate } from './gates/cross-sd-file-overlap-temporal-ship.js';
+export { createCrossSdFileOverlapTemporalShipGate };
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -1072,6 +1076,11 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // set ENFORCE_LEARNING_GATE=true to block.
   gates.push(createLearningOrBypassResolvedGate(supabase));
 
+  // Cross-SD File-Overlap Temporal Gate — SHIP oracle (FR-2b)
+  // Compares this PR's diff against the merge-commit diffs of SDs shipped
+  // within the configured window. High-risk = FAIL, medium = WARN unless ack'd.
+  gates.push(createCrossSdFileOverlapTemporalShipGate(supabase));
+
   return gates;
 }
 
@@ -1089,5 +1098,6 @@ export default {
   createAutomatedUatGate,
   createWireCheckGate,
   createLearningOrBypassResolvedGate,
+  createCrossSdFileOverlapTemporalShipGate,
   getRequiredGates
 };
