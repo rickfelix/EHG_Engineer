@@ -17,10 +17,10 @@ import { createRetrospectiveQualityGate } from './retrospective-quality.js';
 import { createMockSD } from '../../../../../../tests/factories/validator-context-factory.js';
 
 /** Build a Supabase mock that returns different data per table */
-function buildSupabase({ children = [], retrospective = null, childError = null }) {
+function buildSupabase({ children = [], retrospective = null, childError = null, handoffRow = null }) {
   const makeChainable = (resolveValue) => {
     const c = {
-      select: () => c, eq: () => c, neq: () => c,
+      select: () => c, eq: () => c, neq: () => c, gt: () => c, gte: () => c, lt: () => c, lte: () => c, is: () => c,
       order: () => c, limit: () => c,
       single: () => Promise.resolve(resolveValue),
       maybeSingle: () => Promise.resolve(resolveValue),
@@ -36,6 +36,9 @@ function buildSupabase({ children = [], retrospective = null, childError = null 
       }
       if (table === 'retrospectives') {
         return { select: () => makeChainable({ data: retrospective, error: null }) };
+      }
+      if (table === 'sd_phase_handoffs') {
+        return { select: () => makeChainable({ data: handoffRow, error: null }) };
       }
       return { select: () => makeChainable({ data: [], error: null }) };
     }),
@@ -149,5 +152,73 @@ describe('RETROSPECTIVE_QUALITY_GATE', () => {
     expect(result.details.infrastructure_auto_pass).toBe(true);
     // Score should be at least 55 (floor for infrastructure)
     expect(result.score).toBeGreaterThanOrEqual(55);
+  });
+
+  // SD-LEO-INFRA-RETROSPECTIVE-GATES-FAIL-001 — new failure-mode tests.
+  // The shared retro-filters helper applies three filters (existence, retro_type,
+  // freshness). Any row that fails a filter is returned to the gate as null —
+  // so the four new "failure mode" tests here all exercise the helper-returns-null
+  // path at the gate level. Filter-level unit tests live in retro-filters.test.js.
+  it('hard-fails when no retrospective exists (zero rows / helper returns null)', async () => {
+    // AC1: zero rows in retrospectives for this SD
+    const supabase = buildSupabase({ retrospective: null });
+    const gate = createRetrospectiveQualityGate(supabase);
+
+    const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'none-uuid', sd_key: 'SD-NONE-TEST-001' }) };
+    const result = await gate.validator(ctx);
+
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0);
+    expect(result.issues[0]).toMatch(/No SD-completion retrospective found for SD SD-NONE-TEST-001/);
+    expect(result.remediation).toMatch(/generate-retrospective\.js/);
+    // AC1 acceptance: validateSDCompletionReadiness must NOT be called on null retro
+    expect(validateSDCompletionReadiness).not.toHaveBeenCalled();
+  });
+
+  it('hard-fails when only a handoff-time retro exists (pre-LEAD timestamp filtered out)', async () => {
+    // AC2: helper filters out handoff-time retros via created_at > leadToPlanAcceptedAt.
+    // At the gate level this is indistinguishable from zero rows — the helper returns null.
+    const supabase = buildSupabase({ retrospective: null });
+    const gate = createRetrospectiveQualityGate(supabase);
+
+    const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'stale-uuid', sd_key: 'SD-STALE-RETRO-001' }) };
+    const result = await gate.validator(ctx);
+
+    expect(result.passed).toBe(false);
+    expect(result.issues[0]).toMatch(/must be retro_type=SD_COMPLETION with created_at >/);
+    expect(result.remediation).toMatch(/handoff-time retrospective does not satisfy this gate/);
+    expect(validateSDCompletionReadiness).not.toHaveBeenCalled();
+  });
+
+  it('hard-fails when only a non-SD_COMPLETION retro exists (retro_type filter rejected)', async () => {
+    // AC3: retro_type filter excludes SPRINT/INCIDENT/AUDIT rows. The helper returns null
+    // when no row passes the filter — gate behaviour is identical to AC1/AC2 failure modes.
+    const supabase = buildSupabase({ retrospective: null });
+    const gate = createRetrospectiveQualityGate(supabase);
+
+    const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'sprint-uuid', sd_key: 'SD-WRONG-TYPE-001' }) };
+    const result = await gate.validator(ctx);
+
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0);
+    expect(result.issues[0]).toMatch(/No SD-completion retrospective found for SD SD-WRONG-TYPE-001/);
+    expect(validateSDCompletionReadiness).not.toHaveBeenCalled();
+  });
+
+  it('passes auto-pass fast-path for infrastructure with a valid SD-completion retro (no regression)', async () => {
+    // AC4 + AC7: a valid retro (all three filters satisfied → helper returns it) passes the
+    // existing infrastructure fast-path unchanged. Regression guard for FR5.
+    const retro = { id: 'retro-valid', quality_score: 70, retro_type: 'SD_COMPLETION', status: 'PUBLISHED' };
+    const supabase = buildSupabase({ retrospective: retro });
+    const gate = createRetrospectiveQualityGate(supabase);
+
+    const ctx = { sd: createMockSD({ sd_type: 'infrastructure', id: 'infra-valid-uuid' }) };
+    const result = await gate.validator(ctx);
+
+    expect(result.passed).toBe(true);
+    expect(result.details.infrastructure_auto_pass).toBe(true);
+    expect(result.score).toBeGreaterThanOrEqual(55);
+    // Fast-path short-circuits before the quality validator is invoked.
+    expect(validateSDCompletionReadiness).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 import { resolveRepoPath, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 import { getTierForSD } from '../../../sd-type-checker.js';
+import { getFilteredRetrospective } from '../../retro-filters.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
@@ -281,13 +282,13 @@ export function createRetrospectiveExistsGate(supabase) {
       console.log('\n🔒 GATE 3: Retrospective Verification');
       console.log('-'.repeat(50));
 
-      const { data: retrospective } = await supabase
-        .from('retrospectives')
-        .select('id, quality_score, status, created_at')
-        .eq('sd_id', ctx.sd.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      // SD-LEO-INFRA-RETROSPECTIVE-GATES-FAIL-001: Use shared three-filter helper so
+      // this gate and PLAN-TO-LEAD retrospective-quality.js share the same invariants
+      // (existence + retro_type=SD_COMPLETION + created_at > LEAD-TO-PLAN acceptance).
+      // Handoff-time retros share retro_type='SD_COMPLETION' so the timestamp filter
+      // is what distinguishes them from true SD-completion retrospectives.
+      const { retrospective, leadToPlanAcceptedAt } =
+        await getFilteredRetrospective(ctx.sd.id, ctx.sd.created_at || null, supabase);
 
       if (!retrospective) {
         const sdKey = ctx.sd?.sd_key || ctx.sdId || 'unknown';
@@ -295,17 +296,18 @@ export function createRetrospectiveExistsGate(supabase) {
           passed: false,
           score: 0,
           max_score: 100,
-          issues: ['No retrospective found - run RETRO sub-agent first'],
+          issues: [`No SD-completion retrospective found for ${sdKey} (must be retro_type=SD_COMPLETION with created_at > ${leadToPlanAcceptedAt}) - run RETRO sub-agent first`],
           warnings: [],
           remediation: 'Quality retrospective required for final approval.\n'
+            + '   A handoff-time retrospective does not satisfy this gate — must be retro_type=SD_COMPLETION authored after LEAD-TO-PLAN acceptance.\n'
             + '   --- TASK TOOL INVOCATION ---\n'
             + '   subagent_type: "retro-agent"\n'
             + '   prompt: |\n'
-            + `     Symptom: No quality retrospective found for ${sdKey}. LEAD-FINAL-APPROVAL blocked.\n`
-            + `     Location: sd_retrospectives table WHERE sd_id='${ctx.sd?.id || sdKey}'\n`
+            + `     Symptom: No qualifying SD-completion retrospective found for ${sdKey}. LEAD-FINAL-APPROVAL blocked.\n`
+            + `     Location: retrospectives table WHERE sd_id='${ctx.sd?.id || sdKey}' AND retro_type='SD_COMPLETION' AND created_at > '${leadToPlanAcceptedAt}'\n`
             + '     Frequency: Blocking final approval\n'
-            + '     Prior attempts: Retrospective not yet generated\n'
-            + `     Desired outcome: Generate retrospective for ${sdKey} with quality score >= 60%. Include SD-specific learnings, not boilerplate.\n`
+            + '     Prior attempts: Retrospective not yet generated (or existing retro is a handoff-time retro created before LEAD-TO-PLAN)\n'
+            + `     Desired outcome: Generate retrospective for ${sdKey} with quality score >= 60% and retro_type=SD_COMPLETION. Include SD-specific learnings, not boilerplate.\n`
             + '   --- END INVOCATION ---'
         };
       }
