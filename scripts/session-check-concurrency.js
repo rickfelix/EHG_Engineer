@@ -23,8 +23,13 @@
  */
 
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
+// SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR4): use the canonical
+// getActiveSessions helper from session-manager.mjs instead of a local
+// inline query. Both `sd:next` (via its session-manager usage) and this
+// CLI now read from the same SSOT, satisfying the AC4 requirement that
+// both report the same active-session list within 1-second skew.
+import { getActiveSessions } from '../lib/session-manager.mjs';
 
 function getCurrentBranch() {
   try {
@@ -52,14 +57,20 @@ async function main() {
     process.exit(2);
   }
 
-  const supabase = createClient(url, key);
-  const { data, error } = await supabase
-    .from('v_active_sessions')
-    .select('session_id,sd_key,current_branch,heartbeat_age_human,computed_status,hostname')
-    .eq('computed_status', 'active');
-
-  if (error) {
-    console.error('[session:check-concurrency] query failed:', error.message);
+  // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR4): delegate to the SSOT
+  // helper. getActiveSessions reads from v_active_sessions filtered by
+  // computed_status IN ('active','idle'). To preserve this script's prior
+  // behavior (active-only contention detection), we post-filter here —
+  // both scripts still read from the same SSOT query path, which is what
+  // AC4 requires. If a future refactor wants to include idle sessions in
+  // contention detection, flip the filter here.
+  // Errors from the helper bubble up; we catch and map to exit code 2.
+  let data;
+  try {
+    const all = await getActiveSessions();
+    data = (all || []).filter(s => s.computed_status === 'active');
+  } catch (err) {
+    console.error('[session:check-concurrency] query failed:', err.message);
     process.exit(2);
   }
 
