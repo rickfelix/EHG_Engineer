@@ -15,8 +15,7 @@
  */
 
 import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
+import { createBranchFileReader } from '../../../lib/branch-file-reader.js';
 
 const GATE_NAME = 'UI_INTERACTIVITY_CHECK';
 const INTERACTIVE_PATTERNS = ['onClick', 'onSubmit', 'authedFetch', 'onChange', 'onSelect'];
@@ -90,15 +89,21 @@ export function createUiInteractivityCheckGate(supabase) {
           return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No component files changed'] };
         }
 
-        // Check each changed file for interactive patterns
+        // Check each changed file for interactive patterns.
+        // SD-LEO-INFRA-FIX-GATE-FILE-001: read from origin/<branch>, not the shared
+        // working tree (which may be on an unrelated branch in parallel sessions).
+        const reader = createBranchFileReader(EHG_REPO_PATH);
         let interactiveFiles = 0;
         const displayOnlyFiles = [];
 
         for (const file of changedFiles) {
-          const fullPath = path.join(EHG_REPO_PATH, file);
-          if (!fs.existsSync(fullPath)) continue;
-
-          const content = fs.readFileSync(fullPath, 'utf8');
+          let content;
+          try {
+            content = reader.readFile(branchName, file);
+          } catch {
+            // File may have been deleted on branch — skip like the old fs.existsSync path
+            continue;
+          }
           const hasInteractivity = INTERACTIVE_PATTERNS.some(p => content.includes(p));
 
           if (hasInteractivity) {
