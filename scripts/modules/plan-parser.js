@@ -32,9 +32,14 @@ export function extractTitle(content) {
   return null;
 }
 
+/** Maximum characters returned from extractSummary() before paragraph-boundary truncation. */
+export const SUMMARY_CAP = 2000;
+
 /**
  * Extract summary/goal from plan content
- * Matches "## Goal", "## Summary", or "## Executive Summary" sections
+ * Matches "## Goal", "## Summary", or "## Executive Summary" sections.
+ * Returns the full section joined with blank lines, capped at SUMMARY_CAP chars
+ * at a paragraph boundary (never mid-sentence).
  *
  * @param {string} content - Plan file content
  * @returns {string|null} Extracted summary or null
@@ -42,21 +47,36 @@ export function extractTitle(content) {
 export function extractSummary(content) {
   if (!content) return null;
 
-  // Match ## Goal, ## Summary, or ## Executive Summary
-  const sectionPattern = /^##\s+(Goal|Summary|Executive Summary)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|$)/mi;
+  // Anchor-fix: drop the `m` flag so `$` matches end-of-string (not end-of-line).
+  // The original `/^##...$/mi` stopped at the first paragraph break because `$` in
+  // multiline mode matches before every `\n`, breaking multi-paragraph capture.
+  // Use `(?:^|\n)` to keep the start-of-line anchor for the header.
+  const sectionPattern = /(?:^|\n)##\s+(Goal|Summary|Executive Summary)\s*\n+([\s\S]*?)(?=\n##\s|\n#\s|$)/i;
   const match = content.match(sectionPattern);
+  if (!match) return null;
 
-  if (match) {
-    // Clean up the extracted content
-    let summary = match[2].trim();
-    // Remove markdown formatting for cleaner description
-    summary = summary.replace(/\*\*/g, '').replace(/\*/g, '');
-    // Limit to first paragraph or 500 chars
-    const firstPara = summary.split('\n\n')[0];
-    return firstPara.length > 500 ? firstPara.substring(0, 497) + '...' : firstPara;
+  let summary = match[2].trim().replace(/\*\*/g, '').replace(/\*/g, '');
+  if (summary.length <= SUMMARY_CAP) return summary;
+
+  // Over cap — truncate at paragraph boundary, falling back to line boundary, never mid-sentence.
+  const paragraphs = summary.split(/\n\n/);
+  let kept = '';
+  for (const para of paragraphs) {
+    const candidate = kept ? kept + '\n\n' + para : para;
+    if (candidate.length + 3 > SUMMARY_CAP) break; // +3 reserves room for the ... suffix
+    kept = candidate;
   }
+  if (kept) return kept + '\n\n...';
 
-  return null;
+  // Single paragraph that itself exceeds the cap — truncate at last line break below cap.
+  const lines = summary.split(/\n/);
+  let lineKept = '';
+  for (const line of lines) {
+    const candidate = lineKept ? lineKept + '\n' + line : line;
+    if (candidate.length + 3 > SUMMARY_CAP) break;
+    lineKept = candidate;
+  }
+  return (lineKept || summary.slice(0, SUMMARY_CAP - 3)) + '...';
 }
 
 /**
@@ -175,6 +195,49 @@ export function inferSDType(content) {
 
   // Default to feature
   return 'feature';
+}
+
+/** Canonical sd_type values accepted by strategic_directives_v2. `fix` is an alias for `bugfix` (SDKeyGenerator-compatible). */
+export const EXPLICIT_TYPE_ENUM = ['feature', 'bugfix', 'fix', 'infrastructure', 'database', 'security', 'refactor', 'documentation', 'orchestrator'];
+
+/**
+ * Extract an explicit `## Type` header value from plan content.
+ * Returns the lowercase value if it is in EXPLICIT_TYPE_ENUM; else null.
+ * An unknown value emits a stderr warning (so operators see they mis-declared).
+ *
+ * @param {string} content - Plan file content
+ * @returns {string|null} Validated sd_type or null
+ */
+export function extractExplicitType(content) {
+  if (!content) return null;
+  const match = content.match(/^##\s+Type\s*\n+\s*([a-z][a-z_-]*)/mi);
+  if (!match) return null;
+  const value = match[1].toLowerCase().trim();
+  if (EXPLICIT_TYPE_ENUM.includes(value)) return value;
+  // Unknown type in explicit header — warn and fall through.
+  process.stderr.write(`[plan-parser] Unknown explicit \`## Type\` value: "${value}". Falling back to inferSDType(). Valid values: ${EXPLICIT_TYPE_ENUM.join(', ')}\n`);
+  return null;
+}
+
+/** Canonical priority values accepted by strategic_directives_v2. */
+export const EXPLICIT_PRIORITY_ENUM = ['critical', 'high', 'medium', 'low'];
+
+/**
+ * Extract an explicit `## Priority` header value from plan content.
+ * Returns the lowercase value if it is in EXPLICIT_PRIORITY_ENUM; else null.
+ * An unknown value emits a stderr warning.
+ *
+ * @param {string} content - Plan file content
+ * @returns {string|null} Validated priority or null
+ */
+export function extractExplicitPriority(content) {
+  if (!content) return null;
+  const match = content.match(/^##\s+Priority\s*\n+\s*([a-z]+)/mi);
+  if (!match) return null;
+  const value = match[1].toLowerCase().trim();
+  if (EXPLICIT_PRIORITY_ENUM.includes(value)) return value;
+  process.stderr.write(`[plan-parser] Unknown explicit \`## Priority\` value: "${value}". Falling back to null. Valid values: ${EXPLICIT_PRIORITY_ENUM.join(', ')}\n`);
+  return null;
 }
 
 /**
@@ -308,9 +371,14 @@ export function parsePlanFile(content) {
       strategicObjectives: [],
       risks: [],
       type: 'feature',
+      priority: null,
       fullContent: ''
     };
   }
+
+  // Explicit authored intent wins over heuristic inference. Inference is fallback, not override.
+  const explicitType = extractExplicitType(content);
+  const explicitPriority = extractExplicitPriority(content);
 
   return {
     title: extractTitle(content),
@@ -320,7 +388,8 @@ export function parsePlanFile(content) {
     keyChanges: extractKeyChanges(content),
     strategicObjectives: extractStrategicObjectives(content),
     risks: extractRisks(content),
-    type: inferSDType(content),
+    type: explicitType ?? inferSDType(content),
+    priority: explicitPriority,
     fullContent: content
   };
 }
@@ -365,12 +434,17 @@ export function formatStepsAsCriteria(steps, maxSteps = 10) {
 export default {
   extractTitle,
   extractSummary,
+  SUMMARY_CAP,
   extractSteps,
   extractFiles,
   extractKeyChanges,
   extractStrategicObjectives,
   extractRisks,
   inferSDType,
+  extractExplicitType,
+  extractExplicitPriority,
+  EXPLICIT_TYPE_ENUM,
+  EXPLICIT_PRIORITY_ENUM,
   parsePlanFile,
   formatFilesAsScope,
   formatStepsAsCriteria
