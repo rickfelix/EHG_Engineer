@@ -1,0 +1,72 @@
+# SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001 (FR3)
+#
+# Scheduled sweep that finds quick_fixes rows whose PRs are already merged on
+# GitHub but whose DB status was never flipped to 'completed' (e.g. because a
+# session used `gh pr merge` directly instead of `complete-quick-fix.js`).
+#
+# Complements QF-20260423-380 which hides the pre-merge race window;
+# this workflow cleans up the post-merge rot window.
+
+name: Orphan QF Reaper
+
+on:
+  schedule:
+    # Every 15 minutes. Aligned with the loader's 60s PR-state cache — a session
+    # that misses the cache will still see reconciled rows within one sweep.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'If true, log would-reconcile actions without updating DB'
+        required: false
+        default: 'false'
+
+permissions:
+  pull-requests: read
+  contents: read
+
+concurrency:
+  group: orphan-qf-reaper
+  cancel-in-progress: false
+
+jobs:
+  reap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ORPHAN_QF_REAPER_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install minimal deps
+        run: npm ci --omit=dev --prefer-offline --no-audit
+
+      - name: Run reaper
+        id: run
+        run: node scripts/orphan-qf-reaper.mjs 2>&1 | tee reaper.log
+
+      - name: Extract summary for job summary
+        if: always()
+        run: |
+          echo "## Orphan QF Reaper — $(date -u +%Y-%m-%dT%H:%MZ)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          grep '"action":"summary"' reaper.log | tail -1 >> "$GITHUB_STEP_SUMMARY" || echo '{"action":"summary","note":"no summary line emitted"}' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reaper-log-${{ github.run_id }}
+          path: reaper.log
+          retention-days: 7

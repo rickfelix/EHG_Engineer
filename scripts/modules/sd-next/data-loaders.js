@@ -347,6 +347,125 @@ export async function loadOpenQuickFixes(supabase) {
   }
 }
 
+// In-memory PR-state cache for fleet-mode deduplication within a single process run.
+// Keyed by pr_url → { state, statusCheckRollup, fetchedAt }. 60s TTL.
+// SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001 (FR2)
+const PR_STATE_CACHE = new Map();
+const PR_STATE_TTL_MS = 60_000;
+
+function getCachedPrState(prUrl) {
+  const entry = PR_STATE_CACHE.get(prUrl);
+  if (!entry) return null;
+  if (Date.now() - entry.fetchedAt > PR_STATE_TTL_MS) {
+    PR_STATE_CACHE.delete(prUrl);
+    return null;
+  }
+  return entry;
+}
+
+function setCachedPrState(prUrl, state) {
+  PR_STATE_CACHE.set(prUrl, { ...state, fetchedAt: Date.now() });
+}
+
+/**
+ * @internal — exported for unit test visibility only.
+ */
+export function __resetPrStateCacheForTests() {
+  PR_STATE_CACHE.clear();
+}
+
+function parsePrNumberFromUrl(prUrl) {
+  if (!prUrl || typeof prUrl !== 'string') return null;
+  const match = prUrl.match(/\/pull\/(\d+)(?:\D|$)/);
+  return match ? Number(match[1]) : null;
+}
+
+function fetchPrStateViaGh(prNumber, execSyncImpl) {
+  try {
+    const raw = execSyncImpl(`gh pr view ${prNumber} --json state,statusCheckRollup,mergeCommit`, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 10_000,
+    });
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function allChecksGreen(statusCheckRollup) {
+  if (!Array.isArray(statusCheckRollup) || statusCheckRollup.length === 0) return false;
+  return statusCheckRollup.every((c) => c.conclusion === 'SUCCESS');
+}
+
+/**
+ * Load QFs whose PRs are OPEN and CI-green — candidates to emit
+ * AUTO_PROCEED_ACTION:qf_merge instead of qf_start.
+ *
+ * SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001 (FR2)
+ *
+ * Complement to loadOpenQuickFixes: that function hides any row with a
+ * populated pr_url (QF-20260423-380's pre-merge-race filter). This function
+ * reads the same pool but returns ONLY rows with populated pr_url where the
+ * PR is OPEN and all CI checks succeeded.
+ *
+ * Rows whose PRs are MERGED are omitted — the orphan-qf-reaper script
+ * (scripts/orphan-qf-reaper.mjs, FR1) flips their status=completed within
+ * its safety window; they drop out naturally on the next sd:next run.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {Object} [deps] - Injected dependencies for testability
+ * @param {Function} [deps.execSync] - Defaults to child_process.execSync
+ * @returns {Promise<Array>} QF rows with ready_to_merge=true and pr_number resolved
+ */
+export async function loadReadyToMergeQuickFixes(supabase, deps = {}) {
+  try {
+    const { data, error } = await supabase
+      .from('quick_fixes')
+      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha')
+      .in('status', ['open', 'in_progress'])
+      .not('pr_url', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(50);
+
+    if (error) {
+      logQueryFailure('loadReadyToMergeQuickFixes', error, { table: 'quick_fixes' });
+      return [];
+    }
+
+    if (!data || data.length === 0) return [];
+
+    let execSyncImpl = deps.execSync;
+    if (!execSyncImpl) {
+      const mod = await import('node:child_process');
+      execSyncImpl = mod.execSync;
+    }
+
+    const ready = [];
+    for (const qf of data) {
+      const prNumber = parsePrNumberFromUrl(qf.pr_url);
+      if (!prNumber) continue;
+
+      let prState = getCachedPrState(qf.pr_url);
+      if (!prState) {
+        const fetched = fetchPrStateViaGh(prNumber, execSyncImpl);
+        if (!fetched) continue;
+        prState = { state: fetched.state, statusCheckRollup: fetched.statusCheckRollup };
+        setCachedPrState(qf.pr_url, prState);
+      }
+
+      if (prState.state !== 'OPEN') continue;
+      if (!allChecksGreen(prState.statusCheckRollup)) continue;
+
+      ready.push({ ...qf, ready_to_merge: true, pr_number: prNumber });
+    }
+
+    return ready;
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Re-triage open quick fixes to detect tier drift (e.g., QFs that should be escalated to SDs).
  * Uses the existing runTriageGate() with a non-interactive source so no gate prompt is shown.
