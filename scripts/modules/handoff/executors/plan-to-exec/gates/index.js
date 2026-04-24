@@ -32,3 +32,8 @@ export { createTranslationFidelityGate } from './translation-fidelity.js';
 // Bugfix Coverage Preflight — advisory only, shifts EXEC-TO-PLAN discovery left
 // Part of SD-LEARN-FIX-ADDRESS-PAT-EXECTOPLAN-001 (FR-3) addressing PAT-HF-EXECTOPLAN-a14ec7de
 export { createBugfixCoveragePreflightGate } from './bugfix-coverage-preflight.js';
+
+// Cross-SD File-Overlap Temporal Gate (SD-LEO-INFRA-CROSS-FILE-OVERLAP-001 FR-2a)
+// Detects file overlap with SDs shipped within the configured window
+// (default 48h) using PRD target_files as the oracle.
+export { createCrossSdFileOverlapTemporalGate } from './cross-sd-file-overlap-temporal.js';

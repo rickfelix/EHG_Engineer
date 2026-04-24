@@ -1,0 +1,23 @@
+{
+  "_doc": "High-risk file patterns for CROSS_SD_FILE_OVERLAP_TEMPORAL_* gates. SD-LEO-INFRA-CROSS-FILE-OVERLAP-001 (FR-4). Patterns are minimatch globs. An overlap on any of these files = hard FAIL with no acknowledgment path.",
+  "version": 1,
+  "patterns": [
+    "scripts/modules/sd-key-generator.js",
+    "scripts/modules/handoff/**",
+    "scripts/handoff.js",
+    "scripts/sd-start.js",
+    "lib/gates/**",
+    "lib/auth/**",
+    "lib/security/**",
+    "**/auth/**",
+    "**/migrations/**",
+    "database/schema/**",
+    "database/migrations/**",
+    "supabase/migrations/**",
+    "CLAUDE.md",
+    "CLAUDE_CORE.md",
+    "CLAUDE_LEAD.md",
+    "CLAUDE_PLAN.md",
+    "CLAUDE_EXEC.md"
+  ]
+}
