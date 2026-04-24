@@ -37,12 +37,31 @@ describe('EXCLUSION_PATTERNS (FR-1)', () => {
     expect(isExcludedFromWireCheck('tests/unit/handoff/foo.js')).toBe(true);
   });
 
+  // SD-MAN-INFRA-WIRE-CHECK-GATE-001: extend coverage to singular test/ and nested tests/
+  it('matches top-level singular test/ directory (TS-3 canonical extension)', () => {
+    expect(isExcludedFromWireCheck('test/unit/bias-detection.test.js')).toBe(true);
+    expect(isExcludedFromWireCheck('test/eva/experiments/chairman-report.test.js')).toBe(true);
+  });
+
+  it('matches nested tests/ directories below lib/ or scripts/ (TS-5 nested coverage)', () => {
+    expect(isExcludedFromWireCheck('scripts/archive/one-time/tests/test-aegis-adapters.js')).toBe(true);
+    expect(isExcludedFromWireCheck('lib/feature/tests/util.js')).toBe(true);
+  });
+
+  it('matches nested singular test/ directories (TS-6 nested singular)', () => {
+    expect(isExcludedFromWireCheck('scripts/module/test/helper.js')).toBe(true);
+  });
+
   it('does NOT match production files with test-like substrings (TS-7 risk guard)', () => {
     // Production files named like `test-helpers.js` or `.test-fixtures.js` must NOT be excluded —
     // the PRD risk section explicitly forbids this over-match.
     expect(isExcludedFromWireCheck('scripts/x/test-helpers.js')).toBe(false);
     expect(isExcludedFromWireCheck('lib/testing/foo.js')).toBe(false);
     expect(isExcludedFromWireCheck('scripts/mytest.js')).toBe(false);
+    // SD-MAN-INFRA-WIRE-CHECK-GATE-001 guardrails: directory name must be exactly
+    // `test` or `tests` — close substrings must not trigger the extended pattern.
+    expect(isExcludedFromWireCheck('scripts/integration-test-setup.js')).toBe(false);
+    expect(isExcludedFromWireCheck('lib/tester/foo.js')).toBe(false);
   });
 
   it('exports EXCLUSION_PATTERNS as a regex list (per TR-2 declarative requirement)', () => {
