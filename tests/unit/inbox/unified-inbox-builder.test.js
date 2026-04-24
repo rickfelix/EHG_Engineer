@@ -31,11 +31,13 @@ describe('Lifecycle mapping', () => {
     it('maps "new" to NEW', () => expect(mapFeedbackLifecycle('new')).toBe('NEW'));
     it('maps "backlog" to ON_THE_SHELF', () => expect(mapFeedbackLifecycle('backlog')).toBe('ON_THE_SHELF'));
     it('maps "resolved" to COMPLETED', () => expect(mapFeedbackLifecycle('resolved')).toBe('COMPLETED'));
+    it('maps "wont_fix" to COMPLETED', () => expect(mapFeedbackLifecycle('wont_fix')).toBe('COMPLETED'));
     it('defaults unknown to NEW', () => expect(mapFeedbackLifecycle('unknown')).toBe('NEW'));
   });
 
   describe('mapPatternLifecycle', () => {
     it('maps "active" to NEW', () => expect(mapPatternLifecycle('active')).toBe('NEW'));
+    it('maps "assigned" to IN_PROGRESS', () => expect(mapPatternLifecycle('assigned')).toBe('IN_PROGRESS'));
     it('maps "resolved" to COMPLETED', () => expect(mapPatternLifecycle('resolved')).toBe('COMPLETED'));
     it('defaults unknown to NEW', () => expect(mapPatternLifecycle('foo')).toBe('NEW'));
   });
