@@ -185,6 +185,11 @@ export async function addPRDToDatabase(sdId, prdTitle) {
         stakeholderPersonas
       );
       console.log(`\n✅ PRD ${prdId} created with validated LLM content!`);
+      // QF-20260424-805: machine-readable success marker emitted BEFORE the
+      // slow post-insert hooks (component recommendations, sub-agent
+      // orchestration). Callers can grep this marker to detect persistence
+      // success even if the process is later SIGTERMed mid-post-hook.
+      console.log(`>>> PRD_PERSISTED=${prdId}`);
       console.log(`   Progress: ${data.progress}%`);
       console.log(`   Functional Requirements: ${llmContent.functional_requirements?.length || 0}`);
       console.log(`   Test Scenarios: ${llmContent.test_scenarios?.length || 0}`);
@@ -201,6 +206,9 @@ export async function addPRDToDatabase(sdId, prdTitle) {
             supabase, prdId, sdId, sdIdValue, prdTitle, sdData, llmContent, stakeholderPersonas
           );
           console.log(`\n⚠️  PRD ${prdId} created with pre_validation_warning flag`);
+          // QF-20260424-805: same machine-readable marker on the retry success
+          // path so callers don't need to special-case the warn variant.
+          console.log(`>>> PRD_PERSISTED=${prdId}`);
         } catch (retryError) {
           console.error('Retry also failed:', retryError.message);
           process.exit(1);
