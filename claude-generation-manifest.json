@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-04-24T11:38:22.548Z",
-  "git_commit": "3f7b4bc6",
-  "db_snapshot_hash": "025565500b723151",
+  "generated_at": "2026-04-24T15:16:17.498Z",
+  "git_commit": "68598fb1",
+  "db_snapshot_hash": "ae66431a74ab3b32",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 11288,
-      "estimated_tokens": 2822,
-      "content_hash": "bfec2cfd1339086c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE.md"
+      "chars": 11823,
+      "estimated_tokens": 2956,
+      "content_hash": "111a45deaa6ec96b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 69604,
-      "estimated_tokens": 17401,
-      "content_hash": "fc8f427e984f9b87",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_CORE.md"
+      "chars": 69428,
+      "estimated_tokens": 17357,
+      "content_hash": "651f24495d902d83",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 58959,
-      "estimated_tokens": 14740,
-      "content_hash": "a68217fbf36547ca",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_LEAD.md"
+      "chars": 60558,
+      "estimated_tokens": 15140,
+      "content_hash": "93d4d5d3e889b0da",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 87716,
-      "estimated_tokens": 21929,
-      "content_hash": "ba1d1638912b1474",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_PLAN.md"
+      "chars": 87717,
+      "estimated_tokens": 21930,
+      "content_hash": "383cd99dfa5ae35d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 76697,
+      "chars": 76698,
       "estimated_tokens": 19175,
-      "content_hash": "3a44bffb74bb97b4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_EXEC.md"
+      "content_hash": "0e349e6decbe0dcc",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9141,
-      "estimated_tokens": 2286,
-      "content_hash": "75093ac1968e3c8b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_DIGEST.md"
+      "chars": 9170,
+      "estimated_tokens": 2293,
+      "content_hash": "6098387308802901",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 10927,
+      "chars": 10928,
       "estimated_tokens": 2732,
-      "content_hash": "8e7ed090c52c9bf8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "a3b53e550bfa4558",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 4801,
+      "chars": 4802,
       "estimated_tokens": 1201,
-      "content_hash": "99831a4c7b8e652b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "852ec1995c595b07",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 7809,
+      "chars": 7810,
       "estimated_tokens": 1953,
-      "content_hash": "13d56645f5c85c7f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "4fab05f017d3215f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10207,
+      "chars": 10208,
       "estimated_tokens": 2552,
-      "content_hash": "8bcbfbd4946e6314",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "4d295952e5dab4dd",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }
