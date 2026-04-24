@@ -211,6 +211,61 @@ function findClaudeCodePid(entryPath = 'unknown') {
   return null;
 }
 
+/**
+ * QF-20260424-143: Insert-if-not-exists claude_sessions row for this UUID.
+ *
+ * Mirrors session-tick.cjs PostgREST pattern (no supabase-js dep) so cold-start
+ * latency stays negligible. `Prefer: resolution=merge-duplicates` makes POST act
+ * as an upsert on the session_id unique key — safe for resume/compact where the
+ * row may already exist. Heartbeat is refreshed either way.
+ *
+ * Best-effort: any error (no env vars, network failure, timeout) is swallowed.
+ * SessionStart must never be blocked by telemetry — session-tick will retry
+ * once it runs.
+ */
+async function upsertSessionRow(sessionId, ccPid, source) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) return;
+
+  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions`;
+  const now = new Date().toISOString();
+  const pidNum = Number(ccPid);
+  const body = JSON.stringify({
+    session_id: sessionId,
+    status: 'active',
+    heartbeat_at: now,
+    pid: Number.isFinite(pidNum) ? pidNum : null,
+    hostname: require('os').hostname(),
+    metadata: { cc_pid: ccPid, source: source || 'unknown' },
+  });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+      body,
+      signal: controller.signal,
+    });
+    if (!res.ok && process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.error(`SessionStart:capture-session-id: upsert status=${res.status}`);
+    }
+  } catch (err) {
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.error(`SessionStart:capture-session-id: upsert failed: ${err?.message || err}`);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function main() {
   return new Promise((resolve) => {
     let input = '';
@@ -221,7 +276,7 @@ function main() {
       input += chunk;
     });
 
-    process.stdin.on('end', () => {
+    process.stdin.on('end', async () => {
       try {
         const data = JSON.parse(input);
         const sessionId = data.session_id;
@@ -354,6 +409,13 @@ function main() {
         // Machine-readable line for downstream parsing (SD-MAN-INFRA-SESSION-IDENTITY-BIRTH-001)
         console.log(`CLAUDE_SESSION_ID=${sessionId}`);
         console.log(`SessionStart:capture-session-id: ${sessionId}`);
+
+        // ── QF-20260424-143: upsert claude_sessions row for captured UUID ──
+        // session-tick.cjs uses PATCH (update-only); if no row exists, every tick
+        // silently no-ops and the identity chain between env var, markers, and DB
+        // breaks. Insert-if-not-exists here so tick has a target. Uses PostgREST
+        // directly (no supabase-js dep) to match session-tick.cjs pattern.
+        await upsertSessionRow(sessionId, ccPid, data.source);
 
         // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: spawn detached session-tick ──
         // Writes process_alive_at every 30s until the parent CC exits.
