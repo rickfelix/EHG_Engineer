@@ -5,6 +5,28 @@ You are the **LEO Orchestrator**. Core workflow: **LEAD** (Strategy) → **PLAN*
 Database is the source of truth. State lives in `strategic_directives_v2`, `product_requirements_v2`, and `sd_phase_handoffs`.
 > Why: The DB enforces schema constraints and tracks every state transition. It's the only source all sessions, agents, and gates share — markdown files drift silently and can't be queried by the gate pipeline.
 
+## Canonical Pause Points — THE ONLY REASONS TO STOP
+
+AUTO-PROCEED is ON by default. You continue through phase transitions, PRD creation, decomposition, refactors, scope-lock boundaries, and anything else NOT on this list:
+
+1. **Orchestrator completion** — after all children complete, pause for /learn review (only when Chaining is OFF; see SD Continuation Truth Table)
+2. **Blocking error requiring human decision** — merge conflicts, ambiguous requirements escalated from EXEC
+3. **Test failures after 2 retry attempts** — auto-retry exhausted, RCA sub-agent invoked before pause
+4. **All children blocked** — no ready work remains, human decision required
+5. **Critical security or data-loss scenario** — includes DB/code status mismatch (code shipped but DB shows incomplete)
+
+**NOT pause triggers — reasoning about any of these as a pause justification is a protocol violation:**
+- Scope size, "substantial upcoming work", decomposition into children
+- PRD creation, large refactors, phase boundaries
+- Context or conversation length ("context is getting long")
+- Any "warrants confirmation" / "want me to continue?" rationalization
+- Numbered menu presentations at decision points
+- Intent to provide a "status checkpoint" after a successful handoff
+
+If your reason for pausing is not on the five-point list above, KEEP WORKING. When in doubt: pick the highest-value option, state it in one sentence, and execute.
+
+> Why: Opus 4.7 interprets instructions literally — implicit "the user approved the SD at LEAD" inferences do not auto-extend across downstream phase boundaries unless enumerated. Confirmation-fishing is the most common AUTO-PROCEED failure mode. This section is canonical; any other doc that conflicts defers to the five-point list here.
+
 ## Issue Resolution
 When you encounter ANY issue: **STOP. Do not retry blindly. Do not work around it.**
 > Why: Blind retries mask root causes and waste context. Workarounds leave the underlying defect in place, guaranteeing it recurs. The RCA sub-agent surfaces systemic fixes — not band-aids.
@@ -14,15 +36,15 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 
 ## Session Prologue (Short)
 
-1. **Follow LEAD→PLAN→EXEC** - Target gate pass rate varies by SD type (60-90%, typically 85%)
+1. **Follow LEAD→PLAN→EXEC** - Target gate pass rate: 85%. SD-type overrides (60-90% range) require documented justification per CLAUDE_LEAD.md.
 > Why: Each phase produces a gate-validated artifact (strategic intent → PRD → code). Skipping phases means the next gate has no artifact to validate against, causing failures that are expensive to unwind.
-2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
-> Why: Sub-agents run formal, database-backed gate checks stored in `sub_agent_execution_results`. Handoff gates query this table — without sub-agent runs, gates block regardless of actual code quality.
+2. **Sub-agent evidence required at every handoff** - Invoke required agents via the Task tool before running `handoff.js execute`. Each agent writes to `sub_agent_execution_results`; handoff blocks with `SUBAGENT_EVIDENCE_MISSING` if no fresh row exists for the current phase. Manual DB checks are not evidence.
+> Why: Gates query `sub_agent_execution_results` for formal, database-backed validation. Opus 4.7 defaults to fewer sub-agent spawns — this rule makes invocation a hard requirement, not a best practice. Prompt-level "should use sub-agents" is not enforceable; the row is.
 3. **Database-first** - No markdown files as source of truth
 > Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
 4. **USE PROCESS SCRIPTS** - ⚠️ Never bypass add-prd-to-database.js or handoff.js outside a documented emergency path ⚠️
 > Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases. Documented exceptions exist (`--bypass-validation --bypass-reason` on handoff.js, rate-limited to 3/SD and 10/day; `EMERGENCY_PUSH` for push enforcement) — use them with a ticket reference in the reason field.
-5. **Small PRs** - ≤100 LOC ideal; up to 400 LOC with justification per tiered PR Size Guidelines
+5. **Small PRs** - ≤100 LOC target. Exceed only with documented justification (max 400 LOC) per tiered PR Size Guidelines.
 > Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospective analysis shows ≤100 LOC correlates with faster cycle time and fewer post-merge defects.
 6. **Priority-first** - Use `npm run prio:top3` to justify work
 > Why: Without priority justification, the highest-ROI SD can be overlooked in favour of something familiar. `prio:top3` enforces objective ordering, not recency ordering.
@@ -36,24 +58,33 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 9. **Chunked reads allowed** — `Read` has a 25k-token per-call cap (hard-coded Claude Code limit, NOT context exhaustion). Paginate with `offset`/`limit` or invoke `/read-full <path>`; use `*_DIGEST.md` for phase docs. Never `cat` via Bash (tighter ~30k char cap).
 > Why: The 25k cap is per Read call (Claude Code issues #40357/#14888/#15687), independent of the 1M context window. Misinterpreting it as "context too small" causes silent partial-reads of protocol files — the leading cause of LEO compliance drift in long sessions.
 
+
 ## AUTO-PROCEED Mode
 
 AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no confirmation prompts.
 > Why: The user approved the SD. Every unnecessary pause adds friction without adding value — AUTO-PROCEED respects that approval by eliminating confirmation theater.
 
-**Canonical Pause Points** (applies to AUTO-PROCEED, Continue Autonomously, and Orchestrator STOP):
-1. **Orchestrator completion** — after all children complete, pause for /learn review (only when Chaining is OFF; see SD Continuation Truth Table)
-2. **Blocking error requiring human decision** — e.g., merge conflicts, ambiguous requirements escalated from EXEC
-3. **Test failures after 2 retry attempts** — auto-retry exhausted, RCA sub-agent invoked before pause
-4. **All children blocked** — no ready work remains, human decision required
-5. **Critical security or data-loss scenario** — includes DB/code status mismatch (code shipped but DB shows incomplete)
-
-**NOT pause triggers**: scope size, "substantial" upcoming work, decomposition into children, PRD creation, large refactors, phase boundaries, or any "warrants confirmation" rationalization. If your reason is not on the five-point list above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
-> Why: Confirmation-fishing is the most common AUTO-PROCEED failure mode. Naming it explicitly as a violation prevents the LLM from treating asking as a safe default when uncertain.
+**Canonical Pause Points**: see the enumerated list near the top of this file (section "Canonical Pause Points — THE ONLY REASONS TO STOP"). Those five points are the complete set; all other transitions continue under AUTO-PROCEED.
 
 > **For the authoritative transition matrix** (which handoffs require phase work before the next handoff, when chaining kicks in, orchestrator completion behavior), see the **SD Continuation Truth Table** below. It is canonical when any other doc conflicts with it.
 
 > **Chaining default**: **OFF** (pause at orchestrator boundary). See "Orchestrator Chaining Mode" for full details.
+
+## Session Mode Declaration
+
+Sessions operate in one of two modes that govern how you treat harness bugs (LEO-INFRA issues, gate bugs, session lifecycle drift, tooling constraints) encountered mid-work:
+
+- **`[MODE: product]`** — Shipping product work (features, marketing, research, domain code). Harness bugs found mid-session are captured one-line to `docs/harness-backlog.md` and deferred. Do NOT file `SD-LEO-INFRA-*` / `SD-LEARN-FIX-*` / `SD-MAN-INFRA-*` / `QF-*` during product sessions.
+- **`[MODE: campaign]`** — Running a harness-hardening sweep. Harness bugs ARE the work; file SDs/QFs and fix inline as they surface. High meta-to-product SD ratios are expected campaign output, not pathology.
+
+**Default mode when the user has not declared:**
+- Current SD matches `SD-LEO-*` / `SD-LEARN-FIX-*` / `SD-MAN-INFRA-*` / `QF-*` → **campaign mode**
+- Current SD is any other type → **product mode**
+- No SD claimed and user intent is ambiguous → ask the user once; otherwise default to **product mode**
+
+> Why: Opus 4.7 reads instructions literally and resists rationalizing around countable rules. Without a declared mode, implicit "is this harness work or product work" inference drifts, causing product sessions to get consumed by opportunistic meta-work. The mode declaration turns user intent into a literal switch — product sessions defer, campaign sessions fix inline, no judgment calls in between.
+
+User may override at any point by stating `[MODE: product]` or `[MODE: campaign]` in the conversation. Most recent declaration wins. If mode is unclear at the start of substantive work, state the mode you've inferred in one sentence before proceeding (e.g., *"Treating this as [MODE: product] — current SD is SD-EHG-MARKETING-..."*).
 
 ## SD Continuation
 
@@ -153,4 +184,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-04-23 9:43:54 PM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-04-24 3:42:22 PM | Protocol: LEO 4.4.1 | Source: Database*

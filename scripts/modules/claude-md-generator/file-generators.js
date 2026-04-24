@@ -77,6 +77,28 @@ You are the **LEO Orchestrator**. Core workflow: **LEAD** (Strategy) → **PLAN*
 Database is the source of truth. State lives in \`strategic_directives_v2\`, \`product_requirements_v2\`, and \`sd_phase_handoffs\`.
 > Why: The DB enforces schema constraints and tracks every state transition. It's the only source all sessions, agents, and gates share — markdown files drift silently and can't be queried by the gate pipeline.
 
+## Canonical Pause Points — THE ONLY REASONS TO STOP
+
+AUTO-PROCEED is ON by default. You continue through phase transitions, PRD creation, decomposition, refactors, scope-lock boundaries, and anything else NOT on this list:
+
+1. **Orchestrator completion** — after all children complete, pause for /learn review (only when Chaining is OFF; see SD Continuation Truth Table)
+2. **Blocking error requiring human decision** — merge conflicts, ambiguous requirements escalated from EXEC
+3. **Test failures after 2 retry attempts** — auto-retry exhausted, RCA sub-agent invoked before pause
+4. **All children blocked** — no ready work remains, human decision required
+5. **Critical security or data-loss scenario** — includes DB/code status mismatch (code shipped but DB shows incomplete)
+
+**NOT pause triggers — reasoning about any of these as a pause justification is a protocol violation:**
+- Scope size, "substantial upcoming work", decomposition into children
+- PRD creation, large refactors, phase boundaries
+- Context or conversation length ("context is getting long")
+- Any "warrants confirmation" / "want me to continue?" rationalization
+- Numbered menu presentations at decision points
+- Intent to provide a "status checkpoint" after a successful handoff
+
+If your reason for pausing is not on the five-point list above, KEEP WORKING. When in doubt: pick the highest-value option, state it in one sentence, and execute.
+
+> Why: Opus 4.7 interprets instructions literally — implicit "the user approved the SD at LEAD" inferences do not auto-extend across downstream phase boundaries unless enumerated. Confirmation-fishing is the most common AUTO-PROCEED failure mode. This section is canonical; any other doc that conflicts defers to the five-point list here.
+
 ## Issue Resolution
 When you encounter ANY issue: **STOP. Do not retry blindly. Do not work around it.**
 > Why: Blind retries mask root causes and waste context. Workarounds leave the underlying defect in place, guaranteeing it recurs. The RCA sub-agent surfaces systemic fixes — not band-aids.
@@ -87,6 +109,22 @@ Invoke the RCA Sub-Agent (\`subagent_type="rca-agent"\`). Your prompt MUST conta
 ${sessionPrologue ? formatSection(sessionPrologue) : ''}
 
 ${autoProceedRouter ? autoProceedRouter.content : ''}
+
+## Session Mode Declaration
+
+Sessions operate in one of two modes that govern how you treat harness bugs (LEO-INFRA issues, gate bugs, session lifecycle drift, tooling constraints) encountered mid-work:
+
+- **\`[MODE: product]\`** — Shipping product work (features, marketing, research, domain code). Harness bugs found mid-session are captured one-line to \`docs/harness-backlog.md\` and deferred. Do NOT file \`SD-LEO-INFRA-*\` / \`SD-LEARN-FIX-*\` / \`SD-MAN-INFRA-*\` / \`QF-*\` during product sessions.
+- **\`[MODE: campaign]\`** — Running a harness-hardening sweep. Harness bugs ARE the work; file SDs/QFs and fix inline as they surface. High meta-to-product SD ratios are expected campaign output, not pathology.
+
+**Default mode when the user has not declared:**
+- Current SD matches \`SD-LEO-*\` / \`SD-LEARN-FIX-*\` / \`SD-MAN-INFRA-*\` / \`QF-*\` → **campaign mode**
+- Current SD is any other type → **product mode**
+- No SD claimed and user intent is ambiguous → ask the user once; otherwise default to **product mode**
+
+> Why: Opus 4.7 reads instructions literally and resists rationalizing around countable rules. Without a declared mode, implicit "is this harness work or product work" inference drifts, causing product sessions to get consumed by opportunistic meta-work. The mode declaration turns user intent into a literal switch — product sessions defer, campaign sessions fix inline, no judgment calls in between.
+
+User may override at any point by stating \`[MODE: product]\` or \`[MODE: campaign]\` in the conversation. Most recent declaration wins. If mode is unclear at the start of substantive work, state the mode you've inferred in one sentence before proceeding (e.g., *"Treating this as [MODE: product] — current SD is SD-EHG-MARKETING-..."*).
 
 ## SD Continuation
 
@@ -169,6 +207,7 @@ function generateCore(data, fileMapping) {
 **Generated**: ${today} ${time}
 **Protocol**: LEO ${protocol.version}
 **Purpose**: Essential workflow context for all sessions
+**Effort**: medium (core context; phase-specific files tag their own effort for phase work)
 
 > Sub-agent routing enforced by PreToolUse hook. See \`scripts/hooks/pre-tool-enforce.cjs\`.
 > For Five-Point Brief (sub-agent prompt quality), see CLAUDE.md Issue Resolution section.
@@ -244,6 +283,7 @@ function generateLead(data, fileMapping) {
 **Generated**: ${today} ${time}
 **Protocol**: LEO ${protocol.version}
 **Purpose**: LEAD agent operations and strategic validation
+**Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.
@@ -289,6 +329,7 @@ function generatePlan(data, fileMapping) {
 **Generated**: ${today} ${time}
 **Protocol**: LEO ${protocol.version}
 **Purpose**: PLAN agent operations, PRD creation, validation gates
+**Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.
@@ -354,6 +395,7 @@ function generateExec(data, fileMapping) {
 **Generated**: ${today} ${time}
 **Protocol**: LEO ${protocol.version}
 **Purpose**: EXEC agent implementation requirements and testing
+**Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.7 guidance)
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.

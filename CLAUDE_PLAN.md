@@ -3,6 +3,7 @@
 **Generated**: 2026-04-23 9:43:55 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
+**Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.
@@ -63,7 +64,7 @@ When a vision document is updated during PLAN phase (e.g., via brainstorm refine
 
 ### When to Use Plan Agents
 
-Before creating a PRD, consider launching multiple `Plan` agents to explore different approaches:
+Before creating a PRD, launch `Plan` agents to explore different approaches when the criteria below apply. Skip only for trivial bug fixes, typo changes, or single-approach tasks where the design is unambiguous:
 
 **Use Plan agents when**:
 - Multiple valid architectures exist

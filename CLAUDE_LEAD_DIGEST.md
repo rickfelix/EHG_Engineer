@@ -8,6 +8,7 @@
 
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD approval gates and constraints (<5k chars)
+**Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
 
 ---
 
