@@ -10,30 +10,61 @@ const gitExec = (cmd, opts = {}) =>
 
 /**
  * Check if a worktree has commits that have not been pushed to the remote.
- * SD-MAN-INFRA-WORKTREE-CODE-LOSS-001 (FR-1)
+ * SD-MAN-INFRA-WORKTREE-CODE-LOSS-001 (FR-1).
+ *
+ * QF-20260424-803: After `gh pr merge --delete-branch`, the local branch is
+ * gone, so a naive `git log origin/main..HEAD` either returns the now-orphaned
+ * commits (false unpushed) or throws (silently fell back to "treat as safe").
+ * Filter the listed commits through `git cherry` (patch-id match — handles
+ * squash merges) with a per-commit `merge-base --is-ancestor` fallback so a
+ * shipped commit is correctly recognized as not-unpushed.
  */
 function hasUnpushedCommits(wtPath) {
+  const opts = { cwd: wtPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] };
+  let commits = [];
   try {
-    const log = execSync('git log origin/main..HEAD --oneline', {
-      cwd: wtPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore']
-    }).trim();
-    if (!log) return { unpushed: false, commits: [] };
-    const commits = log.split('\n').filter(Boolean);
-    return { unpushed: true, commits };
+    const log = execSync('git log origin/main..HEAD --oneline', opts).trim();
+    if (log) commits = log.split('\n').filter(Boolean);
   } catch {
-    // If origin/main doesn't exist or git fails, try @{upstream}
     try {
-      const log = execSync('git log @{upstream}..HEAD --oneline', {
-        cwd: wtPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore']
-      }).trim();
-      if (!log) return { unpushed: false, commits: [] };
-      const commits = log.split('\n').filter(Boolean);
-      return { unpushed: true, commits };
+      const log = execSync('git log @{upstream}..HEAD --oneline', opts).trim();
+      if (log) commits = log.split('\n').filter(Boolean);
     } catch {
-      // Cannot determine remote state — treat as safe (unpushed)
-      return { unpushed: true, commits: ['(unable to determine remote state)'] };
+      // Cannot resolve any upstream from this worktree (branch deleted, etc.).
+      // If origin/main is reachable at all, treat as clean — there is nothing
+      // to compare to. Otherwise fail safe.
+      try {
+        execSync('git rev-parse --verify --quiet origin/main', opts);
+        return { unpushed: false, commits: [] };
+      } catch {
+        return { unpushed: true, commits: ['(unable to determine remote state)'] };
+      }
     }
   }
+  if (commits.length === 0) return { unpushed: false, commits: [] };
+
+  // QF-20260424-803: filter out commits already on origin/main (by patch-id
+  // for squash-merge cases, then by ancestor as a belt-and-suspenders check).
+  try {
+    const cherry = execSync('git cherry origin/main HEAD', opts).trim();
+    if (cherry) {
+      const truly = cherry.split('\n').filter(l => l.startsWith('+ ')).map(l => l.slice(2).trim()).filter(Boolean);
+      if (truly.length === 0) return { unpushed: false, commits: [] };
+      return { unpushed: true, commits: truly };
+    }
+  } catch { /* fall through to per-commit ancestor check */ }
+
+  const truly = commits.filter(line => {
+    const sha = line.split(/\s+/)[0];
+    try {
+      execSync(`git merge-base --is-ancestor ${sha} origin/main`, opts);
+      return false; // ancestor of origin/main -> already shipped
+    } catch {
+      return true; // genuinely not on origin/main
+    }
+  });
+  if (truly.length === 0) return { unpushed: false, commits: [] };
+  return { unpushed: true, commits: truly };
 }
 
 /**
