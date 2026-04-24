@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'path';
-import { getRepoPaths, resolveRepoPath, resolveGitHubRepo, isVentureRepo, clearCache, ENGINEER_ROOT } from '../../lib/repo-paths.js';
+import { getRepoPaths, resolveRepoPath, resolveGitHubRepo, isVentureRepo, clearCache, getRepoRoot, isInsideWorktree, ENGINEER_ROOT } from '../../lib/repo-paths.js';
 
 describe('lib/repo-paths', () => {
   beforeEach(() => {
@@ -122,6 +122,77 @@ describe('lib/repo-paths', () => {
       const mod = await import('../../lib/repo-paths.js');
       expect(mod.default.FALLBACK_REPOS).toHaveProperty('EHG_Engineer');
       expect(mod.default.FALLBACK_REPOS).toHaveProperty('ehg');
+    });
+  });
+
+  // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5)
+  describe('getRepoRoot()', () => {
+    it('returns ENGINEER_ROOT', () => {
+      expect(getRepoRoot()).toBe(ENGINEER_ROOT);
+    });
+
+    it('is invariant regardless of options', () => {
+      expect(getRepoRoot({})).toBe(ENGINEER_ROOT);
+      expect(getRepoRoot({ cwd: '/totally/elsewhere' })).toBe(ENGINEER_ROOT);
+    });
+
+    it('returns an absolute path', () => {
+      expect(path.isAbsolute(getRepoRoot())).toBe(true);
+    });
+
+    it('is exported from the default module export', async () => {
+      const mod = await import('../../lib/repo-paths.js');
+      expect(typeof mod.default.getRepoRoot).toBe('function');
+      expect(mod.default.getRepoRoot()).toBe(ENGINEER_ROOT);
+    });
+  });
+
+  // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5 enhancement B)
+  describe('isInsideWorktree()', () => {
+    it('returns inside=false for the main repo root', () => {
+      const result = isInsideWorktree(ENGINEER_ROOT);
+      expect(result.inside).toBe(false);
+      expect(result.repoRoot).toBe(ENGINEER_ROOT);
+      expect(result.worktreesDir).toBe(path.resolve(ENGINEER_ROOT, '.worktrees'));
+    });
+
+    it('returns inside=true for the worktrees directory itself', () => {
+      const worktreesDir = path.resolve(ENGINEER_ROOT, '.worktrees');
+      expect(isInsideWorktree(worktreesDir).inside).toBe(true);
+    });
+
+    it('returns inside=true for a specific worktree subdirectory', () => {
+      const nested = path.resolve(ENGINEER_ROOT, '.worktrees', 'SD-EXAMPLE-001');
+      expect(isInsideWorktree(nested).inside).toBe(true);
+    });
+
+    it('returns inside=true for a deep worktree subdirectory', () => {
+      const deep = path.resolve(ENGINEER_ROOT, '.worktrees', 'SD-EXAMPLE-001', 'lib', 'deep');
+      expect(isInsideWorktree(deep).inside).toBe(true);
+    });
+
+    it('returns inside=false for a sibling directory that starts with the worktrees name', () => {
+      // Defend against naive startsWith: ENGINEER_ROOT/.worktrees-backup should NOT match
+      const sibling = path.resolve(ENGINEER_ROOT, '.worktrees-backup');
+      expect(isInsideWorktree(sibling).inside).toBe(false);
+    });
+
+    it('returns inside=false for an unrelated path', () => {
+      expect(isInsideWorktree('/tmp').inside).toBe(false);
+      expect(isInsideWorktree(path.resolve(ENGINEER_ROOT, '..', 'ehg')).inside).toBe(false);
+    });
+
+    it('defaults cwd to process.cwd()', () => {
+      // Just assert it runs without throwing and returns a well-formed object
+      const result = isInsideWorktree();
+      expect(result).toHaveProperty('inside');
+      expect(typeof result.inside).toBe('boolean');
+      expect(result).toHaveProperty('repoRoot', ENGINEER_ROOT);
+    });
+
+    it('is exported from the default module export', async () => {
+      const mod = await import('../../lib/repo-paths.js');
+      expect(typeof mod.default.isInsideWorktree).toBe('function');
     });
   });
 });
