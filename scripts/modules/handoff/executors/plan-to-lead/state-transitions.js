@@ -457,13 +457,24 @@ export async function completeStandardSD(supabase, sdId, prd, planValidation, ga
       .select('id')
       .single();
 
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126 (PAT-HF-LEADFINALAPPROVAL-d94c34d8):
+    // Previously non-blocking: DB errors or silent empty-result were logged as warnings and
+    // the handoff continued. Downstream LEAD-FINAL-APPROVAL then failed with a confusing
+    // "SD status must be pending_approval" error instead of the real cause (3 recorded
+    // occurrences). Surface failures loudly so triage is possible.
     if (sdError) {
-      console.log(`   ⚠️  SD update note: ${sdError.message}`);
-    } else if (!sdUpdateResult) {
-      console.log('   ⚠️  SD update returned no data - possible silent failure');
-    } else {
-      console.log('   ✅ SD status transitioned: → pending_approval');
+      throw new Error(
+        `PLAN-TO-LEAD: SD status UPDATE to pending_approval failed for ${sdCanonicalId}: ${sdError.message}. ` +
+        `Root cause surfaces here — do not retry LEAD-FINAL-APPROVAL until this is resolved.`
+      );
     }
+    if (!sdUpdateResult) {
+      throw new Error(
+        `PLAN-TO-LEAD: SD status UPDATE returned no data for ${sdCanonicalId} (silent failure — row not matched). ` +
+        `Verify the SD id is canonical and the record exists. Do not retry LEAD-FINAL-APPROVAL until this is resolved.`
+      );
+    }
+    console.log('   ✅ SD status transitioned: → pending_approval');
   }
 
   console.log('📋 PLAN verification complete and handed to LEAD for approval');
