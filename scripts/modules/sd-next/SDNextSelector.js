@@ -15,7 +15,6 @@ import { checkDependencyStatus } from '../../child-sd-preflight.js';
 import { VentureContextManager } from '../../../lib/eva/venture-context-manager.js';
 import { normalizeVenturePrefix } from '../sd-key-generator.js';
 
-import { scoreToBand, bandToNumeric } from '../auto-proceed/urgency-scorer.js';
 import { colors } from './colors.js';
 
 /** Maximum time (ms) allowed for the displayTracks loop before preemption */
@@ -42,7 +41,8 @@ function computeOKRScore(alignments, krMap) {
   }
   return Math.min(total, 90); // Cap at 90
 }
-import { checkDependenciesResolved, scanMetadataForMisplacedDependencies } from './dependency-resolver.js';
+import { checkDependenciesResolved } from './dependency-resolver.js';
+import { rankItems } from './rank-items.js';
 import { detectLocalSignals } from './local-signals.js';
 import {
   loadActiveBaseline,
@@ -606,7 +606,7 @@ export class SDNextSelector {
   }
 
   async displayTracks() {
-    const tracks = { A: [], B: [], C: [], STANDALONE: [] };
+    // `tracks` is populated later by rankItems() (SD-LEO-INFRA-UNIFY-QUICK-FIX-001).
 
     // SINGLE SOURCE OF TRUTH: Query all active SDs directly from strategic_directives_v2
     // This ensures SDs appear even if baseline sync trigger failed (SD-LEO-INFRA-QUEUE-SIMPLIFY-001)
@@ -743,62 +743,20 @@ export class SDNextSelector {
       baselineMap.set(item.sd_id, item);
     }
 
-    // Track SDs with misplaced dependency info in metadata
-    const misplacedDeps = [];
-
-    // Process each SD (uses filtered list when venture context is active)
+    // Pre-enrich filtered SDs with async dependency fields (rankItems is pure;
+    // async DB calls stay out of it). Preemption loop guard remains here.
     const displayStartTime = Date.now();
     let preempted = false;
+    const enrichedSDs = [];
     for (const sd of filteredSDs) {
-      // Preemption check: abort if display loop exceeds timeout
       if (Date.now() - displayStartTime > MAX_DISPLAY_DURATION_MS) {
-        console.log(`${colors.yellow}⚠️  Display preempted after ${MAX_DISPLAY_DURATION_MS / 1000}s — showing ${Object.values(tracks).flat().length} of ${filteredSDs.length} SDs${colors.reset}`);
+        console.log(`${colors.yellow}⚠️  Display preempted after ${MAX_DISPLAY_DURATION_MS / 1000}s — enriched ${enrichedSDs.length} of ${filteredSDs.length} SDs${colors.reset}`);
         preempted = true;
         break;
       }
       if (sd.status === 'completed' || sd.status === 'cancelled') continue;
 
-      // Governance: skip deferred SDs from recommendation pipeline (keep in display with badge)
-      const isDeferred = sd.metadata?.do_not_advance_without_trigger === true;
-
-      // QA: Check for dependency info in metadata with empty dependencies column
-      const depsEmpty = !sd.dependencies || (Array.isArray(sd.dependencies) && sd.dependencies.length === 0);
-      if (depsEmpty && sd.metadata) {
-        const scan = scanMetadataForMisplacedDependencies(sd.metadata);
-        if (scan.hasMisplacedDeps) {
-          misplacedDeps.push({ sd_key: sd.sd_key || sd.id, findings: scan.findings });
-        }
-      }
-
-      // Look up baseline item by sd_key or id
-      const baselineItem = baselineMap.get(sd.sd_key) || baselineMap.get(sd.id);
-
-      // Derive track: baseline > metadata > category > STANDALONE
-      let trackKey;
-      if (baselineItem?.track) {
-        trackKey = baselineItem.track;
-      } else if (sd.metadata?.execution_track) {
-        const track = sd.metadata.execution_track;
-        trackKey = track === 'Infrastructure' || track === 'Safety' ? 'A' :
-                   track === 'Feature' ? 'B' :
-                   track === 'Quality' ? 'C' : 'STANDALONE';
-      } else if (sd.category) {
-        const cat = sd.category.toLowerCase();
-        trackKey = cat === 'infrastructure' || cat === 'platform' ? 'A' :
-                   cat === 'quality' || cat === 'testing' || cat === 'qa' ? 'C' : 'B';
-      } else {
-        trackKey = 'STANDALONE';
-      }
-
-      // Log warning if SD not in baseline (helps detect sync failures)
-      if (!baselineItem && sd.status !== 'draft') {
-        console.log(`${colors.yellow}⚠️  SD ${sd.sd_key || sd.id} not in baseline - using category-based track${colors.reset}`);
-      }
-
-      if (!tracks[trackKey]) trackKey = 'STANDALONE';
-
       const depsResolved = await checkDependenciesResolved(this.supabase, sd.dependencies);
-
       let childDepStatus = null;
       if (sd.parent_sd_id) {
         try {
@@ -808,65 +766,26 @@ export class SDNextSelector {
         }
       }
 
-      // SD-MAN-INFRA-PRIORITY-QUEUE-ROUTING-001: Vision-score-weighted priority
-      // gap_weight = (100 - vision_score) / 100; composite_rank = sequence_rank / (1 + gap_weight)
-      const sequenceRank = baselineItem?.sequence_rank || 9999;
-      const hasVisionOrigin = !!sd.vision_origin_score_id;
-      const visionScoreVal = sd.vision_score ?? null;
-      const gapWeight = (hasVisionOrigin && visionScoreVal !== null)
-        ? (100 - Math.max(0, Math.min(100, visionScoreVal))) / 100
-        : 0;
-      let compositeRank = gapWeight > 0 ? sequenceRank / (1 + gapWeight) : sequenceRank;
-
-      // SD-LEO-INFRA-OKR-PIPELINE-AUTOMATION-001: OKR impact scoring
-      // Higher OKR score = more strategic alignment = lower rank (higher priority)
-      const okrScore = okrScoreMap.get(sd.id) || 0;
-      const okrBoost = okrBoostMap.get(sd.id) || 1.0;
-      // Blend: subtract OKR-proportional amount from rank (max 90 * 0.30 = 27 rank points)
-      compositeRank = (compositeRank * okrBoost) - (okrScore * okrBlendWeight);
-
-      // SD-LEO-INFRA-EHG-PORTFOLIO-ALLOCATION-001: Glide path policy boost
-      // Venture-scoped SDs get a multiplier based on their growth_strategy alignment
-      // with the active policy weights. Infrastructure SDs are policy-neutral (1.0x).
-      const policyBoost = policyBoostMap.get(sd.venture_id) ?? 1.0;
-      if (policyBoost !== 1.0) {
-        compositeRank = compositeRank * policyBoost;
-      }
-
-      // SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-A: Extract urgency from metadata
-      const urgencyScore = sd.metadata?.urgency_score ?? null;
-      const urgencyBand = sd.metadata?.urgency_band ?? (urgencyScore !== null ? scoreToBand(urgencyScore) : 'P3');
-      const urgencyNumeric = bandToNumeric(urgencyBand);
-
-      tracks[trackKey].push({
-        ...(baselineItem || {}),
-        ...sd,
-        sd_id: sd.sd_key || sd.id,
-        sequence_rank: sequenceRank,
-        gap_weight: gapWeight,
-        composite_rank: compositeRank,
-        okr_boost: okrBoost < 1.0 ? okrBoost : null,
-        okr_score: okrScore > 0 ? okrScore : null, // OKR impact score (0-90)
-        policy_boost: policyBoost !== 1.0 ? policyBoost : null, // Glide path weight
-        urgency_score: urgencyScore,
-        urgency_band: urgencyBand,
-        urgency_numeric: urgencyNumeric,
-        deps_resolved: depsResolved,
-        is_deferred: isDeferred,
-        childDepStatus,
-        actual: this.actuals[sd.sd_key] || this.actuals[sd.id]
-      });
+      enrichedSDs.push({ ...sd, deps_resolved: depsResolved, childDepStatus });
     }
 
-    // Sort each track: urgency band (P0 first) → urgency score (desc) → composite_rank fallback
-    for (const trackKey of Object.keys(tracks)) {
-      tracks[trackKey].sort((a, b) => {
-        const bandDiff = (a.urgency_numeric ?? 3) - (b.urgency_numeric ?? 3);
-        if (bandDiff !== 0) return bandDiff;
-        const scoreDiff = (b.urgency_score ?? 0) - (a.urgency_score ?? 0);
-        if (scoreDiff !== 0) return scoreDiff;
-        return (a.composite_rank ?? a.sequence_rank ?? 9999) - (b.composite_rank ?? b.sequence_rank ?? 9999);
-      });
+    // Pure ranking (SD-LEO-INFRA-UNIFY-QUICK-FIX-001): single source of truth for
+    // urgency bands + vision gap weight + OKR blend + policy boost + track grouping.
+    const rankResult = rankItems(enrichedSDs, {
+      baselineItemsMap: baselineMap,
+      okrScoreMap,
+      okrBoostMap,
+      okrBlendWeight,
+      policyBoostMap,
+      actuals: this.actuals,
+    });
+
+    const tracks = rankResult.tracks;
+    const misplacedDeps = rankResult.misplacedDeps;
+
+    // Emit orphan-baseline warnings (previously inline per SD)
+    for (const orphan of rankResult.orphanBaseline) {
+      console.log(`${colors.yellow}⚠️  SD ${orphan.sd_key} not in baseline - using category-based track${colors.reset}`);
     }
 
     // SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Annotate stuck SDs
