@@ -33,6 +33,9 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 8. **Parallel-session safety** - In shared-working-tree sessions, run `npm run session:check-concurrency` before Write/Edit work; if contention is detected, isolate with `npm run session:worktree`
 > Why: Parallel Claude Code sessions sharing one working tree cause tool-result "internal error" messages when one session's `git checkout` mutates files mid-PostToolUse-hook in another session. The SessionStart auto-worktree hook (`scripts/hooks/concurrent-session-worktree.cjs`) catches some cases but is point-in-time; the CLI gives any session an explicit isolation check.
 
+9. **Chunked reads allowed** — `Read` has a 25k-token per-call cap (hard-coded Claude Code limit, NOT context exhaustion). Paginate with `offset`/`limit` or invoke `/read-full <path>`; use `*_DIGEST.md` for phase docs. Never `cat` via Bash (tighter ~30k char cap).
+> Why: The 25k cap is per Read call (Claude Code issues #40357/#14888/#15687), independent of the 1M context window. Misinterpreting it as "context too small" causes silent partial-reads of protocol files — the leading cause of LEO compliance drift in long sessions.
+
 ## AUTO-PROCEED Mode
 
 AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no confirmation prompts.
