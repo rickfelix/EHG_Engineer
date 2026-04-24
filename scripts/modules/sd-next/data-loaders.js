@@ -324,10 +324,15 @@ export async function loadVisionScores(supabase) {
  */
 export async function loadOpenQuickFixes(supabase) {
   try {
+    // Race-safety: exclude rows where pr_url or commit_sha are populated. A parallel session
+    // populates those fields the moment complete-quick-fix.js begins, ~30-90s before status flips
+    // to 'completed'. Filtering on status alone surfaces phantom QFs during the merge window.
     const { data, error } = await supabase
       .from('quick_fixes')
-      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id')
+      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id, pr_url, commit_sha')
       .in('status', ['open', 'in_progress'])
+      .is('pr_url', null)
+      .is('commit_sha', null)
       .order('created_at', { ascending: true })
       .limit(50);
 
