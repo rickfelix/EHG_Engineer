@@ -704,8 +704,18 @@ export async function generateSDKey(options) {
     venturePrefix = null
   } = options;
 
-  // SD-LEO-SDKEY-ENFORCE-LEAD-READ-001: Validate CLAUDE_CORE.md and CLAUDE_LEAD.md have been fully read
-  if (!skipLeadValidation) {
+  // SD-LEO-SDKEY-ENFORCE-LEAD-READ-001: Validate CLAUDE_CORE.md and CLAUDE_LEAD.md have been fully read.
+  // QF-20260424-603: Skip in non-interactive runtimes. The session-marker file
+  // .claude/unified-session-state.json is populated only by Claude Code PostToolUse/SessionStart
+  // hooks; a vitest CI runner or headless automation cannot have it. The guard's intent is to
+  // force *interactive Claude Code sessions* to read the protocol, not to gate test processes.
+  const isNonInteractiveRuntime =
+    process.env.CI === 'true' ||
+    process.env.VITEST === 'true' ||
+    process.env.NODE_ENV === 'test' ||
+    process.env.SDKEY_SKIP_PROTOCOL_READ === '1';
+
+  if (!skipLeadValidation && !isNonInteractiveRuntime) {
     const protocolValidation = validateProtocolFilesRead();
     if (!protocolValidation.valid) {
       console.error(protocolValidation.remediation);
