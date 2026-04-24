@@ -249,15 +249,23 @@ function findClaudeCodePid(entryPath = 'unknown') {
 
 /**
  * QF-20260424-143: Insert-if-not-exists claude_sessions row for this UUID.
+ * SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR2): retry-hardened.
  *
  * Mirrors session-tick.cjs PostgREST pattern (no supabase-js dep) so cold-start
  * latency stays negligible. `Prefer: resolution=merge-duplicates` makes POST act
  * as an upsert on the session_id unique key — safe for resume/compact where the
  * row may already exist. Heartbeat is refreshed either way.
  *
- * Best-effort: any error (no env vars, network failure, timeout) is swallowed.
- * SessionStart must never be blocked by telemetry — session-tick will retry
- * once it runs.
+ * **Retry policy** (SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 FR2): each attempt
+ * has a 3s timeout; on failure we retry with exponential backoff (0ms, 500ms,
+ * 1500ms) for up to 3 attempts total. This closes the fire-and-forget gap
+ * observed 2026-04-24 (session 4b15d2aa missed claude_sessions entirely despite
+ * hook running). The prior "session-tick will retry" comment was misleading —
+ * session-tick.cjs only UPDATEs heartbeat, it does NOT CREATE the row; a
+ * missing row stays missing until the next manual claim reaches sd-start.
+ *
+ * Still fail-soft after max retries: any final error is swallowed (or logged
+ * with LEO_TELEMETRY_DEBUG=1). SessionStart never blocks on telemetry.
  */
 async function upsertSessionRow(sessionId, ccPid, source) {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -276,29 +284,64 @@ async function upsertSessionRow(sessionId, ccPid, source) {
     metadata: { cc_pid: ccPid, source: source || 'unknown' },
   });
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3000);
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal',
-      },
-      body,
-      signal: controller.signal,
-    });
-    if (!res.ok && process.env.LEO_TELEMETRY_DEBUG === '1') {
-      console.error(`SessionStart:capture-session-id: upsert status=${res.status}`);
+  const MAX_ATTEMPTS = 3;
+  const PER_ATTEMPT_TIMEOUT_MS = 3000;
+  // Exponential backoff with 0 base delay for the first attempt so happy-path
+  // latency is unchanged (~200ms typical).
+  const BACKOFFS_MS = [0, 500, 1500];
+  const debug = process.env.LEO_TELEMETRY_DEBUG === '1';
+
+  let lastStatus = null;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (BACKOFFS_MS[attempt - 1] > 0) {
+      await new Promise((r) => setTimeout(r, BACKOFFS_MS[attempt - 1]));
     }
-  } catch (err) {
-    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
-      console.error(`SessionStart:capture-session-id: upsert failed: ${err?.message || err}`);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PER_ATTEMPT_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        },
+        body,
+        signal: controller.signal,
+      });
+      // Success: 2xx. Return immediately — no further attempts.
+      if (res.ok) {
+        clearTimeout(timer);
+        if (debug && attempt > 1) {
+          console.error(`SessionStart:capture-session-id: upsert OK on attempt ${attempt}/${MAX_ATTEMPTS}`);
+        }
+        return;
+      }
+      lastStatus = res.status;
+      if (debug) {
+        console.error(`SessionStart:capture-session-id: upsert status=${res.status} attempt=${attempt}/${MAX_ATTEMPTS}`);
+      }
+      // 4xx (not 408/429) is a client-side error — no point retrying. Bail.
+      if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+        clearTimeout(timer);
+        return;
+      }
+    } catch (err) {
+      lastError = err;
+      if (debug) {
+        console.error(`SessionStart:capture-session-id: upsert failed attempt=${attempt}/${MAX_ATTEMPTS}: ${err?.message || err}`);
+      }
+    } finally {
+      clearTimeout(timer);
     }
-  } finally {
-    clearTimeout(timer);
+  }
+
+  if (debug) {
+    console.error(`SessionStart:capture-session-id: upsert exhausted ${MAX_ATTEMPTS} attempts (last_status=${lastStatus}, last_error=${lastError?.message || 'n/a'})`);
   }
 }
 
@@ -508,7 +551,7 @@ function main() {
 }
 
 // SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-5): expose pure helpers for unit tests.
-module.exports = { selectAncestorFromChain, findClaudeCodePid };
+module.exports = { selectAncestorFromChain, findClaudeCodePid, upsertSessionRow };
 
 if (require.main === module) {
   main().then(() => process.exit(0)).catch(() => process.exit(0));
