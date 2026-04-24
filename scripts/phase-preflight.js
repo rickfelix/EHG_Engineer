@@ -84,6 +84,15 @@ async function validateDiscoveryGate(sdId) {
     .single();
 
   // Count files from exploration_summary (check multiple locations for backward compatibility)
+  //
+  // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR7): `files_examined` is an
+  // alternate (undocumented) key some SD creators populated. DB scan on
+  // 2026-04-24 found 2 SDs using `files_examined` vs 158 using the canonical
+  // `files_explored`. We accept both here so the preflight doesn't block the
+  // affected SDs. A one-shot migration (scripts/migrate-exploration-summary-files-examined.mjs)
+  // moves the `files_examined` arrays to `files_explored` for consistency.
+  //
+  // CANONICAL KEY for new SDs: `sd.exploration_summary.files_explored`.
   let filesExplored = [];
   let source = 'none';
 
@@ -91,6 +100,10 @@ async function validateDiscoveryGate(sdId) {
   if (sd?.exploration_summary?.files_explored && Array.isArray(sd.exploration_summary.files_explored)) {
     filesExplored = sd.exploration_summary.files_explored;
     source = 'sd.exploration_summary.files_explored';
+  } else if (sd?.exploration_summary?.files_examined && Array.isArray(sd.exploration_summary.files_examined)) {
+    // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR7): alternate-key fallback
+    filesExplored = sd.exploration_summary.files_examined;
+    source = 'sd.exploration_summary.files_examined (deprecated — run migration)';
   } else if (prd?.exploration_summary && Array.isArray(prd.exploration_summary)) {
     filesExplored = prd.exploration_summary;
     source = 'prd.exploration_summary';

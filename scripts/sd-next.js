@@ -31,6 +31,17 @@ import { resolveOwnSession } from '../lib/resolve-own-session.js';
  * Query session settings (auto_proceed + chain_orchestrators) and emit
  * a machine-readable SESSION_SETTINGS line so autonomous flows know
  * both settings without a separate query.
+ *
+ * SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR3): strict per-session
+ * filter. When CLAUDE_SESSION_ID is set, we ONLY use that session's
+ * metadata — never the heartbeat-fallback "newest active session",
+ * which was causing peer sessions' settings to leak across
+ * `npm run sd:next` invocations. When our own row is missing, fall
+ * through to global defaults rather than adopting a peer's config.
+ *
+ * Observed live 2026-04-24: session `4b15d2aa` with chain=false saw
+ * `SESSION_SETTINGS:{..."chain_orchestrators":true}` because a peer
+ * session with chain=true had the newer heartbeat — textbook D2 drift.
  */
 async function emitSessionSettings() {
   try {
@@ -39,21 +50,49 @@ async function emitSessionSettings() {
     if (!url || !key) return null;
 
     const supabase = createClient(url, key);
-    const { data } = await resolveOwnSession(supabase, {
-      select: 'metadata',
+    const envSessionId = process.env.CLAUDE_SESSION_ID;
+
+    // Resolve our session. warnOnFallback:false suppresses the noisy warning,
+    // but we handle the fallback ourselves below.
+    const resolved = await resolveOwnSession(supabase, {
+      select: 'metadata, session_id',
       warnOnFallback: false
     });
 
-    // Fall back to global defaults from DB if no session metadata
+    // FR3: when CLAUDE_SESSION_ID is explicitly set, we REQUIRE a deterministic
+    // match (source='env_var' or 'marker_file'). Any other source — especially
+    // heartbeat_fallback — means we'd be reading the wrong session's metadata.
+    // Prefer global defaults in that case so chain_orchestrators doesn't leak
+    // across CC instances.
+    const deterministicSources = new Set(['env_var', 'marker_file']);
+    const isOwnSession = envSessionId
+      ? deterministicSources.has(resolved.source)
+      : true; // without env var, any heartbeat-newest lookup is acceptable legacy behavior
+    const data = isOwnSession ? resolved.data : null;
+
+    // Fall back to global defaults from DB for any field missing in our own row.
     let globalChaining = false;
-    if (data?.metadata?.chain_orchestrators === undefined) {
+    let globalAutoProceed = true;
+    if (!data || data.metadata?.chain_orchestrators === undefined || data.metadata?.auto_proceed === undefined) {
       const { data: globalData } = await supabase.rpc('get_leo_global_defaults');
-      globalChaining = globalData?.[0]?.chain_orchestrators ?? false;
+      if (globalData?.[0]) {
+        globalChaining = globalData[0].chain_orchestrators ?? false;
+        if (globalData[0].auto_proceed !== undefined) {
+          globalAutoProceed = globalData[0].auto_proceed;
+        }
+      }
     }
 
-    const autoProceed = data?.metadata?.auto_proceed ?? true;
+    const autoProceed = data?.metadata?.auto_proceed ?? globalAutoProceed;
     const chainOrchestrators = data?.metadata?.chain_orchestrators ?? globalChaining;
-    const settings = { auto_proceed: autoProceed, chain_orchestrators: chainOrchestrators };
+    const settings = {
+      auto_proceed: autoProceed,
+      chain_orchestrators: chainOrchestrators,
+    };
+    // Telemetry for debugging peer-leak incidents; the envelope itself stays stable.
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.log(`[sd-next] SESSION_SETTINGS source=${resolved.source} ownSession=${isOwnSession} envSet=${!!envSessionId}`);
+    }
     console.log(`SESSION_SETTINGS:${JSON.stringify(settings)}`);
     return settings;
   } catch {

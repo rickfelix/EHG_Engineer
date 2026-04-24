@@ -14,6 +14,11 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { execSync } from 'child_process';
+// SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5): getRepoRoot resolves the
+// canonical main repo regardless of cwd; isInsideWorktree is used as an
+// early guard to prevent nested-worktree creation when sd-start is
+// accidentally invoked from inside a .worktrees/ subtree.
+import { getRepoRoot, isInsideWorktree } from '../lib/repo-paths.js';
 import os from 'os';
 import path from 'node:path';
 import dotenv from 'dotenv';
@@ -451,6 +456,25 @@ async function main() {
     console.log(`${colors.red}${colors.bold}Error: SD ID required${colors.reset}`);
     console.log(`\nUsage: ${colors.cyan}npm run sd:start <SD-ID>${colors.reset}`);
     console.log(`\nExample: ${colors.dim}npm run sd:start SD-HARDENING-V2-001C${colors.reset}`);
+    process.exit(1);
+  }
+
+  // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5 enhancement B):
+  // Fail fast if this command is running from inside the .worktrees/ subtree.
+  // Otherwise `git rev-parse --show-toplevel` (historically used downstream)
+  // returns the worktree path, which causes sd-start to create a nested
+  // `<worktree>/.worktrees/<sd>` path and then release the claim when the
+  // worktree-creation step fails with "branch already used by worktree at ...".
+  // Observed live on 2026-04-24 during this SD's own LEAD phase.
+  const worktreeGuard = isInsideWorktree();
+  if (worktreeGuard.inside) {
+    console.log(`\n${colors.red}${colors.bold}Error: sd-start must run from the main repo root${colors.reset}`);
+    console.log(`\n  Current cwd is inside the worktrees subtree:`);
+    console.log(`    ${colors.dim}cwd:       ${process.cwd()}${colors.reset}`);
+    console.log(`    ${colors.dim}worktrees: ${worktreeGuard.worktreesDir}${colors.reset}`);
+    console.log(`\n  ${colors.cyan}cd ${worktreeGuard.repoRoot}${colors.reset}`);
+    console.log(`  ${colors.cyan}node scripts/sd-start.js ${sdId}${colors.reset}`);
+    console.log(`\n  ${colors.dim}(No claim changes made — safe to retry.)${colors.reset}`);
     process.exit(1);
   }
 
@@ -973,9 +997,11 @@ async function main() {
   };
   let worktreeInfo = null;
   try {
-    const repoRoot = execSync('git rev-parse --show-toplevel', {
-      encoding: 'utf8', stdio: 'pipe'
-    }).trim();
+    // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5): getRepoRoot() is
+    // invariant regardless of process.cwd(); the legacy `git rev-parse
+    // --show-toplevel` call returned the worktree path when cwd was inside
+    // one, causing resolveWorkdir to create a nested worktree path.
+    const repoRoot = getRepoRoot();
     worktreeInfo = await resolveWorkdir(effectiveId, 'claim', repoRoot);
     if (worktreeInfo && !worktreeInfo.success) {
       // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree failure
@@ -1129,10 +1155,11 @@ async function main() {
   //         during the install window.
   if (worktreeInfo?.success && worktreeInfo.cwd) {
     try {
-      // Resolve repo root once (worktrees symlink node_modules from there).
-      const installRepoRoot = execSync('git rev-parse --show-toplevel', {
-        encoding: 'utf8', cwd: worktreeInfo.cwd, stdio: 'pipe'
-      }).trim();
+      // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5): Resolve repo root
+      // once (worktrees symlink node_modules from there). Using getRepoRoot()
+      // instead of `git rev-parse --show-toplevel` with cwd=worktreeInfo.cwd
+      // — the latter returns the worktree path, not the main repo.
+      const installRepoRoot = getRepoRoot();
 
       const forceInstall = process.argv.includes('--force-install');
       const decision = await evaluateInstallDecision({
