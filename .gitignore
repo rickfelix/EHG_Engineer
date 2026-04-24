@@ -209,6 +209,7 @@ scripts/archived-sd-scripts/
 /.leo-validation/
 /.quickfix-evidence/
 /plans/
+/scratch/
 
 # Git worktree session directories (created by npm run session:worktree)
 .sessions/
