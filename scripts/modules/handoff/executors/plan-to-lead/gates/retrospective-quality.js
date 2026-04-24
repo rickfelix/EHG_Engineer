@@ -6,6 +6,7 @@
  */
 
 import { isInfrastructureSDSync, getThresholdProfile } from '../../../../sd-type-checker.js';
+import { getFilteredRetrospective } from '../../../retro-filters.js';
 
 /**
  * Create the RETROSPECTIVE_QUALITY_GATE validator
@@ -46,18 +47,34 @@ export function createRetrospectiveQualityGate(supabase) {
       ctx._orchestratorChildren = children || [];
       ctx._isOrchestratorWithAllChildrenComplete = allChildrenComplete;
 
-      // Load retrospective for this SD
+      // Load retrospective for this SD via the shared three-filter query
+      // (SD-LEO-INFRA-RETROSPECTIVE-GATES-FAIL-001): existence + retro_type=SD_COMPLETION
+      // + created_at > LEAD-TO-PLAN acceptance. Handoff-time retros (which share
+      // retro_type='SD_COMPLETION') are correctly excluded by the timestamp filter.
       const sdUuid = ctx.sd?.id || ctx.sdId;
-      const { data: retrospective, error: retroError } = await supabase
-        .from('retrospectives')
-        .select('*')
-        .eq('sd_id', sdUuid)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const sdCreatedAt = ctx.sd?.created_at || null;
+      const { retrospective, leadToPlanAcceptedAt, error: retroError } =
+        await getFilteredRetrospective(sdUuid, sdCreatedAt, supabase);
 
       if (retroError && retroError.code !== 'PGRST116') {
         console.log(`   ⚠️  Retrospective query error: ${retroError.message}`);
+      }
+
+      // Zero-rows HARD-FAIL: never fall through to validateSDCompletionReadiness(sd, null),
+      // which would score on SD quality alone and silently pass the gate.
+      if (!retrospective) {
+        const sdKey = ctx.sd?.sd_key || ctx.sdId || 'unknown';
+        console.log('   ❌ No qualifying SD-completion retrospective found');
+        console.log(`      leadToPlanAcceptedAt cutoff: ${leadToPlanAcceptedAt}`);
+        return {
+          passed: false,
+          score: 0,
+          max_score: 100,
+          issues: [`No SD-completion retrospective found for SD ${sdKey} (must be retro_type=SD_COMPLETION with created_at > ${leadToPlanAcceptedAt})`],
+          warnings: [],
+          remediation: `Run: node scripts/generate-retrospective.js ${sdUuid}\n`
+            + '   A handoff-time retrospective does not satisfy this gate — you must create a proper SD-completion retrospective authored after the LEAD-TO-PLAN acceptance timestamp.'
+        };
       }
 
       // Check for auto-pass conditions
