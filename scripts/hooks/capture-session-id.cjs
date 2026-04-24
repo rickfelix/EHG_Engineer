@@ -115,6 +115,46 @@ function sotAtomicWrite(targetPath, content) {
 }
 
 /**
+ * Select the long-lived Claude Code ancestor from a parsed process chain.
+ * Pure function: takes [{pid, name, ppid}, ...] (chain[0] is current process),
+ * returns the chosen entry or null. Exported for unit tests.
+ *
+ * SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-1, FR-3):
+ *   Pass 1 — outermost claude.exe wins (claude.exe is the modern long-lived
+ *            Claude Code process on Windows; node.exe is often a transient
+ *            subprocess that dies within seconds).
+ *   Pass 2 — original "first node.exe with non-shell parent" rule, with broadened
+ *            skip-set including cmd.exe / pwsh.exe / powershell.exe, preserving
+ *            backward compatibility for environments without claude.exe.
+ *   Pass 3 — defensive fallback: outermost node.exe in chain.
+ */
+function selectAncestorFromChain(chain) {
+  if (!Array.isArray(chain) || chain.length < 2) return null;
+  const skipParents = ['node.exe', 'node', 'bash.exe', 'bash', 'sh.exe', 'sh', 'cmd.exe', 'pwsh.exe', 'powershell.exe'];
+
+  // Pass 1: outermost claude.exe wins.
+  for (let i = chain.length - 1; i >= 1; i--) {
+    if (chain[i].name === 'claude.exe') return chain[i];
+  }
+
+  // Pass 2: original semantics with broadened skip-set.
+  for (let i = 1; i < chain.length; i++) {
+    const proc = chain[i];
+    if (proc.name === 'node.exe' || proc.name === 'node') {
+      const parent = chain[i + 1];
+      if (!parent || !skipParents.includes(parent.name)) return proc;
+    }
+  }
+
+  // Pass 3: outermost node.exe defensive fallback.
+  for (let i = chain.length - 1; i >= 1; i--) {
+    if (chain[i].name === 'node.exe' || chain[i].name === 'node') return chain[i];
+  }
+
+  return null;
+}
+
+/**
  * Find the Claude Code node.exe PID by walking the process ancestry chain.
  * Mirrors the logic in lib/terminal-identity.js findClaudeCodePid(), but in CJS
  * for use in this hook. Falls back to process scan if tree walk fails.
@@ -155,17 +195,11 @@ function findClaudeCodePid(entryPath = 'unknown') {
         return { pid, name: (name || '').toLowerCase(), ppid };
       });
 
-      // Find the first node.exe whose parent is NOT node/bash/sh
-      for (let i = 1; i < chain.length; i++) {
-        const proc = chain[i];
-        if (proc.name === 'node.exe' || proc.name === 'node') {
-          const parent = chain[i + 1];
-          if (!parent || !['node.exe', 'node', 'bash.exe', 'bash', 'sh.exe', 'sh'].includes(parent.name)) {
-            const dur = Number((process.hrtime.bigint() - walkStart) / 1000000n);
-            logDiscoveryEvent({ entry_path: entryPath, method_used: 'tree_walk', outcome: 'success', duration_ms: dur, chain_depth: chain.length });
-            return proc.pid;
-          }
-        }
+      const selected = selectAncestorFromChain(chain);
+      if (selected) {
+        const dur = Number((process.hrtime.bigint() - walkStart) / 1000000n);
+        logDiscoveryEvent({ entry_path: entryPath, method_used: 'tree_walk', outcome: 'success', duration_ms: dur, chain_depth: chain.length, resolved_name: selected.name });
+        return selected.pid;
       }
     }
     const dur = Number((process.hrtime.bigint() - walkStart) / 1000000n);
@@ -176,7 +210,9 @@ function findClaudeCodePid(entryPath = 'unknown') {
     /* fall through to scan */
   }
 
-  // Method 2: Scan all node.exe processes for SSE port match
+  // Method 2: Scan all node.exe / claude.exe processes for SSE port match.
+  // SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-2): single CIM round-trip with WQL OR-filter so the
+  // fallback path also discovers claude.exe and stays within SCAN_TIMEOUT_MS.
   const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
   if (!ssePort) {
     logDiscoveryEvent({ entry_path: entryPath, method_used: 'scan', outcome: 'skipped_no_sse_port' });
@@ -185,7 +221,7 @@ function findClaudeCodePid(entryPath = 'unknown') {
   const scanStart = process.hrtime.bigint();
   try {
     const script = [
-      'Get-CimInstance Win32_Process -Filter "Name=\'node.exe\'" -ErrorAction SilentlyContinue |',
+      'Get-CimInstance Win32_Process -Filter "Name=\'node.exe\' OR Name=\'claude.exe\'" -ErrorAction SilentlyContinue |',
       `  Where-Object { $_.ProcessId -ne ${process.pid} -and $_.CommandLine -match '${ssePort}' } |`,
       '  ForEach-Object { $_.ProcessId } |',
       '  Select-Object -First 1'
@@ -471,4 +507,9 @@ function main() {
   });
 }
 
-main().then(() => process.exit(0)).catch(() => process.exit(0));
+// SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-5): expose pure helpers for unit tests.
+module.exports = { selectAncestorFromChain, findClaudeCodePid };
+
+if (require.main === module) {
+  main().then(() => process.exit(0)).catch(() => process.exit(0));
+}
