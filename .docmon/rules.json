@@ -60,17 +60,22 @@
   ],
   "root_allowlist": [
     "CLAUDE.md",
+    "CLAUDE_DIGEST.md",
     "CLAUDE_CORE.md",
+    "CLAUDE_CORE_DIGEST.md",
     "CLAUDE_LEAD.md",
+    "CLAUDE_LEAD_DIGEST.md",
     "CLAUDE_PLAN.md",
+    "CLAUDE_PLAN_DIGEST.md",
     "CLAUDE_EXEC.md",
+    "CLAUDE_EXEC_DIGEST.md",
     "README.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "LICENSE.md",
     "CODE_OF_CONDUCT.md"
   ],
-  "max_root_files": 10,
+  "max_root_files": 15,
   "rubric": [
     {
       "id": "RULE-RUBRIC-001",

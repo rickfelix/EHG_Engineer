@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-04-23 9:43:55 PM
+**Generated**: 2026-04-24 7:38:22 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 
@@ -86,41 +86,6 @@ Task tool with subagent_type="database-agent":
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
-
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -162,6 +127,41 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -218,48 +218,6 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## 🤖 Built-in Agent Integration
-
-## Built-in Agent Integration
-
-### Three-Layer Agent Architecture
-
-LEO Protocol uses three complementary agent layers:
-
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
-
-### Integration Principle
-
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
-
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
-```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
-
-This is faster than sequential exploration and provides comprehensive coverage.
-
 ## Claude Code Plan Mode Integration
 
 **Status**: ACTIVE | **Version**: 1.0.0
@@ -302,6 +260,48 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
+
+## 🤖 Built-in Agent Integration
+
+## Built-in Agent Integration
+
+### Three-Layer Agent Architecture
+
+LEO Protocol uses three complementary agent layers:
+
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
 
 ## Work Tracking Policy
 
@@ -414,6 +414,38 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
+
+## QF Lifecycle Reconciliation
+
+**Problem**: quick_fixes rows stay `status=open` after a PR is merged via direct `gh pr merge` (any path that skips complete-quick-fix.js). sd:next then recommends phantom work. Root cause documented in feedback memory `feedback_qf_db_stale_after_merge.md`.
+
+**Solution**: Two complementary reconciliation layers — pre-merge filter + post-merge sweep. Both are idempotent and safe to run on any schedule.
+
+### Layer 1 — Pre-Merge Filter (sd:next data loader)
+`scripts/modules/sd-next/data-loaders.js` exposes two functions:
+- `loadOpenQuickFixes()` — returns rows where `pr_url IS NULL` AND `commit_sha IS NULL`. Filters out QFs with in-flight PRs so sd:next does not restart work a parallel session is already merging (QF-380 merge-race fix).
+- `loadReadyToMergeQuickFixes()` — queries the inverse pool (`pr_url IS NOT NULL`), cross-checks each PR state via `gh api` with a 60-second in-memory cache, returns only OPEN + all-checks-green rows tagged `ready_to_merge=true`. Lets the sd:next dispatcher emit a `qf_merge` action for adoption-ready work instead of `qf_start`.
+
+> Why the cache: sd:next runs many times per session. Without the 60s dedup, each invocation hits the GitHub API for every open QF — rate limits bite within minutes.
+
+### Layer 2 — Post-Merge Sweep (orphan-qf-reaper)
+`scripts/orphan-qf-reaper.mjs` sweeps rows where `status IN (open, in_progress)` AND `pr_url` points to a MERGED PR, and flips them to `status=completed`. Protections:
+- **Idempotency**: `.eq(status, current)` guard on the update — a concurrent complete-quick-fix.js flip wins without erroring.
+- **5-minute safety window**: skips rows whose `pr_url` was set within the last 5 minutes, giving complete-quick-fix.js time to finish its own flip.
+- **Structured JSON logging**: one line per row evaluated, durable artifact for debugging races.
+
+### Scheduled Execution
+`.github/workflows/orphan-qf-reaper.yml` runs Layer 2 every 15 minutes on cron plus `workflow_dispatch`, with a `dry-run` input, a concurrency group to prevent overlap, and a per-run `reaper.log` artifact.
+
+### When to Reach For This
+- **`sd:next` recommends a QF you know was merged**: check `loadOpenQuickFixes` is filtering on `pr_url IS NULL`; inspect that QF's `pr_url` / `commit_sha` columns. If they're set, the reaper will close it on its next cron; for immediate cleanup, run `node scripts/orphan-qf-reaper.mjs`.
+- **Two sessions on the same QF**: verify `loadReadyToMergeQuickFixes` is wired into the dispatcher and emitting `qf_merge` for rows with open PRs.
+- **QF with open PR but sd:next ignores it**: the PR's checks are not all green — expected. Layer 1 only surfaces merge-ready work.
+
+### Anti-Pattern
+Do **not** replace these layers with a blanket "close all QFs with any pr_url set". The 5-minute window and merged-state check prevent closing a QF whose PR is still under review.
+
+> Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
 
 ## 🖥️ UI Parity Requirement (MANDATORY)
 
@@ -562,38 +594,6 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
-
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -634,6 +634,38 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Why**: SD-LEO-INFRA-CENTRALIZED-POST-STAGE-001 revealed that the S17 doc-gen hook failed silently on every run since it was shipped (wrong column name in query). Because the error was caught as non-fatal, the pipeline continued without vision/architecture docs, and S19 generated an unvalidated sprint plan.
 
 **Rule**: "Non-fatal" means the hook threw an unexpected exception. "Hook ran but wrote zero rows to its target table" is a **data integrity failure** that must surface.
+
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -754,14 +786,6 @@ const solution = await kb.getSolution('PAT-003');
 - Critical severity: 5+ occurrences
 - High severity: 7+ occurrences
 - Increasing trend: 4+ occurrences
-
-## claude_sessions.current_branch Contract
-
-**Invariant** (SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001): `current_branch` is non-null for every session row whose originating process runs inside a git working tree. NULL is reserved for sessions that legitimately have no git context — primarily virtual sessions (drain agents with no cwd) and the narrow window between process start and first heartbeat. Any other NULL row on an active non-virtual session is a bug.
-
-**Enforcement**: Application-layer. Every `claude_sessions.update(...)` call that performs a heartbeat-style write routes through `stampBranch()` in `lib/session-writer.cjs`, which resolves the branch via `git rev-parse --abbrev-ref HEAD`. Claim/release/status-only writes do not need `current_branch` and do not call `stampBranch`. A regression guard at `tests/unit/session-writer/no-bypass.test.js` fails CI if a new writer bypasses the helper.
-
-**Why not a NOT NULL constraint**: Pre-existing NULL rows would require a data migration. Virtual sessions are legitimately NULL. COALESCE semantics in `update_session_heartbeat_with_branch` already prevent null-overwrite from transient detector failures.
 
 ## Genesis Codebase Locations
 
@@ -1350,11 +1374,22 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
-| PAT-HF-EXECTOPLAN-0bda95fe | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
-| PAT-RETRO-EXECTOPLAN-0bda95fe | session_retrospective | [HIGH] high | 5 | [STABLE] | N/A |
-| PAT-HF-PLANTOEXEC-eaccd2b3 | handoff_failure | [HIGH] high | 4 | [STABLE] | N/A |
+| PAT-HF-LEADTOPLAN-fecb45e8 | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
+| PAT-RETRO-LEADTOPLAN-fecb45e8 | session_retrospective | [HIGH] high | 5 | [STABLE] | N/A |
+| PAT-WIRE-CHECK-LOCAL-MAIN-STALE | infrastructure | [HIGH] high | 1 | [STABLE] | Change diff ref in wire-check-gate.js:15 |
+| PAT-RETRO-EXISTS-GATE-FALSE-PASS | process | [CRIT] critical | 1 | [STABLE] | Replace heuristic scoring with hard quer |
 
 ### Prevention Checklists
+
+**infrastructure**:
+- [ ] When writing gates that diff against a branch ref, always use `origin/<branch>` not the local ref
+- [ ] Gates must `git fetch --quiet` before running ref-sensitive checks
+- [ ] Never assume the local branch ref tracks origin in multi-worktree repos
+
+**process**:
+- [ ] Artifact-existence gates must query the artifact table directly, never heuristic-score
+- [ ] Handoff-type retrospectives must not satisfy SD_COMPLETION retrospective checks
+- [ ] Any gate on a CLAUDE_CORE.md REQUIRED artifact must be binary pass/fail, not percentage
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
@@ -1366,57 +1401,57 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. PLAN_TO_EXEC Handoff Retrospective: C3: Auto-Iterate PRD Quality Loop [QUALITY]
+### 1. LEAD_TO_PLAN Handoff Retrospective: Create venture-provisioner.js Orchestration Module [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
-- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
+- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
+- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
+
+**Action Items**:
+- [ ] Verify: venture-provisioner.js exports provisionVenture() with idempotent state ...
+- [ ] Validate: provisioning-state.js provides CRUD for venture_provisioning_state for...
+
+### 2. LEAD_TO_PLAN Handoff Retrospective: CI/CD Template Generation [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
+- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
+
+**Action Items**:
+- [ ] Verify: CI/CD templates created with lint, test, build, deploy steps for SD-LEO-...
+- [ ] Validate: --register flag generates .github/workflows/ in venture directory for ...
+
+### 3. PLAN_TO_EXEC Handoff Retrospective: Enhance create-ehg-venture with --register Flag [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
+- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
-### 2. PLAN_TO_EXEC Handoff Retrospective: C5: Auto-Decompose SD Hierarchy from Architecture Plans [QUALITY]
+### 4. PLAN_TO_EXEC Handoff Retrospective: Stage 18 Post-Processor Full Automation [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
-- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
+- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
+- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
-### 3. PLAN_TO_EXEC Handoff Retrospective: B1: leo_adrs Population During Stage 14 [QUALITY]
+### 5. PLAN_TO_EXEC Handoff Retrospective: CI/CD Template Generation [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
-- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
+- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
+- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
-
-### 4. LEAD_TO_PLAN Handoff Retrospective: C3: Auto-Iterate PRD Quality Loop [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
-- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
-
-**Action Items**:
-- [ ] Verify: PRDs below threshold are auto-enriched for SD-LEO-INFRA-STREAM-SPRINT-BR...
-- [ ] Validate: Enrichment is deterministic (no LLM) for SD-LEO-INFRA-STREAM-SPRINT-BR...
-
-### 5. LEAD_TO_PLAN Handoff Retrospective: Corrective: Vision Gap — semantic (semantic) (score 79/100) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
-- [PAT-AUTO-58a34ffe] Gate RETROSPECTIVE_QUALITY_GATE failed: score 17/100
-
-**Action Items**:
-- [ ] Verify: Semantic dimension score >= 93 for SD-MAN-GEN-CORRECTIVE-VISION-GAP-019
-- [ ] Validate: Evidence artifacts committed for SD-MAN-GEN-CORRECTIVE-VISION-GAP-019
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1482,7 +1517,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-04-23*
+*Generated from database: 2026-04-24*
 *Protocol Version: 4.4.1*
-*Includes: Proposals (0) + Hot Patterns (3) + Lessons (5)*
+*Includes: Proposals (0) + Hot Patterns (4) + Lessons (5)*
 *Load this file first in all sessions*
