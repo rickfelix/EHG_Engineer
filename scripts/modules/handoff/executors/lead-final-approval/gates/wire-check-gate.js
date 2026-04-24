@@ -26,15 +26,22 @@ const GATE_NAME = 'WIRE_CHECK_GATE';
  * runtime entry point by design — exclude them from the reachability check
  * so co-located tests do not false-positive PAT-AUTO-855d11b1.
  *
- * Patterns are canonical only (*.test.ext, *.spec.ext, __tests__/, tests/);
+ * SD-MAN-INFRA-WIRE-CHECK-GATE-001 extension: broadened the tests?/ rule to
+ * cover both singular `test/` (used by this repo under `test/eva/experiments/`)
+ * and nested `tests/` paths (e.g. `scripts/archive/one-time/tests/`), since
+ * the previous `^tests/` anchor missed those entirely.
+ *
+ * Patterns are canonical only (*.test.ext, *.spec.ext, __tests__/, test/, tests/);
  * intentionally NOT matching *.test-* or similar variants to avoid
  * over-matching production files (mitigation for TS-7 negative control).
+ * The `(^|\/)tests?\/` form requires a directory-boundary, so `lib/testing/`
+ * and `scripts/test-helpers.js` do NOT match.
  */
 export const EXCLUSION_PATTERNS = [
   /\.test\.(js|mjs|cjs|jsx|tsx)$/,
   /\.spec\.(js|mjs|cjs|jsx|tsx)$/,
   /(^|\/)__tests__\//,
-  /^tests\//
+  /(^|\/)tests?\//
 ];
 
 /**
