@@ -27,12 +27,51 @@ export const PRD_REQUIREMENTS = {
 };
 
 /**
+ * Fallback threshold used when sd_type has no profile row or lookup fails.
+ * Matches the `feature` default — conservative middle ground across SD types.
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-127 FR-3.
+ */
+export const PRD_THRESHOLD_FALLBACK = 85;
+
+/**
+ * Resolve the sd_type-aware PRD minimum score from `sd_type_validation_profiles.prd_minimum_score`.
+ * Returns PRD_THRESHOLD_FALLBACK (85) when sd_type is missing, the row is absent, or the
+ * column is NULL. Warnings on fallback so operators notice unseeded rows.
+ *
+ * @param {Object} supabase - Supabase client with `.from(...)`
+ * @param {string|null|undefined} sdType - SD type string
+ * @returns {Promise<number>} Numeric threshold in [0, 100]
+ */
+export async function resolvePRDThreshold(supabase, sdType) {
+  if (!sdType || !supabase?.from) return PRD_THRESHOLD_FALLBACK;
+  try {
+    const { data, error } = await supabase
+      .from('sd_type_validation_profiles')
+      .select('prd_minimum_score')
+      .eq('sd_type', sdType)
+      .maybeSingle();
+    if (error || !data || data.prd_minimum_score == null) {
+      console.warn(`[prd-validation] No prd_minimum_score for sd_type='${sdType}', using fallback ${PRD_THRESHOLD_FALLBACK}`);
+      return PRD_THRESHOLD_FALLBACK;
+    }
+    return Number(data.prd_minimum_score);
+  } catch (e) {
+    console.warn(`[prd-validation] Threshold lookup failed for sd_type='${sdType}': ${e?.message || e}. Falling back to ${PRD_THRESHOLD_FALLBACK}.`);
+    return PRD_THRESHOLD_FALLBACK;
+  }
+}
+
+/**
  * Basic PRD validation fallback
  *
  * @param {Object} prd - PRD object
+ * @param {Object} [options]
+ * @param {number} [options.minimumScore] - When provided, `.valid` gates on `percentage >= minimumScore`
+ *   (replaces the legacy all-fields-required behavior). Surfaces sd_type-aware threshold from
+ *   sd_type_validation_profiles.prd_minimum_score via resolvePRDThreshold(). FR-3.
  * @returns {Object} - Validation result with valid, score, errors, warnings, percentage
  */
-export function basicPRDValidation(prd) {
+export function basicPRDValidation(prd, options = {}) {
   const validation = {
     valid: true,
     score: 0,
@@ -40,6 +79,7 @@ export function basicPRDValidation(prd) {
     errors: [],
     warnings: []
   };
+  let missingRequired = false;
 
   // Check required fields
   PRD_REQUIREMENTS.requiredFields.forEach(field => {
@@ -53,15 +93,15 @@ export function basicPRDValidation(prd) {
     const isPresent = value !== null && value !== undefined;
 
     if (!isPresent) {
-      validation.valid = false;
+      missingRequired = true;
       validation.errors.push(`Missing required field: ${field}`);
     } else {
       // For strings, check if non-empty after trim
       if (typeof value === 'string' && !value.trim()) {
-        validation.valid = false;
+        missingRequired = true;
         validation.errors.push(`Empty required field: ${field}`);
       } else if (Array.isArray(value) && value.length === 0) {
-        validation.valid = false;
+        missingRequired = true;
         validation.errors.push(`Empty array for required field: ${field}`);
       } else {
         validation.score += 10;
@@ -69,7 +109,7 @@ export function basicPRDValidation(prd) {
     }
   });
 
-  // Check functional requirements count
+  // Check functional requirements count (blocking regardless of threshold mode)
   if (prd.functional_requirements) {
     const funcReqs = Array.isArray(prd.functional_requirements)
       ? prd.functional_requirements
@@ -82,6 +122,19 @@ export function basicPRDValidation(prd) {
   }
 
   validation.percentage = Math.round((validation.score / 70) * 100); // Adjust for available points
+
+  if (typeof options.minimumScore === 'number') {
+    // sd_type-aware threshold: pass when percentage >= minimumScore
+    validation.thresholdApplied = options.minimumScore;
+    if (validation.percentage < options.minimumScore) {
+      validation.valid = false;
+      validation.errors.push(`PRD score ${validation.percentage}% is below sd_type threshold ${options.minimumScore}%`);
+    }
+  } else if (missingRequired) {
+    // Backward-compat: all-fields-required gate when no threshold is provided
+    validation.valid = false;
+  }
+
   return validation;
 }
 

@@ -19,6 +19,7 @@ import dotenv from 'dotenv';
 import {
   PRD_REQUIREMENTS,
   basicPRDValidation,
+  resolvePRDThreshold,
   validateParentOrchestratorPRD,
   validatePlanPresentation,
   getStoryMinimumScoreByCategory
@@ -268,19 +269,24 @@ export class PlanToExecVerifier {
         }
         console.log('   ✅ Parent orchestrator PRD validation passed');
       } else {
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-127 FR-3: sd_type-aware threshold from
+        // sd_type_validation_profiles.prd_minimum_score (fallback 85). Replaces the flat 100%
+        // that caused PAT-HF-PLANTOEXEC-813875a9 — infra/docs PRDs with 6 of 7 fields failed at 86%.
+        const minimumScore = await resolvePRDThreshold(this.supabase, sd.sd_type);
         const prdValidator = await this.loadPRDValidator();
-        prdValidation = await prdValidator(prd);
+        // basicPRDValidation honors options.minimumScore; richer validators ignore it harmlessly.
+        prdValidation = await prdValidator(prd, { minimumScore });
 
-        console.log(`\n📊 PRD Quality Score: ${prdValidation.percentage || prdValidation.score}%`);
+        console.log(`\n📊 PRD Quality Score: ${prdValidation.percentage || prdValidation.score}% (threshold for sd_type='${sd.sd_type}': ${minimumScore}%)`);
 
         const actualScore = prdValidation.percentage || prdValidation.score;
-        if (!prdValidation.valid || actualScore < this.prdRequirements.minimumScore) {
+        if (!prdValidation.valid || actualScore < minimumScore) {
           const topErrors = (prdValidation?.errors || []).slice(0, 3);
           const errorSuffix = topErrors.length > 0 ? `: ${topErrors.join('; ')}` : '';
-          const prdQualityMsg = `PRD does not meet quality standards (score: ${actualScore}% / required: ${this.prdRequirements.minimumScore}%)${errorSuffix}`;
+          const prdQualityMsg = `PRD does not meet quality standards (score: ${actualScore}% / required: ${minimumScore}%)${errorSuffix}`;
           return rejectHandoff(this.supabase, sdId, 'PRD_QUALITY', prdQualityMsg, {
             prdValidation,
-            requiredScore: this.prdRequirements.minimumScore,
+            requiredScore: minimumScore,
             actualScore
           });
         }
@@ -364,7 +370,8 @@ export class PlanToExecVerifier {
       console.log('\n✅ HANDOFF APPROVED');
       console.log('='.repeat(50));
       console.log('✅ Strategic Directive exists and is active');
-      console.log(`✅ PRD quality score: ${prdValidation.percentage || prdValidation.score}% (≥${this.prdRequirements.minimumScore}%)`);
+      const approvedThreshold = prdValidation.thresholdApplied ?? this.prdRequirements.minimumScore;
+      console.log(`✅ PRD quality score: ${prdValidation.percentage || prdValidation.score}% (≥${approvedThreshold}%)`);
       console.log('✅ PRD status ready for execution');
 
       // Update PRD to EXEC phase
