@@ -22,6 +22,7 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { getVenturePath } from '../lib/venture-resolver.js';
 import { sanitizeBranchName, checkDirtyWorktree, verifyGitignore, acquireWorktreeLock, releaseLock } from '../lib/worktree-guards.js';
+import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from '../lib/worktree-quota.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -160,28 +161,12 @@ function resolveFromScan(sdKey, repoRoot) {
   return null;
 }
 
-/**
- * SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-003:
- * Max worktrees under .worktrees/. Parity with lib/worktree-manager.js.
- * Helper dirs (_archive, qf) are excluded from the count.
- */
-const MAX_WORKTREE_COUNT = 20;
-const WORKTREE_QUOTA_HELPERS = new Set(['_archive', 'qf', 'sd', 'adhoc']);
-
-/**
- * Count actual SD worktree subdirs, excluding layout/helper dirs.
- */
-function countWorktreeDirs(worktreesDir) {
-  if (!fs.existsSync(worktreesDir)) return 0;
-  try {
-    return fs.readdirSync(worktreesDir).filter((entry) => {
-      if (WORKTREE_QUOTA_HELPERS.has(entry)) return false;
-      try {
-        return fs.statSync(path.join(worktreesDir, entry)).isDirectory();
-      } catch { return false; }
-    }).length;
-  } catch { return 0; }
-}
+// SD-LEO-FIX-WORKTREE-QUOTA-COUNTER-001: the worktree quota counter moved to
+// lib/worktree-quota.js. `MAX_WORKTREE_COUNT` and `WORKTREE_QUOTA_HELPERS` are
+// re-exported here from the shared module so existing imports (if any) keep
+// working. The counter now uses `git worktree list --porcelain` instead of
+// `fs.readdirSync`, so orphan directories no longer inflate the count.
+export { MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS };
 
 /**
  * SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-001:
@@ -265,16 +250,12 @@ function createWorktree(sdKey, repoRoot) {
   }
 
   // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-003: Quota enforcement.
-  // Parity with lib/worktree-manager.js::createWorkTypeWorktree quota check.
-  const existingCount = countWorktreeDirs(worktreesDir);
-  if (existingCount >= MAX_WORKTREE_COUNT) {
-    const err = new Error(
-      `Worktree limit reached (${existingCount}/${MAX_WORKTREE_COUNT}). ` +
-      'Run cleanup or remove stale worktrees before creating new ones.'
-    );
-    err.errorCode = 'WORKTREE_QUOTA_EXCEEDED';
-    throw err;
-  }
+  // Parity with lib/worktree-manager.js::createWorkTypeWorktree via shared
+  // helper in lib/worktree-quota.js (SD-LEO-FIX-WORKTREE-QUOTA-COUNTER-001).
+  // Counter now uses `git worktree list --porcelain`, so orphan directories
+  // no longer inflate the count. Error contract (message + errorCode) is
+  // preserved by `createQuotaExceededError` inside the helper.
+  enforceWorktreeQuota(repoRoot, worktreesDir);
 
   // Look for an existing feature branch
   const _branchPrefix = `feat/${sdKey}`;
