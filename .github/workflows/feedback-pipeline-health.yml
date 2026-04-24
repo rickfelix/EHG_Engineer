@@ -1,0 +1,62 @@
+name: "Feedback Pipeline Health (SLO)"
+
+# CAPA-6 of SD-LEO-INFRA-FEEDBACK-PIPELINE-HEALTH-001
+# Weekly invariant check: count(status='new' AND ai_triage_classification IS NULL
+# AND age > 2h) must be 0. On breach, opens a GitHub issue so the operator
+# sees the regression immediately.
+
+on:
+  schedule:
+    # Weekly on Monday at 14:00 UTC (dampens false positives from short bursts)
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run health-check
+        id: health
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set +e
+          node scripts/modules/inbox/check-pipeline-health.js 2> health-payload.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat health-payload.json
+          # Expose payload to later steps
+          {
+            echo "payload<<EOF"
+            cat health-payload.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open GitHub issue on breach
+        if: steps.health.outputs.exit_code == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Feedback pipeline SLO breach: stale-untriaged rows detected"
+          BODY=$'## Feedback Pipeline Health Check — BREACH\n\nThe weekly SLO check found `status=new` feedback rows with `ai_triage_classification=NULL` older than 2 hours. This indicates the auto-triage workflow is failing or falling behind.\n\n### Breach Payload\n\n```json\n'"$(cat health-payload.json)"$'\n```\n\n### Triage Steps\n\n1. Check `.github/workflows/clockwork-auto-triage.yml` recent runs — any failures?\n2. Verify `SUPABASE_*` and `OPENAI_API_KEY` secrets are still valid\n3. Inspect the sample_ids in the payload for common patterns (schema drift, noisy producer, etc.)\n4. Run `node scripts/modules/inbox/auto-triage.js --max-items 50` locally to manually drain\n\n### Related\n\n- SD: SD-LEO-INFRA-FEEDBACK-PIPELINE-HEALTH-001\n- Invariant source: `scripts/modules/inbox/check-pipeline-health.js`\n- Run: [View this workflow run]('"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"')'
+          gh issue create \
+            --title "$TITLE" \
+            --body "$BODY" \
+            --label "feedback-pipeline-slo-breach"

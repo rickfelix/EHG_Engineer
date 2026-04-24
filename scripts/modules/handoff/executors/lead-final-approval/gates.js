@@ -32,6 +32,8 @@ export { createWiringValidationGate };
 // Wire Check Gate — AST call graph reachability (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001-C)
 import { createWireCheckGate } from './gates/wire-check-gate.js';
 export { createWireCheckGate };
+import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
+export { createLearningOrBypassResolvedGate };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1061,6 +1063,13 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001-C)
   gates.push(createWireCheckGate(supabase));
 
+  // Learning-or-Bypass-Resolved Gate — completion safeguard
+  // (SD-LEARN-FIX-ADDRESS-PAT-AGENT-001)
+  // Blocks status=completed when --bypass-validation was used without corresponding
+  // /learn execution (learning_runs row) or follow-up SD resolution. Default warn-only;
+  // set ENFORCE_LEARNING_GATE=true to block.
+  gates.push(createLearningOrBypassResolvedGate(supabase));
+
   return gates;
 }
 
@@ -1077,5 +1086,6 @@ export default {
   createSmokeTestGate,
   createAutomatedUatGate,
   createWireCheckGate,
+  createLearningOrBypassResolvedGate,
   getRequiredGates
 };

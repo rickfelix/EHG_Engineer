@@ -139,10 +139,32 @@ export class BaseExecutor {
       try {
         const { assertValidClaim, ClaimIdentityError } = await import('../../../../lib/claim-validity-gate.js');
         const sdKeyForGate = sd?.sd_key || sdId;
-        await assertValidClaim(this.supabase, sdKeyForGate, {
-          operation: `handoff_${this.handoffType}`,
-          allowMainRepoForAcquisition: isOrchestrator
-        });
+
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126 (PAT-RETRO/HF-EXECTOPLAN-0bda95fe residual):
+        // Close the marker-file race. capture-session-id hook writes
+        // .claude/session-identity/<sid>.json but can lag behind handoff invocation
+        // by ~100-250ms on cold sessions. One-shot retry with 250ms delay on
+        // no_deterministic_identity failures closes the race without adding
+        // latency to the happy path (retry fires only on failure).
+        let attempt = 0;
+        const maxAttempts = 2;
+        while (true) {
+          try {
+            await assertValidClaim(this.supabase, sdKeyForGate, {
+              operation: `handoff_${this.handoffType}`,
+              allowMainRepoForAcquisition: isOrchestrator
+            });
+            break; // success
+          } catch (retryable) {
+            attempt += 1;
+            const isFirstRetryWindow = attempt < maxAttempts
+              && retryable?.name === 'ClaimIdentityError'
+              && retryable?.reason === 'no_deterministic_identity';
+            if (!isFirstRetryWindow) throw retryable;
+            console.warn(`[claim-validity] no_deterministic_identity on attempt ${attempt} — waiting 250ms for marker-file to settle, then retrying once.`);
+            await new Promise(r => setTimeout(r, 250));
+          }
+        }
       } catch (e) {
         if (e?.name === 'ClaimIdentityError') {
           console.error(e.toBanner ? e.toBanner() : e.message);
@@ -472,7 +494,13 @@ export class BaseExecutor {
       };
 
     } catch (error) {
-      console.error(`❌ ${this.handoffType} execution error:`, error.message);
+      // QF-20260423-200: Log with full diagnostic context (was: just error.message)
+      const errorClass = error?.constructor?.name || 'Unknown';
+      const errorName = error?.name || errorClass;
+      console.error(`❌ ${this.handoffType} execution error [${errorName}]:`, error?.message || '(no message)');
+      if (error?.stack) {
+        console.error(error.stack.split('\n').slice(0, 5).join('\n'));
+      }
 
       // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Record error in telemetry
       try { endSpan(rootSpan, { result: 'error', error_class: error.constructor?.name, error_message: error.message }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
@@ -481,7 +509,7 @@ export class BaseExecutor {
       const failurePhase = this._getSourcePhaseFromHandoff();
       await this._displayOnFailureDirectives(failurePhase);
 
-      return ResultBuilder.systemError(error);
+      return ResultBuilder.systemError(error, 'executeSpecific');
     }
   }
 

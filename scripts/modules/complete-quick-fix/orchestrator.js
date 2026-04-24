@@ -116,10 +116,12 @@ export async function completeQuickFix(qfId, options = {}) {
   let e2eTestResult = null;
   let testsPass;
 
-  // Allow skipping if explicitly passed and --skip-tests flag
-  if (options.testsPass !== undefined && options.skipTestRun) {
-    console.log('   ⚠️  Using cached test results (--skip-tests flag)\n');
-    testsPass = options.testsPass;
+  // --skip-tests alone means "trust CI / cached results". Default testsPass=true unless
+  // the caller explicitly says otherwise via --tests-pass no. This matches the sibling
+  // pattern at test-runner.js:108-113 (--skip-typecheck works standalone).
+  if (options.skipTestRun) {
+    testsPass = options.testsPass !== undefined ? options.testsPass : true;
+    console.log(`   ⚠️  Skipping test run (--skip-tests); testsPass=${testsPass}\n`);
   } else {
     // Run unit tests in target application directory
     console.log('━━━ Unit Tests ━━━\n');

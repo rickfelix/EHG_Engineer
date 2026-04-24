@@ -80,8 +80,8 @@ Options:
   --branch-name         Git branch name (auto-detected if not provided)
   --actual-loc          Actual lines of code changed (auto-detected from git diff)
   --pr-url              GitHub PR URL (REQUIRED)
-  --skip-tests          Skip running tests (use with --tests-pass to use cached results)
-  --tests-pass          Use cached test result (requires --skip-tests flag)
+  --skip-tests          Skip running tests (trusts CI; testsPass=true by default)
+  --tests-pass          Override testsPass explicitly (yes/no); optional with --skip-tests
   --skip-typecheck      Skip TypeScript verification (not recommended)
   --uat-verified        UAT verified (yes/no, will prompt if not provided)
   --verification-notes  Optional notes about verification

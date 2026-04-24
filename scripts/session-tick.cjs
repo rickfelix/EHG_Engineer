@@ -145,11 +145,15 @@ writeMarker();
 // Fire the first tick immediately so DB sees a fresh process_alive_at ASAP.
 tickOnce();
 
-// Schedule periodic ticks
+// Schedule periodic ticks.
+// QF-20260424-001: Do NOT unref tickInterval — this setInterval is what keeps
+// the detached daemon's Node event loop alive. If it is unref'd, the process
+// exits ~260ms after the initial tickOnce() fetch resolves, leaving only one
+// heartbeat write. Parent-liveness check (below) handles the exit path.
 const tickInterval = setInterval(() => { tickOnce(); }, TICK_MS);
-tickInterval.unref?.();
 
-// Schedule parent liveness checks
+// Schedule parent liveness checks. Unref is intentional here — the parent
+// poll never holds the loop alive on its own; tickInterval does.
 const parentInterval = setInterval(() => {
   if (!parentAlive()) {
     clearInterval(tickInterval);

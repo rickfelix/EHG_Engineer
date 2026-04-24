@@ -42,10 +42,13 @@ export function createVisionDimensionCompletenessGate(supabase) {
       }
 
       try {
-        // Query vision scores for this SD
+        // QF-20260423-812: eva_vision_scores exposes `total_score` and
+        // `dimension_scores` columns. The obsolete `score` / `dimensions` names
+        // caused PostgreSQL errors on every invocation, which the self-catch
+        // below masked as passed=true score=50 — silently falsifying the gate.
         const { data: visionScores, error } = await supabase
           .from('eva_vision_scores')
-          .select('score, dimensions, scored_at')
+          .select('total_score, dimension_scores, scored_at')
           .eq('sd_id', sdId)
           .order('scored_at', { ascending: false })
           .limit(1);
@@ -71,8 +74,8 @@ export function createVisionDimensionCompletenessGate(supabase) {
         }
 
         const latest = visionScores[0];
-        const overallScore = latest.score || 0;
-        const dimensions = latest.dimensions || {};
+        const overallScore = latest.total_score || 0;
+        const dimensions = latest.dimension_scores || {};
 
         // Check individual dimension coverage
         const dimensionKeys = Object.keys(dimensions);
