@@ -526,13 +526,34 @@ async function main() {
   const claimedKeys = new Set((claimedSdStatus || []).map(sd => sd.sd_key));
   const { data: allPendingApproval } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, status, current_phase, progress_percentage, completion_date')
+    .select('id, sd_key, status, current_phase, progress_percentage, completion_date')
     .eq('status', 'pending_approval');
 
   const activeClaimSdIds = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_key));
   const stuckApproval = (allPendingApproval || []).filter(sd => !activeClaimSdIds.has(sd.sd_key));
 
+  // QF-20260423-909: Guard against resetting SDs that legitimately completed
+  // PLAN-TO-LEAD and are resting in pending_approval awaiting LEAD-FINAL-APPROVAL.
+  // sd_phase_handoffs.sd_id holds BOTH uuid- and sd_key-style values; check both.
+  const stuckApprovalIds = stuckApproval.flatMap(sd => [sd.id, sd.sd_key].filter(Boolean));
+  let acceptedPlanToLeadSet = new Set();
+  if (stuckApprovalIds.length > 0) {
+    const { data: p2lHandoffs } = await supabase
+      .from('sd_phase_handoffs')
+      .select('sd_id')
+      .eq('handoff_type', 'PLAN-TO-LEAD')
+      .eq('status', 'accepted')
+      .in('sd_id', stuckApprovalIds);
+    acceptedPlanToLeadSet = new Set((p2lHandoffs || []).map(h => h.sd_id));
+  }
+
   for (const sd of stuckApproval) {
+    // QF-20260423-909: Skip reset if PLAN-TO-LEAD handoff already accepted —
+    // SD is legitimately awaiting LEAD-FINAL-APPROVAL, not stuck.
+    if (acceptedPlanToLeadSet.has(sd.sd_key) || acceptedPlanToLeadSet.has(sd.id)) {
+      actions.push('QA: skipped reset on ' + sd.sd_key + ' — PLAN-TO-LEAD accepted, awaiting LEAD-FINAL-APPROVAL');
+      continue;
+    }
     // FIX #1: STUCK_100 — if at 100% with completion_date, mark completed instead of resetting
     if (sd.progress_percentage >= 100 && sd.completion_date) {
       const { error } = await supabase
