@@ -69,7 +69,10 @@ export const SD_TYPE_ADDRESSABLE_DIMENSIONS = {
   feature:        null, // features can address all dimensions
   governance:     null,
   security:       ['security', 'compliance', 'risk', 'architecture', 'reliability', 'data'],
-  infrastructure: ['architecture', 'reliability', 'scalability', 'performance', 'security', 'maintainability', 'automation', 'observability'],
+  // SD-LEO-INFRA-EXPAND-GATE-VISION-001: added cli/workflow/protocol/governance
+  // so EHG_Engineer CLI-first infra SDs score on real dim coverage instead of
+  // silently floor-rule-passing. PAT-HF-LEADTOPLAN-1cbfab60 was the standing evidence.
+  infrastructure: ['architecture', 'reliability', 'scalability', 'performance', 'security', 'maintainability', 'automation', 'observability', 'cli', 'workflow', 'protocol', 'governance'],
   enhancement:    null,
   maintenance:    ['reliability', 'maintainability', 'performance', 'security', 'architecture'],
   protocol:       ['process', 'governance', 'compliance', 'documentation', 'automation', 'quality'],
