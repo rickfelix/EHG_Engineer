@@ -157,6 +157,76 @@ export async function hasActiveWorkEvidence(supabase, sdId, sd, recencyMinutes =
 }
 
 /**
+ * Detect contention via SD enrichment metadata (updated_by + updated_at).
+ *
+ * SD-MAN-INFRA-NEXT-CONTENTION-DETECTOR-001: covers the "cycling claim" case
+ * where another active session has just touched an SD (writing updated_by /
+ * updated_at) but does not currently hold the formal claim. Today sd:next
+ * recommends such SDs as workable; this signal upgrades the LOCAL_ACTIVITY
+ * badge to CLAIMED for the duration of the window.
+ *
+ * Pivoted from the SD's original `enriched_by_session`/`enriched_at` design
+ * because those columns do not exist on strategic_directives_v2; we use the
+ * always-present updated_by + updated_at instead. Window is configurable via
+ * env CONTENTION_DETECTOR_WINDOW_MIN (default 10 minutes).
+ *
+ * @param {Object} params
+ * @param {Object} params.sd - SD row (must include updated_by and updated_at)
+ * @param {Array}  params.activeSessions - claude_sessions rows with status='active'
+ * @param {number} [params.recencyMinutes=10] - Window in minutes; values <=0 disable the check
+ * @returns {{ inProgress: boolean, sessionId: string|null, ageMin: number|null, reason: string }}
+ *   inProgress=true means the SD was touched by an active session within the window.
+ *   reason is a short diagnostic string suitable for display.
+ */
+export function checkEnrichmentSignal({ sd, activeSessions, recencyMinutes } = {}) {
+  const envWindow = process.env.CONTENTION_DETECTOR_WINDOW_MIN
+    ? Number(process.env.CONTENTION_DETECTOR_WINDOW_MIN)
+    : null;
+  const windowMin = Number.isFinite(recencyMinutes) ? recencyMinutes
+                  : Number.isFinite(envWindow) ? envWindow
+                  : 10;
+
+  if (windowMin <= 0) {
+    return { inProgress: false, sessionId: null, ageMin: null, reason: 'window_disabled' };
+  }
+  if (!sd || typeof sd !== 'object') {
+    return { inProgress: false, sessionId: null, ageMin: null, reason: 'no_sd' };
+  }
+
+  // Fail-fast on missing source columns (per validation-agent condition).
+  // updated_by may be a UUID (session_id) or a username/system string; we
+  // accept both and rely on activeSessions lookup to disambiguate.
+  if (!Object.prototype.hasOwnProperty.call(sd, 'updated_by') || !Object.prototype.hasOwnProperty.call(sd, 'updated_at')) {
+    return { inProgress: false, sessionId: null, ageMin: null, reason: 'missing_source_columns' };
+  }
+  if (!sd.updated_by || !sd.updated_at) {
+    return { inProgress: false, sessionId: null, ageMin: null, reason: 'no_enrichment' };
+  }
+
+  const updatedAt = new Date(sd.updated_at);
+  if (Number.isNaN(updatedAt.getTime())) {
+    return { inProgress: false, sessionId: null, ageMin: null, reason: 'invalid_updated_at' };
+  }
+  const ageMin = (Date.now() - updatedAt.getTime()) / 60_000;
+  if (ageMin > windowMin) {
+    return { inProgress: false, sessionId: sd.updated_by, ageMin: Math.round(ageMin), reason: 'window_expired' };
+  }
+
+  const sessions = Array.isArray(activeSessions) ? activeSessions : [];
+  const match = sessions.find(s => s && s.session_id === sd.updated_by && s.status === 'active');
+  if (!match) {
+    return { inProgress: false, sessionId: sd.updated_by, ageMin: Math.round(ageMin), reason: 'no_active_match' };
+  }
+
+  return {
+    inProgress: true,
+    sessionId: sd.updated_by,
+    ageMin: Math.round(ageMin),
+    reason: 'active_match_within_window',
+  };
+}
+
+/**
  * Auto-release a stale dead claim. Only call when relationship is 'stale_dead'
  * (triple-confirmed: heartbeat stale + same host + PID dead).
  *
