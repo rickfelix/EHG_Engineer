@@ -472,7 +472,13 @@ export class BaseExecutor {
       };
 
     } catch (error) {
-      console.error(`❌ ${this.handoffType} execution error:`, error.message);
+      // QF-20260423-200: Log with full diagnostic context (was: just error.message)
+      const errorClass = error?.constructor?.name || 'Unknown';
+      const errorName = error?.name || errorClass;
+      console.error(`❌ ${this.handoffType} execution error [${errorName}]:`, error?.message || '(no message)');
+      if (error?.stack) {
+        console.error(error.stack.split('\n').slice(0, 5).join('\n'));
+      }
 
       // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Record error in telemetry
       try { endSpan(rootSpan, { result: 'error', error_class: error.constructor?.name, error_message: error.message }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
@@ -481,7 +487,7 @@ export class BaseExecutor {
       const failurePhase = this._getSourcePhaseFromHandoff();
       await this._displayOnFailureDirectives(failurePhase);
 
-      return ResultBuilder.systemError(error);
+      return ResultBuilder.systemError(error, 'executeSpecific');
     }
   }
 

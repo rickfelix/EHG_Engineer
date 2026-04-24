@@ -58,17 +58,51 @@ export class ResultBuilder {
   }
 
   /**
-   * Create a system error response
+   * Create a system error response.
+   *
+   * QF-20260423-200: Enhanced to surface errorClass, stack frames, and source
+   * step so operators can diagnose uncaught exceptions instead of seeing an
+   * opaque "SYSTEM_ERROR" with empty message. If the error was wrapped with a
+   * structured name (ANALYSIS_SYNTHESIS_FAILED, RUSSIAN_JUDGE_FAILED,
+   * VERIFIER_EXCEPTION), that name is used as the reasonCode — the CLI surfaces
+   * the specific failure step via `REASON=<specific>` instead of generic.
+   *
    * @param {Error|string} error - Error object or message
-   * @returns {object} System error response
+   * @param {string} [sourceStep=null] - Optional hint about which step threw (e.g. 'executeSpecific')
+   * @returns {object} System error response with diagnostic fields
    */
-  static systemError(error) {
-    const message = error instanceof Error ? error.message : String(error);
+  static systemError(error, sourceStep = null) {
+    const isErrorInstance = error instanceof Error;
+    const rawMessage = isErrorInstance ? error.message : String(error);
+    const errorClass = isErrorInstance ? (error.constructor?.name || 'Error') : 'Unknown';
+    const errorName = isErrorInstance ? error.name : null;
+    const stack = isErrorInstance && error.stack
+      ? error.stack.split('\n').slice(0, 10).join('\n')
+      : null;
+
+    // Structured reason codes surface the precise failure step via CLI output
+    const STRUCTURED_NAMES = new Set([
+      'ANALYSIS_SYNTHESIS_FAILED',
+      'RUSSIAN_JUDGE_FAILED',
+      'VERIFIER_EXCEPTION'
+    ]);
+    const reasonCode = (errorName && STRUCTURED_NAMES.has(errorName)) ? errorName : 'SYSTEM_ERROR';
+    const message = rawMessage && rawMessage.length > 0
+      ? rawMessage
+      : `${errorClass} thrown with no message${sourceStep ? ` at ${sourceStep}` : ''}`;
+
     return {
       success: false,
       error: message,
-      reasonCode: 'SYSTEM_ERROR',
-      systemError: true
+      message,
+      errorClass,
+      errorStack: stack,
+      sourceStep: sourceStep || null,
+      reasonCode,
+      systemError: true,
+      remediation: stack
+        ? `Error class: ${errorClass}\nSource step: ${sourceStep || 'executor post-gate path'}\nStack (first 10 frames):\n${stack}`
+        : null
     };
   }
 

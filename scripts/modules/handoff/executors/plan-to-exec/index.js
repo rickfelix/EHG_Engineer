@@ -290,13 +290,34 @@ export class PlanToExecExecutor extends BaseExecutor {
     }
 
     // V03: AnalysisStep — Synthesize prior LEAD phase evaluation data (SD-MAN-GEN-CORRECTIVE-VISION-GAP-010)
-    const analysisStep = await this._synthesizeLeadAnalysis(sdId, sd, prd);
+    // QF-20260423-200: Wrap in diagnostic catch — any exception gets a structured
+    // reason code (ANALYSIS_SYNTHESIS_FAILED) so ResultBuilder.systemError surfaces
+    // the specific failure step in REASON= instead of generic SYSTEM_ERROR.
+    let analysisStep;
+    try {
+      analysisStep = await this._synthesizeLeadAnalysis(sdId, sd, prd);
+    } catch (error) {
+      const wrapped = new Error(`ANALYSIS_SYNTHESIS_FAILED: ${error.message || error.constructor?.name || 'unknown'}`);
+      wrapped.name = 'ANALYSIS_SYNTHESIS_FAILED';
+      wrapped.cause = error;
+      if (error.stack) wrapped.stack = `${wrapped.message}\nCaused by: ${error.stack}`;
+      throw wrapped;
+    }
     if (analysisStep) {
       options._analysisStep = analysisStep;
     }
 
     // AI Quality Assessment (Russian Judge) - PRD & User Stories
-    await this._runRussianJudgeAssessment(prd, sd);
+    // QF-20260423-200: Wrap in diagnostic catch (see above)
+    try {
+      await this._runRussianJudgeAssessment(prd, sd);
+    } catch (error) {
+      const wrapped = new Error(`RUSSIAN_JUDGE_FAILED: ${error.message || error.constructor?.name || 'unknown'}`);
+      wrapped.name = 'RUSSIAN_JUDGE_FAILED';
+      wrapped.cause = error;
+      if (error.stack) wrapped.stack = `${wrapped.message}\nCaused by: ${error.stack}`;
+      throw wrapped;
+    }
 
     // Standard PLAN-to-EXEC verification
     console.log('🔍 Step 2: Standard PLAN→EXEC Verification');
@@ -309,7 +330,16 @@ export class PlanToExecExecutor extends BaseExecutor {
       verificationResult = { success: true, bypassed: true };
     } else {
       const verifier = new PlanToExecVerifier();
-      verificationResult = await verifier.verifyHandoff(sdId, options.prdId);
+      // QF-20260423-200: Wrap in diagnostic catch (see above)
+      try {
+        verificationResult = await verifier.verifyHandoff(sdId, options.prdId);
+      } catch (error) {
+        const wrapped = new Error(`VERIFIER_EXCEPTION: ${error.message || error.constructor?.name || 'unknown'}`);
+        wrapped.name = 'VERIFIER_EXCEPTION';
+        wrapped.cause = error;
+        if (error.stack) wrapped.stack = `${wrapped.message}\nCaused by: ${error.stack}`;
+        throw wrapped;
+      }
 
       if (!verificationResult.success) {
         return verificationResult;
