@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-04-23T01:43:54.948Z",
-  "git_commit": "dd4af67c",
-  "db_snapshot_hash": "1b7482beab585910",
+  "generated_at": "2026-04-24T11:38:22.548Z",
+  "git_commit": "3f7b4bc6",
+  "db_snapshot_hash": "025565500b723151",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 11288,
       "estimated_tokens": 2822,
-      "content_hash": "d83252b81625b7fd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE.md"
+      "content_hash": "bfec2cfd1339086c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 65841,
-      "estimated_tokens": 16461,
-      "content_hash": "2914ac08f6c32116",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_CORE.md"
+      "chars": 69604,
+      "estimated_tokens": 17401,
+      "content_hash": "fc8f427e984f9b87",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 58959,
       "estimated_tokens": 14740,
-      "content_hash": "5ca2a4dfe315133a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_LEAD.md"
+      "content_hash": "a68217fbf36547ca",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 87716,
       "estimated_tokens": 21929,
-      "content_hash": "5e0910818bdfbb73",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_PLAN.md"
+      "content_hash": "ba1d1638912b1474",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 76697,
       "estimated_tokens": 19175,
-      "content_hash": "cf59d1696d4475bf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_EXEC.md"
+      "content_hash": "3a44bffb74bb97b4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9141,
       "estimated_tokens": 2286,
-      "content_hash": "a87d11c58704a8cc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_DIGEST.md"
+      "content_hash": "75093ac1968e3c8b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 10927,
       "estimated_tokens": 2732,
-      "content_hash": "589fe60b6ffbb8d7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "8e7ed090c52c9bf8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 4801,
       "estimated_tokens": 1201,
-      "content_hash": "20e29712e69272d6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "99831a4c7b8e652b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 7809,
       "estimated_tokens": 1953,
-      "content_hash": "af2213646f23f4ff",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "13d56645f5c85c7f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10207,
       "estimated_tokens": 2552,
-      "content_hash": "33a222c035c83811",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-PROTOCOL-LINTER-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "8bcbfbd4946e6314",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }
