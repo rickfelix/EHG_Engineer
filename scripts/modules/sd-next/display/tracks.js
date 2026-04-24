@@ -8,6 +8,7 @@ import { getPhaseAwareStatus } from '../status-helpers.js';
 import { parseDependencies } from '../dependency-resolver.js';
 import { formatVisionBadge } from './vision-scorecard.js';
 import { analyzeClaimRelationship, autoReleaseStaleDeadClaim, checkEnrichmentSignal } from '../claim-analysis.js';
+import { renderQFRow } from './quick-fixes.js';
 
 /**
  * Display a track section with hierarchical SD items
@@ -65,6 +66,13 @@ export async function displayTrackSection(trackKey, trackName, items, sessionCon
  * @param {Object} sessionContext - Session context
  */
 async function displaySDItem(item, indent, childItems, allItems, sessionContext) {
+  // SD-LEO-INFRA-UNIFY-QUICK-FIX-001 (Phase 3): QFs render with their own row
+  // format (tier badge + severity + age), not the SD hierarchical format.
+  if (item.kind === 'qf') {
+    renderQFRow(item, indent);
+    return;
+  }
+
   const { claimedSDs = new Map(), currentSession = null, activeSessions = [], localSignals = new Map(), supabase = null } = sessionContext;
 
   const sdId = item.sd_key || item.sd_id;

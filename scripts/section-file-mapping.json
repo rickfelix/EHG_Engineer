@@ -42,6 +42,7 @@
       "sd_type_workflow_paths",
       "work_tracking_policy",
       "qf_lifecycle_reconciliation",
+      "queue_ranking_unified",
       "genesis_codebase",
       "governance_strategic_hierarchy",
       "governance_chairman_ceo_roles",

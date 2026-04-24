@@ -6,18 +6,32 @@
 import { colors } from '../colors.js';
 import { checkDependenciesResolved } from '../dependency-resolver.js';
 import { displayTrackSection } from './tracks.js';
+import { rankItems } from '../rank-items.js';
+import { classifyQuickFixes } from './quick-fixes.js';
 
 /**
- * Show fallback queue when no baseline is active
+ * Show fallback queue when no baseline is active.
+ *
+ * SD-LEO-INFRA-UNIFY-QUICK-FIX-001:
+ *   - Phase 2: delegates ranking to rank-items.js so urgency, vision gap,
+ *     OKR blend, and policy boost apply in no-baseline mode.
+ *   - Phase 3: interleaves Quick Fixes with SDs in their inferred tracks
+ *     via rank-items.js, removing the separate OPEN QUICK FIXES section.
+ *     Returns a summary the orchestrator uses for AUTO_PROCEED_ACTION.
  *
  * @param {Object} supabase - Supabase client
- * @param {Object} options - Display options
+ * @param {Object} options  - { skipBaselineWarning, sessionContext, openQuickFixes, qfTriageResults }
+ * @returns {Promise<Object>} qfSummary with topStartableQF (or empty summary if no QFs passed)
  */
 export async function showFallbackQueue(supabase, options = {}) {
-  const { skipBaselineWarning = false, sessionContext = {} } = options;
+  const {
+    skipBaselineWarning = false,
+    sessionContext = {},
+    openQuickFixes = [],
+    qfTriageResults = new Map(),
+  } = options;
 
-  // SD-LEO-INFRA-OKR-PIPELINE-AUTOMATION-001: Load OKR scores for fallback ranking
-  // Load configurable blend weight
+  // Load configurable OKR blend weight (shared with baseline path).
   let okrBlendWeight = 0.30;
   try {
     const { data: configRow } = await supabase
@@ -30,10 +44,11 @@ export async function showFallbackQueue(supabase, options = {}) {
     }
   } catch { /* non-fatal */ }
 
-  // No baseline - fall back to sequence_rank on SDs directly
+  // No baseline — use strategic_directives_v2.sequence_rank + category as baseline substitutes.
+  // Column list mirrors what rankItems() reads: sequence_rank, category, metadata, vision_*, venture_id.
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on, parent_sd_id')
+    .select('id, sd_key, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on, parent_sd_id, category, vision_score, vision_origin_score_id, venture_id')
     .eq('is_active', true)
     .in('status', ['draft', 'lead_review', 'plan_active', 'exec_active', 'active', 'in_progress'])
     .in('priority', ['critical', 'high', 'medium'])
@@ -45,8 +60,8 @@ export async function showFallbackQueue(supabase, options = {}) {
     return;
   }
 
-  // Batch-load OKR alignment scores for fallback SDs
-  const okrScores = new Map();
+  // Batch-load OKR alignment scores. Map shape: sd_uuid -> score (0-90).
+  const okrScoreMap = new Map();
   try {
     const sdUUIDs = sds.map(s => s.id);
     const { data: krAlignments } = await supabase
@@ -69,81 +84,68 @@ export async function showFallbackQueue(supabase, options = {}) {
           const contrib = CONTRIB[a.contribution_type] ?? 0.5;
           total += 10 * urgency * contrib * (a.contribution_weight ?? 1.0);
         }
-        okrScores.set(sdId, Math.min(total, 90));
+        okrScoreMap.set(sdId, Math.min(total, 90));
       }
     }
   } catch { /* non-fatal */ }
 
-  // Group by track from metadata
-  const tracks = { A: [], B: [], C: [], STANDALONE: [], UNASSIGNED: [] };
-
+  // Pre-enrich SDs with async dependency resolution (rankItems() is pure).
+  const enrichedSDs = [];
   for (const sd of sds) {
-    const track = sd.metadata?.execution_track || 'UNASSIGNED';
-    const trackKey = track === 'Infrastructure' || track === 'Safety' ? 'A' :
-                     track === 'Feature' ? 'B' :
-                     track === 'Quality' ? 'C' :
-                     track === 'STANDALONE' ? 'STANDALONE' : 'UNASSIGNED';
-
     const depsResolved = await checkDependenciesResolved(supabase, sd.dependencies);
-    const okrScore = okrScores.get(sd.id) || 0;
-
-    tracks[trackKey].push({
-      ...sd,
-      deps_resolved: depsResolved,
-      track: trackKey,
-      okr_score: okrScore,
-      composite_rank: (sd.sequence_rank || 9999) - (okrScore * okrBlendWeight)
-    });
+    enrichedSDs.push({ ...sd, deps_resolved: depsResolved });
   }
 
-  // Sort each track by OKR-blended composite rank
-  for (const trackSDs of Object.values(tracks)) {
-    trackSDs.sort((a, b) => (a.composite_rank ?? 9999) - (b.composite_rank ?? 9999));
-  }
+  // Phase 3: classify QFs (computes escalation + claim badges, returns summary
+  // for AUTO_PROCEED_ACTION routing), tag with kind='qf', and feed into the
+  // same ranking call so QFs interleave with SDs in their inferred tracks.
+  const { summary: qfSummary, classified: classifiedQFs } = classifyQuickFixes(
+    openQuickFixes, qfTriageResults, sessionContext
+  );
+  const qfItems = classifiedQFs.map(qf => ({ ...qf, kind: 'qf' }));
 
-  // Display tracks
-  displayTrackSection('A', 'Infrastructure/Safety', tracks.A, sessionContext);
-  displayTrackSection('B', 'Feature/Stages', tracks.B, sessionContext);
-  displayTrackSection('C', 'Quality', tracks.C, sessionContext);
+  // Pure ranking: no baseline map — empty Map signals fallback mode.
+  // rank-items resolves sequence_rank from the SD row and track from
+  // metadata/category, and routes QFs via their severity + type.
+  const { tracks } = rankItems([...enrichedSDs, ...qfItems], {
+    baselineItemsMap: new Map(),
+    okrScoreMap,
+    okrBlendWeight,
+  });
+
+  // Display tracks (shared shape with baseline path). Must await — displaySDItem
+  // runs async claim checks that otherwise interleave output with later sections.
+  await displayTrackSection('A', 'Infrastructure/Safety', tracks.A, sessionContext);
+  await displayTrackSection('B', 'Feature/Stages', tracks.B, sessionContext);
+  await displayTrackSection('C', 'Quality', tracks.C, sessionContext);
   if (tracks.STANDALONE.length > 0) {
-    displayTrackSection('STANDALONE', 'Standalone (No Dependencies)', tracks.STANDALONE, sessionContext);
-  }
-  if (tracks.UNASSIGNED.length > 0) {
-    displayTrackSection('UNASSIGNED', 'Unassigned (Needs Track)', tracks.UNASSIGNED, sessionContext);
-  }
-
-  // Find ready SDs (include unassigned)
-  const readySDs = [];
-  for (const sd of sds) {
-    const depsResolved = await checkDependenciesResolved(supabase, sd.dependencies);
-    if (depsResolved) {
-      readySDs.push(sd);
-    }
+    await displayTrackSection('STANDALONE', 'Standalone (No Dependencies)', tracks.STANDALONE, sessionContext);
   }
 
   console.log(`\n${colors.bold}${colors.green}RECOMMENDED STARTING POINTS:${colors.reset}`);
 
-  if (sds.find(s => s.is_working_on)) {
-    const workingOn = sds.find(s => s.is_working_on);
+  const workingOn = sds.find(s => s.is_working_on);
+  if (workingOn) {
     console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${workingOn.sd_key || workingOn.id} - ${workingOn.title}`);
     console.log(`${colors.dim}   (Marked as "Working On" in UI)${colors.reset}`);
   }
 
-  // Show top ready SD per track (including unassigned)
+  // Show top ready SD per track.
   for (const [trackKey, trackSDs] of Object.entries(tracks)) {
     const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on);
     if (ready) {
-      const trackLabel = trackKey === 'UNASSIGNED' ? 'Unassigned' : `Track ${trackKey}`;
+      const trackLabel = `Track ${trackKey}`;
       console.log(`${colors.green}  ${trackLabel}:${colors.reset} ${ready.sd_key || ready.id} - ${ready.title.substring(0, 50)}...`);
     }
   }
 
   console.log(`\n${colors.dim}To begin: "I'm working on <SD-ID>"${colors.reset}`);
 
-  // Baseline creation prompt (skip if we already showed exhausted baseline message)
   if (!skipBaselineWarning) {
     displayNoBaselineWarning();
   }
+
+  return qfSummary;
 }
 
 /**
