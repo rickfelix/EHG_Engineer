@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-23T22:47:27.849Z
+**Generated**: 2026-04-24T02:57:22.920Z
 **Rows**: 18
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (31 total)
+## Columns (32 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -49,6 +49,7 @@
 | required_sub_agents | `jsonb` | YES | `'{}'::jsonb` | Phase-keyed sub-agent requirements. Format: {"PLAN": ["STORIES", "DESIGN"], "EXEC": ["TESTING"]} |
 | coverage_threshold_pct | `integer(32)` | YES | - | Test pass rate threshold (0-100). NULL = fallback to system default (60/40). Phase 2 will add severity-based overrides. |
 | coverage_blocking | `boolean` | YES | `true` | Whether failing the threshold blocks the handoff (TRUE) or is advisory only (FALSE). |
+| prd_minimum_score | `numeric` | YES | - | - |
 
 ## Constraints
 
@@ -61,6 +62,7 @@
 - `sd_type_validation_profiles_lead_weight_check`: CHECK (((lead_weight >= 0) AND (lead_weight <= 100)))
 - `sd_type_validation_profiles_min_handoffs_check`: CHECK (((min_handoffs >= 0) AND (min_handoffs <= 5)))
 - `sd_type_validation_profiles_plan_weight_check`: CHECK (((plan_weight >= 0) AND (plan_weight <= 100)))
+- `sd_type_validation_profiles_prd_minimum_score_check`: CHECK (((prd_minimum_score >= (0)::numeric) AND (prd_minimum_score <= (100)::numeric)))
 - `sd_type_validation_profiles_verify_weight_check`: CHECK (((verify_weight >= 0) AND (verify_weight <= 100)))
 - `security_floor`: CHECK ((NOT (((sd_type)::text = 'security'::text) AND (coverage_threshold_pct IS NOT NULL) AND (coverage_threshold_pct < 100))))
 - `valid_human_verification_type`: CHECK ((human_verification_type = ANY (ARRAY['ui_smoke_test'::text, 'api_test'::text, 'cli_verification'::text, 'documentation_review'::text, 'none'::text])))
