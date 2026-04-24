@@ -22,6 +22,11 @@ import { resolveOwnSession } from '../lib/resolve-own-session.js';
 import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate.js';
 import sessionIdentitySot from '../lib/session-identity-sot.js';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
+// SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 — pre-claim multi-signal evidence-of-life gate.
+// Wraps claimGuard's heartbeat/inactive auto-release to prevent hostile reclaim
+// when the prior session has been released but its CC conversation is still active
+// under a rotated session_id (the 2026-04-24 incident class).
+import { checkPreClaimEvidence } from './modules/claim-health/triangulate.js';
 import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
@@ -697,10 +702,85 @@ async function main() {
   // SD-LEO-INFRA-PRE-CLAIM-CHECK-001: Auto-fallback on claim conflict
   const autoProceed = await getSessionAutoProceed(session.session_id);
   const fallbackEnabled = autoProceed || process.argv.includes('--fallback');
+  // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001: --force-reclaim override flag (telemetry-emitting)
+  const forceReclaim = process.argv.includes('--force-reclaim');
   let claimResult = await claimGuard(effectiveId, session.session_id, { autoFallback: fallbackEnabled });
   const skippedSDs = [];
 
   if (!claimResult.success) {
+    // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 (FR2): Evidence-of-life pre-claim gate.
+    // Before any auto-release path, check triangulate() for evidence that the prior
+    // claim's CC conversation is still alive (cross-shell, rotated session_id, etc.).
+    // If evidence is present and --force-reclaim not passed, FAIL CLOSED.
+    try {
+      const evidenceCheck = await checkPreClaimEvidence(supabase, effectiveId, {
+        mySessionId: session.session_id
+      });
+      if (!evidenceCheck.allowReclaim && !forceReclaim) {
+        const evidenceList = (evidenceCheck.evidence || []).join(', ') || 'unknown';
+        console.log(
+          `\n${colors.red}═══════════════════════════════════════════════════════════════════${colors.reset}`
+        );
+        console.log(
+          `${colors.red}🚫 CROSS-SIGNAL EVIDENCE-OF-LIFE GATE BLOCKED — claim_protected${colors.reset}`
+        );
+        console.log(
+          `${colors.red}═══════════════════════════════════════════════════════════════════${colors.reset}`
+        );
+        console.log(`  SD:             ${effectiveId}`);
+        console.log(`  Classification: ${evidenceCheck.classification}`);
+        console.log(`  Evidence:       ${evidenceList}`);
+        console.log(`  My session:     ${session.session_id}`);
+        console.log(`  Owner session:  ${claimResult.owner?.session_id || '(none)'}`);
+        console.log('');
+        console.log(`  ${colors.yellow}Why blocked:${colors.reset} The owning session is released or stale, but`);
+        console.log(`  triangulate() detected evidence the CC conversation is still active`);
+        console.log(`  (sub-agent activity in last 5 min, sibling session on the branch,`);
+        console.log(`  warm worktree, or matching plan-file). Auto-releasing this claim`);
+        console.log(`  would clobber that other session's work.`);
+        console.log('');
+        console.log(`  ${colors.cyan}Options:${colors.reset}`);
+        console.log(`    1. Pick a different SD: npm run sd:next`);
+        console.log(`    2. Confirm the other session is truly gone, then retry with:`);
+        console.log(`       node scripts/sd-start.js ${effectiveId} --force-reclaim`);
+        console.log(
+          `${colors.red}═══════════════════════════════════════════════════════════════════${colors.reset}\n`
+        );
+        process.exit(1);
+      }
+      if (!evidenceCheck.allowReclaim && forceReclaim) {
+        // Telemetry: log the override to audit_log so systemic false-positives surface.
+        const evidenceList = (evidenceCheck.evidence || []).join(', ');
+        console.log(
+          `${colors.yellow}⚠ --force-reclaim override accepted. Evidence-of-life signals were present (${evidenceList}); proceeding anyway.${colors.reset}`
+        );
+        try {
+          await supabase.from('audit_log').insert({
+            event_type: 'claim_force_reclaim',
+            severity: 'warning',
+            actor: session.session_id,
+            details: JSON.stringify({
+              sd_key: effectiveId,
+              classification: evidenceCheck.classification,
+              evidence: evidenceCheck.evidence,
+              owner_session: claimResult.owner?.session_id || null,
+              my_session: session.session_id,
+              at: new Date().toISOString(),
+              source: 'sd-start.js',
+              ref: 'SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001'
+            })
+          });
+        } catch (auditErr) {
+          // audit_log failure is non-blocking but should be visible
+          console.log(`${colors.dim}(audit_log emission skipped: ${auditErr.message})${colors.reset}`);
+        }
+      }
+    } catch (gateErr) {
+      // Gate must fail-open on internal errors so we don't break the claim path entirely.
+      // Real failures will still be caught by the existing claimGuard logic below.
+      console.log(`${colors.dim}(cross-signal gate skipped: ${gateErr.message})${colors.reset}`);
+    }
+
     // SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-001: Heartbeat TTL check (cross-machine compatible)
     // Releases claims from sessions whose heartbeat is >30 minutes stale, regardless of PID visibility.
     let autoReleased = false;
