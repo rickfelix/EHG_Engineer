@@ -51,6 +51,7 @@ import {
   validatePRDGrounding,
   formatValidationResults
 } from '../../lib/prd-grounding-validator.js';
+import { validatePRDQuality, resolveEnforcementMode } from './quality-validator.js';
 import {
   extractPersonasFromSD,
   isPersonaIngestionEnabled,
@@ -479,6 +480,46 @@ async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, 
 
         if (existingPrd) {
           console.log(`   ✅ PRD record verified in database (id: ${existingPrd.id}, status: ${existingPrd.status})`);
+
+          // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129 (FR-4): Post-insert quality validation.
+          // Default mode is 'off' for backwards compatibility; operators opt in via
+          // PRD_QUALITY_ENFORCEMENT_MODE=warn|block once the rubric has been tuned.
+          const qualityMode = resolveEnforcementMode();
+          if (qualityMode !== 'off') {
+            try {
+              const { data: fullPrd } = await supabase
+                .from('product_requirements_v2')
+                .select('functional_requirements, technical_requirements, acceptance_criteria, test_scenarios, risks, system_architecture, implementation_approach')
+                .eq('id', existingPrd.id)
+                .single();
+              const result = validatePRDQuality(fullPrd || {});
+              const logPayload = {
+                event: 'prd_quality_check',
+                prd_id: existingPrd.id,
+                mode: qualityMode,
+                score: result.score,
+                threshold: result.threshold,
+                passed: result.passed,
+                breakdown: result.breakdown
+              };
+              console.log(`   [prd-quality] ${JSON.stringify(logPayload)}`);
+              if (!result.passed) {
+                if (qualityMode === 'block') {
+                  console.error(`\n   ❌ PRD QUALITY GATE FAILED: score=${result.score} threshold=${result.threshold}`);
+                  for (const dim of result.breakdown) {
+                    if (dim.reasons.length) {
+                      console.error(`      - ${dim.dimension} (${dim.score}/10): ${dim.reasons.join('; ')}`);
+                    }
+                  }
+                  process.exit(1);
+                } else {
+                  console.warn(`   ⚠️  PRD quality warning (warn-only): score=${result.score} threshold=${result.threshold}`);
+                }
+              }
+            } catch (qErr) {
+              console.warn(`   [prd-quality] validator error (non-blocking): ${qErr.message}`);
+            }
+          }
         } else {
           console.log('\n   ⚠️  WARNING: No PRD record found in product_requirements_v2 for this SD.');
           console.log('   The downstream PLAN-TO-EXEC handoff WILL FAIL without a PRD record.');
