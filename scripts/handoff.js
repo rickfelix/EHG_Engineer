@@ -18,6 +18,18 @@
 
 import { main } from './modules/handoff/cli/index.js';
 import { claimGuard } from '../lib/claim-guard.mjs';
+import { startHeartbeat } from '../lib/heartbeat-manager.mjs';
+
+// SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR1 call-site migration):
+// Start an in-process heartbeat for the duration of this script. Cooperative
+// ownership mode means the parent Claude Code session retains claim
+// ownership — we don't release on exit. This closes the "long gate
+// evaluation triggers stale-sweep auto-release" race that caused live
+// claim loss during validation-agent runs on 2026-04-24.
+// No-op when CLAUDE_SESSION_ID is absent (CI, ad-hoc manual runs).
+if (process.env.CLAUDE_SESSION_ID) {
+  startHeartbeat(process.env.CLAUDE_SESSION_ID, { ownershipMode: 'cooperative' });
+}
 
 // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: Pre-delegate claim assertion
 // Ensures claim exists before forwarding to the handoff executor

@@ -48,8 +48,18 @@ export {
 // CLI entry point - delegate to modular index
 import { addPRDToDatabase } from './prd/index.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { startHeartbeat } from '../lib/heartbeat-manager.mjs';
 
 if (isMainModule(import.meta.url)) {
+  // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR1 call-site migration):
+  // PRD creation is sub-agent-heavy and regularly exceeds the 15-min claim
+  // TTL (validation-agent + LLM generation + STORIES sub-agent). Start an
+  // in-process heartbeat in cooperative mode so the parent session's
+  // claim is preserved throughout. No-op when CLAUDE_SESSION_ID is absent.
+  if (process.env.CLAUDE_SESSION_ID) {
+    startHeartbeat(process.env.CLAUDE_SESSION_ID, { ownershipMode: 'cooperative' });
+  }
+
   const args = process.argv.slice(2);
   if (args.length < 1) {
     console.log('Usage: node scripts/add-prd-to-database.js <SD-ID> [PRD-Title]');

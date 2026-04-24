@@ -15,6 +15,72 @@ import { validateBypassReason } from '../bypass-rubric.js';
 import { resolveAutoProceed } from '../auto-proceed-resolver.js';
 
 /**
+ * SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 followup: post-handoff state
+ * reconciliation. The per-executor state-transitions.js modules are
+ * authoritative setters, but silent failures have been observed (SD stays
+ * at status='draft' phase='LEAD' after an accepted LEAD-TO-PLAN). This
+ * helper re-queries the SD and force-updates status/phase when drift is
+ * detected. Fail-soft: any error is logged but does not fail the handoff.
+ *
+ * Expected post-handoff SD state per handoff type (matches the DB writes
+ * in each executor's state-transitions.js):
+ */
+const POST_HANDOFF_SD_STATE = {
+  'LEAD-TO-PLAN': { status: 'in_progress', current_phase: 'PLAN_PRD' },
+  'PLAN-TO-EXEC': { status: 'in_progress', current_phase: 'EXEC' },
+  'EXEC-TO-PLAN': { status: 'in_progress', current_phase: 'PLAN_VERIFICATION' },
+  'PLAN-TO-LEAD': { status: 'pending_approval', current_phase: 'LEAD_FINAL' },
+  'LEAD-FINAL-APPROVAL': { status: 'completed', current_phase: 'COMPLETED' },
+};
+
+async function reconcileSDStateAfterHandoff(handoffType, sdId, supabase) {
+  const expected = POST_HANDOFF_SD_STATE[handoffType.toUpperCase()];
+  if (!expected || !sdId) return;
+
+  try {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+    const queryField = isUUID ? 'id' : 'sd_key';
+
+    const { data: sd, error: readErr } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status, current_phase')
+      .eq(queryField, sdId)
+      .maybeSingle();
+
+    if (readErr || !sd) {
+      // Silent skip — the handoff already succeeded; a read failure here
+      // doesn't justify louder noise. Log only in debug mode.
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        console.log(`[reconcile-sd-state] read failed for ${sdId}: ${readErr?.message || 'no row'}`);
+      }
+      return;
+    }
+
+    const drift = sd.status !== expected.status || sd.current_phase !== expected.current_phase;
+    if (!drift) return;
+
+    const { error: updErr } = await supabase
+      .from('strategic_directives_v2')
+      .update({
+        status: expected.status,
+        current_phase: expected.current_phase,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', sd.id);
+
+    if (updErr) {
+      console.log(`   ⚠️  Post-handoff state reconciliation failed: ${updErr.message}`);
+    } else {
+      console.log(`   🔧 Post-handoff state reconciled: ${sd.status}/${sd.current_phase} → ${expected.status}/${expected.current_phase}`);
+    }
+  } catch (e) {
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.log(`[reconcile-sd-state] error: ${e?.message || e}`);
+    }
+  }
+}
+
+/**
  * Check bypass rate limits and log to audit
  *
  * @param {string} sdId - Strategic Directive ID
@@ -265,6 +331,18 @@ export async function displayExecutionResult(result, handoffType, sdId) {
 
       // LEO 5.0: Hydrate tasks for next phase
       await hydrateAndOutputTasks(sdId, handoffType, supabase);
+
+      // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 followup (2026-04-24):
+      // Defensive reconciliation for the "SD status stays at 'draft' after
+      // accepted handoffs" drift. Each executor's state-transitions.js is
+      // the authoritative setter, but silent failures have been observed
+      // (e.g., atomic RPC unavailable AND legacy fallback's .update() returns
+      // no error yet doesn't persist — root cause unclear; defense-in-depth
+      // instead of chasing it). Re-queries the SD post-handoff and
+      // force-updates status/phase when they don't match the expected
+      // post-handoff values. Fail-soft — any error here is logged but doesn't
+      // fail the handoff (which already succeeded).
+      await reconcileSDStateAfterHandoff(handoffType, canonicalId || sdId, supabase);
     }
 
     // SD-LEO-INFRA-HANDOFF-RESULT-SUMMARY-001: Machine-readable result summary
@@ -282,7 +360,7 @@ export async function displayExecutionResult(result, handoffType, sdId) {
         if (autoProceedResult.enabled) {
           const commitOutput = execSync('git log origin/main..HEAD --oneline 2>/dev/null || true', { encoding: 'utf-8' }).trim();
           if (commitOutput.length > 0) {
-            console.log(`\nHANDOFF_POST_ACTION=ship`);
+            console.log('\nHANDOFF_POST_ACTION=ship');
           }
         }
       } catch (e) {
