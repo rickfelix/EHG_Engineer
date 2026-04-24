@@ -31,6 +31,14 @@ const TICK_MS = 30 * 1000;
 const PARENT_POLL_MS = 5 * 1000;
 const HTTP_TIMEOUT_MS = 3000;
 
+// SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-4): early-exit telemetry threshold + sinks.
+// If cleanupAndExit fires within EARLY_EXIT_THRESHOLD_MS of process start, emit a
+// structured tick.early_exit event so operators can detect ancestor-discovery regressions.
+const EARLY_EXIT_THRESHOLD_MS = 60 * 1000;
+const EARLY_EXIT_HTTP_TIMEOUT_MS = 1000;
+const startedAt = Date.now();
+const earlyExitNdjsonPath = path.resolve(__dirname, '../.claude/pids/spawn-errors.log');
+
 const sessionId = process.env.CLAUDE_SESSION_ID || '';
 const parentPid = Number(process.env.CC_PARENT_PID) || 0;
 
@@ -126,7 +134,68 @@ async function tickOnce() {
 
 // ── Main loop ────────────────────────────────────────────────────────────────
 
+// SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-4): emit tick.early_exit telemetry when
+// cleanupAndExit runs within 60s of process start. Two sinks:
+//   1. NDJSON append to .claude/pids/spawn-errors.log (sync-safe, signal-handler-tolerant)
+//   2. Best-effort PostgREST POST to session_lifecycle_events (queryable across fleet)
+// Sink 1 is the durable record. Sink 2 is opportunistic — sync handlers may exit
+// before the fetch resolves, so we do not await it.
+function emitEarlyExitTelemetry(exitCode, lifetimeMs) {
+  const event = {
+    timestamp: new Date().toISOString(),
+    event: 'tick.early_exit',
+    session_id: sessionId,
+    tick_pid: process.pid,
+    cc_parent_pid: parentPid,
+    lifetime_ms: lifetimeMs,
+    exit_code: exitCode,
+    hostname: require('os').hostname(),
+  };
+
+  // Sink 1: synchronous NDJSON append (guaranteed durability under signal teardown).
+  try {
+    fs.mkdirSync(path.dirname(earlyExitNdjsonPath), { recursive: true });
+    fs.appendFileSync(earlyExitNdjsonPath, JSON.stringify(event) + '\n');
+  } catch {
+    // file write failures are non-fatal — DB sink may still capture the event
+  }
+
+  // Sink 2: best-effort PostgREST POST to session_lifecycle_events.
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) return;
+  try {
+    const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/session_lifecycle_events`;
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), EARLY_EXIT_HTTP_TIMEOUT_MS);
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        event_type: 'tick.early_exit',
+        session_id: sessionId,
+        pid: process.pid,
+        reason: 'ancestor_pid_exited',
+        latency_ms: lifetimeMs,
+        metadata: { cc_parent_pid: parentPid, exit_code: exitCode, hostname: event.hostname },
+      }),
+      signal: controller.signal,
+    }).catch(() => { /* best-effort */ });
+  } catch {
+    /* best-effort */
+  }
+}
+
 function cleanupAndExit(code) {
+  const lifetimeMs = Date.now() - startedAt;
+  if (lifetimeMs < EARLY_EXIT_THRESHOLD_MS) {
+    try { emitEarlyExitTelemetry(code, lifetimeMs); } catch { /* never block exit */ }
+  }
   deleteMarker();
   process.exit(code);
 }
