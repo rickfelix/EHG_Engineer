@@ -2,15 +2,19 @@
  * Retrospective-gate query filters (SD-LEO-INFRA-RETROSPECTIVE-GATES-FAIL-001)
  *
  * Both PLAN-TO-LEAD (retrospective-quality.js) and LEAD-FINAL-APPROVAL
- * (createRetrospectiveExistsGate) must enforce the same three invariants:
+ * (createRetrospectiveExistsGate) must enforce the same invariants:
  *   1. Existence: at least one retrospective row for the SD
- *   2. Type: retro_type = 'SD_COMPLETION'
- *   3. Freshness: created_at > the SD's LEAD-TO-PLAN acceptance timestamp
+ *   2. Type: retro_type = 'SD_COMPLETION' (excludes SPRINT/INCIDENT/AUDIT)
+ *   3. Not a handoff-time retro: retrospective_type IS NULL (handoff-time
+ *      retros tag this column with LEAD_TO_PLAN / PLAN_TO_EXEC / etc.)
+ *   4. Freshness: created_at > the SD's LEAD-TO-PLAN acceptance timestamp
+ *      (defense in depth — catches any handoff-type retros missed by #3)
  *
  * Handoff-time retrospectives are written with retro_type='SD_COMPLETION'
- * (see scripts/modules/handoff/executors/lead-to-plan/retrospective.js line
- * 283), so retro_type alone does not distinguish them from true SD-completion
- * retrospectives. The timestamp filter is what reliably separates them.
+ * but also set retrospective_type to the handoff phase (see
+ * scripts/modules/handoff/executors/lead-to-plan/retrospective.js line 283-284),
+ * so retro_type alone does not distinguish them from true SD-completion retros.
+ * The retrospective_type and timestamp filters are both required.
  */
 
 /**
@@ -57,6 +61,7 @@ export async function getFilteredRetrospective(sdUuid, sdCreatedAt, supabase) {
     .select('*')
     .eq('sd_id', sdUuid)
     .eq('retro_type', 'SD_COMPLETION')
+    .is('retrospective_type', null)
     .gt('created_at', leadToPlanAcceptedAt)
     .order('created_at', { ascending: false })
     .limit(1)

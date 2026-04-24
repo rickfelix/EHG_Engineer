@@ -20,7 +20,7 @@ import { createMockSD } from '../../../../../../tests/factories/validator-contex
 function buildSupabase({ children = [], retrospective = null, childError = null, handoffRow = null }) {
   const makeChainable = (resolveValue) => {
     const c = {
-      select: () => c, eq: () => c, neq: () => c, gt: () => c, gte: () => c, lt: () => c, lte: () => c,
+      select: () => c, eq: () => c, neq: () => c, gt: () => c, gte: () => c, lt: () => c, lte: () => c, is: () => c,
       order: () => c, limit: () => c,
       single: () => Promise.resolve(resolveValue),
       maybeSingle: () => Promise.resolve(resolveValue),

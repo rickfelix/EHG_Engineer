@@ -12,7 +12,7 @@ import { getFilteredRetrospective, resolveLeadToPlanAcceptedAt } from './retro-f
 function buildSupabase({ handoffRow = null, retrospective = null } = {}) {
   const makeChainable = (resolveValue) => {
     const c = {
-      select: () => c, eq: () => c, gt: () => c, order: () => c, limit: () => c,
+      select: () => c, eq: () => c, gt: () => c, is: () => c, order: () => c, limit: () => c,
       maybeSingle: () => Promise.resolve(resolveValue),
       single: () => Promise.resolve(resolveValue),
       then: (fn) => Promise.resolve(resolveValue).then(fn),
