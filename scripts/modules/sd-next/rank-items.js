@@ -73,14 +73,32 @@ export function qfUrgencyBand(severity, createdAt, now = Date.now()) {
 /**
  * Infer a QF's track from its type + branch-name signals.
  *
+ * QF-TO-TRACK INFERENCE RULE (canonical reference, AC7 of SD-LEO-INFRA-UNIFY-QUICK-FIX-001):
+ *
  *   bug, polish             → C (Quality)
  *   documentation           → STANDALONE
  *   anything else           → STANDALONE
  *
  * Track A override (Infrastructure): any bug/polish QF whose branch_name
- * contains an infrastructure-signaling keyword is promoted to A. Conservative
- * by design (TR-5): the branch_name prefix 'quick-fix/' is assumed; we require
- * an *additional* signal beyond that.
+ * contains an infrastructure-signaling keyword (see TRACK_A_BRANCH_KEYWORDS)
+ * is promoted to A. Conservative by design (TR-5): the branch_name prefix
+ * 'quick-fix/' is assumed; we require an *additional* signal beyond that.
+ *
+ * ANTI-PATTERN: DO NOT add a `quick_fixes.track` column.
+ * Track is *inferred* from QF type + branch_name signals at ranking time —
+ * never persisted on the row. Reasons:
+ *   1. Track taxonomy (A/B/C/STANDALONE) belongs to the queue-ranking layer,
+ *      not to the QF data model. A persisted column would couple QF schema to
+ *      a presentation concern that may evolve independently.
+ *   2. Inference is cheap, deterministic, and centrally tunable here. A column
+ *      would create two sources of truth (column vs. inference) and require
+ *      backfill + sync logic the moment the rule changes.
+ *   3. Branch-name signals (TRACK_A_BRANCH_KEYWORDS) are operational metadata
+ *      that may change per branching convention; baking them into a stored
+ *      column would calcify yesterday's heuristics.
+ *
+ * If the inference rule must be customised, edit this function — never the
+ * QF row.
  *
  * @param {Object} qf - QF row with `type` and optional `branch_name`
  * @returns {'A' | 'B' | 'C' | 'STANDALONE'}
