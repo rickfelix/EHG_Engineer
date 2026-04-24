@@ -46,6 +46,9 @@ import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 // DFE Escalation Gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
 import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
 
+// Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001) — Module C DB-enforced evidence
+import { createSubagentEvidenceGate } from '../../gates/subagent-evidence-gate.js';
+
 // Helper modules
 import { transitionSdToPlan } from './state-transitions.js';
 import { displayPreHandoffWarnings, displayTranslationFidelityPreview } from './pre-handoff-warnings.js';
@@ -90,6 +93,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
     // Validates CLAUDE_PLAN.md was read (destination phase file)
     gates.push(createProtocolFileReadGate('LEAD-TO-PLAN'));
+
+    // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
+    // DB-enforced: requires fresh sub_agent_execution_results rows for validation-agent + Explore
+    gates.push(createSubagentEvidenceGate(this.supabase));
 
     // SD Transition Readiness Gate
     gates.push(createTransitionReadinessGate(this.supabase));
