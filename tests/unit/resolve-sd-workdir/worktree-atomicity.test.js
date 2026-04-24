@@ -75,7 +75,7 @@ test('post-condition: directory not in git worktree list is detectable via porce
     const expected = wtPath.replace(/\\/g, '/');
     assert.ok(
       !paths.some(p => p.replace(/\\/g, '/') === expected),
-      `Orphan dir should NOT appear in worktree list`
+      'Orphan dir should NOT appear in worktree list'
     );
     // .git pointer should not exist
     assert.ok(!existsSync(join(wtPath, '.git')), '.git pointer must NOT exist for plain dir');
@@ -131,6 +131,63 @@ test('pre-condition: plain directory at worktree path fails isValidWorktree chec
     assert.ok(!paths.some(p => p.replace(/\\/g, '/') === expected), 'Junk dir must NOT be in worktree list');
   } finally {
     rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// QF-20260423-778: Cross-repo isValidWorktree — the porcelain check must
+// inspect the *target* repo's worktree list, not the caller's cwd.
+// Regression test for: sd-start hard-failing with WORKTREE_CREATE_FAILED
+// on cross-repo SDs (targetApp != 'EHG_Engineer') even when the worktree
+// is valid and registered in the target repo.
+// ---------------------------------------------------------------------------
+test('cross-repo: worktree in repo B is NOT listed by porcelain run from repo A (bug reproducer)', () => {
+  const repoA = createFixtureRepo();
+  const repoB = createFixtureRepo();
+  try {
+    const wtPath = join(repoB, '.worktrees', 'SD-CROSS-REPO');
+    mkdirSync(join(repoB, '.worktrees'), { recursive: true });
+    execSync(`git worktree add "${wtPath}" -b feat/SD-CROSS-REPO`, { cwd: repoB, stdio: 'pipe' });
+
+    // Bug condition: porcelain run from repo A's cwd returns repo A's worktrees,
+    // NOT repo B's. Cross-repo worktree validation therefore always fails.
+    const listedFromA = execSync('git worktree list --porcelain', { cwd: repoA, encoding: 'utf8' });
+    const pathsFromA = listedFromA.split('\n')
+      .filter(l => l.startsWith('worktree '))
+      .map(l => l.replace('worktree ', '').trim().replace(/\\/g, '/'));
+    const expected = wtPath.replace(/\\/g, '/');
+    assert.ok(
+      !pathsFromA.some(p => p.replace(/\\/g, '/') === expected),
+      'From repo A, porcelain must NOT list repo B\'s worktree (reproduces the bug)'
+    );
+  } finally {
+    rmSync(repoA, { recursive: true, force: true });
+    rmSync(repoB, { recursive: true, force: true });
+  }
+});
+
+test('cross-repo: porcelain with cwd=wtPath correctly lists the worktree (fix verification)', () => {
+  const repoA = createFixtureRepo();
+  const repoB = createFixtureRepo();
+  try {
+    const wtPath = join(repoB, '.worktrees', 'SD-CROSS-REPO-FIX');
+    mkdirSync(join(repoB, '.worktrees'), { recursive: true });
+    execSync(`git worktree add "${wtPath}" -b feat/SD-CROSS-REPO-FIX`, { cwd: repoB, stdio: 'pipe' });
+
+    // Fix condition: porcelain run from the worktree path itself resolves to
+    // repo B's worktree list — the registration check succeeds.
+    const listedFromWt = execSync('git worktree list --porcelain', { cwd: wtPath, encoding: 'utf8' });
+    const pathsFromWt = listedFromWt.split('\n')
+      .filter(l => l.startsWith('worktree '))
+      .map(l => l.replace('worktree ', '').trim().replace(/\\/g, '/'));
+    const expected = wtPath.replace(/\\/g, '/');
+    assert.ok(
+      pathsFromWt.some(p => p.replace(/\\/g, '/') === expected),
+      `With cwd=wtPath, porcelain must list ${expected}`
+    );
+  } finally {
+    rmSync(repoA, { recursive: true, force: true });
+    rmSync(repoB, { recursive: true, force: true });
   }
 });
 

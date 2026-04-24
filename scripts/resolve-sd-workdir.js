@@ -67,7 +67,11 @@ function isValidWorktree(wtPath) {
     // may still exist but git no longer tracks it, causing module resolution
     // failures when scripts run from the orphaned directory.
     const absPath = path.resolve(wtPath).replace(/\\/g, '/');
-    const listed = execSync('git worktree list --porcelain', { encoding: 'utf8', stdio: 'pipe' });
+    // cwd must be wtPath so the command inspects the *target* repo's worktree list.
+    // Without cwd, this runs from process.cwd() (usually EHG_Engineer), and cross-repo
+    // SDs (targetApp != 'EHG_Engineer') always fail the registration check because
+    // their worktree belongs to a different repo entirely.
+    const listed = execSync('git worktree list --porcelain', { cwd: wtPath, encoding: 'utf8', stdio: 'pipe' });
     const registeredPaths = listed
       .split('\n')
       .filter(l => l.startsWith('worktree '))
