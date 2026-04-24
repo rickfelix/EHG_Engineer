@@ -101,6 +101,7 @@ scripts/check-*.mjs
 scripts/check-*.js
 scripts/check-*.cjs
 scripts/cleanup-*.js
+!scripts/cleanup-phantom-worktrees.js
 scripts/complete-*.mjs
 scripts/configure-*.sh
 scripts/delete-*.js
@@ -209,6 +210,7 @@ scripts/archived-sd-scripts/
 /.leo-validation/
 /.quickfix-evidence/
 /plans/
+/scratch/
 
 # Git worktree session directories (created by npm run session:worktree)
 .sessions/
