@@ -536,6 +536,13 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     bypassReason = args[bypassReasonIdx + 1];
   }
 
+  // SD-LEARN-FIX-ADDRESS-PAT-AGENT-001: Bypass shape validation flags
+  // Require enforcement-table evidence (pattern or follow-up SD) instead of prose-only
+  const patternIdIdx = args.findIndex(a => a === '--pattern-id');
+  const followupSdKeyIdx = args.findIndex(a => a === '--followup-sd-key');
+  const patternId = patternIdIdx !== -1 && args[patternIdIdx + 1] ? args[patternIdIdx + 1] : null;
+  const followupSdKey = followupSdKeyIdx !== -1 && args[followupSdKeyIdx + 1] ? args[followupSdKeyIdx + 1] : null;
+
   // Find prdId (third non-flag argument)
   const nonFlagArgs = args.filter((a, i) =>
     !a.startsWith('--') &&
@@ -614,6 +621,33 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     const bypassCheck = await checkBypassRateLimits(sdId, handoffType, bypassReason);
     if (!bypassCheck.success) {
       return { success: false };
+    }
+
+    // SD-LEARN-FIX-ADDRESS-PAT-AGENT-001: Bypass shape enforcement
+    // Require --pattern-id or --followup-sd-key (enforcement-table evidence)
+    const { validateBypassShape } = await import('../bypass-rubric.js');
+    const supabaseForShape = createSupabaseServiceClient();
+    const shapeResult = await validateBypassShape({
+      patternId,
+      followupSdKey,
+      supabase: supabaseForShape,
+      bypassReason,
+      sdId,
+      handoffType
+    });
+    if (!shapeResult.allowed) {
+      console.error('');
+      console.error('❌ BYPASS SHAPE VIOLATION');
+      console.error('═'.repeat(50));
+      console.error(shapeResult.message);
+      console.error('');
+      return { success: false };
+    }
+    if (shapeResult.warnOnly) {
+      console.warn('');
+      console.warn('⚠️  BYPASS SHAPE WARNING (warn-only mode, set ENFORCE_BYPASS_SHAPE=true to block)');
+      console.warn(shapeResult.message);
+      console.warn('');
     }
   }
 
