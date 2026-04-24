@@ -26,6 +26,79 @@ import { scoreToBand, bandToNumeric } from '../auto-proceed/urgency-scorer.js';
 import { scanMetadataForMisplacedDependencies } from './dependency-resolver.js';
 
 /**
+ * QF severity → sequence_rank. Lower rank = higher priority, matching the SD
+ * sequence_rank convention. Tuning lives here (single-edit), not inline.
+ */
+export const SEVERITY_TO_RANK = {
+  critical: 100,
+  high:     200,
+  medium:   500,
+  low:      1000,
+};
+
+/** Branch-name keywords that promote a bug-type QF to Track A (Infrastructure). */
+const TRACK_A_BRANCH_KEYWORDS = [
+  'infra',
+  'hook',
+  'gate',
+  'protocol',
+  'workflow',
+  'sd-next',
+  'handoff',
+];
+
+/**
+ * Derive a QF's urgency band from severity + age.
+ *   critical                                          → P0
+ *   medium/high aged > 7 days                         → P0
+ *   high                                              → P1
+ *   medium                                            → P2
+ *   everything else                                   → P3
+ *
+ * @param {string} severity
+ * @param {string} createdAt - ISO timestamp
+ * @param {number} now - ms since epoch
+ * @returns {'P0' | 'P1' | 'P2' | 'P3'}
+ */
+export function qfUrgencyBand(severity, createdAt, now = Date.now()) {
+  const sev = (severity || '').toLowerCase();
+  if (sev === 'critical') return 'P0';
+  const ageDays = createdAt ? (now - new Date(createdAt).getTime()) / 86_400_000 : 0;
+  if (ageDays > 7 && (sev === 'high' || sev === 'medium')) return 'P0';
+  if (sev === 'high') return 'P1';
+  if (sev === 'medium') return 'P2';
+  return 'P3';
+}
+
+/**
+ * Infer a QF's track from its type + branch-name signals.
+ *
+ *   bug, polish             → C (Quality)
+ *   documentation           → STANDALONE
+ *   anything else           → STANDALONE
+ *
+ * Track A override (Infrastructure): any bug/polish QF whose branch_name
+ * contains an infrastructure-signaling keyword is promoted to A. Conservative
+ * by design (TR-5): the branch_name prefix 'quick-fix/' is assumed; we require
+ * an *additional* signal beyond that.
+ *
+ * @param {Object} qf - QF row with `type` and optional `branch_name`
+ * @returns {'A' | 'B' | 'C' | 'STANDALONE'}
+ */
+export function qfTrack(qf) {
+  const type = (qf.type || '').toLowerCase();
+  const branch = (qf.branch_name || '').toLowerCase();
+
+  const infraSignal = branch && TRACK_A_BRANCH_KEYWORDS.some(k => branch.includes(k));
+
+  if (type === 'bug' || type === 'polish') {
+    return infraSignal ? 'A' : 'C';
+  }
+  if (type === 'documentation') return 'STANDALONE';
+  return 'STANDALONE';
+}
+
+/**
  * @typedef {Object} RankContext
  * @property {Map<string, Object>} [baselineItemsMap] sd_id (key or uuid) -> baseline item { sequence_rank, track, ... }
  * @property {Map<string, number>} [okrScoreMap]      SD uuid -> OKR impact score (0-90)
@@ -67,11 +140,24 @@ export function rankItems(items, context = {}) {
     actuals          = {},
   } = context;
 
+  const now = context.now ?? Date.now();
   const tracks = { A: [], B: [], C: [], STANDALONE: [] };
   const misplacedDeps = [];
   const orphanBaseline = [];
 
-  for (const sd of items) {
+  for (const item of items) {
+    // QF branch (SD-LEO-INFRA-UNIFY-QUICK-FIX-001 Phase 3).
+    // Discriminator: item.kind === 'qf'. We intentionally do NOT use item.type
+    // because that column on quick_fixes rows holds the QF category
+    // (bug/polish/documentation), which qfTrack() reads separately.
+    if (item.kind === 'qf') {
+      const ranked = rankQF(item, now);
+      if (ranked) tracks[ranked.track_key].push(ranked);
+      continue;
+    }
+
+    // SD branch
+    const sd = item;
     if (sd.status === 'completed' || sd.status === 'cancelled') continue;
 
     // Governance: deferred SDs skip recommendation pipeline but stay in display.
@@ -139,6 +225,7 @@ export function rankItems(items, context = {}) {
     tracks[trackKey].push({
       ...(baselineItem || {}),
       ...sd,
+      kind: 'sd',
       sd_id: sd.sd_key || sd.id,
       sequence_rank: sequenceRank,
       gap_weight: gapWeight,
@@ -166,4 +253,39 @@ export function rankItems(items, context = {}) {
   }
 
   return { tracks, misplacedDeps, orphanBaseline };
+}
+
+/**
+ * Rank a single Quick Fix into a ranked item with the same shape as a ranked SD,
+ * so the per-track sort (urgency band → urgency score → composite_rank) treats
+ * both uniformly.
+ *
+ * @param {Object} qf - Raw quick_fixes row (must include id/severity/type at minimum)
+ * @param {number} now - ms since epoch (for age calculation)
+ * @returns {Object | null}
+ */
+function rankQF(qf, now) {
+  if (!qf || !qf.id) return null;
+  if (qf.status && !['open', 'in_progress'].includes(qf.status)) return null;
+
+  const severity = (qf.severity || 'low').toLowerCase();
+  const sequenceRank = SEVERITY_TO_RANK[severity] ?? SEVERITY_TO_RANK.low;
+  const urgencyBand = qfUrgencyBand(severity, qf.created_at, now);
+  const urgencyNumeric = bandToNumeric(urgencyBand);
+  const trackKey = qfTrack(qf);
+
+  return {
+    ...qf,
+    kind: 'qf',
+    sd_id: qf.id,              // so display code that reads sd_id shows the QF-ID
+    track: trackKey,
+    track_key: trackKey,       // private — tells the caller which bucket to push to
+    sequence_rank: sequenceRank,
+    composite_rank: sequenceRank, // QFs have no vision/OKR/policy blend
+    urgency_band: urgencyBand,
+    urgency_numeric: urgencyNumeric,
+    urgency_score: null,
+    is_deferred: false,
+    deps_resolved: true,       // QFs have no declared dependencies
+  };
 }

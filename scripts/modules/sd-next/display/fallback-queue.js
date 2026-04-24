@@ -7,19 +7,29 @@ import { colors } from '../colors.js';
 import { checkDependenciesResolved } from '../dependency-resolver.js';
 import { displayTrackSection } from './tracks.js';
 import { rankItems } from '../rank-items.js';
+import { classifyQuickFixes } from './quick-fixes.js';
 
 /**
  * Show fallback queue when no baseline is active.
  *
- * SD-LEO-INFRA-UNIFY-QUICK-FIX-001 (Phase 2): delegates all ranking to
- * rank-items.js so the no-baseline path applies the same urgency bands,
- * vision gap weight, OKR blend, and policy boost as the baseline path.
+ * SD-LEO-INFRA-UNIFY-QUICK-FIX-001:
+ *   - Phase 2: delegates ranking to rank-items.js so urgency, vision gap,
+ *     OKR blend, and policy boost apply in no-baseline mode.
+ *   - Phase 3: interleaves Quick Fixes with SDs in their inferred tracks
+ *     via rank-items.js, removing the separate OPEN QUICK FIXES section.
+ *     Returns a summary the orchestrator uses for AUTO_PROCEED_ACTION.
  *
  * @param {Object} supabase - Supabase client
- * @param {Object} options  - Display options
+ * @param {Object} options  - { skipBaselineWarning, sessionContext, openQuickFixes, qfTriageResults }
+ * @returns {Promise<Object>} qfSummary with topStartableQF (or empty summary if no QFs passed)
  */
 export async function showFallbackQueue(supabase, options = {}) {
-  const { skipBaselineWarning = false, sessionContext = {} } = options;
+  const {
+    skipBaselineWarning = false,
+    sessionContext = {},
+    openQuickFixes = [],
+    qfTriageResults = new Map(),
+  } = options;
 
   // Load configurable OKR blend weight (shared with baseline path).
   let okrBlendWeight = 0.30;
@@ -86,9 +96,18 @@ export async function showFallbackQueue(supabase, options = {}) {
     enrichedSDs.push({ ...sd, deps_resolved: depsResolved });
   }
 
-  // Pure ranking: no baseline map — caller passes an empty Map to signal fallback mode.
-  // rankItems resolves sequence_rank from the SD row itself and track from metadata/category.
-  const { tracks } = rankItems(enrichedSDs, {
+  // Phase 3: classify QFs (computes escalation + claim badges, returns summary
+  // for AUTO_PROCEED_ACTION routing), tag with kind='qf', and feed into the
+  // same ranking call so QFs interleave with SDs in their inferred tracks.
+  const { summary: qfSummary, classified: classifiedQFs } = classifyQuickFixes(
+    openQuickFixes, qfTriageResults, sessionContext
+  );
+  const qfItems = classifiedQFs.map(qf => ({ ...qf, kind: 'qf' }));
+
+  // Pure ranking: no baseline map — empty Map signals fallback mode.
+  // rank-items resolves sequence_rank from the SD row and track from
+  // metadata/category, and routes QFs via their severity + type.
+  const { tracks } = rankItems([...enrichedSDs, ...qfItems], {
     baselineItemsMap: new Map(),
     okrScoreMap,
     okrBlendWeight,
@@ -125,6 +144,8 @@ export async function showFallbackQueue(supabase, options = {}) {
   if (!skipBaselineWarning) {
     displayNoBaselineWarning();
   }
+
+  return qfSummary;
 }
 
 /**

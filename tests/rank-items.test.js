@@ -4,7 +4,12 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { rankItems } from '../scripts/modules/sd-next/rank-items.js';
+import {
+  rankItems,
+  SEVERITY_TO_RANK,
+  qfUrgencyBand,
+  qfTrack,
+} from '../scripts/modules/sd-next/rank-items.js';
 
 /** Minimal SD factory so each test only spells out what it cares about. */
 function sd(overrides = {}) {
@@ -183,5 +188,154 @@ describe('rankItems — Phase 1 baseline parity', () => {
     assert.equal(result.tracks.A[0].sd_key, 'SD-P1-B', 'first: highest urgency_score, tied composite_rank');
     assert.equal(result.tracks.A[1].sd_key, 'SD-P1-C');
     assert.equal(result.tracks.A[2].sd_key, 'SD-P1-A', 'last: lower urgency_score');
+  });
+});
+
+describe('rankItems — Phase 3 Quick Fix interleaving', () => {
+  const NOW = Date.parse('2026-04-24T12:00:00Z');
+  const FRESH = '2026-04-24T11:00:00Z'; // 1 hour before NOW
+  const OLD   = '2026-04-15T00:00:00Z'; // 9 days before NOW
+
+  /**
+   * Mirrors how callers should shape a QF row: the DB `type` column
+   * (bug/polish/documentation) remains untouched; we set kind='qf' as the
+   * rankItems discriminator alongside it.
+   */
+  function qf({ id = 'QF-X', severity = 'medium', type = 'bug', created_at = FRESH, branch_name = null, status = 'open', title = 'Some QF' } = {}) {
+    return {
+      kind: 'qf',
+      id,
+      title,
+      severity,
+      status,
+      type,                // DB column — bug/polish/documentation
+      created_at,
+      branch_name,
+    };
+  }
+
+  // --- severity / urgency helpers ---
+
+  it('SEVERITY_TO_RANK exports match PRD-specified values', () => {
+    assert.equal(SEVERITY_TO_RANK.critical, 100);
+    assert.equal(SEVERITY_TO_RANK.high,     200);
+    assert.equal(SEVERITY_TO_RANK.medium,   500);
+    assert.equal(SEVERITY_TO_RANK.low,      1000);
+  });
+
+  it('qfUrgencyBand — critical always P0', () => {
+    assert.equal(qfUrgencyBand('critical', FRESH, NOW), 'P0');
+    assert.equal(qfUrgencyBand('critical', OLD,   NOW), 'P0');
+  });
+
+  it('qfUrgencyBand — medium/high aged > 7 days escalates to P0; low does not', () => {
+    assert.equal(qfUrgencyBand('medium', OLD, NOW), 'P0');
+    assert.equal(qfUrgencyBand('high',   OLD, NOW), 'P0');
+    assert.equal(qfUrgencyBand('low',    OLD, NOW), 'P3');
+  });
+
+  it('qfUrgencyBand — fresh QFs map severity → band directly', () => {
+    assert.equal(qfUrgencyBand('high',   FRESH, NOW), 'P1');
+    assert.equal(qfUrgencyBand('medium', FRESH, NOW), 'P2');
+    assert.equal(qfUrgencyBand('low',    FRESH, NOW), 'P3');
+  });
+
+  // --- track inference (qfTrack helper) ---
+
+  it('qfTrack — bug/polish default to C, documentation to STANDALONE', () => {
+    assert.equal(qfTrack({ type: 'bug' }),           'C');
+    assert.equal(qfTrack({ type: 'polish' }),        'C');
+    assert.equal(qfTrack({ type: 'documentation' }), 'STANDALONE');
+    assert.equal(qfTrack({ type: 'something-new' }), 'STANDALONE');
+  });
+
+  it('qfTrack — bug/polish promoted to A when branch_name contains infra keyword', () => {
+    assert.equal(qfTrack({ type: 'bug',    branch_name: 'quick-fix/QF-INFRA-REAPER' }), 'A');
+    assert.equal(qfTrack({ type: 'polish', branch_name: 'quick-fix/QF-HOOK-FIX' }),    'A');
+    assert.equal(qfTrack({ type: 'bug',    branch_name: 'quick-fix/QF-RANDOM' }),       'C', 'no keyword → stays C');
+  });
+
+  // --- TS-3: P0 bug QF outranks medium-priority SDs in Track C ---
+
+  it('TS-3: P0 bug QF ranks above medium-priority SDs in Track C', () => {
+    const items = [
+      sd({ sd_key: 'SD-C-1', category: 'quality', metadata: { urgency_band: 'P2' } }),
+      sd({ sd_key: 'SD-C-2', category: 'quality', metadata: { urgency_band: 'P2' } }),
+      qf({ id: 'QF-001', severity: 'critical', type: 'bug' }),
+    ];
+    const { tracks } = rankItems(items, { now: NOW });
+    assert.equal(tracks.C.length, 3);
+    assert.equal(tracks.C[0].id, 'QF-001', 'P0 QF tops Track C');
+    assert.equal(tracks.C[0].urgency_band, 'P0');
+  });
+
+  // --- TS-4: Type distribution mapping ---
+
+  it('TS-4: bug=89 / polish=8 / documentation=6 distribution routes correctly', () => {
+    const items = [
+      qf({ id: 'QF-BUG',   type: 'bug' }),
+      qf({ id: 'QF-POL',   type: 'polish' }),
+      qf({ id: 'QF-DOC',   type: 'documentation' }),
+      qf({ id: 'QF-OTHER', type: 'something-new' }),
+    ];
+    const { tracks } = rankItems(items, { now: NOW });
+    assert.deepEqual(tracks.C.map(x => x.id).sort(), ['QF-BUG', 'QF-POL']);
+    assert.deepEqual(tracks.STANDALONE.map(x => x.id).sort(), ['QF-DOC', 'QF-OTHER']);
+    assert.equal(tracks.A.length, 0);
+    assert.equal(tracks.B.length, 0);
+  });
+
+  // --- TS-5: Track A inference via branch heuristic ---
+
+  it('TS-5: branch-name heuristic promotes infra QF to Track A', () => {
+    const items = [
+      qf({ id: 'QF-INFRA', type: 'bug', branch_name: 'quick-fix/QF-INFRA-FIX' }),
+      qf({ id: 'QF-NORMAL', type: 'bug', branch_name: 'quick-fix/QF-NORMAL' }),
+    ];
+    const { tracks } = rankItems(items, { now: NOW });
+    assert.equal(tracks.A.length, 1);
+    assert.equal(tracks.A[0].id, 'QF-INFRA');
+    assert.equal(tracks.C.length, 1);
+    assert.equal(tracks.C[0].id, 'QF-NORMAL');
+  });
+
+  // --- Ranking semantics for mixed SD+QF fleets ---
+
+  it('Mixed fleet: sort within track treats SDs and QFs uniformly', () => {
+    const items = [
+      sd({ sd_key: 'SD-P2', category: 'quality', metadata: { urgency_band: 'P2' } }),
+      qf({ id: 'QF-HI',    severity: 'high', type: 'bug' }),   // P1 urgency
+      qf({ id: 'QF-LO',    severity: 'low',  type: 'bug' }),   // P3 urgency
+    ];
+    const { tracks } = rankItems(items, { now: NOW });
+    assert.deepEqual(
+      tracks.C.map(x => x.sd_key || x.id),
+      ['QF-HI', 'SD-P2', 'QF-LO'],
+      'P1 QF < P2 SD < P3 QF by urgency_numeric'
+    );
+  });
+
+  it('rankQF discriminator: kind="qf" routes into QF path, not SD path', () => {
+    const items = [
+      { kind: 'qf', id: 'QF-A', type: 'bug', severity: 'high', status: 'open', created_at: FRESH },
+      // An SD with id that looks like a QF shouldn't be mistaken
+      sd({ id: 'QF-LOOKALIKE', sd_key: 'SD-LOOKALIKE', category: 'quality' }),
+    ];
+    const { tracks } = rankItems(items, { now: NOW });
+    assert.equal(tracks.C.length, 2);
+    const qfRanked = tracks.C.find(x => x.id === 'QF-A');
+    assert.equal(qfRanked.kind, 'qf');
+    const sdRanked = tracks.C.find(x => x.sd_key === 'SD-LOOKALIKE');
+    assert.equal(sdRanked.kind, 'sd');
+  });
+
+  it('QF with non-open status is filtered out', () => {
+    const items = [
+      qf({ id: 'QF-COMPLETED', status: 'completed' }),
+      qf({ id: 'QF-OPEN',      status: 'open' }),
+    ];
+    const { tracks } = rankItems(items, { now: NOW });
+    const allIds = [...tracks.A, ...tracks.B, ...tracks.C, ...tracks.STANDALONE].map(x => x.id);
+    assert.deepEqual(allIds, ['QF-OPEN']);
   });
 });

@@ -12,29 +12,34 @@ const MAX_DISPLAY = 10;
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 
 /**
- * Display open quick fixes section.
+ * Classify open quick fixes: compute per-QF escalation flag, claim badge,
+ * and return the summary + classified list. Pure presentation-adjacent logic;
+ * does not print.
  *
- * @param {Array} quickFixes - Open quick fixes from loadOpenQuickFixes
- * @param {Map} triageResults - Re-triage results from triageQuickFixes (qfId -> TriageResult)
- * @param {Object} sessionContext - Session context for claim analysis
- * @returns {{ escalationCount: number, totalCount: number, topQF: Object|null }}
+ * Used by:
+ *   - showFallbackQueue / displayTracks: pre-ranking enrichment so QFs can
+ *     be interleaved with SDs (SD-LEO-INFRA-UNIFY-QUICK-FIX-001).
+ *   - displayQuickFixes: legacy separate-section display (kept for back-compat).
+ *
+ * @returns {{
+ *   summary: { totalCount: number, escalationCount: number, topQF: Object|null, topStartableQF: Object|null },
+ *   classified: Array<Object>
+ * }}
  */
-export function displayQuickFixes(quickFixes, triageResults = new Map(), sessionContext = {}) {
-  const summary = { escalationCount: 0, totalCount: 0, topQF: null };
+export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessionContext = {}) {
+  const summary = { escalationCount: 0, totalCount: 0, topQF: null, topStartableQF: null };
 
-  if (!quickFixes || quickFixes.length === 0) return summary;
+  if (!quickFixes || quickFixes.length === 0) return { summary, classified: [] };
 
   summary.totalCount = quickFixes.length;
 
   const { claimedSDs = new Map(), currentSession = null, activeSessions = [] } = sessionContext;
 
-  // Classify each QF: escalation-flagged (tier 3 re-triage) vs normal, plus claim status
   const classified = quickFixes.map(qf => {
     const triage = triageResults.get(qf.id);
     const escalate = triage && triage.tier === 3;
     if (escalate) summary.escalationCount++;
 
-    // Claim analysis
     let claimBadge = '';
     let isClaimedByOther = false;
 
@@ -44,14 +49,9 @@ export function displayQuickFixes(quickFixes, triageResults = new Map(), session
         claimBadge = `${colors.green}YOURS${colors.reset} `;
       } else {
         isClaimedByOther = true;
-        // Try richer analysis if we have session data
         const claimingSession = activeSessions.find(s => s.session_id === claimingSessionId);
         if (claimingSession) {
-          const analysis = analyzeClaimRelationship({
-            claimingSessionId,
-            claimingSession,
-            currentSession
-          });
+          const analysis = analyzeClaimRelationship({ claimingSessionId, claimingSession, currentSession });
           if (analysis.relationship === 'same_conversation') {
             claimBadge = `${colors.green}${analysis.displayLabel}${colors.reset} `;
             isClaimedByOther = false;
@@ -69,7 +69,6 @@ export function displayQuickFixes(quickFixes, triageResults = new Map(), session
     return { ...qf, _triage: triage, _escalate: escalate, _claimBadge: claimBadge, _isClaimedByOther: isClaimedByOther };
   });
 
-  // Sort: escalation first, then severity, then age (oldest first — already sorted by created_at ASC from DB)
   classified.sort((a, b) => {
     if (a._escalate !== b._escalate) return a._escalate ? -1 : 1;
     const sevA = SEVERITY_ORDER[a.severity] ?? 4;
@@ -79,35 +78,61 @@ export function displayQuickFixes(quickFixes, triageResults = new Map(), session
   });
 
   summary.topQF = classified[0] || null;
-  // Skip claimed-by-others QFs from topStartableQF selection
   summary.topStartableQF = classified.find(qf => !qf._escalate && !qf._isClaimedByOther) || null;
 
-  // Display header
+  return { summary, classified };
+}
+
+/**
+ * Render a single QF row inline within a track. Used by tracks.js when
+ * interleaving QFs with SDs in the unified queue display (FR-4).
+ *
+ * Output format matches the legacy OPEN QUICK FIXES section row format so
+ * visual muscle-memory is preserved — tier badge, claim badge, severity,
+ * age, and (for escalations) the triage reason + action.
+ *
+ * @param {Object} qf - Classified QF (from classifyQuickFixes)
+ * @param {string} indent - Leading whitespace for hierarchical placement
+ */
+export function renderQFRow(qf, indent = '') {
+  const age = formatAge(qf.created_at);
+  const loc = qf.estimated_loc ? `~${qf.estimated_loc} LOC` : 'LOC unknown';
+  const target = qf.target_application || 'N/A';
+  const badge = qf._claimBadge || '';
+
+  if (qf._escalate) {
+    const reason = qf._triage?.escalationReason || 'Re-triage returned Tier 3';
+    console.log(`${indent}  ${colors.red}${colors.bold}⚠ ESCALATE${colors.reset}  ${badge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
+    console.log(`${indent}       ${colors.dim}Re-triage: Tier 3 — ${reason}${colors.reset}`);
+    console.log(`${indent}       ${colors.dim}Action: /leo create --from-qf ${qf.id}${colors.reset}`);
+  } else {
+    const tier = qf._triage ? qf._triage.tier : inferTier(qf.estimated_loc);
+    const tierBadge = `[T${tier}]`;
+    const statusBadge = qf.status === 'in_progress' ? `${colors.cyan}WIP${colors.reset} ` : '';
+    console.log(`${indent}  ${colors.bold}${tierBadge}${colors.reset} ${badge}${statusBadge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
+    console.log(`${indent}       ${colors.dim}Est: ${loc} | Type: ${qf.type} | Target: ${target}${colors.reset}`);
+  }
+}
+
+/**
+ * Legacy display: print a separate OPEN QUICK FIXES section at the bottom of
+ * the queue. Kept for back-compat; the preferred path is to interleave QFs
+ * with SDs via rankItems() + renderQFRow() (SD-LEO-INFRA-UNIFY-QUICK-FIX-001).
+ *
+ * Returns the summary so callers can still compute AUTO_PROCEED_ACTION.
+ *
+ * @deprecated Prefer classifyQuickFixes() + inline rendering via tracks.js.
+ */
+export function displayQuickFixes(quickFixes, triageResults = new Map(), sessionContext = {}) {
+  const { summary, classified } = classifyQuickFixes(quickFixes, triageResults, sessionContext);
+  if (!quickFixes || quickFixes.length === 0) return summary;
+
   console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
   console.log(`${colors.bold}${colors.yellow}OPEN QUICK FIXES (${summary.totalCount}):${colors.reset}\n`);
 
   const displayed = classified.slice(0, MAX_DISPLAY);
-
   for (const qf of displayed) {
-    const age = formatAge(qf.created_at);
-    const loc = qf.estimated_loc ? `~${qf.estimated_loc} LOC` : 'LOC unknown';
-    const target = qf.target_application || 'N/A';
-    const badge = qf._claimBadge;
-
-    if (qf._escalate) {
-      // Escalation row
-      const reason = qf._triage?.escalationReason || 'Re-triage returned Tier 3';
-      console.log(`  ${colors.red}${colors.bold}⚠ ESCALATE${colors.reset}  ${badge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
-      console.log(`       ${colors.dim}Re-triage: Tier 3 — ${reason}${colors.reset}`);
-      console.log(`       ${colors.dim}Action: /leo create --from-qf ${qf.id}${colors.reset}`);
-    } else {
-      // Normal row
-      const tier = qf._triage ? qf._triage.tier : inferTier(qf.estimated_loc);
-      const tierBadge = `[T${tier}]`;
-      const statusBadge = qf.status === 'in_progress' ? `${colors.cyan}WIP${colors.reset} ` : '';
-      console.log(`  ${colors.bold}${tierBadge}${colors.reset} ${badge}${statusBadge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
-      console.log(`       ${colors.dim}Est: ${loc} | Type: ${qf.type} | Target: ${target}${colors.reset}`);
-    }
+    renderQFRow(qf);
   }
 
   if (summary.totalCount > MAX_DISPLAY) {

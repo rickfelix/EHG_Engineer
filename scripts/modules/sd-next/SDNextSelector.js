@@ -74,6 +74,7 @@ import {
   isOrchestratorBlocked,
   displayTelemetryFindings,
   displayQuickFixes,
+  classifyQuickFixes,
   displayRoadmapAwareness,
   displayBrainstormPipelineAdvisory
 } from './display/index.js';
@@ -210,11 +211,15 @@ export class SDNextSelector {
     // Display scheduled job failure alerts from feedback table
     await this.displayScheduledJobAlerts();
 
+    // SD-LEO-INFRA-UNIFY-QUICK-FIX-001 (Phase 3): QFs now interleave with SDs
+    // inside the track sections; no separate OPEN QUICK FIXES render call.
+    // showFallbackQueue / displayTracks return the QF summary for AUTO_PROCEED_ACTION.
     if (!this.baseline) {
-      await showFallbackQueue(this.supabase, {
-        sessionContext: this.getSessionContext()
+      const qfSummaryNoBaseline = await showFallbackQueue(this.supabase, {
+        sessionContext: this.getSessionContext(),
+        openQuickFixes: this.openQuickFixes,
+        qfTriageResults: this.qfTriageResults,
       });
-      const qfSummaryNoBaseline = displayQuickFixes(this.openQuickFixes, this.qfTriageResults, this.getSessionContext());
       this.displayFeedbackItems();
       if (qfSummaryNoBaseline.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available` };
@@ -226,13 +231,13 @@ export class SDNextSelector {
     const actionableCount = await countActionableBaselineItems(this.supabase, this.baselineItems);
 
     if (actionableCount === 0) {
-      // Baseline exists but is exhausted - show helpful message and fallback
       showExhaustedBaselineMessage(this.baseline, this.baselineItems);
-      await showFallbackQueue(this.supabase, {
+      const qfSummaryExhausted = await showFallbackQueue(this.supabase, {
         skipBaselineWarning: true,
-        sessionContext: this.getSessionContext()
+        sessionContext: this.getSessionContext(),
+        openQuickFixes: this.openQuickFixes,
+        qfTriageResults: this.qfTriageResults,
       });
-      const qfSummaryExhausted = displayQuickFixes(this.openQuickFixes, this.qfTriageResults, this.getSessionContext());
       this.displayFeedbackItems();
       if (qfSummaryExhausted.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available` };
@@ -240,11 +245,8 @@ export class SDNextSelector {
       return { action: 'none', sd_id: null, reason: 'Baseline exhausted - all items completed' };
     }
 
-    // Display tracks
-    await this.displayTracks();
-
-    // Display open quick fixes with re-triage escalation warnings
-    const qfSummary = displayQuickFixes(this.openQuickFixes, this.qfTriageResults, this.getSessionContext());
+    // Display tracks (QFs interleaved inside; qfSummary returned for routing)
+    const qfSummary = await this.displayTracks();
 
     // Display actionable feedback items (SD-LEO-INFRA-FEEDBACK-PIPELINE-ACTIVATION-001-C)
     this.displayFeedbackItems();
@@ -769,9 +771,16 @@ export class SDNextSelector {
       enrichedSDs.push({ ...sd, deps_resolved: depsResolved, childDepStatus });
     }
 
-    // Pure ranking (SD-LEO-INFRA-UNIFY-QUICK-FIX-001): single source of truth for
-    // urgency bands + vision gap weight + OKR blend + policy boost + track grouping.
-    const rankResult = rankItems(enrichedSDs, {
+    // SD-LEO-INFRA-UNIFY-QUICK-FIX-001 Phase 3: classify QFs, tag with kind='qf',
+    // feed into rankItems alongside SDs so they interleave in the track sections.
+    const { summary: qfSummary, classified: classifiedQFs } = classifyQuickFixes(
+      this.openQuickFixes, this.qfTriageResults, this.getSessionContext()
+    );
+    const qfItems = classifiedQFs.map(qf => ({ ...qf, kind: 'qf' }));
+
+    // Pure ranking: single source of truth for urgency bands + vision gap weight +
+    // OKR blend + policy boost + track grouping, across both SDs and QFs.
+    const rankResult = rankItems([...enrichedSDs, ...qfItems], {
       baselineItemsMap: baselineMap,
       okrScoreMap,
       okrBoostMap,
@@ -815,6 +824,8 @@ export class SDNextSelector {
       console.log(`  ${colors.dim}These dependencies are NOT enforced by the queue system.${colors.reset}`);
       console.log(`  ${colors.dim}Move them to the "dependencies" column for proper blocking/readiness control.${colors.reset}`);
     }
+
+    return qfSummary;
   }
 }
 
