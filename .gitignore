@@ -101,6 +101,7 @@ scripts/check-*.mjs
 scripts/check-*.js
 scripts/check-*.cjs
 scripts/cleanup-*.js
+!scripts/cleanup-phantom-worktrees.js
 scripts/complete-*.mjs
 scripts/configure-*.sh
 scripts/delete-*.js
