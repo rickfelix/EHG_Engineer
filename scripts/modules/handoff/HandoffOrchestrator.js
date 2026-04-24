@@ -294,7 +294,8 @@ export class HandoffOrchestrator {
         console.log('📋 REMEDIATION ACTIONS');
         console.log('─'.repeat(60));
         result.failedGates.forEach((gate, idx) => {
-          const remediation = executor.getRemediation ? executor.getRemediation(gate.name) : null;
+          // QF-20260424-806: pass sdId so remediation prompts interpolate correctly.
+          const remediation = executor.getRemediation ? executor.getRemediation(gate.name, { sdId }) : null;
           console.log(`   ${idx + 1}. ${gate.name}`);
           gate.issues.forEach(issue => console.log(`      ❌ ${issue}`));
           if (remediation) {
