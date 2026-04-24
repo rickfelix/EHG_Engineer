@@ -13,6 +13,8 @@
  * 7. Schema pre-flight validation (SD-LEO-ORCH-SELF-HEALING-DATABASE-001-C) - TIERED (blocking/advisory/skip)
  * 8. Permission audit trail (SD-LEO-INFRA-LEO-PRIMITIVE-PARITY-001-C) - ASYNC WRITE (fire-and-forget)
  * 9. SD creation skill enforcement (ENF-SD-CREATE-SKILL) - HARD BLOCK (exit 2)
+ * 10. D1 Bugfix TDD Prove-It Gate - HARD BLOCK (exit 2)
+ * 11. RCA Tiered Enforcement (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129) - TIERED (warn on 2nd, block on 3rd)
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -571,6 +573,79 @@ async function main() {
     } catch (d1Err) {
       // Catch-all fail-open: ANY error in D1 logic must NOT block edits
       process.stderr.write('[pre-tool-enforce] D1 hook errored (fail-open): ' + d1Err.message + '\n');
+    }
+  }
+
+  // --- ENFORCEMENT 11: RCA Tiered Enforcement (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129) ---
+  // Detects repeated execution of the same tool on the same target within a
+  // 10-minute window and applies tiered enforcement:
+  //   attempt 2 → stdout warning, exit 0
+  //   attempt 3+ → hard block (exit 2), nudging the caller to invoke rca-agent
+  //
+  // Counters are session-scoped (.claude/retry-state-<session>.json) and reset
+  // whenever a new rca-agent execution row appears in sub_agent_execution_results
+  // for the claimed SD (FR-3). Emergency bypass via EMERGENCY_RCA_BYPASS=true (FR-5).
+  //
+  // Fail-open: any error in this block exits early without affecting the tool call.
+  try {
+    const rcaEnabled = process.env.LEO_RCA_ENFORCEMENT !== 'off';
+    const trackedTools = new Set(['Bash', 'Edit', 'Write', 'MultiEdit']);
+    if (rcaEnabled && _SESSION_ID && _SESSION_ID !== 'unknown' && trackedTools.has(TOOL_NAME)) {
+      const stateMgr = require('./retry-state-manager.cjs');
+
+      // Resolve the claimed SD key (used for RCA reset lookup).
+      let claimedSdKey = null;
+      try {
+        const fs2 = require('fs');
+        const path2 = require('path');
+        const stateFile = path2.resolve(__dirname, '../../.claude/unified-session-state.json');
+        if (fs2.existsSync(stateFile)) {
+          const st = JSON.parse(fs2.readFileSync(stateFile, 'utf8'));
+          claimedSdKey = st.sd?.sd_key || st.sd?.id || null;
+        }
+      } catch {
+        // Missing state file is not fatal — reset lookup simply no-ops.
+      }
+
+      const { attempts, signature, rcaResetApplied } = await stateMgr.recordAndCount(
+        _SESSION_ID, claimedSdKey, TOOL_NAME, input
+      );
+
+      if (signature && attempts >= 2) {
+        const bypassed = process.env.EMERGENCY_RCA_BYPASS === 'true';
+        const outcome = attempts >= 3 && !bypassed ? 'block' : 'warn';
+        auditPermissionDecision(
+          _SESSION_ID, TOOL_NAME, 'RCA-TIERED-ENFORCEMENT',
+          'Repeated tool invocation without intervening RCA',
+          outcome,
+          { attempts, signature, sd_key: claimedSdKey, rca_reset_applied: rcaResetApplied, bypassed }
+        );
+
+        if (attempts >= 3 && !bypassed) {
+          process.stderr.write(
+            `\nRCA TIERED ENFORCEMENT (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129):\n` +
+            `  Blocked: ${TOOL_NAME} invoked ${attempts}x on the same target within 10 minutes.\n` +
+            `  Signature: ${signature}\n` +
+            `  Policy: After 3 consecutive attempts, invoke rca-agent before retrying.\n` +
+            `    Task({ subagent_type: 'rca-agent', prompt: '<Symptom / Location / Frequency / Prior Attempts / Desired Outcome>' })\n` +
+            `  Once rca-agent records a result in sub_agent_execution_results, the counter resets automatically.\n` +
+            `  Emergency override: set EMERGENCY_RCA_BYPASS=true for the single retry.\n`
+          );
+          process.exit(2);
+        }
+
+        // Tier 1 warning (2nd attempt or bypassed): advisory only.
+        console.log(
+          `[pre-tool-enforce] RCA-TIERED-ENFORCEMENT: attempt ${attempts} on ${signature} — ` +
+          `next repeat ${bypassed ? '(bypass active)' : 'will be blocked'}. ` +
+          `Consider invoking rca-agent if this indicates a persistent failure.`
+        );
+      }
+    }
+  } catch (rcaErr) {
+    // Fail-open: any internal error must not block tool execution.
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      process.stderr.write(`[pre-tool-enforce] RCA enforcement errored (fail-open): ${rcaErr.message}\n`);
     }
   }
 
