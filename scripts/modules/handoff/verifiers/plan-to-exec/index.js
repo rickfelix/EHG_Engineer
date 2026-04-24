@@ -12,7 +12,9 @@ export { PlanToExecVerifier, main } from './PlanToExecVerifier.js';
 // PRD Validation
 export {
   PRD_REQUIREMENTS,
+  PRD_THRESHOLD_FALLBACK,
   basicPRDValidation,
+  resolvePRDThreshold,
   validateParentOrchestratorPRD
 } from './prd-validation.js';
 
