@@ -257,7 +257,9 @@ export function extractKeyChanges(content) {
   const changes = [];
 
   // Look for "## Changes" or "## Key Changes" or "## What Changes" sections
-  const changesPattern = /^##\s+(Changes|Key Changes|What Changes|Implementation)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|$)/mi;
+  // SD-LEO-INFRA-AUTO-GENERATED-PRD-001: lookahead uses (?![\s\S]) for true end-of-string so
+  // lazy body does not truncate at first end-of-line (which `$` in multiline mode wrongly enabled).
+  const changesPattern = /^##\s+(Changes|Key Changes|What Changes|Implementation)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
   const match = content.match(changesPattern);
   const sectionPresent = Boolean(match);
 
@@ -307,7 +309,7 @@ export function extractStrategicObjectives(content) {
   if (!content) return null;
 
   // Try to find "## Objectives" or similar sections
-  const objectivesPattern = /^##\s+(Objectives|Strategic Objectives|Goals)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|$)/mi;
+  const objectivesPattern = /^##\s+(Objectives|Strategic Objectives|Goals)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
   const match = content.match(objectivesPattern);
 
   if (!match) return null;
@@ -339,7 +341,7 @@ export function extractRisks(content) {
   if (!content) return null;
 
   // Look for "## Risks" or "## Concerns" sections
-  const risksPattern = /^##\s+(Risks|Concerns|Considerations|Caveats)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|$)/mi;
+  const risksPattern = /^##\s+(Risks|Concerns|Considerations|Caveats)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
   const match = content.match(risksPattern);
 
   if (!match) return null;
@@ -372,7 +374,7 @@ export function extractRisks(content) {
 export function extractSuccessCriteria(content) {
   if (!content) return null;
 
-  const sectionPattern = /^##\s+(Acceptance|Success|Success Criteria|Acceptance Criteria)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|$)/mi;
+  const sectionPattern = /^##\s+(Acceptance|Success|Success Criteria|Acceptance Criteria)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
   const match = content.match(sectionPattern);
 
   if (!match) return null;
