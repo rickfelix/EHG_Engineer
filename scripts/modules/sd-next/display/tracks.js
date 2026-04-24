@@ -7,7 +7,7 @@ import { colors, trackColors } from '../colors.js';
 import { getPhaseAwareStatus } from '../status-helpers.js';
 import { parseDependencies } from '../dependency-resolver.js';
 import { formatVisionBadge } from './vision-scorecard.js';
-import { analyzeClaimRelationship, autoReleaseStaleDeadClaim } from '../claim-analysis.js';
+import { analyzeClaimRelationship, autoReleaseStaleDeadClaim, checkEnrichmentSignal } from '../claim-analysis.js';
 
 /**
  * Display a track section with hierarchical SD items
@@ -100,7 +100,28 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
 
   // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Check local signals
   const localSignal = localSignals.get(sdId);
-  const hasLocalActivity = localSignal && !localSignal.staleWorktree && !isClaimedByOther && !isClaimedByMe;
+  let hasLocalActivity = localSignal && !localSignal.staleWorktree && !isClaimedByOther && !isClaimedByMe;
+
+  // SD-MAN-INFRA-NEXT-CONTENTION-DETECTOR-001: enrichment-signal upgrade.
+  // If another active session has touched this SD inside the recency window
+  // but does not currently hold the formal claim, upgrade to CLAIMED so we
+  // do not recommend SDs that are being actively worked.
+  let enrichmentSignal = null;
+  if (!isClaimedByOther && !isClaimedByMe && currentSession) {
+    enrichmentSignal = checkEnrichmentSignal({ sd: item, activeSessions });
+    if (enrichmentSignal.inProgress && enrichmentSignal.sessionId !== currentSession.session_id) {
+      isClaimedByOther = true;
+      hasLocalActivity = false;
+      const claimingSession = activeSessions.find(s => s.session_id === enrichmentSignal.sessionId);
+      if (claimingSession) {
+        claimAnalysis = analyzeClaimRelationship({
+          claimingSessionId: enrichmentSignal.sessionId,
+          claimingSession,
+          currentSession,
+        });
+      }
+    }
+  }
 
   // Status icon logic - now phase-aware with claim analysis
   let statusIcon;
