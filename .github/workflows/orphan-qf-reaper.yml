@@ -49,7 +49,11 @@ jobs:
           cache: 'npm'
 
       - name: Install minimal deps
-        run: npm ci --omit=dev --prefer-offline --no-audit
+        # QF-20260424-371: --ignore-scripts matches canonical repo CI pattern
+        # (8/9 peer workflows). --omit=dev alone stripped husky then fired the
+        # prepare lifecycle -> "husky: not found" exit 127. See RCA for
+        # pattern PAT-CI-WORKFLOW-LIFECYCLE-001.
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
 
       - name: Run reaper
         id: run
