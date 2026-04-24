@@ -43,9 +43,13 @@ function main() {
   if (values.merge) method = 'merge';
   if (values.rebase) method = 'rebase';
 
-  // Detect already-merged PRs up front to be idempotent.
-  const preview = JSON.parse(sh(`gh pr view ${prNumber} --json state,mergeCommit,headRefName,baseRepository`));
-  const { owner: { login: owner }, name: repo } = preview.baseRepository;
+  // Detect already-merged PRs up front to be idempotent. gh pr view does not expose
+  // baseRepository, so resolve owner/name via gh repo view (works because the wrapper
+  // already requires being inside the repo's working tree).
+  const preview = JSON.parse(sh(`gh pr view ${prNumber} --json state,mergeCommit,headRefName`));
+  const repoInfo = JSON.parse(sh(`gh repo view --json owner,name`));
+  const owner = repoInfo.owner.login;
+  const repo = repoInfo.name;
 
   if (preview.state === 'MERGED') {
     const sha = preview.mergeCommit?.oid || 'unknown';
