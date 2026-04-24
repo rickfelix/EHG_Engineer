@@ -1,6 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001",
-  "createdAt": "2026-04-24T10:11:18.627Z",
+  "sdKey": "SD-EHG-MARKETING-DISTRIBUTION-PRODUCER-BINDING-001",
+  "expectedBranch": "feat/SD-EHG-MARKETING-DISTRIBUTION-PRODUCER-BINDING-001",
+  "createdAt": "2026-04-24T20:05:55.630Z",
+  "hostname": "Legion-Laptop",
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
