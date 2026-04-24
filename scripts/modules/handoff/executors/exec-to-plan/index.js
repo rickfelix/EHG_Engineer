@@ -516,8 +516,9 @@ export class ExecToPlanExecutor extends BaseExecutor {
     }
   }
 
-  getRemediation(gateName) {
-    return getRemediation(gateName);
+  // QF-20260424-806: forward context so promptFn(ctx) can interpolate sdId.
+  getRemediation(gateName, context = {}) {
+    return getRemediation(gateName, context);
   }
 }
 
