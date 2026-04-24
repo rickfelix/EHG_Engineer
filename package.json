@@ -170,6 +170,7 @@
     "prd:tables": "node scripts/prd-diagnostic-toolkit.js table-status",
     "prd:orphaned": "node scripts/prd-diagnostic-toolkit.js orphaned-prds",
     "prd:consolidated": "node scripts/unified-consolidated-prd.js",
+    "prd:audit": "node scripts/fix-prd-scripts.js --audit",
     "prd:audit:fix": "node scripts/fix-prd-scripts.js",
     "prd:audit:dry": "node scripts/fix-prd-scripts.js --dry-run",
     "prd:schema": "node lib/prd-schema-validator.js",
