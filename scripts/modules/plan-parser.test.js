@@ -8,6 +8,10 @@ import {
   extractSummary,
   parsePlanFile,
   inferSDType,
+  extractKeyChanges,
+  extractStrategicObjectives,
+  extractRisks,
+  extractSuccessCriteria,
   SUMMARY_CAP,
   EXPLICIT_TYPE_ENUM,
   EXPLICIT_PRIORITY_ENUM,
@@ -169,4 +173,56 @@ test('parsePlanFile: invalid explicit type value falls through, priority honored
   // foobar invalid → falls through to inferSDType which detects 'security'+'fix'
   assert.equal(parsed.type, 'fix');
   assert.equal(parsed.priority, 'critical');
+});
+
+// ---------- SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-1, FR-2) ----------
+
+test('extractSuccessCriteria: AC-1.1 — present with bullets returns {criterion, measure}[]', () => {
+  const content = '## Acceptance\n- Criterion A\n- Criterion B\n';
+  const result = extractSuccessCriteria(content);
+  assert.deepEqual(result, [
+    { criterion: 'Criterion A', measure: 'See plan for details' },
+    { criterion: 'Criterion B', measure: 'See plan for details' },
+  ]);
+});
+
+test('extractSuccessCriteria: AC-1.2 — absent section returns null (not [])', () => {
+  const content = '# Plan\n\n## Summary\n\nNo acceptance section here.';
+  assert.equal(extractSuccessCriteria(content), null);
+});
+
+test('extractSuccessCriteria: AC-1.3 — parsePlanFile exposes successCriteria', () => {
+  const content = '# Plan\n\n## Success Criteria\n- The thing works\n';
+  const parsed = parsePlanFile(content);
+  assert.ok(Array.isArray(parsed.successCriteria));
+  assert.equal(parsed.successCriteria[0].criterion, 'The thing works');
+});
+
+test('extractKeyChanges: AC-2.1 — no ## Changes section AND no files → null', () => {
+  const content = '# Plan\n\n## Summary\n\nNothing about changes.\n';
+  assert.equal(extractKeyChanges(content), null);
+});
+
+test('extractKeyChanges: AC-2.2 — header only, no bullets → []', () => {
+  const content = '# Plan\n\n## Changes\n\n';
+  const result = extractKeyChanges(content);
+  assert.ok(Array.isArray(result));
+  assert.equal(result.length, 0);
+});
+
+test('extractKeyChanges: AC-2.3 — bullets present → objects (unchanged behavior)', () => {
+  const content = '## Changes\n- Add new feature\n- Fix bug\n';
+  const result = extractKeyChanges(content);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].change, 'Add new feature');
+});
+
+test('extractStrategicObjectives: absent section returns null (removed summary fallback)', () => {
+  const content = '# Plan\n\n## Summary\n\nSome purpose without objectives section.';
+  assert.equal(extractStrategicObjectives(content), null);
+});
+
+test('extractRisks: absent section returns null', () => {
+  const content = '## Summary\n\nNo risks section here.';
+  assert.equal(extractRisks(content), null);
 });

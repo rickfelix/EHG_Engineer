@@ -626,29 +626,41 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
   // Step 7: Build scope from files
   const scope = formatFilesAsScope(parsed.files) || parsed.summary || parsed.title;
 
-  // Step 8: Build success criteria from steps
-  const successCriteria = formatStepsAsCriteria(parsed.steps, 10);
-  if (successCriteria.length === 0) {
-    // Use default if no steps found
-    successCriteria.push('All implementation items from plan are complete');
-    successCriteria.push('Code passes lint and type checks');
-    successCriteria.push('PR reviewed and approved');
+  // Step 8: Build success criteria — prefer ## Acceptance/## Success bullets (FR-1) over step-derived
+  // SD-LEO-INFRA-AUTO-GENERATED-PRD-001: track which plan sections were absent so FR-3
+  // ENRICHMENT_WARNING can name the fields that will be default-filled downstream.
+  const planFieldsAbsent = [];
+  let successCriteria;
+  if (parsed.successCriteria && parsed.successCriteria.length > 0) {
+    successCriteria = parsed.successCriteria.map(c => typeof c === 'string' ? c : c.criterion);
+  } else {
+    if (parsed.successCriteria === null) planFieldsAbsent.push('success_criteria');
+    successCriteria = formatStepsAsCriteria(parsed.steps, 10);
+    if (successCriteria.length === 0) {
+      // Use default if no steps found
+      successCriteria.push('All implementation items from plan are complete');
+      successCriteria.push('Code passes lint and type checks');
+      successCriteria.push('PR reviewed and approved');
+    }
   }
 
-  // Step 9: Build key_changes from parsed data
-  const keyChanges = (parsed.keyChanges || []).map(kc => ({
+  // Step 9: Build key_changes from parsed data (null = plan silent, [] = present-but-empty)
+  if (parsed.keyChanges === null) planFieldsAbsent.push('key_changes');
+  const keyChanges = (parsed.keyChanges ?? []).map(kc => ({
     change: kc.change,
     impact: kc.impact
   }));
 
   // Step 10: Build strategic_objectives from parsed data
-  const strategicObjectives = (parsed.strategicObjectives || []).map(obj => ({
+  if (parsed.strategicObjectives === null) planFieldsAbsent.push('strategic_objectives');
+  const strategicObjectives = (parsed.strategicObjectives ?? []).map(obj => ({
     objective: obj.objective,
     metric: obj.metric
   }));
 
   // Step 11: Build risks from parsed data
-  const risks = (parsed.risks || []).map(r => ({
+  if (parsed.risks === null) planFieldsAbsent.push('risks');
+  const risks = (parsed.risks ?? []).map(r => ({
     risk: r.risk,
     severity: r.severity || 'medium',
     mitigation: r.mitigation || 'Address during implementation'
@@ -674,6 +686,9 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
       steps_count: parsed.steps.length,
       files_count: parsed.files.length,
       auto_detected: wasAutoDetected,
+      // SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-3): provenance for createSD's
+      // ENRICHMENT_WARNING composer; pruned before DB insert.
+      _planFieldsAbsent: planFieldsAbsent,
       ...(overrides.visionKey ? { vision_key: overrides.visionKey } : {}),
       ...(overrides.archKey ? { arch_key: overrides.archKey } : {}),
       ...(overrides.migrationReviewed ? { migration_reviewed: true } : {}),
@@ -1403,10 +1418,25 @@ async function createSD(options) {
 
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-069: GATE_SD_QUALITY-aligned validation with auto-enrichment
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-078: Now populates missing fields AND applies enriched data to insert
+  // SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-3): Compose ENRICHMENT_WARNING naming every field
+  // the SD inherits from a default (from plan-parser null-sections AND autoPopulateMissingFields).
   try {
     const gateResult = validateSDFields(sdData, { enrich: true, quiet: false });
     if (gateResult.enrichments.length > 0) {
       console.log(`   ✅ Auto-enrichment applied ${gateResult.enrichments.length} fix(es) (score: ${gateResult.score}/${gateResult.threshold})`);
+    }
+
+    // Fields defaulted at creation — union of plan-parser absences and auto-populated field names.
+    const planAbsent = Array.isArray(sdData.metadata?._planFieldsAbsent) ? sdData.metadata._planFieldsAbsent : [];
+    const needsEnrichment = Array.from(new Set([...(gateResult.fieldsWritten || []), ...planAbsent]));
+    if (needsEnrichment.length > 0) {
+      process.stderr.write(`⚠️  FIELDS NEEDING ENRICHMENT: ${needsEnrichment.join(', ')}\n`);
+      sdData.metadata = { ...sdData.metadata, needs_enrichment: needsEnrichment };
+    }
+    // Prune internal provenance key before DB insert (additive-only contract).
+    if (sdData.metadata && '_planFieldsAbsent' in sdData.metadata) {
+      const { _planFieldsAbsent, ...rest } = sdData.metadata;
+      sdData.metadata = rest;
     }
   } catch (vErr) {
     console.warn(`   ⚠️  GATE_SD_QUALITY pre-check skipped: ${vErr.message}`);

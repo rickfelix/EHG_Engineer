@@ -149,4 +149,38 @@ describe('validateSDFields — missing field auto-population', () => {
     const populationEnrichments = result.enrichments.filter(e => e.includes('populated'));
     expect(populationEnrichments).toHaveLength(0);
   });
+
+  // SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-4): fieldsWritten return-shape extension
+  it('should return fieldsWritten[] listing actual field names for sparse SD', () => {
+    const sd = createMinimalSD(); // only sd_type/title/description/scope — JSONB all absent
+
+    const result = validateSDFields(sd, { enrich: true, quiet: true });
+
+    expect(Array.isArray(result.fieldsWritten)).toBe(true);
+    expect(result.fieldsWritten.length).toBeGreaterThan(0);
+    // Each entry is a snake_case column name, not human text
+    for (const field of result.fieldsWritten) {
+      expect(field).toMatch(/^[a-z_]+$/);
+    }
+    expect(result.fieldsWritten).toContain('strategic_objectives');
+    expect(result.fieldsWritten).toContain('success_criteria');
+    expect(result.fieldsWritten).toContain('key_changes');
+  });
+
+  it('should return empty fieldsWritten[] when SD already rich', () => {
+    const sd = createMinimalSD({
+      strategic_objectives: ['Complete work'],
+      dependencies: [{ sd_key: 'none', description: 'None' }],
+      implementation_guidelines: ['Follow protocol'],
+      success_criteria: [{ criterion: 'Works', measure: 'Tests pass' }],
+      success_metrics: [{ metric: 'Done', target: '100%', actual: '0%' }],
+      key_changes: [{ change: 'Fix', impact: 'Resolved' }],
+      key_principles: ['Quality'],
+      risks: [{ risk: 'Low', severity: 'low', mitigation: 'Testing' }],
+    });
+
+    const result = validateSDFields(sd, { enrich: true, quiet: true });
+
+    expect(result.fieldsWritten).toEqual([]);
+  });
 });

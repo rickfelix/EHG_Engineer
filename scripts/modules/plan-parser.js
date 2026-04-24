@@ -244,17 +244,24 @@ export function extractExplicitPriority(content) {
  * Extract key changes from plan content
  * Looks for sections describing what will change
  *
+ * SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-2): Returns null when no ## Changes section
+ * AND no file-table rows contribute — distinguishes "plan is silent" from "plan said nothing".
+ * Section present but empty returns []; bullets or file-rows return populated array.
+ *
  * @param {string} content - Plan file content
- * @returns {Array<{change: string, impact: string}>} Array of key changes
+ * @returns {Array<{change: string, impact: string}>|null} Array of key changes, or null when plan provides none
  */
 export function extractKeyChanges(content) {
-  if (!content) return [];
+  if (!content) return null;
 
   const changes = [];
 
   // Look for "## Changes" or "## Key Changes" or "## What Changes" sections
-  const changesPattern = /^##\s+(Changes|Key Changes|What Changes|Implementation)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|$)/mi;
+  // SD-LEO-INFRA-AUTO-GENERATED-PRD-001: lookahead uses (?![\s\S]) for true end-of-string so
+  // lazy body does not truncate at first end-of-line (which `$` in multiline mode wrongly enabled).
+  const changesPattern = /^##\s+(Changes|Key Changes|What Changes|Implementation)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
   const match = content.match(changesPattern);
+  const sectionPresent = Boolean(match);
 
   if (match) {
     const sectionContent = match[2];
@@ -279,45 +286,43 @@ export function extractKeyChanges(content) {
     });
   });
 
+  if (changes.length === 0) {
+    // Section present but no bullets/files → [] (author acknowledged but provided nothing).
+    // Section absent AND no files → null (plan never addressed changes).
+    return sectionPresent ? [] : null;
+  }
+
   return changes.slice(0, 10); // Limit to 10
 }
 
 /**
  * Extract strategic objectives from plan content
  *
+ * SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-2): Returns null when no Objectives/Goals section.
+ * The previous summary-derived fallback was a soft default that hid enrichment gaps — removed.
+ * Section present but no bullets returns []; bullets return populated array.
+ *
  * @param {string} content - Plan file content
- * @returns {Array<{objective: string, metric: string}>} Array of objectives
+ * @returns {Array<{objective: string, metric: string}>|null} Array of objectives, or null when absent
  */
 export function extractStrategicObjectives(content) {
-  if (!content) return [];
-
-  const objectives = [];
+  if (!content) return null;
 
   // Try to find "## Objectives" or similar sections
-  const objectivesPattern = /^##\s+(Objectives|Strategic Objectives|Goals)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|$)/mi;
+  const objectivesPattern = /^##\s+(Objectives|Strategic Objectives|Goals)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
   const match = content.match(objectivesPattern);
 
-  if (match) {
-    const sectionContent = match[2];
-    const bulletPattern = /^[-*]\s+(.+)$/gm;
-    let bulletMatch;
-    while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
-      objectives.push({
-        objective: bulletMatch[1].trim(),
-        metric: 'Completion of objective'
-      });
-    }
-  }
+  if (!match) return null;
 
-  // If no explicit objectives, derive from goal/summary
-  if (objectives.length === 0) {
-    const summary = extractSummary(content);
-    if (summary) {
-      objectives.push({
-        objective: summary,
-        metric: 'Plan implementation complete'
-      });
-    }
+  const objectives = [];
+  const sectionContent = match[2];
+  const bulletPattern = /^[-*]\s+(.+)$/gm;
+  let bulletMatch;
+  while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
+    objectives.push({
+      objective: bulletMatch[1].trim(),
+      metric: 'Completion of objective'
+    });
   }
 
   return objectives.slice(0, 5); // Limit to 5
@@ -326,32 +331,66 @@ export function extractStrategicObjectives(content) {
 /**
  * Extract risks from plan content
  *
+ * SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-2): Returns null when no Risks/Concerns section,
+ * so ENRICHMENT_WARNING can distinguish absent from deliberately empty.
+ *
  * @param {string} content - Plan file content
- * @returns {Array<{risk: string, severity: string, mitigation: string}>} Array of risks
+ * @returns {Array<{risk: string, severity: string, mitigation: string}>|null} Array of risks, or null when absent
  */
 export function extractRisks(content) {
-  if (!content) return [];
-
-  const risks = [];
+  if (!content) return null;
 
   // Look for "## Risks" or "## Concerns" sections
-  const risksPattern = /^##\s+(Risks|Concerns|Considerations|Caveats)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|$)/mi;
+  const risksPattern = /^##\s+(Risks|Concerns|Considerations|Caveats)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
   const match = content.match(risksPattern);
 
-  if (match) {
-    const sectionContent = match[2];
-    const bulletPattern = /^[-*]\s+(.+)$/gm;
-    let bulletMatch;
-    while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
-      risks.push({
-        risk: bulletMatch[1].trim(),
-        severity: 'medium',
-        mitigation: 'Address during implementation'
-      });
-    }
+  if (!match) return null;
+
+  const risks = [];
+  const sectionContent = match[2];
+  const bulletPattern = /^[-*]\s+(.+)$/gm;
+  let bulletMatch;
+  while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
+    risks.push({
+      risk: bulletMatch[1].trim(),
+      severity: 'medium',
+      mitigation: 'Address during implementation'
+    });
   }
 
   return risks.slice(0, 5); // Limit to 5
+}
+
+/**
+ * Extract success/acceptance criteria from plan content.
+ *
+ * SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-1): New extractor. Parses "## Acceptance" or
+ * "## Success" / "## Success Criteria" sections; bullets map to {criterion, measure} objects.
+ * Returns null when section absent so ENRICHMENT_WARNING can fire on defaulted success_criteria.
+ *
+ * @param {string} content - Plan file content
+ * @returns {Array<{criterion: string, measure: string}>|null} Array of criteria, or null when absent
+ */
+export function extractSuccessCriteria(content) {
+  if (!content) return null;
+
+  const sectionPattern = /^##\s+(Acceptance|Success|Success Criteria|Acceptance Criteria)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
+  const match = content.match(sectionPattern);
+
+  if (!match) return null;
+
+  const criteria = [];
+  const sectionContent = match[2];
+  const bulletPattern = /^[-*]\s+(.+)$/gm;
+  let bulletMatch;
+  while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
+    criteria.push({
+      criterion: bulletMatch[1].trim(),
+      measure: 'See plan for details'
+    });
+  }
+
+  return criteria.slice(0, 10);
 }
 
 /**
@@ -367,9 +406,10 @@ export function parsePlanFile(content) {
       summary: null,
       steps: [],
       files: [],
-      keyChanges: [],
-      strategicObjectives: [],
-      risks: [],
+      keyChanges: null,
+      strategicObjectives: null,
+      risks: null,
+      successCriteria: null,
       type: 'feature',
       priority: null,
       fullContent: ''
@@ -388,6 +428,7 @@ export function parsePlanFile(content) {
     keyChanges: extractKeyChanges(content),
     strategicObjectives: extractStrategicObjectives(content),
     risks: extractRisks(content),
+    successCriteria: extractSuccessCriteria(content),
     type: explicitType ?? inferSDType(content),
     priority: explicitPriority,
     fullContent: content
@@ -440,6 +481,7 @@ export default {
   extractKeyChanges,
   extractStrategicObjectives,
   extractRisks,
+  extractSuccessCriteria,
   inferSDType,
   extractExplicitType,
   extractExplicitPriority,

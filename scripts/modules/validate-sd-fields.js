@@ -71,12 +71,15 @@ function autoEnrichStructure(sdData) {
 /**
  * Auto-populate missing JSONB fields with sensible defaults.
  * SD-LEARN-FIX-ADDRESS-PAT-AUTO-078: Addresses root cause of 45/100 scores.
+ * SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-4): Now also returns fieldsWritten[] so callers
+ * (leo-create-sd.js ENRICHMENT_WARNING) can reference actual field names, not just human text.
  *
  * @param {Object} sdData - The SD data object (mutated in place)
- * @returns {string[]} List of enrichment actions taken
+ * @returns {{actions: string[], fieldsWritten: string[]}} Enrichment actions + field names populated
  */
 function autoPopulateMissingFields(sdData) {
   const actions = [];
+  const fieldsWritten = [];
   const sdType = sdData.sd_type || 'feature';
   const threshold = SD_TYPE_THRESHOLDS[sdType] || DEFAULT_THRESHOLD;
   const title = sdData.title || 'Untitled SD';
@@ -89,11 +92,12 @@ function autoPopulateMissingFields(sdData) {
   }
 
   // Only populate if below the required field count for this SD type
-  if (populated >= threshold.requiredFields) return actions;
+  if (populated >= threshold.requiredFields) return { actions, fieldsWritten };
 
   if (!isPopulated(sdData.dependencies)) {
     sdData.dependencies = [{ sd_key: 'none', description: 'No blocking dependencies identified' }];
     actions.push('dependencies: populated with default (no blocking dependencies)');
+    fieldsWritten.push('dependencies');
   }
 
   if (!isPopulated(sdData.implementation_guidelines)) {
@@ -102,39 +106,46 @@ function autoPopulateMissingFields(sdData) {
       : 'Address requirements defined in SD scope';
     sdData.implementation_guidelines = [guideline];
     actions.push('implementation_guidelines: populated from SD title');
+    fieldsWritten.push('implementation_guidelines');
   }
 
   if (!isPopulated(sdData.strategic_objectives)) {
     sdData.strategic_objectives = [`Complete ${title.substring(0, 80)}`];
     actions.push('strategic_objectives: populated from SD title');
+    fieldsWritten.push('strategic_objectives');
   }
 
   if (!isPopulated(sdData.success_criteria)) {
     sdData.success_criteria = [{ criterion: title.substring(0, 100), measure: 'Implementation verified and tests passing' }];
     actions.push('success_criteria: populated with default criterion');
+    fieldsWritten.push('success_criteria');
   }
 
   if (!isPopulated(sdData.success_metrics)) {
     sdData.success_metrics = [{ metric: 'Implementation completeness', target: '100%', actual: null }];
     actions.push('success_metrics: populated with default metric');
+    fieldsWritten.push('success_metrics');
   }
 
   if (!isPopulated(sdData.key_changes)) {
     sdData.key_changes = [{ change: title.substring(0, 100), impact: 'See SD description for details' }];
     actions.push('key_changes: populated from SD title');
+    fieldsWritten.push('key_changes');
   }
 
   if (!isPopulated(sdData.key_principles)) {
     sdData.key_principles = ['Follow existing patterns', 'Ensure backward compatibility'];
     actions.push('key_principles: populated with defaults');
+    fieldsWritten.push('key_principles');
   }
 
   if (!isPopulated(sdData.risks)) {
     sdData.risks = [{ risk: 'Implementation may require iteration', severity: 'low', mitigation: 'Incremental development with testing' }];
     actions.push('risks: populated with default low-risk entry');
+    fieldsWritten.push('risks');
   }
 
-  return actions;
+  return { actions, fieldsWritten };
 }
 
 /**
@@ -158,13 +169,15 @@ function autoPopulateMissingFields(sdData) {
 export function validateSDFields(sdData, options = {}) {
   const { enrich = true, quiet = false } = options;
   const enrichments = [];
+  const fieldsWritten = [];
 
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-078: Two-phase enrichment
   // Phase 1: Populate missing JSONB fields (addresses 45/100 scores from missing fields)
   // Phase 2: Fix structural issues (existing — addresses string→object conversion)
   if (enrich) {
-    const populateActions = autoPopulateMissingFields(sdData);
-    enrichments.push(...populateActions);
+    const populateResult = autoPopulateMissingFields(sdData);
+    enrichments.push(...populateResult.actions);
+    fieldsWritten.push(...populateResult.fieldsWritten);
 
     const structureActions = autoEnrichStructure(sdData);
     enrichments.push(...structureActions);
@@ -201,6 +214,7 @@ export function validateSDFields(sdData, options = {}) {
     issues: result.issues,
     warnings: result.warnings,
     enrichments,
+    fieldsWritten,
     details: result.details,
   };
 }

@@ -18,6 +18,10 @@ import {
   formatVisionSpecs,
   formatGovernance
 } from './formatters.js';
+// SD-LEO-INFRA-AUTO-GENERATED-PRD-001: rewrite loop (FR-5 + FR-6 + FR-7).
+// Imports are static (not dynamic) so the module graph loads cleanly at test time;
+// behavior change still gated by PRD_REWRITE_LOOP env var (default OFF).
+import { applyRewriteLoop } from '../modules/prd/rewrite-loop.js';
 
 /**
  * Check if inline PRD generation mode is enabled.
@@ -105,13 +109,53 @@ async function generatePRDViaExternalAPI(sd, context = {}) {
       return null;
     }
 
-    return parsePRDResponse(content);
+    const prdContent = parsePRDResponse(content);
+
+    // SD-LEO-INFRA-AUTO-GENERATED-PRD-001 (FR-5): post-parse user-story rewrite loop.
+    // No-op when PRD_REWRITE_LOOP=false (default); skipped when no user_stories in response.
+    // Fail-soft: rewrite errors never kill PRD generation.
+    if (prdContent) {
+      try {
+        const rubric = await loadQualityRubric();
+        if (rubric) {
+          const loopResult = await applyRewriteLoop(prdContent, { llmClient, rubric, logger: console.log.bind(console) });
+          if (!loopResult.skipped && loopResult.attempts.length > 0) {
+            prdContent.metadata = prdContent.metadata || {};
+            prdContent.metadata.rewrite_attempts = loopResult.attempts;
+            if (loopResult.budgetAborted) prdContent.metadata.rewrite_budget_aborted = true;
+            console.log(`   🔄 Rewrite loop: ${loopResult.attempts.length} story(ies) re-prompted`);
+          }
+        }
+      } catch (loopErr) {
+        console.warn(`   ⚠️  Rewrite loop failed (non-fatal): ${loopErr.message}`);
+      }
+    }
+
+    return prdContent;
 
   } catch (error) {
     console.error('   ❌ LLM PRD generation failed:', error.message);
     if (error.response?.data) {
       console.error('   API Error:', JSON.stringify(error.response.data, null, 2));
     }
+    return null;
+  }
+}
+
+/**
+ * Lazy-load the user-story quality rubric. Kept out of the module-top imports
+ * because the rubric file instantiates a Supabase client at construction time,
+ * which is undesirable in environments that generate PRDs without full env.
+ *
+ * @returns {Promise<Object|null>} Rubric instance or null on import failure
+ */
+async function loadQualityRubric() {
+  try {
+    const mod = await import('../modules/rubrics/user-story-quality-rubric.js');
+    const Klass = mod.default || mod.UserStoryQualityRubric;
+    return Klass ? new Klass() : null;
+  } catch (err) {
+    console.warn(`   ⚠️  Could not load user-story quality rubric: ${err.message}`);
     return null;
   }
 }
