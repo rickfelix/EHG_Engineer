@@ -48,7 +48,7 @@ export {
 // CLI entry point - delegate to modular index
 import { addPRDToDatabase } from './prd/index.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
-import { startHeartbeat } from '../lib/heartbeat-manager.mjs';
+import { startHeartbeat, stopHeartbeat } from '../lib/heartbeat-manager.mjs';
 
 if (isMainModule(import.meta.url)) {
   // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR1 call-site migration):
@@ -56,7 +56,8 @@ if (isMainModule(import.meta.url)) {
   // TTL (validation-agent + LLM generation + STORIES sub-agent). Start an
   // in-process heartbeat in cooperative mode so the parent session's
   // claim is preserved throughout. No-op when CLAUDE_SESSION_ID is absent.
-  if (process.env.CLAUDE_SESSION_ID) {
+  const heartbeatActive = Boolean(process.env.CLAUDE_SESSION_ID);
+  if (heartbeatActive) {
     startHeartbeat(process.env.CLAUDE_SESSION_ID, { ownershipMode: 'cooperative' });
   }
 
@@ -69,5 +70,13 @@ if (isMainModule(import.meta.url)) {
 
   const sdId = args[0];
   const prdTitle = args.slice(1).filter(a => !a.startsWith('--')).join(' ');
-  addPRDToDatabase(sdId, prdTitle);
+  // QF-20260424-805: Stop the heartbeat interval after addPRDToDatabase resolves
+  // so Node can exit naturally. Without this, setInterval keeps the event loop
+  // alive forever and Bash SIGTERMs the process at its 10-min default timeout
+  // (exit 143) — even though the PRD + user-story rows already landed in the DB.
+  // Cooperative mode means stopHeartbeat does NOT release the parent session's
+  // claim; only the in-process timer is cleared.
+  addPRDToDatabase(sdId, prdTitle).finally(() => {
+    if (heartbeatActive) stopHeartbeat();
+  });
 }
