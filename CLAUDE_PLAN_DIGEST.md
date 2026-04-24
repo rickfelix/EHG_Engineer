@@ -8,6 +8,7 @@
 
 **Protocol**: LEO 4.4.1
 **Purpose**: PRD requirements and constraints (<5k chars)
+**Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
 
 ---
 

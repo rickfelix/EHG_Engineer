@@ -231,7 +231,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         // FR-4: draft SDs get a distinct code so tooling can differentiate
         // "never approved" from "wrong state but approved at some point".
         const nextCommand = `node scripts/handoff.js execute PLAN-TO-LEAD ${sdId}`;
-        console.log(`   ❌ SD status is 'draft' — LEAD-FINAL-APPROVAL requires 'pending_approval'. Run PLAN-TO-LEAD first.`);
+        console.log('   ❌ SD status is \'draft\' — LEAD-FINAL-APPROVAL requires \'pending_approval\'. Run PLAN-TO-LEAD first.');
         return ResultBuilder.rejected(
           'DRAFT_SD_NOT_APPROVED',
           `SD status must be 'pending_approval' for final approval (current: 'draft'). Run PLAN-TO-LEAD first: ${nextCommand}`,
@@ -276,9 +276,9 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           return ResultBuilder.rejected(
             'INVALID_STATUS',
             `SD status is '${sd.status}' but PLAN-TO-LEAD handoff is already recorded as accepted — ` +
-            `the status UPDATE to 'pending_approval' was never applied (silent pre-fix failure). ` +
+            'the status UPDATE to \'pending_approval\' was never applied (silent pre-fix failure). ' +
             `Remediation: manually update SD ${sdId} status to 'pending_approval' in strategic_directives_v2, ` +
-            `OR re-run PLAN-TO-LEAD (which now throws on UPDATE failure per SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126).`,
+            'OR re-run PLAN-TO-LEAD (which now throws on UPDATE failure per SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126).',
             {
               currentStatus: sd.status,
               requiredStatus: 'pending_approval',
@@ -749,8 +749,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     return { closedCount: updated?.length || 0 };
   }
 
-  getRemediation(gateName) {
-    return getRemediation(gateName);
+  // QF-20260424-806: accept context (sdId, details, score) and forward it to
+  // remediations.getRemediation, which forwards to rejection-subagent-mapping's
+  // promptFn(ctx). Without this, remediation prompts render `${ctx.sdId}` as
+  // the literal string "undefined" — making the Five-Point Brief unactionable.
+  getRemediation(gateName, context = {}) {
+    return getRemediation(gateName, context);
   }
 }
 

@@ -48,6 +48,9 @@ import { createScopeCompletionGate } from '../../gates/scope-completion-gate.js'
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 
+// Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001) — Module C DB-enforced evidence
+import { createSubagentEvidenceGate } from '../../gates/subagent-evidence-gate.js';
+
 // Helper modules
 import {
   transitionUserStoriesToValidated,
@@ -212,6 +215,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
     // Prerequisite handoff check
     gates.push(createPrerequisiteCheckGate(this.supabase));
+
+    // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
+    // DB-enforced: requires fresh sub_agent_execution_results rows for TESTING + SECURITY
+    gates.push(createSubagentEvidenceGate(this.supabase));
 
     // Orchestrator children get a reduced gate set — they are tactical decompositions
     // of a parent SD and should not face standalone SD requirements like full
@@ -516,8 +523,9 @@ export class ExecToPlanExecutor extends BaseExecutor {
     }
   }
 
-  getRemediation(gateName) {
-    return getRemediation(gateName);
+  // QF-20260424-806: forward context so promptFn(ctx) can interpolate sdId.
+  getRemediation(gateName, context = {}) {
+    return getRemediation(gateName, context);
   }
 }
 

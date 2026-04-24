@@ -8,6 +8,7 @@
 
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential enforcement rules (<10k chars)
+**Effort**: medium (core context; phase-specific files tag their own effort for phase work)
 
 ---
 

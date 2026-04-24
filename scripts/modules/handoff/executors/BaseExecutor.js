@@ -370,7 +370,8 @@ export class BaseExecutor {
           const failurePhase = this._getSourcePhaseFromHandoff();
           await this._displayOnFailureDirectives(failurePhase);
 
-          const remediation = this.getRemediation(gateResults.failedGate);
+          // QF-20260424-806: pass sdId so remediation prompts interpolate correctly.
+          const remediation = this.getRemediation(gateResults.failedGate, { sdId });
 
           // RCA Auto-Trigger on gate failure (SD-LEO-ENH-ENHANCE-RCA-SUB-001)
           // SD-LEARN-FIX-ADDRESS-PAT-AUTO-003: Use individual gate score, not overall aggregate.

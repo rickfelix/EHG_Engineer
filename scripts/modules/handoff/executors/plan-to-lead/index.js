@@ -20,6 +20,9 @@ import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.
 // DFE Escalation Gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
 import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
 
+// Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001) — Module C DB-enforced evidence
+import { createSubagentEvidenceGate } from '../../gates/subagent-evidence-gate.js';
+
 // Scope Completion Verification Gate (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-002)
 import { createScopeCompletionGate } from '../../gates/scope-completion-gate.js';
 
@@ -232,6 +235,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
     // Prerequisite handoff check
     gates.push(createPrerequisiteCheckGate(this.supabase));
+
+    // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
+    // DB-enforced: requires fresh sub_agent_execution_results rows for RETRO
+    gates.push(createSubagentEvidenceGate(this.supabase));
 
     // Orchestrator children get a reduced gate set — they are tactical decompositions
     // that should not face standalone SD requirements like heal scoring, retrospective
@@ -529,8 +536,9 @@ export class PlanToLeadExecutor extends BaseExecutor {
     };
   }
 
-  getRemediation(gateName) {
-    return getRemediation(gateName);
+  // QF-20260424-806: forward context so promptFn(ctx) can interpolate sdId.
+  getRemediation(gateName, context = {}) {
+    return getRemediation(gateName, context);
   }
 }
 

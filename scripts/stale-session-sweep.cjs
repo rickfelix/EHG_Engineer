@@ -1198,6 +1198,23 @@ async function main() {
   }
   console.log('COORDINATION MSGS: Sent to ' + activeSessions.length + ' active sessions');
   console.log('');
+
+  // SD-LEO-INFRA-FORMALIZED-WORKTREE-REAPER-001 — reaper tick (slower cadence).
+  // Runs every 12th sweep (~1h at 5-min intervals). Feature-flagged by
+  // WORKTREE_REAPER_ENABLED; dry-run unless WORKTREE_REAPER_EXECUTE is set.
+  // Wrapped so any reaper failure NEVER aborts the sweep's claim-cleanup work.
+  try {
+    const reaperTick = require('./fleet/worktree-reaper-tick.cjs');
+    const outcome = reaperTick.tick({ logger: (m) => console.log(m) });
+    if (outcome.invoked) {
+      console.log('  reaper_tick result=' + outcome.result + ' counter=' + outcome.counter);
+      console.log('');
+    }
+  } catch (reaperErr) {
+    console.log('WORKTREE REAPER TICK: ' + (reaperErr && reaperErr.message ? reaperErr.message : 'unknown'));
+    console.log('');
+  }
+
   console.log('=== SWEEP COMPLETE ===');
 }
 

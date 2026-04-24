@@ -87,6 +87,20 @@ describe('_extractWeakDimensions', () => {
     const result = _extractWeakDimensions(dims);
     expect(result[0].dimensionName).toBe('V99');
   });
+
+  // QF-20260424-807: SD-heal persist writes friendly dim keys, not V01/A01 codes.
+  it('counts SD-heal friendly dimension keys (key_changes_delivered etc.)', () => {
+    const sdHealDims = {
+      key_changes_delivered: { name: 'key_changes_delivered', score: 95 },
+      success_criteria_met: { name: 'success_criteria_met', score: 85 },
+      success_metrics_achieved: { name: 'success_metrics_achieved', score: 60 },
+      smoke_tests_pass: { name: 'smoke_tests_pass', score: 50 },
+      capabilities_present: { name: 'capabilities_present', score: 70 },
+    };
+    const result = _extractWeakDimensions(sdHealDims);
+    expect(result.length).toBe(3); // all three <83 (smoke 50, success_metrics 60, capabilities 70)
+    expect(result[0].dimId).toBe('smoke_tests_pass');
+  });
 });
 
 describe('_groupDimensions', () => {

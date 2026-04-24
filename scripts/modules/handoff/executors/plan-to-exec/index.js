@@ -46,6 +46,9 @@ import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 // DFE Escalation Gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
 import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
 
+// Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001) — Module C DB-enforced evidence
+import { createSubagentEvidenceGate } from '../../gates/subagent-evidence-gate.js';
+
 // Helper modules
 import { transitionPrdToExec, transitionSdToExec } from './state-transitions.js';
 import { createHandoffRetrospective } from './retrospective.js';
@@ -126,6 +129,10 @@ export class PlanToExecExecutor extends BaseExecutor {
 
     // Prerequisite handoff check (always first after protocol read)
     gates.push(createPrerequisiteCheckGate(this.supabase));
+
+    // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
+    // DB-enforced: requires fresh sub_agent_execution_results rows for the required set
+    gates.push(createSubagentEvidenceGate(this.supabase));
 
     // Parent orchestrators get simplified gates
     if (parentOrchestrator) {
@@ -540,8 +547,9 @@ export class PlanToExecExecutor extends BaseExecutor {
     }
   }
 
-  getRemediation(gateName) {
-    return getRemediation(gateName);
+  // QF-20260424-806: forward context so promptFn(ctx) can interpolate sdId.
+  getRemediation(gateName, context = {}) {
+    return getRemediation(gateName, context);
   }
 
   async _loadValidators() {
