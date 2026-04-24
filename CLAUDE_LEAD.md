@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-04-23 9:43:55 PM
+**Generated**: 2026-04-24 11:16:17 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 
@@ -982,6 +982,22 @@ This question is ENFORCED by:
 3. **AIQualityEvaluator** - Caps scores at 70% if no human-verifiable outcomes
 4. **UserStoryQualityRubric** - Caps at 6/10 for technical-only acceptance criteria
 
+## Anti-Pattern: Confirmation-Fishing at Scope-Lock
+
+### When Pause IS OK vs Confirmation-Fishing
+
+LEAD has a **canonical 5-point pause-point list** (see CLAUDE.md lines 44-51). At scope-lock boundary — once validation-agent has informed scope and the 9-question gate is answered — LEAD **locks the scope** per the SCOPE LOCK rule above. LEAD does **not** pause to ask the user a final scope-approval question.
+
+**❌ Anti-pattern (confirmation-fishing at scope-lock)**:
+> "I've run validation-agent and answered all 9 questions. Before I lock scope, should I pause here for final approval on option (A) vs option (B)?"
+
+**✅ Correct behavior**:
+> Scope-lock is informed by validation-agent + 9-question gate. If validation finds a real blocker, escalate (a canonical pause point). If not, proceed — locking scope IS the LEAD decision. Presenting a numbered menu at this boundary is confirmation-fishing.
+
+**Why this matters**: The user has already approved the SD; validation-agent informs lock; LEAD locks. A user-facing confirmation ask at scope-lock adds friction without adding value — the same "the most common AUTO-PROCEED failure mode" pattern CLAUDE.md:51-52 warns about, now manifest at the LEAD-specific decision boundary.
+
+**Gate behavior**: If validation-agent returns evidence-of-real-blocker (duplicate SDs, overlapping scope, missing prerequisites), LEAD escalates per canonical pause point #2 ("Blocking error requiring human decision"). That escalation is **not** confirmation-fishing — it carries specific gate evidence. Menu-style asks without such evidence are the anti-pattern.
+
 ## 📚 Automated PRD Enrichment (MANDATORY)
 
 **SD-LEO-LEARN-001: Proactive Learning Integration**
@@ -1308,6 +1324,33 @@ Sequential LEAD approval allows learning from earlier children to inform later d
 
 > **Team Capabilities**: For orchestrator SDs with parallel children, agents can spawn specialist teams to accelerate cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
+## SD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off SD creation scripts like:**
+- `create-*-sd.js`
+- `create-sd*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/leo-create-sd.js
+```
+
+### Why This Matters
+- One-off scripts bypass validation and governance
+- They create maintenance burden (100+ orphaned scripts)
+- They fragment the codebase and confuse future developers
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-sd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/leo-create-sd.js`
+2. Follow interactive prompts
+3. SD is properly validated and tracked in database
+
 ## Vision V2 SD Handling (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Reference Check
@@ -1349,33 +1392,6 @@ All Vision V2 SDs contain this metadata:
   "note": "Similar files may exist in the codebase that you can learn from, but we are creating from new."
 }
 ```
-
-## SD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off SD creation scripts like:**
-- `create-*-sd.js`
-- `create-sd*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/leo-create-sd.js
-```
-
-### Why This Matters
-- One-off scripts bypass validation and governance
-- They create maintenance burden (100+ orphaned scripts)
-- They fragment the codebase and confuse future developers
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-sd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/leo-create-sd.js`
-2. Follow interactive prompts
-3. SD is properly validated and tracked in database
 
 ## Parent-Child SD Phase Governance
 
@@ -1522,6 +1538,6 @@ Check `objectives` (active, current period) and `key_results` (status != 'achiev
 
 ---
 
-*Generated from database: 2026-04-23*
+*Generated from database: 2026-04-24*
 *Protocol Version: 4.4.1*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*
