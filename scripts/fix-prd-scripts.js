@@ -11,6 +11,7 @@
  *
  * Usage:
  *   node scripts/fix-prd-scripts.js --dry-run  # Preview changes
+ *   node scripts/fix-prd-scripts.js --audit    # Report-only, exit 1 on findings (CI)
  *   node scripts/fix-prd-scripts.js            # Apply fixes
  *   node scripts/fix-prd-scripts.js <file>     # Fix specific file
  */
@@ -24,7 +25,8 @@ const { glob } = globPkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DRY_RUN = process.argv.includes('--dry-run');
+const AUDIT_MODE = process.argv.includes('--audit');
+const DRY_RUN = AUDIT_MODE || process.argv.includes('--dry-run');
 const TARGET_FILE = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : null;
 
 // SD UUID population pattern to inject
@@ -289,7 +291,9 @@ function main() {
   console.log('\n🔧 PRD SCRIPT FIXER');
   console.log('='.repeat(70));
 
-  if (DRY_RUN) {
+  if (AUDIT_MODE) {
+    console.log('🔍 AUDIT MODE - Report-only, exit non-zero if findings');
+  } else if (DRY_RUN) {
     console.log('🔍 DRY RUN MODE - No files will be modified');
   }
   console.log('');
@@ -345,14 +349,22 @@ function main() {
   console.log(`Errors: ${errorCount}`);
   console.log(`Unchanged: ${files.length - fixedCount - errorCount}`);
 
-  if (DRY_RUN) {
+  if (AUDIT_MODE) {
+    if (fixedCount > 0) {
+      console.log(`\n❌ Audit failed: ${fixedCount} script(s) need schema fixes. Run \`npm run prd:audit:fix\` to auto-fix.`);
+      process.exit(1);
+    }
+    console.log('\n✅ Audit passed: no schema issues found');
+  } else if (DRY_RUN) {
     console.log('\n💡 Run without --dry-run to apply fixes');
   } else {
     console.log('\n✅ Fixes applied! Backup files created with .backup extension');
   }
 }
 
-main().catch(err => {
+try {
+  main();
+} catch (err) {
   console.error('❌ Fix failed:', err);
   process.exit(1);
-});
+}
