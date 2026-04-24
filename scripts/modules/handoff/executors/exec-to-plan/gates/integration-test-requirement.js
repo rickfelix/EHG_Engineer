@@ -15,6 +15,7 @@ import { existsSync, readFileSync, readdirSync, statSync, realpathSync } from 'f
 import { resolve, relative, extname } from 'path';
 import { execSync } from 'child_process';
 import { categorizeTestFiles } from '../../../../../lib/test-categorizer.js';
+import { getMainRef } from '../../../shared-git-context.js';
 
 /**
  * Valid integration test file extensions
@@ -97,7 +98,9 @@ function countModifiedModules(gitContext) {
           encoding: 'utf8', timeout: 10000
         });
       } else {
-        diffOutput = execSync('git diff --name-only main...HEAD', {
+        // SD-LEO-INFRA-WIRE-CHECK-GATE-001: use origin/main via getMainRef()
+        const { ref } = getMainRef();
+        diffOutput = execSync(`git diff --name-only ${ref}...HEAD`, {
           encoding: 'utf8', timeout: 10000
         });
       }

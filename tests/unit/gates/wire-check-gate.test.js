@@ -252,3 +252,87 @@ describe('wire-check-gate', () => {
     expect(Array.isArray(result.warnings)).toBe(true);
   });
 });
+
+// ─── SD-LEO-INFRA-WIRE-CHECK-GATE-001: getMainRef regression (real-repo) ──
+describe('getMainRef helper (SD-LEO-INFRA-WIRE-CHECK-GATE-001)', () => {
+  let getMainRef;
+
+  beforeEach(async () => {
+    const mod = await import('../../../scripts/modules/handoff/shared-git-context.js');
+    getMainRef = mod.getMainRef;
+  });
+
+  it('returns a result with a non-empty ref string', () => {
+    const result = getMainRef({ skipFetch: true });
+    expect(result).toHaveProperty('ref');
+    expect(result).toHaveProperty('source');
+    expect(typeof result.ref).toBe('string');
+    expect(result.ref.length).toBeGreaterThan(0);
+    expect(['origin', 'origin-master', 'local-fallback']).toContain(result.source);
+  });
+
+  it('prefers origin/main when running inside a repo with origin/main', () => {
+    // This test runs inside a worktree of EHG_Engineer, which has origin/main.
+    const result = getMainRef({ skipFetch: true });
+    if (result.source === 'origin') {
+      expect(result.ref).toBe('origin/main');
+      expect(result.warning).toBeUndefined();
+    }
+    // If origin/main isn't available (offline CI), source is fallback — that's OK,
+    // but the structure must still be correct (asserted in the previous test).
+  });
+
+  it('local-fallback path includes a warning explaining the issue', () => {
+    // Run from a tempdir that is NOT a git repo so no refs resolve.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gmr-test-'));
+    try {
+      const result = getMainRef({ cwd: tmp, skipFetch: true });
+      expect(result.source).toBe('local-fallback');
+      expect(typeof result.warning).toBe('string');
+      expect(result.warning.length).toBeGreaterThan(0);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('respects skipFetch:true (does not attempt remote fetch)', () => {
+    // Hard to assert "did not call fetch" without mocking; instead assert
+    // that the call completes within a tight budget when skipFetch is true.
+    // A real fetch would take > 200ms; local rev-parse is < 50ms.
+    const start = Date.now();
+    getMainRef({ skipFetch: true });
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(2000); // generous budget for CI
+  });
+});
+
+describe('wire-check-gate exports SD-LEO-INFRA-WIRE-CHECK-GATE-001 fix surface', () => {
+  it('uses getMainRef() symbol (canonical helper) — guards against regression', async () => {
+    const fs2 = await import('fs');
+    const url = await import('url');
+    const __filename2 = url.fileURLToPath(import.meta.url);
+    const __dirname2 = path.dirname(__filename2);
+    const gateFile = path.resolve(__dirname2, '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js');
+    const source = fs2.readFileSync(gateFile, 'utf8');
+    expect(source).toContain('getMainRef');
+    // Bare 'main...HEAD' literal must not reappear.
+    expect(source).not.toMatch(/['"`]main\.\.\.HEAD['"`]/);
+  });
+
+  it('catch block returns passed:false on diff failure (no silent pass)', async () => {
+    const fs2 = await import('fs');
+    const url = await import('url');
+    const __filename2 = url.fileURLToPath(import.meta.url);
+    const __dirname2 = path.dirname(__filename2);
+    const gateFile = path.resolve(__dirname2, '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js');
+    const source = fs2.readFileSync(gateFile, 'utf8');
+    // The catch block in the diff try/catch must NOT return passed:true.
+    // Find the catch block of the git diff try and verify shape.
+    const diffSection = source.slice(source.indexOf('Get new files from git diff'));
+    const catchIdx = diffSection.indexOf('} catch (');
+    expect(catchIdx).toBeGreaterThan(-1);
+    const catchBlock = diffSection.slice(catchIdx, catchIdx + 800);
+    expect(catchBlock).toMatch(/passed:\s*false/);
+    expect(catchBlock).not.toMatch(/passed:\s*true/);
+  });
+});

@@ -22,6 +22,8 @@ import { runGapAnalysis } from '../../../lib/gap-detection/index.js';
 import { executeAutoChain, EXIT_CODES } from './auto-chain-executor.js';
 // SD-MAN-ORCH-SCOPE-COMPLEXITY-ANALYSIS-001-B: Integration verification at orchestrator boundary
 import { verifyIntegration, formatGateResult } from '../../gates/integration-verification-gate.js';
+// SD-LEO-INFRA-WIRE-CHECK-GATE-001: canonical main ref resolver
+import { getMainRef } from './shared-git-context.js';
 
 /**
  * Generate a unique idempotency key for orchestrator completion
@@ -481,9 +483,11 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
     );
 
     // Get LOC from git diff for the orchestrator branch (lightweight)
+    // SD-LEO-INFRA-WIRE-CHECK-GATE-001: use getMainRef() to handle stale local main
     let branchLoc = {};
     try {
-      const diffOutput = execSync('git diff --stat main...HEAD 2>/dev/null || echo ""', {
+      const { ref } = getMainRef();
+      const diffOutput = execSync(`git diff --stat ${ref}...HEAD 2>/dev/null || echo ""`, {
         encoding: 'utf8', timeout: 3000
       });
       // Parse LOC from the last summary line: "X files changed, Y insertions(+), Z deletions(-)"
@@ -529,8 +533,10 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
       try {
         const _sdKeyShort = child.sd_key?.replace(/^SD-/, '').toLowerCase().slice(0, 30) || '';
         // Check for test files related to this child's commits
+        // SD-LEO-INFRA-WIRE-CHECK-GATE-001: use getMainRef() to handle stale local main
+        const { ref: mainRef } = getMainRef();
         const testFilesOutput = execSync(
-          'git log --name-only --pretty=format: --diff-filter=A main...HEAD 2>/dev/null | sort -u',
+          `git log --name-only --pretty=format: --diff-filter=A ${mainRef}...HEAD 2>/dev/null | sort -u`,
           { encoding: 'utf8', timeout: 2000 }
         ).trim();
 
