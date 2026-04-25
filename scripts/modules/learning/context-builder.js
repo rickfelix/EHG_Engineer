@@ -13,7 +13,13 @@ import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'crypto';
 import { syncVisionScoresToPatterns } from '../../eva/vision-to-patterns.js';
+import {
+  filterPatternsForLearning,
+  fetchAssignedSdStatuses,
+  persistFilterLog,
+} from './filter.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
@@ -356,47 +362,37 @@ async function getRecentLessons(sdId = null, limit = TOP_N) {
  * - Auto-filter stale (60+ days) patterns with declining trend
  * - Actionability bonus for patterns with proven solutions
  */
-async function getIssuePatterns(limit = TOP_N) {
+async function getIssuePatterns(limit = TOP_N, options = {}) {
   // Try decay view first, fall back to base table
   // Query more than needed to allow for filtering
   const queryLimit = limit * 3;
 
-  // SD-LEO-INFRA-ENHANCE-LEARN-SESSION-001: Pattern deduplication
-  // Exclude patterns already assigned to an SD (prevents duplicate SD creation)
-  let dedupFilterApplied = false;
+  // SD-LEO-FIX-PLAN-LEARN-COMPOSITE-001: assigned_sd_id IS NULL guard removed.
+  // Status-aware exclusion now handled in filterPatternsForLearning (FR-3) which
+  // also rejects auto_rca / unreviewed / ghost-UUID-fingerprint patterns BEFORE
+  // composite scoring.
+  // dedupFilterApplied retained for backward-compat with the function's prior
+  // return shape; always true now since FR-3 in filterPatternsForLearning
+  // performs the status-aware dedup.
+  const dedupFilterApplied = true;
+  const VIEW_SELECT = 'pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status, severity_weight, composite_score, min_occurrence_threshold, meets_threshold, source, assigned_sd_id, metadata, dedup_fingerprint';
   let { data, error } = await supabase
     .from('v_patterns_with_decay')
-    .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status, severity_weight, composite_score, min_occurrence_threshold, meets_threshold')
-    .is('assigned_sd_id', null)
+    .select(VIEW_SELECT)
     .order('composite_score', { ascending: false })
     .limit(queryLimit);
 
-  // SD-LEO-INFRA-ENHANCE-LEARN-SESSION-001: If dedup filter caused the error, retry without it (fail-open)
-  if (error && error.message.includes('assigned_sd_id')) {
-    console.log('  Dedup filter failed on view (column may not exist). Retrying without filter (fail-open)...');
-    const retryResult = await supabase
-      .from('v_patterns_with_decay')
-      .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status, severity_weight, composite_score, min_occurrence_threshold, meets_threshold')
-      .order('composite_score', { ascending: false })
-      .limit(queryLimit);
-    data = retryResult.data;
-    error = retryResult.error;
-  } else if (!error) {
-    dedupFilterApplied = true;
-  }
-
   // Fallback to base table if view fails (doesn't exist, schema error, or data type issues)
   // SD-LEARN-FIX-011: Also catch "cannot get array length of a scalar" from jsonb_array_length bug
-  if (error && (error.message.includes('does not exist') || error.message.includes('schema cache') || error.message.includes('array length') || error.message.includes('scalar'))) {
-    console.log(`Note: Using base table fallback (view error: ${error.message.substring(0, 60)})`);
+  // SD-LEO-FIX-PLAN-LEARN-COMPOSITE-001: Also fall back if the view lacks the new columns (source/assigned_sd_id/metadata/dedup_fingerprint).
+  if (error && (error.message.includes('does not exist') || error.message.includes('schema cache') || error.message.includes('array length') || error.message.includes('scalar') || error.message.includes('column'))) {
+    console.log(`Note: Using base table fallback (view error: ${error.message.substring(0, 80)})`);
     const fallback = await supabase
       .from('issue_patterns')
-      .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, updated_at, created_at')
+      .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, updated_at, created_at, source, assigned_sd_id, metadata, dedup_fingerprint')
       .eq('status', 'active')
-      .is('assigned_sd_id', null)
       .order('occurrence_count', { ascending: false })
       .limit(queryLimit);
-    dedupFilterApplied = true;
     data = fallback.data;
     error = fallback.error;
 
@@ -434,8 +430,48 @@ async function getIssuePatterns(limit = TOP_N) {
     return { patterns: [], filtered: { lowOccurrence: 0, lowConfidence: 0, staleDecline: 0 } };
   }
 
+  // SD-LEO-FIX-PLAN-LEARN-COMPOSITE-001: noise filter BEFORE composite scoring.
+  // Replaces the prior .is(assigned_sd_id, null) guards at the .select() layer
+  // with status-aware FR-3, plus FR-1 (source allow-list), FR-2 (auto_captured
+  // unreviewed), FR-4 (UUID-fingerprint ghost), FR-5 (metadata.filter_log[]).
+  let noiseFilterRejected = [];
+  if (data && data.length > 0) {
+    try {
+      const sdStatusMap = await fetchAssignedSdStatuses(supabase, data);
+      const result = filterPatternsForLearning(data, {
+        bypass: options.bypass === true,
+        sdStatusMap,
+      });
+      data = result.kept;
+      noiseFilterRejected = result.rejected;
+
+      if (options.bypass === true) {
+        console.log('  ⚠ NOISE FILTER DISABLED — bypass active');
+      } else if (noiseFilterRejected.length > 0) {
+        console.log(`  Noise filter: ${noiseFilterRejected.length} pattern(s) rejected before scoring`);
+        for (const { pattern, reason } of noiseFilterRejected) {
+          console.log(`    - ${pattern.pattern_id || pattern.id}: ${reason}`);
+        }
+        const scorerRunId = randomUUID();
+        // Fire-and-forget; persistFilterLog logs warnings on per-row failure
+        // and never throws, so it cannot block scoring.
+        persistFilterLog(supabase, noiseFilterRejected, scorerRunId).catch((err) => {
+          console.warn(`[filter-log] persist batch failed: ${err.message}`);
+        });
+      }
+    } catch (filterErr) {
+      console.warn(`[noise-filter] skipped due to error: ${filterErr.message}`);
+    }
+  }
+
   // Track what gets filtered out for transparency
-  const filtered = { lowOccurrence: 0, lowConfidence: 0, staleDecline: 0, total: (data || []).length };
+  const filtered = {
+    lowOccurrence: 0,
+    lowConfidence: 0,
+    staleDecline: 0,
+    total: (data || []).length,
+    noise: noiseFilterRejected.length,
+  };
 
   const patterns = (data || [])
     .map(pattern => {
@@ -506,11 +542,7 @@ async function getIssuePatterns(limit = TOP_N) {
     })
     .slice(0, limit);
 
-  if (dedupFilterApplied) {
-    console.log('  Pattern dedup: assigned_sd_id filter active');
-  }
-
-  return { patterns, filtered, dedupFilterApplied };
+  return { patterns, filtered, dedupFilterApplied, noiseFilterRejected };
 }
 
 /**
@@ -774,13 +806,13 @@ async function getVisionGapPatterns(limit = TOP_N) {
   }));
 }
 
-export async function buildLearningContext(sdId = null) {
+export async function buildLearningContext(sdId = null, options = {}) {
   console.log('Building learning context with severity-weighted filtering...');
   console.log(`  Thresholds: Critical/High=1 occ, Medium/Low=3 occ, min ${FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD}% confidence`);
 
   const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns, subAgentLearnings, visionGaps] = await Promise.all([
     getRecentLessons(sdId, TOP_N),
-    getIssuePatterns(TOP_N),
+    getIssuePatterns(TOP_N, { bypass: options.bypass === true }),
     getPendingImprovements(TOP_N),
     getResolvedFeedbackLearnings(TOP_N),
     getRecurringFeedbackPatterns(TOP_N),
