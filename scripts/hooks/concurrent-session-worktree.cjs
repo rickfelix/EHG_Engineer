@@ -245,15 +245,23 @@ function gitViaPowerShell(gitArgs, opts = {}) {
 
 /**
  * Check if a worktree is actively used by a running session (US-004).
+ * Layer 1: filesystem marker .ehg-session.json (legacy, naming-tolerant).
+ * Layer 2: DB claim heartbeat from strategic_directives_v2 (added per
+ * SD-LEO-INFRA-MAKE-SESSIONSTART-WORKTREE-001 / PAT-WORKTREE-CLEANUP-CLAIM-BLIND-001).
  * @param {string} wtPath - Absolute path to the worktree
+ * @param {Map<string,{sessionId:string,ageMs:number}>} [activeClaims] - Pre-fetched claim map keyed by sd_key/id
  * @returns {boolean} true if an active session is likely using this worktree
  */
-function isWorktreeInUseBySession(wtPath) {
+function isWorktreeInUseBySession(wtPath, activeClaims) {
+  // Layer 1: filesystem marker
   try {
     const sessionFile = path.join(wtPath, '.ehg-session.json');
     if (fs.existsSync(sessionFile)) {
       const meta = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
-      if (meta.sessionId) {
+      // Accept both camelCase (sessionId) and snake_case (session_id) — sd-start.js
+      // and ad-hoc markers historically wrote snake_case. PAT-WORKTREE-CLEANUP-CLAIM-BLIND-001
+      // wiped a worktree whose marker used snake_case because the prior check rejected it.
+      if (meta.sessionId || meta.session_id) {
         const mtime = fs.statSync(sessionFile).mtime;
         if (Date.now() - mtime.getTime() < 10 * 60 * 1000) {
           return true;
@@ -261,7 +269,53 @@ function isWorktreeInUseBySession(wtPath) {
       }
     }
   } catch { /* best effort */ }
+
+  // Layer 2: DB claim heartbeat
+  if (activeClaims) {
+    const wtName = path.basename(wtPath);
+    if (activeClaims.has(wtName)) return true;
+  }
+
   return false;
+}
+
+/**
+ * Pre-fetch active SD claims with fresh heartbeats, keyed by sd_key (and id).
+ * Used by cleanupStaleConcurrentWorktrees to avoid per-worktree async DB queries
+ * inside the 4.5s hook timeout budget.
+ * @param {object} supabase - Initialized Supabase service-role client
+ * @returns {Promise<Map<string,{sessionId:string,ageMs:number,sd_key:string}>>}
+ */
+async function getActiveDbClaims(supabase) {
+  const claims = new Map();
+  if (!supabase) return claims;
+  try {
+    const { data: rows, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, id, claiming_session_id, is_working_on, status, current_phase')
+      .not('claiming_session_id', 'is', null)
+      .eq('is_working_on', true)
+      .in('status', ['draft', 'in_progress', 'pending_approval']);
+    if (error || !rows || rows.length === 0) return claims;
+
+    const sessionIds = [...new Set(rows.map(r => r.claiming_session_id))];
+    const { data: sessRows } = await supabase
+      .from('claude_sessions')
+      .select('session_id, heartbeat_at')
+      .in('session_id', sessionIds);
+    const ageBySession = new Map(
+      (sessRows || []).map(s => [s.session_id, Date.now() - new Date(s.heartbeat_at).getTime()])
+    );
+
+    for (const r of rows) {
+      const ageMs = ageBySession.get(r.claiming_session_id);
+      if (ageMs === undefined || ageMs >= 10 * 60 * 1000) continue; // stale
+      const claimInfo = { sessionId: r.claiming_session_id, ageMs, sd_key: r.sd_key };
+      claims.set(r.sd_key, claimInfo);
+      if (r.id && r.id !== r.sd_key) claims.set(r.id, claimInfo);
+    }
+  } catch { /* best effort — empty map means no claim-awareness, falls back to FS marker */ }
+  return claims;
 }
 
 /**
@@ -275,7 +329,7 @@ function isWorktreeInUseBySession(wtPath) {
  * - Active session check before deletion (prevents CWD disappearing)
  * - CWD validation after cleanup (resets to repo root if invalid)
  */
-function cleanupStaleConcurrentWorktrees() {
+async function cleanupStaleConcurrentWorktrees(supabase) {
   const maxAgeMs = 60 * 60 * 1000; // 1 hour
   const worktreesDir = path.resolve(__dirname, '../../.worktrees');
 
@@ -294,6 +348,11 @@ function cleanupStaleConcurrentWorktrees() {
   } catch { return; }
 
   if (entries.length === 0) return;
+
+  // FR-1: Pre-fetch active DB claims so per-worktree filtering is sync.
+  // Defeats PAT-WORKTREE-CLEANUP-CLAIM-BLIND-001 by giving the cleanup
+  // visibility into strategic_directives_v2.claiming_session_id.
+  const activeClaims = await getActiveDbClaims(supabase);
 
   let cleaned = 0;
   let skipped = 0;
@@ -319,9 +378,14 @@ function cleanupStaleConcurrentWorktrees() {
       try { createdAt = fs.statSync(wtPath).mtime; } catch { continue; }
     }
 
-    // US-004: Skip if an active session is using this worktree
-    if (isWorktreeInUseBySession(wtPath)) {
-      logEvent('session.cleanup_skipped_active', { entry, reason: 'active_session' });
+    // US-004 + FR-1: Skip if filesystem marker OR DB claim says active
+    if (isWorktreeInUseBySession(wtPath, activeClaims)) {
+      const claim = activeClaims.get(entry);
+      logEvent('session.cleanup_skipped_active', {
+        entry,
+        reason: claim ? 'active_db_claim' : 'active_fs_marker',
+        ...(claim && { claiming_session: String(claim.sessionId).slice(0, 8) + '...', heartbeat_age_ms: claim.ageMs }),
+      });
       skipped++;
       continue;
     }
@@ -331,14 +395,31 @@ function cleanupStaleConcurrentWorktrees() {
       if (Date.now() - createdAt.getTime() <= maxAgeMs) continue;
     }
 
-    // For SD-* worktrees: stale if branch is fully merged to main
+    // For SD-* worktrees: stale if branch is fully merged to main AND working tree is clean
     if (entry.startsWith('SD-')) {
       try {
         // Get the branch this worktree is on
         const wtBranch = gitViaPowerShell(`-C "${wtPath}" rev-parse --abbrev-ref HEAD`, {
           cwd: repoRoot, timeout: 3000
         }).toString().trim();
-        // Check if that branch is merged into main
+
+        // FR-2: Skip if working tree is dirty (uncommitted/staged/untracked work).
+        // Without this, brand-new EXEC worktrees with no commits ahead of main are
+        // misclassified as "merged → safe" — see PAT-WORKTREE-CLEANUP-CLAIM-BLIND-001.
+        try {
+          const status = gitViaPowerShell(`-C "${wtPath}" status --porcelain`, {
+            cwd: repoRoot, timeout: 3000
+          }).toString();
+          if (status.trim().length > 0) {
+            logEvent('session.cleanup_skipped_dirty', {
+              entry, reason: 'dirty_working_tree', file_count: status.trim().split('\n').length
+            });
+            skipped++;
+            continue;
+          }
+        } catch { /* status check failed — fall through to merge check */ }
+
+        // Check if branch is merged into main
         const merged = gitViaPowerShell(`branch --merged main`, {
           cwd: repoRoot, timeout: 3000
         }).toString();
@@ -349,6 +430,19 @@ function cleanupStaleConcurrentWorktrees() {
         continue; // Can't determine merge status — skip to be safe
       }
     }
+
+    // FR-3: Audit-log the force-remove BEFORE the destructive call so
+    // post-mortems have a record. Closes the audit gap that made the
+    // PAT-WORKTREE-CLEANUP-CLAIM-BLIND-001 RCA require filesystem timestamp forensics.
+    logEvent('session.worktree_force_removed', {
+      entry,
+      cwd: process.cwd(),
+      caller: 'cleanupStaleConcurrentWorktrees',
+      reason: entry.startsWith('concurrent-') ? 'stale_concurrent_age' : 'merged_branch_clean_tree',
+      age_hours: Math.round((Date.now() - createdAt.getTime()) / 3600000),
+      db_claim_check_ran: supabase != null,
+      active_claims_count: activeClaims.size,
+    });
 
     // US-001: Use PowerShell for git ops to avoid MSYS2 pipe corruption
     try {
@@ -441,8 +535,18 @@ function pruneStaleLocalBranches() {
 }
 
 async function main() {
-  // Clean up stale worktrees and branches before doing anything else
-  cleanupStaleConcurrentWorktrees();
+  // Initialize Supabase EARLY so cleanup can consult DB claims (FR-1).
+  // Pre-fix, supabase init happened after cleanupStaleConcurrentWorktrees, leaving
+  // the destructive worktree sweep claim-blind — see PAT-WORKTREE-CLEANUP-CLAIM-BLIND-001.
+  let supabase = null;
+  try {
+    const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
+    supabase = createSupabaseServiceClient();
+  } catch { /* Supabase not available — cleanup falls back to FS-marker only */ }
+
+  // Clean up stale worktrees and branches before doing anything else.
+  // Now async + claim-aware (passes supabase to consult DB heartbeats).
+  await cleanupStaleConcurrentWorktrees(supabase);
   pruneStaleLocalBranches();
 
   // Skip if already inside a worktree — prevents nested worktree creation.
@@ -466,13 +570,9 @@ async function main() {
   // Detect current work type
   const { workType, workKey } = detectWorkType();
 
-  // Initialize Supabase
-  let supabase;
-  try {
-    const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
-    supabase = createSupabaseServiceClient();
-  } catch {
-    return; // Supabase not available - skip silently
+  // Bail early if Supabase wasn't available — concurrent-session detection requires it
+  if (!supabase) {
+    return;
   }
 
   // SD-LEO-INFRA-CLAIM-SYSTEM-IMPROVEMENTS-001 (FR-003): Clean up stale sessions on startup.
@@ -637,16 +737,23 @@ async function main() {
   }
 }
 
-// Run with timeout protection (hook has 5s timeout)
-const hookTimeout = setTimeout(() => {
-  // If we haven't finished in time, exit cleanly
-  process.exit(0);
-}, 4500);
+// Test exports (used by scripts/hooks/__tests__/concurrent-session-worktree.test.js)
+// Gating `main()` behind `require.main === module` lets tests `require()` this
+// file without triggering the SessionStart side-effects.
+module.exports = { isWorktreeInUseBySession, getActiveDbClaims, cleanupStaleConcurrentWorktrees };
 
-main()
-  .catch(() => {
-    // Never block session start
-  })
-  .finally(() => {
-    clearTimeout(hookTimeout);
-  });
+if (require.main === module) {
+  // Run with timeout protection (hook has 5s timeout)
+  const hookTimeout = setTimeout(() => {
+    // If we haven't finished in time, exit cleanly
+    process.exit(0);
+  }, 4500);
+
+  main()
+    .catch(() => {
+      // Never block session start
+    })
+    .finally(() => {
+      clearTimeout(hookTimeout);
+    });
+}
