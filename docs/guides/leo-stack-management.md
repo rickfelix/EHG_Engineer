@@ -1,9 +1,9 @@
 ---
 category: guide
 status: draft
-version: 1.0.0
+version: 2.1.0
 author: auto-fixer
-last_updated: 2026-02-28
+last_updated: 2026-04-25
 tags: [guide, auto-generated]
 ---
 # LEO Stack Management - Cross-Platform Version
@@ -14,21 +14,16 @@ tags: [guide, auto-generated]
 - [Metadata](#metadata)
 - [Overview](#overview)
 - [Platform Support](#platform-support)
-- [Overview](#overview)
 - [Quick Start](#quick-start)
   - [Using the Cross-Platform Runner (Recommended)](#using-the-cross-platform-runner-recommended)
   - [Using the /leo and /restart Slash Commands](#using-the-leo-and-restart-slash-commands)
   - [Start Individual Servers](#start-individual-servers)
 - [Windows-Specific Notes](#windows-specific-notes)
   - [PowerShell Direct Usage](#powershell-direct-usage)
-  - [Virtual Environment for Agent Platform](#virtual-environment-for-agent-platform)
 - [Prerequisites](#prerequisites)
-  - [For All Servers](#for-all-servers)
-  - [For Agent Platform (Port 8000)](#for-agent-platform-port-8000)
 - [Server URLs](#server-urls)
 - [Troubleshooting](#troubleshooting)
   - [Port Already in Use](#port-already-in-use)
-  - [Agent Platform Not Starting](#agent-platform-not-starting)
   - [Viewing Logs](#viewing-logs)
 - [Development Workflow](#development-workflow)
   - [Standard Development Session](#standard-development-session)
@@ -43,16 +38,19 @@ tags: [guide, auto-generated]
 ## Metadata
 - **Category**: Guide
 - **Status**: Approved
-- **Version**: 2.0.0
-- **Author**: Claude Code (Windows Migration)
-- **Last Updated**: 2026-01-19
+- **Version**: 2.1.0
+- **Last Updated**: 2026-04-25
 - **Tags**: leo-stack, deployment, cross-platform, windows, operations
 
 ## Overview
 
-Management guide for the LEO Stack - the three-server ecosystem powering the LEO Protocol.
+Management guide for the LEO Stack — the two-server ecosystem powering the LEO Protocol.
 
 **Quick Command:** `node scripts/cross-platform-run.js leo-stack [start|stop|restart|status]`
+
+> Agent Platform was removed from leo-stack management on 2026-04-25 (commit `f8e252ee28`, CrewAI elimination). AI workflows that previously ran under leo-stack management have been retired; references in older docs and archived scripts are dead.
+
+> Operators are responsible for `git pull` in `EHG_Engineer/` and `ehg/` before `/restart` if they want latest. The Windows path no longer auto-pulls (matches POSIX behavior; prevents peer-worktree clobber).
 
 ## Platform Support
 
@@ -65,17 +63,12 @@ The cross-platform runner automatically selects the right script for your OS.
 
 ---
 
-## Overview
-
-The **LEO Stack** consists of three servers that power your LEO Protocol ecosystem:
+## Servers Managed
 
 | Server | Port | Purpose | Technology | Startup Time |
 |--------|------|---------|------------|--------------|
 | **EHG_Engineer** | 3000 | LEO Protocol Framework & Backend API | Node.js/Express | ~1 second |
 | **EHG App** | 8080 | Frontend UI & User Interface | Vite/React | ~3 seconds |
-| **Agent Platform** | 8000 | AI Research Backend (for Venture Creation) | FastAPI/Python | **10-15 seconds** |
-
-**Note:** The Agent Platform (port 8000) takes 10-15 seconds to fully start because it loads AI components.
 
 ## Quick Start
 
@@ -113,7 +106,6 @@ In Claude Code sessions:
 ```bash
 node scripts/cross-platform-run.js leo-stack start-engineer
 node scripts/cross-platform-run.js leo-stack start-app
-node scripts/cross-platform-run.js leo-stack start-agent
 ```
 
 ## Windows-Specific Notes
@@ -129,30 +121,10 @@ You can also run the PowerShell script directly:
 .\scripts\leo-stack.ps1 restart -Fast
 ```
 
-### Virtual Environment for Agent Platform
-
-On Windows, the Python venv is at `venv_win`:
-```powershell
-cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
-.\venv_win\Scripts\Activate.ps1
-```
-
 ## Prerequisites
 
-### For All Servers
 - Node.js and npm installed
-- Git for Windows (includes Git Bash)
-
-### For Agent Platform (Port 8000)
-- Python 3.10+
-- Virtual environment set up (`venv_win` on Windows)
-
-**First-time setup for Agent Platform:**
-
-```powershell
-cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
-.\INSTALL.ps1
-```
+- Git for Windows (includes Git Bash) on Windows; standard `git` elsewhere
 
 ## Server URLs
 
@@ -160,8 +132,6 @@ cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
 |--------|-----|-------------|
 | EHG_Engineer | http://localhost:3000 | Immediately |
 | EHG App | http://localhost:8080 | ~3 seconds |
-| Agent Platform | http://localhost:8000 | 10-15 seconds |
-| API Docs | http://localhost:8000/api/docs | 10-15 seconds |
 
 ## Troubleshooting
 
@@ -180,46 +150,6 @@ Stop-Process -Id <PID> -Force
 node scripts/cross-platform-run.js leo-stack clean
 ```
 
-### Agent Platform Not Starting
-
-**Check virtual environment:**
-```powershell
-Test-Path C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win
-```
-
-If not found, run setup:
-```powershell
-cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
-.\INSTALL.ps1
-```
-
-**Check for missing dependencies:**
-If you see `ModuleNotFoundError` in logs, install the missing package:
-```powershell
-cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
-.\venv_win\Scripts\pip.exe install <missing-package>
-```
-
-**Common dependency issues and resolutions:**
-
-| Error | Missing Package(s) | Solution |
-|-------|-------------------|----------|
-| `No module named 'langchain_openai'` | `langchain_openai` | `pip install langchain_openai` |
-| `No module named 'anthropic'` | `anthropic` | `pip install anthropic` |
-| `Client.__init__() got an unexpected keyword argument 'proxy'` | Outdated `supabase` stack | `pip install --upgrade supabase gotrue` |
-| `No module named 'websockets.asyncio'` | Outdated `websockets` | `pip install "websockets>=13,<16"` |
-
-**Full dependency reinstall (if multiple issues):**
-```powershell
-cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
-.\venv_win\Scripts\pip.exe install -r requirements.txt --upgrade
-```
-
-**Note:** After installing dependencies, restart the Agent Platform:
-```bash
-node scripts/cross-platform-run.js leo-stack restart
-```
-
 ### Viewing Logs
 
 Logs are stored in `.logs/`:
@@ -230,7 +160,6 @@ Get-ChildItem .logs -File | Sort-Object LastWriteTime -Descending | Select-Objec
 # View specific log
 Get-Content .logs\engineer-*.log -Tail 50
 Get-Content .logs\app-*.log -Tail 50
-Get-Content .logs\agent-*.log -Tail 50
 ```
 
 ## Development Workflow
@@ -241,9 +170,8 @@ Get-Content .logs\agent-*.log -Tail 50
    ```bash
    node scripts/cross-platform-run.js leo-stack start
    ```
-   Wait 15 seconds for Agent Platform to fully load.
 
-2. **Verify all servers:**
+2. **Verify both servers:**
    ```bash
    node scripts/cross-platform-run.js leo-stack status
    ```
@@ -284,7 +212,6 @@ Use `-Fast` flag for reduced delays during development.
 PID files are stored in `.pids/`:
 - `engineer.pid` - EHG_Engineer process
 - `app.pid` - EHG App process
-- `agent.pid` - Agent Platform process
 
 ### Log Files
 
@@ -292,7 +219,6 @@ Log files are stored in `.logs/`:
 - `leo-stack-YYYYMMDD-HHMMSS.log` - Script operations
 - `engineer-*.log` - EHG_Engineer output
 - `app-*.log` - Vite output
-- `agent-*.log` - FastAPI output
 
 ## Commands Reference
 
@@ -305,17 +231,12 @@ Log files are stored in `.logs/`:
 | `clean` | Clean up processes on all ports |
 | `start-engineer` | Start only EHG_Engineer (3000) |
 | `start-app` | Start only EHG App (8080) |
-| `start-agent` | Start only Agent Platform (8000) |
-| `emergency` | Force kill all node/python processes |
+| `start-worker` | Start workers from `config/workers.json` |
+| `emergency` | Force kill all node processes (Windows only; prompts for confirmation) |
 
 ## Support
 
 For issues:
-- Check this README
+- Check this guide
 - Review logs in `.logs/`
 - Verify prerequisites are installed
-- Wait 15 seconds after starting for Agent Platform
-
----
-
-*Updated: January 2026 - Windows native environment (no WSL)*

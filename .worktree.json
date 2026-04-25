@@ -1,7 +1,6 @@
 {
-  "sdKey": "SD-EHG-MARKETING-DISTRIBUTION-PRODUCER-BINDING-001",
-  "expectedBranch": "feat/SD-EHG-MARKETING-DISTRIBUTION-PRODUCER-BINDING-001",
-  "createdAt": "2026-04-24T20:05:55.630Z",
-  "hostname": "Legion-Laptop",
-  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
+  "sdKey": "SD-LEO-INFRA-RESTART-SKILL-LEO-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-RESTART-SKILL-LEO-001",
+  "createdAt": "2026-04-25T17:39:18.267Z",
+  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer"
 }
