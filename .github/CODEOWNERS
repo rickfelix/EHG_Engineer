@@ -48,3 +48,12 @@ CONTRIBUTING.md @rickfelix
 **/auth* @rickfelix
 **/security* @rickfelix
 **/credentials* @rickfelix
+
+# Stage templates barrel — protected per SD-LEO-INFRA-STAGE-TEMPLATE-BARREL-001
+# Any change to a stage-NN.js file should also touch the contract test below
+# (tests/unit/eva/stage-templates/index.test.js). The auto-discovery barrel
+# (lib/eva/stage-templates/index.js, post-2026-04-25) makes deletions safe at
+# runtime, but the contract test guards against semantic regressions.
+/lib/eva/stage-templates/stage-*.js @rickfelix
+/lib/eva/stage-templates/index.js @rickfelix
+/tests/unit/eva/stage-templates/index.test.js @rickfelix
