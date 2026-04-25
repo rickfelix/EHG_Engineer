@@ -500,6 +500,74 @@ Options:
 2. Run `git checkout main && git pull` to sync local
 3. Confirm: "✅ PR #X merged and branch deleted. You're on main with latest changes."
 
+### Step 6.3: Quick Fix Closure (AUTOMATED for `qf/*` and `quick-fix/*` branches)
+
+**Why this exists**: Without this step, `quick_fixes` rows stay `status=open` after merge — the orphan-QF rot pattern documented in QF-20260424-808 and QF-20260424-081 (both same-class incidents in 24 hours, 2026-04-25). Once Step 6.7 deletes the branch + worktree, `complete-quick-fix.js` can no longer auto-detect from a CWD that points at the right branch (the structural class of bug closed by SD-LEO-FIX-COMPLETE-QUICK-FIX-001 inside the script). This step closes the loop at the workflow level — invoke `complete-quick-fix.js` AFTER merge succeeds but BEFORE worktree cleanup runs.
+
+**This step runs strictly between Step 6 (merge complete) and Step 6.5 (auto-learning capture). It is a no-op for non-QF branches.**
+
+**1. Detect QF branch via the canonical helper:**
+
+```bash
+node -e "import('./lib/ship/qf-detector.mjs').then(({ isQuickFixBranch, extractQFId }) => {
+  const branch = process.argv[1];
+  console.log('IS_QF=' + isQuickFixBranch(branch));
+  console.log('QF_ID=' + (extractQFId(branch) || ''));
+});" "<branch-name-of-merged-pr>"
+```
+
+The helper accepts BOTH `qf/QF-<id>` AND `quick-fix/QF-<id>` prefixes — production data shows both are still in active use, and rolling-out a single canonical prefix is out of scope.
+
+**2. If `IS_QF=false`:** Skip directly to Step 6.5. Print no message — the silent no-op is the desired regression behavior for non-QF SDs.
+
+**3. If `IS_QF=true` AND `QF_ID` is non-empty:** Invoke `complete-quick-fix.js` with values captured from the just-merged PR:
+
+```bash
+# Required values (from earlier /ship steps):
+# - <QF_ID>          from extractQFId(branch)
+# - <PR_URL>         from Step 4 (gh pr create output) or `gh pr view <#> --json url`
+# - <COMMIT_SHA>     from gh-merge-safe.mjs output (look for "Merged PR #N (merge): <SHA>")
+# - <BRANCH_NAME>    the original branch name (e.g., qf/QF-...)
+
+node scripts/complete-quick-fix.js <QF_ID> \
+  --pr-url <PR_URL> \
+  --commit-sha <COMMIT_SHA> \
+  --branch-name <BRANCH_NAME> \
+  --skip-tests --tests-pass yes \
+  --skip-typecheck \
+  --uat-verified yes \
+  --verification-notes "Auto-closed by /ship Step 6.3 after merge of <PR_URL>"
+```
+
+**Why these flags:**
+- `--pr-url` makes `autoDetectGitInfo` use PR metadata as source of truth (the SD-LEO-FIX-COMPLETE-QUICK-FIX-001 fix), so this step is correct even on Windows worktrees.
+- `--skip-tests --tests-pass yes` — CI passed for the merge to succeed; re-running tests post-merge is redundant.
+- `--skip-typecheck` — same reasoning; the PR review gate already covered TypeScript.
+- `--uat-verified yes` — the merge gate IS the de-facto UAT for QFs (small, scoped fixes that PR-review validated).
+
+**4. Set a sentinel for Step 7:**
+
+After `complete-quick-fix.js` returns successfully, export `STEP_6_3_RAN_QF_CLOSURE=true` in the session so Step 7 (Post-Merge Command Ecosystem) can suppress the SD-flavored ecosystem prompt — QFs have their own implicit completion sequence and don't need `/learn` or `/leo next` follow-ups.
+
+**5. If `complete-quick-fix.js` fails** (non-zero exit or visible error):
+
+This is rare post-fix (SD-LEO-FIX-COMPLETE-QUICK-FIX-001 hardened the underlying script's auto-detection). When it does happen:
+- Surface the error message to the user
+- Do NOT block the rest of /ship (Step 6.5 + 6.7 still run; the QF row staying open is recoverable, an aborted ship is not)
+- The operator can manually close via `complete-quick-fix.js QF-<id> --pr-url <url> ...` or via `database-agent` UPDATE if the script has a deeper bug
+
+**6. Output format:**
+
+```
+🎯 Step 6.3: QF branch detected — closing QF-20260424-808 via complete-quick-fix.js
+   PR: https://github.com/rickfelix/EHG_Engineer/pull/3331
+   Commit: 2f97e7a78a516eed10172f328df5421f0d7fa8cf
+   Branch: qf/QF-20260424-808
+   ✓ Quick-Fix QF-20260424-808 → status=completed
+```
+
+For non-QF merges, no output appears — Step 6.5 follows directly.
+
 ### Step 6.5: Auto-Learning Capture (AUTOMATED)
 
 **After successful merge, the system automatically captures learnings for non-SD work.**
@@ -600,6 +668,8 @@ node scripts/modules/shipping/post-merge-worktree-cleanup.js --sdKey <SD-KEY-OR-
 ```
 ✅ PR #X merged and branch deleted.
 ```
+
+**Skip-when-QF-closed**: If `STEP_6_3_RAN_QF_CLOSURE=true` was set in Step 6.3, skip Step 7 entirely. Quick-Fix flow ends with the script's own completion summary; presenting `/learn` / `/leo next` after a QF close is noise (QFs are their own sequence, not SD work that benefits from learning capture or queue navigation). For SD merges, continue below.
 
 **AUTO-PROCEED Detection**: Check if AUTO-PROCEED mode is active (same check as Step 6).
 
