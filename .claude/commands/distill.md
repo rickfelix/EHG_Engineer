@@ -613,27 +613,22 @@ For each item in the **selected** brainstorm queue (cherry-picked subset), proce
 
 4. Update queue display: `[DONE] "Item title..." → SD_KEY (VISION-KEY, ARCH-KEY)` or `[NEEDS_TRIAGE] "Item title..."`
 
-5. **Inter-item decision point** (SD-DISTILLTOBRAINSTORM-ORCH-001-C):
+5. **Inter-item progression** (deterministic under AUTO-PROCEED):
 
-   If there are remaining items in the selected queue, present AskUserQuestion:
+   If there are remaining items in the selected queue, log progress and continue to the next item automatically:
 
    ```
-   question: "Item N of M complete. SD_KEY created. What next?"
-   header: "Brainstorm Loop — N/M"
-   options:
-     - label: "Process next item"
-       description: "Continue to: 'NEXT_ITEM_TITLE'"
-     - label: "Defer remaining items"
-       description: "Send N remaining items to waves without brainstorm"
-     - label: "Done for now"
-       description: "Save progress — resume later with /distill"
+   [Brainstorm Loop N/M] SD_KEY created. Continuing to: 'NEXT_ITEM_TITLE'
    ```
 
-   - **Process next item**: Continue loop to the next selected item
-   - **Defer remaining**: Set `item_disposition = 'deferred'` for all remaining items, skip to summary
-   - **Done for now**: Save loop state (step 6) and exit — state file enables resume next session
+   The loop state (step 6) is written per iteration regardless of how the loop terminates, so resume always works. Per CLAUDE.md AUTO-PROCEED canonical pause-points, do **not** present an `AskUserQuestion` menu at this boundary.
 
-   If this is the LAST item (no more remaining), skip AskUserQuestion and go directly to summary.
+   **Cancellation pattern** — operators can verbally interrupt at any time. Honor any of:
+   - "stop", "skip remaining", "done for now", "defer the rest"
+   - On verbal interrupt: set `item_disposition = 'deferred'` for all remaining items, save loop state, skip to summary.
+   - On Ctrl+C: state file is already up to date; resume next session via `/distill`.
+
+   If this is the LAST item (no more remaining), skip directly to summary.
 
 6. **After each item completes**, update loop state:
    ```bash
@@ -688,38 +683,31 @@ After the pipeline completes, summarize:
 - Number of waves proposed and their themes
 - Whether results were persisted (live run) or previewed (dry run)
 
-**Step 5: Next steps (interactive)**
+**Step 5: Next steps (deterministic routing on roadmap state)**
 
-If this was a live run (not dry-run), present an AskUserQuestion with recommended next actions:
+After a live run, route automatically based on the current roadmap state — no `AskUserQuestion` menu, per CLAUDE.md AUTO-PROCEED.
+
+| Roadmap state | Next action |
+|---------------|-------------|
+| Waves exist but unrefined (no `roadmap_wave_items` with `dedup_status`/`reconcile_status`/`score`) | Log: "Pipeline complete with N waves. Run `/distill refine --roadmap-id <id>` to deduplicate, reconcile, and score." |
+| Waves refined but unapproved (`roadmaps.approved_at IS NULL`) | Log: "Refinement complete. Run `/distill approve --roadmap-id <id>` to lock wave sequence." |
+| Waves approved but unpromoted | Log: "Approved. Run `/distill promote --wave-id <id>` to create SDs from each wave." |
+| Pipeline produced 0 waves | Log: "Pipeline complete; no waves produced (insufficient classified items)." Return. |
+
+The operator can verbally override at any time ("skip refine", "done for now"). Fetch the most recent roadmap ID once for the log lines.
+
+After a dry run, log results and instruct the operator on the exact next command — no menu:
 
 ```
-question: "Distill pipeline complete. What would you like to do next?"
-header: "Next Steps"
-options:
-  - label: "View roadmap status"
-    description: "Show wave breakdown and progress (/distill status)"
-  - label: "Approve wave sequence"
-    description: "Lock wave ordering for promotion (/distill approve)"
-  - label: "Run refinement pipeline"
-    description: "Dedup, reconcile, and score wave items (/distill refine)"
-  - label: "Done for now"
-    description: "End distill session — resume later with /distill status"
+[DRY RUN COMPLETE]
+  Items synced:    N (preview only — not persisted)
+  Items classified: M (preview only — not persisted)
+  Waves proposed:   K
+  Re-run live:    /distill
+  Re-run live (skip sync): /distill --skip-sync
 ```
 
-Auto-invoke the selected command via the Skill tool. If "Approve wave sequence" is selected, the system will need a `--roadmap-id` — fetch the most recent roadmap ID and pass it automatically.
-
-If this was a dry run, present:
-```
-question: "Dry run complete. Ready to persist?"
-header: "Dry Run Results"
-options:
-  - label: "Run live (persist to DB)"
-    description: "Re-run pipeline without --dry-run to write results"
-  - label: "Run live (skip sync)"
-    description: "Persist without re-syncing sources (/distill --skip-sync)"
-  - label: "Done for now"
-    description: "Review results later"
-```
+Dry run is a true preview — no deferred-tool round-trip is needed to ask whether to persist; the operator decides by re-invoking the command.
 
 ---
 
