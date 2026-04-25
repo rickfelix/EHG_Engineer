@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "scripts/__tests__/replay/fixture-schema.json",
+  "title": "Replay golden fixture",
+  "description": "One real (input, V1 output, downstream-validator result) tuple captured from production for replay testing of V2 prompt rewrites.",
+  "type": "object",
+  "required": ["input", "v1_output", "validator_result", "captured_at", "sanitized"],
+  "properties": {
+    "input": {
+      "description": "The exact input passed to the V1 inline prompt (JSON-serializable)."
+    },
+    "v1_output": {
+      "description": "The V1 prompt's raw output as observed in production."
+    },
+    "validator_result": {
+      "type": "object",
+      "required": ["passed"],
+      "properties": {
+        "passed": { "type": "boolean", "description": "Whether v1_output passed the downstream validator (PRD rubric, JSON schema, etc.)." },
+        "details": { "description": "Optional validator-specific details." }
+      }
+    },
+    "captured_at": { "type": "string", "format": "date-time" },
+    "sanitized": { "type": "boolean", "const": true, "description": "Must be true. Loader refuses fixtures where sanitized !== true." }
+  }
+}

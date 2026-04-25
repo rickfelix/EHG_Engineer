@@ -1,0 +1,51 @@
+name: Replay Framework Tests
+
+# Runs the inline-prompt replay test framework on every PR that touches it,
+# its golden corpus, or any of the 4 target production scripts whose prompts
+# the framework guards (PRs #2-5 of SD-LEO-INFRA-OPUS-HARNESS-PHASE-3-INLINE-SCRIPTS-001).
+#
+# Blocking by design: FR-3 AC-3 requires CI failure to block PR merge.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/__tests__/replay/**'
+      - 'scripts/__tests__/golden/**'
+      - 'scripts/eva/srip/quality-checker.mjs'
+      - 'scripts/modules/ai-quality-judge/**'
+      - 'scripts/eva-intake-pipeline.js'
+      - 'scripts/modules/sd-creation/prd-sd-041c/**'
+      - '.github/workflows/replay-tests.yml'
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  replay-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run replay framework tests
+        run: npx vitest run scripts/__tests__/replay/
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Replay Framework Tests" >> $GITHUB_STEP_SUMMARY
+          echo "Suite: scripts/__tests__/replay/*.test.js" >> $GITHUB_STEP_SUMMARY
+          echo "Guards V1→V2 prompt parity for 4 production scripts." >> $GITHUB_STEP_SUMMARY
