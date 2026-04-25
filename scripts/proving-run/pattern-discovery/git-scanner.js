@@ -45,8 +45,16 @@ function scanRepoHistory(repoPath, pathPatterns, limit = MAX_COMMITS) {
 
 /**
  * Parse git log --oneline --name-only output into structured commits.
+ *
+ * Expects: hash+subject lines interleaved with file path lines.
+ *   abc1234 commit subject
+ *   path/to/file.js
+ *   path/to/other.js
+ *
+ *   def5678 next subject
+ *   path/to/another.js
  */
-function parseGitLog(output) {
+export function parseGitLog(output) {
   const commits = [];
   let current = null;
 
@@ -70,6 +78,26 @@ function parseGitLog(output) {
   if (current) commits.push(current);
 
   return commits;
+}
+
+/**
+ * Parse git log --pretty= --name-only output (paths only, no commit metadata).
+ *
+ * Expects: one file path per non-empty line. Used for added-file mining
+ * (--diff-filter=A --pretty= --name-only) where commit metadata is irrelevant.
+ *
+ * @param {string} output - Raw stdout from git log --pretty= --name-only
+ * @returns {string[]} Normalised file paths (forward slashes)
+ */
+export function parsePathsOnly(output) {
+  if (!output) return [];
+  const paths = [];
+  for (const raw of output.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    paths.push(line.replace(/\\/g, '/'));
+  }
+  return paths;
 }
 
 /**
