@@ -8,20 +8,12 @@
 
 import { execSync } from 'child_process';
 import { inferPattern } from './group-review.js';
+import { parsePathsOnly } from '../../proving-run/pattern-discovery/git-scanner.js';
 
 export const DEFAULT_MIN_COMMITS = 2;
 export const DEFAULT_MAX_COMMITS_SCANNED = 1000;
 
-export function parseAddedFiles(output) {
-  if (!output) return [];
-  const paths = [];
-  for (const raw of output.split('\n')) {
-    const line = raw.trim();
-    if (!line) continue;
-    paths.push(line.replace(/\\/g, '/'));
-  }
-  return paths;
-}
+export const parseAddedFiles = parsePathsOnly;
 
 function runGitLog(repoPath, maxCommits) {
   const cmd = `git -C "${repoPath}" log --diff-filter=A --pretty= --name-only -n ${maxCommits}`;
