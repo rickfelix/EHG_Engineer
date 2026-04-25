@@ -177,10 +177,15 @@ async function createQuickFix(options = {}) {
   // Generate ID
   const qfId = generateQuickFixId();
 
-  // Unified Work-Item Router: determine tier based on LOC + risk keywords
+  // Unified Work-Item Router: determine tier based on LOC + risk keywords.
+  // Pass `scope` derived from the user's expected/actual fields — those describe
+  // the change itself. `description` often references existing patterns by name
+  // (e.g., "extends the needsAuth gate") which would false-trigger a description-level scan.
+  const scopeText = [expected, actual].filter(Boolean).join('\n');
   const routingDecision = await routeWorkItem({
     estimatedLoc,
     type,
+    scope: scopeText,
     description,
     entryPoint: 'create-quick-fix',
   }, supabase);
