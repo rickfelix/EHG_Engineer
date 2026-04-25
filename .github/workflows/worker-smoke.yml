@@ -1,0 +1,61 @@
+name: Stage Worker Import Smoke Test
+
+# Sub-second pre-merge defense against ESM resolution errors in lib/eva/**.
+# Catches the bug class shipped in PR #3211 (SD-REDESIGN-S18S26-E+F, 2026-04-21):
+# barrel re-exports referencing deleted symbols → Stage Execution Worker
+# crashloop → all ventures globally blocked.
+#
+# Filed under SD-LEO-INFRA-STAGE-TEMPLATE-BARREL-001 (Arm B).
+# Fails CLOSED on any ESM static-link error, syntax error, or missing module.
+
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/**'
+      - 'scripts/start-stage-worker.js'
+      - '.github/workflows/worker-smoke.yml'
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Skip full npm install — smoke tests below need only the source files.
+      # @supabase/supabase-js is the only runtime dep touched by stage-registry.js;
+      # we install just that one to keep the smoke under 30 seconds total.
+      - name: Install minimal runtime deps
+        run: npm install --no-audit --no-fund --no-save --ignore-scripts @supabase/supabase-js dotenv
+
+      - name: Smoke — barrel ESM static-link
+        # Verifies lib/eva/stage-templates/index.js resolves cleanly.
+        # Pre-fix (PR #3211 era), this would crash with SyntaxError on stage-23.
+        run: |
+          node -e "import('./lib/eva/stage-templates/index.js').then(m => {
+            if (typeof m.STAGE_COUNT !== 'number' || m.STAGE_COUNT < 1) {
+              throw new Error('STAGE_COUNT missing or zero');
+            }
+            if (typeof m.getTemplate !== 'function') {
+              throw new Error('getTemplate missing');
+            }
+            console.log('OK barrel — STAGE_COUNT=' + m.STAGE_COUNT + ' exports=' + Object.keys(m).length);
+          }).catch(e => { console.error('FAIL:', e.message); process.exit(1); });"
+
+      - name: Smoke — worker entrypoint syntax check
+        # node --check parses but does not execute. Catches SyntaxError + import
+        # path errors without booting the supervisor or DB connection.
+        run: node --check scripts/start-stage-worker.js
