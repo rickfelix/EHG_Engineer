@@ -13,22 +13,48 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const VENTURE_ID = 'c1b214ad-af1e-4c7a-ba1b-d18fb1f59c06';
-const VENTURE_NAME = 'Blueprint Governance';
+const VENTURE_ID = process.env.VENTURE_ID || '94856fc6-9ba9-4f56-9a5c-85041031a0fc';
+const VENTURE_NAME = process.env.VENTURE_NAME || 'LexiGuard';
 const STOP_AT_STAGE = 17;
 const POLL_MS = 30000;
 
-// Gate classification (from gate-constants.js)
-const KILL_GATES = new Set([3, 5, 13, 24]);
-const PROMOTION_GATES = new Set([10, 17, 18, 19, 23, 25]);
-const BLOCKING_GATES = new Set([3, 5, 10, 13, 17, 18, 19, 20, 23, 24, 25]);
+// Gate classification — sourced from lifecycle_stage_config (DB authoritative as of 2026-04-25)
+// Decision gates require chairman_decision row before advance. PROMOTION = metadata.gate_type='promotion'.
+// S23 is named "Launch Readiness Kill Gate" but stored as decision_gate; flagged here for log clarity.
+const KILL_GATES = new Set([23]);
+const PROMOTION_GATES = new Set([17]);
+const BLOCKING_GATES = new Set([3, 5, 13, 16, 17, 23, 24]);
+// Stages that need an SD/human input (work_type=sd_required) — auto-advance is unsafe
+const SD_REQUIRED_STAGES = new Set([10, 18, 19]);
 
 const STAGE_NAMES = {
-  0:'Stage Zero', 1:'Ideation', 2:'Research', 3:'Validation [KILL]', 4:'Market Analysis',
-  5:'Business Model [KILL]', 6:'Competitor Analysis', 7:'MVP Definition', 8:'Technical Assessment',
-  9:'Financial Modeling', 10:'Brand Identity [PROMO]', 11:'Naming & Visual', 12:'GTM Strategy',
-  13:'Tech Stack [KILL]', 14:'Architecture', 15:'Blueprint & Wireframes',
-  16:'Sprint Planning', 17:'Design Refinement [PROMO]'
+   0:'Stage Zero',
+   1:'Draft Idea',
+   2:'AI Review',
+   3:'Comprehensive Validation [GATE]',
+   4:'Competitive Intelligence',
+   5:'Profitability Forecasting [GATE]',
+   6:'Risk Evaluation',
+   7:'Revenue Architecture',
+   8:'Business Model Canvas',
+   9:'Exit Strategy',
+  10:'Customer & Brand Foundation [SD]',
+  11:'Naming & Visual Identity',
+  12:'GTM & Sales Strategy',
+  13:'Product Roadmap [GATE]',
+  14:'Technical Architecture',
+  15:'Design Studio',
+  16:'Financial Projections [GATE]',
+  17:'Blueprint Review [PROMO GATE]',
+  18:'Marketing Copy Studio [SD]',
+  19:'Build in Replit [SD]',
+  20:'Code Quality Gate',
+  21:'Visual Assets',
+  22:'Distribution Setup',
+  23:'Launch Readiness [KILL GATE]',
+  24:'Go Live & Announce [GATE]',
+  25:'Post-Launch Review',
+  26:'Growth Playbook'
 };
 
 // Post-Stitch-replacement: monitor wireframe_screens instead of stitch artifacts
@@ -47,18 +73,25 @@ const DESIGN_ARTIFACT_TYPES = [
   'stitch_curation', 'stitch_project', 'stitch_design_export',
 ];
 
-// Stage artifact expectations (what we expect at each stage)
+// Stage artifact expectations — sourced from lifecycle_stage_config.required_artifacts (DB authoritative)
 const EXPECTED_ARTIFACTS = {
-  1: ['truth_idea_brief'],
-  2: ['truth_ai_critique'],
-  3: ['truth_validation_decision'],
-  4: ['truth_competitive_analysis'],
-  5: ['truth_financial_model'],
+   1: ['truth_idea_brief'],
+   2: ['truth_ai_critique'],
+   3: ['truth_validation_decision'],
+   4: ['truth_competitive_analysis'],
+   5: ['truth_financial_model'],
+   6: ['engine_risk_matrix'],
+   7: ['engine_pricing_model'],
+   8: ['engine_business_model_canvas'],
+   9: ['engine_exit_strategy'],
   10: ['identity_persona_brand'],
-  11: ['identity_naming_visual', 'identity_brand_name'],
-  14: ['blueprint_technical_architecture'],
-  15: ['blueprint_wireframes', 'blueprint_user_story_pack'],
-  16: ['blueprint_sprint_plan'],
+  11: ['identity_naming_visual'],
+  12: ['identity_brand_guidelines', 'identity_gtm_sales_strategy'],
+  13: ['blueprint_product_roadmap'],
+  14: ['blueprint_technical_architecture', 'blueprint_data_model', 'blueprint_erd_diagram', 'blueprint_api_contract', 'blueprint_schema_spec'],
+  15: ['blueprint_wireframes'],
+  16: ['blueprint_financial_projection'],
+  17: ['system_devils_advocate_review'],
 };
 
 let lastStage = null;
@@ -339,10 +372,12 @@ function validateStageArtifacts(stage, arts) {
 async function main() {
   console.log(`\n${'='.repeat(70)}`);
   console.log(` VENTURE MONITOR — ${VENTURE_NAME} (${VENTURE_ID.slice(0,8)})`);
-  console.log(` Poll every ${POLL_MS/1000}s | Auto-push S3-S16 | HARD STOP at S${STOP_AT_STAGE}`);
-  console.log(` Kill gates: S3, S5, S13 | Promotion gates: S10, S17`);
-  console.log(` Stitch replacement: watching wireframe_screens (S15), s17_archetypes (S17)`);
-  console.log(` Design mastery: s17_design_system, s17_strategy_stats, cross-variant awareness`);
+  console.log(` Poll every ${POLL_MS/1000}s | Auto-push to S${STOP_AT_STAGE - 1} | HARD STOP at S${STOP_AT_STAGE}`);
+  console.log(` Decision gates  : S3, S5, S13, S16, S17 (PROMO), S23 (KILL), S24`);
+  console.log(` Manual / sd_req : S10 Brand, S18 Marketing Copy, S19 Build in Replit`);
+  console.log(` Phases: 1 TRUTH(1-5) | 2 ENGINE(6-9) | 3 IDENTITY(10-12) | 4 BLUEPRINT(13-17) | 5 BUILD&MARKET(18-22) | 6 LAUNCH&GROW(23-26)`);
+  console.log(` Stop point S${STOP_AT_STAGE} = Blueprint Review (promotion gate); next is S18 Marketing Copy (manual)`);
+  console.log(` Watch: wireframe_screens (S15), s17_archetypes / s17_design_system / s17_strategy_stats (S17)`);
   console.log(` Legacy Stitch artifacts should NOT appear for new ventures`);
   console.log(`${'='.repeat(70)}\n`);
 
