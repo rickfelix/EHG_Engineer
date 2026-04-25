@@ -6,6 +6,11 @@ export const SECRET_PATTERNS = Object.freeze([
   { name: 'github_fine_grained_pat', pattern: /github_pat_[A-Za-z0-9_]{82,}/g },
   { name: 'private_key_block', pattern: /-----BEGIN (RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g },
   { name: 'jwt_token', pattern: /eyJ[A-Za-z0-9_=-]{8,}\.eyJ[A-Za-z0-9_=-]{8,}\.[A-Za-z0-9_\-+/=]{8,}/g },
+  { name: 'slack_token', pattern: /xox[abps]-[A-Za-z0-9-]{20,}/g },
+  { name: 'stripe_live_key', pattern: /(?:sk|pk|rk)_live_[A-Za-z0-9]{24,}/g },
+  { name: 'google_api_key', pattern: /AIza[A-Za-z0-9_-]{35}/g },
+  { name: 'sendgrid_api_key', pattern: /SG\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{40,}/g },
+  { name: 'postgres_conn_with_password', pattern: /postgres(?:ql)?:\/\/[^:\s/@]+:[^@\s]+@/g },
 ]);
 
 export class SanitizationViolation extends Error {
