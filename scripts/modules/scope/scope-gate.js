@@ -176,9 +176,9 @@ function printViolationMessage(sdKey, scope, result) {
   }
   lines.push('');
   lines.push('   REMEDIATION:');
-  lines.push(`     • Unstage the violating files (they are outside the SD's scope)`);
-  lines.push(`     • Add them to metadata.scope.in_files if they are in-scope but missing`);
-  lines.push(`     • File a follow-up SD/QF for adjacent work`);
+  lines.push('     • Unstage the violating files (they are outside the SD\'s scope)');
+  lines.push('     • Add them to metadata.scope.in_files if they are in-scope but missing');
+  lines.push('     • File a follow-up SD/QF for adjacent work');
   lines.push('');
   lines.push('   ESCAPE HATCH (audited):');
   lines.push(`     SCOPE_OVERRIDE=${sdKey} SCOPE_OVERRIDE_REASON="<ticket>" git commit ...`);
@@ -262,11 +262,14 @@ export async function main(argv = process.argv.slice(2)) {
 }
 
 // CLI entry
+// Use process.exitCode (not process.exit) to avoid Windows libuv UV_HANDLE_CLOSING
+// assertion when Supabase HTTP keep-alive sockets are still open during teardown.
+// Setting exitCode lets Node finish cleanup naturally before exiting.
 const isDirectRun = import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('scope-gate.js');
 if (isDirectRun) {
-  main().then(code => process.exit(code)).catch(err => {
+  main().then(code => { process.exitCode = code; }).catch(err => {
     process.stderr.write(`[scope-gate] ERROR: ${err.message}\n`);
     // Fail-open on unexpected errors — do not block commits on bugs in the gate itself.
-    process.exit(0);
+    process.exitCode = 0;
   });
 }
