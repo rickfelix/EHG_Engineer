@@ -92,8 +92,16 @@ export async function completeQuickFix(qfId, options = {}) {
     return qf;
   }
 
-  // Auto-detect git info
-  const gitInfo = autoDetectGitInfo(testDir, options);
+  // Auto-detect git info. autoDetectGitInfo NOW throws on PR-metadata failure
+  // and on refuse-to-auto-detect-outside-QF-worktree (SD-LEO-FIX-COMPLETE-QUICK-FIX-001).
+  // Surface the operator-readable message without the Node stack trace.
+  let gitInfo;
+  try {
+    gitInfo = autoDetectGitInfo(testDir, options);
+  } catch (e) {
+    console.error(`\n❌ ${e.message}\n`);
+    process.exit(1);
+  }
   let { commitSha, branchName, actualLoc } = gitInfo;
 
   // Manual input if not provided
