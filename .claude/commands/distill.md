@@ -683,18 +683,19 @@ After the pipeline completes, summarize:
 - Number of waves proposed and their themes
 - Whether results were persisted (live run) or previewed (dry run)
 
-**Step 5: Next steps (deterministic routing on roadmap state)**
+**Step 5: Next steps (deterministic routing on the just-completed pipeline mode)**
 
-After a live run, route automatically based on the current roadmap state — no `AskUserQuestion` menu, per CLAUDE.md AUTO-PROCEED.
+After a live run, route automatically based on which pipeline mode the operator just invoked — no `AskUserQuestion` menu, per CLAUDE.md AUTO-PROCEED. The mode is observable (it's the subcommand on the just-finished `/distill` invocation), so this routing requires no schema queries.
 
-| Roadmap state | Next action |
-|---------------|-------------|
-| Waves exist but unrefined (no `roadmap_wave_items` with `dedup_status`/`reconcile_status`/`score`) | Log: "Pipeline complete with N waves. Run `/distill refine --roadmap-id <id>` to deduplicate, reconcile, and score." |
-| Waves refined but unapproved (`roadmaps.approved_at IS NULL`) | Log: "Refinement complete. Run `/distill approve --roadmap-id <id>` to lock wave sequence." |
-| Waves approved but unpromoted | Log: "Approved. Run `/distill promote --wave-id <id>` to create SDs from each wave." |
-| Pipeline produced 0 waves | Log: "Pipeline complete; no waves produced (insufficient classified items)." Return. |
+| Just-completed mode | Next action |
+|---------------------|-------------|
+| `/distill` (default pipeline; produced ≥1 wave) | Log: "Pipeline complete with N waves. Next: `/distill refine --roadmap-id <id>` to deduplicate, reconcile, and score." |
+| `/distill refine` | Log: "Refinement complete. Next: `/distill approve --roadmap-id <id>` to lock wave sequence." |
+| `/distill approve` | Log: "Approved. Next: `/distill promote --wave-id <id>` per wave to create SDs." |
+| `/distill promote` | Log: "Promotion complete. Run `/distill status` to view remaining waves, or `/leo next` to begin work on the new SDs." |
+| `/distill` produced 0 waves | Log: "Pipeline complete; no waves produced (insufficient classified items). No further action." Return. |
 
-The operator can verbally override at any time ("skip refine", "done for now"). Fetch the most recent roadmap ID once for the log lines.
+Fetch the most recent roadmap ID once for the log lines (via `roadmap-status.js`). The operator can verbally override at any time ("skip refine", "done for now").
 
 After a dry run, log results and instruct the operator on the exact next command — no menu:
 

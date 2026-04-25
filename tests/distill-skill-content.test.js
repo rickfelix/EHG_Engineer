@@ -110,6 +110,13 @@ describe('distill.md — legitimate operator-input menus preserved (positive)', 
       'Per-iteration state-write block must remain (lines after each item completes).'
     ).toMatch(/state\.completed_items\.push/);
   });
+
+  it('inter-item cancellation contract is documented (verbal-interrupt → item_disposition=deferred)', () => {
+    expect(
+      distill,
+      "Cancellation contract must remain documented: removing the menu without keeping the verbal-interrupt → item_disposition='deferred' instruction would silently strand operators with no abort path. See SD-LEO-INFRA-AUTO-PROCEED-AUDIT-001."
+    ).toMatch(/item_disposition\s*=\s*['"]deferred['"]/);
+  });
 });
 
 describe('distill.md — AskUserQuestion total count baseline', () => {
