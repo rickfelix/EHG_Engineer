@@ -585,7 +585,6 @@ export class OrchestratorCompletionGuardian {
         title: `${this.parentData.title} - Orchestrator Retrospective`,
         description: `Aggregated retrospective for orchestrator coordinating ${this.childData.length} child SDs`,
         retro_type: 'SD_COMPLETION',
-        retrospective_type: 'SD_COMPLETION',
         conducted_date: new Date().toISOString(),
         what_went_well: uniqueWentWell.length > 0 ? uniqueWentWell : [
           `All ${this.childData.length} child SDs completed successfully`,
