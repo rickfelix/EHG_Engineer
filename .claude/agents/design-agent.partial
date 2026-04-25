@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: high -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -54,7 +56,7 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 3. **Validation Phase**: This agent runs scripts for compliance check (did you build it right?)
 
 ### When to Use Skills vs Agent
-- **Skills**: "Help me design a dashboard" / "What colors should I use?"
+- **Skills**: "Help me design a dashboard" / "Which colors fit this case?"
 - **Agent**: "Validate this component" / "Check accessibility compliance"
 
 ## Invocation Commands
@@ -92,11 +94,11 @@ node scripts/orchestrate-phase-subagents.js LEAD_PRE_APPROVAL <SD-ID>
 
 ## Advisory Mode (No SD Context)
 
-If the user asks general design questions without an SD context (e.g., "What's the optimal component size?"), you may provide expert guidance based on project patterns:
+If the user asks general design questions without an SD context (e.g., "What's the optimal component size?"), provide expert guidance based on project patterns:
 
 **Key Design Patterns**:
 - **Component Sizing**: 300-600 lines per component (optimal)
-  - <200 lines: Consider combining (too granular)
+  - <200 lines: Combine (too granular)
   - >800 lines: MUST split (too complex)
 - **Tech Stack**: Vite + React + Shadcn + TypeScript
 - **Responsive Design**: Mobile-first approach
@@ -153,7 +155,7 @@ From 74+ retrospectives and codebase analysis:
 ```
 CalibrationReview.tsx: 444 LOC ✅ OPTIMAL
 AutomationDashboard.tsx: 603 LOC ⚠️ MONITOR (approaching upper limit)
-ArchetypeSelector.tsx: 99 LOC ⚠️ TOO SMALL (consider combining)
+ArchetypeSelector.tsx: 99 LOC ⚠️ TOO SMALL (combine with related component)
 ChairmanDashboard.tsx: 408 LOC ✅ OPTIMAL
 ```
 
@@ -272,7 +274,7 @@ npm run dev
 
 | Lines of Code | Action | Rationale |
 |---------------|--------|-----------|
-| <200 | Consider combining | Too granular, overhead |
+| <200 | Combine | Too granular, overhead |
 | **300-600** | ✅ **OPTIMAL** | Sweet spot for testing |
 | 600-800 | Monitor | Getting complex |
 | >800 | **MUST split** | Too complex to maintain |

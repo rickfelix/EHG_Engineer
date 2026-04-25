@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: opus
 ---
 
+<!-- reasoning_effort: low -->
+
 # Orchestrator Child SD Teammate
 
 You are a teammate in a parallel orchestrator team. Your job is to execute

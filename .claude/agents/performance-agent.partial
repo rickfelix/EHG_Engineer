@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: high -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -57,7 +59,7 @@ Reference: `.claude/context/PERFORMANCE-INDEX.md`
 **Purpose**: Identify sequential async patterns that cause request waterfalls
 
 **Detection Patterns**:
-- Sequential `await` statements that could be parallelized
+- Sequential `await` statements that need parallelization
 - `useEffect` with nested fetch calls
 - Server components with chained data fetching
 

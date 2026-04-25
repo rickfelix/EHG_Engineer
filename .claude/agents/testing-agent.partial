@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: medium -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -82,7 +84,7 @@ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>
 
 ## Advisory Mode (No SD Context)
 
-If the user asks general testing questions without an SD context (e.g., "What's the best way to structure E2E tests?"), you may provide expert guidance based on project patterns:
+If the user asks general testing questions without an SD context (e.g., "What's the best way to structure E2E tests?"), provide expert guidance based on project patterns:
 
 **Key Testing Patterns**:
 - **Dual Test Requirement**: BOTH unit tests AND E2E tests must pass

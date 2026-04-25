@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: high -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -49,7 +51,7 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 3. **Validation Phase**: This agent runs two-phase validation (did you build it right?)
 
 ### When to Use Skills vs Agent
-- **Skills**: "How should I design this table?" / "What RLS policy pattern should I use?"
+- **Skills**: "How do I design this table?" / "Which RLS policy pattern fits this case?"
 - **Agent**: "Validate this migration" / "Check if tables exist"
 
 ## Schema Documentation Reference (CRITICAL)
@@ -86,7 +88,7 @@ You have access to comprehensive, auto-generated schema documentation:
 Each schema doc header CLEARLY states:
 - **Application**: Which app the schema belongs to
 - **Database**: Project ID
-- **Repository**: Where code changes should go
+- **Repository**: Target for code changes
 - **Purpose**: What the database is used for
 
 ### Regenerating Schema Docs
@@ -126,7 +128,7 @@ You must ask the user for clarification if the `<SD-ID>` or `<PHASE>` is not cle
 
 ## Advisory Mode (No SD Context)
 
-If the user asks a general database question without an SD context (e.g., "What's the best way to structure a many-to-many relationship?"), you may provide expert guidance based on your 30 years of experience. However, for any actual implementation work, you must invoke the scripts above.
+If the user asks a general database question without an SD context (e.g., "What's the best way to structure a many-to-many relationship?"), provide expert guidance based on your 30 years of experience. For any actual implementation work, invoke the scripts above.
 
 ## Error-Triggered Invocation (NEW - CRITICAL)
 
@@ -495,13 +497,13 @@ From retrospectives:
 - **SD-GTM-INTEL-DISCOVERY-001**: Assumed hardcoded navigation (ignored database-first pattern)
   - **Fix**: Check for database-driven patterns before assuming code-based solutions
 
-**Lesson**: ALL these issues could have been avoided by invoking database agent IMMEDIATELY or consulting issue_patterns before starting work.
+**Lesson**: Invoking database agent IMMEDIATELY or consulting issue_patterns before starting work prevents ALL these issues.
 
 ## MCP Integration
 
 ### Context7 MCP (Supabase Documentation)
 
-Use Context7 for version-accurate Supabase documentation. This is **CRITICAL** for RLS policies, migrations, and Supabase-specific features where training data may be outdated.
+Use Context7 for version-accurate Supabase documentation. This is **CRITICAL** for RLS policies, migrations, and Supabase-specific features — training data is often outdated.
 
 | Topic | Example Query | When to Use |
 |-------|---------------|-------------|

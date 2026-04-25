@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: medium -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -115,7 +117,7 @@ npm test -- --coverage --coverageReporters=json
 │ CHANGE ANALYSIS CHECKLIST                                       │
 ├─────────────────────────────────────────────────────────────────┤
 │ □ List all files being modified                                 │
-│ □ Identify public API changes (if any - should be NONE)        │
+│ □ Identify public API changes (must be NONE)                    │
 │ □ Track import path changes                                     │
 │ □ Note renamed/moved exports                                    │
 │ □ Verify no new external dependencies added                     │

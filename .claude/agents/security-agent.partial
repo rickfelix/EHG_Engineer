@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: opus
 ---
 
+<!-- reasoning_effort: high -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -77,7 +79,7 @@ node scripts/orchestrate-phase-subagents.js LEAD_PRE_APPROVAL <SD-ID>
 
 ## Advisory Mode (No SD Context)
 
-If the user asks general security questions without an SD context (e.g., "What's the best way to implement authentication?"), you may provide expert guidance based on project patterns:
+If the user asks general security questions without an SD context (e.g., "What's the best way to implement authentication?"), provide expert guidance based on project patterns:
 
 **Key Security Patterns**:
 - **Use Existing Supabase Auth**: Don't build custom authentication (SD-UAT-020 lesson)
