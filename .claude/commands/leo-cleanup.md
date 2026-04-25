@@ -33,7 +33,32 @@ This will:
 3. Stage files matching commit rules (actual commit done via /ship)
 4. Skip REVIEW items for interactive handling
 
-### For REVIEW items (files with no matching rule):
+### Bulk classification (recommended when REVIEW has clusters):
+
+The engine groups REVIEW items by inferred dirname/glob (≥3 files per cluster).
+For each cluster, present a single AskUserQuestion to classify the whole group
+in one round-trip instead of one prompt per file:
+
+```javascript
+{
+  "questions": [{
+    "question": "Cluster: <pattern> (<N> files matching).\nExamples: <first 3 filenames>",
+    "header": "Classify cluster",
+    "multiSelect": false,
+    "options": [
+      {"label": "Delete all", "description": "Remove all <N> files matching this pattern"},
+      {"label": "Gitignore", "description": "Add the pattern to .gitignore"},
+      {"label": "Commit all", "description": "Stage all <N> files for commit"},
+      {"label": "Skip", "description": "Fall through to per-file review"}
+    ]
+  }]
+}
+```
+
+After bulk classification, optionally persist the cluster pattern as a learned rule
+via learnRule() so future scans auto-categorize the same shape.
+
+### For unclustered REVIEW items (files with no matching rule):
 
 Present each unknown file to the user one at a time using AskUserQuestion:
 
@@ -81,7 +106,23 @@ learnRule(filepath, category, reason);
 node scripts/repo-cleanup.js --json
 ```
 
-Returns structured JSON for programmatic use by other scripts.
+Returns structured JSON for programmatic use by other scripts. Each item
+includes `size_bytes` and `age_days` fields (null for paths that cannot be stat'd).
+
+### Auto-safe mode (CI / scheduled runs):
+
+```bash
+AUTO_PROCEED=true node scripts/repo-cleanup.js --auto-safe --execute
+```
+
+Under AUTO-PROCEED, `--auto-safe` auto-applies clusters that match a
+high-confidence rule suggestion derived from `git log --diff-filter=A`
+(default: ≥2 prior commits introduced files matching the inferred pattern).
+Safety guarantees:
+- Never auto-applies category=delete (irreversible actions stay interactive)
+- Each applied action appended to `.claude/cleanup-audit-log.jsonl`
+- Disable globally via `CLEANUP_AUTO_SAFE_ENABLED=false` env var
+- No-op without AUTO-PROCEED — flag falls through to standard prompt flow
 
 ## Integration
 
@@ -96,4 +137,12 @@ This command is integrated at these pipeline points:
 | (none) | Dry run — scan and display |
 | `--execute` | Apply all rule-matched actions |
 | `--no-learn` | Disable rule learning prompts |
-| `--json` | Output JSON instead of table |
+| `--json` | Output JSON instead of table (items include size_bytes + age_days) |
+| `--auto-safe` | Auto-apply high-confidence cluster verdicts under AUTO-PROCEED (no-op otherwise; never deletes) |
+
+## Environment variables
+
+| Variable | Effect |
+|----------|--------|
+| `AUTO_PROCEED=true` | Required for `--auto-safe` to take effect |
+| `CLEANUP_AUTO_SAFE_ENABLED=false` | Kill switch — `--auto-safe` becomes a no-op |
