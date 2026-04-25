@@ -265,7 +265,6 @@ When creating a retrospective, include protocol improvements in the `protocol_im
 const retroData = {
   sd_id: 'SD-TEST-001',
   retro_type: 'SD_COMPLETION',
-  retrospective_type: 'SD_COMPLETION',
   title: 'SD-TEST-001 Completion Retrospective',
   quality_score: 85,
   target_application: 'EHG_Engineer',
