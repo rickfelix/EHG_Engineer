@@ -624,6 +624,35 @@ fi
 echo "✅ Gate 0 validation complete"
 
 # ============================================================================
+# STAGE 7.25: Scope Gate (BLOCKING when SD declares metadata.scope)
+# ============================================================================
+# SD-LEO-INFRA-OPUS-MODULE-SCOPE-001 (Opus 4.7 Module E): Pre-commit scope
+# enforcement. Blocks "while-I'm-here" edits that would expand the active SD's
+# scope beyond its declared metadata.scope.{in_files,out_files,mode}.
+#
+# Modes: strict / advisory / out_files_only (default — backward compatible).
+# Escape hatch: SCOPE_OVERRIDE=<SD-ID> SCOPE_OVERRIDE_REASON="<ticket>" git commit ...
+# Audit log: ~/.claude/scope-overrides.log
+#
+# Skip cases (silent pass, exit 0): no SD on branch, no metadata.scope on SD,
+# no Supabase credentials, gate-internal error (fail-open by design).
+# ============================================================================
+echo ""
+echo "🔍 Running Scope Gate (Opus 4.7 Module E)..."
+
+if [ ! -z "$SD_ID" ]; then
+  node scripts/modules/scope/scope-gate.js "$SD_ID"
+  SCOPE_EXIT=$?
+  if [ $SCOPE_EXIT -ne 0 ]; then
+    exit 1
+  fi
+else
+  echo "   ℹ️  No SD reference — scope gate skipped"
+fi
+
+echo "✅ Scope gate complete"
+
+# ============================================================================
 # STAGE 7.5: LOC Threshold Trigger (BLOCKING for large changes)
 # ============================================================================
 # SD-LEO-GATE0-LOCTHRESHOLD-001: Large changes (>500 LOC) require SD in EXEC phase
