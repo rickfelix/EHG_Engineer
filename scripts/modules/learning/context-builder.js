@@ -806,13 +806,13 @@ async function getVisionGapPatterns(limit = TOP_N) {
   }));
 }
 
-export async function buildLearningContext(sdId = null) {
+export async function buildLearningContext(sdId = null, options = {}) {
   console.log('Building learning context with severity-weighted filtering...');
   console.log(`  Thresholds: Critical/High=1 occ, Medium/Low=3 occ, min ${FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD}% confidence`);
 
   const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns, subAgentLearnings, visionGaps] = await Promise.all([
     getRecentLessons(sdId, TOP_N),
-    getIssuePatterns(TOP_N),
+    getIssuePatterns(TOP_N, { bypass: options.bypass === true }),
     getPendingImprovements(TOP_N),
     getResolvedFeedbackLearnings(TOP_N),
     getRecurringFeedbackPatterns(TOP_N),

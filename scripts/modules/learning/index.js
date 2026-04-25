@@ -15,17 +15,47 @@ import { buildLearningContext } from './context-builder.js';
 import { reviewContext, formatReviewedContextForDisplay } from './reviewer.js';
 import { executeSDCreationWorkflow, executeApprovedImprovements, rollbackDecision } from './executor.js';
 import { buildInsightsReport, formatInsightsForDisplay } from './insights.js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
+
+/**
+ * SD-LEO-FIX-PLAN-LEARN-COMPOSITE-001 (FR-6): emit a loud, audited record of
+ * --no-filter usage. Loud: WARN line on stdout. Audited: best-effort INSERT
+ * into audit_log; failure logs to stderr but does not block the bypass.
+ */
+async function emitFilterBypassAudit(commandName, sdId) {
+  const ts = new Date().toISOString();
+  const sessionId = process.env.CLAUDE_SESSION_ID || 'unknown';
+  console.warn('  ⚠ NOISE FILTER DISABLED — bypass active');
+  console.log(`>>> LEARN_FILTER_BYPASS=true session_id=${sessionId} command=${commandName} sd_id=${sdId || 'none'} ts=${ts}`);
+  try {
+    const supabase = createSupabaseServiceClient();
+    const { error } = await supabase.from('audit_log').insert({
+      event: 'LEARN_FILTER_BYPASS',
+      session_id: sessionId,
+      details: { command: commandName, sd_id: sdId, ts },
+    });
+    if (error) {
+      console.warn(`[audit] LEARN_FILTER_BYPASS insert failed (non-blocking): ${error.message}`);
+    }
+  } catch (err) {
+    console.warn(`[audit] LEARN_FILTER_BYPASS skipped (non-blocking): ${err.message}`);
+  }
+}
 
 /**
  * Process command - gather context and add DA
  */
-async function processCommand(sdId = null) {
+async function processCommand(sdId = null, options = {}) {
   console.log('='.repeat(60));
   console.log('  /learn - LEO Protocol Self-Improvement');
   console.log('='.repeat(60));
 
+  if (options.bypass === true) {
+    await emitFilterBypassAudit('process', sdId);
+  }
+
   // Build context
-  const context = await buildLearningContext(sdId);
+  const context = await buildLearningContext(sdId, { bypass: options.bypass === true });
 
   if (context.summary.total_patterns === 0 &&
       context.summary.total_lessons === 0 &&
@@ -68,15 +98,19 @@ async function processCommand(sdId = null) {
  * @param {string|null} sdId - Optional SD context
  * @returns {Promise<{approved: number, deferred: number, sd_key: string|null}>}
  */
-async function autoApproveCommand(threshold = 50, sdId = null) {
+async function autoApproveCommand(threshold = 50, sdId = null, options = {}) {
   console.log('='.repeat(60));
   console.log('  /learn AUTO-APPROVE (AUTO-PROCEED Mode)');
   console.log('='.repeat(60));
   console.log(`\n  Composite score threshold: >= ${threshold}`);
   console.log('  Trusting existing severity-weighted filters\n');
 
+  if (options.bypass === true) {
+    await emitFilterBypassAudit('auto-approve', sdId);
+  }
+
   // Build context (same filtering as interactive mode)
-  const context = await buildLearningContext(sdId);
+  const context = await buildLearningContext(sdId, { bypass: options.bypass === true });
 
   if (context.summary.total_patterns === 0 &&
       context.summary.total_lessons === 0 &&
@@ -347,7 +381,8 @@ async function main() {
       case 'process': {
         const sdIdArg = args.find(a => a.startsWith('--sd-id='));
         const sdId = sdIdArg?.split('=')[1] || null;
-        await processCommand(sdId);
+        const bypass = args.includes('--no-filter');
+        await processCommand(sdId, { bypass });
         break;
       }
 
@@ -356,7 +391,8 @@ async function main() {
         const threshold = thresholdArg ? parseInt(thresholdArg.split('=')[1], 10) : 50;
         const sdIdArg = args.find(a => a.startsWith('--sd-id='));
         const sdId = sdIdArg?.split('=')[1] || null;
-        await autoApproveCommand(threshold, sdId);
+        const bypass = args.includes('--no-filter');
+        await autoApproveCommand(threshold, sdId, { bypass });
         break;
       }
 
@@ -396,8 +432,8 @@ async function main() {
         console.log('LEO Protocol Learning Module');
         console.log('');
         console.log('Usage:');
-        console.log('  node scripts/modules/learning/index.js process [--sd-id=<ID>]');
-        console.log('  node scripts/modules/learning/index.js auto-approve [--threshold=50]');
+        console.log('  node scripts/modules/learning/index.js process [--sd-id=<ID>] [--no-filter]');
+        console.log('  node scripts/modules/learning/index.js auto-approve [--threshold=50] [--no-filter]');
         console.log('  node scripts/modules/learning/index.js apply --decisions=\'<JSON>\' [--legacy]');
         console.log('  node scripts/modules/learning/index.js rollback <DECISION_ID>');
         console.log('  node scripts/modules/learning/index.js insights');

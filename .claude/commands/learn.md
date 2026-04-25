@@ -141,6 +141,36 @@ supabase.from('claude_sessions')
   ```bash
   node scripts/modules/learning/index.js auto-approve --threshold=50
   ```
+
+### Noise Filter (SD-LEO-FIX-PLAN-LEARN-COMPOSITE-001)
+
+The composite scorer applies a noise filter BEFORE ranking patterns to stop
+auto-filing LEARN-FIX SDs from low-signal sources. Four filters run in order:
+
+1. **LOW_SIGNAL_SOURCE** — only `source IN (retrospective, feedback_cluster)` pass; also rejects `metadata.origin='auto_rca'`
+2. **AUTO_CAPTURED_UNREVIEWED** — rejects `metadata.auto_captured=true AND human_reviewed!=true`
+3. **ALREADY_ASSIGNED_OPEN_SD** — rejects patterns linked to an SD in `{draft, planning, executing, completed, pending_approval}`. SDs in `cancelled` status RE-OPEN the pattern.
+4. **UUID_FINGERPRINT** — rejects `dedup_fingerprint` matching UUID v4 regex (ghost patterns where the fingerprint IS an SD UUID).
+
+Each rejection appends a structured entry to `issue_patterns.metadata.filter_log[]` with `{ts, reason, scorer_run_id, severity}`, FIFO-truncated at 50 entries.
+
+**Operator override** — `--no-filter`:
+
+```bash
+# Bypass the filter for debugging (loud + audited)
+node scripts/modules/learning/index.js process --no-filter
+node scripts/modules/learning/index.js auto-approve --threshold=50 --no-filter
+```
+
+When `--no-filter` is used:
+- A WARN line `⚠ NOISE FILTER DISABLED — bypass active` is printed
+- A structured `>>> LEARN_FILTER_BYPASS=true` line emits to stdout for log capture
+- A row is best-effort INSERTed into `audit_log` with `event='LEARN_FILTER_BYPASS'` (failure is non-blocking)
+- Patterns flow into the scorer unfiltered (matches pre-fix behavior)
+
+Use sparingly — this exists for debugging "why was X filtered?" investigations, not as a regular workflow.
+
+
 - This will:
   1. Build learning context (same filtering as interactive mode)
   2. Auto-approve all patterns with composite_score >= 50
