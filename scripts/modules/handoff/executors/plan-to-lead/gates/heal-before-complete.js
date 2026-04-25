@@ -27,6 +27,7 @@
  */
 
 import { execSync } from 'child_process';
+import { GATE_REASON_CODES, MAX_HEAL_ITERATIONS } from './gate-reason-codes.js';
 
 const DEFAULT_HEAL_THRESHOLD = 85;
 const DEFAULT_TOLERANCE_BUFFER = 3;
@@ -836,127 +837,168 @@ export function createHealBeforeCompleteGate(supabase) {
         };
       }
 
-      // SD heal score below effective threshold — auto-re-heal before failing
-      // (SD-LEARN-FIX-ADDRESS-PAT-AUTO-053: single retry eliminates manual re-heal cycle)
+      // SD heal score below effective threshold — auto-re-heal up to MAX_HEAL_ITERATIONS
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-132 (FR-2): bounded iteration loop with EXHAUSTED verdict
       if (sdHealScore < effectiveThreshold) {
-        const gaps = latestScore.rubric_snapshot?.gaps || [];
+        const initialGaps = latestScore.rubric_snapshot?.gaps || [];
         console.log('');
-        console.log(`   ⚠️  SD heal score ${sdHealScore} < ${effectiveThreshold} effective threshold — attempting auto-re-heal...`);
-        if (gaps.length > 0) {
+        console.log(`   ⚠️  SD heal score ${sdHealScore} < ${effectiveThreshold} effective threshold — attempting auto-re-heal (max ${MAX_HEAL_ITERATIONS} iterations)...`);
+        if (initialGaps.length > 0) {
           console.log('   Gaps identified in previous score:');
-          gaps.forEach((gap, i) => {
+          initialGaps.forEach((gap, i) => {
             console.log(`     ${i + 1}. ${gap}`);
           });
         }
 
-        // Attempt single auto-re-heal
-        // SD-LEO-INFRA-TYPE-AWARE-GATE-001: Try fast heal first for lightweight SDs
-        // SD-LEARN-FIX-ADDRESS-PAT-AUTO-054: tag re-heal scores as sd-heal mode
-        let reHealScore = null;
+        // Inner: try one heal attempt (fast for lightweight SDs, full fallback otherwise).
+        // Returns the new vision_scores row or null if both paths failed.
+        const attemptOneHeal = async () => {
+          let result = null;
 
-        // Fast re-heal for lightweight SD types
-        if (FAST_HEAL_SD_TYPES.includes(sdType)) {
-          try {
-            console.log('   🚀 Fast re-heal path...');
-            const fastResult = await fastAutoHeal(supabase, sdKey, sdUuid, sdType);
-            if (fastResult && fastResult.score >= effectiveThreshold) {
-              // Get vision_id and iteration for NOT NULL columns
-              let reHealVisionId = null;
-              const { data: reVisionDocs } = await supabase
-                .from('eva_vision_documents')
-                .select('id')
-                .order('created_at', { ascending: false })
-                .limit(1);
-              if (reVisionDocs && reVisionDocs.length > 0) reHealVisionId = reVisionDocs[0].id;
+          if (FAST_HEAL_SD_TYPES.includes(sdType)) {
+            try {
+              console.log('   🚀 Fast re-heal path...');
+              const fastResult = await fastAutoHeal(supabase, sdKey, sdUuid, sdType);
+              if (fastResult && fastResult.score >= effectiveThreshold) {
+                let reHealVisionId = null;
+                const { data: reVisionDocs } = await supabase
+                  .from('eva_vision_documents')
+                  .select('id')
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+                if (reVisionDocs && reVisionDocs.length > 0) reHealVisionId = reVisionDocs[0].id;
 
-              const { count: reIterCount } = await supabase
-                .from('eva_vision_scores')
-                .select('id', { count: 'exact', head: true })
-                .eq('sd_id', sdKey);
+                const { count: reIterCount } = await supabase
+                  .from('eva_vision_scores')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('sd_id', sdKey);
 
-              const reHealPayload = {
-                sd_id: sdKey,
-                total_score: fastResult.score,
-                threshold_action: fastResult.score >= threshold ? 'accept' : 'minor_sd',
-                iteration: (reIterCount || 0) + 1,
-                dimension_scores: fastResult.details || { structural: { score: 100 }, semantic: { score: 72 } },
-                rubric_snapshot: { mode: 'sd-heal', source: 'fast-auto-re-heal', scoring_mode: fastResult.mode, details: fastResult.details }
-              };
-              if (reHealVisionId) reHealPayload.vision_id = reHealVisionId;
+                const reHealPayload = {
+                  sd_id: sdKey,
+                  total_score: fastResult.score,
+                  threshold_action: fastResult.score >= threshold ? 'accept' : 'minor_sd',
+                  iteration: (reIterCount || 0) + 1,
+                  dimension_scores: fastResult.details || { structural: { score: 100 }, semantic: { score: 72 } },
+                  rubric_snapshot: { mode: 'sd-heal', source: 'fast-auto-re-heal', scoring_mode: fastResult.mode, details: fastResult.details }
+                };
+                if (reHealVisionId) reHealPayload.vision_id = reHealVisionId;
 
-              const { data: inserted, error: reInsertErr } = await supabase
-                .from('eva_vision_scores')
-                .insert(reHealPayload)
-                .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at');
-              if (reInsertErr) console.log(`   ⚠️  Re-heal score insert failed: ${reInsertErr.message}`);
-              if (inserted && inserted.length > 0) reHealScore = inserted[0];
-            }
-          } catch (err) {
-            console.log(`   ⚠️  Fast re-heal failed: ${err.message}`);
-          }
-        }
-
-        // Full re-heal fallback
-        if (!reHealScore) {
-          try {
-            const { scoreSD } = await import('../../../../../../scripts/eva/vision-scorer.js');
-            const healPromise = scoreSD({ sdKey, supabase });
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Auto-re-heal timed out')), AUTO_HEAL_TIMEOUT_MS)
-            );
-            await Promise.race([healPromise, timeoutPromise]);
-
-            // Re-query for the newly created score
-            const { data: newScores } = await supabase
-              .from('eva_vision_scores')
-              .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
-              .eq('sd_id', sdKey)
-              .order('scored_at', { ascending: false })
-              .limit(1);
-
-            if (newScores && newScores.length > 0) {
-              reHealScore = newScores[0];
-              // Tag the re-heal score as sd-heal mode
-              if (reHealScore.rubric_snapshot?.mode !== 'sd-heal') {
-                const updatedSnapshot = { ...(reHealScore.rubric_snapshot || {}), mode: 'sd-heal', source: 'auto-re-heal-gate' };
-                await supabase.from('eva_vision_scores').update({ rubric_snapshot: updatedSnapshot }).eq('id', reHealScore.id);
-                reHealScore.rubric_snapshot = updatedSnapshot;
+                const { data: inserted, error: reInsertErr } = await supabase
+                  .from('eva_vision_scores')
+                  .insert(reHealPayload)
+                  .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at');
+                if (reInsertErr) console.log(`   ⚠️  Re-heal score insert failed: ${reInsertErr.message}`);
+                if (inserted && inserted.length > 0) result = inserted[0];
               }
-              console.log(`   🔄 Auto-re-heal complete: score ${reHealScore.total_score}/100 (was ${sdHealScore}/100, mode: sd-heal)`);
-            } else {
-              console.log('   ⚠️  Auto-re-heal ran but no new score was persisted');
+            } catch (err) {
+              console.log(`   ⚠️  Fast re-heal failed: ${err.message}`);
             }
-          } catch (err) {
-            console.log(`   ❌ Auto-re-heal failed: ${err.message}`);
           }
+
+          if (!result) {
+            try {
+              const { scoreSD } = await import('../../../../../../scripts/eva/vision-scorer.js');
+              const healPromise = scoreSD({ sdKey, supabase });
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Auto-re-heal timed out')), AUTO_HEAL_TIMEOUT_MS)
+              );
+              await Promise.race([healPromise, timeoutPromise]);
+
+              const { data: newScores } = await supabase
+                .from('eva_vision_scores')
+                .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
+                .eq('sd_id', sdKey)
+                .order('scored_at', { ascending: false })
+                .limit(1);
+
+              if (newScores && newScores.length > 0) {
+                result = newScores[0];
+                if (result.rubric_snapshot?.mode !== 'sd-heal') {
+                  const updatedSnapshot = { ...(result.rubric_snapshot || {}), mode: 'sd-heal', source: 'auto-re-heal-gate' };
+                  await supabase.from('eva_vision_scores').update({ rubric_snapshot: updatedSnapshot }).eq('id', result.id);
+                  result.rubric_snapshot = updatedSnapshot;
+                }
+              }
+            } catch (err) {
+              console.log(`   ❌ Auto-re-heal failed: ${err.message}`);
+            }
+          }
+
+          return result;
+        };
+
+        let currentScore = sdHealScore;
+        let currentScoreObj = latestScore;
+        let healIterations = 0;
+        const iterationHistory = [];
+
+        while (healIterations < MAX_HEAL_ITERATIONS && currentScore < effectiveThreshold) {
+          healIterations++;
+
+          // FR-5: per-iteration audit_log row with structured payload
+          try {
+            await supabase.from('audit_log').insert({
+              event_type: 'session.heal_iteration',
+              entity_type: 'sd',
+              entity_id: sdKey,
+              new_value: {
+                gate: 'HEAL_BEFORE_COMPLETE',
+                iteration_number: healIterations,
+                score: currentScore,
+                threshold: effectiveThreshold,
+                delta: currentScore - effectiveThreshold,
+              },
+              metadata: { sd_uuid: sdUuid, sd_type: sdType },
+              severity: 'info',
+              created_by: process.env.CLAUDE_SESSION_ID || 'heal-before-complete-gate',
+            });
+          } catch (auditErr) {
+            console.error('[heal-before-complete] audit_log_write_failed:', auditErr?.message || auditErr);
+          }
+
+          console.log(`   🔁 Iteration ${healIterations}/${MAX_HEAL_ITERATIONS}: score ${currentScore}, threshold ${effectiveThreshold}, delta ${currentScore - effectiveThreshold}`);
+
+          const newScoreObj = await attemptOneHeal();
+          iterationHistory.push({ iteration: healIterations, before: currentScore, after: newScoreObj?.total_score ?? null });
+
+          if (!newScoreObj) {
+            console.log('   ⚠️  Heal attempt produced no new score; breaking iteration loop');
+            break;
+          }
+
+          currentScoreObj = newScoreObj;
+          currentScore = newScoreObj.total_score;
+          console.log(`   📈 Iteration ${healIterations} produced score ${currentScore}`);
         }
 
-        // Evaluate re-heal result (including tolerance buffer)
-        if (reHealScore && reHealScore.total_score >= effectiveThreshold) {
-          const withinBuffer = reHealScore.total_score < threshold;
-          console.log(`   ✅ Re-heal score ${reHealScore.total_score} >= ${effectiveThreshold} effective threshold — PASS${withinBuffer ? ' (within tolerance)' : ''}`);
+        // Convergence — PASS
+        if (currentScore >= effectiveThreshold) {
+          const withinBuffer = currentScore < threshold;
+          console.log(`   ✅ Heal converged in ${healIterations} iteration(s): ${sdHealScore} → ${currentScore} >= ${effectiveThreshold}${withinBuffer ? ' (within tolerance)' : ''}`);
           return {
             passed: true,
-            score: reHealScore.total_score,
+            score: currentScore,
             max_score: 100,
             issues: [],
             warnings: [
-              `Auto-re-heal improved score from ${sdHealScore} to ${reHealScore.total_score}`,
-              ...(withinBuffer ? [`Score ${reHealScore.total_score} within tolerance buffer of threshold ${threshold} (buffer: ${toleranceBuffer})`] : []),
+              `Auto-re-heal converged in ${healIterations} iteration(s): ${sdHealScore} → ${currentScore}`,
+              ...(withinBuffer ? [`Score ${currentScore} within tolerance buffer of threshold ${threshold} (buffer: ${toleranceBuffer})`] : []),
               ...(visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : []),
               ...(intentAdvisory ? [`Intent-vs-Outcome advisory: ${intentAdvisory.coverage}% parent scope coverage (parent: "${intentAdvisory.parent_title}")`] : [])
             ],
             details: {
-              sd_heal_score: reHealScore.total_score,
+              sd_heal_score: currentScore,
               original_score: sdHealScore,
               auto_re_healed: true,
+              iterations: healIterations,
+              iteration_history: iterationHistory,
               threshold,
               tolerance_buffer: toleranceBuffer,
               effective_threshold: effectiveThreshold,
               is_corrective: isCorrective,
               is_child_sd: isChildSD,
               is_learn_source: isLearnSource,
-              score_id: reHealScore.id,
+              score_id: currentScoreObj.id,
               score_age_minutes: 0,
               vision_advisory: visionAdvisory,
               intent_advisory: intentAdvisory
@@ -964,28 +1006,22 @@ export function createHealBeforeCompleteGate(supabase) {
           };
         }
 
-        // Re-heal did not meet threshold — fail with best available info
-        const finalScore = reHealScore?.total_score ?? sdHealScore;
-        const finalScoreId = reHealScore?.id ?? latestScore.id;
-        const finalGaps = reHealScore?.rubric_snapshot?.gaps || gaps;
-        const reHealNote = reHealScore
-          ? `Auto-re-heal attempted: ${sdHealScore} → ${reHealScore.total_score} (still below ${threshold})`
-          : 'Auto-re-heal attempted but failed to produce a new score';
+        // EXHAUSTED — cap reached or attempt failed without convergence
+        const finalGaps = currentScoreObj?.rubric_snapshot?.gaps || initialGaps;
+        const exhaustedNote = `Heal exhausted ${healIterations}/${MAX_HEAL_ITERATIONS} iteration(s) without converging (${sdHealScore} → ${currentScore}, effective threshold ${effectiveThreshold})`;
 
         console.log('');
-        console.log(`   ❌ NEEDS_ITERATION: score ${finalScore}/100 still below effective threshold ${effectiveThreshold} after re-heal`);
-        console.log(`   ${reHealNote}`);
+        console.log(`   ❌ EXHAUSTED: ${exhaustedNote}`);
         console.log('');
         console.log('   Fix the gaps within this SD, re-ship, then re-run:');
         console.log(`   /heal sd --sd-id ${sdKey}`);
 
         return {
           passed: false,
-          score: finalScore,
+          score: currentScore,
           max_score: 100,
           issues: [
-            `SD heal score ${finalScore}/100 below effective threshold ${effectiveThreshold} (threshold: ${threshold}, tolerance: ${toleranceBuffer}) — NEEDS_ITERATION`,
-            reHealNote,
+            `[${GATE_REASON_CODES.HEAL_EXHAUSTED}] ${exhaustedNote}`,
             ...finalGaps.map(g => `Gap: ${g}`)
           ],
           warnings: [
@@ -994,17 +1030,21 @@ export function createHealBeforeCompleteGate(supabase) {
           ],
           remediation: `Fix identified gaps, re-ship, run /heal sd --sd-id ${sdKey}, then retry PLAN-TO-LEAD`,
           details: {
-            sd_heal_score: finalScore,
+            verdict: 'EXHAUSTED',
+            reason_code: GATE_REASON_CODES.HEAL_EXHAUSTED,
+            sd_heal_score: currentScore,
             original_score: sdHealScore,
-            auto_re_healed: !!reHealScore,
+            auto_re_healed: healIterations > 0,
+            iterations: healIterations,
+            iteration_history: iterationHistory,
             threshold,
             tolerance_buffer: toleranceBuffer,
             effective_threshold: effectiveThreshold,
             is_corrective: isCorrective,
-              is_child_sd: isChildSD,
-              is_learn_source: isLearnSource,
-            score_id: finalScoreId,
-            score_age_minutes: reHealScore ? 0 : scoreAge,
+            is_child_sd: isChildSD,
+            is_learn_source: isLearnSource,
+            score_id: currentScoreObj?.id ?? latestScore.id,
+            score_age_minutes: healIterations > 0 ? 0 : scoreAge,
             gaps: finalGaps,
             vision_advisory: visionAdvisory,
             intent_advisory: intentAdvisory

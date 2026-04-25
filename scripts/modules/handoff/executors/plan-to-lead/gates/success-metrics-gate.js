@@ -15,6 +15,7 @@
  */
 
 import { verifyAllMetrics } from '../../../../../lib/metric-auto-verifier.js';
+import { GATE_REASON_CODES, isPlaceholderActual } from './gate-reason-codes.js';
 
 // ── Achievement helpers (from success-metrics-achievement.js) ──
 
@@ -227,8 +228,25 @@ export function createSuccessMetricsGate(supabase) {
         const hasActual = actual != null && String(actual).trim() !== '';
 
         if (!hasActual) {
-          metricScores.push({ name, score: 0, reason: 'No actual value recorded', target, actual });
+          metricScores.push({ name, score: 0, reason: 'No actual value recorded', reason_code: GATE_REASON_CODES.SUCCESS_METRICS_EMPTY_ACTUAL, target, actual });
           console.log(`   ❌ ${name}: No actual value (target: ${target || 'N/A'})`);
+          continue;
+        }
+
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-132 FR-1: distinguish auto-populated
+        // placeholder from auto-populated concrete value. Hand-edited values
+        // (no _auto_populated flag) bypass this check — a human asserting "100%"
+        // is authoritative.
+        if (metric._auto_populated === true && isPlaceholderActual(actual)) {
+          metricScores.push({
+            name,
+            score: 0,
+            reason: `Auto-populated placeholder "${actual}" — not a real measurement`,
+            reason_code: GATE_REASON_CODES.SUCCESS_METRICS_PLACEHOLDER_VALUE,
+            target,
+            actual,
+          });
+          console.log(`   ❌ ${name}: auto-populated placeholder "${actual}" (target: ${target || 'N/A'})`);
           continue;
         }
 
@@ -291,7 +309,9 @@ export function createSuccessMetricsGate(supabase) {
       const passed = achievementPassed && verificationPassed;
 
       const issues = [
-        ...metricScores.filter(m => m.score === 0).map(m => `${m.name}: No actual value recorded (target: ${m.target || 'N/A'})`),
+        ...metricScores.filter(m => m.score === 0).map(m =>
+          `[${m.reason_code || 'SUCCESS_METRICS_EMPTY_ACTUAL'}] ${m.name}: ${m.reason} (target: ${m.target || 'N/A'})`
+        ),
         ...(isVerificationAdvisory ? [] : verifyResults.filter(r => r.status === 'mismatch').map(r => r.issue))
       ];
 
