@@ -708,7 +708,24 @@ async function runPersistMode(sdKey, visionKey, archKey, scoreJson) {
   }
 }
 
+export const DEFAULT_VISION_KEY = 'VISION-EHG-L1-001';
+export const DEFAULT_ARCH_KEY = 'ARCH-EHG-L1-001';
+
+export async function resolveDefaultKeysFromSD(supabase, sdKey) {
+  if (!sdKey) return { vision_key: null, arch_key: null };
+  const { data } = await supabase
+    .from('strategic_directives_v2')
+    .select('metadata')
+    .or(`id.eq.${sdKey},sd_key.eq.${sdKey}`)
+    .maybeSingle();
+  return {
+    vision_key: data?.metadata?.vision_key || null,
+    arch_key: data?.metadata?.arch_key || null
+  };
+}
+
 if (isMainModule(import.meta.url)) {
+  (async () => {
   const args = process.argv.slice(2);
 
   const getArg = (flag) => {
@@ -717,8 +734,8 @@ if (isMainModule(import.meta.url)) {
   };
 
   const sdKey = getArg('--sd-id');
-  const visionKey = getArg('--vision-key') || 'VISION-EHG-L1-001';
-  const archKey = getArg('--arch-key') || 'ARCH-EHG-L1-001';
+  const explicitVision = getArg('--vision-key');
+  const explicitArch = getArg('--arch-key');
   const scope = getArg('--scope');
   const dryRun = args.includes('--dry-run');
   const inline = args.includes('--inline');
@@ -727,6 +744,18 @@ if (isMainModule(import.meta.url)) {
   if (!sdKey && !scope) {
     console.error('Usage: node scripts/eva/vision-scorer.js --sd-id <SD-KEY> [--inline] [--persist <JSON>] [--dry-run]');
     process.exit(1);
+  }
+
+  let visionKey = explicitVision;
+  let archKey = explicitArch;
+  if ((!visionKey || !archKey) && sdKey) {
+    const supabase = createSupabaseServiceClient();
+    const fromMeta = await resolveDefaultKeysFromSD(supabase, sdKey);
+    visionKey = visionKey || fromMeta.vision_key || DEFAULT_VISION_KEY;
+    archKey = archKey || fromMeta.arch_key || DEFAULT_ARCH_KEY;
+  } else {
+    visionKey = visionKey || DEFAULT_VISION_KEY;
+    archKey = archKey || DEFAULT_ARCH_KEY;
   }
 
   // Inline mode: output context for Claude Code
@@ -785,4 +814,5 @@ if (isMainModule(import.meta.url)) {
         process.exit(1);
       });
   }
+  })().catch((err) => { console.error(err); process.exit(1); });
 }
