@@ -11,9 +11,17 @@ const PREFIX_SVCACCT = SK + 'svcacct-';
 const PREFIX_AKIA = 'AK' + 'IA';
 const PREFIX_GHP = 'gh' + 'p_';
 const PREFIX_PAT = 'github' + '_pat_';
+const PREFIX_XOXB = 'xo' + 'xb-';
+const PREFIX_XOXP = 'xo' + 'xp-';
+const PREFIX_STRIPE_SK = 's' + 'k_live_';
+const PREFIX_STRIPE_PK = 'p' + 'k_live_';
+const PREFIX_GOOG = 'AI' + 'za';
+const PREFIX_SG = 'S' + 'G.';
 const PAYLOAD = 'A'.repeat(24);
 const LONG_PAYLOAD = 'A'.repeat(36);
 const FINE_GRAINED_PAYLOAD = 'A'.repeat(82);
+const GOOG_PAYLOAD = 'A'.repeat(35);
+const SG_PAYLOAD = 'A'.repeat(22) + '.' + 'B'.repeat(43);
 
 describe('scanForSecrets', () => {
   it('returns [] for clean text', () => {
@@ -69,6 +77,56 @@ describe('scanForSecrets', () => {
   it('detects JWT tokens whose middle segment contains hyphens (real base64url)', () => {
     const hits = scanForSecrets('eyJhbGciOiJI.eyJzdWItcw-AB.signaturepart12');
     expect(hits.find(h => h.kind === 'jwt_token')).toBeTruthy();
+  });
+
+  it('detects Slack bot tokens (xoxb-)', () => {
+    const hits = scanForSecrets(PREFIX_XOXB + '12345-67890-' + PAYLOAD);
+    expect(hits.find(h => h.kind === 'slack_token')).toBeTruthy();
+  });
+
+  it('detects Slack user tokens (xoxp-)', () => {
+    const hits = scanForSecrets(PREFIX_XOXP + '12345-67890-' + PAYLOAD);
+    expect(hits.find(h => h.kind === 'slack_token')).toBeTruthy();
+  });
+
+  it('detects Stripe live secret keys (sk_live_)', () => {
+    const hits = scanForSecrets(PREFIX_STRIPE_SK + PAYLOAD);
+    expect(hits.find(h => h.kind === 'stripe_live_key')).toBeTruthy();
+  });
+
+  it('detects Stripe live publishable keys (pk_live_)', () => {
+    const hits = scanForSecrets(PREFIX_STRIPE_PK + PAYLOAD);
+    expect(hits.find(h => h.kind === 'stripe_live_key')).toBeTruthy();
+  });
+
+  it('does not match Stripe test keys (sk_test_/pk_test_)', () => {
+    const hits = scanForSecrets('sk' + '_test_' + PAYLOAD);
+    expect(hits.find(h => h.kind === 'stripe_live_key')).toBeFalsy();
+  });
+
+  it('detects Google API keys (AIza-prefixed, 39 chars total)', () => {
+    const hits = scanForSecrets(PREFIX_GOOG + GOOG_PAYLOAD);
+    expect(hits.find(h => h.kind === 'google_api_key')).toBeTruthy();
+  });
+
+  it('detects SendGrid API keys (SG.{x}.{y})', () => {
+    const hits = scanForSecrets(PREFIX_SG + SG_PAYLOAD);
+    expect(hits.find(h => h.kind === 'sendgrid_api_key')).toBeTruthy();
+  });
+
+  it('detects postgres connection strings with embedded passwords', () => {
+    const hits = scanForSecrets('postgres' + '://user:hunter2@host:5432/db');
+    expect(hits.find(h => h.kind === 'postgres_conn_with_password')).toBeTruthy();
+  });
+
+  it('detects postgresql:// scheme variant with embedded passwords', () => {
+    const hits = scanForSecrets('postgres' + 'ql://admin:s3cret@10.0.0.1:5432/prod');
+    expect(hits.find(h => h.kind === 'postgres_conn_with_password')).toBeTruthy();
+  });
+
+  it('does not match passwordless postgres URIs (no password = no leak)', () => {
+    const hits = scanForSecrets('postgres' + '://localhost:5432/devdb');
+    expect(hits.find(h => h.kind === 'postgres_conn_with_password')).toBeFalsy();
   });
 
   it('serializes objects before scanning', () => {

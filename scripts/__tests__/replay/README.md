@@ -55,9 +55,34 @@ See `fixture-schema.json`. Every fixture must include:
 
 ## Sanitization
 
-`sanitization-checker.mjs` scans `input`, `v1_output`, and `validator_result` for: Anthropic API keys (incl. admin), OpenAI API keys (incl. `sk-proj-` / `sk-svcacct-` / `sk-admin-` scoped), AWS access keys, GitHub classic PATs (`ghp_`), GitHub fine-grained PATs (`github_pat_`), PEM private-key blocks, and JWTs. The loader (`loadFixture`) invokes `assertSanitized` automatically — refusal-on-suspicion is the policy, since the asymmetric cost (re-redact one fixture vs. leak a Supabase service-role key) favors aggression. Capture pipelines must redact these before writing the fixture.
+`sanitization-checker.mjs` scans `input`, `v1_output`, and `validator_result` for the patterns below. The loader (`loadFixture`) invokes `assertSanitized` automatically, AND `scripts/__tests__/golden/golden-corpus-sanitized.test.js` walks every fixture in CI regardless of which test imports the loader — refusal-on-suspicion is the policy, since the asymmetric cost (re-redact one fixture vs. leak a Supabase service-role key) favors aggression. Capture pipelines must redact these before writing the fixture.
 
-**Known false-positive class**: prose like `"eyJexample0.eyJexample0.signature"` will trip the JWT pattern. Either rephrase the example or redact it; do not add to allowlists. Coverage gaps not in scope for PR #1: Slack tokens, Stripe keys, Google API keys, SendGrid keys, postgres connection strings with embedded passwords, PII (email/phone/IP). Cover in a follow-up QF before reusing this framework for any script that touches those services.
+**Patterns covered** (12, frozen via `Object.freeze(SECRET_PATTERNS)`):
+
+| Pattern | Examples |
+|---|---|
+| `anthropic_api_key` | `sk-ant-...` (incl. admin) |
+| `openai_api_key` | `sk-...`, `sk-proj-...`, `sk-svcacct-...`, `sk-admin-...` |
+| `aws_access_key` | `AKIA...` |
+| `github_token` | `ghp_...` (classic PAT) |
+| `github_fine_grained_pat` | `github_pat_...` |
+| `private_key_block` | PEM blocks (RSA/EC/DSA/OPENSSH/PGP) |
+| `jwt_token` | `eyJ...eyJ...sig` (incl. base64url middles with hyphens) |
+| `slack_token` | `xoxb-` / `xoxp-` / `xoxa-` / `xoxs-` |
+| `stripe_live_key` | `sk_live_` / `pk_live_` / `rk_live_` (NOT `sk_test_`) |
+| `google_api_key` | `AIza...` (39 chars) |
+| `sendgrid_api_key` | `SG.{x}.{y}` |
+| `postgres_conn_with_password` | `postgres://user:password@host` (passwordless URIs ignored) |
+
+**Known false-positive class**: prose like `"eyJexample0.eyJexample0.signature"` will trip the JWT pattern. Either rephrase the example or redact it; do not add to allowlists.
+
+**Explicit non-coverage** (out of scope; do not assume DLP):
+- PII — email addresses, phone numbers, IPv4/IPv6 addresses, postal addresses, names, dates of birth.
+- Stripe test keys (`sk_test_` / `pk_test_`) — placeholder convention, not real credentials.
+- Bearer tokens with no recognizable prefix or structure.
+- Encrypted blobs masquerading as plain text.
+
+If a future target script handles PII or any uncovered credential class, add the pattern in a separate QF before opening the script-rephrase PR.
 
 ## Parity contract
 
