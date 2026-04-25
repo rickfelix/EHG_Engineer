@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/**'
       - 'scripts/**'
+      - 'lib/**'
       - 'server.js'
   push:
     branches: [main, develop]
@@ -33,16 +34,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq bc
 
       - name: Run tests with coverage
+        # Fails closed on test errors (SD-LEO-INFRA-STAGE-TEMPLATE-BARREL-001 Arm C).
+        # Prior versions tolerated "missing exports / ESM conflicts" via
+        # `continue-on-error: true` and a `|| exit 0` soft-pass — this is
+        # exactly the policy gap that allowed PR #3211 (SD-REDESIGN-S18S26-E+F)
+        # to merge with a barrel-rot regression. The strict mode here is the
+        # canonical defense against that bug class.
         env:
           NODE_OPTIONS: --experimental-vm-modules
-        run: |
-          npm run test:coverage -- --json --outputFile=test-results.json || {
-            echo "⚠️ Test coverage encountered errors"
-            echo "This is informational - workflow will continue"
-            echo "Known issues: Jest environment teardown, missing exports, ESM conflicts"
-            exit 0
-          }
-        continue-on-error: true  # Informational only during test infrastructure fixes
+        run: npm run test:coverage -- --json --outputFile=test-results.json
 
       - name: Check coverage threshold
         run: |
