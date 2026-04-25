@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 ---
 description: Simplify code before shipping - clean up session changes without altering behavior
 argument-hint: [--files <paths>] [--apply] [--dry-run] [--type cleanup|style|logic]

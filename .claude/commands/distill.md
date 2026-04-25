@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 # Distill Command
 
 Refine raw ideas from all sources into strategic roadmap waves.
@@ -62,10 +64,10 @@ Read the `===DEDUP_CONTEXT===` JSON from Phase A output. For each wave, semantic
 3. Rules:
    - Match on MEANING, not just keywords. "Add dark mode" and "Implement theme switching" are duplicates.
    - Items from different sources (todoist vs youtube) can still be duplicates if about the same topic.
-   - YouTube videos about the same tool/topic (e.g., multiple OpenClaw tutorials) should be grouped.
+   - YouTube videos about the same tool/topic (e.g., multiple OpenClaw tutorials) must be grouped.
    - Items with the same chairman_intent AND overlapping scope are likely duplicates.
-   - Short/vague items (single words like "script") should NOT be grouped unless clearly identical.
-   - Each item should appear in at most ONE group.
+   - Short/vague items (single words like "script") must NOT be grouped unless clearly identical.
+   - Each item appears in at most ONE group.
    - Groups must have at least 2 items.
    - item_indices are 1-based (per wave, not global).
 4. Produce results per wave.
@@ -108,7 +110,7 @@ Read the `===RECONCILE_CONTEXT===` JSON from Phase C output. For each wave item,
    - `already_done` — A completed SD already delivered this capability
    - `in_progress` — An active SD is working on this
    - `partially_done` — An SD partially covers this
-3. Match on MEANING, not keywords. "Add dark mode" should match "Implement theme switching".
+3. Match on MEANING, not keywords. "Add dark mode" matches "Implement theme switching".
 4. Only flag non-novel if confidence >= 60.
 5. Short/vague items with no clear semantic match → `novel`.
 
@@ -148,7 +150,7 @@ Read the `===SCORING_CONTEXT===` JSON from Phase E output. For each wave's items
 4. Assign recommendation: `promote` if ≥70, `review` if 40-69, `defer` if <40
 5. Rules:
    - Score based on the item's MEANING and strategic value, not just keywords.
-   - Consider the wave context (title/description) when scoring strategic alignment.
+   - Account for wave context (title/description) when scoring strategic alignment.
    - YouTube reference videos score high on pragmatist (actionable) and strategist (informative).
    - Vague/short items without clear scope score lower on pragmatist.
    - Items about core infrastructure (security, protocols) score high on strategist.
@@ -681,7 +683,7 @@ Use `timeout: 600000`.
 
 After the pipeline completes, summarize:
 - How many items were synced (if sync ran)
-- Classification coverage (should be 100% if all items classified)
+- Classification coverage (target 100% if all items classified)
 - How many items the chairman reviewed and the intent distribution
 - Number of waves proposed and their themes
 - Whether results were persisted (live run) or previewed (dry run)

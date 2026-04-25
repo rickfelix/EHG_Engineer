@@ -1,3 +1,5 @@
+<!-- reasoning_effort: high -->
+
 # /heal — Iterative Codebase-vs-Intent Scoring
 
 Score the current codebase against intended outcomes and generate corrective work when gaps are found.
@@ -56,7 +58,7 @@ Present an interactive menu using AskUserQuestion:
 {
   "questions": [
     {
-      "question": "Which completed SDs should we heal against?",
+      "question": "Which completed SDs to heal against?",
       "header": "SD filter",
       "multiSelect": false,
       "options": [

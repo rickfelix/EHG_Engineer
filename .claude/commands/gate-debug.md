@@ -1,3 +1,5 @@
+<!-- reasoning_effort: high -->
+
 ---
 description: "Debug gate failures during handoff execution. Use when a handoff fails, gates return low scores, or you need to diagnose validation issues."
 ---

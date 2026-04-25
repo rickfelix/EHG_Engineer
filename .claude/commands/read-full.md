@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 # Read Full Skill
 
 Read a file completely by paginating through `Read` tool calls when the file exceeds the per-call 25,000-token cap.

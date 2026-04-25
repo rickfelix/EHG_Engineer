@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 # Handoff In — Import Session Context After Account Switch
 
 Restore session context from a handoff package created by `/handoff-out` on the other account.

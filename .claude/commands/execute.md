@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 # /execute - Multi-Session Execution Team Command
 
 Spawn a parallel execution team: a supervisor process plus N independent `claude --print` workers that continuously claim and work Strategic Directives via `/leo next`. Workers handle one SD each through the full LEAD→PLAN→EXEC→SHIP→LEARN lifecycle, then exit cleanly. The supervisor respawns workers, monitors PIDs, enforces a circuit breaker, and exits gracefully on `/execute stop`.

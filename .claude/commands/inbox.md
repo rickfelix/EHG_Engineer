@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 # /inbox - Unified Inbox Command
 
 **Purpose**: View and manage the unified inbox across feedback, issue patterns, audit findings, and SDs

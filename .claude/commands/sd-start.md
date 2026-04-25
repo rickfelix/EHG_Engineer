@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 ---
 description: "Start work on a Strategic Directive: claim, validate status, load phase context. Use when user says /sd-start <SD-ID> or when starting any SD."
 ---

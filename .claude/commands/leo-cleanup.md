@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 # /leo cleanup — Intelligent Repo Cleanup
 
 Scan untracked files, categorize them via pattern rules, and clean up the repository.

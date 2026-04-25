@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 ---
 description: "View and modify LEO session settings (AUTO-PROCEED, Orchestrator Chaining). Use when user says /leo settings or needs to change session configuration."
 ---

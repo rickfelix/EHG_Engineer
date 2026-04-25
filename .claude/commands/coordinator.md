@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 # /coordinator - Fleet Coordination Command
 
 Coordinate parallel Claude Code sessions: monitor workers, resolve conflicts, run QA checks, and forecast completion.
@@ -404,7 +406,7 @@ For each SD, compute remaining time using its **current phase position**:
    - SD in EXEC → remaining = EXEC remaining only
 3. Within the current phase, use `progress_percentage` to estimate how much of that phase is left:
    - `phase_remaining = phase_median × (1 - progress/100)`
-4. **Subtract elapsed time on the current attempt.** Track when each worker claimed its SD (from sweep/dashboard data). If a worker has been on an SD for 15 minutes and the estimate says 20 minutes remaining, the displayed remaining should be ~5 minutes, not 20.
+4. **Subtract elapsed time on the current attempt.** Track when each worker claimed its SD (from sweep/dashboard data). If a worker has been on an SD for 15 minutes and the estimate says 20 minutes remaining, the displayed remaining is ~5 minutes, not 20.
 
 **Example:** Child C is `child/infrastructure`, currently in LEAD at 30%.
 - LEAD remaining: 2m × 0.70 = ~1.4m (but if worker has been in LEAD for 12m already, LEAD is clearly slower than median — use max(median_remaining, 2m) as floor)

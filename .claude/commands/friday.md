@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 # Friday Meeting Command
 
 Run the structured weekly Friday meeting with EVA.

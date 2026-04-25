@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 ---
 description: Intelligent autonomous inbox processing with context-aware prioritization
 ---

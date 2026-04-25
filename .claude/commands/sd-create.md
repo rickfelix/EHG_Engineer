@@ -1,3 +1,5 @@
+<!-- reasoning_effort: high -->
+
 ---
 description: "Create a new Strategic Directive via interactive wizard or flags. Supports 6 creation modes: interactive, --from-uat, --from-learn, --from-feedback, --from-plan, --child."
 ---

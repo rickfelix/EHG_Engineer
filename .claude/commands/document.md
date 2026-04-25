@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 ---
 name: document
 description: "Intelligent documentation updater. Analyzes conversation context, invokes DOCMON sub-agent, and uses documentation skills to update LEO protocol, CLAUDE.md files, and other documentation as needed."
@@ -481,7 +483,7 @@ validate_file_name() {
 
   # Must be kebab-case or use underscores for versions
   if [[ "$filename" =~ [A-Z] ]] && [[ ! "$filename" =~ ^(README|CLAUDE|API_REFERENCE|CHANGELOG)\.md$ ]]; then
-    echo "⚠️ WARNING: File name should be kebab-case: $filename"
+    echo "⚠️ WARNING: File name must be kebab-case: $filename"
     echo "  Suggestion: $(echo $filename | sed 's/\([A-Z]\)/-\L\1/g' | sed 's/^-//')"
   fi
 
@@ -984,7 +986,7 @@ supabase.from('leo_protocol_sections')
 4. **Database-First**: LEO Protocol docs live in database, not files
 5. **Regeneration**: After DB updates, always regenerate CLAUDE.md files
 6. **Context-Aware**: Use full conversation to understand what changed
-7. **Idempotent**: Running twice should not duplicate content
+7. **Idempotent**: Running twice does not duplicate content
 8. **Skill Integration**: Use documentation skills for patterns
 9. **DOCMON Validation**: Verify database-first compliance
 10. **Report Findings**: Always report existing doc discovery results before making changes
@@ -1182,7 +1184,7 @@ supabase.from('claude_sessions')
 **If AUTO-PROCEED is ACTIVE:**
 - Skip AskUserQuestion
 - Output status: `🤖 AUTO-PROCEED: Documentation complete, continuing to next command...`
-- Auto-invoke the next command in post-completion sequence (typically `/learn` or `/leo next`)
+- Auto-invoke the next command in post-completion sequence (`/learn` or `/leo next`)
 
 **If AUTO-PROCEED is INACTIVE:**
 **If documentation changes created uncommitted files - Use AskUserQuestion:**

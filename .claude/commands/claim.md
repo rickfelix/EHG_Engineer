@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 # /claim - SD Claim Management Command
 
 Manage SD session claims: view status, release claims, list all active claims.

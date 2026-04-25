@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 # Restart Command
 
 Restart all LEO Stack servers.
