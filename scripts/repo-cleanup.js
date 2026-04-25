@@ -15,11 +15,16 @@ import fs from 'fs';
 import path from 'path';
 import { minimatch } from 'minimatch';
 import { fileURLToPath } from 'url';
+import { groupReviewItems } from './modules/cleanup/group-review.js';
+import { deriveRulesFromGitLog } from './modules/cleanup/derive-rules.js';
+import { appendAuditEntry } from './modules/cleanup/audit-log.js';
+import { parseCliFlags as parseAutoProceedCli, parseEnvVar as parseAutoProceedEnv } from './modules/handoff/auto-proceed-resolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 const RULES_PATH = path.join(REPO_ROOT, '.claude', 'cleanup-rules.json');
+const AUTO_SAFE_KILL_SWITCH = process.env.CLEANUP_AUTO_SAFE_ENABLED !== 'false';
 
 // ── Rules ──────────────────────────────────────────────────────
 
@@ -105,12 +110,36 @@ export function categorize(files, rules) {
   return result;
 }
 
+// ── Enrichment ────────────────────────────────────────────────
+
+function enrichItem(item) {
+  const file = typeof item === 'string' ? { file: item } : item;
+  try {
+    const stat = fs.statSync(path.join(REPO_ROOT, file.file));
+    const size_bytes = stat.isDirectory() ? null : stat.size;
+    const age_days = Math.floor((Date.now() - stat.mtimeMs) / 86400000);
+    return { ...file, size_bytes, age_days };
+  } catch {
+    return { ...file, size_bytes: null, age_days: null };
+  }
+}
+
+function enrichCategories(categories) {
+  return {
+    delete: categories.delete.map(enrichItem),
+    gitignore: categories.gitignore.map(enrichItem),
+    commit: categories.commit.map(enrichItem),
+    review: categories.review.map(enrichItem)
+  };
+}
+
 // ── Scan API ───────────────────────────────────────────────────
 
-export function scan() {
+export function scan(options = {}) {
   const files = scanUntracked();
   const rules = loadRules();
-  return categorize(files, rules);
+  const categories = categorize(files, rules);
+  return options.enrich === false ? categories : enrichCategories(categories);
 }
 
 // ── Summary Display ────────────────────────────────────────────
@@ -247,20 +276,93 @@ export function learnRule(file, category, reason) {
 
 // ── CLI ────────────────────────────────────────────────────────
 
+function isAutoProceedActive(args) {
+  const cli = parseAutoProceedCli(args);
+  if (cli.value !== null) return cli.value;
+  const env = parseAutoProceedEnv();
+  if (env.value !== null) return env.value;
+  return false;
+}
+
+export function applyAutoSafe(categories, options = {}) {
+  const { suggestions = [], minOccurrences = 2 } = options;
+  const stats = { applied: 0, deferred: 0, skipped_delete: 0 };
+  if (!suggestions.length) {
+    return { categories, stats, applied: [] };
+  }
+  const suggestionByPattern = new Map(suggestions.map(s => [s.pattern, s]));
+  const { clusters } = groupReviewItems(categories.review);
+  if (!clusters.size) {
+    return { categories, stats, applied: [] };
+  }
+  const next = {
+    delete: [...categories.delete],
+    gitignore: [...categories.gitignore],
+    commit: [...categories.commit],
+    review: [...categories.review]
+  };
+  const applied = [];
+  for (const [pattern, members] of clusters) {
+    const sugg = suggestionByPattern.get(pattern);
+    if (!sugg || sugg.occurrences < minOccurrences) {
+      stats.deferred += members.length;
+      continue;
+    }
+    if (sugg.category === 'delete') {
+      stats.skipped_delete += members.length;
+      continue;
+    }
+    for (const member of members) {
+      const file = typeof member === 'string' ? member : member.file;
+      next[sugg.category].push({ file, reason: sugg.reason, source: 'auto-safe' });
+      next.review = next.review.filter(r => (typeof r === 'string' ? r : r.file) !== file);
+      applied.push({ file, category: sugg.category, pattern, occurrences: sugg.occurrences });
+      stats.applied++;
+    }
+  }
+  return { categories: next, stats, applied };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const execute = args.includes('--execute');
   const noLearn = args.includes('--no-learn');
   const jsonOutput = args.includes('--json');
+  const autoSafeFlag = args.includes('--auto-safe');
 
-  const categories = scan();
+  let categories = scan();
+
+  let autoSafeReport = null;
+  if (autoSafeFlag) {
+    if (!AUTO_SAFE_KILL_SWITCH) {
+      autoSafeReport = { skipped: 'CLEANUP_AUTO_SAFE_ENABLED=false (kill switch active)' };
+    } else if (!isAutoProceedActive(args)) {
+      autoSafeReport = { skipped: '--auto-safe is a no-op without AUTO-PROCEED (set AUTO_PROCEED=true or pass --auto-proceed)' };
+    } else {
+      const suggestions = deriveRulesFromGitLog({ repoPath: REPO_ROOT });
+      const result = applyAutoSafe(categories, { suggestions });
+      categories = result.categories;
+      autoSafeReport = { stats: result.stats, applied_count: result.applied.length };
+      for (const action of result.applied) {
+        appendAuditEntry(action, { repoRoot: REPO_ROOT });
+      }
+    }
+  }
 
   if (jsonOutput) {
-    console.log(JSON.stringify(categories, null, 2));
+    const payload = autoSafeReport ? { ...categories, auto_safe: autoSafeReport } : categories;
+    console.log(JSON.stringify(payload, null, 2));
     return;
   }
 
   presentSummary(categories);
+  if (autoSafeReport) {
+    if (autoSafeReport.skipped) {
+      console.log(`\n  --auto-safe: ${autoSafeReport.skipped}`);
+    } else {
+      console.log(`\n  --auto-safe: ${autoSafeReport.applied_count} action(s) auto-applied (deferred=${autoSafeReport.stats.deferred}, skipped_delete=${autoSafeReport.stats.skipped_delete})`);
+    }
+  }
 
   if (execute) {
     const total = categories.delete.length + categories.gitignore.length + categories.commit.length;

@@ -27,10 +27,15 @@
       {"pattern": ".claude/fleet-identity*.json", "reason": "Session-generated fleet identity"},
       {"pattern": ".claude/scheduled_tasks.lock", "reason": "Runtime lock file"},
       {"pattern": ".leo-validation/", "reason": "Runtime validation directory"},
-      {"pattern": ".quickfix-evidence/", "reason": "Runtime QF evidence directory"}
+      {"pattern": ".quickfix-evidence/", "reason": "Runtime QF evidence directory"},
+      {"pattern": ".claude-work/", "reason": "Runtime work directory (sibling of .claude-locks/)"},
+      {"pattern": ".claude/pids/", "reason": "Daemon PID files (sibling of .claude/logs/)"},
+      {"pattern": ".claude/*-state.json", "reason": "Runtime state files (worktree-reaper, etc.)"},
+      {"pattern": ".claude/session-*.md", "reason": "Ephemeral per-session notes"}
     ],
     "commit": [
-      {"pattern": "database/migrations/*.sql", "reason": "Applied but untracked migrations"}
+      {"pattern": "database/migrations/*.sql", "reason": "Applied but untracked migrations"},
+      {"pattern": "docs/plans/archived/*-plan.md", "reason": "Archived SD planning artifacts (sibling of tracked *-vision.md / *-architecture.md)"}
     ]
   },
   "learned": [],
