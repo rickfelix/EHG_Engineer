@@ -16,73 +16,32 @@ This uses the appropriate script for the current platform:
 - **Windows**: Uses `leo-stack.ps1` (PowerShell)
 - **Linux/macOS/WSL**: Uses `leo-stack.sh` (Bash)
 
-This restarts all three servers:
+This restarts both managed servers:
 - EHG_Engineer (port 3000)
 - EHG App (port 8080)
-- Agent Platform (port 8000)
 
-After running, confirm the status shows all servers running.
+> Historical note: an "Agent Platform" service formerly managed by leo-stack was retired on 2026-04-25 (commit `f8e252ee28`, CrewAI elimination). leo-stack scripts no longer manage it; references to it in older docs are dead.
+
+After running, confirm the status shows both servers running.
+
+## Post-Restart Routing (Deterministic)
+
+After restart, route automatically based on the current SD's `sd_type` (read from `strategic_directives_v2`). Do **not** present `AskUserQuestion` menus at this boundary — the routing is deterministic per CLAUDE.md AUTO-PROCEED canonical pause-points.
+
+| `sd_type` | Next action |
+|-----------|-------------|
+| `feature`, `bugfix`, `security`, `refactor`, `enhancement`, `performance`, `ux_debt` | Invoke `/uat` (UAT required before ship — user-observable surface) |
+| `infrastructure`, `database`, `documentation`, `docs`, `uat` | Invoke `/ship` (no UAT required — `uat` campaigns ARE the test scenarios) |
+| `orchestrator`, `discovery_spike`, `implementation`, no SD claimed, or `sd_type` unknown | Log "Restart complete; awaiting operator direction" and return |
+
+> The 15 valid `sd_type` values are defined in `database/migrations/20260206_register_uat_sd_type.sql`. If a new type is introduced, update this table and the corresponding test invariant.
+
+The operator can verbally override at any time (e.g., "skip /uat", "done for now"). The deterministic rule replaces three prior `AskUserQuestion` menus that violated AUTO-PROCEED — see SD-LEO-INFRA-RESTART-SKILL-LEO-001.
 
 ## Command Ecosystem Integration
 
-### Cross-Reference
-
 This command is part of the **Command Ecosystem**. For full workflow context, see:
-- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
-
----
-
-The `/restart` command connects to other commands in the workflow:
-
-### Post-Restart Suggestions
-
-**If SD requires UAT (feature, bugfix, security, refactor, enhancement) - Use AskUserQuestion:**
-
-```javascript
-{
-  "question": "Servers restarted. Ready for User Acceptance Testing?",
-  "header": "Post-Restart",
-  "multiSelect": false,
-  "options": [
-    {"label": "/uat (Recommended)", "description": "Run human acceptance testing before shipping"},
-    {"label": "Skip UAT, /ship", "description": "Ship without formal UAT (not recommended for features)"},
-    {"label": "/leo next", "description": "Check SD queue first"},
-    {"label": "Done for now", "description": "End session"}
-  ]
-}
-```
-
-**If SD is infrastructure/database/docs (UAT exempt) - Use AskUserQuestion:**
-
-```javascript
-{
-  "question": "Servers restarted. Ready for visual review?",
-  "header": "Post-Restart",
-  "multiSelect": false,
-  "options": [
-    {"label": "Visual review done, /ship", "description": "Proceed to shipping workflow"},
-    {"label": "/leo next", "description": "Check SD queue first"},
-    {"label": "Done for now", "description": "End session"}
-  ]
-}
-```
-
-**If starting fresh work - Use AskUserQuestion:**
-
-```javascript
-{
-  "question": "Servers restarted. What would you like to do?",
-  "header": "Next Step",
-  "multiSelect": false,
-  "options": [
-    {"label": "/leo next", "description": "See SD queue and pick next work"},
-    {"label": "/leo status", "description": "Check current SD progress"},
-    {"label": "Done for now", "description": "End session"}
-  ]
-}
-```
-
-**Auto-invoke behavior:** When user selects a command option, immediately invoke that skill using the Skill tool.
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** — Complete inter-command flow diagram and relationships
 
 ### When to Use /restart
 
@@ -94,11 +53,11 @@ The `/restart` command connects to other commands in the workflow:
 | Long session (>2 hours) | Yes | Prevents stale server state |
 | After major implementation | Yes | Ensure changes are reflected |
 | Quick-fix or small changes | Optional | Usually not needed |
+| Backend-only SDs (no UI) | Skip | Restart is pure ceremony with no UI to refresh |
 
 ### Typical Flow After /restart
 
 ```
-/restart → /uat → /ship → /document → /learn
+/restart → /uat → /ship → /document → /learn   (UAT-required sd_types)
+/restart → /ship → /document → /learn          (UAT-exempt sd_types)
 ```
-
-For UAT-requiring SDs (feature, bugfix, security, refactor, enhancement), always suggest /uat before /ship.
