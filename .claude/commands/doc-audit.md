@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 ---
 name: doc-audit
 description: "Documentation health audit: score 13 dimensions (structural + coverage), persist results, generate corrective SDs, iterate until Grade A (≥93). Mirrors the /heal pattern."

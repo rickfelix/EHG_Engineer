@@ -1,3 +1,5 @@
+<!-- reasoning_effort: high -->
+
 # /learn Command
 
 Improve the LEO Protocol by learning from historical patterns, retrospectives, and extracted improvements.
@@ -65,7 +67,7 @@ Example structure:
 {
   "questions": [
     {
-      "question": "Which patterns should we address?",
+      "question": "Which patterns to address?",
       "header": "Patterns",
       "multiSelect": true,
       "options": [

@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 # /status - Pipeline Status Command
 
 **Purpose**: Display real-time health metrics for the self-improvement pipeline.

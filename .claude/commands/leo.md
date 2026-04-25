@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 ---
 description: LEO stack management and session control
 argument-hint: [start <SD-ID>|assist|history|inbox|create|next|continue|complete|restart|settings]

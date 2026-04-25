@@ -1,3 +1,5 @@
+<!-- reasoning_effort: high -->
+
 # /prove — Venture Proving Companion
 
 Guide the Chairman through the venture proving lifecycle — from discovering an opportunity, through creating a venture, through proving stages 1-18 (THE_TRUTH → THE_IDENTITY → THE_BLUEPRINT → THE_BUILD entry gate). Stages 19-26 (build execution through launch) require venture-repo-aware assessment and will be addressed separately.

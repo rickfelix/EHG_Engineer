@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 # /uat - Human Acceptance Testing Command
 
 **Purpose**: Execute interactive User Acceptance Testing after `/restart` and before `/ship`

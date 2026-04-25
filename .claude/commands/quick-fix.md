@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 ---
 description: Create quick-fix for UAT-discovered issue (bug/polish ≤50 LOC)
 argument-hint: [describe the issue]

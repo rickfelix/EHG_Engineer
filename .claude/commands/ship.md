@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 # Ship Command
 
 Commit your changes and create a pull request.
@@ -732,7 +734,7 @@ This command is part of the **Command Ecosystem**. For full workflow context, se
 ```
 🎯 UI Changes Detected
 
-Before shipping, consider:
+Before shipping:
 1. Run /restart - Clean server environment
 2. Visual review - Verify UI renders correctly
 3. Then proceed with /ship

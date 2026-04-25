@@ -1,3 +1,5 @@
+<!-- reasoning_effort: high -->
+
 # Ground-Truth Triangulation Protocol
 
 > **Verification Lens**: CODEBASE-AWARE, SEMI-MANUAL

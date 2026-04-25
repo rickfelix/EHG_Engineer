@@ -1,3 +1,5 @@
+<!-- reasoning_effort: high -->
+
 # /brainstorm - EHG-Aware Strategic Brainstorming
 
 Universal thinking tool with domain-specific question banks, multi-venture awareness, and self-improving retrospective. Stores content in the `brainstorm_sessions.content` database column (DB-only — no filesystem markdown files).
@@ -1364,7 +1366,7 @@ Substitute `<CONTEXT>` and `<NNN>` using the derivation + collision-scan rules b
 **Dimension derivation** (no LLM needed):
 - Extract 6-10 dimensions from the vision doc's success criteria and key sections
 - Each dimension: `{name, weight, description, source_section}`
-- Weights should sum to ~1.0 — verify before passing (warn if outside 0.9-1.1)
+- Weights must sum to ~1.0 — verify before passing (warn if outside 0.9-1.1)
 - Use `timeout: 30000` for the command
 
 **Key format**: `VISION-<CONTEXT>-L2-<NNN>`
@@ -1555,7 +1557,7 @@ Use the **same** `<CONTEXT>` you derived in Step 9.5B (so vision and arch share 
 **IMPORTANT**: Use `--content` to pass the in-memory architecture content directly. Do NOT use `--source` with a file path — that would require creating a markdown file, violating the DB-only policy. The `--sections` flag is also available as an alternative for structured JSON input.
 
 Architecture dimensions focus on structural/implementation aspects (6-8 dimensions).
-Weights should sum to ~1.0 — verify before passing (warn if outside 0.9-1.1).
+Weights must sum to ~1.0 — verify before passing (warn if outside 0.9-1.1).
 
 **Key format**: `ARCH-<CONTEXT>-<NNN>`. CONTEXT derivation and NNN collision-scan rules are the same as Step 9.5B (reuse the same CONTEXT you derived there so vision and arch share an ID root; scan `eva_architecture_plans` with prefix `ARCH-<CONTEXT>-` for next NNN).
 
@@ -1642,7 +1644,7 @@ supabase.from('brainstorm_sessions')
 
 ## Step 9.6: Outcome Auto-Upgrade (SD-LEO-INFRA-BRAINSTORM-SD-PIPELINE-001)
 
-**After Step 9.5E validates both vision_key and plan_key exist**, check if the outcome_type should be upgraded:
+**After Step 9.5E validates both vision_key and plan_key exist**, check whether to upgrade outcome_type:
 
 - If `outcome_type` is **"Needs Triage"** AND both vision_key and plan_key are captured:
   - Auto-upgrade `outcome_type` to **`sd_created`**
@@ -1800,7 +1802,7 @@ options:
    - Do NOT ask the user for the keys — they are auto-populated from Step 9.5
 
 **If outcome is "Ready for SD" AND no vision/arch registered:**
-This path should NOT occur under normal operation — Step 9.5 is mandatory for "Ready for SD" outcomes.
+This path must NOT occur under normal operation — Step 9.5 is mandatory for "Ready for SD" outcomes.
 If it does occur (e.g., EVA registration failed), prompt the user to fix the registration issue before creating SDs.
 Do NOT offer a "Create SD without vision/arch" option — that is an anti-pattern.
 

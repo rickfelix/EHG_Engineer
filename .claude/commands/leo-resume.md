@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 ---
 description: "Restore session state after crash, compaction, or interruption. Use when user says /leo resume or needs to recover session context."
 ---

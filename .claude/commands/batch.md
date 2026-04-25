@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 ---
 description: Run batch operations on the SD fleet — accept handoffs, rescore vision, complete children
 argument-hint: <operation> [--apply] [--type <value>] [--parent <SD-KEY>] [--list]

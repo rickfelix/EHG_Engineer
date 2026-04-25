@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 # Handoff Out — Export Session Context Before Account Switch
 
 Export your current session context so another Claude Code account can pick up where you left off.

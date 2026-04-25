@@ -1,3 +1,5 @@
+<!-- reasoning_effort: medium -->
+
 # /feedback - Feedback Management (Alias)
 
 **This is an alias for `/inbox`**

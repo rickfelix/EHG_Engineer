@@ -1,3 +1,5 @@
+<!-- reasoning_effort: low -->
+
 ---
 description: Compact context by summarizing and moving details to memory
 argument-hint: [focus area or leave empty for full compaction]

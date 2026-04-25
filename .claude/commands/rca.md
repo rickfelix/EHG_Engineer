@@ -1,3 +1,5 @@
+<!-- reasoning_effort: high -->
+
 # /rca - Root Cause Analysis with 5-Whys + Investigation
 
 When a handoff, validation, or sub-agent fails, use this root cause analysis pattern instead of simple retry-then-skip. Combines progressive 5-Whys diagnosis with GStack-inspired investigation techniques (structured hypotheses, evidence collection, anti-confirmation-bias).
@@ -145,7 +147,7 @@ If still failing after Level 4:
 This command is part of the **Command Ecosystem**. For full workflow context, see:
 - **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
 
-**Note**: `/rca` is typically invoked when handoffs or sub-agents fail, requiring progressive diagnosis and remediation.
+**Note**: `/rca` is invoked when handoffs or sub-agents fail, requiring progressive diagnosis and remediation.
 
 ---
 
@@ -203,7 +205,7 @@ Why #1: GITHUB and TESTING sub-agents returned BLOCKED
 Why #2: TESTING requires E2E tests; none exist for naming-engine
 Why #3: SD was implemented without corresponding E2E test coverage
 Why #4: PRD didn't specify E2E test requirements explicitly
-Why #5: Root cause: Feature SDs should auto-generate E2E test stubs
+Why #5: Root cause: Feature SDs must auto-generate E2E test stubs
 
 Quick fix identified: Create minimal E2E smoke test (~8 min)
 
