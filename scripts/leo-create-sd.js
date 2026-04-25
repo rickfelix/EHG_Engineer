@@ -7,6 +7,7 @@
  * - --from-uat <test-id>: Create from UAT finding
  * - --from-learn <pattern-id>: Create from /learn pattern
  * - --from-feedback <id>: Create from /inbox feedback item
+ * - --from-qf <QF-ID>: Escalate open quick-fix to SD (Tier 3 routing)
  * - --child <parent-key> <index>: Create child SD
  * - --vision-key <key>: Link to EVA vision document
  * - --arch-key <key>: Link to EVA architecture plan
@@ -365,6 +366,90 @@ async function createFromFeedback(feedbackId) {
       strategic_directive_id: sd.id
     })
     .eq('id', feedback.id);
+
+  return sd;
+}
+
+/**
+ * Create SD from open quick-fix (QF-* row).
+ * Used when sd:next escalates a QF to Tier 3 (risk-keyword or LOC threshold).
+ * Mirrors createFromFeedback contract; updates the source quick_fixes row with
+ * status='escalated' + escalated_to_sd_id so the queue stops recommending it.
+ */
+async function createFromQF(qfId) {
+  console.log(`\n📋 Creating SD from quick-fix: ${qfId}`);
+
+  if (!qfId) {
+    console.error('❌ Missing QF-ID. Usage: node scripts/leo-create-sd.js --from-qf <QF-ID>');
+    process.exit(1);
+  }
+
+  const { data: qf, error } = await supabase
+    .from('quick_fixes')
+    .select('*')
+    .eq('id', qfId)
+    .maybeSingle();
+
+  if (error || !qf) {
+    console.error('Quick-fix not found:', qfId, error?.message || '');
+    process.exit(1);
+  }
+
+  // Duplicate guard: already escalated or already shipped
+  if (qf.escalated_to_sd_id) {
+    console.log(`\n⚠️  Quick-fix already escalated to SD: ${qf.escalated_to_sd_id}\n`);
+    process.exit(0);
+  }
+  if (qf.status === 'completed') {
+    console.log(`\n⚠️  Quick-fix is already completed (status=${qf.status}). Refusing to escalate.\n`);
+    process.exit(0);
+  }
+
+  // Map QF type → SD type. Unknown QF types fall through to 'fix'.
+  const typeMap = { bug: 'fix', polish: 'enhancement', documentation: 'documentation', enhancement: 'enhancement' };
+  const type = typeMap[qf.type] || 'fix';
+
+  // Map QF severity → SD priority (1:1 enum overlap).
+  const priority = ['critical', 'high', 'medium', 'low'].includes(qf.severity) ? qf.severity : 'medium';
+
+  const venturePrefix = await resolveVenturePrefix();
+  const sdKey = await generateSDKey({ source: 'LEO', type, title: qf.title, venturePrefix });
+
+  const sd = await createSD({
+    sdKey,
+    title: qf.title,
+    description: qf.description || qf.title,
+    type,
+    priority,
+    rationale: `Escalated from quick-fix ${qf.id} (Tier 3 routing). Original LOC estimate: ${qf.estimated_loc ?? 'n/a'}.`,
+    metadata: {
+      source: 'quick_fix',
+      source_qf_id: qf.id,
+      qf_type: qf.type,
+      qf_severity: qf.severity,
+      qf_estimated_loc: qf.estimated_loc,
+      qf_target_application: qf.target_application
+    }
+  });
+
+  // Mark the QF as escalated and release any active claim so the queue/parallel sessions
+  // see the new state. Failure here is non-fatal — the SD exists and operator can reconcile.
+  const { error: updErr } = await supabase
+    .from('quick_fixes')
+    .update({
+      status: 'escalated',
+      escalated_to_sd_id: sd.id,
+      escalation_reason: `Escalated to ${sdKey} via leo-create-sd.js --from-qf`,
+      claiming_session_id: null
+    })
+    .eq('id', qf.id);
+
+  if (updErr) {
+    console.warn(`   ⚠️  SD created but QF row update failed: ${updErr.message}`);
+    console.warn(`      Manually run: UPDATE quick_fixes SET status='escalated', escalated_to_sd_id='${sd.id}' WHERE id='${qf.id}';`);
+  } else {
+    console.log(`   ✓ Quick-fix ${qf.id} → status='escalated', escalated_to_sd_id=${sd.id}`);
+  }
 
   return sd;
 }
@@ -1589,6 +1674,7 @@ Usage:
   node scripts/leo-create-sd.js --from-uat <test-id>
   node scripts/leo-create-sd.js --from-learn <pattern-id>
   node scripts/leo-create-sd.js --from-feedback <feedback-id>
+  node scripts/leo-create-sd.js --from-qf <QF-ID>
   node scripts/leo-create-sd.js --from-plan [path] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js --child <parent-key> [index] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js <source> <type> "<title>"
@@ -1640,6 +1726,7 @@ Venture Context:
 Examples:
   node scripts/leo-create-sd.js --from-uat abc123
   node scripts/leo-create-sd.js --from-feedback def456
+  node scripts/leo-create-sd.js --from-qf QF-20260424-808           # Escalate Tier-3 quick-fix to SD
   node scripts/leo-create-sd.js --from-plan                              # Auto-detect most recent plan
   node scripts/leo-create-sd.js --from-plan --yes                        # Auto-detect without confirmation
   node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md   # Use specific plan
@@ -1662,6 +1749,8 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       await createFromLearn(args[1]);
     } else if (args[0] === '--from-feedback') {
       await createFromFeedback(args[1]);
+    } else if (args[0] === '--from-qf') {
+      await createFromQF(args[1]);
     } else if (args[0] === '--from-plan') {
       // Check for --yes flag (skip confirmation for auto-detect)
       const hasYesFlag = args.includes('--yes') || args.includes('-y');
@@ -1801,6 +1890,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         console.error('   Did you mean one of these?');
         console.error('     --from-plan [path] [--type <type>] [--title "<title>"]');
         console.error('     --from-feedback <id>');
+        console.error('     --from-qf <QF-ID>');
         console.error('     --from-learn <pattern-id>');
         console.error('     --from-uat <test-id>');
         process.exit(1);
