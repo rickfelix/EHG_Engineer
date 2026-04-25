@@ -1,0 +1,12 @@
+filename,total_loc,hedge_typically,hedge_ideally,hedge_consider,hedge_should,hedge_may,hedge_could,total_hedges,hedges_per_1000_loc
+".claude/skills/eva.skill.md",130,0,0,0,0,0,0,0,0.00
+".claude/skills/eva-archplan.skill.md",249,0,0,0,0,0,0,0,0.00
+".claude/skills/eva-constitution.skill.md",115,0,0,0,0,0,0,0,0.00
+".claude/skills/eva-mission.skill.md",97,0,0,0,0,0,0,0,0.00
+".claude/skills/eva-okr.skill.md",124,0,0,0,0,0,0,0,0.00
+".claude/skills/eva-research.skill.md",221,0,0,0,0,0,0,0,0.00
+".claude/skills/eva-score.skill.md",116,0,0,0,0,0,0,0,0.00
+".claude/skills/eva-strategy.skill.md",116,0,0,0,0,0,0,0,0.00
+".claude/skills/eva-vision.skill.md",248,0,0,0,0,0,0,0,0.00
+".claude/skills/review-vision.skill.md",244,0,0,0,0,0,0,0,0.00
+AGGREGATE,1660,0,0,0,0,0,0,0,0.00

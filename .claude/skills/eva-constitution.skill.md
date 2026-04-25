@@ -2,6 +2,8 @@
 description: "Manage protocol constitution rules (CONST-001 through CONST-011) and constitutional amendments"
 ---
 
+<!-- reasoning_effort: medium -->
+
 # /eva constitution - Protocol Constitution Management
 
 Manage protocol constitution rules (CONST-001 through CONST-011) and constitutional amendments.

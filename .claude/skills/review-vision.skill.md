@@ -2,6 +2,8 @@
 description: "Review existing vision and architecture plans using a 3-agent team to identify blind spots and feasibility concerns"
 ---
 
+<!-- reasoning_effort: high -->
+
 # /eva review - Post-Creation Vision & Architecture Review
 
 Review existing vision documents and/or architecture plans using a 3-agent team (Challenger, Visionary, Pragmatist) to identify blind spots, opportunities, and feasibility concerns.
@@ -100,8 +102,8 @@ Document(s):
 
 Analyze for:
 1. BLIND SPOTS: 2-3 things the document fails to address (missing stakeholders, unaddressed failure modes, ignored competitors)
-2. ASSUMPTION TESTING: 2-3 assumptions that could be wrong (market, technical, resource)
-3. SCOPE CREEP RISK: Areas where scope could expand uncontrollably
+2. ASSUMPTION TESTING: 2-3 assumptions worth challenging (market, technical, resource)
+3. SCOPE CREEP RISK: Areas where scope risks uncontrolled expansion
 4. MISSING STAKEHOLDERS: Who is affected but not mentioned?
 
 Output your analysis as structured markdown sections. Be specific — reference document sections by name.
@@ -118,7 +120,7 @@ Analyze for:
 1. L1 ALIGNMENT: How well does this align with portfolio-level strategic vision? Score 1-10.
 2. HEAL SCORING POTENTIAL: Will the extracted dimensions produce meaningful HEAL scores? Flag weak dimensions.
 3. DOWNSTREAM SD QUALITY: Will SDs created from this document have clear scope and success criteria?
-4. OPPORTUNITIES: 2-3 strategic opportunities the document could better leverage
+4. OPPORTUNITIES: 2-3 strategic opportunities the document underleverages
 
 Output your analysis as structured markdown sections.
 ```

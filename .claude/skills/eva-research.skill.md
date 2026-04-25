@@ -2,6 +2,8 @@
 description: "Tiered research investigation with intent-based routing: L1 WebSearch, L2 codebase triangulation, L3 multi-model deep research"
 ---
 
+<!-- reasoning_effort: high -->
+
 # /eva research - EVA Research Command
 
 Tiered research investigation with intent-based routing: L1 (WebSearch), L2 (codebase

@@ -2,6 +2,8 @@
 description: "Create, version, and manage EVA Architecture Plans linked to Vision documents"
 ---
 
+<!-- reasoning_effort: high -->
+
 # /eva archplan - EVA Architecture Plan Manager
 
 Create, version, and manage Architecture Plans linked to Vision documents
@@ -44,7 +46,7 @@ Display the output directly.
 
 If neither `--source` nor `--content` provided, ask:
 ```
-"What is the path to the architecture source document? (e.g. docs/plans/archived/eva-platform-architecture.md) — NOTE: New architecture plans should be registered directly via DB using --content flag, not from markdown files."
+"What is the path to the architecture source document? (e.g. docs/plans/archived/eva-platform-architecture.md) — NOTE: Register new architecture plans directly via DB using --content flag, not from markdown files."
 ```
 
 **Preferred workflow (DB-only):** Generate architecture content in-memory and pass via `--content` flag to avoid creating intermediary files.
@@ -78,7 +80,7 @@ If `--vision-key` not provided:
 ```javascript
 {
   "questions": [{
-    "question": "Which vision document should this architecture plan be linked to?",
+    "question": "Which vision document does this architecture plan link to?",
     "header": "Parent Vision",
     "multiSelect": false,
     "options": [

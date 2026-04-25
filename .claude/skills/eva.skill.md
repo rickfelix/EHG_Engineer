@@ -2,6 +2,8 @@
 description: "Unified EVA governance CLI entry point. Routes /eva subcommands to vision, architecture, OKR, strategy, and research handlers."
 ---
 
+<!-- reasoning_effort: low -->
+
 # /eva - Unified EVA Governance CLI
 
 Entry point for all EVA governance commands. Routes `/eva <subcommand>` to the appropriate handler.
