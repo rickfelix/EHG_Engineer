@@ -46,9 +46,82 @@ function sanitizeCommitMessage(message) {
 }
 
 /**
- * Auto-detect git information from repository
- * @param {string} testDir - Directory to run git commands in
- * @param {object} options - Existing options that may override detection
+ * Extract PR number from a GitHub PR URL.
+ * @param {string} prUrl
+ * @returns {number|null}
+ */
+export function extractPRNumber(prUrl) {
+  if (!prUrl || typeof prUrl !== 'string') return null;
+  const match = prUrl.match(/\/pull\/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * Detect whether testDir is inside a recognized QF worktree
+ * (i.e. .worktrees/qf/QF-* or .worktrees/QF-*). Used to decide whether the
+ * legacy CWD-HEAD auto-detect is safe to run.
+ * @param {string} testDir
+ * @returns {boolean}
+ */
+export function isInQFWorktree(testDir) {
+  try {
+    const gitDir = execSync('git rev-parse --git-dir', { cwd: testDir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    if (!gitDir.includes('worktrees')) return false;
+    const normalized = (testDir || '').replace(/\\/g, '/');
+    return /\/\.worktrees\/(qf\/)?QF-/i.test(normalized);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch PR metadata via the gh CLI. Loud-fails on any error — callers MUST
+ * NOT silently fall back to CWD HEAD; that is the bug class this fix closes.
+ * @param {number} prNumber
+ * @param {string} testDir
+ * @returns {object} Parsed JSON: { state, headRefName, mergeCommit, additions, deletions, url }
+ */
+export function fetchPRMetadata(prNumber, testDir) {
+  const fields = 'state,headRefName,mergeCommit,additions,deletions,url';
+  let raw;
+  try {
+    raw = execSync(`gh pr view ${prNumber} --json ${fields}`, {
+      cwd: testDir,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+  } catch (e) {
+    const code = e.status ?? '?';
+    const stderr = (e.stderr ? e.stderr.toString() : '').trim().split('\n')[0];
+    throw new Error(`gh pr view ${prNumber} exited ${code}${stderr ? `: ${stderr}` : ''}. Cannot resolve PR metadata; pass --commit-sha/--branch-name/--actual-loc explicitly or fix gh auth.`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`gh pr view ${prNumber} returned non-JSON output. Cannot resolve PR metadata.`);
+  }
+  if (!parsed || typeof parsed.state !== 'string') {
+    throw new Error(`gh pr view ${prNumber} returned malformed JSON (missing state). Cannot resolve PR metadata.`);
+  }
+  return parsed;
+}
+
+/**
+ * Auto-detect git information for a quick-fix completion.
+ *
+ * Priority order:
+ *   1. Explicit values from `options` (commitSha / branchName / actualLoc) win.
+ *   2. If `options.prUrl` is supplied → drive detection from `gh pr view <#>`
+ *      (canonical post-merge artifact). Failures are LOUD — no silent
+ *      fallback to CWD HEAD.
+ *   3. Else if testDir is inside a QF worktree → legacy git-rev-parse path.
+ *   4. Else → throw with operator-readable remediation. Refusing to act is
+ *      strictly better than silently producing wrong values (witnessed twice
+ *      in 24h: QF-20260424-808, QF-20260424-081).
+ *
+ * @param {string} testDir - Directory to run git/gh commands in
+ * @param {object} options - May contain commitSha / branchName / actualLoc / prUrl
  * @returns {object} Git info with commitSha, branchName, actualLoc
  */
 export function autoDetectGitInfo(testDir, options = {}) {
@@ -58,6 +131,56 @@ export function autoDetectGitInfo(testDir, options = {}) {
     actualLoc: options.actualLoc
   };
 
+  // Fast path: nothing to detect.
+  if (result.commitSha && result.branchName && result.actualLoc) {
+    return result;
+  }
+
+  // ── PR-metadata authoritative path ────────────────────────────────────
+  if (options.prUrl) {
+    const prNumber = extractPRNumber(options.prUrl);
+    if (!prNumber) {
+      throw new Error(`Invalid --pr-url '${options.prUrl}': expected GitHub PR URL (e.g., https://github.com/org/repo/pull/123)`);
+    }
+    const pr = fetchPRMetadata(prNumber, testDir);
+
+    if (!result.commitSha) {
+      if (pr.state === 'MERGED' && pr.mergeCommit?.oid) {
+        result.commitSha = pr.mergeCommit.oid;
+        console.log(`🔍 PR #${prNumber} (merged) → commit SHA: ${result.commitSha.substring(0, 7)}`);
+      } else if (pr.state === 'OPEN') {
+        console.log(`🔍 PR #${prNumber} is OPEN — commit SHA not derivable from PR metadata yet`);
+      } else {
+        throw new Error(`PR #${prNumber} is in unexpected state '${pr.state}' (expected MERGED or OPEN). Cannot derive commit SHA.`);
+      }
+    }
+
+    if (!result.branchName && pr.headRefName) {
+      result.branchName = pr.headRefName;
+      console.log(`🔍 PR #${prNumber} → branch: ${result.branchName}`);
+    }
+
+    if (!result.actualLoc) {
+      // gh additions+deletions overcounts vs git --shortstat for renames, but feeds the
+      // 50-LOC hard-cap fail-safely (stricter, never under-rejects).
+      const additions = typeof pr.additions === 'number' ? pr.additions : 0;
+      const deletions = typeof pr.deletions === 'number' ? pr.deletions : 0;
+      result.actualLoc = additions + deletions;
+      console.log(`🔍 PR #${prNumber} → actual LOC: ${result.actualLoc} (${additions} additions + ${deletions} deletions)\n`);
+    }
+    return result;
+  }
+
+  // ── No --pr-url: refuse-to-auto-detect outside QF worktree ─────────────
+  if (!isInQFWorktree(testDir)) {
+    throw new Error(
+      `Cannot auto-detect git info: CWD '${testDir}' is not a recognized QF worktree, ` +
+      `and --pr-url was not supplied. Pass --commit-sha / --branch-name / --actual-loc explicitly, ` +
+      `or pass --pr-url <github-pr-url> for post-merge auto-detection.`
+    );
+  }
+
+  // ── Legacy in-worktree path (regression-safe) ──────────────────────────
   try {
     if (!result.commitSha) {
       result.commitSha = execSync('git rev-parse HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
