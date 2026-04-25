@@ -62,6 +62,33 @@ function getTempDir() {
   return os.tmpdir();
 }
 
+const UI_KEYWORDS = ['ui', 'ux', 'component', 'page', 'frontend', 'wireframe', 'modal', 'dialog', 'button', 'form', 'navigation', 'dashboard'];
+const DATA_MODEL_KEYWORDS = ['migration', 'schema', 'rls', 'table', 'column', 'index', 'constraint', 'foreign key', 'rpc', 'sql'];
+const NON_UI_TYPES = ['infrastructure', 'documentation', 'refactor'];
+
+function textHasAnyKeyword(text, keywords) {
+  if (!text) return false;
+  const lower = String(text).toLowerCase();
+  return keywords.some(k => lower.includes(k));
+}
+
+export function needsDesignAnalysis(sdData) {
+  const sdType = sdData.sd_type || sdData.category || 'feature';
+  if (!NON_UI_TYPES.includes(sdType)) return true;
+  return textHasAnyKeyword(sdData.scope, UI_KEYWORDS) ||
+         textHasAnyKeyword(sdData.description, UI_KEYWORDS) ||
+         textHasAnyKeyword(JSON.stringify(sdData.key_changes || ''), UI_KEYWORDS);
+}
+
+export function needsDatabaseAnalysis(sdData) {
+  const sdType = sdData.sd_type || sdData.category || 'feature';
+  if (sdType === 'database') return true;
+  if (!NON_UI_TYPES.includes(sdType)) return true;
+  return textHasAnyKeyword(sdData.scope, DATA_MODEL_KEYWORDS) ||
+         textHasAnyKeyword(sdData.description, DATA_MODEL_KEYWORDS) ||
+         textHasAnyKeyword(JSON.stringify(sdData.key_changes || ''), DATA_MODEL_KEYWORDS);
+}
+
 /**
  * Execute DESIGN sub-agent analysis
  * @param {string} sdId - Strategic Directive ID
@@ -70,6 +97,11 @@ function getTempDir() {
  * @returns {Promise<string|null>} Design analysis output or null
  */
 export async function executeDesignAnalysis(sdId, sdData, personaContextBlock = '') {
+  if (!needsDesignAnalysis(sdData)) {
+    console.log(`\n   DESIGN: SKIPPED (sd_type='${sdData.sd_type || sdData.category}' has no UI keywords in scope/description/key_changes)`);
+    return null;
+  }
+
   console.log('\n='.repeat(55));
   console.log('PHASE 1: DESIGN ANALYSIS');
   console.log('='.repeat(55));
@@ -105,6 +137,11 @@ export async function executeDesignAnalysis(sdId, sdData, personaContextBlock = 
  * @returns {Promise<string|null>} Database analysis output or null
  */
 export async function executeDatabaseAnalysis(sdId, sdData, designAnalysis, personaContextBlock = '') {
+  if (!needsDatabaseAnalysis(sdData)) {
+    console.log(`\n   DATABASE: SKIPPED (sd_type='${sdData.sd_type || sdData.category}' has no data-model keywords in scope/description/key_changes)`);
+    return null;
+  }
+
   console.log('\n='.repeat(55));
   console.log('PHASE 2: DATABASE SCHEMA ANALYSIS');
   console.log('='.repeat(55));
