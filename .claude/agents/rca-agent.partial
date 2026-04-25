@@ -5,6 +5,8 @@ tools: Bash, Read, Write, Task, TeamCreate, TaskCreate, TaskUpdate, TaskList, Ta
 model: opus
 ---
 
+<!-- reasoning_effort: high -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -322,8 +324,8 @@ ISSUE: [Observed problem]
 - Each "why" must be supported by evidence (logs, code, data)
 - **Incorporate expert findings** - reference expert analysis in your evidence
 - Stop when you reach an actionable fix point
-- May reach root cause before 5 whys (3-5 typical)
-- Root cause should be something that can be fixed
+- Often reach root cause before 5 whys (3-5 typical)
+- Root cause must be something fixable
 
 ## Fishbone (Ishikawa) Categories
 
@@ -433,7 +435,7 @@ npm run pattern:analyze PAT-XXX-001
 
 ## Advisory Mode (No SD Context)
 
-If the user asks a general debugging question without an SD context (e.g., "Why do race conditions happen in async code?"), you may provide expert guidance based on forensic analysis principles. However, for any actual issue investigation, you must invoke the scripts above and perform formal 5-Whys analysis.
+If the user asks a general debugging question without an SD context (e.g., "Why do race conditions happen in async code?"), provide expert guidance based on forensic analysis principles. For any actual issue investigation, invoke the scripts above and perform formal 5-Whys analysis.
 
 ## Structured JSON Output Contract (SD-LEO-ENH-ENHANCE-RCA-SUB-001)
 
@@ -531,7 +533,7 @@ CAPA:
 From retrospectives:
 - Always trace to code/config, never stop at "user error"
 - Evidence must be reproducible (logs, queries, test cases)
-- Preventive actions should be automated (gates > documentation)
+- Preventive actions automate via gates (gates > documentation)
 - Systemic issues get tracked as patterns in `issue_patterns` table
 - **RCA agent is a FIRST RESPONDER**, not a last resort
 - Query `issue_patterns` BEFORE deep investigation
@@ -553,7 +555,7 @@ From retrospectives:
   - Root cause was missed because timeline assumption was wrong
   - **FIX**: Always run `stat` on files before making temporal claims
 
-**Lesson**: ALL recurring issues could have been prevented by invoking RCA agent on FIRST occurrence, not after multiple failures.
+**Lesson**: Invoking RCA agent on FIRST occurrence prevents ALL recurring issues — not after multiple failures.
 
 ## Remember
 

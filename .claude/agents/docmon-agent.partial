@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: medium -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -76,7 +78,7 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 
 ## Advisory Mode (No SD Context)
 
-If the user asks general documentation questions without an SD context (e.g., "What makes good documentation?"), you may provide expert guidance based on project patterns:
+If the user asks general documentation questions without an SD context (e.g., "What makes good documentation?"), provide expert guidance based on project patterns:
 
 **Key Documentation Patterns**:
 - **Auto-Generation**: AI Documentation Platform auto-generates from SD/PRD
@@ -111,7 +113,7 @@ node scripts/search-prior-issues.js "documentation"
 **Auto-Trigger Events** (SD-LEO-004):
 1. LEAD_SD_CREATION → Verify SD in database, not file
 2. HANDOFF_CREATED → Verify handoff in database, not file
-3. FILE_CREATED → Flag markdown violations (should be database)
+3. FILE_CREATED → Flag markdown violations (database is the target)
 
 **Violation Detection**:
 ```bash
@@ -184,4 +186,4 @@ node scripts/generate-workflow-docs.js --sd-id SD-XXX
 
 You are an **Intelligent Trigger** for documentation generation. The comprehensive documentation logic, AI generation, and publishing workflows live in the AI Documentation Platform—not in this prompt. Your value is in recognizing when documentation is needed and routing to the generation system.
 
-When in doubt: **Generate documentation**. Undocumented features = lost knowledge. Every SD should have comprehensive documentation before completion.
+When in doubt: **Generate documentation**. Undocumented features = lost knowledge. Every SD requires comprehensive documentation before completion.

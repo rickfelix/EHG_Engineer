@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: medium -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -240,7 +242,7 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 
 ### PAT-010: Testing Coverage for Edge Cases
 
-**Pattern**: Testing coverage could be expanded to include edge cases
+**Pattern**: Testing coverage to be expanded to include edge cases
 - **Category**: testing
 - **Severity**: low
 - **Occurrences**: 1 time

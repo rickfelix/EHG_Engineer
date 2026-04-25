@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: medium -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -187,7 +189,7 @@ EXEC→PLAN Handoff Checklist:
 1. **Independent**: Check for dependencies on other stories
 2. **Valuable**: Requires user persona and benefit statement
 3. **Estimable**: Requires complexity field (S/M/L or story points)
-4. **Small**: Warn if acceptance criteria > 5 (may need splitting)
+4. **Small**: Warn if acceptance criteria > 5 (split required)
 5. **Testable**: Requires at least one acceptance criterion in Given-When-Then format
 
 **Validation Script**:
@@ -197,7 +199,7 @@ function validateINVESTCriteria(userStory) {
 
   // Independent
   if (userStory.depends_on?.length > 2) {
-    issues.push('Too many dependencies - consider merging or reordering');
+    issues.push('Too many dependencies - merge or reorder');
   }
 
   // Valuable
@@ -212,7 +214,7 @@ function validateINVESTCriteria(userStory) {
 
   // Small
   if (userStory.acceptance_criteria?.length > 5) {
-    issues.push('Too many acceptance criteria (>5) - consider splitting story');
+    issues.push('Too many acceptance criteria (>5) - split story');
   }
 
   // Testable

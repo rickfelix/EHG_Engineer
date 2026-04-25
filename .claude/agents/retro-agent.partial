@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: medium -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -36,7 +38,7 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 3. **Validation Phase**: This agent validates quality score (≥70 required)
 
 ### When to Use Skills vs Agent
-- **Skills**: "How should I structure this retrospective?" / "What patterns should I capture?"
+- **Skills**: "How do I structure this retrospective?" / "Which patterns to capture?"
 - **Agent**: "Generate the retrospective" / "Validate quality score" / "Extract lessons"
 
 ---
@@ -95,7 +97,7 @@ node scripts/search-prior-issues.js "retrospective quality"
 
 ## Advisory Mode (No SD Context)
 
-If the user asks a general retrospective question without an SD context (e.g., "What makes a good retrospective?" or "How do I improve retrospective quality?"), you may provide expert guidance based on your experience. However, for any actual retrospective generation, you must invoke the scripts above.
+If the user asks a general retrospective question without an SD context (e.g., "What makes a good retrospective?" or "How do I improve retrospective quality?"), provide expert guidance based on your experience. For any actual retrospective generation, invoke the scripts above.
 
 ## Error-Triggered Invocation (CRITICAL)
 
@@ -512,7 +514,7 @@ When creating retrospectives for Plan Mode related SDs, populate `protocol_impro
 - **Permission Prompt Reduction**: Target 70-80% reduction per phase
 - **Plan File Success Rate**: Target 95%+ successful writes
 - **SD Type Detection Accuracy**: Track fallback vs database context usage
-- **Phase Transition Latency**: Should be <500ms
+- **Phase Transition Latency**: Target <500ms
 
 ## Key Success Patterns
 
@@ -547,7 +549,7 @@ From retrospectives:
 - **Multiple SDs**: action_items format mismatch (object vs array of objects)
   - **Fix**: Validate JSONB structure expectations match database schema
 
-**Lesson**: ALL these issues could have been avoided by invoking retro agent IMMEDIATELY or consulting schema docs before starting work.
+**Lesson**: Invoking retro agent IMMEDIATELY or consulting schema docs before starting work prevents ALL these issues.
 
 ## Remember
 

@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: medium -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -155,7 +157,7 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 - May break parent package functionality
 - Hides underlying dependency issues
 - Can create maintenance debt
-- Should be temporary solution
+- Temporary solution only
 
 **Best Practice**:
 1. Document WHY override is needed (CVE number, issue link)
@@ -404,7 +406,7 @@ openai                   5.23.2  →  6.7.0    (major version available)
 
 1. **Minimize Dependencies**: Only add when necessary
    - Question: "Can I build this in 1-2 hours vs adding dependency?"
-   - Consider: Maintenance burden, security surface area, bundle size
+   - Evaluate: Maintenance burden, security surface area, bundle size
    - Alternative: Utility libraries (lodash) → native JavaScript
 
 2. **Audit Regularly**: Weekly `npm audit` runs

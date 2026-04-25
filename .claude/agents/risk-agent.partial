@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: high -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -117,7 +119,7 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
   ],
   "warnings": [
     "Security: RLS policies need careful design",
-    "Performance: Consider caching for frequent queries"
+    "Performance: Add caching for frequent queries"
   ],
   "mitigation_recommendations": [
     "Create detailed migration rollback plan",

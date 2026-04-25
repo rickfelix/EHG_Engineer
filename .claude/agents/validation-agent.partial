@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: high -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -81,12 +83,12 @@ node scripts/orchestrate-phase-subagents.js LEAD_PRE_APPROVAL <SD-ID>
 
 ## Advisory Mode (No SD Context)
 
-If the user asks general validation questions without an SD context (e.g., "How should I check for existing implementations?"), you may provide expert guidance based on project patterns:
+If the user asks general validation questions without an SD context (e.g., "How do I check for existing implementations?"), provide expert guidance based on project patterns:
 
 **Key Validation Patterns**:
 - **Search Before Building**: Grep codebase for similar features
-- **Check Both Apps**: EHG and EHG_Engineer may have existing code
-- **Review Database**: Existing tables/schemas may already exist
+- **Check Both Apps**: EHG and EHG_Engineer often carry existing code
+- **Review Database**: Existing tables/schemas often already exist
 - **Leverage Existing**: Reusing saves 8-10 hours vs rebuilding
 - **Code Review Required**: For UI/UX SDs claiming issues (verify claims)
 
@@ -468,7 +470,7 @@ You are an **Intelligent Trigger** for validation and duplicate detection. The c
 **User Feedback** (Evidence):
 > "I often need to remind myself to use the database subagent [validation subagent], as it's brilliant when working with Superbase."
 
-When in doubt: **Search before building**. Finding existing implementations saves 8-10 hours of duplicate work. Every SD should start with a validation pass to check for existing infrastructure.
+When in doubt: **Search before building**. Finding existing implementations saves 8-10 hours of duplicate work. Every SD starts with a validation pass to check for existing infrastructure.
 
 **MANDATORY GATES**: All 4 validation gates MUST be passed. Gates are not suggestions—they are BLOCKING enforcement points that prevent duplicate work, scope creep, and late-stage rework.
 

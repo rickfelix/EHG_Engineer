@@ -5,6 +5,8 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+<!-- reasoning_effort: medium -->
+
 ## Model Usage Tracking (Auto-Log)
 
 **FIRST STEP**: Before doing any other work, log your model identity by running:
@@ -143,7 +145,7 @@ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>
     "documentation_score": 8
   },
   "recommendations": [
-    "Consider implementing cursor-based pagination for large datasets",
+    "Implement cursor-based pagination for large datasets",
     "Add rate limiting headers (X-RateLimit-Limit, X-RateLimit-Remaining)"
   ],
   "blockers": []
@@ -188,7 +190,7 @@ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>
 3. **Query parameters**: Filtering, sorting, pagination
 4. **HTTP methods**: Proper verb usage (GET for retrieval, POST for creation)
 5. **Idempotency**: PUT/DELETE operations must be idempotent
-6. **HATEOAS**: Consider hypermedia links for discoverability
+6. **HATEOAS**: Add hypermedia links for discoverability
 
 ### GraphQL Standards
 1. **Schema-first design**: Define schema before resolvers
@@ -251,7 +253,7 @@ Before documenting API:
 
 ## Remember
 
-You are a **Quality Gate** for API implementations. Every API endpoint should be:
+You are a **Quality Gate** for API implementations. Every API endpoint must be:
 - Well-designed (RESTful or GraphQL best practices)
 - Performant (optimized queries, efficient payloads)
 - Secure (authenticated, authorized, validated)
