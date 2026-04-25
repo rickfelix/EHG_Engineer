@@ -1,142 +1,149 @@
 # Custom Agent Manifest
 
-**Last Updated**: 2025-10-12
-**Total Agents**: 10 (7 active, 3 archived)
+**Last Updated**: 2026-04-25
+**Active Agents**: 17 (`.partial` sources in `.claude/agents/`)
+**Archived Agents**: 3 (`.md` files in `.claude/agents/_archived/`)
+**Total**: 20
+**Generator**: `node scripts/generate-agent-manifest.js` — re-run after agent additions/removals.
+
+> Source of truth is the `.partial` files (committed). Compiled `.md` files in `.claude/agents/` are build artifacts (gitignored) produced by `scripts/generate-agent-md-from-db.js`. This manifest enumerates the canonical sources, not the compiled outputs.
 
 ---
 
-## Active Agents (Always Loaded)
+## Active Agents
 
-These agents are loaded in every Claude Code session and available for automatic invocation:
+Listed alphabetically. Each entry shows the agent name, model, reasoning-effort tag (Module H), and one-line description from frontmatter.
 
-1. **database-agent**
-   - Used daily for schema validation, migrations, RLS policies
-   - Essential for database-related SDs
+### api-agent
+- **File**: `api-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `medium`
+- **Description**: MUST BE USED PROACTIVELY for all API-related tasks. Handles REST/GraphQL endpoint design, API architecture, versioning, and documentation. Trigger on keywords: API, REST, GraphQL, endpoint, route, controller, middleware, API design.
 
-2. **validation-agent**
-   - Used in every SD (duplicate checks, backlog validation, infrastructure analysis)
-   - Required for LEAD pre-approval phase
+### database-agent
+- **File**: `database-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `high`
+- **Description**: MUST BE USED PROACTIVELY for all database tasks. Handles schema design, Supabase migrations, RLS policies, SQL validation, and architecture. Trigger on keywords: database, migration, schema, table, RLS, SQL, Postgres, created migration, wrote migration, execute migration, apply migration, run migration, pending migration.
 
-3. **testing-agent** (QA Engineering Director)
-   - Used during PLAN verification phase
-   - Essential for E2E testing and test case generation
+### dependency-agent
+- **File**: `dependency-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `medium`
+- **Description**: MUST BE USED PROACTIVELY for all dependency-related tasks. Handles npm/package updates, security vulnerabilities (CVE), dependency conflicts, version management, and CI/CD dependency failures. Trigger on keywords: dependency, npm, package, vulnerability, CVE, outdated, upgrade, npm audit.
 
-4. **security-agent**
-   - Used for auth/RLS features, security validation
-   - Critical for security-related SDs
+### design-agent
+- **File**: `design-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `high`
+- **Description**: MUST BE USED PROACTIVELY for all code-producing SD types (feature, enhancement, bugfix, refactor, performance) AND for UI/UX tasks. Handles component sizing, design validation, accessibility, and user experience assessment. Trigger on: (1) SD types: feature, enhancement, refactor, performance; (2) Keywords: UI, UX, design, component, interface, accessibility, a11y, layout, responsive, frontend, dashboard, API endpoint, new feature, new endpoint, backend feature, service layer, controller, database table.
 
-5. **design-agent**
-   - Used for UI/UX SDs, component sizing, design validation
-   - Important for frontend work
+### docmon-agent
+- **File**: `docmon-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `medium`
+- **Description**: MUST BE USED PROACTIVELY for all documentation tasks. Handles AI documentation generation, workflow documentation, and information architecture. Trigger on keywords: documentation, docs, README, guide, documentation generation, workflow docs.
 
-6. **github-agent** (DevOps Platform Architect)
-   - Used for CI/CD verification, GitHub Actions validation
-   - Required for deployment verification
+### github-agent
+- **File**: `github-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `medium`
+- **Description**: MUST BE USED PROACTIVELY for all CI/CD and GitHub Actions tasks. Handles pipeline verification, workflow validation, deployment checks, and refactoring safety. Trigger on keywords: GitHub Actions, CI/CD, pipeline, workflow, deployment, build, actions, refactor.
 
-7. **docmon-agent** (Documentation Generation)
-   - Used for AI documentation generation
-   - Auto-triggers at SD completion
+### orchestrator-child-agent
+- **File**: `orchestrator-child-agent.partial`
+- **Model**: `opus`
+- **Reasoning effort**: `low`
+- **Description**: Teammate agent for parallel child SD execution within an orchestrator. Each teammate works in its own worktree, following the full LEO Protocol workflow for its assigned child SD.
 
----
+### performance-agent
+- **File**: `performance-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `high`
+- **Description**: MUST BE USED PROACTIVELY for all performance engineering lead tasks. Trigger on keywords: performance, optimization, speed, latency, load, scalability, caching, indexing.
 
-## Archived Agents (On-Demand Only)
+### rca-agent
+- **File**: `rca-agent.partial`
+- **Model**: `opus`
+- **Reasoning effort**: `high`
+- **Description**: MUST BE USED PROACTIVELY for all root cause analysis tasks. Handles defect triage, root cause determination, and CAPA generation. Trigger on keywords: root cause, 5 whys, diagnose, debug, investigate, why is this happening, what caused this, rca, defect analysis, recurring issue, keeps happening.
 
-These agents are archived but can be re-enabled instantly or invoked via scripts:
+### regression-agent
+- **File**: `regression-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `medium`
+- **Description**: MUST BE USED PROACTIVELY for all refactoring validation tasks. Validates backward compatibility, captures baseline state, compares before/after results. Trigger on keywords: refactor, refactoring, restructure, backward compatibility, regression, no behavior change.
 
-### 1. **performance-agent**
-- **Reason**: Only needed during performance optimization work
-- **Usage**: Situational (performance analysis, load testing, caching strategies)
-- **Re-enable**: `mv .claude/agents/_archived/performance-agent.md .claude/agents/`
-- **Script invocation**: `node scripts/execute-subagent.js --code PERFORMANCE --sd-id <SD-ID>`
+### retro-agent
+- **File**: `retro-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `medium`
+- **Description**: MUST BE USED PROACTIVELY for retrospective generation and continuous improvement. Handles retrospective creation, lesson extraction, and quality scoring. Trigger on keywords: retrospective, retro, lessons learned, continuous improvement, post-mortem.
 
-### 2. **uat-agent**
-- **Reason**: Only needed during UAT testing phases
-- **Usage**: Situational (user acceptance testing, validation workflows)
-- **Re-enable**: `mv .claude/agents/_archived/uat-agent.md .claude/agents/`
-- **Script invocation**: `node scripts/execute-subagent.js --code UAT --sd-id <SD-ID>`
+### risk-agent
+- **File**: `risk-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `high`
+- **Description**: MUST BE USED PROACTIVELY for all risk assessment sub-agent tasks. Trigger on keywords: risk, mitigation, contingency, risk assessment, risk management.
 
-### 3. **retro-agent** (Continuous Improvement Coach)
-- **Reason**: Auto-triggers at SD completion, doesn't need pre-loading
-- **Usage**: Automatic (generates retrospectives after SD completion)
-- **Re-enable**: `mv .claude/agents/_archived/retro-agent.md .claude/agents/`
-- **Script invocation**: `node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>`
+### security-agent
+- **File**: `security-agent.partial`
+- **Model**: `opus`
+- **Reasoning effort**: `high`
+- **Description**: MUST BE USED PROACTIVELY for all security tasks. Handles authentication, authorization, RLS policies, security validation, and threat assessment. Trigger on keywords: security, auth, RLS, permissions, roles, authentication, authorization, vulnerability, OWASP.
 
----
+### stories-agent
+- **File**: `stories-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `medium`
+- **Description**: MUST BE USED PROACTIVELY for all user story context engineering sub-agent tasks. Trigger on keywords: user story, story, acceptance criteria, user journey.
 
-## Invocation Methods
+### testing-agent
+- **File**: `testing-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `medium`
+- **Description**: MUST BE USED PROACTIVELY for all testing and QA tasks. Handles E2E testing, test generation, coverage validation, and QA workflows. Trigger on keywords: test, testing, QA, E2E, Playwright, coverage, test cases, user stories.
 
-### Always-Loaded Agents
-Task tool auto-detects keywords and delegates to appropriate agent.
+### uat-agent
+- **File**: `uat-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `low`
+- **Description**: MUST BE USED PROACTIVELY for all uat test executor tasks. Trigger on keywords: UAT, user acceptance, acceptance testing, user journey, acceptance criteria.
 
-**Example**:
-```
-User: "Validate the database schema for SD-ABC-001"
-→ Claude Code automatically invokes database-agent
-```
-
-### Archived Agents
-
-#### Method 1: Temporary Re-Enable
-```bash
-# Move agent back to active directory
-mv .claude/agents/_archived/performance-agent.md .claude/agents/
-
-# Restart Claude Code (agents re-scanned)
-
-# Use normally through Task tool
-
-# After use: Move back to archive
-mv .claude/agents/performance-agent.md .claude/agents/_archived/
-```
-
-#### Method 2: Direct Script Invocation (No Re-Enable Needed)
-```bash
-# Execute sub-agent directly via script
-node scripts/execute-subagent.js --code PERFORMANCE --sd-id SD-ABC-001
-
-# Results stored in database: sub_agent_execution_results table
-```
-
----
-
-## Context Savings
-
-**Before archival**: 643 tokens (10 agents)
-**After archival**: ~400-450 tokens (7 agents)
-**Savings**: ~200-250 tokens per session
-
----
-
-## Maintenance
-
-### Monthly Review
-Run agent usage tracker to identify agents not used in 30 days:
-```bash
-node scripts/track-agent-usage.js
-```
-
-If an agent shows 0 invocations for 30 days → Consider archiving
-
-### Re-Activation Criteria
-Move agent from archive back to active if:
-- Used 3+ times in a month
-- Needed for ongoing project work
-- Auto-trigger functionality required
+### validation-agent
+- **File**: `validation-agent.partial`
+- **Model**: `sonnet`
+- **Reasoning effort**: `high`
+- **Description**: MUST BE USED PROACTIVELY for codebase validation and duplicate detection. Handles existing implementation checks, duplicate detection, and systems analysis. Trigger on keywords: validation, duplicate, existing, codebase audit, systems analysis.
 
 ---
 
-## Backup Location
+## Archived Agents
 
-All agents backed up to: `.claude/backups/2025-10-12/`
+Retired agents kept for reference. Re-activate by moving the `.md` file out of `_archived/` and creating the corresponding `.partial` in `.claude/agents/` (then re-run this generator). Direct script invocation still works while archived: `node scripts/execute-subagent.js --code <CODE> --sd-id <SD-ID>`.
 
-To restore all agents:
-```bash
-cp .claude/backups/2025-10-12/*.md .claude/agents/
-```
+### performance-agent
+- **File**: `performance-agent.md`
+- **Model**: `inherit`
+- **Reasoning effort**: `medium` *(default — file is missing tag)*
+- **Description**: MUST BE USED PROACTIVELY for all performance tasks. Handles performance validation, optimization assessment, load testing, and resource monitoring. Trigger on keywords: performance, optimization, speed, latency, load, scalability, caching, indexing.
+
+### retro-agent
+- **File**: `retro-agent.md`
+- **Model**: `inherit`
+- **Reasoning effort**: `medium` *(default — file is missing tag)*
+- **Description**: MUST BE USED PROACTIVELY for retrospective generation and continuous improvement. Handles retrospective creation, lesson extraction, and quality scoring. Trigger on keywords: retrospective, retro, lessons learned, continuous improvement, post-mortem.
+
+### uat-agent
+- **File**: `uat-agent.md`
+- **Model**: `inherit`
+- **Reasoning effort**: `medium` *(default — file is missing tag)*
+- **Description**: MUST BE USED PROACTIVELY for user acceptance testing. Handles UAT validation, user journey testing, and acceptance criteria verification. Trigger on keywords: UAT, user acceptance, acceptance testing, user journey, acceptance criteria.
 
 ---
 
-**Notes**:
-- Archived agents remain fully functional via script invocation
-- No functionality lost, only context space saved
-- All changes reversible in <1 minute
+## Notes
+
+- Module H (`SD-LEO-INFRA-OPUS-HARNESS-ALIGNMENT-001-A`) added the `reasoning_effort` tag convention. Agents missing the tag default to `medium` — fix the source file rather than this manifest.
+- The compiler at `scripts/generate-agent-md-from-db.js` reads `.partial` files + LEO database knowledge to produce the gitignored `.md` files Claude Code loads at session start.
+- Non-agent partials in `.claude/agents/` (e.g., `_model-tracking-section.partial`) are excluded from the inventory by design.
