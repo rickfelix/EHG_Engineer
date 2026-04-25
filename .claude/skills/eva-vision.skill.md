@@ -2,6 +2,8 @@
 description: "Create, version, and manage L1 portfolio and L2 venture-specific vision documents in EVA"
 ---
 
+<!-- reasoning_effort: high -->
+
 # /eva vision - EVA Vision Document Manager
 
 Create, version, and manage L1 (portfolio) and L2 (venture-specific) vision documents
@@ -60,7 +62,7 @@ If `--level` not provided, ask:
 
 If neither `--source` nor `--content` provided, ask:
 ```
-"What is the path to the source document? (e.g. docs/plans/archived/eva-venture-lifecycle-vision.md) — NOTE: New vision documents should be registered directly via DB using --content flag, not from markdown files."
+"What is the path to the source document? (e.g. docs/plans/archived/eva-venture-lifecycle-vision.md) — NOTE: Register new vision documents directly via DB using --content flag, not from markdown files."
 ```
 
 **Preferred workflow (DB-only):** Generate vision content in-memory and pass via `--content` flag to avoid creating intermediary files.
@@ -140,12 +142,12 @@ Vision Key: <generated-key>
 Level: <L1|L2>
 Source: <source-path>
 Dimensions: <count>
-Weight Sum: <sum> (should be ~1.0)
+Weight Sum: <sum> (target ~1.0)
 ```
 
 If the weight sum is outside 0.9-1.1, display a warning:
 ```
-⚠️  Dimension weights sum to <sum> — expected ~1.0. Consider adjusting before approval.
+⚠️  Dimension weights sum to <sum> — expected ~1.0. Adjust before approval.
 ```
 
 Then ask:
