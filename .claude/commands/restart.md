@@ -30,9 +30,11 @@ After restart, route automatically based on the current SD's `sd_type` (read fro
 
 | `sd_type` | Next action |
 |-----------|-------------|
-| `feature`, `bugfix`, `security`, `refactor`, `enhancement` | Invoke `/uat` (UAT required before ship) |
-| `infrastructure`, `database`, `documentation` | Invoke `/ship` (no UAT required for these types) |
-| `orchestrator`, no SD claimed, or `sd_type` unknown | Log "Restart complete; awaiting operator direction" and return |
+| `feature`, `bugfix`, `security`, `refactor`, `enhancement`, `performance`, `ux_debt` | Invoke `/uat` (UAT required before ship — user-observable surface) |
+| `infrastructure`, `database`, `documentation`, `docs`, `uat` | Invoke `/ship` (no UAT required — `uat` campaigns ARE the test scenarios) |
+| `orchestrator`, `discovery_spike`, `implementation`, no SD claimed, or `sd_type` unknown | Log "Restart complete; awaiting operator direction" and return |
+
+> The 15 valid `sd_type` values are defined in `database/migrations/20260206_register_uat_sd_type.sql`. If a new type is introduced, update this table and the corresponding test invariant.
 
 The operator can verbally override at any time (e.g., "skip /uat", "done for now"). The deterministic rule replaces three prior `AskUserQuestion` menus that violated AUTO-PROCEED — see SD-LEO-INFRA-RESTART-SKILL-LEO-001.
 
