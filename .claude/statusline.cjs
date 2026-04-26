@@ -140,17 +140,19 @@ try {
   }
 } catch (_) { /* intentionally silent: git may not be available */ }
 
-// Worktree SD detection
+// Worktree SD detection — source of truth is `git worktree list --porcelain`
+// (matches scripts/worktree-reaper.mjs). Previously this scanned `.worktrees/*`
+// at depth 1 with a `.worktree.json` marker requirement, which missed nested
+// `qf/QF-*` worktrees and any worktree without a marker file.
 let activeWorktreeSd = '';
 try {
-  const worktreesDir = path.join(cwd, '.worktrees');
-  if (fs.existsSync(worktreesDir)) {
-    const dirs = fs.readdirSync(worktreesDir, { withFileTypes: true })
-      .filter(d => d.isDirectory() && fs.existsSync(path.join(worktreesDir, d.name, '.worktree.json')))
-      .map(d => d.name);
-    if (dirs.length === 1) activeWorktreeSd = dirs[0];
-    else if (dirs.length > 1) activeWorktreeSd = `${dirs.length}wt`;
-  }
+  const out = execSync('git worktree list --porcelain', { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const paths = out.split('\n')
+    .filter(l => l.startsWith('worktree '))
+    .map(l => l.slice('worktree '.length).trim())
+    .filter(p => path.resolve(p) !== path.resolve(cwd)); // exclude main repo
+  if (paths.length === 1) activeWorktreeSd = path.basename(paths[0]);
+  else if (paths.length > 1) activeWorktreeSd = `${paths.length}wt`;
 } catch (_) { /* intentionally silent: worktree detection is optional */ }
 
 // Activity state
