@@ -42,9 +42,15 @@ The backend writes ONE `venture_artifacts` row per screen (NOT one row containin
   "title": "<screenTitle> — 4 Archetypes",
   "content": "<JSON.stringify of content shape below>",
   "is_current": true,
-  "metadata": { "screenId": "<screenId>" }
+  "metadata": {
+    "screenId": "<screenId>",
+    "has_failed_variants": "boolean — true if any variant exhausted retries (ARM C)",
+    "failed_variant_count": "number — count of s17_variant_failed siblings (ARM C)"
+  }
 }
 ```
+
+**ARM C metadata flags** (`has_failed_variants` + `failed_variant_count`) are written by `archetype-generator.js` whenever bounded retry (ARM B) writes one or more `s17_variant_failed` siblings for the same screen. Frontend (ARM D, PR4) reads these flags to decide whether to surface the "regenerate failed variants" affordance — see §5.1 for the contrast against the per-variant WIP marker pattern.
 
 ### `content` shape (parsed JSON)
 
@@ -133,11 +139,31 @@ Add new files to this inventory when introduced.
 
 The following artifact types are written by the same pipeline but not part of the read contract above. Documented for completeness:
 
-- `s17_variant_wip` — per-variant checkpoints, soft-deleted after `s17_archetypes` is assembled (`archetype-generator.js:886`)
-- `s17_session_state` — generation-progress log (`archetype-generator.js:706`)
+- `s17_variant_wip` — per-variant checkpoints, soft-deleted after `s17_archetypes` is assembled (`archetype-generator.js`)
+- `s17_session_state` — generation-progress log (`archetype-generator.js`)
 - `s17_preview` — preview-mode artifact (Landing + Dashboard for top 2 strategies; same content shape as `s17_archetypes`)
 - `stage_17_refined` — Pass 1 output (4 refined variants; one row per variant)
 - `stage_17_approved_mobile` / `stage_17_approved_desktop` — Pass 2 final approvals
+- `s17_variant_failed` — per-variant failure marker written when bounded retry exhausts (SD-LEO-INFRA-STAGE-ARCHETYPE-GENERATION-001 ARM B). Migration `20260426_add_s17_heartbeat_and_variant_failed.sql`.
+- `s17_heartbeat` — 30s liveness signal during generation (SD-LEO-INFRA-STAGE-ARCHETYPE-GENERATION-001 ARM E). Same migration.
+
+### 5.1 Failure-marker pattern: per-screen vs per-variant
+
+Two distinct artifact-shapes carry "this thing didn't fully complete" semantics. They are NOT redundant — each lives at a different granularity and serves a different consumer.
+
+| Marker | Granularity | Path | Consumer | Lifetime |
+|---|---|---|---|---|
+| `s17_variant_wip` (PAT-PERSIST-CHECKPOINT-001) | Per-variant **success-in-progress** | `archetype-generator.js` writes after each successful variant; cleaned up after the per-screen `s17_archetypes` artifact assembles | The generator itself, on resume — picks up where a prior interrupted run left off | Transient (cleaned on `s17_archetypes` write) |
+| `s17_variant_failed` (ARM B) | Per-variant **terminal failure** | `archetype-generator.js` writes after bounded retry exhausts on a single variant; never cleaned up by the generator | Frontend regenerate-failed-variants affordance (ARM D, PR4); resume endpoint (ARM F, PR3) decides whether to retry just the failed variants | Persistent until manually cleared or a successful regenerate writes a fresh per-screen artifact |
+| `metadata.has_failed_variants` on `s17_archetypes` (ARM C) | Per-screen **summary flag** | Set on the screen-level archetypes write when at least one `s17_variant_failed` sibling exists | Frontend banner / regenerate button — single read off the same row the screen already loads | Lives with the `s17_archetypes` row |
+
+**Why per-screen + per-variant + WIP all coexist:** the per-screen flag is the cheap-read for the UI (the frontend already pulls `s17_archetypes` once); the per-variant `s17_variant_failed` rows carry the diagnostic detail (error name, attempts, callerLabel) needed to decide retry vs escalate; and the WIP rows handle the orthogonal concern of *successful* in-progress variants surviving a crash. ARM C does NOT duplicate ARM B — it's a denormalized summary of ARM B for the UI's read-cost, written in the same transaction so they cannot diverge.
+
+### 5.2 `s17_heartbeat` TTL + pruning policy
+
+Heartbeats are written every 30s during active generation. The `writeArtifact` dedup logic UPDATEs the same row each tick (one row per active venture), so steady-state row count is bounded. A maintenance job (PR3, TR-2) prunes rows whose `metadata.ttlExpiresAt` is in the past — TTL defaults to 7 days, configurable via the `ttlDays` option to `startHeartbeatWriter()`.
+
+The TTL exists for the failure mode where a venture's generation crashed without `stop()` running (e.g. process kill -9): the row is left behind with no path to deletion via the normal `cleanupWipVariants` flow. After 7 days it is unconditionally garbage-collected by the maintenance job.
 
 ## 6. Historical drift cases (training set for Arm D fingerprint)
 
