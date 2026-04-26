@@ -4,7 +4,7 @@
  */
 
 import { colors, trackColors } from '../colors.js';
-import { getPhaseAwareStatus } from '../status-helpers.js';
+import { getPhaseAwareStatus, getCadenceBadge, getCadenceReason } from '../status-helpers.js';
 import { parseDependencies } from '../dependency-resolver.js';
 import { formatVisionBadge } from './vision-scorecard.js';
 import { analyzeClaimRelationship, autoReleaseStaleDeadClaim, checkEnrichmentSignal } from '../claim-analysis.js';
@@ -192,7 +192,13 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
     ? ` ${colors.yellow}[BRAINSTORM FIRST]${colors.reset}`
     : '';
 
-  console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${ventureBadge}${urgencyBadge}${brainstormBadge}${visionBadge}${gapBadge}... ${statusIcon}`);
+  // SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001: CADENCE-WAIT badge + reason line
+  const cadenceBadge = getCadenceBadge(item);
+  const cadenceReason = getCadenceReason(item);
+  console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${ventureBadge}${urgencyBadge}${brainstormBadge}${visionBadge}${gapBadge}${cadenceBadge}... ${statusIcon}`);
+  if (cadenceReason) {
+    console.log(`${indent}        └─ ${colors.magenta}${cadenceReason}${colors.reset}`);
+  }
 
   // Show claim details with PID-aware output
   if (isClaimedByOther) {
@@ -334,7 +340,9 @@ function displaySDItemSimple(item, prefix, nextIndent, childItems, allItems) {
   const title = (item.title || '').substring(0, 30);
   const simpleVisionBadge = formatVisionBadge(item.vision_score ?? item.vision_alignment_score);
 
-  console.log(`${prefix}${workingIcon}${sdId} - ${title}${simpleVisionBadge}... ${statusIcon}`);
+  // SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001: CADENCE-WAIT badge in simple display path too
+  const cadenceBadgeSimple = getCadenceBadge(item);
+  console.log(`${prefix}${workingIcon}${sdId} - ${title}${simpleVisionBadge}${cadenceBadgeSimple}... ${statusIcon}`);
 
   // Recursively show grandchildren
   const children = childItems.get(sdId) || childItems.get(item.id) || [];

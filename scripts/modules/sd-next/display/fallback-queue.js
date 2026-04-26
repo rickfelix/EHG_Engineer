@@ -48,7 +48,7 @@ export async function showFallbackQueue(supabase, options = {}) {
   // Column list mirrors what rankItems() reads: sequence_rank, category, metadata, vision_*, venture_id.
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on, parent_sd_id, category, vision_score, vision_origin_score_id, venture_id')
+    .select('id, sd_key, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on, parent_sd_id, category, vision_score, vision_origin_score_id, venture_id, governance_metadata')
     .eq('is_active', true)
     .in('status', ['draft', 'lead_review', 'plan_active', 'exec_active', 'active', 'in_progress'])
     .in('priority', ['critical', 'high', 'medium'])

@@ -7,6 +7,7 @@
  */
 
 import { colors } from './colors.js';
+import { computeGateState } from '../../../lib/cadence/pre-claim-gate.mjs';
 
 // Phase-to-required-handoff mapping for stuck detection
 const PHASE_REQUIRES_HANDOFF = {
@@ -99,6 +100,39 @@ export function getPhaseAwareStatus(item) {
   } else {
     return `${colors.red}BLOCKED${colors.reset}`;
   }
+}
+
+/**
+ * Build CADENCE-WAIT badge for an SD if its pre-claim cadence gate is active.
+ * Returns empty string when no gate is active (no badge rendered).
+ * SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001
+ *
+ * @param {Object} item - SD item with governance_metadata + metadata
+ * @returns {string} Colored badge string (with leading space) or empty string
+ */
+export function getCadenceBadge(item) {
+  const gateState = computeGateState({
+    governance_metadata: item?.governance_metadata,
+    metadata: item?.metadata,
+  });
+  if (!gateState.active) return '';
+  const dayWord = gateState.days_remaining === 1 ? 'day' : 'days';
+  return ` ${colors.magenta}[CADENCE-WAIT ${gateState.days_remaining} ${dayWord}]${colors.reset}`;
+}
+
+/**
+ * Get cadence-wait reason text for inline display under an SD entry.
+ * Returns empty string when no gate active.
+ * @param {Object} item
+ * @returns {string}
+ */
+export function getCadenceReason(item) {
+  const gateState = computeGateState({
+    governance_metadata: item?.governance_metadata,
+    metadata: item?.metadata,
+  });
+  if (!gateState.active) return '';
+  return gateState.reason;
 }
 
 /**

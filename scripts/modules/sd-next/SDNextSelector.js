@@ -614,7 +614,7 @@ export class SDNextSelector {
     // This ensures SDs appear even if baseline sync trigger failed (SD-LEO-INFRA-QUEUE-SIMPLIFY-001)
     const { data: allSDs, error: sdError } = await this.supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_score, vision_origin_score_id, venture_id')
+      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_score, vision_origin_score_id, venture_id, governance_metadata')
       .eq('is_active', true)
       .in('status', ['draft', 'active', 'in_progress', 'planning'])
       .order('created_at', { ascending: true });
