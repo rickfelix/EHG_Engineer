@@ -1199,6 +1199,27 @@ async function runPreGateBlockerDetection(supabase, sdId, sd) {
 }
 
 /**
+ * SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001: Forward operator-supplied vision/arch key
+ * overrides to downstream vision-scorer.js spawns by setting env vars. The scorer
+ * reads LEO_VISION_KEY_OVERRIDE / LEO_ARCH_KEY_OVERRIDE in its argv handling chain.
+ * Precedence enforced inside vision-scorer.js: explicit flag > env > metadata > suffix-autodetect > DEFAULT.
+ *
+ * @param {string[]} args - process.argv.slice(2)
+ * @returns {{ visionKey: string|null, archKey: string|null }} Resolved overrides (also stored in env)
+ */
+export function applyVisionKeyOverrides(args) {
+  const getFlag = (name) => {
+    const idx = args.findIndex(a => a === name);
+    return idx !== -1 && args[idx + 1] ? args[idx + 1] : null;
+  };
+  const visionKey = getFlag('--vision-key');
+  const archKey = getFlag('--arch-key');
+  if (visionKey) process.env.LEO_VISION_KEY_OVERRIDE = visionKey;
+  if (archKey) process.env.LEO_ARCH_KEY_OVERRIDE = archKey;
+  return { visionKey, archKey };
+}
+
+/**
  * Main CLI entry point
  */
 export async function main() {
@@ -1207,6 +1228,9 @@ export async function main() {
 
   const args = process.argv.slice(2);
   const command = args[0];
+
+  // SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001: parse --vision-key/--arch-key once for all subcommands.
+  applyVisionKeyOverrides(args);
 
   let result = { success: true };
 

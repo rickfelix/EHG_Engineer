@@ -13,12 +13,13 @@
  * asserts post-change behavior + backward compatibility.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   SD_TYPE_ADDRESSABLE_DIMENSIONS,
   MIN_ADDRESSABLE_DIMENSIONS,
   countAddressableDimensions,
   calculateDynamicThreshold,
+  buildTierRemediationHint,
 } from './vision-score.js';
 
 // Convert dim names to the JSONB shape the real gate consumes
@@ -166,5 +167,95 @@ describe('calculateDynamicThreshold — sanity (unchanged behavior)', () => {
 
   it('returns base when total is 0 (no dimension data)', () => {
     expect(calculateDynamicThreshold(80, 0, 0)).toBe(80);
+  });
+});
+
+// SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001
+describe('buildTierRemediationHint', () => {
+  let originalVisionEnv;
+  let originalArchEnv;
+
+  beforeEach(() => {
+    originalVisionEnv = process.env.LEO_VISION_KEY_OVERRIDE;
+    originalArchEnv = process.env.LEO_ARCH_KEY_OVERRIDE;
+    delete process.env.LEO_VISION_KEY_OVERRIDE;
+    delete process.env.LEO_ARCH_KEY_OVERRIDE;
+  });
+
+  afterEach(() => {
+    if (originalVisionEnv === undefined) delete process.env.LEO_VISION_KEY_OVERRIDE;
+    else process.env.LEO_VISION_KEY_OVERRIDE = originalVisionEnv;
+    if (originalArchEnv === undefined) delete process.env.LEO_ARCH_KEY_OVERRIDE;
+    else process.env.LEO_ARCH_KEY_OVERRIDE = originalArchEnv;
+  });
+
+  it('returns blank hint when no signals present', () => {
+    const result = buildTierRemediationHint({ sd_key: 'SD-FOO-BAR-001', metadata: null });
+    expect(result).toEqual({ tier: null, source: null, flagSuffix: '', note: null });
+  });
+
+  it('uses env override when set', () => {
+    process.env.LEO_VISION_KEY_OVERRIDE = 'VISION-EHG-L2-001';
+    process.env.LEO_ARCH_KEY_OVERRIDE = 'ARCH-EHG-L2-001';
+    const result = buildTierRemediationHint({ sd_key: 'SD-X-001', metadata: null });
+    expect(result.tier).toBe('L2');
+    expect(result.source).toBe('env_override');
+    expect(result.flagSuffix).toBe(' --vision-key VISION-EHG-L2-001 --arch-key ARCH-EHG-L2-001');
+    expect(result.note).toContain('LEO_VISION_KEY_OVERRIDE');
+  });
+
+  it('uses sd.metadata.vision_key when present (no flag suffix needed)', () => {
+    const sd = { sd_key: 'SD-X-001', metadata: { vision_key: 'VISION-EHG-L2-001' } };
+    const result = buildTierRemediationHint(sd);
+    expect(result.tier).toBe('L2');
+    expect(result.source).toBe('sd.metadata.vision_key');
+    expect(result.flagSuffix).toBe('');
+    expect(result.note).toContain("sd.metadata.vision_key='VISION-EHG-L2-001'");
+  });
+
+  it('falls back to sd_key suffix autodetect (L2)', () => {
+    const sd = { sd_key: 'SD-VISION-S17-SIMPLIFY-L2-001', metadata: null };
+    const result = buildTierRemediationHint(sd);
+    expect(result.tier).toBe('L2');
+    expect(result.source).toBe('sd_key_suffix');
+    expect(result.flagSuffix).toBe(' --vision-key VISION-EHG-L2-001 --arch-key ARCH-EHG-L2-001');
+    expect(result.note).toContain('tier L2');
+  });
+
+  it('falls back to sd_key suffix autodetect (L3)', () => {
+    const sd = { sd_key: 'SD-A-L3-005', metadata: null };
+    const result = buildTierRemediationHint(sd);
+    expect(result.tier).toBe('L3');
+    expect(result.flagSuffix).toBe(' --vision-key VISION-EHG-L3-001 --arch-key ARCH-EHG-L3-001');
+  });
+
+  it('env override takes precedence over metadata', () => {
+    process.env.LEO_VISION_KEY_OVERRIDE = 'VISION-EHG-L3-001';
+    const sd = { sd_key: 'SD-X-001', metadata: { vision_key: 'VISION-EHG-L1-001' } };
+    const result = buildTierRemediationHint(sd);
+    expect(result.tier).toBe('L3');
+    expect(result.source).toBe('env_override');
+  });
+
+  it('metadata takes precedence over sd_key suffix', () => {
+    const sd = {
+      sd_key: 'SD-FOO-L1-001',
+      metadata: { vision_key: 'VISION-EHG-L2-001' }
+    };
+    const result = buildTierRemediationHint(sd);
+    expect(result.tier).toBe('L2');
+    expect(result.source).toBe('sd.metadata.vision_key');
+  });
+
+  it('returns blank hint when sd_key is missing and no overrides', () => {
+    const result = buildTierRemediationHint({ metadata: null });
+    expect(result).toEqual({ tier: null, source: null, flagSuffix: '', note: null });
+  });
+
+  it('uses .id when sd_key is missing for suffix detection', () => {
+    const sd = { id: 'SD-FOO-L2-001', metadata: null };
+    const result = buildTierRemediationHint(sd);
+    expect(result.tier).toBe('L2');
+    expect(result.source).toBe('sd_key_suffix');
   });
 });
