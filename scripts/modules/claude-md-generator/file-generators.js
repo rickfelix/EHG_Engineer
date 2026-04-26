@@ -128,15 +128,17 @@ User may override at any point by stating \`[MODE: product]\` or \`[MODE: campai
 
 ## SD Continuation
 
+**AUTO-PROCEED default: ON. Orchestrator Chaining default: OFF.** (Both configurable via \`/leo settings\`.)
+
 | Transition | AUTO-PROCEED | Chaining | Behavior |
 |-----------|:---:|:---:|----------|
-| Handoff (not final) | * | * | **TERMINAL** - phase work required |
+| Handoff completes (not LEAD-FINAL-APPROVAL) | * | * | **Phase work required** — do the phase's work, then invoke next handoff. No auto-chaining between handoffs. |
 | Child → next child | ON | * | Auto-continue |
 | Orchestrator done | ON | ON | /learn → auto-continue |
 | Orchestrator done | ON | OFF | /learn → show queue → PAUSE |
 | All blocked | * | * | PAUSE |
 
-> Why (TERMINAL): A non-final handoff means gate-validated state must be written to the DB before the next phase begins. Skipping this orphans the SD — the next session finds no handoff record and cannot determine what was approved or completed.
+> Why ("Phase work required"): Handoffs are sequence points, not session-stop points. A non-final handoff means the current phase's artifact (PRD, implementation, verification) is committed to the DB, and the next phase's work must be done before the next handoff fires. AUTO-PROCEED keeps the session moving through that work autonomously; it does NOT skip the work. The **SD Continuation Truth Table** (in CLAUDE_CORE.md) is the authoritative, fully-enumerated version of this matrix — consult it when behavior is ambiguous.
 
 ## Work Item Routing
 
