@@ -585,9 +585,21 @@ export function createPRMergeVerificationGate() {
                       });
                     }
                   }
-                } catch (_e) {
-                  // Intentionally suppressed: branch comparison failed, skip
-                  console.debug('[LeadFinalApproval] branch comparison suppressed:', _e?.message || _e);
+                } catch (e) {
+                  // SD-LEO-INFRA-HANDOFF-MERGE-MAIN-001: do NOT silently skip.
+                  // A branch we cannot compare against main is unverified — treat as
+                  // unmerged unless we have positive evidence otherwise. This was the
+                  // dual failure mode in SD-MAN-ORCH-S18-S26-PIPELINE-001-A: branch
+                  // existed on origin but rev-list/gh-pr-list either errored or was
+                  // skipped on the LEAD host, leaving the branch unverified yet allowed.
+                  console.log(`   ⚠️  Could not verify ${cleanBranch}: ${e?.message || e}`);
+                  unmergedBranches.push({
+                    branch: cleanBranch,
+                    repo: repo,
+                    commits: null,
+                    unverified: true,
+                    reason: e?.message || String(e)
+                  });
                 }
               }
             }
@@ -598,9 +610,15 @@ export function createPRMergeVerificationGate() {
         }
 
         if (unmergedBranches.length > 0) {
-          console.log(`   ❌ Found ${unmergedBranches.length} unmerged branch(es) with commits:`);
-          unmergedBranches.forEach(b => {
+          const verified = unmergedBranches.filter(b => !b.unverified);
+          const unverified = unmergedBranches.filter(b => b.unverified);
+          console.log(`   ❌ Found ${unmergedBranches.length} branch(es) blocking completion (${verified.length} unmerged + ${unverified.length} unverified):`);
+          verified.forEach(b => {
             console.log(`      - ${b.branch} (${b.commits} commits ahead of main)`);
+            console.log(`        Repo: ${b.repo}`);
+          });
+          unverified.forEach(b => {
+            console.log(`      - ${b.branch} (UNVERIFIED — could not compare against main: ${b.reason})`);
             console.log(`        Repo: ${b.repo}`);
           });
 
@@ -609,18 +627,21 @@ export function createPRMergeVerificationGate() {
             score: 0,
             max_score: 100,
             issues: [
-              `${unmergedBranches.length} unmerged branch(es) with commits - create PRs and merge before completion`,
-              ...unmergedBranches.map(b => `  → ${b.branch} (${b.commits} commits) in ${b.repo}`),
+              `${unmergedBranches.length} branch(es) block completion (${verified.length} unmerged, ${unverified.length} unverified) - resolve before completion`,
+              ...verified.map(b => `  → ${b.branch} (${b.commits} commits) in ${b.repo}`),
+              ...unverified.map(b => `  → ${b.branch} (UNVERIFIED: ${b.reason}) in ${b.repo}`),
               '',
               'REMEDIATION: Run /ship to create PRs and merge branches before running LEAD-FINAL-APPROVAL.',
               'Required order: EXEC → /ship (merge PR) → LEAD-FINAL-APPROVAL',
-              ...unmergedBranches.map(b => `  → cd to ${b.repo} repo, then: git push -u origin ${b.branch} && gh pr create && gh pr merge --merge --delete-branch`)
+              ...verified.map(b => `  → cd to ${b.repo} repo, then: git push -u origin ${b.branch} && gh pr create && gh pr merge --merge --delete-branch`),
+              ...(unverified.length > 0 ? ['', 'For UNVERIFIED branches: resolve the comparison error (gh auth, network, repo path) and re-run, OR --bypass-validation with documented reason if the branch is known-merged.'] : [])
             ],
             warnings: [],
             details: {
               checkedPatterns: branchPatterns,
               openPRs: 0,
-              unmergedBranches: unmergedBranches
+              unmergedBranches: unmergedBranches,
+              unverifiedCount: unverified.length
             }
           };
         }
@@ -637,14 +658,30 @@ export function createPRMergeVerificationGate() {
         };
 
       } catch (error) {
-        console.log(`   ⚠️  PR verification skipped: ${error.message}`);
+        // SD-LEO-INFRA-HANDOFF-MERGE-MAIN-001: fail-closed when verification cannot run.
+        // Previously returned passed=true score=80 here, which silently allowed completion
+        // when gh CLI was unavailable or git operations threw. Witnessed live in
+        // SD-MAN-ORCH-S18-S26-PIPELINE-001-A: branch never merged, gate accepted at 88,
+        // 24 warnings, no bypass. The fail-open path is the bug — verification failure
+        // is not equivalent to verification success.
+        console.log(`   ❌ PR verification failed: ${error.message}`);
         return {
-          passed: true,
-          score: 80,
+          passed: false,
+          score: 0,
           max_score: 100,
-          issues: [],
-          warnings: [`PR verification could not run: ${error.message}. Verify manually that all PRs are merged.`],
-          details: { skipped: true, reason: error.message }
+          issues: [
+            `PR verification could not run: ${error.message}`,
+            '',
+            'REMEDIATION: Resolve the underlying verification error before retrying:',
+            '  - gh CLI unauthenticated → run: gh auth login',
+            '  - gh CLI not installed → install from https://cli.github.com/',
+            '  - Repo path missing → verify EHG/EHG_Engineer paths in repo-paths.js',
+            '  - Network/timeout → retry; if persistent, document and use --bypass-validation with reason',
+            '',
+            'Bypass available for documented emergencies: --bypass-validation --bypass-reason "<reason>"'
+          ],
+          warnings: [],
+          details: { failed: true, reason: error.message, fail_closed: true }
         };
       }
     },
