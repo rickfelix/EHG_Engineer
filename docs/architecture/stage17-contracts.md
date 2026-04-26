@@ -18,6 +18,7 @@ All endpoints are mounted under `/api/stage17` (`server/index.js:168`) and requi
 | `POST` | `/api/stage17/:ventureId/strategy-recommendation` | Returns ranked design strategies | `server/routes/stage17.js:45` |
 | `POST` | `/api/stage17/:ventureId/archetypes` | Generates 4 HTML archetypes per screen | `server/routes/stage17.js:80` |
 | `POST` | `/api/stage17/:ventureId/archetypes/cancel` | Cancels in-flight archetype generation | `server/routes/stage17.js:129` |
+| `POST` | `/api/stage17/:ventureId/archetypes/resume` | Resumes interrupted generation; idempotent via `s17_session_state.metadata.resume_lock` (10-min TTL) — see §5.3 | `server/routes/stage17.js` (ARM F) |
 | `POST` | `/api/stage17/:ventureId/select` | Pass 1 selection (2 archetypes → 4 refined) | `server/routes/stage17.js:149` |
 | `POST` | `/api/stage17/:ventureId/refine` | Pass 2 selection (approve final variant) | `server/routes/stage17.js:179` |
 | `POST` | `/api/stage17/:ventureId/approve` | Auto-advance chairman gate when all screens approved | `server/routes/stage17.js:243` |
@@ -161,9 +162,29 @@ Two distinct artifact-shapes carry "this thing didn't fully complete" semantics.
 
 ### 5.2 `s17_heartbeat` TTL + pruning policy
 
-Heartbeats are written every 30s during active generation. The `writeArtifact` dedup logic UPDATEs the same row each tick (one row per active venture), so steady-state row count is bounded. A maintenance job (PR3, TR-2) prunes rows whose `metadata.ttlExpiresAt` is in the past — TTL defaults to 7 days, configurable via the `ttlDays` option to `startHeartbeatWriter()`.
+Heartbeats are written every 30s during active generation. The `writeArtifact` dedup logic UPDATEs the same row each tick (one row per active venture), so steady-state row count is bounded. A maintenance job (`scripts/maintenance/prune-s17-heartbeats.mjs`, ARM F TR-2) prunes rows whose `metadata.ttlExpiresAt` is in the past — TTL defaults to 7 days, configurable via the `ttlDays` option to `startHeartbeatWriter()`.
 
-The TTL exists for the failure mode where a venture's generation crashed without `stop()` running (e.g. process kill -9): the row is left behind with no path to deletion via the normal `cleanupWipVariants` flow. After 7 days it is unconditionally garbage-collected by the maintenance job.
+The TTL exists for the failure mode where a venture's generation crashed without `stop()` running (e.g. process kill -9): the row is left behind with no path to deletion via the normal `cleanupWipVariants` flow. After 7 days it is unconditionally garbage-collected by the maintenance job. Run manually as `node scripts/maintenance/prune-s17-heartbeats.mjs` (or `--dry-run` to inspect first).
+
+### 5.3 Resume endpoint idempotency (`s17_session_state.metadata.resume_lock`)
+
+`POST /api/stage17/:ventureId/archetypes/resume` (ARM F) claims a 10-minute lock on the venture's existing `s17_session_state` artifact before spawning the generator:
+
+```json
+"metadata": {
+  "resume_lock": {
+    "token": "<uuid>",
+    "expires_at": "<ISO 8601 — now + 10 min>",
+    "acquired_at": "<ISO 8601>"
+  }
+}
+```
+
+A second concurrent call within the TTL receives HTTP 409 `{code: 'RESUME_LOCKED', existingExpiresAt}`. After the generator's `.finally()` runs, the lock is released. Crashed jobs (no release) recover automatically once the TTL elapses — the next caller's `acquireResumeLock` overwrites the expired lock.
+
+This pattern was chosen over a `job_id` UNIQUE constraint to avoid a schema migration: the `s17_session_state` row already exists per-venture (`writeArtifact` dedup ensures one row), and lock semantics are exactly what double-fire prevention needs.
+
+Helpers: `lib/eva/stage-17/resume-lock.js` — `acquireResumeLock(supabase, ventureId, opts)` → `{acquired, token, expiresAt}` or `{acquired:false, reason:'LOCKED', existingExpiresAt}`; `releaseResumeLock(supabase, ventureId, token)` → `{released}` (token-mismatch is a no-op, defensive against late `.finally()`).
 
 ## 6. Historical drift cases (training set for Arm D fingerprint)
 
