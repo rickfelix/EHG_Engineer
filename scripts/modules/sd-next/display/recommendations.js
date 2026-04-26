@@ -8,6 +8,7 @@ import { isActionableForLead } from '../status-helpers.js';
 import { checkDependenciesResolved, checkMetadataDependency, resolveMetadataBlocker } from '../dependency-resolver.js';
 import { getEstimatedDuration, formatEstimateShort } from '../../../lib/duration-estimator.js';
 import { analyzeClaimRelationship, hasActiveWorkEvidence } from '../claim-analysis.js';
+import { formatClaimedWork } from './claim-formatters.js';
 
 /**
  * Display recommendations section and return structured action data.
@@ -480,14 +481,14 @@ function displayBeginWorkInstructions() {
 export function displayActiveSessions(activeSessions, currentSession) {
   if (activeSessions.length === 0) return;
 
-  const sessionsWithClaims = activeSessions.filter(s => s.sd_id);
-  const idleSessions = activeSessions.filter(s => !s.sd_id);
+  const sessionsWithClaims = activeSessions.filter(s => s.sd_id || s.qf_id);
+  const idleSessions = activeSessions.filter(s => !s.sd_id && !s.qf_id);
 
   if (sessionsWithClaims.length > 0) {
     console.log(`${colors.bold}ACTIVE SESSIONS (${sessionsWithClaims.length}):${colors.reset}\n`);
 
     // Header row
-    console.log(`${colors.dim}   Session           │ Claimed SD                │ Track │ Duration │ Heartbeat${colors.reset}`);
+    console.log(`${colors.dim}   Session           │ Claimed Work              │ Track │ Duration │ Heartbeat${colors.reset}`);
     console.log(`${colors.dim}${'─'.repeat(100)}${colors.reset}`);
 
     for (const s of sessionsWithClaims) {
@@ -508,11 +509,11 @@ export function displayActiveSessions(activeSessions, currentSession) {
         heartbeatColor = colors.yellow;
       }
 
-      const sdDisplay = (s.sd_id || 'None').padEnd(25);
+      const claimDisplay = formatClaimedWork(s).padEnd(25);
       const trackDisplay = (s.track || 'N/A').padEnd(5);
       const durationDisplay = `${ageMin}m`.padEnd(8);
 
-      console.log(`${marker} ${shortId} │ ${colors.bold}${sdDisplay}${colors.reset} │ ${trackDisplay} │ ${durationDisplay} │ ${heartbeatColor}${heartbeatAge}${colors.reset}`);
+      console.log(`${marker} ${shortId} │ ${colors.bold}${claimDisplay}${colors.reset} │ ${trackDisplay} │ ${durationDisplay} │ ${heartbeatColor}${heartbeatAge}${colors.reset}`);
 
       // Show hostname/codebase for non-current sessions (helps identify which terminal)
       if (!isCurrent && (s.hostname || s.codebase)) {
@@ -524,7 +525,7 @@ export function displayActiveSessions(activeSessions, currentSession) {
   }
 
   if (idleSessions.length > 0) {
-    console.log(`${colors.dim}(${idleSessions.length} idle session(s) - no SD claimed)${colors.reset}\n`);
+    console.log(`${colors.dim}(${idleSessions.length} idle session(s) - no SD or QF claimed)${colors.reset}\n`);
   }
 }
 
