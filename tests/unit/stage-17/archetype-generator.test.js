@@ -25,6 +25,13 @@ vi.mock('../../../lib/eva/stage-17/page-type-classifier.js', () => ({
     'split-screen layout',
     'dashboard-style layout',
   ]),
+  // QF-20260425-288: archetype-generator now always calls this (no confidence gate)
+  getStrategyLayouts: vi.fn().mockReturnValue([
+    { strategy: 'clarity-first', description: 'clarity-first layout' },
+    { strategy: 'dense', description: 'dense layout' },
+    { strategy: 'narrative', description: 'narrative layout' },
+    { strategy: 'visual-impact', description: 'visual-impact layout' },
+  ]),
 }));
 
 // ── Mock: scoring-engine (fire-and-forget in production) ────────────────────
