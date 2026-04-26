@@ -37,6 +37,26 @@ export function shouldRequireUserStories(sdType) {
 }
 
 /**
+ * Canonicalize a smoke_test_steps entry to {instruction, expected_outcome}.
+ *
+ * SD-LEO-INFRA-SMOKE-TEST-SCHEMA-RECONCILE-001 — eliminates the asymmetry
+ * between PRECHECK gate (smoke-test-specification.js — accepts dual shape)
+ * and execute preflight (this file — historically strict).
+ *
+ * Accepts: {instruction, expected_outcome} | {instruction_template, expected_outcome_template} | {step, expected}
+ * Returns: { instruction, expected_outcome } — undefined for both keys when neither pair is fully present.
+ *
+ * @param {Object|null|undefined} step
+ * @returns {{instruction: string|undefined, expected_outcome: string|undefined}}
+ */
+export function canonicalizeSmokeStep(step) {
+  if (!step || typeof step !== 'object') return { instruction: undefined, expected_outcome: undefined };
+  const instruction = step.instruction || step.instruction_template || step.step;
+  const expected_outcome = step.expected_outcome || step.expected_outcome_template || step.expected;
+  return { instruction, expected_outcome };
+}
+
+/**
  * Run prerequisite preflight checks for a given handoff type.
  * Returns { passed, issues[] } where each issue has { code, message, remediation }.
  */
@@ -241,6 +261,9 @@ function checkLeadToPlanPrereqs(sd) {
   }
 
   // Check smoke_test_steps
+  // SD-LEO-INFRA-SMOKE-TEST-SCHEMA-RECONCILE-001: canonicalize each step
+  // before validity check — accepts legacy {step, expected} shape in addition
+  // to canonical {instruction, expected_outcome}.
   const smokeSteps = sd.smoke_test_steps;
   if (!smokeSteps || !Array.isArray(smokeSteps) || smokeSteps.length === 0) {
     issues.push({
@@ -249,9 +272,10 @@ function checkLeadToPlanPrereqs(sd) {
       remediation: 'Add smoke_test_steps: [{instruction: "...", expected_outcome: "..."}]'
     });
   } else {
-    const validSteps = smokeSteps.filter(s => s.instruction && s.expected_outcome);
+    const canonicalized = smokeSteps.map(canonicalizeSmokeStep);
+    const validSteps = canonicalized.filter(s => s.instruction && s.expected_outcome);
     if (validSteps.length === 0) {
-      const invalidStep = smokeSteps[0];
+      const invalidStep = canonicalized[0];
       const missingFields = [];
       if (!invalidStep?.instruction) missingFields.push('instruction');
       if (!invalidStep?.expected_outcome) missingFields.push('expected_outcome');
@@ -259,11 +283,12 @@ function checkLeadToPlanPrereqs(sd) {
         code: 'SMOKE_TEST_INVALID',
         message: `smoke_test_steps[0] is missing required field(s): ${missingFields.join(', ')}`,
         remediation: [
-          'Each step must have both fields. Example:',
+          'Each step must have both fields. Canonical (preferred):',
           '  smoke_test_steps: [',
           '    { instruction: "Run: node scripts/handoff.js execute LEAD-TO-PLAN SD-EXAMPLE-001",',
           '      expected_outcome: "HANDOFF_RESULT=PASS printed to stdout" }',
-          '  ]'
+          '  ]',
+          'Legacy {step, expected} shape is also accepted (auto-canonicalized).'
         ].join('\n')
       });
     }
