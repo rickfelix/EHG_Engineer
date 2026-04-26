@@ -607,6 +607,34 @@ async function main() {
     }
   }
 
+  // QF-20260426-SWEEP-PHANTOM-DETECT: detect phantom in_progress SDs
+  // (status=in_progress + claiming_session_id IS NULL). These are invisible to
+  // sd:next's workable filter and silently park work until manual reset. Reset
+  // to draft/LEAD so the queue surfaces them for the next worker.
+  const { data: phantomInProgress } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, current_phase, progress_percentage')
+    .eq('status', 'in_progress')
+    .is('claiming_session_id', null);
+
+  for (const sd of (phantomInProgress || [])) {
+    const { error } = await supabase
+      .from('strategic_directives_v2')
+      .update({
+        status: 'draft',
+        current_phase: 'LEAD',
+        progress_percentage: 0,
+        is_working_on: false
+      })
+      .eq('sd_key', sd.sd_key)
+      .eq('status', 'in_progress')
+      .is('claiming_session_id', null);
+
+    if (!error) {
+      actions.push('QA: reset phantom ' + sd.sd_key + ' from in_progress/' + sd.current_phase + '/' + sd.progress_percentage + '% → draft/LEAD/0% (no claiming session)');
+    }
+  }
+
   // 3e. QA — detect and auto-enrich bare-shell SDs (FIX #6)
   const { data: pendingSDs } = await supabase
     .from('strategic_directives_v2')
