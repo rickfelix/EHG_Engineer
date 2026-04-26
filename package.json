@@ -13,6 +13,7 @@
     "audit:ingest": "node scripts/ingest-audit-file.mjs",
     "audit:generate-sds": "node scripts/audit-to-sd.mjs",
     "audit:retro": "node scripts/audit-retro.mjs",
+    "audit:stage17": "node scripts/audit-stage17-urls.mjs",
     "test-database": "node scripts/test-database.js",
     "new-sd": "node scripts/new-strategic-directive.js",
     "add-sd": "node scripts/add-sd-to-database.js",
