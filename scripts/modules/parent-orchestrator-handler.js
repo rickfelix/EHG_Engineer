@@ -1,5 +1,5 @@
-import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 #!/usr/bin/env node
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
 /**
  * ParentOrchestratorHandler - Intelligent handling for parent Strategic Directives

@@ -118,7 +118,7 @@ function _antiPattern(params) {
 async function _exportExists(params) {
   const modulePath = resolve(ROOT, params.module);
   try {
-    const mod = await import(`file:///${modulePath.replace(/\\/g, '/')}`);
+    const mod = await import(`file:///${modulePath.replaceAll('\\', '/')}`);
     const has = params.exportName in mod || (mod.default && params.exportName in mod.default);
     return {
       passed: has,

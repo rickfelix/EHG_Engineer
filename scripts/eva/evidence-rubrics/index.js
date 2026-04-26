@@ -46,7 +46,7 @@ export async function loadAllRubrics() {
     .sort();
 
   for (const file of files) {
-    const mod = await import(`file:///${join(RUBRIC_DIR, file).replace(/\\/g, '/')}`);
+    const mod = await import(`file:///${join(RUBRIC_DIR, file).replaceAll('\\', '/')}`);
     const rubric = mod.default;
     validateRubric(rubric, file);
     rubrics.set(rubric.id, rubric);

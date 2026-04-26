@@ -41,6 +41,7 @@ export default defineConfig({
       '**/press-kit/**',
       '**/agents/**',
       '**/archive/**',
+      '**/services/codeguardian-mock/**',
       '**/.worktrees/**',
       '**/.cursor/worktrees/**',
       '**/.claude/worktrees/**',
@@ -62,6 +63,7 @@ export default defineConfig({
       exclude: [
         '**/node_modules/**',
         '**/client/**',
+        '**/archive/**',
       ],
     },
   },
