@@ -50,6 +50,8 @@ import { scoreSD } from './eva/vision-scorer.js';
 import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
 import { validateSDFields } from './modules/validate-sd-fields.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001: path-based target detector
+import { detectFromKeyChanges } from './modules/handoff/executors/lead-to-plan/gates/target-application.js';
 
 const supabase = createSupabaseServiceClient();
 
@@ -1426,9 +1428,12 @@ async function createSD(options) {
   }
 
   // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Resolve target_application from venture context
-  // Precedence: explicit param > VENTURE env var > getCurrentVenture() > 'EHG_Engineer'
+  // SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001: insert key_changes path detector
+  //   between VENTURE env var and getCurrentVenture() fallback (line 1446 below).
+  // Precedence: explicit param > VENTURE env var > path detect from key_changes > getCurrentVenture() > 'EHG_Engineer'
   const resolvedTargetApplication = explicitTargetApp
     || (process.env.VENTURE && (getVentureConfig(process.env.VENTURE)?.name || process.env.VENTURE))
+    || detectFromKeyChanges(finalKeyChanges)
     || null;
 
   const sdData = {

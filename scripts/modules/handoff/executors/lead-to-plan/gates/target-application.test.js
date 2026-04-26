@@ -9,7 +9,7 @@ vi.mock('../../../../../../lib/venture-resolver.js', () => ({
   getCurrentVenture: vi.fn(() => 'EHG_Engineer'),
 }));
 
-import { validateTargetApplication, createTargetApplicationGate } from './target-application.js';
+import { validateTargetApplication, createTargetApplicationGate, detectFromKeyChanges, PATH_PATTERN_DICTIONARY } from './target-application.js';
 import { createMockSD, createMockSupabase, assertValidatorResult } from '../../../../../../tests/factories/validator-context-factory.js';
 
 describe('validateTargetApplication', () => {
@@ -122,6 +122,71 @@ describe('validateTargetApplication', () => {
 
     expect(result.pass).toBe(true);
     expect(result.score).toBe(100);
+  });
+});
+
+// SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001
+describe('detectFromKeyChanges', () => {
+  it('returns "EHG" for all-frontend paths', () => {
+    const result = detectFromKeyChanges([
+      { type: 'feature', change: 'Modify /ehg/src/components/stage17/Stage17ReviewPanel.tsx' },
+      { type: 'test', change: 'Add tests under src/pages/admin/' },
+    ]);
+    expect(result).toBe('EHG');
+  });
+
+  it('returns "EHG_Engineer" for all-backend paths', () => {
+    const result = detectFromKeyChanges([
+      { type: 'feature', change: 'Add scripts/modules/handoff/foo.js' },
+      { type: 'test', change: 'Update lib/eva/bar.js' },
+    ]);
+    expect(result).toBe('EHG_Engineer');
+  });
+
+  it('returns null for empty array', () => {
+    expect(detectFromKeyChanges([])).toBeNull();
+  });
+
+  it('returns null for non-array input without throwing', () => {
+    expect(detectFromKeyChanges(undefined)).toBeNull();
+    expect(detectFromKeyChanges(null)).toBeNull();
+    expect(detectFromKeyChanges('not-an-array')).toBeNull();
+    expect(detectFromKeyChanges({ change: '/ehg/' })).toBeNull();
+  });
+
+  it('returns null on tied EHG vs EHG_Engineer counts', () => {
+    const result = detectFromKeyChanges([
+      { type: 'feature', change: '/ehg/src/foo.tsx' },
+      { type: 'feature', change: 'scripts/bar.js' },
+    ]);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when no path patterns match', () => {
+    const result = detectFromKeyChanges([
+      { type: 'feature', change: 'docs/some-prose-only-change.md' },
+      { type: 'fix', change: 'unrelated text with no path prefix' },
+    ]);
+    expect(result).toBeNull();
+  });
+
+  it('skips entries with missing or non-string change field without throwing', () => {
+    const result = detectFromKeyChanges([
+      { type: 'feature', change: '/ehg/src/foo.tsx' },
+      { type: 'feature' },
+      { type: 'test', change: null },
+      'not-an-object',
+      null,
+      { type: 'feature', change: 'src/pages/bar.tsx' },
+    ]);
+    expect(result).toBe('EHG');
+  });
+
+  it('exports PATH_PATTERN_DICTIONARY with both application keys populated', () => {
+    expect(Array.isArray(PATH_PATTERN_DICTIONARY.EHG)).toBe(true);
+    expect(Array.isArray(PATH_PATTERN_DICTIONARY.EHG_Engineer)).toBe(true);
+    expect(PATH_PATTERN_DICTIONARY.EHG.length).toBeGreaterThan(0);
+    expect(PATH_PATTERN_DICTIONARY.EHG_Engineer.length).toBeGreaterThan(0);
   });
 });
 
