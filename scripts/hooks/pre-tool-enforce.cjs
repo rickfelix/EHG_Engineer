@@ -15,6 +15,7 @@
  * 9. SD creation skill enforcement (ENF-SD-CREATE-SKILL) - HARD BLOCK (exit 2)
  * 10. D1 Bugfix TDD Prove-It Gate - HARD BLOCK (exit 2)
  * 11. RCA Tiered Enforcement (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129) - TIERED (warn on 2nd, block on 3rd)
+ * 12. npm install Concurrency Guard (QF-20260426-822) - HARD BLOCK (exit 2)
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -311,6 +312,54 @@ async function main() {
         'The skill provides description enrichment, vision readiness assessment, and post-creation chaining.\n'
       );
       process.exit(2);
+    }
+  }
+
+  // --- ENFORCEMENT 12: npm install Concurrency Guard (QF-20260426-822) ---
+  // Refuses Bash invocations of `npm install` / `npm i` / `npm ci` when a
+  // sibling session is mid-extract. Two detection signals:
+  //   (a) node_modules/.staging/ exists and is non-empty (npm's own
+  //       extraction-staging dir; only present DURING tarball extraction)
+  //   (b) another npm/node process is running an install/ci command
+  // Either signal blocks (exit 2) with a recovery hint.
+  // Disable in tests via LEO_NPM_INSTALL_GUARD=off.
+  if (TOOL_NAME === 'Bash' && process.env.LEO_NPM_INSTALL_GUARD !== 'off') {
+    const cmd = (input.command || '').trim();
+    const NPM_INSTALL_RE = /(?:^|[\s;&|(])npm\s+(install|i|ci)(?:\s+|$)/;
+    if (NPM_INSTALL_RE.test(cmd) && !/--help/.test(cmd)) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const cwd = input.cwd || process.cwd();
+        const stagingPath = path.join(cwd, 'node_modules', '.staging');
+        let signal = null;
+        try {
+          if (fs.existsSync(stagingPath) && fs.readdirSync(stagingPath).length > 0) {
+            signal = 'node_modules/.staging/ active';
+          }
+        } catch { /* unreadable = treat as inactive */ }
+        if (!signal && process.env.LEO_NPM_INSTALL_GUARD_PS !== 'off') {
+          try {
+            const { execSync } = require('child_process');
+            const out = process.platform === 'win32'
+              ? execSync('wmic process where "name=\'node.exe\'" get ProcessId,CommandLine /FORMAT:CSV', { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] })
+              : execSync('ps -eo pid,command', { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
+            const myPid = String(process.pid);
+            const peer = out.split('\n').find(l => /(npm-cli\.js|npm)\s.*(install|\bi\b|\bci\b)/.test(l) && !l.includes(myPid));
+            if (peer) signal = `npm install peer process detected`;
+          } catch { /* ps/wmic failure = no peer detected (fail-open) */ }
+        }
+        if (signal) {
+          auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'NPM-INSTALL-RACE', 'npm install concurrency guard', 'block', { signal });
+          process.stderr.write(
+            `NPM INSTALL RACE GUARD (QF-20260426-822): refusing concurrent npm install.\n` +
+            `  Signal: ${signal}\n` +
+            `  Wait ~30-60s and retry, OR isolate via: npm run session:worktree -- --sd-key <key>\n` +
+            `  If staging is stuck (no actual peer): rm -rf node_modules/.staging\n`
+          );
+          process.exit(2);
+        }
+      } catch { /* fail-open on any internal error */ }
     }
   }
 
