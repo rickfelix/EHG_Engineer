@@ -617,31 +617,96 @@ function generateDefaultCriteria(sdType, context) {
   return defaults[sdType] || defaults.feature;
 }
 
+// SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: validateSdId split into two
+// functions + lookupSdIdForFk helper. The old single validateSdId was both too
+// strict (rejected UUIDs at input) and too loose (let raw input flow into FK
+// columns). The split lets callers pass either format while still enforcing the
+// story_key CHECK constraint where the strict format is required.
+
 /**
- * Validate that sdId is a valid SD key format, not a UUID
- * Valid format: ^[A-Z0-9-]+$ (e.g., SD-EVA-MEETING-001)
- * Invalid: UUID format (contains lowercase a-f)
+ * Strict validator: sdKey must match the SD key format used by user_stories.story_key.
+ * Required because PostgreSQL CHECK constraint on user_stories.story_key enforces
+ * regex ^[A-Z0-9-]+:US-[0-9]{3,}$ (UUID hex range would fail).
+ *
+ * Used internally on the resolved sd_key value (NOT raw input) before constructing
+ * story_key prefix.
  */
-function validateSdId(sdId) {
-  // Check if it's a UUID (contains lowercase hex characters or too many hyphens)
+export function validateSdKeyForStoryKey(sdKey) {
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (uuidPattern.test(sdId)) {
+  if (uuidPattern.test(sdKey)) {
     throw new Error(
-      `Invalid sdId format: received UUID "${sdId}" but expected SD key format (e.g., "SD-EVA-MEETING-001"). ` +
-      `The valid_story_key constraint requires story_key format: ^[A-Z0-9-]+:US-[0-9]{3,}$`
+      `Invalid sd_key for story_key prefix: received UUID "${sdKey}" but story_key CHECK constraint ` +
+      `requires SD key format (e.g., "SD-EVA-MEETING-001"). story_key regex: ^[A-Z0-9-]+:US-[0-9]{3,}$`
     );
   }
 
-  // Check if it matches the expected SD key pattern
   const sdKeyPattern = /^[A-Z0-9-]+$/;
-  if (!sdKeyPattern.test(sdId)) {
+  if (!sdKeyPattern.test(sdKey)) {
     throw new Error(
-      `Invalid sdId format: "${sdId}" contains invalid characters. ` +
-      `SD keys must only contain uppercase letters, numbers, and hyphens (e.g., "SD-EVA-MEETING-001").`
+      `Invalid sd_key for story_key prefix: "${sdKey}" contains invalid characters. ` +
+      `SD keys must only contain uppercase letters, numbers, and hyphens.`
     );
   }
 
   return true;
+}
+
+/**
+ * Permissive validator: accepts EITHER a UUID or a sd_key, rejects only true garbage
+ * (empty, null, non-string, or strings with characters that match neither format).
+ *
+ * Use at autoTriggerStories entry to permit either input form, then resolve to the
+ * canonical FK target via lookupSdIdForFk.
+ */
+export function validateSdIdInput(sdIdInput) {
+  if (typeof sdIdInput !== 'string' || sdIdInput.length === 0) {
+    throw new Error(
+      `Invalid sdId input: expected non-empty string, received ${typeof sdIdInput} (${sdIdInput})`
+    );
+  }
+
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const sdKeyPattern = /^[A-Z0-9-]+$/;
+  if (!uuidPattern.test(sdIdInput) && !sdKeyPattern.test(sdIdInput)) {
+    throw new Error(
+      `Invalid sdId input: "${sdIdInput}" matches neither UUID nor SD key format. ` +
+      `Expected either UUID (8-4-4-4-12 hex) or SD key (uppercase letters/digits/hyphens).`
+    );
+  }
+
+  return true;
+}
+
+/**
+ * Resolve any SD identifier (sd_key OR UUID) to the canonical FK target values.
+ *
+ * Returns { id, sd_key } from strategic_directives_v2. The `id` value is what
+ * downstream FK columns (user_stories.sd_id, sub_agent_execution_results.sd_id)
+ * must reference — note `strategic_directives_v2.id` is varchar(50) bimodal:
+ * UUID for newer SDs, sd_key string for legacy SDs. The `sd_key` value is what
+ * user_stories.story_key must use as prefix (CHECK constraint enforces SD-key format).
+ *
+ * Pattern source: existing getSDType helper (line 414) uses the same .or() lookup.
+ *
+ * @param {object} supabase - Supabase client
+ * @param {string} sdKeyOrUuid - Either a sd_key (e.g. "SD-FOO-001") or UUID
+ * @returns {Promise<{id: string, sd_key: string}>}
+ * @throws {Error} If no SD matches either id or sd_key
+ */
+export async function lookupSdIdForFk(supabase, sdKeyOrUuid) {
+  const { data, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key')
+    .or(`id.eq.${sdKeyOrUuid},sd_key.eq.${sdKeyOrUuid}`)
+    .single();
+
+  if (error || !data) {
+    throw new Error(
+      `SD not found: lookupSdIdForFk("${sdKeyOrUuid}") returned no row. ${error?.message || ''}`
+    );
+  }
+
+  return { id: data.id, sd_key: data.sd_key };
 }
 
 /**
@@ -661,8 +726,14 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     personaContext = []
   } = options;
 
-  // Validate sdId format FIRST before any database operations
-  validateSdId(sdId);
+  // SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: permissive input validation,
+  // then resolve sdId → { resolvedSdId, sdKey }. resolvedSdId is what downstream
+  // FK columns require (varchar(50), bimodal — may be UUID or sd_key string per
+  // row). sdKey is what story_key prefix requires (CHECK constraint enforces
+  // SD-key format).
+  validateSdIdInput(sdId);
+  const { id: resolvedSdId, sd_key: sdKey } = await lookupSdIdForFk(supabase, sdId);
+  validateSdKeyForStoryKey(sdKey);
 
   console.log('\n🎯 Product Requirements Expert: Auto-Trigger Check');
   console.log('═══════════════════════════════════════════════════\n');
@@ -676,7 +747,7 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     const { data: existingStories, error: checkError } = await supabase
       .from('user_stories')
       .select('story_key, title, status')
-      .eq('sd_id', sdId);
+      .eq('sd_id', resolvedSdId);
 
     if (checkError) {
       throw new Error(`Failed to check existing user stories: ${checkError.message}`);
@@ -694,7 +765,7 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
             reason: 'USER_STORIES_EXIST',
             existing_count: existingStories.length,
             stories: existingStories.map(s => s.story_key)
-          });
+          }, resolvedSdId);
         }
 
         return {
@@ -734,7 +805,7 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
         trigger_type: 'AUTOMATIC',
         prd_title: prd.title,
         prd_status: prd.status
-      });
+      }, resolvedSdId);
     }
 
     // Step 4: Execute Product Requirements Expert logic
@@ -744,7 +815,7 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     const { data: sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .select('*')
-      .eq('id', sdId)
+      .eq('id', resolvedSdId)
       .single();
 
     if (sdError) {
@@ -759,12 +830,14 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
       });
 
       // Transform LLM output to database format
+      // SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: sd_id uses resolvedSdId (FK target),
+      // story_key uses sdKey (CHECK constraint requires SD-key format).
       if (userStories && userStories.length > 0) {
         userStories = userStories.map((story, index) => ({
           id: randomUUID(),
-          sd_id: sdId,
+          sd_id: resolvedSdId,
           prd_id: prdId,
-          story_key: `${sdId}:US-${String(index + 1).padStart(3, '0')}`,
+          story_key: `${sdKey}:US-${String(index + 1).padStart(3, '0')}`,
           title: story.title,
           user_role: story.user_role,
           user_want: story.user_want,
@@ -791,7 +864,8 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
       console.log('   📝 Using template-based story generation...');
       // Generate user stories from PRD functional requirements
       // Now SD-type-aware (v1.1.0) - passes supabase to fetch SD type for criteria transformation
-      userStories = await generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaContext);
+      // SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: pass resolvedSdId + sdKey
+      userStories = await generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, prdId, personaContext);
     }
 
     if (userStories.length === 0) {
@@ -848,6 +922,7 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     };
 
     if (logExecution) {
+      // logSubAgentResult does UPDATE keyed on executionId; no FK-target arg needed.
       await logSubAgentResult(supabase, sdId, prdId, executionId, result);
     }
 
@@ -906,6 +981,7 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     console.error('');
 
     if (logExecution) {
+      // logSubAgentError does UPDATE keyed on executionId; no FK-target arg needed.
       await logSubAgentError(supabase, sdId, prdId, executionId, error, duration);
     }
 
@@ -934,11 +1010,16 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
  *
  * @param {object} supabase - Supabase client for SD type lookup
  * @param {object} prd - PRD record
- * @param {string} sdId - Strategic directive ID
+ * @param {string} resolvedSdId - Resolved canonical id from strategic_directives_v2 (FK target)
+ * @param {string} sdKey - Resolved sd_key from strategic_directives_v2 (story_key prefix)
  * @param {string} prdId - PRD ID
  * @param {Array} personaContext - Optional array of persona objects
+ *
+ * SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: signature changed to receive
+ * pre-resolved id + sd_key (was previously sdId only). Caller (autoTriggerStories)
+ * resolves once via lookupSdIdForFk, passes both values down.
  */
-async function generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaContext = []) {
+async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, prdId, personaContext = []) {
   const userStories = [];
 
   // Extract functional requirements if available
@@ -949,13 +1030,13 @@ async function generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaCon
   }
 
   // SD-TYPE-AWARE: Fetch SD type for criteria transformation
-  const sdType = await getSDType(supabase, sdId);
+  const sdType = await getSDType(supabase, resolvedSdId);
   console.log(`   📋 SD Type: ${sdType} (criteria will be ${sdType === 'feature' || sdType === 'security' ? 'STRICT' : sdType === 'documentation' ? 'LENIENT' : 'MODERATE'})`);
 
   for (let i = 0; i < functionalRequirements.length; i++) {
     const fr = functionalRequirements[i];
     const storyNumber = String(i + 1).padStart(3, '0');
-    const storyKey = `${sdId}:US-${storyNumber}`;
+    const storyKey = `${sdKey}:US-${storyNumber}`;
 
     // Determine story points based on priority
     const storyPoints = fr.priority === 'CRITICAL' ? 5 :
@@ -977,13 +1058,15 @@ async function generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaCon
     );
 
     // E2E Test Path Generation (v1.3.0): Auto-generate test paths based on SD type
+    // SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: slug uses sdKey (stable, sd-key-format),
+    // sd_id uses resolvedSdId (FK target).
     const storyTitle = fr.requirement || `Implement ${fr.id}`;
-    const e2eConfig = generateE2ETestPath(sdId, sdType, storyNumber, storyTitle);
+    const e2eConfig = generateE2ETestPath(sdKey, sdType, storyNumber, storyTitle);
 
     const userStory = {
       id: randomUUID(),
       story_key: storyKey,
-      sd_id: sdId,
+      sd_id: resolvedSdId,
       prd_id: prdId,
       title: storyTitle,
       user_role: userRole,
@@ -1193,8 +1276,11 @@ function extractKeyAction(description) {
 
 /**
  * Log sub-agent skip event
+ *
+ * SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: resolvedSdId param added for FK column.
+ * sdId is preserved in metadata.sd_id_input for traceability of caller's input.
  */
-async function logSubAgentSkip(supabase, sdId, prdId, executionId, metadata) {
+async function logSubAgentSkip(supabase, sdId, prdId, executionId, metadata, resolvedSdId) {
   try {
     await supabase
       .from('sub_agent_execution_results')
@@ -1203,7 +1289,7 @@ async function logSubAgentSkip(supabase, sdId, prdId, executionId, metadata) {
         sub_agent_id: 'product-requirements-expert',
         sub_agent_code: 'STORIES',
         version: '1.0.0',
-        sd_id: sdId,
+        sd_id: resolvedSdId,
         verdict: 'SKIPPED',
         confidence: 100,
         summary: {
@@ -1224,8 +1310,11 @@ async function logSubAgentSkip(supabase, sdId, prdId, executionId, metadata) {
 
 /**
  * Log sub-agent execution attempt
+ *
+ * SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: resolvedSdId param added for FK column.
+ * sdId is preserved in metadata.sd_id_input for traceability of caller's input.
  */
-async function logSubAgentAttempt(supabase, sdId, prdId, executionId, metadata) {
+async function logSubAgentAttempt(supabase, sdId, prdId, executionId, metadata, resolvedSdId) {
   console.log(`📝 Logging execution attempt (ID: ${executionId.substring(0, 8)}...)`);
 
   try {
@@ -1236,7 +1325,7 @@ async function logSubAgentAttempt(supabase, sdId, prdId, executionId, metadata) 
         sub_agent_id: 'product-requirements-expert',
         sub_agent_code: 'STORIES',
         version: '1.0.0',
-        sd_id: sdId,
+        sd_id: resolvedSdId,
         verdict: 'IN_PROGRESS',
         confidence: 0,
         summary: {
