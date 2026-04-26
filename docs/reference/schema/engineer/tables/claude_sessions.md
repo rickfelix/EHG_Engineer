@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-26T20:51:45.386Z
-**Rows**: 11,949
+**Generated**: 2026-04-26T21:16:02.093Z
+**Rows**: 11,952
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (44 total)
+## Columns (45 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -62,6 +62,7 @@
 | files_modified_since_claim | `integer(32)` | YES | `0` | Files modified since claimed_at (throttled 30s in PostToolUse). |
 | process_alive_at | `timestamp with time zone` | YES | - | Last tick from detached session-tick.cjs process. Authoritative liveness — if < 90s old, worker is alive. |
 | expected_silence_until | `timestamp with time zone` | YES | - | Worker-declared silent period (Bash timeout, Agent invocation). Sweep enforces 30-minute hard cap — values beyond that are IGNORED to prevent masking dead workers. |
+| loop_state | `text` | YES | `'unknown'::text` | - |
 
 ## Constraints
 
@@ -76,6 +77,7 @@
 
 ### Check Constraints
 - `claude_sessions_last_activity_kind_check`: CHECK (((last_activity_kind IS NULL) OR (last_activity_kind = ANY (ARRAY['executing'::text, 'waiting_tool'::text, 'waiting_agent'::text, 'thinking'::text, 'idle'::text, 'exiting'::text]))))
+- `claude_sessions_loop_state_check`: CHECK ((loop_state = ANY (ARRAY['active'::text, 'awaiting_tick'::text, 'exited'::text, 'unknown'::text])))
 - `claude_sessions_status_check`: CHECK ((status = ANY (ARRAY['active'::text, 'idle'::text, 'stale'::text, 'released'::text])))
 - `claude_sessions_track_check`: CHECK ((track = ANY (ARRAY['A'::text, 'B'::text, 'C'::text, 'STANDALONE'::text])))
 
