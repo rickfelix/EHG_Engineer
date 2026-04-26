@@ -36,6 +36,10 @@ import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
+// SD-LEO-INFRA-FLEET-DASHBOARD-VISIBILITY-001: shared formatter so the roster
+// also surfaces in-flight QF claims (quick_fixes.claiming_session_id), not just
+// SD claims.
+import { formatRosterClaim } from './modules/sd-next/display/claim-formatters.js';
 // SD-LEO-INFRA-LEO-PROTOCOL-POLICY-001 (FR-008 / D2): consume the extended
 // classification policy so 'outside_repo' / 'false_success' /
 // 'target_changed_after_claim' hints surface with stable codes. The base
@@ -68,7 +72,7 @@ async function displayFleetRoster() {
   try {
     const { data: sessions } = await supabase
       .from('v_active_sessions')
-      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, pid')
+      .select('session_id, sd_key, sd_title, qf_id, qf_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, pid')
       .in('computed_status', ['active', 'idle', 'stale']);
 
     if (!sessions || sessions.length === 0) {
@@ -81,10 +85,8 @@ async function displayFleetRoster() {
       const shortId = s.session_id.substring(0, 12);
       const hbAge = s.heartbeat_age_human || formatHbAge(s.heartbeat_age_seconds);
       const staleTag = (s.heartbeat_age_seconds || 0) > 900 ? ` ${colors.red}STALE${colors.reset}` : '';
-      const sdLabel = s.sd_key
-        ? `→ ${s.sd_title || s.sd_key}`
-        : `${colors.dim}(idle)${colors.reset}`;
-      console.log(`   ${shortId}  ${hbAge}${staleTag}  ${sdLabel}`);
+      const claimLabel = formatRosterClaim(s);
+      console.log(`   ${shortId}  ${hbAge}${staleTag}  ${claimLabel}`);
     }
   } catch {
     // Non-blocking — roster display is informational
