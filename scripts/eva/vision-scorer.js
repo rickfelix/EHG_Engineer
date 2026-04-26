@@ -711,6 +711,31 @@ async function runPersistMode(sdKey, visionKey, archKey, scoreJson) {
 export const DEFAULT_VISION_KEY = 'VISION-EHG-L1-001';
 export const DEFAULT_ARCH_KEY = 'ARCH-EHG-L1-001';
 
+// SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001: Anchored suffix regex for tier autodetection.
+// Matches `-L1-`, `-L2-`, `-L3-` segments inside an SD key (hyphen-bounded to avoid
+// matching unrelated substrings like `SD-L2-CACHE-...` where L2 is not a vision tier).
+const SD_TIER_SUFFIX_RE = /-L([123])-/;
+
+/**
+ * Derive vision/arch keys from an SD key's tier suffix.
+ * Used as a fallback when sd.metadata.vision_key is null but the SD key itself
+ * encodes a vision tier (e.g. `SD-VISION-S17-SIMPLIFY-L2-001` → tier 2).
+ *
+ * @param {string} sdKey
+ * @returns {{ vision_key: string|null, arch_key: string|null, tier: 'L1'|'L2'|'L3'|null }}
+ */
+export function tierKeysFromSDKey(sdKey) {
+  if (!sdKey || typeof sdKey !== 'string') return { vision_key: null, arch_key: null, tier: null };
+  const match = sdKey.match(SD_TIER_SUFFIX_RE);
+  if (!match) return { vision_key: null, arch_key: null, tier: null };
+  const tier = `L${match[1]}`;
+  return {
+    vision_key: `VISION-EHG-${tier}-001`,
+    arch_key: `ARCH-EHG-${tier}-001`,
+    tier
+  };
+}
+
 export async function resolveDefaultKeysFromSD(supabase, sdKey) {
   if (!sdKey) return { vision_key: null, arch_key: null };
   const { data } = await supabase
@@ -718,9 +743,16 @@ export async function resolveDefaultKeysFromSD(supabase, sdKey) {
     .select('metadata')
     .or(`id.eq.${sdKey},sd_key.eq.${sdKey}`)
     .maybeSingle();
+  // Precedence: explicit metadata > suffix-tier autodetect > null (caller falls back to DEFAULT)
+  const metaVision = data?.metadata?.vision_key || null;
+  const metaArch = data?.metadata?.arch_key || null;
+  if (metaVision || metaArch) {
+    return { vision_key: metaVision, arch_key: metaArch };
+  }
+  const fromSuffix = tierKeysFromSDKey(sdKey);
   return {
-    vision_key: data?.metadata?.vision_key || null,
-    arch_key: data?.metadata?.arch_key || null
+    vision_key: fromSuffix.vision_key,
+    arch_key: fromSuffix.arch_key
   };
 }
 
@@ -746,8 +778,11 @@ if (isMainModule(import.meta.url)) {
     process.exit(1);
   }
 
-  let visionKey = explicitVision;
-  let archKey = explicitArch;
+  // SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001: Env-var fallback so handoff.js can
+  // forward --vision-key/--arch-key into a downstream vision-scorer invocation
+  // without re-parsing argv. Precedence: explicit flag > env override > metadata > suffix-autodetect > DEFAULT.
+  let visionKey = explicitVision || process.env.LEO_VISION_KEY_OVERRIDE || null;
+  let archKey = explicitArch || process.env.LEO_ARCH_KEY_OVERRIDE || null;
   if ((!visionKey || !archKey) && sdKey) {
     const supabase = createSupabaseServiceClient();
     const fromMeta = await resolveDefaultKeysFromSD(supabase, sdKey);

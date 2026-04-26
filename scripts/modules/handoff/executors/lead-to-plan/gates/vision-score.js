@@ -157,6 +157,60 @@ async function logGateEvaluation(supabase, auditData) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001: Build a tier hint for the gate's remediation
+ * message. Resolves the SD's vision tier from (in precedence order):
+ *   1. ctx.options / env override (LEO_VISION_KEY_OVERRIDE)
+ *   2. sd.metadata.vision_key
+ *   3. sd_key suffix `/-L([123])-/` autodetect
+ * Returns { tier, source, flagSuffix, note } — `flagSuffix` is appended to the
+ * remediation command when a non-default tier is resolved, so operators don't
+ * accidentally re-score L2 SDs against L1 dims.
+ *
+ * @param {Object} sd
+ * @returns {{ tier: string|null, source: string|null, flagSuffix: string, note: string|null }}
+ */
+export function buildTierRemediationHint(sd) {
+  const envKey = process.env.LEO_VISION_KEY_OVERRIDE || null;
+  const envArch = process.env.LEO_ARCH_KEY_OVERRIDE || null;
+  if (envKey) {
+    return {
+      tier: extractTier(envKey),
+      source: 'env_override',
+      flagSuffix: ` --vision-key ${envKey}${envArch ? ` --arch-key ${envArch}` : ''}`,
+      note: 'Tier supplied via --vision-key / LEO_VISION_KEY_OVERRIDE — keep it on the rerun.'
+    };
+  }
+  const metaKey = sd?.metadata?.vision_key || null;
+  const metaArch = sd?.metadata?.arch_key || null;
+  if (metaKey) {
+    return {
+      tier: extractTier(metaKey),
+      source: 'sd.metadata.vision_key',
+      flagSuffix: '', // metadata path is auto-resolved by scorer; no flag needed
+      note: `Tier auto-resolves from sd.metadata.vision_key='${metaKey}'.`
+    };
+  }
+  const sdKey = sd?.sd_key || sd?.id || null;
+  const suffixMatch = sdKey ? sdKey.match(/-L([123])-/) : null;
+  if (suffixMatch) {
+    const tier = `L${suffixMatch[1]}`;
+    return {
+      tier,
+      source: 'sd_key_suffix',
+      flagSuffix: ` --vision-key VISION-EHG-${tier}-001 --arch-key ARCH-EHG-${tier}-001`,
+      note: `SD key suggests tier ${tier} — passing --vision-key/--arch-key on the rerun avoids the L1 default.`
+    };
+  }
+  return { tier: null, source: null, flagSuffix: '', note: null };
+}
+
+function extractTier(visionKey) {
+  if (!visionKey) return null;
+  const m = visionKey.match(/-L([123])-/);
+  return m ? `L${m[1]}` : null;
+}
+
 const THRESHOLD_LABELS = {
   accept:        { emoji: '✅', label: 'ACCEPT',      desc: 'Strong vision alignment' },
   minor_sd:      { emoji: '🟡', label: 'MINOR GAP',  desc: 'Minor alignment gaps — consider scope adjustments' },
@@ -312,18 +366,24 @@ export async function validateVisionScore(sd, supabase) {
 
   // ── No score present → hard block ───────────────────────────────────────
   if (visionScore === null) {
+    // SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001: include tier hint in remediation
+    // so operators don't default-score L2/L3 SDs against L1 dims.
+    const tierHint = buildTierRemediationHint(sd);
+    const cmd = `node scripts/eva/vision-scorer.js --sd-id ${sdKey || '<SD-KEY>'}${tierHint.flagSuffix}`;
     console.log('   ❌ No vision alignment score found — handoff BLOCKED');
-    console.log(`   💡 Run: node scripts/eva/vision-scorer.js --sd-id ${sdKey || '<SD-KEY>'}`);
+    console.log(`   💡 Run: ${cmd}`);
+    if (tierHint.note) console.log(`      ${tierHint.note}`);
     await logGateEvaluation(supabase, {
       sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
       baseThreshold, adjustedThreshold: threshold, score: null, verdict: 'blocked_no_score',
+      context: tierHint.tier ? `tier_resolved=${tierHint.tier} via ${tierHint.source}` : null,
     });
     return {
       passed: false,
       score: 0,
       maxScore: 100,
-      details: `No vision alignment score found for ${sdKey}. Run vision-scorer.js before LEAD-TO-PLAN.`,
-      remediation: `node scripts/eva/vision-scorer.js --sd-id ${sdKey || '<SD-KEY>'}`,
+      details: `No vision alignment score found for ${sdKey}. Run vision-scorer.js before LEAD-TO-PLAN.${tierHint.tier ? ` Resolved tier: ${tierHint.tier} (${tierHint.source}).` : ''}`,
+      remediation: cmd,
       warnings: [],
     };
   }
@@ -406,22 +466,27 @@ export async function validateVisionScore(sd, supabase) {
       };
     }
 
+    // SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001: include tier hint on rerun command.
+    const belowTierHint = buildTierRemediationHint(sd);
+    const rerunCmd = `node scripts/eva/vision-scorer.js --sd-id ${sdKey}${belowTierHint.flagSuffix}`;
     console.log(`   ❌ Score ${visionScore}/100 BELOW ${sdType} threshold ${threshold} — handoff BLOCKED`);
     if (thresholdAdjusted) {
       console.log(`   ℹ️  (Adjusted from base ${baseThreshold} to ${threshold} for ${addressable}/${total} addressable dims)`);
     }
-    console.log(`   💡 Improve vision alignment: node scripts/eva/vision-scorer.js --sd-id ${sdKey}`);
+    console.log(`   💡 Improve vision alignment: ${rerunCmd}`);
+    if (belowTierHint.note) console.log(`      ${belowTierHint.note}`);
     console.log('   💡 Or request Chairman override via validation_gate_registry');
     await logGateEvaluation(supabase, {
       sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
       baseThreshold, adjustedThreshold: threshold, score: visionScore, verdict: 'blocked_below_threshold',
+      context: belowTierHint.tier ? `tier_resolved=${belowTierHint.tier} via ${belowTierHint.source}` : null,
     });
     return {
       passed: false,
       score: 0,
       maxScore: 100,
-      details: `Vision score ${visionScore}/100 does not meet ${sdType} threshold ${threshold}/100${thresholdAdjusted ? ` (adjusted from ${baseThreshold} for ${addressable}/${total} dims)` : ''}`,
-      remediation: `Score must reach ${threshold}/100 for ${sdType} SDs. Run: node scripts/eva/vision-scorer.js --sd-id ${sdKey}`,
+      details: `Vision score ${visionScore}/100 does not meet ${sdType} threshold ${threshold}/100${thresholdAdjusted ? ` (adjusted from ${baseThreshold} for ${addressable}/${total} dims)` : ''}${belowTierHint.tier ? `. Resolved tier: ${belowTierHint.tier} (${belowTierHint.source}).` : ''}`,
+      remediation: `Score must reach ${threshold}/100 for ${sdType} SDs. Run: ${rerunCmd}`,
       warnings: [],
     };
   }
