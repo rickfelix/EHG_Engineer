@@ -1,0 +1,64 @@
+name: Stage 17 Contract Smoke
+
+# Catches the QF-20260425-422 / 423 / 130 class: backend changes to the Stage 17
+# surface that drift from the frontend's expected contract.
+#
+# SD-LEO-INFRA-STAGE17-CROSS-REPO-001 — Arm C (EHG_Engineer side of twinned pair)
+#
+# Strategy: this workflow runs in EHG_Engineer on PRs that touch the Stage 17
+# backend OR the contract doc. It shallow-clones the sibling rickfelix/ehg repo
+# and runs scripts/audit-stage17-urls.mjs to verify all /api/stage17/* URLs in
+# the frontend match a registered backend route.
+#
+# A twin workflow lives in rickfelix/ehg and triggers on frontend Stage 17 file
+# changes — same audit, opposite repo as the trigger source.
+#
+# 7-day rollout (2026-04-26 → 2026-05-03): continue-on-error: true (advisory).
+# Flip to blocking via 1-line PR after false-positive rate is confirmed <1%.
+
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/stage-17/**'
+      - 'lib/eva/stage-templates/stage-17.js'
+      - 'server/routes/stage17.js'
+      - 'docs/architecture/stage17-contracts.md'
+      - 'scripts/audit-stage17-urls.mjs'
+      - '.github/workflows/stage17-contract-smoke.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true  # ADVISORY for first 7 days; remove this line to make blocking
+    steps:
+      - name: Checkout EHG_Engineer
+        uses: actions/checkout@v4
+
+      - name: Checkout sibling EHG repo
+        uses: actions/checkout@v4
+        with:
+          repository: rickfelix/ehg
+          path: ehg-sibling
+          token: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run cross-repo Stage 17 URL audit
+        run: |
+          node scripts/audit-stage17-urls.mjs \
+            --backend server/routes/stage17.js \
+            --frontend ehg-sibling/src
+
+      - name: Note about advisory mode
+        if: failure()
+        run: |
+          echo "::warning ::Stage 17 contract drift detected. This workflow is in 7-day advisory mode (2026-04-26 → 2026-05-03). After that, drift will block PRs. See docs/architecture/stage17-contracts.md."

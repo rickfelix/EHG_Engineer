@@ -57,3 +57,12 @@ CONTRIBUTING.md @rickfelix
 /lib/eva/stage-templates/stage-*.js @rickfelix
 /lib/eva/stage-templates/index.js @rickfelix
 /tests/unit/eva/stage-templates/index.test.js @rickfelix
+
+# Stage 17 cross-repo contract gate per SD-LEO-INFRA-STAGE17-CROSS-REPO-001.
+# Any change to these paths must also touch docs/architecture/stage17-contracts.md
+# (paired-update enforced by .github/workflows/stage17-contract-smoke.yml).
+# Reviewer verifies the contract still matches.
+/lib/eva/stage-17/ @rickfelix
+/server/routes/stage17.js @rickfelix
+/docs/architecture/stage17-contracts.md @rickfelix
+/scripts/audit-stage17-urls.mjs @rickfelix
