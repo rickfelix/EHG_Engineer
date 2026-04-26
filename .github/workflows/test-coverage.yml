@@ -7,6 +7,7 @@ on:
       - 'scripts/**'
       - 'lib/**'
       - 'server.js'
+      - 'vitest.config.js'
   push:
     branches: [main, develop]
 
