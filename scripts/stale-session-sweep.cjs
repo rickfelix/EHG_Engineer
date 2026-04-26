@@ -425,6 +425,7 @@ async function main() {
       isStale: isStale && !hasPidAlive && !(sourceSide && sourceSide.alive),
       status,
       sourceSideReason: sourceSide?.reason || null,
+      hasPidAlive, // QF-20260426-SWEEP-HARDCAP-PIDALIVE: preserve for hard-cap guard
     };
   });
   if (collisions.length > 0) {
@@ -714,6 +715,17 @@ async function main() {
     let releaseReason = 'SWEEP_PID_DEAD';
     if (FLEET_MC_SWEEP_GATE) {
       if (hbSec >= FLEET_MC_HARD_CAP_SEC) {
+        // QF-20260426-SWEEP-HARDCAP-PIDALIVE: hard cap must respect pid_alive.
+        // Worker phase-boundary scripts (handoff.js validation-agent + Explore
+        // subagents during PLAN_PRD) routinely take 15-25 min. Heartbeat lag
+        // past 20m + live PID = legitimately busy, not stuck.
+        if (s.hasPidAlive) {
+          warnings.push(
+            'WIP_GUARD_HARDCAP_PID_ALIVE: ' + s.session_id +
+            ' hb=' + Math.round(hbSec) + 's >= 20m hard cap BUT pid_alive=true — HOLDING release (SD: ' + s.sd_key + ')'
+          );
+          continue;
+        }
         releaseReason = 'SWEEP_HARD_CAP_20M';
       } else {
         const mc = mcBySession.get(s.session_id);
