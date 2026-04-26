@@ -19,6 +19,8 @@ Parse `$ARGUMENTS` to determine the subcommand:
 - `predictions` or `p` → Predictive signals (capacity, unlock forecast, heartbeat aging)
 - `sweep` or `s` → Run stale session sweep (release dead claims, resolve conflicts, QA fixes)
 - `identity` or `id` → Assign colors and callsigns to active workers
+- `revive [callsign]` → Request revival for a single callsign (e.g., `revive Bravo`)
+- `revive-all` → Request revival for every callsign without an active session
 - `team` or `t` → /execute team banner (active multi-session execution teams, Mockup A)
 - `help` → Show usage help
 
@@ -42,6 +44,8 @@ Map the argument to the appropriate action:
 - `predictions`, `p` → dashboard predictions section
 - `sweep`, `s` → run sweep script
 - `identity`, `id` → assign fleet identities
+- `revive <callsign>` → run coordinator-revive.cjs with the callsign arg
+- `revive-all` → run coordinator-revive.cjs with `all`
 - `team`, `t` → dashboard team section (/execute Mockup A banner — Phase 2)
 - `all`, no args → full dashboard
 - `help` → show help
@@ -180,6 +184,25 @@ Assigns colors and NATO callsigns to all active workers. New workers without an 
 
 Display the assignment table output.
 
+#### For `revive [callsign]` or `revive-all` (SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001):
+
+```bash
+# Single-callsign revival
+node scripts/coordinator-revive.cjs <callsign>      # e.g., 'Bravo'
+
+# Batch revive every callsign without an active session
+node scripts/coordinator-revive.cjs all
+```
+
+INSERTs a row into `worker_spawn_requests` (one pending per callsign — partial unique index enforces idempotency) and emits a `SPAWN_REQUEST` broadcast on `session_coordination`. An external spawn-execution layer (out of scope for this skill — see `docs/protocol/coordinator-worker-revival.md`) consumes the row and starts a fresh CC instance.
+
+Behavior:
+- Single revive of an already-pending callsign reports "already pending" gracefully (no error).
+- `revive-all` queries `v_active_sessions` for callsigns without active sessions, batches inserts, and reports inserted/skipped/failed counts.
+- The `revival` dashboard section (`/coordinator revival` or part of `/coordinator all`) surfaces pending requests with age + expires-in.
+
+Display the script output directly to the user.
+
 #### For `help`:
 
 Display:
@@ -200,6 +223,8 @@ Subcommands:
   /coordinator predict  (p) Predictive signals — capacity, unlock forecast, aging
   /coordinator sweep    (s) Run stale session sweep — release dead, resolve conflicts
   /coordinator identity (id) Assign colors and callsigns to active workers
+  /coordinator revive [callsign] Request revival for a callsign (worker_spawn_requests)
+  /coordinator revive-all   Request revival for every callsign without an active session
   /coordinator help         Show this help
 
 Getting Started:

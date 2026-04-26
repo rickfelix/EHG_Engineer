@@ -146,6 +146,21 @@ async function loadData() {
       .order('agent_slot', { ascending: true })
   ]);
 
+  // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001: pending worker_spawn_requests
+  // Separate query (added after main Promise.all) — graceful degradation if table doesn't exist.
+  let revivalPending = [];
+  try {
+    const { data: rpData } = await supabase
+      .from('worker_spawn_requests')
+      .select('id, requested_callsign, requested_by_session_id, requested_at, expires_at')
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
+      .order('requested_at', { ascending: true });
+    revivalPending = rpData || [];
+  } catch (e) {
+    // Pre-migration clones don't have the table — silently empty.
+  }
+
   const sessions = sessRes.data || [];
   const allSessions = allSessRes.data || [];
   const drainAgents = drainRes.data || [];
@@ -270,7 +285,8 @@ async function loadData() {
     unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells,
     drainAgents,
     mc, mcByWorker,
-    executeTeams
+    executeTeams,
+    revivalPending // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
   };
 }
 
@@ -474,6 +490,34 @@ function printAvailable(d) {
     }
   }
 
+  console.log('');
+}
+
+// ── Section: Revival Pending (SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001) ──
+function printRevivalPending(d) {
+  const rows = d.revivalPending || [];
+  if (rows.length === 0) return; // zero-noise default
+
+  console.log('REVIVAL PENDING (' + rows.length + ')');
+  console.log('─'.repeat(72));
+  console.log('  ' + pad('Callsign', 12) + pad('Requested by', 24) + pad('Age', 12) + 'Expires in');
+  console.log('  ' + '─'.repeat(68));
+
+  const now = Date.now();
+  function fmtAge(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return s + 's';
+    const m = Math.round(s / 60);
+    if (m < 60) return m + 'm';
+    return Math.round(m / 60) + 'h';
+  }
+
+  for (const r of rows) {
+    const age = fmtAge(now - Date.parse(r.requested_at));
+    const expIn = fmtAge(Date.parse(r.expires_at) - now);
+    const reqBy = (r.requested_by_session_id || 'unknown').substring(0, 22);
+    console.log('  ' + pad(r.requested_callsign, 12) + pad(reqBy, 24) + pad(age, 12) + expIn);
+  }
   console.log('');
 }
 
@@ -976,6 +1020,7 @@ async function main() {
     workers:       () => printWorkers(d),
     orchestrator:  () => printOrchestrator(d),
     available:     () => printAvailable(d),
+    revival:       () => printRevivalPending(d),
     coordination:  () => printCoordination(d),
     coaching:      async () => await printCoaching(d),
     health:        () => printHealth(d),
@@ -991,6 +1036,7 @@ async function main() {
       printDrainAgents(d);
       printOrchestrator(d);
       printAvailable(d);
+      printRevivalPending(d); // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
       printCoordination(d);
       await printCoaching(d);
       printHealth(d);
