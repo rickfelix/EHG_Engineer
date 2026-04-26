@@ -124,6 +124,71 @@ router.post('/:ventureId/archetypes', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/stage17/:ventureId/archetypes/resume
+ *
+ * Resume archetype generation for a venture whose prior run was interrupted
+ * (worker crash, watchdog stall, network drop). Idempotency guard: claims a
+ * 10-min lock_token on the venture's s17_session_state row before spawning
+ * the generator. A second concurrent call within the TTL gets 409.
+ *
+ * SD-LEO-INFRA-STAGE-ARCHETYPE-GENERATION-001 ARM F
+ */
+router.post('/:ventureId/archetypes/resume', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+
+  const supabase = req.app.locals.supabase || req.supabase;
+  const { acquireResumeLock, releaseResumeLock } = await import('../../lib/eva/stage-17/resume-lock.js');
+
+  const lock = await acquireResumeLock(supabase, ventureId);
+  if (!lock.acquired) {
+    if (lock.reason === 'LOCKED') {
+      return res.status(409).json({
+        error: 'Resume already in progress for this venture',
+        code: 'RESUME_LOCKED',
+        existingExpiresAt: lock.existingExpiresAt,
+      });
+    }
+    return res.status(500).json({ error: sanitizeErrorMessage(lock.error), code: 'RESUME_LOCK_ERROR' });
+  }
+
+  // Defensively cancel any in-process foreground generation for this venture
+  // before resuming — the resume request is the new authoritative driver.
+  const inFlight = activeArchetypeGenerations.get(ventureId);
+  if (inFlight) {
+    inFlight.abort();
+    activeArchetypeGenerations.delete(ventureId);
+  }
+
+  const ac = new AbortController();
+  activeArchetypeGenerations.set(ventureId, ac);
+
+  res.status(202).json({
+    status: 'resuming',
+    lockToken: lock.token,
+    expiresAt: lock.expiresAt,
+    message: 'Resume started. Monitor progress via s17_heartbeat artifact.',
+  });
+
+  generateArchetypes(ventureId, supabase, { signal: ac.signal })
+    .then((result) => {
+      const label = result?.cancelled ? 'cancelled' : 'complete';
+      console.log(`[stage17-route] stage17/archetypes/resume ${label}: ${result?.artifactIds?.length ?? 0} screens for ${ventureId.slice(0, 8)}`);
+    })
+    .catch((err) => {
+      console.error('[stage17-route] stage17/archetypes/resume background failed:', err.message ?? err);
+    })
+    .finally(async () => {
+      activeArchetypeGenerations.delete(ventureId);
+      try { await releaseResumeLock(supabase, ventureId, lock.token); }
+      catch (err) { console.warn('[stage17-route] resume-lock release failed:', err.message ?? err); }
+    });
+  return;
+}));
+
+/**
  * POST /api/stage17/:ventureId/archetypes/cancel
  */
 router.post('/:ventureId/archetypes/cancel', asyncHandler(async (req, res) => {
