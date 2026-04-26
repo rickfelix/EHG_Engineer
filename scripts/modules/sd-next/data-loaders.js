@@ -4,6 +4,9 @@
  */
 
 import { execSync } from 'child_process';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { parseHarnessBacklog } from './harness-backlog-parser.js';
 
 /**
  * Log a query failure with structured context for diagnostics.
@@ -597,4 +600,62 @@ export async function loadFeedbackItems(supabase) {
     // Table may not exist in all environments
     return [];
   }
+}
+
+/**
+ * Harness-backlog loader cache (SD-LEO-INFRA-SURFACE-HARNESS-BACKLOG-001).
+ * Keyed by absolute filePath; entry shape:
+ *   { mtimeMs: number, expiresAt: number, result: HarnessBacklogParseResult }
+ * 60s TTL upper bound; mtime-mismatch invalidates earlier.
+ */
+const HARNESS_BACKLOG_TTL_MS = 60_000;
+const _harnessBacklogCache = new Map();
+
+/**
+ * Load + parse docs/harness-backlog.md for the sd:next HARNESS BACKLOG section.
+ * Read-only filesystem access. mtime-keyed in-memory cache (60s TTL) prevents
+ * repeated reads on rapid sd:next invocations.
+ *
+ * @param {string} [filePath]  Absolute path to harness-backlog.md.
+ *                             Defaults to <repo-root>/docs/harness-backlog.md
+ *                             (repo root resolved relative to this module).
+ * @returns {Promise<{ count:number, oldestAgeDays:number, items:Array, fileMissing:boolean, error:string|null }>}
+ */
+export async function loadHarnessBacklog(filePath) {
+  const resolvedPath = filePath
+    ?? process.env.HARNESS_BACKLOG_PATH
+    ?? path.resolve(process.cwd(), 'docs', 'harness-backlog.md');
+
+  try {
+    const stat = await fs.stat(resolvedPath).catch(() => null);
+    if (!stat) {
+      return { count: 0, oldestAgeDays: 0, items: [], fileMissing: true, error: null };
+    }
+    const cached = _harnessBacklogCache.get(resolvedPath);
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.expiresAt > Date.now()) {
+      return cached.result;
+    }
+    const content = await fs.readFile(resolvedPath, 'utf8');
+    const parsed = parseHarnessBacklog(content);
+    const result = { ...parsed, fileMissing: false, error: null };
+    _harnessBacklogCache.set(resolvedPath, {
+      mtimeMs: stat.mtimeMs,
+      expiresAt: Date.now() + HARNESS_BACKLOG_TTL_MS,
+      result,
+    });
+    return result;
+  } catch (err) {
+    return {
+      count: 0,
+      oldestAgeDays: 0,
+      items: [],
+      fileMissing: false,
+      error: err?.message || String(err),
+    };
+  }
+}
+
+/** Test-only: clear the harness-backlog loader cache. */
+export function _clearHarnessBacklogCache() {
+  _harnessBacklogCache.clear();
 }

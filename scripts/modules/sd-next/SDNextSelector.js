@@ -56,7 +56,8 @@ import {
   loadOpenQuickFixes,
   triageQuickFixes,
   loadUnscheduledRoadmapItems,
-  loadFeedbackItems
+  loadFeedbackItems,
+  loadHarnessBacklog
 } from './data-loaders.js';
 import {
   displayOKRScorecard,
@@ -128,6 +129,8 @@ export class SDNextSelector {
     this.qfTriageResults = new Map();
     this.unscheduledRoadmapItems = [];
     this.feedbackItems = [];
+    // SD-LEO-INFRA-SURFACE-HARNESS-BACKLOG-001
+    this.harnessBacklog = null;
   }
 
   /**
@@ -186,6 +189,8 @@ export class SDNextSelector {
     }
     this.unscheduledRoadmapItems = await loadUnscheduledRoadmapItems(this.supabase);
     this.feedbackItems = await loadFeedbackItems(this.supabase);
+    // SD-LEO-INFRA-SURFACE-HARNESS-BACKLOG-001: load harness backlog file
+    this.harnessBacklog = await loadHarnessBacklog();
     this.loadMultiRepoStatus();
 
     // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Detect local signals
@@ -221,6 +226,7 @@ export class SDNextSelector {
         qfTriageResults: this.qfTriageResults,
       });
       this.displayFeedbackItems();
+      this.displayHarnessBacklog();
       if (qfSummaryNoBaseline.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available` };
       }
@@ -239,6 +245,7 @@ export class SDNextSelector {
         qfTriageResults: this.qfTriageResults,
       });
       this.displayFeedbackItems();
+      this.displayHarnessBacklog();
       if (qfSummaryExhausted.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available` };
       }
@@ -250,6 +257,9 @@ export class SDNextSelector {
 
     // Display actionable feedback items (SD-LEO-INFRA-FEEDBACK-PIPELINE-ACTIVATION-001-C)
     this.displayFeedbackItems();
+
+    // Display harness backlog staleness (SD-LEO-INFRA-SURFACE-HARNESS-BACKLOG-001)
+    this.displayHarnessBacklog();
 
     // Display recommendations and get structured action data
     const recommendation = await displayRecommendations(this.supabase, this.baselineItems, this.conflicts, this.getSessionContext(), qfSummary);
@@ -605,6 +615,66 @@ export class SDNextSelector {
       console.log(`  ${badge} ${cat}${title}${age > 7 ? ` ${c.red}(${age}d)${c.reset}` : ` ${c.dim}(${age}d)${c.reset}`}`);
     }
     console.log(`${c.dim}  Run /inbox to triage${c.reset}`);
+  }
+
+  /**
+   * Display harness backlog count + oldest-entry age + top 5 items.
+   * SD-LEO-INFRA-SURFACE-HARNESS-BACKLOG-001
+   *
+   * Section ALWAYS renders so operators learn the surface exists. Color
+   * escalates green (<7d) → yellow (7-13d) → magenta (>=14d) on count badge.
+   */
+  displayHarnessBacklog() {
+    const c = colors;
+    const data = this.harnessBacklog;
+
+    if (!data) {
+      console.log(`\n${c.bold}${c.yellow}HARNESS BACKLOG${c.reset} ${c.dim}(not loaded)${c.reset}`);
+      return;
+    }
+
+    if (data.fileMissing) {
+      console.log(`\n${c.bold}${c.yellow}HARNESS BACKLOG${c.reset} ${c.dim}(file missing — check docs/harness-backlog.md)${c.reset}`);
+      return;
+    }
+
+    if (data.error) {
+      console.log(`\n${c.bold}${c.yellow}HARNESS BACKLOG${c.reset} ${c.red}(parse error — see stderr)${c.reset}`);
+      process.stderr.write(`[harness-backlog] ${data.error}\n`);
+      return;
+    }
+
+    const ageColor = data.oldestAgeDays >= 14
+      ? c.magenta
+      : data.oldestAgeDays >= 7
+        ? c.yellow
+        : c.green;
+    const countDisplay = data.count === 0
+      ? `${c.dim}0 items${c.reset}`
+      : `${ageColor}${data.count} item${data.count === 1 ? '' : 's'}, oldest ${data.oldestAgeDays}d${c.reset}`;
+
+    console.log(`\n${c.bold}${c.yellow}HARNESS BACKLOG${c.reset} (${countDisplay})`);
+
+    if (data.count === 0) {
+      console.log(`${c.dim}  No deferred items — keep filing one-liners during product work${c.reset}`);
+      return;
+    }
+
+    const sorted = [...data.items].sort((a, b) => b.ageDays - a.ageDays);
+    const top = sorted.slice(0, 5);
+    for (const item of top) {
+      const ageBadge = item.ageDays >= 14
+        ? `${c.magenta}${item.ageDays}d${c.reset}`
+        : item.ageDays >= 7
+          ? `${c.yellow}${item.ageDays}d${c.reset}`
+          : `${c.dim}${item.ageDays}d${c.reset}`;
+      const symptom = (item.symptom || '(no symptom)').slice(0, 80);
+      console.log(`  ${ageBadge} ${symptom}`);
+    }
+    if (data.count > 5) {
+      console.log(`${c.dim}  +${data.count - 5} more — see docs/harness-backlog.md${c.reset}`);
+    }
+    console.log(`${c.dim}  Process via [MODE: campaign] session or /leo audit${c.reset}`);
   }
 
   async displayTracks() {
