@@ -4,7 +4,75 @@
  *
  * SD-LEO-GEMINI-001: Validate target_application at LEAD-TO-PLAN to prevent
  * late-stage failures when commits are searched in wrong repository
+ *
+ * SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001: Path-based detector
+ * `detectFromKeyChanges` complements the prose detector below; consumed by
+ * leo-create-sd.js BEFORE the venture-resolver fallback so all-frontend SDs
+ * route to EHG without manual --venture intervention.
  */
+
+// Path-prefix substrings that vote toward each application. Matches are
+// case-sensitive substring checks against `key_changes[].change` strings.
+// Update review date in the comment block below when patterns change.
+// Last reviewed: 2026-04-26 (SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001)
+export const PATH_PATTERN_DICTIONARY = {
+  EHG: [
+    '/ehg/',
+    'src/components/',
+    'src/pages/',
+    'src/stages/',
+    'src/ventures/',
+    'src/hooks/',
+    'src/lib/',
+  ],
+  EHG_Engineer: [
+    'scripts/',
+    'lib/eva/',
+    'lib/sub-agents/',
+    'lib/llm/',
+    'lib/genesis/',
+    'lib/utils/',
+    'lib/telemetry/',
+    'lib/team/',
+    '.claude/',
+    'CLAUDE.md',
+    'CLAUDE_CORE.md',
+    'CLAUDE_LEAD.md',
+    'CLAUDE_PLAN.md',
+    'CLAUDE_EXEC.md',
+    'handoff.js',
+  ],
+};
+
+/**
+ * Path-based target_application detector for SD authoring.
+ *
+ * Scans `key_changes[].change` strings against PATH_PATTERN_DICTIONARY,
+ * tallies matches per application, and returns the majority winner.
+ * Returns null on tie, empty input, non-array input, or zero matches —
+ * the caller's existing fallback chain (getCurrentVenture / explicitTargetApp /
+ * 'EHG_Engineer') handles those cases.
+ *
+ * @param {Array<{type?: string, change?: string}>|*} keyChanges
+ * @returns {'EHG'|'EHG_Engineer'|null}
+ */
+export function detectFromKeyChanges(keyChanges) {
+  if (!Array.isArray(keyChanges) || keyChanges.length === 0) return null;
+
+  let ehgVotes = 0;
+  let engineerVotes = 0;
+
+  for (const entry of keyChanges) {
+    const change = (entry && typeof entry === 'object' && typeof entry.change === 'string') ? entry.change : '';
+    if (!change) continue;
+    if (PATH_PATTERN_DICTIONARY.EHG.some(p => change.includes(p))) ehgVotes += 1;
+    if (PATH_PATTERN_DICTIONARY.EHG_Engineer.some(p => change.includes(p))) engineerVotes += 1;
+  }
+
+  if (ehgVotes === 0 && engineerVotes === 0) return null;
+  if (ehgVotes === engineerVotes) return null;
+  return ehgVotes > engineerVotes ? 'EHG' : 'EHG_Engineer';
+}
 
 /**
  * Validate and potentially auto-correct target_application
