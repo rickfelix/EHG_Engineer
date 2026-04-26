@@ -42,7 +42,8 @@ jobs:
         # canonical defense against that bug class.
         env:
           NODE_OPTIONS: --experimental-vm-modules
-        run: npm run test:coverage -- --json --outputFile=test-results.json
+        # QF-20260426-465: vitest dropped CLI --json in 1.x->3.x; use --reporter=json instead.
+        run: npm run test:coverage -- --reporter=json --outputFile=test-results.json
 
       - name: Check coverage threshold
         run: |
