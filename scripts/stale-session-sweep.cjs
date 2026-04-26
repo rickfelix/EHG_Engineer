@@ -970,24 +970,28 @@ async function main() {
 
   // FIX #3: Clean up coordination messages targeting dead/stale sessions
   // These accumulate because target sessions exit without reading them
+  // QF-20260426-SWEEP-MSG-NUKE: previously also deleted unexpired broadcasts
+  // (target_session='broadcast' is never in classified-set) and COACHING messages
+  // to STALE-but-claim-holding sessions (workers read on next sd-start chained run).
+  // Now: only delete unread messages where (a) target is a real session_id (UUID-shaped),
+  // (b) target is DEAD (claim released), and (c) message is past its expires_at if set.
   const allSessionIds = new Set(classified.map(s => s.session_id));
+  const deadIds = new Set(classified.filter(s => s.status === 'DEAD').map(s => s.session_id));
+  const nowMs = Date.now();
+  const isUuidLike = (s) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(s);
+  const isExpired = (m) => !m.expires_at || new Date(m.expires_at).getTime() <= nowMs;
+
   const { data: unreadMsgs } = await supabase
     .from('session_coordination')
-    .select('id, target_session')
+    .select('id, target_session, message_type, expires_at')
     .is('acknowledged_at', null)
     .is('read_at', null);
 
-  const deadMsgIds = (unreadMsgs || [])
-    .filter(m => !allSessionIds.has(m.target_session))
+  const allDeadMsgIds = (unreadMsgs || [])
+    .filter(m => isUuidLike(m.target_session))
+    .filter(m => !allSessionIds.has(m.target_session) || deadIds.has(m.target_session))
+    .filter(isExpired)
     .map(m => m.id);
-
-  // Also include messages targeting sessions classified as DEAD or stale
-  const deadOrStaleIds = new Set(classified.filter(s => s.status !== 'ACTIVE').map(s => s.session_id));
-  const staleMsgIds = (unreadMsgs || [])
-    .filter(m => deadOrStaleIds.has(m.target_session))
-    .map(m => m.id);
-
-  const allDeadMsgIds = [...new Set([...deadMsgIds, ...staleMsgIds])];
   if (allDeadMsgIds.length > 0) {
     // Delete in batches of 50
     for (let i = 0; i < allDeadMsgIds.length; i += 50) {
