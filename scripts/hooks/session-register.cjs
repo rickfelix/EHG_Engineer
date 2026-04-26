@@ -115,6 +115,22 @@ async function main() {
   if (!error) {
     console.log(`session-register: registered ${sessionId.slice(0, 12)}...`);
   }
+
+  // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001: if the session was previously parked
+  // in `awaiting_tick` (set by post-tool-loop-state.cjs after a ScheduleWakeup),
+  // SessionStart now means the wakeup fired — flip to `active`. Conditional WHERE
+  // means fresh sessions (no prior loop_state) are not touched.
+  try {
+    const {
+      LOOP_STATE_ACTIVE,
+      LOOP_STATE_AWAITING_TICK
+    } = require('../lib/sessions/loop-state-tracker.cjs');
+    await supabase
+      .from('claude_sessions')
+      .update({ loop_state: LOOP_STATE_ACTIVE })
+      .eq('session_id', sessionId)
+      .eq('loop_state', LOOP_STATE_AWAITING_TICK);
+  } catch { /* best-effort observability; never block SessionStart */ }
 }
 
 main().catch(() => { /* fail silently */ });

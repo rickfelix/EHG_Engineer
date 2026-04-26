@@ -100,6 +100,7 @@ The dashboard may show additional columns from the heartbeat intelligence system
 - **Fails** (handoff failure count): Flag WORKER_STRUGGLING when fails > 3. Suggest /rca at fails > 5.
 - **WIP** (uncommitted changes): If a stale session has WIP=yes, **do NOT recommend release** — flag as "stale with uncommitted work, needs SAVE_WARNING"
 - **Branch**: Cross-check for worktree conflicts. Two workers on the same branch = WORKTREE_CONFLICT. Exception: QF-type SDs on main branch are expected.
+- **LoopState** (`claude_sessions.loop_state`): `awaiting_tick` means the worker is in a /loop parked on ScheduleWakeup — do not dispatch new work; it will resume autonomously. `active` = mid-iteration; `exited` = loop ended (safe to dispatch); `--` = no /loop state recorded.
 
 When these columns show `-` (not yet populated), fall back to heartbeat-age-only assessment.
 

@@ -149,6 +149,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "ScheduleWakeup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/post-tool-loop-state.cjs",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [
