@@ -1259,6 +1259,27 @@ async function main() {
     console.log('');
   }
 
+  // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001 — flip loop_state to `exited` on
+  // sessions that just got released by this sweep cycle. Best-effort: failure
+  // does not roll back the release. Single bulk UPDATE rather than threading
+  // the field through every release path above (4+ sites in 3a/3b/3c/3d).
+  try {
+    // `now` was captured at the start of main() and is used for every release_at
+    // write in this sweep, so released_at >= now identifies sessions released
+    // during this cycle.
+    const sweepStartIso = now && now.toISOString ? now.toISOString() : null;
+    if (sweepStartIso) {
+      const { LOOP_STATE_EXITED } = require('./lib/sessions/loop-state-tracker.cjs');
+      await supabase
+        .from('claude_sessions')
+        .update({ loop_state: LOOP_STATE_EXITED })
+        .gte('released_at', sweepStartIso)
+        .in('loop_state', ['active', 'awaiting_tick']);
+    }
+  } catch (loopExitErr) {
+    console.log('LOOP_STATE EXIT: ' + (loopExitErr && loopExitErr.message ? loopExitErr.message : 'unknown'));
+  }
+
   console.log('=== SWEEP COMPLETE ===');
 }
 

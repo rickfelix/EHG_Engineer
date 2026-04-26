@@ -107,7 +107,7 @@ async function loadData() {
   const [sessRes, allSessRes, childRes, workRes, coordRes, rawSessRes, drainRes] = await Promise.all([
     supabase
       .from('v_active_sessions')
-      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id')
+      .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, terminal_id, loop_state')
       .not('sd_key', 'is', null)
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
@@ -356,8 +356,9 @@ function printWorkers(d) {
   } else {
     const csidHeader = hasCollision ? pad('CSID', 12) : '';
     const mcHeader = mcOk ? pad('P(alive)', 16) : '';
-    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + pad('Activity', 18) + pad('Silent until', 14) + mcHeader + 'Heartbeat');
-    console.log('  ' + '─'.repeat(hasCollision ? (mcOk ? 136 : 120) : (mcOk ? 124 : 108)));
+    console.log('  ' + pad('Terminal', 12) + csidHeader + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + pad('LoopState', 14) + pad('Activity', 18) + pad('Silent until', 14) + mcHeader + 'Heartbeat');
+    // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001: LoopState column (14 chars) added between WIP and Activity → 14-char wider separator.
+    console.log('  ' + '─'.repeat(hasCollision ? (mcOk ? 150 : 134) : (mcOk ? 138 : 122)));
     for (const s of d.activeSessions) {
       const child = d.children.find(c => c.sd_key === s.sd_key);
       const pct = child ? child.progress_percentage : 0;
@@ -373,7 +374,10 @@ function printWorkers(d) {
       const mcCell = mcOk
         ? pad((mcRow ? pBar(mcRow.p_alive, 10) + ' ' + mcRow.p_alive.toFixed(2) : pad('-', 15)), 16)
         : '';
-      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(activity, 18) + pad(silent, 14) + mcCell + s.heartbeat_age_human + struggleTag);
+      // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001: render loop_state; NULL or `unknown` collapses to `--`.
+      const loopRaw = s.loop_state;
+      const loopCell = (!loopRaw || loopRaw === 'unknown') ? '--' : String(loopRaw);
+      console.log('  ' + pad(s.tty, 12) + csid + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + pad(loopCell, 14) + pad(activity, 18) + pad(silent, 14) + mcCell + s.heartbeat_age_human + struggleTag);
     }
   }
 
