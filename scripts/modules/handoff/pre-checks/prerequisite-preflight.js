@@ -15,6 +15,7 @@
 
 import { SD_TYPE_THRESHOLDS, DEFAULT_THRESHOLD, JSONB_FIELDS } from '../../sd-quality-scoring.js';
 import { shouldBypassUserStories } from '../../../../lib/protocol-policies/orchestrator-bypass.js';
+import { lookupSdIdForFk } from '../../auto-trigger-stories.mjs';
 
 /**
  * Determines whether an SD requires user stories at PLAN-TO-EXEC time.
@@ -64,11 +65,28 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
   const issues = [];
 
   try {
-    // Load SD record
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-134: bimodal id/sd_key resolution.
+    // strategic_directives_v2.id is varchar(50) PK and may hold UUID-shaped
+    // strings on newer SDs or sd_key strings on legacy rows. Resolve via the
+    // PR #3367 helper, then full-row select keyed on the canonical id.
+    let resolved;
+    try {
+      resolved = await lookupSdIdForFk(supabase, sdId);
+    } catch {
+      return {
+        passed: false,
+        issues: [{
+          code: 'SD_NOT_FOUND',
+          message: `Strategic Directive ${sdId} not found in database`,
+          remediation: 'Identifier did not match either id or sd_key. Verify the value (UUID or SD-XXX format) and re-check via: SELECT id, sd_key FROM strategic_directives_v2 WHERE id = $1 OR sd_key = $1.'
+        }]
+      };
+    }
+
     const { data: sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .select('*')
-      .eq('sd_key', sdId)
+      .eq('id', resolved.id)
       .single();
 
     if (sdError || !sd) {
@@ -77,7 +95,7 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
         issues: [{
           code: 'SD_NOT_FOUND',
           message: `Strategic Directive ${sdId} not found in database`,
-          remediation: 'Verify the SD key is correct. Run: node -e "..." to check.'
+          remediation: 'Identifier resolved but full row could not be loaded. Check DB connectivity and row visibility.'
         }]
       };
     }

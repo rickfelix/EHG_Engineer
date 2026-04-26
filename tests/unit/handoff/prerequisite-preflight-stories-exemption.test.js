@@ -72,6 +72,7 @@ describe('checkPlanToExecPrereqs USER_STORIES bypass behavior', () => {
         const builder = {
           select: () => builder,
           eq: () => builder,
+          or: () => builder,
           single: async () => {
             if (table === 'strategic_directives_v2') return { data: sdRow, error: null };
             if (table === 'product_requirements_v2') return { data: prdRow || null, error: null };
@@ -211,6 +212,7 @@ describe('QF-20260423-666: passed filters info-severity entries', () => {
         const builder = {
           select: () => builder,
           eq: () => builder,
+          or: () => builder,
           single: async () => {
             if (table === 'strategic_directives_v2') return { data: sdRow, error: null };
             if (table === 'product_requirements_v2') return { data: prdRow || null, error: null };
