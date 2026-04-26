@@ -248,7 +248,7 @@ export async function traceDependencyChain(supabase, sdKey, options = {}) {
   async function fetchSD(key) {
     const { data } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, priority, progress_percentage, dependencies, metadata, is_active, parent_sd_id, created_at')
+      .select('id, sd_key, title, status, current_phase, priority, progress_percentage, dependencies, metadata, is_active, parent_sd_id, created_at, governance_metadata')
       .or(`sd_key.eq.${key},id.eq.${key}`)
       .single();
     return data;
@@ -369,7 +369,7 @@ export async function resolveMetadataBlocker(supabase, blockerSdKey) {
   // Blocker is a leaf SD (not an orchestrator) — recommend it directly
   const { data: children } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, sequence_rank, track, sd_type, is_active')
+    .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, sequence_rank, track, sd_type, is_active, governance_metadata, metadata')
     .eq('parent_sd_id', blockerSD.id)
     .eq('is_active', true);
 
