@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-26T21:16:02.093Z
-**Rows**: 36
+**Generated**: 2026-04-27T02:34:49.236Z
+**Rows**: 37
 **RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -53,6 +53,10 @@
 - `ship_review_findings_pkey`
   ```sql
   CREATE UNIQUE INDEX ship_review_findings_pkey ON public.ship_review_findings USING btree (id)
+  ```
+- `ux_ship_review_findings_sd_pr`
+  ```sql
+  CREATE UNIQUE INDEX ux_ship_review_findings_sd_pr ON public.ship_review_findings USING btree (sd_key, pr_number) WHERE (sd_key IS NOT NULL)
   ```
 
 ---
