@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-26T21:16:02.093Z
+**Generated**: 2026-04-27T02:34:49.236Z
 **Rows**: 11
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (26 total)
+## Columns (27 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -44,6 +44,7 @@
 | context | `jsonb` | YES | - | - |
 | attempt_number | `integer(32)` | **NO** | `1` | Attempt number for decision re-entry. Enables immutable history — each retry creates a new row instead of updating. |
 | deleted_at | `timestamp with time zone` | YES | - | - |
+| decided_by_user_id | `uuid` | YES | - | auth.users.id of the chairman who approved/rejected. NULL for system/trigger writes (venture_monitor, telegram, agent paths). RLS still gates on existing fn_is_chairman() row-level policy. Added by SD-EHG-INFRA-CHAIRMAN-DECISIONS-USER-ID-001. |
 
 ## Constraints
 
@@ -51,6 +52,7 @@
 - `chairman_decisions_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `chairman_decisions_decided_by_user_id_fkey`: decided_by_user_id → users(id)
 - `chairman_decisions_preference_ref_id_fkey`: preference_ref_id → chairman_preferences(id)
 - `chairman_decisions_venture_id_fkey`: venture_id → ventures(id)
 
@@ -68,6 +70,10 @@
 - `chairman_decisions_pkey`
   ```sql
   CREATE UNIQUE INDEX chairman_decisions_pkey ON public.chairman_decisions USING btree (id)
+  ```
+- `idx_cd_venture_user_created`
+  ```sql
+  CREATE INDEX idx_cd_venture_user_created ON public.chairman_decisions USING btree (venture_id, decided_by_user_id, created_at DESC) WHERE (decided_by_user_id IS NOT NULL)
   ```
 - `idx_chairman_decisions_blocking`
   ```sql
