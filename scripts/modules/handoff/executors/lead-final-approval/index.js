@@ -454,6 +454,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // original SD to measure whether the gap was closed.
     await rescoreOriginalSD(sd, this.supabase);
 
+    // SD-LEO-INFRA-PR-TRACKING-BACKFILL-001: Populate canonical PR-to-SD join row.
+    // Looks up the latest merged PR for this SD's branch and inserts a row into
+    // ship_review_findings. Log-and-continue on failure; never blocks completion.
+    try {
+      const { runShipReviewFindingsPopulator } = await import('./hooks/ship-review-findings-populator.js');
+      const result = await runShipReviewFindingsPopulator(sd, this.supabase);
+      console.log(`   [pr-tracking-populator] ${result.outcome}${result.detail ? ` (${result.detail})` : ''}`);
+    } catch (populatorError) {
+      console.warn(`   ⚠️  PR-tracking populator failed (non-blocking): ${populatorError.message}`);
+    }
+
     // SD-LEO-INFRA-PROGRAMMATIC-TOOL-CALLING-001: Auto-populate retrospective via programmatic scorer.
     // Generates SD-specific insights with real file references — avoids RETROSPECTIVE_QUALITY_GATE failures.
     // Fail-safe: non-blocking, never prevents SD completion.
