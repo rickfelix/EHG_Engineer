@@ -28,3 +28,9 @@ export { createChildScopeCoverageGate } from './child-scope-coverage.js';
 
 // Acceptance Criteria Traceability (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001-B)
 export { createAcceptanceCriteriaTraceabilityGate } from './acceptance-criteria-traceability.js';
+
+// Vision Fidelity Gate (SD-LEO-INFRA-VISION-FIDELITY-GATE-001 FR-2)
+// Compares wireframe elements (eva_vision_documents.extracted_dimensions) against
+// implementation evidence (PRD acceptance_criteria + git diff) via the
+// vision-fidelity sub-agent. Severity tiering per sd_type — see severity-policy.js.
+export { createVisionFidelityGate } from './vision-fidelity.js';
