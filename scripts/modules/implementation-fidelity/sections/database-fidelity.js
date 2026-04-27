@@ -234,7 +234,7 @@ async function extractTableNamesFromMigrations(migrationFiles, repoPath) {
  * @param {Object} supabase - Supabase client
  * @returns {{found: string[], missing: string[]}}
  */
-async function verifyTablesExist(tableNames, supabase) {
+export async function verifyTablesExist(tableNames, supabase) {
   const found = [];
   const missing = [];
   for (const table of tableNames) {

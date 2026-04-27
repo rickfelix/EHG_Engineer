@@ -277,6 +277,41 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
     }
   }
 
+  // SD-LEO-INFRA-BRAINSTORM-SOURCE-TRUTH-CHECK-001 (FR-5):
+  // Pre-check brainstorm claims BEFORE upsert when feature flag is enabled and brainstormId is supplied.
+  // Default: BRAINSTORM_PRE_CHECK_ENABLED=false (ramp-up safety per rollout plan stage 2).
+  // Override drift via --bypass-source-truth-check '<reason>' (reason ≥10 chars).
+  const preCheckEnabled = process.env.BRAINSTORM_PRE_CHECK_ENABLED === 'true';
+  const bypassReason = typeof opts.bypassSourceTruthCheck === 'string' ? opts.bypassSourceTruthCheck : null;
+  if (preCheckEnabled && brainstormId) {
+    const { preCheckBrainstorm } = await import('./brainstorm-pre-check.mjs');
+    const { report } = await preCheckBrainstorm({ brainstormId, supabase });
+    if (report.claims_failed > 0) {
+      const errorEntries = report.drift_entries.filter((e) => e.severity === 'error');
+      const blocking = errorEntries.length > 0;
+      console.warn(`\n⚠️  Source-truth drift detected: ${report.claims_failed}/${report.claims_total} claims failed (${errorEntries.length} errors)`);
+      for (const entry of report.drift_entries) {
+        console.warn(`   [${entry.severity}] ${entry.expected} → ${entry.observed}` +
+          (entry.remediation_hint ? `\n      fix: ${entry.remediation_hint}` : ''));
+      }
+      if (blocking) {
+        if (!bypassReason || bypassReason.length < 10) {
+          console.error('\n❌ Upsert blocked by source-truth drift. Either fix the brainstorm or pass --bypass-source-truth-check "<reason ≥10 chars>".');
+          process.exit(1);
+        }
+        await supabase.from('audit_log').insert({
+          event_type: 'BRAINSTORM_SOURCE_TRUTH_BYPASS',
+          entity_type: 'brainstorm_session',
+          entity_id: brainstormId,
+          metadata: { reason: bypassReason, drift_count: report.claims_failed, plan_key: planKey, vision_key: visionKey },
+          severity: 'warning',
+          created_by: 'eva-archplan-command',
+        });
+        console.warn(`   ⚠️  Bypassed with reason: ${bypassReason}`);
+      }
+    }
+  }
+
   // Delegate to extracted upsert module (SD-LEO-INFRA-VENTURE-BUILD-READINESS-001-C)
   const { upsertArchPlan } = await import('../../lib/eva/archplan-upsert.js');
   const { data, error } = await upsertArchPlan({
@@ -293,6 +328,21 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
   console.log(`   Vision:   ${visionKey} (id: ${data.vision_id})`);
   console.log(`   Status:   ${data.status}`);
   if (dimensions) console.log(`   Dimensions: ${dimensions.length} extracted`);
+
+  // SD-LEO-INFRA-BRAINSTORM-SOURCE-TRUTH-CHECK-001 (FR-5):
+  // Auto-file companion SDs declared in brainstorm.metadata.companion_sds_to_file
+  // AFTER successful upsert (never before — drift would leak phantom SDs).
+  if (preCheckEnabled && brainstormId) {
+    try {
+      const { autoFileBrainstorm } = await import('./brainstorm-auto-file.mjs');
+      const { summary } = await autoFileBrainstorm({ brainstormId, supabase });
+      if (summary.filed + summary.skipped + summary.failed > 0) {
+        console.log(`   Companions: filed=${summary.filed} skipped=${summary.skipped} failed=${summary.failed}`);
+      }
+    } catch (autoFileErr) {
+      console.warn(`   ⚠️  Companion auto-file failed (non-blocking): ${autoFileErr.message}`);
+    }
+  }
 }
 
 async function cmdAddendum({ planKey, section }) {
