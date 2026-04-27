@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "tasks": [
+    {
+      "id": "spot-check-001",
+      "title": "Should I use Postgres or Mongo for the new venture's user store?",
+      "description": "Tier-2 cloud-hosted, ~10K MAU expected at month 6. I lean Postgres but want to be sure.",
+      "expected_flow": "decision",
+      "expected_pushback_topic": "criteria first — what is being optimized for (familiarity, scale, cost, integration)"
+    },
+    {
+      "id": "spot-check-002",
+      "title": "Investigate why our Stripe webhook is dropping every 4th event",
+      "description": "Started after the latest deploy. Logs show no signature mismatch. Looking for likely root causes before I spend time bisecting commits.",
+      "expected_flow": "research",
+      "expected_pushback_topic": "the framing — has it actually been confirmed as every 4th vs random sampling that looks like every 4th"
+    },
+    {
+      "id": "spot-check-003",
+      "title": "Draft the email to the design firm explaining we're going in another direction",
+      "description": "Need to be polite but final. They sent 3 invoices this month for revisions we never asked for.",
+      "expected_flow": "draft",
+      "expected_pushback_topic": "softer phrasing if the chairman drifts toward 'we just need a break' framing — be final, not deferred"
+    },
+    {
+      "id": "spot-check-004",
+      "title": "Plan the prep checklist for the Wednesday investor call",
+      "description": "Solo first venture, 30-minute slot, two general partners on the line.",
+      "expected_flow": "action_prep",
+      "expected_pushback_topic": "skipping the 'what are the 3 likely questions' prep step in favor of polishing the deck"
+    },
+    {
+      "id": "spot-check-005",
+      "title": "Pick a transactional email service for the launch",
+      "description": "Volume will be ~5K emails/month at launch, scaling to 50K within 6 months. SendGrid, Postmark, Resend, or roll-our-own SES?",
+      "expected_flow": "platform",
+      "expected_pushback_topic": "roll-our-own SES at this volume — that's premature complexity for a solo operator"
+    }
+  ]
+}
