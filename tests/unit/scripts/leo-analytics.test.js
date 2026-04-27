@@ -14,12 +14,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'leo-analytics.js');
 
+// CLI integration tests need a live Supabase connection — the script reads
+// real metrics from the database. In CI runs without secrets the synthetic
+// sentinel from tests/setup.js sets SUPABASE_URL=https://test.invalid.local,
+// which the spawned child inherits and fails to resolve. Detect and skip.
+const HAS_REAL_DB = process.env.SUPABASE_URL
+  && !process.env.SUPABASE_URL.includes('test.invalid.local')
+  && process.env.SUPABASE_SERVICE_ROLE_KEY
+  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
+
 function runScript(args = '') {
   const cmd = `node ${SCRIPT} ${args}`;
   return execSync(cmd, { cwd: ROOT, encoding: 'utf8', timeout: 15000 });
 }
 
-describe('leo-analytics.js', () => {
+describe.skipIf(!HAS_REAL_DB)('leo-analytics.js', () => {
   test('exits with code 0 and displays dashboard header', () => {
     const output = runScript();
     expect(output).toContain('LEO SELF-IMPROVEMENT ANALYTICS DASHBOARD');

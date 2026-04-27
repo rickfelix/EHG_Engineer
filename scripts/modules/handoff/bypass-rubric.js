@@ -36,6 +36,14 @@ export const LEGITIMATE_REASONS = [
     id: 'INFRA_MIGRATION',
     pattern: /\b(migration|infra|infrastructure)\b.*\b(pending|in[\s-]?progress|deploying|rollout)\b/i,
     description: 'Infrastructure migration in progress'
+  },
+  {
+    // SD-LEO-INFRA-VISION-FIDELITY-GATE-001 FR-4: VISION_FIDELITY_GATE bypass
+    // when wireframe and PR diverge by design (e.g. wireframe shows post-backend
+    // state but the PR ships pre-backend; backend lands in a follow-up SD).
+    id: 'VISION_DELIBERATE_DEVIATION',
+    pattern: /\b(wireframe|vision)\b.*\b(deviat|deliberat|intentional|post[-\s]?backend|pre[-\s]?backend|follow[\s-]?up\s*sd|differs?\s+by\s+design)\b/i,
+    description: 'Intentional deviation between vision wireframe and implementation'
   }
 ];
 

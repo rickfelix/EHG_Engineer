@@ -16,13 +16,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock the network / DB side effects so tests don't hit Supabase. We only
 // care about the ownership-mode state machine here.
-vi.mock('../../lib/supabase-client.js', () => ({
-  createSupabaseServiceClient: () => ({
+vi.mock('../../lib/supabase-client.js', () => {
+  const stubClient = {
     from: () => ({
       update: () => ({ eq: () => Promise.resolve({ error: null }) }),
     }),
-  }),
-}));
+  };
+  return {
+    createSupabaseServiceClient: () => stubClient,
+    lazyServiceClient: () => stubClient,
+  };
+});
 
 vi.mock('../../lib/session-manager.mjs', () => ({
   updateHeartbeat: vi.fn(() => Promise.resolve({ success: true })),
