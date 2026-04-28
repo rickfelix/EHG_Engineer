@@ -373,6 +373,21 @@ describe('formatPlanModePrompt', () => {
     expect(result).not.toMatch(/^Architecture:/m);
   });
 
+  it('binding contract references every seeder-written doc (spec, tasks, architecture, branding)', () => {
+    // Doc-driven Plan Mode: every doc the repo seeder writes in the
+    // agent-optimized format (replit-repo-seeder.js:649-654) plus the
+    // chairman-approved docs must be surfaced so Replit Agent reads them.
+    const result = formatPlanModePrompt(mockGroups, mockVenture, mockSummary);
+    expect(result).toContain('docs/spec.md');
+    expect(result).toContain('docs/tasks.md');
+    expect(result).toContain('docs/architecture.md');
+    expect(result).toContain('docs/branding.md');
+    expect(result).toContain('docs/marketing-copy.md');
+    expect(result).toContain('docs/color-palette.md');
+    expect(result).toContain('docs/designs/');
+    expect(result).toContain('docs/gtm-strategy.md');
+  });
+
   it('caps Plan Mode features at 5 and references docs/tasks.md for overflow', () => {
     // Per Replit's "3 max" community guidance + LEO 2-feature headroom.
     const overflowGroups = JSON.parse(JSON.stringify(mockGroups));
