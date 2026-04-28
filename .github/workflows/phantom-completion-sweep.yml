@@ -1,0 +1,62 @@
+name: Phantom Completion Sweep
+
+on:
+  schedule:
+    # Daily at 09:00 UTC (after typical EU/US ship windows close)
+    - cron: '0 9 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sweep:
+    name: Detect status=completed SDs lacking ship_review_findings
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Run phantom sweep
+        id: sweep
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -e
+          # Find completed code-shipping SDs missing ship_review_findings rows.
+          # Uses the same audit script SD-2 created (script gated by --apply, so
+          # this dry-run mode is safe to invoke nightly).
+          OUTPUT=$(node scripts/audit-phantom-completions.js --include-shipped 2>&1 || true)
+          echo "$OUTPUT"
+
+          # Detect any UNKNOWN/PHANTOM bucket entries that emerged since the
+          # 2026-04-28 baseline (SD-MAN-INFRA-RECONCILE-S18-S26-001 cleaned the
+          # original 12+ phantoms). Any new emergence indicates a gate bypass.
+          if echo "$OUTPUT" | grep -qE '^(PHANTOM_NO_FORWARDING|PHANTOM_WITH_FORWARDING|UNKNOWN) \([1-9]'; then
+            echo "phantom_detected=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Phantom Completion Detected"
+              echo ""
+              echo '```'
+              echo "$OUTPUT"
+              echo '```'
+            } > /tmp/issue-body.md
+          else
+            echo "phantom_detected=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open issue on phantom detection
+        if: steps.sweep.outputs.phantom_detected == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Phantom completion suspected: $(date -u +%Y-%m-%d)" \
+            --label phantom-completion-suspected \
+            --body-file /tmp/issue-body.md
