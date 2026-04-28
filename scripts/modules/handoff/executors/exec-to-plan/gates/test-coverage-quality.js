@@ -19,6 +19,22 @@
 
 import { execSync, spawn } from 'child_process';
 
+// QF-20260428-PLAYWRIGHT-BACKEND: SD types that ship without UI by definition.
+// When the diff also touches no UI files, spawning Playwright is guaranteed to time out
+// (60s) and force a documented bypass at every backend EXEC-TO-PLAN. Short-circuit instead.
+const BACKEND_ONLY_SD_TYPES = new Set(['bugfix', 'infrastructure', 'documentation', 'database', 'refactor']);
+const UI_FILE_PATTERN = /(?:\.tsx$|\.jsx$|^src\/components\/|^src\/pages\/|^pages\/|^components\/|^app\/(?!api)|^src\/app\/(?!api))/i;
+
+/**
+ * Detect whether any of the changed files look like UI surface (React/Next page or component).
+ * @param {string[]} codeFiles
+ * @returns {boolean}
+ */
+function hasUIFiles(codeFiles) {
+  if (!Array.isArray(codeFiles)) return false;
+  return codeFiles.some(f => UI_FILE_PATTERN.test(f));
+}
+
 /**
  * Detect code file changes in the current branch/working directory.
  *
@@ -320,6 +336,40 @@ export function createTestCoverageQualityGate(supabase) {
             mode: 'advisory',
             changed_files_count: codeChanges.codeFileCount,
             summary: 'Live test execution disabled - advisory mode'
+          }
+        };
+      }
+
+      // QF-20260428-PLAYWRIGHT-BACKEND: short-circuit for backend-only SDs with no UI surface in the diff.
+      // Spawning Playwright in this case is guaranteed to time out at 60s and force a documented bypass
+      // at every backend EXEC-TO-PLAN. The skip is fail-open (passed=true, score=100) but explicitly
+      // logged + tagged in details.skip_reason so audits can distinguish from a real PASS.
+      // Override via `LEO_PLAYWRIGHT_BACKEND_SHORTCIRCUIT=off` (e.g., a backend SD that legitimately added e2e tests).
+      const shortCircuitEnabled = process.env.LEO_PLAYWRIGHT_BACKEND_SHORTCIRCUIT !== 'off';
+      const isBackendOnly = BACKEND_ONLY_SD_TYPES.has(sdType);
+      const diffTouchesUI = hasUIFiles(codeChanges.codeFiles);
+      if (shortCircuitEnabled && isBackendOnly && !diffTouchesUI) {
+        console.log(`   ⏭️  Backend-only SD (sd_type=${sdType}) with no UI files in diff — skipping Playwright spawn`);
+        console.log('   💡 Override with LEO_PLAYWRIGHT_BACKEND_SHORTCIRCUIT=off if e2e tests added');
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [
+            `Backend-only SD (${sdType}) with zero UI files in diff — Playwright spawn skipped`,
+            'If this SD legitimately includes e2e tests, set LEO_PLAYWRIGHT_BACKEND_SHORTCIRCUIT=off and re-run'
+          ],
+          details: {
+            status: 'PASS',
+            blocking: false,
+            threshold_used: threshold,
+            sd_type: sdType,
+            mode: 'short_circuit_backend_only',
+            skip_reason: 'backend_only_sd_no_ui_files',
+            changed_files_count: codeChanges.codeFileCount,
+            ui_files_count: 0,
+            summary: 'Backend-only SD with no UI surface in diff'
           }
         };
       }
