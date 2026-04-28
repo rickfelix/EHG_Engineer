@@ -484,8 +484,31 @@ supabase.from('claude_sessions')
 **If AUTO-PROCEED is ACTIVE:**
 - Skip AskUserQuestion
 - Output status: `🤖 AUTO-PROCEED: Auto-merging PR #X...`
-- Auto-execute: `gh pr merge <PR#> --merge --delete-branch`
-- Continue to Step 7 automatically
+- Run the hardened auto-merge sequence below — do NOT bare-call `gh pr merge`.
+- Continue to Step 6.3 automatically on success; HARD-FAIL `/ship` on failure.
+
+**Hardened auto-merge sequence (SD-LEO-INFRA-SHIP-AUTO-MERGE-001):**
+
+The bare `gh pr merge <PR#> --merge --delete-branch` call silently failed for months — three independent layers blocked it (draft PRs, branch-protection `enforce_admins`, no exit-code check). The hardened sequence lives in `lib/ship/auto-merge.mjs` so it is unit-testable; invoke it from /ship Step 6 like this:
+
+```bash
+node -e "
+import('./lib/ship/auto-merge.mjs').then(async ({ attemptAutoMerge }) => {
+  const owner = (await import('node:child_process')).execSync('gh repo view --json owner --jq .owner.login').toString().trim();
+  const name = (await import('node:child_process')).execSync('gh repo view --json name --jq .name').toString().trim();
+  const result = await attemptAutoMerge({ prNumber: <PR#>, repoOwner: owner, repoName: name });
+  if (!result.ok) process.exit(result.exitCode || 1);
+});
+"
+```
+
+If the call exits non-zero, `/ship` MUST hard-fail and skip Step 6.3 / Step 6.5 / `/learn` / next-SD selection. Do NOT rescue the exit code.
+
+**What the module does (each step closes one of the three failure modes):**
+- `detectDraftState` (`gh pr view --json isDraft`) → `gh pr ready` if draft. LEO PRs are conventionally drafts (waiting for LEAD-FINAL); `gh pr merge` returns "this pull request is in draft state" without this step.
+- `detectEnforceAdmins` (`gh api branches/main/protection`) → conditional `--admin`. The flag is gated on actual branch-protection state, not hardcoded, so privileges are not elevated unnecessarily on repos without `enforce_admins`.
+- Exit-code check on the merge — old behavior silently proceeded on merge failure, marking SDs `completed` while PRs sat orphaned. This is the load-bearing fix.
+- Race recovery: `gh pr view --json state` once on non-zero exit; if `state == MERGED`, treat as success (concurrent-merge race) without re-introducing silent failures.
 
 **If AUTO-PROCEED is INACTIVE:**
 **After presenting the PR URL, use AskUserQuestion to prompt:**
