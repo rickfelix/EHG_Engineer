@@ -364,6 +364,15 @@ describe('formatPlanModePrompt', () => {
     expect(result).toContain('Out of Scope');
   });
 
+  it('references docs/architecture.md instead of inlining an architecture summary', () => {
+    // docs/architecture.md is written by the repo seeder
+    // (replit-repo-seeder.js:652). Inlining a summary risked pulling the wrong
+    // artifact (strategic rationale rather than technical decisions).
+    const result = formatPlanModePrompt(mockGroups, mockVenture, mockSummary);
+    expect(result).toContain('docs/architecture.md');
+    expect(result).not.toMatch(/^Architecture:/m);
+  });
+
   it('caps Plan Mode features at 5 and references docs/tasks.md for overflow', () => {
     // Per Replit's "3 max" community guidance + LEO 2-feature headroom.
     const overflowGroups = JSON.parse(JSON.stringify(mockGroups));
