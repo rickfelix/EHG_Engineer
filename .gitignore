@@ -153,6 +153,9 @@ scripts/verify-*.cjs
 # Wired into CI (.github/workflows/marketing-schema-verify.yml) and LEAD-TO-PLAN
 # pre-handoff gate for Marketing Distribution phases B/C/D.
 !scripts/verify-marketing-schema.mjs
+# UPSTREAM_ARTIFACT_TYPES parity check (SD-MAN-FIX-STAGE-MARKETING-COPY-001)
+# Wired into CI to detect drift between EHG_Engineer canonical and EHG SPA copy.
+!scripts/verify-upstream-types-parity.js
 # Exception: verify-l2p/ directory is production code (modular handoff verifier)
 scripts/comprehensive-*.mjs
 scripts/infrastructure-*.mjs
