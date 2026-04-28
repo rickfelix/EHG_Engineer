@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-27T11:26:09.324Z
+**Generated**: 2026-04-28T11:03:12.905Z
 **Rows**: 11
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (27 total)
+## Columns (28 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -45,6 +45,7 @@
 | attempt_number | `integer(32)` | **NO** | `1` | Attempt number for decision re-entry. Enables immutable history — each retry creates a new row instead of updating. |
 | deleted_at | `timestamp with time zone` | YES | - | - |
 | decided_by_user_id | `uuid` | YES | - | auth.users.id of the chairman who approved/rejected. NULL for system/trigger writes (venture_monitor, telegram, agent paths). RLS still gates on existing fn_is_chairman() row-level policy. Added by SD-EHG-INFRA-CHAIRMAN-DECISIONS-USER-ID-001. |
+| approval_type | `USER-DEFINED` | YES | - | Discriminates AI-generated (chairman-reviewed) approvals from chairman-authored ones. Orthogonal to decision_type (which classifies decision context: stage_gate, gate_failure_escalation, review). NULL = legacy/unknown (rows pre-dating SD-ACTIVATE-S18-MARKETING-COPY-ORCH-001). |
 
 ## Constraints
 
