@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-27T11:26:09.324Z
-**Tables**: 654
+**Generated**: 2026-04-28T11:03:12.905Z
+**Tables**: 657
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (654)
+## All Tables (657)
 
 ### LEO Protocol
 
@@ -203,6 +203,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [agent_task_contracts](tables/agent_task_contracts.md)
 - [agentic_reviews](tables/agentic_reviews.md)
 - [agents](tables/agents.md)
+- [ai_gen_dwell_tracking](tables/ai_gen_dwell_tracking.md)
+- [ai_gen_provenance](tables/ai_gen_provenance.md)
 - [ai_quality_assessments](tables/ai_quality_assessments.md)
 - [anthropic_plugin_registry](tables/anthropic_plugin_registry.md)
 - [app_config](tables/app_config.md)
@@ -571,6 +573,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [stage_events](tables/stage_events.md)
 - [stage_executions](tables/stage_executions.md)
 - [stage_of_death_predictions](tables/stage_of_death_predictions.md)
+- [stage_prop_contracts](tables/stage_prop_contracts.md)
 - [stage_proving_journal](tables/stage_proving_journal.md)
 - [stage_zero_requests](tables/stage_zero_requests.md)
 - [stitch_generation_metrics](tables/stitch_generation_metrics.md)

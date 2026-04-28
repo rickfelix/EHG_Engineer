@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-27T11:26:09.324Z
-**Rows**: 37
+**Generated**: 2026-04-28T11:03:12.905Z
+**Rows**: 46
 **RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (12 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -30,6 +30,7 @@
 | multi_agent | `boolean` | YES | `false` | - |
 | reviewed_at | `timestamp with time zone` | **NO** | `now()` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| synthesized_at | `timestamp with time zone` | YES | - | Set when row was inserted by post-hoc reconciliation (e.g., scripts/audit-phantom-completions.js for SD-MAN-INFRA-RECONCILE-S18-S26-001). NULL for real-time-logged rows from /ship Step 5.5. |
 
 ## Constraints
 
