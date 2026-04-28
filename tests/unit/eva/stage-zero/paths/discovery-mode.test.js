@@ -39,14 +39,14 @@ function createMockSupabase(strategyData = null, nurseryItems = []) {
   return { from: vi.fn(() => chain), _chain: chain };
 }
 
+// SD-LEO-ENH-TREND-SCANNER-SCORING-001 (Checkpoint 2): mock now matches the
+// actual `client.complete(systemPrompt, prompt, opts)` API used by
+// callLLMForCandidates. Prior `messages.create` shape was a pre-existing test bug
+// masked by the silent [] return path that has since been hardened (FR-7).
 function createMockLlm(candidates) {
   return {
     _model: 'test-model',
-    messages: {
-      create: vi.fn().mockResolvedValue({
-        content: [{ text: JSON.stringify(candidates) }],
-      }),
-    },
+    complete: vi.fn().mockResolvedValue(JSON.stringify(candidates)),
   };
 }
 
@@ -59,9 +59,13 @@ const defaultStrategy = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // 5 candidates — meets the default-candidateCount post-condition floor of ceil(5/2)=3 (FR-7).
   mockLlmClient = createMockLlm([
-    { name: 'Venture A', problem_statement: 'Problem A', solution: 'Solution A', target_market: 'Market A', automation_feasibility: 8, competition_level: 'low' },
-    { name: 'Venture B', problem_statement: 'Problem B', solution: 'Solution B', target_market: 'Market B', automation_feasibility: 6, competition_level: 'high' },
+    { name: 'Venture A', problem_statement: 'Problem A', solution: 'Solution A', target_market: 'Market A', automation_feasibility: 8, competition_level: 'low',    monthly_revenue_potential: '$10K/month' },
+    { name: 'Venture B', problem_statement: 'Problem B', solution: 'Solution B', target_market: 'Market B', automation_feasibility: 6, competition_level: 'high',   monthly_revenue_potential: '$5K/month' },
+    { name: 'Venture C', problem_statement: 'Problem C', solution: 'Solution C', target_market: 'Market C', automation_feasibility: 7, competition_level: 'medium', monthly_revenue_potential: '$3K/month' },
+    { name: 'Venture D', problem_statement: 'Problem D', solution: 'Solution D', target_market: 'Market D', automation_feasibility: 5, competition_level: 'low',    monthly_revenue_potential: '$2K/month' },
+    { name: 'Venture E', problem_statement: 'Problem E', solution: 'Solution E', target_market: 'Market E', automation_feasibility: 9, competition_level: 'low',    monthly_revenue_potential: '$20K/month' },
   ]);
   mockSupabase = createMockSupabase(defaultStrategy);
 });
@@ -94,7 +98,7 @@ describe('executeDiscoveryMode', () => {
     );
 
     expect(mockSupabase.from).toHaveBeenCalledWith('discovery_strategies');
-    expect(mockLlmClient.messages.create).toHaveBeenCalled();
+    expect(mockLlmClient.complete).toHaveBeenCalled();
     expect(result).not.toBeNull();
     expect(result.origin_type).toBe('discovery');
     expect(result.discovery_strategy).toBe('trend_scanner');
@@ -107,7 +111,8 @@ describe('executeDiscoveryMode', () => {
       { supabase: mockSupabase, logger: silentLogger, llmClient: mockLlmClient }
     );
 
-    const prompt = mockLlmClient.messages.create.mock.calls[0][0].messages[0].content;
+    // client.complete(systemPrompt, prompt, opts) — assert on prompt arg.
+    const prompt = mockLlmClient.complete.mock.calls[0][1];
     expect(prompt).toContain('3');
   });
 
@@ -117,17 +122,19 @@ describe('executeDiscoveryMode', () => {
       { supabase: mockSupabase, logger: silentLogger, llmClient: mockLlmClient }
     );
 
-    const prompt = mockLlmClient.messages.create.mock.calls[0][0].messages[0].content;
+    const prompt = mockLlmClient.complete.mock.calls[0][1];
     expect(prompt).toContain('budget_range');
   });
 
-  test('returns null when LLM returns no candidates', async () => {
+  test('throws LLMUndercountError when LLM returns no candidates (post-FR-7 hardening)', async () => {
     const emptyLlm = createMockLlm([]);
-    const result = await executeDiscoveryMode(
-      { strategy: 'trend_scanner' },
-      { supabase: mockSupabase, logger: silentLogger, llmClient: emptyLlm }
-    );
-    expect(result).toBeNull();
+    // Prior behavior was silent null return (masking the failure); FR-7 surfaces this as an error.
+    await expect(
+      executeDiscoveryMode(
+        { strategy: 'trend_scanner' },
+        { supabase: mockSupabase, logger: silentLogger, llmClient: emptyLlm }
+      )
+    ).rejects.toThrow(/undercount|empty_response/);
   });
 
   test('returns PathOutput with metadata including strategy info', async () => {

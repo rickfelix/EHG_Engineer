@@ -240,10 +240,18 @@ async function processRequest(supabase, request) {
       EXECUTION_TIMEOUT_MS
     );
 
+    // FR-4e (SD-LEO-ENH-TREND-SCANNER-SCORING-001): surface prompt_version in the
+    // top-level result payload so dashboard consumers and the closed-loop RPC
+    // can read it without nested metadata traversal. Null for non-versioned strategies.
+    const promptVersion = result?.brief?.metadata?.prompt_version
+      ?? result?.brief?.prompt_version
+      ?? null;
+
     // Store success
     await updateStatus(supabase, request.id, {
       status: 'completed',
-      result,
+      result: { ...result, prompt_version: promptVersion },
+      prompt_version: promptVersion,
       completed_at: new Date().toISOString(),
     });
 
