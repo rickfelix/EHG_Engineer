@@ -125,43 +125,19 @@ export async function checkAndCompleteParentSD(sd, supabase, { shippingResults }
           await recordFailedCompletion(parentSD, 'Manual intervention required', report, supabase);
         }
       } catch (guardianError) {
-        console.log(`   ⚠️  Guardian unavailable: ${guardianError.message}`);
-        console.log('   📝 Attempting legacy completion (may fail if artifacts missing)...');
-
-        const { error } = await supabase
-          .from('strategic_directives_v2')
-          .update({
-            status: 'completed',
-            progress_percentage: 100,
-            current_phase: 'COMPLETED',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', parentSD.id);
-
-        if (error) {
-          console.log(`   ❌ Legacy completion FAILED: ${error.message}`);
-          console.log(`   💡 Run: node scripts/modules/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`);
-          await recordFailedCompletion(parentSD, error.message, null, supabase);
-        } else {
-          console.log(`   ✅ Parent SD "${parentSD.title}" auto-completed (legacy path)`);
-
-          // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
-          // SD-LEO-ENH-AUTO-PROCEED-001-05: Returns chaining info if enabled
-          const hookResult = await executeOrchestratorCompletionHook(
-            parentSD.id,
-            parentSD.title,
-            siblings.length,
-            { supabase, shippingResults }
-          );
-
-          return {
-            orchestratorCompleted: true,
-            chainContinue: hookResult?.chainContinue || false,
-            nextOrchestrator: hookResult?.nextOrchestrator || null,
-            nextOrchestratorSdKey: hookResult?.nextOrchestratorSdKey || null
-          };
-        }
+        // SD-LEO-INFRA-PHANTOM-COMPLETION-PROOF-001 (FR-2 / US-002): closed legacy
+        // direct-DB write path. Previously this catch silently UPDATEd status='completed'
+        // without running gates — the smoking gun that allowed SD-MAN-INFRA-S18-S26-DATA-001
+        // and other phantoms to ship. Guardian unavailability is a P0 — not permission
+        // to skip the gate chain.
+        console.log(`   ❌ Guardian unavailable: ${guardianError.message}`);
+        console.log(`   ❌ LEGACY DIRECT-DB COMPLETION PATH IS CLOSED (SD-LEO-INFRA-PHANTOM-COMPLETION-PROOF-001).`);
+        console.log(`   💡 Required action: invoke RCA on Guardian failure, OR explicitly bypass via:`);
+        console.log(`      node scripts/modules/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`);
+        await recordFailedCompletion(parentSD, `Guardian unavailable: ${guardianError.message}. Legacy fallback closed by SD-LEO-INFRA-PHANTOM-COMPLETION-PROOF-001.`, null, supabase);
+        throw new Error(`PHANTOM_PROOF_LEGACY_PATH_CLOSED: Guardian failed for parent ${parentSD.id} (${parentSD.sd_key || 'no sd_key'}). Direct-DB status=completed write refused. Original error: ${guardianError.message}`);
       }
+
     }
   } catch (error) {
     console.log(`   ⚠️  Parent check error: ${error.message}`);
