@@ -205,8 +205,14 @@ As we apply this playbook stage by stage, capture each stage's idiosyncrasies he
 - Persona path: `customerPersonas[0].name` (camelCase, plural).
 - All 6 methodology rules from §0 hit at least once during S18 debugging.
 
-### Stage 19 — *(populate during S19 recon)*
-*To be filled in.*
+### Stage 19 — Sprint Planning
+- **Architectural shape: worker-driven, NOT user-API-driven.** No `/api/stage19/*` route exists. When the chairman approves S18, `lib/agents/venture-state-machine.js:316` calls `executeStage({ stageNumber: 19 })` which invokes `template.analysisStep` (= `analyzeStage19`) and persists output via the centralized `writeArtifact()` service. The frontend (`Stage19SprintPlanning.tsx`) is a pure renderer of `stageData.advisoryData`.
+- **Implication for the playbook:** §1.1's "frontend honest banner" check does not apply (no fetch). §1.2's "real persistence" is handled by `lib/eva/artifact-persistence-service.js` (already correct, dedup-by-screenId pattern). The playbook still applies for §1.0 (vision), §1.4 (LLM config), §1.5 (field-path).
+- **Errors bubble to `venture-state-machine.js:325-326` which catches with `console.warn` only.** Worker-side honest failure UX (surfacing typed errors to the chairman) is a future improvement; today, an LLM failure means the stage simply doesn't advance and the chairman has to read engineer logs.
+- **Upstream dependencies (CROSS_STAGE_DEPS):** stage18Data (build readiness), stage17Data (blueprint review quality scores), stage13Data (roadmap milestones), stage14Data (architecture layers), stage15Data (user stories / wireframes for app-type resolution).
+- **Output: sprint plan + SD bridge payloads.** Each sprint item generates an SD draft (title, description, priority, type, scope, success_criteria, dependencies, risks, target_application). Promotion gate, chairman signature required.
+- **LLM call:** `client.complete(SYSTEM_PROMPT + getFourBucketsPrompt(), userPrompt, { timeout: 180000 })`. Default-routed to Gemini via `getLLMClient({ purpose: 'content-generation' })`. Timeout was 120s pre-fix; bumped to 180s in commit `d5e4c0ba0f` to match S18.
+- **Fix history (this session):** commit `d5e4c0ba0f` applied Option A — wrapped `client.complete()` in try/catch → `LlmUnavailableError`; deleted synthetic `[{ title: 'Initial Build Task', ... }]` placeholder; replaced with `LlmInvalidResponseError` throw.
 
 ### Stage 20–26 — *(populate as we work them)*
 *To be filled in.*
