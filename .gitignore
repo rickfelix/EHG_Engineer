@@ -164,6 +164,8 @@ scripts/create-*-handoff.mjs
 scripts/create-*-via-*.mjs
 scripts/create-*-children.js
 scripts/audit-*.js
+# Phantom-completion audit (SD-MAN-INFRA-RECONCILE-S18-S26-001) — production deliverable
+!scripts/audit-phantom-completions.js
 
 # One-off story generation scripts (SD-specific, use generate-user-stories.js instead)
 scripts/generate-user-stories-*.js
