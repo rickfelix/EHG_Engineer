@@ -1117,8 +1117,10 @@ async function main() {
       process.exit(1);
     }
   } catch (wtErr) {
-    // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree error
-    const classified = classifyWorktreeFailure(wtErr);
+    // SD-MULTISESSION-WORKTREE-SAFETY-ATOMIC-ORCH-001-C: Hard-fail on worktree error.
+    // SD-LEO-INFRA-START-WORKTREE-BRANCH-001: pass typed err.code as context so
+    // WorktreeBaseFetchFailedError surfaces with the dedicated remediation hint.
+    const classified = classifyWorktreeFailure(wtErr, { errCode: wtErr?.code });
     console.error(`${colors.red}   ❌  Worktree resolution error: ${wtErr.message}${colors.reset}`);
     if (classified.code && classified.code !== 'unknown') {
       console.error(`${colors.dim}      [code: ${classified.code} | severity: ${classified.severity}]${colors.reset}`);
