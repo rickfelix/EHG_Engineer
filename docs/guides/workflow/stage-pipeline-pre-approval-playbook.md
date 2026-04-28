@@ -39,6 +39,7 @@ Apply this list to **Stage N+1** before approving Stage N's promotion gate. Most
 - [ ] **Analyzer header read.** Open `lib/eva/stage-templates/analysis-steps/stage-N-*.js`. The top comment names the SD that authored it. What's the LLM supposed to produce?
 - [ ] **Strategic Directives history.** Run `SELECT sd_key, status, scope FROM strategic_directives_v2 WHERE sd_key ILIKE '%STAGE-N%' ORDER BY created_at DESC LIMIT 20`. Skim titles. Which SDs are recent? Which have CAPAs (Corrective Action / Prevention Actions)? Are any "completed" claims worth verifying?
 - [ ] **Reality gate boundary.** Does Stage N+1 have a Reality Gate at the (N → N+1) boundary? Check `lib/eva/reality-gates.js`. If yes, what's it asserting?
+- [ ] **House-stack adherence verified.** For Stage 14 (Technical Architecture) artifacts, confirm `architecture.layers[*].technology` matches `EHG_HOUSE_TECH_STACK` (`lib/eva/config/house-tech-stack.js`) AND `architecture.security.authStrategy` matches `EHG_HOUSE_AUTH_STRATEGY`, OR `architecture.override_reason` is populated with a deviation justification. See Rule 8 of Section 0 for rationale. Use `node scripts/one-off/audit-house-stack-adherence.mjs` for a portfolio-wide read-only audit.
 
 ### 1.1 Honest-failure check
 
