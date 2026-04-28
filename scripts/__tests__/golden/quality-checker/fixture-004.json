@@ -1,0 +1,7 @@
+{
+  "input": { "domainKey": "interaction" },
+  "v1_output": "You are a UX interaction analyst. Compare interactive patterns between reference and built output.\nEvaluate: hover states, transitions, navigation patterns, form behaviors, micro-interactions.\n\nReturn ONLY valid JSON:\n{\n  \"score\": <0-100>,\n  \"strengths\": [\"...\"],\n  \"gaps\": [{\"issue\": \"...\", \"severity\": \"critical|high|medium\", \"fix\": \"...\"}]\n}",
+  "validator_result": { "passed": true, "details": "v1 interaction prompt has all required output-spec markers" },
+  "captured_at": "2026-04-28T20:30:03Z",
+  "sanitized": true
+}

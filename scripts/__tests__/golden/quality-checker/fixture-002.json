@@ -1,0 +1,7 @@
+{
+  "input": { "domainKey": "visual_composition" },
+  "v1_output": "You are a visual design analyst. Compare the reference and built output.\nEvaluate: color palette adherence, typography hierarchy, whitespace rhythm, visual weight distribution.\n\nReturn ONLY valid JSON:\n{\n  \"score\": <0-100>,\n  \"strengths\": [\"...\"],\n  \"gaps\": [{\"issue\": \"...\", \"severity\": \"critical|high|medium\", \"fix\": \"...\"}]\n}",
+  "validator_result": { "passed": true, "details": "v1 visual_composition prompt has all required output-spec markers" },
+  "captured_at": "2026-04-28T20:30:01Z",
+  "sanitized": true
+}

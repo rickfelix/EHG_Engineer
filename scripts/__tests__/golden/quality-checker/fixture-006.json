@@ -1,0 +1,7 @@
+{
+  "input": { "domainKey": "accessibility" },
+  "v1_output": "You are a WCAG accessibility auditor. Evaluate the built output against WCAG 2.1 AA.\nEvaluate: alt text, ARIA labels, keyboard navigation, color contrast, focus management, heading hierarchy.\n\nReturn ONLY valid JSON:\n{\n  \"score\": <0-100>,\n  \"strengths\": [\"...\"],\n  \"gaps\": [{\"issue\": \"...\", \"severity\": \"critical|high|medium\", \"fix\": \"...\"}]\n}",
+  "validator_result": { "passed": true, "details": "v1 accessibility prompt has all required output-spec markers" },
+  "captured_at": "2026-04-28T20:30:05Z",
+  "sanitized": true
+}

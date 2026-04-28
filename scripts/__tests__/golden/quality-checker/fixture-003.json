@@ -1,0 +1,7 @@
+{
+  "input": { "domainKey": "design_system" },
+  "v1_output": "You are a design system auditor. Compare reference tokens/components with built output.\nEvaluate: color token consistency, spacing scale adherence, component library match, typography scale.\n\nReturn ONLY valid JSON:\n{\n  \"score\": <0-100>,\n  \"strengths\": [\"...\"],\n  \"gaps\": [{\"issue\": \"...\", \"severity\": \"critical|high|medium\", \"fix\": \"...\"}]\n}",
+  "validator_result": { "passed": true, "details": "v1 design_system prompt has all required output-spec markers" },
+  "captured_at": "2026-04-28T20:30:02Z",
+  "sanitized": true
+}
