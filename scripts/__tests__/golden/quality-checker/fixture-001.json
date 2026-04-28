@@ -1,0 +1,7 @@
+{
+  "input": { "domainKey": "layout" },
+  "v1_output": "You are a web layout forensics expert. Compare the reference site DNA with the built output.\nEvaluate structural alignment: grid systems, section ordering, content flow, responsive breakpoints.\n\nReturn ONLY valid JSON:\n{\n  \"score\": <0-100>,\n  \"strengths\": [\"...\"],\n  \"gaps\": [{\"issue\": \"...\", \"severity\": \"critical|high|medium\", \"fix\": \"...\"}]\n}",
+  "validator_result": { "passed": true, "details": "v1 layout prompt has all required output-spec markers" },
+  "captured_at": "2026-04-28T20:30:00Z",
+  "sanitized": true
+}

@@ -31,73 +31,65 @@ function getSupabase() {
 }
 
 // ============================================================================
-// LLM Domain Evaluation Prompts
+// LLM Domain Evaluation Prompts (V2 imperative — see PRD-SD-LEO-INFRA-OPUS-HARNESS-PHASE-3-INLINE-SCRIPTS-001)
 // ============================================================================
 
-function buildDomainPrompt(domainKey) {
-  const prompts = {
-    layout: `You are a web layout forensics expert. Compare the reference site DNA with the built output.
-Evaluate structural alignment: grid systems, section ordering, content flow, responsive breakpoints.
+const DOMAIN_RUBRIC = {
+  layout: {
+    subject: 'layout fidelity',
+    dimensions: ['Grid systems', 'Section ordering', 'Content flow', 'Responsive breakpoints'],
+  },
+  visual_composition: {
+    subject: 'visual composition',
+    dimensions: ['Color palette adherence', 'Typography hierarchy', 'Whitespace rhythm', 'Visual weight distribution'],
+  },
+  design_system: {
+    subject: 'design system consistency',
+    dimensions: ['Color token consistency', 'Spacing scale adherence', 'Component library match', 'Typography scale'],
+  },
+  interaction: {
+    subject: 'interaction patterns',
+    dimensions: ['Hover states', 'Transitions', 'Navigation patterns', 'Form behaviors', 'Micro-interactions'],
+  },
+  technical: {
+    subject: 'technical implementation',
+    dimensions: ['Semantic HTML', 'Performance patterns', 'SEO structure', 'Code organization', 'Framework best practices'],
+  },
+  accessibility: {
+    subject: 'WCAG 2.1 AA accessibility',
+    dimensions: ['Alt text', 'ARIA labels', 'Keyboard navigation', 'Color contrast', 'Focus management', 'Heading hierarchy'],
+  },
+};
 
-Return ONLY valid JSON:
+export function buildDomainPrompt(domainKey) {
+  const rubric = DOMAIN_RUBRIC[domainKey] || DOMAIN_RUBRIC.technical;
+  const dimensionsList = rubric.dimensions.map(d => `- ${d}`).join('\n');
+  return `Compare the reference site DNA against the built output for ${rubric.subject}.
+
+Score the built output (0-100). Inspect each dimension:
+${dimensionsList}
+
+Identify up to 5 concrete strengths supporting the score. List every gap with severity (critical, high, or medium) and propose a specific fix.
+
+Return strictly this JSON, with no surrounding text:
 {
   "score": <0-100>,
   "strengths": ["..."],
   "gaps": [{"issue": "...", "severity": "critical|high|medium", "fix": "..."}]
-}`,
+}`;
+}
 
-    visual_composition: `You are a visual design analyst. Compare the reference and built output.
-Evaluate: color palette adherence, typography hierarchy, whitespace rhythm, visual weight distribution.
-
-Return ONLY valid JSON:
-{
-  "score": <0-100>,
-  "strengths": ["..."],
-  "gaps": [{"issue": "...", "severity": "critical|high|medium", "fix": "..."}]
-}`,
-
-    design_system: `You are a design system auditor. Compare reference tokens/components with built output.
-Evaluate: color token consistency, spacing scale adherence, component library match, typography scale.
-
-Return ONLY valid JSON:
-{
-  "score": <0-100>,
-  "strengths": ["..."],
-  "gaps": [{"issue": "...", "severity": "critical|high|medium", "fix": "..."}]
-}`,
-
-    interaction: `You are a UX interaction analyst. Compare interactive patterns between reference and built output.
-Evaluate: hover states, transitions, navigation patterns, form behaviors, micro-interactions.
-
-Return ONLY valid JSON:
-{
-  "score": <0-100>,
-  "strengths": ["..."],
-  "gaps": [{"issue": "...", "severity": "critical|high|medium", "fix": "..."}]
-}`,
-
-    technical: `You are a frontend technical auditor. Evaluate the built output's technical quality.
-Evaluate: semantic HTML, performance patterns, SEO structure, code organization, framework best practices.
-
-Return ONLY valid JSON:
-{
-  "score": <0-100>,
-  "strengths": ["..."],
-  "gaps": [{"issue": "...", "severity": "critical|high|medium", "fix": "..."}]
-}`,
-
-    accessibility: `You are a WCAG accessibility auditor. Evaluate the built output against WCAG 2.1 AA.
-Evaluate: alt text, ARIA labels, keyboard navigation, color contrast, focus management, heading hierarchy.
-
-Return ONLY valid JSON:
-{
-  "score": <0-100>,
-  "strengths": ["..."],
-  "gaps": [{"issue": "...", "severity": "critical|high|medium", "fix": "..."}]
-}`,
-  };
-
-  return prompts[domainKey] || prompts.technical;
+export function validateDomainPromptShape(prompt) {
+  if (typeof prompt !== 'string' || prompt.length === 0) {
+    return { passed: false, details: 'prompt must be a non-empty string' };
+  }
+  const required = ['score', 'strengths', 'gaps', 'severity', 'critical', 'high', 'medium', 'fix', 'JSON'];
+  const lower = prompt.toLowerCase();
+  const missing = required.filter(m => !lower.includes(m.toLowerCase()));
+  if (missing.length > 0) {
+    return { passed: false, details: `missing markers: ${missing.join(',')}` };
+  }
+  return { passed: true };
 }
 
 // ============================================================================
