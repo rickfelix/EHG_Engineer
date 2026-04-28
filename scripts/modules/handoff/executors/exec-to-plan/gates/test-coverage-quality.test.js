@@ -183,4 +183,67 @@ describe('GATE_TEST_COVERAGE_QUALITY', () => {
       expect(result.details).toHaveProperty('summary');
     });
   });
+
+  // QF-20260428-PLAYWRIGHT-BACKEND
+  describe('backend-only Playwright short-circuit', () => {
+    beforeEach(() => {
+      // Force live mode so we exercise the post-advisory path. Earlier `describe('no code changes')`
+      // tests call `execSync.mockReturnValue('')` whose impl override survives `vi.clearAllMocks()`,
+      // so we restore the factory-default diff (lib/* files, no UI) explicitly here.
+      execSync.mockReturnValue('lib/some-file.js\nlib/other-file.js');
+      process.env.ENABLE_LIVE_TEST_EXECUTION = 'true';
+      process.env.PLAYWRIGHT_GATE_TIMEOUT_MS = '50';
+      delete process.env.LEO_PLAYWRIGHT_BACKEND_SHORTCIRCUIT;
+    });
+
+    it('short-circuits for bugfix SD with no UI files in diff', async () => {
+      const result = await gate.validator({ sd: { sd_type: 'bugfix' } });
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.details.mode).toBe('short_circuit_backend_only');
+      expect(result.details.skip_reason).toBe('backend_only_sd_no_ui_files');
+      expect(result.details.ui_files_count).toBe(0);
+    });
+
+    it('short-circuits for infrastructure SD with no UI files in diff', async () => {
+      const result = await gate.validator({ sd: { sd_type: 'infrastructure' } });
+      expect(result.score).toBe(100);
+      expect(result.details.mode).toBe('short_circuit_backend_only');
+    });
+
+    it('short-circuits for documentation SD with no UI files in diff', async () => {
+      const result = await gate.validator({ sd: { sd_type: 'documentation' } });
+      expect(result.score).toBe(100);
+      expect(result.details.mode).toBe('short_circuit_backend_only');
+    });
+
+    it('does NOT short-circuit when diff touches UI files (.tsx)', async () => {
+      execSync.mockReturnValue('src/components/Button.tsx\nlib/util.js');
+      const result = await gate.validator({ sd: { sd_type: 'bugfix' } });
+      expect(result.details.mode).not.toBe('short_circuit_backend_only');
+    });
+
+    it('does NOT short-circuit when diff touches src/components/', async () => {
+      execSync.mockReturnValue('src/components/SomeFile.jsx\nlib/util.js');
+      const result = await gate.validator({ sd: { sd_type: 'infrastructure' } });
+      expect(result.details.mode).not.toBe('short_circuit_backend_only');
+    });
+
+    it('does NOT short-circuit for feature SD even with no UI files', async () => {
+      const result = await gate.validator({ sd: { sd_type: 'feature' } });
+      expect(result.details.mode).not.toBe('short_circuit_backend_only');
+    });
+
+    it('does NOT short-circuit when LEO_PLAYWRIGHT_BACKEND_SHORTCIRCUIT=off', async () => {
+      process.env.LEO_PLAYWRIGHT_BACKEND_SHORTCIRCUIT = 'off';
+      const result = await gate.validator({ sd: { sd_type: 'bugfix' } });
+      expect(result.details.mode).not.toBe('short_circuit_backend_only');
+    });
+
+    it('warnings explain why the gate was skipped (auditable)', async () => {
+      const result = await gate.validator({ sd: { sd_type: 'bugfix' } });
+      expect(result.warnings.some(w => w.includes('Backend-only SD'))).toBe(true);
+      expect(result.warnings.some(w => w.includes('LEO_PLAYWRIGHT_BACKEND_SHORTCIRCUIT=off'))).toBe(true);
+    });
+  });
 });
