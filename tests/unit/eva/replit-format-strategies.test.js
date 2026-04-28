@@ -341,9 +341,9 @@ describe('formatReplitMd', () => {
 // ── Format 2: Plan Mode Prompt ──────────────────────
 
 describe('formatPlanModePrompt', () => {
-  it('stays under 2000 chars', () => {
+  it('stays under 6000 chars (Plan Mode budget)', () => {
     const result = formatPlanModePrompt(mockGroups, mockVenture, mockSummary);
-    expect(result.length).toBeLessThanOrEqual(2000);
+    expect(result.length).toBeLessThanOrEqual(6000);
   });
 
   it('includes numbered sprint items', () => {
@@ -364,8 +364,46 @@ describe('formatPlanModePrompt', () => {
     expect(result).toContain('Out of Scope');
   });
 
+  it('references docs/architecture.md instead of inlining an architecture summary', () => {
+    // docs/architecture.md is written by the repo seeder
+    // (replit-repo-seeder.js:652). Inlining a summary risked pulling the wrong
+    // artifact (strategic rationale rather than technical decisions).
+    const result = formatPlanModePrompt(mockGroups, mockVenture, mockSummary);
+    expect(result).toContain('docs/architecture.md');
+    expect(result).not.toMatch(/^Architecture:/m);
+  });
+
+  it('caps Plan Mode features at 5 and references docs/tasks.md for overflow', () => {
+    // Per Replit's "3 max" community guidance + LEO 2-feature headroom.
+    const overflowGroups = JSON.parse(JSON.stringify(mockGroups));
+    overflowGroups[4].artifacts[0].content.items = Array.from({ length: 9 }, (_, i) => ({
+      name: `Feature ${i + 1}`,
+      description: 'desc',
+      story_points: 3,
+      priority: 'medium',
+    }));
+    const result = formatPlanModePrompt(overflowGroups, mockVenture, mockSummary);
+    expect(result).toContain('top 5 of 9');
+    expect(result).toContain('1. Feature 1');
+    expect(result).toContain('5. Feature 5');
+    expect(result).not.toContain('6. Feature 6');
+    expect(result).toContain('docs/tasks.md');
+    expect(result).toContain('remaining 4 feature');
+  });
+
+  it('promotes critical-priority items above high regardless of input order', () => {
+    const reorderedGroups = JSON.parse(JSON.stringify(mockGroups));
+    reorderedGroups[4].artifacts[0].content.items = [
+      { name: 'High A', story_points: 3, priority: 'high' },
+      { name: 'Critical B', story_points: 1, priority: 'critical' },
+      { name: 'High C', story_points: 5, priority: 'high' },
+    ];
+    const result = formatPlanModePrompt(reorderedGroups, mockVenture, mockSummary);
+    expect(result.indexOf('Critical B')).toBeLessThan(result.indexOf('High A'));
+    expect(result.indexOf('High A')).toBeLessThan(result.indexOf('High C'));
+  });
+
   it('truncates to budget when content is too long', () => {
-    // Create groups with very long descriptions
     const longGroups = JSON.parse(JSON.stringify(mockGroups));
     longGroups[4].artifacts[0].content.items = Array.from({ length: 20 }, (_, i) => ({
       name: `Feature ${i + 1} with a very long name for testing budget enforcement`,
@@ -373,7 +411,7 @@ describe('formatPlanModePrompt', () => {
       story_points: 5,
     }));
     const result = formatPlanModePrompt(longGroups, mockVenture, mockSummary);
-    expect(result.length).toBeLessThanOrEqual(2000);
+    expect(result.length).toBeLessThanOrEqual(6000);
   });
 });
 
@@ -392,10 +430,12 @@ describe('formatFeaturePrompts', () => {
     expect(result[2].filename).toBe('03-ai-auto-schedule.md');
   });
 
-  it('each prompt references replit.md', () => {
+  it('each prompt references the binding-contract docs (replit.md is auto-overwritten on import)', () => {
     const result = formatFeaturePrompts(mockGroups, mockVenture, mockSummary);
     for (const f of result) {
-      expect(f.content).toContain('replit.md');
+      expect(f.content).toContain('docs/marketing-copy.md');
+      expect(f.content).toContain('docs/designs/');
+      expect(f.content).toContain('docs/color-palette.md');
     }
   });
 
