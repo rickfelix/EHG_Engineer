@@ -1,4 +1,4 @@
-# service_versions Table
+# eva_venture_config Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
@@ -14,42 +14,38 @@
 
 ---
 
-## Columns (7 total)
+## Columns (6 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| service_id | `uuid` | **NO** | - | - |
-| version | `text` | **NO** | - | - |
-| artifact_schema | `jsonb` | **NO** | - | - |
-| changelog | `text` | YES | - | - |
-| deprecated_at | `timestamp with time zone` | YES | - | - |
+| key | `character varying(128)` | **NO** | - | Unique config key. Use dotted scope prefix for namespacing (e.g. 'vision_repair_loop_enabled', 'venture:<uuid>:flag_name'). |
+| value | `jsonb` | **NO** | - | JSONB value. For boolean flags, store as JSON boolean (true/false). For complex configs, store as object. |
+| description | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `service_versions_pkey`: PRIMARY KEY (id)
-
-### Foreign Keys
-- `service_versions_service_id_fkey`: service_id → ehg_services(id)
+- `eva_venture_config_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
-- `service_versions_service_id_version_key`: UNIQUE (service_id, version)
+- `eva_venture_config_key_key`: UNIQUE (key)
 
 ## Indexes
 
-- `idx_service_versions_service_id`
+- `eva_venture_config_key_key`
   ```sql
-  CREATE INDEX idx_service_versions_service_id ON public.service_versions USING btree (service_id)
+  CREATE UNIQUE INDEX eva_venture_config_key_key ON public.eva_venture_config USING btree (key)
   ```
-- `service_versions_pkey`
+- `eva_venture_config_pkey`
   ```sql
-  CREATE UNIQUE INDEX service_versions_pkey ON public.service_versions USING btree (id)
+  CREATE UNIQUE INDEX eva_venture_config_pkey ON public.eva_venture_config USING btree (id)
   ```
-- `service_versions_service_id_version_key`
+- `idx_eva_venture_config_key_lookup`
   ```sql
-  CREATE UNIQUE INDEX service_versions_service_id_version_key ON public.service_versions USING btree (service_id, version)
+  CREATE INDEX idx_eva_venture_config_key_lookup ON public.eva_venture_config USING btree (key)
   ```
 
 ---
