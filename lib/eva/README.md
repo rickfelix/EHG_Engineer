@@ -83,6 +83,14 @@ import { processStage, VentureContextManager } from '../eva/index.js';
 | `concurrent-venture-orchestrator.js` | Orchestrates multiple ventures in parallel |
 | `expand-spinoff-evaluator.js` | Evaluates venture expansion and spinoff opportunities |
 
+### Vision/Architecture Quality
+
+| File | Purpose |
+|------|---------|
+| `vision-upsert.js` | Reusable vision document upsert; returns quality_checked, quality_issues, created_by |
+| `archplan-upsert.js` | Reusable architecture plan upsert (mirror of vision-upsert) |
+| `vision-repair-loop.js` | Bounded LLM repair loop (inner per-write loop) — converges quality_checked=false rows toward true via attempt-capped regeneration. Stub-exempts seed-l1-vision; gated by feature flag. Distinct from `scripts/eva/vision-heal.js` (outer governance loop: score → corrective SD → rescore). |
+
 ### Supporting
 
 | File | Purpose |
