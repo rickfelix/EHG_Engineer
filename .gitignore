@@ -166,6 +166,8 @@ scripts/create-*-children.js
 scripts/audit-*.js
 # Phantom-completion audit (SD-MAN-INFRA-RECONCILE-S18-S26-001) — production deliverable
 !scripts/audit-phantom-completions.js
+# DB content parity audit (SD-LEO-INFRA-CODE-CONTENT-PARITY-001) — production deliverable
+!scripts/audit-completed-sd-db-content-parity.js
 
 # One-off story generation scripts (SD-specific, use generate-user-stories.js instead)
 scripts/generate-user-stories-*.js
