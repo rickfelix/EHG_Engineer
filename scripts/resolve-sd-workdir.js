@@ -381,14 +381,16 @@ function ensureWorktreeEssentials(worktreePath, repoRoot) {
     }
   }
 
-  // Copy .env (gitignored, so never present in worktrees)
-  const sourceEnv = path.join(repoRoot, '.env');
-  const targetEnv = path.join(worktreePath, '.env');
-  if (fs.existsSync(sourceEnv) && !fs.existsSync(targetEnv)) {
-    try {
-      fs.copyFileSync(sourceEnv, targetEnv);
-    } catch (err) {
-      errors.push({ step: 'copy_env', message: err.message });
+  // Copy .env and .env.local (gitignored, so never present in worktrees)
+  for (const envFile of ['.env', '.env.local']) {
+    const src = path.join(repoRoot, envFile);
+    const dst = path.join(worktreePath, envFile);
+    if (fs.existsSync(src) && !fs.existsSync(dst)) {
+      try {
+        fs.copyFileSync(src, dst);
+      } catch (err) {
+        errors.push({ step: `copy_${envFile}`, message: err.message });
+      }
     }
   }
 
