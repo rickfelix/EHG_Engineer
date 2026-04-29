@@ -13,7 +13,9 @@ import fs from 'fs';
 import path from 'path';
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 
-const PROJECT_ROOT = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
+import { execSync } from 'child_process';
+const PROJECT_ROOT = process.env.CLAUDE_PROJECT_DIR ||
+  (() => { try { return execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim(); } catch { return 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer'; } })();
 
 /**
  * Extract deliverable items from architecture plan content.
@@ -288,7 +290,7 @@ export async function validateScopeCompletion(sdKey) {
       score: 70,
       issues: [],
       warnings: [
-        `SD inherits scope from parent orchestrator (metadata.inherited_from_parent set) but has no scope_slice declared. Gate returns soft-pass (score=70). Declare scope_slice on the child to score only the claimed subset of parent deliverables.`
+        'SD inherits scope from parent orchestrator (metadata.inherited_from_parent set) but has no scope_slice declared. Gate returns soft-pass (score=70). Declare scope_slice on the child to score only the claimed subset of parent deliverables.'
       ],
       checklist: [],
       details: {
