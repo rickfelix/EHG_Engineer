@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-24T11:38:22.548Z -->
-<!-- git_commit: 3f7b4bc6 -->
-<!-- db_snapshot_hash: 025565500b723151 -->
+<!-- generated_at: 2026-04-29T14:02:45.172Z -->
+<!-- git_commit: c11354c0 -->
+<!-- db_snapshot_hash: d8878f5dd48d903e -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
@@ -266,5 +266,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-04-24 7:38:22 AM*
+*DIGEST generated: 2026-04-29 10:02:45 AM*
 *Protocol: 4.4.1*
