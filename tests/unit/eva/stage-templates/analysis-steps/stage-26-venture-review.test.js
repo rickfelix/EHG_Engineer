@@ -13,7 +13,7 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
   })),
 }));
 
-import { analyzeStage25, analyzeExpansionVectors, VENTURE_DECISIONS, HEALTH_RATINGS, REVIEW_CATEGORIES, EXPANSION_VECTORS, EXPANSION_WEIGHTS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-25-venture-review.js';
+import { analyzeStage25, analyzeExpansionVectors, VENTURE_DECISIONS, HEALTH_RATINGS, REVIEW_CATEGORIES, EXPANSION_VECTORS, EXPANSION_WEIGHTS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-26-venture-review.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
 
 function createLLMResponse(overrides = {}) {

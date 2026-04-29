@@ -16,7 +16,7 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
 import {
   analyzeStage24, AARRR_CATEGORIES, TREND_DIRECTIONS, OUTCOME_ASSESSMENTS, IMPACT_LEVELS,
   EXPERIMENT_STATUSES, EXPERIMENT_OUTCOMES, COHORT_PERIODS, ENGAGEMENT_LEVELS,
-} from '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-metrics-learning.js';
+} from '../../../../../lib/eva/stage-templates/analysis-steps/stage-25-metrics-learning.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
 
 function createLLMResponse(overrides = {}) {
