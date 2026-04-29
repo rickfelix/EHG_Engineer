@@ -71,3 +71,64 @@ describe('Stage 19 SYSTEM_PROMPT — default-capabilities inclusion (FR-2)', () 
     expect(stage19Source).toMatch(/SD-LEO-ENH-CONSTRAIN-STAGE-EMIT-001/);
   });
 });
+
+describe('analyzeStage19 — default_capabilities_override pass-through (FR-4)', () => {
+  it('accepts default_capabilities_override as a destructured param with default {}', () => {
+    expect(stage19Source).toMatch(/default_capabilities_override\s*=\s*\{\s*\}/);
+  });
+
+  it('JSDoc documents the param and links the SD', () => {
+    expect(stage19Source).toMatch(
+      /@param\s+\{Object\}\s+\[params\.default_capabilities_override=\{\}\]/
+    );
+    expect(stage19Source).toMatch(
+      /@param.*default_capabilities_override.*SD-LEO-ENH-CONSTRAIN-STAGE-EMIT-001/s
+    );
+  });
+
+  it('renders override context only when entries have non-empty trimmed override_reason (no leakage when unset)', () => {
+    expect(stage19Source).toMatch(
+      /Object\.entries\(default_capabilities_override\s*\|\|\s*\{\s*\}\)/
+    );
+    expect(stage19Source).toMatch(
+      /\.override_reason\.trim\(\)\.length\s*>\s*0/
+    );
+    // The userPrompt template must conditionally interpolate the override context
+    expect(stage19Source).toMatch(/\$\{defaultCapabilitiesOverrideContext\}/);
+  });
+
+  it('hooks validateVentureDefaultCapabilities after sprintItems normalization', () => {
+    // The validator call must come AFTER the value-gate logger.warn block (line ~320)
+    // and BEFORE the LLM-fallback-count tracking
+    const validatorCallIdx = stage19Source.indexOf('validateVentureDefaultCapabilities(');
+    const valueGateIdx = stage19Source.indexOf('VALUE GATE');
+    const fallbackTrackIdx = stage19Source.indexOf('Track LLM fallback fields');
+    expect(validatorCallIdx).toBeGreaterThan(0);
+    expect(valueGateIdx).toBeGreaterThan(0);
+    expect(fallbackTrackIdx).toBeGreaterThan(0);
+    expect(validatorCallIdx).toBeGreaterThan(valueGateIdx); // after value gate
+    expect(validatorCallIdx).toBeLessThan(fallbackTrackIdx); // before fallback tracking
+  });
+
+  it('throws MissingDefaultCapabilityError on validator failure', () => {
+    expect(stage19Source).toMatch(
+      /throw\s+new\s+MissingDefaultCapabilityError/
+    );
+    expect(stage19Source).toMatch(
+      /missing mandatory portfolio-default capabilities/
+    );
+  });
+
+  it('emits structured logs for PASS / OVERRIDE_ACCEPTED / VIOLATION states', () => {
+    expect(stage19Source).toMatch(/Default-capabilities adherence: PASS/);
+    expect(stage19Source).toMatch(/Default-capabilities adherence: OVERRIDE_ACCEPTED/);
+    expect(stage19Source).toMatch(/Default-capabilities adherence: VIOLATION/);
+  });
+
+  it('passes default_capabilities_override through to validator opts.defaultCapabilitiesOverride', () => {
+    expect(stage19Source).toMatch(
+      /defaultCapabilitiesOverride:\s*default_capabilities_override/
+    );
+  });
+});
+
