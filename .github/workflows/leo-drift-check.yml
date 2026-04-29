@@ -2,7 +2,13 @@ name: LEO Protocol Drift Check
 
 on:
   push:
-    branches: [main, develop, 'feat/*']
+    # Push triggers scope to protected branches only — feature branches are
+    # covered by the pull_request trigger below. Including 'feat/*' here used
+    # to fire a duplicate workflow run on every push to a feature branch with
+    # an open PR (concurrency.group keys on github.ref which differs between
+    # push and pull_request events, so it does not dedupe across event types).
+    # See QF-20260429-LEO-DRIFT-DEDUPE rationale.
+    branches: [main, develop]
     paths:
       - 'tools/gates/**'
       - 'scripts/**'
