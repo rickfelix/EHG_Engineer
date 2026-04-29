@@ -74,7 +74,7 @@ AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no c
 
 Sessions operate in one of two modes that govern how you treat harness bugs (LEO-INFRA issues, gate bugs, session lifecycle drift, tooling constraints) encountered mid-work:
 
-- **`[MODE: product]`** — Shipping product work (features, marketing, research, domain code). Harness bugs found mid-session are captured one-line to `docs/harness-backlog.md` and deferred. Do NOT file `SD-LEO-INFRA-*` / `SD-LEARN-FIX-*` / `SD-MAN-INFRA-*` / `QF-*` during product sessions.
+- **`[MODE: product]`** — Shipping product work (features, marketing, research, domain code). Harness bugs found mid-session are captured via `node scripts/log-harness-bug.js "<symptom>"` (writes to the `feedback` table with category='harness_backlog') and deferred. Do NOT file `SD-LEO-INFRA-*` / `SD-LEARN-FIX-*` / `SD-MAN-INFRA-*` / `QF-*` during product sessions.
 - **`[MODE: campaign]`** — Running a harness-hardening sweep. Harness bugs ARE the work; file SDs/QFs and fix inline as they surface. High meta-to-product SD ratios are expected campaign output, not pathology.
 
 **Default mode when the user has not declared:**
@@ -184,4 +184,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-04-24 3:42:22 PM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-04-29 10:02:45 AM | Protocol: LEO 4.4.1 | Source: Database*

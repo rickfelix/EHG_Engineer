@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-04-23 9:43:55 PM
+**Generated**: 2026-04-29 10:02:45 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.7 guidance)
@@ -120,20 +120,6 @@ Before writing ANY code, EXEC MUST:
    - Identify exact location for new features
    - Document: "Current state captured, changes will go at [location]"
 
-### Progress Ticks (Intra-Phase Signaling)
-
-For any phase expected to run longer than ~10 minutes, emit progress ticks at natural checkpoints so the fleet dashboard can distinguish productive workers from stalled ones (SD-LEO-INFRA-SD-INTRAPHASE-PROGRESS-001):
-
-```bash
-node scripts/progress-tick.js <SD-KEY> 25 "exploration-done"
-node scripts/progress-tick.js <SD-KEY> 50 "first-file-committed"
-node scripts/progress-tick.js <SD-KEY> 75 "tests-green"
-```
-
-Ticks are monotonic (a lower or equal `pct` is a no-op), fail-soft (CLI errors never kill the worker), and bounded `[0, 100]`. `sd-start.js` auto-emits a 5% entry tick on claim success; handoff-boundary writers still own the canonical 100 at phase completion. You only need to emit the intermediate checkpoints relevant to your phase.
-
-See [docs/reference/progress-ticks.md](docs/reference/progress-ticks.md) for the full contract, recommended cadence, and rollback procedure.
-
 ### Implementation Checklist Template
 ```markdown
 ## EXEC Pre-Implementation Checklist
@@ -207,6 +193,70 @@ npm run sd:status SD-XXX-001
 See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for complete documentation.
 
 **If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
+
+
+## Branch Creation (Automated at LEAD-TO-PLAN)
+
+## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
+
+### Automatic Branch Creation
+
+As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
+
+1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
+2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
+3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
+4. Database is updated with branch name for tracking
+
+### Manual Branch Creation (If Needed)
+
+If branch creation fails or you need to create one manually:
+
+```bash
+# Create branch for an SD (looks up title from database)
+npm run sd:branch SD-XXX-001
+
+# Create with auto-stash (non-interactive)
+npm run sd:branch:auto SD-XXX-001
+
+# Check if branch exists
+npm run sd:branch:check SD-XXX-001
+
+# Full command with options
+# Branch was auto-created at LEAD-TO-PLAN handoff
+```
+
+### Branch Naming Convention
+
+| SD Type | Branch Prefix | Example |
+|---------|---------------|---------|
+| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
+| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
+| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
+| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
+| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
+
+### Branch Hygiene Rules
+
+From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
+- **≤7 days stale** at PLAN-TO-EXEC handoff
+- **One SD per branch** (no mixing work)
+- **Merge main at phase transitions**
+
+### When Branch is Created
+
+```
+LEAD Phase                    PLAN Phase                   EXEC Phase
+    |                              |                            |
+    |   LEAD-TO-PLAN handoff       |                            |
+    |---[Branch Created Here]----->|                            |
+    |                              |   PRD Creation             |
+    |                              |   Sub-agent validation     |
+    |                              |                            |
+    |                              |   PLAN-TO-EXEC handoff     |
+    |                              |---[Branch Validated]------>|
+    |                              |                            |
+```
 
 
 ## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
@@ -296,70 +346,6 @@ If `research_confidence_score = 0.00`, you skipped this step.
 | Simulate sub-agents | 15% quality loss | Execute actual tools |
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
-
-## Branch Creation (Automated at LEAD-TO-PLAN)
-
-## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
-
-### Automatic Branch Creation
-
-As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
-
-1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
-2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
-3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
-4. Database is updated with branch name for tracking
-
-### Manual Branch Creation (If Needed)
-
-If branch creation fails or you need to create one manually:
-
-```bash
-# Create branch for an SD (looks up title from database)
-npm run sd:branch SD-XXX-001
-
-# Create with auto-stash (non-interactive)
-npm run sd:branch:auto SD-XXX-001
-
-# Check if branch exists
-npm run sd:branch:check SD-XXX-001
-
-# Full command with options
-# Branch was auto-created at LEAD-TO-PLAN handoff
-```
-
-### Branch Naming Convention
-
-| SD Type | Branch Prefix | Example |
-|---------|---------------|---------|
-| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
-| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
-| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
-| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
-| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
-
-### Branch Hygiene Rules
-
-From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
-- **≤7 days stale** at PLAN-TO-EXEC handoff
-- **One SD per branch** (no mixing work)
-- **Merge main at phase transitions**
-
-### When Branch is Created
-
-```
-LEAD Phase                    PLAN Phase                   EXEC Phase
-    |                              |                            |
-    |   LEAD-TO-PLAN handoff       |                            |
-    |---[Branch Created Here]----->|                            |
-    |                              |   PRD Creation             |
-    |                              |   Sub-agent validation     |
-    |                              |                            |
-    |                              |   PLAN-TO-EXEC handoff     |
-    |                              |---[Branch Validated]------>|
-    |                              |                            |
-```
-
 
 ## Vision/Architecture Doc Pre-Check
 
@@ -1468,6 +1454,77 @@ The ACCEPTANCE_CRITERIA_VALIDATION gate scores stories as follows:
 
 Threshold: overall score >= 60 AND no story scores 0.
 
+## Playwright MCP Integration
+
+## 🎭 Playwright MCP Integration
+
+**Status**: ✅ READY (Installed 2025-10-12)
+
+### Overview
+Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
+
+### Installed Components
+- **Chrome**: Google Chrome browser for MCP operations
+- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
+- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
+- **System Dependencies**: All required Linux libraries installed
+
+### Available MCP Tools
+
+#### Navigation
+- `mcp__playwright__browser_navigate` - Navigate to URL
+- `mcp__playwright__browser_navigate_back` - Go back to previous page
+
+#### Interaction
+- `mcp__playwright__browser_click` - Click elements
+- `mcp__playwright__browser_fill` - Fill form fields
+- `mcp__playwright__browser_select` - Select dropdown options
+- `mcp__playwright__browser_hover` - Hover over elements
+- `mcp__playwright__browser_type` - Type text into elements
+
+#### Verification
+- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
+- `mcp__playwright__browser_take_screenshot` - Take screenshots
+- `mcp__playwright__browser_evaluate` - Execute JavaScript
+
+#### Management
+- `mcp__playwright__browser_close` - Close browser
+- `mcp__playwright__browser_tabs` - Manage tabs
+
+### Testing Integration
+
+**When to Use Playwright MCP**:
+1. ✅ Visual regression testing
+2. ✅ UI component verification
+3. ✅ Screenshot capture for evidence
+4. ✅ Accessibility tree validation
+5. ✅ Cross-browser testing
+
+**When to Use Standard Playwright**:
+1. ✅ E2E test suites (`npm run test:e2e`)
+2. ✅ CI/CD pipeline tests
+3. ✅ Automated test runs
+4. ✅ User story validation
+
+### Usage Example
+
+```javascript
+// Using Playwright MCP for visual verification
+await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
+await mcp__playwright__browser_snapshot(); // Get accessibility tree
+await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
+await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
+```
+
+### QA Director Integration
+
+The QA Engineering Director sub-agent now has access to:
+- Playwright MCP for visual testing
+- Standard Playwright for E2E automation
+- Both Chrome (MCP) and Chromium (tests) browsers
+
+**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
+
 ## Triangulated Runtime Audit Protocol
 
 ### Purpose
@@ -1685,77 +1742,6 @@ See: `/runtime-audit` skill for full template
 - `codebase-search` - Finding code references
 - `schema-design` - Database schema issues
 
-
-## Playwright MCP Integration
-
-## 🎭 Playwright MCP Integration
-
-**Status**: ✅ READY (Installed 2025-10-12)
-
-### Overview
-Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
-
-### Installed Components
-- **Chrome**: Google Chrome browser for MCP operations
-- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
-- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
-- **System Dependencies**: All required Linux libraries installed
-
-### Available MCP Tools
-
-#### Navigation
-- `mcp__playwright__browser_navigate` - Navigate to URL
-- `mcp__playwright__browser_navigate_back` - Go back to previous page
-
-#### Interaction
-- `mcp__playwright__browser_click` - Click elements
-- `mcp__playwright__browser_fill` - Fill form fields
-- `mcp__playwright__browser_select` - Select dropdown options
-- `mcp__playwright__browser_hover` - Hover over elements
-- `mcp__playwright__browser_type` - Type text into elements
-
-#### Verification
-- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
-- `mcp__playwright__browser_take_screenshot` - Take screenshots
-- `mcp__playwright__browser_evaluate` - Execute JavaScript
-
-#### Management
-- `mcp__playwright__browser_close` - Close browser
-- `mcp__playwright__browser_tabs` - Manage tabs
-
-### Testing Integration
-
-**When to Use Playwright MCP**:
-1. ✅ Visual regression testing
-2. ✅ UI component verification
-3. ✅ Screenshot capture for evidence
-4. ✅ Accessibility tree validation
-5. ✅ Cross-browser testing
-
-**When to Use Standard Playwright**:
-1. ✅ E2E test suites (`npm run test:e2e`)
-2. ✅ CI/CD pipeline tests
-3. ✅ Automated test runs
-4. ✅ User story validation
-
-### Usage Example
-
-```javascript
-// Using Playwright MCP for visual verification
-await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
-await mcp__playwright__browser_snapshot(); // Get accessibility tree
-await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
-await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
-```
-
-### QA Director Integration
-
-The QA Engineering Director sub-agent now has access to:
-- Playwright MCP for visual testing
-- Standard Playwright for E2E automation
-- Both Chrome (MCP) and Chromium (tests) browsers
-
-**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
 
 ## Edge Case Testing Checklist
 
@@ -2014,6 +2000,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-04-23*
+*Generated from database: 2026-04-29*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*
