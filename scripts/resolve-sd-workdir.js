@@ -23,6 +23,10 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { getVenturePath } from '../lib/venture-resolver.js';
 import { sanitizeBranchName, checkDirtyWorktree, verifyGitignore, acquireWorktreeLock, releaseLock } from '../lib/worktree-guards.js';
 import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from '../lib/worktree-quota.js';
+// SD-LEO-INFRA-START-WORKTREE-BRANCH-001: delegate base-ref resolution + fetch
+// to the single source of truth in lib/worktree-manager.js so this code path
+// cannot drift away from the createWorktree behavior.
+import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError } from '../lib/worktree-manager.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -300,7 +304,12 @@ function createWorktree(sdKey, repoRoot) {
     } catch { return false; }
   })();
 
+  // SD-LEO-INFRA-START-WORKTREE-BRANCH-001: when creating a NEW branch, fork
+  // explicitly from baseRef (default origin/main). Re-claim path keeps existing
+  // semantics. Fetch failures throw WorktreeBaseFetchFailedError (fail-closed)
+  // and propagate up to sd-start.js for the refusal banner.
   let lockPath;
+  let baseRef = null;
   try {
     lockPath = acquireWorktreeLock(sdKey, process.env.CLAUDE_SESSION_ID || 'unknown', worktreesDir);
 
@@ -309,7 +318,9 @@ function createWorktree(sdKey, repoRoot) {
         cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
       });
     } else {
-      execSync(`git worktree add -b "${branch}" "${worktreePath}"`, {
+      baseRef = resolveWorktreeBaseRef();
+      fetchBaseRef(repoRoot, baseRef);
+      execSync(`git worktree add -b "${branch}" "${worktreePath}" "${baseRef}"`, {
         cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
       });
     }
@@ -326,7 +337,8 @@ function createWorktree(sdKey, repoRoot) {
     sdKey,
     expectedBranch: branch,
     createdAt: new Date().toISOString(),
-    repoRoot
+    repoRoot,
+    baseRef
   }, null, 2));
 
   const essentials = ensureWorktreeEssentials(worktreePath, repoRoot);
@@ -369,14 +381,16 @@ function ensureWorktreeEssentials(worktreePath, repoRoot) {
     }
   }
 
-  // Copy .env (gitignored, so never present in worktrees)
-  const sourceEnv = path.join(repoRoot, '.env');
-  const targetEnv = path.join(worktreePath, '.env');
-  if (fs.existsSync(sourceEnv) && !fs.existsSync(targetEnv)) {
-    try {
-      fs.copyFileSync(sourceEnv, targetEnv);
-    } catch (err) {
-      errors.push({ step: 'copy_env', message: err.message });
+  // Copy .env and .env.local (gitignored, so never present in worktrees)
+  for (const envFile of ['.env', '.env.local']) {
+    const src = path.join(repoRoot, envFile);
+    const dst = path.join(worktreePath, envFile);
+    if (fs.existsSync(src) && !fs.existsSync(dst)) {
+      try {
+        fs.copyFileSync(src, dst);
+      } catch (err) {
+        errors.push({ step: `copy_${envFile}`, message: err.message });
+      }
     }
   }
 

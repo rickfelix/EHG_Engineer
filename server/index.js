@@ -58,6 +58,7 @@ import evaChatRoutes from './routes/eva-chat.js';
 import evaEconomicLensRoutes from './routes/eva-economic-lens.js';
 import stage17Routes from './routes/stage17.js';
 import stage18Routes from './routes/stage18.js';
+import stage19Routes from './routes/stage19.js';
 import stage24Routes from './routes/stage24.js';
 import githubRepoRoutes from './routes/github-repo.js';
 import protocolLintRoutes, { requireAdminRole } from './routes/protocol-lint.js';
@@ -169,6 +170,8 @@ app.use('/api/eva/economic-lens', requireAuth, evaEconomicLensRoutes);
 app.use('/api/stage17', requireAuth, stage17Routes);
 // Stage 18 Marketing Copy Studio
 app.use('/api/stage18', requireAuth, stage18Routes);
+// Stage 19 Replit Workflow Prompts
+app.use('/api/stage19', requireAuth, stage19Routes);
 // Stage 24 Go Live
 app.use('/api/stage24', requireAuth, stage24Routes);
 app.use('/api/github', requireAuth, githubRepoRoutes);

@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-27T02:34:49.236Z
+**Generated**: 2026-04-29T22:26:55.427Z
 **Rows**: 762
 **RLS**: Enabled (3 policies)
 
@@ -50,6 +50,7 @@
 - `compliance_violations_policy_id_fkey`: policy_id → governance_policies(id)
 
 ### Check Constraints
+- `compliance_violations_ai_guardrail_metadata_check`: CHECK (((violation_type <> 'ai_guardrail'::text) OR ((metadata ? 'guardrail_layer'::text) AND ((metadata ->> 'guardrail_layer'::text) = ANY (ARRAY['pii'::text, 'citation'::text, 'claim'::text, 'dwell'::text, 'compliance'::text])))))
 - `compliance_violations_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text, 'info'::text])))
 - `compliance_violations_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 26)))
 - `compliance_violations_status_check`: CHECK ((status = ANY (ARRAY['open'::text, 'acknowledged'::text, 'remediated'::text, 'false_positive'::text])))

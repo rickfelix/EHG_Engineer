@@ -1,11 +1,15 @@
 name: DB Verify
 
+# Path filter narrowed by SD-LEO-INFRA-SHIP-AUTO-MERGE-001 (was: db/**, ops/**, docs/**).
+# `docs/**` made every documentation PR trigger this workflow, which then red-failed
+# on empty PG*_STAGING secrets — turning every PR's mergeStateStatus to UNSTABLE and
+# blocking /ship auto-merge on PRs that don't touch the database at all.
 on:
   pull_request:
     paths:
       - 'db/**'
       - 'ops/**'
-      - 'docs/**'
+      - 'database/migrations/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,13 +25,25 @@ jobs:
       PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check secrets configured
+        id: check_secrets
+        run: |
+          if [ -z "$PGHOST" ] || [ -z "$PGDATABASE" ] || [ -z "$PGUSER" ] || [ -z "$PGPASSWORD" ]; then
+            echo "::warning::PG*_STAGING secrets are not configured — skipping migration apply and verify steps. Configure repo secrets to enable real verification."
+            echo "secrets_configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "secrets_configured=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Install tooling
+        if: steps.check_secrets.outputs.secrets_configured == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
       - name: Apply migrations
+        if: steps.check_secrets.outputs.secrets_configured == 'true'
         run: bash ops/scripts/staging_apply.sh
       - name: Verify database objects
+        if: steps.check_secrets.outputs.secrets_configured == 'true'
         run: bash ops/scripts/run_checks.sh
       - name: Policy regression scan
         run: |

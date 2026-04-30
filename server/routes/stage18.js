@@ -16,6 +16,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid } from '../middleware/validate.js';
 import { analyzeStage18MarketingCopy } from '../../lib/eva/stage-templates/analysis-steps/stage-18-marketing-copy.js';
+import { UPSTREAM_ARTIFACT_TYPES, STAGE_MAP } from '../../lib/eva/stage-templates/upstream-artifact-types.js';
 
 const router = Router();
 
@@ -25,23 +26,9 @@ const VALID_SECTIONS = [
   'social_posts', 'seo_meta', 'blog_draft',
 ];
 
-const UPSTREAM_ARTIFACT_TYPES = [
-  'truth_idea_brief', 'truth_competitive_analysis',
-  'engine_pricing_model', 'engine_business_model_canvas',
-  'identity_persona_brand', 'identity_brand_guidelines',
-  'identity_naming_visual', 'identity_brand_name',
-  'identity_gtm_sales_strategy', 'blueprint_product_roadmap',
-  'blueprint_user_story_pack', 'blueprint_financial_projection',
-];
-
-const STAGE_MAP = {
-  truth_idea_brief: 1, truth_competitive_analysis: 4,
-  engine_pricing_model: 7, engine_business_model_canvas: 8,
-  identity_persona_brand: 10, identity_brand_guidelines: 10,
-  identity_naming_visual: 11, identity_brand_name: 11,
-  identity_gtm_sales_strategy: 12, blueprint_product_roadmap: 13,
-  blueprint_user_story_pack: 15, blueprint_financial_projection: 16,
-};
+function titleForSection(section) {
+  return 'Marketing ' + section.replace(/_/g, ' ');
+}
 
 async function fetchUpstreamAndVenture(supabase, ventureId) {
   const [{ data: venture }, { data: artifacts }] = await Promise.all([
@@ -72,14 +59,16 @@ async function storeMarketingArtifacts(supabase, ventureId, copyResult) {
     upserts.push({
       venture_id: ventureId,
       artifact_type: `marketing_${section}`,
-      stage_number: 18,
+      title: titleForSection(section),
+      lifecycle_stage: 18,
       artifact_data: copyResult[section],
     });
   }
-  if (upserts.length === 0) return;
+  if (upserts.length === 0) return { error: null };
   const { error } = await supabase.from('venture_artifacts')
     .upsert(upserts, { onConflict: 'venture_id,artifact_type' });
   if (error) console.error('[stage18-route] artifact upsert error:', error.message);
+  return { error };
 }
 
 /**
@@ -96,7 +85,14 @@ router.post('/:ventureId/generate-copy', asyncHandler(async (req, res) => {
   const params = await fetchUpstreamAndVenture(supabase, ventureId);
   const result = await analyzeStage18MarketingCopy(params);
 
-  await storeMarketingArtifacts(supabase, ventureId, result);
+  const { error: storageError } = await storeMarketingArtifacts(supabase, ventureId, result);
+  if (storageError) {
+    return res.status(500).json({
+      error: 'Failed to persist marketing artifacts: ' + storageError.message,
+      code: 'ARTIFACT_STORAGE_FAILED',
+      data: result,
+    });
+  }
 
   return res.status(200).json({ status: 'success', data: result });
 }));
@@ -131,11 +127,19 @@ router.post('/:ventureId/regenerate/:section', asyncHandler(async (req, res) => 
     .upsert({
       venture_id: ventureId,
       artifact_type: 'marketing_' + section,
-      stage_number: 18,
+      title: titleForSection(section),
+      lifecycle_stage: 18,
       artifact_data: sectionData,
     }, { onConflict: 'venture_id,artifact_type' });
 
-  if (error) console.error('[stage18-route] regenerate upsert error:', error.message);
+  if (error) {
+    console.error('[stage18-route] regenerate upsert error:', error.message);
+    return res.status(500).json({
+      error: 'Failed to persist regenerated section: ' + error.message,
+      code: 'ARTIFACT_STORAGE_FAILED',
+      data: { [section]: sectionData },
+    });
+  }
 
   return res.status(200).json({ status: 'success', data: { [section]: sectionData } });
 }));

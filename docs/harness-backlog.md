@@ -1,26 +1,48 @@
-# Harness Backlog
+# Harness Backlog — DEPRECATED
 
-**Purpose**: One-line deferred captures of harness-level bugs found during `[MODE: product]` sessions.
+**As of 2026-04-29, harness-bug capture moved from this file to the `feedback` table** (`category='harness_backlog'`).
 
-During product work, do NOT file SDs/QFs for harness issues (LEO-INFRA, gate bugs, session lifecycle drift, tooling gaps). Append them here and keep shipping product. A follow-up `[MODE: campaign]` session processes this backlog: triages, groups, and files the necessary `SD-LEO-INFRA-*` / `SD-LEARN-FIX-*` / `SD-MAN-INFRA-*` / `QF-*` against the real recurrence signal.
+Why: file-based capture violated CLAUDE.md's database-first rule — the index couldn't be queried by `/leo next`, sub-agents, gates, or the clockwork-auto-triage workflow. The 36 historical entries from this file have been migrated to `feedback` rows (one-time migration via `scripts/one-off/migrate-harness-backlog-to-feedback.mjs`, idempotent via SHA-256 `metadata.dedup_hash`).
 
-See CLAUDE.md → Session Mode Declaration for the full rule.
+## How to log a new harness bug (replacement for the old one-line append)
 
-## Format
-
-One line per item. Date, symptom, file or command where it surfaced, SD/QF from which session it was deferred.
-
-```
-2026-MM-DD | <symptom> | <file or command> | deferred from SD-...
+```bash
+node scripts/log-harness-bug.js "<symptom>" [--file <path>] [--sd <sd-key>] [--severity high|medium|low]
 ```
 
-## Items
+The CLI is idempotent (SHA-256 hash over `date::symptom::file`), so re-running on the same day with the same args is a no-op.
 
-<!-- Append below. Do not edit or remove existing lines — they are the signal for the next campaign session. -->
-2026-04-26 | GATE5_GIT_COMMIT_ENFORCEMENT hardcodes appPath=EHG_ROOT (ehg frontend repo) — backend EHG_Engineer SDs see wrong branch, gate misfires; bypass needed every backend SD | scripts/verify-git-commit-status.js:33 + scripts/modules/handoff/executors/plan-to-lead/gates/git-commit-enforcement.js:18 | deferred from SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001 (PR #3365)
-2026-04-26 | sd_type gaming-detection trigger blocks LEAD-authority type changes when LLM detector + manual confirmation both agree the type is wrong (95% LLM confidence at PLAN-TO-EXEC SD_TYPE_VALIDATION); requires governance_metadata.bypass_reason that operator cannot self-grant from EXEC | DB trigger raising P0001 on strategic_directives_v2 sd_type updates | deferred from SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001
-2026-04-26 | Chaining-end behavior: with chain_orchestrators=true and no next orchestrator queued, LEAD-FINAL-APPROVAL exits 1 attempting to claim a non-existent UUID (cosmetic, SD already completed correctly) | scripts/modules/handoff/executors/lead-final-approval/index.js + chain auto-continuation logic | deferred from SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001
-2026-04-26 | model_usage_log CHECK constraint stale: rejects phase='EXEC-TO-PLAN' (handoff phase enum drifted from log enum) | model_usage_log.phase CHECK constraint | observed by database-agent during user-stories status update, deferred from SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001
-2026-04-26 | Concurrent npm install across sibling worktrees on shared C:\Users\rickf\Projects\_EHG\EHG_Engineer\node_modules causes ENOTEMPTY/ENOENT lock errors (recovery requires sequential install) | npm install on shared node_modules in worktree fleet | deferred from SD-LEO-INFRA-VISION-SCORER-L2-FLAGS-001
+## How to query the backlog
 
-2026-04-27 | splitPostgreSQLStatements (scripts/lib/supabase-connection.js) splits on semicolons inside single-line `--` comments, yielding malformed DDL fragments rejected as 42601 syntax error; workaround: send full migration as single client.query() call | scripts/lib/supabase-connection.js splitPostgreSQLStatements | observed during SD-LEO-INFRA-PR-TRACKING-BACKFILL-001 migration apply
+```sql
+-- All harness backlog rows
+SELECT id, title, severity, metadata->>'deferred_from_sd_key' AS sd, metadata->>'source_location' AS file, status, created_at
+  FROM feedback
+ WHERE category = 'harness_backlog'
+ ORDER BY created_at DESC;
+
+-- Open / un-triaged only
+SELECT * FROM feedback
+ WHERE category = 'harness_backlog' AND status = 'new'
+ ORDER BY created_at DESC;
+```
+
+## Triage flow (campaign mode)
+
+When you next run a `[MODE: campaign]` session:
+1. Query open rows with the SQL above.
+2. Group by `metadata->>'deferred_from_sd_key'` and by symptom-class to find recurrence.
+3. File `SD-LEO-INFRA-*` / `QF-*` against the highest-signal clusters.
+4. Mark resolved rows with `status='resolved'` and populate `resolution_notes` + `resolution_sd_id`.
+
+## Format reference (historical, for git-blame archaeology)
+
+The original file used two line formats:
+- `2026-MM-DD | <symptom> | <file or command> | deferred from SD-...`
+- `- 2026-MM-DD: <symptom prose>`
+
+These have been parsed into structured `feedback` rows with `metadata.line_format`, `metadata.original_date`, `metadata.raw_line`, `metadata.source_location`, `metadata.deferred_from_sd_key`, and `metadata.imported_from='docs/harness-backlog.md'`.
+
+## Do not append to this file.
+
+Use the CLI. If you cannot run the CLI for any reason (offline, broken supabase env), append to a temporary scratch and migrate when you're back online — do **not** restore this file as a primary capture mechanism.

@@ -240,25 +240,51 @@ async function processRequest(supabase, request) {
       EXECUTION_TIMEOUT_MS
     );
 
+    // FR-4e (SD-LEO-ENH-TREND-SCANNER-SCORING-001): surface prompt_version in the
+    // top-level result payload so dashboard consumers and the closed-loop RPC
+    // can read it without nested metadata traversal. Null for non-versioned strategies.
+    const promptVersion = result?.brief?.metadata?.prompt_version
+      ?? result?.brief?.prompt_version
+      ?? null;
+
     // Store success
     await updateStatus(supabase, request.id, {
       status: 'completed',
-      result,
+      result: { ...result, prompt_version: promptVersion },
+      prompt_version: promptVersion,
       completed_at: new Date().toISOString(),
     });
 
     log.info(`Completed request ${request.id} | decision=${result.decision} | duration=${result.duration_ms}ms`);
     return true;
   } catch (err) {
-    // Store failure
+    // Store failure — map thrown typed errors to error_details.error_type so
+    // dashboards can distinguish parse_failure / empty_response / undercount / timeout / other.
+    // Error class carries .errorType (set by LLMEmptyResponseError, LLMParseError, LLMUndercountError).
+    let errorType = err && typeof err.errorType === 'string' ? err.errorType : null;
+    if (!errorType) {
+      const name = err?.name || '';
+      const msg = err?.message || '';
+      if (name === 'TimeoutError' || /timed?\s*out|timeout/i.test(msg)) errorType = 'timeout';
+      else errorType = 'other';
+    }
+
     await updateStatus(supabase, request.id, {
       status: 'failed',
       error_message: err.message,
-      error_details: { stack: err.stack, name: err.name },
+      error_details: {
+        stack: err.stack,
+        name: err.name,
+        error_type: errorType,
+        ...(err?.strategyName ? { strategy_name: err.strategyName } : {}),
+        ...(err?.promptVersion ? { prompt_version: err.promptVersion } : {}),
+        ...(err?.expected != null ? { expected: err.expected } : {}),
+        ...(err?.actual != null ? { actual: err.actual } : {}),
+      },
       completed_at: new Date().toISOString(),
     });
 
-    log.error(`Failed request ${request.id}:`, err.message);
+    log.error(`Failed request ${request.id} [error_type=${errorType}]:`, err.message);
     return false;
   }
 }

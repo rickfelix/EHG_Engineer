@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-04-24T15:16:17.498Z",
-  "git_commit": "68598fb1",
-  "db_snapshot_hash": "ae66431a74ab3b32",
+  "generated_at": "2026-04-29T14:02:45.172Z",
+  "git_commit": "c11354c0",
+  "db_snapshot_hash": "d8878f5dd48d903e",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 11823,
-      "estimated_tokens": 2956,
-      "content_hash": "111a45deaa6ec96b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE.md"
+      "chars": 14837,
+      "estimated_tokens": 3710,
+      "content_hash": "5212dae3e8ee111d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 69428,
-      "estimated_tokens": 17357,
-      "content_hash": "651f24495d902d83",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_CORE.md"
+      "chars": 75781,
+      "estimated_tokens": 18946,
+      "content_hash": "40f45d82e6f5be86",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 60558,
-      "estimated_tokens": 15140,
-      "content_hash": "93d4d5d3e889b0da",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_LEAD.md"
+      "chars": 60652,
+      "estimated_tokens": 15163,
+      "content_hash": "987c6f4f57fa0b7f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 87717,
-      "estimated_tokens": 21930,
-      "content_hash": "383cd99dfa5ae35d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_PLAN.md"
+      "chars": 87918,
+      "estimated_tokens": 21980,
+      "content_hash": "5c53e208e4d934df",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 76698,
-      "estimated_tokens": 19175,
-      "content_hash": "0e349e6decbe0dcc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_EXEC.md"
+      "chars": 76810,
+      "estimated_tokens": 19203,
+      "content_hash": "58df17b7cf437f41",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9170,
       "estimated_tokens": 2293,
-      "content_hash": "6098387308802901",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_DIGEST.md"
+      "content_hash": "fb808fee7b25a15d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 10928,
-      "estimated_tokens": 2732,
-      "content_hash": "a3b53e550bfa4558",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_CORE_DIGEST.md"
+      "chars": 11020,
+      "estimated_tokens": 2755,
+      "content_hash": "8d7f516e620c9513",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 4802,
-      "estimated_tokens": 1201,
-      "content_hash": "852ec1995c595b07",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_LEAD_DIGEST.md"
+      "chars": 4907,
+      "estimated_tokens": 1227,
+      "content_hash": "1c05e978f7e6a9f7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 7810,
-      "estimated_tokens": 1953,
-      "content_hash": "4fab05f017d3215f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_PLAN_DIGEST.md"
+      "chars": 7897,
+      "estimated_tokens": 1975,
+      "content_hash": "25f9e9a1e6bb391b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10208,
-      "estimated_tokens": 2552,
-      "content_hash": "4d295952e5dab4dd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PAT-LEAD-001\\CLAUDE_EXEC_DIGEST.md"
+      "chars": 10320,
+      "estimated_tokens": 2580,
+      "content_hash": "8d1ad2fb75f0e2a9",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }

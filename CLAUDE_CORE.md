@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-04-24 7:38:22 AM
+**Generated**: 2026-04-29 10:02:45 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -87,6 +87,41 @@ Task tool with subagent_type="database-agent":
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
+
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -128,41 +163,6 @@ bash scripts/leo-stack.sh restart   # All 3 servers
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -304,40 +304,6 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 
 This is faster than sequential exploration and provides comprehensive coverage.
 
-## Work Tracking Policy
-
-**ALL changes to main must be tracked** as either:
-
-### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>75 LOC, see Work Item Routing)
-- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
-- Command: `npm run sd:create`
-
-### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (≤75 LOC per Tier 1/Tier 2 in Work Item Routing)
-- Branch: `quick-fix/QF-YYYYMMDD-NNN`
-- Command: `node scripts/create-quick-fix.js --interactive`
-
-> **LOC thresholds** are defined once in **Work Item Routing** (CLAUDE.md): Tier 1 ≤30 (auto-approve QF), Tier 2 31-75 (standard QF), Tier 3 >75 (full SD). Risk keywords (auth, migration, schema, feature) always force Tier 3 regardless of LOC.
-
-### Why This Matters
-- All work tracked in database
-- Lessons learned captured
-- Quality gates enforced
-- Progress metrics accurate
-
-### Emergency Bypass (Logged)
-```bash
-EMERGENCY_PUSH="critical: reason here" git push
-```
-This logs to audit_log and should be followed by retroactive SD/QF creation.
-
-### Pre-Push Enforcement
-The pre-push hook automatically:
-1. Detects SD/QF from branch name
-2. Verifies completion status in database
-3. Blocks if not ready for merge
-
 ## Sub-Agent Model Routing
 
 **CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
@@ -379,42 +345,39 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
-## Execution Philosophy
+## Work Tracking Policy
 
-### Quality-First (PARAMOUNT)
-**Get it right, not fast.** Correctness > speed. 2-4 hours careful implementation beats 6-12 hours rework.
+**ALL changes to main must be tracked** as either:
 
-### Testing-First (MANDATORY)
-- E2E testing is MANDATORY
-- 100% user story coverage required
-- Both unit tests AND E2E tests must pass
+### Strategic Directive (SD) - For Substantial Work
+- Features, refactors, infrastructure (>75 LOC, see Work Item Routing)
+- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
+- Command: `npm run sd:create`
 
-### Database-First (REQUIRED)
-**Zero markdown files.** Database tables are single source of truth:
-- SDs → `strategic_directives_v2`
-- PRDs → `product_requirements_v2`
-- Handoffs → `sd_phase_handoffs`
-- Retrospectives → `retrospectives`
+### Quick-Fix (QF) - For Small Fixes
+- Bugs, polish, docs (≤75 LOC per Tier 1/Tier 2 in Work Item Routing)
+- Branch: `quick-fix/QF-YYYYMMDD-NNN`
+- Command: `node scripts/create-quick-fix.js --interactive`
 
-### Validation-First (GATEKEEPING)
-- LEAD validates: Real problem? Feasible? Resources?
-- After approval: SCOPE LOCK - deliver what was approved
+> **LOC thresholds** are defined once in **Work Item Routing** (CLAUDE.md): Tier 1 ≤30 (auto-approve QF), Tier 2 31-75 (standard QF), Tier 3 >75 (full SD). Risk keywords (auth, migration, schema, feature) always force Tier 3 regardless of LOC.
 
-### Anti-Bias Rules (MANDATORY)
-| Bias | Incorrect | Correct |
-|------|-----------|---------|
-| Efficiency | Skip workflow steps | Full workflow is non-negotiable |
-| Completion | "complete" = code works | "complete" = database status + validations |
-| Abstraction | Children are sub-tasks | Children are INDEPENDENT SDs |
-| Autonomy | No human gates | Each phase requires validation |
+### Why This Matters
+- All work tracked in database
+- Lessons learned captured
+- Quality gates enforced
+- Progress metrics accurate
 
-**RULE**: When ANY bias-pattern detected, STOP and verify with user.
+### Emergency Bypass (Logged)
+```bash
+EMERGENCY_PUSH="critical: reason here" git push
+```
+This logs to audit_log and should be followed by retroactive SD/QF creation.
 
-**NEVER**:
-- Ship without completing full LEO Protocol
-- Skip LEAD approval for child SDs
-- Skip PRD creation for child SDs
-- Mark parent complete before all children complete in database
+### Pre-Push Enforcement
+The pre-push hook automatically:
+1. Detects SD/QF from branch name
+2. Verifies completion status in database
+3. Blocks if not ready for merge
 
 ## QF Lifecycle Reconciliation
 
@@ -480,6 +443,112 @@ Before marking any stage/feature as complete:
 - [ ] Recommendations are actionable in the UI
 
 **BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
+## Execution Philosophy
+
+### Quality-First (PARAMOUNT)
+**Get it right, not fast.** Correctness > speed. 2-4 hours careful implementation beats 6-12 hours rework.
+
+### Testing-First (MANDATORY)
+- E2E testing is MANDATORY
+- 100% user story coverage required
+- Both unit tests AND E2E tests must pass
+
+### Database-First (REQUIRED)
+**Zero markdown files.** Database tables are single source of truth:
+- SDs → `strategic_directives_v2`
+- PRDs → `product_requirements_v2`
+- Handoffs → `sd_phase_handoffs`
+- Retrospectives → `retrospectives`
+
+### Validation-First (GATEKEEPING)
+- LEAD validates: Real problem? Feasible? Resources?
+- After approval: SCOPE LOCK - deliver what was approved
+
+### Anti-Bias Rules (MANDATORY)
+| Bias | Incorrect | Correct |
+|------|-----------|---------|
+| Efficiency | Skip workflow steps | Full workflow is non-negotiable |
+| Completion | "complete" = code works | "complete" = database status + validations |
+| Abstraction | Children are sub-tasks | Children are INDEPENDENT SDs |
+| Autonomy | No human gates | Each phase requires validation |
+
+**RULE**: When ANY bias-pattern detected, STOP and verify with user.
+
+**NEVER**:
+- Ship without completing full LEO Protocol
+- Skip LEAD approval for child SDs
+- Skip PRD creation for child SDs
+- Mark parent complete before all children complete in database
+
+## Queue Ranking and QF Track Inference
+
+**Purpose**: Document the unified queue ranking model used by `npm run sd:next`,
+established by SD-LEO-INFRA-UNIFY-QUICK-FIX-001.
+
+### Single Source of Truth: `scripts/modules/sd-next/rank-items.js`
+
+Both the baseline-active path (`SDNextSelector.js::displayTracks`) and the
+no-baseline fallback path (`display/fallback-queue.js::showFallbackQueue`)
+delegate ranking to the same pure `rankItems(items, context)` function. The
+urgency bands, vision gap weighting, OKR impact blending, and policy boost
+apply uniformly regardless of whether a baseline is active.
+
+Do NOT reintroduce inline sort logic or `composite_rank` arithmetic in the
+orchestrator files — that divergence was the bug this SD fixed.
+
+### QF Track Inference
+
+Quick Fixes rank alongside SDs in the same track sections. The QF → track
+assignment is inferred from existing `quick_fixes` columns; there is no
+`quick_fixes.track` schema column and none should be added.
+
+| `quick_fixes.type` | Default Track | Override |
+|---------------------|---------------|----------|
+| `bug`               | C (Quality)   | Track A if `branch_name` contains an infra keyword |
+| `polish`            | C (Quality)   | Track A if `branch_name` contains an infra keyword |
+| `documentation`     | STANDALONE    | (none) |
+| anything else       | STANDALONE    | (none) |
+
+Infra keyword set (in `rank-items.js::TRACK_A_BRANCH_KEYWORDS`): `infra`,
+`hook`, `gate`, `protocol`, `workflow`, `sd-next`, `handoff`. The
+heuristic is conservative by design — false-positive Track A assignment
+pollutes the Infrastructure track with mis-categorised work.
+
+### QF Severity → sequence_rank + urgency band
+
+| Severity   | sequence_rank | Default band (fresh) | Band (age > 7 days) |
+|------------|---------------|----------------------|---------------------|
+| `critical` | 100           | P0                   | P0                  |
+| `high`     | 200           | P1                   | P0                  |
+| `medium`   | 500           | P2                   | P0                  |
+| `low`      | 1000          | P3                   | P3                  |
+
+Tuning: edit `SEVERITY_TO_RANK` and `qfUrgencyBand` in `rank-items.js` —
+single-line changes; do not propagate these constants elsewhere.
+
+### Anti-patterns
+
+- ❌ Adding a `quick_fixes.track` column. We infer at read time on purpose.
+- ❌ Duplicating ranking logic in a new caller. Import `rankItems` instead.
+- ❌ Reintroducing a separate `OPEN QUICK FIXES` section at the bottom of
+  `sd:next` output. QFs render inline inside their track via
+  `display/tracks.js::displaySDItem` (branch on `item.kind === 'qf'`).
+- ❌ Conflating `item.kind` (routing discriminator) with `qf.type`
+  (DB column holding bug/polish/documentation). They are separate signals.
+
+### AUTO_PROCEED_ACTION envelope (unchanged)
+
+The refactor preserves the existing envelope shape exactly:
+
+```
+AUTO_PROCEED_ACTION:{"action":"start"|"qf_start"|"continue"|...,
+                     "sd_id": "<key>"|null, "qf_id": "<id>"|null,
+                     "reason": "<text>"}
+```
+
+Downstream consumers (`coordination-inbox.cjs`, integration tests) continue
+to parse without modification.
 
 ## Sub-Agent Routing Reference
 
@@ -1308,6 +1377,39 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 - Base: `/scripts/modules/ai-quality-evaluator.js`
 - Full documentation: `docs/reference/ai-quality-rubrics.md`
 
+## Retrospective-Gate Invariants
+
+## Retrospective-Gate Invariants (FR4 of SD-LEO-INFRA-RETROSPECTIVE-GATES-FAIL-001)
+
+Both LEO handoff gates that check for a completion retrospective — `RETROSPECTIVE_QUALITY_GATE` at PLAN-TO-LEAD (`scripts/modules/handoff/executors/plan-to-lead/gates/retrospective-quality.js`) and `createRetrospectiveExistsGate` at LEAD-FINAL-APPROVAL (`scripts/modules/handoff/executors/lead-final-approval/gates.js`) — enforce **three invariants** via the shared helper `scripts/modules/handoff/retro-filters.js`:
+
+### The Three Invariants
+
+| # | Invariant | Query filter | Why |
+|---|-----------|--------------|-----|
+| 1 | **Existence** | `sd_id = <uuid>` plus `.maybeSingle()` with null-guard | A missing retrospective must be a hard-fail. Never fall through to `validateSDCompletionReadiness(sd, null)` — that function scores on SD quality alone, silently passing the gate. |
+| 2 | **Type** | `.eq('retro_type', 'SD_COMPLETION')` | Handoff-time retros (LEAD_TO_PLAN, PLAN_TO_EXEC) are stored in the same table with a `retrospective_type` column for the phase label — but they still set `retro_type='SD_COMPLETION'` (see `lead-to-plan/retrospective.js:283`). The type filter excludes SPRINT / INCIDENT / AUDIT retros but is NOT sufficient on its own. |
+| 3 | **Freshness** | `.gt('created_at', leadToPlanAcceptedAt)` | The one axis that reliably separates handoff-time retros from true SD-completion retros is creation time — SD-completion retros are authored *after* the SD actually ships. `leadToPlanAcceptedAt` comes from the most-recent `sd_phase_handoffs` row where `from_phase='LEAD'`, `to_phase='PLAN'`, `status='accepted'`. Falls back to `SD.created_at` when no such handoff exists (Phase-0 / unusual SDs). |
+
+### Why Binary Pass/Fail, Not Percentage
+
+Artifact-existence gates must query the artifact table directly, never heuristic-score. The original bug (`PAT-RETRO-EXISTS-GATE-FALSE-PASS`) manifested precisely because `validateSDCompletionReadiness` returned a percentage score based on SD quality when the retro was missing — and that score was high enough to pass the threshold. Hard-fail with remediation is the only way to make the absence loud.
+
+### Touching These Gates
+
+If you modify either gate, preserve the three-invariant invariant:
+
+- Use `getFilteredRetrospective(sdUuid, sdCreatedAt, supabase)` from `scripts/modules/handoff/retro-filters.js`. Do **not** re-roll the query.
+- Preserve the zero-rows hard-fail branch **before** `checkAutoPassConditions`. The auto-pass fast-paths for orchestrator / database / bugfix / corrective / enhancement / infrastructure assume a valid retro is present — they must never run on null.
+- Add a test case for each new behavior: see `scripts/modules/handoff/retro-filters.test.js`, `retrospective-quality.test.js` (4 new failure-mode cases), and `lead-final-approval/gates/retrospective-exists.test.js` (mirror tests, previously zero coverage).
+
+### Reference
+
+- Evidence row (VALIDATION sub-agent, predecessor SD): `sub_agent_execution_results.id = e6cf78c4-427b-4c94-9fb9-b9b030604871`
+- Evidence row (VALIDATION sub-agent, this SD): `sub_agent_execution_results.id = eb55ea9b-712c-4dcb-ad37-123c15d26d0f`
+- Hot pattern: `PAT-RETRO-EXISTS-GATE-FALSE-PASS` (critical severity, process category)
+
+
 ## Strategic Governance Hierarchy
 
 The EHG platform operates under a 7-layer strategic governance stack. Each layer has a database table, CLI command, and clear purpose.
@@ -1375,22 +1477,13 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
-| PAT-HF-LEADTOPLAN-fecb45e8 | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
-| PAT-RETRO-LEADTOPLAN-fecb45e8 | session_retrospective | [HIGH] high | 5 | [STABLE] | N/A |
-| PAT-WIRE-CHECK-LOCAL-MAIN-STALE | infrastructure | [HIGH] high | 1 | [STABLE] | Change diff ref in wire-check-gate.js:15 |
-| PAT-RETRO-EXISTS-GATE-FALSE-PASS | process | [CRIT] critical | 1 | [STABLE] | Replace heuristic scoring with hard quer |
+| PAT-HF-LEADTOPLAN-3612ea70 | handoff_failure | [HIGH] high | 8 | [STABLE] | N/A |
+| PAT-HF-PLANTOEXEC-211b3c47 | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOEXEC-211b3c47 | session_retrospective | [HIGH] high | 5 | [STABLE] | N/A |
+| PAT-HF-LEADTOPLAN-1249b41c | handoff_failure | [HIGH] high | 4 | [STABLE] | N/A |
+| PAT-RETRO-LEADTOPLAN-1249b41c | session_retrospective | [HIGH] high | 4 | [STABLE] | N/A |
 
 ### Prevention Checklists
-
-**infrastructure**:
-- [ ] When writing gates that diff against a branch ref, always use `origin/<branch>` not the local ref
-- [ ] Gates must `git fetch --quiet` before running ref-sensitive checks
-- [ ] Never assume the local branch ref tracks origin in multi-worktree repos
-
-**process**:
-- [ ] Artifact-existence gates must query the artifact table directly, never heuristic-score
-- [ ] Handoff-type retrospectives must not satisfy SD_COMPLETION retrospective checks
-- [ ] Any gate on a CLAUDE_CORE.md REQUIRED artifact must be binary pass/fail, not percentage
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
@@ -1402,54 +1495,54 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. LEAD_TO_PLAN Handoff Retrospective: Create venture-provisioner.js Orchestration Module [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+### 1. LEAD_TO_PLAN Handoff Retrospective: Software Factory - Automated Venture Error Detection and Self-Healing Pipeline [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/1/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
-- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
+- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
+- [PAT-AUTO-a710c9c1] Gate GATE_SD_QUALITY failed: score 27/100
 
 **Action Items**:
-- [ ] Verify: venture-provisioner.js exports provisionVenture() with idempotent state ...
-- [ ] Validate: provisioning-state.js provides CRUD for venture_provisioning_state for...
+- [ ] Verify: Sentry errors appear in feedback table within 30 minutes for SD-LEO-INFR...
+- [ ] Validate: Error sanitizer prevents prompt injection for SD-LEO-INFRA-SOFTWARE-FA...
 
-### 2. LEAD_TO_PLAN Handoff Retrospective: CI/CD Template Generation [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
-- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
-
-**Action Items**:
-- [ ] Verify: CI/CD templates created with lint, test, build, deploy steps for SD-LEO-...
-- [ ] Validate: --register flag generates .github/workflows/ in venture directory for ...
-
-### 3. PLAN_TO_EXEC Handoff Retrospective: Enhance create-ehg-venture with --register Flag [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+### 2. PLAN_TO_EXEC Handoff Retrospective: Software Factory - Automated Venture Error Detection and Self-Healing Pipeline [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/1/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
-- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
+- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
+- [PAT-AUTO-a710c9c1] Gate GATE_SD_QUALITY failed: score 27/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
-### 4. PLAN_TO_EXEC Handoff Retrospective: Stage 18 Post-Processor Full Automation [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+### 3. LEAD_TO_PLAN Handoff Retrospective: Unified Identity Schema — Migrate Board Seats to specialist_registry [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/31/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
-- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
+- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
+- [PAT-AUTO-a710c9c1] Gate GATE_SD_QUALITY failed: score 27/100
+
+**Action Items**:
+- [ ] Verify: specialist_registry table has 8 new columns for SD-LEO-INFRA-INTELLIGENT...
+- [ ] Validate: 6 founding C-suite identities seeded for SD-LEO-INFRA-INTELLIGENT-DYNA...
+
+### 4. PLAN_TO_EXEC Handoff Retrospective: Unified Identity Schema — Migrate Board Seats to specialist_registry [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 3/31/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
+- [PAT-AUTO-a710c9c1] Gate GATE_SD_QUALITY failed: score 27/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
-### 5. PLAN_TO_EXEC Handoff Retrospective: CI/CD Template Generation [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/25/2026 | **Score**: 100
+### 5. PLAN_TO_EXEC Handoff Retrospective: S20 SD Progress Dashboard Child Tree View [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/1/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-fe6bb36f] Gate HEAL_BEFORE_COMPLETE failed: score 47/100
-- [PAT-AUTO-f4a85d68] Gate HEAL_BEFORE_COMPLETE failed: score 25/100
+- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
+- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
@@ -1518,7 +1611,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-04-24*
+*Generated from database: 2026-04-29*
 *Protocol Version: 4.4.1*
-*Includes: Proposals (0) + Hot Patterns (4) + Lessons (5)*
+*Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

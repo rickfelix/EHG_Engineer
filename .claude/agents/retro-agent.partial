@@ -164,6 +164,73 @@ node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>
 
 **Evidence**: SD-A11Y-FEATURE-BRANCH-001 - Quality score calculation trigger ensures comprehensive retrospectives
 
+## Lesson Triage — Domain-Specific vs Tooling-Gap (REQUIRED)
+
+> **Why this exists**: Without triage, retros routinely emit "lessons" that are actually symptoms of tooling gaps. The same gap then recurs SD after SD because the lesson was prose nobody queries while the systemic fix was never filed. Memorializing a symptom as a lesson is anti-learning — it normalizes the gap.
+
+**For EACH candidate `key_learning` you are about to write, ask:**
+
+> *"Would tightening tooling X prevent this from ever needing to be re-learned on a future SD? Y/N"*
+
+### If YES (tooling gap)
+This is NOT a true lesson. The lesson is implicit in "this gap exists and is unaddressed." Two-step handling:
+
+1. **File the gap** in the appropriate venue:
+   - Single-line, fast-to-fix → append to `docs/harness-backlog.md` (one-line entry per format in that file)
+   - Tier 1 (≤30 LOC) targeted fix → file `QF-YYYYMMDD-<descriptor>` via `scripts/create-quick-fix.js`
+   - Tier 3 (framework-surface, >75 LOC, or risk keywords) → file `SD-LEO-INFRA-*` via `scripts/leo-create-sd.js --from-plan`
+
+2. **Rewrite the lesson** to name the systemic gap and reference the filed item, NOT to memorialize the symptom:
+   - **BAD** (memorializes the symptom): `"Cross-repo target_application misclassification → manual worktree path fixup"`
+   - **GOOD** (names the gap + tracks the fix): `"Cross-repo SDs require manual worktree fixup until sd-start.js reads the explicit ## Target Application plan header (filed SD-LEO-INFRA-START-WORKTREE-BRANCH-001)"`
+
+The rewritten lesson is durable: when the SD ships, future retros can verify the lesson is now a closed loop. When the SD is still open, future operators see the active gap.
+
+### If NO (true domain-specific lesson)
+Keep the lesson as a concrete, file/line-anchored insight that future SD authors in the same domain would benefit from. Examples that pass triage:
+
+- `"parseRevenuePotential regex with ([KMB])? unanchored at end matched 'm' in 'monthly' → $2000 monthly parsed as $2 billion. Lookahead (?![a-z]) is required when the suffix can be followed by alpha context."` (regex craft, no tooling fix)
+- `"Tie-break tests for weighted composites need intentionally-constructed ties (e.g. weights={automation_feasibility:0,...,strategic_fit:1.0}) — assuming the largest input dominates the composite produces a wrong oracle."` (test design, no tooling fix)
+
+### Required metadata block
+
+In the retrospective's `metadata` jsonb column, populate `lesson_triage` as a sibling key. One entry per `key_learning`. Shape:
+
+```json
+{
+  "lesson_triage": [
+    {
+      "lesson_index": 0,
+      "lesson_text": "<verbatim from key_learnings[0]>",
+      "classification": "domain_specific",
+      "rationale": "regex craft; no tooling can know weight semantics ahead of time"
+    },
+    {
+      "lesson_index": 1,
+      "lesson_text": "<verbatim — already rewritten to name the gap>",
+      "classification": "tooling_gap",
+      "filed_as": { "venue": "harness_backlog | qf | sd", "ref": "<line-N or QF-... or SD-...>" },
+      "rationale": "if sd-start read the plan-content header, this would never recur"
+    }
+  ]
+}
+```
+
+### Self-test before INSERT
+
+Before inserting the retrospective row, scan `key_learnings` for any phrase that looks like a tooling gap:
+- "manual workaround / fixup / patch"
+- "had to bypass / had to override"
+- "X drift between Y and Z"
+- "schema/enum mismatch"
+- "every time we / always have to"
+
+If any match AND the corresponding `lesson_triage[i].classification !== 'tooling_gap'`, you have either misclassified a tooling gap as domain-specific, OR you've left a tooling-gap symptom in the lesson without filing the fix. Re-triage before inserting.
+
+### Why this is a quality gate, not a nice-to-have
+
+A retro that lists 8 lessons but classifies 0 as tooling_gap is suspicious — modern SDs almost always surface ≥1 systemic gap. Conversely, a retro that classifies 8/8 as tooling_gap is also suspicious — domain-specific craft (regex, schema design, test oracles) almost always produces ≥1 true lesson. The triage forces a deliberate classification rather than the lazy "everything is a lesson" default.
+
 ## Database-Driven Validation (SD-A11Y-ONBOARDING-001, SD-VIF-TIER-001)
 
 ### Database Constraints + Trigger Functions

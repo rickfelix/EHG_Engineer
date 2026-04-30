@@ -26,6 +26,9 @@ import { createSubagentEvidenceGate } from '../../gates/subagent-evidence-gate.j
 // Scope Completion Verification Gate (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-002)
 import { createScopeCompletionGate } from '../../gates/scope-completion-gate.js';
 
+// DB Content Parity Gate (SD-LEO-INFRA-CODE-CONTENT-PARITY-001)
+import { createDbContentParityGate } from '../../gates/db-content-parity-gate.js';
+
 // Gate creators
 import {
   createPrerequisiteCheckGate,
@@ -44,7 +47,9 @@ import {
   createFailureChainOrderingGate,
   // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
   createScopeAuditGate,
-  createChildScopeCoverageGate
+  createChildScopeCoverageGate,
+  // Vision Fidelity Gate (SD-LEO-INFRA-VISION-FIDELITY-GATE-001 FR-2)
+  createVisionFidelityGate
 } from './gates/index.js';
 // Note: requiresTraceabilityGates is re-exported via 'export * from ./gates/index.js'
 
@@ -255,6 +260,9 @@ export class PlanToLeadExecutor extends BaseExecutor {
       // SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-002: added to prevent zero-verification bypass
       gates.push(createScopeCompletionGate());
 
+      // DB Content Parity — runs after scope-completion, before /learn (SD-LEO-INFRA-CODE-CONTENT-PARITY-001)
+      gates.push(createDbContentParityGate());
+
       return gates;
     }
 
@@ -300,6 +308,14 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // Architecture plan validation (advisory — checks dimension coverage)
     gates.push(createArchitecturePlanValidationGate(this.supabase));
 
+    // Vision Fidelity Gate (SD-LEO-INFRA-VISION-FIDELITY-GATE-001 FR-2)
+    // LLM-driven element-level wireframe vs implementation comparison.
+    // Severity-tier policy per sd_type — see lib/sub-agents/vision-fidelity/severity-policy.js.
+    // Skips for documentation/refactor; warn-only for infrastructure; blocks feature/bugfix
+    // when critical_missing > 2 (or mixed: critical>1 AND non_critical>5).
+    // Fail-soft: missing vision_key, sub-agent throw, or LLM timeout → advisory pass.
+    gates.push(createVisionFidelityGate(this.supabase));
+
     // Smoke Test Evidence gate (blocking for pipeline SDs)
     // Prevents architecture plans from missing runtime observation of the actual failure.
     // RCA: SD-LEO-INFRA-EVA-STAGE-PIPELINE-002 fixed downstream symptoms while the
@@ -318,6 +334,9 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
     gates.push(createScopeAuditGate(this.supabase));
     gates.push(createChildScopeCoverageGate(this.supabase));
+
+    // DB Content Parity — runs before /learn (SD-LEO-INFRA-CODE-CONTENT-PARITY-001)
+    gates.push(createDbContentParityGate());
 
     return gates;
   }

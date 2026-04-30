@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-27T02:34:49.236Z
-**Tables**: 654
+**Generated**: 2026-04-29T22:26:55.427Z
+**Tables**: 659
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (654)
+## All Tables (659)
 
 ### LEO Protocol
 
@@ -203,6 +203,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [agent_task_contracts](tables/agent_task_contracts.md)
 - [agentic_reviews](tables/agentic_reviews.md)
 - [agents](tables/agents.md)
+- [ai_gen_dwell_tracking](tables/ai_gen_dwell_tracking.md)
+- [ai_gen_provenance](tables/ai_gen_provenance.md)
 - [ai_quality_assessments](tables/ai_quality_assessments.md)
 - [anthropic_plugin_registry](tables/anthropic_plugin_registry.md)
 - [app_config](tables/app_config.md)
@@ -360,6 +362,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_trace_log](tables/eva_trace_log.md)
 - [eva_translation_gates](tables/eva_translation_gates.md)
 - [eva_updates](tables/eva_updates.md)
+- [eva_venture_config](tables/eva_venture_config.md)
 - [eva_ventures](tables/eva_ventures.md)
 - [eva_vision_documents](tables/eva_vision_documents.md)
 - [eva_vision_gaps](tables/eva_vision_gaps.md)
@@ -571,6 +574,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [stage_events](tables/stage_events.md)
 - [stage_executions](tables/stage_executions.md)
 - [stage_of_death_predictions](tables/stage_of_death_predictions.md)
+- [stage_prop_contracts](tables/stage_prop_contracts.md)
 - [stage_proving_journal](tables/stage_proving_journal.md)
 - [stage_zero_requests](tables/stage_zero_requests.md)
 - [stitch_generation_metrics](tables/stitch_generation_metrics.md)
@@ -672,6 +676,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_persona_mapping](tables/venture_persona_mapping.md)
 - [venture_postmortems](tables/venture_postmortems.md)
 - [venture_provisioning_state](tables/venture_provisioning_state.md)
+- [venture_quality_findings](tables/venture_quality_findings.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_resources](tables/venture_resources.md)
 - [venture_separability_scores](tables/venture_separability_scores.md)

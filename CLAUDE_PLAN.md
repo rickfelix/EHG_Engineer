@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-04-23 9:43:55 PM
+**Generated**: 2026-04-29 10:02:45 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
@@ -239,7 +239,7 @@ These anti-patterns are specific to the PLAN phase. Violating them leads to inco
 ### NC-PLAN-002: No PRD Without Exploration
 **Anti-Pattern**: Creating PRD immediately after SD approval without reading codebase
 **Why Wrong**: PRDs miss existing infrastructure, create duplicate work, conflict with patterns
-**Correct Approach**: Read ≥5 relevant files, document findings at `strategic_directives_v2.exploration_summary.files_explored` (the exact path `phase-preflight.js` Discovery Gate reads)
+**Correct Approach**: Read ≥5 relevant files, document findings in exploration_summary
 
 ### NC-PLAN-003: No Boilerplate Acceptance Criteria
 **Anti-Pattern**: Using generic criteria like "all tests pass", "code review done", "meets requirements"
@@ -293,7 +293,7 @@ Before running `node scripts/add-prd-to-database.js`:
 
 1. **Exploration Complete?** (Discovery Gate)
    - [ ] Read ≥5 relevant files
-   - [ ] Documented findings at `sd.exploration_summary.files_explored` (the exact JSONB path checked by `phase-preflight.js` Discovery Gate)
+   - [ ] Documented findings in exploration_summary
    - [ ] Identified existing patterns to follow
 
 2. **Requirements Specific?** (Russian Judge)
@@ -403,13 +403,12 @@ Before running `node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX`, verify ALL
 - [ ] Technical architecture documented
 
 ### 2. Integration & Operationalization Complete ✅
-- [ ] PRD has `integration_operationalization` section with 5 subsections.
-  Canonical JSONB keys below match the `product_requirements_v2` CHECK constraint verbatim — use these exact keys. Alternative names (`upstream_dependencies`, `runtime_configuration`, `observability_rollout_rollback`, etc.) are REJECTED by the constraint.
-  - [ ] `consumers` — **Consumers & User Journeys**: Who/what uses this feature
-  - [ ] `dependencies` — **Upstream/Downstream Dependencies**: External systems, failure modes (single array with `direction` field per entry; NOT split into `upstream_dependencies`/`downstream_dependencies`)
-  - [ ] `data_contracts` — **Data Contracts & Schema**: Tables, columns, API contracts
-  - [ ] `runtime_config` — **Runtime Configuration**: Env vars, feature flags, deployment sequence
-  - [ ] `observability_rollout` — **Observability, Rollout & Rollback**: Metrics, rollout plan, rollback procedure
+- [ ] PRD has `integration_operationalization` section with 5 subsections:
+  - [ ] **Consumers & User Journeys**: Who/what uses this feature
+  - [ ] **Upstream/Downstream Dependencies**: External systems, failure modes
+  - [ ] **Data Contracts & Schema**: Tables, columns, API contracts
+  - [ ] **Runtime Configuration**: Env vars, feature flags, deployment sequence
+  - [ ] **Observability, Rollout & Rollback**: Metrics, rollout plan, rollback procedure
 - [ ] For infrastructure SDs: Consumers identified OR justification provided (≥30 chars)
 - [ ] Dependencies have `name`, `direction`, `failure_mode` fields
 
@@ -824,21 +823,6 @@ node scripts/add-prd-to-database.js {SD-ID}
 - ⚠️ Never create PRDs as markdown files
 - ⚠️ Never skip validation gates
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -890,6 +874,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -1667,34 +1666,6 @@ for (const childId of childIds) {
 
 > **Team Capabilities**: When planning complex SDs, consider whether team spawning (any agent leading specialists) could parallelize cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
-## PRD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off PRD creation scripts like:**
-- `create-prd-sd-*.js`
-- `insert-prd-*.js`
-- `enhance-prd-*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/add-prd-to-database.js
-```
-
-### Why This Matters
-- One-off scripts bypass PRD quality validation
-- They create massive maintenance burden (100+ orphaned scripts)
-- They fragment PRD creation patterns
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-prd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/add-prd-to-database.js`
-2. Follow the modular PRD creation system in `scripts/prd/`
-3. PRD is properly validated against quality rubrics
-
 ## Vision V2 PRD Requirements (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Integration in PRDs
@@ -1735,6 +1706,34 @@ Key spec requirements addressed:
 ### Implementation Guidance (from SD metadata)
 
 All Vision V2 SDs have `creation_mode: CREATE_FROM_NEW` - implement fresh per specs, learn from existing code but do not modify it.
+
+## PRD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off PRD creation scripts like:**
+- `create-prd-sd-*.js`
+- `insert-prd-*.js`
+- `enhance-prd-*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/add-prd-to-database.js
+```
+
+### Why This Matters
+- One-off scripts bypass PRD quality validation
+- They create massive maintenance burden (100+ orphaned scripts)
+- They fragment PRD creation patterns
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-prd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/add-prd-to-database.js`
+2. Follow the modular PRD creation system in `scripts/prd/`
+3. PRD is properly validated against quality rubrics
 
 ## Quality Assessment Integration in Handoffs
 
@@ -2415,6 +2414,6 @@ On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decompositi
 
 ---
 
-*Generated from database: 2026-04-23*
+*Generated from database: 2026-04-29*
 *Protocol Version: 4.4.1*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
