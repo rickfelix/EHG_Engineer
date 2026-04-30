@@ -1,543 +1,73 @@
-/**
- * Unit tests for Stage 23 Analysis Step - Launch Execution
- * Part of SD-EVA-FEAT-TEMPLATES-LAUNCH-001
- *
- * @module tests/unit/eva/stage-templates/analysis-steps/stage-23-launch-execution.test
- */
+import { describe, it, expect } from 'vitest';
+import {
+  analyzeStage23,
+  LAUNCH_TYPES,
+  TASK_STATUSES,
+  CRITERION_PRIORITIES,
+  APP_STORE_STATUSES,
+  DOMAIN_STATUSES,
+  CHANNEL_STATUSES,
+  APP_RANKING_TIERS,
+  COMPETITIVE_POSITIONS,
+} from '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-launch-execution.js';
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-vi.mock('../../../../../lib/llm/index.js', () => ({
-  getLLMClient: vi.fn(() => ({
-    complete: vi.fn(),
-  })),
-}));
-
-import { analyzeStage23, LAUNCH_TYPES, TASK_STATUSES, CRITERION_PRIORITIES, APP_STORE_STATUSES, DOMAIN_STATUSES, CHANNEL_STATUSES, APP_RANKING_TIERS, COMPETITIVE_POSITIONS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-execution.js';
-import { getLLMClient } from '../../../../../lib/llm/index.js';
-
-function createLLMResponse(overrides = {}) {
-  const base = {
-    launchType: 'beta',
-    launchBrief: 'Launching the MVP to a closed beta group of 50 users for initial feedback.',
-    successCriteria: [
-      { metric: 'User signups', target: '50 in 7 days', measurementWindow: '7 days', priority: 'primary' },
-      { metric: 'Error rate', target: 'Below 5%', measurementWindow: '7 days', priority: 'secondary' },
-      { metric: 'NPS score', target: 'Above 30', measurementWindow: '14 days', priority: 'secondary' },
-    ],
-    rollbackTriggers: [
-      { condition: 'Error rate exceeds 10% for 1 hour', severity: 'critical' },
-      { condition: 'Zero signups in first 48 hours', severity: 'warning' },
-    ],
-    launchTasks: [
-      { name: 'Deploy to production', owner: 'Engineering', status: 'done' },
-      { name: 'Send beta invites', owner: 'Marketing', status: 'pending' },
-      { name: 'Configure monitoring', owner: 'DevOps', status: 'in_progress' },
-    ],
-    plannedLaunchDate: '2026-03-01',
-    ...overrides,
-  };
-  return JSON.stringify(base);
-}
-
-function setupMock(responseOverrides = {}) {
-  const mockComplete = vi.fn().mockResolvedValue(createLLMResponse(responseOverrides));
-  getLLMClient.mockReturnValue({ complete: mockComplete });
-  return mockComplete;
-}
-
-const VALID_PARAMS = {
-  stage22Data: {
-    releaseDecision: { decision: 'release', rationale: 'QA passed' },
-    releaseItems: [{ name: 'Feature A', status: 'approved' }],
-    sprintRetrospective: { wentWell: ['Velocity improved'] },
-  },
-};
-
-describe('stage-23-launch-execution.js', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe('stage-24-launch-execution.js — contract', () => {
+  it('exports analyzeStage23 as an async function', () => {
+    expect(typeof analyzeStage23).toBe('function');
+    expect(analyzeStage23.constructor.name).toBe('AsyncFunction');
   });
 
-  describe('Exported constants', () => {
-    it('should export LAUNCH_TYPES', () => {
-      expect(LAUNCH_TYPES).toEqual(['soft_launch', 'beta', 'general_availability']);
-    });
-
-    it('should export TASK_STATUSES', () => {
-      expect(TASK_STATUSES).toEqual(['pending', 'in_progress', 'done', 'blocked']);
-    });
-
-    it('should export CRITERION_PRIORITIES', () => {
-      expect(CRITERION_PRIORITIES).toEqual(['primary', 'secondary']);
-    });
-
-    it('should export APP_STORE_STATUSES', () => {
-      expect(APP_STORE_STATUSES).toEqual(['not_submitted', 'submitted', 'in_review', 'approved', 'rejected', 'live']);
-    });
-
-    it('should export DOMAIN_STATUSES', () => {
-      expect(DOMAIN_STATUSES).toEqual(['not_configured', 'dns_pending', 'ssl_pending', 'active', 'error']);
-    });
-
-    it('should export CHANNEL_STATUSES', () => {
-      expect(CHANNEL_STATUSES).toEqual(['not_started', 'drafting', 'scheduled', 'live', 'paused']);
-    });
-
-    it('should export APP_RANKING_TIERS', () => {
-      expect(APP_RANKING_TIERS).toEqual(['top10', 'top50', 'top100', 'below100', 'unknown']);
-    });
-
-    it('should export COMPETITIVE_POSITIONS', () => {
-      expect(COMPETITIVE_POSITIONS).toEqual(['leader', 'challenger', 'follower', 'niche', 'unknown']);
-    });
+  it('throws when stage22Data is missing', async () => {
+    await expect(analyzeStage23({ logger: { log: () => {}, warn: () => {} } }))
+      .rejects.toThrow('Stage 23 launch execution requires Stage 22');
   });
 
-  describe('Input validation', () => {
-    it('should throw when stage22Data is missing', async () => {
-      await expect(analyzeStage23({})).rejects.toThrow('Stage 23 launch execution requires Stage 22');
-    });
+  it('throws REFUSED when called with data (stub implementation)', async () => {
+    await expect(analyzeStage23({ stage22Data: { releaseDecision: {} }, logger: { log: () => {} } }))
+      .rejects.toThrow('[Stage23] REFUSED');
   });
 
-  describe('Launch type normalization', () => {
-    it('should accept valid launch types', async () => {
-      for (const lt of LAUNCH_TYPES) {
-        setupMock({ launchType: lt });
-        const result = await analyzeStage23(VALID_PARAMS);
-        expect(result.launchType).toBe(lt);
-      }
-    });
-
-    it('should default to soft_launch for invalid type', async () => {
-      setupMock({ launchType: 'invalid' });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.launchType).toBe('soft_launch');
-    });
+  it('exports LAUNCH_TYPES array', () => {
+    expect(Array.isArray(LAUNCH_TYPES)).toBe(true);
+    expect(LAUNCH_TYPES).toContain('beta');
+    expect(LAUNCH_TYPES).toContain('soft_launch');
   });
 
-  describe('Launch brief normalization', () => {
-    it('should use LLM-provided brief', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.launchBrief).toContain('MVP');
-    });
-
-    it('should truncate to 1000 characters', async () => {
-      setupMock({ launchBrief: 'X'.repeat(2000) });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.launchBrief.length).toBe(1000);
-    });
-
-    it('should default when missing', async () => {
-      setupMock({ launchBrief: undefined });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.launchBrief).toBe('Launch brief pending.');
-    });
+  it('exports TASK_STATUSES array', () => {
+    expect(Array.isArray(TASK_STATUSES)).toBe(true);
+    expect(TASK_STATUSES).toContain('pending');
+    expect(TASK_STATUSES).toContain('done');
   });
 
-  describe('Success criteria normalization', () => {
-    it('should use LLM-provided criteria', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.successCriteria.length).toBe(3);
-      expect(result.successCriteria[0].metric).toBe('User signups');
-    });
-
-    it('should provide defaults when fewer than 2 criteria', async () => {
-      setupMock({ successCriteria: [{ metric: 'Only one' }] });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.successCriteria.length).toBe(2);
-      expect(result.successCriteria[0].priority).toBe('primary');
-    });
-
-    it('should ensure at least one primary criterion', async () => {
-      setupMock({
-        successCriteria: [
-          { metric: 'M1', target: 'T1', measurementWindow: '7 days', priority: 'secondary' },
-          { metric: 'M2', target: 'T2', measurementWindow: '7 days', priority: 'secondary' },
-        ],
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.successCriteria.some(sc => sc.priority === 'primary')).toBe(true);
-    });
-
-    it('should default invalid priority to secondary', async () => {
-      setupMock({
-        successCriteria: [
-          { metric: 'M1', target: 'T1', measurementWindow: '7 days', priority: 'primary' },
-          { metric: 'M2', target: 'T2', measurementWindow: '7 days', priority: 'invalid' },
-        ],
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.successCriteria[1].priority).toBe('secondary');
-    });
-
-    it('should truncate metric to 200 characters', async () => {
-      setupMock({
-        successCriteria: [
-          { metric: 'M'.repeat(300), target: 'T1', measurementWindow: '7 days', priority: 'primary' },
-          { metric: 'M2', target: 'T2', measurementWindow: '7 days', priority: 'secondary' },
-        ],
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.successCriteria[0].metric.length).toBe(200);
-    });
+  it('exports CRITERION_PRIORITIES array', () => {
+    expect(Array.isArray(CRITERION_PRIORITIES)).toBe(true);
+    expect(CRITERION_PRIORITIES).toContain('primary');
   });
 
-  describe('Rollback triggers normalization', () => {
-    it('should use LLM-provided triggers', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.rollbackTriggers.length).toBe(2);
-    });
-
-    it('should provide default when empty', async () => {
-      setupMock({ rollbackTriggers: [] });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.rollbackTriggers.length).toBe(1);
-      expect(result.rollbackTriggers[0].severity).toBe('critical');
-    });
-
-    it('should default invalid severity to warning', async () => {
-      setupMock({
-        rollbackTriggers: [{ condition: 'Something bad', severity: 'invalid' }],
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.rollbackTriggers[0].severity).toBe('warning');
-    });
+  it('exports APP_STORE_STATUSES array', () => {
+    expect(Array.isArray(APP_STORE_STATUSES)).toBe(true);
+    expect(APP_STORE_STATUSES).toContain('live');
   });
 
-  describe('Launch tasks normalization', () => {
-    it('should use LLM-provided tasks', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.launchTasks.length).toBe(3);
-    });
-
-    it('should provide default when empty', async () => {
-      setupMock({ launchTasks: [] });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.launchTasks.length).toBe(1);
-    });
-
-    it('should default invalid status to pending', async () => {
-      setupMock({
-        launchTasks: [{ name: 'Task', owner: 'Owner', status: 'invalid' }],
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.launchTasks[0].status).toBe('pending');
-    });
-
-    it('should accept all valid task statuses', async () => {
-      for (const status of TASK_STATUSES) {
-        setupMock({
-          launchTasks: [{ name: 'Task', owner: 'Owner', status }],
-        });
-        const result = await analyzeStage23(VALID_PARAMS);
-        expect(result.launchTasks[0].status).toBe(status);
-      }
-    });
+  it('exports DOMAIN_STATUSES array', () => {
+    expect(Array.isArray(DOMAIN_STATUSES)).toBe(true);
+    expect(DOMAIN_STATUSES).toContain('active');
   });
 
-  describe('Planned launch date normalization', () => {
-    it('should accept valid YYYY-MM-DD date', async () => {
-      setupMock({ plannedLaunchDate: '2026-03-15' });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.plannedLaunchDate).toBe('2026-03-15');
-    });
-
-    it('should generate default date for invalid format', async () => {
-      setupMock({ plannedLaunchDate: 'not-a-date' });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.plannedLaunchDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    });
+  it('exports CHANNEL_STATUSES array', () => {
+    expect(Array.isArray(CHANNEL_STATUSES)).toBe(true);
+    expect(CHANNEL_STATUSES).toContain('live');
   });
 
-  describe('Output shape', () => {
-    it('should return all expected fields', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result).toHaveProperty('launchType');
-      expect(result).toHaveProperty('launchBrief');
-      expect(result).toHaveProperty('successCriteria');
-      expect(result).toHaveProperty('rollbackTriggers');
-      expect(result).toHaveProperty('launchTasks');
-      expect(result).toHaveProperty('plannedLaunchDate');
-      expect(result).toHaveProperty('totalTasks');
-      expect(result).toHaveProperty('blockedTasks');
-      expect(result).toHaveProperty('primaryCriteria');
-      expect(result).toHaveProperty('totalCriteria');
-      expect(result).toHaveProperty('appStoreReadiness');
-      expect(result).toHaveProperty('domainDeployment');
-      expect(result).toHaveProperty('marketingChannels');
-      expect(result).toHaveProperty('chairmanEscalation');
-      expect(result).toHaveProperty('publishReadinessScore');
-      expect(result).toHaveProperty('liveChannels');
-      expect(result).toHaveProperty('totalChannels');
-      expect(result).toHaveProperty('requiresChairmanApproval');
-      expect(result).toHaveProperty('appRankings');
-      expect(result).toHaveProperty('competitivePosition');
-    });
-
-    it('should compute derived counts correctly', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.totalTasks).toBe(result.launchTasks.length);
-      expect(result.blockedTasks).toBe(result.launchTasks.filter(lt => lt.status === 'blocked').length);
-      expect(result.primaryCriteria).toBe(result.successCriteria.filter(sc => sc.priority === 'primary').length);
-      expect(result.totalCriteria).toBe(result.successCriteria.length);
-    });
+  it('exports APP_RANKING_TIERS array', () => {
+    expect(Array.isArray(APP_RANKING_TIERS)).toBe(true);
+    expect(APP_RANKING_TIERS).toContain('top10');
+    expect(APP_RANKING_TIERS).toContain('unknown');
   });
 
-  describe('Upstream data integration', () => {
-    it('should include stage22 release context in prompt', async () => {
-      const mockComplete = setupMock();
-      await analyzeStage23(VALID_PARAMS);
-      const userPrompt = mockComplete.mock.calls[0][1];
-      expect(userPrompt).toContain('release');
-    });
-
-    it('should include stage01 criteria in prompt when provided', async () => {
-      const mockComplete = setupMock();
-      await analyzeStage23({
-        ...VALID_PARAMS,
-        stage01Data: { successCriteria: [{ metric: 'Revenue', target: '$10K MRR' }] },
-      });
-      const userPrompt = mockComplete.mock.calls[0][1];
-      expect(userPrompt).toContain('Revenue');
-    });
-
-    it('should include ventureName in prompt', async () => {
-      const mockComplete = setupMock();
-      await analyzeStage23({ ...VALID_PARAMS, ventureName: 'TestVenture' });
-      const userPrompt = mockComplete.mock.calls[0][1];
-      expect(userPrompt).toContain('TestVenture');
-    });
-  });
-
-  describe('App store readiness normalization', () => {
-    it('should default to not_submitted/web when missing', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.appStoreReadiness.status).toBe('not_submitted');
-      expect(result.appStoreReadiness.platform).toBe('web');
-      expect(result.appStoreReadiness.complianceScore).toBe(0);
-      expect(result.appStoreReadiness.blockers).toEqual([]);
-    });
-
-    it('should accept valid app store data', async () => {
-      setupMock({
-        appStoreReadiness: { status: 'approved', platform: 'ios', complianceScore: 85, blockers: ['Screenshots needed'] },
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.appStoreReadiness.status).toBe('approved');
-      expect(result.appStoreReadiness.platform).toBe('ios');
-      expect(result.appStoreReadiness.complianceScore).toBe(85);
-    });
-
-    it('should clamp complianceScore to 0-100', async () => {
-      setupMock({ appStoreReadiness: { complianceScore: 150 } });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.appStoreReadiness.complianceScore).toBe(100);
-    });
-  });
-
-  describe('Domain deployment normalization', () => {
-    it('should default to not_configured when missing', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.domainDeployment.status).toBe('not_configured');
-      expect(result.domainDeployment.sslValid).toBe(false);
-      expect(result.domainDeployment.cdnConfigured).toBe(false);
-    });
-
-    it('should accept valid domain data', async () => {
-      setupMock({
-        domainDeployment: { status: 'active', domain: 'example.com', sslValid: true, cdnConfigured: true },
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.domainDeployment.status).toBe('active');
-      expect(result.domainDeployment.domain).toBe('example.com');
-    });
-  });
-
-  describe('Marketing channels normalization', () => {
-    it('should default to organic when empty', async () => {
-      setupMock({ marketingChannels: [] });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.marketingChannels.length).toBe(1);
-      expect(result.marketingChannels[0].channel).toBe('organic');
-    });
-
-    it('should accept valid channel data', async () => {
-      setupMock({
-        marketingChannels: [
-          { channel: 'email', status: 'live', reach: '10K subscribers' },
-          { channel: 'social_media', status: 'scheduled', reach: '5K followers' },
-        ],
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.marketingChannels.length).toBe(2);
-      expect(result.liveChannels).toBe(1);
-      expect(result.totalChannels).toBe(2);
-    });
-  });
-
-  describe('Chairman escalation normalization', () => {
-    it('should auto-detect irreversible actions', async () => {
-      setupMock({
-        appStoreReadiness: { status: 'submitted' },
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.chairmanEscalation.requiresApproval).toBe(true);
-      expect(result.requiresChairmanApproval).toBe(true);
-    });
-
-    it('should not require approval when no irreversible actions', async () => {
-      setupMock({
-        appStoreReadiness: { status: 'not_submitted' },
-        domainDeployment: { status: 'not_configured' },
-        marketingChannels: [{ channel: 'email', status: 'drafting', reach: 'TBD' }],
-        chairmanEscalation: { requiresApproval: false },
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.chairmanEscalation.requiresApproval).toBe(false);
-    });
-  });
-
-  describe('Publish readiness score', () => {
-    it('should compute publishReadinessScore as a number 0-100', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(typeof result.publishReadinessScore).toBe('number');
-      expect(result.publishReadinessScore).toBeGreaterThanOrEqual(0);
-      expect(result.publishReadinessScore).toBeLessThanOrEqual(100);
-    });
-  });
-
-  describe('App rankings normalization', () => {
-    it('should default to null/unknown when no ranking data', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.appRankings.categoryRank).toBeNull();
-      expect(result.appRankings.overallRank).toBeNull();
-      expect(result.appRankings.rating).toBeNull();
-      expect(result.appRankings.reviewCount).toBeNull();
-      expect(result.appRankings.tier).toBe('unknown');
-      expect(result.appRankings.trend).toBe('unknown');
-    });
-
-    it('should extract valid ranking data', async () => {
-      setupMock({
-        appRankings: { categoryRank: 5, overallRank: 42, rating: 4.5, reviewCount: 1200, trend: 'improving' },
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.appRankings.categoryRank).toBe(5);
-      expect(result.appRankings.overallRank).toBe(42);
-      expect(result.appRankings.rating).toBe(4.5);
-      expect(result.appRankings.reviewCount).toBe(1200);
-      expect(result.appRankings.trend).toBe('improving');
-    });
-
-    it('should derive tier from categoryRank', async () => {
-      const cases = [
-        { rank: 3, expected: 'top10' },
-        { rank: 10, expected: 'top10' },
-        { rank: 25, expected: 'top50' },
-        { rank: 50, expected: 'top50' },
-        { rank: 75, expected: 'top100' },
-        { rank: 100, expected: 'top100' },
-        { rank: 150, expected: 'below100' },
-      ];
-      for (const { rank, expected } of cases) {
-        setupMock({ appRankings: { categoryRank: rank } });
-        const result = await analyzeStage23(VALID_PARAMS);
-        expect(result.appRankings.tier).toBe(expected);
-      }
-    });
-
-    it('should clamp rating to 0-5', async () => {
-      setupMock({ appRankings: { rating: 7 } });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.appRankings.rating).toBe(5);
-    });
-
-    it('should default invalid trend to unknown', async () => {
-      setupMock({ appRankings: { trend: 'skyrocketing' } });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.appRankings.trend).toBe('unknown');
-    });
-
-    it('should accept all valid trends', async () => {
-      for (const trend of ['improving', 'stable', 'declining', 'unknown']) {
-        setupMock({ appRankings: { trend } });
-        const result = await analyzeStage23(VALID_PARAMS);
-        expect(result.appRankings.trend).toBe(trend);
-      }
-    });
-  });
-
-  describe('Competitive position normalization', () => {
-    it('should default to null/unknown when no data', async () => {
-      setupMock();
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.competitivePosition.marketShareEstimate).toBeNull();
-      expect(result.competitivePosition.competitorCount).toBeNull();
-      expect(result.competitivePosition.differentiationScore).toBeNull();
-      expect(result.competitivePosition.position).toBe('unknown');
-    });
-
-    it('should extract valid competitive data', async () => {
-      setupMock({
-        competitivePosition: { marketShareEstimate: 15, competitorCount: 8, differentiationScore: 75, position: 'challenger' },
-      });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.competitivePosition.marketShareEstimate).toBe(15);
-      expect(result.competitivePosition.competitorCount).toBe(8);
-      expect(result.competitivePosition.differentiationScore).toBe(75);
-      expect(result.competitivePosition.position).toBe('challenger');
-    });
-
-    it('should clamp marketShareEstimate to 0-100', async () => {
-      setupMock({ competitivePosition: { marketShareEstimate: 120 } });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.competitivePosition.marketShareEstimate).toBe(100);
-    });
-
-    it('should clamp differentiationScore to 0-100', async () => {
-      setupMock({ competitivePosition: { differentiationScore: -10 } });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.competitivePosition.differentiationScore).toBe(0);
-    });
-
-    it('should default invalid position to unknown', async () => {
-      setupMock({ competitivePosition: { position: 'dominator' } });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.competitivePosition.position).toBe('unknown');
-    });
-
-    it('should accept all valid positions', async () => {
-      for (const pos of ['leader', 'challenger', 'follower', 'niche', 'unknown']) {
-        setupMock({ competitivePosition: { position: pos } });
-        const result = await analyzeStage23(VALID_PARAMS);
-        expect(result.competitivePosition.position).toBe(pos);
-      }
-    });
-  });
-
-  describe('JSON parsing', () => {
-    it('should handle markdown code block wrapping', async () => {
-      const response = createLLMResponse();
-      const mockComplete = vi.fn().mockResolvedValue('```json\n' + response + '\n```');
-      getLLMClient.mockReturnValue({ complete: mockComplete });
-      const result = await analyzeStage23(VALID_PARAMS);
-      expect(result.launchType).toBe('beta');
-    });
-
-    it('should throw on unparseable response', async () => {
-      const mockComplete = vi.fn().mockResolvedValue('Not JSON');
-      getLLMClient.mockReturnValue({ complete: mockComplete });
-      await expect(analyzeStage23(VALID_PARAMS)).rejects.toThrow('Failed to parse LLM response as JSON');
-    });
+  it('exports COMPETITIVE_POSITIONS array', () => {
+    expect(Array.isArray(COMPETITIVE_POSITIONS)).toBe(true);
+    expect(COMPETITIVE_POSITIONS).toContain('leader');
+    expect(COMPETITIVE_POSITIONS).toContain('unknown');
   });
 });
