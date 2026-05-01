@@ -7,6 +7,11 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 
+const MANDATORY_ITEMS = [
+  { title: 'Integrate Feedback Widget', description: 'Add feedback widget', type: 'infra', priority: 'medium', estimatedLoc: 30, acceptanceCriteria: 'Widget visible', architectureLayer: 'frontend', milestoneRef: 'MVP' },
+  { title: 'Wire Error Capture Middleware', description: 'Add error capture', type: 'infra', priority: 'medium', estimatedLoc: 20, acceptanceCriteria: 'Errors captured', architectureLayer: 'backend', milestoneRef: 'MVP' },
+];
+
 // Shared mock function to capture calls
 const mockComplete = vi.fn().mockResolvedValue(JSON.stringify({
   sprintGoal: 'Build core parking feature',
@@ -19,7 +24,7 @@ const mockComplete = vi.fn().mockResolvedValue(JSON.stringify({
     acceptanceCriteria: 'Users can search and see results',
     architectureLayer: 'frontend',
     milestoneRef: 'MVP',
-  }],
+  }, ...MANDATORY_ITEMS],
 }));
 
 vi.mock('../../../../lib/llm/index.js', () => ({
@@ -75,7 +80,7 @@ describe('Stage 19 build_brief consumption', () => {
       stage18Data: baseStage18,
       stage17Data,
       ventureName: 'ParkAI',
-      logger: { log: vi.fn(), warn: vi.fn(), info: vi.fn() },
+      logger: { log: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() },
     });
 
     // Verify the LLM was called with build_brief content in the prompt
@@ -100,7 +105,7 @@ describe('Stage 19 build_brief consumption', () => {
       stage18Data: baseStage18,
       stage17Data,
       ventureName: 'ParkAI',
-      logger: { log: vi.fn(), warn: vi.fn(), info: vi.fn() },
+      logger: { log: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() },
     });
 
     // Should still produce a valid sprint plan
@@ -129,7 +134,7 @@ describe('Stage 19 build_brief consumption', () => {
       stage18Data: baseStage18,
       stage17Data,
       ventureName: 'ParkAI',
-      logger: { log: vi.fn(), warn: vi.fn(), info: vi.fn() },
+      logger: { log: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() },
     });
 
     expect(result.sprint_name).toBeDefined();
