@@ -206,7 +206,7 @@ export class AIQualityJudge {
       messages: [
         {
           role: 'system',
-          content: 'You are an AI Quality Judge evaluating protocol improvement proposals. Respond only with valid JSON as specified in the prompt.'
+          content: 'Evaluate protocol improvement proposals as an AI Quality Judge. Respond only with valid JSON in the exact shape the user prompt specifies.'
         },
         {
           role: 'user',

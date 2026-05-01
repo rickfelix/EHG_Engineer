@@ -1,0 +1,102 @@
+{
+  "input": {
+    "improvements": [
+      {
+        "id": "imp-aaaa-1111",
+        "improvement_type": "CRUD_INSERT",
+        "target_table": "pattern_observations",
+        "target_operation": "INSERT",
+        "risk_tier": "AUTO",
+        "evidence_count": 7,
+        "description": "Auto-insert pattern observations when retrospective signals exceed threshold",
+        "payload": {
+          "table": "pattern_observations",
+          "columns": [
+            "pattern_id",
+            "observed_at",
+            "confidence"
+          ]
+        },
+        "source_retro_id": "retro-1"
+      },
+      {
+        "id": "imp-bbbb-2222",
+        "improvement_type": "CRUD_UPDATE",
+        "target_table": "strategic_directives_v2",
+        "target_operation": "UPDATE",
+        "risk_tier": "GOVERNED",
+        "evidence_count": 4,
+        "description": "Update SD scope_reduction_percentage when scope amendment recorded",
+        "payload": {
+          "columns": [
+            "scope_reduction_percentage"
+          ]
+        },
+        "source_retro_id": "retro-2"
+      },
+      {
+        "id": "imp-cccc-3333",
+        "improvement_type": "CONSTITUTION_AMEND",
+        "target_table": "protocol_constitution",
+        "target_operation": "INSERT",
+        "risk_tier": "IMMUTABLE",
+        "evidence_count": 12,
+        "description": "Add CONST-015 enforcing scope-lock during EXEC",
+        "payload": {
+          "rule_code": "CONST-015"
+        },
+        "source_retro_id": "retro-3"
+      },
+      {
+        "id": "imp-dddd-4444",
+        "improvement_type": "GATE_THRESHOLD",
+        "target_table": "leo_gates",
+        "target_operation": "UPDATE",
+        "risk_tier": "GOVERNED",
+        "evidence_count": 1,
+        "description": "Lower BASELINE_DEBT_CHECK threshold from 80 to 70",
+        "payload": {
+          "gate": "BASELINE_DEBT_CHECK",
+          "new_threshold": 70
+        },
+        "source_retro_id": "retro-4"
+      }
+    ],
+    "constitutionRules": [
+      {
+        "rule_code": "CONST-001",
+        "rule_text": "GOVERNED tier requires human approval",
+        "rationale": "Human review for risk-bearing changes"
+      },
+      {
+        "rule_code": "CONST-002",
+        "rule_text": "System cannot approve its own proposals",
+        "rationale": "Triangulation principle"
+      },
+      {
+        "rule_code": "CONST-003",
+        "rule_text": "All changes must be audit-logged",
+        "rationale": "Reversibility and forensics"
+      },
+      {
+        "rule_code": "CONST-004",
+        "rule_text": "Every change must be reversible",
+        "rationale": "Safety net for production"
+      },
+      {
+        "rule_code": "CONST-005",
+        "rule_text": "Database-first architecture",
+        "rationale": "Single source of truth"
+      }
+    ]
+  },
+  "v1_output": "# AI Quality Judge: Batch Evaluation\n\nEvaluate the following 4 improvement proposals.\n\n## CONSTITUTION RULES (Must Not Violate)\n\n**CONST-001**: GOVERNED tier requires human approval\n   Rationale: Human review for risk-bearing changes\n\n**CONST-002**: System cannot approve its own proposals\n   Rationale: Triangulation principle\n\n**CONST-003**: All changes must be audit-logged\n   Rationale: Reversibility and forensics\n\n**CONST-004**: Every change must be reversible\n   Rationale: Safety net for production\n\n**CONST-005**: Database-first architecture\n   Rationale: Single source of truth\n\n\n## IMPROVEMENTS TO EVALUATE\n\n### Improvement 1\n**ID:** imp-aaaa-1111\n**Type:** CRUD_INSERT\n**Target Table:** pattern_observations\n**Target Operation:** INSERT\n**Risk Tier:** AUTO\n**Description:** Auto-insert pattern observations when retrospective signals exceed threshold...\n\n\n### Improvement 2\n**ID:** imp-bbbb-2222\n**Type:** CRUD_UPDATE\n**Target Table:** strategic_directives_v2\n**Target Operation:** UPDATE\n**Risk Tier:** GOVERNED\n**Description:** Update SD scope_reduction_percentage when scope amendment recorded...\n\n\n### Improvement 3\n**ID:** imp-cccc-3333\n**Type:** CONSTITUTION_AMEND\n**Target Table:** protocol_constitution\n**Target Operation:** INSERT\n**Risk Tier:** IMMUTABLE\n**Description:** Add CONST-015 enforcing scope-lock during EXEC...\n\n\n### Improvement 4\n**ID:** imp-dddd-4444\n**Type:** GATE_THRESHOLD\n**Target Table:** leo_gates\n**Target Operation:** UPDATE\n**Risk Tier:** GOVERNED\n**Description:** Lower BASELINE_DEBT_CHECK threshold from 80 to 70...\n\n\n## SCORING CRITERIA\n**SAFETY** (Weight: 25%)\n   Can this change be safely applied and rolled back?\n   Scale: 0-10: 0=irreversible danger, 10=completely safe\n\n**SPECIFICITY** (Weight: 20%)\n   Is the improvement specific with exact table/operation/payload?\n   Scale: 0-10: 0=vague, 10=fully specified\n\n**NECESSITY** (Weight: 20%)\n   Does this address a real gap with evidence?\n   Scale: 0-10: 0=unnecessary, 10=critical need with evidence\n\n**EVIDENCE** (Weight: 20%)\n   Is there retrospective/pattern support for this improvement?\n   Scale: 0-10: 0=no evidence, 10=multiple supporting retrospectives\n\n**ATOMICITY** (Weight: 15%)\n   Is this a single, focused change?\n   Scale: 0-10: 0=multiple unrelated changes, 10=single atomic change\n\n\n## RESPONSE FORMAT\n\nRespond with JSON array:\n```json\n{\n  \"evaluations\": [\n    {\n      \"improvement_id\": \"uuid\",\n      \"constitution_passed\": true|false,\n      \"score\": 0-100,\n      \"recommendation\": \"APPROVE|NEEDS_REVISION|REJECT\",\n      \"key_issues\": [\"issue1\", \"issue2\"]\n    }\n  ]\n}\n```",
+  "validator_result": {
+    "passed": true,
+    "details": "7 required markers present"
+  },
+  "captured_at": "2026-05-01T22:43:37.012Z",
+  "sanitized": true,
+  "builder": "batch",
+  "label": "batch-001-mixed-tiers"
+}
