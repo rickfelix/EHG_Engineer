@@ -1,0 +1,59 @@
+{
+  "input": {
+    "improvement": {
+      "id": "imp-dddd-4444",
+      "improvement_type": "GATE_THRESHOLD",
+      "target_table": "leo_gates",
+      "target_operation": "UPDATE",
+      "risk_tier": "GOVERNED",
+      "evidence_count": 1,
+      "description": "Lower BASELINE_DEBT_CHECK threshold from 80 to 70",
+      "payload": {
+        "gate": "BASELINE_DEBT_CHECK",
+        "new_threshold": 70
+      },
+      "source_retro_id": "retro-4"
+    },
+    "previousAssessment": {
+      "score": 48,
+      "recommendation": "REJECT",
+      "reasoning": "Evidence count was 1; needs ≥3 supporting retros"
+    },
+    "constitutionRules": [
+      {
+        "rule_code": "CONST-001",
+        "rule_text": "GOVERNED tier requires human approval",
+        "rationale": "Human review for risk-bearing changes"
+      },
+      {
+        "rule_code": "CONST-002",
+        "rule_text": "System cannot approve its own proposals",
+        "rationale": "Triangulation principle"
+      },
+      {
+        "rule_code": "CONST-003",
+        "rule_text": "All changes must be audit-logged",
+        "rationale": "Reversibility and forensics"
+      },
+      {
+        "rule_code": "CONST-004",
+        "rule_text": "Every change must be reversible",
+        "rationale": "Safety net for production"
+      },
+      {
+        "rule_code": "CONST-005",
+        "rule_text": "Database-first architecture",
+        "rationale": "Single source of truth"
+      }
+    ]
+  },
+  "v1_output": "# AI Quality Judge: Improvement Proposal Evaluation\n\nYou are an AI Quality Judge evaluating a protocol improvement proposal. Your task is to:\n1. Check for constitution rule violations\n2. Score the improvement on multiple criteria\n3. Provide a clear recommendation\n\n## CONSTITUTION RULES (Must Not Violate)\n\n**CONST-001**: GOVERNED tier requires human approval\n   Rationale: Human review for risk-bearing changes\n\n**CONST-002**: System cannot approve its own proposals\n   Rationale: Triangulation principle\n\n**CONST-003**: All changes must be audit-logged\n   Rationale: Reversibility and forensics\n\n**CONST-004**: Every change must be reversible\n   Rationale: Safety net for production\n\n**CONST-005**: Database-first architecture\n   Rationale: Single source of truth\n\n\n## IMPROVEMENT PROPOSAL TO EVALUATE\n\n**ID:** imp-dddd-4444\n**Type:** GATE_THRESHOLD\n**Target Table:** leo_gates\n**Target Operation:** UPDATE\n**Risk Tier:** GOVERNED\n**Evidence Count:** 1 retrospectives\n\n**Description:**\nLower BASELINE_DEBT_CHECK threshold from 80 to 70\n\n**Payload:**\n```json\n{\n  \"gate\": \"BASELINE_DEBT_CHECK\",\n  \"new_threshold\": 70\n}\n```\n\n**Source Retrospective ID:** retro-4\n\n## SCORING CRITERIA\n\nScore each criterion from 0-10:\n\n**SAFETY** (Weight: 25%)\n   Can this change be safely applied and rolled back?\n   Scale: 0-10: 0=irreversible danger, 10=completely safe\n\n**SPECIFICITY** (Weight: 20%)\n   Is the improvement specific with exact table/operation/payload?\n   Scale: 0-10: 0=vague, 10=fully specified\n\n**NECESSITY** (Weight: 20%)\n   Does this address a real gap with evidence?\n   Scale: 0-10: 0=unnecessary, 10=critical need with evidence\n\n**EVIDENCE** (Weight: 20%)\n   Is there retrospective/pattern support for this improvement?\n   Scale: 0-10: 0=no evidence, 10=multiple supporting retrospectives\n\n**ATOMICITY** (Weight: 15%)\n   Is this a single, focused change?\n   Scale: 0-10: 0=multiple unrelated changes, 10=single atomic change\n\n\n## YOUR TASK\n\n1. **Constitution Check**: First, identify any violations of the constitution rules above.\n   - CRITICAL violations (CONST-001, CONST-002, CONST-007, CONST-009) = auto-reject\n   - HIGH violations require mandatory human review\n   - MEDIUM violations are warnings\n\n2. **Criterion Scoring**: Score each criterion 0-10 with brief justification.\n\n3. **Recommendation**: Based on weighted score:\n   - 85-100: APPROVE (high confidence)\n   - 70-84: APPROVE (medium confidence, human review recommended)\n   - 50-69: NEEDS_REVISION\n   - 0-49: REJECT\n\n## RESPONSE FORMAT\n\nRespond with JSON in this exact format:\n```json\n{\n  \"constitution_check\": {\n    \"violations\": [\n      {\n        \"rule_code\": \"CONST-XXX\",\n        \"severity\": \"CRITICAL|HIGH|MEDIUM\",\n        \"explanation\": \"Why this is a violation\"\n      }\n    ],\n    \"passed\": true|false\n  },\n  \"criteria_scores\": {\n    \"safety\": 0-10,\n    \"specificity\": 0-10,\n    \"necessity\": 0-10,\n    \"evidence\": 0-10,\n    \"atomicity\": 0-10\n  },\n  \"reasoning\": {\n    \"safety\": \"Brief justification\",\n    \"specificity\": \"Brief justification\",\n    \"necessity\": \"Brief justification\",\n    \"evidence\": \"Brief justification\",\n    \"atomicity\": \"Brief justification\"\n  },\n  \"recommendation\": \"APPROVE|NEEDS_REVISION|REJECT\",\n  \"confidence\": \"HIGH|MEDIUM|LOW\",\n  \"summary\": \"One paragraph overall assessment\"\n}\n```\n\n\n## PREVIOUS ASSESSMENT\n\n**Previous Score:** 48%\n**Previous Recommendation:** REJECT\n**Previous Issues:**\nEvidence count was 1; needs ≥3 supporting retros\n\n**Changes Made:**\nPlease evaluate if the issues from the previous assessment have been addressed.\n",
+  "validator_result": {
+    "passed": true,
+    "details": "evaluation + previous-assessment markers present"
+  },
+  "captured_at": "2026-05-01T22:43:37.012Z",
+  "sanitized": true,
+  "builder": "re-evaluation",
+  "label": "reeval-002-evidence-grew"
+}

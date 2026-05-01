@@ -55,10 +55,10 @@ export function generateEvaluationPrompt(improvement, constitutionRules) {
 
   return `# AI Quality Judge: Improvement Proposal Evaluation
 
-You are an AI Quality Judge evaluating a protocol improvement proposal. Your task is to:
-1. Check for constitution rule violations
-2. Score the improvement on multiple criteria
-3. Provide a clear recommendation
+Evaluate the protocol improvement proposal below using the Russian Judge methodology:
+1. Check for constitution rule violations.
+2. Score the improvement on five weighted criteria.
+3. Issue a clear recommendation tied to the weighted score.
 
 ${constitutionContext}
 
@@ -87,16 +87,16 @@ Score each criterion from 0-10:
 
 ${criteriaSection}
 
-## YOUR TASK
+## EVALUATION STEPS
 
-1. **Constitution Check**: First, identify any violations of the constitution rules above.
-   - CRITICAL violations (CONST-001, CONST-002, CONST-007, CONST-009) = auto-reject
-   - HIGH violations require mandatory human review
-   - MEDIUM violations are warnings
+1. **Constitution Check**: Identify any violations of the constitution rules above.
+   - Flag CRITICAL violations (CONST-001, CONST-002, CONST-007, CONST-009) for auto-reject.
+   - Flag HIGH violations for mandatory human review.
+   - Surface MEDIUM violations as warnings.
 
 2. **Criterion Scoring**: Score each criterion 0-10 with brief justification.
 
-3. **Recommendation**: Based on weighted score:
+3. **Recommendation**: Map the weighted score to one of:
    - 85-100: APPROVE (high confidence)
    - 70-84: APPROVE (medium confidence, human review recommended)
    - 50-69: NEEDS_REVISION
@@ -104,7 +104,7 @@ ${criteriaSection}
 
 ## RESPONSE FORMAT
 
-Respond with JSON in this exact format:
+Return strictly this JSON, with no surrounding text:
 \`\`\`json
 {
   "constitution_check": {
@@ -161,7 +161,7 @@ export function generateBatchEvaluationPrompt(improvements, constitutionRules) {
 
   return `# AI Quality Judge: Batch Evaluation
 
-Evaluate the following ${improvements.length} improvement proposals.
+Evaluate the ${improvements.length} improvement proposals below. Apply the constitution rules, score each proposal against the five criteria, and return one entry per improvement.
 
 ${constitutionContext}
 
@@ -173,7 +173,7 @@ ${criteriaSection}
 
 ## RESPONSE FORMAT
 
-Respond with JSON array:
+Return strictly this JSON array, with no surrounding text:
 \`\`\`json
 {
   "evaluations": [
@@ -209,15 +209,84 @@ export function generateReEvaluationPrompt(improvement, previousAssessment, cons
 ${previousAssessment.reasoning || 'Not specified'}
 
 **Changes Made:**
-Please evaluate if the issues from the previous assessment have been addressed.
+Verify whether the issues from the previous assessment have been addressed in the revised proposal above.
 `;
 
   return basePrompt + '\n\n' + previousContext;
+}
+
+/**
+ * Shape validator: evaluation prompt must contain markers downstream consumers
+ * (constitution-validator + scoring.js + AIQualityJudge response parser) rely on.
+ * Used by replay tests to assert V1->V2 imperative rewrites preserve structure.
+ *
+ * @param {string} prompt
+ * @returns {{passed: boolean, details: string}}
+ */
+export function validateEvaluationPromptShape(prompt) {
+  if (typeof prompt !== 'string' || prompt.length === 0) {
+    return { passed: false, details: 'prompt must be a non-empty string' };
+  }
+  const required = [
+    'constitution', 'criteria_scores', 'reasoning', 'recommendation',
+    'safety', 'specificity', 'necessity', 'evidence', 'atomicity',
+    'APPROVE', 'NEEDS_REVISION', 'REJECT',
+    'JSON',
+  ];
+  const lower = prompt.toLowerCase();
+  const missing = required.filter(m => !lower.includes(m.toLowerCase()));
+  if (missing.length > 0) {
+    return { passed: false, details: `missing markers: ${missing.join(',')}` };
+  }
+  return { passed: true, details: `${required.length} required markers present` };
+}
+
+/**
+ * Shape validator: batch evaluation prompt.
+ *
+ * @param {string} prompt
+ * @returns {{passed: boolean, details: string}}
+ */
+export function validateBatchEvaluationPromptShape(prompt) {
+  if (typeof prompt !== 'string' || prompt.length === 0) {
+    return { passed: false, details: 'prompt must be a non-empty string' };
+  }
+  const required = [
+    'constitution', 'evaluations', 'improvement_id',
+    'score', 'recommendation', 'key_issues', 'JSON',
+  ];
+  const lower = prompt.toLowerCase();
+  const missing = required.filter(m => !lower.includes(m.toLowerCase()));
+  if (missing.length > 0) {
+    return { passed: false, details: `missing markers: ${missing.join(',')}` };
+  }
+  return { passed: true, details: `${required.length} required markers present` };
+}
+
+/**
+ * Shape validator: re-evaluation prompt (super-set of evaluation + previous-assessment).
+ *
+ * @param {string} prompt
+ * @returns {{passed: boolean, details: string}}
+ */
+export function validateReEvaluationPromptShape(prompt) {
+  const baseResult = validateEvaluationPromptShape(prompt);
+  if (!baseResult.passed) {
+    return { passed: false, details: `base evaluation markers missing: ${baseResult.details}` };
+  }
+  const lower = prompt.toLowerCase();
+  if (!lower.includes('previous')) {
+    return { passed: false, details: 'missing previous-assessment marker' };
+  }
+  return { passed: true, details: 'evaluation + previous-assessment markers present' };
 }
 
 export default {
   generateEvaluationPrompt,
   generateBatchEvaluationPrompt,
   generateReEvaluationPrompt,
-  buildConstitutionContext
+  buildConstitutionContext,
+  validateEvaluationPromptShape,
+  validateBatchEvaluationPromptShape,
+  validateReEvaluationPromptShape,
 };
