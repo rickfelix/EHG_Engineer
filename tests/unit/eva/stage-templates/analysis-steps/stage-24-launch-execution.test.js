@@ -13,7 +13,7 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
   })),
 }));
 
-import { analyzeStage23, LAUNCH_TYPES, TASK_STATUSES, CRITERION_PRIORITIES, APP_STORE_STATUSES, DOMAIN_STATUSES, CHANNEL_STATUSES, APP_RANKING_TIERS, COMPETITIVE_POSITIONS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-execution.js';
+import { analyzeStage23, LAUNCH_TYPES, TASK_STATUSES, CRITERION_PRIORITIES, APP_STORE_STATUSES, DOMAIN_STATUSES, CHANNEL_STATUSES, APP_RANKING_TIERS, COMPETITIVE_POSITIONS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-launch-execution.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
 
 function createLLMResponse(overrides = {}) {
