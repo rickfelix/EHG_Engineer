@@ -6,10 +6,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../../../lib/eva/stage-templates/stage-24.js', () => ({
-  checkReleaseReadiness: vi.fn(() => ({ ready: true, reasons: [] })),
-}));
-
 import { analyzeStage23 } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-marketing-prep.js';
 
 const STAGE23_REAL = {
