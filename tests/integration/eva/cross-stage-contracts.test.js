@@ -37,12 +37,16 @@ function genStage02() {
     metrics: {
       marketFit: 75, customerNeed: 80, momentum: 65,
       revenuePotential: 70, competitiveBarrier: 60, executionFeasibility: 72,
+      designQuality: 68,
     },
     evidence: {
       market: 'TAM analysis shows $50B global artisan goods market growing at 8% CAGR',
       customer: '200 artisan interviews confirm logistics as top pain point',
+      growth: 'Monthly growth rate of 15% projected based on similar marketplace launches',
+      revenue: 'Commission-based model yields 70% gross margin at scale',
       competitive: 'No AI-powered artisan marketplace exists; closest is Etsy (manual matching)',
       execution: 'Team has relevant marketplace and AI experience from prior ventures',
+      design: 'Mobile-first UX validated with 50 artisan users achieving 85% task completion',
     },
     suggestions: [
       { type: 'immediate', text: 'Validate pricing with 50 target artisan users in pilot region' },
@@ -55,6 +59,7 @@ function genStage03() {
   return {
     marketFit: 75, customerNeed: 80, momentum: 65,
     revenuePotential: 70, competitiveBarrier: 60, executionFeasibility: 72,
+    designQuality: 70,
     competitorEntities: [
       { name: 'CompetitorA', positioning: 'Market leader', threat_level: 'H' },
       { name: 'CompetitorB', positioning: 'Niche player', threat_level: 'M' },
@@ -71,6 +76,11 @@ function genStage04() {
       { name: 'CompetitorC', position: 'Emerging logistics platform', threat: 'L', pricingModel: 'usage_based', marketPosition: 'New entrant', strengths: ['Advanced tech stack', 'AI capabilities'], weaknesses: ['Unknown brand', 'No marketplace'], swot: { strengths: ['Tech'], weaknesses: ['Unknown'], opportunities: ['Partnership'], threats: ['Regulation'] } },
     ],
     blueOceanAnalysis: { eliminate: ['High fees'], reduce: ['Complexity'], raise: ['AI matching'], create: ['Global logistics'] },
+    stage5Handoff: {
+      pricingLandscape: 'Subscription and freemium models dominate; usage-based gaining traction',
+      competitivePositioning: 'Strong AI-driven differentiation with lower fees than market leaders',
+      marketGaps: ['Artisan logistics optimization', 'Global reach for micro-vendors', 'AI-powered matching'],
+    },
   };
 }
 
@@ -294,7 +304,8 @@ describe('Cross-Stage Contracts', () => {
     });
 
     it('rejects when stage5Handoff is missing from raw (non-derived) data', () => {
-      const result = validateCrossStageContract(genStage04(), contract, 'stage-04');
+      const { stage5Handoff: _, ...rawData } = genStage04();
+      const result = validateCrossStageContract(rawData, contract, 'stage-04');
       expect(result.valid).toBe(false);
     });
 

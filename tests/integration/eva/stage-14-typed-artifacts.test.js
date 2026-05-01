@@ -26,13 +26,13 @@ const silentLogger = { warn: vi.fn(), info() {}, error() {}, debug() {}, log() {
 const ARCH_PAYLOAD = {
   architecture_summary: 'Full-stack architecture with five layers and risk register',
   layers: {
-    presentation: { technology: 'React', components: ['App'], rationale: 'SPA' },
-    api: { technology: 'REST', components: ['/users'], rationale: 'Standard' },
-    business_logic: { technology: 'Node.js', components: ['svc'], rationale: 'JS unification' },
-    data: { technology: 'PostgreSQL', components: ['users'], rationale: 'ACID' },
-    infrastructure: { technology: 'AWS', components: ['ECS'], rationale: 'Managed' },
+    presentation: { technology: 'React + Vite + Tailwind', components: ['App'], rationale: 'SPA' },
+    api: { technology: 'REST via Vercel Functions', components: ['/users'], rationale: 'Standard' },
+    business_logic: { technology: 'Node.js (TypeScript)', components: ['svc'], rationale: 'JS unification' },
+    data: { technology: 'PostgreSQL via Supabase', components: ['users'], rationale: 'ACID' },
+    infrastructure: { technology: 'Vercel + Replit + Supabase', components: ['hosting'], rationale: 'Managed' },
   },
-  security: { authStrategy: 'JWT', dataClassification: 'internal', complianceRequirements: ['SOC2'] },
+  security: { authStrategy: 'Supabase Auth', dataClassification: 'internal', complianceRequirements: ['SOC2'] },
   dataEntities: [
     { name: 'User', description: 'app user', relationships: ['Profile'], estimatedVolume: '1k/mo' },
   ],
@@ -89,7 +89,7 @@ describe('Stage 14 typed-artifact emission (FR-5)', () => {
     expect(tech.source).toBe('analysis-step:stage-14');
     expect(tech.payload.architecture_summary).toBe(ARCH_PAYLOAD.architecture_summary);
     expect(tech.payload.layers).toBeDefined();
-    expect(tech.payload.layers.presentation.technology).toBe('React');
+    expect(tech.payload.layers.presentation.technology).toBe('React + Vite + Tailwind');
     expect(tech.payload.dataEntities).toHaveLength(1);
     expect(tech.payload.layer_count).toBe(5);
     expect(tech.payload.total_components).toBe(5);
@@ -112,7 +112,7 @@ describe('Stage 14 typed-artifact emission (FR-5)', () => {
   it('legacy top-level keys spread for backward-compat with cross-stage consumers', async () => {
     const result = await analyzeStage14({ stage1Data: STAGE1_DATA, ventureName: 'TestVenture', logger: silentLogger });
     expect(result.layers).toBeDefined();
-    expect(result.layers.presentation.technology).toBe('React');
+    expect(result.layers.presentation.technology).toBe('React + Vite + Tailwind');
     expect(result.dataEntities).toHaveLength(1);
     expect(result.layer_count).toBe(5);
     expect(result.total_components).toBe(5);

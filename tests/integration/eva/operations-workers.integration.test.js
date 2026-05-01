@@ -171,13 +171,15 @@ describe('registerOperationsHandlers', () => {
 
     registerOperationsHandlers(mockRegistry);
 
-    expect(mockRegistry.register).toHaveBeenCalledTimes(6);
+    expect(mockRegistry.register).toHaveBeenCalledTimes(8);
     expect(registered).toHaveProperty('ops_financial_sync');
     expect(registered).toHaveProperty('ops_feedback_classify');
     expect(registered).toHaveProperty('ops_metrics_collect');
     expect(registered).toHaveProperty('ops_health_score');
     expect(registered).toHaveProperty('ops_enhancement_detect');
     expect(registered).toHaveProperty('ops_status_snapshot');
+    expect(registered).toHaveProperty('ops_separability_score');
+    expect(registered).toHaveProperty('ops_data_room_refresh');
   }, 120000);
 });
 
@@ -263,7 +265,7 @@ describe('ops_metrics_collect handler', () => {
 
     const result = await handlers.ops_metrics_collect({ supabase, logger: silentLogger });
 
-    expect(result).toHaveProperty('metric_type', 'ops_pipeline_throughput');
+    expect(result).toHaveProperty('metric_type', 'ops_metrics_combined');
     expect(result).toHaveProperty('metric_value');
     expect(result).toHaveProperty('created_at');
   }, 120000);
