@@ -167,6 +167,11 @@ describe('Stage 18 Provisioning Smoke Test', () => {
   });
 
   describe('3. Conformance check gates provisioning', () => {
+    // Skipped: provisionVenture('smoke-conformance-default', { skipStateTracking: true })
+    // returns { success: false } on the current main branch — pre-existing production
+    // failure unrelated to this PR (filed as harness-backlog entry, see feedback table).
+    // The conformance_checked step is still defined in DEFAULT_STEPS at
+    // venture-provisioner.js:304; restore this assertion once provisionVenture is fixed.
     it.skip('should include conformance_checked in DEFAULT_STEPS', async () => {
       // Import the module to check DEFAULT_STEPS isn't directly exported,
       // but provisionVenture uses it by default — verify via a dry run

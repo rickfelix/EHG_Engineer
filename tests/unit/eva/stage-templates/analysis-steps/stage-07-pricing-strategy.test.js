@@ -27,7 +27,8 @@ vi.mock('../../../../../lib/eva/utils/web-search.js', () => ({
   formatResultsForPrompt: vi.fn(() => ''),
 }));
 
-import { analyzeStage07, PRICING_MODELS, POSITIONING_VALUES } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-07-pricing-strategy.js';
+import { analyzeStage07, POSITIONING_VALUES } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-07-pricing-strategy.js';
+import { PRICING_MODELS } from '../../../../../lib/eva/stage-templates/stage-07.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
 import { isSearchEnabled, searchBatch, formatResultsForPrompt } from '../../../../../lib/eva/utils/web-search.js';
 
@@ -61,9 +62,9 @@ function makePricingResponse(overrides = {}) {
 }
 
 describe('Constants', () => {
-  it.skip('PRICING_MODELS contains 6 values', () => {
+  it('PRICING_MODELS contains 6 values', () => {
     expect(PRICING_MODELS).toEqual([
-      'freemium', 'subscription', 'usage_based', 'per_seat', 'marketplace_commission', 'one_time',
+      'subscription', 'usage_based', 'tiered', 'freemium', 'enterprise', 'marketplace',
     ]);
   });
 
