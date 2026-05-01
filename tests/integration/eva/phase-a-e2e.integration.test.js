@@ -102,18 +102,31 @@ function createStatefulMockSupabase() {
         };
       }
       if (table === 'venture_artifacts') {
-        return {
+        const makeArtChain = (overrides = {}) => ({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockImplementation(() => {
-            // Return artifacts for current stage range (for reality gates)
-            return Promise.resolve({ data: state.artifacts, error: null });
-          }),
+          neq: vi.fn().mockReturnThis(),
+          lte: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          in: vi.fn().mockImplementation(() => Promise.resolve({ data: state.artifacts, error: null })),
+          not: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          then: (resolve) => resolve({ data: state.artifacts, error: null }),
+          ...overrides,
+        });
+        return {
+          ...makeArtChain(),
           insert: vi.fn().mockImplementation((records) => {
             const items = Array.isArray(records) ? records : [records];
             state.artifacts.push(...items);
-            return Promise.resolve({ data: null, error: null });
+            return { select: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: items[0], error: null }) };
           }),
+          update: vi.fn(() => makeArtChain()),
+          delete: vi.fn(() => makeArtChain()),
         };
       }
       if (table === 'chairman_decisions') {
@@ -201,16 +214,29 @@ function createStatefulMockSupabase() {
           single: vi.fn().mockResolvedValue({ data: state.stage_work[0] || null, error: null }),
         };
       }
-      // Fallback for chairman_preferences, stage_templates, etc.
+      // Fallback for chairman_preferences, venture_dependencies, stage_templates, etc.
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        neq: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        gt: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        not: vi.fn().mockReturnThis(),
+        filter: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         in: vi.fn().mockResolvedValue({ data: [], error: null }),
         single: vi.fn().mockResolvedValue({ data: null, error: null }),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
         order: vi.fn().mockResolvedValue({ data: [], error: null }),
-        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        then: (resolve) => resolve({ data: [], error: null }),
       };
     }),
   };
@@ -439,15 +465,16 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
     const state = mockSupabase._state;
     state.venture.current_lifecycle_stage = 10;
 
-    // Score between min_score (7) and chairman_review_score (9) triggers MEDIUM low_score
-    // MEDIUM severity → REQUIRE_REVIEW (not STOP which requires HIGH)
+    // Default min_score=2.0, chairman_review_score=3.0. Score 2.5 is between them:
+    // MEDIUM severity low_score → REQUIRE_REVIEW (not STOP which requires HIGH)
+    const score = (DEFAULTS['filter.min_score'] + DEFAULTS['filter.chairman_review_score']) / 2;
     const result = await processStage(
       {
         ventureId: 'v-e2e-phase-a',
         stageId: 10,
         options: {
           dryRun: true,
-          stageTemplate: makeStageTemplate(10, { score: DEFAULTS['filter.min_score'] + 1, cost: 1000 }),
+          stageTemplate: makeStageTemplate(10, { score, cost: 1000 }),
         },
       },
       {
@@ -527,10 +554,10 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
     expect(results).toHaveLength(5);
     results.forEach(r => expect(r.status).toBe(STATUS.COMPLETED));
 
-    // Verify promotion gate at stage 16
-    const promotionGate16 = isDevilsAdvocateGate(16);
-    expect(promotionGate16.isGate).toBe(true);
-    expect(promotionGate16.gateType).toBe('promotion');
+    // Verify promotion gate at stage 17 (PROMOTION_GATES = [17, 18, 23])
+    const promotionGate17 = isDevilsAdvocateGate(17);
+    expect(promotionGate17.isGate).toBe(true);
+    expect(promotionGate17.gateType).toBe('promotion');
   });
 
   // Step 7: Stage 18 → SD Bridge creates LEO SDs
@@ -618,10 +645,9 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
     const state = mockSupabase._state;
     state.venture.current_lifecycle_stage = 22;
 
-    // Stage 22 is a promotion gate — verify gate type
+    // Stage 22 is not a devil's advocate gate (PROMOTION_GATES = [17, 18, 23])
     const gate22 = isDevilsAdvocateGate(22);
-    expect(gate22.isGate).toBe(true);
-    expect(gate22.gateType).toBe('promotion');
+    expect(gate22.isGate).toBe(false);
 
     const result = await processStage(
       { ventureId: 'v-e2e-phase-a', stageId: 22, options: { dryRun: true, stageTemplate: makeStageTemplate(22) } },
@@ -642,10 +668,10 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
     const state = mockSupabase._state;
     state.venture.current_lifecycle_stage = 23;
 
-    // Stage 23 is a kill gate
+    // Stage 23 is a promotion gate (PROMOTION_GATES = [17, 18, 23])
     const gate23 = isDevilsAdvocateGate(23);
     expect(gate23.isGate).toBe(true);
-    expect(gate23.gateType).toBe('kill');
+    expect(gate23.gateType).toBe('promotion');
 
     const result = await processStage(
       { ventureId: 'v-e2e-phase-a', stageId: 23, options: { dryRun: true, stageTemplate: makeStageTemplate(23) } },
@@ -781,7 +807,7 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
       expect(boundaries).toContain('9->10');
       expect(boundaries).toContain('12->13');
       expect(boundaries).toContain('17->18');
-      expect(boundaries).toContain('22->23');
+      expect(boundaries).toContain('23->24');
     });
 
     it('verifies kill gates at stages 3, 5, 13, 24 and promotion gates at 17, 18, 23', () => {

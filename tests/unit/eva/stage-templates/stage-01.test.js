@@ -23,7 +23,8 @@ describe('stage-01.js - Draft Idea template', () => {
 
     it('should export ARCHETYPES enum', () => {
       expect(ARCHETYPES).toEqual([
-        'saas', 'marketplace', 'deeptech', 'hardware', 'services', 'media', 'fintech',
+        'saas', 'marketplace', 'ai_product', 'e_commerce', 'fintech', 'healthtech',
+        'edtech', 'media', 'creator_tools', 'services', 'deeptech', 'real_estate',
       ]);
     });
 

@@ -23,7 +23,8 @@ vi.mock('../../../../lib/eva/utils/parse-json.js', () => ({
   extractUsage: vi.fn((response) => response?.usage || null),
 }));
 
-import { analyzeStage01, STAGE1_ARCHETYPES } from '../../../../lib/eva/stage-templates/analysis-steps/stage-01-hydration.js';
+import { analyzeStage01 } from '../../../../lib/eva/stage-templates/analysis-steps/stage-01-hydration.js';
+import { ARCHETYPES as STAGE1_ARCHETYPES } from '../../../../lib/eva/stage-templates/stage-01.js';
 import { getLLMClient } from '../../../../lib/llm/index.js';
 import { parseJSON } from '../../../../lib/eva/utils/parse-json.js';
 
@@ -244,7 +245,8 @@ describe('stage-01-hydration.js - analyzeStage01', () => {
   describe('STAGE1_ARCHETYPES export', () => {
     it('should export valid archetypes list', () => {
       expect(STAGE1_ARCHETYPES).toEqual([
-        'saas', 'marketplace', 'deeptech', 'hardware', 'services', 'media', 'fintech',
+        'saas', 'marketplace', 'ai_product', 'e_commerce', 'fintech', 'healthtech',
+        'edtech', 'media', 'creator_tools', 'services', 'deeptech', 'real_estate',
       ]);
     });
   });

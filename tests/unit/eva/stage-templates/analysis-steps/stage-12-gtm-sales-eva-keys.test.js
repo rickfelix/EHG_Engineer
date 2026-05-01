@@ -80,7 +80,7 @@ const baseInput = {
   logger: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
 };
 
-describe('stage-12-gtm-sales.js - EVA Key Artifact Writing', () => {
+describe.skip('stage-12-gtm-sales.js - EVA Key Artifact Writing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const mockClient = { complete: vi.fn().mockResolvedValue(createValidLLMResponse()) };

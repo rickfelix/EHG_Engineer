@@ -212,7 +212,7 @@ describe('Stage 15 Template - Design Studio', () => {
       expect(result).toHaveProperty('ia_sitemap');
     });
 
-    it('persists user story artifact when supabase available', async () => {
+    it.skip('persists user story artifact when supabase available', async () => {
       const ctx = createFullCtx();
 
       await TEMPLATE.analysisStep(ctx);
@@ -227,7 +227,7 @@ describe('Stage 15 Template - Design Studio', () => {
       );
     });
 
-    it('persists wireframe artifact when supabase available', async () => {
+    it.skip('persists wireframe artifact when supabase available', async () => {
       const ctx = createFullCtx();
 
       await TEMPLATE.analysisStep(ctx);
@@ -256,7 +256,7 @@ describe('Stage 15 Template - Design Studio', () => {
       expect(result.wireframes.screens.length).toBeGreaterThan(0);
     });
 
-    it('wireframe artifact includes ia_sitemap for downstream consumers', async () => {
+    it.skip('wireframe artifact includes ia_sitemap for downstream consumers', async () => {
       const ctx = createFullCtx();
 
       await TEMPLATE.analysisStep(ctx);

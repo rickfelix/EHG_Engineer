@@ -8,6 +8,11 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const MANDATORY_ITEMS = [
+  { title: 'Integrate Feedback Widget', description: 'Add feedback widget', type: 'infra', priority: 'medium', estimatedLoc: 30, acceptanceCriteria: 'Widget visible', architectureLayer: 'frontend', milestoneRef: 'MVP Launch' },
+  { title: 'Wire Error Capture Middleware', description: 'Add error capture', type: 'infra', priority: 'medium', estimatedLoc: 20, acceptanceCriteria: 'Errors captured', architectureLayer: 'backend', milestoneRef: 'MVP Launch' },
+];
+
 // Shared mock complete function so tests can inspect calls
 const mockComplete = vi.fn().mockResolvedValue(JSON.stringify({
   sprintGoal: 'Build core user dashboard',
@@ -22,6 +27,7 @@ const mockComplete = vi.fn().mockResolvedValue(JSON.stringify({
       architectureLayer: 'frontend',
       milestoneRef: 'MVP Launch',
     },
+    ...MANDATORY_ITEMS,
   ],
 }));
 
@@ -204,12 +210,13 @@ describe('Stage 19 Context Enrichment', () => {
 
   describe('FR-5: Value gate validation', () => {
     it('should warn when sprint contains no feature-type items', async () => {
-      // Mock LLM to return infra-only items
+      // Mock LLM to return infra-only items (plus mandatory capabilities to pass gate)
       mockComplete.mockResolvedValueOnce(JSON.stringify({
         sprintGoal: 'Set up infrastructure',
         sprintItems: [
           { title: 'Set up CI/CD', description: 'Configure pipeline', type: 'infra', priority: 'high', estimatedLoc: 100, acceptanceCriteria: 'Pipeline works', architectureLayer: 'infrastructure', milestoneRef: 'MVP' },
           { title: 'Refactor auth', description: 'Clean up auth code', type: 'refactor', priority: 'medium', estimatedLoc: 80, acceptanceCriteria: 'Auth works', architectureLayer: 'backend', milestoneRef: 'MVP' },
+          ...MANDATORY_ITEMS,
         ],
       }));
 

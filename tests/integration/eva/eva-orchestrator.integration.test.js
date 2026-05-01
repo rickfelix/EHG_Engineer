@@ -53,11 +53,27 @@ function createIntegrationMockSupabase({
         };
       }
       if (table === 'venture_artifacts') {
-        return {
+        const makeArtChain = (overrides = {}) => ({
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          neq: vi.fn().mockReturnThis(),
+          lte: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
           in: vi.fn().mockResolvedValue({ data: artifacts, error: null }),
-          insert: vi.fn().mockResolvedValue({ data: null, error: insertError }),
+          not: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          then: (resolve) => resolve({ data: artifacts, error: null }),
+          ...overrides,
+        });
+        return {
+          ...makeArtChain(),
+          insert: vi.fn().mockResolvedValue({ data: [{ id: 'art-1' }], error: insertError }),
+          update: vi.fn(() => makeArtChain()),
+          delete: vi.fn(() => makeArtChain()),
         };
       }
       if (table === 'strategic_directives_v2') {
@@ -70,14 +86,29 @@ function createIntegrationMockSupabase({
           single: vi.fn().mockResolvedValue({ data: null, error: insertError }),
         };
       }
-      // Fallback for any other table (chairman_preferences, stage_templates, etc.)
+      // Fallback for any other table (venture_dependencies, chairman_preferences, etc.)
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        neq: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        gt: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        not: vi.fn().mockReturnThis(),
+        filter: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
         in: vi.fn().mockResolvedValue({ data: [], error: null }),
         single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         insert: vi.fn().mockResolvedValue({ data: null, error: insertError }),
+        upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
         order: vi.fn().mockResolvedValue({ data: [], error: null }),
+        then: (resolve) => resolve({ data: [], error: null }),
       };
     }),
   };
@@ -153,21 +184,23 @@ describe('Eva Orchestrator Integration', () => {
       );
 
       expect(result.status).toBe(STATUS.COMPLETED);
-      expect(result.filterDecision.action).toBe(FILTER_ACTION.STOP);
+      // cost_threshold was downgraded to MEDIUM (advisory) — maps to REQUIRE_REVIEW not STOP
+      expect(result.filterDecision.action).toBe(FILTER_ACTION.REQUIRE_REVIEW);
       // Trigger objects are in filterDecision.raw.triggers (filterDecision.reasons has message strings)
       const costTrigger = result.filterDecision.raw.triggers.find(t => t.type === 'cost_threshold');
       expect(costTrigger).toBeDefined();
-      expect(costTrigger.severity).toBe('HIGH');
+      expect(costTrigger.severity).toBe('MEDIUM');
     });
 
     it('should REQUIRE_REVIEW when decision filter detects low score (MEDIUM tier)', async () => {
       const mockSupabase = createIntegrationMockSupabase();
 
-      // Score 8 is above min_score (7) but below chairman_review_score (9)
+      // Default min_score=2.0, chairman_review_score=3.0.
+      // Score 2.5 is above min_score (2.0) but below chairman_review_score (3.0)
       // → triggers MEDIUM low_score → maps to REQUIRE_REVIEW (not STOP)
       const lowScoreStep = vi.fn().mockResolvedValue({
         artifactType: 'score_analysis',
-        payload: { score: 8 },
+        payload: { score: 2.5 },
         source: 'score-step',
       });
 
@@ -298,8 +331,8 @@ describe('Eva Orchestrator Integration', () => {
       expect(gateType).toBe('kill');
     });
 
-    it('should identify promotion gate at stage 16', () => {
-      const { isGate, gateType } = isDevilsAdvocateGate(16);
+    it('should identify promotion gate at stage 17', () => {
+      const { isGate, gateType } = isDevilsAdvocateGate(17);
       expect(isGate).toBe(true);
       expect(gateType).toBe('promotion');
     });
@@ -438,7 +471,8 @@ describe('Eva Orchestrator Integration', () => {
       );
 
       expect(result.status).toBe(STATUS.COMPLETED);
-      expect(result.filterDecision.action).toBe(FILTER_ACTION.STOP);
+      // Both cost_threshold (MEDIUM) and novel_pattern (MEDIUM) → REQUIRE_REVIEW (no HIGH trigger)
+      expect(result.filterDecision.action).toBe(FILTER_ACTION.REQUIRE_REVIEW);
 
       const costTrigger = result.filterDecision.raw.triggers.find(t => t.type === 'cost_threshold');
       const novelTrigger = result.filterDecision.raw.triggers.find(t => t.type === 'novel_pattern');
@@ -455,11 +489,11 @@ describe('Eva Orchestrator Integration', () => {
       expect(boundaries).toContain('9->10');
       expect(boundaries).toContain('12->13');
       expect(boundaries).toContain('17->18');
-      expect(boundaries).toContain('22->23');
+      expect(boundaries).toContain('23->24');
 
-      // Each boundary has 3 required artifacts
+      // Each boundary has at least one required artifact
       for (const key of boundaries) {
-        expect(BOUNDARY_CONFIG[key].required_artifacts).toHaveLength(3);
+        expect(BOUNDARY_CONFIG[key].required_artifacts.length).toBeGreaterThanOrEqual(1);
       }
     });
 

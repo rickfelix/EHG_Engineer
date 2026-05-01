@@ -503,7 +503,7 @@ describe('stage-10-naming-brand.js - Analysis Step v2.0', () => {
       const mockComplete = setupMock();
       await analyzeStage10({
         ...VALID_PARAMS,
-        stage8Data: { value_propositions: { items: ['Affordable AI analytics'] } },
+        stage8Data: { valuePropositions: { items: ['Affordable AI analytics'] } },
       });
       const userPrompt = mockComplete.mock.calls[0][1];
       expect(userPrompt).toContain('Affordable AI analytics');

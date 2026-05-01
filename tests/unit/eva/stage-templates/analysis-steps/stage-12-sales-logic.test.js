@@ -288,7 +288,7 @@ describe('stage-12-sales-logic.js - Analysis Step v2.0', () => {
       setupMock();
       const result = await analyzeStage12({
         ...VALID_PARAMS,
-        stage7Data: { pricingModel: 'subscription', unitEconomics: { arpa: 99 } },
+        stage7Data: { pricing_model: 'subscription', arpa: 99 },
       });
       expect(result.economyCheck.pricingAvailable).toBe(true);
     });
@@ -319,7 +319,7 @@ describe('stage-12-sales-logic.js - Analysis Step v2.0', () => {
       const mockComplete = setupMock();
       await analyzeStage12({
         ...VALID_PARAMS,
-        stage7Data: { pricingModel: 'subscription', unitEconomics: { arpa: 99 } },
+        stage7Data: { pricing_model: 'subscription', arpa: 99 },
       });
       const userPrompt = mockComplete.mock.calls[0][1];
       expect(userPrompt).toContain('subscription');

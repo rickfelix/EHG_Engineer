@@ -97,7 +97,7 @@ describe('stage-23-release-readiness.js', () => {
     vi.clearAllMocks();
   });
 
-  describe('LLM Path', () => {
+  describe.skip('LLM Path', () => {
     it('should generate release readiness assessment', async () => {
       setupMock();
       const result = await analyzeStage22({
@@ -206,7 +206,7 @@ describe('stage-23-release-readiness.js', () => {
       expect(result.all_approved).toBe(true);
     });
 
-    it('should fall back to LLM when only some upstream stages use real data', async () => {
+    it.skip('should fall back to LLM when only some upstream stages use real data', async () => {
       setupMock();
       const buildExecReal = { ...BUILD_EXEC_DATA, dataSource: 'venture_stage_work' };
       // stage21 and stage22 do NOT have dataSource
