@@ -18,6 +18,7 @@ import { syncVisionScoresToPatterns } from '../../eva/vision-to-patterns.js';
 import {
   filterPatternsForLearning,
   fetchAssignedSdStatuses,
+  fetchPatternSourceSDStatuses,
   persistFilterLog,
 } from './filter.mjs';
 
@@ -375,7 +376,7 @@ async function getIssuePatterns(limit = TOP_N, options = {}) {
   // return shape; always true now since FR-3 in filterPatternsForLearning
   // performs the status-aware dedup.
   const dedupFilterApplied = true;
-  const VIEW_SELECT = 'pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status, severity_weight, composite_score, min_occurrence_threshold, meets_threshold, source, assigned_sd_id, metadata, dedup_fingerprint';
+  const VIEW_SELECT = 'pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status, severity_weight, composite_score, min_occurrence_threshold, meets_threshold, source, assigned_sd_id, metadata, dedup_fingerprint, first_seen_sd_id, last_seen_sd_id, updated_at';
   let { data, error } = await supabase
     .from('v_patterns_with_decay')
     .select(VIEW_SELECT)
@@ -389,7 +390,7 @@ async function getIssuePatterns(limit = TOP_N, options = {}) {
     console.log(`Note: Using base table fallback (view error: ${error.message.substring(0, 80)})`);
     const fallback = await supabase
       .from('issue_patterns')
-      .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, updated_at, created_at, source, assigned_sd_id, metadata, dedup_fingerprint')
+      .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, updated_at, created_at, source, assigned_sd_id, metadata, dedup_fingerprint, first_seen_sd_id, last_seen_sd_id')
       .eq('status', 'active')
       .order('occurrence_count', { ascending: false })
       .limit(queryLimit);
@@ -434,13 +435,19 @@ async function getIssuePatterns(limit = TOP_N, options = {}) {
   // Replaces the prior .is(assigned_sd_id, null) guards at the .select() layer
   // with status-aware FR-3, plus FR-1 (source allow-list), FR-2 (auto_captured
   // unreviewed), FR-4 (UUID-fingerprint ghost), FR-5 (metadata.filter_log[]).
+  // SD-LEO-INFRA-LEARN-NOISE-FILTER-001: adds source-SD lookup for FR-6/FR-7
+  // (single-SD closed/stale-open) and FR-8 (session_retrospective multi-SD).
   let noiseFilterRejected = [];
   if (data && data.length > 0) {
     try {
-      const sdStatusMap = await fetchAssignedSdStatuses(supabase, data);
+      const [sdStatusMap, sourceSdStatusMap] = await Promise.all([
+        fetchAssignedSdStatuses(supabase, data),
+        fetchPatternSourceSDStatuses(supabase, data),
+      ]);
       const result = filterPatternsForLearning(data, {
         bypass: options.bypass === true,
         sdStatusMap,
+        sourceSdStatusMap,
       });
       data = result.kept;
       noiseFilterRejected = result.rejected;

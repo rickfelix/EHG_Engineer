@@ -1,11 +1,12 @@
 /**
  * /learn Composite Scorer Noise Filter
  *
- * SD-LEO-FIX-PLAN-LEARN-COMPOSITE-001
+ * SD-LEO-FIX-PLAN-LEARN-COMPOSITE-001 (FR-1..FR-5)
+ * SD-LEO-INFRA-LEARN-NOISE-FILTER-001 (FR-6..FR-8): single-SD source-SD filters
  *
  * Pure function. Rejects low-signal issue_patterns BEFORE composite scoring so
  * /learn stops auto-filing LEARN-FIX SDs from noise (auto_rca / unreviewed /
- * already-assigned-to-open-SD / ghost-UUID-fingerprint).
+ * already-assigned-to-open-SD / ghost-UUID-fingerprint / single-SD handoff-retry-loop).
  *
  * Persistence (metadata.filter_log[] append) is a SEPARATE concern handled by
  * persistFilterLog() so this module stays unit-testable without a DB connection.
@@ -23,11 +24,18 @@ const DEFAULT_BLOCK_SD_STATUSES = new Set([
   'pending_approval',
 ]);
 
+const DEFAULT_CLOSED_SOURCE_STATUSES = new Set(['completed', 'cancelled']);
+const DEFAULT_STALE_OPEN_AGE_DAYS = 7;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export const REJECT_REASONS = Object.freeze({
   LOW_SIGNAL_SOURCE: 'LOW_SIGNAL_SOURCE',
   AUTO_CAPTURED_UNREVIEWED: 'AUTO_CAPTURED_UNREVIEWED',
   ALREADY_ASSIGNED_OPEN_SD: 'ALREADY_ASSIGNED_OPEN_SD',
   UUID_FINGERPRINT: 'UUID_FINGERPRINT',
+  SINGLE_SD_CLOSED_SOURCE: 'SINGLE_SD_CLOSED_SOURCE',
+  SINGLE_SD_STALE_OPEN_SOURCE: 'SINGLE_SD_STALE_OPEN_SOURCE',
+  SESSION_RETRO_NEEDS_MULTI_SD: 'SESSION_RETRO_NEEDS_MULTI_SD',
 });
 
 const REASON_SEVERITY = {
@@ -35,6 +43,9 @@ const REASON_SEVERITY = {
   [REJECT_REASONS.AUTO_CAPTURED_UNREVIEWED]: 'INFO',
   [REJECT_REASONS.ALREADY_ASSIGNED_OPEN_SD]: 'INFO',
   [REJECT_REASONS.UUID_FINGERPRINT]: 'INFO',
+  [REJECT_REASONS.SINGLE_SD_CLOSED_SOURCE]: 'INFO',
+  [REJECT_REASONS.SINGLE_SD_STALE_OPEN_SOURCE]: 'INFO',
+  [REJECT_REASONS.SESSION_RETRO_NEEDS_MULTI_SD]: 'INFO',
 };
 
 function checkSource(pattern, allowSources) {
@@ -73,11 +84,74 @@ function checkFingerprint(pattern) {
 }
 
 /**
+ * Pattern's first_seen_sd_id == last_seen_sd_id AND source SD is closed
+ * (status in closedStatuses, default {completed, cancelled}). Catches the
+ * highest-confidence single-SD-noise case: handoff-rejection retry loop on
+ * an SD that has since closed. Pure function.
+ */
+function checkSingleSDClosedSource(pattern, sourceSdStatusMap, closedStatuses) {
+  const firstId = pattern?.first_seen_sd_id;
+  const lastId = pattern?.last_seen_sd_id;
+  if (!firstId || !lastId) return null;
+  if (firstId !== lastId) return null;
+  const status = sourceSdStatusMap.get(firstId);
+  if (status === undefined) return null;
+  if (closedStatuses.has(status)) return REJECT_REASONS.SINGLE_SD_CLOSED_SOURCE;
+  return null;
+}
+
+/**
+ * Pattern's first_seen_sd_id == last_seen_sd_id AND source SD is OPEN
+ * (status not in closedStatuses) AND pattern's recency timestamp is older
+ * than ageThresholdDays. Catches the "open SD stuck in retry loop" case
+ * that checkSingleSDClosedSource misses. Defensive — gives open SDs a
+ * grace period to resolve before flagging the pattern as noise.
+ *
+ * Age computed from pattern.last_seen_at if present, else pattern.updated_at.
+ * If neither is present, function abstains (returns null).
+ */
+function checkSingleSDStaleOpenSource(pattern, sourceSdStatusMap, closedStatuses, ageThresholdDays, nowMs) {
+  const firstId = pattern?.first_seen_sd_id;
+  const lastId = pattern?.last_seen_sd_id;
+  if (!firstId || !lastId) return null;
+  if (firstId !== lastId) return null;
+  const status = sourceSdStatusMap.get(firstId);
+  if (status === undefined) return null;
+  if (closedStatuses.has(status)) return null;
+  const ts = pattern?.last_seen_at || pattern?.updated_at;
+  if (!ts) return null;
+  const tsMs = Date.parse(ts);
+  if (Number.isNaN(tsMs)) return null;
+  const ageDays = (nowMs - tsMs) / MS_PER_DAY;
+  if (ageDays > ageThresholdDays) return REJECT_REASONS.SINGLE_SD_STALE_OPEN_SOURCE;
+  return null;
+}
+
+/**
+ * Category-specific gate: when category='session_retrospective', require
+ * occurrences across >=2 distinct SDs. session_retrospective patterns
+ * track per-SD handoff-rejection histories — single-SD shape is structurally
+ * noise, not recurrence. Pure data check, no DB dependency.
+ */
+function checkSessionRetroRequiresMultiSD(pattern) {
+  if (pattern?.category !== 'session_retrospective') return null;
+  const firstId = pattern?.first_seen_sd_id;
+  const lastId = pattern?.last_seen_sd_id;
+  if (!firstId || !lastId) return null;
+  if (firstId === lastId) return REJECT_REASONS.SESSION_RETRO_NEEDS_MULTI_SD;
+  return null;
+}
+
+/**
  * @param {Array<object>} patterns
  * @param {object} [options]
  * @param {Iterable<string>} [options.allowSources]
  * @param {Iterable<string>} [options.blockStatuses]
  * @param {Map<string,string>} [options.sdStatusMap]
+ * @param {Map<string,string>} [options.sourceSdStatusMap] - SD-status lookup keyed by first/last_seen_sd_id (FR-6/FR-7)
+ * @param {Iterable<string>} [options.closedSourceStatuses] - statuses considered "closed" for FR-6 (default: completed, cancelled)
+ * @param {number} [options.staleOpenAgeDays] - FR-7 age threshold in days (default 7)
+ * @param {number} [options.nowMs] - injectable clock for FR-7 testing (default Date.now())
  * @param {boolean} [options.bypass=false]
  * @returns {{kept: Array, rejected: Array<{pattern: object, reason: string, severity: string}>}}
  */
@@ -97,6 +171,14 @@ export function filterPatternsForLearning(patterns, options = {}) {
     ? new Set(options.blockStatuses)
     : DEFAULT_BLOCK_SD_STATUSES;
   const sdStatusMap = options.sdStatusMap || new Map();
+  const sourceSdStatusMap = options.sourceSdStatusMap || new Map();
+  const closedSourceStatuses = options.closedSourceStatuses
+    ? new Set(options.closedSourceStatuses)
+    : DEFAULT_CLOSED_SOURCE_STATUSES;
+  const staleOpenAgeDays = Number.isFinite(options.staleOpenAgeDays) && options.staleOpenAgeDays > 0
+    ? options.staleOpenAgeDays
+    : DEFAULT_STALE_OPEN_AGE_DAYS;
+  const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
 
   const kept = [];
   const rejected = [];
@@ -106,7 +188,10 @@ export function filterPatternsForLearning(patterns, options = {}) {
       checkSource(pattern, allowSources) ||
       checkAutoCaptured(pattern) ||
       checkAssignedSd(pattern, sdStatusMap, blockStatuses) ||
-      checkFingerprint(pattern);
+      checkFingerprint(pattern) ||
+      checkSingleSDClosedSource(pattern, sourceSdStatusMap, closedSourceStatuses) ||
+      checkSingleSDStaleOpenSource(pattern, sourceSdStatusMap, closedSourceStatuses, staleOpenAgeDays, nowMs) ||
+      checkSessionRetroRequiresMultiSD(pattern);
 
     if (reason) {
       rejected.push({ pattern, reason, severity: REASON_SEVERITY[reason] });
@@ -143,6 +228,43 @@ export async function fetchAssignedSdStatuses(supabase, patterns) {
 
   if (error) {
     throw new Error(`fetchAssignedSdStatuses failed: ${error.message}`);
+  }
+
+  const map = new Map();
+  for (const row of data || []) map.set(row.id, row.status);
+  return map;
+}
+
+/**
+ * Build the source-SD-status lookup map needed by FR-6 and FR-7. Single batched
+ * query to strategic_directives_v2 keyed by id, covering the union of every
+ * pattern's first_seen_sd_id and last_seen_sd_id values. Caller passes the
+ * supabase client to preserve the pure-function shape of filterPatternsForLearning.
+ *
+ * @param {object} supabase - Supabase client
+ * @param {Array<object>} patterns
+ * @returns {Promise<Map<string,string>>} Map<sdId, status>
+ */
+export async function fetchPatternSourceSDStatuses(supabase, patterns) {
+  const ids = new Set();
+  for (const p of patterns) {
+    if (typeof p?.first_seen_sd_id === 'string' && p.first_seen_sd_id.length > 0) {
+      ids.add(p.first_seen_sd_id);
+    }
+    if (typeof p?.last_seen_sd_id === 'string' && p.last_seen_sd_id.length > 0) {
+      ids.add(p.last_seen_sd_id);
+    }
+  }
+
+  if (ids.size === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, status')
+    .in('id', [...ids]);
+
+  if (error) {
+    throw new Error(`fetchPatternSourceSDStatuses failed: ${error.message}`);
   }
 
   const map = new Map();
