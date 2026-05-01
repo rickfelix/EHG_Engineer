@@ -158,8 +158,8 @@ describe('stage-11-gtm.js - Tournament Feature Flag Integration', () => {
       expect(result).toHaveProperty('tiers');
       expect(result).toHaveProperty('channels');
       expect(result).toHaveProperty('launch_timeline');
-      expect(result).toHaveProperty('totalMonthlyBudget');
-      expect(result).toHaveProperty('avgCac');
+      expect(result).toHaveProperty('total_monthly_budget');
+      expect(result).toHaveProperty('avg_cac');
       expect(result.tiers).toHaveLength(3);
       expect(result.channels).toHaveLength(8);
     });
@@ -261,8 +261,8 @@ describe('stage-11-gtm.js - Tournament Feature Flag Integration', () => {
       // Standard normalization checks
       expect(result.tiers).toHaveLength(3);
       expect(result.channels).toHaveLength(8);
-      expect(result).toHaveProperty('totalMonthlyBudget');
-      expect(result).toHaveProperty('avgCac');
+      expect(result).toHaveProperty('total_monthly_budget');
+      expect(result).toHaveProperty('avg_cac');
       expect(result).toHaveProperty('tierCount', 3);
       expect(result).toHaveProperty('channelCount', 8);
     });

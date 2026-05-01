@@ -429,14 +429,14 @@ describe('stage-11-gtm.js - Analysis Step v2.0', () => {
       setupMock();
       const result = await analyzeStage11(VALID_PARAMS);
       // 5000 + 10000 + 3000 + 4000 + 2000 + 0 + 8000 + 12000 = 44000
-      expect(result.totalMonthlyBudget).toBe(44000);
+      expect(result.total_monthly_budget).toBe(44000);
     });
 
     it('should compute avgCac excluding zero-CAC channels', async () => {
       setupMock();
       const result = await analyzeStage11(VALID_PARAMS);
       // All 8 channels have non-zero CAC: (100+150+80+90+50+120+200+250)/8 = 1040/8 = 130
-      expect(result.avgCac).toBe(130);
+      expect(result.avg_cac).toBe(130);
     });
 
     it('should return avgCac as 0 when all channels have zero CAC', async () => {
@@ -460,7 +460,7 @@ describe('stage-11-gtm.js - Analysis Step v2.0', () => {
         ],
       });
       const result = await analyzeStage11(VALID_PARAMS);
-      expect(result.avgCac).toBe(0);
+      expect(result.avg_cac).toBe(0);
     });
 
     it('should include tierCount and channelCount in output', async () => {
@@ -531,8 +531,8 @@ describe('stage-11-gtm.js - Analysis Step v2.0', () => {
       expect(result).toHaveProperty('tiers');
       expect(result).toHaveProperty('channels');
       expect(result).toHaveProperty('launch_timeline');
-      expect(result).toHaveProperty('totalMonthlyBudget');
-      expect(result).toHaveProperty('avgCac');
+      expect(result).toHaveProperty('total_monthly_budget');
+      expect(result).toHaveProperty('avg_cac');
       expect(result).toHaveProperty('tierCount');
       expect(result).toHaveProperty('channelCount');
       expect(result).toHaveProperty('activeChannelCount');
