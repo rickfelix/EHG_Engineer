@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
- * CLI wrapper for the cross-venture quality-finding aggregator.
+ * CLI wrapper for the cross-venture quality-finding aggregator (manual / ad-hoc).
  *
  * Usage:
  *   node scripts/aggregate-quality-findings.js              # write patterns to DB
  *   node scripts/aggregate-quality-findings.js --dry-run    # preview only, no DB writes
  *
- * SD: SD-LEO-ORCH-QUALITY-LIFECYCLE-LOOP-001-F
+ * SD: SD-LEO-ORCH-QUALITY-LIFECYCLE-LOOP-001-F (manual CLI)
+ *
+ * For scheduled / cron-driven runs with pg_advisory_lock, lookback window, and
+ * audit_log emission, use scripts/cron/quality-findings-aggregator.mjs
+ * (SD-LEO-INFRA-STAGE-QUALITY-ANALYZER-FR-F-001).
  */
 
 import { createClient } from '@supabase/supabase-js';
