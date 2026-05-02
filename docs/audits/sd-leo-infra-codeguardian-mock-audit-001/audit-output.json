@@ -1,0 +1,268 @@
+{
+  "sd": "SD-LEO-INFRA-CODEGUARDIAN-MOCK-AUDIT-001",
+  "target": "codeguardian-mock",
+  "audited_at": "2026-05-02T01:08:13.277Z",
+  "summary": {
+    "grep_matches_count": 46,
+    "dynamic_require_matches_count": 2,
+    "docker_compose_refs_count": 0,
+    "workspace_refs_count": 0,
+    "ci_workflow_refs_count": 0,
+    "vitest_exclusion_present": true,
+    "recent_activity_count": 0
+  },
+  "grep_matches": [
+    {
+      "file": ".claude/auto-proceed-state.json",
+      "line": 6,
+      "text": "\"currentTask\": \"Implementing Audit codeguardian-mock disposition (decommission vs repair) PRD\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 29,
+      "text": "\"Audit script `scripts/audit/codeguardian-mock-disposition.mjs` runs grep across *.js,*.ts,*.mjs,*.cjs,*.json,*.yml,*.yaml,*.md for 'codeguardian-mock' and 'codeguardian_mock'; parses docker-compose*.yml for service definitions; parses root package.json workspaces array; scans .github/workflows/*.yml for path references; emits machine-readable JSON to docs/audits/sd-leo-infra-codeguardian-mock-audit-001/audit-output.json plus human-readable summary at AUDIT.md.\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 37,
+      "text": "\"Disposition decision document at docs/audits/sd-leo-infra-codeguardian-mock-audit-001/DECISION.md declares EITHER 'Option A (decommission)' OR 'Option B (repair)' with citations to specific lines of audit-output.json.\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 45,
+      "text": "\"If chosen, atomic PR removes (a) services/codeguardian-mock/ recursively, (b) line of vitest.config.js containing '**/services/codeguardian-mock/**', (c) any docker-compose service block referencing codeguardian-mock, (d) any package.json workspaces entry, (e) any CI workflow path reference.\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 47,
+      "text": "\"Post-merge `grep -r 'codeguardian-mock' --include=*.{json,yml,yaml,js,ts,mjs,cjs} .` returns zero matches outside the audit doc directory.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 53,
+      "text": "\"If chosen, atomic PR (a) fixes failing tests inside services/codeguardian-mock/tests/ so they pass under vitest, (b) removes the '**/services/codeguardian-mock/**' exclusion from vitest.config.js, (c) preserves the service docker-compose/workspace registration if those exist.\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 55,
+      "text": "\"`npx vitest run services/codeguardian-mock/tests/` exits 0 with at least one test executed (not all skipped).\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 92,
+      "text": "\"Diff vitest.config.js shows net -1 exclusion entry (the codeguardian-mock line removed); no new entries in same PR. Pre-commit/CI guard could be added but is out of scope for this SD.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 115,
+      "text": "\"Disposition=B → tests fixed → exclusion removed → vitest run passes → CI green. Expected: services/codeguardian-mock/tests/ tests visible in test-coverage report.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 122,
+      "text": "\"Audit finds codeguardian-mock referenced in docker-compose.dev.yml. DECISION.md must explicitly call out the docker reference and either remove it (Option A) or document why it stays (Option B).\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 129,
+      "text": "\"Audit finds package.json workspaces array includes 'services/codeguardian-mock'. Disposition execution must update workspaces array atomically.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 136,
+      "text": "\"Audit's dynamic_require_matches is non-empty (e.g., require('services/codeguardian-mock/something') appears somewhere). DECISION.md must NOT auto-recommend Option A — escalate to LEAD for review (this is the abandoned-status drift case).\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 160,
+      "text": "\"package.json workspaces array and/or package-lock.json may reference @ehg/codeguardian-mock; deleting the dir without updating these causes `npm install` errors.\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 169,
+      "text": "\"codeguardian-mock may be referenced by docker-compose.yml, docker-compose.dev.yml, or docker-compose.test.yml. Removing the build dir without cleaning compose files leaves dangling service definitions that fail `docker-compose up`.\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 178,
+      "text": "\".github/workflows/*.yml may reference services/codeguardian-mock paths in path-filters or build steps. Removing the dir without cleaning workflows breaks unrelated CI runs.\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 187,
+      "text": "\"require('services/codeguardian-mock/...') or import('services/codeguardian-mock/...') at runtime would not show up in static grep for module specifier strings unless we grep the literal substring.\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 198,
+      "text": "\"Audit script checks `git log --since=2026-04-26 services/codeguardian-mock/` for new commits + greps for any new external refs. If new activity found, escalate to LEAD before deletion.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 207,
+      "text": "\"Audit script identifies the exclusion entry by content (regex match on '**/services/codeguardian-mock/**') not by line number; disposition execution edits by content.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 225,
+      "text": "\"If Option A: post-merge `grep -r 'codeguardian-mock' --include=*.{json,yml,yaml,js,ts,mjs,cjs} .` returns zero matches outside the audit doc directory.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 230,
+      "text": "\"If Option B: `npx vitest run services/codeguardian-mock/tests/` exits 0 with at least one test executed (not all skipped).\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 249,
+      "text": "change: \"Disposition PR removes (Option A) or repairs (Option B) the codeguardian-mock test-suite source so test-coverage workflow no longer hits the abandoned-scaffolding skip path.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 254,
+      "text": "change: \"After Option A, `npx vitest run` no longer encounters the codeguardian-mock exclusion comment; after Option B, the test directory becomes a normal participant in the vitest run.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 268,
+      "text": "failure_mode: \"Only relevant if codeguardian-mock is registered as a workspace; audit script detects this.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 274,
+      "text": "failure_mode: \"Only relevant if a service block references codeguardian-mock; audit script detects this.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 280,
+      "text": "failure_mode: \"Only relevant if any workflow references services/codeguardian-mock paths; audit script detects this.\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 306,
+      "text": "default: \"docs/audits/sd-leo-infra-codeguardian-mock-audit-001/\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 315,
+      "text": "\"Per-SD git revert; Option A revert restores services/codeguardian-mock/ tree; Option B revert re-adds exclusion to vitest.config.js\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 320,
+      "text": "\"Audit whether services/codeguardian-mock/ should be decommissioned (Option A, ~95% likely per Explore-agent codebase scan: zero imports outside the directory, vitest excludes since 2026-04-26 commit 7d0b8a8ff9 'abandoned scaffolding', multiple SD-CODEGUARDIAN-* sibling PRs closed-as-superseded) or repaired (Option B). \" +"
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 325,
+      "text": "\"SD-LEO-INFRA-TEST-COVERAGE-HYGIENE-001 (parent) FR-3 surfaced the codeguardian-mock vitest exclusion as a hygiene defect: scaffolding kept on disk, excluded from CI, signaling 'we'll come back to this' that never happens. \" +"
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 330,
+      "text": "\"EHG_Engineer Vite-based monorepo. services/codeguardian-mock/ is a directory of indeterminate size (audit step quantifies). Excluded from vitest at vitest.config.js:44 since 2026-04-26 via commit 7d0b8a8ff9 with comment 'abandoned scaffolding'. \" +"
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 335,
+      "text": "\"Component A: scripts/audit/codeguardian-mock-disposition.mjs (one-shot Node ES module, ~50 LOC, stdlib only).\\n\" +"
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 336,
+      "text": "\"Component B: docs/audits/sd-leo-infra-codeguardian-mock-audit-001/AUDIT.md (human-readable, generated).\\n\" +"
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 337,
+      "text": "\"Component C: docs/audits/sd-leo-infra-codeguardian-mock-audit-001/audit-output.json (machine-readable, generated).\\n\" +"
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 338,
+      "text": "\"Component D: docs/audits/sd-leo-infra-codeguardian-mock-audit-001/DECISION.md (LEAD/EXEC authored after audit runs, parseable by grep).\\n\" +"
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 357,
+      "text": "\"services/codeguardian-mock/ has zero imports outside the directory (Explore-agent finding to be confirmed by FR-1 audit).\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 358,
+      "text": "\"vitest.config.js exclusion line content matches regex '\\\\*\\\\*\\\\/services\\\\/codeguardian-mock\\\\/\\\\*\\\\*' (verified by audit script before execution).\","
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 363,
+      "text": "{ id: \"EX-1\", task: \"Implement scripts/audit/codeguardian-mock-disposition.mjs (FR-1, TR-1, TR-4)\" },"
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 364,
+      "text": "{ id: \"EX-2\", task: \"Run audit script; commit audit-output.json + AUDIT.md to docs/audits/sd-leo-infra-codeguardian-mock-audit-001/\" },"
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 456,
+      "text": "'Audit codeguardian-mock disposition (decommission vs repair) PRD',  // $4 title"
+    },
+    {
+      "file": "scripts/audit/codeguardian-mock-disposition.mjs",
+      "line": 8,
+      "text": "const SD_KEY = 'sd-leo-infra-codeguardian-mock-audit-001';"
+    },
+    {
+      "file": "scripts/audit/codeguardian-mock-disposition.mjs",
+      "line": 10,
+      "text": "const TARGET = 'codeguardian-mock';"
+    },
+    {
+      "file": "services/codeguardian-mock/docker-compose.yml",
+      "line": 2,
+      "text": "codeguardian-mock:"
+    },
+    {
+      "file": "services/codeguardian-mock/package-lock.json",
+      "line": 2,
+      "text": "\"name\": \"@ehg/codeguardian-mock\","
+    },
+    {
+      "file": "services/codeguardian-mock/package-lock.json",
+      "line": 8,
+      "text": "\"name\": \"@ehg/codeguardian-mock\","
+    },
+    {
+      "file": "services/codeguardian-mock/package.json",
+      "line": 2,
+      "text": "\"name\": \"@ehg/codeguardian-mock\","
+    },
+    {
+      "file": "vitest.config.js",
+      "line": 44,
+      "text": "'**/services/codeguardian-mock/**',"
+    }
+  ],
+  "dynamic_require_matches": [
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 136,
+      "text": "\"Audit's dynamic_require_matches is non-empty (e.g., require('services/codeguardian-mock/something') appears somewhere). DECISION.md must NOT auto-recommend Option A — escalate to LEAD for review (this is the abandoned-status drift case).\""
+    },
+    {
+      "file": ".claude/tmp/insert-prd-codeguardian-mock-audit.mjs",
+      "line": 187,
+      "text": "\"require('services/codeguardian-mock/...') or import('services/codeguardian-mock/...') at runtime would not show up in static grep for module specifier strings unless we grep the literal substring.\","
+    }
+  ],
+  "docker_compose_refs": [],
+  "workspace_refs": [],
+  "ci_workflow_refs": [],
+  "vitest_exclusion": [
+    {
+      "line": 44,
+      "text": "'**/services/codeguardian-mock/**',"
+    }
+  ],
+  "recent_activity": []
+}
