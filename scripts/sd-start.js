@@ -254,7 +254,7 @@ async function getSDDetails(sdId) {
   // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope')
+    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope, governance_metadata, metadata')
     .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
@@ -451,6 +451,105 @@ async function getNextHandoff(sd) {
   return handoffMap[phase] || 'LEAD-TO-PLAN';
 }
 
+/**
+ * Enforce SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001 cadence gate.
+ *
+ * Idempotent — safe to call multiple times (e.g., once on the parent SD and
+ * again after orchestrator routing reassigns `sd` to a leaf). Reads
+ * governance_metadata + metadata directly off the passed `sd` object, so
+ * callers must ensure those columns are selected before invoking.
+ *
+ * Refuses (process.exit(1)) when the gate is active and no valid override
+ * is supplied. Override requires --override-cadence-gate "<≥20-char reason>"
+ * plus either --pattern-id or --followup-sd-key, audit-logged fail-closed.
+ */
+async function enforceCadenceGate(sd, effectiveId) {
+  const { computeGateState, formatRefusalMessage } = await import('../lib/cadence/pre-claim-gate.mjs');
+  const gateState = computeGateState({
+    governance_metadata: sd.governance_metadata,
+    metadata: sd.metadata,
+  });
+
+  if (!gateState.active) return;
+
+  const argv = process.argv;
+  const overrideIdx = argv.findIndex(a => a === '--override-cadence-gate');
+  const overrideReason = (overrideIdx !== -1 && argv[overrideIdx + 1]) ? argv[overrideIdx + 1] : null;
+  const patternIdIdx = argv.findIndex(a => a === '--pattern-id');
+  const followupIdx = argv.findIndex(a => a === '--followup-sd-key');
+  const patternId = (patternIdIdx !== -1 && argv[patternIdIdx + 1]) ? argv[patternIdIdx + 1] : null;
+  const followupSdKey = (followupIdx !== -1 && argv[followupIdx + 1]) ? argv[followupIdx + 1] : null;
+
+  if (!overrideReason || overrideReason.length < 20) {
+    console.log(`\n${colors.red}${colors.bold}🚫 ${formatRefusalMessage({ sdKey: effectiveId, gateState })}${colors.reset}`);
+    if (overrideReason && overrideReason.length < 20) {
+      console.log(`${colors.red}   (override reason must be ≥20 chars; got ${overrideReason.length})${colors.reset}`);
+    }
+    try {
+      await supabase.from('audit_log').insert({
+        event_type: 'CADENCE_GATE_REFUSED',
+        entity_type: 'strategic_directive',
+        entity_id: sd.id,
+        metadata: {
+          sd_key: effectiveId,
+          gate_until: gateState.gate_until,
+          days_remaining: gateState.days_remaining,
+          source: gateState.source,
+          override_attempted: overrideReason !== null,
+          override_reason: overrideReason,
+          operator_session_id: process.env.CLAUDE_SESSION_ID || null,
+        },
+        severity: 'info',
+      });
+    } catch (auditErr) {
+      console.warn(`${colors.dim}(audit-log refusal record failed non-blocking: ${auditErr.message})${colors.reset}`);
+    }
+    process.exit(1);
+  }
+
+  const { validateBypassShape } = await import('./modules/handoff/bypass-rubric.js');
+  const shapeResult = await validateBypassShape({
+    patternId,
+    followupSdKey,
+    supabase,
+    bypassReason: overrideReason,
+    sdId: sd.id,
+    handoffType: 'sd_start_cadence_override',
+  });
+  if (!shapeResult.allowed) {
+    console.log(`\n${colors.red}${colors.bold}🚫 Cadence override refused${colors.reset}`);
+    console.log(`   ${shapeResult.message}`);
+    process.exit(1);
+  }
+
+  const { error: auditErr } = await supabase.from('audit_log').insert({
+    event_type: 'CADENCE_GATE_OVERRIDE',
+    entity_type: 'strategic_directive',
+    entity_id: sd.id,
+    metadata: {
+      sd_key: effectiveId,
+      gate_until: gateState.gate_until,
+      days_remaining: gateState.days_remaining,
+      source: gateState.source,
+      override_reason: overrideReason,
+      pattern_id: patternId,
+      followup_sd_key: followupSdKey,
+      operator_session_id: process.env.CLAUDE_SESSION_ID || null,
+    },
+    severity: 'warning',
+  });
+  if (auditErr) {
+    console.log(`\n${colors.red}${colors.bold}🚫 audit-log unavailable; cadence override cannot be safely recorded${colors.reset}`);
+    console.log(`   audit_log error: ${auditErr.message}`);
+    console.log(`   ${colors.dim}fail-closed: claim refused${colors.reset}`);
+    process.exit(1);
+  }
+  console.log(`${colors.yellow}⚠ Cadence gate override accepted${colors.reset}`);
+  console.log(`   Reason:           "${overrideReason}"`);
+  console.log(`   Pattern/Followup: ${patternId || followupSdKey}`);
+  console.log(`   Audit row:        event_type=CADENCE_GATE_OVERRIDE on entity_id=${sd.id}`);
+}
+
 async function main() {
   const sdId = process.argv[2];
 
@@ -471,7 +570,7 @@ async function main() {
   const worktreeGuard = isInsideWorktree();
   if (worktreeGuard.inside) {
     console.log(`\n${colors.red}${colors.bold}Error: sd-start must run from the main repo root${colors.reset}`);
-    console.log(`\n  Current cwd is inside the worktrees subtree:`);
+    console.log('\n  Current cwd is inside the worktrees subtree:');
     console.log(`    ${colors.dim}cwd:       ${process.cwd()}${colors.reset}`);
     console.log(`    ${colors.dim}worktrees: ${worktreeGuard.worktreesDir}${colors.reset}`);
     console.log(`\n  ${colors.cyan}cd ${worktreeGuard.repoRoot}${colors.reset}`);
@@ -518,101 +617,9 @@ async function main() {
   }
 
   // 1.4. SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001: Pre-claim cadence gate.
-  // Refuses claim if SD is in a stability window (governance_metadata.next_workable_after
-  // in future, OR derived from governance_metadata.session_log[last] + metadata.pr_cadence_minimum_days).
-  // Override requires --override-cadence-gate "<reason>" + (--pattern-id PAT-XXX OR --followup-sd-key SD-XXX),
-  // mirroring scripts/modules/handoff/bypass-rubric.js governance anchoring.
-  // Audit-log emission is fail-closed: refusal on INSERT failure during override.
-  {
-    const { computeGateState, formatRefusalMessage } = await import('../lib/cadence/pre-claim-gate.mjs');
-    const gateState = computeGateState({
-      governance_metadata: sd.governance_metadata,
-      metadata: sd.metadata,
-    });
-
-    if (gateState.active) {
-      const argv = process.argv;
-      const overrideIdx = argv.findIndex(a => a === '--override-cadence-gate');
-      const overrideReason = (overrideIdx !== -1 && argv[overrideIdx + 1]) ? argv[overrideIdx + 1] : null;
-      const patternIdIdx = argv.findIndex(a => a === '--pattern-id');
-      const followupIdx = argv.findIndex(a => a === '--followup-sd-key');
-      const patternId = (patternIdIdx !== -1 && argv[patternIdIdx + 1]) ? argv[patternIdIdx + 1] : null;
-      const followupSdKey = (followupIdx !== -1 && argv[followupIdx + 1]) ? argv[followupIdx + 1] : null;
-
-      if (!overrideReason || overrideReason.length < 20) {
-        // No override or reason too short — REFUSE.
-        console.log(`\n${colors.red}${colors.bold}🚫 ${formatRefusalMessage({ sdKey: effectiveId, gateState })}${colors.reset}`);
-        if (overrideReason && overrideReason.length < 20) {
-          console.log(`${colors.red}   (override reason must be ≥20 chars; got ${overrideReason.length})${colors.reset}`);
-        }
-        try {
-          await supabase.from('audit_log').insert({
-            event_type: 'CADENCE_GATE_REFUSED',
-            entity_type: 'strategic_directive',
-            entity_id: sd.id,
-            metadata: {
-              sd_key: effectiveId,
-              gate_until: gateState.gate_until,
-              days_remaining: gateState.days_remaining,
-              source: gateState.source,
-              override_attempted: overrideReason !== null,
-              override_reason: overrideReason,
-              operator_session_id: process.env.CLAUDE_SESSION_ID || null,
-            },
-            severity: 'info',
-          });
-        } catch (auditErr) {
-          // Refusal-side audit failure is non-blocking (the gate is still refusing).
-          console.warn(`${colors.dim}(audit-log refusal record failed non-blocking: ${auditErr.message})${colors.reset}`);
-        }
-        process.exit(1);
-      }
-
-      // Override attempted — validate governance anchoring per bypass-rubric pattern.
-      const { validateBypassShape } = await import('./modules/handoff/bypass-rubric.js');
-      const shapeResult = await validateBypassShape({
-        patternId,
-        followupSdKey,
-        supabase,
-        bypassReason: overrideReason,
-        sdId: sd.id,
-        handoffType: 'sd_start_cadence_override',
-      });
-      if (!shapeResult.allowed) {
-        console.log(`\n${colors.red}${colors.bold}🚫 Cadence override refused${colors.reset}`);
-        console.log(`   ${shapeResult.message}`);
-        process.exit(1);
-      }
-
-      // Override valid — emit audit row BEFORE proceeding. Fail-closed on INSERT error.
-      const { error: auditErr } = await supabase.from('audit_log').insert({
-        event_type: 'CADENCE_GATE_OVERRIDE',
-        entity_type: 'strategic_directive',
-        entity_id: sd.id,
-        metadata: {
-          sd_key: effectiveId,
-          gate_until: gateState.gate_until,
-          days_remaining: gateState.days_remaining,
-          source: gateState.source,
-          override_reason: overrideReason,
-          pattern_id: patternId,
-          followup_sd_key: followupSdKey,
-          operator_session_id: process.env.CLAUDE_SESSION_ID || null,
-        },
-        severity: 'warning',
-      });
-      if (auditErr) {
-        console.log(`\n${colors.red}${colors.bold}🚫 audit-log unavailable; cadence override cannot be safely recorded${colors.reset}`);
-        console.log(`   audit_log error: ${auditErr.message}`);
-        console.log(`   ${colors.dim}fail-closed: claim refused${colors.reset}`);
-        process.exit(1);
-      }
-      console.log(`${colors.yellow}⚠ Cadence gate override accepted${colors.reset}`);
-      console.log(`   Reason:           "${overrideReason}"`);
-      console.log(`   Pattern/Followup: ${patternId || followupSdKey}`);
-      console.log(`   Audit row:        event_type=CADENCE_GATE_OVERRIDE on entity_id=${sd.id}`);
-    }
-  }
+  // Refuses claim if SD is in a stability window. Re-runs after orchestrator
+  // leaf routing so a cadence-blocked leaf is not silently claimed via the parent.
+  await enforceCadenceGate(sd, effectiveId);
 
   // 1.5. Orchestrator detection — route to child instead of claiming parent
   const explicitChild = process.argv.includes('--child') ? process.argv[process.argv.indexOf('--child') + 1] : null;
@@ -697,6 +704,11 @@ async function main() {
       Object.assign(sd, childSd);
       effectiveId = childId;
       console.log(`   ${colors.dim}(Orchestrator ${sdId} not claimed — only leaf ${childId} will be claimed)${colors.reset}`);
+
+      // Re-enforce cadence gate against the leaf's governance_metadata.
+      // Without this re-check, a cadence-blocked leaf is silently claimed via
+      // the parent (the parent has no next_workable_after of its own).
+      await enforceCadenceGate(sd, effectiveId);
     }
   }
 
@@ -857,14 +869,14 @@ async function main() {
         console.log(`  Owner session:  ${claimResult.owner?.session_id || '(none)'}`);
         console.log('');
         console.log(`  ${colors.yellow}Why blocked:${colors.reset} The owning session is released or stale, but`);
-        console.log(`  triangulate() detected evidence the CC conversation is still active`);
-        console.log(`  (sub-agent activity in last 5 min, sibling session on the branch,`);
-        console.log(`  warm worktree, or matching plan-file). Auto-releasing this claim`);
-        console.log(`  would clobber that other session's work.`);
+        console.log('  triangulate() detected evidence the CC conversation is still active');
+        console.log('  (sub-agent activity in last 5 min, sibling session on the branch,');
+        console.log('  warm worktree, or matching plan-file). Auto-releasing this claim');
+        console.log('  would clobber that other session\'s work.');
         console.log('');
         console.log(`  ${colors.cyan}Options:${colors.reset}`);
-        console.log(`    1. Pick a different SD: npm run sd:next`);
-        console.log(`    2. Confirm the other session is truly gone, then retry with:`);
+        console.log('    1. Pick a different SD: npm run sd:next');
+        console.log('    2. Confirm the other session is truly gone, then retry with:');
         console.log(`       node scripts/sd-start.js ${effectiveId} --force-reclaim`);
         console.log(
           `${colors.red}═══════════════════════════════════════════════════════════════════${colors.reset}\n`
@@ -1221,7 +1233,7 @@ async function main() {
           `   Requested SD: ${effectiveId}\n` +
           `   Observed basename: ${observedBasename}\n` +
           `   Resolved path: ${worktreeInfo.cwd}\n` +
-          `\nRemediation:\n` +
+          '\nRemediation:\n' +
           `   1. ${colors.cyan}npm run session:check-concurrency${colors.reset} — confirm no peer sessions are using this worktree\n` +
           `   2. ${colors.cyan}node scripts/release-and-clean.js ${observedBasename}${colors.reset} — release the stale claim and clean the worktree\n` +
           `   3. Re-run /leo start ${effectiveId}\n`
