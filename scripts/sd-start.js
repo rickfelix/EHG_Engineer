@@ -1212,19 +1212,30 @@ async function main() {
       const cwdNormalized = (worktreeInfo.cwd || '').replace(/\\/g, '/');
       const observedBasename = path.basename(cwdNormalized);
       if (observedBasename !== effectiveId) {
-        console.warn(
-          `   ${colors.yellow}⚠️  Skipping worktree_path persistence — basename mismatch:${colors.reset}\n` +
-          `      Observed: ${observedBasename}\n` +
-          `      Expected: ${effectiveId}\n` +
-          `      Resolved: ${worktreeInfo.cwd}`
+        // SD-LEO-INFRA-LEO-INFRA-SESSION-001 (FR-4): hard refusal — the prior
+        // warn-and-proceed silently masked stale claude_sessions rows pointing
+        // at the wrong worktree. Refuse to continue so the operator clears
+        // the stale state explicitly.
+        console.error(
+          `\n${colors.red}[WORKTREE_BASENAME_MISMATCH]${colors.reset} sd-start refusing to proceed:\n` +
+          `   Requested SD: ${effectiveId}\n` +
+          `   Observed basename: ${observedBasename}\n` +
+          `   Resolved path: ${worktreeInfo.cwd}\n` +
+          `\nRemediation:\n` +
+          `   1. ${colors.cyan}npm run session:check-concurrency${colors.reset} — confirm no peer sessions are using this worktree\n` +
+          `   2. ${colors.cyan}node scripts/release-and-clean.js ${observedBasename}${colors.reset} — release the stale claim and clean the worktree\n` +
+          `   3. Re-run /leo start ${effectiveId}\n`
         );
-      } else {
-        await supabase
-          .from('strategic_directives_v2')
-          .update({ worktree_path: worktreeInfo.cwd })
-          .eq('sd_key', effectiveId);
+        process.exit(1);
       }
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ worktree_path: worktreeInfo.cwd })
+        .eq('sd_key', effectiveId);
     } catch (e) {
+      // Preserve the original WORKTREE_BASENAME_MISMATCH path — process.exit
+      // above is unreachable from the catch. Other errors here remain
+      // non-fatal (DB persistence is advisory, not load-bearing).
       console.warn(`   ${colors.yellow}⚠️  Failed to persist worktree_path: ${e?.message || e}${colors.reset}`);
     }
 
