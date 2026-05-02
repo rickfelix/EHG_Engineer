@@ -10,15 +10,18 @@ import {
   validateFindingShape,
 } from '../../../../lib/eva/quality-findings/finding-shape.js';
 
-describe('FINDING_CATEGORIES (canonical 10)', () => {
-  it('enumerates exactly 10 categories: code review (5) + QA (2) + UAT (3)', () => {
+describe('FINDING_CATEGORIES (canonical 12)', () => {
+  it('enumerates exactly 12 categories: code review (5) + QA (2) + UAT (3) + Vision (2)', () => {
+    // SD-LEO-INFRA-STAGE-QUALITY-ANALYZER-FR-E-001 added the two Vision Compliance
+    // categories (feedback_widget_present, error_capture_wired) on 2026-05-02.
     expect(FINDING_CATEGORIES).toEqual([
       'npm_audit', 'secrets', 'lint', 'test_suite',
       'unit_test', 'e2e_test',
       'uat_test', 'bug_report', 'uat_signoff',
       'capability',
+      'feedback_widget_present', 'error_capture_wired',
     ]);
-    expect(FINDING_CATEGORIES.length).toBe(10);
+    expect(FINDING_CATEGORIES.length).toBe(12);
   });
 
   it('is frozen (immutable)', () => {
