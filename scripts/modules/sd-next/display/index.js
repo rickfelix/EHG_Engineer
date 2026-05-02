@@ -12,7 +12,9 @@ export {
 export {
   displayRecommendations,
   displayActiveSessions,
-  displaySessionContext
+  displaySessionContext,
+  displayWorktreeIsolationReminder,
+  countPeerSessions
 } from './recommendations.js';
 export { displayParallelOpportunities } from './parallel.js';
 export {

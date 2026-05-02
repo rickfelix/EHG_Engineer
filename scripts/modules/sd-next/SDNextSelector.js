@@ -68,6 +68,7 @@ import {
   displayRecommendations,
   displayActiveSessions,
   displaySessionContext,
+  displayWorktreeIsolationReminder,
   displayParallelOpportunities,
   showFallbackQueue,
   showExhaustedBaselineMessage,
@@ -227,6 +228,7 @@ export class SDNextSelector {
       });
       this.displayFeedbackItems();
       this.displayHarnessBacklog();
+      displayWorktreeIsolationReminder(this.activeSessions, this.currentSession);
       if (qfSummaryNoBaseline.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available` };
       }
@@ -246,6 +248,7 @@ export class SDNextSelector {
       });
       this.displayFeedbackItems();
       this.displayHarnessBacklog();
+      displayWorktreeIsolationReminder(this.activeSessions, this.currentSession);
       if (qfSummaryExhausted.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available` };
       }
@@ -284,6 +287,8 @@ export class SDNextSelector {
 
     // Display brainstorm pipeline health advisory
     await this.displayBrainstormPipelineHealth();
+
+    displayWorktreeIsolationReminder(this.activeSessions, this.currentSession);
 
     console.log(`\n${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
