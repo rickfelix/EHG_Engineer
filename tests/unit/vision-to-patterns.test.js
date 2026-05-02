@@ -13,39 +13,44 @@ vi.mock('../../lib/eva/event-bus/vision-events.js', () => ({
 
 const { syncVisionScoresToPatterns } = await import('../../scripts/eva/vision-to-patterns.js');
 
+/**
+ * Build a chainable thenable mock query builder for one table.
+ * `data` is what `await query` resolves to; chain methods (.select/.eq/.lt/...)
+ * all return the same builder so depth doesn't matter.
+ */
+function makeBuilder(data, extras = {}) {
+  const result = { data, error: null };
+  const builder = { ...extras };
+  const chainMethods = [
+    'select', 'eq', 'neq', 'in', 'is', 'or', 'not', 'ilike', 'like',
+    'gte', 'lte', 'gt', 'lt', 'contains', 'order', 'limit', 'range',
+  ];
+  for (const m of chainMethods) {
+    if (!builder[m]) builder[m] = vi.fn(() => builder);
+  }
+  builder.single = vi.fn().mockResolvedValue(result);
+  builder.maybeSingle = vi.fn().mockResolvedValue(result);
+  builder.then = (onFulfilled, onRejected) =>
+    Promise.resolve(result).then(onFulfilled, onRejected);
+  return builder;
+}
+
 function createMockSupabase(scoreRecords, existingPatterns = []) {
-  const mockUpdate = vi.fn().mockReturnValue({
+  const mockUpdate = vi.fn(() => ({
     eq: vi.fn().mockResolvedValue({ error: null }),
-  });
+  }));
   const mockInsert = vi.fn().mockResolvedValue({ error: null });
 
   return {
     from: vi.fn((table) => {
       if (table === 'eva_vision_scores') {
-        return {
-          select: vi.fn().mockReturnValue({
-            lt: vi.fn().mockReturnValue({
-              gte: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({ data: scoreRecords, error: null }),
-                }),
-              }),
-            }),
-          }),
-        };
+        return makeBuilder(scoreRecords);
       }
       if (table === 'issue_patterns') {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue({ data: existingPatterns, error: null }),
-            }),
-          }),
-          update: mockUpdate,
-          insert: mockInsert,
-        };
+        return makeBuilder(existingPatterns, { update: mockUpdate, insert: mockInsert });
       }
-      return {};
+      // Fallback: any other table returns empty data but still chainable.
+      return makeBuilder([]);
     }),
     _mockInsert: mockInsert,
     _mockUpdate: mockUpdate,

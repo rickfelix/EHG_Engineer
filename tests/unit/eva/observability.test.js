@@ -13,6 +13,30 @@ import {
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
+/**
+ * Source code calls _resolveEvaVentureId() which does
+ *   supabase.from('eva_ventures').select('id').eq('venture_id', x).maybeSingle()
+ * BEFORE any insert path runs.  Wrap an existing inline mockDb so the
+ * `eva_ventures` lookup succeeds (returns id='eva-v-1') while preserving
+ * each test's bespoke insert mock for other tables.
+ */
+function withEvaVentures(mockDb, evaVentureId = 'eva-v-1') {
+  const originalFrom = mockDb.from;
+  mockDb.from = vi.fn((table) => {
+    if (table === 'eva_ventures') {
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: evaVentureId }, error: null }),
+          }),
+        }),
+      };
+    }
+    return originalFrom(table);
+  });
+  return mockDb;
+}
+
 describe('OrchestratorTracer', () => {
   let tracer;
 
@@ -208,7 +232,7 @@ describe('OrchestratorTracer', () => {
         }),
       };
 
-      const result = await tracer.persistTrace(mockDb);
+      const result = await tracer.persistTrace(withEvaVentures(mockDb));
       expect(result.persisted).toBe(true);
       expect(result.id).toBe('trace-row-1');
       expect(mockDb.from).toHaveBeenCalledWith('eva_trace_log');
@@ -234,7 +258,7 @@ describe('OrchestratorTracer', () => {
         }),
       };
 
-      const result = await tracer.persistTrace(mockDb);
+      const result = await tracer.persistTrace(withEvaVentures(mockDb));
       expect(result.persisted).toBe(false);
       expect(result.error).toBe('Table not found');
     });
@@ -244,7 +268,7 @@ describe('OrchestratorTracer', () => {
         from: vi.fn().mockImplementation(() => { throw new Error('Connection failed'); }),
       };
 
-      const result = await tracer.persistTrace(mockDb);
+      const result = await tracer.persistTrace(withEvaVentures(mockDb));
       expect(result.persisted).toBe(false);
       expect(result.error).toBe('Connection failed');
     });
@@ -264,7 +288,7 @@ describe('OrchestratorTracer', () => {
         }),
       };
 
-      await tracer.persistTrace(mockDb);
+      await tracer.persistTrace(withEvaVentures(mockDb));
       expect(capturedRow.metadata.module_version).toBe(MODULE_VERSION);
     });
   });
@@ -280,7 +304,7 @@ describe('OrchestratorTracer', () => {
         }),
       };
 
-      const result = await tracer.persistEvents(mockDb);
+      const result = await tracer.persistEvents(withEvaVentures(mockDb));
       expect(result.persisted).toBe(true);
       expect(result.count).toBe(2);
       expect(mockDb.from).toHaveBeenCalledWith('eva_events');
@@ -295,7 +319,7 @@ describe('OrchestratorTracer', () => {
 
     it('should return error when no events', async () => {
       const mockDb = { from: vi.fn() };
-      const result = await tracer.persistEvents(mockDb);
+      const result = await tracer.persistEvents(withEvaVentures(mockDb));
       expect(result.persisted).toBe(false);
       expect(result.error).toBe('No events');
     });
@@ -308,7 +332,7 @@ describe('OrchestratorTracer', () => {
         }),
       };
 
-      const result = await tracer.persistEvents(mockDb);
+      const result = await tracer.persistEvents(withEvaVentures(mockDb));
       expect(result.persisted).toBe(false);
       expect(result.error).toBe('Insert failed');
     });
@@ -319,7 +343,7 @@ describe('OrchestratorTracer', () => {
         from: vi.fn().mockImplementation(() => { throw new Error('Boom'); }),
       };
 
-      const result = await tracer.persistEvents(mockDb);
+      const result = await tracer.persistEvents(withEvaVentures(mockDb));
       expect(result.persisted).toBe(false);
       expect(result.error).toBe('Boom');
     });
