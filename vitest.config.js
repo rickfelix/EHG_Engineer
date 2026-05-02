@@ -26,6 +26,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     testTimeout: 60000,
+    teardownTimeout: 10000,
+    pool: 'forks',
     setupFiles: ['./tests/setup.js'],
     include: [
       '**/__tests__/**/*.test.js',

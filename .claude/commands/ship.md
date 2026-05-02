@@ -686,6 +686,37 @@ node scripts/modules/shipping/post-merge-worktree-cleanup.js --sdKey <SD-KEY-OR-
 
 **Note:** The existing LEAD-FINAL-APPROVAL cleanup is kept as a safety net. It is idempotent — if this step already cleaned up, it reports "worktree_not_found" and moves on.
 
+### Step 6.5: Auto-fire Post-Merge LEO Handoff Chain (SD-FDBK-ENH-POST-MERGE-AUTO-001)
+
+**Purpose**: After /ship merges a PR for an SD, automatically fire EXEC-TO-PLAN, PLAN-TO-LEAD, and LEAD-FINAL-APPROVAL handoffs so the SD reaches `status=completed` instead of remaining stuck at `status=draft, current_phase=LEAD`.
+
+**Skip condition**: If `STEP_6_3_RAN_QF_CLOSURE=true` (Quick-Fix flow), skip this step entirely. QFs use complete-quick-fix.js, not the LEO handoff chain.
+
+**Emergency disable**: If a regression emerges, set `LEO_AUTOHANDOFF_ENABLED=false` to skip Step 6.5; the SD will need manual `handoff.js execute` invocations to reach `completed`.
+
+**Run** (after Step 6.3 sets its sentinel; before Step 7's ecosystem prompt):
+```bash
+if [ "${STEP_6_3_RAN_QF_CLOSURE:-false}" = "false" ] && [ "${LEO_AUTOHANDOFF_ENABLED:-true}" = "true" ]; then
+  SD_KEY=$(echo "$BRANCH" | sed -nE 's|^(feat|fix|refactor|docs|test)/(SD-[^-]+(-[^-/]+)*)/?.*|\2|p')
+  if [ -n "$SD_KEY" ]; then
+    node scripts/post-merge-handoff-orchestrator.js --sd-key="$SD_KEY"
+    if [ $? -eq 0 ]; then
+      export STEP_6_5_RAN_AUTOHANDOFF=true
+    fi
+  fi
+fi
+```
+
+**Outcomes**:
+- `exit 0` (action=completed): SD advanced through full chain; status=completed; STEP_6_5_RAN_AUTOHANDOFF=true
+- `exit 0` (action=idempotent_skip): SD already completed; no-op; safe re-run
+- `exit 0` (reason=no_exec_work_to_advance): SD in LEAD/draft state — bug-class case logged for operator review
+- `exit 2-5` (non-zero): orchestrator halted; full step+stderr in `.claude/post-merge-orchestrator.log`. Step 7 ecosystem prompt still runs so operator can intervene.
+
+**Why this exists**: Without this step, `/ship` Step 6 merges the PR but never invokes the downstream LEO phase handoffs — the SD remains stuck at `draft/LEAD/0%` with stale claim ownership, blocking reclaim by parallel sessions. This is the bug-class behind 4035+ aggregate PAT-AUTO-* handoff-fail occurrences and 3 confirmed phantom SDs (SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001 PRs #3389+#3437; SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-A).
+
+**Defense-in-depth**: `phantom-completion-sweep.yml` continues to detect any phantoms that emerge despite this fix.
+
 ### Step 7: Post-Merge Command Ecosystem (NEW)
 
 **After a successful merge, present contextual suggestions using AskUserQuestion:**
