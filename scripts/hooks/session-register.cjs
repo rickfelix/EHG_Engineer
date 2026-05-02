@@ -38,6 +38,36 @@ function detectCurrentRepo() {
 }
 
 function getCurrentSessionId() {
+  // Resolution order (5f02d3c2):
+  //   1. CLAUDE_SESSION_ID env var (set by capture-session-id.cjs which runs
+  //      earlier in the SessionStart chain — most reliable when present)
+  //   2. .claude/session-identity/<uuid>.json — current marker scheme;
+  //      pick the most-recently-modified file. capture-session-id.cjs:383
+  //      writes one file per session here.
+  //   3. .claude/session-id.json — legacy single-file marker (predates the
+  //      session-identity dir, kept for backward compat)
+  //   4. ~/.claude-sessions/*.json — even-older fallback
+  if (process.env.CLAUDE_SESSION_ID) {
+    return process.env.CLAUDE_SESSION_ID;
+  }
+
+  try {
+    const markerDir = path.resolve(__dirname, '../../.claude/session-identity');
+    if (fs.existsSync(markerDir)) {
+      const markers = fs.readdirSync(markerDir)
+        .filter(f => f.endsWith('.json'))
+        .map(f => {
+          const full = path.join(markerDir, f);
+          return { name: f, mtime: fs.statSync(full).mtimeMs };
+        })
+        .sort((a, b) => b.mtime - a.mtime);
+      if (markers.length > 0) {
+        const latest = JSON.parse(fs.readFileSync(path.join(markerDir, markers[0].name), 'utf8'));
+        if (latest.session_id) return latest.session_id;
+      }
+    }
+  } catch { /* fall through to legacy lookups */ }
+
   try {
     const sessionFile = path.resolve(__dirname, '../../.claude/session-id.json');
     if (fs.existsSync(sessionFile)) {
