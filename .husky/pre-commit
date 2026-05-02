@@ -342,17 +342,27 @@ echo ""
 # ============================================================================
 # Smoke Tests
 # ============================================================================
-echo "Running smoke tests before commit..."
-npm run test:smoke
+# Exempt docs/, reports/, test/, chore/ branches from smoke tests — these
+# typically contain documentation regeneration, reports, test additions, or
+# housekeeping that don't exercise runtime paths the smoke tests cover.
+# Mirrors the LOC-threshold exemption further down (~line 682).
+# Closes feedback row 36b22247: smoke tests fail offline (DNS ENOTFOUND on
+# test.invalid.local) and force --no-verify on docs-only commits.
+if echo "$BRANCH" | grep -qE '^(docs|reports|test|chore)/'; then
+  echo "📝 Skipping smoke tests — branch type '$(echo "$BRANCH" | cut -d'/' -f1)/' is exempt"
+else
+  echo "Running smoke tests before commit..."
+  npm run test:smoke
 
-# Check exit code
-if [ $? -ne 0 ]; then
-  echo "❌ Smoke tests failed. Commit aborted."
-  echo "Run 'npm run test:smoke' to see details."
-  exit 1
+  # Check exit code
+  if [ $? -ne 0 ]; then
+    echo "❌ Smoke tests failed. Commit aborted."
+    echo "Run 'npm run test:smoke' to see details."
+    exit 1
+  fi
+
+  echo "✅ Smoke tests passed."
 fi
-
-echo "✅ Smoke tests passed."
 
 # ============================================================================
 # PRD Schema Validation
