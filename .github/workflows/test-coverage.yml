@@ -29,6 +29,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # On PR runs the merge ref is checked out and 'main' exists only as
+      # 'origin/main'. The branch-resolver tests use the literal 'main' ref
+      # via `git show main:...` / `git ls-tree main`, so create a local
+      # branch pointing at origin/main for them.
+      - name: Ensure local 'main' ref for branch-resolver tests
+        if: github.event_name == 'pull_request'
+        run: git update-ref refs/heads/main refs/remotes/origin/main
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
