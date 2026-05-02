@@ -380,7 +380,14 @@ class RetrospectiveExtractionTrigger {
 // INTEGRATION TESTS
 // ============================================================================
 
-describe('Handoff Retrospective Integration', () => {
+// Gate on a real database. CI synthetic env (test.invalid.local) cannot
+// satisfy the live createSupabaseServiceClient() inside beforeAll.
+const HAS_REAL_DB = process.env.SUPABASE_URL
+  && !process.env.SUPABASE_URL.includes('test.invalid.local')
+  && process.env.SUPABASE_SERVICE_ROLE_KEY
+  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
+
+describe.skipIf(!HAS_REAL_DB)('Handoff Retrospective Integration', () => {
   let supabase;
   let handoffSystem;
   let extractionTrigger;

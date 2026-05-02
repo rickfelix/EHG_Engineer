@@ -14,13 +14,20 @@ import { createOrReusePendingDecision, waitForDecision } from '../../lib/eva/cha
 
 const supabase = createSupabaseServiceClient();
 
+// Gate on a real database. CI without secrets sets test.invalid.local via
+// tests/setup.js — every test here exercises real chairman_decisions writes.
+const HAS_REAL_DB = process.env.SUPABASE_URL
+  && !process.env.SUPABASE_URL.includes('test.invalid.local')
+  && process.env.SUPABASE_SERVICE_ROLE_KEY
+  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
+
 // Use an existing venture from the database (FK constraints make test venture creation complex)
 let testVentureId = null;
 let testDecisionId = null;
 const createdDecisionIds = [];
 const testLogger = { log: () => {}, warn: () => {}, error: console.error };
 
-describe('Chairman Decision API', () => {
+describe.skipIf(!HAS_REAL_DB)('Chairman Decision API', () => {
   beforeAll(async () => {
     // Find an existing venture to use for testing
     const { data: ventures } = await supabase

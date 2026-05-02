@@ -20,6 +20,15 @@ dotenv.config();
 
 const supabase = createSupabaseServiceClient();
 
+// Gate the suite on a real database. CI without secrets sets the synthetic
+// `test.invalid.local` URL via tests/setup.js — every test in this file
+// performs real DB writes (eva_ventures, eva_events, eva_events_dlq),
+// so without a live connection they all fail at first FK lookup.
+const HAS_REAL_DB = process.env.SUPABASE_URL
+  && !process.env.SUPABASE_URL.includes('test.invalid.local')
+  && process.env.SUPABASE_SERVICE_ROLE_KEY
+  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
+
 // Import event bus modules
 import {
   initializeEventBus,
@@ -111,7 +120,7 @@ async function cleanup() {
   }
 }
 
-describe('EVA Event Bus Handler Wiring', () => {
+describe.skipIf(!HAS_REAL_DB)('EVA Event Bus Handler Wiring', () => {
   beforeAll(async () => {
     testVentureId = await createTestVenture();
     // Enable event bus for tests
