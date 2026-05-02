@@ -115,7 +115,7 @@ async function runOnce({ args, supabase, pgClient, lockKey }) {
     await writeAuditLog(supabase, 'lock_held', {
       lock_name: LOCK_KEY_NAME,
       lock_key: lockKey,
-    }, { severity: 'info' });
+    }, { entityType: 'fr_c_generator_run', entityId: LOCK_KEY_NAME, severity: 'info' });
     return { exitCode: 0, summary: { lockHeld: true } };
   }
 
@@ -130,7 +130,7 @@ async function runOnce({ args, supabase, pgClient, lockKey }) {
     await writeAuditLog(supabase, 'generator_failed', {
       error: err.message,
       stack: (err.stack || '').slice(0, 1000),
-    }, { severity: 'error' });
+    }, { entityType: 'fr_c_generator_run', entityId: LOCK_KEY_NAME, severity: 'error' });
     return { exitCode: 1, summary: { error: err.message } };
   } finally {
     await releaseLock(pgClient, lockKey);
