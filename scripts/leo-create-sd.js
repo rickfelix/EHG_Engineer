@@ -273,7 +273,7 @@ async function createFromLearn(patternId) {
 /**
  * Create SD from /inbox feedback item
  */
-async function createFromFeedback(feedbackId) {
+async function createFromFeedback(feedbackId, options = {}) {
   console.log(`\n📋 Creating SD from feedback: ${feedbackId}`);
 
   // Fetch feedback item (support full or partial UUID)
@@ -315,15 +315,18 @@ async function createFromFeedback(feedbackId) {
     process.exit(0);
   }
 
-  // Map feedback type to SD type
+  // Map feedback type to SD type. --type flag (options.typeOverride) wins
+  // when supplied (mirrors --from-plan / --child override semantics).
   const typeMap = { issue: 'fix', enhancement: 'enhancement', bug: 'bugfix' };
-  const type = typeMap[feedback.type] || 'feature';
+  const type = options.typeOverride || typeMap[feedback.type] || 'feature';
+  // --title override (options.titleOverride) wins over feedback.title for the SD.
+  const sdTitle = options.titleOverride || feedback.title;
 
   // Triage Gate: soft recommendation for feedback-sourced items
   try {
     const triageResult = await runTriageGate({
-      title: feedback.title,
-      description: feedback.description || feedback.title,
+      title: sdTitle,
+      description: feedback.description || sdTitle,
       type,
       source: 'feedback'
     }, supabase);
@@ -339,15 +342,15 @@ async function createFromFeedback(feedbackId) {
   const sdKey = await generateSDKey({
     source: 'FEEDBACK',
     type,
-    title: feedback.title,
+    title: sdTitle,
     venturePrefix
   });
 
   // Create SD
   const sd = await createSD({
     sdKey,
-    title: feedback.title,
-    description: feedback.description || feedback.title,
+    title: sdTitle,
+    description: feedback.description || sdTitle,
     type,
     priority: mapPriority(feedback.priority),
     rationale: `Created from feedback item. Source: ${feedback.source_type || 'manual'}`,
@@ -1689,8 +1692,8 @@ Types: ${Object.keys(SD_TYPES).join(', ')}
 
 Flags:
   --yes, -y          Skip confirmation for auto-detected plans
-  --type <type>      Override SD type (for --from-plan or --child; children never inherit 'orchestrator')
-  --title "<title>"  Override title (for --from-plan or --child)
+  --type <type>      Override SD type (for --from-plan, --from-feedback, or --child; children never inherit 'orchestrator')
+  --title "<title>"  Override title (for --from-plan, --from-feedback, or --child)
   --priority <p>     Override priority for --from-plan (critical|high|medium|low). Default from plan header
                      ## Priority, falling back to "medium" if absent.
   --venture <name>   Generate venture-scoped SD key (SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM})
@@ -1753,7 +1756,22 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
     } else if (args[0] === '--from-learn') {
       await createFromLearn(args[1]);
     } else if (args[0] === '--from-feedback') {
-      await createFromFeedback(args[1]);
+      // Parse --type and --title overrides (mirrors --from-plan / --child).
+      // The feedback ID is the first non-flag positional after --from-feedback.
+      const fbTypeIdx = args.indexOf('--type');
+      const fbTitleIdx = args.indexOf('--title');
+      const fbFlagValuePositions = new Set(
+        [fbTypeIdx !== -1 ? fbTypeIdx + 1 : -1,
+         fbTitleIdx !== -1 ? fbTitleIdx + 1 : -1].filter(i => i > 0)
+      );
+      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title']);
+      const feedbackId = args.find((arg, i) =>
+        i > 0 && !arg.startsWith('-') && !fbFlagValuePositions.has(i) && !fbKnownFlags.has(arg)
+      ) || args[1];
+      await createFromFeedback(feedbackId, {
+        typeOverride: fbTypeIdx !== -1 ? args[fbTypeIdx + 1] : null,
+        titleOverride: fbTitleIdx !== -1 ? args[fbTitleIdx + 1] : null,
+      });
     } else if (args[0] === '--from-qf') {
       await createFromQF(args[1]);
     } else if (args[0] === '--from-plan') {
