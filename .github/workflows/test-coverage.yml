@@ -43,6 +43,16 @@ jobs:
         # canonical defense against that bug class.
         env:
           NODE_OPTIONS: --experimental-vm-modules
+          # SD-LEO-INFRA-VITEST-EXITS-61S-001: tests/setup.js falls back to
+          # https://test.invalid.local when SUPABASE_URL is unset. Smoke tests
+          # then issue real .from('table').select() calls that hang in supabase-js
+          # fetch retry against the unresolvable host until vitest's testTimeout
+          # (60s) force-kills the worker — which exits 1 with no test failure.
+          # Pass the secrets so DB-touching tests have a real endpoint.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         # QF-20260426-465: vitest dropped CLI --json in 1.x->3.x; use --reporter=json instead.
         run: npm run test:coverage -- --reporter=json --outputFile=test-results.json
 
