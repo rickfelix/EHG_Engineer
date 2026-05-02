@@ -305,3 +305,15 @@ tests/uat/.auth/
 .playwright-edge-profile/
 .playwright-shots/
 scripts/tmp/
+
+# Disposable scripts/one-off/* lifecycle patterns (claim/complete-qf, scratch, diagnostics)
+scripts/one-off/_*
+scripts/one-off/claim-qf-*
+scripts/one-off/complete-qf-*
+scripts/one-off/cancel-qf-*
+scripts/one-off/release-qf-*
+scripts/one-off/inspect-*
+scripts/one-off/check-*
+scripts/one-off/verify-*
+scripts/one-off/audit-*
+scripts/one-off/probe-*
