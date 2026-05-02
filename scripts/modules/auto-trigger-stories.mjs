@@ -617,6 +617,37 @@ function generateDefaultCriteria(sdType, context) {
   return defaults[sdType] || defaults.feature;
 }
 
+// QF-20260502-stories-priority-enum: PRD functional_requirements arrive with
+// MoSCoW priority values (must/should/could/wont) that the user_stories CHECK
+// constraint (critical/high/medium/low/minimal) rejects. Normalize before
+// insert. Also de-case-sensitivize the story_points lookup which previously
+// matched only uppercase {CRITICAL,HIGH,MEDIUM} and silently degraded
+// lowercase canonical inputs to story_points=1.
+const PRIORITY_CANONICAL = new Set(['critical', 'high', 'medium', 'low', 'minimal']);
+const MOSCOW_TO_CANONICAL = {
+  must: 'critical', 'must-have': 'critical', must_have: 'critical',
+  should: 'high', 'should-have': 'high', should_have: 'high',
+  could: 'medium', 'could-have': 'medium', could_have: 'medium',
+  wont: 'low', "won't": 'low', 'wont-have': 'low', wont_have: 'low'
+};
+
+export function normalizePriorityForUserStory(rawPriority) {
+  const lower = String(rawPriority ?? '').trim().toLowerCase();
+  if (!lower) return 'medium';
+  if (PRIORITY_CANONICAL.has(lower)) return lower;
+  if (MOSCOW_TO_CANONICAL[lower]) return MOSCOW_TO_CANONICAL[lower];
+  return 'medium';
+}
+
+export function derivePriorityStoryPoints(canonicalPriority) {
+  switch (canonicalPriority) {
+    case 'critical': return 5;
+    case 'high': return 3;
+    case 'medium': return 2;
+    default: return 1;
+  }
+}
+
 // SD-LEO-INFRA-AUTO-TRIGGER-STORIES-FK-FIX-001: validateSdId split into two
 // functions + lookupSdIdForFk helper. The old single validateSdId was both too
 // strict (rejected UUIDs at input) and too loose (let raw input flow into FK
@@ -843,7 +874,7 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
           user_want: story.user_want,
           user_benefit: story.user_benefit,
           story_points: story.story_points || 3,
-          priority: story.priority || 'medium',
+          priority: normalizePriorityForUserStory(story.priority),
           status: 'ready',
           acceptance_criteria: story.acceptance_criteria,
           implementation_context: typeof story.implementation_context === 'object'
@@ -1038,17 +1069,14 @@ async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, pr
     const storyNumber = String(i + 1).padStart(3, '0');
     const storyKey = `${sdKey}:US-${storyNumber}`;
 
-    // Determine story points based on priority
-    const storyPoints = fr.priority === 'CRITICAL' ? 5 :
-                        fr.priority === 'HIGH' ? 3 :
-                        fr.priority === 'MEDIUM' ? 2 : 1;
+    // QF-20260502-stories-priority-enum: normalize once (handles MoSCoW + case)
+    // then derive both fields from the canonical value.
+    const priority = normalizePriorityForUserStory(fr.priority);
+    const storyPoints = derivePriorityStoryPoints(priority);
 
     // Determine user role from requirement or default to stakeholder
     // Now uses persona context when available (feature-flagged)
     const userRole = extractUserRole(fr.requirement, prd.category, personaContext);
-
-    // Convert priority to lowercase for user story status
-    const priority = (fr.priority || 'medium').toLowerCase();
 
     // SD-TYPE-AWARE: Transform acceptance criteria based on SD type
     const transformedCriteria = transformAcceptanceCriteria(
