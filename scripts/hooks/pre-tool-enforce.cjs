@@ -16,6 +16,7 @@
  * 10. D1 Bugfix TDD Prove-It Gate - HARD BLOCK (exit 2)
  * 11. RCA Tiered Enforcement (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129) - TIERED (warn on 2nd, block on 3rd)
  * 12. npm install Concurrency Guard (QF-20260426-822) - HARD BLOCK (exit 2)
+ * 13. Worktree Hygiene Guard (SD-LEO-INFRA-PRE-TOOL-WORKTREE-GUARD-001) - HARD BLOCK on main/master + WARN-ONCE on inherited dirt
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -361,6 +362,109 @@ async function main() {
         }
       } catch { /* fail-open on any internal error */ }
     }
+  }
+
+  // --- ENFORCEMENT 13: Worktree Hygiene Guard (SD-LEO-INFRA-PRE-TOOL-WORKTREE-GUARD-001) ---
+  // PreToolUse check on Edit/Write — catches the most common parallel-session
+  // failure mode at the moment of first damage:
+  //   (a) HARD BLOCK if branch is main/master (edits never belong on main)
+  //   (b) WARN-ONCE per session if branch is non-feature-prefixed AND the
+  //       working tree carries >25 inherited modifications (signal: session
+  //       inherited a dirty tree from a prior session — predicts /ship pain)
+  // Goal: surface the issue before the first edit accumulates, independent of
+  // SD context. Existing triggers (sd-start.js, sd:next reminder, SessionStart
+  // hook) all assume an SD claim — non-SD work bypasses them entirely.
+  // Off-switch: LEO_WORKTREE_GUARD=off (also for tests / known-clean cases)
+  if ((TOOL_NAME === 'Edit' || TOOL_NAME === 'Write') && process.env.LEO_WORKTREE_GUARD !== 'off') {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = input.file_path || '';
+      if (filePath) {
+        // Walk up from the file's dir to find the git root (via the .git
+        // marker — file in worktrees, dir in main repo). Pure fs, ~1ms.
+        let gitRoot = null;
+        let gitDir = null;
+        {
+          let dir = path.resolve(path.dirname(filePath));
+          for (let i = 0; i < 40 && dir; i++) {
+            const marker = path.join(dir, '.git');
+            try {
+              const st = fs.statSync(marker);
+              gitRoot = dir;
+              if (st.isFile()) {
+                // Worktree: .git is a file containing "gitdir: <path>"
+                const c = fs.readFileSync(marker, 'utf8').trim();
+                const m = c.match(/^gitdir:\s*(.+)$/);
+                gitDir = m ? path.resolve(dir, m[1].trim()) : null;
+              } else {
+                gitDir = marker;
+              }
+              break;
+            } catch { /* keep walking */ }
+            const parent = path.dirname(dir);
+            if (parent === dir) break;
+            dir = parent;
+          }
+        }
+
+        if (gitRoot && gitDir) {
+          let branch = '';
+          try {
+            const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+            const m = head.match(/^ref:\s*refs\/heads\/(.+)$/);
+            branch = m ? m[1] : '';
+          } catch { /* fail-open */ }
+
+          // (a) HARD BLOCK on main/master
+          if (branch === 'main' || branch === 'master') {
+            auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'WORKTREE-HYGIENE-MAIN', 'Edit/Write blocked on main/master', 'block', { branch, gitRoot });
+            process.stderr.write(
+              `WORKTREE HYGIENE GUARD: Edit/Write blocked on '${branch}'.\n` +
+              `  Run \`npm run session:worktree\` to create an isolated branch off origin/main.\n` +
+              `  If intentional (e.g., one-off doc fix), set LEO_WORKTREE_GUARD=off and retry.\n` +
+              `  Why: edits on main bypass branch isolation and force stash gymnastics at /ship.\n`
+            );
+            process.exit(2);
+          }
+
+          // (b) WARN-ONCE on inherited dirt + non-feature branch
+          // Any branch with a conventional feature prefix is treated as
+          // already-isolated; warn only on truly bare names ('wip-experiment',
+          // 'scratch'). Counts modifications via porcelain index/status files
+          // for speed — `git status --porcelain` on an 11k-file repo takes
+          // ~1s on Windows and trips short-timeout tests.
+          const FEATURE_BRANCH_RE = /^(feat|fix|refactor|chore|docs|test|hotfix|qf|quick-fix)\//;
+          if (branch && !FEATURE_BRANCH_RE.test(branch) && _SESSION_ID) {
+            const markerDir = path.join(gitRoot, '.claude', 'pids');
+            const markerFile = path.join(markerDir, `worktree-hygiene-warned-${_SESSION_ID}.flag`);
+            if (!fs.existsSync(markerFile)) {
+              let dirtyCount = 0;
+              try {
+                const { execSync } = require('child_process');
+                const out = execSync(`git -C "${gitRoot}" status --porcelain`, {
+                  encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000,
+                });
+                dirtyCount = out.split('\n').filter(l => l.length > 0).length;
+              } catch { /* fail-open */ }
+              if (dirtyCount > 25) {
+                auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'WORKTREE-HYGIENE-DIRT', 'Inherited dirty tree on non-feature branch', 'warn', { branch, dirtyCount });
+                console.log(
+                  `[worktree-hygiene] WARNING: ${dirtyCount} inherited modifications on non-feature branch '${branch}'.\n` +
+                  `  Consider \`npm run session:worktree\` before adding more work — mid-stream isolation\n` +
+                  `  requires stash gymnastics at /ship time. Warning fires once per session.\n` +
+                  `  Suppress with LEO_WORKTREE_GUARD=off if intentional.`
+                );
+                try {
+                  fs.mkdirSync(markerDir, { recursive: true });
+                  fs.writeFileSync(markerFile, new Date().toISOString());
+                } catch { /* fail-open */ }
+              }
+            }
+          }
+        }
+      }
+    } catch { /* fail-open on any internal error */ }
   }
 
   // --- ENFORCEMENT 1: Background Execution Ban (NC-006) ---
