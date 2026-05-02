@@ -538,6 +538,38 @@ class GitBranchVerifier {
   }
 
   /**
+   * Pre-check: if a no-slug canonical branch <branchType>/<sdId> already
+   * exists locally or on remote, override expectedBranchName to use it.
+   * Closes naming-convention drift between sd-start.js (creates no-slug
+   * canonical) and generateBranchName() (slug-suffixed).
+   * Closes feedback row f651e8eb.
+   */
+  async preferExistingCanonicalBranch() {
+    // Don't override if expectedBranchName already has no slug.
+    const branchType = this.expectedBranchName.split('/')[0] || 'feat';
+    const noSlugCanonical = `${branchType}/${this.sdId}`;
+    if (this.expectedBranchName === noSlugCanonical) return;
+
+    // Local check
+    const localResult = await this.gitCommand('git branch --list');
+    const localBranches = localResult.stdout.split('\n').map(b => b.trim().replace(/^\* /, ''));
+    if (localBranches.includes(noSlugCanonical)) {
+      console.log(`   ↪ Found existing canonical branch ${noSlugCanonical} — using it instead of generated ${this.expectedBranchName}`);
+      this.expectedBranchName = noSlugCanonical;
+      this.results.expectedBranch = noSlugCanonical;
+      return;
+    }
+
+    // Remote check
+    const remoteResult = await this.gitCommand(`git ls-remote --heads origin ${noSlugCanonical}`);
+    if (remoteResult.success && remoteResult.stdout.length > 0) {
+      console.log(`   ↪ Found canonical branch ${noSlugCanonical} on remote — using it instead of generated ${this.expectedBranchName}`);
+      this.expectedBranchName = noSlugCanonical;
+      this.results.expectedBranch = noSlugCanonical;
+    }
+  }
+
+  /**
    * Run all checks and execute actions as needed
    */
   async verify() {
@@ -564,6 +596,13 @@ class GitBranchVerifier {
       this.results.verdict = 'FAIL';
       return this.results;
     }
+
+    // f651e8eb: prefer existing canonical (no-slug) branch over creating a
+    // slugged duplicate. sd-start.js creates feat/<sdId> (no slug) at claim
+    // time; without this pre-check, this verifier would not find the slugged
+    // expectedBranchName and would CREATE a second branch, leaving the
+    // worktree on one branch and EXEC committing to another.
+    await this.preferExistingCanonicalBranch();
 
     // Run all checks
     const _check1 = await this.checkBranchExists();
