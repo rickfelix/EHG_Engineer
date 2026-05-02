@@ -43,7 +43,6 @@ export default defineConfig({
       '**/press-kit/**',
       '**/agents/**',
       '**/archive/**',
-      '**/services/codeguardian-mock/**',
       '**/.worktrees/**',
       '**/.cursor/worktrees/**',
       '**/.claude/worktrees/**',
