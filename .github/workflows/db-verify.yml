@@ -10,6 +10,9 @@ on:
       - 'db/**'
       - 'ops/**'
       - 'database/migrations/**'
+      - 'apps/ingest/**'
+      # Re-run on workflow changes so edits to this file self-validate.
+      - '.github/workflows/db-verify.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -51,7 +54,13 @@ jobs:
             echo 'Forbidden pattern detected (GRANT ALL)';
             exit 1;
           fi
-          if grep -R "eng_" apps/ingest -n | grep -v "v_eng_"; then
+          # Match bare eng_* identifiers (eng_ followed by a letter), then
+          # exclude legitimate references:
+          #   - v_eng_*: view naming convention
+          #   - views.eng_*: schema-qualified view access (still through a view)
+          # The bare-identifier regex sidesteps doc-comment text like `eng_*`
+          # (no letter after underscore) which the prior literal-substring grep flagged.
+          if grep -REn '\beng_[a-zA-Z]' apps/ingest | grep -v 'v_eng_' | grep -v 'views\.eng_'; then
             echo 'Forbidden direct eng_* usage detected in app code';
             exit 1;
           fi
