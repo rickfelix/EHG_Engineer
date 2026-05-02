@@ -292,3 +292,16 @@ nul
 tests/e2e/ehg-app/.auth/
 tests/e2e/.auth/
 tests/uat/.auth/
+
+# Auto-added by /leo cleanup
+.claude-work/
+.claude/pids/
+/.claude/session-module-refactor-opus47.md
+/.claude/worktree-reaper-state.json
+.claude/coordinator-*.md
+.claude/handoff-backup-*/
+.claude/retry-state-*.json.tmp-*
+.claude/tmp/
+.playwright-edge-profile/
+.playwright-shots/
+scripts/tmp/
