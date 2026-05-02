@@ -41,7 +41,9 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+      # secrets.DATABASE_URL is the canonical pooler connection string in this
+      # repo (see schema-docs-update.yml). secrets.SUPABASE_POOLER_URL is unset.
+      SUPABASE_POOLER_URL: ${{ secrets.DATABASE_URL }}
       FR_C_RATE_LIMIT_PER_VENTURE_PER_DAY: ${{ github.event.inputs.rate_limit_override || '' }}
 
     steps:
