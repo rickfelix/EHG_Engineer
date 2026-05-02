@@ -18,11 +18,49 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { execSync } from 'child_process';
 import { createSupabaseServiceClient } from '../../scripts/lib/supabase-connection.js';
+import { rollbackWorktreeFilesystemSync } from '../../lib/worktree-manager.js';
 
 const SHOULD_RUN = process.env.RUN_DB_INTEGRATION_WORKTREE_STATE === '1';
 
 const describeIfDb = SHOULD_RUN ? describe : describe.skip;
+
+describe('TS-2: WORKTREE_POST_CONDITION_FAILED produces no orphan directory (filesystem)', () => {
+  let tempRoot;
+  let orphanDir;
+
+  beforeAll(() => {
+    // Use a real temp dir on the OS so rmSync interacts with the real filesystem.
+    // This deliberately avoids mocking fs so we can assert the directory is
+    // actually gone after rollback runs.
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-rollback-'));
+  });
+
+  afterAll(() => {
+    try { fs.rmSync(tempRoot, { recursive: true, force: true }); } catch { /* best effort */ }
+  });
+
+  it('rollbackWorktreeFilesystemSync removes the orphan directory via fs.rmSync fallback', () => {
+    orphanDir = path.join(tempRoot, 'orphan-wt');
+    fs.mkdirSync(orphanDir, { recursive: true });
+    fs.writeFileSync(path.join(orphanDir, 'sentinel.txt'), 'this should be deleted');
+    expect(fs.existsSync(orphanDir)).toBe(true);
+
+    // Note: tempRoot is NOT a git repo, so `git worktree remove --force` will
+    // fail every retry. The fs.rmSync fallback path is the one that actually
+    // succeeds on this fixture — exactly the scenario we need to verify
+    // (the rollback tolerates a non-registered orphan directory).
+    const result = rollbackWorktreeFilesystemSync(orphanDir, tempRoot, { delaysMs: [0, 0, 0] });
+
+    expect(result.ok).toBe(true);
+    expect(result.fellBackToRmSync).toBe(true);
+    expect(fs.existsSync(orphanDir)).toBe(false);
+  });
+});
 
 describeIfDb('worktree-state atomicity (FR-1, integration, requires migration deployed)', () => {
   let supabase;
