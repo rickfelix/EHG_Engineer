@@ -13,6 +13,7 @@
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { sortByUrgency, scoreToBand } from '../auto-proceed/urgency-scorer.js';
 import { buildDependencyDAG, detectCycles, computeRunnableSet } from '../../../lib/orchestrator/dependency-dag.js';
+import { computeGateState } from '../../../lib/cadence/pre-claim-gate.mjs';
 
 /**
  * Check if an SD is a child (has a parent)
@@ -44,7 +45,7 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
     // FIX: 2026-02-05 - Added sd_type for SD-type-aware workflow continuation
     let query = supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage, sd_type, claiming_session_id')
+      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, governance_metadata, dependencies, updated_at, progress_percentage, sd_type, claiming_session_id')
       .eq('parent_sd_id', parentSdId)
       .in('status', ['draft', 'active']);
 
@@ -72,9 +73,26 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
       return true;
     }) : [];
 
+    // Skip children with active pre-claim cadence gate. Mirrors the refusal
+    // logic in scripts/sd-start.js so orchestrator-routed claims can't slip
+    // past the same window that direct sd-start would refuse.
+    // (Closes feedback row f52246de — orchestrator preflight router bypassed
+    // the cadence gate from PR #3353 / SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001.)
+    const cadenceCleared = unblocked.filter(child => {
+      const state = computeGateState({
+        governance_metadata: child.governance_metadata,
+        metadata: child.metadata,
+      });
+      if (state.active) {
+        console.log(`   [child-sd-selector] Skipping ${child.sd_key || child.id} - cadence gate active (${state.days_remaining}d until ${state.gate_until})`);
+        return false;
+      }
+      return true;
+    });
+
     // SD-LEO-ENH-AUTO-PROCEED-001-11: Sort by urgency (band > score > enqueue_time)
     // Map candidates to include urgency data for sorting
-    const withUrgency = unblocked.map(child => ({
+    const withUrgency = cadenceCleared.map(child => ({
       ...child,
       urgency_score: child.metadata?.urgency_score ?? 0.5,
       urgency_band: child.metadata?.urgency_band ?? scoreToBand(child.metadata?.urgency_score ?? 0.5),
@@ -194,7 +212,7 @@ export async function getReadyChildren(supabase, parentSdId, options = {}) {
     // Fetch ALL children (not just active/draft) for DAG construction
     const { data: allChildren, error: allError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage, sd_type')
+      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, governance_metadata, dependencies, updated_at, progress_percentage, sd_type')
       .eq('parent_sd_id', parentSdId);
 
     if (allError) {
@@ -245,8 +263,22 @@ export async function getReadyChildren(supabase, parentSdId, options = {}) {
       .map(id => allChildren.find(c => c.id === id))
       .filter(c => c && workableStatuses.includes(c.status));
 
+    // Skip children with active pre-claim cadence gate (same rule as
+    // getNextReadyChild — orchestrator-parallel mode must not bypass it).
+    const cadenceCleared = readyCandidates.filter(child => {
+      const state = computeGateState({
+        governance_metadata: child.governance_metadata,
+        metadata: child.metadata,
+      });
+      if (state.active) {
+        console.log(`   [child-sd-selector] Skipping ${child.sd_key || child.id} - cadence gate active (${state.days_remaining}d until ${state.gate_until})`);
+        return false;
+      }
+      return true;
+    });
+
     // Apply urgency sorting (same as getNextReadyChild)
-    const withUrgency = readyCandidates.map(child => ({
+    const withUrgency = cadenceCleared.map(child => ({
       ...child,
       urgency_score: child.metadata?.urgency_score ?? 0.5,
       urgency_band: child.metadata?.urgency_band ?? scoreToBand(child.metadata?.urgency_score ?? 0.5),

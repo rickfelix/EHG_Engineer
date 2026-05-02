@@ -170,6 +170,85 @@ describe('Child SD Selector', () => {
       expect(result.reason).toContain('blocked');
     });
 
+    it('skips children with active cadence gate and returns the next unguarded one', async () => {
+      // f52246de — orchestrator preflight router was bypassing the cadence gate
+      // applied at sd-start. The gate must apply identically here.
+      const futureIso = new Date(Date.now() + 5 * 86400000).toISOString();
+      const gatedChild = {
+        id: 'child-gated',
+        sd_key: 'SD-GATED',
+        title: 'Gated Child',
+        status: 'draft',
+        priority: 50,
+        sequence_rank: 1,
+        governance_metadata: { next_workable_after: futureIso },
+      };
+      const openChild = {
+        id: 'child-open',
+        sd_key: 'SD-OPEN',
+        title: 'Open Child',
+        status: 'draft',
+        priority: 50,
+        sequence_rank: 2,
+      };
+      const mockSupabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              in: () => Promise.resolve({ data: [gatedChild, openChild], error: null })
+            })
+          })
+        })
+      };
+
+      const result = await getNextReadyChild(mockSupabase, 'parent-1');
+
+      expect(result.sd).toBeTruthy();
+      expect(result.sd.id).toBe('child-open');
+      expect(result.allComplete).toBe(false);
+    });
+
+    it('returns null when every candidate is gated by an active cadence window', async () => {
+      const futureIso = new Date(Date.now() + 3 * 86400000).toISOString();
+      const gatedChildren = [
+        {
+          id: 'c1', sd_key: 'SD-C1', status: 'draft',
+          governance_metadata: { next_workable_after: futureIso },
+        },
+        {
+          id: 'c2', sd_key: 'SD-C2', status: 'draft',
+          governance_metadata: { next_workable_after: futureIso },
+        },
+      ];
+      let queryCount = 0;
+      const mockSupabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => {
+              queryCount++;
+              if (queryCount === 1) {
+                return { in: () => Promise.resolve({ data: gatedChildren, error: null }) };
+              }
+              return Promise.resolve({
+                data: [
+                  { id: 'c1', status: 'draft' },
+                  { id: 'c2', status: 'draft' }
+                ],
+                error: null
+              });
+            }
+          })
+        })
+      };
+
+      const result = await getNextReadyChild(mockSupabase, 'parent-1');
+
+      expect(result.sd).toBe(null);
+      expect(result.allComplete).toBe(false);
+      // 2 candidates were gated, 0 completed → no ready children, none blocked
+      expect(result.reason).toContain('No ready children');
+    });
+
     it('should handle query errors gracefully', async () => {
       // Production code: the first query uses .eq().in() and awaits directly
       const mockSupabase = {
