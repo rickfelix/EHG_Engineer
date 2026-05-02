@@ -127,6 +127,33 @@ describeIfDb('worktree-state atomicity (FR-1, integration, requires migration de
     expect(data.worktree_branch).toBeNull();
   });
 
+  it('TS-3: ck_claude_sessions_worktree_state_consistency rejects INSERT with sd_key=NULL and worktree_path SET', async () => {
+    const sessionId = `it-ts3-${randomUUID()}`;
+
+    const { error } = await supabase.from('claude_sessions').insert({
+      session_id: sessionId,
+      sd_key: null,
+      worktree_path: '/tmp/.worktrees/IT-SD-Z',
+      worktree_branch: null,
+      status: 'idle',
+      heartbeat_at: new Date().toISOString(),
+      machine_id: 'integration-test',
+      terminal_id: sessionId,
+      pid: 0
+    });
+
+    expect(error).not.toBeNull();
+    // Constraint name appears in PostgreSQL's violation message
+    expect(error.message + (error.details || '')).toMatch(/ck_claude_sessions_worktree_state_consistency/);
+
+    // Confirm no row was actually inserted (constraint refused, transaction rolled back)
+    const { data } = await supabase
+      .from('claude_sessions')
+      .select('session_id')
+      .eq('session_id', sessionId);
+    expect(data).toHaveLength(0);
+  });
+
   it('TS-7: claim_sd takeover (force) emits CLAIM_TAKEOVER row with worktree_path_before / worktree_branch_before in metadata, and the new claim has NULL worktree state', async () => {
     const priorSession = `it-ts7-prior-${randomUUID()}`;
     const newSession = `it-ts7-new-${randomUUID()}`;
