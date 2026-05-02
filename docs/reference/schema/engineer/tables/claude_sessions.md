@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-02T19:46:27.633Z
-**Rows**: 12,100
+**Generated**: 2026-05-02T20:13:35.342Z
+**Rows**: 12,101
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -76,6 +76,7 @@
 - `claude_sessions_session_id_key`: UNIQUE (session_id)
 
 ### Check Constraints
+- `ck_claude_sessions_worktree_state_consistency`: CHECK (((sd_key IS NOT NULL) OR ((worktree_path IS NULL) AND (worktree_branch IS NULL))))
 - `claude_sessions_last_activity_kind_check`: CHECK (((last_activity_kind IS NULL) OR (last_activity_kind = ANY (ARRAY['executing'::text, 'waiting_tool'::text, 'waiting_agent'::text, 'thinking'::text, 'idle'::text, 'exiting'::text]))))
 - `claude_sessions_loop_state_check`: CHECK ((loop_state = ANY (ARRAY['active'::text, 'awaiting_tick'::text, 'exited'::text, 'unknown'::text])))
 - `claude_sessions_status_check`: CHECK ((status = ANY (ARRAY['active'::text, 'idle'::text, 'stale'::text, 'released'::text])))
