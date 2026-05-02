@@ -786,6 +786,14 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     }
   };
   if (parsed.priority) createOptions.priority = parsed.priority;
+  // 7f0a4f54: explicit `## Target Application` plan header takes precedence
+  // over detectFromKeyChanges file-path inference. Without this, plans that
+  // literally name the target still landed under the path-detector's default.
+  // CLI --target-application override (if added later) would slot in via
+  // overrides.targetApplicationOverride above this line, before parsed.
+  if (parsed.targetApplication) {
+    createOptions.target_application = parsed.targetApplication;
+  }
   const sd = await createSD(createOptions);
 
   // Step 13: Update additional fields that aren't in createSD signature

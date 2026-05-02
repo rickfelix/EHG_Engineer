@@ -219,6 +219,27 @@ export function extractExplicitType(content) {
   return null;
 }
 
+/**
+ * Extract an explicit `## Target Application` header value from plan content.
+ * Captures the FIRST identifier-like token after the header (free-text; the
+ * value space is open-ended — venture names, EHG, EHG_Engineer, etc.).
+ * Trailing parenthetical descriptions ("EHG_Engineer (Stage 0 venture engine)")
+ * are intentionally trimmed to just the leading identifier.
+ *
+ * Closes feedback row 7f0a4f54 — autodetect was falling through to
+ * detectFromKeyChanges even when the plan literally said the target.
+ *
+ * @param {string} content - Plan file content
+ * @returns {string|null} Header value (preserved case) or null
+ */
+export function extractExplicitTargetApplication(content) {
+  if (!content) return null;
+  const match = content.match(/^##\s+Target\s+Application\s*\n+\s*([A-Za-z][A-Za-z0-9_.-]*)/m);
+  if (!match) return null;
+  const value = match[1].trim();
+  return value || null;
+}
+
 /** Canonical priority values accepted by strategic_directives_v2. */
 export const EXPLICIT_PRIORITY_ENUM = ['critical', 'high', 'medium', 'low'];
 
@@ -419,6 +440,7 @@ export function parsePlanFile(content) {
   // Explicit authored intent wins over heuristic inference. Inference is fallback, not override.
   const explicitType = extractExplicitType(content);
   const explicitPriority = extractExplicitPriority(content);
+  const explicitTargetApplication = extractExplicitTargetApplication(content);
 
   return {
     title: extractTitle(content),
@@ -431,6 +453,7 @@ export function parsePlanFile(content) {
     successCriteria: extractSuccessCriteria(content),
     type: explicitType ?? inferSDType(content),
     priority: explicitPriority,
+    targetApplication: explicitTargetApplication,
     fullContent: content
   };
 }
@@ -485,6 +508,7 @@ export default {
   inferSDType,
   extractExplicitType,
   extractExplicitPriority,
+  extractExplicitTargetApplication,
   EXPLICIT_TYPE_ENUM,
   EXPLICIT_PRIORITY_ENUM,
   parsePlanFile,
