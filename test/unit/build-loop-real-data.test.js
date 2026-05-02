@@ -2,12 +2,11 @@
  * Build Loop Real Data Wiring (Stages 19-22) - Unit Tests
  * Part of SD-LEO-ORCH-EVA-STAGE-PIPELINE-001-C
  *
- * Tests the real data path for stages 19-22 analysis steps:
- * - Stage 19: fetchRealBuildData from venture_stage_work
- * - Stage 20: fetchRealQAData from SD completion rates
- * - Stage 21: buildRealIntegrationData from upstream real data
- * - Stage 22: buildRealReleaseData from upstream real data
- * - Graceful fallback when no real data exists
+ * SKIPPED 2026-05-01 (SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001 PR3): pipeline was
+ * renumbered by SD-REDESIGN-S18S26 (commit 39e67761cc). Build/QA/review/release
+ * moved from stages 19/20/21/22 → 20/21/22/23, and `stage18Data` → `stage19Data`
+ * inputs. Replacement contract tests for the post-redesign pipeline live at
+ * tests/unit/eva/stage-templates/stage-NN.test.js.
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
@@ -71,7 +70,7 @@ function createMockSupabase(responses = {}) {
 
 // ── Stage 19: Real Build Data ────────────────────────────────
 
-describe('Stage 19 - Real Build Data Wiring', () => {
+describe.skip('Stage 19 - Real Build Data Wiring', () => {
   let analyzeStage19;
 
   beforeEach(async () => {
@@ -176,7 +175,7 @@ describe('Stage 19 - Real Build Data Wiring', () => {
 
 // ── Stage 20: Real QA Data ───────────────────────────────────
 
-describe('Stage 20 - Real QA Data Wiring', () => {
+describe.skip('Stage 20 - Real QA Data Wiring', () => {
   let analyzeStage20;
 
   beforeEach(async () => {
@@ -276,7 +275,7 @@ describe('Stage 20 - Real QA Data Wiring', () => {
 
 // ── Stage 21: Real Integration Data ──────────────────────────
 
-describe('Stage 21 - Real Integration Data Wiring', () => {
+describe.skip('Stage 21 - Real Integration Data Wiring', () => {
   let analyzeStage21;
 
   beforeEach(async () => {
@@ -356,7 +355,7 @@ describe('Stage 21 - Real Integration Data Wiring', () => {
 
 // ── Stage 22: Real Release Data ──────────────────────────────
 
-describe('Stage 22 - Real Release Data Wiring', () => {
+describe.skip('Stage 22 - Real Release Data Wiring', () => {
   let analyzeStage22;
 
   beforeEach(async () => {
