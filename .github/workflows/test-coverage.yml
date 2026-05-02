@@ -8,6 +8,8 @@ on:
       - 'lib/**'
       - 'server.js'
       - 'vitest.config.js'
+      # Re-run on workflow changes so edits to this file self-validate.
+      - '.github/workflows/test-coverage.yml'
   push:
     branches: [main, develop]
 
