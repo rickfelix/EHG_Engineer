@@ -6,7 +6,14 @@
  * double-claiming race conditions.
  *
  * Part of SD-LEO-INFRA-IMPLEMENT-STANDALONE-AUTO-001
+ *
+ * SD-LEO-INFRA-LEO-INFRA-SESSION-001 (FR-2): worktree-state clears now route
+ * through lib/lifecycle/worktree-state-writer.mjs. Worktree columns are NOT
+ * touched in the sd_key UPDATEs here; clearWorktreeState is invoked after a
+ * successful release/swap so the (sd_key, worktree_*) invariant holds.
  */
+
+import { clearWorktreeState } from '../../../lib/lifecycle/worktree-state-writer.mjs';
 
 /**
  * Atomically swap the claimed SD for a session.
@@ -57,6 +64,14 @@ export async function swapClaim(supabase, { sessionId, oldSdKey, newSdKey }) {
       };
     }
 
+    // FR-2: When swapping FROM a prior SD, clear the prior worktree state.
+    // The new SD's worktree (if any) will be written by sd-start.js after
+    // createWorktree succeeds. Skipping the clear when oldSdKey is null
+    // (fresh claim) avoids over-writing nothing.
+    if (oldSdKey) {
+      await clearWorktreeState(sessionId, { supabase, reason: 'claim_swap' });
+    }
+
     return { success: true, reason: `Claimed ${newSdKey}` };
   } catch (err) {
     return { success: false, reason: `Exception: ${err.message}` };
@@ -90,6 +105,10 @@ export async function releaseClaim(supabase, sessionId, sdKey) {
     if (!data || data.length === 0) {
       return { success: false, reason: `Session does not hold claim on ${sdKey}` };
     }
+
+    // FR-2: clear worktree state through the single-owner writer so the
+    // (sd_key, worktree_*) invariant holds. Audit log line emitted by writer.
+    await clearWorktreeState(sessionId, { supabase, reason: 'release_claim' });
 
     return { success: true, reason: `Released ${sdKey}` };
   } catch (err) {

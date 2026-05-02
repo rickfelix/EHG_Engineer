@@ -1,0 +1,168 @@
+/**
+ * Integration tests for SD-LEO-INFRA-LEO-INFRA-SESSION-001.
+ *
+ * Covers TS-1 (release-then-claim freshness) and TS-7 (no-regression in
+ * claim_sd happy path + new worktree_path_before audit metadata).
+ *
+ * GATE: these tests require the FR-1 migration
+ *   database/migrations/20260502_claim_sd_worktree_columns.sql
+ * to be applied to the target Supabase project. Until then they skip with a
+ * documented reason. To run after deploy:
+ *
+ *   RUN_DB_INTEGRATION_WORKTREE_STATE=1 npx vitest run \\
+ *     tests/integration/worktree-state-atomicity.test.js
+ *
+ * Tests use unique synthetic session IDs and clean up after themselves so
+ * they can run safely against the live DB.
+ */
+
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { randomUUID } from 'crypto';
+import { createSupabaseServiceClient } from '../../scripts/lib/supabase-connection.js';
+
+const SHOULD_RUN = process.env.RUN_DB_INTEGRATION_WORKTREE_STATE === '1';
+
+const describeIfDb = SHOULD_RUN ? describe : describe.skip;
+
+describeIfDb('worktree-state atomicity (FR-1, integration, requires migration deployed)', () => {
+  let supabase;
+  /** session IDs we created — clean up at the end */
+  const createdSessionIds = [];
+
+  beforeAll(async () => {
+    supabase = await createSupabaseServiceClient('engineer');
+  });
+
+  afterAll(async () => {
+    if (!supabase) return;
+    for (const sid of createdSessionIds) {
+      await supabase.from('claude_sessions').delete().eq('session_id', sid);
+    }
+  });
+
+  async function seedSession({ sessionId, sdKey, worktreePath, worktreeBranch, status = 'idle', heartbeatMinutesAgo = 0 }) {
+    const heartbeatAt = new Date(Date.now() - heartbeatMinutesAgo * 60 * 1000).toISOString();
+    const { error } = await supabase.from('claude_sessions').insert({
+      session_id: sessionId,
+      sd_key: sdKey,
+      worktree_path: worktreePath,
+      worktree_branch: worktreeBranch,
+      status,
+      heartbeat_at: heartbeatAt,
+      machine_id: 'integration-test',
+      terminal_id: sessionId,
+      pid: 0,
+      claimed_at: sdKey ? new Date().toISOString() : null
+    });
+    if (error) throw new Error(`seedSession failed: ${error.message}`);
+    createdSessionIds.push(sessionId);
+  }
+
+  it('TS-1: release_sd clears worktree_path AND worktree_branch alongside sd_key', async () => {
+    const sessionId = `it-ts1-${randomUUID()}`;
+    const sdKey = `IT-SD-X-${Date.now()}`;
+    const worktreePath = `/tmp/.worktrees/${sdKey}`;
+    const worktreeBranch = `feat/${sdKey}`;
+
+    await seedSession({
+      sessionId,
+      sdKey,
+      worktreePath,
+      worktreeBranch,
+      status: 'active'
+    });
+
+    const { error: rpcError } = await supabase.rpc('release_sd', {
+      p_session_id: sessionId,
+      p_reason: 'integration_test_ts1'
+    });
+    expect(rpcError).toBeNull();
+
+    const { data, error } = await supabase
+      .from('claude_sessions')
+      .select('sd_key, worktree_path, worktree_branch')
+      .eq('session_id', sessionId)
+      .single();
+    expect(error).toBeNull();
+    expect(data.sd_key).toBeNull();
+    expect(data.worktree_path).toBeNull();
+    expect(data.worktree_branch).toBeNull();
+  });
+
+  it('TS-7: claim_sd takeover (force) emits CLAIM_TAKEOVER row with worktree_path_before / worktree_branch_before in metadata, and the new claim has NULL worktree state', async () => {
+    const priorSession = `it-ts7-prior-${randomUUID()}`;
+    const newSession = `it-ts7-new-${randomUUID()}`;
+    const sdKey = `IT-SD-Y-${Date.now()}`;
+    const worktreePath = `/tmp/.worktrees/${sdKey}-prior`;
+    const worktreeBranch = `feat/${sdKey}`;
+
+    // Prior session — heartbeat 5 minutes ago to satisfy ≥60s force-takeover threshold
+    await seedSession({
+      sessionId: priorSession,
+      sdKey,
+      worktreePath,
+      worktreeBranch,
+      status: 'active',
+      heartbeatMinutesAgo: 5
+    });
+
+    // New session (the one taking over) — has its own row, fresh
+    await seedSession({
+      sessionId: newSession,
+      sdKey: null,
+      worktreePath: null,
+      worktreeBranch: null,
+      status: 'active'
+    });
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('claim_sd', {
+      p_sd_id: sdKey,
+      p_session_id: newSession,
+      p_track: 'A',
+      p_force_takeover: true
+    });
+    expect(rpcError).toBeNull();
+    expect(rpcData?.success).toBe(true);
+    expect(rpcData?.takeover).toBe(true);
+    const auditEventId = rpcData?.audit_event_id;
+    expect(auditEventId).toBeTruthy();
+
+    // Audit row carries the new worktree_path_before / worktree_branch_before fields
+    const { data: auditRow } = await supabase
+      .from('session_lifecycle_events')
+      .select('event_type, metadata')
+      .eq('id', auditEventId)
+      .single();
+    expect(['CLAIM_TAKEOVER', 'CLAIM_AUTO_RECLAIM']).toContain(auditRow.event_type);
+    expect(auditRow.metadata.worktree_path_before).toBe(worktreePath);
+    expect(auditRow.metadata.worktree_branch_before).toBe(worktreeBranch);
+
+    // Prior session's row is fully cleared
+    const { data: priorAfter } = await supabase
+      .from('claude_sessions')
+      .select('sd_key, worktree_path, worktree_branch, status')
+      .eq('session_id', priorSession)
+      .single();
+    expect(priorAfter.sd_key).toBeNull();
+    expect(priorAfter.worktree_path).toBeNull();
+    expect(priorAfter.worktree_branch).toBeNull();
+
+    // New session holds the claim and has NULL worktree state (sd-start writes it later)
+    const { data: newAfter } = await supabase
+      .from('claude_sessions')
+      .select('sd_key, worktree_path, worktree_branch')
+      .eq('session_id', newSession)
+      .single();
+    expect(newAfter.sd_key).toBe(sdKey);
+    expect(newAfter.worktree_path).toBeNull();
+    expect(newAfter.worktree_branch).toBeNull();
+  });
+});
+
+if (!SHOULD_RUN) {
+  describe.skip('worktree-state atomicity (skipped — set RUN_DB_INTEGRATION_WORKTREE_STATE=1 after FR-1 migration deploys)', () => {
+    it('placeholder', () => {
+      expect(true).toBe(true);
+    });
+  });
+}
