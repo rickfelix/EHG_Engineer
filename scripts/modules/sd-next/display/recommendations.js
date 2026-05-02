@@ -542,6 +542,37 @@ function formatHeartbeatAgeDisplay(seconds) {
 }
 
 /**
+ * Count peer Claude Code sessions live alongside the current one.
+ * Pure function, exported for unit tests. Uses session_id equality only —
+ * staleness is already filtered upstream by v_active_sessions
+ * (heartbeat_age_seconds <= 600).
+ *
+ * @param {Array} activeSessions - Rows from v_active_sessions
+ * @param {Object|null} currentSession - { session_id } or null
+ * @returns {number} - Count of peer sessions (0 if none or current unknown)
+ */
+export function countPeerSessions(activeSessions, currentSession) {
+  if (!Array.isArray(activeSessions) || activeSessions.length === 0) return 0;
+  if (!currentSession || !currentSession.session_id) return 0;
+  return activeSessions.filter(s => s && s.session_id !== currentSession.session_id).length;
+}
+
+/**
+ * Conditional advisory for parallel-session workflows: print one yellow line
+ * if peer Claude Code sessions are live, plus a dim follow-up pointing to the
+ * concurrency commands. No output if peer count is 0 or current session unknown.
+ *
+ * @param {Array} activeSessions - Rows from v_active_sessions
+ * @param {Object|null} currentSession - { session_id } or null
+ */
+export function displayWorktreeIsolationReminder(activeSessions, currentSession) {
+  const peerCount = countPeerSessions(activeSessions, currentSession);
+  if (peerCount === 0) return;
+  console.log(`\n${colors.yellow}⚠ ${peerCount} other Claude Code session(s) active.${colors.reset}`);
+  console.log(`${colors.dim}  Before Write/Edit work: run \`npm run session:check-concurrency\`, or \`npm run session:worktree\` to isolate.${colors.reset}`);
+}
+
+/**
  * Display session context (recent activity)
  *
  * @param {Array} recentActivity - Recent activity data
