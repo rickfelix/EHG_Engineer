@@ -1,10 +1,12 @@
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { safeRecursiveRm, safeRecursiveCp } from '../../../lib/worktree-manager.js';
 
 // Quick-fix QF-20260211-111: Post-merge worktree cleanup for /ship
 // FR-5: Added --sdKey support for external callers (SD-LEO-INFRA-UNIFIED-WORKTREE-LIFECYCLE-001)
 // SD-MAN-INFRA-WORKTREE-CODE-LOSS-001: Pre-cleanup commit check + archive-on-conflict
+// SD-FDBK-ENH-SESSION-WORKTREE-CLEANUP-001: junction-safe rm/cp prevents node_modules wipe on Windows
 const gitExec = (cmd, opts = {}) =>
   execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], ...opts }).trim();
 
@@ -85,9 +87,9 @@ function archiveWorktree(wtPath, sdKey) {
   try {
     fs.renameSync(wtPath, archivePath);
   } catch {
-    // Cross-device move on Windows — copy then delete
-    fs.cpSync(wtPath, archivePath, { recursive: true });
-    fs.rmSync(wtPath, { recursive: true, force: true });
+    // Cross-device move on Windows — copy then delete (junction-safe to avoid wiping shared node_modules)
+    safeRecursiveCp(wtPath, archivePath, { recursive: true });
+    safeRecursiveRm(wtPath);
   }
 
   // Prune git worktree references for the moved path
@@ -160,7 +162,7 @@ function cleanupWorktreeByPath(wtPath) {
     execSync(`git worktree remove --force "${wtPath}"`, { cwd: mainRepoPath, encoding: 'utf8', stdio: 'pipe' });
   } catch {
     if (fs.existsSync(wtPath)) {
-      fs.rmSync(wtPath, { recursive: true, force: true });
+      safeRecursiveRm(wtPath);
       execSync('git worktree prune', { cwd: mainRepoPath, stdio: 'pipe' });
     }
   }
