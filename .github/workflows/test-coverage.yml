@@ -8,6 +8,8 @@ on:
       - 'lib/**'
       - 'server.js'
       - 'vitest.config.js'
+      # Re-run on workflow changes so edits to this file self-validate.
+      - '.github/workflows/test-coverage.yml'
   push:
     branches: [main, develop]
 
@@ -20,7 +22,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # fetch-depth: 0 — branch-resolver tests reference the literal 'main' ref
+      # (e.g. readFileFromBranch(repoPath, 'main', ...)). Default depth=1 omits it
+      # on PR runs and the tests fail BASELINE_REGRESSION against the ratchet.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # On PR runs the merge ref is checked out and 'main' exists only as
+      # 'origin/main'. The branch-resolver tests use the literal 'main' ref
+      # via `git show main:...` / `git ls-tree main`, so create a local
+      # branch pointing at origin/main for them.
+      - name: Ensure local 'main' ref for branch-resolver tests
+        if: github.event_name == 'pull_request'
+        run: git update-ref refs/heads/main refs/remotes/origin/main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
