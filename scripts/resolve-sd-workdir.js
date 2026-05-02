@@ -243,6 +243,14 @@ function createWorktree(sdKey, repoRoot) {
   if (fs.existsSync(worktreePath)) {
     if (isValidWorktree(worktreePath)) {
       const existingBranch = getWorktreeBranch(worktreePath);
+      // Patch up essentials (.env, node_modules) for pre-existing worktrees
+      // that DB and scan paths missed. Without this, handoff.js and other
+      // scripts run from the worktree fail with NEXT_PUBLIC_SUPABASE_URL
+      // is required. Closes feedback row c9d07065.
+      const essentials = ensureWorktreeEssentials(worktreePath, repoRoot);
+      if (!essentials.ok) {
+        emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'pre-existing', errors: essentials.errors });
+      }
       return { path: worktreePath, branch: existingBranch || `feat/${sdKey}`, created: false };
     }
     const err = new Error(
