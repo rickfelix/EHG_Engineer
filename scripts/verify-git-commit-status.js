@@ -15,7 +15,7 @@
  *
  * Usage:
  *   node scripts/verify-git-commit-status.js SD-XXX /path/to/app
- *   node scripts/verify-git-commit-status.js SD-XXX  # defaults to EHG_ROOT (cross-platform)
+ *   node scripts/verify-git-commit-status.js SD-XXX  # defaults to EHG_Engineer (the repo this script lives in)
  */
 
 import { exec } from 'child_process';
@@ -29,13 +29,19 @@ import { isMainModule } from '../lib/utils/is-main-module.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const _EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
 const EHG_ROOT = resolveRepoPath('ehg');
 
 const execAsync = promisify(exec);
 
 class GitCommitVerifier {
-  constructor(sdId, appPath = EHG_ROOT, options = {}) {
+  // Default appPath is EHG_Engineer (the repo this script LIVES IN), not EHG.
+  // Backend SDs without explicit target_application were previously misrouted
+  // to EHG_ROOT — gate misfired against the wrong branches and forced bypass.
+  // The handoff executor passes appPath via determineTargetRepository() in
+  // normal flow; this default only matters for direct CLI usage.
+  // Closes feedback row 5424d06e.
+  constructor(sdId, appPath = EHG_ENGINEER_ROOT, options = {}) {
     this.sdId = sdId;
     this.legacyId = options.legacyId || null; // SD-VENTURE-STAGE0-UI-001: Support legacy_id search
     this.appPath = appPath;
