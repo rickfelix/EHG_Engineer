@@ -14,8 +14,16 @@ import path from 'path';
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 
 import { execSync } from 'child_process';
-const PROJECT_ROOT = process.env.CLAUDE_PROJECT_DIR ||
-  (() => { try { return execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim(); } catch { return 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer'; } })();
+// PROJECT_ROOT prefers `git rev-parse --show-toplevel` (worktree-aware) over
+// the CLAUDE_PROJECT_DIR env var (always points at the MAIN repo, even when
+// running from a worktree). Without this priority, scope-completion-gate
+// looks for SD deliverables at main-repo paths and reports them missing
+// when the SD's branch added them inside the worktree.
+// Closes feedback row e58d53d6.
+const PROJECT_ROOT = (() => {
+  try { return execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim(); }
+  catch { return process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer'; }
+})();
 
 /**
  * Extract deliverable items from architecture plan content.
