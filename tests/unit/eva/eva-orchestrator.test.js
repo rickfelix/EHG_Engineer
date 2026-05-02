@@ -49,22 +49,22 @@ import { emit } from '../../../lib/eva/shared-services.js';
 const { buildResult, mergeArtifactOutputs, STATUS, FILTER_ACTION } = _internal;
 
 function createMockSupabase(overrides = {}) {
+  const ventureRow = {
+    id: 'v-1',
+    name: 'Test Venture',
+    status: 'active',
+    current_lifecycle_stage: 1,
+    archetype: 'saas',
+    created_at: '2026-01-01',
+    autonomy_level: 'L0',
+  };
   const mockFrom = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({
-      data: {
-        id: 'v-1',
-        name: 'Test Venture',
-        status: 'active',
-        current_lifecycle_stage: 1,
-        archetype: 'saas',
-        created_at: '2026-01-01',
-      },
-      error: null,
-    }),
+    single: vi.fn().mockResolvedValue({ data: ventureRow, error: null }),
+    maybeSingle: vi.fn().mockResolvedValue({ data: ventureRow, error: null }),
     insert: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
     ...overrides,
