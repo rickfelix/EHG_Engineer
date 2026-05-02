@@ -24,6 +24,14 @@ import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 // SD-LEO-SDKEY-001: Centralized SD key generation
 import { generateSDKey as generateCentralizedSDKey } from './modules/sd-key-generator.js';
+// SD-FDBK-ENH-LEARN-AUTO-APPROVE-001 (FR-1): wire alert path through the same
+// noise filter chain that scripts/modules/learning/context-builder.js uses, so
+// /learn auto-approve and pattern-alert see identical suppression decisions.
+import {
+  filterPatternsForLearning,
+  fetchAssignedSdStatuses,
+  fetchPatternSourceSDStatuses,
+} from './modules/learning/filter.mjs';
 
 dotenv.config();
 
@@ -106,6 +114,11 @@ async function hasExistingSD(patternId) {
 
 /**
  * Get patterns that exceed alert thresholds
+ *
+ * SD-FDBK-ENH-LEARN-AUTO-APPROVE-001 (FR-1): apply filterPatternsForLearning
+ * BEFORE the severity/trend threshold so noise patterns matching the same
+ * filters used by /learn auto-approve are suppressed in the alert path too.
+ * Mirrors the wiring pattern at scripts/modules/learning/context-builder.js:443-471.
  */
 async function getAlertablePatterns() {
   const { data: patterns, error } = await supabase
@@ -121,8 +134,29 @@ async function getAlertablePatterns() {
 
   if (!patterns) return [];
 
+  // FR-1: Suppress noise patterns before threshold check.
+  let surviving = patterns;
+  try {
+    const [sdStatusMap, sourceSdStatusMap] = await Promise.all([
+      fetchAssignedSdStatuses(supabase, patterns),
+      fetchPatternSourceSDStatuses(supabase, patterns),
+    ]);
+    const result = filterPatternsForLearning(patterns, {
+      sdStatusMap,
+      sourceSdStatusMap,
+    });
+    surviving = result.kept;
+    if (result.rejected.length > 0) {
+      console.log(`  Noise filter: ${result.rejected.length} pattern(s) suppressed before threshold check`);
+    }
+  } catch (filterErr) {
+    // Fail-open: a filter error must not block legitimate alerting; matches
+    // the context-builder.js fail-open posture at line 469.
+    console.warn(`[noise-filter] skipped due to error: ${filterErr.message}`);
+  }
+
   // Filter patterns that meet threshold criteria
-  return patterns.filter(p => {
+  return surviving.filter(p => {
     // Critical severity with 5+ occurrences
     if (p.severity === 'critical' && p.occurrence_count >= CONFIG.CRITICAL_SEVERITY_THRESHOLD) {
       return true;

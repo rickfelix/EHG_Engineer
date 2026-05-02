@@ -1,0 +1,96 @@
+{
+  "_meta": {
+    "description": "5 patterns from the 2026-05-01 LEARN-139 cancellation bundle. Used as a golden-test fixture for SD-FDBK-ENH-LEARN-AUTO-APPROVE-001. After the fix, all 5 must be suppressed by filterPatternsForLearning (admitted=0, suppressed=5).",
+    "vector_legend": {
+      "a": "closed-source single-SD (first==last, source SD status in {completed,cancelled})",
+      "b_c": "empty proven_solutions + null/empty related_sub_agents + occurrence_count < 3",
+      "d": "cross-source fingerprint stem duplicate (same 8-char stem + same first_seen_sd_id)"
+    },
+    "expected_admitted": 0,
+    "expected_suppressed": 5,
+    "expected_reason_codes_at_least_once": ["fr6", "empty_proven", "fingerprint_stem_dup"]
+  },
+  "source_sd_status_map": {
+    "11111111-1111-1111-1111-111111111111": "completed",
+    "22222222-2222-2222-2222-222222222222": "cancelled",
+    "33333333-3333-3333-3333-333333333333": "completed",
+    "44444444-4444-4444-4444-444444444444": "completed"
+  },
+  "patterns": [
+    {
+      "_vector": "a",
+      "_note": "PAT-HF-PLANTOEXEC-211b3c47 — handoff_failure single-SD whose source SD already completed",
+      "pattern_id": "PAT-HF-PLANTOEXEC-211b3c47",
+      "source": "retrospective",
+      "category": "handoff_failure",
+      "occurrence_count": 1,
+      "dedup_fingerprint": "211b3c47abcdef0123456789abcdef01",
+      "first_seen_sd_id": "11111111-1111-1111-1111-111111111111",
+      "last_seen_sd_id": "11111111-1111-1111-1111-111111111111",
+      "proven_solutions": [],
+      "related_sub_agents": null,
+      "metadata": {},
+      "updated_at": "2026-05-01T00:00:00Z"
+    },
+    {
+      "_vector": "d",
+      "_note": "PAT-RETRO-PLANTOEXEC-211b3c47 — same fingerprint stem (211b3c47) + same first_seen_sd_id as PAT-HF; should collapse via dedup pre-pass",
+      "pattern_id": "PAT-RETRO-PLANTOEXEC-211b3c47",
+      "source": "retrospective",
+      "category": "session_retrospective",
+      "occurrence_count": 1,
+      "dedup_fingerprint": "211b3c47ffffffff0000000000000000",
+      "first_seen_sd_id": "11111111-1111-1111-1111-111111111111",
+      "last_seen_sd_id": "11111111-1111-1111-1111-111111111111",
+      "proven_solutions": [],
+      "related_sub_agents": [],
+      "metadata": {},
+      "updated_at": "2026-05-01T00:00:00Z"
+    },
+    {
+      "_vector": "a",
+      "_note": "Closed-source single-SD on a cancelled source SD — FR-6 territory",
+      "pattern_id": "PAT-RETRO-PLANTOLEAD-d1af8062",
+      "source": "retrospective",
+      "category": "session_retrospective",
+      "occurrence_count": 4,
+      "dedup_fingerprint": "d1af8062cccccccc1111111122222222",
+      "first_seen_sd_id": "22222222-2222-2222-2222-222222222222",
+      "last_seen_sd_id": "22222222-2222-2222-2222-222222222222",
+      "proven_solutions": [],
+      "related_sub_agents": null,
+      "metadata": {},
+      "updated_at": "2026-05-01T00:00:00Z"
+    },
+    {
+      "_vector": "b_c",
+      "_note": "Empty proven_solutions + null related_sub_agents + occurrence_count=2 (< default threshold 3) — FR-2 territory; first/last differ so FR-6/7/8 do NOT apply",
+      "pattern_id": "PAT-RETRO-EMPTY-PROVEN-001",
+      "source": "retrospective",
+      "category": "auto_rca",
+      "occurrence_count": 2,
+      "dedup_fingerprint": "abcdef9876543210fedcba0987654321",
+      "first_seen_sd_id": "33333333-3333-3333-3333-333333333333",
+      "last_seen_sd_id": "44444444-4444-4444-4444-444444444444",
+      "proven_solutions": [],
+      "related_sub_agents": null,
+      "metadata": { "origin": "auto_rca" },
+      "updated_at": "2026-05-01T00:00:00Z"
+    },
+    {
+      "_vector": "b_c",
+      "_note": "Empty proven_solutions + empty array related_sub_agents + occurrence_count=1 — FR-2 territory; multi-SD so FR-6/7/8 abstain",
+      "pattern_id": "PAT-RETRO-EMPTY-PROVEN-002",
+      "source": "feedback_cluster",
+      "category": "general",
+      "occurrence_count": 1,
+      "dedup_fingerprint": "0000aaaaffff5555eeee9999cccc7777",
+      "first_seen_sd_id": "33333333-3333-3333-3333-333333333333",
+      "last_seen_sd_id": "44444444-4444-4444-4444-444444444444",
+      "proven_solutions": [],
+      "related_sub_agents": [],
+      "metadata": {},
+      "updated_at": "2026-05-01T00:00:00Z"
+    }
+  ]
+}
