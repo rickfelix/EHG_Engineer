@@ -22,6 +22,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getAncestorChain, MAX_HIERARCHY_DEPTH } from './lib/sd-hierarchy-mapper.js';
+import { parseDependencies } from './lib/dependency-graph.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,7 +64,7 @@ const REQUIRED_HANDOFFS_BY_TYPE = {
   default: 3
 };
 
-class ChildSDPreflightValidator {
+export class ChildSDPreflightValidator {
   constructor() {
     this.sd = null;
     this.parent = null;
@@ -163,22 +164,39 @@ class ChildSDPreflightValidator {
   }
 
   /**
-   * Extract dependency IDs from dependency_chain
-   * Supports both old and new formats
+   * Extract dependency IDs from an SD row.
+   *
+   * Reads both modern and legacy locations, in this precedence order:
+   *  1. sd.dependencies (JSONB column on strategic_directives_v2) — array of
+   *     {sd_id} objects, bare SD-ID strings, or placeholder objects like
+   *     {type, status, dependency} (placeholder shape returns []).
+   *     Delegated to parseDependencies for shape normalization.
+   *  2. sd.dependency_chain — three legacy shapes:
+   *     - Array of SD-ID strings
+   *     - Object with children[].depends_on (own chain)
+   *     - Parent's dependency_chain.children[].depends_on
+   *
+   * SD-FDBK-ENH-CHILD-PREFLIGHT-RETURNS-001: previously read only
+   * dependency_chain — false PASS for the 657 child SDs (~42% of pop) that
+   * populate `dependencies` instead. Sister fix in
+   * lib/utils/dependency-chain-validator.js.
    */
   extractDependencyIds(sd) {
+    // Modern location: sd.dependencies JSONB column (array of {sd_id} or strings)
+    const fromColumn = parseDependencies(sd.dependencies);
+    if (fromColumn.length > 0) return fromColumn;
+
     if (!sd.dependency_chain) return [];
 
     const chain = sd.dependency_chain;
 
-    // Format 1: Array of SD IDs directly
+    // Legacy Format 1: Array of SD IDs directly
     if (Array.isArray(chain)) {
       return chain.filter(item => typeof item === 'string' && item.startsWith('SD-'));
     }
 
-    // Format 2: Object with children array containing depends_on
+    // Legacy Format 2: Object with children array containing depends_on
     if (chain.children && Array.isArray(chain.children)) {
-      // Find this SD in the children array and get its depends_on
       const thisChild = chain.children.find(c =>
         c.sd_id === sd.id || c.sd_id === sd.sd_key
       );
@@ -191,8 +209,7 @@ class ChildSDPreflightValidator {
       }
     }
 
-    // Format 3: Parent's dependency_chain with children array
-    // We need to find what this specific SD depends on
+    // Legacy Format 3: Parent's dependency_chain with children array
     if (this.parent?.dependency_chain?.children) {
       const thisChild = this.parent.dependency_chain.children.find(c =>
         c.sd_id === sd.id || c.sd_id === sd.sd_key
@@ -293,6 +310,10 @@ class ChildSDPreflightValidator {
     if (this.dependencies.length === 0) {
       console.log(`${colors.bold}🔗 DEPENDENCY CHECK${colors.reset}`);
       console.log(`${colors.dim}   No dependencies defined for this child SD.${colors.reset}\n`);
+      const unlockGate = this.sd.metadata?.unlock_gate;
+      if (unlockGate?.type) {
+        console.log(`${colors.cyan}   UNLOCK_GATE: ${unlockGate.type}${colors.reset} ${colors.dim}(informational — does not affect verdict)${colors.reset}`);
+      }
       console.log(`${colors.green}✅ RESULT: PASS${colors.reset}`);
       console.log(`${colors.dim}   Ready to work on ${displayId}.${colors.reset}`);
       console.log(`\n${colors.yellow}${colors.bold}⚠️  CONTEXT LOADING REMINDER:${colors.reset}`);
@@ -392,6 +413,10 @@ class ChildSDPreflightValidator {
       };
     }
 
+    const unlockGatePass = this.sd.metadata?.unlock_gate;
+    if (unlockGatePass?.type) {
+      console.log(`${colors.cyan}   UNLOCK_GATE: ${unlockGatePass.type}${colors.reset} ${colors.dim}(informational — does not affect verdict)${colors.reset}`);
+    }
     console.log(`${colors.bgGreen}${colors.bold} ✅ RESULT: PROCEED ${colors.reset}`);
     console.log(`${colors.green}   All dependencies satisfied. Ready to work on ${displayId}.${colors.reset}`);
     console.log(`\n${colors.yellow}${colors.bold}⚠️  CONTEXT LOADING REMINDER:${colors.reset}`);

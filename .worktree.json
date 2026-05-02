@@ -1,6 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001",
-  "createdAt": "2026-04-26T15:39:35.067Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer"
+  "sdKey": "SD-FDBK-ENH-CHILD-PREFLIGHT-RETURNS-001",
+  "expectedBranch": "feat/SD-FDBK-ENH-CHILD-PREFLIGHT-RETURNS-001",
+  "createdAt": "2026-05-02T12:07:06.667Z",
+  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "baseRef": "origin/main"
 }
