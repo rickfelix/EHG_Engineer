@@ -26,18 +26,28 @@ function makeArtifact(id, type, content, metadata = {}) {
   return { id, artifact_type: type, content, metadata, title: `Screen ${id}` };
 }
 
+/**
+ * Builds a chainable supabase QueryBuilder mock.  Every fluent method
+ * (.select/.eq/.in/.order/.limit/...) returns the same builder instance,
+ * so it works regardless of how many chained calls the source makes.  The
+ * builder is awaitable via .then(), resolving to { data, error } at the
+ * end of the chain — matching the @supabase/supabase-js client contract.
+ */
 function createMockSupabase(artifacts = []) {
-  return {
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            in: vi.fn().mockResolvedValue({ data: artifacts, error: null }),
-          }),
-        }),
-      }),
-    }),
-  };
+  const result = { data: artifacts, error: null };
+  const builder = {};
+  const chainMethods = [
+    'select', 'eq', 'neq', 'in', 'is', 'or', 'not', 'ilike', 'like',
+    'gte', 'lte', 'gt', 'lt', 'contains', 'order', 'limit', 'range',
+    'insert', 'update', 'upsert', 'delete',
+  ];
+  for (const m of chainMethods) builder[m] = vi.fn(() => builder);
+  builder.single = vi.fn().mockResolvedValue(result);
+  builder.maybeSingle = vi.fn().mockResolvedValue(result);
+  // Make the builder awaitable so `await query` resolves to {data, error}.
+  builder.then = (onFulfilled, onRejected) =>
+    Promise.resolve(result).then(onFulfilled, onRejected);
+  return { from: vi.fn(() => builder) };
 }
 
 describe('qa-rubric', () => {
