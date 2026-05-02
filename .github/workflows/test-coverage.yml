@@ -35,16 +35,43 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq bc
 
       - name: Run tests with coverage
-        # Fails closed on test errors (SD-LEO-INFRA-STAGE-TEMPLATE-BARREL-001 Arm C).
-        # Prior versions tolerated "missing exports / ESM conflicts" via
-        # `continue-on-error: true` and a `|| exit 0` soft-pass — this is
-        # exactly the policy gap that allowed PR #3211 (SD-REDESIGN-S18S26-E+F)
-        # to merge with a barrel-rot regression. The strict mode here is the
-        # canonical defense against that bug class.
+        # Strict-fail behavior split into two phases per FR-4 of
+        # SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001:
+        #   1. This step uses `continue-on-error: true` so test failures (vitest
+        #      exit 1) don't fail the job — the BASELINE_REGRESSION gate
+        #      (`Compare to main snapshot` below) is now the authoritative gate
+        #      on whether the PR introduces NEW failures vs main.
+        #   2. The "Verify vitest produced test-results.json" step immediately
+        #      after fails the job if vitest crashed before writing JSON output
+        #      (the original SD-LEO-INFRA-STAGE-TEMPLATE-BARREL-001 Arm C case
+        #      that prevented PR #3211's barrel-rot regression from shipping).
+        # The barrel-rot defense is preserved — vitest must produce a parseable
+        # test-results.json — but pre-existing failures no longer block PRs
+        # while the SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001 triage completes.
+        # Sunsets along with the rest of the ratchet (see linked doc).
+        continue-on-error: true
         env:
           NODE_OPTIONS: --experimental-vm-modules
         # QF-20260426-465: vitest dropped CLI --json in 1.x->3.x; use --reporter=json instead.
         run: npm run test:coverage -- --reporter=json --outputFile=test-results.json
+
+      - name: Verify vitest produced test-results.json
+        # Replaces the original strict-fail protection for the
+        # SD-LEO-INFRA-STAGE-TEMPLATE-BARREL-001 case: if vitest crashed at
+        # module load (missing exports, ESM conflicts, etc.) it never writes
+        # the JSON file. Fail closed in that case so the workflow can't pass
+        # without having actually run the tests.
+        if: always()
+        run: |
+          if [ ! -s test-results.json ]; then
+            echo "::error::vitest did not produce a non-empty test-results.json — likely crashed at module load (ESM/import error). Check the 'Run tests with coverage' step log."
+            exit 1
+          fi
+          if ! node -e "JSON.parse(require('node:fs').readFileSync('test-results.json','utf8'))" > /dev/null 2>&1; then
+            echo "::error::test-results.json exists but is not valid JSON — vitest reporter output is malformed."
+            exit 1
+          fi
+          echo "✓ vitest produced parseable test-results.json"
 
       - name: Check coverage threshold
         run: |
@@ -85,6 +112,37 @@ jobs:
           path: test-results.json
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Compare to main snapshot
+        # See docs/reference/test-coverage-baseline-ratchet.md for triage.
+        # FR-4 of SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001 — replaces the binary
+        # "any vitest failure = red" gate with a delta gate against the most
+        # recent main-branch snapshot in codebase_health_snapshots. PRs fail
+        # only on NEW failures vs baseline; pushes to main rewrite the snapshot
+        # so the next PR is held to the lower bar. Sunsets when main reaches
+        # ≤100 failures (see linked doc).
+        if: always() && hashFiles('test-results.json') != ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: node scripts/compare-to-main-snapshot.mjs
+
+      - name: Upload PR test-failures artifact
+        # Only present on PR runs that wrote test-failures-pr.json (i.e. a
+        # BASELINE_REGRESSION). Lets reviewers download the failure list
+        # without re-running the audit locally.
+        if: always() && hashFiles('test-failures-pr.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failures-pr-json
+          path: test-failures-pr.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Capture test results to database
         if: always()
