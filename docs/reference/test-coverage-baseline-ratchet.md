@@ -126,6 +126,16 @@ EXAMPLES:
   node scripts/audit-test-failures.mjs --format=json | jq .by_category
   node scripts/audit-test-failures.mjs --summary > failures.csv
   node scripts/audit-test-failures.mjs --by-category=must-be-set --format=json
+
+DATA SOURCE:
+  PRIMARY (today): Parses vitest --reporter=json output from --results path.
+  SECONDARY (future): SELECT from test_runs/test_results when CI populates
+  trigger_context.branch (currently unpopulated; deferred per DATABASE sub-agent).
+
+SEE ALSO:
+  docs/reference/test-coverage-baseline-ratchet.md (ships in PR3)
+  scripts/test-result-capture.js (CI step that should populate test_runs)
+  SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001
 ```
 
 ## Sunset Criteria
