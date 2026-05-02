@@ -20,7 +20,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # fetch-depth: 0 — branch-resolver tests reference the literal 'main' ref
+      # (e.g. readFileFromBranch(repoPath, 'main', ...)). Default depth=1 omits it
+      # on PR runs and the tests fail BASELINE_REGRESSION against the ratchet.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
