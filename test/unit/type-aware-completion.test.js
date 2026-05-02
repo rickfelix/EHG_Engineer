@@ -17,57 +17,57 @@ import {
 describe('Type-Aware SD Completion Validation', () => {
   describe('getUATRequirement', () => {
     it('should return REQUIRED for feature SDs', () => {
-      expect(getUATRequirement('feature')).toBe('REQUIRED');
+      expect(getUATRequirement('feature').status).toBe('REQUIRED');
     });
 
     it('should return REQUIRED for bugfix SDs', () => {
-      expect(getUATRequirement('bugfix')).toBe('REQUIRED');
+      expect(getUATRequirement('bugfix').status).toBe('REQUIRED');
     });
 
     it('should return REQUIRED for security SDs', () => {
-      expect(getUATRequirement('security')).toBe('REQUIRED');
+      expect(getUATRequirement('security').status).toBe('REQUIRED');
     });
 
     it('should return REQUIRED for refactor SDs', () => {
-      expect(getUATRequirement('refactor')).toBe('REQUIRED');
+      expect(getUATRequirement('refactor').status).toBe('REQUIRED');
     });
 
     it('should return REQUIRED for enhancement SDs', () => {
-      expect(getUATRequirement('enhancement')).toBe('REQUIRED');
+      expect(getUATRequirement('enhancement').status).toBe('REQUIRED');
     });
 
     it('should return PROMPT for performance SDs', () => {
-      expect(getUATRequirement('performance')).toBe('PROMPT');
+      expect(getUATRequirement('performance').status).toBe('PROMPT');
     });
 
     it('should return EXEMPT for infrastructure SDs', () => {
-      expect(getUATRequirement('infrastructure')).toBe('EXEMPT');
+      expect(getUATRequirement('infrastructure').status).toBe('EXEMPT');
     });
 
     it('should return EXEMPT for database SDs', () => {
-      expect(getUATRequirement('database')).toBe('EXEMPT');
+      expect(getUATRequirement('database').status).toBe('EXEMPT');
     });
 
     it('should return EXEMPT for documentation SDs', () => {
-      expect(getUATRequirement('documentation')).toBe('EXEMPT');
+      expect(getUATRequirement('documentation').status).toBe('EXEMPT');
     });
 
     it('should return EXEMPT for orchestrator SDs', () => {
-      expect(getUATRequirement('orchestrator')).toBe('EXEMPT');
+      expect(getUATRequirement('orchestrator').status).toBe('EXEMPT');
     });
 
     it('should return PROMPT for unknown types', () => {
-      expect(getUATRequirement('unknown-type')).toBe('PROMPT');
+      expect(getUATRequirement('unknown-type').status).toBe('PROMPT');
     });
 
     it('should handle case insensitivity', () => {
-      expect(getUATRequirement('FEATURE')).toBe('REQUIRED');
-      expect(getUATRequirement('Feature')).toBe('REQUIRED');
+      expect(getUATRequirement('FEATURE').status).toBe('REQUIRED');
+      expect(getUATRequirement('Feature').status).toBe('REQUIRED');
     });
 
     it('should handle null/undefined', () => {
-      expect(getUATRequirement(null)).toBe('REQUIRED'); // defaults to feature
-      expect(getUATRequirement(undefined)).toBe('REQUIRED');
+      expect(getUATRequirement(null).status).toBe('REQUIRED'); // defaults to feature
+      expect(getUATRequirement(undefined).status).toBe('REQUIRED');
     });
   });
 
@@ -199,7 +199,7 @@ describe('Type-Aware SD Completion Validation', () => {
   describe('Integration scenarios', () => {
     it('UAT requirement should align with validation requirements for feature SDs', () => {
       const sd = { sd_type: 'feature', title: 'Feature' };
-      const uatReq = getUATRequirement('feature');
+      const uatReq = getUATRequirement('feature').status;
       const validationReqs = getValidationRequirements(sd);
 
       // Both should indicate UAT is required
@@ -209,7 +209,7 @@ describe('Type-Aware SD Completion Validation', () => {
 
     it('UAT requirement should align with validation requirements for infrastructure SDs', () => {
       const sd = { sd_type: 'infrastructure', title: 'Infra' };
-      const uatReq = getUATRequirement('infrastructure');
+      const uatReq = getUATRequirement('infrastructure').status;
       const validationReqs = getValidationRequirements(sd);
 
       // Both should indicate UAT is NOT required
