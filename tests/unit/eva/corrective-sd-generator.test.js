@@ -3,7 +3,7 @@
  * SD-EVA-QUALITY-VISION-GOVERNANCE-TESTS-001
  */
 
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { GRADE } from '../../../lib/standards/grade-scale.js';
 
 // Mock dotenv and supabase before importing the module
@@ -154,5 +154,101 @@ describe('corrective-sd-generator: checkMinOccurrences', () => {
     const result = await checkMinOccurrences(mockSupabase, 'SD-TEST');
     expect(result.qualifies).toBe(true);
     expect(result.count).toBe(MIN_OCCURRENCES);
+  });
+});
+
+// SD-FDBK-ENH-HEAL-COMMAND-MJS-001 — regression cases for unbound `options` parameter
+describe('generateCorrectiveSD: options-binding regression (SD-FDBK-ENH-HEAL-COMMAND-MJS-001)', () => {
+  let generateCorrectiveSD;
+  let originalSupabaseUrl;
+  let originalSupabaseKey;
+  let createClientSpy;
+
+  beforeAll(async () => {
+    originalSupabaseUrl = process.env.SUPABASE_URL;
+    originalSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_URL = 'https://test.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+    const mod = await import('../../../scripts/eva/corrective-sd-generator.mjs');
+    generateCorrectiveSD = mod.generateCorrectiveSD;
+    const supaMod = await import('@supabase/supabase-js');
+    createClientSpy = vi.spyOn(supaMod, 'createClient');
+  });
+
+  function buildSupabase(scoreOverride = {}) {
+    const score = {
+      id: 'score-rgr-1',
+      sd_id: 'SD-TEST-FAKE-001',
+      vision_id: 'vision-rgr',
+      total_score: 50,
+      threshold_action: 'gap_closure_sd',
+      dimension_scores: { V01: 80, V02: 80, V03: 80, V04: 80, V05: 80 },
+      rubric_snapshot: { git_sha: 'b7a7d52604', mode: 'sd-heal' },
+      created_by: 'test-fixture-rgr',
+      scored_at: new Date().toISOString(),
+      ...scoreOverride,
+    };
+    return {
+      from: vi.fn((table) => {
+        if (table === 'eva_vision_scores') {
+          return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: score, error: null }) }) }) };
+        }
+        if (table === 'audit_log') {
+          return { insert: vi.fn().mockResolvedValue({ error: null }) };
+        }
+        if (table === 'strategic_directives_v2') {
+          return {
+            select: () => ({
+              eq: () => ({
+                gte: () => Promise.resolve({ data: [{ id: 'sd-x' }, { id: 'sd-y' }], count: 2, error: null }),
+              }),
+            }),
+          };
+        }
+        return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: { message: 'unexpected ' + table } }) }) }) };
+      }),
+    };
+  }
+
+  it('regression — does NOT throw ReferenceError when called with one arg and a git_sha-stamped score', async () => {
+    createClientSpy.mockReturnValueOnce(buildSupabase());
+    let refError = null;
+    try {
+      await generateCorrectiveSD('score-rgr-1');
+    } catch (err) {
+      if (err && err.name === 'ReferenceError' && /options/.test(err.message)) {
+        refError = err;
+      }
+    }
+    expect(refError).toBeNull();
+  });
+
+  it('honors options.force=true (passes second-arg through to staleness check branch)', async () => {
+    createClientSpy.mockReturnValueOnce(buildSupabase());
+    let refError = null;
+    try {
+      await generateCorrectiveSD('score-rgr-1', { force: true });
+    } catch (err) {
+      if (err && err.name === 'ReferenceError') refError = err;
+    }
+    expect(refError).toBeNull();
+  });
+
+  it('default-undefined options object behaves as { force: undefined } (no force override)', async () => {
+    createClientSpy.mockReturnValueOnce(buildSupabase());
+    let refError = null;
+    try {
+      await generateCorrectiveSD('score-rgr-1');
+    } catch (err) {
+      if (err && err.name === 'ReferenceError') refError = err;
+    }
+    expect(refError).toBeNull();
+  });
+
+  afterAll(() => {
+    if (originalSupabaseUrl !== undefined) process.env.SUPABASE_URL = originalSupabaseUrl;
+    else delete process.env.SUPABASE_URL;
+    if (originalSupabaseKey !== undefined) process.env.SUPABASE_SERVICE_ROLE_KEY = originalSupabaseKey;
+    else delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   });
 });

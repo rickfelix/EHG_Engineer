@@ -229,7 +229,8 @@ function buildEnrichedDescription(dimensionName, dimId, dimensionScores, rubricS
  * @param {string} scoreId - UUID of the eva_vision_scores record
  * @returns {Promise<{created: boolean, action: string, sdKey: string|null, sdId: string|null}>}
  */
-export async function generateCorrectiveSD(scoreId) {
+// SD-FDBK-ENH-HEAL-COMMAND-MJS-001: bind options param so line 286 staleness check (CAPA-3) does not ReferenceError
+export async function generateCorrectiveSD(scoreId, options = {}) {
   const supabase = getSupabase();
 
   // 1. Load the score record (include created_by and rubric_snapshot for quality checks)

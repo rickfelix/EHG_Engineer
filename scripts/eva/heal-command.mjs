@@ -92,6 +92,8 @@ function parseSDArgs(args) {
     if (arg === 'generate') {
       opts.mode = 'generate';
       opts.scoreId = args[i + 1];
+      // SD-FDBK-ENH-HEAL-COMMAND-MJS-001: --force overrides staleness skip in corrective-sd-generator
+      opts.force = args.slice(i + 1).includes('--force');
       break;
     }
     if (arg === 'close-loop') {
@@ -620,9 +622,9 @@ async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
   }
 }
 
-async function cmdSDGenerate(scoreId) {
+async function cmdSDGenerate(scoreId, options = {}) {
   const { generateCorrectiveSD } = await import('./corrective-sd-generator.mjs');
-  const result = await generateCorrectiveSD(scoreId);
+  const result = await generateCorrectiveSD(scoreId, options);
   console.log(JSON.stringify(result, null, 2));
 
   if (result.created && result.sds) {
@@ -863,7 +865,7 @@ if (isMain) {
         cmdSDPersist(opts.persistJson, opts.persistFile, { inProgress: opts.inProgress }).catch(e => { console.error(e.message); process.exit(1); });
       } else if (opts.mode === 'generate') {
         if (!opts.scoreId) { console.error('Usage: heal sd generate <score-id>'); process.exit(1); }
-        cmdSDGenerate(opts.scoreId).catch(e => { console.error(e.message); process.exit(1); });
+        cmdSDGenerate(opts.scoreId, { force: opts.force }).catch(e => { console.error(e.message); process.exit(1); });
       } else if (opts.mode === 'close-loop') {
         cmdSDCloseLoop(opts.apply).catch(e => { console.error(e.message); process.exit(1); });
       } else if (opts.mode === 'generate-all') {
