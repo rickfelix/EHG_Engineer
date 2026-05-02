@@ -133,7 +133,17 @@ async function getLatestEvent(sessionId, sdKey) {
   return (data || []).find(e => e.metadata?.sd_key === sdKey) || null;
 }
 
-describe('claim_sd cross-table consistency (SD-LEO-INFRA-CLAIM-CROSS-TABLE-CONSISTENCY-001)', () => {
+
+// Gate on a real database. CI without secrets sets the synthetic
+// 'test.invalid.local' URL via tests/setup.js — every assertion that touches
+// a real Supabase table fails (or worse, passes vacuously after a soft-error
+// from the JS client) under that URL. SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001
+// CAPA CA-1: gate the suite so CI skips cleanly.
+const HAS_REAL_DB = process.env.SUPABASE_URL
+  && !process.env.SUPABASE_URL.includes('test.invalid.local')
+  && process.env.SUPABASE_SERVICE_ROLE_KEY
+  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
+describe.skipIf(!HAS_REAL_DB)('claim_sd cross-table consistency (SD-LEO-INFRA-CLAIM-CROSS-TABLE-CONSISTENCY-001)', () => {
   beforeAll(async () => {
     for (const s of ALL_TEST_SESSIONS) await ensureTestSession(s);
     for (const sd of ALL_TEST_SDS) await ensureTestSD(sd);

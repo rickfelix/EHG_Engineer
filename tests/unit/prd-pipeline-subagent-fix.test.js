@@ -10,11 +10,12 @@ import path from 'path';
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '../..');
 
-// The 5 files that were changed in this SD
+// The files that were changed in this SD.
+// scripts/regenerate-prd-content.js was archived in commit d3f7b2a799
+// ("archive 1,641 dead scripts") — removed from the contract-existence list.
 const CHANGED_FILES = [
   'scripts/prd/sub-agent-orchestrator.js',
   'scripts/modules/prd/subagent-phases.js',
-  'scripts/regenerate-prd-content.js',
   'scripts/modules/prd-generator/sub-agent-runners.js',
   'package.json'
 ];
@@ -70,7 +71,6 @@ describe('SD-LEO-FIX-FIX-BROKEN-SUB-001: Fix Broken Sub-Agent CLI Invocations', 
     const expectedCounts = {
       'scripts/prd/sub-agent-orchestrator.js': 4,        // DESIGN, DATABASE, SECURITY, RISK
       'scripts/modules/prd/subagent-phases.js': 4,       // DESIGN, DATABASE, SECURITY, RISK
-      'scripts/regenerate-prd-content.js': 4,             // DESIGN, DATABASE, RISK, SECURITY
       'scripts/modules/prd-generator/sub-agent-runners.js': 1  // core runSubAgent function
     };
 
@@ -90,7 +90,6 @@ describe('SD-LEO-FIX-FIX-BROKEN-SUB-001: Fix Broken Sub-Agent CLI Invocations', 
     const filesWithFormatter = [
       'scripts/prd/sub-agent-orchestrator.js',
       'scripts/modules/prd/subagent-phases.js',
-      'scripts/regenerate-prd-content.js',
       'scripts/modules/prd-generator/sub-agent-runners.js'
     ];
 

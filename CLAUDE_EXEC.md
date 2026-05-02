@@ -1348,6 +1348,10 @@ When this gate fails:
 - **Export**: `createTestCoverageQualityGate(supabase)`
 - **Gate Key**: `GATE_TEST_COVERAGE_QUALITY`
 
+### Related Documentation
+
+- [`docs/reference/test-coverage-baseline-ratchet.md`](docs/reference/test-coverage-baseline-ratchet.md) — separate Test Coverage Enforcement workflow ratchet (unrelated to this gate; documents the temporary main-snapshot delta gate that tolerates pre-existing failures while triage completes)
+
 ## Integration Test Requirement Gate (EXEC-TO-PLAN)
 
 **Source**: SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-E (Fixes GAP-003)

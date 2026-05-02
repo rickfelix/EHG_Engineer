@@ -22,7 +22,27 @@ import { _internal } from '../../../lib/eva/eva-orchestrator.js';
 const { persistArtifacts } = _internal;
 
 /**
+ * Build a chainable .update() spy that supports `.update().eq().eq()...` and
+ * resolves the final chain link to `{ error: null }` when awaited.
+ *
+ * Required because writeArtifactBatch (artifact-persistence-service.js) issues a
+ * dedup pre-update `from().update({is_current:false}).eq().eq().eq().eq()`
+ * before each insert. Plain vi.fn() returns undefined, which breaks the chain
+ * and surfaces as `Cannot read properties of undefined (reading 'eq')`.
+ */
+function buildChainableUpdate() {
+  return vi.fn(() => {
+    const chain = {};
+    chain.eq = vi.fn(() => chain);
+    // Thenable so `await ...eq().eq()...` resolves cleanly.
+    chain.then = (resolve) => Promise.resolve({ error: null }).then(resolve);
+    return chain;
+  });
+}
+
+/**
  * Create a mock Supabase client with chainable .from().insert().select().single()
+ * and chainable .from().update().eq()...
  * @param {Object} options - { data, error } to return from single()
  * @returns {Object} Mock supabase client with call tracking
  */
@@ -30,11 +50,12 @@ function createMockSupabase({ data = { id: 'art-001' }, error = null } = {}) {
   const singleFn = vi.fn().mockResolvedValue({ data, error });
   const selectFn = vi.fn().mockReturnValue({ single: singleFn });
   const insertFn = vi.fn().mockReturnValue({ select: selectFn });
-  const fromFn = vi.fn().mockReturnValue({ insert: insertFn, update: vi.fn() });
+  const updateFn = buildChainableUpdate();
+  const fromFn = vi.fn().mockReturnValue({ insert: insertFn, update: updateFn });
 
   return {
     from: fromFn,
-    _mocks: { fromFn, insertFn, selectFn, singleFn },
+    _mocks: { fromFn, insertFn, selectFn, singleFn, updateFn },
   };
 }
 
@@ -53,11 +74,12 @@ function createMultiInsertMockSupabase(ids) {
       }),
     }),
   }));
-  const fromFn = vi.fn().mockReturnValue({ insert: insertFn, update: vi.fn() });
+  const updateFn = buildChainableUpdate();
+  const fromFn = vi.fn().mockReturnValue({ insert: insertFn, update: updateFn });
 
   return {
     from: fromFn,
-    _mocks: { fromFn, insertFn },
+    _mocks: { fromFn, insertFn, updateFn },
   };
 }
 
@@ -163,10 +185,10 @@ describe('persistArtifacts()', () => {
 
     await expect(
       persistArtifacts(supabase, ventureId, stageId, artifacts),
-    ).rejects.toThrow('Failed to persist artifact: duplicate key violation');
+    ).rejects.toThrow(/writeArtifact failed: duplicate key violation/);
   });
 
-  it('should NOT mark old artifacts is_current=false (versioning gap)', async () => {
+  it('marks prior is_current artifacts as false before inserting (versioning gap closed)', async () => {
     const supabase = createMockSupabase();
     const artifacts = [
       { artifactType: 'analysis', payload: { version: 2 } },
@@ -174,13 +196,14 @@ describe('persistArtifacts()', () => {
 
     await persistArtifacts(supabase, ventureId, stageId, artifacts);
 
-    // Verify from() was only called for insert, never for an update to set is_current=false
+    // writeArtifactBatch issues one update-dedup call per unique artifact type, then one insert per artifact.
+    // For one artifact of one type: from('venture_artifacts') is called twice (1 dedup-update + 1 insert),
+    // and writeArtifact may issue a third from() for its own dedup pre-check (skipDedup short-circuits that).
     const fromCalls = supabase._mocks.fromFn.mock.calls;
-    expect(fromCalls).toHaveLength(1);
-    expect(fromCalls[0][0]).toBe('venture_artifacts');
+    expect(fromCalls.length).toBeGreaterThanOrEqual(2);
+    expect(fromCalls.every(c => c[0] === 'venture_artifacts')).toBe(true);
 
-    // The return value of from() should only have insert() called, not update()
-    const fromReturnValue = supabase._mocks.fromFn.mock.results[0].value;
-    expect(fromReturnValue.update).not.toHaveBeenCalled();
+    // Update was called with is_current:false to retire prior versions.
+    expect(supabase._mocks.updateFn).toHaveBeenCalledWith({ is_current: false });
   });
 });

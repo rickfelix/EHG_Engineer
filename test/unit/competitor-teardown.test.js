@@ -15,80 +15,79 @@ import { executeCompetitorTeardown } from '../../lib/eva/stage-zero/paths/compet
 
 // ── Mock LLM Client ──────────────────────────────────────────
 
+const ANALYSIS_DEFAULT = {
+  company_name: 'TestCorp',
+  url: 'https://testcorp.com',
+  business_model: 'SaaS',
+  value_proposition: 'Automated testing',
+  target_market: 'Enterprise developers',
+  pricing_model: 'Per-seat subscription',
+  key_features: ['CI/CD integration', 'Visual regression', 'API testing'],
+  work_components: [
+    { component: 'Test creation', automation_potential: 'high', description: 'Writing test scripts' },
+    { component: 'Test execution', automation_potential: 'high', description: 'Running tests' },
+  ],
+  weaknesses: ['Expensive for small teams', 'Complex setup'],
+  differentiation_opportunities: ['AI-generated tests', 'Zero-config setup'],
+};
+
+const DECONSTRUCTION_DEFAULT = {
+  root_customer_goals: ['Ship reliable software faster'],
+  automatable_components: [
+    { component: 'Test writing', current_cost: '$50k/yr engineer', automation_approach: 'LLM-generated tests' },
+  ],
+  automation_solution: 'AI-powered testing platform with zero human test engineers',
+  suggested_venture_name: 'AutoTest AI',
+  root_customer_problem: 'Software testing requires expensive specialized engineers',
+  target_market: 'Mid-market SaaS companies',
+  cost_advantage_estimate: '80% lower',
+  speed_advantage_estimate: '10x faster test creation',
+};
+
+const GAP_ANALYSIS_DEFAULT = {
+  table_stakes: ['CI/CD integration', 'Dashboard'],
+  differentiators: [{ feature: 'Visual testing', who_has_it: ['CompA'] }],
+  gaps: ['AI-generated tests', 'Self-healing tests'],
+  common_weaknesses: ['Complex pricing', 'Slow setup'],
+  underserved_segments: ['Solo developers', 'Startups'],
+};
+
 function createMockLLMClient(responses = {}) {
   let callCount = 0;
   const responseList = Array.isArray(responses) ? responses : null;
 
+  /**
+   * Returns the JSON-string body for the given prompt.  Used by both
+   * client.complete (LLM-agnostic factory; current source) and
+   * client.messages.create (Anthropic-shaped legacy surface kept for any
+   * older assertion that reads .messages.create.mock).  Source code calls
+   *   `await client.complete('', userPrompt, opts)`
+   * so the routing only needs the prompt text.
+   */
+  function bodyFor(prompt) {
+    if (responseList) {
+      const idx = callCount++;
+      return responseList[idx] || '{}';
+    }
+    if (prompt.includes('Analyze this competitor business')) {
+      return JSON.stringify(responses.analysis || ANALYSIS_DEFAULT);
+    }
+    if (prompt.includes('first-principles venture strategist')) {
+      return JSON.stringify(responses.deconstruction || DECONSTRUCTION_DEFAULT);
+    }
+    if (prompt.includes('Compare these competitors')) {
+      return JSON.stringify(responses.gapAnalysis || GAP_ANALYSIS_DEFAULT);
+    }
+    return '{}';
+  }
+
   return {
     _model: 'mock-model',
+    complete: vi.fn().mockImplementation(async (_systemPrompt, userPrompt) => bodyFor(userPrompt)),
     messages: {
       create: vi.fn().mockImplementation(async ({ messages }) => {
         const prompt = messages[0]?.content || '';
-
-        // If responses is an array, return in order
-        if (responseList) {
-          const idx = callCount++;
-          const text = responseList[idx] || '{}';
-          return { content: [{ text }] };
-        }
-
-        // Route based on prompt content
-        if (prompt.includes('Analyze this competitor business')) {
-          return {
-            content: [{
-              text: JSON.stringify(responses.analysis || {
-                company_name: 'TestCorp',
-                url: 'https://testcorp.com',
-                business_model: 'SaaS',
-                value_proposition: 'Automated testing',
-                target_market: 'Enterprise developers',
-                pricing_model: 'Per-seat subscription',
-                key_features: ['CI/CD integration', 'Visual regression', 'API testing'],
-                work_components: [
-                  { component: 'Test creation', automation_potential: 'high', description: 'Writing test scripts' },
-                  { component: 'Test execution', automation_potential: 'high', description: 'Running tests' },
-                ],
-                weaknesses: ['Expensive for small teams', 'Complex setup'],
-                differentiation_opportunities: ['AI-generated tests', 'Zero-config setup'],
-              }),
-            }],
-          };
-        }
-
-        if (prompt.includes('first-principles venture strategist')) {
-          return {
-            content: [{
-              text: JSON.stringify(responses.deconstruction || {
-                root_customer_goals: ['Ship reliable software faster'],
-                automatable_components: [
-                  { component: 'Test writing', current_cost: '$50k/yr engineer', automation_approach: 'LLM-generated tests' },
-                ],
-                automation_solution: 'AI-powered testing platform with zero human test engineers',
-                suggested_venture_name: 'AutoTest AI',
-                root_customer_problem: 'Software testing requires expensive specialized engineers',
-                target_market: 'Mid-market SaaS companies',
-                cost_advantage_estimate: '80% lower',
-                speed_advantage_estimate: '10x faster test creation',
-              }),
-            }],
-          };
-        }
-
-        if (prompt.includes('Compare these competitors')) {
-          return {
-            content: [{
-              text: JSON.stringify(responses.gapAnalysis || {
-                table_stakes: ['CI/CD integration', 'Dashboard'],
-                differentiators: [{ feature: 'Visual testing', who_has_it: ['CompA'] }],
-                gaps: ['AI-generated tests', 'Self-healing tests'],
-                common_weaknesses: ['Complex pricing', 'Slow setup'],
-                underserved_segments: ['Solo developers', 'Startups'],
-              }),
-            }],
-          };
-        }
-
-        return { content: [{ text: '{}' }] };
+        return { content: [{ text: bodyFor(prompt) }] };
       }),
     },
   };
@@ -148,7 +147,7 @@ describe('Competitor Teardown - executeCompetitorTeardown', () => {
     );
 
     // LLM should be called: 2 analyses + 1 deconstruction + 1 gap analysis = 4
-    expect(llmClient.messages.create).toHaveBeenCalledTimes(4);
+    expect(llmClient.complete).toHaveBeenCalledTimes(4);
 
     // Gap analysis should be populated
     expect(result.raw_material.gap_analysis).not.toBeNull();
@@ -169,7 +168,7 @@ describe('Competitor Teardown - executeCompetitorTeardown', () => {
     );
 
     // LLM should be called: 1 analysis + 1 deconstruction = 2
-    expect(llmClient.messages.create).toHaveBeenCalledTimes(2);
+    expect(llmClient.complete).toHaveBeenCalledTimes(2);
     expect(result.raw_material.gap_analysis).toBeNull();
   });
 
@@ -223,13 +222,17 @@ describe('Competitor Teardown - analyzeCompetitor', () => {
   });
 
   test('handles LLM error gracefully', async () => {
+    const successPayload = JSON.stringify({ suggested_venture_name: '', root_customer_problem: '', automation_solution: '', target_market: '' });
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn()
+        .mockRejectedValueOnce(new Error('Rate limited'))
+        .mockResolvedValue(successPayload),
       messages: {
         create: vi.fn()
           .mockRejectedValueOnce(new Error('Rate limited'))
           .mockResolvedValue({
-            content: [{ text: JSON.stringify({ suggested_venture_name: '', root_customer_problem: '', automation_solution: '', target_market: '' }) }],
+            content: [{ text: successPayload }],
           }),
       },
     };
@@ -275,12 +278,16 @@ describe('Competitor Teardown - First Principles', () => {
   });
 
   test('handles deconstruction failure gracefully', async () => {
+    const analysisPayload = JSON.stringify({ company_name: 'Test', url: 'https://test.com' });
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn()
+        .mockResolvedValueOnce(analysisPayload)
+        .mockRejectedValueOnce(new Error('Context too long')),
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce({
-            content: [{ text: JSON.stringify({ company_name: 'Test', url: 'https://test.com' }) }],
+            content: [{ text: analysisPayload }],
           })
           .mockRejectedValueOnce(new Error('Context too long')),
       },
@@ -325,20 +332,24 @@ describe('Competitor Teardown - Gap Analysis', () => {
 
   test('handles gap analysis failure gracefully', async () => {
     let callCount = 0;
+    function bodyByCall() {
+      callCount++;
+      // First 2 calls = competitor analyses, 3rd = deconstruction, 4th = gap analysis (fails)
+      if (callCount <= 2) {
+        return JSON.stringify({ company_name: `Comp${callCount}`, url: `https://comp${callCount}.com` });
+      }
+      if (callCount === 3) {
+        return JSON.stringify({ suggested_venture_name: 'Test', root_customer_problem: '', automation_solution: '', target_market: '' });
+      }
+      throw new Error('Gap analysis failed');
+    }
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn().mockImplementation(async () => bodyByCall()),
       messages: {
-        create: vi.fn().mockImplementation(async () => {
-          callCount++;
-          // First 2 calls = competitor analyses, 3rd = deconstruction, 4th = gap analysis (fails)
-          if (callCount <= 2) {
-            return { content: [{ text: JSON.stringify({ company_name: `Comp${callCount}`, url: `https://comp${callCount}.com` }) }] };
-          }
-          if (callCount === 3) {
-            return { content: [{ text: JSON.stringify({ suggested_venture_name: 'Test', root_customer_problem: '', automation_solution: '', target_market: '' }) }] };
-          }
-          throw new Error('Gap analysis failed');
-        }),
+        create: vi.fn().mockImplementation(async () => ({
+          content: [{ text: bodyByCall() }],
+        })),
       },
     };
 

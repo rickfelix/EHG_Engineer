@@ -11,17 +11,46 @@ vi.mock('@supabase/supabase-js', () => ({
 
 import { VentureContextManager, createVentureContextManager } from '../../../lib/eva/venture-context-manager.js';
 
-function createMockSupabase(overrides = {}) {
-  const mockQuery = {
+/**
+ * Returns a chainable supabase QueryBuilder mock with all common methods
+ * stubbed as `mockReturnThis()`. Resolvers (single/maybeSingle) default to
+ * `{ data: null, error: null }`. Pass `overrides` to replace any stub.
+ *
+ * Used by createMockSupabase() AND by inline `mockSupabase.from.mockReturnValue`
+ * sites — keep it complete so adding a new chain in source code doesn't require
+ * touching every mock site again.
+ */
+function mockQueryBuilder(overrides = {}) {
+  return {
     select: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    upsert: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    neq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
+    ilike: vi.fn().mockReturnThis(),
+    like: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    lte: vi.fn().mockReturnThis(),
+    gt: vi.fn().mockReturnThis(),
+    lt: vi.fn().mockReturnThis(),
+    contains: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
+    range: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    update: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    ...overrides,
   };
+}
+
+function createMockSupabase(overrides = {}) {
+  const mockQuery = mockQueryBuilder();
 
   return {
     from: vi.fn(() => ({ ...mockQuery, ...overrides })),
@@ -71,9 +100,14 @@ describe('VentureContextManager', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
+          data: { session_id: 's1', metadata: {}, status: 'active' },
+          error: null,
+        }),
+        maybeSingle: vi.fn().mockResolvedValue({
           data: { session_id: 's1', metadata: {}, status: 'active' },
           error: null,
         }),
@@ -87,9 +121,14 @@ describe('VentureContextManager', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
+          data: { session_id: 's1', metadata: { active_venture_id: 'v-123' }, status: 'active' },
+          error: null,
+        }),
+        maybeSingle: vi.fn().mockResolvedValue({
           data: { session_id: 's1', metadata: { active_venture_id: 'v-123' }, status: 'active' },
           error: null,
         }),
@@ -127,7 +166,9 @@ describe('VentureContextManager', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: venture, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: venture, error: null }),
       });
 
       const result = await manager.getActiveVenture();
@@ -141,7 +182,9 @@ describe('VentureContextManager', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
       });
 
       const result = await manager.getActiveVenture();
@@ -154,7 +197,9 @@ describe('VentureContextManager', () => {
       mockSupabase.from.mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
       });
 
       const result = await manager.setActiveVenture('nonexistent-id');
@@ -170,7 +215,12 @@ describe('VentureContextManager', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({
+              data: { id: 'v-1', name: 'Test', status: 'active', current_lifecycle_stage: 1 },
+              error: null,
+            }),
+            maybeSingle: vi.fn().mockResolvedValue({
               data: { id: 'v-1', name: 'Test', status: 'active', current_lifecycle_stage: 1 },
               error: null,
             }),
@@ -179,9 +229,11 @@ describe('VentureContextManager', () => {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
           order: vi.fn().mockReturnThis(),
           limit: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({ data: null, error: { message: 'No session' } }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'No session' } }),
         };
       });
 
@@ -201,16 +253,20 @@ describe('VentureContextManager', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: mockVenture, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: mockVenture, error: null }),
           };
         }
         if (callCount === 2) {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
             order: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
           };
         }
         return {
@@ -237,16 +293,20 @@ describe('VentureContextManager', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: mockVenture, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: mockVenture, error: null }),
           };
         }
         if (callCount === 2) {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
             order: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
           };
         }
         return {
@@ -282,9 +342,11 @@ describe('VentureContextManager', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
             order: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: session, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: session, error: null }),
           };
         }
         return {
@@ -312,9 +374,11 @@ describe('VentureContextManager', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
             order: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: session, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: session, error: null }),
           };
         }
         return {

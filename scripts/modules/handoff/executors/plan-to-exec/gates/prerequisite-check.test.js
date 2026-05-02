@@ -23,6 +23,7 @@ function buildHandoffSupabase({ data = [], error = null, updateError = null } = 
     eq: () => chainable,
     in: () => chainable,
     is: () => chainable,
+    or: () => chainable,
     order: () => chainable,
     limit: () => chainable,
     then: (fn) => Promise.resolve({ data, error }).then(fn),

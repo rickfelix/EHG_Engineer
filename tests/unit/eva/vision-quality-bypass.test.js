@@ -32,7 +32,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEST_VENTURE_ID = '00000000-0000-0000-0000-test00bypass';
 const TEST_VISION_KEY = 'VISION-TEST-BYPASS-REGRESSION-001';
 
-describe('Vision Quality Gate Bypass', () => {
+
+// Gate on a real database. CI without secrets sets the synthetic
+// 'test.invalid.local' URL via tests/setup.js — every assertion that touches
+// a real Supabase table fails (or worse, passes vacuously after a soft-error
+// from the JS client) under that URL. SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001
+// CAPA CA-1: gate the suite so CI skips cleanly.
+const HAS_REAL_DB = process.env.SUPABASE_URL
+  && !process.env.SUPABASE_URL.includes('test.invalid.local')
+  && process.env.SUPABASE_SERVICE_ROLE_KEY
+  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
+describe.skipIf(!HAS_REAL_DB)('Vision Quality Gate Bypass', () => {
   let testVisionExists = false;
   let rpcAvailable = true;
 

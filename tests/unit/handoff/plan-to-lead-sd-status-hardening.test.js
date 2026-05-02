@@ -19,8 +19,14 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = path.resolve(new URL(import.meta.url).pathname.replace(/^\//, ''), '../../../..');
+// On Linux, `new URL(import.meta.url).pathname` returns a leading-slash path
+// like `/home/runner/work/.../this.test.js`. Stripping the leading `/` makes it
+// relative, and path.resolve(<relative>, '...') joins against process.cwd(),
+// yielding a doubled `/home/runner/.../home/runner/...` and ENOENT failures.
+// fileURLToPath handles platform encoding correctly on both Linux and Windows.
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 function readSource(rel) {
   return fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');

@@ -18,7 +18,17 @@ dotenv.config();
 
 const supabase = createSupabaseServiceClient();
 
-describe('Blocked State Detector', () => {
+
+// Gate on a real database. CI without secrets sets the synthetic
+// 'test.invalid.local' URL via tests/setup.js — every assertion that touches
+// a real Supabase table fails (or worse, passes vacuously after a soft-error
+// from the JS client) under that URL. SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001
+// CAPA CA-1: gate the suite so CI skips cleanly.
+const HAS_REAL_DB = process.env.SUPABASE_URL
+  && !process.env.SUPABASE_URL.includes('test.invalid.local')
+  && process.env.SUPABASE_SERVICE_ROLE_KEY
+  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
+describe.skipIf(!HAS_REAL_DB)('Blocked State Detector', () => {
   let testOrchestratorId = null;
   let testChildIds = [];
 
@@ -26,14 +36,21 @@ describe('Blocked State Detector', () => {
     const timestamp = Date.now();
     testOrchestratorId = `TEST-ORCH-${timestamp}`;
 
-    // Create test orchestrator SD
+    // Create test orchestrator SD.  category is NOT NULL on
+    // strategic_directives_v2, so it must be supplied even for fixtures.
     const { error: orchError } = await supabase
       .from('strategic_directives_v2')
       .insert({
         id: testOrchestratorId,
         sd_key: testOrchestratorId,
         title: 'Test Orchestrator for Blocked State',
+        description: 'Test fixture orchestrator for blocked-state-detector tests',
         sd_type: 'orchestrator',
+        category: 'infrastructure',
+        priority: 'medium',
+        rationale: 'Test fixture for blocked-state-detector unit tests',
+        scope: 'Test fixture only',
+        target_application: 'EHG_Engineer',
         status: 'active',
         is_active: true,
         metadata: {}
@@ -48,36 +65,40 @@ describe('Blocked State Detector', () => {
 
     testChildIds = [childId1, childId2, childId3];
 
+    const childCommon = {
+      sd_type: 'feature',
+      category: 'feature',
+      description: 'Test fixture child for blocked-state-detector tests',
+      priority: 'medium',
+      rationale: 'Test fixture child for blocked-state-detector tests',
+      scope: 'Test fixture only',
+      target_application: 'EHG_Engineer',
+      status: 'active',
+      parent_sd_id: testOrchestratorId,
+      is_active: true,
+    };
     const children = [
       {
+        ...childCommon,
         id: childId1,
         sd_key: childId1,
         title: 'Test Child 1 - Blocked',
-        sd_type: 'feature',
-        status: 'active',
-        parent_sd_id: testOrchestratorId,
-        is_active: true,
         metadata: { blocked: true, blocked_reason: 'Waiting for external API' }
       },
       {
+        ...childCommon,
         id: childId2,
         sd_key: childId2,
         title: 'Test Child 2 - Blocked by Dependency',
-        sd_type: 'feature',
-        status: 'active',
-        parent_sd_id: testOrchestratorId,
-        is_active: true,
         dependencies: ['non-existent-dep'],
         metadata: {}
       },
       {
+        ...childCommon,
         id: childId3,
         sd_key: childId3,
         title: 'Test Child 3 - Completed',
-        sd_type: 'feature',
         status: 'completed',
-        parent_sd_id: testOrchestratorId,
-        is_active: true,
         metadata: {}
       }
     ];

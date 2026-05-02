@@ -56,11 +56,17 @@ function createMockLLMClient(candidates = null) {
     },
   ];
 
+  // Source code calls `await client.complete('', prompt, opts)` (LLM-agnostic
+  // factory in lib/llm/client-factory.js).  Older tests asserted on
+  // .messages.create, so both surfaces are exposed and share the same
+  // payload — assertions on either still work.
+  const payload = JSON.stringify(candidates || defaultCandidates);
   return {
     _model: 'mock-model',
+    complete: vi.fn().mockImplementation(async () => payload),
     messages: {
       create: vi.fn().mockImplementation(async () => ({
-        content: [{ text: JSON.stringify(candidates || defaultCandidates) }],
+        content: [{ text: payload }],
       })),
     },
   };
@@ -227,9 +233,11 @@ describe('Discovery Mode - executeDiscoveryMode', () => {
     expect(result.raw_material.constraints).toEqual({ industries: ['fintech'], budget_range: '$10K-$50K' });
     expect(result.metadata.constraints_applied).toContain('industries');
     expect(result.metadata.constraints_applied).toContain('budget_range');
-    // Verify LLM was called with constraints in the prompt
-    const callArgs = llmClient.messages.create.mock.calls[0][0];
-    expect(callArgs.messages[0].content).toContain('fintech');
+    // Verify LLM was called with constraints in the prompt.
+    // Source calls `client.complete(systemPrompt, userPrompt, opts)`, so the
+    // user prompt is mock.calls[0][1].
+    const userPrompt = llmClient.complete.mock.calls[0][1];
+    expect(userPrompt).toContain('fintech');
   });
 
   test('selects highest-scored candidate as top', async () => {
@@ -337,6 +345,7 @@ describe('Discovery Mode - Error Handling', () => {
     const supabase = createMockSupabase();
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn().mockResolvedValue('I cannot generate venture candidates right now.'),
       messages: {
         create: vi.fn().mockResolvedValue({
           content: [{ text: 'I cannot generate venture candidates right now.' }],
@@ -356,6 +365,7 @@ describe('Discovery Mode - Error Handling', () => {
     const supabase = createMockSupabase();
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn().mockRejectedValue(new Error('Rate limited')),
       messages: {
         create: vi.fn().mockRejectedValue(new Error('Rate limited')),
       },
@@ -375,6 +385,7 @@ describe('Discovery Mode - Error Handling', () => {
     const supabase = createMockSupabase();
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn().mockRejectedValue(new Error('Context too long')),
       messages: {
         create: vi.fn().mockRejectedValue(new Error('Context too long')),
       },
