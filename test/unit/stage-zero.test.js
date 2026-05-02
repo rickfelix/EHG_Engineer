@@ -297,11 +297,13 @@ describe('Path Router', () => {
 
   test('routes to discovery mode', async () => {
     const supabase = createMockSupabase();
+    const ventureJson = JSON.stringify([{ name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 }]);
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn().mockResolvedValue(ventureJson),
       messages: {
         create: vi.fn().mockResolvedValue({
-          content: [{ text: JSON.stringify([{ name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 }]) }],
+          content: [{ text: ventureJson }],
         }),
       },
     };
@@ -439,11 +441,13 @@ describe('Stage 0 Orchestrator', () => {
 
   test('executes full flow with discovery path', async () => {
     const supabase = createMockSupabase();
+    const ventureJson = JSON.stringify([{ name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 }]);
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn().mockResolvedValue(ventureJson),
       messages: {
         create: vi.fn().mockResolvedValue({
-          content: [{ text: JSON.stringify([{ name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 }]) }],
+          content: [{ text: ventureJson }],
         }),
       },
     };
