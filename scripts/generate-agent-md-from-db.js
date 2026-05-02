@@ -304,14 +304,23 @@ function compileAgentFromPartial(partialPath, agentName, agentCode, data, config
   const rawContent = fs.readFileSync(partialPath, 'utf8');
   const agent = data.agentByCode[agentCode];
 
-  // Strip old frontmatter — we generate it from DB now
-  const body = stripYamlFrontmatter(rawContent);
+  // 27edb2c0: when the DB has no row for this agentCode (agent authored as a
+  // .partial but not in leo_sub_agents — or fetch returned an unexpectedly
+  // empty agentByCode) preserve the .partial's frontmatter rather than
+  // stripping it and writing a frontmatter-less .md. Without this fallback,
+  // Claude Code couldn't recognize the file as an agent and the subagent_type
+  // was effectively unregistered (witnessed for stories-agent and risk-agent).
+  const body = agent ? stripYamlFrontmatter(rawContent) : rawContent;
 
   // Remove any existing "Institutional Memory (Generated)" section
   const cleanedBody = body.replace(/## Institutional Memory \(Generated\)[\s\S]*?(?=\n## [^I]|\n---\n|$)/, '');
 
-  // Generate new frontmatter from DB
+  // Generate new frontmatter from DB; falls back to '' when no DB row, in
+  // which case cleanedBody still carries the .partial's frontmatter.
   const frontmatter = agent ? generateFrontmatter(agentName, agent) : '';
+  if (!agent) {
+    console.warn(`  ⚠️  No DB row for ${agentCode} (${agentName}) — preserving .partial frontmatter as fallback`);
+  }
 
   // Compose knowledge block
   const knowledgeBlock = composeKnowledgeBlock(agentCode, data, configCategoryMappings);
