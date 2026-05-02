@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-04-29T22:26:55.427Z
+**Generated**: 2026-05-02T15:07:57.543Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (14 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,10 @@
 | sd_key | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | resolved_at | `timestamp with time zone` | YES | - | - |
+| status | `text` | **NO** | `'pending'::text` | FR-C status machine. Forward-only transitions enforced by venture_quality_findings_status_transition_trg. pending->sd_filed/cancelled; sd_filed->resolved/cancelled. |
+| sd_filed_at | `timestamp with time zone` | YES | - | Set atomically by BEFORE UPDATE trigger when status transitions pending->sd_filed. |
+| resolved_at_v2 | `timestamp with time zone` | YES | - | Set atomically by BEFORE UPDATE trigger when status transitions sd_filed->resolved. Distinct from the legacy resolved_at column (kept for compatibility with the parent_finding_hash generator). |
+| cancelled_at | `timestamp with time zone` | YES | - | Set atomically by BEFORE UPDATE trigger when status transitions to cancelled (from pending or sd_filed). |
 
 ## Constraints
 
@@ -40,12 +44,17 @@
 ### Check Constraints
 - `venture_quality_findings_finding_category_check`: CHECK ((finding_category = ANY (ARRAY['npm_audit'::text, 'secrets'::text, 'lint'::text, 'test_suite'::text, 'unit_test'::text, 'e2e_test'::text, 'uat_test'::text, 'bug_report'::text, 'uat_signoff'::text, 'capability'::text])))
 - `venture_quality_findings_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
+- `venture_quality_findings_status_chk`: CHECK ((status = ANY (ARRAY['pending'::text, 'sd_filed'::text, 'resolved'::text, 'cancelled'::text])))
 
 ## Indexes
 
 - `venture_quality_findings_category_idx`
   ```sql
   CREATE INDEX venture_quality_findings_category_idx ON public.venture_quality_findings USING btree (finding_category)
+  ```
+- `venture_quality_findings_pending_idx`
+  ```sql
+  CREATE INDEX venture_quality_findings_pending_idx ON public.venture_quality_findings USING btree (venture_id, finding_category, severity) WHERE (status = 'pending'::text)
   ```
 - `venture_quality_findings_pkey`
   ```sql
@@ -80,6 +89,13 @@
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+## Triggers
+
+### venture_quality_findings_status_transition_trg
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION venture_quality_findings_status_transition_fn()`
 
 ---
 
