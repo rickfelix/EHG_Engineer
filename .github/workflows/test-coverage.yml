@@ -71,6 +71,21 @@ jobs:
           fi
         continue-on-error: true  # Informational only during test infrastructure fixes
 
+      - name: Upload test-results.json artifact
+        # SD-LEO-INFRA-COVERAGE-CI-TRIAGE-001 CAPA CA-2: future debug sessions
+        # need the per-test failure list, which vitest writes only to the JSON
+        # file (its JSON reporter does not emit per-failure lines to stdout).
+        # Without this artifact, `gh run view --log` surfaces only a count, and
+        # any CI/local delta investigation is blind. `if: always()` runs on
+        # failure too, which is the case we actually need to debug.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-json
+          path: test-results.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Capture test results to database
         if: always()
         env:
