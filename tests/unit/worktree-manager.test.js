@@ -23,6 +23,8 @@ const {
   listWorktrees,
   resolveExpectedBranch,
   validateSdKey,
+  safeRecursiveRm,
+  safeRecursiveCp,
   _resetDeprecationWarning
 } = await import('../../lib/worktree-manager.js');
 
@@ -354,6 +356,131 @@ describe('Worktree Manager', () => {
       execSync.mockReturnValue('/nonexistent/path\n');
       const result = listWorktrees();
       expect(result).toEqual([]);
+    });
+  });
+
+  // SD-FDBK-ENH-SESSION-WORKTREE-CLEANUP-001
+  describe('safeRecursiveRm', () => {
+    it('returns silently when path does not exist (force=true default)', () => {
+      const missing = path.join(os.tmpdir(), `srm-${Date.now()}-missing`);
+      expect(() => safeRecursiveRm(missing)).not.toThrow();
+    });
+
+    it('removes a regular directory tree like fs.rmSync', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'srm-'));
+      fs.writeFileSync(path.join(dir, 'a.txt'), 'a');
+      fs.mkdirSync(path.join(dir, 'sub'));
+      fs.writeFileSync(path.join(dir, 'sub', 'b.txt'), 'b');
+      safeRecursiveRm(dir);
+      expect(fs.existsSync(dir)).toBe(false);
+    });
+
+    it('unlinks a top-level junction child WITHOUT touching the junction target', () => {
+      const target = fs.mkdtempSync(path.join(os.tmpdir(), 'srm-target-'));
+      const sentinel = path.join(target, 'sentinel.txt');
+      fs.writeFileSync(sentinel, 'PRESERVE_ME');
+
+      const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'srm-wt-'));
+      fs.writeFileSync(path.join(wt, 'src.txt'), 'worktree-content');
+      const linkPath = path.join(wt, 'node_modules');
+      try {
+        fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
+      } catch (err) {
+        // Windows without admin / developer-mode can't create symlinks; skip
+        fs.rmSync(target, { recursive: true, force: true });
+        fs.rmSync(wt, { recursive: true, force: true });
+        return;
+      }
+
+      safeRecursiveRm(wt);
+
+      expect(fs.existsSync(wt)).toBe(false);
+      expect(fs.existsSync(target)).toBe(true);
+      expect(fs.existsSync(sentinel)).toBe(true);
+      expect(fs.readFileSync(sentinel, 'utf8')).toBe('PRESERVE_ME');
+      fs.rmSync(target, { recursive: true, force: true });
+    });
+
+    it('unlinks the path itself when it is a symlink/junction (no recursion)', () => {
+      const target = fs.mkdtempSync(path.join(os.tmpdir(), 'srm-target2-'));
+      fs.writeFileSync(path.join(target, 'keep.txt'), 'KEEP');
+      const link = path.join(os.tmpdir(), `srm-link-${Date.now()}`);
+      try {
+        fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+      } catch {
+        fs.rmSync(target, { recursive: true, force: true });
+        return;
+      }
+
+      safeRecursiveRm(link);
+
+      expect(fs.existsSync(link)).toBe(false);
+      expect(fs.existsSync(target)).toBe(true);
+      expect(fs.existsSync(path.join(target, 'keep.txt'))).toBe(true);
+      fs.rmSync(target, { recursive: true, force: true });
+    });
+  });
+
+  describe('safeRecursiveCp', () => {
+    it('throws when source does not exist', () => {
+      const missing = path.join(os.tmpdir(), `scp-${Date.now()}-missing`);
+      const dest = path.join(os.tmpdir(), `scp-dest-${Date.now()}`);
+      expect(() => safeRecursiveCp(missing, dest)).toThrow(/source does not exist/);
+    });
+
+    it('copies a regular directory tree faithfully', () => {
+      const src = fs.mkdtempSync(path.join(os.tmpdir(), 'scp-src-'));
+      fs.writeFileSync(path.join(src, 'a.txt'), 'A');
+      fs.mkdirSync(path.join(src, 'sub'));
+      fs.writeFileSync(path.join(src, 'sub', 'b.txt'), 'B');
+
+      const dest = path.join(os.tmpdir(), `scp-dest-${Date.now()}`);
+      safeRecursiveCp(src, dest, { recursive: true });
+
+      expect(fs.readFileSync(path.join(dest, 'a.txt'), 'utf8')).toBe('A');
+      expect(fs.readFileSync(path.join(dest, 'sub', 'b.txt'), 'utf8')).toBe('B');
+      fs.rmSync(src, { recursive: true, force: true });
+      fs.rmSync(dest, { recursive: true, force: true });
+    });
+
+    it('does NOT copy junction TARGET contents into destination', () => {
+      const target = fs.mkdtempSync(path.join(os.tmpdir(), 'scp-target-'));
+      // Sentinel that proves target was NOT copied into dest
+      fs.writeFileSync(path.join(target, 'BIG_SENTINEL.txt'), 'x'.repeat(1024));
+
+      const src = fs.mkdtempSync(path.join(os.tmpdir(), 'scp-src-'));
+      fs.writeFileSync(path.join(src, 'real.txt'), 'real-content');
+      try {
+        fs.symlinkSync(target, path.join(src, 'node_modules'),
+          process.platform === 'win32' ? 'junction' : 'dir');
+      } catch {
+        fs.rmSync(target, { recursive: true, force: true });
+        fs.rmSync(src, { recursive: true, force: true });
+        return;
+      }
+
+      const dest = path.join(os.tmpdir(), `scp-dest-${Date.now()}`);
+      safeRecursiveCp(src, dest, { recursive: true });
+
+      expect(fs.readFileSync(path.join(dest, 'real.txt'), 'utf8')).toBe('real-content');
+      // Critical assertion: target file MUST NOT have been copied through the junction
+      const destNodeModules = path.join(dest, 'node_modules');
+      const bigSentinelInDest = path.join(destNodeModules, 'BIG_SENTINEL.txt');
+      // Either the link was recreated (so reading the sentinel via the link is OK,
+      // but the file at destNodeModules itself is a SYMLINK, not a regular file
+      // containing the copied content) OR the link was skipped entirely.
+      if (fs.existsSync(destNodeModules)) {
+        const destStat = fs.lstatSync(destNodeModules);
+        expect(destStat.isSymbolicLink()).toBe(true);
+      }
+      // Even if we read through the link, the SOURCE target's sentinel still exists
+      // because we never wrote a copy. Assert source target unchanged.
+      expect(fs.existsSync(path.join(target, 'BIG_SENTINEL.txt'))).toBe(true);
+
+      fs.rmSync(target, { recursive: true, force: true });
+      fs.rmSync(src, { recursive: true, force: true });
+      // Use safeRecursiveRm for dest in case junction was recreated
+      safeRecursiveRm(dest);
     });
   });
 });
