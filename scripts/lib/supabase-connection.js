@@ -325,27 +325,95 @@ export async function createSupabaseAnonClient(projectKey = 'engineer', options 
 }
 
 /**
- * PostgreSQL statement splitter that respects $$ delimiters
+ * PostgreSQL statement splitter that respects $$ delimiters, single-line `--`
+ * comments, block comments, and single-quoted string literals.
+ *
+ * QF-20260502-pg-stmt-splitter: prior version only tracked $$ delimiters, so
+ * any `;` inside a `--` comment or a `'...;...'` literal incorrectly terminated
+ * the current statement and broke migrations applied via this helper. The
+ * workaround was to send the full file as one client.query() call, which
+ * defeated the purpose of the splitter.
+ *
  * @param {string} sql - SQL content
  * @returns {string[]} Array of statements
  */
 export function splitPostgreSQLStatements(sql) {
   let inDollarQuote = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let inSingleQuote = false;
   let current = '';
   const statements = [];
 
   for (let i = 0; i < sql.length; i++) {
-    // Check for $$ delimiter (used in function bodies)
-    if (sql[i] === '$' && sql[i+1] === '$') {
-      inDollarQuote = !inDollarQuote;
-      current += '$$';
-      i++; // Skip next $
+    const ch = sql[i];
+    const next = sql[i + 1];
+
+    if (inLineComment) {
+      current += ch;
+      if (ch === '\n') inLineComment = false;
+      continue;
     }
-    // Semicolon only terminates if not in dollar quote
-    else if (sql[i] === ';' && !inDollarQuote) {
+    if (inBlockComment) {
+      current += ch;
+      if (ch === '*' && next === '/') {
+        current += '/';
+        i++;
+        inBlockComment = false;
+      }
+      continue;
+    }
+    if (inSingleQuote) {
+      current += ch;
+      if (ch === "'") {
+        // SQL escapes a single quote by doubling it: 'it''s ok'.
+        if (next === "'") {
+          current += "'";
+          i++;
+        } else {
+          inSingleQuote = false;
+        }
+      }
+      continue;
+    }
+    if (inDollarQuote) {
+      if (ch === '$' && next === '$') {
+        inDollarQuote = false;
+        current += '$$';
+        i++;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (ch === '-' && next === '-') {
+      inLineComment = true;
+      current += '--';
+      i++;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      current += '/*';
+      i++;
+      continue;
+    }
+    if (ch === "'") {
+      inSingleQuote = true;
+      current += ch;
+      continue;
+    }
+    if (ch === '$' && next === '$') {
+      inDollarQuote = true;
+      current += '$$';
+      i++;
+      continue;
+    }
+    if (ch === ';') {
       const trimmed = current.trim();
       if (trimmed.length > 0) {
-        // Remove comment-only lines
+        // Strip comment-only lines so the executor doesn't get a no-op statement.
         const lines = trimmed.split('\n').filter(line => {
           const l = line.trim();
           return l.length > 0 && !l.startsWith('--');
@@ -355,13 +423,11 @@ export function splitPostgreSQLStatements(sql) {
         }
       }
       current = '';
+      continue;
     }
-    else {
-      current += sql[i];
-    }
+    current += ch;
   }
 
-  // Add final statement if exists
   if (current.trim().length > 0) {
     statements.push(current.trim());
   }
