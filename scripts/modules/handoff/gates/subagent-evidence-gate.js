@@ -27,6 +27,21 @@ export const REQUIRED_SUBAGENTS = {
 };
 
 /**
+ * Parse a DB timestamp string treating naive (no-TZ) values as UTC.
+ * strategic_directives_v2.created_at and sd_phase_handoffs.accepted_at are
+ * stored as timestamp-without-time-zone in some environments; PostgREST returns
+ * them as naive strings, and `new Date(...)` parses naive strings as LOCAL —
+ * inflating freshness anchors by the local UTC offset and rejecting valid
+ * evidence rows. Append 'Z' when no TZ marker is present so JS treats it as UTC.
+ */
+function parseAsUTC(ts) {
+  if (!ts) return null;
+  if (ts instanceof Date) return ts;
+  const hasTZ = /Z$|[+-]\d{2}:?\d{2}$/.test(ts);
+  return new Date(hasTZ ? ts : ts + 'Z');
+}
+
+/**
  * Resolve the current-phase start timestamp for freshness comparison.
  * Order:
  *   1) sd_phase_handoffs.accepted_at for most recent accepted handoff INTO current phase
@@ -41,7 +56,7 @@ export const REQUIRED_SUBAGENTS = {
 async function resolveCurrentPhaseStartedAt(ctx, supabase) {
   if (ctx._phaseStartedAt instanceof Date) return ctx._phaseStartedAt;
   if (typeof ctx._phaseStartedAt === 'string') {
-    ctx._phaseStartedAt = new Date(ctx._phaseStartedAt);
+    ctx._phaseStartedAt = parseAsUTC(ctx._phaseStartedAt);
     return ctx._phaseStartedAt;
   }
 
@@ -79,7 +94,7 @@ async function resolveCurrentPhaseStartedAt(ctx, supabase) {
       .limit(1);
 
     if (data && data.length > 0 && data[0].accepted_at) {
-      ctx._phaseStartedAt = new Date(data[0].accepted_at);
+      ctx._phaseStartedAt = parseAsUTC(data[0].accepted_at);
       return ctx._phaseStartedAt;
     }
   } catch (_) {
@@ -94,7 +109,7 @@ async function resolveCurrentPhaseStartedAt(ctx, supabase) {
       .eq('id', sdUuid)
       .single();
     if (data?.created_at) {
-      ctx._phaseStartedAt = new Date(data.created_at);
+      ctx._phaseStartedAt = parseAsUTC(data.created_at);
       return ctx._phaseStartedAt;
     }
   } catch (_) { /* noop */ }
