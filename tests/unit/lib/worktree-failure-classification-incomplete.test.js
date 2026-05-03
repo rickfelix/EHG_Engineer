@@ -37,12 +37,23 @@ describe('SD-LEO-INFRA-LEO-INFRA-WORKTREE-001 — worktree_incomplete classifica
     expect(result.severity).toBe('error');
   });
 
-  it('classify() also matches the natural-language fragment', () => {
+  // Adversarial review of PR #3488 (finding 2): the prior broad regex
+  // overmatched unrelated stage-error strings. Verify the tightened pattern
+  // accepts ONLY the literal WORKTREE_INCOMPLETE token (with word-boundary).
+  it('classify() does NOT match natural-language substrate phrasing without the token', () => {
+    // Pre-fix: this returned 'worktree_incomplete' (false positive)
     const result = classify('worktree creation reported success but substrate items missing');
-    expect(result.code).toBe('worktree_incomplete');
+    expect(result.code).not.toBe('worktree_incomplete');
   });
 
-  it('classify() does NOT match worktree_incomplete on unrelated errors', () => {
+  it('classify() does NOT match unrelated stage-error strings containing substrate/items/missing', () => {
+    // Real-shaped stage error fragments that the prior regex over-matched
+    expect(classify('the gate detected substrate items missing in stage 18').code).not.toBe('worktree_incomplete');
+    expect(classify('stage emit substrate metadata items missing from registry').code).not.toBe('worktree_incomplete');
+    expect(classify('substrate items are missing for stage 18 review panel').code).not.toBe('worktree_incomplete');
+  });
+
+  it('classify() does NOT match worktree_incomplete on other classifications', () => {
     expect(classify('git: command not found').code).not.toBe('worktree_incomplete');
     expect(classify('WORKTREE_BASE_FETCH_FAILED').code).toBe('base_ref_fetch_failed');
     expect(classify('worktree already checked out at').code).toBe('already_checked_out');

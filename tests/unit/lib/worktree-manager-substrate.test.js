@@ -128,4 +128,27 @@ describe('SD-LEO-INFRA-LEO-INFRA-WORKTREE-001 — validateWorktreeSubstrate', ()
       try { fs.rmSync(realModules, { recursive: true, force: true }); } catch { /* best-effort */ }
     }
   });
+
+  // Adversarial review of PR #3488 (finding 1): the prior fs.existsSync
+  // call followed symlinks and falsely reported a broken-target junction
+  // as missing. lstatSync sees the link itself, so a transient broken
+  // target (sibling npm install mid-swap) still reports the substrate
+  // item as present.
+  it('treats broken-target node_modules junction as present (lstat semantics)', () => {
+    buildHealthyWorktree(tmpRoot);
+    const targetThatWillBeDeleted = fs.mkdtempSync(path.join(os.tmpdir(), 'substrate-vanish-'));
+    fs.rmSync(path.join(tmpRoot, 'node_modules'), { recursive: true, force: true });
+    try {
+      const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+      fs.symlinkSync(targetThatWillBeDeleted, path.join(tmpRoot, 'node_modules'), linkType);
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') return;
+      throw err;
+    }
+    // Break the link by removing the target — fs.existsSync would now lie
+    fs.rmSync(targetThatWillBeDeleted, { recursive: true, force: true });
+    const result = validateWorktreeSubstrate(tmpRoot);
+    expect(result.missing).not.toContain('node_modules');
+    expect(result.ok).toBe(true);
+  });
 });
