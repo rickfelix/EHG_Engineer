@@ -72,6 +72,80 @@ export const MIN_OCCURRENCES = 2;
 // created_by values that identify test/smoke-test score records to skip.
 const TEST_CREATED_BY_PATTERNS = ['test-', 'test-sync', 'vision-scorer-test'];
 
+// ─── A05 Source-Class Filter (SD-LEO-INFRA-FILTER-CORRECTIVE-GENERATOR-001) ───
+// Heuristic keyword sets used by classifySourceSD() to decide whether the source
+// SD is a class for which A05 (event_bus_integration) corrective SDs are noise.
+// Read-only/CLI/validation-only sources legitimately do not emit lifecycle events.
+
+export const READONLY_KEYWORDS = [
+  'cli', 'validation', 'parser', 'parsing', 'validator', 'preflight',
+  'check', 'verify', 'classifier', 'lookup', 'query', 'audit',
+  'helper', 'logger', 'reporter', 'inspector', 'scanner',
+];
+export const WRITE_KEYWORDS = [
+  'emit', 'publish', 'event', 'persist', 'insert', 'update', 'migration',
+  'schema', 'lifecycle', 'webhook', 'broadcast',
+];
+export const READONLY_BUGFIX_TYPES = new Set(['bugfix', 'fix', 'documentation']);
+
+/**
+ * Lightweight classifier: inspect SD shape and return reason if A05 corrective
+ * should be suppressed. Returns null when no suppression match (allow A05).
+ * Pure / synchronous so it is unit-testable without a Supabase client.
+ *
+ * @param {Object} sd - { sd_type, scope, key_changes, title, description }
+ * @returns {string|null} reason like 'cli_validation' / 'readonly_bugfix' or null
+ */
+export function classifySourceSD(sd) {
+  if (!sd) return null;
+  const text = [
+    sd.title, sd.description, sd.scope,
+    Array.isArray(sd.key_changes)
+      ? sd.key_changes.map(k => (typeof k === 'object' ? `${k.change || ''} ${k.impact || ''}` : String(k))).join(' ')
+      : '',
+  ].join(' ').toLowerCase();
+
+  const writeMatches = WRITE_KEYWORDS.filter(k => text.includes(k)).length;
+  if (writeMatches >= 2) return null;
+
+  const readonlyMatches = READONLY_KEYWORDS.filter(k => text.includes(k)).length;
+  if (readonlyMatches >= 2) return 'cli_validation';
+
+  const sdType = String(sd.sd_type || '').toLowerCase();
+  if (READONLY_BUGFIX_TYPES.has(sdType) && writeMatches === 0 && readonlyMatches >= 1) {
+    return 'readonly_bugfix';
+  }
+  if (sdType === 'documentation') return 'documentation';
+
+  return null;
+}
+
+/**
+ * Database-backed companion: load source SD by sd_key OR id and run classifier.
+ * Conservative default: returns suppress=false on any lookup failure or null SD,
+ * so legit A05 emissions are never silently lost.
+ *
+ * @param {string|null} sourceSdId
+ * @param {Object} supabase
+ * @returns {Promise<{ suppress: boolean, reason: string|null, sourceSdKey: string|null }>}
+ */
+export async function isSourceSDA05Suppressed(sourceSdId, supabase) {
+  if (!sourceSdId) return { suppress: false, reason: null, sourceSdKey: null };
+  try {
+    const { data, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, sd_type, title, description, scope, key_changes')
+      .or(`sd_key.eq.${sourceSdId},id.eq.${sourceSdId}`)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return { suppress: false, reason: null, sourceSdKey: null };
+    const reason = classifySourceSD(data);
+    return { suppress: !!reason, reason, sourceSdKey: data.sd_key || data.id };
+  } catch {
+    return { suppress: false, reason: null, sourceSdKey: null };
+  }
+}
+
 // ─── Supabase Client ──────────────────────────────────────────────────────────
 
 function getSupabase() {
@@ -370,6 +444,30 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
     });
   }
 
+  // 5b. A05 source-class filter (SD-LEO-INFRA-FILTER-CORRECTIVE-GENERATOR-001).
+  // For source SDs that are read-only/CLI/validation-only, A05 (event_bus_integration)
+  // corrective generation is noise — strip A05 from each group's dims and drop the
+  // group entirely if no dims remain. Other dimensions still emit normally.
+  if (score.sd_id) {
+    const a05Verdict = await isSourceSDA05Suppressed(score.sd_id, supabase);
+    if (a05Verdict.suppress) {
+      let suppressedAny = false;
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const beforeLen = groups[i].dims.length;
+        groups[i].dims = groups[i].dims.filter(d => d.dimId !== 'A05');
+        if (groups[i].dims.length < beforeLen) suppressedAny = true;
+        if (groups[i].dims.length === 0) groups.splice(i, 1);
+      }
+      if (suppressedAny) {
+        console.log(`[corrective-sd-generator] eva.corrective.skipped_a05 source_sd_id=${a05Verdict.sourceSdKey} reason=${a05Verdict.reason} total_score=${score.total_score ?? '?'}`);
+        await _logAudit(supabase, scoreId, 'skipped_a05_source_class', null, score.vision_id, {
+          source_sd_id: a05Verdict.sourceSdKey,
+          reason: a05Verdict.reason,
+        });
+      }
+    }
+  }
+
   // 6. Create one SD per group via createSD (standard LEO creation pipeline)
   const createdSDs = [];
   const allGeneratedIds = [...existingIds];
@@ -528,11 +626,11 @@ function _extractDimensionName(dimensionScores, totalScore) {
   return _extractLowestDimension(dimensionScores, totalScore).dimensionName;
 }
 
-async function _logAudit(supabase, scoreId, action, sdKey, visionId) {
+async function _logAudit(supabase, scoreId, action, sdKey, visionId, extra = null) {
   try {
     await supabase.from('brainstorm_sessions').insert({
       domain: 'protocol',
-      topic: `EVA Corrective SD: ${sdKey ?? 'accept (no SD)'}`,
+      topic: `EVA Corrective SD: ${sdKey ?? action}`,
       mode: 'structured',
       capabilities_status: 'not_checked',
       retrospective_status: 'pending',
@@ -542,6 +640,7 @@ async function _logAudit(supabase, scoreId, action, sdKey, visionId) {
         vision_id: visionId,
         action_taken: action,
         sd_key_created: sdKey ?? null,
+        ...(extra || {}),
       },
     });
   } catch {
