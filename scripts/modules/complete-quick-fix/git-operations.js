@@ -224,7 +224,12 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
   let diffAnalysis = {};
 
   try {
-    const files = execSync('git diff origin/main --name-only', { encoding: 'utf-8', cwd: testDir })
+    // QF-20260503-820: use three-dot syntax (origin/main...HEAD) so the diff is
+    // scoped to "what THIS branch changed since divergence" — independent of how
+    // far origin/main has advanced during the QF lifecycle. Two-dot syntax
+    // (origin/main..HEAD) was producing false-positive scope-creep warnings
+    // when parallel sessions merged unrelated work to main mid-flight.
+    const files = execSync('git diff origin/main...HEAD --name-only', { encoding: 'utf-8', cwd: testDir })
       .trim()
       .split('\n')
       .filter(f => f);
@@ -233,7 +238,7 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
     console.log(`   Files Changed: ${filesChanged.length}`);
     filesChanged.forEach(file => console.log(`      - ${file}`));
 
-    const diffStat = execSync('git diff origin/main --stat', { encoding: 'utf-8', cwd: testDir });
+    const diffStat = execSync('git diff origin/main...HEAD --stat', { encoding: 'utf-8', cwd: testDir });
     const insertions = diffStat.match(/(\d+) insertion/);
     const deletions = diffStat.match(/(\d+) deletion/);
 
