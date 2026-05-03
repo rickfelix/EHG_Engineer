@@ -52,7 +52,13 @@ function readSessionState() {
  */
 function isLeadFileRead() {
   const state = readSessionState();
-  return state.protocolFilesRead?.includes('CLAUDE_LEAD.md') || state.protocolFilesRead?.includes('CLAUDE_LEAD.md') || false;
+  // QF-20260503-283: also accept readCount > 0 in protocolFileReadStatus —
+  // chunked reads update that schema but never append to protocolFilesRead,
+  // so without this fallback Case 1 in validateLeadFileRead short-circuits
+  // before Case 2's cumulative-coverage check can run.
+  return state.protocolFilesRead?.includes('CLAUDE_LEAD.md')
+    || (state.protocolFileReadStatus?.['CLAUDE_LEAD.md']?.readCount > 0)
+    || false;
 }
 
 /**
@@ -61,7 +67,11 @@ function isLeadFileRead() {
  */
 function isCoreFileRead() {
   const state = readSessionState();
-  return state.protocolFilesRead?.includes('CLAUDE_CORE.md') || state.protocolFilesRead?.includes('CLAUDE_CORE.md') || false;
+  // QF-20260503-283: also accept readCount > 0 in protocolFileReadStatus —
+  // chunked reads update that schema but never append to protocolFilesRead.
+  return state.protocolFilesRead?.includes('CLAUDE_CORE.md')
+    || (state.protocolFileReadStatus?.['CLAUDE_CORE.md']?.readCount > 0)
+    || false;
 }
 
 /**
