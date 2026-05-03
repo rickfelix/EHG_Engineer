@@ -88,13 +88,28 @@ export const WRITE_KEYWORDS = [
 ];
 export const READONLY_BUGFIX_TYPES = new Set(['bugfix', 'fix', 'documentation']);
 
+// SD-LEO-INFRA-EXTEND-CORRECTIVE-GENERATOR-001: lifecycle-feature heuristic.
+// Feature-type SDs that touch only session/lifecycle plumbing (e.g. session-id
+// capture, hook installation, identity persistence) legitimately do not address
+// architectural dimensions. They were previously bypassing classification because
+// READONLY_BUGFIX_TYPES omits 'feature'.
+export const LIFECYCLE_FEATURE_KEYWORDS = [
+  'session', 'hook', 'capture', 'sessionstart', 'lifecycle', 'identity',
+];
+
+// SD-LEO-INFRA-EXTEND-CORRECTIVE-GENERATOR-001: dimension set stripped when a
+// source is suppression-eligible. Previously only A05 was stripped, leaving
+// A01-A04 to emit identical noise correctives (see cancelled SDs 040/041/042).
+export const SUPPRESSED_ARCHITECTURAL_DIMS = new Set(['A01', 'A02', 'A03', 'A04', 'A05']);
+
 /**
- * Lightweight classifier: inspect SD shape and return reason if A05 corrective
- * should be suppressed. Returns null when no suppression match (allow A05).
+ * Lightweight classifier: inspect SD shape and return reason if architectural
+ * correctives should be suppressed. Returns null when no suppression match.
  * Pure / synchronous so it is unit-testable without a Supabase client.
  *
  * @param {Object} sd - { sd_type, scope, key_changes, title, description }
- * @returns {string|null} reason like 'cli_validation' / 'readonly_bugfix' or null
+ * @returns {string|null} reason like 'cli_validation' / 'readonly_bugfix' /
+ *   'documentation' / 'lifecycle_feature' or null
  */
 export function classifySourceSD(sd) {
   if (!sd) return null;
@@ -116,6 +131,20 @@ export function classifySourceSD(sd) {
     return 'readonly_bugfix';
   }
   if (sdType === 'documentation') return 'documentation';
+
+  // Conservative lifecycle-feature path: feature-type SD with at least one
+  // lifecycle keyword AND zero STRICT write verbs. The strict-write count
+  // excludes 'lifecycle' itself (it sits in WRITE_KEYWORDS as a domain noun
+  // that describes lifecycle-themed SDs, not a write action) — otherwise any
+  // SD describing itself as "lifecycle hook" trips the write floor and never
+  // reaches this branch. Real write verbs (persist, emit, publish, insert,
+  // update, migration, schema, broadcast, webhook, event) still bump the count
+  // and disqualify the SD from suppression.
+  if (sdType === 'feature') {
+    const lifecycleMatches = LIFECYCLE_FEATURE_KEYWORDS.filter(k => text.includes(k)).length;
+    const strictWriteMatches = WRITE_KEYWORDS.filter(k => k !== 'lifecycle' && text.includes(k)).length;
+    if (lifecycleMatches >= 1 && strictWriteMatches === 0) return 'lifecycle_feature';
+  }
 
   return null;
 }
@@ -444,25 +473,36 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
     });
   }
 
-  // 5b. A05 source-class filter (SD-LEO-INFRA-FILTER-CORRECTIVE-GENERATOR-001).
-  // For source SDs that are read-only/CLI/validation-only, A05 (event_bus_integration)
-  // corrective generation is noise — strip A05 from each group's dims and drop the
-  // group entirely if no dims remain. Other dimensions still emit normally.
+  // 5b. Architectural source-class filter (SD-LEO-INFRA-FILTER-CORRECTIVE-GENERATOR-001
+  // shipped A05-only; SD-LEO-INFRA-EXTEND-CORRECTIVE-GENERATOR-001 extends to A01-A05).
+  // For source SDs classified as read-only/CLI/documentation/lifecycle-feature, the
+  // entire architectural row (A01-A05) is noise because the SD does not change
+  // architecture. Strip all A-dims from each group; V-dims pass through. Drop empty
+  // groups. Other dimensions still emit normally for non-suppressed sources.
   if (score.sd_id) {
-    const a05Verdict = await isSourceSDA05Suppressed(score.sd_id, supabase);
-    if (a05Verdict.suppress) {
+    const verdict = await isSourceSDA05Suppressed(score.sd_id, supabase);
+    if (verdict.suppress) {
       let suppressedAny = false;
+      const suppressedDims = new Set();
       for (let i = groups.length - 1; i >= 0; i--) {
         const beforeLen = groups[i].dims.length;
-        groups[i].dims = groups[i].dims.filter(d => d.dimId !== 'A05');
+        for (const d of groups[i].dims) {
+          if (SUPPRESSED_ARCHITECTURAL_DIMS.has(d.dimId)) suppressedDims.add(d.dimId);
+        }
+        groups[i].dims = groups[i].dims.filter(d => !SUPPRESSED_ARCHITECTURAL_DIMS.has(d.dimId));
         if (groups[i].dims.length < beforeLen) suppressedAny = true;
         if (groups[i].dims.length === 0) groups.splice(i, 1);
       }
       if (suppressedAny) {
-        console.log(`[corrective-sd-generator] eva.corrective.skipped_a05 source_sd_id=${a05Verdict.sourceSdKey} reason=${a05Verdict.reason} total_score=${score.total_score ?? '?'}`);
-        await _logAudit(supabase, scoreId, 'skipped_a05_source_class', null, score.vision_id, {
-          source_sd_id: a05Verdict.sourceSdKey,
-          reason: a05Verdict.reason,
+        const eventType = verdict.reason === 'lifecycle_feature'
+          ? 'skipped_lifecycle_feature_class'
+          : 'skipped_a05_source_class';
+        const dimsList = [...suppressedDims].sort().join(',');
+        console.log(`[corrective-sd-generator] eva.corrective.${eventType} source_sd_id=${verdict.sourceSdKey} reason=${verdict.reason} dims=${dimsList} total_score=${score.total_score ?? '?'}`);
+        await _logAudit(supabase, scoreId, eventType, null, score.vision_id, {
+          source_sd_id: verdict.sourceSdKey,
+          reason: verdict.reason,
+          suppressed_dims: [...suppressedDims].sort(),
         });
       }
     }
