@@ -265,14 +265,14 @@ async function main() {
   })));
 
   // Step 3 — insert stories one-by-one so a single bad column doesn't poison the batch
-  const insertedIds = [];
+  const createdStoryIds = [];
   if (skipStoryInsert) {
     const { data: existing } = await supabase
       .from('user_stories')
       .select('id,story_key')
       .eq('sd_id', SD_UUID)
       .order('story_key', { ascending: true });
-    for (const r of existing) insertedIds.push(r.id);
+    for (const r of existing) createdStoryIds.push(r.id);
   } else
   for (const { id, row } of built) {
     log(`inserting ${row.story_key || row.key || id} ...`);
@@ -293,13 +293,13 @@ async function main() {
           const { [bad]: _drop, ...rest } = row;
           const retry = await supabase.from('user_stories').insert(rest).select('id').single();
           if (retry.error) { err('retry failed:', retry.error.message); throw retry.error; }
-          insertedIds.push(retry.data.id);
+          createdStoryIds.push(retry.data.id);
           continue;
         }
       }
       throw error;
     }
-    insertedIds.push(data?.id || id);
+    createdStoryIds.push(data?.id || id);
   }
 
   // Verify count
@@ -325,7 +325,7 @@ async function main() {
 
   // Step 4 — insert STORIES sub_agent_execution_results row
   const summary = {
-    stories_generated: insertedIds.length,
+    stories_generated: createdStoryIds.length,
     impl_context_coverage_pct: 100,
     fr_coverage: ['FR-1', 'FR-2', 'FR-3', 'FR-4', 'FR-5'],
     notes: 'Stories cover resolveTimeout helper, four call-site wirings, debug log, vitest suite, and PrivacyPatrol smoke test.'
@@ -400,9 +400,9 @@ async function main() {
   console.log('\n=== STORIES SUB-AGENT REPORT ===');
   console.log(`SD: ${SD_KEY} (${SD_UUID})`);
   console.log(`PRD: ${PRD_ID}`);
-  console.log(`Stories inserted: ${insertedIds.length}`);
-  for (let i = 0; i < insertedIds.length; i++) {
-    console.log(`  ${i + 1}. ${insertedIds[i]}  (${STORIES[i].fr})  ${STORIES[i].title}`);
+  console.log(`Stories inserted: ${createdStoryIds.length}`);
+  for (let i = 0; i < createdStoryIds.length; i++) {
+    console.log(`  ${i + 1}. ${createdStoryIds[i]}  (${STORIES[i].fr})  ${STORIES[i].title}`);
   }
   console.log(`SAER row id: ${saerId} (phase=${PHASE}, code=${SUB_AGENT_CODE}, verdict=PASS, confidence=95)`);
   console.log('================================\n');
