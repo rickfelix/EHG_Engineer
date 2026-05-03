@@ -88,27 +88,43 @@ export async function swapClaim(supabase, { sessionId, oldSdKey, newSdKey }) {
  */
 export async function releaseClaim(supabase, sessionId, sdKey) {
   try {
-    const { data, error } = await supabase
+    // Pre-check holds caller-side safety: confirm session actually holds sdKey.
+    // The atomic RPC below is session-scoped (releases whatever the session
+    // holds) so this guards against caller-side bugs where the wrong sdKey is
+    // passed.
+    const { data: session, error: selectError } = await supabase
       .from('claude_sessions')
-      .update({
-        sd_key: null,
-        released_at: new Date().toISOString()
-      })
+      .select('sd_key')
       .eq('session_id', sessionId)
-      .eq('sd_key', sdKey)
-      .select('session_id');
+      .maybeSingle();
+
+    if (selectError) {
+      return { success: false, reason: `DB error: ${selectError.message}` };
+    }
+    if (!session) {
+      return { success: false, reason: `Session ${sessionId} not found` };
+    }
+    if (session.sd_key !== sdKey) {
+      return { success: false, reason: `Session does not hold claim on ${sdKey}` };
+    }
+
+    // Atomic release via release_sd RPC (migration 20260502_release_clear_worktree_state.sql):
+    // single UPDATE NULLs sd_key, worktree_path, worktree_branch together so the
+    // ck_claude_sessions_worktree_state_consistency invariant holds at every
+    // observable row state. Also clears claiming_session_id / active_session_id
+    // on the SD row, fixing the partial-cleanup class where releaseClaim only
+    // touched claude_sessions.
+    const { data, error } = await supabase.rpc('release_sd', {
+      p_session_id: sessionId,
+      p_reason: 'release_claim'
+    });
 
     if (error) {
       return { success: false, reason: `DB error: ${error.message}` };
     }
-
-    if (!data || data.length === 0) {
-      return { success: false, reason: `Session does not hold claim on ${sdKey}` };
+    if (data && data.success === false) {
+      return { success: false, reason: data.error || data.message || 'release_sd RPC reported failure' };
     }
-
-    // FR-2: clear worktree state through the single-owner writer so the
-    // (sd_key, worktree_*) invariant holds. Audit log line emitted by writer.
-    await clearWorktreeState(sessionId, { supabase, reason: 'release_claim' });
 
     return { success: true, reason: `Released ${sdKey}` };
   } catch (err) {
