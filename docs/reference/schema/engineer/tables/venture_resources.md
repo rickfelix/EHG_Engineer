@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (9 total)
+## Columns (11 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -27,6 +27,8 @@
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| repo_url | `text` | YES | - | GitHub repository URL captured at Stage 19 Replit-deployment registration. Populated by `POST /api/stage19/:ventureId/register-deployment` (SD-LEO-FEAT-STAGE-BUILD-REPLIT-001 / FR-3). Read by exit-gate-enforcer for the `gates.exit` "GitHub repo URL stored in venture_resources" verifier. NULL for ventures that skip Replit. |
+| deployment_url | `text` | YES | - | Replit / hosting deployment URL captured at Stage 19 registration alongside `repo_url`. Same SD/FR. Indexed by partial unique index `venture_resources_venture_deployment_url_uniq` to prevent duplicate registrations per venture. NULL for non-Replit ventures. |
 
 ## Constraints
 
@@ -61,6 +63,13 @@
   ```sql
   CREATE UNIQUE INDEX venture_resources_venture_id_resource_type_resource_identif_key ON public.venture_resources USING btree (venture_id, resource_type, resource_identifier)
   ```
+- `venture_resources_venture_deployment_url_uniq` (partial)
+  ```sql
+  CREATE UNIQUE INDEX venture_resources_venture_deployment_url_uniq
+    ON public.venture_resources (venture_id, deployment_url)
+    WHERE deployment_url IS NOT NULL
+  ```
+  Added by migration `20260503_venture_resources_add_replit_urls.sql` to prevent duplicate Replit deployment registrations on the same venture. Partial-on-NOT-NULL so existing rows without `deployment_url` are unaffected.
 
 ## RLS Policies
 

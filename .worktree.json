@@ -1,7 +1,8 @@
 {
-  "sdKey": "SD-FDBK-ENH-CHILD-PREFLIGHT-RETURNS-001",
-  "expectedBranch": "feat/SD-FDBK-ENH-CHILD-PREFLIGHT-RETURNS-001",
-  "createdAt": "2026-05-02T12:07:06.667Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "sdKey": "SD-LEO-FEAT-STAGE-BUILD-REPLIT-001",
+  "expectedBranch": "feat/SD-LEO-FEAT-STAGE-BUILD-REPLIT-001",
+  "createdAt": "2026-05-03T18:41:15.610Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
   "baseRef": "origin/main"
 }
