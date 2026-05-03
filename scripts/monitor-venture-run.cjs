@@ -172,7 +172,10 @@ async function approveDecision(decisionId, stage) {
   const { data, error } = await sb.rpc('approve_chairman_decision', {
     p_decision_id: decisionId,
     p_rationale: `Monitor auto-push: advancing ${VENTURE_NAME} S${stage} [${gateType}]`,
-    p_decided_by: 'venture_monitor'
+    p_decided_by: 'venture_monitor',
+    // SD-LEO-FIX-DROP-LEGACY-ARG-001: system caller, no semantic approval_type.
+    // Pairs with the EHG migration that drops the legacy 3-arg overload.
+    p_approval_type: null
   });
   return { data, error };
 }
