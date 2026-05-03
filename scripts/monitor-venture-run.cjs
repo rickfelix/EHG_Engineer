@@ -73,26 +73,60 @@ const DESIGN_ARTIFACT_TYPES = [
   'stitch_curation', 'stitch_project', 'stitch_design_export',
 ];
 
-// Stage artifact expectations — sourced from lifecycle_stage_config.required_artifacts (DB authoritative)
-const EXPECTED_ARTIFACTS = {
-   1: ['truth_idea_brief'],
-   2: ['truth_ai_critique'],
-   3: ['truth_validation_decision'],
-   4: ['truth_competitive_analysis'],
-   5: ['truth_financial_model'],
-   6: ['engine_risk_matrix'],
-   7: ['engine_pricing_model'],
-   8: ['engine_business_model_canvas'],
-   9: ['engine_exit_strategy'],
-  10: ['identity_persona_brand'],
-  11: ['identity_naming_visual'],
-  12: ['identity_brand_guidelines', 'identity_gtm_sales_strategy'],
-  13: ['blueprint_product_roadmap'],
-  14: ['blueprint_technical_architecture', 'blueprint_data_model', 'blueprint_erd_diagram', 'blueprint_api_contract', 'blueprint_schema_spec'],
-  15: ['blueprint_wireframes'],
-  16: ['blueprint_financial_projection'],
-  17: ['system_devils_advocate_review'],
-};
+// SD-LEO-REFAC-REFACTOR-MONITOR-EXPECTED-001: stage artifact expectations are now loaded
+// from lifecycle_stage_config.required_artifacts at startup (DB-authoritative).
+// expectedArtifactsByStage is populated by loadExpectedArtifactsByStage() before polling.
+let expectedArtifactsByStage = new Map();
+
+// Worker-row source filter — EMPIRICAL (verified via SELECT DISTINCT source FROM venture_artifacts).
+// Worker sources match: stage-NN (zero-padded for 1-9, unpadded for 10+) OR stage-NN-<sub-variant>.
+// Advisory rows DO NOT count toward required-artifact validation — they are observability metadata.
+const ADVISORY_SOURCES = new Set([
+  'stage-gates',
+  'devils-advocate',
+  'chairman-review',
+  'manual-upload',
+  'lifecycle-sd-bridge',
+]);
+const ADVISORY_SUFFIXES = ['-analysis', '-post-hook'];
+
+function isWorkerSourceForStage(source, stage) {
+  if (!source) return false;
+  if (ADVISORY_SOURCES.has(source)) return false;
+  if (ADVISORY_SUFFIXES.some((suf) => source.endsWith(suf))) return false;
+  const padded = `stage-${String(stage).padStart(2, '0')}`;
+  const unpadded = `stage-${stage}`;
+  return (
+    source === padded ||
+    source === unpadded ||
+    source.startsWith(`${padded}-`) ||
+    source.startsWith(`${unpadded}-`)
+  );
+}
+
+async function loadExpectedArtifactsByStage() {
+  const { data, error } = await sb
+    .from('lifecycle_stage_config')
+    .select('stage_number, required_artifacts');
+  if (error) {
+    throw new Error(
+      `Failed to load lifecycle_stage_config (DB-authoritative artifact taxonomy): ${error.message}`
+    );
+  }
+  const map = new Map();
+  for (const row of data || []) {
+    const required = Array.isArray(row.required_artifacts) ? row.required_artifacts : [];
+    map.set(row.stage_number, required);
+  }
+  return map;
+}
+
+// Module export for testability (vitest reaches in via require)
+module.exports = module.exports || {};
+module.exports.isWorkerSourceForStage = isWorkerSourceForStage;
+module.exports.loadExpectedArtifactsByStage = loadExpectedArtifactsByStage;
+module.exports.ADVISORY_SOURCES = ADVISORY_SOURCES;
+module.exports.ADVISORY_SUFFIXES = ADVISORY_SUFFIXES;
 
 let lastStage = null;
 let issues = [];
@@ -128,7 +162,7 @@ async function getPendingDecision(stage) {
 
 async function getArtifacts(stage) {
   const { data } = await sb.from('venture_artifacts')
-    .select('lifecycle_stage, artifact_type, title, created_at, metadata')
+    .select('lifecycle_stage, artifact_type, title, source, created_at, metadata')
     .eq('venture_id', VENTURE_ID)
     .eq('lifecycle_stage', stage)
     .order('created_at', { ascending: false })
@@ -138,7 +172,7 @@ async function getArtifacts(stage) {
 
 async function getAllArtifacts() {
   const { data } = await sb.from('venture_artifacts')
-    .select('lifecycle_stage, artifact_type, title, created_at')
+    .select('lifecycle_stage, artifact_type, title, source, created_at')
     .eq('venture_id', VENTURE_ID)
     .order('lifecycle_stage', { ascending: true });
   return data || [];
@@ -360,11 +394,16 @@ async function poll() {
 }
 
 function validateStageArtifacts(stage, arts) {
-  const types = new Set(arts.map(a => a.artifact_type));
-  const expected = EXPECTED_ARTIFACTS[stage];
-  if (!expected) return;
+  const expected = expectedArtifactsByStage.get(stage);
+  if (!expected || expected.length === 0) return;
 
-  const missing = expected.filter(e => !types.has(e));
+  // SD-LEO-REFAC-REFACTOR-MONITOR-EXPECTED-001: filter to worker rows only.
+  // Advisory rows (stage-gates, devils-advocate, *-analysis, etc.) are observability metadata,
+  // not required deliverables — including them inflated the missing-set with false positives.
+  const workerArts = arts.filter((a) => isWorkerSourceForStage(a.source, stage));
+  const types = new Set(workerArts.map((a) => a.artifact_type));
+
+  const missing = expected.filter((e) => !types.has(e));
   if (missing.length > 0) {
     const msg = `S${stage} missing expected: ${missing.join(', ')}`;
     issues.push({ stage, type: 'missing_artifact', msg, ts: ts() });
@@ -372,7 +411,35 @@ function validateStageArtifacts(stage, arts) {
   }
 }
 
+async function runDryRunValidate() {
+  const map = await loadExpectedArtifactsByStage();
+  console.log('lifecycle_stage_config.required_artifacts (DB-authoritative):');
+  const stages = Array.from(map.keys()).sort((a, b) => a - b);
+  for (const stage of stages) {
+    const required = map.get(stage) || [];
+    console.log(`  Stage ${String(stage).padStart(2, ' ')}: ${required.length === 0 ? '(none)' : required.join(', ')}`);
+  }
+  console.log(`\nTotal stages loaded: ${stages.length}`);
+}
+
 async function main() {
+  // SD-LEO-REFAC-REFACTOR-MONITOR-EXPECTED-001: --dry-run-validate flag short-circuits polling.
+  // Loads the artifact map, prints it, exits 0. No polling, no DB writes, no venture-id resolution.
+  const dryRunFlag = process.argv.some((a) => a === '--dry-run-validate' || a === '--dryRunValidate');
+  if (dryRunFlag) {
+    await runDryRunValidate();
+    process.exit(0);
+  }
+
+  // Load DB-authoritative artifact map BEFORE polling begins. On failure, exit non-zero
+  // rather than silently falling back to stale data — operator must see the error.
+  try {
+    expectedArtifactsByStage = await loadExpectedArtifactsByStage();
+  } catch (err) {
+    console.error(`[FATAL] ${err.message}`);
+    process.exit(1);
+  }
+
   console.log(`\n${'='.repeat(70)}`);
   console.log(` VENTURE MONITOR — ${VENTURE_NAME} (${VENTURE_ID.slice(0,8)})`);
   console.log(` Poll every ${POLL_MS/1000}s | Auto-push to S${STOP_AT_STAGE - 1} | HARD STOP at S${STOP_AT_STAGE}`);
