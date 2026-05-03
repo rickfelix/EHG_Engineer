@@ -319,10 +319,13 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     if (gateResults.gate3?.score) priorGateScores.push(gateResults.gate3.score);
 
     // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched SD for pattern tracking
+    // QF-20260503-515: query by handoffLookupId (UUID-resolved at line 69) instead of raw sd_id —
+    // sd_id may be the sd_key string when invoked via canonical CLI form, and .eq('id', sd_key)
+    // returns null, causing calculateAdaptiveThreshold to dereference null.risk_level.
     const sdData = options.prefetched?.sd || (await supabase
       .from('strategic_directives_v2')
       .select('*')
-      .eq('id', sd_id)
+      .eq('id', handoffLookupId)
       .single()).data;
 
     // Fetch pattern statistics for maturity bonus
