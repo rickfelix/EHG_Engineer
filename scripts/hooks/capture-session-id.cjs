@@ -20,6 +20,14 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+// SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-7): self-load .env so process.env.SUPABASE_*
+// resolves regardless of whether the parent shell pre-sourced .env. Hook subprocesses do NOT
+// inherit other hooks' loaded env (each hook is a sibling spawn), so without this line
+// upsertSessionRow silently returns at the supabaseUrl/Key check below — the smoking-gun
+// failure mode F observed across 5 reproductions (sessions 2485521c, 8edf5243, 755f5696,
+// 97270d12, fd8348ea). Reference pattern: lib/supabase-client.cjs:9.
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+
 // SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001: spawn telemetry.
 // Writes errors to .claude/pids/spawn-errors.log (NDJSON) and stderr.
 // Rotates at SPAWN_LOG_MAX_BYTES, keeps SPAWN_LOG_KEEP_FILES most recent.
@@ -270,7 +278,14 @@ function findClaudeCodePid(entryPath = 'unknown') {
 async function upsertSessionRow(sessionId, ccPid, source) {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !supabaseKey) return;
+  if (!supabaseUrl || !supabaseKey) {
+    // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-7-AC3): observable silent-return.
+    // Booleans only — never log the values themselves.
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.error(`SessionStart:capture-session-id: upsert skipped — supabaseUrl/Key missing in env (URL=${Boolean(supabaseUrl)} KEY=${Boolean(supabaseKey)})`);
+    }
+    return;
+  }
 
   const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions`;
   const now = new Date().toISOString();
