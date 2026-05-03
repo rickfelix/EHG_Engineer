@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-02T20:26:21.163Z
-**Rows**: 32,871
+**Generated**: 2026-05-03T00:54:41.781Z
+**Rows**: 33,016
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -37,7 +37,7 @@
 - `model_usage_log_pkey`: PRIMARY KEY (id)
 
 ### Check Constraints
-- `model_usage_log_phase_check`: CHECK ((phase = ANY (ARRAY['LEAD'::text, 'PLAN'::text, 'EXEC'::text, 'UNKNOWN'::text, 'STANDALONE'::text, 'QF_COMPLETION'::text, 'SD_COMPLETION'::text, 'HANDOFF'::text, 'COMPLETE'::text, 'LEAD_APPROVAL'::text, 'LEAD_FINAL_APPROVAL'::text, 'PLAN_DESIGN'::text, 'PLAN_VERIFY'::text, 'EXEC_IMPLEMENTATION'::text])))
+- `model_usage_log_phase_check`: CHECK ((phase = ANY (ARRAY['LEAD'::text, 'PLAN'::text, 'EXEC'::text, 'UNKNOWN'::text, 'STANDALONE'::text, 'QF_COMPLETION'::text, 'SD_COMPLETION'::text, 'HANDOFF'::text, 'COMPLETE'::text, 'LEAD_APPROVAL'::text, 'LEAD_FINAL_APPROVAL'::text, 'PLAN_DESIGN'::text, 'PLAN_VERIFY'::text, 'EXEC_IMPLEMENTATION'::text, 'LEAD-TO-PLAN'::text, 'PLAN-TO-EXEC'::text, 'EXEC-TO-PLAN'::text, 'PLAN-TO-LEAD'::text, 'LEAD-FINAL'::text])))
 - `model_usage_log_provider_source_check`: CHECK (((provider_source)::text = ANY ((ARRAY['local'::character varying, 'cloud'::character varying, 'fallback'::character varying])::text[])))
 
 ## Indexes
