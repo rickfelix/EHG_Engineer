@@ -81,19 +81,17 @@ export async function validateTddPreImplementation(context) {
   }
 
   // Fetch SD to get type and metadata
-  const { data: sd, error: sdError } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_type, metadata')
-    .eq('id', sd_id)
-    .single();
+  // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+  const { resolveSdInputOrNull } = await import('../../lib/sd-id-resolver.js');
+  const { sd } = await resolveSdInputOrNull(sd_id, supabase);
 
-  if (sdError || !sd) {
+  if (!sd) {
     return {
       passed: true,
       score: 80,
       max_score: 100,
       issues: [],
-      warnings: [`Could not fetch SD ${sd_id} for TDD check: ${sdError?.message || 'not found'}`],
+      warnings: [`Could not fetch SD ${sd_id} for TDD check: not found`],
       details: { status: 'warn', reason: 'SD lookup failed, defaulting to pass' }
     };
   }

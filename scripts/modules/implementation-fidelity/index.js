@@ -59,12 +59,10 @@ export async function validateGate2ExecToPlan(sd_id, supabase, options = {}) {
 
   // Check if this is a documentation-only SD
   // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched SD when available
+  // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
   try {
-    const sd = options.prefetched?.sd || (await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, sd_type, scope, category')
-      .eq('id', sd_id)
-      .single()).data;
+    const { resolveSdInputOrNull } = await import('../../lib/sd-id-resolver.js');
+    const sd = options.prefetched?.sd || (await resolveSdInputOrNull(sd_id, supabase)).sd;
 
     if (sd && shouldSkipCodeValidation(sd)) {
       const validationReqs = getValidationRequirements(sd);
@@ -114,13 +112,10 @@ export async function validateGate2ExecToPlan(sd_id, supabase, options = {}) {
     let sd = options.prefetched?.sd || null;
 
     if (!sd) {
-      // Try direct ID lookup first (works for both UUID and SD-KEY format IDs)
-      const result = await supabase
-        .from('strategic_directives_v2')
-        .select('id, title, sd_type, scope, category, intensity_level, target_application')
-        .eq('id', sd_id)
-        .single();
-      sd = result.data;
+      // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+      const { resolveSdInputOrNull: resolveSdInputOrNullA } = await import('../../lib/sd-id-resolver.js');
+      const resolved = await resolveSdInputOrNullA(sd_id, supabase);
+      sd = resolved.sd;
     }
     if (sd?.id) {
       resolvedSdUuid = sd.id;
@@ -257,11 +252,9 @@ export async function validateGate2ExecToPlan(sd_id, supabase, options = {}) {
       ? [gate1Handoff.metadata.gate1_validation.score]
       : [];
 
-    const sdData = options.prefetched?.sd || (await supabase
-      .from('strategic_directives_v2')
-      .select('*')
-      .eq('id', sd_id)
-      .single()).data;
+    // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+    const { resolveSdInputOrNull: resolveSdInputOrNullB } = await import('../../lib/sd-id-resolver.js');
+    const sdData = options.prefetched?.sd || (await resolveSdInputOrNullB(sd_id, supabase)).sd;
 
     const patternStats = await getPatternStats(sdData, supabase);
 

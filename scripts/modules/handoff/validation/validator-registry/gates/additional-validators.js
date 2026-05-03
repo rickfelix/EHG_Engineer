@@ -68,11 +68,9 @@ export function registerAdditionalValidators(registry) {
     const { sd_id, supabase } = context;
 
     // Check if this SD type should skip sub-agent orchestration validation
-    const { data: sdData } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_type, title')
-      .eq('id', sd_id)
-      .single();
+    // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+    const { resolveSdInputOrNull } = await import('../../../../lib/sd-id-resolver.js');
+    const { sd: sdData } = await resolveSdInputOrNull(sd_id, supabase);
 
     // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Skip for documentation-only SDs
     if (sdData && shouldSkipCodeValidation(sdData)) {
@@ -206,13 +204,11 @@ export function registerAdditionalValidators(registry) {
     const { sd_id, sd, supabase } = context;
 
     // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Get SD type for lightweight check
+    // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
     let sdType = (sd?.sd_type || '').toLowerCase();
     if (!sdType && sd_id) {
-      const { data: sdData } = await supabase
-        .from('strategic_directives_v2')
-        .select('sd_type')
-        .eq('id', sd_id)
-        .single();
+      const { resolveSdInputOrNull } = await import('../../../../lib/sd-id-resolver.js');
+      const { sd: sdData } = await resolveSdInputOrNull(sd_id, supabase);
       sdType = (sdData?.sd_type || '').toLowerCase();
     }
 

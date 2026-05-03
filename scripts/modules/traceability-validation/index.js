@@ -183,11 +183,9 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
       if (gate2) priorGateScores.push(gate2);
     }
 
-    const sdData = options.prefetched?.sd || (await supabase
-      .from('strategic_directives_v2')
-      .select('*')
-      .eq('id', sd_id)
-      .single()).data;
+    // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+    const { resolveSdInputOrNull } = await import('../../lib/sd-id-resolver.js');
+    const sdData = options.prefetched?.sd || (await resolveSdInputOrNull(sd_id, supabase)).sd;
 
     const patternStats = await getPatternStats(sdData, supabase);
 

@@ -58,11 +58,9 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
   // SD-LEO-INFRA-RENAME-COLUMNS-SELF-001: TYPE-BASED GATE SKIP
   // Check if this SD type requires DESIGN/DATABASE validation
   // ===================================================================
-  const { data: sdTypeCheck } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_type, category')
-    .eq('id', sd_id)
-    .single();
+  // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+  const { resolveSdInputOrNull } = await import('../lib/sd-id-resolver.js');
+  const { sd: sdTypeCheck } = await resolveSdInputOrNull(sd_id, supabase);
 
   if (sdTypeCheck) {
     const requiresGates = requiresDesignDatabaseGatesSync(sdTypeCheck);
@@ -524,11 +522,9 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
     console.log(`GATE 1 SCORE: ${validation.score}/${validation.max_score} points`);
 
     // Calculate adaptive threshold based on SD context
-    const { data: sdData } = await supabase
-      .from('strategic_directives_v2')
-      .select('*')
-      .eq('id', sd_id)
-      .single();
+    // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+    const { resolveSdInputOrNull: resolveSdInputOrNull2 } = await import('../lib/sd-id-resolver.js');
+    const { sd: sdData } = await resolveSdInputOrNull2(sd_id, supabase);
 
     // Fetch pattern statistics for maturity bonus
     const patternStats = await getPatternStats(sdData, supabase);

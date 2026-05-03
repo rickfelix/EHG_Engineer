@@ -126,7 +126,14 @@
     "no-console": ["warn", { "allow": ["warn", "error"] }],
     "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }],
     "semi": ["error", "always"],
-    "quotes": ["error", "single", { "avoidEscape": true }]
+    "quotes": ["error", "single", { "avoidEscape": true }],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.property.name='eq'][arguments.0.value='id'][arguments.1.name=/^(sd_id|sdId|sdInput|sdKey)$/]",
+        "message": "Use resolveSdInput() from scripts/lib/sd-id-resolver.js instead of .eq('id', <sd_id-like-var>) — input may be UUID or sd_key form (SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001)."
+      }
+    ]
   },
   "overrides": [
     {

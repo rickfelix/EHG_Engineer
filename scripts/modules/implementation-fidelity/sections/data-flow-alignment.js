@@ -62,24 +62,12 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
   }
 
   // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI/form requirements (hardcoded fallback)
+  // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver (replaces 2-step UUID-then-sd_key lookup).
   try {
-    let sd = null;
-    const { data: sdById } = await supabase
-      .from('strategic_directives_v2')
-      .select('sd_type, scope')
-      .eq('id', sd_id)
-      .single();
-
-    if (sdById) {
-      sd = sdById;
-    } else {
-      const { data: sdBySdKey } = await supabase
-        .from('strategic_directives_v2')
-        .select('sd_type, scope')
-        .eq('sd_key', sd_id)
-        .single();
-      sd = sdBySdKey;
-    }
+    const { resolveSdInputOrNull } = await import('../../../lib/sd-id-resolver.js');
+    const { sd: sdResolved } = await resolveSdInputOrNull(sd_id, supabase);
+    let sd = sdResolved ? { sd_type: sdResolved.sd_type, scope: sdResolved.scope } : null;
+    // Legacy 2-step fallback removed: resolver handles both UUID and sd_key forms via single .or() query.
 
     // Extract scope text for analysis
     let scopeToCheck = '';

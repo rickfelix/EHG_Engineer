@@ -55,33 +55,13 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
     // ================================================
     // 1. FETCH SD AND USER STORIES
     // ================================================
-    // SD ID Schema Fix: Handle UUID and sd_key
-    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
+    // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+    const { resolveSdInputOrNull } = await import('../lib/sd-id-resolver.js');
+    const { sd } = await resolveSdInputOrNull(sd_id, supabase);
 
-    let sd, sdError;
-    if (isUUID) {
-      const result = await supabase
-        .from('strategic_directives_v2')
-        .select('id, sd_type, title, checkpoint_plan')
-        .eq('id', sd_id)
-        .single();
-      sd = result.data;
-      sdError = result.error;
-    } else {
-      // SD-LEO-ID-NORMALIZE-001: Support id and sd_key lookup
-      const result = await supabase
-        .from('strategic_directives_v2')
-        .select('id, sd_type, title, checkpoint_plan')
-        .or(`id.eq.${sd_id},sd_key.eq.${sd_id}`)
-        .single();
-      sd = result.data;
-      sdError = result.error;
-    }
-
-    if (sdError || !sd) {
+    if (!sd) {
       validation.passed = false;
-      validation.issues.push(`Failed to fetch SD: ${sdError?.message || 'Not found'}`);
+      validation.issues.push(`Failed to fetch SD: Not found for input "${sd_id}"`);
       return validation;
     }
 
