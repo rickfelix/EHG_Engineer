@@ -53,10 +53,10 @@ async function fetchUpstreamAndVenture(supabase, ventureId) {
 }
 
 async function storeMarketingArtifacts(supabase, ventureId, copyResult) {
-  const upserts = [];
+  const inserts = [];
   for (const section of VALID_SECTIONS) {
     if (!copyResult[section]) continue;
-    upserts.push({
+    inserts.push({
       venture_id: ventureId,
       artifact_type: `marketing_${section}`,
       title: titleForSection(section),
@@ -64,10 +64,23 @@ async function storeMarketingArtifacts(supabase, ventureId, copyResult) {
       artifact_data: copyResult[section],
     });
   }
-  if (upserts.length === 0) return { error: null };
-  const { error } = await supabase.from('venture_artifacts')
-    .upsert(upserts, { onConflict: 'venture_id,artifact_type' });
-  if (error) console.error('[stage18-route] artifact upsert error:', error.message);
+  if (inserts.length === 0) return { error: null };
+
+  // venture_artifacts has no unique constraint on (venture_id, artifact_type),
+  // so .upsert(onConflict: ...) fails with PG 42P10. Use the mark-old-as-not-current
+  // + insert pattern that the rest of the codebase relies on (is_current default = true).
+  const artifactTypes = inserts.map(i => i.artifact_type);
+  const { error: markErr } = await supabase.from('venture_artifacts')
+    .update({ is_current: false })
+    .eq('venture_id', ventureId)
+    .in('artifact_type', artifactTypes)
+    .eq('is_current', true);
+  if (markErr) {
+    console.error('[stage18-route] mark-not-current error:', markErr.message);
+    return { error: markErr };
+  }
+  const { error } = await supabase.from('venture_artifacts').insert(inserts);
+  if (error) console.error('[stage18-route] artifact insert error:', error.message);
   return { error };
 }
 
@@ -123,14 +136,29 @@ router.post('/:ventureId/regenerate/:section', asyncHandler(async (req, res) => 
     return res.status(500).json({ error: 'Failed to generate section: ' + section, code: 'GENERATION_FAILED' });
   }
 
-  const { error } = await supabase.from('venture_artifacts')
-    .upsert({
-      venture_id: ventureId,
-      artifact_type: 'marketing_' + section,
-      title: titleForSection(section),
-      lifecycle_stage: 18,
-      artifact_data: sectionData,
-    }, { onConflict: 'venture_id,artifact_type' });
+  // Mark prior current row(s) for this artifact_type as not-current, then insert
+  // the new row. See storeMarketingArtifacts for why this can't use .upsert().
+  const artifactType = 'marketing_' + section;
+  const { error: markErr } = await supabase.from('venture_artifacts')
+    .update({ is_current: false })
+    .eq('venture_id', ventureId)
+    .eq('artifact_type', artifactType)
+    .eq('is_current', true);
+  if (markErr) {
+    console.error('[stage18-route] regenerate mark-not-current error:', markErr.message);
+    return res.status(500).json({
+      error: 'Failed to persist regenerated section: ' + markErr.message,
+      code: 'ARTIFACT_STORAGE_FAILED',
+      data: sectionData,
+    });
+  }
+  const { error } = await supabase.from('venture_artifacts').insert({
+    venture_id: ventureId,
+    artifact_type: artifactType,
+    title: titleForSection(section),
+    lifecycle_stage: 18,
+    artifact_data: sectionData,
+  });
 
   if (error) {
     console.error('[stage18-route] regenerate upsert error:', error.message);
