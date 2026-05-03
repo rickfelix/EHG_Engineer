@@ -3,8 +3,13 @@
 /**
  * LEO Assist Runner — Periodic feedback inbox processor
  *
- * Queries untriaged feedback items and classifies them via LLM.
+ * Queries untriaged feedback items and classifies them via heuristics.
  * Designed to run from GitHub Actions on a cron schedule.
+ *
+ * Writes ai_triage_source='rules' (heuristic only). LLM-based classification
+ * is handled by auto-triage.js (Child -D), which writes 'llm'. Both values
+ * are constrained by chk_ai_triage_source_valid on the feedback table — see
+ * database/migrations/20260207_feedback_llm_triage_columns.sql.
  *
  * Usage:
  *   node scripts/modules/inbox/assist-runner.js [--max-items N] [--dry-run]
@@ -14,9 +19,13 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../../lib/utils/is-main-module.js';
 import 'dotenv/config';
 
 const CLASSIFICATION_CATEGORIES = ['bug', 'enhancement', 'question', 'noise'];
+// Must match chk_ai_triage_source_valid CHECK constraint on feedback table.
+// assist-runner only does heuristic classification, so always 'rules'.
+const TRIAGE_SOURCE = 'rules';
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -67,7 +76,7 @@ async function classifyItem(item) {
     confidence = 0.65;
   }
 
-  return { classification, confidence };
+  return { classification, confidence, source: TRIAGE_SOURCE };
 }
 
 async function run() {
@@ -104,11 +113,11 @@ async function run() {
   let errors = 0;
 
   for (const item of items) {
-    const { classification, confidence } = await classifyItem(item);
+    const { classification, confidence, source } = await classifyItem(item);
     const truncTitle = (item.title || '').substring(0, 60);
 
     if (flags.dryRun) {
-      console.log(`  [DRY-RUN] ${truncTitle} → ${classification} (${(confidence * 100).toFixed(0)}%)`);
+      console.log(`  [DRY-RUN] ${truncTitle} → ${classification} (${(confidence * 100).toFixed(0)}%) [${source}]`);
       processed++;
       continue;
     }
@@ -118,7 +127,7 @@ async function run() {
       .update({
         ai_triage_classification: classification,
         ai_triage_confidence: Math.round(confidence * 100),
-        ai_triage_source: 'assist-runner',
+        ai_triage_source: source,
         updated_at: new Date().toISOString()
       })
       .eq('id', item.id);
@@ -127,7 +136,7 @@ async function run() {
       console.error(`  [ERROR] ${truncTitle}: ${updateError.message}`);
       errors++;
     } else {
-      console.log(`  [OK] ${truncTitle} → ${classification} (${(confidence * 100).toFixed(0)}%)`);
+      console.log(`  [OK] ${truncTitle} → ${classification} (${(confidence * 100).toFixed(0)}%) [${source}]`);
       processed++;
     }
   }
@@ -138,7 +147,12 @@ async function run() {
   console.log(`  Mode: ${flags.dryRun ? 'dry-run (no writes)' : 'live'}`);
 }
 
-run().catch(err => {
-  console.error('[assist-runner] Fatal:', err.message);
-  process.exit(1);
-});
+// Exported for unit tests.
+export { classifyItem, TRIAGE_SOURCE };
+
+if (isMainModule(import.meta.url)) {
+  run().catch(err => {
+    console.error('[assist-runner] Fatal:', err.message);
+    process.exit(1);
+  });
+}
