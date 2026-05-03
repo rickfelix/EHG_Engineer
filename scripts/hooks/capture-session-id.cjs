@@ -355,9 +355,11 @@ async function upsertSessionRow(sessionId, ccPid, source) {
     }
   }
 
-  if (debug) {
-    console.error(`SessionStart:capture-session-id: upsert exhausted ${MAX_ATTEMPTS} attempts (last_status=${lastStatus}, last_error=${lastError?.message || 'n/a'})`);
-  }
+  // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-2): exhaustion stderr is always-on.
+  // Per-attempt logs (lines 334/340/350) remain debug-gated to keep happy-path noise low,
+  // but exhaustion (3 retries failed) is never silent — operator-trust violation tracked
+  // across 5 prior reproductions of failure mode F.
+  console.error(`SessionStart:capture-session-id: upsert exhausted ${MAX_ATTEMPTS} attempts (last_status=${lastStatus}, last_error=${lastError?.message || 'n/a'})`);
 }
 
 function main() {
@@ -457,9 +459,18 @@ function main() {
           // When SOT is enabled, atomically update the /current pointer to match.
           // This is the third identity source — once it's written, claim-validity-gate
           // sees all three in agreement.
+          //
+          // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-3): unconditional pointer write.
+          // Previously gated on sotOrdering — left /current 8.5+ days stale under SOT-off
+          // (the default), pointing at unrelated sessions. claim-validity-gate observers
+          // need /current to be a deterministic third source regardless of SOT flag state.
+          // Atomic semantics preserved: sotAtomicWrite under SOT-on, plain writeFileSync
+          // under SOT-off (writeFileSync is atomic for small payloads on Windows).
+          const currentPointer = path.join(markerDir, 'current');
           if (sotOrdering) {
-            const currentPointer = path.join(markerDir, 'current');
             sotAtomicWrite(currentPointer, sessionId);
+          } else {
+            fs.writeFileSync(currentPointer, sessionId);
           }
 
           // Cleanup old markers — preserve markers for alive PIDs, only delete dead ones
@@ -559,9 +570,16 @@ function main() {
     });
 
     // Timeout must exceed the internal PowerShell budget (tree_walk + scan = 9s).
-    // Registered hook timeout in .claude/settings.json is 15s; 12s leaves 3s margin
-    // for marker write + cleanup before Claude Code kills the process.
-    setTimeout(resolve, 12000);
+    // Registered hook timeout in .claude/settings.json is 15s.
+    //
+    // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-5): bumped 12000ms → 13500ms.
+    // Belt-and-suspenders after FR-1+FR-4+FR-7 land — gives the upsert + tick spawn
+    // path more headroom on slow Windows tree-walks (TREE_WALK_TIMEOUT_MS=6000 +
+    // SCAN_TIMEOUT_MS=3000 + 3-attempt upsert ~11s could exceed the 12s budget).
+    // Per DESIGN consolidation #2 in metadata.design_plan_recommendations: shipped
+    // as separately revertible commit so it can be reverted independently if the
+    // structural fixes prove sufficient without the timer extension.
+    setTimeout(resolve, 13500);
   });
 }
 

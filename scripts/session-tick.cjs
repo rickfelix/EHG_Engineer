@@ -98,38 +98,79 @@ function parentAlive() {
 
 // ── Telemetry write ──────────────────────────────────────────────────────────
 
+// SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-1+FR-4): first-tick recovery path.
+// Originally tickOnce always PATCHed — when no row existed (because
+// capture-session-id.cjs upsert silent-failed at SessionStart), every tick was
+// a 0-row no-op. Now the first tick after spawn does a POST with
+// resolution=merge-duplicates so the row is created if missing. UNIQUE(session_id)
+// + onConflict=session_id provides idempotency at the DB level. Subsequent ticks
+// revert to PATCH so steady-state cost is unchanged.
+let isFirstTick = true;
+
 async function tickOnce() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseKey) return;
 
-  const url =
-    `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions` +
-    `?session_id=eq.${encodeURIComponent(sessionId)}`;
-
+  const baseUrl = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
+  const debug = process.env.LEO_TELEMETRY_DEBUG === '1';
 
   try {
-    // SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001 FR-4: update BOTH columns.
-    // claim-guard.mjs keys claim TTL on heartbeat_at (300s stale threshold).
-    // Updating only process_alive_at leaves the claim vulnerable to stale-claim
-    // cleanup during long Edit/Write/Read bursts that don't invoke any CLI script.
     const now = new Date().toISOString();
-    await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify({
-        process_alive_at: now,
-        heartbeat_at: now,
-      }),
-      signal: controller.signal,
-    });
+    if (isFirstTick) {
+      // FR-1+FR-4: insert-if-not-exists (POST + merge-duplicates) so a missing row
+      // self-heals within ~30s. UNIQUE(session_id) + 409 path treated as success
+      // gives race-on-race idempotency with capture-session-id.cjs upsertSessionRow.
+      const res = await fetch(baseUrl, {
+        method: 'POST',
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          status: 'active',
+          heartbeat_at: now,
+          process_alive_at: now,
+          pid: process.pid,
+          hostname: require('os').hostname(),
+          metadata: { cc_parent_pid: parentPid, source: 'session-tick-first' },
+        }),
+        signal: controller.signal,
+      });
+      // 2xx OR 409/conflict → row exists, ticks can revert to PATCH.
+      if (res.ok || res.status === 409) {
+        isFirstTick = false;
+        if (debug && res.status === 409) {
+          console.error(`session-tick: first-tick POST 409 (row already existed) — race resolved, switching to PATCH`);
+        }
+      } else {
+        // Non-success: leave isFirstTick=true so the next tick retries the POST.
+        if (debug) console.error(`session-tick: first-tick POST status=${res.status} — will retry on next tick`);
+      }
+    } else {
+      // Steady state — SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001 FR-4: update BOTH columns.
+      // claim-guard.mjs keys claim TTL on heartbeat_at (300s stale threshold).
+      const url = `${baseUrl}?session_id=eq.${encodeURIComponent(sessionId)}`;
+      await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          process_alive_at: now,
+          heartbeat_at: now,
+        }),
+        signal: controller.signal,
+      });
+    }
   } catch {
     // swallow — next tick will retry. Never crash the tick loop.
   } finally {
