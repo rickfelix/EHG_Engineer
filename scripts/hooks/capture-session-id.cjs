@@ -570,9 +570,16 @@ function main() {
     });
 
     // Timeout must exceed the internal PowerShell budget (tree_walk + scan = 9s).
-    // Registered hook timeout in .claude/settings.json is 15s; 12s leaves 3s margin
-    // for marker write + cleanup before Claude Code kills the process.
-    setTimeout(resolve, 12000);
+    // Registered hook timeout in .claude/settings.json is 15s.
+    //
+    // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-5): bumped 12000ms → 13500ms.
+    // Belt-and-suspenders after FR-1+FR-4+FR-7 land — gives the upsert + tick spawn
+    // path more headroom on slow Windows tree-walks (TREE_WALK_TIMEOUT_MS=6000 +
+    // SCAN_TIMEOUT_MS=3000 + 3-attempt upsert ~11s could exceed the 12s budget).
+    // Per DESIGN consolidation #2 in metadata.design_plan_recommendations: shipped
+    // as separately revertible commit so it can be reverted independently if the
+    // structural fixes prove sufficient without the timer extension.
+    setTimeout(resolve, 13500);
   });
 }
 
