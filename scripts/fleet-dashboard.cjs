@@ -367,7 +367,9 @@ function printWorkers(d) {
       const fails = s.handoff_fail_count != null ? String(s.handoff_fail_count) : '-';
       const wip = s.has_uncommitted_changes === true ? 'Y' : s.has_uncommitted_changes === false ? 'N' : '-';
       const struggleTag = (s.handoff_fail_count || 0) > 3 ? ' [STRUGGLING]' : '';
-      const csid = hasCollision ? pad((markerIds[s.session_id] || '').substring(0, 10), 12) : '';
+      // markerIds[id] is { claude_session_id, pid, alive } per getMarkerSessionIds(); read property before substring
+      const markerEntry = markerIds[s.session_id];
+      const csid = hasCollision ? pad((markerEntry?.claude_session_id || '').substring(0, 10), 12) : '';
       const activity = formatActivity(s);
       const silent = formatSilentUntil(s);
       const mcRow = d.mcByWorker && d.mcByWorker[s.session_id];
