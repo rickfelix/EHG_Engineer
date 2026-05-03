@@ -53,6 +53,7 @@ async function fetchUpstreamAndVenture(supabase, ventureId) {
 }
 
 async function storeMarketingArtifacts(supabase, ventureId, copyResult) {
+  const isFallback = (copyResult?.metadata?.llmFallbackCount ?? 0) > 0;
   const inserts = [];
   for (const section of VALID_SECTIONS) {
     if (!copyResult[section]) continue;
@@ -62,6 +63,7 @@ async function storeMarketingArtifacts(supabase, ventureId, copyResult) {
       title: titleForSection(section),
       lifecycle_stage: 18,
       artifact_data: copyResult[section],
+      metadata: { is_fallback: isFallback },
     });
   }
   if (inserts.length === 0) return { error: null };
@@ -152,12 +154,14 @@ router.post('/:ventureId/regenerate/:section', asyncHandler(async (req, res) => 
       data: sectionData,
     });
   }
+  const isFallback = (result?.metadata?.llmFallbackCount ?? 0) > 0;
   const { error } = await supabase.from('venture_artifacts').insert({
     venture_id: ventureId,
     artifact_type: artifactType,
     title: titleForSection(section),
     lifecycle_stage: 18,
     artifact_data: sectionData,
+    metadata: { is_fallback: isFallback },
   });
 
   if (error) {
