@@ -355,9 +355,11 @@ async function upsertSessionRow(sessionId, ccPid, source) {
     }
   }
 
-  if (debug) {
-    console.error(`SessionStart:capture-session-id: upsert exhausted ${MAX_ATTEMPTS} attempts (last_status=${lastStatus}, last_error=${lastError?.message || 'n/a'})`);
-  }
+  // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-2): exhaustion stderr is always-on.
+  // Per-attempt logs (lines 334/340/350) remain debug-gated to keep happy-path noise low,
+  // but exhaustion (3 retries failed) is never silent — operator-trust violation tracked
+  // across 5 prior reproductions of failure mode F.
+  console.error(`SessionStart:capture-session-id: upsert exhausted ${MAX_ATTEMPTS} attempts (last_status=${lastStatus}, last_error=${lastError?.message || 'n/a'})`);
 }
 
 function main() {
@@ -457,9 +459,18 @@ function main() {
           // When SOT is enabled, atomically update the /current pointer to match.
           // This is the third identity source — once it's written, claim-validity-gate
           // sees all three in agreement.
+          //
+          // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-3): unconditional pointer write.
+          // Previously gated on sotOrdering — left /current 8.5+ days stale under SOT-off
+          // (the default), pointing at unrelated sessions. claim-validity-gate observers
+          // need /current to be a deterministic third source regardless of SOT flag state.
+          // Atomic semantics preserved: sotAtomicWrite under SOT-on, plain writeFileSync
+          // under SOT-off (writeFileSync is atomic for small payloads on Windows).
+          const currentPointer = path.join(markerDir, 'current');
           if (sotOrdering) {
-            const currentPointer = path.join(markerDir, 'current');
             sotAtomicWrite(currentPointer, sessionId);
+          } else {
+            fs.writeFileSync(currentPointer, sessionId);
           }
 
           // Cleanup old markers — preserve markers for alive PIDs, only delete dead ones
