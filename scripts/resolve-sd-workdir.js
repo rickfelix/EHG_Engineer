@@ -26,7 +26,9 @@ import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from
 // SD-LEO-INFRA-START-WORKTREE-BRANCH-001: delegate base-ref resolution + fetch
 // to the single source of truth in lib/worktree-manager.js so this code path
 // cannot drift away from the createWorktree behavior.
-import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError } from '../lib/worktree-manager.js';
+// SD-LEO-INFRA-LEO-INFRA-WORKTREE-001: SUBSTRATE_ITEMS + validateWorktreeSubstrate
+// for the post-creation completeness gate.
+import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError, SUBSTRATE_ITEMS, validateWorktreeSubstrate } from '../lib/worktree-manager.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -354,6 +356,34 @@ function createWorktree(sdKey, repoRoot) {
     emitLog({ event: 'worktree.essentials_partial', sdKey, errors: essentials.errors });
   }
 
+  // SD-LEO-INFRA-LEO-INFRA-WORKTREE-001 (FR-004): post-creation substrate
+  // completeness gate. Runs AFTER ensureWorktreeEssentials so that the
+  // node_modules symlink and .env copy it creates are checked. On failure,
+  // throw with errCode=WORKTREE_INCOMPLETE — sd-start.js catches at line ~1131,
+  // calls classifyWorktreeFailure (which maps to code='worktree_incomplete'
+  // via lib/protocol-policies/worktree-failure-classification.js), releases
+  // the claim via release_sd RPC, and exits non-zero. The incomplete worktree
+  // directory is preserved on disk for operator inspection.
+  const substrate = validateWorktreeSubstrate(worktreePath);
+  if (!substrate.ok) {
+    emitLog({
+      event: 'worktree.incomplete',
+      sdKey,
+      worktreePath,
+      missing: substrate.missing,
+      errCode: 'WORKTREE_INCOMPLETE'
+    });
+    const err = new Error(
+      `WORKTREE_INCOMPLETE: substrate items missing after creation: ${substrate.missing.join(', ')}. ` +
+      `Worktree at ${worktreePath} is preserved for inspection.`
+    );
+    err.code = 'WORKTREE_INCOMPLETE';
+    err.errCode = 'WORKTREE_INCOMPLETE';
+    err.missing = substrate.missing;
+    err.worktreePath = worktreePath;
+    throw err;
+  }
+
   // Verify .gitignore covers .env (SD-LEO-INFRA-AUTO-WORKTREE-START-001 US-003)
   const gitignoreCheck = verifyGitignore(worktreePath);
   if (!gitignoreCheck.ignored) {
@@ -367,6 +397,13 @@ function createWorktree(sdKey, repoRoot) {
  * Ensure worktree has essential untracked files (node_modules symlink, .env copy).
  * Runs after EVERY successful resolution — not just creation — so previously
  * created worktrees also get patched up.
+ *
+ * SD-LEO-INFRA-LEO-INFRA-WORKTREE-001 (FR-001 / TR-002): driven by the
+ * SUBSTRATE_ITEMS const exported from lib/worktree-manager.js so this helper
+ * cannot drift away from validateWorktreeSubstrate's expectations. Items that
+ * require active setup (node_modules symlink, .env copy) are gated on
+ * SUBSTRATE_ITEMS membership; .env.local is opportunistic (not in the
+ * substrate contract but copied if present).
  */
 function ensureWorktreeEssentials(worktreePath, repoRoot) {
   // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-004: Structured error return
@@ -374,23 +411,32 @@ function ensureWorktreeEssentials(worktreePath, repoRoot) {
   // failures are surfaced so callers can log and operators can diagnose.
   const errors = [];
 
-  // Symlink node_modules (avoids duplicating ~500MB)
-  const sourceModules = path.join(repoRoot, 'node_modules');
-  const targetModules = path.join(worktreePath, 'node_modules');
-  if (fs.existsSync(sourceModules) && !fs.existsSync(targetModules)) {
-    try {
-      if (process.platform === 'win32') {
-        fs.symlinkSync(sourceModules, targetModules, 'junction');
-      } else {
-        fs.symlinkSync(sourceModules, targetModules, 'dir');
+  // Symlink node_modules (avoids duplicating ~500MB) — only if substrate
+  // contract requires it. Drift guard: if 'node_modules' is removed from
+  // SUBSTRATE_ITEMS, this helper stops creating the symlink and the parity
+  // test surfaces the drift.
+  if (SUBSTRATE_ITEMS.includes('node_modules')) {
+    const sourceModules = path.join(repoRoot, 'node_modules');
+    const targetModules = path.join(worktreePath, 'node_modules');
+    if (fs.existsSync(sourceModules) && !fs.existsSync(targetModules)) {
+      try {
+        if (process.platform === 'win32') {
+          fs.symlinkSync(sourceModules, targetModules, 'junction');
+        } else {
+          fs.symlinkSync(sourceModules, targetModules, 'dir');
+        }
+      } catch (err) {
+        errors.push({ step: 'symlink_node_modules', message: err.message });
       }
-    } catch (err) {
-      errors.push({ step: 'symlink_node_modules', message: err.message });
     }
   }
 
-  // Copy .env and .env.local (gitignored, so never present in worktrees)
-  for (const envFile of ['.env', '.env.local']) {
+  // Copy .env (gated on SUBSTRATE_ITEMS membership) plus opportunistic
+  // .env.local (not part of substrate contract but copied if present).
+  const envFiles = [];
+  if (SUBSTRATE_ITEMS.includes('.env')) envFiles.push('.env');
+  envFiles.push('.env.local');
+  for (const envFile of envFiles) {
     const src = path.join(repoRoot, envFile);
     const dst = path.join(worktreePath, envFile);
     if (fs.existsSync(src) && !fs.existsSync(dst)) {
