@@ -175,6 +175,51 @@ export async function isSourceSDA05Suppressed(sourceSdId, supabase) {
   }
 }
 
+/**
+ * QF-20260503-858 dedup: return the sd_key of an existing draft corrective SD
+ * that targets the same source SD + dimensions, or null if no duplicate.
+ *
+ * Match key is (source_sd_id, sorted dimensions). Resolves candidate source SDs
+ * via metadata.source_sd_id (preferred) or falls back to the eva_vision_scores
+ * row referenced by metadata.score_id (legacy SDs predating this field).
+ *
+ * @param {Object} supabase
+ * @param {string|null} sourceSdId
+ * @param {string[]} dimensionIds
+ * @returns {Promise<string|null>} duplicate sd_key, or null
+ */
+export async function findDuplicateCorrective(supabase, sourceSdId, dimensionIds) {
+  if (!sourceSdId || !Array.isArray(dimensionIds) || dimensionIds.length === 0) return null;
+  const dimsKey = [...dimensionIds].sort().join(',');
+  try {
+    const { data: drafts } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, metadata')
+      .eq('status', 'draft')
+      .filter('metadata->>source', 'eq', 'corrective_sd_generator');
+    const matches = (drafts || []).filter(
+      d => (d.metadata?.dimensions || []).slice().sort().join(',') === dimsKey
+    );
+    if (!matches.length) return null;
+    const idsNeedingLookup = matches
+      .filter(m => !m.metadata?.source_sd_id)
+      .map(m => m.metadata?.score_id || m.metadata?.vision_origin_score_id)
+      .filter(Boolean);
+    const scoreSdMap = {};
+    if (idsNeedingLookup.length) {
+      const { data: scores } = await supabase
+        .from('eva_vision_scores').select('id, sd_id').in('id', idsNeedingLookup);
+      for (const sc of (scores || [])) scoreSdMap[sc.id] = sc.sd_id;
+    }
+    for (const m of matches) {
+      const candSrc = m.metadata?.source_sd_id
+        || scoreSdMap[m.metadata?.score_id || m.metadata?.vision_origin_score_id];
+      if (candSrc === sourceSdId) return m.sd_key;
+    }
+    return null;
+  } catch { return null; }
+}
+
 // ─── Supabase Client ──────────────────────────────────────────────────────────
 
 function getSupabase() {
@@ -522,6 +567,21 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
       score.rubric_snapshot, score.total_score, action
     );
 
+    // QF-20260503-858: dedup — skip if a draft corrective already targets the
+    // same source-SD + dimension set. Prevents the duplicate-emission noise
+    // observed 2026-05-03 (15/24 post-filter SDs were duplicates).
+    const dimensionIds = dims.map(d => d.dimId);
+    const dupSdKey = await findDuplicateCorrective(supabase, score.sd_id, dimensionIds);
+    if (dupSdKey) {
+      console.log(`[corrective-sd-generator] eva.corrective.skipped_duplicate source_sd_id=${score.sd_id} dims=${[...dimensionIds].sort().join(',')} existing=${dupSdKey}`);
+      await _logAudit(supabase, scoreId, 'skipped_duplicate', dupSdKey, score.vision_id, {
+        source_sd_id: score.sd_id,
+        dimensions: dimensionIds,
+        existing_sd_key: dupSdKey,
+      });
+      continue;
+    }
+
     // Generate SD key through standard pipeline
     const sdKey = await generateSDKey({ source: 'CORR', type: sdType, title });
 
@@ -542,6 +602,7 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
         key_principles: [{ principle: 'Vision alignment', description: `Address ${label} gap(s) to improve EVA vision score` }],
         metadata: {
           source: 'corrective_sd_generator',
+          source_sd_id: score.sd_id ?? null,
           score_id: scoreId,
           vision_origin_score_id: scoreId,
           action_tier: action,
