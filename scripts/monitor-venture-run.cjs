@@ -15,7 +15,7 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 
 const VENTURE_ID = process.env.VENTURE_ID || '94856fc6-9ba9-4f56-9a5c-85041031a0fc';
 const VENTURE_NAME = process.env.VENTURE_NAME || 'LexiGuard';
-const STOP_AT_STAGE = 17;
+const STOP_AT_STAGE = parseInt(process.env.STOP_AT_STAGE || '17', 10);
 const POLL_MS = 30000;
 
 // Gate classification — sourced from lifecycle_stage_config (DB authoritative as of 2026-04-25)
