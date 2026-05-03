@@ -1,11 +1,11 @@
-# venture_raid_summary Table
+# cron_run_locks Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-05-03T21:32:51.296Z
-**Rows**: 136
+**Rows**: 0
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,33 +14,30 @@
 
 ---
 
-## Columns (7 total)
+## Columns (4 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
-| venture_id | `uuid` | **NO** | - | - |
-| risk_count | `integer(32)` | YES | - | - |
-| action_count | `integer(32)` | YES | - | - |
-| issue_count | `integer(32)` | YES | - | - |
-| decision_count | `integer(32)` | YES | - | - |
-| total_count | `integer(32)` | YES | - | - |
-| last_updated | `timestamp with time zone` | YES | - | - |
+| name | `text` | **NO** | - | - |
+| owner | `uuid` | **NO** | - | - |
+| locked_at | `timestamp with time zone` | **NO** | `now()` | - |
+| expires_at | `timestamp with time zone` | **NO** | - | - |
 
 ## Constraints
 
 ### Primary Key
-- `venture_raid_summary_pkey`: PRIMARY KEY (venture_id)
+- `cron_run_locks_pkey`: PRIMARY KEY (name)
 
 ## Indexes
 
-- `venture_raid_summary_pkey`
+- `cron_run_locks_pkey`
   ```sql
-  CREATE UNIQUE INDEX venture_raid_summary_pkey ON public.venture_raid_summary USING btree (venture_id)
+  CREATE UNIQUE INDEX cron_run_locks_pkey ON public.cron_run_locks USING btree (name)
   ```
 
 ## RLS Policies
 
-### 1. service_role_all_venture_raid_summary (ALL)
+### 1. cron_run_locks_service_all (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
