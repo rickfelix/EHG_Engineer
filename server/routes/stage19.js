@@ -22,8 +22,27 @@ import { Router } from 'express';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid } from '../middleware/validate.js';
 import { formatReplitOptimized } from '../../lib/eva/bridge/replit-prompt-formatter.js';
+import { writeArtifact } from '../../lib/eva/artifact-persistence-service.js';
+import { ARTIFACT_TYPES } from '../../lib/eva/artifact-types.js';
 
 const router = Router();
+
+// SD-LEO-FEAT-STAGE-BUILD-REPLIT-001 / FR-3 — URL shape validators
+const HTTPS_URL_RE = /^https:\/\/[^\s/$.?#].[^\s]*$/i;
+const GITHUB_REPO_RE = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/?$/i;
+
+function validateRegistrationBody(body) {
+  const errors = {};
+  const repo_url = typeof body?.repo_url === 'string' ? body.repo_url.trim() : '';
+  const deployment_url = typeof body?.deployment_url === 'string' ? body.deployment_url.trim() : '';
+  if (!repo_url || !GITHUB_REPO_RE.test(repo_url)) {
+    errors.repo_url = 'must be https://github.com/<owner>/<repo>';
+  }
+  if (!deployment_url || !HTTPS_URL_RE.test(deployment_url)) {
+    errors.deployment_url = 'must be a valid https:// URL';
+  }
+  return { repo_url, deployment_url, errors };
+}
 
 /**
  * GET /api/stage19/:ventureId/replit-prompts
@@ -77,6 +96,114 @@ router.get('/:ventureId/replit-prompts', asyncHandler(async (req, res) => {
       code: 'PROMPT_BUILD_FAILED',
     });
   }
+}));
+
+/**
+ * POST /api/stage19/:ventureId/register-deployment
+ *
+ * SD-LEO-FEAT-STAGE-BUILD-REPLIT-001 / FR-3
+ *
+ * Registers Replit deployment + GitHub repo URLs for a venture and emits the
+ * canonical `build_mvp_build` artifact (the "build is done" signal that the
+ * Stage 19→20 exit-gate enforcer reads).
+ *
+ * Request body: { repo_url: string, deployment_url: string }
+ *   repo_url       — must match https://github.com/<owner>/<repo>
+ *   deployment_url — must be a valid https:// URL
+ *
+ * Behavior:
+ *   1. Validate UUID + URL shapes (400 INVALID_VENTURE_ID / VALIDATION_FAILED).
+ *   2. Upsert venture_resources columns repo_url + deployment_url
+ *      (resource_type='replit_deployment', resource_identifier=deployment_url
+ *      so the existing (venture_id, resource_type, resource_identifier) unique
+ *      constraint provides idempotency on the deployment URL).
+ *   3. Emit `build_mvp_build` artifact via artifact-persistence-service.writeArtifact;
+ *      writeArtifact's is_current dedup makes the emit idempotent.
+ *   4. Return 200 with the resource id, artifact id, and canonical URLs.
+ */
+router.post('/:ventureId/register-deployment', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+  const { repo_url, deployment_url, errors } = validateRegistrationBody(req.body);
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({
+      error: 'URL validation failed',
+      code: 'VALIDATION_FAILED',
+      invalid: Object.keys(errors),
+      reason: errors,
+    });
+  }
+
+  const supabase = req.app.locals.supabase;
+  if (!supabase) {
+    return res.status(500).json({ error: 'Supabase client unavailable', code: 'NO_SUPABASE' });
+  }
+
+  // Upsert venture_resources row using the existing unique key
+  // (venture_id, resource_type, resource_identifier) for idempotency.
+  const { data: resourceRow, error: upsertErr } = await supabase
+    .from('venture_resources')
+    .upsert({
+      venture_id: ventureId,
+      resource_type: 'replit_deployment',
+      resource_identifier: deployment_url,
+      provider: 'replit',
+      status: 'active',
+      repo_url,
+      deployment_url,
+    }, { onConflict: 'venture_id,resource_type,resource_identifier' })
+    .select('id')
+    .single();
+
+  if (upsertErr) {
+    console.error('[stage19-route] register-deployment upsert failed', upsertErr.message);
+    return res.status(500).json({
+      error: 'Failed to persist venture_resources',
+      code: 'RESOURCE_UPSERT_FAILED',
+      detail: upsertErr.message,
+    });
+  }
+
+  // Emit build_mvp_build artifact (writeArtifact handles dedup via is_current).
+  let artifactId;
+  try {
+    artifactId = await writeArtifact(supabase, {
+      ventureId,
+      lifecycleStage: 19,
+      artifactType: ARTIFACT_TYPES.BUILD_MVP_BUILD,
+      title: 'Replit deployment registered',
+      artifactData: {
+        repo_url,
+        deployment_url,
+        registered_at: new Date().toISOString(),
+      },
+      metadata: {
+        registered_via: 'POST /api/stage19/:ventureId/register-deployment',
+        repo_url,
+        deployment_url,
+      },
+      source: 'stage19-register-deployment',
+    });
+  } catch (err) {
+    console.error('[stage19-route] build_mvp_build emit failed', err.message);
+    return res.status(500).json({
+      error: 'venture_resources persisted but artifact emit failed',
+      code: 'ARTIFACT_EMIT_FAILED',
+      detail: err.message,
+      resource_id: resourceRow?.id,
+    });
+  }
+
+  return res.status(200).json({
+    ventureId,
+    repo_url,
+    deployment_url,
+    resource_id: resourceRow?.id,
+    artifact_id: artifactId,
+    artifact_type: ARTIFACT_TYPES.BUILD_MVP_BUILD,
+  });
 }));
 
 export default router;
