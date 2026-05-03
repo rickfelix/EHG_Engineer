@@ -1099,16 +1099,25 @@ describe('Stage 19: analyzeStage19', () => {
 describe('Stage 20: analyzeStage20', () => {
   beforeEach(() => { mockComplete.mockReset(); });
 
-  // analyzeStage20 = stage-20-build-execution.js. LLM synthesis is permanently
-  // disabled — requires real SD completion data from venture_stage_work.
+  // SD-LEO-FEAT-STAGE-CODE-QUALITY-001 FR-1 (2026-05-03): analyzeStage20 now
+  // dispatches to the canonical Code Quality Gate analyzer (stage-20-code-quality.js)
+  // — NOT the legacy stage-20-build-execution.js. The legacy export is still
+  // reachable via analyzeStage20BuildExecution for backwards-compat callers.
   it.skip('produces valid QA assessment with quality decision', async () => {
-    // Skipped: analyzeStage20 is REFUSED — requires real build data from SD completion pipeline.
-    // LLM fabrication is permanently disabled to prevent poisoned downstream stages.
+    // Skipped: superseded — canonical analyzer needs a github_repo + clone path.
+    // Covered by tests/unit/eva/stage-code-quality-fr-1-2-4-8.test.js.
   });
 
-  it('throws when stage19Data is missing', async () => {
-    await expect(analyzeStage20({ logger: silentLogger }))
-      .rejects.toThrow('Stage 20 build execution requires Stage 19 (sprint planning) data');
+  it('returns BLOCKED verdict when no github_repo (canonical analyzer)', async () => {
+    const result = await analyzeStage20({
+      stage19Data: null,
+      ventureName: 'IntegrationTestVenture',
+      ventureId: null,
+      supabase: null,
+      logger: silentLogger,
+    });
+    expect(result.verdict).toBe('BLOCKED');
+    expect(result.findings[0].check).toBe('precondition');
   });
 });
 
