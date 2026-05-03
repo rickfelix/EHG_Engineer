@@ -21,6 +21,16 @@ describe('resolveTimeout — decision matrix (FR-1)', () => {
     expect(resolveTimeout('gemini-2.5-pro', { timeout: 45000 })).toEqual({ value: 45000, reason: 'explicit' });
   });
 
+  it('TS-1b: invalid options.timeout (0/NaN/negative/non-number) falls through to next branch (preserves pre-helper safety net)', () => {
+    // 0 was previously masked by `options.timeout || PROVIDER_TIMEOUT_MS`; preserve fall-through.
+    expect(resolveTimeout('gemini-2.5-flash', { timeout: 0 }).reason).toBe('default');
+    expect(resolveTimeout('gemini-2.5-flash', { timeout: NaN }).reason).toBe('default');
+    expect(resolveTimeout('gemini-2.5-flash', { timeout: -1 }).reason).toBe('default');
+    expect(resolveTimeout('gemini-2.5-flash', { timeout: '30000' }).reason).toBe('default');
+    // And invalid timeout still allows downstream signals (e.g. purpose) to fire LONG.
+    expect(resolveTimeout('gemini-2.5-flash', { timeout: 0, purpose: 'content-generation' }).reason).toBe('purpose');
+  });
+
   it('TS-2: purpose=content-generation triggers LONG', () => {
     expect(resolveTimeout('gemini-2.5-flash', { purpose: 'content-generation' }))
       .toEqual({ value: PROVIDER_TIMEOUT_LONG_MS, reason: 'purpose' });
