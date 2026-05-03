@@ -4,8 +4,9 @@ name: "FR-C Remediation SD Generator (cron)"
 #
 # Hourly sweep of venture_quality_findings (status='pending', severity in
 # critical/high/medium) → DRAFT remediation SDs in strategic_directives_v2.
-# Idempotent via pg_advisory_lock(hashtext('fr_c_generator')); the script
-# no-ops gracefully if a previous tick is still running.
+# Idempotent via cron_run_locks table + try_claim_cron_lock RPC; the script
+# no-ops gracefully if a previous tick is still running. The TTL on the row
+# lock self-heals after 2x the cron interval, so a crashed tick can't jam it.
 
 on:
   schedule:
@@ -27,7 +28,7 @@ permissions:
   contents: read
 
 concurrency:
-  # Cancel any in-flight run to avoid stacking — the advisory lock would no-op
+  # Cancel any in-flight run to avoid stacking — the cron lock would no-op
   # the second one anyway, but cancelling avoids burning Actions minutes.
   group: ${{ github.workflow }}
   cancel-in-progress: true
@@ -41,7 +42,6 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
       FR_C_RATE_LIMIT_PER_VENTURE_PER_DAY: ${{ github.event.inputs.rate_limit_override || '' }}
 
     steps:

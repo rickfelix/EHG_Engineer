@@ -7,6 +7,10 @@
  * on feedback table rows with status='new' and no existing classification.
  *
  * Categories: bug, enhancement, question, noise
+ * Sources: 'llm' (LLM-derived classification) or 'rules' (heuristic fallback).
+ *   These are the only values permitted by the chk_ai_triage_source_valid
+ *   CHECK constraint on the feedback table — see migration
+ *   database/migrations/20260207_feedback_llm_triage_columns.sql.
  * Idempotent: skips already-classified items.
  *
  * Usage:
@@ -18,9 +22,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { getLLMClient } from '../../../lib/llm/client-factory.js';
+import { isMainModule } from '../../../lib/utils/is-main-module.js';
 import 'dotenv/config';
 
 const VALID_CATEGORIES = ['bug', 'enhancement', 'question', 'noise'];
+// Must match chk_ai_triage_source_valid CHECK constraint on feedback table.
+const VALID_SOURCES = ['llm', 'rules'];
 const BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 500;
 
@@ -75,7 +82,9 @@ async function classifyWithLLM(item) {
 
     const text = typeof result === 'string' ? result : result?.content || result?.text || '';
     const match = text.match(/\{[^}]+\}/);
-    if (!match) return { classification: 'question', confidence: 0.40 };
+    // No parseable JSON in LLM output: fall back to a hardcoded default
+    // and report 'rules' as the source (the value is not LLM-derived).
+    if (!match) return { classification: 'question', confidence: 0.40, source: 'rules' };
 
     const parsed = JSON.parse(match[0]);
     const classification = VALID_CATEGORIES.includes(parsed.classification)
@@ -83,7 +92,7 @@ async function classifyWithLLM(item) {
       : 'question';
     const confidence = Math.max(0, Math.min(1, parseFloat(parsed.confidence) || 0.50));
 
-    return { classification, confidence };
+    return { classification, confidence, source: 'llm' };
   } catch (err) {
     console.warn(`  [WARN] LLM classification failed: ${err.message}`);
     return heuristicClassify(item);
@@ -95,15 +104,15 @@ function heuristicClassify(item) {
   const category = (item.category || '').toLowerCase();
 
   if (category.includes('error') || category.includes('failure') || category.includes('ci_failure')) {
-    return { classification: 'bug', confidence: 0.75 };
+    return { classification: 'bug', confidence: 0.75, source: 'rules' };
   }
   if (title.includes('fail') || title.includes('error') || title.includes('crash')) {
-    return { classification: 'bug', confidence: 0.70 };
+    return { classification: 'bug', confidence: 0.70, source: 'rules' };
   }
   if (title.includes('add') || title.includes('improve') || title.includes('enhance')) {
-    return { classification: 'enhancement', confidence: 0.65 };
+    return { classification: 'enhancement', confidence: 0.65, source: 'rules' };
   }
-  return { classification: 'question', confidence: 0.50 };
+  return { classification: 'question', confidence: 0.50, source: 'rules' };
 }
 
 function sleep(ms) {
@@ -144,12 +153,15 @@ async function run() {
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const { classification, confidence } = await classifyWithLLM(item);
+    const { classification, confidence, source } = await classifyWithLLM(item);
     const truncTitle = (item.title || '').substring(0, 55);
     totalConfidence += confidence;
+    // Defense-in-depth: never write a value that would violate
+    // chk_ai_triage_source_valid; treat unknown sources as 'rules'.
+    const safeSource = VALID_SOURCES.includes(source) ? source : 'rules';
 
     if (flags.dryRun) {
-      console.log(`  [DRY-RUN] ${truncTitle} → ${classification} (${(confidence * 100).toFixed(0)}%)`);
+      console.log(`  [DRY-RUN] ${truncTitle} → ${classification} (${(confidence * 100).toFixed(0)}%) [${safeSource}]`);
       processed++;
     } else {
       const { error: updateError } = await supabase
@@ -157,7 +169,7 @@ async function run() {
         .update({
           ai_triage_classification: classification,
           ai_triage_confidence: Math.round(confidence * 100),
-          ai_triage_source: 'auto-triage-llm',
+          ai_triage_source: safeSource,
           updated_at: new Date().toISOString()
         })
         .eq('id', item.id);
@@ -166,7 +178,7 @@ async function run() {
         console.error(`  [ERROR] ${truncTitle}: ${updateError.message}`);
         errors++;
       } else {
-        console.log(`  [OK] ${truncTitle} → ${classification} (${(confidence * 100).toFixed(0)}%)`);
+        console.log(`  [OK] ${truncTitle} → ${classification} (${(confidence * 100).toFixed(0)}%) [${safeSource}]`);
         processed++;
       }
     }
@@ -191,7 +203,12 @@ async function run() {
   }
 }
 
-run().catch(err => {
-  console.error('[auto-triage] Fatal:', err.message);
-  process.exit(1);
-});
+// Exported for unit tests.
+export { classifyWithLLM, heuristicClassify, VALID_SOURCES };
+
+if (isMainModule(import.meta.url)) {
+  run().catch(err => {
+    console.error('[auto-triage] Fatal:', err.message);
+    process.exit(1);
+  });
+}
