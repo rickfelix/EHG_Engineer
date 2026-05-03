@@ -27,6 +27,11 @@
 const fs = require('fs');
 const path = require('path');
 
+// SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-7): self-load .env so SUPABASE_* reads at
+// lines further below resolve regardless of parent shell. Detached tick subprocess does NOT
+// inherit other hooks' loaded env. Symmetric with capture-session-id.cjs FR-7 fix.
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
 const TICK_MS = 30 * 1000;
 const PARENT_POLL_MS = 5 * 1000;
 const HTTP_TIMEOUT_MS = 3000;
