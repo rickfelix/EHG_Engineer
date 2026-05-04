@@ -170,6 +170,11 @@ function resetFrictionCountersIfSdChanged(sessionId, currentSdKey) {
 
 function getCurrentSessionId() {
   try {
+    // QF-20260504-964 FIX 1: env var is canonical post-2026-04-08 session-stability rules.
+    // Without this, the hook silently exits when .claude/session-id.json is absent and
+    // PID-scan fails (Windows PPID=1) — coordinator→worker delivery dies fleet-wide.
+    if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
+
     // Check .claude/session-id.json first (most reliable)
     const sessionFile = path.resolve(__dirname, '../../.claude/session-id.json');
     if (fs.existsSync(sessionFile)) {
@@ -398,4 +403,8 @@ async function main() {
   }
 }
 
-main().catch(() => { /* fail silently */ });
+if (require.main === module) {
+  main().catch(() => { /* fail silently */ });
+}
+
+module.exports = { getCurrentSessionId };
