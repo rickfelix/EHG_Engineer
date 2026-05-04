@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-04T02:48:24.018Z
-**Tables**: 661
+**Generated**: 2026-05-04T13:49:53.536Z
+**Tables**: 663
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (661)
+## All Tables (663)
 
 ### LEO Protocol
 
@@ -256,6 +256,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [claude_code_releases](tables/claude_code_releases.md)
 - [claude_sessions](tables/claude_sessions.md)
 - [cleanup_orchestration_state](tables/cleanup_orchestration_state.md)
+- [client_error_events](tables/client_error_events.md)
 - [codebase_health_config](tables/codebase_health_config.md)
 - [codebase_health_snapshots](tables/codebase_health_snapshots.md)
 - [codebase_semantic_index](tables/codebase_semantic_index.md)
@@ -542,6 +543,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [root_cause_reports](tables/root_cause_reports.md)
 - [runtime_audits](tables/runtime_audits.md)
 - [scaffold_patterns](tables/scaffold_patterns.md)
+- [scan_results](tables/scan_results.md)
 - [schema_expectations](tables/schema_expectations.md)
 - [screen_layouts](tables/screen_layouts.md)
 - [sdip_ai_analysis](tables/sdip_ai_analysis.md)
