@@ -936,12 +936,13 @@ function mapPriority(feedbackPriority) {
  * orchestrator, qa, refactor, security, implementation, strategic_observation,
  * architectural_review, discovery_spike, ux_debt, product_decision
  */
-// PAT-SDCREATE-001: Valid SD types that exist in all registration points
-// Keep in sync with: sd-type-validation.js VALID_SD_TYPES, type-classifier.js SD_TYPE_PROFILES
+// QF-20260504-251: VALID_DB_SD_TYPES aligned with actual sd_type_check enum.
+// Removed: 'qa', 'library', 'fix' (rejected by DB constraint).
+// Added: 'discovery_spike', 'ux_debt' (valid per constraint).
 const VALID_DB_SD_TYPES = [
   'feature', 'infrastructure', 'bugfix', 'database', 'security',
   'refactor', 'documentation', 'docs', 'orchestrator', 'performance',
-  'enhancement', 'uat', 'library', 'fix', 'implementation', 'qa'
+  'enhancement', 'uat', 'implementation', 'discovery_spike', 'ux_debt'
 ];
 
 function mapToDbType(userType) {
@@ -962,8 +963,11 @@ function mapToDbType(userType) {
     security: 'security',
     orchestrator: 'orchestrator',
     orch: 'orchestrator',
-    qa: 'qa',
-    testing: 'qa',
+    qa: 'infrastructure',       // QF-251: 'qa' rejected by DB → infrastructure
+    testing: 'infrastructure',  // QF-251: was 'qa', same rejection class
+    spike: 'discovery_spike',
+    discovery_spike: 'discovery_spike',
+    ux_debt: 'ux_debt',
     implementation: 'implementation',
     enhancement: 'feature'  // Map enhancement to feature
   };
