@@ -119,3 +119,110 @@ describe('QF-932 ENF-STDIN-6: stdin precedence over env', () => {
     expect(parsed.tool_input_raw).toBe(JSON.stringify({ file_path: '/tmp/z', content: 'data' }));
   });
 });
+
+// QF-20260504-484: ENF-SD-CREATE-SKILL matcher tightening.
+// Pre-fix: /leo-create-sd\.js/ substring match false-positived on script-name
+// MENTIONS in argument strings. Post-fix: regex requires `node ` prefix at
+// command-start or after shell separator. Tests run real enforcement (no
+// TEST_DUMP_RESOLVED) and assert exit-code-2 (block) vs 0 (pass).
+function spawnHookEnforce(stdinPayload, extraEnv = {}) {
+  const { spawn } = require('node:child_process');
+  const probe = spawn('node', [HOOK_PATH], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    // SUPABASE_URL='' short-circuits audit-log writes so tests don't hit the DB.
+    // Other ENF guards keyed off env vars set to safe-default values.
+    env: {
+      ...process.env,
+      SUPABASE_URL: '',
+      LEO_NPM_INSTALL_GUARD: 'off',
+      ...extraEnv
+    }
+  });
+  probe.stdin.end(stdinPayload);
+  return new Promise((resolve) => {
+    let stdout = '', stderr = '';
+    probe.stdout.on('data', c => { stdout += c; });
+    probe.stderr.on('data', c => { stderr += c; });
+    probe.on('close', code => resolve({ stdout, stderr, code }));
+  });
+}
+
+function bashPayload(command) {
+  return JSON.stringify({
+    session_id: 'enf9-test',
+    tool_name: 'Bash',
+    tool_input: { command },
+    hook_event_name: 'PreToolUse'
+  });
+}
+
+describe('QF-484 ENF-SD-CREATE-SKILL: false-positives no longer block', () => {
+  it('passes log-harness-bug.js with script name in quoted description', async () => {
+    const r = await spawnHookEnforce(bashPayload(
+      'node scripts/log-harness-bug.js "ENF-SD-CREATE-SKILL false-positive on leo-create-sd.js mention"'
+    ));
+    expect(r.code).toBe(0);
+    expect(r.stderr).not.toMatch(/PROTOCOL VIOLATION/);
+  });
+
+  it('passes gh search containing the script name', async () => {
+    const r = await spawnHookEnforce(bashPayload(
+      'gh pr list --search "leo-create-sd.js"'
+    ));
+    expect(r.code).toBe(0);
+  });
+
+  it('passes Grep-equivalent grep over the script name', async () => {
+    const r = await spawnHookEnforce(bashPayload(
+      'grep -r leo-create-sd.js scripts/'
+    ));
+    expect(r.code).toBe(0);
+  });
+
+  it('passes echo with script-name string content', async () => {
+    const r = await spawnHookEnforce(bashPayload(
+      "echo 'see scripts/leo-create-sd.js for details'"
+    ));
+    expect(r.code).toBe(0);
+  });
+});
+
+describe('QF-484 ENF-SD-CREATE-SKILL: true-positives still block', () => {
+  it('blocks bare node invocation', async () => {
+    const r = await spawnHookEnforce(bashPayload(
+      'node scripts/leo-create-sd.js LEO infrastructure "test"'
+    ));
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/ENF-SD-CREATE-SKILL/);
+  });
+
+  it('blocks node invocation after && chain', async () => {
+    const r = await spawnHookEnforce(bashPayload(
+      'cd /tmp && node scripts/leo-create-sd.js --from-feedback abc'
+    ));
+    expect(r.code).toBe(2);
+  });
+
+  it('blocks node ./scripts/leo-create-sd.js path variant', async () => {
+    const r = await spawnHookEnforce(bashPayload(
+      'node ./scripts/leo-create-sd.js LEO infrastructure "title"'
+    ));
+    expect(r.code).toBe(2);
+  });
+});
+
+describe('QF-484 ENF-SD-CREATE-SKILL: bypass mechanisms', () => {
+  it('passes when prefixed with SD_CREATE_VIA_SKILL=1', async () => {
+    const r = await spawnHookEnforce(bashPayload(
+      'SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js LEO infrastructure "test"'
+    ));
+    expect(r.code).toBe(0);
+  });
+
+  it('passes --help invocation', async () => {
+    const r = await spawnHookEnforce(bashPayload(
+      'node scripts/leo-create-sd.js --help'
+    ));
+    expect(r.code).toBe(0);
+  });
+});

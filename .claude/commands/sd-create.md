@@ -15,13 +15,13 @@ All creation calls go through canonical scripts.
 ## Quick Reference
 ```bash
 # Interactive creation
-node scripts/leo-create-sd.js LEO <type> "<title>"
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js LEO <type> "<title>"
 
 # Flag-based creation
-node scripts/leo-create-sd.js --from-uat <test-id>
-node scripts/leo-create-sd.js --from-learn <pattern-id>
-node scripts/leo-create-sd.js --from-feedback <id>
-node scripts/leo-create-sd.js --from-plan [path]
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-uat <test-id>
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-learn <pattern-id>
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-feedback <id>
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-plan [path]
 node scripts/modules/sd-key-generator.js --child <parent-key> <index>
 ```
 
@@ -67,17 +67,17 @@ node scripts/modules/sd-key-generator.js LEO <type> "<title>"
 
 ### `create --from-uat <test-id>`
 ```bash
-node scripts/leo-create-sd.js --from-uat <test-id>
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-uat <test-id>
 ```
 
 ### `create --from-learn <pattern-id>`
 ```bash
-node scripts/leo-create-sd.js --from-learn <pattern-id>
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-learn <pattern-id>
 ```
 
 ### `create --from-feedback <id>`
 ```bash
-node scripts/leo-create-sd.js --from-feedback <id>
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-feedback <id>
 ```
 
 ### `create --child <parent-key>`
@@ -95,9 +95,9 @@ Read tool: CLAUDE_LEAD.md
 
 Then run:
 ```bash
-node scripts/leo-create-sd.js --from-plan
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-plan
 # Or with specific path:
-node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md
 ```
 
 Extracts: title, summary, success criteria, scope, and SD type from plan content.
@@ -117,7 +117,7 @@ Next: Run LEAD-TO-PLAN handoff when ready
 ```
 
 ## Canonical Scripts (NEVER bypass)
-- `node scripts/leo-create-sd.js` — All SD creation
+- `SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js` — All SD creation
 - `node scripts/modules/sd-key-generator.js` — Key generation
 - `node scripts/modules/vision-readiness-rubric.js` — Vision routing
 - `node scripts/create-quick-fix.js` — Quick fix creation
