@@ -192,18 +192,26 @@ function resetFrictionCountersIfSdChanged(sessionId, currentSdKey) {
 function getCurrentSessionId() {
   try {
     // QF-20260504-964 FIX 1: env var is canonical post-2026-04-08 session-stability rules.
-    // Without this, the hook silently exits when .claude/session-id.json is absent and
-    // PID-scan fails (Windows PPID=1) — coordinator→worker delivery dies fleet-wide.
     if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
 
-    // Check .claude/session-id.json first (most reliable)
-    const sessionFile = path.resolve(__dirname, '../../.claude/session-id.json');
-    if (fs.existsSync(sessionFile)) {
-      const data = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
-      if (data.session_id) return data.session_id;
-    }
+    // QF-20260504-297: read from canonical SessionStart marker dir (RCA: the
+    // old .claude/session-id.json singular-file lookup at this position was
+    // dead code — no script in the repo ever wrote to that path. The actual
+    // markers live at .claude/session-identity/pid-<ccPid>.json, written by
+    // capture-session-id.cjs at SessionStart). This unblocks coord sessions
+    // that never claim an SD (and so have no ~/.claude-sessions/<sid>.json
+    // file) from the silent if(!sessionId) return — closes feedback row
+    // 7f49b45f-9065-4d9d-917d-9a8a032e1462.
+    try {
+      const { readSessionIdFromIdentityMarker } = require('../../lib/hooks/session-id.cjs');
+      const fromMarker = readSessionIdFromIdentityMarker();
+      if (fromMarker) return fromMarker;
+    } catch { /* helper unavailable — fall through */ }
 
-    // Fallback: scan session directory
+    // Final fallback: scan ~/.claude-sessions for sd-claim sessions (workers
+    // that claimed an SD via lib/session-manager.mjs). Note: process.ppid is
+    // unreliable on Windows (often 1), so this path is only useful when the
+    // session_id includes a PID-derived suffix or when ppid happens to match.
     const sessionDir = path.join(os.homedir(), '.claude-sessions');
     if (!fs.existsSync(sessionDir)) return null;
     const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.json'));
