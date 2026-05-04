@@ -82,6 +82,7 @@ function parseArgs(argv) {
     help: args.includes('--help') || args.includes('-h'),
     days: DEFAULT_IDLE_DAYS,
     preserveRoot: null,
+    repo: null,
   };
   const daysIdx = args.findIndex((a) => a === '--days');
   if (daysIdx !== -1 && args[daysIdx + 1]) {
@@ -91,6 +92,10 @@ function parseArgs(argv) {
   const prIdx = args.findIndex((a) => a === '--preserve-root');
   if (prIdx !== -1 && args[prIdx + 1]) {
     opts.preserveRoot = args[prIdx + 1];
+  }
+  const repoIdx = args.findIndex((a) => a === '--repo');
+  if (repoIdx !== -1 && args[repoIdx + 1]) {
+    opts.repo = args[repoIdx + 1];
   }
   return opts;
 }
@@ -107,6 +112,8 @@ Options:
   --yes                 Skip interactive confirmation for Stage 2
   --days <n>            Idle threshold in days (default: ${DEFAULT_IDLE_DAYS})
   --preserve-root <p>   Override preserve destination root (default: scratch/preserved-from-*)
+  --repo <path>         Run against a different repo (chdir before scanning); useful when
+                        the target repo's quota is full but you can't easily cd into it
   --phantom-only        Legacy mode: only report phantoms (missing dirs / prunable)
   --verbose, -v         Include per-worktree detector trace in the table
   --help, -h            Show this help
@@ -543,6 +550,16 @@ export async function main(argv = process.argv) {
   if (opts.help) {
     console.log(HELP);
     return 0;
+  }
+
+  if (opts.repo) {
+    const target = path.resolve(opts.repo);
+    if (!fs.existsSync(target)) {
+      console.error(`❌ --repo path does not exist: ${target}`);
+      return 2;
+    }
+    try { process.chdir(target); }
+    catch (e) { console.error(`❌ Cannot chdir to --repo ${target}: ${e.message}`); return 2; }
   }
 
   loadDotenv();
