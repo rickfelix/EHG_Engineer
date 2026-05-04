@@ -82,6 +82,60 @@ describe('HOOK-2: env var takes priority over session-id.json file', () => {
   });
 });
 
+describe('STDIN-1: readSessionIdFromStdin parses {session_id} from stdin (QF-20260504-007)', () => {
+  // Use a child process to control stdin deterministically — vitest cannot easily
+  // mock process.stdin's data-event timing in-process.
+  it('returns session_id when Claude Code passes JSON payload via stdin', async () => {
+    const { spawn } = require('node:child_process');
+    const probe = spawn('node', ['-e', `
+      const hook = require('${HOOK_PATH.replace(/\\/g, '/')}');
+      hook.readSessionIdFromStdin(1000).then(sid => { process.stdout.write(String(sid), () => process.exit(0)); });
+    `], { stdio: ['pipe', 'pipe', 'pipe'] });
+    probe.stdin.end(JSON.stringify({
+      session_id: 'abc-from-stdin-123',
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash'
+    }));
+    const out = await new Promise((resolve) => {
+      let buf = '';
+      probe.stdout.on('data', c => { buf += c; });
+      probe.on('close', () => resolve(buf));
+    });
+    expect(out).toBe('abc-from-stdin-123');
+  });
+
+  it('returns null on malformed JSON', async () => {
+    const { spawn } = require('node:child_process');
+    const probe = spawn('node', ['-e', `
+      const hook = require('${HOOK_PATH.replace(/\\/g, '/')}');
+      hook.readSessionIdFromStdin(500).then(sid => { process.stdout.write(String(sid), () => process.exit(0)); });
+    `], { stdio: ['pipe', 'pipe', 'pipe'] });
+    probe.stdin.end('this is not json {{{');
+    const out = await new Promise((resolve) => {
+      let buf = '';
+      probe.stdout.on('data', c => { buf += c; });
+      probe.on('close', () => resolve(buf));
+    });
+    expect(out).toBe('null');
+  });
+
+  it('returns null on timeout (empty stdin, never closes)', async () => {
+    const { spawn } = require('node:child_process');
+    const probe = spawn('node', ['-e', `
+      const hook = require('${HOOK_PATH.replace(/\\/g, '/')}');
+      hook.readSessionIdFromStdin(150).then(sid => { process.stdout.write(String(sid), () => process.exit(0)); });
+    `], { stdio: ['pipe', 'pipe', 'pipe'] });
+    // Deliberately do NOT call probe.stdin.end() — let timeout trigger
+    const out = await new Promise((resolve) => {
+      let buf = '';
+      probe.stdout.on('data', c => { buf += c; });
+      probe.on('close', () => resolve(buf));
+    });
+    probe.stdin.end(); // cleanup
+    expect(out).toBe('null');
+  });
+});
+
 describe('HOOK-3: returns null when env var unset AND file missing AND no PID match', () => {
   const originalEnv = process.env.CLAUDE_SESSION_ID;
   let sessionFileBackup = null;
