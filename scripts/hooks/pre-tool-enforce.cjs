@@ -24,8 +24,30 @@
  *           stdout = advisory feedback shown to model
  */
 
-const TOOL_NAME = process.env.CLAUDE_TOOL_NAME || '';
-const TOOL_INPUT_RAW = process.env.CLAUDE_TOOL_INPUT || '';
+// QF-20260504-932: Read PreToolUse stdin payload synchronously at module load.
+// Per RCA #2 (2026-05-04), Claude Code does NOT propagate CLAUDE_TOOL_NAME,
+// CLAUDE_TOOL_INPUT, or CLAUDE_SESSION_ID env vars to PreToolUse hook
+// subprocesses — the canonical source is the JSON {session_id, tool_name,
+// tool_input, hook_event_name, ...} payload passed via stdin (verified contract
+// in lib/hooks/session-id.cjs JSDoc). Pre-fix, all 13 enforcement rules in
+// this file silently no-op'd because TOOL_NAME/TOOL_INPUT_RAW resolved to ''.
+//
+// fs.readFileSync(0) reads stdin sync to EOF. Claude Code closes stdin before
+// the hook process gets control, so this won't hang. Wrapped in try/catch:
+// any failure (no stdin, malformed JSON, etc) falls through to env vars.
+const _stdinPayload = (() => {
+  try {
+    const raw = require('fs').readFileSync(0, 'utf8');
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+})();
+
+const TOOL_NAME = _stdinPayload.tool_name || process.env.CLAUDE_TOOL_NAME || '';
+const TOOL_INPUT_RAW = _stdinPayload.tool_input != null
+  ? (typeof _stdinPayload.tool_input === 'string'
+      ? _stdinPayload.tool_input
+      : JSON.stringify(_stdinPayload.tool_input))
+  : (process.env.CLAUDE_TOOL_INPUT || '');
 
 // --- ENFORCEMENT 8: Permission Audit Trail (SD-LEO-INFRA-LEO-PRIMITIVE-PARITY-001-C) ---
 // Fire-and-forget async write to permission_audit_log table.
@@ -96,11 +118,27 @@ function auditPermissionDecision(sessionId, toolName, ruleCode, ruleDesc, outcom
   }
 }
 
-// Derive session ID once at module load time
-const _SESSION_ID = process.env.SESSION_ID ||
+// Derive session ID once at module load time. QF-20260504-932: stdin payload
+// (Claude Code's PreToolUse contract) takes precedence over env vars, which
+// are not propagated to PreToolUse subprocesses.
+const _SESSION_ID = _stdinPayload.session_id ||
+  process.env.SESSION_ID ||
   process.env.CLAUDE_SESSION_ID ||
   process.env.LEO_SESSION_ID ||
   'unknown';
+
+// QF-20260504-932: test-only mode — print resolved variables and exit before
+// any enforcement runs. Tests use this to verify stdin/env resolution without
+// triggering side-effects (audit writes, exit-2 blocks). Production hooks
+// never set TEST_DUMP_RESOLVED.
+if (process.env.TEST_DUMP_RESOLVED === '1') {
+  console.log(JSON.stringify({
+    tool_name: TOOL_NAME,
+    tool_input_raw: TOOL_INPUT_RAW,
+    session_id: _SESSION_ID
+  }));
+  process.exit(0);
+}
 
 // --- WORKTREE CLAIM GUARD (PAT-CLMMULTI-001) ---
 // Regex to detect paths inside .worktrees/<SD-KEY>/
