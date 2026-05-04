@@ -135,6 +135,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       ['pr', 'ready'],
       ['api', 'repos/rickfelix/EHG_Engineer/branches/main/protection'],
       ['pr', 'merge'],
+      ['pr', 'view'],
     ]);
     const mergeCall = calls.find(argvMatchers.prMerge);
     expect(mergeCall).toContain('--admin');
