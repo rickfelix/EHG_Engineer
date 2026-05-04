@@ -725,19 +725,17 @@ export function validateSdIdInput(sdIdInput) {
  * @throws {Error} If no SD matches either id or sd_key
  */
 export async function lookupSdIdForFk(supabase, sdKeyOrUuid) {
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key')
-    .or(`id.eq.${sdKeyOrUuid},sd_key.eq.${sdKeyOrUuid}`)
-    .single();
-
-  if (error || !data) {
+  // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001 Phase 2: delegate to canonical resolver.
+  // Preserves throw-on-not-found contract by re-wrapping the canonical Error.
+  const { resolveSdInput } = await import('../lib/sd-id-resolver.js');
+  try {
+    const { sdId, sdKey } = await resolveSdInput(sdKeyOrUuid, supabase);
+    return { id: sdId, sd_key: sdKey };
+  } catch (err) {
     throw new Error(
-      `SD not found: lookupSdIdForFk("${sdKeyOrUuid}") returned no row. ${error?.message || ''}`
+      `SD not found: lookupSdIdForFk("${sdKeyOrUuid}") returned no row. ${err.message || ''}`
     );
   }
-
-  return { id: data.id, sd_key: data.sd_key };
 }
 
 /**

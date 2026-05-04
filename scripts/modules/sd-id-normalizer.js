@@ -83,39 +83,42 @@ export function isUUID(sdId) {
  * await normalizeSDId(supabase, 'SD-STAGE-ARCH-001');     // sd_key format
  * await normalizeSDId(supabase, 'e1c8cc23-...');          // uuid format
  */
+// SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001 Phase 2: delegate to canonical resolver.
+// Module-scoped flag ensures deprecation warn fires exactly once per Node.js process.
+let _shimDeprecationWarned = false;
+function _emitShimDeprecation() {
+  if (_shimDeprecationWarned) return;
+  if (process.env.LEO_SDID_DEPRECATION_WARN === 'off') return;
+  _shimDeprecationWarned = true;
+  console.warn('[SD-ID-NORMALIZER] normalizeSDId is now a shim over scripts/lib/sd-id-resolver.js::resolveSdInput. New code should call resolveSdInput directly.');
+}
+
 export async function normalizeSDId(supabase, sdId) {
+  _emitShimDeprecation();
   if (!sdId || typeof sdId !== 'string') {
     console.warn('[SD-ID-NORMALIZER] Invalid sdId provided:', sdId);
     return null;
   }
-
   const trimmedId = sdId.trim();
   const format = detectIdFormat(trimmedId);
-
-  // Strategy: Query using OR to check all possible identifier columns
-  // This is more efficient than multiple sequential queries
-  const { data: sd, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id')
-    .or(`id.eq.${trimmedId},sd_key.eq.${trimmedId}`)
-    .maybeSingle();
-
-  if (error) {
-    console.error('[SD-ID-NORMALIZER] Query error:', error.message);
+  const { resolveSdInput } = await import('../lib/sd-id-resolver.js');
+  try {
+    const { sdId: canonical } = await resolveSdInput(trimmedId, supabase);
+    if (canonical !== trimmedId) {
+      console.log(`[SD-ID-NORMALIZER] Normalized: "${trimmedId}" -> "${canonical}"`);
+    }
+    return canonical;
+  } catch (err) {
+    // Translate Error→null to preserve legacy silent-zero contract.
+    if (/SD not found/.test(err.message)) {
+      console.warn(`[SD-ID-NORMALIZER] SD not found for identifier: ${trimmedId} (format: ${format})`);
+    } else if (/DB error/.test(err.message)) {
+      console.error('[SD-ID-NORMALIZER] Query error:', err.message);
+    } else {
+      console.warn('[SD-ID-NORMALIZER] Resolver error:', err.message);
+    }
     return null;
   }
-
-  if (!sd) {
-    console.warn(`[SD-ID-NORMALIZER] SD not found for identifier: ${trimmedId} (format: ${format})`);
-    return null;
-  }
-
-  // Log normalization for debugging silent update issues
-  if (sd.id !== trimmedId) {
-    console.log(`[SD-ID-NORMALIZER] Normalized: "${trimmedId}" -> "${sd.id}"`);
-  }
-
-  return sd.id;
 }
 
 /**

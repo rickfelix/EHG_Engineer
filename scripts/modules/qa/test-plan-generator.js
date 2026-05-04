@@ -33,14 +33,13 @@ export async function generateTestPlan(sd_id, supabase, _options = {}) {
   // ================================================
   // 1. FETCH CONTEXT (SD, PRD, User Stories)
   // ================================================
-  const { data: sd, error: sdError } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, title, description, category, scope, priority')
-    .eq('id', sd_id)
-    .single();
-
-  if (sdError || !sd) {
-    throw new Error(`Failed to fetch SD: ${sdError?.message || 'SD not found'}`);
+  // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+  const { resolveSdInput } = await import('../../lib/sd-id-resolver.js');
+  let sd;
+  try {
+    ({ sd } = await resolveSdInput(sd_id, supabase));
+  } catch (err) {
+    throw new Error(`Failed to fetch SD: ${err.message}`);
   }
 
   const { data: prd, error: prdError } = await supabase

@@ -30,13 +30,10 @@ export async function getSDSearchTerms(sd_id, supabase) {
 
   try {
     if (supabase) {
-      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id, use sd_key (column dropped 2026-01-24)
-      const { data: sd } = await supabase
-        .from('strategic_directives_v2')
-        .select('sd_key')
-        .eq('id', sd_id)
-        .single();
-      if (sd?.sd_key) {
+      // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
+      const { resolveSdInputOrNull } = await import('../../../lib/sd-id-resolver.js');
+      const { sd } = await resolveSdInputOrNull(sd_id, supabase);
+      if (sd?.sd_key && sd.sd_key !== sd_id) {
         searchTerms.push(sd.sd_key);
       }
     }
