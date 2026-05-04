@@ -22,6 +22,8 @@ Parse `$ARGUMENTS` to determine the subcommand:
 - `revive [callsign]` → Request revival for a single callsign (e.g., `revive Bravo`)
 - `revive-all` → Request revival for every callsign without an active session
 - `team` or `t` → /execute team banner (active multi-session execution teams, Mockup A)
+- `inbox` or `in` → Worker-signal inbox (FR-3a, signals from workers via /signal)
+- `stop` → Clear active-coordinator pointer (DB metadata + .claude/active-coordinator.json)
 - `help` → Show usage help
 
 ARGUMENTS: $ARGUMENTS
@@ -47,6 +49,8 @@ Map the argument to the appropriate action:
 - `revive <callsign>` → run coordinator-revive.cjs with the callsign arg
 - `revive-all` → run coordinator-revive.cjs with `all`
 - `team`, `t` → dashboard team section (/execute Mockup A banner — Phase 2)
+- `inbox`, `in` → dashboard inbox section (worker signals)
+- `stop` → clear active-coordinator pointer
 - `all`, no args → full dashboard
 - `help` → show help
 
@@ -122,6 +126,21 @@ When these columns show `-` (not yet populated), fall back to heartbeat-age-only
 
 Initialize coordinator mode. This runs an initial sweep and dashboard, then sets up automated cron loops so the coordinator runs hands-free.
 
+**Step 0: Broadcast coordinator identity (FR-1)**
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const { setActiveCoordinator } = require('./lib/coordinator/resolve.cjs');
+(async () => {
+  const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  await setActiveCoordinator(sb, process.env.CLAUDE_SESSION_ID);
+  console.log('✓ Coordinator identity broadcast: session_id=' + process.env.CLAUDE_SESSION_ID);
+})();
+"
+```
+This writes `.claude/active-coordinator.json` and sets `claude_sessions.metadata.is_coordinator=true` so workers running `/signal` can resolve this session as the target. Also drains any `target_session=broadcast-coordinator` rows from the last 24h and re-targets them to this session_id (queryable via `/coordinator inbox`).
+
 **Step 1: Run initial sweep to clean up fleet state**
 ```bash
 node scripts/stale-session-sweep.cjs
@@ -184,6 +203,33 @@ node scripts/assign-fleet-identities.cjs
 Assigns colors and NATO callsigns to all active workers. New workers without an identity get the next available color/callsign. Workers receive a `SET_IDENTITY` coordination message and their statusline updates automatically on the next inbox check.
 
 Display the assignment table output.
+
+#### For `inbox` or `in` (SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a):
+
+```bash
+node scripts/fleet-dashboard.cjs inbox
+```
+
+Renders unread worker signals targeting this coordinator session (signals sent via `/signal` or `node scripts/worker-signal.cjs`). The query filters on `payload->>signal_type IS NOT NULL` to avoid surfacing existing INFO traffic. Surfaced signals are marked `read_at` so they do not re-render on the next call.
+
+If no active coordinator is detected (no `/coordinator start` yet), the section reports it and exits cleanly.
+
+#### For `stop` (SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-1):
+
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const { clearActiveCoordinator } = require('./lib/coordinator/resolve.cjs');
+(async () => {
+  const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  await clearActiveCoordinator(sb, process.env.CLAUDE_SESSION_ID);
+  console.log('✓ Coordinator identity cleared.');
+})();
+"
+```
+
+Removes `.claude/active-coordinator.json` and clears `claude_sessions.metadata.is_coordinator` for this session. Subsequent worker `/signal` invocations will fall back to `target_session=broadcast-coordinator` until a new coordinator runs `/coordinator start`. Cron loops created by `/coordinator start` continue running independently.
 
 #### For `revive [callsign]` or `revive-all` (SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001):
 
