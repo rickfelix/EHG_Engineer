@@ -265,7 +265,7 @@ export function registerGate2Validators(registry) {
 
     // Check if this SD type should skip code validation
     // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
-    const { resolveSdInputOrNull } = await import('../../../../lib/sd-id-resolver.js');
+    const { resolveSdInputOrNull } = await import('../../../../../lib/sd-id-resolver.js');
     const { sd: sdData } = await resolveSdInputOrNull(sd_id, supabase);
 
     if (sdData && shouldSkipCodeValidation(sdData)) {
