@@ -19,11 +19,14 @@
 
 const { execSync } = require('child_process');
 const path = require('path');
+const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
 
 // Never throw — the entire hook is wrapped.
 (async function main() {
   try {
-    const sessionId = process.env.CLAUDE_SESSION_ID;
+    // QF-20260504-765: stdin (Claude Code hook protocol) is canonical for
+    // PostToolUse; env fallback covers manual node invocations and tests.
+    const sessionId = await resolveSessionId();
     if (!sessionId) return;
 
     const nowMs = Date.now();

@@ -26,8 +26,11 @@ const TOOL_NAME = process.env.CLAUDE_TOOL_NAME || '';
     const flag = (process.env.LEO_LOOP_STATE_SIGNAL || 'on').toLowerCase();
     if (flag === 'off' || flag === '0' || flag === 'false') return;
 
+    // QF-20260504-765: stdin (Claude Code hook protocol) is canonical for
+    // PostToolUse; env fallbacks preserved for manual invocations.
+    const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
     const sessionId =
-      process.env.CLAUDE_SESSION_ID ||
+      (await resolveSessionId()) ||
       process.env.SESSION_ID ||
       '';
     if (!sessionId) return;
