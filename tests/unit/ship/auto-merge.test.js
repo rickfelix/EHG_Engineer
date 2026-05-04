@@ -12,6 +12,7 @@ import {
   detectDraftState,
   detectEnforceAdmins,
   buildMergeArgs,
+  verifyMerged,
 } from '../../../lib/ship/auto-merge.mjs';
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
@@ -35,6 +36,8 @@ function makeRunner(responses) {
 const argvMatchers = {
   prViewIsDraft: (args) =>
     args[0] === 'pr' && args[1] === 'view' && args.includes('isDraft'),
+  prViewMergedAt: (args) =>
+    args[0] === 'pr' && args[1] === 'view' && args.includes('mergedAt'),
   prViewState: (args) =>
     args[0] === 'pr' && args[1] === 'view' && args.includes('state'),
   prReady: (args) => args[0] === 'pr' && args[1] === 'ready',
@@ -115,6 +118,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       { match: argvMatchers.prReady, result: { stdout: '' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
     ]);
 
     const r = await attemptAutoMerge({
@@ -131,6 +135,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       ['pr', 'ready'],
       ['api', 'repos/rickfelix/EHG_Engineer/branches/main/protection'],
       ['pr', 'merge'],
+      ['pr', 'view'],
     ]);
     const mergeCall = calls.find(argvMatchers.prMerge);
     expect(mergeCall).toContain('--admin');
@@ -141,6 +146,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
     ]);
 
     const r = await attemptAutoMerge({
@@ -160,6 +166,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
     ]);
 
     const r = await attemptAutoMerge({
@@ -173,6 +180,79 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
     expect(r).toEqual({ ok: true, action: 'merged', adminUsed: false });
     const mergeCall = calls.find(argvMatchers.prMerge);
     expect(mergeCall).not.toContain('--admin');
+  });
+});
+
+describe('verifyMerged (QF-20260504-195)', () => {
+  it('returns true when mergedAt is a populated ISO timestamp', () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
+    ]);
+    expect(verifyMerged(568, runner)).toBe(true);
+  });
+
+  it('returns false when gh emits the literal string "null" (PR not merged)', () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewMergedAt, result: { stdout: 'null\n' } },
+    ]);
+    expect(verifyMerged(568, runner)).toBe(false);
+  });
+
+  it('returns false on lookup failure (safer fallback)', () => {
+    const runner = () => ({ code: 1, stdout: '', stderr: 'auth required' });
+    expect(verifyMerged(568, runner)).toBe(false);
+  });
+
+  it('returns false on empty stdout', () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '' } },
+    ]);
+    expect(verifyMerged(568, runner)).toBe(false);
+  });
+});
+
+describe('attemptAutoMerge — silent-success regression (QF-20260504-195)', () => {
+  it('hard-fails when gh pr merge exits 0 but mergedAt is null and PR state is OPEN', async () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
+      { match: argvMatchers.prMerge, result: { code: 0, stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: 'null\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'OPEN\n' } },
+    ]);
+
+    const r = await attemptAutoMerge({
+      prNumber: 568,
+      repoOwner: 'rickfelix',
+      repoName: 'ehg',
+      runner,
+      logger: silentLogger,
+    });
+
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).toBe(1);
+    expect(r.reason).toMatch(/silent-success/);
+    expect(r.reason).toMatch(/state=OPEN/);
+  });
+
+  it('recovers as already-merged when exit-0-mergedAt-null but state is MERGED (race)', async () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
+      { match: argvMatchers.prMerge, result: { code: 0, stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: 'null\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+    ]);
+
+    const r = await attemptAutoMerge({
+      prNumber: 568,
+      repoOwner: 'rickfelix',
+      repoName: 'ehg',
+      runner,
+      logger: silentLogger,
+    });
+
+    expect(r).toEqual({ ok: true, action: 'already-merged', adminUsed: true });
   });
 });
 
@@ -211,6 +291,8 @@ describe('attemptAutoMerge — race recovery (FR-4, TS-5)', () => {
         match: argvMatchers.prMerge,
         result: { code: 1, stderr: 'pull request not found in mergeable state' },
       },
+      // Non-zero exit short-circuits past verifyMerged into the race-recovery
+      // state check; no prViewMergedAt entry needed in this path.
       { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
     ]);
 
