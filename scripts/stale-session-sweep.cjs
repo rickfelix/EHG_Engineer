@@ -807,6 +807,13 @@ async function main() {
         released_reason: releaseReason,
         is_alive: false,
         worktree_path: null,
+        // QF-20260504-081: ck_claude_sessions_worktree_state_consistency requires
+        // sd_key IS NOT NULL OR (worktree_path IS NULL AND worktree_branch IS NULL).
+        // Sweep was missed when worktree_branch was added 2026-05-02 (RPC release
+        // paths got the column, sweep direct UPDATE didn't). Without this null,
+        // every release attempt against a session with non-null worktree_branch
+        // fails the CHECK and emits a dead-letter CLAIM_RELEASED.
+        worktree_branch: null,
         has_uncommitted_changes: false,
         current_branch: null
       })
