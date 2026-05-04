@@ -1016,13 +1016,18 @@ function parseDeps(deps) {
   return [];
 }
 
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a — top-level require so the
+// wire-check call-graph builder (lib/static-analysis/call-graph-builder.js)
+// can statically resolve the dependency on lib/coordinator/resolve.cjs.
+const { getActiveCoordinatorId: _getActiveCoordinatorIdForInbox } = require('../lib/coordinator/resolve.cjs');
+
 // ── Section: Worker-Signal Inbox (FR-3a) ──
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001
 // CRITICAL: filter on payload->>signal_type IS NOT NULL — relying on message_type=INFO
 // alone would surface 105+ unrelated INFO rows already in production. After surfacing,
 // mark read_at so signals do not re-appear next render.
 async function printInbox() {
-  const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+  const getActiveCoordinatorId = _getActiveCoordinatorIdForInbox;
 
   console.log('WORKER-SIGNAL INBOX');
   console.log('─'.repeat(72));

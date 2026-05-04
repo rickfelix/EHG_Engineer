@@ -25,6 +25,9 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
+// call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
+const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
 
 // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-005): MC gating constants.
 // Feature-flag MC consultation at sweep independently from dashboard so that
@@ -1311,7 +1314,7 @@ async function main() {
   // harness-backlog feedback rows. Idempotent (signal_fingerprint dedup).
   // Best-effort — failure does not abort sweep.
   try {
-    const router = require('../lib/coordinator/signal-router.cjs');
+    const router = _signalRouterModule;
     const result = await router.aggregateSignals(supabase);
     if (result.error) {
       console.log('SIGNAL ROUTER: error=' + result.error.message);
