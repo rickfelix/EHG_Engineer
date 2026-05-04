@@ -262,6 +262,63 @@ function emitAutoClaimDirective(suggestedSd, availableSds) {
   console.log('');
 }
 
+// SD-LEO-INFRA-COORDINATOR-WORKER-DELIVERED-001 — DELIVERED-layer helper.
+//
+// When the receiver hook reads an inbound INFO row with payload.request_ack=true,
+// INSERT a paired DELIVERED row back to the original sender. Provides
+// transport-layer confirmation independent of LLM activity, closing the
+// structural ~50% ACK-rate observability gap identified in the 2026-05-04 RCA.
+//
+// Contract:
+//   - FR-1: paired row uses message_type='INFO' (existing enum), subject
+//     '[DELIVERED <8-char>]', payload.delivered_for=<orig.id>,
+//     payload.sender=<this-worker>, payload.kind='transport_ack'.
+//   - FR-2: idempotent — dedup pre-SELECT by (subject, sender_session,
+//     target_session). Re-firing the hook does NOT produce a duplicate.
+//   - FR-3: best-effort — INSERT failures emit a single stderr log line and
+//     return without throwing. Caller's read_at update is unaffected.
+//   - FR-4: sender_session sourced from caller (which uses canonical resolver
+//     in lib/hooks/session-id.cjs). No new resolution paths.
+//   - FR-5: subject format exactly '[DELIVERED <first-8-hex-of-orig-id>]'.
+//   - FR-6: msg.payload?.request_ack !== true → no-op.
+//
+// Returns 'inserted' | 'duplicate' | 'skipped' | 'error' (used by tests; the
+// caller in main() ignores the return value).
+async function insertDeliveredRowIfRequested(supabase, sessionId, msg) {
+  if (!msg || !msg.payload || msg.payload.request_ack !== true) return 'skipped';
+  if (!msg.sender_session || !msg.id || !sessionId) return 'skipped';
+  try {
+    const origIdPrefix = String(msg.id).replace(/-/g, '').slice(0, 8);
+    const deliveredSubject = '[DELIVERED ' + origIdPrefix + ']';
+    const { data: existing } = await supabase
+      .from('session_coordination')
+      .select('id')
+      .eq('subject', deliveredSubject)
+      .eq('sender_session', sessionId)
+      .eq('target_session', msg.sender_session)
+      .limit(1);
+    if (existing && existing.length > 0) return 'duplicate';
+    await supabase
+      .from('session_coordination')
+      .insert({
+        sender_session: sessionId,
+        target_session: msg.sender_session,
+        message_type: 'INFO',
+        subject: deliveredSubject,
+        payload: {
+          delivered_for: msg.id,
+          sender: sessionId,
+          kind: 'transport_ack'
+        },
+        sender_type: 'worker'
+      });
+    return 'inserted';
+  } catch (e) {
+    process.stderr.write('[coord-inbox] DELIVERED insert failed: ' + (e && e.message ? e.message : String(e)) + '\n');
+    return 'error';
+  }
+}
+
 // QF-20260504-007: Claude Code passes hook payload as JSON on stdin per its
 // PostToolUse protocol. The session_id field is the only reliable identifier of
 // the calling session — env vars (CLAUDE_SESSION_ID) are NOT propagated to hook
@@ -397,6 +454,10 @@ async function main() {
           acknowledged_at: isActionable ? null : new Date().toISOString()
         })
         .eq('id', msg.id);
+
+      // SD-LEO-INFRA-COORDINATOR-WORKER-DELIVERED-001 — DELIVERED-layer.
+      // Best-effort, idempotent. See insertDeliveredRowIfRequested() doc.
+      await insertDeliveredRowIfRequested(supabase, sessionId, msg);
     }
   }
 
@@ -470,5 +531,7 @@ module.exports = {
   shouldHeartbeat,
   markHeartbeat,
   getThrottleFile,
-  getHeartbeatFile
+  getHeartbeatFile,
+  // SD-LEO-INFRA-COORDINATOR-WORKER-DELIVERED-001 — exposed for unit tests
+  insertDeliveredRowIfRequested
 };
