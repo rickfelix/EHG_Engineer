@@ -4,7 +4,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/statusline.cjs"
+    "command": "node ${CLAUDE_PROJECT_DIR}/.claude/statusline.cjs"
   },
   "hooks": {
     "PreCompact": [
@@ -12,7 +12,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/precompact-snapshot.ps1",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${CLAUDE_PROJECT_DIR}/scripts/hooks/precompact-snapshot.ps1",
             "timeout": 10
           }
         ]
@@ -23,32 +23,32 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/session-state-sync.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/session-state-sync.cjs",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/cleanup-orphaned-tasks.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/cleanup-orphaned-tasks.cjs",
             "timeout": 3
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/session-start-loader.ps1",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${CLAUDE_PROJECT_DIR}/scripts/hooks/session-start-loader.ps1",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/telemetry-auto-trigger.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/telemetry-auto-trigger.cjs",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/agent-compiler-hook.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/agent-compiler-hook.cjs",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/concurrent-session-worktree.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/concurrent-session-worktree.cjs",
             "timeout": 10
           }
         ]
@@ -57,12 +57,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/capture-session-id.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/capture-session-id.cjs",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/session-register.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/session-register.cjs",
             "timeout": 5
           }
         ]
@@ -73,17 +73,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/context-compact-nudge.js --time-only --interval 10",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/context-compact-nudge.js --time-only --interval 10",
             "timeout": 3
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/coordination-inbox.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/coordination-inbox.cjs",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/post-tool-clear-telemetry.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/post-tool-clear-telemetry.cjs",
             "timeout": 3
           }
         ]
@@ -98,12 +98,12 @@
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/auto-learning-capture.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/auto-learning-capture.cjs",
             "timeout": 20
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/post-ship-enforcement.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/post-ship-enforcement.cjs",
             "timeout": 3
           }
         ]
@@ -113,7 +113,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/migration-execution-reminder.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/migration-execution-reminder.cjs",
             "timeout": 5
           },
           {
@@ -140,7 +140,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/protocol-file-tracker.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/protocol-file-tracker.cjs",
             "timeout": 3
           }
         ]
@@ -150,7 +150,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/task-subagent-recorder.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/task-subagent-recorder.cjs",
             "timeout": 10
           }
         ]
@@ -160,7 +160,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/post-tool-loop-state.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/post-tool-loop-state.cjs",
             "timeout": 5
           }
         ]
@@ -171,17 +171,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/set-activity-state.ps1 -State idle",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${CLAUDE_PROJECT_DIR}/.claude/set-activity-state.ps1 -State idle",
             "timeout": 2
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/stop-subagent-enforcement.js",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/stop-subagent-enforcement.js",
             "timeout": 120
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/auto-proceed-pause-lint.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/auto-proceed-pause-lint.cjs",
             "timeout": 5
           }
         ]
@@ -192,27 +192,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/session-cleanup.js",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/session-cleanup.js",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/set-activity-state.ps1 -State running",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${CLAUDE_PROJECT_DIR}/.claude/set-activity-state.ps1 -State running",
             "timeout": 2
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/autonomous-checkpoint.js",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/autonomous-checkpoint.js",
             "timeout": 3
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/auto-proceed-resume.js",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/auto-proceed-resume.js",
             "timeout": 3
           },
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/context-compact-nudge.js",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/context-compact-nudge.js",
             "timeout": 3
           }
         ]
@@ -223,7 +223,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/set-activity-state.ps1 -State running",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${CLAUDE_PROJECT_DIR}/.claude/set-activity-state.ps1 -State running",
             "timeout": 2
           }
         ]
@@ -243,7 +243,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/pre-tool-enforce.cjs",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/pre-tool-enforce.cjs",
             "timeout": 3
           }
         ]
@@ -253,7 +253,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/task-recorder.js",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/task-recorder.js",
             "timeout": 5
           }
         ]
