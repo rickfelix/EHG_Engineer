@@ -343,12 +343,23 @@ async function main() {
   // Ref: feedback_always_use_sd_create_skill.md (2026-04-07)
   if (TOOL_NAME === 'Bash') {
     const cmd = input.command || '';
-    if (/leo-create-sd\.js/.test(cmd) && !/--help/.test(cmd) && !/SD_CREATE_VIA_SKILL=1/.test(cmd)) {
+    // QF-20260504-484: Anchor matcher to actual `node ` invocations (program
+    // boundary), not bare substring. Previous /leo-create-sd\.js/ false-
+    // positived on (a) commands MENTIONING the script name in argument
+    // strings (log-harness-bug.js descriptions, gh search, comments), and
+    // (b) the /sd-create skill's own bash invocations following its
+    // documented pattern — circular block. Pattern requires `node ` at
+    // start-of-cmd or after ; && | ` , followed by optional path then
+    // `leo-create-sd.js` at a word boundary. SD_CREATE_VIA_SKILL=1 prefix
+    // and --help still bypass.
+    const DIRECT_INVOCATION = /(^|[\s;&|`])node\s+\S*\bleo-create-sd\.js\b/;
+    if (DIRECT_INVOCATION.test(cmd) && !/--help/.test(cmd) && !/SD_CREATE_VIA_SKILL=1/.test(cmd)) {
       auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-SD-CREATE-SKILL', 'SD creation skill enforcement', 'block', {});
       process.stderr.write(
         'PROTOCOL VIOLATION (ENF-SD-CREATE-SKILL): Direct leo-create-sd.js invocation blocked.\n' +
         'Use the /sd-create skill instead: Skill tool with skill="sd-create"\n' +
-        'The skill provides description enrichment, vision readiness assessment, and post-creation chaining.\n'
+        'The skill provides description enrichment, vision readiness assessment, and post-creation chaining.\n' +
+        '(If invoking from inside the /sd-create skill, prefix with SD_CREATE_VIA_SKILL=1 — see .claude/commands/sd-create.md)\n'
       );
       process.exit(2);
     }
