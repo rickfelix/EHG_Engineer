@@ -17,8 +17,18 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const THROTTLE_FILE = path.join(os.tmpdir(), 'claude-coordination-inbox-last-check.json');
-const HEARTBEAT_FILE = path.join(os.tmpdir(), 'claude-heartbeat-last-update.json');
+// QF-20260504-912: per-session throttle/heartbeat paths. Pre-fix these were
+// host-shared, causing 5/6 sessions to be starved for up to 60s after any one
+// session marked the throttle. Mirror the friction-counters pattern (validated
+// regex + per-session filename) at lines ~96-125 below.
+function getThrottleFile(sessionId) {
+  if (!isValidSessionId(sessionId)) return null;
+  return path.join(os.tmpdir(), `claude-coordination-inbox-throttle-${sessionId}.json`);
+}
+function getHeartbeatFile(sessionId) {
+  if (!isValidSessionId(sessionId)) return null;
+  return path.join(os.tmpdir(), `claude-coordination-inbox-heartbeat-${sessionId}.json`);
+}
 
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — friction-detection counter file.
 // Per-session counter of recurring failures; emits proactive /signal nudge when
@@ -40,39 +50,50 @@ function getIdentityFile(resolvedSessionId) {
 // SD-LEO-INFRA-FLEET-COORDINATION-RESILIENCE-001 (FR-003):
 // Reduced from 300s to 60s for faster coordination message delivery.
 // Configurable via env var for tuning under high DB load.
-const CHECK_INTERVAL_MS = parseInt(process.env.COORDINATION_CHECK_INTERVAL_MS, 10) || 60_000;
+// QF-20260504-912: default reduced 60_000 → 15_000 — safe now that throttle is
+// per-session (no peer interference). Per-session DB load: 4 queries/min × 6
+// sessions = 24/min, well below capacity.
+const CHECK_INTERVAL_MS = parseInt(process.env.COORDINATION_CHECK_INTERVAL_MS, 10) || 15_000;
 const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 
-function shouldCheck() {
+function shouldCheck(sessionId) {
+  const file = getThrottleFile(sessionId);
+  if (!file) return true;
   try {
-    if (!fs.existsSync(THROTTLE_FILE)) return true;
-    const data = JSON.parse(fs.readFileSync(THROTTLE_FILE, 'utf8'));
+    if (!fs.existsSync(file)) return true;
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     return (Date.now() - data.lastCheck) > CHECK_INTERVAL_MS;
   } catch {
     return true;
   }
 }
 
-function markChecked() {
+function markChecked(sessionId) {
+  const file = getThrottleFile(sessionId);
+  if (!file) return;
   try {
-    fs.writeFileSync(THROTTLE_FILE, JSON.stringify({ lastCheck: Date.now() }));
+    fs.writeFileSync(file, JSON.stringify({ lastCheck: Date.now() }));
   } catch { /* ignore */ }
 }
 
-function shouldHeartbeat() {
+function shouldHeartbeat(sessionId) {
+  const file = getHeartbeatFile(sessionId);
+  if (!file) return true;
   try {
-    if (!fs.existsSync(HEARTBEAT_FILE)) return true;
-    const data = JSON.parse(fs.readFileSync(HEARTBEAT_FILE, 'utf8'));
+    if (!fs.existsSync(file)) return true;
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     return (Date.now() - data.lastHeartbeat) > HEARTBEAT_INTERVAL_MS;
   } catch {
     return true;
   }
 }
 
-function markHeartbeat() {
+function markHeartbeat(sessionId) {
+  const file = getHeartbeatFile(sessionId);
+  if (!file) return;
   try {
-    fs.writeFileSync(HEARTBEAT_FILE, JSON.stringify({ lastHeartbeat: Date.now() }));
+    fs.writeFileSync(file, JSON.stringify({ lastHeartbeat: Date.now() }));
   } catch { /* ignore */ }
 }
 
@@ -80,8 +101,8 @@ function markHeartbeat() {
  * Update heartbeat_at on claude_sessions — runs every 30s regardless of inbox check
  */
 async function updateHeartbeat(supabase, sessionId) {
-  if (!shouldHeartbeat()) return;
-  markHeartbeat();
+  if (!shouldHeartbeat(sessionId)) return;
+  markHeartbeat(sessionId);
   try {
     // stampBranch keeps current_branch fresh on inbox-hook heartbeats — see
     // lib/session-writer.cjs and SD-LEO-INFRA-SESSION-CURRENT-BRANCH-001.
@@ -273,8 +294,8 @@ async function main() {
   // Always update heartbeat (30s throttle) — even when inbox check is skipped
   await updateHeartbeat(supabase, sessionId);
 
-  if (!shouldCheck()) return;
-  markChecked();
+  if (!shouldCheck(sessionId)) return;
+  markChecked(sessionId);
 
   // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — check friction counters and
   // reset if SD changed. Counters are populated by external hooks (gate failures,
@@ -432,4 +453,14 @@ if (require.main === module) {
   main().catch(() => { /* fail silently */ });
 }
 
-module.exports = { getCurrentSessionId, readSessionIdFromStdin };
+module.exports = {
+  getCurrentSessionId,
+  readSessionIdFromStdin,
+  // QF-20260504-912 — exposed for per-session throttle/heartbeat tests
+  shouldCheck,
+  markChecked,
+  shouldHeartbeat,
+  markHeartbeat,
+  getThrottleFile,
+  getHeartbeatFile
+};
