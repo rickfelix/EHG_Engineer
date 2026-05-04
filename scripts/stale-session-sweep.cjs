@@ -1280,6 +1280,51 @@ async function main() {
     console.log('LOOP_STATE EXIT: ' + (loopExitErr && loopExitErr.message ? loopExitErr.message : 'unknown'));
   }
 
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-1 — clear is_coordinator flag on
+  // sessions whose heartbeat is older than 10 minutes. Logged as
+  // COORDINATOR_FLAG_CLEARED. Best-effort — failure does not abort sweep.
+  try {
+    const cutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+    const { data: stale } = await supabase
+      .from('claude_sessions')
+      .select('session_id, metadata, heartbeat_at')
+      .filter('metadata->>is_coordinator', 'eq', 'true')
+      .lt('heartbeat_at', cutoff);
+    let cleared = 0;
+    for (const s of stale || []) {
+      const next = { ...(s.metadata || {}) };
+      delete next.is_coordinator;
+      delete next.coordinator_since;
+      await supabase
+        .from('claude_sessions')
+        .update({ metadata: next })
+        .eq('session_id', s.session_id);
+      cleared++;
+      console.log('  COORDINATOR_FLAG_CLEARED: session=' + s.session_id + ' heartbeat=' + s.heartbeat_at);
+    }
+    if (cleared > 0) console.log('STALE COORDINATOR FLAGS CLEARED: ' + cleared);
+  } catch (coordErr) {
+    console.log('COORDINATOR FLAG CLEANUP: ' + (coordErr && coordErr.message ? coordErr.message : 'unknown'));
+  }
+
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — aggregate worker signals into
+  // harness-backlog feedback rows. Idempotent (signal_fingerprint dedup).
+  // Best-effort — failure does not abort sweep.
+  try {
+    const router = require('../lib/coordinator/signal-router.cjs');
+    const result = await router.aggregateSignals(supabase);
+    if (result.error) {
+      console.log('SIGNAL ROUTER: error=' + result.error.message);
+    } else if (result.promoted > 0 || result.skipped > 0) {
+      console.log('SIGNAL ROUTER: promoted=' + result.promoted + ' skipped=' + result.skipped);
+      for (const row of (result.promotedRows || [])) {
+        console.log('  HARNESS_BACKLOG_CREATED: feedback_id=' + row.feedback_id + ' type=' + row.signal_type + ' callsigns=' + row.callsigns.join(',') + ' count=' + row.signal_count);
+      }
+    }
+  } catch (routerErr) {
+    console.log('SIGNAL ROUTER: ' + (routerErr && routerErr.message ? routerErr.message : 'unknown'));
+  }
+
   console.log('=== SWEEP COMPLETE ===');
 }
 
