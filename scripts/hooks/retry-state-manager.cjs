@@ -25,6 +25,28 @@ const crypto = require('crypto');
 
 const RETRY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
+// QF-20260504-830 — known-idempotent monitoring commands are exempt from
+// signature dedup. RCA-TIERED ENFORCEMENT was tripping the 4th invocation of
+// /coordinator periodic probes (all exit 0) the same way it gates retry loops.
+// Patterns are matched against the raw Bash command string.
+const EXEMPT_PATTERNS = [
+  /\bscripts[/\\]stale-session-sweep\.cjs\b/,
+  /\bscripts[/\\]fleet-dashboard\.cjs\b/,
+  /\bscripts[/\\]assign-fleet-identities\.cjs\b/,
+  /[/\\]?\.claude[/\\]tmp[/\\]coord-[\w-]+\.(?:cjs|mjs)\b/,
+];
+
+/**
+ * Whether a Bash command should bypass invocation tracking entirely.
+ * Returns false for any non-string input.
+ * @param {string} commandStr
+ * @returns {boolean}
+ */
+function isExempt(commandStr) {
+  if (typeof commandStr !== 'string' || !commandStr) return false;
+  return EXEMPT_PATTERNS.some(rx => rx.test(commandStr));
+}
+
 /**
  * Resolve the on-disk state path for a session.
  * @param {string} sessionId
@@ -172,6 +194,10 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
     return { attempts: 0, signature: null, rcaResetApplied: false };
   }
 
+  if (toolName === 'Bash' && isExempt(toolInput && toolInput.command)) {
+    return { attempts: 0, signature, rcaResetApplied: false };
+  }
+
   const now = typeof opts.now === 'number' ? opts.now : Date.now();
   const rcaCheck = opts.rcaCheck || fetchRcaInvocationSince;
 
@@ -207,5 +233,6 @@ module.exports = {
   fetchRcaInvocationSince,
   pruneStale,
   stateFilePath,
+  isExempt,
   RETRY_WINDOW_MS
 };
