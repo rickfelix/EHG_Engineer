@@ -1016,6 +1016,78 @@ function parseDeps(deps) {
   return [];
 }
 
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a — top-level require so the
+// wire-check call-graph builder (lib/static-analysis/call-graph-builder.js)
+// can statically resolve the dependency on lib/coordinator/resolve.cjs.
+const { getActiveCoordinatorId: _getActiveCoordinatorIdForInbox } = require('../lib/coordinator/resolve.cjs');
+
+// ── Section: Worker-Signal Inbox (FR-3a) ──
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001
+// CRITICAL: filter on payload->>signal_type IS NOT NULL — relying on message_type=INFO
+// alone would surface 105+ unrelated INFO rows already in production. After surfacing,
+// mark read_at so signals do not re-appear next render.
+async function printInbox() {
+  const getActiveCoordinatorId = _getActiveCoordinatorIdForInbox;
+
+  console.log('WORKER-SIGNAL INBOX');
+  console.log('─'.repeat(72));
+
+  const coordinatorId = await getActiveCoordinatorId(supabase);
+  if (!coordinatorId) {
+    console.log('  (no active coordinator detected — run /coordinator start first)');
+    console.log('');
+    return;
+  }
+
+  const { data: signals, error } = await supabase
+    .from('session_coordination')
+    .select('id, sender_session, sender_type, subject, body, payload, created_at')
+    .eq('target_session', coordinatorId)
+    .not('payload->>signal_type', 'is', null)
+    .is('read_at', null)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.log('  (inbox query failed: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+
+  if (!signals || signals.length === 0) {
+    console.log('  (no unread worker signals)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + signals.length + ' unread signal(s)');
+  console.log('');
+  console.log('  ' + pad('Type', 16) + pad('Severity', 10) + pad('Callsign', 12) + pad('Age', 8) + 'Body');
+  console.log('  ' + '─'.repeat(68));
+
+  const ids = [];
+  for (const s of signals) {
+    const sigType = s.payload?.signal_type || '?';
+    const severity = s.payload?.severity || 'medium';
+    const callsign = s.payload?.sender_callsign || '(none)';
+    const ageMin = Math.floor((Date.now() - new Date(s.created_at).getTime()) / 60_000);
+    const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
+    const bodyPreview = (s.body || s.payload?.body || '').replace(/\n/g, ' ').substring(0, 28);
+    console.log('  ' + pad(sigType, 16) + pad(severity, 10) + pad(callsign, 12) + pad(ageStr, 8) + bodyPreview);
+    ids.push(s.id);
+  }
+
+  // Mark all surfaced rows as read so they don't re-surface on next /coordinator inbox.
+  if (ids.length > 0) {
+    await supabase
+      .from('session_coordination')
+      .update({ read_at: new Date().toISOString() })
+      .in('id', ids);
+  }
+
+  console.log('');
+}
+
 // ── Main ──
 
 async function main() {
@@ -1034,6 +1106,7 @@ async function main() {
     forecast:      async () => await printForecast(d),
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
+    inbox:         async () => await printInbox(),
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     all:           async () => {
       // Team banner appears at top of /coordinator all when active teams exist (otherwise no-op)
@@ -1044,6 +1117,7 @@ async function main() {
       printAvailable(d);
       printRevivalPending(d); // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
       printCoordination(d);
+      await printInbox(); // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a
       await printCoaching(d);
       printHealth(d);
       printQA(d);
@@ -1055,7 +1129,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, coordination, coaching, health, qa, forecast, predictions, team, all');
+    console.log('Sections: workers, orchestrator, available, coordination, coaching, health, qa, forecast, predictions, inbox, team, all');
     process.exit(1);
   }
 

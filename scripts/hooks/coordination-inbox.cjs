@@ -19,6 +19,16 @@ const os = require('os');
 
 const THROTTLE_FILE = path.join(os.tmpdir(), 'claude-coordination-inbox-last-check.json');
 const HEARTBEAT_FILE = path.join(os.tmpdir(), 'claude-heartbeat-last-update.json');
+
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — friction-detection counter file.
+// Per-session counter of recurring failures; emits proactive /signal nudge when
+// thresholds cross. Path is in .claude/tmp/ (gitignored). Security M4: validate
+// session_id with regex /^[a-zA-Z0-9_-]{1,128}$/ before path.join.
+const FRICTION_COUNTERS_DIR = path.resolve(__dirname, '../../.claude/tmp');
+const FRICTION_TRIGGERS = {
+  GATE_FAILURE_3X: 3,    // same gate failed 3+ times same session
+  TOOL_FAILURE_3X: 3     // same tool error 3+ times same session
+};
 const IDENTITY_DIR = path.resolve(__dirname, '../../.claude');
 // Per-session identity file keyed by session ID (birth certificate UUID or resolved).
 // Falls back to shared file for sessions without a resolvable ID.
@@ -81,6 +91,81 @@ async function updateHeartbeat(supabase, sessionId) {
       .update(stampBranch({ heartbeat_at: new Date().toISOString() }))
       .eq('session_id', sessionId);
   } catch { /* fail silently */ }
+}
+
+// SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — friction-detection helpers.
+// Security M4: validate session_id pattern before path.join.
+function isValidSessionId(sid) {
+  return typeof sid === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(sid);
+}
+
+function getFrictionCounterFile(sessionId) {
+  if (!isValidSessionId(sessionId)) return null;
+  return path.join(FRICTION_COUNTERS_DIR, `friction-counters-${sessionId}.json`);
+}
+
+function readFrictionCounters(sessionId) {
+  const file = getFrictionCounterFile(sessionId);
+  if (!file) return {};
+  try {
+    if (!fs.existsSync(file)) return {};
+    return JSON.parse(fs.readFileSync(file, 'utf8')) || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeFrictionCounters(sessionId, counters) {
+  const file = getFrictionCounterFile(sessionId);
+  if (!file) return;
+  try {
+    fs.mkdirSync(FRICTION_COUNTERS_DIR, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(counters));
+  } catch { /* fail silently */ }
+}
+
+// Note: this hook does NOT auto-detect failures from tool outputs (PostToolUse runs
+// AFTER each call but does not see error counts). Counter increments must come from
+// other hooks/scripts that detect domain failures (e.g., gate failure handler in
+// handoff.js). The proactive-prompt fires when ANY counter crosses threshold.
+function emitFrictionPrompt(counters, triggerKey) {
+  const count = counters[triggerKey] || 0;
+  console.log('');
+  console.log('================================================================');
+  console.log('  💡 PROACTIVE FRICTION PROMPT (SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c)');
+  console.log('  Trigger: ' + triggerKey + ' = ' + count + ' (threshold: ' + FRICTION_TRIGGERS[triggerKey] + ')');
+  console.log('  This recurring friction looks aggregatable across sessions.');
+  console.log('  Consider: /signal stuck "<one-line summary of friction>"');
+  console.log('  Decision rule: see /signal --help, FR-6 in CLAUDE_CORE.md "Signaling friction" section.');
+  console.log('================================================================');
+  console.log('');
+}
+
+function checkFrictionThresholds(sessionId) {
+  const counters = readFrictionCounters(sessionId);
+  if (!counters._sd_key_at_check) return; // not yet stamped — first check
+  let fired = false;
+  for (const [key, threshold] of Object.entries(FRICTION_TRIGGERS)) {
+    if ((counters[key] || 0) >= threshold && !counters['_fired_' + key]) {
+      emitFrictionPrompt(counters, key);
+      counters['_fired_' + key] = new Date().toISOString();
+      fired = true;
+    }
+  }
+  if (fired) writeFrictionCounters(sessionId, counters);
+}
+
+function resetFrictionCountersIfSdChanged(sessionId, currentSdKey) {
+  if (!isValidSessionId(sessionId)) return;
+  const counters = readFrictionCounters(sessionId);
+  if (counters._sd_key_at_check && counters._sd_key_at_check !== currentSdKey) {
+    // SD changed — reset counters but keep history sticky for telemetry.
+    const fresh = { _sd_key_at_check: currentSdKey, _reset_at: new Date().toISOString() };
+    writeFrictionCounters(sessionId, fresh);
+  } else if (!counters._sd_key_at_check) {
+    counters._sd_key_at_check = currentSdKey;
+    writeFrictionCounters(sessionId, counters);
+  }
 }
 
 function getCurrentSessionId() {
@@ -160,6 +245,19 @@ async function main() {
 
   if (!shouldCheck()) return;
   markChecked();
+
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — check friction counters and
+  // reset if SD changed. Counters are populated by external hooks (gate failures,
+  // tool retries) — this hook only reacts when thresholds cross.
+  try {
+    const { data: sdRow } = await supabase
+      .from('claude_sessions')
+      .select('sd_key')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    resetFrictionCountersIfSdChanged(sessionId, sdRow?.sd_key || null);
+    checkFrictionThresholds(sessionId);
+  } catch { /* fail silently — friction nudge is best-effort */ }
 
   // Check if this session is idle (no SD claimed)
   let isIdle = false;

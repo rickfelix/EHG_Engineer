@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-04-29 10:02:45 AM
+**Generated**: 2026-05-04 9:54:34 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
@@ -1666,6 +1666,34 @@ for (const childId of childIds) {
 
 > **Team Capabilities**: When planning complex SDs, consider whether team spawning (any agent leading specialists) could parallelize cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
+## PRD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off PRD creation scripts like:**
+- `create-prd-sd-*.js`
+- `insert-prd-*.js`
+- `enhance-prd-*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/add-prd-to-database.js
+```
+
+### Why This Matters
+- One-off scripts bypass PRD quality validation
+- They create massive maintenance burden (100+ orphaned scripts)
+- They fragment PRD creation patterns
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-prd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/add-prd-to-database.js`
+2. Follow the modular PRD creation system in `scripts/prd/`
+3. PRD is properly validated against quality rubrics
+
 ## Vision V2 PRD Requirements (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Integration in PRDs
@@ -1706,34 +1734,6 @@ Key spec requirements addressed:
 ### Implementation Guidance (from SD metadata)
 
 All Vision V2 SDs have `creation_mode: CREATE_FROM_NEW` - implement fresh per specs, learn from existing code but do not modify it.
-
-## PRD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off PRD creation scripts like:**
-- `create-prd-sd-*.js`
-- `insert-prd-*.js`
-- `enhance-prd-*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/add-prd-to-database.js
-```
-
-### Why This Matters
-- One-off scripts bypass PRD quality validation
-- They create massive maintenance burden (100+ orphaned scripts)
-- They fragment PRD creation patterns
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-prd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/add-prd-to-database.js`
-2. Follow the modular PRD creation system in `scripts/prd/`
-3. PRD is properly validated against quality rubrics
 
 ## Quality Assessment Integration in Handoffs
 
@@ -2414,6 +2414,6 @@ On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decompositi
 
 ---
 
-*Generated from database: 2026-04-29*
+*Generated from database: 2026-05-04*
 *Protocol Version: 4.4.1*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

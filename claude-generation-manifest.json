@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-04-29T14:02:45.172Z",
-  "git_commit": "c11354c0",
-  "db_snapshot_hash": "d8878f5dd48d903e",
+  "generated_at": "2026-05-04T01:54:34.074Z",
+  "git_commit": "51a69650",
+  "db_snapshot_hash": "9def68fc45bd1a50",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 14837,
-      "estimated_tokens": 3710,
-      "content_hash": "5212dae3e8ee111d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
+      "chars": 14836,
+      "estimated_tokens": 3709,
+      "content_hash": "382e64862942e99c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 75781,
-      "estimated_tokens": 18946,
-      "content_hash": "40f45d82e6f5be86",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
+      "chars": 77957,
+      "estimated_tokens": 19490,
+      "content_hash": "d16497146ebac05b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 60652,
+      "chars": 60651,
       "estimated_tokens": 15163,
-      "content_hash": "987c6f4f57fa0b7f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
+      "content_hash": "cf1bef90358fae29",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 87918,
+      "chars": 87917,
       "estimated_tokens": 21980,
-      "content_hash": "5c53e208e4d934df",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
+      "content_hash": "313623bcb0716aca",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 76810,
-      "estimated_tokens": 19203,
-      "content_hash": "58df17b7cf437f41",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
+      "chars": 78888,
+      "estimated_tokens": 19722,
+      "content_hash": "fe119f8d1a95cede",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9170,
+      "chars": 9169,
       "estimated_tokens": 2293,
-      "content_hash": "fb808fee7b25a15d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
+      "content_hash": "ab908536669fa767",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 11020,
+      "chars": 11019,
       "estimated_tokens": 2755,
-      "content_hash": "8d7f516e620c9513",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "4a5cfed3b762a18b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 4907,
+      "chars": 4906,
       "estimated_tokens": 1227,
-      "content_hash": "1c05e978f7e6a9f7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "f769dc7ba2102ad1",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 7897,
-      "estimated_tokens": 1975,
-      "content_hash": "25f9e9a1e6bb391b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
+      "chars": 7896,
+      "estimated_tokens": 1974,
+      "content_hash": "c045d533b247ccfa",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10320,
+      "chars": 10319,
       "estimated_tokens": 2580,
-      "content_hash": "8d1ad2fb75f0e2a9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "74967ce3cfc40ce0",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-TWO-WAY-COORDINATOR-001\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }

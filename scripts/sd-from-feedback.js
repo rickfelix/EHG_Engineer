@@ -299,6 +299,31 @@ async function createSdFromFeedback(feedback, parentId = null) {
     })
     .eq('id', feedback.id);
 
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4c — provenance writer.
+  // If this feedback row was created by signal-router.cjs (carries metadata.signal_fingerprint),
+  // stamp routed_to_sd_key onto every contributing session_coordination row so the
+  // sweep's SIGNAL_RESOLVED logic (FR-4d) can fire when this SD reaches completed status.
+  try {
+    if (feedback.metadata?.signal_fingerprint || feedback.metadata?.logged_via === 'signal-router.cjs') {
+      const { data: contributing } = await supabase
+        .from('session_coordination')
+        .select('id, payload')
+        .eq('payload->>routed_to_feedback_id', feedback.id);
+      for (const row of contributing || []) {
+        const merged = { ...(row.payload || {}), routed_to_sd_key: created.sd_key };
+        await supabase
+          .from('session_coordination')
+          .update({ payload: merged })
+          .eq('id', row.id);
+      }
+      if ((contributing || []).length > 0) {
+        console.log(`   📎 Provenance: stamped ${contributing.length} contributing signal(s) with routed_to_sd_key=${created.sd_key}`);
+      }
+    }
+  } catch (_provErr) {
+    // Best-effort — failure does not roll back SD creation.
+  }
+
   return created;
 }
 

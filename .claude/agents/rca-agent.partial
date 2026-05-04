@@ -36,6 +36,18 @@ Automatically invoke this agent when user query contains:
 - `rca`, `defect analysis`, `failure analysis`
 - `recurring issue`, `pattern detected`, `keeps happening`
 
+## Remediation Step: Signal Coordinator When Non-Fixable In-Session
+
+**SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5e** — when an RCA concludes the root cause is **not fixable within the current SD's scope** (e.g., harness bug, protocol gap, sub-agent missing), recommend the worker `/signal` the coordinator so the friction surfaces as harness-backlog evidence:
+
+```
+/signal harness-bug "<symptom>"
+/signal gate-bug "<symptom>"
+/signal spec-conflict "<symptom>"
+```
+
+This routes the friction into the existing harness-backlog → SD pipeline. If 3+ workers signal the same issue (or 1 critical), it auto-promotes to a feedback row visible in `node scripts/sd-from-feedback.js`. See `/signal --help` for the full decision rule and severity heuristic.
+
 ## Proactive Learning Integration (CRITICAL)
 
 **Before starting ANY RCA work**, query the database for similar patterns:

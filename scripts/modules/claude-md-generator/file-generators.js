@@ -31,6 +31,7 @@ import {
 
 import {
   generateHotPatternsSection,
+  generateKnownFrictionPointsSection,
   generateRecentLessonsSection,
   generateGateHealthSection,
   generateProposalsSection,
@@ -186,7 +187,7 @@ Use \`*_DIGEST.md\` variants only when context is constrained (e.g. smaller mode
  * @returns {string} Generated markdown content
  */
 function generateCore(data, fileMapping) {
-  const { protocol, agents, subAgents, hotPatterns, recentRetrospectives, gateHealth, pendingProposals } = data;
+  const { protocol, agents, subAgents, hotPatterns, knownFrictionPoints, recentRetrospectives, gateHealth, pendingProposals } = data;
   const sections = protocol.sections;
   const { today, time } = getMetadata(protocol);
 
@@ -196,6 +197,8 @@ function generateCore(data, fileMapping) {
   // Compact sub-agent table (no keywords — hook handles routing)
   const subAgentSection = generateSubAgentSectionCompact(subAgents);
   const hotPatternsSection = generateHotPatternsSection(hotPatterns);
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4b
+  const knownFrictionSection = generateKnownFrictionPointsSection(knownFrictionPoints);
   const recentLessonsSection = generateRecentLessonsSection(recentRetrospectives);
   const gateHealthSection = generateGateHealthSection(gateHealth);
   const proposalsSection = generateProposalsSection(pendingProposals);
@@ -220,6 +223,8 @@ ${coreContent}
 ${proposalsSection}
 
 ${hotPatternsSection}
+
+${knownFrictionSection}
 
 ${gateHealthSection}
 

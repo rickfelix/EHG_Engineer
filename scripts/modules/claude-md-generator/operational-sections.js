@@ -62,6 +62,45 @@ function generateHotPatternsSection(patterns) {
 }
 
 /**
+ * Generate "Known Friction Points" section for CLAUDE_CORE.md.
+ * SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4b.
+ * Surfaces top harness-backlog feedback rows where contributing_workers >= 3
+ * (i.e., recurring friction observed by multiple workers via /signal).
+ * @param {Array} frictionRows - feedback rows already filtered to category='harness_backlog' with ≥3 contributing_workers
+ * @returns {string} Formatted markdown
+ */
+function generateKnownFrictionPointsSection(frictionRows) {
+  if (!frictionRows || frictionRows.length === 0) {
+    return `## Known Friction Points
+
+*(No widespread friction signals tracked currently — workers can /signal to surface recurring issues.)*
+`;
+  }
+
+  let section = `## Known Friction Points
+
+**From Worker Signals** — recurring friction observed by 3+ workers via \`/signal\`. Aggregated into harness-backlog by \`lib/coordinator/signal-router.cjs\` on every sweep cycle. Triage via \`node scripts/sd-from-feedback.js\`.
+
+| Signal Type | Workers | Severity | Title |
+|-------------|---------|----------|-------|
+`;
+
+  frictionRows.forEach(row => {
+    const sigType = row.metadata?.signal_type || '?';
+    const workerCount = (row.metadata?.contributing_workers || []).length;
+    const severity = row.severity || 'medium';
+    const title = (row.title || '').slice(0, 60);
+    section += `| ${sigType} | ${workerCount} | ${severity} | ${title} |\n`;
+  });
+
+  section += `
+*Auto-updated from \`feedback\` table where \`category='harness_backlog'\` AND \`metadata.contributing_workers\` length ≥ 3.*
+`;
+
+  return section;
+}
+
+/**
  * Generate Recent Lessons section for CLAUDE_CORE.md
  * @param {Array} retrospectives - List of retrospectives
  * @returns {string} Formatted markdown
@@ -323,6 +362,7 @@ ${d.content}
 
 export {
   generateHotPatternsSection,
+  generateKnownFrictionPointsSection,
   generateRecentLessonsSection,
   generateGateHealthSection,
   generateProposalsSection,

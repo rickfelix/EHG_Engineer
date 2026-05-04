@@ -229,7 +229,7 @@ async function main() {
         target_sd: worker.sd_id || null,
         message_type: 'SET_IDENTITY',
         subject: `Identity: ${callsign} (${color})`,
-        body: `The coordinator assigned you callsign "${callsign}" with color "${color}". Your statusline will update automatically. You may also run: /color ${color}`,
+        body: `The coordinator assigned you callsign "${callsign}" with color "${color}". Your statusline will update automatically. You may also run: /color ${color}\n\nCommunication: send signals back via /signal (try /signal --help for types). Use it when stuck on a gate >2x, about to bypass, or seeing protocol/spec friction.`,
         payload: { color, callsign, display_name: displayName },
         sender_type: 'coordinator',
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()

@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-04-29 10:02:45 AM
+**Generated**: 2026-05-04 9:54:34 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -10,6 +10,24 @@
 > For Strunkian writing standards, see `docs/reference/strunkian-writing-standards.md`.
 
 ---
+
+## Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+> Why: Hand-rolled migration scripts reliably fail in the specific edge cases that matter most — missing SUPABASE_DB_PASSWORD, pooler URL routing, SSL mode selection, and retry logic on transient failures. The database-agent encodes these hard-won patterns, preventing migrations from getting stuck at connection setup.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
 
 ## Cascade Invalidation System
 
@@ -44,24 +62,6 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 - `eva_architecture_plans.needs_review_since` — auto-set by trigger, NULL when resolved
 - `eva_architecture_plans.vision_version_aligned_to` — tracks which vision version the plan was last aligned with
 
-## Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-> Why: Hand-rolled migration scripts reliably fail in the specific edge cases that matter most — missing SUPABASE_DB_PASSWORD, pooler URL routing, SSL mode selection, and retry logic on transient failures. The database-agent encodes these hard-won patterns, preventing migrations from getting stuck at connection setup.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
-
 ## 🏗️ Application Architecture - UNIFIED FRONTEND
 
 ## Application Architecture - UNIFIED FRONTEND
@@ -86,41 +86,6 @@ Task tool with subagent_type="database-agent":
 ```bash
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
@@ -163,6 +128,41 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -304,6 +304,40 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 
 This is faster than sequential exploration and provides comprehensive coverage.
 
+## Work Tracking Policy
+
+**ALL changes to main must be tracked** as either:
+
+### Strategic Directive (SD) - For Substantial Work
+- Features, refactors, infrastructure (>75 LOC, see Work Item Routing)
+- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
+- Command: `npm run sd:create`
+
+### Quick-Fix (QF) - For Small Fixes
+- Bugs, polish, docs (≤75 LOC per Tier 1/Tier 2 in Work Item Routing)
+- Branch: `quick-fix/QF-YYYYMMDD-NNN`
+- Command: `node scripts/create-quick-fix.js --interactive`
+
+> **LOC thresholds** are defined once in **Work Item Routing** (CLAUDE.md): Tier 1 ≤30 (auto-approve QF), Tier 2 31-75 (standard QF), Tier 3 >75 (full SD). Risk keywords (auth, migration, schema, feature) always force Tier 3 regardless of LOC.
+
+### Why This Matters
+- All work tracked in database
+- Lessons learned captured
+- Quality gates enforced
+- Progress metrics accurate
+
+### Emergency Bypass (Logged)
+```bash
+EMERGENCY_PUSH="critical: reason here" git push
+```
+This logs to audit_log and should be followed by retroactive SD/QF creation.
+
+### Pre-Push Enforcement
+The pre-push hook automatically:
+1. Detects SD/QF from branch name
+2. Verifies completion status in database
+3. Blocks if not ready for merge
+
 ## Sub-Agent Model Routing
 
 **CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
@@ -344,72 +378,6 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 *Updated: SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G to add Google/Gemini provider awareness*
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
-
-## Work Tracking Policy
-
-**ALL changes to main must be tracked** as either:
-
-### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>75 LOC, see Work Item Routing)
-- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
-- Command: `npm run sd:create`
-
-### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (≤75 LOC per Tier 1/Tier 2 in Work Item Routing)
-- Branch: `quick-fix/QF-YYYYMMDD-NNN`
-- Command: `node scripts/create-quick-fix.js --interactive`
-
-> **LOC thresholds** are defined once in **Work Item Routing** (CLAUDE.md): Tier 1 ≤30 (auto-approve QF), Tier 2 31-75 (standard QF), Tier 3 >75 (full SD). Risk keywords (auth, migration, schema, feature) always force Tier 3 regardless of LOC.
-
-### Why This Matters
-- All work tracked in database
-- Lessons learned captured
-- Quality gates enforced
-- Progress metrics accurate
-
-### Emergency Bypass (Logged)
-```bash
-EMERGENCY_PUSH="critical: reason here" git push
-```
-This logs to audit_log and should be followed by retroactive SD/QF creation.
-
-### Pre-Push Enforcement
-The pre-push hook automatically:
-1. Detects SD/QF from branch name
-2. Verifies completion status in database
-3. Blocks if not ready for merge
-
-## QF Lifecycle Reconciliation
-
-**Problem**: quick_fixes rows stay `status=open` after a PR is merged via direct `gh pr merge` (any path that skips complete-quick-fix.js). sd:next then recommends phantom work. Root cause documented in feedback memory `feedback_qf_db_stale_after_merge.md`.
-
-**Solution**: Two complementary reconciliation layers — pre-merge filter + post-merge sweep. Both are idempotent and safe to run on any schedule.
-
-### Layer 1 — Pre-Merge Filter (sd:next data loader)
-`scripts/modules/sd-next/data-loaders.js` exposes two functions:
-- `loadOpenQuickFixes()` — returns rows where `pr_url IS NULL` AND `commit_sha IS NULL`. Filters out QFs with in-flight PRs so sd:next does not restart work a parallel session is already merging (QF-380 merge-race fix).
-- `loadReadyToMergeQuickFixes()` — queries the inverse pool (`pr_url IS NOT NULL`), cross-checks each PR state via `gh api` with a 60-second in-memory cache, returns only OPEN + all-checks-green rows tagged `ready_to_merge=true`. Lets the sd:next dispatcher emit a `qf_merge` action for adoption-ready work instead of `qf_start`.
-
-> Why the cache: sd:next runs many times per session. Without the 60s dedup, each invocation hits the GitHub API for every open QF — rate limits bite within minutes.
-
-### Layer 2 — Post-Merge Sweep (orphan-qf-reaper)
-`scripts/orphan-qf-reaper.mjs` sweeps rows where `status IN (open, in_progress)` AND `pr_url` points to a MERGED PR, and flips them to `status=completed`. Protections:
-- **Idempotency**: `.eq(status, current)` guard on the update — a concurrent complete-quick-fix.js flip wins without erroring.
-- **5-minute safety window**: skips rows whose `pr_url` was set within the last 5 minutes, giving complete-quick-fix.js time to finish its own flip.
-- **Structured JSON logging**: one line per row evaluated, durable artifact for debugging races.
-
-### Scheduled Execution
-`.github/workflows/orphan-qf-reaper.yml` runs Layer 2 every 15 minutes on cron plus `workflow_dispatch`, with a `dry-run` input, a concurrency group to prevent overlap, and a per-run `reaper.log` artifact.
-
-### When to Reach For This
-- **`sd:next` recommends a QF you know was merged**: check `loadOpenQuickFixes` is filtering on `pr_url IS NULL`; inspect that QF's `pr_url` / `commit_sha` columns. If they're set, the reaper will close it on its next cron; for immediate cleanup, run `node scripts/orphan-qf-reaper.mjs`.
-- **Two sessions on the same QF**: verify `loadReadyToMergeQuickFixes` is wired into the dispatcher and emitting `qf_merge` for rows with open PRs.
-- **QF with open PR but sd:next ignores it**: the PR's checks are not all green — expected. Layer 1 only surfaces merge-ready work.
-
-### Anti-Pattern
-Do **not** replace these layers with a blanket "close all QFs with any pr_url set". The 5-minute window and merged-state check prevent closing a QF whose PR is still under review.
-
-> Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
 
 ## 🖥️ UI Parity Requirement (MANDATORY)
 
@@ -480,6 +448,38 @@ Before marking any stage/feature as complete:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
+
+## QF Lifecycle Reconciliation
+
+**Problem**: quick_fixes rows stay `status=open` after a PR is merged via direct `gh pr merge` (any path that skips complete-quick-fix.js). sd:next then recommends phantom work. Root cause documented in feedback memory `feedback_qf_db_stale_after_merge.md`.
+
+**Solution**: Two complementary reconciliation layers — pre-merge filter + post-merge sweep. Both are idempotent and safe to run on any schedule.
+
+### Layer 1 — Pre-Merge Filter (sd:next data loader)
+`scripts/modules/sd-next/data-loaders.js` exposes two functions:
+- `loadOpenQuickFixes()` — returns rows where `pr_url IS NULL` AND `commit_sha IS NULL`. Filters out QFs with in-flight PRs so sd:next does not restart work a parallel session is already merging (QF-380 merge-race fix).
+- `loadReadyToMergeQuickFixes()` — queries the inverse pool (`pr_url IS NOT NULL`), cross-checks each PR state via `gh api` with a 60-second in-memory cache, returns only OPEN + all-checks-green rows tagged `ready_to_merge=true`. Lets the sd:next dispatcher emit a `qf_merge` action for adoption-ready work instead of `qf_start`.
+
+> Why the cache: sd:next runs many times per session. Without the 60s dedup, each invocation hits the GitHub API for every open QF — rate limits bite within minutes.
+
+### Layer 2 — Post-Merge Sweep (orphan-qf-reaper)
+`scripts/orphan-qf-reaper.mjs` sweeps rows where `status IN (open, in_progress)` AND `pr_url` points to a MERGED PR, and flips them to `status=completed`. Protections:
+- **Idempotency**: `.eq(status, current)` guard on the update — a concurrent complete-quick-fix.js flip wins without erroring.
+- **5-minute safety window**: skips rows whose `pr_url` was set within the last 5 minutes, giving complete-quick-fix.js time to finish its own flip.
+- **Structured JSON logging**: one line per row evaluated, durable artifact for debugging races.
+
+### Scheduled Execution
+`.github/workflows/orphan-qf-reaper.yml` runs Layer 2 every 15 minutes on cron plus `workflow_dispatch`, with a `dry-run` input, a concurrency group to prevent overlap, and a per-run `reaper.log` artifact.
+
+### When to Reach For This
+- **`sd:next` recommends a QF you know was merged**: check `loadOpenQuickFixes` is filtering on `pr_url IS NULL`; inspect that QF's `pr_url` / `commit_sha` columns. If they're set, the reaper will close it on its next cron; for immediate cleanup, run `node scripts/orphan-qf-reaper.mjs`.
+- **Two sessions on the same QF**: verify `loadReadyToMergeQuickFixes` is wired into the dispatcher and emitting `qf_merge` for rows with open PRs.
+- **QF with open PR but sd:next ignores it**: the PR's checks are not all green — expected. Layer 1 only surfaces merge-ready work.
+
+### Anti-Pattern
+Do **not** replace these layers with a blanket "close all QFs with any pr_url set". The 5-minute window and merged-state check prevent closing a QF whose PR is still under review.
+
+> Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
 
 ## Queue Ranking and QF Track Inference
 
@@ -796,7 +796,10 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 ### "Continue autonomously"
 **Definition**: Execute the current SD through its full LEO Protocol workflow WITHOUT stopping to ask for user confirmation at each step.
 **NOT**: Skip workflow steps for efficiency.
-**AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table (which handoffs are TERMINAL / require phase work) and Chaining setting (orchestrator-to-orchestrator).
+
+**Recommend-and-execute (mandatory at every non-canonical decision point)**: When multiple paths exist, output `**Going with [pick]** — [one-sentence why]. [Execute same turn.]` This replaces — never coexists with — "Should I do X?" / "Want me to proceed?" / numbered option menus. The user approved the SD; redirects come mid-stream and cost less than confirmation cycles.
+
+**AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table and Chaining setting.
 
 **ONLY STOP IF** (Canonical Pause Points — same list as AUTO-PROCEED Mode):
 1. **Orchestrator completion** — after all children, when Chaining is OFF
@@ -805,7 +808,7 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 4. **All children blocked**
 5. **Critical security or data-loss scenario** (includes DB/code status mismatch)
 
-**NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, or any "warrants confirmation" rationalization. Phase boundaries are NOT pause points. If your reason for stopping is not on the five-point list above, KEEP WORKING. Asking "want me to continue or pause here?" at a phase transition is a protocol violation.
+**NOT a stop condition**: scope size, "substantial" upcoming work, decomposition into multiple children, PRD creation, large refactors, "warrants confirmation" rationalization, asking "which option?" or "should I do X or Y?" instead of executing. Phase boundaries are NOT pause points. If your reason for stopping is not on the five-point list above, KEEP WORKING.
 
 ### "Child SD"
 **Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
@@ -1410,6 +1413,23 @@ If you modify either gate, preserve the three-invariant invariant:
 - Hot pattern: `PAT-RETRO-EXISTS-GATE-FALSE-PASS` (critical severity, process category)
 
 
+## Signaling friction to the coordinator
+
+Workers signal mid-execution friction back to the active coordinator via session_coordination (no new schema). Two-way channel reuses existing INFO message_type with payload-based discrimination — discriminator lives in payload.signal_type.
+
+**Send a signal when ANY:**
+1. **Recurrence threshold met** — same gate failed 2+ times no improvement, same RCA root cause hit twice this session, same tool failure 3+ times, phase elapsed time >2× type-bucket median
+2. **About to bypass / workaround** — 3rd-of-3 bypass quota, --no-verify, manual retry without root cause, mock instead of fix
+3. **Protocol / spec friction** — PRD acceptance criteria contradict each other, sub-agent evidence ungeneratable without bypass, gate criteria inconsistent with PRD, documented sub-agent doesn't exist
+4. **Recognized harness bug observed** — about to invoke log-harness-bug.js + the friction looks generalizable
+5. **Trend hint** — current friction matches memory entries you just read
+
+**Don't send when:** first-time issue (retry first), already-open SD/backlog, purely local issue (file as harness bug), rate-limited.
+
+**Severity heuristic:** low (single-cycle inconvenience), medium (recurring within session — default), high (blocking SD or requires bypass), critical (DB inconsistency / gate fail-open / security — bypasses ≥3 aggregation threshold).
+
+**How to send:** `/signal <type> "<body>"` slash command — see /signal --help. Or directly: `node scripts/worker-signal.cjs <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
+
 ## Strategic Governance Hierarchy
 
 The EHG platform operates under a 7-layer strategic governance stack. Each layer has a database table, CLI command, and clear purpose.
@@ -1478,15 +1498,20 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
 | PAT-HF-LEADTOPLAN-3612ea70 | handoff_failure | [HIGH] high | 8 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
 | PAT-HF-PLANTOEXEC-211b3c47 | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
 | PAT-RETRO-PLANTOEXEC-211b3c47 | session_retrospective | [HIGH] high | 5 | [STABLE] | N/A |
-| PAT-HF-LEADTOPLAN-1249b41c | handoff_failure | [HIGH] high | 4 | [STABLE] | N/A |
-| PAT-RETRO-LEADTOPLAN-1249b41c | session_retrospective | [HIGH] high | 4 | [STABLE] | N/A |
 
 ### Prevention Checklists
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
+
+
+## Known Friction Points
+
+*(No widespread friction signals tracked currently — workers can /signal to surface recurring issues.)*
 
 
 
@@ -1495,53 +1520,54 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. LEAD_TO_PLAN Handoff Retrospective: Software Factory - Automated Venture Error Detection and Self-Healing Pipeline [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/1/2026 | **Score**: 100
+### 1. PLAN_TO_EXEC Handoff Retrospective: Populate brand_variants from S10 identity_persona_brand artifact [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/3/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
-- [PAT-AUTO-a710c9c1] Gate GATE_SD_QUALITY failed: score 27/100
+- brand_variants population should have been included in the original S10 implementation - this was a ...
+- No integration test verifying the full Stage 10 to brand_variants pipeline end-to-end in CI
 
 **Action Items**:
-- [ ] Verify: Sentry errors appear in feedback table within 30 minutes for SD-LEO-INFR...
-- [ ] Validate: Error sanitizer prevents prompt injection for SD-LEO-INFRA-SOFTWARE-FA...
+- [ ] Create backfill migration for existing S10 ventures missing brand_variants
+- [ ] Add brand_variants type to shared types module
 
-### 2. PLAN_TO_EXEC Handoff Retrospective: Software Factory - Automated Venture Error Detection and Self-Healing Pipeline [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/1/2026 | **Score**: 100
+### 2. PLAN_TO_EXEC Handoff Retrospective: Post-stage hook API endpoint — S15 Stitch, S17 docs, S19 bridge dispatch [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/3/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
-- [PAT-AUTO-a710c9c1] Gate GATE_SD_QUALITY failed: score 27/100
+- The endpoint currently uses console.log/console.error for dispatch results — production deployment s...
+- Failed dispatches are fire-and-forget with no retry mechanism — adding exponential backoff retry (ma...
 
 **Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+- [ ] Add retry logic for failed dispatches
+- [ ] Implement structured JSON logging
 
-### 3. LEAD_TO_PLAN Handoff Retrospective: Unified Identity Schema — Migrate Board Seats to specialist_registry [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/31/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
-- [PAT-AUTO-a710c9c1] Gate GATE_SD_QUALITY failed: score 27/100
-
-**Action Items**:
-- [ ] Verify: specialist_registry table has 8 new columns for SD-LEO-INFRA-INTELLIGENT...
-- [ ] Validate: 6 founding C-suite identities seeded for SD-LEO-INFRA-INTELLIGENT-DYNA...
-
-### 4. PLAN_TO_EXEC Handoff Retrospective: Unified Identity Schema — Migrate Board Seats to specialist_registry [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 3/31/2026 | **Score**: 100
+### 3. PLAN_TO_EXEC Handoff Retrospective: DB-driven gate enforcement — remove hardcoded arrays, add S16 to hard_gate_stages [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/3/2026 | **Score**: 100
 
 **Key Improvements**:
+- [PAT-AUTO-6de8fc27] Gate SUCCESS_METRICS failed: score 62/100
 - [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
-- [PAT-AUTO-a710c9c1] Gate GATE_SD_QUALITY failed: score 27/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
-### 5. PLAN_TO_EXEC Handoff Retrospective: S20 SD Progress Dashboard Child Tree View [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/1/2026 | **Score**: 100
+### 4. LEAD_TO_PLAN Handoff Retrospective: Populate brand_variants from S10 identity_persona_brand artifact [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/3/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-360448d5] Gate SUCCESS_METRICS failed: score 66/100
+- brand_variants population should have been included in the original S10 implementation - this was a ...
+- No integration test verifying the full Stage 10 to brand_variants pipeline end-to-end in CI
+
+**Action Items**:
+- [ ] Create backfill migration for existing S10 ventures missing brand_variants
+- [ ] Add brand_variants type to shared types module
+
+### 5. PLAN_TO_EXEC Handoff Retrospective: S17 parity integration test — CLI vs frontend venture state comparison [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/4/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-6de8fc27] Gate SUCCESS_METRICS failed: score 62/100
 - [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
 
 **Action Items**:
@@ -1611,7 +1637,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-04-29*
+*Generated from database: 2026-05-04*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

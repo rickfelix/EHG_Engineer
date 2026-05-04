@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-04-29 10:02:45 AM
+**Generated**: 2026-05-04 9:54:34 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.7 guidance)
@@ -195,70 +195,6 @@ See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for c
 **If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
 
 
-## Branch Creation (Automated at LEAD-TO-PLAN)
-
-## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
-
-### Automatic Branch Creation
-
-As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
-
-1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
-2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
-3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
-4. Database is updated with branch name for tracking
-
-### Manual Branch Creation (If Needed)
-
-If branch creation fails or you need to create one manually:
-
-```bash
-# Create branch for an SD (looks up title from database)
-npm run sd:branch SD-XXX-001
-
-# Create with auto-stash (non-interactive)
-npm run sd:branch:auto SD-XXX-001
-
-# Check if branch exists
-npm run sd:branch:check SD-XXX-001
-
-# Full command with options
-# Branch was auto-created at LEAD-TO-PLAN handoff
-```
-
-### Branch Naming Convention
-
-| SD Type | Branch Prefix | Example |
-|---------|---------------|---------|
-| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
-| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
-| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
-| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
-| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
-
-### Branch Hygiene Rules
-
-From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
-- **≤7 days stale** at PLAN-TO-EXEC handoff
-- **One SD per branch** (no mixing work)
-- **Merge main at phase transitions**
-
-### When Branch is Created
-
-```
-LEAD Phase                    PLAN Phase                   EXEC Phase
-    |                              |                            |
-    |   LEAD-TO-PLAN handoff       |                            |
-    |---[Branch Created Here]----->|                            |
-    |                              |   PRD Creation             |
-    |                              |   Sub-agent validation     |
-    |                              |                            |
-    |                              |   PLAN-TO-EXEC handoff     |
-    |                              |---[Branch Validated]------>|
-    |                              |                            |
-```
-
-
 ## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
 
 **Source**: Analysis of 175 high-quality retrospectives (score ≥60)
@@ -347,6 +283,70 @@ If `research_confidence_score = 0.00`, you skipped this step.
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
 
+## Branch Creation (Automated at LEAD-TO-PLAN)
+
+## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
+
+### Automatic Branch Creation
+
+As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
+
+1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
+2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
+3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
+4. Database is updated with branch name for tracking
+
+### Manual Branch Creation (If Needed)
+
+If branch creation fails or you need to create one manually:
+
+```bash
+# Create branch for an SD (looks up title from database)
+npm run sd:branch SD-XXX-001
+
+# Create with auto-stash (non-interactive)
+npm run sd:branch:auto SD-XXX-001
+
+# Check if branch exists
+npm run sd:branch:check SD-XXX-001
+
+# Full command with options
+# Branch was auto-created at LEAD-TO-PLAN handoff
+```
+
+### Branch Naming Convention
+
+| SD Type | Branch Prefix | Example |
+|---------|---------------|---------|
+| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
+| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
+| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
+| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
+| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
+
+### Branch Hygiene Rules
+
+From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
+- **≤7 days stale** at PLAN-TO-EXEC handoff
+- **One SD per branch** (no mixing work)
+- **Merge main at phase transitions**
+
+### When Branch is Created
+
+```
+LEAD Phase                    PLAN Phase                   EXEC Phase
+    |                              |                            |
+    |   LEAD-TO-PLAN handoff       |                            |
+    |---[Branch Created Here]----->|                            |
+    |                              |   PRD Creation             |
+    |                              |   Sub-agent validation     |
+    |                              |                            |
+    |                              |   PLAN-TO-EXEC handoff     |
+    |                              |---[Branch Validated]------>|
+    |                              |                            |
+```
+
+
 ## Vision/Architecture Doc Pre-Check
 
 ## Vision/Architecture Doc Pre-Check (Step 0.25)
@@ -431,41 +431,6 @@ Sub-agents are FIRST RESPONDERS in EXEC phase. When you encounter a problem that
 
 *Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
-## Migration Script Pattern (MANDATORY)
-
-**Issue Pattern**: PAT-DB-MIGRATION-001
-
-When writing migration scripts, you MUST use the established pattern:
-
-### Correct Pattern
-```javascript
-import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
-import { readFileSync } from 'fs';
-
-const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
-const client = await createDatabaseClient('engineer', { verify: true });
-const statements = splitPostgreSQLStatements(migrationSQL);
-
-for (const statement of statements) {
-  await client.query(statement);
-}
-
-await client.end();
-```
-
-### NEVER Use This Pattern
-```javascript
-// WRONG - exec_sql RPC does not exist
-import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(url, key);
-await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
-```
-
-### Before Writing Migration Scripts
-1. Search for existing patterns: `Glob *migration*.js`
-2. Read `scripts/run-sql-migration.js` as canonical template
-3. Use `lib/supabase-connection.js` utilities
-
 ## 📚 Skill Integration (EXEC Phase)
 
 ## Skill Integration During EXEC
@@ -545,6 +510,41 @@ Both are valid in EXEC — use them for different purposes:
 Skills are for **creative guidance** (how to build).
 Sub-agents act as **first responders** on domain-specific errors AND as **formal validators** before EXEC-TO-PLAN.
 Use both during EXEC — the distinction is about *purpose*, not *phase*.
+
+## Migration Script Pattern (MANDATORY)
+
+**Issue Pattern**: PAT-DB-MIGRATION-001
+
+When writing migration scripts, you MUST use the established pattern:
+
+### Correct Pattern
+```javascript
+import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
+import { readFileSync } from 'fs';
+
+const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
+const client = await createDatabaseClient('engineer', { verify: true });
+const statements = splitPostgreSQLStatements(migrationSQL);
+
+for (const statement of statements) {
+  await client.query(statement);
+}
+
+await client.end();
+```
+
+### NEVER Use This Pattern
+```javascript
+// WRONG - exec_sql RPC does not exist
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(url, key);
+await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
+```
+
+### Before Writing Migration Scripts
+1. Search for existing patterns: `Glob *migration*.js`
+2. Read `scripts/run-sql-migration.js` as canonical template
+3. Use `lib/supabase-connection.js` utilities
 
 ## Validation Rules (SD-LEARN-008)
 
@@ -1348,10 +1348,6 @@ When this gate fails:
 - **Export**: `createTestCoverageQualityGate(supabase)`
 - **Gate Key**: `GATE_TEST_COVERAGE_QUALITY`
 
-### Related Documentation
-
-- [`docs/reference/test-coverage-baseline-ratchet.md`](docs/reference/test-coverage-baseline-ratchet.md) — separate Test Coverage Enforcement workflow ratchet (unrelated to this gate; documents the temporary main-snapshot delta gate that tolerates pre-existing failures while triage completes)
-
 ## Integration Test Requirement Gate (EXEC-TO-PLAN)
 
 **Source**: SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-E (Fixes GAP-003)
@@ -1457,77 +1453,6 @@ The ACCEPTANCE_CRITERIA_VALIDATION gate scores stories as follows:
 - **0**: No acceptance criteria defined
 
 Threshold: overall score >= 60 AND no story scores 0.
-
-## Playwright MCP Integration
-
-## 🎭 Playwright MCP Integration
-
-**Status**: ✅ READY (Installed 2025-10-12)
-
-### Overview
-Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
-
-### Installed Components
-- **Chrome**: Google Chrome browser for MCP operations
-- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
-- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
-- **System Dependencies**: All required Linux libraries installed
-
-### Available MCP Tools
-
-#### Navigation
-- `mcp__playwright__browser_navigate` - Navigate to URL
-- `mcp__playwright__browser_navigate_back` - Go back to previous page
-
-#### Interaction
-- `mcp__playwright__browser_click` - Click elements
-- `mcp__playwright__browser_fill` - Fill form fields
-- `mcp__playwright__browser_select` - Select dropdown options
-- `mcp__playwright__browser_hover` - Hover over elements
-- `mcp__playwright__browser_type` - Type text into elements
-
-#### Verification
-- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
-- `mcp__playwright__browser_take_screenshot` - Take screenshots
-- `mcp__playwright__browser_evaluate` - Execute JavaScript
-
-#### Management
-- `mcp__playwright__browser_close` - Close browser
-- `mcp__playwright__browser_tabs` - Manage tabs
-
-### Testing Integration
-
-**When to Use Playwright MCP**:
-1. ✅ Visual regression testing
-2. ✅ UI component verification
-3. ✅ Screenshot capture for evidence
-4. ✅ Accessibility tree validation
-5. ✅ Cross-browser testing
-
-**When to Use Standard Playwright**:
-1. ✅ E2E test suites (`npm run test:e2e`)
-2. ✅ CI/CD pipeline tests
-3. ✅ Automated test runs
-4. ✅ User story validation
-
-### Usage Example
-
-```javascript
-// Using Playwright MCP for visual verification
-await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
-await mcp__playwright__browser_snapshot(); // Get accessibility tree
-await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
-await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
-```
-
-### QA Director Integration
-
-The QA Engineering Director sub-agent now has access to:
-- Playwright MCP for visual testing
-- Standard Playwright for E2E automation
-- Both Chrome (MCP) and Chromium (tests) browsers
-
-**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
 
 ## Triangulated Runtime Audit Protocol
 
@@ -1747,6 +1672,77 @@ See: `/runtime-audit` skill for full template
 - `schema-design` - Database schema issues
 
 
+## Playwright MCP Integration
+
+## 🎭 Playwright MCP Integration
+
+**Status**: ✅ READY (Installed 2025-10-12)
+
+### Overview
+Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
+
+### Installed Components
+- **Chrome**: Google Chrome browser for MCP operations
+- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
+- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
+- **System Dependencies**: All required Linux libraries installed
+
+### Available MCP Tools
+
+#### Navigation
+- `mcp__playwright__browser_navigate` - Navigate to URL
+- `mcp__playwright__browser_navigate_back` - Go back to previous page
+
+#### Interaction
+- `mcp__playwright__browser_click` - Click elements
+- `mcp__playwright__browser_fill` - Fill form fields
+- `mcp__playwright__browser_select` - Select dropdown options
+- `mcp__playwright__browser_hover` - Hover over elements
+- `mcp__playwright__browser_type` - Type text into elements
+
+#### Verification
+- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
+- `mcp__playwright__browser_take_screenshot` - Take screenshots
+- `mcp__playwright__browser_evaluate` - Execute JavaScript
+
+#### Management
+- `mcp__playwright__browser_close` - Close browser
+- `mcp__playwright__browser_tabs` - Manage tabs
+
+### Testing Integration
+
+**When to Use Playwright MCP**:
+1. ✅ Visual regression testing
+2. ✅ UI component verification
+3. ✅ Screenshot capture for evidence
+4. ✅ Accessibility tree validation
+5. ✅ Cross-browser testing
+
+**When to Use Standard Playwright**:
+1. ✅ E2E test suites (`npm run test:e2e`)
+2. ✅ CI/CD pipeline tests
+3. ✅ Automated test runs
+4. ✅ User story validation
+
+### Usage Example
+
+```javascript
+// Using Playwright MCP for visual verification
+await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
+await mcp__playwright__browser_snapshot(); // Get accessibility tree
+await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
+await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
+```
+
+### QA Director Integration
+
+The QA Engineering Director sub-agent now has access to:
+- Playwright MCP for visual testing
+- Standard Playwright for E2E automation
+- Both Chrome (MCP) and Chromium (tests) browsers
+
+**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
+
 ## Edge Case Testing Checklist
 
 When implementing tests, ensure coverage for:
@@ -1861,6 +1857,67 @@ npx eslint --no-error-on-unmatched-pattern $(git diff --name-only origin/main...
 | Pre-push hook rejects | Lint errors in committed files | Fix errors, commit fix, push again |
 
 > Why: ESLint parse errors from incomplete edits are the #2 source of code quality friction. Catching them before commit prevents cascade failures at gate validation and pre-push hooks.
+
+## PRD metadata.db_content_assertions field guide
+
+# metadata.db_content_assertions Field Guide
+
+When authoring a PRD for an SD that touches a central-registry table, populate
+`strategic_directives_v2.metadata.db_content_assertions` so the DB_CONTENT_PARITY
+gate at /leo complete can verify code-vs-DB content drift.
+
+## Shape
+
+```jsonc
+{
+  "db_content_assertions": [
+    {
+      "table": "stage_config",                  // must be in REGISTRY_TABLES
+      "row_filter": { "stage_number": 20 },     // selects exactly one row
+      "expected_columns": {
+        "stage_name": "Code Quality Gate",      // literal comparison
+        "description": { "regex": "^Code Quality" }  // anchored regex
+      }
+    }
+  ]
+}
+```
+
+## Allowlist (REGISTRY_TABLES)
+
+The list of tables eligible for assertions lives in
+`lib/db-content-registry-allowlist.js` — currently `['stage_config',
+'chairman_dashboard_config']`. Adding a table requires explicit chairman-approved
+PR and compounds gate runtime / false-positive surface area.
+
+## Worked examples
+
+### Literal match (preferred)
+```jsonc
+{ "table": "stage_config", "row_filter": { "stage_number": 18 },
+  "expected_columns": { "stage_name": "MVP Development" } }
+```
+
+### Anchored regex (only when literal won't fit)
+```jsonc
+{ "table": "stage_config", "row_filter": { "stage_number": 21 },
+  "expected_columns": { "description": { "regex": "^Pre-Launch" } } }
+```
+
+## Anti-ReDoS guard
+
+- Regex patterns are capped at 500 characters.
+- When `LEO_PARITY_REGEX_REQUIRE_ANCHORS=true`, unanchored patterns are rejected.
+- Prefer literal matches; reach for regex only when the value is dynamic.
+
+## What happens at /leo complete
+
+The gate (`scripts/modules/handoff/gates/db-content-parity-gate.js`) runs after
+scope-completion and before /learn. On mismatch it fails closed with a remediation
+message naming `table`, `row_filter`, `expected`, and `actual`. Each run writes one
+row to `sd_verification_results` (verification_type='DB_CONTENT_PARITY', column
+`result` not `status`). Skip path (no assertions) returns pass:true with no DB reads.
+
 
 ## Database Schema Constraints Reference
 
@@ -2004,6 +2061,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-04-29*
+*Generated from database: 2026-05-04*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

@@ -152,6 +152,46 @@ async function getHotPatterns(supabase, limit = 5) {
 }
 
 /**
+ * Fetch known friction points from harness-backlog feedback rows.
+ * SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4b.
+ * Returns top harness-backlog rows where contributing_workers length ≥ 3,
+ * ordered by signal_count DESC. Filters out closed/resolved rows.
+ * @param {Object} supabase - Supabase client
+ * @param {number} limit - Maximum rows to return (default 5)
+ * @returns {Promise<Array>} List of friction-point feedback rows
+ */
+async function getKnownFrictionPoints(supabase, limit = 5) {
+  try {
+    const { data, error } = await supabase
+      .from('feedback')
+      .select('id, title, severity, metadata, status')
+      .eq('category', 'harness_backlog')
+      .in('status', ['new', 'in_progress'])
+      .not('metadata->>signal_fingerprint', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(50); // overfetch then filter client-side by contributing_workers length
+
+    if (error) {
+      console.warn('Could not load known friction points (feedback table or filter issue):', error.message);
+      return [];
+    }
+
+    // Filter to rows with contributing_workers >= 3 (JSONB array length).
+    const filtered = (data || []).filter(row => {
+      const workers = row.metadata?.contributing_workers;
+      return Array.isArray(workers) && workers.length >= 3;
+    });
+
+    // Sort by signal_count DESC then return top `limit`.
+    filtered.sort((a, b) => (b.metadata?.signal_count || 0) - (a.metadata?.signal_count || 0));
+    return filtered.slice(0, limit);
+  } catch (err) {
+    console.warn('getKnownFrictionPoints failed:', err.message);
+    return [];
+  }
+}
+
+/**
  * Fetch recent published retrospectives for lessons learned
  * @param {Object} supabase - Supabase client
  * @param {number} days - Number of days to look back
@@ -322,6 +362,7 @@ export {
   getSchemaConstraints,
   getProcessScripts,
   getHotPatterns,
+  getKnownFrictionPoints,
   getRecentRetrospectives,
   getGateHealth,
   getPendingProposals,
