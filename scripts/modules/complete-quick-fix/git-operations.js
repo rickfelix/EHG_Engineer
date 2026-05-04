@@ -162,7 +162,8 @@ export function autoDetectGitInfo(testDir, options = {}) {
 
     if (!result.actualLoc) {
       // gh additions+deletions overcounts vs git --shortstat for renames, but feeds the
-      // 50-LOC hard-cap fail-safely (stricter, never under-rejects).
+      // QF hard-cap (see QF_HARD_LOC_CAP in verification.js) fail-safely (stricter,
+      // never under-rejects).
       const additions = typeof pr.additions === 'number' ? pr.additions : 0;
       const deletions = typeof pr.deletions === 'number' ? pr.deletions : 0;
       result.actualLoc = additions + deletions;
