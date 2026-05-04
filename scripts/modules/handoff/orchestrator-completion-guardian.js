@@ -31,6 +31,9 @@ const ORCHESTRATOR_REQUIREMENTS = {
   prd: { required: true, minFields: ['title', 'executive_summary', 'status'] },
   retrospective: { required: true, minQualityScore: 70 },
   deliverables: { allComplete: true },
+  // QF-20260504-921: minCount=1 enforces presence only. Expected count is
+  // derived dynamically from parent.metadata.child_count when present
+  // (set during decomposition). See validateChildren() for the count gate.
   children: { allComplete: true, minCount: 1 }
 };
 
@@ -150,6 +153,17 @@ export class OrchestratorCompletionGuardian {
         check: 'CHILDREN',
         passed: true,
         message: `All ${children.length} children completed`
+      });
+    }
+
+    // QF-20260504-921: Compare delivered child count vs expected count.
+    // Closes feedback c2b5a84c — minCount:1 used to allow 1-of-N delivery.
+    const expectedCount = this.parentData.metadata?.child_count;
+    if (expectedCount && children?.length < expectedCount) {
+      this.validationResults.push({
+        check: 'CHILDREN_COUNT',
+        passed: false,
+        message: `Only ${children.length} child SD(s) delivered; metadata.child_count=${expectedCount} (under-delivery)`
       });
     }
   }
