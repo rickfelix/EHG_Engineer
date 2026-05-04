@@ -233,6 +233,29 @@ function emitAutoClaimDirective(suggestedSd, availableSds) {
   console.log('');
 }
 
+// QF-20260504-007: Claude Code passes hook payload as JSON on stdin per its
+// PostToolUse protocol. The session_id field is the only reliable identifier of
+// the calling session — env vars (CLAUDE_SESSION_ID) are NOT propagated to hook
+// subprocesses, and per-worktree session-id files don't exist in the parent
+// worktree where the hook actually runs from. Without this read, every auto-fire
+// of this hook returned null at getCurrentSessionId() and exited silently
+// (closes feedback bdc65df3).
+async function readSessionIdFromStdin(timeoutMs = 250) {
+  return new Promise((resolve) => {
+    let buf = '';
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    try {
+      process.stdin.setEncoding('utf8');
+      process.stdin.on('data', c => { buf += c; });
+      process.stdin.on('end', () => {
+        clearTimeout(timer);
+        try { resolve(JSON.parse(buf)?.session_id || null); } catch { resolve(null); }
+      });
+      process.stdin.on('error', () => { clearTimeout(timer); resolve(null); });
+    } catch { clearTimeout(timer); resolve(null); }
+  });
+}
+
 async function main() {
   let supabase;
   try {
@@ -242,7 +265,9 @@ async function main() {
     return;
   }
 
-  const sessionId = getCurrentSessionId();
+  // QF-20260504-007: stdin is the canonical source for PostToolUse session_id.
+  // Falls back to env/file/PID-scan resolution for non-PostToolUse invocations.
+  const sessionId = (await readSessionIdFromStdin()) || getCurrentSessionId();
   if (!sessionId) return;
 
   // Always update heartbeat (30s throttle) — even when inbox check is skipped
@@ -407,4 +432,4 @@ if (require.main === module) {
   main().catch(() => { /* fail silently */ });
 }
 
-module.exports = { getCurrentSessionId };
+module.exports = { getCurrentSessionId, readSessionIdFromStdin };
