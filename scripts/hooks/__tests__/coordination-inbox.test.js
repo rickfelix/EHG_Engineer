@@ -20,6 +20,138 @@ function loadHook() {
   return require(HOOK_PATH);
 }
 
+// =============================================================================
+// QF-20260504-912: Per-session throttle + heartbeat (closes peer-starvation bug)
+// =============================================================================
+// Pre-fix: THROTTLE_FILE and HEARTBEAT_FILE were host-shared paths. With 6
+// active sessions, the first hook fire marks the throttle and the next 5
+// sessions skip their inbox check for up to 60s — message starvation.
+// Post-fix: per-session paths mirror the friction-counters pattern at lines
+// ~96-125 of coordination-inbox.cjs.
+
+describe('QF-912 THROTTLE-1: shouldCheck(sessionId) is per-session, not global', () => {
+  it('returns true for session A even when session B just marked its throttle', () => {
+    const hook = loadHook();
+    const sidA = 'sessionA-throttle1';
+    const sidB = 'sessionB-throttle1';
+    // Wipe both sessions' throttle files first
+    try { fs.unlinkSync(hook.getThrottleFile(sidA)); } catch {}
+    try { fs.unlinkSync(hook.getThrottleFile(sidB)); } catch {}
+    // B marks throttle (recent)
+    hook.markChecked(sidB);
+    // A's check must still return true — A has no own throttle file
+    expect(hook.shouldCheck(sidA)).toBe(true);
+    // Cleanup
+    try { fs.unlinkSync(hook.getThrottleFile(sidA)); } catch {}
+    try { fs.unlinkSync(hook.getThrottleFile(sidB)); } catch {}
+  });
+});
+
+describe('QF-912 THROTTLE-2: shouldCheck(sessionId) returns false only when same session is fresh', () => {
+  it('returns false for session A when A itself just marked', () => {
+    const hook = loadHook();
+    const sid = 'sessionA-throttle2';
+    try { fs.unlinkSync(hook.getThrottleFile(sid)); } catch {}
+    hook.markChecked(sid);
+    expect(hook.shouldCheck(sid)).toBe(false);
+    try { fs.unlinkSync(hook.getThrottleFile(sid)); } catch {}
+  });
+});
+
+describe('QF-912 THROTTLE-3: markChecked(sessionId) writes a per-session file', () => {
+  it('writes to a path containing the sessionId and not to the global path', () => {
+    const hook = loadHook();
+    const sid = 'sessionA-throttle3';
+    const expected = hook.getThrottleFile(sid);
+    expect(expected).toContain(sid);
+    expect(expected).not.toBe(path.join(require('os').tmpdir(), 'claude-coordination-inbox-last-check.json'));
+    try { fs.unlinkSync(expected); } catch {}
+    hook.markChecked(sid);
+    expect(fs.existsSync(expected)).toBe(true);
+    try { fs.unlinkSync(expected); } catch {}
+  });
+});
+
+describe('QF-912 THROTTLE-4: invalid sessionId is rejected gracefully (security M4)', () => {
+  it('does not write a file and shouldCheck returns true (fail-open) for malformed sessionId', () => {
+    const hook = loadHook();
+    const bad = '../../etc/passwd';
+    // markChecked must not throw and must not write
+    expect(() => hook.markChecked(bad)).not.toThrow();
+    // shouldCheck should not throw
+    expect(() => hook.shouldCheck(bad)).not.toThrow();
+    // Returns true (fail-open) because invalid sessionId means no per-session state can exist
+    expect(hook.shouldCheck(bad)).toBe(true);
+  });
+});
+
+describe('QF-912 HEARTBEAT-1: shouldHeartbeat(sessionId) is per-session', () => {
+  it('returns true for A even when B just heartbeated', () => {
+    const hook = loadHook();
+    const sidA = 'sessionA-hb1';
+    const sidB = 'sessionB-hb1';
+    try { fs.unlinkSync(hook.getHeartbeatFile(sidA)); } catch {}
+    try { fs.unlinkSync(hook.getHeartbeatFile(sidB)); } catch {}
+    hook.markHeartbeat(sidB);
+    expect(hook.shouldHeartbeat(sidA)).toBe(true);
+    try { fs.unlinkSync(hook.getHeartbeatFile(sidA)); } catch {}
+    try { fs.unlinkSync(hook.getHeartbeatFile(sidB)); } catch {}
+  });
+});
+
+describe('QF-912 HEARTBEAT-2: shouldHeartbeat(sessionId) returns false only when same session is fresh', () => {
+  it('returns false for A when A itself just heartbeated', () => {
+    const hook = loadHook();
+    const sid = 'sessionA-hb2';
+    try { fs.unlinkSync(hook.getHeartbeatFile(sid)); } catch {}
+    hook.markHeartbeat(sid);
+    expect(hook.shouldHeartbeat(sid)).toBe(false);
+    try { fs.unlinkSync(hook.getHeartbeatFile(sid)); } catch {}
+  });
+});
+
+describe('QF-912 HEARTBEAT-3: markHeartbeat(sessionId) writes a per-session file', () => {
+  it('writes to a path containing the sessionId', () => {
+    const hook = loadHook();
+    const sid = 'sessionA-hb3';
+    const expected = hook.getHeartbeatFile(sid);
+    expect(expected).toContain(sid);
+    expect(expected).not.toBe(path.join(require('os').tmpdir(), 'claude-heartbeat-last-update.json'));
+    try { fs.unlinkSync(expected); } catch {}
+    hook.markHeartbeat(sid);
+    expect(fs.existsSync(expected)).toBe(true);
+    try { fs.unlinkSync(expected); } catch {}
+  });
+});
+
+describe('QF-912 HEARTBEAT-4: invalid sessionId is rejected gracefully', () => {
+  it('does not write a file and shouldHeartbeat returns true (fail-open)', () => {
+    const hook = loadHook();
+    const bad = 'has spaces and !!!';
+    expect(() => hook.markHeartbeat(bad)).not.toThrow();
+    expect(() => hook.shouldHeartbeat(bad)).not.toThrow();
+    expect(hook.shouldHeartbeat(bad)).toBe(true);
+  });
+});
+
+describe('QF-912 CROSS-SESSION-1: 6 sessions can all check independently within same window', () => {
+  it('after 6 distinct markChecked calls, all 6 throttle files exist at distinct paths', () => {
+    const hook = loadHook();
+    const sids = ['sess1', 'sess2', 'sess3', 'sess4', 'sess5', 'sess6'].map(s => 'qf912-' + s);
+    sids.forEach(sid => { try { fs.unlinkSync(hook.getThrottleFile(sid)); } catch {} });
+    sids.forEach(sid => hook.markChecked(sid));
+    const paths = sids.map(sid => hook.getThrottleFile(sid));
+    // All paths distinct
+    expect(new Set(paths).size).toBe(6);
+    // All files exist
+    paths.forEach(p => expect(fs.existsSync(p)).toBe(true));
+    // None is the legacy shared path
+    paths.forEach(p => expect(p).not.toBe(path.join(require('os').tmpdir(), 'claude-coordination-inbox-last-check.json')));
+    // Cleanup
+    paths.forEach(p => { try { fs.unlinkSync(p); } catch {} });
+  });
+});
+
 describe('HOOK-1: getCurrentSessionId returns process.env.CLAUDE_SESSION_ID when set', () => {
   const originalEnv = process.env.CLAUDE_SESSION_ID;
   let sessionFileBackup = null;
