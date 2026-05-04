@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-03T21:32:51.296Z
+**Generated**: 2026-05-04T02:48:24.018Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -23,7 +23,7 @@
 | content_id | `uuid` | YES | - | - |
 | variant_id | `uuid` | YES | - | - |
 | campaign_id | `uuid` | YES | - | - |
-| platform | `text` | **NO** | - | - |
+| platform | `text` | **NO** | `'web'::text` | - |
 | utm_source | `text` | YES | - | - |
 | utm_medium | `text` | YES | - | - |
 | utm_campaign | `text` | YES | - | - |
@@ -62,6 +62,10 @@
   ```sql
   CREATE INDEX idx_attribution_venture ON public.marketing_attribution USING btree (venture_id)
   ```
+- `idx_marketing_attribution_landing_pp`
+  ```sql
+  CREATE INDEX idx_marketing_attribution_landing_pp ON public.marketing_attribution USING btree (occurred_at DESC) WHERE ((event_value ->> 'route_slug'::text) = '/v/privacy-patrol'::text)
+  ```
 - `marketing_attribution_pkey`
   ```sql
   CREATE UNIQUE INDEX marketing_attribution_pkey ON public.marketing_attribution USING btree (id)
@@ -69,13 +73,18 @@
 
 ## RLS Policies
 
-### 1. service_role_all_marketing_attribution (ALL)
+### 1. anon_insert_landing_marketing_attribution (INSERT)
+
+- **Roles**: {anon}
+- **With Check**: `((event_value ? 'route_slug'::text) AND (event_type = ANY (ARRAY['landing_view'::text, 'landing_cta_click'::text, 'landing_section_view'::text])))`
+
+### 2. service_role_all_marketing_attribution (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 2. venture_read_marketing_attribution (SELECT)
+### 3. venture_read_marketing_attribution (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `(venture_id IN ( SELECT ventures.id

@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-03T21:32:51.296Z
+**Generated**: 2026-05-04T02:48:24.018Z
 **Rows**: 2
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (21 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,11 +36,17 @@
 | bio | `text` | YES | - | - |
 | timezone | `text` | YES | - | - |
 | language | `text` | YES | - | - |
+| website_url | `text` | YES | - | PrivacyPatrol AI: user-supplied website URL captured during onboarding for first scan |
+| onboarding_completed_at | `timestamp with time zone` | YES | - | PrivacyPatrol AI: timestamp when user completed the initial onboarding flow |
+| primary_persona | `text` | YES | - | PrivacyPatrol AI: user persona classification (pragmatic_priya | indie_dev_ian | NULL) |
 
 ## Constraints
 
 ### Primary Key
 - `profiles_pkey`: PRIMARY KEY (id)
+
+### Check Constraints
+- `profiles_primary_persona_check`: CHECK (((primary_persona IS NULL) OR (primary_persona = ANY (ARRAY['pragmatic_priya'::text, 'indie_dev_ian'::text]))))
 
 ## Indexes
 

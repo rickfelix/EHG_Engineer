@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-03T21:32:51.296Z
-**Rows**: 0
-**RLS**: Enabled (2 policies)
+**Generated**: 2026-05-04T02:48:24.018Z
+**Rows**: 7
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (9 total)
+## Columns (11 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -27,6 +27,8 @@
 | metadata | `jsonb` | **NO** | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| display_order | `integer(32)` | **NO** | `0` | - |
+| content_key | `text` | YES | - | - |
 
 ## Constraints
 
@@ -38,6 +40,10 @@
 
 ## Indexes
 
+- `idx_marketing_content_landing_pp`
+  ```sql
+  CREATE INDEX idx_marketing_content_landing_pp ON public.marketing_content USING btree (display_order, content_type) WHERE (((metadata ->> 'route_slug'::text) = '/v/privacy-patrol'::text) AND (content_type = ANY (ARRAY['landing_hero'::text, 'landing_section'::text, 'landing_cta'::text, 'persona_callout'::text, 'footer_trust'::text])))
+  ```
 - `idx_marketing_content_lifecycle`
   ```sql
   CREATE INDEX idx_marketing_content_lifecycle ON public.marketing_content USING btree (lifecycle_state)
@@ -54,16 +60,25 @@
   ```sql
   CREATE UNIQUE INDEX marketing_content_pkey ON public.marketing_content USING btree (id)
   ```
+- `marketing_content_venture_key_uniq`
+  ```sql
+  CREATE UNIQUE INDEX marketing_content_venture_key_uniq ON public.marketing_content USING btree (venture_id, content_key) WHERE (content_key IS NOT NULL)
+  ```
 
 ## RLS Policies
 
-### 1. service_role_all_marketing_content (ALL)
+### 1. anon_read_landing_marketing_content (SELECT)
+
+- **Roles**: {anon}
+- **Using**: `((content_type = ANY (ARRAY['landing_hero'::text, 'landing_section'::text, 'landing_cta'::text, 'persona_callout'::text, 'footer_trust'::text])) AND (metadata ? 'route_slug'::text))`
+
+### 2. service_role_all_marketing_content (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 2. venture_read_marketing_content (SELECT)
+### 3. venture_read_marketing_content (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `(venture_id IN ( SELECT ventures.id
