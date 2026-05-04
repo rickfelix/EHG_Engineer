@@ -22,7 +22,24 @@ import os from 'os';
 // CONFIGURATION
 // ============================================================================
 
-const SESSION_ID = process.env.CLAUDE_SESSION_ID || 'default';
+// QF-20260504-840: Read UserPromptSubmit stdin payload at module load (see
+// autonomous-checkpoint.js for full rationale). Pre-fix, peer sessions all
+// resolved to SESSION_ID='default' and could delete each other's marker files
+// during the cleanup walk at lines 57-78.
+const _stdinPayload = (() => {
+  try {
+    const raw = fs.readFileSync(0, 'utf8');
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+})();
+
+const SESSION_ID = _stdinPayload.session_id || process.env.CLAUDE_SESSION_ID || 'default';
+
+// QF-20260504-840: test-only mode for stdin-resolution verification.
+if (process.env.TEST_DUMP_RESOLVED === '1') {
+  console.log(JSON.stringify({ session_id: SESSION_ID }));
+  process.exit(0);
+}
 const MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6 hours - files older than this are stale
 
 // Locations to clean
