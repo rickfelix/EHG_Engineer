@@ -69,7 +69,7 @@ export function registerAdditionalValidators(registry) {
 
     // Check if this SD type should skip sub-agent orchestration validation
     // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
-    const { resolveSdInputOrNull } = await import('../../../../lib/sd-id-resolver.js');
+    const { resolveSdInputOrNull } = await import('../../../../../lib/sd-id-resolver.js');
     const { sd: sdData } = await resolveSdInputOrNull(sd_id, supabase);
 
     // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Skip for documentation-only SDs
@@ -207,7 +207,7 @@ export function registerAdditionalValidators(registry) {
     // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001: Use canonical resolver.
     let sdType = (sd?.sd_type || '').toLowerCase();
     if (!sdType && sd_id) {
-      const { resolveSdInputOrNull } = await import('../../../../lib/sd-id-resolver.js');
+      const { resolveSdInputOrNull } = await import('../../../../../lib/sd-id-resolver.js');
       const { sd: sdData } = await resolveSdInputOrNull(sd_id, supabase);
       sdType = (sdData?.sd_type || '').toLowerCase();
     }
