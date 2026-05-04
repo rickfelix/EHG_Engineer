@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-04-29T14:02:45.172Z -->
-<!-- git_commit: c11354c0 -->
-<!-- db_snapshot_hash: d8878f5dd48d903e -->
+<!-- generated_at: 2026-05-04T01:54:34.074Z -->
+<!-- git_commit: 51a69650 -->
+<!-- db_snapshot_hash: 9def68fc45bd1a50 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
@@ -155,14 +155,13 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 ### "Continue autonomously"
 **Definition**: Execute the current SD through its full LEO Protocol workflow WITHOUT stopping to ask for user confirmation at each step.
 **NOT**: Skip workflow steps for efficiency.
-**AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table (which handoffs are TERMINAL / require phase work) and Chaining setting (orchestrator-to-orchestrator).
+
+**Recommend-and-execute (mandatory at every non-canonical decision point)**: When multiple paths exist, output `**Going with [pick]** — [one-sentence why]. [Execute same turn.]` This replaces — never coexists with — "Should I do X?" / "Want me to proceed?" / numbered option menus. The user approved the SD; redirects come mid-stream and cost less than confirmation cycles.
+
+**AUTO-PROCEED**: Phase transitions *within* an SD run automatically. Post-completion sequence (/document → /ship → /learn) and next-SD selection also run automatically — modulated by the SD Continuation Truth Table and Chaining setting.
 
 **ONLY STOP IF** (Canonical Pause Points — same list as AUTO-PROCEED Mode):
-1. **Orchestrator completion** — after all children, when Chaining is OFF
-2. **Blocking error requiring human decision** — merge conflicts, ambiguous requirements
-3. **Test failures after 2 retry attempts**
-4. **All children blocked**
-5. **Critical security or data-loss scenario** (includes DB/code status mis
+1. **Orchestrato
 
 *...truncated. Read full file for complete section.*
 
@@ -266,5 +265,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-04-29 10:02:45 AM*
+*DIGEST generated: 2026-05-04 9:54:34 PM*
 *Protocol: 4.4.1*

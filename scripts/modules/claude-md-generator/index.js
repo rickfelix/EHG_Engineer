@@ -20,6 +20,7 @@ import {
   getSchemaConstraints,
   getProcessScripts,
   getHotPatterns,
+  getKnownFrictionPoints,
   getRecentRetrospectives,
   getGateHealth,
   getPendingProposals,
@@ -162,6 +163,8 @@ class CLAUDEMDGeneratorV3 {
       const schemaConstraints = await getSchemaConstraints(this.supabase);
       const processScripts = await getProcessScripts(this.supabase);
       const hotPatterns = await getHotPatterns(this.supabase, 5);
+      // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4b: known friction points from worker /signal aggregation
+      const knownFrictionPoints = await getKnownFrictionPoints(this.supabase, 5);
       const recentRetrospectives = await getRecentRetrospectives(this.supabase, 30, 5);
       const gateHealth = await getGateHealth(this.supabase);
       const pendingProposals = await getPendingProposals(this.supabase, 5);
@@ -178,6 +181,7 @@ class CLAUDEMDGeneratorV3 {
         schemaConstraints,
         processScripts,
         hotPatterns,
+        knownFrictionPoints,
         recentRetrospectives,
         gateHealth,
         pendingProposals,

@@ -1325,6 +1325,82 @@ async function main() {
     console.log('SIGNAL ROUTER: ' + (routerErr && routerErr.message ? routerErr.message : 'unknown'));
   }
 
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
+  // For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
+  // status is 'completed' AND payload.notification_sent is not yet true, look up
+  // sender_callsign's current_session_id (heartbeat <10min) and send SIGNAL_RESOLVED.
+  // Drops silently when callsign no longer maps to a live session. Sets
+  // payload.notification_sent=true to prevent re-send.
+  try {
+    const { data: candidates } = await supabase
+      .from('session_coordination')
+      .select('id, payload, body')
+      .not('payload->>routed_to_sd_key', 'is', null)
+      .neq('payload->>notification_sent', 'true')
+      .limit(50);
+
+    let notified = 0;
+    let dropped = 0;
+    for (const sig of candidates || []) {
+      const sdKey = sig.payload?.routed_to_sd_key;
+      const callsign = sig.payload?.sender_callsign;
+      if (!sdKey || !callsign) continue;
+
+      // Verify SD is completed.
+      const { data: sdRow } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, status')
+        .eq('sd_key', sdKey)
+        .maybeSingle();
+      if (!sdRow || sdRow.status !== 'completed') continue;
+
+      // Resolve callsign → current live session_id.
+      const liveCutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+      const { data: live } = await supabase
+        .from('claude_sessions')
+        .select('session_id, metadata')
+        .gte('heartbeat_at', liveCutoff)
+        .filter('metadata->>fleet_identity', 'not.is', null);
+      const owner = (live || []).find(s => s.metadata?.fleet_identity?.callsign === callsign);
+
+      if (!owner) {
+        // Mark notification_sent=true with a "dropped" flag so we don't retry forever.
+        const merged = { ...(sig.payload || {}), notification_sent: true, signal_resolved_dropped: true };
+        await supabase.from('session_coordination').update({ payload: merged }).eq('id', sig.id);
+        dropped++;
+        continue;
+      }
+
+      // Send SIGNAL_RESOLVED to owner.
+      await supabase.from('session_coordination').insert({
+        sender_session: null,
+        sender_type: 'coordinator',
+        target_session: owner.session_id,
+        message_type: 'INFO',
+        subject: `[SIGNAL_RESOLVED] ${sig.payload?.signal_type || 'signal'} → ${sdKey}`,
+        body: `Your earlier signal (\"${(sig.body || '').slice(0, 200)}\") contributed to SD ${sdKey}, which is now completed.`,
+        payload: {
+          signal_resolved: true,
+          signal_type: sig.payload?.signal_type,
+          original_body: (sig.body || '').slice(0, 500),
+          resulting_sd_key: sdKey,
+          original_signal_id: sig.id
+        },
+        expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
+      });
+
+      // Mark sent.
+      const merged = { ...(sig.payload || {}), notification_sent: true };
+      await supabase.from('session_coordination').update({ payload: merged }).eq('id', sig.id);
+      notified++;
+    }
+    if (notified > 0 || dropped > 0) {
+      console.log('SIGNAL_RESOLVED: notified=' + notified + ' dropped=' + dropped);
+    }
+  } catch (resolvedErr) {
+    console.log('SIGNAL_RESOLVED: ' + (resolvedErr && resolvedErr.message ? resolvedErr.message : 'unknown'));
+  }
+
   console.log('=== SWEEP COMPLETE ===');
 }
 
