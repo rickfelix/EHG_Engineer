@@ -30,6 +30,7 @@ const {
   MAX_GRANDCHILDREN_PER_CHILD,
   buildProvenance,
   selectApplicableLayers,
+  filterLayersByCapability,
 } = _internal;
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -149,6 +150,7 @@ describe('LifecycleSDBridge', () => {
             sd_bridge_payloads: [{ title: 'Feature A', type: 'feature', description: 'Desc', scope: 'Scope' }],
           },
           ventureContext: { id: 'v1', name: 'Test' },
+          options: { skipEnrichment: true },
         },
         { supabase: createMockSupabase(), logger: silentLogger },
       );
@@ -167,7 +169,7 @@ describe('LifecycleSDBridge', () => {
             sd_bridge_payloads: [{ title: 'Feature A', type: 'feature', description: 'D', scope: 'S' }],
           },
           ventureContext: { id: 'v1', name: 'Test' },
-          options: { generateGrandchildren: false },
+          options: { generateGrandchildren: false, skipEnrichment: true },
         },
         { supabase: createMockSupabase(), logger: silentLogger },
       );
@@ -240,6 +242,188 @@ describe('LifecycleSDBridge', () => {
     it('should ignore unknown layer keys', () => {
       const layers = selectApplicableLayers({ architecture_layers: ['data', 'unknown'] });
       expect(layers.length).toBe(1);
+    });
+  });
+
+  describe('filterLayersByCapability — target_application capability gate', () => {
+    it('should suppress api layer when target_application=ehg (Vite SPA, no serverless API)', () => {
+      const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const filtered = filterLayersByCapability(ARCHITECTURE_LAYERS, 'ehg', { logger });
+      const keys = filtered.map(l => l.key);
+      expect(keys).toEqual(['data', 'ui', 'tests']);
+      expect(keys).not.toContain('api');
+    });
+
+    it('should keep all 4 layers when target_application=EHG_Engineer (has serverless API)', () => {
+      const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const filtered = filterLayersByCapability(ARCHITECTURE_LAYERS, 'EHG_Engineer', { logger });
+      const keys = filtered.map(l => l.key);
+      expect(keys).toEqual(['data', 'api', 'ui', 'tests']);
+    });
+
+    it('should emit one audit log line when api is suppressed', () => {
+      const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      filterLayersByCapability(ARCHITECTURE_LAYERS, 'ehg', { logger, parentChildKey: 'SD-PARENT-001-A' });
+      expect(logger.log).toHaveBeenCalledTimes(1);
+      const msg = logger.log.mock.calls[0][0];
+      expect(msg).toContain('Suppressed architecture_layer(s)');
+      expect(msg).toContain('api');
+      expect(msg).toContain('target_application=ehg');
+      expect(msg).toContain('has_serverless_api=false');
+      expect(msg).toContain('parent=SD-PARENT-001-A');
+    });
+
+    it('should NOT emit audit log when no layers are suppressed', () => {
+      const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      filterLayersByCapability(ARCHITECTURE_LAYERS, 'EHG_Engineer', { logger });
+      expect(logger.log).not.toHaveBeenCalled();
+    });
+
+    it('should default to permissive (all layers) for unknown target_application', () => {
+      const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const filtered = filterLayersByCapability(ARCHITECTURE_LAYERS, 'some-new-venture', { logger });
+      expect(filtered.length).toBe(4);
+      expect(logger.log).not.toHaveBeenCalled();
+    });
+
+    it('should be case-insensitive and tolerate spaces/dashes', () => {
+      const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const variants = ['EHG', 'Ehg', 'ehg'];
+      for (const v of variants) {
+        const f = filterLayersByCapability(ARCHITECTURE_LAYERS, v, { logger });
+        expect(f.map(l => l.key)).not.toContain('api');
+      }
+    });
+  });
+
+  describe('createGrandchildren end-to-end — capability suppression', () => {
+    it('should NOT emit api grandchild when ventureContext.name=ehg', async () => {
+      const insertCalls = [];
+      const mockSb = {
+        from: vi.fn((table) => {
+          if (table === 'strategic_directives_v2') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+              insert: vi.fn().mockImplementation((data) => {
+                insertCalls.push(data);
+                return Promise.resolve({ data: null, error: null });
+              }),
+              update: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
+          }
+          return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
+        }),
+        rpc: vi.fn().mockResolvedValue({ data: { cancelled_sds: 0, cancelled_prds: 0 }, error: null }),
+      };
+
+      const result = await convertSprintToSDs(
+        {
+          stageOutput: {
+            sprint_name: 'Sprint EHG',
+            sprint_goal: 'Build SPA feature',
+            sd_bridge_payloads: [{ title: 'Feature A', type: 'feature', description: 'D', scope: 'S' }],
+          },
+          ventureContext: { id: 'v1', name: 'ehg' },
+          options: { skipEnrichment: true },
+        },
+        { supabase: mockSb, logger: silentLogger },
+      );
+
+      expect(result.created).toBe(true);
+      // Orchestrator + 1 child + grandchildren. ehg suppresses api → only 3 grandchildren.
+      const grandchildInserts = insertCalls.filter(r => r.metadata?.architecture_layer);
+      expect(grandchildInserts.length).toBe(3);
+      const layers = grandchildInserts.map(r => r.metadata.architecture_layer).sort();
+      expect(layers).toEqual(['data', 'tests', 'ui']);
+    });
+
+    it('should emit all 4 grandchildren when ventureContext.name=EHG_Engineer', async () => {
+      const insertCalls = [];
+      const mockSb = {
+        from: vi.fn((table) => {
+          if (table === 'strategic_directives_v2') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+              insert: vi.fn().mockImplementation((data) => {
+                insertCalls.push(data);
+                return Promise.resolve({ data: null, error: null });
+              }),
+              update: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
+          }
+          return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
+        }),
+        rpc: vi.fn().mockResolvedValue({ data: { cancelled_sds: 0, cancelled_prds: 0 }, error: null }),
+      };
+
+      const result = await convertSprintToSDs(
+        {
+          stageOutput: {
+            sprint_name: 'Sprint Engineer',
+            sprint_goal: 'Build harness feature',
+            sd_bridge_payloads: [{ title: 'Feature A', type: 'feature', description: 'D', scope: 'S' }],
+          },
+          ventureContext: { id: 'v1', name: 'EHG_Engineer' },
+          options: { skipEnrichment: true },
+        },
+        { supabase: mockSb, logger: silentLogger },
+      );
+
+      expect(result.created).toBe(true);
+      const grandchildInserts = insertCalls.filter(r => r.metadata?.architecture_layer);
+      expect(grandchildInserts.length).toBe(4);
+      const layers = grandchildInserts.map(r => r.metadata.architecture_layer).sort();
+      expect(layers).toEqual(['api', 'data', 'tests', 'ui']);
+    });
+
+    it('should respect childPayload.target_application override per parent', async () => {
+      const insertCalls = [];
+      const mockSb = {
+        from: vi.fn((table) => {
+          if (table === 'strategic_directives_v2') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+              insert: vi.fn().mockImplementation((data) => {
+                insertCalls.push(data);
+                return Promise.resolve({ data: null, error: null });
+              }),
+              update: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
+          }
+          return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
+        }),
+        rpc: vi.fn().mockResolvedValue({ data: { cancelled_sds: 0 }, error: null }),
+      };
+
+      // venture is EHG_Engineer but child overrides to ehg → suppress api
+      await convertSprintToSDs(
+        {
+          stageOutput: {
+            sprint_name: 'Mixed',
+            sprint_goal: 'Mixed targets',
+            sd_bridge_payloads: [{ title: 'Frontend', type: 'feature', target_application: 'ehg', description: 'D', scope: 'S' }],
+          },
+          ventureContext: { id: 'v1', name: 'EHG_Engineer' },
+          options: { skipEnrichment: true },
+        },
+        { supabase: mockSb, logger: silentLogger },
+      );
+
+      const grandchildInserts = insertCalls.filter(r => r.metadata?.architecture_layer);
+      const layers = grandchildInserts.map(r => r.metadata.architecture_layer).sort();
+      expect(layers).toEqual(['data', 'tests', 'ui']);
     });
   });
 
@@ -351,7 +535,7 @@ describe('LifecycleSDBridge', () => {
           },
           ventureContext: { id: 'v1', name: 'Test' },
           evaKeys: { vision_key: 'VISION-TEST-001', plan_key: 'ARCH-TEST-001' },
-          options: { generateGrandchildren: false },
+          options: { generateGrandchildren: false, skipEnrichment: true },
         },
         { supabase: mockSb, logger: silentLogger },
       );
@@ -398,7 +582,7 @@ describe('LifecycleSDBridge', () => {
           },
           ventureContext: { id: 'v1', name: 'Test' },
           // evaKeys omitted — should default to {}
-          options: { generateGrandchildren: false },
+          options: { generateGrandchildren: false, skipEnrichment: true },
         },
         { supabase: mockSb, logger: silentLogger },
       );
