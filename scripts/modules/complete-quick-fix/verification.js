@@ -7,7 +7,13 @@ import path from 'path';
 import { execSync } from 'child_process';
 
 /**
- * Validate LOC constraint (hard cap at 50)
+ * Hard cap on QF size. Aligned with CLAUDE.md routing: Tier 1 ≤30,
+ * Tier 2 31–75 (Standard QF), Tier 3 >75 (full SD). QF-20260504-501.
+ */
+export const QF_HARD_LOC_CAP = 75;
+
+/**
+ * Validate LOC constraint against the QF hard cap (CLAUDE.md routing).
  * @param {number} actualLoc - Actual lines of code
  * @param {string} qfId - Quick-fix ID
  * @param {object} supabase - Supabase client
@@ -15,13 +21,13 @@ import { execSync } from 'child_process';
  * @returns {Promise<boolean>} True if validation passed, false if should exit
  */
 export async function validateLOC(actualLoc, qfId, supabase, prompt) {
-  if (actualLoc <= 50) {
+  if (actualLoc <= QF_HARD_LOC_CAP) {
     return true;
   }
 
   console.log('\n❌ CANNOT COMPLETE - LOC EXCEEDS LIMIT\n');
   console.log(`   Actual LOC: ${actualLoc}`);
-  console.log('   Limit:      50\n');
+  console.log(`   Limit:      ${QF_HARD_LOC_CAP}\n`);
   console.log('⚠️  This issue must be escalated to a full Strategic Directive.\n');
 
   const escalate = await prompt('Auto-escalate to SD? (yes/no): ');
@@ -31,7 +37,7 @@ export async function validateLOC(actualLoc, qfId, supabase, prompt) {
       .from('quick_fixes')
       .update({
         status: 'escalated',
-        escalation_reason: `Actual LOC (${actualLoc}) exceeds 50 line hard cap`,
+        escalation_reason: `Actual LOC (${actualLoc}) exceeds ${QF_HARD_LOC_CAP} line hard cap`,
         actual_loc: actualLoc
       })
       .eq('id', qfId);
@@ -46,7 +52,7 @@ export async function validateLOC(actualLoc, qfId, supabase, prompt) {
     return false;
   }
 
-  console.log('\n⚠️  Quick-fix not completed. Reduce LOC to ≤50 or escalate.\n');
+  console.log(`\n⚠️  Quick-fix not completed. Reduce LOC to ≤${QF_HARD_LOC_CAP} or escalate.\n`);
   return false;
 }
 
