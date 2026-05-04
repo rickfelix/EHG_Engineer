@@ -28,10 +28,31 @@ import { execSync } from 'child_process';
 const THRESHOLD = parseInt(process.env.LEO_CHECKPOINT_THRESHOLD || '20');
 const ENABLED = process.env.LEO_CHECKPOINT_ENABLED !== 'false';
 
+// QF-20260504-840: Read UserPromptSubmit stdin payload synchronously at module
+// load. Per RCA #2 (2026-05-04), Claude Code does NOT propagate
+// CLAUDE_SESSION_ID env var to UserPromptSubmit hook subprocesses — the
+// canonical source is the JSON {session_id, ...} payload via stdin.
+// Pre-fix, all peer sessions collided on session-default.json counter file.
+// fs.readFileSync(0) reads stdin sync to EOF; Claude Code closes stdin before
+// hook runs so this won't hang. Failure falls through to env then 'default'.
+const _stdinPayload = (() => {
+  try {
+    const raw = fs.readFileSync(0, 'utf8');
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+})();
+
 // Counter file location - session-specific
-const SESSION_ID = process.env.CLAUDE_SESSION_ID || 'default';
+const SESSION_ID = _stdinPayload.session_id || process.env.CLAUDE_SESSION_ID || 'default';
 const COUNTER_DIR = path.join(os.tmpdir(), 'leo-checkpoints');
 const COUNTER_FILE = path.join(COUNTER_DIR, `session-${SESSION_ID}.json`);
+
+// QF-20260504-840: test-only mode — print resolved SESSION_ID and exit before
+// any side-effects. Tests use this to verify stdin resolution.
+if (process.env.TEST_DUMP_RESOLVED === '1') {
+  console.log(JSON.stringify({ session_id: SESSION_ID }));
+  process.exit(0);
+}
 
 // ============================================================================
 // HELPER FUNCTIONS
