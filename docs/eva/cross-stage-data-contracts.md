@@ -1,3 +1,11 @@
+---
+Category: Reference
+Status: Approved
+Version: 1.0.0
+Author: SD-LEO-FEAT-STAGE-POST-LAUNCH-001
+Last Updated: 2026-05-05
+Tags: [eva, stage-templates, data-contracts, venture-artifacts, cross-stage]
+---
 # EVA Cross-Stage Data Contracts
 
 Authoritative reference for how lifecycle stages exchange data via `venture_artifacts`. Each contract documents: source stage, sink stage, artifact_type key, expected payload shape, and missing-data fallback marker.
