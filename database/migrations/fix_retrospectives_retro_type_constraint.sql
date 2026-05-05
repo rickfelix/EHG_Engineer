@@ -3,6 +3,9 @@
 -- but the constraint only allowed: ARCHITECTURE_DECISION, INCIDENT, SD_COMPLETION
 
 -- Drop the existing constraint
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 ALTER TABLE retrospectives DROP CONSTRAINT IF EXISTS retrospectives_retro_type_check;
 
 -- Add new constraint with all valid handoff types
@@ -25,3 +28,5 @@ CHECK (retro_type IN (
 -- SELECT conname, pg_get_constraintdef(oid)
 -- FROM pg_constraint
 -- WHERE conrelid = 'retrospectives'::regclass;
+
+COMMIT;

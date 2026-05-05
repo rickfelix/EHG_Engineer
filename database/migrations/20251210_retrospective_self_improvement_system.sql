@@ -21,6 +21,9 @@
 -- =====================================================================================
 
 -- Add retrospective_type column with default
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 ALTER TABLE retrospectives
 ADD COLUMN IF NOT EXISTS retrospective_type TEXT DEFAULT 'SD_COMPLETION';
 
@@ -575,3 +578,5 @@ GRANT SELECT ON v_improvement_effectiveness TO authenticated;
 -- 2. Test with sample retrospective
 -- 3. Review pending improvements: SELECT * FROM v_pending_improvements;
 -- 4. Integrate with handoff scripts to show warnings
+
+COMMIT;

@@ -11,6 +11,9 @@
 -- Execute this in Supabase SQL Editor with elevated privileges
 
 -- Step 1: Drop the existing restrictive constraint
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 ALTER TABLE retrospectives
 DROP CONSTRAINT IF EXISTS retrospectives_retro_type_check;
 
@@ -42,3 +45,5 @@ CHECK (retro_type IN (
 SELECT constraint_name, check_clause
 FROM information_schema.check_constraints
 WHERE constraint_name = 'retrospectives_retro_type_check';
+
+COMMIT;

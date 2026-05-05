@@ -8,6 +8,9 @@
 -- SCHEMA CHANGES: Add quality tracking to retrospectives table
 -- ============================================================================
 
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 ALTER TABLE retrospectives
   ADD COLUMN IF NOT EXISTS quality_score INTEGER CHECK (quality_score >= 0 AND quality_score <= 100),
   ADD COLUMN IF NOT EXISTS quality_issues JSONB DEFAULT '[]'::jsonb,
@@ -281,3 +284,5 @@ BEGIN
   RAISE NOTICE 'Trigger created: auto_validate_retrospective_quality';
   RAISE NOTICE 'Quality threshold: 70/100 required for LEAD approval';
 END $$;
+
+COMMIT;

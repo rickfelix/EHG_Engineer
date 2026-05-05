@@ -18,6 +18,9 @@
 -- PART 1: Add archive tracking columns if not exist
 -- ============================================================================
 
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 ALTER TABLE retrospectives
 ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ DEFAULT NULL;
 
@@ -207,3 +210,5 @@ BEGIN
   RAISE NOTICE 'To run manual cleanup: SELECT run_retrospective_maintenance();';
   RAISE NOTICE '=========================================================';
 END $$;
+
+COMMIT;

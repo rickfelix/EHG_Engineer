@@ -7,6 +7,9 @@
 -- STEP 1: Create helper function to convert array items
 -- ============================================================
 
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 CREATE OR REPLACE FUNCTION convert_array_strings_to_objects(
   arr jsonb,
   text_key text DEFAULT 'learning'
@@ -113,3 +116,5 @@ BEGIN
     RAISE NOTICE 'Migration complete: All key_learnings items are now objects';
   END IF;
 END $$;
+
+COMMIT;

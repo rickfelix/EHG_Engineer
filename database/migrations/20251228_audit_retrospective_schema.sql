@@ -7,6 +7,9 @@
 -- 1. Runtime audits table (first-class audit entities)
 -- ============================================================================
 -- Track audits as first-class entities for metrics and retrospectives
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS runtime_audits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -362,3 +365,5 @@ COMMENT ON VIEW audit_retrospective_quality IS
   'Quality metrics view for audit retrospectives.
    Used to enforce quality gates and track improvement over time.
    Target: 100% coverage, ≥3 verbatim citations, divergence insights present.';
+
+COMMIT;

@@ -7,6 +7,9 @@
 -- ============================================================================
 
 -- Check if columns exist before adding (idempotent)
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 DO $$
 BEGIN
   -- coverage_tool: What tool measured coverage (jest, istanbul, c8, etc.)
@@ -187,3 +190,5 @@ BEGIN
   RAISE NOTICE '  - Warning (not error) if coverage_tool missing';
   RAISE NOTICE '============================================================';
 END $$;
+
+COMMIT;
