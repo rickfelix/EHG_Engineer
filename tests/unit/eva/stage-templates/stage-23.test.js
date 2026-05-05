@@ -6,7 +6,7 @@ describe('stage-23.js — Launch Readiness Kill Gate (stub)', () => {
     expect(stage23.id).toBe('stage-23');
     expect(stage23.slug).toBe('launch-readiness');
     expect(stage23.title).toBe('Launch Readiness Kill Gate');
-    expect(stage23.version).toBe('3.0.0');
+    expect(stage23.version).toBe('3.1.0');
   });
 
   it('has expected defaultData shape', () => {

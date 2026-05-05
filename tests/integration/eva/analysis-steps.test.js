@@ -1156,19 +1156,23 @@ describe('Stage 22: analyzeStage22', () => {
 });
 
 
-describe('Stage 23: analyzeStage23', () => {
+describe('Stage 23: analyzeStage23 (Launch Readiness Kill Gate)', () => {
   beforeEach(() => { mockComplete.mockReset(); });
 
-  // analyzeStage23 = stage-23-release-readiness.js (release readiness, not launch execution).
-  // REFUSED — requires real build data from upstream SD completion pipeline.
-  it.skip('produces valid launch execution brief', async () => {
-    // Skipped: analyzeStage23 is REFUSED — requires real data from upstream SD completion.
-    // LLM fabrication is permanently disabled to prevent poisoned downstream stages.
-  });
-
-  it('throws when stage21Data and stage22Data are missing', async () => {
-    await expect(analyzeStage23({ stage22Data: genStage22(), logger: silentLogger }))
-      .rejects.toThrow('Stage 23 release readiness requires Stage 21 (QA) and Stage 22 (review) data');
+  // SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-2: analyzeStage23 now dispatches to the
+  // canonical stage-23-launch-readiness.js (was misrouted to archived release-readiness.js).
+  it('aggregates readiness checklist when all upstream data is present', async () => {
+    const result = await analyzeStage23({
+      stage20Data: { verdict: 'PASS' },
+      stage21Data: { total_assets: 5 },
+      stage22Data: { active_channels: 3 },
+      ventureName: 'Test Venture',
+      logger: silentLogger,
+    });
+    expect(result).toBeDefined();
+    expect(Array.isArray(result.checklist)).toBe(true);
+    expect(['READY', 'HOLD', 'NOT_READY']).toContain(result.verdict);
+    expect(result.total_categories).toBeGreaterThanOrEqual(6);
   });
 });
 
