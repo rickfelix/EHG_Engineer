@@ -1,0 +1,68 @@
+# Weekly portfolio-isolation drift sentinel.
+# SD-LEO-INFRA-FAIL-CLOSED-VENTURE-001-B / PA-6 / FR-B6.
+#
+# Runs scripts/sentinels/audit-target-application-drift.mjs to flag SDs whose
+# target_application contradicts the resolved repo for the parent venture.
+# Output is uploaded as a JSON artifact for chairman review.
+
+name: audit-target-application-drift
+
+on:
+  schedule:
+    - cron: '0 13 * * 1'  # Mondays 13:00 UTC (avoid peak hours)
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: 'Exit non-zero if drift count > 0'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-target-application-drift
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run drift sentinel
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node scripts/sentinels/audit-target-application-drift.mjs --json > drift-report.json
+          echo "--- Human-readable summary ---"
+          node scripts/sentinels/audit-target-application-drift.mjs
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report-${{ github.run_id }}
+          path: drift-report.json
+          retention-days: 90
+
+      - name: Strict-mode failure
+        if: ${{ github.event.inputs.strict == 'true' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/sentinels/audit-target-application-drift.mjs --strict
