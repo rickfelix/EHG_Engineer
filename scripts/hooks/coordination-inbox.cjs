@@ -17,6 +17,27 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// QF-20260505-canonical-hook — when invoked from a worktree, delegate to the
+// parent worktree's hook implementation. Hook fixes shipped to main don't
+// otherwise reach existing worktrees because settings.json paths resolve via
+// ${CLAUDE_PROJECT_DIR}, which is per-session. Witnessed 2026-05-04 with
+// PR #3546 DELIVERED layer (0 production firings despite correct code).
+if (require.main === module) {
+  try {
+    const { findCanonicalParent } = require(path.resolve(__dirname, '../../lib/hooks/canonical-parent.cjs'));
+    const canonical = findCanonicalParent(__dirname);
+    const myParent = path.resolve(__dirname, '../..');
+    if (canonical && canonical !== myParent) {
+      const parentHook = path.join(canonical, 'scripts/hooks/coordination-inbox.cjs');
+      if (fs.existsSync(parentHook)) {
+        const { spawnSync } = require('child_process');
+        const r = spawnSync(process.execPath, [parentHook], { stdio: 'inherit', windowsHide: true });
+        process.exit(typeof r.status === 'number' ? r.status : 0);
+      }
+    }
+  } catch { /* fall through to local impl on any error */ }
+}
+
 // QF-20260504-912: per-session throttle/heartbeat paths. Pre-fix these were
 // host-shared, causing 5/6 sessions to be starved for up to 60s after any one
 // session marked the throttle. Mirror the friction-counters pattern (validated
@@ -389,7 +410,7 @@ async function main() {
   // Read unread coordination messages for this session
   const { data: messages, error: tableErr } = await supabase
     .from('session_coordination')
-    .select('id, message_type, subject, body, payload, sender_type, created_at')
+    .select('id, message_type, subject, body, payload, sender_type, sender_session, created_at')
     .eq('target_session', sessionId)
     .is('read_at', null)
     .order('created_at', { ascending: true })
