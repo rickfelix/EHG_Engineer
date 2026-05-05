@@ -1192,18 +1192,45 @@ describe('Stage 24: analyzeStage24', () => {
 });
 
 
-describe('Stage 25: analyzeStage25', () => {
+describe('Stage 25: analyzeStage25 (Post-Launch Review)', () => {
   beforeEach(() => { mockComplete.mockReset(); });
 
-  // analyzeStage25 = stage-25-launch-readiness.js (Launch Readiness Chairman Gate).
-  // REFUSED — requires real data from upstream SD completion pipeline.
-  it.skip('produces valid venture review with decision', async () => {
-    // Skipped: analyzeStage25 is REFUSED — requires real data from upstream SD completion.
-    // LLM fabrication is permanently disabled to prevent poisoned downstream stages.
+  // SD-LEO-FEAT-STAGE-POST-LAUNCH-001 FR-1: stage 25 now dispatches to canonical
+  // post-launch review analyzer (was previously aliased to stage-25-launch-readiness.js).
+  // FR-4: emits reason-discriminated no_data marker when artifacts absent — never fabricates.
+
+  it('emits no_data marker with reason=s24_no_real_launch when stage24 was theatrical', async () => {
+    const result = await analyzeStage25({
+      stage24Data: { real_launch: false },
+      ventureName: 'TestVenture',
+      logger: silentLogger,
+    });
+    expect(result.status).toBe('no_data');
+    expect(result.reason).toBe('s24_no_real_launch');
+    expect(result.metrics).toBeNull();
   });
 
-  it('throws when stage23Data is missing', async () => {
-    await expect(analyzeStage25({ logger: silentLogger }))
-      .rejects.toThrow('Stage 25 launch readiness requires Stage 23 (release readiness) data');
+  it('emits no_data marker with reason=no_artifact when postlaunch artifacts absent', async () => {
+    const result = await analyzeStage25({
+      stage24Data: { real_launch: true, launched_at: '2026-05-01' },
+      postlaunchArtifacts: [],
+      ventureName: 'TestVenture',
+      logger: silentLogger,
+    });
+    expect(result.status).toBe('no_data');
+    expect(result.reason).toBe('no_artifact');
+  });
+
+  it('returns ok status with metrics when artifacts present and stage24 real', async () => {
+    const result = await analyzeStage25({
+      stage16Data: { month1_signups: 1000, month1_revenue: 50000 },
+      stage24Data: { real_launch: true, launched_at: '2026-05-01' },
+      postlaunchArtifacts: [{ artifact_type: 'postlaunch_assumptions_vs_reality' }],
+      ventureName: 'TestVenture',
+      logger: silentLogger,
+    });
+    expect(result.status).toBe('ok');
+    expect(result.metrics.signups.projected).toBe(1000);
+    expect(result.baseline_status).toBe('ok');
   });
 });
