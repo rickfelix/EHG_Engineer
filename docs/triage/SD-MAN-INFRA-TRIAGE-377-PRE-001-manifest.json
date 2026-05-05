@@ -1,0 +1,2824 @@
+{
+  "sd_key": "SD-MAN-INFRA-TRIAGE-377-PRE-001",
+  "generated_at": "2026-05-05T21:08:27.905Z",
+  "source": "docs/triage/raw-test-output.log",
+  "totals": {
+    "failing_files": 118,
+    "bucket_1_delete_as_stale": 88,
+    "bucket_2_inline_qf": 11,
+    "bucket_3_child_sd": 19,
+    "bucket_3_share_pct": 16.1,
+    "bucket_3_cap_pct": 40,
+    "cap_breach": false
+  },
+  "files": [
+    {
+      "file": "tests/unit/automated-knowledge-retrieval.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "cannot_find_module",
+      "family": "module_resolution",
+      "bucket": 3,
+      "bucket_rationale": "Risk family module_resolution (3 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 29,
+        "snippet": "Error: Cannot find module './context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/scr"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/blocked-state-detector.test.js",
+      "failing_tests": 11,
+      "primary_error_pattern": "cannot_find_module",
+      "family": "module_resolution",
+      "bucket": 3,
+      "bucket_rationale": "Risk family module_resolution (2 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 3,
+        "snippet": "Error: Cannot find module '/lib/eva/bridge/stitch-exporter.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-00"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 2
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/brand-variants.service.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_throw_function",
+          "family": "drift_throws",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/brand-variants.validation.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "assert_throw_function",
+      "family": "drift_throws",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 18,
+        "snippet": "AssertionError: expected [Function] to throw an error"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_throw_function",
+          "family": "drift_throws",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/circuit-breaker.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "cannot_find_module",
+      "family": "module_resolution",
+      "bucket": 3,
+      "bucket_rationale": "Risk family module_resolution (3 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 16,
+        "snippet": "Error: Cannot find module './context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/scr"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/claim-default.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "assert_throw_function",
+      "family": "drift_throws",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 5,
+        "snippet": "AssertionError: expected [Function] to throw an error"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_throw_function",
+          "family": "drift_throws",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/decision-filter-engine.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/eva-master-scheduler.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "workflow_status_drift",
+      "family": "workflow_status_drift",
+      "bucket": 3,
+      "bucket_rationale": "Risk family workflow_status_drift (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 69,
+        "snippet": "AssertionError: expected 'FAILED' to be 'COMPLETED' // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "workflow_status_drift",
+          "family": "workflow_status_drift",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva-orchestrator.test.js",
+      "failing_tests": 14,
+      "primary_error_pattern": "workflow_status_drift",
+      "family": "workflow_status_drift",
+      "bucket": 3,
+      "bucket_rationale": "Risk family workflow_status_drift (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 24,
+        "snippet": "AssertionError: expected 'FAILED' to be 'COMPLETED' // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "workflow_status_drift",
+          "family": "workflow_status_drift",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/artifact-persistence-advance-reset.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "phase_column_drift",
+      "family": "schema_drift",
+      "bucket": 3,
+      "bucket_rationale": "Risk family schema_drift (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 14,
+        "snippet": "Error: Failed to create directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "phase_column_drift",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/brand-stage-wiring.test.js",
+      "failing_tests": 3,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/eva/bridge/stitch-adapter.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 12,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/resolve-sd-workdir/worktree-a"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 4
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/bridge/stitch-client-budget.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 3,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/resolve-sd-workdir/worktree-a"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 4
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/bridge/stitch-exporter.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 3,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/wiring-validators/vision-trac"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 1
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 4
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/bridge/stitch-provisioner.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "cannot_find_module",
+      "family": "module_resolution",
+      "bucket": 3,
+      "bucket_rationale": "Risk family module_resolution (3 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 6,
+        "snippet": "Error: Cannot find module '/lib/eva/bridge/stitch-client.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 3
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/capacity-assignment-engine.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_zero_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 54,
+        "snippet": "AssertionError: expected +0 to be 1 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/chairman-decision-watcher.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_zero_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected +0 to be 1 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/chairman-governance.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/eva/chairman-intake-review.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_undefined_defined",
+      "family": "drift_undefined",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 80,
+        "snippet": "AssertionError: expected undefined to be defined"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/chairman-sla-enforcer.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_undefined_defined",
+      "family": "drift_undefined",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 23,
+        "snippet": "AssertionError: expected undefined to be defined"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/concurrent-scoring.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_undefined_defined",
+      "family": "drift_undefined",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 15,
+        "snippet": "AssertionError: expected undefined to be defined"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/data-contract-scorer.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_undefined_defined",
+      "family": "drift_undefined",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 3,
+        "snippet": "AssertionError: expected undefined to be defined"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/dead-code-scanner.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_undefined_defined",
+      "family": "drift_undefined",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 46,
+        "snippet": "AssertionError: expected undefined to be defined"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/decision-filter-engine.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "assert_undefined_defined",
+      "family": "drift_undefined",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 37,
+        "snippet": "AssertionError: expected undefined to be defined"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/economic-lens-analysis.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/eva/exit-table-wiring.test.js",
+      "failing_tests": 12,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 148,
+        "snippet": "AssertionError: expected 26 to be 25 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/exit/separation-rehearsal.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 35,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/expand-spinoff-evaluator.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 28,
+        "snippet": "AssertionError: expected 26 to be 25 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/experiments/calibration-report.test.js",
+      "failing_tests": 13,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 2,
+      "bucket_rationale": "Drift-cluster (6 assertions). Bulk-update inline as Tier-1 QF if surface is small enough.",
+      "evidence": {
+        "line": 25,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 3
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/filter-calibration.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 24,
+        "snippet": "AssertionError: expected 2 to be 7 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/gate-failure-recovery.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected 2 to be 7 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/orchestration-hub.test.js",
+      "failing_tests": 3,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 24,
+        "snippet": "AssertionError: expected 20 to be 5 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/orchestrator-gate-result-persist.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 79,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/pipeline-runner/synthetic-venture-factory.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "assert_zero_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected +0 to be 40 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/post-lifecycle-decisions.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 27,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/reality-gates.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "gate_verdict_regression",
+      "family": "gate_verdict_regression",
+      "bucket": 3,
+      "bucket_rationale": "Risk family gate_verdict_regression (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 36,
+        "snippet": "AssertionError: expected 'NOT_APPLICABLE' to be 'PASS' // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "gate_verdict_regression",
+          "family": "gate_verdict_regression",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/replit-reentry-adapter.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 24,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-execution-worker-health.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (3 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-execution-worker-resilience.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (3 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 65,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-execution-worker.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 23,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-templates/stage-20-persistence.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/chairman-review.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/data-pollers/apple-rss-poller.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 25,
+        "snippet": "AssertionError: expected 6 to be 3 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/data-pollers/gplay-scraper.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 11,
+        "snippet": "AssertionError: expected 6 to be 3 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/data-pollers/producthunt-poller.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "assert_zero_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 56,
+        "snippet": "AssertionError: expected +0 to be 8 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/gate-thresholds.test.js",
+      "failing_tests": 11,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/paths/blueprint-browse.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 48,
+        "snippet": "AssertionError: expected 6 to be 3 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/paths/competitor-teardown.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 34,
+        "snippet": "AssertionError: expected 6 to be 3 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/stage-of-death-predictor.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/synthesis/archetype-mapping.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_zero_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 34,
+        "snippet": "AssertionError: expected +0 to be 8 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/synthesis/design-evaluation.test.js",
+      "failing_tests": 12,
+      "primary_error_pattern": "assert_zero_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (4 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 24,
+        "snippet": "AssertionError: expected +0 to be 8 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/synthesis/narrative-risk.test.js",
+      "failing_tests": 10,
+      "primary_error_pattern": "assert_zero_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (4 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 25,
+        "snippet": "AssertionError: expected +0 to be 40 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 3
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/synthesis/synthesis-engine.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_zero_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 38,
+        "snippet": "AssertionError: expected +0 to be 65 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/synthesis/tech-trajectory.test.js",
+      "failing_tests": 13,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 2,
+      "bucket_rationale": "Drift-cluster (7 assertions). Bulk-update inline as Tier-1 QF if surface is small enough.",
+      "evidence": {
+        "line": 125,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 5
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/stage-zero/synthesis/virality.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "logger_warn_not_function",
+      "family": "logger_missing_method",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family logger_missing_method (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 61,
+        "snippet": "TypeError: logger.warn is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "logger_warn_not_function",
+          "family": "logger_missing_method",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/template-extractor.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 46,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/translation-fidelity-gate.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 23,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/eva/weekly-digest.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 45,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/resolve-sd-workdir/worktree-a"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 1
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/event-router-trimodal.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 0,
+        "snippet": "AssertionError: expected 1 to be 2 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/factories/base-factory.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "phase_column_drift",
+      "family": "schema_drift",
+      "bucket": 3,
+      "bucket_rationale": "Risk family schema_drift (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 31,
+        "snippet": "Error: Failed to create directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "phase_column_drift",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/factories/directive-factory.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "phase_column_drift",
+      "family": "schema_drift",
+      "bucket": 3,
+      "bucket_rationale": "Risk family schema_drift (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 26,
+        "snippet": "Error: Failed to create directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "phase_column_drift",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/gap-014/escalation-threshold.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 0,
+        "snippet": "AssertionError: expected 85 to be 100 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/gate4-bypass-acceptance.test.js",
+      "failing_tests": 9,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 46,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/gates/architectural-pattern-checklist.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 49,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/gates/cross-child-integration-gate.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 24,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/genesis/branch-lifecycle.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/governance/chairman-escalation.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/governance/guardrail-intelligence-analyzer.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 52,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/governance/hard-halt-protocol.test.js",
+      "failing_tests": 9,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 21,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/governance/manifesto-mode.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "phase_column_drift",
+      "family": "schema_drift",
+      "bucket": 3,
+      "bucket_rationale": "Risk family schema_drift (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 70,
+        "snippet": "Error: Failed to create test directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "phase_column_drift",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "cannot_create_test_directive",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/handoff-orchestrator.test.js",
+      "failing_tests": 20,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 3,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit. Upgraded to bucket 3 (risk family drift_boolean or failingTests=20>15).",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/handoff/handoff-orchestrator.test.js",
+      "failing_tests": 23,
+      "primary_error_pattern": "phase_column_drift",
+      "family": "schema_drift",
+      "bucket": 3,
+      "bucket_rationale": "Risk family schema_drift (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 4,
+        "snippet": "Error: Failed to create test directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "phase_column_drift",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "cannot_create_test_directive",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/handoff/orchestrator-completion-hook.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/handoff/prerequisite-preflight-smoke-canonicalize.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/helpers/database-helpers.test.js",
+      "failing_tests": 12,
+      "primary_error_pattern": "phase_column_drift",
+      "family": "schema_drift",
+      "bucket": 3,
+      "bucket_rationale": "Risk family schema_drift (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 24,
+        "snippet": "Error: Failed to create test directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "phase_column_drift",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "cannot_create_test_directive",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/integration-verification-gate.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/language-parsers.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/lead-final-approval-prereq-check.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 77,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/learn-pipeline-content-fallback.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 35,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/lib/context-aware-sub-agent-selector.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 40,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/resolve-sd-workdir/worktree-a"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 2
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/lib/error-pattern-library.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 33,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/resolve-sd-workdir/worktree-a"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 4
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/lifecycle-sd-bridge.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 26,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/marketing-ai-email-campaigns.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 3,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/mock/firewall.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (3 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 25,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/multi-session-claim-gate.test.js",
+      "failing_tests": 13,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 3,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/orchestrator-completeness-audit.test.js",
+      "failing_tests": 11,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (3 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 101,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/partial-read-detection/protocol-file-read-gate.test.js",
+      "failing_tests": 10,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (5 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 38,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/prd-enrichment.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "cannot_find_module",
+      "family": "module_resolution",
+      "bucket": 3,
+      "bucket_rationale": "Risk family module_resolution (4 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 5,
+        "snippet": "Error: Cannot find module './context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/scr"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/preflight-autofix.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 25,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/product-hunt-client.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/protocol-file-read-cross-mode.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 24,
+        "snippet": "AssertionError: expected 90 to be 100 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/protocol-file-read-gate.test.js",
+      "failing_tests": 15,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (4 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 82,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/protocol-policies/worktree-failure-classification.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 10,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/rca-gate-validation.test.js",
+      "failing_tests": 17,
+      "primary_error_pattern": "pass_to_blocked",
+      "family": "gate_verdict_regression",
+      "bucket": 3,
+      "bucket_rationale": "Risk family gate_verdict_regression (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 66,
+        "snippet": "AssertionError: expected 'PASS' to be 'BLOCKED' // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "pass_to_blocked",
+          "family": "gate_verdict_regression",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 3
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/rca-learning-ingestion.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (4 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 57,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/rca-runtime-triggers.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 36,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/reality-gates.test.js",
+      "failing_tests": 28,
+      "primary_error_pattern": "gate_verdict_regression",
+      "family": "gate_verdict_regression",
+      "bucket": 3,
+      "bucket_rationale": "Risk family gate_verdict_regression (1 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 96,
+        "snippet": "AssertionError: expected 'NOT_APPLICABLE' to be 'PASS' // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "gate_verdict_regression",
+          "family": "gate_verdict_regression",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/resolve-sd-workdir/worktree-atomicity.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 24,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/resolve-sd-workdir/worktree-a"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 4
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/risk-classifier/anti-bloat-system.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 37,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/risk-classifier/risk-classifier.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/sd-workflow-templates.test.js",
+      "failing_tests": 9,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 25,
+        "snippet": "AssertionError: expected 2 to be 4 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/semantic-search-client.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_n_to_n",
+      "family": "drift_counter",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 59,
+        "snippet": "AssertionError: expected 90 to be 100 // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/semantic-validation-gates.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (4 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 38,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/services/brand-genome.test.js",
+      "failing_tests": 3,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/session-writer/no-bypass.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "unknown",
+      "family": "unclassified",
+      "bucket": 1,
+      "bucket_rationale": "No recognized error pattern in captured context. Default to bucket 1 (delete-as-stale) pending TR-3 deadness verification. Reviewer must confirm the test target is gone or the test is genuinely stale.",
+      "evidence": {
+        "line": 0,
+        "snippet": ""
+      }
+    },
+    {
+      "file": "tests/unit/stage-17/selection-flow.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "assert_undefined_defined",
+      "family": "drift_undefined",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (1 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 65,
+        "snippet": "AssertionError: expected undefined to be defined"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/stage-gates-ext.test.js",
+      "failing_tests": 12,
+      "primary_error_pattern": "logger_warn_not_function",
+      "family": "logger_missing_method",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family logger_missing_method (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 121,
+        "snippet": "TypeError: logger.warn is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "logger_warn_not_function",
+          "family": "logger_missing_method",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/stitch-design-system.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "cannot_find_module",
+      "family": "module_resolution",
+      "bucket": 3,
+      "bucket_rationale": "Risk family module_resolution (5 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 6,
+        "snippet": "Error: Cannot find module '/scripts/context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 5
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/stitch-device-type-resolver.test.js",
+      "failing_tests": 6,
+      "primary_error_pattern": "cannot_find_module",
+      "family": "module_resolution",
+      "bucket": 3,
+      "bucket_rationale": "Risk family module_resolution (4 hits). >30 LOC or risk keyword likely; deferred to child SD.",
+      "evidence": {
+        "line": 7,
+        "snippet": "Error: Cannot find module './context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/scr"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/sub-agents/design-workflow-review.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 42,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/transition-readiness-rejection.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (2 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 26,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/venture-ceo-handlers.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (4 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 11,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/vision-event-bus.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 1,
+      "bucket_rationale": "Drift-only assertions (3 total). Default to delete-as-stale; require deadness verification before commit.",
+      "evidence": {
+        "line": 45,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/vision-portfolio-scorecard.test.js",
+      "failing_tests": 11,
+      "primary_error_pattern": "cannot_read_trend",
+      "family": "null_guard_missing",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family null_guard_missing (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 56,
+        "snippet": "TypeError: Cannot read properties of undefined (reading 'trend')"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_read_trend",
+          "family": "null_guard_missing",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/wiring-validators/orphan-detector.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 21,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/resolve-sd-workdir/worktree-a"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 4
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/wiring-validators/spec-code-drift.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 19,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/resolve-sd-workdir/worktree-a"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 4
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/wiring-validators/vision-traceability.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "no_test_suite_found",
+      "family": "structural_broken",
+      "bucket": 1,
+      "bucket_rationale": "Structural break — file cannot be loaded by vitest. Delete unless feature is alive.",
+      "evidence": {
+        "line": 16,
+        "snippet": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-MAN-INFRA-TRIAGE-377-PRE-001/tests/unit/resolve-sd-workdir/worktree-a"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "no_test_suite_found",
+          "family": "structural_broken",
+          "bucket": 1,
+          "count": 4
+        },
+        {
+          "pattern_id": "cannot_find_module",
+          "family": "module_resolution",
+          "bucket": 3,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "tests/unit/worktree-manager.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "cannot_read_trend",
+      "family": "null_guard_missing",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family null_guard_missing (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 0,
+        "snippet": "TypeError: Cannot read properties of undefined (reading 'trend')"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_read_trend",
+          "family": "null_guard_missing",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "phase_column_drift",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}
