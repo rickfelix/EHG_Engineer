@@ -410,7 +410,7 @@ async function main() {
   // Read unread coordination messages for this session
   const { data: messages, error: tableErr } = await supabase
     .from('session_coordination')
-    .select('id, message_type, subject, body, payload, sender_type, created_at')
+    .select('id, message_type, subject, body, payload, sender_type, sender_session, created_at')
     .eq('target_session', sessionId)
     .is('read_at', null)
     .order('created_at', { ascending: true })
