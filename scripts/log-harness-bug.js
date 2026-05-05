@@ -2,6 +2,11 @@
 // Log a harness-level bug to the `feedback` table (category='harness_backlog').
 // Replaces the deprecated docs/harness-backlog.md append-only log.
 //
+// SD-LEO-INFRA-FAIL-CLOSED-VENTURE-001-B (PA-5 refactor): the actual insert
+// logic moved to lib/governance/emit-feedback.js so PA-5's capability-suppression
+// warning emission can reuse the same dedup-hash pattern. This file is now a
+// CLI wrapper.
+//
 // Usage:
 //   node scripts/log-harness-bug.js "<symptom>" [--file <path>] [--sd <sd-key>] [--severity high|medium|low]
 //
@@ -14,7 +19,7 @@
 // Filter rows: category='harness_backlog' AND status='new' for the open backlog.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'node:crypto';
+import { emitFeedback } from '../lib/governance/emit-feedback.js';
 
 async function main() {
   const rawArgs = process.argv.slice(2);
@@ -49,60 +54,35 @@ async function main() {
   }
   const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const dedupHash = crypto
-    .createHash('sha256')
-    .update(`${today}::${symptom}::${file || ''}`)
-    .digest('hex');
-
-  const { data: existing } = await sb
-    .from('feedback')
-    .select('id')
-    .eq('category', 'harness_backlog')
-    .eq('metadata->>dedup_hash', dedupHash)
-    .maybeSingle();
-
-  if (existing) {
-    console.log(`Already logged today: feedback row ${existing.id} (no duplicate written)`);
-    return;
-  }
-
-  const title = symptom.length > 120 ? `${symptom.slice(0, 117)}...` : symptom;
-
-  const { data, error } = await sb
-    .from('feedback')
-    .insert({
-      type: 'enhancement',
-      category: 'harness_backlog',
-      status: 'new',
-      severity,
-      source_application: 'EHG_Engineer',
-      source_type: 'manual_feedback',
-      title,
+  try {
+    const result = await emitFeedback({
+      supabase: sb,
+      title: symptom,
       description: symptom,
+      severity,
+      source_type: 'manual_feedback',
+      dedup_key: file,
       metadata: {
         logged_via: 'log-harness-bug.js',
-        original_date: today,
         source_location: file,
         deferred_from_sd_key: sd,
-        dedup_hash: dedupHash,
       },
-    })
-    .select('id')
-    .single();
+    });
 
-  if (error) {
-    console.error('INSERT failed:', error.message);
+    if (result.deduped) {
+      console.log(`Already logged today: feedback row ${result.id} (no duplicate written)`);
+    } else {
+      console.log(`Logged harness bug: feedback row ${result.id}`);
+      console.log(`  category=harness_backlog status=new severity=${severity}`);
+      if (sd) console.log(`  deferred_from_sd_key=${sd}`);
+      if (file) console.log(`  source_location=${file}`);
+      console.log('\nQuery open backlog:');
+      console.log("  category='harness_backlog' AND status='new'");
+    }
+  } catch (e) {
+    console.error('emitFeedback failed:', e.message);
     process.exitCode = 1;
-    return;
   }
-
-  console.log(`Logged harness bug: feedback row ${data.id}`);
-  console.log(`  category=harness_backlog status=new severity=${severity}`);
-  if (sd) console.log(`  deferred_from_sd_key=${sd}`);
-  if (file) console.log(`  source_location=${file}`);
-  console.log('\nQuery open backlog:');
-  console.log("  category='harness_backlog' AND status='new'");
 }
 
 main().catch((e) => {
