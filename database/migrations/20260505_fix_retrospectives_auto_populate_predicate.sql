@@ -18,6 +18,8 @@
 -- Idempotency: CREATE OR REPLACE — re-running this migration is a no-op once the new function is in place.
 -- Rollback: redeploy the prior function definition (preserved as a SQL comment block below).
 
+BEGIN;
+
 CREATE OR REPLACE FUNCTION public.auto_populate_retrospective_fields()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -98,3 +100,5 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+
+COMMIT;
