@@ -1,7 +1,7 @@
 /**
  * Unit tests for Stage 24 Analysis Step - Acquirability Review (Exit Readiness Aggregation)
  *
- * Tests the pure aggregation logic in stage-24-acquirability-review.js:
+ * Tests the pure aggregation logic in stage-25-acquirability-review.js:
  * - Weighted score computation (stage0 30%, buildDelta 30%, separability 40%)
  * - Trend detection from delta arrays
  * - Graceful degradation with defaults and warnings
@@ -15,12 +15,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  analyzeStage24AcquirabilityReview,
+  analyzeStage25AcquirabilityReview,
   WEIGHTS,
   BUILD_PHASE_STAGES,
   normalizeDelta,
   computeTrend,
-} from '../../../../lib/eva/stage-templates/analysis-steps/stage-24-acquirability-review.js';
+} from '../../../../lib/eva/stage-templates/analysis-steps/stage-25-acquirability-review.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -242,7 +242,7 @@ function createMockSupabase() {
 
 // ── Tests ────────────────────────────────────────────────────
 
-describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => {
+describe('stage-25-acquirability-review.js - Exit Readiness Aggregation', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -347,7 +347,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
 
   describe('With stageData provided (no DB queries)', () => {
     it('should compute overall_score as weighted average of stage0, build delta, separability', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 70,
@@ -375,7 +375,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should include dimension_breakdown with all three dimensions', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -404,7 +404,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should populate data_sources correctly from stageData', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 50,
@@ -420,7 +420,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should include venture_id and generated_at in the report', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 50,
@@ -436,7 +436,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should include _latencyMs in the result', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 50,
@@ -455,7 +455,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
 
   describe('Trend detection in full analysis', () => {
     it('should detect "improving" trend when deltas increase over time', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -475,7 +475,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should detect "declining" trend when deltas decrease over time', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -495,7 +495,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should detect "stable" trend when deltas are flat', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -515,7 +515,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should return "stable" when fewer than 2 build deltas', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -533,7 +533,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
 
   describe('Graceful degradation with missing data', () => {
     it('should use default 50 and add warning when stage0 is missing', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           // stage0 intentionally omitted
@@ -548,7 +548,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should add warning when build deltas are empty', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -565,7 +565,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should use default 50 and add warning when separability is missing', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -581,7 +581,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should accumulate multiple warnings when all data is missing', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           // all fields omitted or null
@@ -602,7 +602,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should still set _soft_gate: true even with all defaults', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           buildDeltas: [],
@@ -627,7 +627,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
       supabase._setExitProfileSelect({ data: { id: profileId }, error: null });
       supabase._setExitProfileUpdate({ error: null });
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         supabase,
         stageData: {
@@ -653,7 +653,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
       // No profile found
       supabase._setExitProfileSelect({ data: null, error: null });
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         supabase,
         stageData: {
@@ -675,7 +675,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
 
       supabase._setExitProfileSelect({ data: null, error: { message: 'connection timeout' } });
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         supabase,
         stageData: {
@@ -694,7 +694,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should not attempt DB write when supabase is not provided', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         // supabase intentionally omitted
         stageData: {
@@ -726,7 +726,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
       supabase._setSeparability({ data: null, error: null });
       supabase._setExitProfileSelect({ data: null, error: null });
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         supabase,
         logger: silentLogger,
@@ -751,7 +751,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
       supabase._setSeparability({ data: null, error: null });
       supabase._setExitProfileSelect({ data: null, error: null });
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         supabase,
         logger: silentLogger,
@@ -776,7 +776,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
       supabase._setSeparability({ data: null, error: null });
       supabase._setExitProfileSelect({ data: null, error: null });
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         supabase,
         logger: silentLogger,
@@ -807,7 +807,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
       });
       supabase._setExitProfileSelect({ data: null, error: null });
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         supabase,
         logger: silentLogger,
@@ -827,7 +827,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
       supabase._setSeparability({ data: null, error: null });
       supabase._setExitProfileSelect({ data: null, error: null });
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         supabase,
         logger: silentLogger,
@@ -851,7 +851,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
         { stage: 22, delta: 5, score: 55 },
       ];
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 80,
@@ -911,7 +911,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
         { stage: 22, delta: 5, score: 55 },
       ];
 
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 80,
@@ -929,7 +929,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should generate appropriate recommendations for overall=71', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 80,
@@ -955,7 +955,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should identify risk factors for negative deltas in the sequence', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 80,
@@ -984,7 +984,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
 
   describe('Recommendations engine', () => {
     it('should recommend buyer outreach when overall >= 75', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 90,
@@ -1000,7 +1000,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should warn about low stage0 score when < 40', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 30,
@@ -1018,7 +1018,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should warn about low separability when < 40', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -1036,7 +1036,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should warn about below-threshold overall when < 50', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 20,
@@ -1056,7 +1056,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
 
   describe('Risk factors engine', () => {
     it('should flag very low stage0 score as risk', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 20,
@@ -1074,7 +1074,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should flag low infrastructure independence as risk', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -1097,7 +1097,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should flag low IP clarity as risk', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -1120,7 +1120,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should flag data portability concerns as risk', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 60,
@@ -1143,7 +1143,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should include data gap warning in risks when warnings exist', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           // Missing stage0 -> warning generated
@@ -1165,7 +1165,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
 
   describe('Edge cases', () => {
     it('should clamp stage0 score above 100 to 100', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 150,
@@ -1179,7 +1179,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should clamp stage0 score below 0 to 0', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: -20,
@@ -1193,7 +1193,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should clamp separability score to 0-100 range', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 50,
@@ -1207,7 +1207,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
     });
 
     it('should handle extreme negative deltas gracefully', async () => {
-      const result = await analyzeStage24AcquirabilityReview({
+      const result = await analyzeStage25AcquirabilityReview({
         ventureId: VENTURE_ID,
         stageData: {
           stage0: 50,
@@ -1230,7 +1230,7 @@ describe('stage-24-acquirability-review.js - Exit Readiness Aggregation', () => 
       // This test verifies the function does not throw when logger is omitted
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       try {
-        const result = await analyzeStage24AcquirabilityReview({
+        const result = await analyzeStage25AcquirabilityReview({
           ventureId: VENTURE_ID,
           stageData: {
             stage0: 50,
