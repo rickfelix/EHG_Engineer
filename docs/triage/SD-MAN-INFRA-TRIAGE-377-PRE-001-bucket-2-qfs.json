@@ -1,0 +1,452 @@
+[
+  {
+    "qf_brief": {
+      "title": "Fix drift_boolean in calibration-report.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 10,
+      "description": "Pattern assert_true_to_false (drift_boolean) in tests/unit/eva/experiments/calibration-report.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/eva/experiments/calibration-report.test.js",
+      "failing_tests": 13,
+      "primary_error_pattern": "assert_true_to_false",
+      "family": "drift_boolean",
+      "bucket": 2,
+      "bucket_rationale": "Drift-cluster (6 assertions). Bulk-update inline as Tier-1 QF if surface is small enough.",
+      "evidence": {
+        "line": 25,
+        "snippet": "AssertionError: expected true to be false // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_undefined_defined",
+          "family": "drift_undefined",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 3
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix drift_boolean in tech-trajectory.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 10,
+      "description": "Pattern assert_false_to_true (drift_boolean) in tests/unit/eva/stage-zero/synthesis/tech-trajectory.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/eva/stage-zero/synthesis/tech-trajectory.test.js",
+      "failing_tests": 13,
+      "primary_error_pattern": "assert_false_to_true",
+      "family": "drift_boolean",
+      "bucket": 2,
+      "bucket_rationale": "Drift-cluster (7 assertions). Bulk-update inline as Tier-1 QF if surface is small enough.",
+      "evidence": {
+        "line": 125,
+        "snippet": "AssertionError: expected false to be true // Object.is equality"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 5
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix logger_missing_method in virality.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 1,
+      "description": "Pattern logger_warn_not_function (logger_missing_method) in tests/unit/eva/stage-zero/synthesis/virality.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/eva/stage-zero/synthesis/virality.test.js",
+      "failing_tests": 4,
+      "primary_error_pattern": "logger_warn_not_function",
+      "family": "logger_missing_method",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family logger_missing_method (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 61,
+        "snippet": "TypeError: logger.warn is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "logger_warn_not_function",
+          "family": "logger_missing_method",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix mock_incomplete in lead-final-approval-prereq-check.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 5,
+      "description": "Pattern supabase_rpc_not_function (mock_incomplete) in tests/unit/lead-final-approval-prereq-check.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/lead-final-approval-prereq-check.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 77,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix mock_incomplete in learn-pipeline-content-fallback.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 5,
+      "description": "Pattern supabase_rpc_not_function (mock_incomplete) in tests/unit/learn-pipeline-content-fallback.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/learn-pipeline-content-fallback.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 35,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix mock_incomplete in lifecycle-sd-bridge.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 5,
+      "description": "Pattern supabase_rpc_not_function (mock_incomplete) in tests/unit/lifecycle-sd-bridge.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/lifecycle-sd-bridge.test.js",
+      "failing_tests": 8,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 26,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix mock_incomplete in marketing-ai-email-campaigns.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 5,
+      "description": "Pattern supabase_rpc_not_function (mock_incomplete) in tests/unit/marketing-ai-email-campaigns.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/marketing-ai-email-campaigns.test.js",
+      "failing_tests": 5,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 3,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix mock_incomplete in multi-session-claim-gate.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 5,
+      "description": "Pattern supabase_rpc_not_function (mock_incomplete) in tests/unit/multi-session-claim-gate.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/multi-session-claim-gate.test.js",
+      "failing_tests": 13,
+      "primary_error_pattern": "supabase_rpc_not_function",
+      "family": "mock_incomplete",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family mock_incomplete (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 3,
+        "snippet": "TypeError: supabase.rpc is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "supabase_rpc_not_function",
+          "family": "mock_incomplete",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix logger_missing_method in stage-gates-ext.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 1,
+      "description": "Pattern logger_warn_not_function (logger_missing_method) in tests/unit/stage-gates-ext.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/stage-gates-ext.test.js",
+      "failing_tests": 12,
+      "primary_error_pattern": "logger_warn_not_function",
+      "family": "logger_missing_method",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family logger_missing_method (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 121,
+        "snippet": "TypeError: logger.warn is not a function"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "logger_warn_not_function",
+          "family": "logger_missing_method",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_true_to_false",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix null_guard_missing in vision-portfolio-scorecard.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 10,
+      "description": "Pattern cannot_read_trend (null_guard_missing) in tests/unit/vision-portfolio-scorecard.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/vision-portfolio-scorecard.test.js",
+      "failing_tests": 11,
+      "primary_error_pattern": "cannot_read_trend",
+      "family": "null_guard_missing",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family null_guard_missing (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 56,
+        "snippet": "TypeError: Cannot read properties of undefined (reading 'trend')"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_read_trend",
+          "family": "null_guard_missing",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_false_to_true",
+          "family": "drift_boolean",
+          "bucket": "context",
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 2
+        },
+        {
+          "pattern_id": "assert_n_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "qf_brief": {
+      "title": "Fix null_guard_missing in worktree-manager.test.js",
+      "type": "bug",
+      "severity": "low",
+      "target_application": "EHG_Engineer",
+      "estimated_loc": 10,
+      "description": "Pattern cannot_read_trend (null_guard_missing) in tests/unit/worktree-manager.test.js. Bucket 2 — inline Tier-1 QF per PRD FR-2."
+    },
+    "source": {
+      "file": "tests/unit/worktree-manager.test.js",
+      "failing_tests": 7,
+      "primary_error_pattern": "cannot_read_trend",
+      "family": "null_guard_missing",
+      "bucket": 2,
+      "bucket_rationale": "Single-defect family null_guard_missing (1 hits). Tier-1 QF candidate.",
+      "evidence": {
+        "line": 0,
+        "snippet": "TypeError: Cannot read properties of undefined (reading 'trend')"
+      },
+      "all_hits": [
+        {
+          "pattern_id": "cannot_read_trend",
+          "family": "null_guard_missing",
+          "bucket": 2,
+          "count": 1
+        },
+        {
+          "pattern_id": "phase_column_drift",
+          "family": "schema_drift",
+          "bucket": 3,
+          "count": 1
+        },
+        {
+          "pattern_id": "assert_zero_to_n",
+          "family": "drift_counter",
+          "bucket": "context",
+          "count": 1
+        }
+      ]
+    }
+  }
+]
