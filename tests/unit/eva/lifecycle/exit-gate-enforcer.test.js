@@ -54,7 +54,9 @@ function buildSupabaseMock({
           })),
         };
       }
-      if (table === 'venture_resources') {
+      // SD-LEO-INFRA-FAIL-CLOSED-VENTURE-001-A PA-2: verifier now queries
+      // ventures (not venture_resources — those columns never existed live).
+      if (table === 'ventures') {
         return {
           select: vi.fn(() => buildEqChain({
             data: resourceRow,
@@ -142,7 +144,9 @@ describe('exit-gate-enforcer', () => {
       expect(result.allowed).toBe(false);
       expect(result.blocked_by).toHaveLength(1);
       expect(result.blocked_by[0]).toMatch(/GitHub repo URL stored/);
-      expect(result.blocked_by[0]).toMatch(/repo_url and\/or deployment_url not populated/);
+      // SD-LEO-INFRA-FAIL-CLOSED-VENTURE-001-A PA-2: verifier message now uses
+      // 'ventures.' prefix since the table source moved from venture_resources to ventures.
+      expect(result.blocked_by[0]).toMatch(/ventures\.repo_url and\/or ventures\.deployment_url not populated/);
     });
 
     it('blocks with multiple reasons when both gates fail', async () => {
