@@ -15,11 +15,18 @@
 -- consistency).
 --
 -- COLLATE "C" ensures locale-deterministic uniqueness across servers.
--- Postgres NORMALIZE() applies Unicode NFKC normalization (per security-agent C-SEC-1).
+-- Postgres NORMALIZE(name, NFKD) decomposes diacritics; the inner
+-- REGEXP_REPLACE strips combining marks (U+0300..U+036F) so 'Café' and 'Cafe'
+-- collapse to the same key. Per security-agent C-SEC-1 (homoglyph defense).
+-- NFKC alone would keep 'é' precomposed and the alphanumeric strip would
+-- remove it, producing different keys for visually-equivalent inputs.
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ventures_normalized_name
   ON ventures (
-    LOWER(REGEXP_REPLACE(NORMALIZE(name, NFKC), '[^A-Za-z0-9]', '', 'g')) COLLATE "C"
+    LOWER(REGEXP_REPLACE(
+      REGEXP_REPLACE(NORMALIZE(name, NFKD), '[̀-ͯ]', '', 'g'),
+      '[^A-Za-z0-9]', '', 'g'
+    )) COLLATE "C"
   )
   WHERE deleted_at IS NULL AND status IN ('active', 'paused');
 

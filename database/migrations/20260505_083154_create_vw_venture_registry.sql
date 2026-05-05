@@ -19,14 +19,19 @@
 --                          (matches the registry's purpose: routing SDs to repos)
 --
 -- COLLATE "C" — locale-deterministic uniqueness across servers/databases.
--- NORMALIZE(name, NFKC) — Unicode NFKC normalization per security-agent C-SEC-1.
+-- NORMALIZE(name, NFKD) + combining-mark strip — Unicode normalization per
+-- security-agent C-SEC-1 (homoglyph defense). Decomposed form lets us strip
+-- combining diacritical marks (U+0300..U+036F) so 'Café' collapses to 'cafe'
+-- — matching what 'Cafe' produces. Prevents homoglyph-based name shadowing.
 
 CREATE OR REPLACE VIEW vw_venture_registry AS
 SELECT
   v.id,
   v.name,
-  LOWER(REGEXP_REPLACE(NORMALIZE(v.name, NFKC), '[^A-Za-z0-9]', '', 'g')) COLLATE "C"
-    AS normalized_name,
+  LOWER(REGEXP_REPLACE(
+    REGEXP_REPLACE(NORMALIZE(v.name, NFKD), '[̀-ͯ]', '', 'g'),
+    '[^A-Za-z0-9]', '', 'g'
+  )) COLLATE "C" AS normalized_name,
   v.local_path,
   v.repo_url,
   v.deployment_url,

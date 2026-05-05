@@ -32,7 +32,10 @@ DECLARE
   v_normalized TEXT;
 BEGIN
   FOREACH entry IN ARRAY registry_entries LOOP
-    v_normalized := LOWER(REGEXP_REPLACE(NORMALIZE(entry->>'name', NFKC), '[^A-Za-z0-9]', '', 'g'));
+    v_normalized := LOWER(REGEXP_REPLACE(
+      REGEXP_REPLACE(NORMALIZE(entry->>'name', NFKD), '[̀-ͯ]', '', 'g'),
+      '[^A-Za-z0-9]', '', 'g'
+    ));
 
     INSERT INTO ventures (
       id,
@@ -57,8 +60,10 @@ BEGIN
       SELECT 1 FROM ventures v
       WHERE v.deleted_at IS NULL
         AND v.status IN ('active', 'paused')
-        AND LOWER(REGEXP_REPLACE(NORMALIZE(v.name, NFKC), '[^A-Za-z0-9]', '', 'g')) COLLATE "C"
-            = v_normalized COLLATE "C"
+        AND LOWER(REGEXP_REPLACE(
+              REGEXP_REPLACE(NORMALIZE(v.name, NFKD), '[̀-ͯ]', '', 'g'),
+              '[^A-Za-z0-9]', '', 'g'
+            )) COLLATE "C" = v_normalized COLLATE "C"
     );
   END LOOP;
 END $$;
