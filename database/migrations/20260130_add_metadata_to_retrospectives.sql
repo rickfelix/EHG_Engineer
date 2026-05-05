@@ -5,6 +5,9 @@
 -- Solution: Add metadata column for consistency and flexibility
 
 -- Step 1: Add metadata column if not exists
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 ALTER TABLE retrospectives
 ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
 
@@ -20,3 +23,5 @@ COMMENT ON COLUMN retrospectives.metadata IS
 -- SELECT column_name, data_type, column_default
 -- FROM information_schema.columns
 -- WHERE table_name = 'retrospectives' AND column_name = 'metadata';
+
+COMMIT;

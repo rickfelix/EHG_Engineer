@@ -8,6 +8,9 @@
 -- Step 1: Add NOT NULL constraint
 -- ============================================================================
 
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 ALTER TABLE retrospectives
 ALTER COLUMN quality_score SET NOT NULL;
 
@@ -248,3 +251,5 @@ BEGIN
   RAISE NOTICE '';
 END;
 $$;
+
+COMMIT;

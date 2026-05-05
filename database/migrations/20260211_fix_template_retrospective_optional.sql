@@ -16,6 +16,9 @@
 -- Update the template evaluation logic for 'artifact:retrospective' to check
 -- requires_retrospective flag. If false, auto-complete the step.
 
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 CREATE OR REPLACE FUNCTION get_progress_breakdown(sd_id_param text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -398,3 +401,5 @@ END $$;
 COMMENT ON FUNCTION get_progress_breakdown IS
 'Calculates SD progress breakdown using templates when available, with fallback to hardcoded logic.
 FIXED: Respects requires_retrospective flag from sd_type_validation_profiles - auto-completes retrospective step for SD types that do not require it (e.g., bugfix with requires_retrospective=false).';
+
+COMMIT;

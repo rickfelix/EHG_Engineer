@@ -32,6 +32,9 @@
 -- PART 2: Update calculate_sd_progress to delegate to get_progress_breakdown
 -- ============================================================================
 
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 CREATE OR REPLACE FUNCTION calculate_sd_progress(sd_id_param text)
 RETURNS INT
 LANGUAGE plpgsql
@@ -83,3 +86,5 @@ BEGIN
     RAISE WARNING '  - RETROSPECTIVE complete: %', breakdown->'phase_breakdown'->'RETROSPECTIVE'->>'complete';
   END IF;
 END $$;
+
+COMMIT;

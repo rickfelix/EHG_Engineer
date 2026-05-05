@@ -4,6 +4,9 @@
 -- Fix: Add future_enhancements JSONB field to store improvement opportunities
 
 -- Add future_enhancements column to retrospectives table
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 ALTER TABLE retrospectives
 ADD COLUMN IF NOT EXISTS future_enhancements JSONB DEFAULT '[]'::jsonb;
 
@@ -23,3 +26,5 @@ Each entry: {
 -- Create index for searching enhancements
 CREATE INDEX IF NOT EXISTS idx_retrospectives_future_enhancements 
 ON retrospectives USING gin (future_enhancements);
+
+COMMIT;

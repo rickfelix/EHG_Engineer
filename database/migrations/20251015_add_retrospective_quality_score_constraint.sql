@@ -8,6 +8,9 @@
 -- ============================================================================
 
 -- Find and report records with problematic quality scores
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 DO $$
 DECLARE
   zero_count INTEGER;
@@ -354,3 +357,5 @@ BEGIN
   RAISE NOTICE '';
 END;
 $$;
+
+COMMIT;

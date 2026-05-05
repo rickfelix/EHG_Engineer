@@ -9,6 +9,9 @@
 -- This field will store structured protocol improvement suggestions
 -- Format: Array of objects with category, improvement, evidence, and impact
 
+-- 2026-05-05 (SD-LEO-INFRA-BULK-ADD-BEGIN-001): added BEGIN;/COMMIT; for Layer 4.3 CI grep contract. Migration was already applied to production; transaction wrapping affects file-structure validation only, not runtime.
+BEGIN;
+
 ALTER TABLE retrospectives
 ADD COLUMN IF NOT EXISTS protocol_improvements JSONB DEFAULT '[]'::jsonb;
 
@@ -145,3 +148,5 @@ GRANT EXECUTE ON FUNCTION get_all_protocol_improvements TO service_role;
 -- DROP FUNCTION IF EXISTS validate_protocol_improvements_for_process_category;
 -- ALTER TABLE retrospectives DROP CONSTRAINT IF EXISTS check_protocol_improvements_is_array;
 -- ALTER TABLE retrospectives DROP COLUMN IF EXISTS protocol_improvements;
+
+COMMIT;
