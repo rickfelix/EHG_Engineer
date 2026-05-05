@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-04T13:49:53.536Z
-**Rows**: 817
+**Generated**: 2026-05-05T10:51:41.350Z
+**Rows**: 848
 **RLS**: Enabled (8 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (57 total)
+## Columns (63 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -75,6 +75,12 @@
 | auto_correction_status | `text` | YES | `'pending'::text` | Tracks automated correction lifecycle: pending → in_progress → resolved/failed |
 | venture_id | `uuid` | YES | - | Links feedback to a specific venture. Required for user-submitted feedback. |
 | feedback_type | `character varying(30)` | **NO** | `'sentry_error'::character varying` | Feedback channel type. sentry_error = automated capture; user_* = user-submitted via venture app. |
+| corrective_class | `text` | YES | - | Classification of corrective finding (vision_gap, arch_gap, lifecycle_feature, cli_validation, etc.). Set when category=corrective_finding. NULL for non-corrective rows. |
+| source_gate | `text` | YES | - | Which gate detected the finding (eva_vision_score, eva_heal_score, s20_code_quality_gate). NULL for non-corrective rows. |
+| gate_run_id | `uuid` | YES | - | Backref to the source gate run record (e.g., eva_vision_scores.id). NULL when source has no run-id concept. No FK constraint due to multi-source. |
+| promoted_to_sd_id | `character varying(50)` | YES | - | sd_key string of the SD created when triage CLI promoted this finding. NULL until promotion. varchar(50) matches feedback.sd_id semantics. |
+| promoted_at | `timestamp with time zone` | YES | - | Timestamp when triage CLI promoted this finding to an SD. Set together with promoted_to_sd_id. |
+| promoted_by | `text` | YES | - | session_id of the operator who ran corrective-triage promote. Audit trail. |
 
 ## Constraints
 
@@ -126,6 +132,10 @@ END)
 - `idx_feedback_auto_correction`
   ```sql
   CREATE INDEX idx_feedback_auto_correction ON public.feedback USING btree (auto_correction_status) WHERE (auto_correction_status IS NOT NULL)
+  ```
+- `idx_feedback_category_status`
+  ```sql
+  CREATE INDEX idx_feedback_category_status ON public.feedback USING btree (category, status) WHERE ((category)::text = ANY ((ARRAY['corrective_finding'::character varying, 'harness_backlog'::character varying])::text[]))
   ```
 - `idx_feedback_clustering`
   ```sql
@@ -210,6 +220,10 @@ END)
 - `idx_feedback_venture_created`
   ```sql
   CREATE INDEX idx_feedback_venture_created ON public.feedback USING btree (venture_id, created_at DESC) WHERE (venture_id IS NOT NULL)
+  ```
+- `idx_feedback_venture_dedup`
+  ```sql
+  CREATE INDEX idx_feedback_venture_dedup ON public.feedback USING btree (venture_id, lower((title)::text), created_at) WHERE ((feedback_type)::text ~~ 'user_%'::text)
   ```
 
 ## RLS Policies
