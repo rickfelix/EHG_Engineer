@@ -156,10 +156,12 @@ GRANT EXECUTE ON FUNCTION public.kill_venture(UUID, TEXT) TO authenticated;
 -- change is workflow_status='killed' (was 'failed') in the kill-gate UPDATE.
 -- This matches the pattern database-agent inspected at PLAN.
 
+-- Signature must preserve existing DEFAULT NULL::text on p_decided_by — Postgres
+-- forbids removing parameter defaults via CREATE OR REPLACE (42P13).
 CREATE OR REPLACE FUNCTION public.reject_chairman_decision(
   p_decision_id UUID,
   p_rationale TEXT,
-  p_decided_by TEXT
+  p_decided_by TEXT DEFAULT NULL::text
 )
 RETURNS jsonb
 LANGUAGE plpgsql
