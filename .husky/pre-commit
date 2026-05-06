@@ -191,6 +191,38 @@ fi
 echo "✅ Script reference protection passed"
 
 # ============================================================================
+# STAGE 0.7: Retrospective Migration BEGIN/COMMIT Guard (BLOCKING)
+# ============================================================================
+# SD-LEO-INFRA-PRE-COMMIT-GUARD-001: Catch new database/migrations/*retrospective*.sql
+# files that lack line-leading BEGIN; / COMMIT;. The Layer 4.3 retrospective-quality-gates
+# CI workflow greps for those keywords and fails the entire PR otherwise. SD-LEO-INFRA-
+# BULK-ADD-BEGIN-001 closed the chronic red on 17 historical files; this stage prevents
+# regressions from new files at commit time.
+# ============================================================================
+
+STAGED_RETRO=$(git diff --cached --name-only --diff-filter=AM | grep -E "^database/migrations/.*retrospective.*\.sql$" || true)
+
+if [ -n "$STAGED_RETRO" ]; then
+  echo ""
+  echo "🧪 Running retrospective-migration BEGIN/COMMIT guard..."
+
+  # Helper script lives in scripts/. If absent (e.g., partial checkout), warn rather than block.
+  HELPER="scripts/hooks/check-retro-migrations-wrapped.cjs"
+  if [ ! -f "$HELPER" ]; then
+    echo "  ⚠️  $HELPER not found — guard skipped (commit proceeds)."
+  else
+    # Pass each path as a separate arg.
+    if ! echo "$STAGED_RETRO" | xargs -I {} echo "{}" | xargs node "$HELPER"; then
+      echo ""
+      echo "  Pre-commit blocked by Stage 0.7. Resolve the violations above and re-stage."
+      echo ""
+      exit 1
+    fi
+    echo "✅ Retrospective-migration guard passed"
+  fi
+fi
+
+# ============================================================================
 # STAGE 1: Secret Detection (BLOCKING)
 # ============================================================================
 # SD-SEC-CREDENTIAL-ROTATION-001: Prevent accidental commit of secrets
