@@ -84,6 +84,17 @@ class GitBranchVerifier {
     this.worktreeMode = options.worktreeMode || false;
     this.expectedBranchName = this.generateBranchName(sdId, sdTitle);
 
+    // SD-LEO-INFRA-CROSS-REPO-MERGE-001 (FR-2): defensive scope assertion.
+    // When caller passes options.targetApplication, warn loudly if appPath
+    // doesn't match — defense against future regressions in
+    // BaseExecutor.determineTargetRepository. Warn-only, non-blocking.
+    if (options.targetApplication) {
+      const expectedPath = resolveRepoPath(options.targetApplication);
+      if (expectedPath && path.resolve(expectedPath) !== path.resolve(appPath)) {
+        console.warn(`[CROSS_REPO_SCOPE_WARN] verify-git-branch-status running on ${appPath} but SD targets ${options.targetApplication} (expected path: ${expectedPath})`);
+      }
+    }
+
     this.results = {
       branchExists: false,
       onCorrectBranch: false,
