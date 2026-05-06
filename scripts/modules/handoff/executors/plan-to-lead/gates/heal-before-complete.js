@@ -707,6 +707,47 @@ export function createHealBeforeCompleteGate(supabase) {
       const scoreAge = Math.round((Date.now() - new Date(latestScore.scored_at).getTime()) / (1000 * 60));
       const isSDHeal = latestScore.rubric_snapshot?.mode === 'sd-heal';
 
+      // QF-20260506-295: Apply per-SD vision_addressable_dimensions override.
+      // Mirrors LEAD-TO-PLAN GATE_VISION_SCORE behavior (QF-20260505-102) — when an SD
+      // declares a narrow addressable surface in metadata.vision_addressable_dimensions,
+      // the heal threshold drops proportionally with a 60% floor (MIN_ADJUSTED_THRESHOLD_RATIO).
+      // Without this, narrow-domain SDs (e.g. chairman-UI Reject dialog scoring 75/90 on
+      // the 8 dims it actually addresses) are permanently blocked at heal even when those
+      // addressable dims score well. Skip for corrective SDs (already use GRADE.A).
+      let dynamicAdjustment = null;
+      if (!isCorrective) {
+        try {
+          const { data: scoreDims } = await supabase
+            .from('eva_vision_scores')
+            .select('dimension_scores')
+            .eq('id', latestScore.id)
+            .single();
+          const { data: sdForOverride } = await supabase
+            .from('strategic_directives_v2')
+            .select('metadata')
+            .eq('id', sdUuid)
+            .single();
+          if (scoreDims?.dimension_scores && sdForOverride?.metadata) {
+            const { countAddressableDimensions, calculateDynamicThreshold } = await import(
+              '../../lead-to-plan/gates/vision-score.js'
+            );
+            const { addressable, total } = countAddressableDimensions(
+              sdType,
+              scoreDims.dimension_scores,
+              sdForOverride.metadata
+            );
+            const adjusted = calculateDynamicThreshold(threshold, addressable, total);
+            if (adjusted !== threshold) {
+              dynamicAdjustment = { base: threshold, adjusted, addressable, total };
+              console.log(`   📐 Dynamic threshold (per-SD addressable dims): ${threshold} → ${adjusted} (${addressable}/${total} addressable, MIN_ADJUSTED_THRESHOLD_RATIO floor)`);
+              threshold = adjusted;
+            }
+          }
+        } catch (e) {
+          console.debug('[HealBeforeComplete] dynamic threshold adjustment suppressed:', e?.message || e);
+        }
+      }
+
       console.log(`   SD Heal Score: ${sdHealScore}/100 (threshold: ${threshold})`);
       console.log(`   Score Age: ${scoreAge} min`);
       console.log(`   Score ID: ${latestScore.id}`);
