@@ -1,0 +1,104 @@
+
+=== Other functions calling reject_chairman_decision === ERROR: "array_agg" is an aggregate function
+
+=== Functions referencing workflow_status...failed === ERROR: "array_agg" is an aggregate function
+
+=== chairman_decisions RLS policies ===
+[
+  {
+    "polname": "chairman_decisions_select_policy",
+    "polcmd": "r",
+    "using_qual": "fn_is_chairman()",
+    "check_qual": null
+  },
+  {
+    "polname": "service_role_all_chairman_decisions",
+    "polcmd": "*",
+    "using_qual": "true",
+    "check_qual": "true"
+  }
+]
+
+=== publication tables (top 100) ===
+[
+  {
+    "tablename": "activity_logs"
+  },
+  {
+    "tablename": "chairman_decisions"
+  },
+  {
+    "tablename": "compliance_alerts"
+  },
+  {
+    "tablename": "eva_event_log"
+  },
+  {
+    "tablename": "eva_orchestration_events"
+  },
+  {
+    "tablename": "issue_patterns"
+  },
+  {
+    "tablename": "leo_handoff_executions"
+  },
+  {
+    "tablename": "research_sessions"
+  },
+  {
+    "tablename": "retrospectives"
+  },
+  {
+    "tablename": "sd_phase_handoffs"
+  },
+  {
+    "tablename": "strategic_directives_v2"
+  },
+  {
+    "tablename": "system_health"
+  },
+  {
+    "tablename": "uat_results"
+  },
+  {
+    "tablename": "uat_runs"
+  },
+  {
+    "tablename": "venture_drafts"
+  },
+  {
+    "tablename": "ventures"
+  },
+  {
+    "tablename": "workflow_executions"
+  }
+]
+
+=== Triggers on operations_audit_log + eva_events (any?) ===
+[]
+
+=== eva_events trigger functions for status_change === ERROR: "array_agg" is an aggregate function
+
+=== trigger_create_postmortem_on_failure already covered? Check trg_chairman_approval_side_effects source === ERROR: function "public.trigger_chairman_approval_side_effects" does not exist
+
+=== Find trigger function for trg_chairman_approval_side_effects ===
+[
+  {
+    "proname": "approve_chairman_decision"
+  },
+  {
+    "proname": "approve_chairman_decision"
+  },
+  {
+    "proname": "on_chairman_approval_side_effects"
+  },
+  {
+    "proname": "reject_chairman_decision"
+  },
+  {
+    "proname": "trg_chairman_approval_unblock_orchestrator"
+  },
+  {
+    "proname": "update_chairman_decision_updated_at"
+  }
+]
