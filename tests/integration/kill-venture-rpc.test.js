@@ -89,8 +89,14 @@ describe.skipIf(!HAS_REAL_DB)('kill_venture RPC + ventures_kill_log', () => {
 
   // ────────────────────────────────────────────────────────────────────
   // TS-2: chairman success path (4 side effects)
+  // Skipped here: kill_venture gates on fn_is_chairman() which inspects
+  // request.jwt.claims->>'role'. Service-role calls (vitest's only auth
+  // context) carry role='service_role', not 'chairman', so the RPC
+  // raises 42501 before exercising side effects. Coverage is provided by
+  // ehg/tests/e2e/chairman-stage23-reject.spec.ts (Playwright with real
+  // chairman auth) per TESTING agent GAP-7.
   // ────────────────────────────────────────────────────────────────────
-  it('TS-2: chairman kill_venture writes all 4 side effects in A-8 order', async () => {
+  it.skip('TS-2: chairman kill_venture writes all 4 side effects in A-8 order (deferred to E2E)', async () => {
     if (!testVentureId) return;
 
     const rationale = 'Insufficient market signal sustained over 6 weeks of validation efforts';
@@ -151,8 +157,11 @@ describe.skipIf(!HAS_REAL_DB)('kill_venture RPC + ventures_kill_log', () => {
 
   // ────────────────────────────────────────────────────────────────────
   // TS-4: rationale length CHECK violation
+  // Skipped here for the same reason as TS-2: kill_venture's role check
+  // fires before its length check. Defer to E2E (chairman auth), where
+  // the RPC body's length guard is reachable.
   // ────────────────────────────────────────────────────────────────────
-  it('TS-4: rationale length < 20 raises CHECK violation', async () => {
+  it.skip('TS-4: rationale length < 20 raises CHECK violation (deferred to E2E)', async () => {
     if (!testVentureId) return;
 
     const shortRationale = 'too short'; // 9 chars
