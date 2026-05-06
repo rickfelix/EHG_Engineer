@@ -17,6 +17,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   SD_TYPE_ADDRESSABLE_DIMENSIONS,
   MIN_ADDRESSABLE_DIMENSIONS,
+  MIN_ADJUSTED_THRESHOLD_RATIO,
   countAddressableDimensions,
   calculateDynamicThreshold,
   buildTierRemediationHint,
@@ -160,9 +161,13 @@ describe('calculateDynamicThreshold — sanity (unchanged behavior)', () => {
     expect(calculateDynamicThreshold(80, 5, 4)).toBe(80);
   });
 
-  it('scales down when addressable < total', () => {
-    expect(calculateDynamicThreshold(80, 2, 4)).toBe(40);
-    expect(calculateDynamicThreshold(90, 3, 10)).toBe(27);
+  it('scales down when addressable < total but floors at 60% of base (QF-20260505-102)', () => {
+    // 2/4 = 50%, ratio-based = 40, floor = 80 * 0.6 = 48 → use 48
+    expect(calculateDynamicThreshold(80, 2, 4)).toBe(48);
+    // 3/10 = 30%, ratio-based = 27, floor = 90 * 0.6 = 54 → use 54
+    expect(calculateDynamicThreshold(90, 3, 10)).toBe(54);
+    // 5/6 = 83%, ratio-based = 75, floor = 90 * 0.6 = 54 → use 75 (floor doesn't kick in)
+    expect(calculateDynamicThreshold(90, 5, 6)).toBe(75);
   });
 
   it('returns base when total is 0 (no dimension data)', () => {
@@ -257,5 +262,92 @@ describe('buildTierRemediationHint', () => {
     const result = buildTierRemediationHint(sd);
     expect(result.tier).toBe('L2');
     expect(result.source).toBe('sd_key_suffix');
+  });
+});
+
+describe('countAddressableDimensions — SD-level override (QF-20260505-102)', () => {
+  const dims = mkDims([
+    'automation_by_default',
+    'chairman_governance_model',
+    'analysisstep_active_intelligence',
+    'decision_filter_engine_escalation',
+    'cross_stage_data_contracts',
+    'cli_authoritative_workflow',
+    'unlimited_compute_posture',
+    'chairman_dashboard_scope',
+    'governance_guardrail_enforcement',
+  ]);
+
+  it('SD-level vision_addressable_dimensions takes precedence over feature=null', () => {
+    const metadata = {
+      vision_addressable_dimensions: ['chairman', 'governance', 'dashboard'],
+    };
+    const { addressable, total } = countAddressableDimensions('feature', dims, metadata);
+    expect(total).toBe(9);
+    // Matches: chairman_governance_model, chairman_dashboard_scope,
+    // governance_guardrail_enforcement, decision_filter_engine_escalation? no (no chairman/governance/dashboard substring there) — wait yes 'governance' is in 'governance_guardrail_enforcement'
+    expect(addressable).toBe(3); // chairman_governance, chairman_dashboard, governance_guardrail
+  });
+
+  it('falls through to SD_TYPE_ADDRESSABLE_DIMENSIONS when override is empty array', () => {
+    const metadata = { vision_addressable_dimensions: [] };
+    const { addressable, total } = countAddressableDimensions('feature', dims, metadata);
+    // feature=null in type map → all addressable
+    expect(addressable).toBe(total);
+  });
+
+  it('falls through to SD_TYPE_ADDRESSABLE_DIMENSIONS when override is missing', () => {
+    const { addressable, total } = countAddressableDimensions('feature', dims, {});
+    expect(addressable).toBe(total);
+  });
+
+  it('falls through when sdMetadata is null/undefined (backward compat)', () => {
+    const r1 = countAddressableDimensions('feature', dims, null);
+    const r2 = countAddressableDimensions('feature', dims, undefined);
+    const r3 = countAddressableDimensions('feature', dims); // no third arg
+    expect(r1.addressable).toBe(r1.total);
+    expect(r2.addressable).toBe(r2.total);
+    expect(r3.addressable).toBe(r3.total);
+  });
+
+  it('SD override applies even when sd_type has its own pattern list', () => {
+    // infrastructure has a curated list, but SD override should win
+    const metadata = { vision_addressable_dimensions: ['chairman'] };
+    const { addressable } = countAddressableDimensions('infrastructure', dims, metadata);
+    expect(addressable).toBe(2); // chairman_governance_model, chairman_dashboard_scope
+  });
+});
+
+describe('calculateDynamicThreshold — anti-abuse floor (QF-20260505-102)', () => {
+  it('exposes MIN_ADJUSTED_THRESHOLD_RATIO at 0.6', () => {
+    expect(MIN_ADJUSTED_THRESHOLD_RATIO).toBe(0.6);
+  });
+
+  it('floors threshold reduction at 60% of base for narrow addressable counts', () => {
+    // 2 of 18 addressable: ratio-based = 90 * 2/18 = 10. Floor = 90 * 0.6 = 54.
+    const result = calculateDynamicThreshold(90, 2, 18);
+    expect(result).toBe(54);
+  });
+
+  it('does not floor when ratio-based already exceeds the floor', () => {
+    // 12 of 18 addressable: ratio-based = 90 * 12/18 = 60. Floor = 54. Use 60.
+    const result = calculateDynamicThreshold(90, 12, 18);
+    expect(result).toBe(60);
+  });
+
+  it('returns base when all dims addressable (no adjustment)', () => {
+    expect(calculateDynamicThreshold(90, 18, 18)).toBe(90);
+    expect(calculateDynamicThreshold(80, 8, 8)).toBe(80);
+  });
+
+  it('returns base when total is 0 (no dim data)', () => {
+    expect(calculateDynamicThreshold(90, 0, 0)).toBe(90);
+  });
+
+  it('rounds to nearest integer', () => {
+    // base=85, 5/9 addressable, ratio = 85 * 5/9 = 47.22; floor = 85*0.6 = 51. Use 51.
+    expect(calculateDynamicThreshold(85, 5, 9)).toBe(51);
+    // base=85, 7/9 addressable, ratio = 85 * 7/9 = 66.11; floor = 51. Use 66.
+    expect(calculateDynamicThreshold(85, 7, 9)).toBe(66);
   });
 });
