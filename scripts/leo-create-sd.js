@@ -56,6 +56,58 @@ import { detectFromKeyChanges } from './modules/handoff/executors/lead-to-plan/g
 const supabase = createSupabaseServiceClient();
 
 // ============================================================================
+// Cross-Repo Target Repos Parsing (SD-LEO-INFRA-LEO-CREATE-CROSS-001)
+// ============================================================================
+
+/**
+ * Allowed platform repo names for the --target-repos flag.
+ * Writer/consumer parity with computeReposForSD() in
+ * scripts/modules/handoff/executors/lead-final-approval/gates.js (SD-LEO-INFRA-CROSS-REPO-MERGE-001).
+ * Canonical casing: 'EHG' and 'EHG_Engineer'.
+ */
+export const ALLOWED_REPOS = new Set(['EHG', 'EHG_Engineer']);
+
+/**
+ * Parse the --target-repos comma-separated list, validate against ALLOWED_REPOS,
+ * normalize case (ehg → EHG, ehg_engineer → EHG_Engineer), dedup, return array.
+ *
+ * @param {string|null|undefined} raw - Comma-separated repo list (e.g., "EHG,EHG_Engineer")
+ * @returns {string[]|null} Normalized array; null if raw is empty/missing
+ *
+ * On invalid repo: console.error with `[INVALID_TARGET_REPOS]` bracket-tokenized
+ * message and process.exit(1). Pure function otherwise (no side effects).
+ */
+export function parseTargetReposArg(raw) {
+  if (raw == null || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+
+  const parts = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+
+  const normalized = [];
+  const seen = new Set();
+  for (const part of parts) {
+    const lower = part.toLowerCase();
+    let canonical = null;
+    if (lower === 'ehg_engineer') canonical = 'EHG_Engineer';
+    else if (lower === 'ehg') canonical = 'EHG';
+
+    if (canonical === null || !ALLOWED_REPOS.has(canonical)) {
+      console.error(`\n❌ [INVALID_TARGET_REPOS] Invalid --target-repos value: "${part}". Valid: ${[...ALLOWED_REPOS].join(', ')}.`);
+      process.exit(1);
+    }
+
+    if (!seen.has(canonical)) {
+      seen.add(canonical);
+      normalized.push(canonical);
+    }
+  }
+
+  return normalized;
+}
+
+// ============================================================================
 // Venture Context Resolution (SD-LEO-INFRA-SD-NAMESPACING-001)
 // ============================================================================
 
@@ -533,6 +585,7 @@ async function createChild(parentKey, index = 0, overrides = {}) {
       ...(overrides.securityReviewed ? { security_reviewed: true } : {}),
       ...(overrides.visionKey ? { vision_key: overrides.visionKey } : {}),
       ...(overrides.archKey ? { arch_key: overrides.archKey } : {}),
+      ...(overrides.targetRepos ? { target_repos: overrides.targetRepos } : {}),
     }
   });
 
@@ -783,6 +836,7 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
       ...(overrides.archKey ? { arch_key: overrides.archKey } : {}),
       ...(overrides.migrationReviewed ? { migration_reviewed: true } : {}),
       ...(overrides.securityReviewed ? { security_reviewed: true } : {}),
+      ...(overrides.targetRepos ? { target_repos: overrides.targetRepos } : {}),
     }
   };
   if (parsed.priority) createOptions.priority = parsed.priority;
@@ -1720,6 +1774,14 @@ Flags:
   --scope-slice <JSON>  (--child only) Declare the slice of parent orchestrator scope this
                         child claims. JSON shape: {stages?: number[], deliverable_globs?: string[]}.
                         Example: --scope-slice='{"stages":[18]}'
+  --target-repos <list> Set metadata.target_repos[] for cross-repo SDs (comma-separated).
+                        Valid values: EHG, EHG_Engineer (case-insensitive; normalized).
+                        When set, PR_MERGE_VERIFICATION at LEAD-FINAL scopes its scan
+                        to ONLY these repos. Required for SDs spanning both platform repos.
+                        Example: --target-repos EHG,EHG_Engineer
+                        Pairs with computeReposForSD() at lead-final-approval/gates.js
+                        (SD-LEO-INFRA-CROSS-REPO-MERGE-001). Supported in all 3 modes:
+                        direct LEO, --from-plan, --child.
   --help             Show this help message
 
 Dependency Field Guide:
@@ -1815,6 +1877,9 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // Parse boolean review flags (satisfy GR-MIGRATION-REVIEW / GR-SECURITY-BASELINE)
       const migrationReviewed = args.includes('--migration-reviewed');
       const securityReviewed = args.includes('--security-reviewed');
+      // SD-LEO-INFRA-LEO-CREATE-CROSS-001: --target-repos for cross-repo SDs
+      const targetReposIdxPlan = args.indexOf('--target-repos');
+      const targetReposPlan = targetReposIdxPlan !== -1 ? parseTargetReposArg(args[targetReposIdxPlan + 1]) : null;
       // Path is any arg that isn't a flag or a flag's value
       const flagValuePositions = new Set(
         [
@@ -1823,11 +1888,13 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
           priorityIdx !== -1 ? priorityIdx + 1 : -1,
           visionKeyIdx !== -1 ? visionKeyIdx + 1 : -1,
           archKeyIdx !== -1 ? archKeyIdx + 1 : -1,
+          targetReposIdxPlan !== -1 ? targetReposIdxPlan + 1 : -1,
         ].filter(i => i > 0)
       );
       const knownPlanFlags = new Set([
         '--yes', '-y', '--type', '--title', '--priority', '--from-plan',
-        '--vision-key', '--arch-key', '--migration-reviewed', '--security-reviewed'
+        '--vision-key', '--arch-key', '--migration-reviewed', '--security-reviewed',
+        '--target-repos'
       ]);
       const planPath = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !flagValuePositions.has(i) && !knownPlanFlags.has(arg)
@@ -1840,6 +1907,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         archKey,
         migrationReviewed,
         securityReviewed,
+        targetRepos: targetReposPlan,
       });
     } else if (args[0] === '--child') {
       // Parse --type and --title overrides for child creation
@@ -1855,6 +1923,11 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // Parse review flags for child creation (GR-MIGRATION-REVIEW / GR-SECURITY-BASELINE)
       if (args.includes('--migration-reviewed')) childOverrides.migrationReviewed = true;
       if (args.includes('--security-reviewed')) childOverrides.securityReviewed = true;
+      // SD-LEO-INFRA-LEO-CREATE-CROSS-001: --target-repos for cross-repo child SDs
+      const childTargetReposIdx = args.indexOf('--target-repos');
+      if (childTargetReposIdx !== -1 && args[childTargetReposIdx + 1]) {
+        childOverrides.targetRepos = parseTargetReposArg(args[childTargetReposIdx + 1]);
+      }
       // Parse --vision-key / --arch-key for child creation
       const childVisionKeyIdx = args.indexOf('--vision-key');
       if (childVisionKeyIdx !== -1 && args[childVisionKeyIdx + 1]) {
@@ -1903,7 +1976,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // args[1] = parent key, args[2] = index (skip flag positions)
       const childParentKey = args[1];
       const flagValuePositionsChild = new Set(
-        [childTypeIdx, childTitleIdx, childVisionKeyIdx, childArchKeyIdx]
+        [childTypeIdx, childTitleIdx, childVisionKeyIdx, childArchKeyIdx, childTargetReposIdx]
           .filter(i => i !== -1).map(i => i + 1)
       );
       // --scope-slice value (next arg) is also a flag value to skip when finding the index arg
@@ -1917,7 +1990,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
     } else {
       // Direct creation: <source> <type> "<title>"
       // Detect unknown flags to prevent silent corruption (SD-LEO-FIX-CREATE-ARGS-001)
-      const knownDirectFlags = new Set(['--venture', '--vision-key', '--arch-key']);
+      const knownDirectFlags = new Set(['--venture', '--vision-key', '--arch-key', '--target-repos']);
       const unknownFlags = args.filter(a => a.startsWith('-') && !knownDirectFlags.has(a));
       if (unknownFlags.length > 0) {
         console.error('\n❌ Unknown flag(s): ' + unknownFlags.join(', '));
@@ -1934,7 +2007,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const [source, type, ...titleParts] = args;
       // Strip flags and their values from the title (SD-DISTILLTOBRAINSTORM quality fix)
       // Without this, --vision-key VALUE --arch-key VALUE leak into the title text
-      const flagsWithValues = new Set(['--venture', '--vision-key', '--arch-key']);
+      const flagsWithValues = new Set(['--venture', '--vision-key', '--arch-key', '--target-repos']);
       const cleanedTitleParts = [];
       for (let i = 0; i < titleParts.length; i++) {
         if (flagsWithValues.has(titleParts[i])) {
@@ -2081,6 +2154,9 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const visionKey = visionKeyIdx !== -1 ? args[visionKeyIdx + 1] : null;
       const archKeyIdx = args.indexOf('--arch-key');
       const archKey = archKeyIdx !== -1 ? args[archKeyIdx + 1] : null;
+      // SD-LEO-INFRA-LEO-CREATE-CROSS-001: --target-repos for cross-repo SDs
+      const targetReposIdx = args.indexOf('--target-repos');
+      const targetRepos = targetReposIdx !== -1 ? parseTargetReposArg(args[targetReposIdx + 1]) : null;
 
       // FR-003: Auto-route to orchestrator creator when arch key has phases
       if (visionKey && archKey) {
@@ -2161,7 +2237,8 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
           ...phase0Metadata,
           ...(visionKey && { vision_key: visionKey }),
           ...(archKey && { arch_key: archKey }),
-          ...(enriched?.scope && { scope: enriched.scope })
+          ...(enriched?.scope && { scope: enriched.scope }),
+          ...(targetRepos && { target_repos: targetRepos })
         }
       });
     }
