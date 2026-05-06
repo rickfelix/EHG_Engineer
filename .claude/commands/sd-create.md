@@ -23,7 +23,36 @@ SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-learn <pattern-id>
 SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-feedback <id>
 SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-plan [path]
 node scripts/modules/sd-key-generator.js --child <parent-key> <index>
+
+# Cross-repo SDs — set metadata.target_repos[] at creation time
+# (SD-LEO-INFRA-LEO-CREATE-CROSS-001 — pairs with PR_MERGE_VERIFICATION at LEAD-FINAL)
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js LEO <type> "<title>" --target-repos EHG,EHG_Engineer
 ```
+
+## Cross-Repo SDs (--target-repos)
+
+When the user describes work that spans BOTH `rickfelix/ehg` (frontend) AND
+`rickfelix/EHG_Engineer` (backend) — for example, an EHG UI dialog backed by
+an EHG_Engineer migration + RPC — set `metadata.target_repos[]` at creation
+time via the `--target-repos` flag.
+
+**Why**: PR_MERGE_VERIFICATION at LEAD-FINAL uses `computeReposForSD(sd)` to
+scope its scan. Without `metadata.target_repos[]`, single-repo SDs may
+trip on phantom branches in the OTHER repo, and cross-repo SDs may stop
+scanning the second repo.
+
+**Valid values** (case-insensitive, normalized): `EHG`, `EHG_Engineer`.
+
+**Examples**:
+```bash
+# Single-repo EHG_Engineer SD (most LEO-INFRA SDs) — flag NOT needed
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js LEO infrastructure "Backend-only fix"
+
+# Cross-repo SD (REJECT-KILL pattern: EHG UI + EHG_Engineer migration)
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js LEO feature "Reject venture dialog" --target-repos EHG,EHG_Engineer
+```
+
+Invalid input fails loud with `[INVALID_TARGET_REPOS]` bracket-tokenized error.
 
 ## Step 0: Vision Readiness Rubric
 
