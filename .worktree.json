@@ -1,8 +1,7 @@
 {
-  "sdKey": "SD-LEO-FEAT-STAGE-BUILD-REPLIT-001",
-  "expectedBranch": "feat/SD-LEO-FEAT-STAGE-BUILD-REPLIT-001",
-  "createdAt": "2026-05-03T18:41:15.610Z",
-  "hostname": "Legion-Laptop",
-  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+  "sdKey": "SD-LEO-FEAT-STAGE-REJECT-KILL-001",
+  "expectedBranch": "feat/SD-LEO-FEAT-STAGE-REJECT-KILL-001",
+  "createdAt": "2026-05-06T01:22:39.576Z",
+  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
