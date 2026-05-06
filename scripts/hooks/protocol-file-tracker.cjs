@@ -244,7 +244,18 @@ function processHookInput(hookInput) {
       offset: hasOffset ? toolInputData.offset : null,
       readAt: now
     };
-    console.log(`[protocol-file-tracker] ⚠️ Partial read detected for ${normalizedPath} (limit: ${toolInputData.limit}, offset: ${toolInputData.offset})`);
+    // QF-20260506-836: also append to ranges[] so the consumer can compute union
+    // coverage. The singleton lastPartialRead loses prior reads of files larger
+    // than the 25k-token Read cap (RCA c45c82f9). Shape matches the consumer's
+    // unionRangeCoverage() contract at sd-key-generator.js:156-194 — raw
+    // {offset, limit} pairs (offset 1-indexed, omitted = line 1).
+    if (!Array.isArray(fileStatus.ranges)) fileStatus.ranges = [];
+    fileStatus.ranges.push({
+      offset: hasOffset ? toolInputData.offset : 1,
+      limit: hasLimit ? toolInputData.limit : null,
+      readAt: now
+    });
+    console.log(`[protocol-file-tracker] ⚠️ Partial read detected for ${normalizedPath} (limit: ${toolInputData.limit}, offset: ${toolInputData.offset}; ranges: ${fileStatus.ranges.length})`);
   } else {
     // Full read clears partial read flag but preserves historical metadata
     fileStatus.lastReadWasPartial = false;
