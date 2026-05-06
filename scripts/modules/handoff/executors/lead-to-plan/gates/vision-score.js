@@ -57,6 +57,9 @@ export const MIN_ADDRESSABLE_DIMENSIONS = 3;
 /** Minimum average score for addressable dimensions (floor rule). */
 export const FLOOR_MINIMUM_SCORE = 60;
 
+/** Minimum ratio of base threshold the dynamic adjustment can reduce to (anti-abuse floor). */
+export const MIN_ADJUSTED_THRESHOLD_RATIO = 0.6;
+
 /**
  * Dimension addressability by SD type.
  * Maps SD type to a Set of dimension name patterns that the type CAN address.
@@ -87,11 +90,20 @@ export const SD_TYPE_ADDRESSABLE_DIMENSIONS = {
  * Count addressable dimensions for an SD type given the total dimension names.
  * Returns { addressable, total } counts.
  *
+ * SD-level override (QF-20260505-102): when sdMetadata.vision_addressable_dimensions
+ * is a non-empty array of pattern strings, it takes precedence over the type-level
+ * SD_TYPE_ADDRESSABLE_DIMENSIONS lookup. This lets a narrow-domain SD (e.g. a
+ * chairman-UI feature that structurally cannot address CLI/DFE/automation
+ * dimensions) declare its addressable surface explicitly. Abuse is bounded by
+ * MIN_ADDRESSABLE_DIMENSIONS floor (existing) and the threshold floor
+ * MIN_ADJUSTED_THRESHOLD_RATIO in calculateDynamicThreshold (new).
+ *
  * @param {string} sdType
  * @param {Object|null} dimensionScores - JSONB { dimName: score, ... }
+ * @param {Object|null} sdMetadata - SD's metadata column (may carry per-SD override)
  * @returns {{ addressable: number, total: number }}
  */
-export function countAddressableDimensions(sdType, dimensionScores) {
+export function countAddressableDimensions(sdType, dimensionScores, sdMetadata) {
   if (!dimensionScores || typeof dimensionScores !== 'object') {
     return { addressable: 0, total: 0 };
   }
@@ -99,7 +111,11 @@ export function countAddressableDimensions(sdType, dimensionScores) {
   const dimNames = Object.keys(dimensionScores);
   const total = dimNames.length;
 
-  const patterns = SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
+  const sdLevelPatterns = sdMetadata?.vision_addressable_dimensions;
+  const patterns = (Array.isArray(sdLevelPatterns) && sdLevelPatterns.length > 0)
+    ? sdLevelPatterns
+    : SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
+
   if (patterns === null || patterns === undefined) {
     return { addressable: total, total }; // all addressable
   }
@@ -114,8 +130,12 @@ export function countAddressableDimensions(sdType, dimensionScores) {
 
 /**
  * Calculate dynamic threshold based on addressable dimension ratio.
- * Formula: adjusted = base * (addressable / total)
+ * Formula: adjusted = max(base * (addressable / total), base * MIN_ADJUSTED_THRESHOLD_RATIO)
  * Returns base threshold if all dims addressable or no dimension data.
+ *
+ * The MIN_ADJUSTED_THRESHOLD_RATIO floor (QF-20260505-102) prevents abuse of the
+ * SD-level addressable-dimensions override: even a SD declaring 2 of 18
+ * dimensions as addressable cannot drive the threshold below 60% of base.
  *
  * @param {number} baseThreshold
  * @param {number} addressable
@@ -124,7 +144,9 @@ export function countAddressableDimensions(sdType, dimensionScores) {
  */
 export function calculateDynamicThreshold(baseThreshold, addressable, total) {
   if (total === 0 || addressable >= total) return baseThreshold;
-  return Math.round(baseThreshold * (addressable / total));
+  const ratioBased = baseThreshold * (addressable / total);
+  const floor = baseThreshold * MIN_ADJUSTED_THRESHOLD_RATIO;
+  return Math.round(Math.max(ratioBased, floor));
 }
 
 /**
@@ -353,7 +375,8 @@ export async function validateVisionScore(sd, supabase) {
   }
 
   // ── Dynamic threshold adjustment ────────────────────────────────────────
-  const { addressable, total } = countAddressableDimensions(sdType, dimensionScores);
+  // QF-20260505-102: pass sd.metadata so per-SD vision_addressable_dimensions override applies.
+  const { addressable, total } = countAddressableDimensions(sdType, dimensionScores, sd.metadata);
   const threshold = calculateDynamicThreshold(baseThreshold, addressable, total);
   const thresholdAdjusted = threshold !== baseThreshold;
 
