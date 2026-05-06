@@ -1,0 +1,35 @@
+-- Migration: Extend ventures.workflow_status enum with 'killed' value
+-- SD: SD-LEO-FEAT-STAGE-REJECT-KILL-001
+-- Sub-agent evidence: database-agent 7b7a0960-9c4c-40c5-9c67-511dde4ee26f (PASS, 90/100, prospective)
+--
+-- IMPORTANT — Postgres ALTER TYPE limitation
+-- =========================================
+-- This migration MUST be in a standalone file. Postgres does NOT permit
+-- ALTER TYPE ... ADD VALUE inside a transaction that also USES the new
+-- label (CREATE FUNCTION body, INSERT row, etc.). The companion migration
+-- 20260505224113_ventures_kill_log_and_rpc.sql consumes 'killed' and is
+-- in a separate file specifically because of this restriction.
+--
+-- IRREVERSIBILITY
+-- ===============
+-- Postgres does NOT support ALTER TYPE ... DROP VALUE. Once 'killed' is
+-- added to the enum, it cannot be removed. This is a one-way migration.
+-- Rollback strategy: leave the orphan enum value (harmless if no rows
+-- reference it). The companion migration's table + RPC CAN be dropped
+-- via DROP TABLE ventures_kill_log CASCADE; DROP FUNCTION kill_venture
+-- + revert reject_chairman_decision via CREATE OR REPLACE.
+--
+-- Safety verification (database-agent inventory)
+-- ==============================================
+-- 9 venture-attached triggers checked: zero conflict with workflow_status='killed'
+-- 0 partial indexes filter on workflow_status
+-- 2 views reference column but are not value-filtered (v_active_ventures, v_archived_ventures)
+-- chk_event_type CHECK on eva_events: 'killed' NOT accepted (use event_type='status_change'
+--   with event_data.type='venture.killed' instead — see A-2 amendment)
+-- create_postmortem_on_venture_failure trigger: fires only on status='failed', not 'killed'
+
+ALTER TYPE public.workflow_status_enum ADD VALUE IF NOT EXISTS 'killed';
+
+-- Verification query (run separately):
+--   SELECT unnest(enum_range(NULL::workflow_status_enum)) AS values;
+-- Expected: pending, in_progress, paused, completed, failed, skipped, blocked, killed
