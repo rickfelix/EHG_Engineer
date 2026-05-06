@@ -88,9 +88,11 @@ if (violations.length > 0) {
     console.error('   Missing: ' + missing.join(', '));
     console.error('');
   }
-  console.error('   Fix:');
-  console.error('     node scripts/one-off/_wrap-retro-migrations.cjs');
-  console.error('     (or add BEGIN; near top + COMMIT; at EOF manually)');
+  console.error('   Fix (per-file mode wraps just your offending file(s)):');
+  for (const { file } of violations) {
+    console.error('     node scripts/one-off/_wrap-retro-migrations.cjs ' + file);
+  }
+  console.error('   (or add BEGIN; near top + COMMIT; at EOF manually)');
   console.error('');
   console.error('   Emergency bypass (logged): git commit --no-verify');
   console.error('');
