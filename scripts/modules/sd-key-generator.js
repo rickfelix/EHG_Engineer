@@ -97,6 +97,23 @@ function getLeadFilePartialReadDetails() {
 }
 
 /**
+ * QF-20260506-836: Check whether the DIGEST equivalent of a protocol file was
+ * read in this session. Used to satisfy the gate when the full file exceeds
+ * the 25k-token Read cap and a paginated read is impractical (the DIGEST is
+ * the canonical size-constrained alternative).
+ *
+ * @param {string} digestFilename - e.g. "CLAUDE_CORE_DIGEST.md"
+ * @returns {boolean}
+ */
+function isDigestRead(digestFilename) {
+  const state = readSessionState();
+  const digestStatus = state.protocolFileReadStatus?.[digestFilename];
+  if (digestStatus?.readCount > 0) return true;
+  // Legacy array fallback
+  return state.protocolFilesRead?.includes(digestFilename) === true;
+}
+
+/**
  * Check if CLAUDE_CORE.md was only partially read (with limit/offset parameters)
  * @returns {Object|null} Partial read details or null if not partial
  */
@@ -285,6 +302,14 @@ export function validateCoreFileRead() {
   const isRead = isCoreFileRead();
   const partialDetails = getCoreFilePartialReadDetails();
 
+  // QF-20260506-836: DIGEST escape hatch. CLAUDE_CORE.md exceeds the 25k-token
+  // Read cap; CLAUDE_CORE_DIGEST.md is the explicit size-constrained alternative
+  // (per CLAUDE.md item #9). Reading the DIGEST satisfies the protocol-file
+  // requirement without forcing impossible single-call reads of the full file.
+  if (isDigestRead('CLAUDE_CORE_DIGEST.md')) {
+    return { valid: true, error: null, remediation: null };
+  }
+
   // Case 1: Not read at all
   if (!isRead) {
     return {
@@ -376,6 +401,11 @@ export function validateCoreFileRead() {
 export function validateLeadFileRead() {
   const isRead = isLeadFileRead();
   const partialDetails = getLeadFilePartialReadDetails();
+
+  // QF-20260506-836: DIGEST escape hatch (parallel to validateCoreFileRead).
+  if (isDigestRead('CLAUDE_LEAD_DIGEST.md')) {
+    return { valid: true, error: null, remediation: null };
+  }
 
   // Case 1: Not read at all
   if (!isRead) {
