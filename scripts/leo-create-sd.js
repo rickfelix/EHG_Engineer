@@ -820,6 +820,10 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     rationale: 'Created from Claude Code plan file',
     success_criteria: successCriteria,
     strategic_objectives: strategicObjectives.length > 0 ? strategicObjectives : null,
+    // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-3): pass scope and key_changes through createOptions
+    // so createSD INSERTs them atomically — no UPDATE-after-INSERT race, and detector at the buildDefault* call site sees rich content.
+    scope: scope || null,
+    key_changes: keyChanges.length > 0 ? keyChanges : null,
     metadata: {
       source: 'plan',
       plan_content: parsed.fullContent,
@@ -850,10 +854,10 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
   }
   const sd = await createSD(createOptions);
 
-  // Step 13: Update additional fields that aren't in createSD signature
+  // Step 13: Update additional fields that aren't in createSD signature.
+  // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-3): scope and key_changes now flow through createOptions
+  // so they're INSERTed atomically — only `risks` remains for post-INSERT UPDATE.
   const additionalUpdates = {};
-  if (scope) additionalUpdates.scope = scope;
-  if (keyChanges.length > 0) additionalUpdates.key_changes = keyChanges;
   if (risks.length > 0) additionalUpdates.risks = risks;
 
   if (Object.keys(additionalUpdates).length > 0) {
@@ -865,7 +869,7 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     if (updateError) {
       console.warn(`   ⚠️  Could not update additional fields: ${updateError.message}`);
     } else {
-      console.log(`   ✅ Updated: scope, ${keyChanges.length > 0 ? 'key_changes, ' : ''}${risks.length > 0 ? 'risks' : ''}`);
+      console.log(`   ✅ Updated: risks`);
     }
   }
 
@@ -1145,7 +1149,13 @@ function buildDefaultSmokeTestSteps(type, title, scope) {
   // Infrastructure SDs: only generate if scope suggests code changes
   if ((type || '').toLowerCase() === 'infrastructure') {
     const scopeStr = (scope || title || '').toLowerCase();
-    const codeKeywords = ['script', 'fix', 'gate', 'module', 'function', 'class', 'endpoint', 'api', '.js', '.ts'];
+    // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-1): expand to cover CLI / operator-experience / harness vocab.
+    // Kept lowercase only (line above lowercases input). "gates" omitted as substring-redundant with "gate".
+    const codeKeywords = [
+      'script', 'fix', 'gate', 'module', 'function', 'class', 'endpoint', 'api', '.js', '.ts',
+      'flag', 'cli', 'wizard', 'detector', 'parser', 'helper', 'validator', 'hook', 'sub-agent',
+      'refactor', 'sweep', 'audit', 'normalizer',
+    ];
     const hasCodeScope = codeKeywords.some(kw => scopeStr.includes(kw));
     if (!hasCodeScope) return [];
     return [
@@ -1217,6 +1227,9 @@ async function createSD(options) {
     // PAT-SDCREATE-001: Allow passing key_changes and smoke_test_steps
     key_changes = null,
     smoke_test_steps = null,
+    // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-3): accept scope so the plan-file path becomes atomic INSERT.
+    // Default null preserves behavior for callers that omit it (5 internal callers + /leo create path).
+    scope = null,
     // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Allow explicit target_application
     target_application: explicitTargetApp = null,
   } = options;
@@ -1321,7 +1334,9 @@ async function createSD(options) {
     : buildDefaultKeyChanges(type, title);
   const finalSmokeTestSteps = (Array.isArray(smoke_test_steps) && smoke_test_steps.length > 0)
     ? smoke_test_steps
-    : buildDefaultSmokeTestSteps(type, title, options.scope ?? description);
+    // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-2): three-step fallback so detector sees scope from BOTH caller paths
+    // (plan-file passes options.scope after FR-3 atomic-INSERT refactor; /leo create stores it in options.metadata.scope).
+    : buildDefaultSmokeTestSteps(type, title, options.scope ?? options.metadata?.scope ?? description);
 
   // ========================================================================
   // GOVERNANCE GUARDRAILS (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007)
@@ -1510,7 +1525,7 @@ async function createSD(options) {
     sd_key: sdKey,
     title,
     description,
-    scope: description,  // Required field - defaults to description
+    scope: scope || description,  // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-3): prefer atomic-INSERT scope, fall back to description.
     rationale,
     sd_type: dbType,
     status: 'draft',
@@ -1731,7 +1746,8 @@ export function formatDependencyForDisplay(dep) {
 }
 
 // Export for programmatic use (e.g., corrective-sd-generator)
-export { createSD };
+// SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-4): export buildDefaultSmokeTestSteps for unit-test access.
+export { createSD, buildDefaultSmokeTestSteps };
 
 // ============================================================================
 // CLI Handler
