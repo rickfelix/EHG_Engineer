@@ -32,7 +32,7 @@ import { createHealBeforeCompleteGate } from './heal-before-complete.js';
  * @param sdType - SD type (default 'feature' so FAST_HEAL_SD_TYPES path is skipped)
  * @param threshold - leo_config heal threshold (default 80)
  */
-function makeSupabase({ initialScore, sdType = 'feature', threshold = 80, parentSdId = null }) {
+function makeSupabase({ initialScore, sdType = 'feature', threshold = 80, parentSdId = null, metadata = {}, dimensionScores = null }) {
   const auditInserts = [];
   let currentScore = initialScore;
 
@@ -58,7 +58,7 @@ function makeSupabase({ initialScore, sdType = 'feature', threshold = 80, parent
           data: {
             id: 'sd-uuid', sd_key: 'SD-TEST-001', sd_type: sdType,
             parent_sd_id: parentSdId, status: 'in_progress', current_phase: 'PLAN',
-            metadata: {},
+            metadata,
           },
           error: null,
         };
@@ -81,15 +81,15 @@ function makeSupabase({ initialScore, sdType = 'feature', threshold = 80, parent
         limit() { return this; },
         async single() {
           if (this._opts?.head) return { count: 1, error: null };
-          return { data: { id: 'score-' + Math.random(), total_score: currentScore, threshold_action: currentScore >= threshold ? 'accept' : 'gap_closure_sd', rubric_snapshot: { gaps: ['gap1'], mode: 'sd-heal' }, scored_at: new Date().toISOString() }, error: null };
+          return { data: { id: 'score-' + Math.random(), total_score: currentScore, threshold_action: currentScore >= threshold ? 'accept' : 'gap_closure_sd', rubric_snapshot: { gaps: ['gap1'], mode: 'sd-heal' }, scored_at: new Date().toISOString(), dimension_scores: dimensionScores }, error: null };
         },
         then(r) {
           if (this._opts?.head) return Promise.resolve({ count: 1, error: null }).then(r);
-          return Promise.resolve({ data: [{ id: 'score-' + Math.random(), total_score: currentScore, threshold_action: currentScore >= threshold ? 'accept' : 'gap_closure_sd', rubric_snapshot: { gaps: ['gap1'], mode: 'sd-heal' }, scored_at: new Date().toISOString() }], error: null }).then(r);
+          return Promise.resolve({ data: [{ id: 'score-' + Math.random(), total_score: currentScore, threshold_action: currentScore >= threshold ? 'accept' : 'gap_closure_sd', rubric_snapshot: { gaps: ['gap1'], mode: 'sd-heal' }, scored_at: new Date().toISOString(), dimension_scores: dimensionScores }], error: null }).then(r);
         },
         insert(_payload) {
           if (healSequence.length > 0) currentScore = healSequence.shift();
-          return { select: () => Promise.resolve({ data: [{ id: 'inserted-' + Math.random(), total_score: currentScore, threshold_action: 'minor_sd', rubric_snapshot: { mode: 'sd-heal' }, scored_at: new Date().toISOString() }], error: null }) };
+          return { select: () => Promise.resolve({ data: [{ id: 'inserted-' + Math.random(), total_score: currentScore, threshold_action: 'minor_sd', rubric_snapshot: { mode: 'sd-heal' }, scored_at: new Date().toISOString(), dimension_scores: dimensionScores }], error: null }) };
         },
         update() { return { eq: () => Promise.resolve({ data: null, error: null }) }; },
       };
@@ -189,5 +189,52 @@ describe('HEAL_BEFORE_COMPLETE — FR-2 iteration loop', () => {
       expect(result.details.iterations).toBeLessThanOrEqual(MAX_HEAL_ITERATIONS);
     }
     expect(MAX_HEAL_ITERATIONS).toBe(3); // sanity: spec is honored
+  });
+
+  // QF-20260506-295: per-SD vision_addressable_dimensions threshold override
+  it('TS-E: per-SD addressable-dim override floors heal threshold (parity with LEAD-TO-PLAN gate)', async () => {
+    // SD has metadata.vision_addressable_dimensions with 10 patterns. Of the 13
+    // dimensions in the latest score, 7 match the patterns. With baseThreshold 90:
+    //   ratioBased  = 90 * (7/13) ≈ 48
+    //   floor       = 90 * MIN_ADJUSTED_THRESHOLD_RATIO(0.6) = 54
+    //   adjusted    = max(48, 54) = 54
+    //   effective   = 54 - 3 (tolerance) = 51
+    // Score 75 >= 51 → PASS. Without the patch: 75 < 87 → EXHAUSTED.
+    const dimensionScores = {
+      'cli_authoritative_workflow': 88,
+      'decision_filter_engine_escalation': 92,
+      'analysisstep_active_intelligence': 80,
+      'unlimited_compute_posture': 75,
+      'okr_driven_prioritization': 70,
+      'governance_first_chairman': 95,
+      'database_migrations': 90,
+      'event_bus_emission': 87,
+      'lifecycle_stage_orchestration': 91,
+      'stateless_shared_services': 89,
+      'eva_hub_orchestration': 86,
+      'cross_stage_data_contracts': 88,
+      'automation_by_default': 84,
+    };
+    const metadata = {
+      vision_addressable_dimensions: [
+        'chairman', 'governance', 'database', 'event', 'stateless',
+        'eva', 'lifecycle', 'data_contracts', 'automation', 'cross_stage',
+      ],
+    };
+    const supabase = makeSupabase({
+      initialScore: 75,
+      threshold: 90,
+      sdType: 'feature',
+      metadata,
+      dimensionScores,
+    });
+    const gate = createHealBeforeCompleteGate(supabase);
+    const result = await gate.validator(makeCtx({ sd_type: 'feature' }));
+
+    // Primary invariant: a 75 score with the override-floored threshold (54-ish)
+    // must PASS. The exact details path (within-buffer warning vs full pass) is
+    // not asserted because it depends on whether 75 lands above or below the
+    // adjusted base — both are PASS.
+    expect(result.passed).toBe(true);
   });
 });
