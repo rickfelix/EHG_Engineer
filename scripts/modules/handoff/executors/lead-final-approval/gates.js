@@ -53,6 +53,62 @@ function getRepoPath(repoName) {
 }
 
 /**
+ * Compute the list of repos to scan for a given SD's PR_MERGE_VERIFICATION.
+ *
+ * SD-LEO-INFRA-CROSS-REPO-MERGE-001: Closes the gate-side phantom-branch class
+ * where single-repo SDs were blocked by stale branches in the OTHER repo.
+ *
+ * Precedence:
+ *   1. sd.metadata.target_repos[] — explicit allowlist (canonical for cross-repo SDs)
+ *   2. sd.target_application — single-repo derivation (case-insensitive)
+ *   3. fallback to both repos with WARN log (legacy SDs without metadata)
+ *
+ * @param {Object} sd - Strategic Directive record
+ * @returns {Array<{githubRepo: string, localPath: string}>}
+ */
+export function computeReposForSD(sd) {
+  const sdId = sd?.sd_key || sd?.id || 'unknown';
+  const all = [
+    { githubRepo: 'rickfelix/ehg', localPath: getRepoPath('EHG') },
+    { githubRepo: 'rickfelix/EHG_Engineer', localPath: getRepoPath('EHG_Engineer') }
+  ];
+
+  // Tier 1: explicit metadata.target_repos[] allowlist
+  const targetRepos = sd?.metadata?.target_repos;
+  if (Array.isArray(targetRepos) && targetRepos.length > 0) {
+    const allowed = targetRepos.map(r => String(r).toLowerCase().trim());
+    const result = all.filter(r => {
+      const shortName = r.githubRepo.split('/')[1].toLowerCase();
+      return allowed.includes(shortName) || allowed.includes(r.githubRepo.toLowerCase());
+    });
+    if (result.length > 0) {
+      console.log(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} target_application=${sd?.target_application || 'NULL'} target_repos=${JSON.stringify(targetRepos)} scanning=${JSON.stringify(result.map(r => r.githubRepo))}`);
+      return result;
+    }
+  }
+
+  // Tier 2: derived from target_application (case-insensitive)
+  const ta = (typeof sd?.target_application === 'string') ? sd.target_application.toLowerCase().trim() : '';
+  if (ta) {
+    if (ta.includes('engineer')) {
+      const result = [all[1]]; // EHG_Engineer only
+      console.log(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} target_application=${sd.target_application} target_repos=NULL scanning=${JSON.stringify(result.map(r => r.githubRepo))}`);
+      return result;
+    }
+    if (ta === 'ehg' || ta === 'app' || ta === 'application') {
+      const result = [all[0]]; // EHG only
+      console.log(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} target_application=${sd.target_application} target_repos=NULL scanning=${JSON.stringify(result.map(r => r.githubRepo))}`);
+      return result;
+    }
+    // Venture-name or unknown — fall through to Tier 3
+  }
+
+  // Tier 3: legacy fallback — scan both repos with WARN
+  console.warn(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} no target_application or target_repos — scanning both repos (legacy behavior)`);
+  return all;
+}
+
+/**
  * Create Gate 1: PLAN-TO-LEAD handoff verification
  * @param {Object} supabase - Supabase client
  * @returns {Object} Gate definition
@@ -470,10 +526,12 @@ export function createPRMergeVerificationGate() {
       try {
         const { execSync } = await import('child_process');
 
-        const repos = ['rickfelix/ehg', 'rickfelix/EHG_Engineer'];
+        // SD-LEO-INFRA-CROSS-REPO-MERGE-001: scope repo scan to SD's target_application
+        // and metadata.target_repos[] instead of hardcoding both repos.
+        const reposWithPaths = computeReposForSD(ctx.sd);
         const openPRs = [];
 
-        for (const repo of repos) {
+        for (const { githubRepo: repo } of reposWithPaths) {
           try {
             const result = execSync(
               `gh pr list --repo ${repo} --state open --json number,title,headRefName,url --limit 100`,
@@ -529,10 +587,12 @@ export function createPRMergeVerificationGate() {
         console.log(`   Checked patterns: ${branchPatterns.join(', ')}`);
 
         // Check for unmerged branches with commits
+        // SD-LEO-INFRA-CROSS-REPO-MERGE-001: reuse the same scoped repo list (computeReposForSD)
+        // for the unmerged-branch scan to keep both loops consuming a single source of truth
+        // (writer/consumer asymmetry class — PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
         const unmergedBranches = [];
-        for (const repo of repos) {
+        for (const { githubRepo: repo, localPath: repoPath } of reposWithPaths) {
           try {
-            const repoPath = repo === 'rickfelix/ehg' ? getRepoPath('EHG') : getRepoPath('EHG_Engineer');
 
             // SD-LLM-CONTRACT-PIPELINE-TEST-ORCH-001-B RCA: prune stale remote-tracking refs
             // before checking branches. Without this, squash-merged branches whose remote was
