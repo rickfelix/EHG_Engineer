@@ -70,6 +70,8 @@ AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no c
 
 > **Chaining default**: **OFF** (pause at orchestrator boundary). See "Orchestrator Chaining Mode" for full details.
 
+> **No-work fallback**: When `/leo next` finds no workable SD (all claimed, blocked, quota-locked, or top recommendation already in flight) AND AUTO-PROCEED is ON, fall through to `/leo assist` Phase 1. This is continuation behavior under AUTO-PROCEED, not a pause. See "After Running sd:next" bullet 6 in Session Initialization.
+
 ## Session Mode Declaration
 
 Sessions operate in one of two modes that govern how you treat harness bugs (LEO-INFRA issues, gate bugs, session lifecycle drift, tooling constraints) encountered mid-work:
@@ -155,6 +157,8 @@ This command provides:
 3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD.md.
 4. READY SDs have already been approved — proceed to the next handoff in their workflow.
 5. Prioritize: READY > EXEC > PLANNING > DRAFT (prefer SDs with existing momentum)
+6. **If no workable SD exists** (all CLAIMED/BLOCKED, quota-locked, or recommended item already in flight per `gh pr list`) AND AUTO-PROCEED is ON → fall through to `/leo assist` Phase 1 (autonomous inbox processing). Treat this as continuation, not a pause. Only escalate to Pause Point #4 if `/leo assist` Phase 1 also returns zero actionable issues.
+> Why: `/leo next` finding nothing claim-able is a routine state under heavy parallel-session load — it's not a 'human decision required' moment. `/leo assist` exists to handle the inbox in exactly this gap. User-authorized 2026-05-04.
 
 ### Related Commands
 | Command | Purpose |
@@ -184,4 +188,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-05-04 9:54:34 PM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-05-07 6:56:33 AM | Protocol: LEO 4.4.1 | Source: Database*

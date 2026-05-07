@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-05-04 9:54:34 PM
+**Generated**: 2026-05-07 6:56:33 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
@@ -450,6 +450,23 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 | "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
 | "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -520,23 +537,6 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## PLAN Pre-EXEC Checklist
 
@@ -823,6 +823,21 @@ node scripts/add-prd-to-database.js {SD-ID}
 - ⚠️ Never create PRDs as markdown files
 - ⚠️ Never skip validation gates
 
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -874,21 +889,6 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
-
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -2015,6 +2015,22 @@ node scripts/add-prd-to-database.js SD-XXX "Title" 2>&1 | tee /tmp/prd-prompt.tx
 On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decomposition, the PRD creation step was blocked for ~30 minutes because the `WARNING: No PRD record found` message was interpreted as a script failure rather than as the inline-mode handoff signal. The fix attempt (`LLM_PRD_INLINE=false`) then hit external API timeouts, compounding the confusion. Root cause: the warning's phrasing ("You MUST insert the PRD record") is delivered in a warning/error tone, but it is in fact the normal inline-mode completion message.
 
 
+## Substring-Redundancy Audit for Keyword-List Expansions
+
+MANDATORY during PRD authoring for any FR that expands a keyword/phrase list backed by `Array.prototype.some(kw => str.includes(kw))` or equivalent substring matchers: (1) list new keywords, (2) check each against existing entries for case-insensitive substring overlap, (3) drop entries fully subsumed by broader existing entries, (4) document the audit in the FR's acceptance_criteria.
+
+### Why
+
+validation-agent caught this on the "gates" entry during SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 PLAN: `gate` already substring-matches `gates`, `gateway`, `upgrade`. Adding `gates` was structural noise. Generic to any keyword-list expansion (codeKeywords, riskKeywords, schemaKeywords).
+
+### Anti-Pattern Example
+
+Adding `protocol gates` alongside existing `protocol`. Either drop the longer entry, or replace `protocol` with the more specific term and explicitly accept the broadening.
+
+### How to Apply
+
+For every keyword-list FR expansion, include in acceptance_criteria: "Substring-redundancy audit applied: each new entry checked against all existing + sibling new entries for substring containment; redundant entries dropped with rationale."
+
 ## Handoff Templates
 
 
@@ -2414,6 +2430,6 @@ On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decompositi
 
 ---
 
-*Generated from database: 2026-05-04*
+*Generated from database: 2026-05-07*
 *Protocol Version: 4.4.1*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
