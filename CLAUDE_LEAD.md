@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-05-04 9:54:34 PM
+**Generated**: 2026-05-07 6:56:33 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 **Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
@@ -1325,6 +1325,33 @@ Sequential LEAD approval allows learning from earlier children to inform later d
 
 > **Team Capabilities**: For orchestrator SDs with parallel children, agents can spawn specialist teams to accelerate cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
+## SD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off SD creation scripts like:**
+- `create-*-sd.js`
+- `create-sd*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/leo-create-sd.js
+```
+
+### Why This Matters
+- One-off scripts bypass validation and governance
+- They create maintenance burden (100+ orphaned scripts)
+- They fragment the codebase and confuse future developers
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-sd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/leo-create-sd.js`
+2. Follow interactive prompts
+3. SD is properly validated and tracked in database
+
 ## Vision V2 SD Handling (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Reference Check
@@ -1366,33 +1393,6 @@ All Vision V2 SDs contain this metadata:
   "note": "Similar files may exist in the codebase that you can learn from, but we are creating from new."
 }
 ```
-
-## SD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off SD creation scripts like:**
-- `create-*-sd.js`
-- `create-sd*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/leo-create-sd.js
-```
-
-### Why This Matters
-- One-off scripts bypass validation and governance
-- They create maintenance burden (100+ orphaned scripts)
-- They fragment the codebase and confuse future developers
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-sd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/leo-create-sd.js`
-2. Follow interactive prompts
-3. SD is properly validated and tracked in database
 
 ## Parent-Child SD Phase Governance
 
@@ -1537,8 +1537,24 @@ Check `objectives` (active, current period) and `key_results` (status != 'achiev
 - If an SD does align, documenting the KR connection improves traceability
 - Misaligned SDs are not rejected — alignment is advisory, not blocking
 
+## Default Sub-Agent Invocation Cadence for Harness-Fix SDs
+
+MANDATORY: Before invoking add-prd-to-database.js for harness-fix SDs whose scope touches call-site signature changes, narrow-keyword detectors, or shared-scope writer/consumer pairs, LEAD MUST invoke testing-agent prospectively (validation_mode=prospective) and route findings into PRD draft before LEAD-TO-PLAN handoff.
+
+### Why
+
+Two consecutive witnesses (SD-LEO-INFRA-LEO-CREATE-CROSS-001 caught a skip-list miscount; SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 caught the /leo create blind spot at line 2164 storing scope in metadata.scope, not options.scope) confirm prospective LEAD-phase testing-agent catches structural defects PRD authoring would miss.
+
+### ROI
+
+One prevented half-fix per SD; cost: single sub-agent call (~3 min). Eat-our-own-dogfood: this very rule was applied to its own LEAD phase (SD-LEO-INFRA-CODIFY-PROTOCOL-RULES-001 evidence row 0e13a90f-7b02-41b2-8a1e-06a97178953a). The testing-agent caught the dormant target_file column blind spot at LEAD before PRD authoring.
+
+### How to Apply
+
+At LEAD-phase scope-lock, before running `add-prd-to-database.js`, invoke `testing-agent` via the Task tool with the SD's scope/key_changes/risks. Route findings into PRD `metadata.testing_agent_lead_evidence_id` and FR/TS/risk fields. Trigger keywords: harness, gate, detector, keyword list, validator, hook, sub-agent, signature, writer/consumer.
+
 ---
 
-*Generated from database: 2026-05-04*
+*Generated from database: 2026-05-07*
 *Protocol Version: 4.4.1*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

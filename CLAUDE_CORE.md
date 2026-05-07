@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-05-04 9:54:34 PM
+**Generated**: 2026-05-07 6:56:33 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -219,6 +219,48 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## 🤖 Built-in Agent Integration
+
+## Built-in Agent Integration
+
+### Three-Layer Agent Architecture
+
+LEO Protocol uses three complementary agent layers:
+
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
+
 ## Claude Code Plan Mode Integration
 
 **Status**: ACTIVE | **Version**: 1.0.0
@@ -261,48 +303,6 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
-
-## 🤖 Built-in Agent Integration
-
-## Built-in Agent Integration
-
-### Three-Layer Agent Architecture
-
-LEO Protocol uses three complementary agent layers:
-
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
-
-### Integration Principle
-
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
-
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
-```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
-
-This is faster than sequential exploration and provides comprehensive coverage.
 
 ## Work Tracking Policy
 
@@ -664,6 +664,38 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
+
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -704,38 +736,6 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Why**: SD-LEO-INFRA-CENTRALIZED-POST-STAGE-001 revealed that the S17 doc-gen hook failed silently on every run since it was shipped (wrong column name in query). Because the error was caught as non-fatal, the pipeline continued without vision/architecture docs, and S19 generated an unvalidated sprint plan.
 
 **Rule**: "Non-fatal" means the hook threw an unexpected exception. "Hook ran but wrote zero rows to its target table" is a **data integrity failure** that must surface.
-
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -1500,8 +1500,8 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 | PAT-HF-LEADTOPLAN-3612ea70 | handoff_failure | [HIGH] high | 8 | [STABLE] | N/A |
 | PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 | PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-HF-PLANTOEXEC-211b3c47 | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOEXEC-211b3c47 | session_retrospective | [HIGH] high | 5 | [STABLE] | N/A |
+| PAT-HF-EXECTOPLAN-46d4008b | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
+| PAT-HF-PLANTOEXEC-900f5f1d | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
 
 ### Prevention Checklists
 
@@ -1520,58 +1520,57 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. PLAN_TO_EXEC Handoff Retrospective: Populate brand_variants from S10 identity_persona_brand artifact [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/3/2026 | **Score**: 100
+### 1. PLAN_TO_EXEC Handoff Retrospective: Phase 2: DB Vote Audit Trail + Deterministic Tie-Breaking Rules [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/7/2026 | **Score**: 100
 
 **Key Improvements**:
-- brand_variants population should have been included in the original S10 implementation - this was a ...
-- No integration test verifying the full Stage 10 to brand_variants pipeline end-to-end in CI
-
-**Action Items**:
-- [ ] Create backfill migration for existing S10 ventures missing brand_variants
-- [ ] Add brand_variants type to shared types module
-
-### 2. PLAN_TO_EXEC Handoff Retrospective: Post-stage hook API endpoint — S15 Stitch, S17 docs, S19 bridge dispatch [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/3/2026 | **Score**: 100
-
-**Key Improvements**:
-- The endpoint currently uses console.log/console.error for dispatch results — production deployment s...
-- Failed dispatches are fire-and-forget with no retry mechanism — adding exponential backoff retry (ma...
-
-**Action Items**:
-- [ ] Add retry logic for failed dispatches
-- [ ] Implement structured JSON logging
-
-### 3. PLAN_TO_EXEC Handoff Retrospective: DB-driven gate enforcement — remove hardcoded arrays, add S16 to hard_gate_stages [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/3/2026 | **Score**: 100
-
-**Key Improvements**:
-- [PAT-AUTO-6de8fc27] Gate SUCCESS_METRICS failed: score 62/100
-- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
+- [PAT-AUTO-78428251] Gate SUCCESS_METRICS failed: score 74/100
+- [PAT-AUTO-8eebdcf9] Gate SUCCESS_METRICS failed: score 65/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
 
-### 4. LEAD_TO_PLAN Handoff Retrospective: Populate brand_variants from S10 identity_persona_brand artifact [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/3/2026 | **Score**: 100
+### 2. LEAD_TO_PLAN Handoff Retrospective: Phase 1: Fleet Roster at Decision Points (~25 LOC, 1-2 hours) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/8/2026 | **Score**: 100
 
 **Key Improvements**:
-- brand_variants population should have been included in the original S10 implementation - this was a ...
-- No integration test verifying the full Stage 10 to brand_variants pipeline end-to-end in CI
+- [PAT-AUTO-78428251] Gate SUCCESS_METRICS failed: score 74/100
+- [PAT-AUTO-8eebdcf9] Gate SUCCESS_METRICS failed: score 65/100
 
 **Action Items**:
-- [ ] Create backfill migration for existing S10 ventures missing brand_variants
-- [ ] Add brand_variants type to shared types module
+- [ ] Verify: Fleet Roster at Decision Points (~25 LOC, 1-2 hours) deliverables comple...
+- [ ] Validate: All tests passing for SD-FLEETAWARE-SESSION-IDENTITY-HARDENING-ORCH-00...
 
-### 5. PLAN_TO_EXEC Handoff Retrospective: S17 parity integration test — CLI vs frontend venture state comparison [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/4/2026 | **Score**: 100
+### 3. PLAN_TO_EXEC Handoff Retrospective: DB migration: trigger bypass coordination + RPC function [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/7/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-6de8fc27] Gate SUCCESS_METRICS failed: score 62/100
-- [PAT-AUTO-aade2ddd] Gate L:targetApplicationValidation failed: score 0/100
+- [PAT-AUTO-bb04852b] Gate GATE_SD_QUALITY failed: score 55/100
+- [PAT-AUTO-37b32cd1] Gate SUCCESS_METRICS failed: score 69/100
 
 **Action Items**:
 - [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+
+### 4. PLAN_TO_EXEC Handoff Retrospective: Stage 16 Config Template Mismatch: Financial Projections vs API Contract Artifact [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/7/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-8eebdcf9] Gate SUCCESS_METRICS failed: score 65/100
+- [PAT-AUTO-bb04852b] Gate GATE_SD_QUALITY failed: score 55/100
+
+**Action Items**:
+- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+
+### 5. LEAD_TO_PLAN Handoff Retrospective: Stitch Integration Wiring Fix S15 S17 Hooks [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/8/2026 | **Score**: 100
+
+**Key Improvements**:
+- The SD-001-C facade introduction that caused this regression should have had a more thorough integra...
+- The EXEC-TO-PLAN gate has a systemic issue where sub-validator exemptions are not propagated, requir...
+
+**Action Items**:
+- [ ] Verify: S15 hook calls stitch-provisioner.postStage15Hook() instead of stitch-ad...
+- [ ] Validate: S15 hook stores stitch_project artifact in venture_artifacts for SD-LE...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1637,7 +1636,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-05-04*
+*Generated from database: 2026-05-07*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

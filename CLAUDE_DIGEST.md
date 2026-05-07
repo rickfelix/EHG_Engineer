@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-05-04T01:54:34.074Z -->
-<!-- git_commit: 51a69650 -->
-<!-- db_snapshot_hash: 9def68fc45bd1a50 -->
+<!-- generated_at: 2026-05-07T10:56:33.699Z -->
+<!-- git_commit: 7f182311 -->
+<!-- db_snapshot_hash: 55520ea162d958d1 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
@@ -144,14 +144,10 @@ This command provides:
 3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD.md.
 4. READY SDs have already been approved — proceed to the next handoff in their workflow.
 5. Prioritize: READY > EXEC > PLANNING > DRAFT (prefer SDs with existing momentum)
+6. **If no workable SD exists** (all CLAIMED/BLOCKED, quota-locked, or recommended item already in flight per `gh pr list`) AND AUTO-PROCEED is ON → fall through to `/leo assist` Phase 1 (autonomous inbox processing). Treat this as continuation, not a pause. Only escalate to Pause Point #4 if `/leo assist` Phase 1 also returns zero actionable issues.
+> Why: `/leo next` finding nothing claim-able is a routine state under heavy parallel-session lo
 
-### Related Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run sd:next` | Show intelligent SD queue |
-| `npm run sd:status` | Progress vs baseline |
-| `npm run sd:burnrate` | Velocity and forecasting |
-| `npm run sd:baseline view` | Current execution plan |
+*...truncated. Read full file for complete section.*
 
 
 ---
@@ -163,5 +159,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-05-04 9:54:34 PM*
+*DIGEST generated: 2026-05-07 6:56:33 AM*
 *Protocol: 4.4.1*

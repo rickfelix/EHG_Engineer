@@ -81,7 +81,8 @@
       "multi_track_parallel_execution",
       "vision_v2_lead",
       "governance_okr_alignment_lead",
-      "sub_agent_phase_guidance_lead"
+      "sub_agent_phase_guidance_lead",
+      "lead_testing_agent_harness_fix_cadence"
     ],
     "_removed_sections_note": "migration_execution_protocol_lead (duplicate of CORE migration_execution_protocol), mandatory_phase_transitions_lead (duplicate of CORE mandatory_phase_transitions). RCA mandate removed from generator — already in router."
   },
@@ -118,7 +119,8 @@
       "plan_smoke_test_requirement",
       "plan_failure_chain_ordering",
       "sub_agent_phase_guidance_plan",
-      "cascade_invalidation_plan"
+      "cascade_invalidation_plan",
+      "plan_keyword_list_substring_audit"
     ],
     "_removed_sections_note": "migration_execution_protocol_plan (duplicate of CORE), mandatory_phase_transitions_plan (duplicate of CORE), testing_tier_strategy (superseded by testing_tier_strategy_updated), schema_documentation_access + schema_documentation_reference + database_schema_overview (reference data, on-demand lookup via docs/), plan_visual_documentation_examples (Mermaid examples, reference doc). RCA mandate removed from generator — already in router."
   },
@@ -153,7 +155,8 @@
       "sub_agent_phase_guidance_exec",
       "reference",
       "vision_arch_doc_check",
-      "code_quality_pre_commit"
+      "code_quality_pre_commit",
+      "exec_atomic_insert_writer_consumer_pattern"
     ],
     "_removed_sections_note": "mandatory_phase_transitions_exec (duplicate of CORE mandatory_phase_transitions), migration_execution_delegation (duplicate of CORE migration_execution_protocol), workflow (was listed twice — removed duplicate). RCA mandate removed from generator — already in router."
   },
