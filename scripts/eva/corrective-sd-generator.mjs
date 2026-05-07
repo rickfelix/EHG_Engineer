@@ -20,6 +20,7 @@ import { generateSDKey } from '../modules/sd-key-generator.js';
 import { createSD } from '../leo-create-sd.js';
 import { loadIntelligenceSignals } from '../../lib/eva/intelligence-loader.js';
 import { calculateCorrectivePriority } from '../../lib/eva/corrective-priority-calculator.js';
+import { recordCorrectiveFinding } from '../../lib/eva/corrective-finding-recorder.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -553,12 +554,14 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
     }
   }
 
-  // 6. Create one SD per group via createSD (standard LEO creation pipeline)
-  const createdSDs = [];
-  const allGeneratedIds = [...existingIds];
+  // 6. Record one feedback finding per group via corrective-finding-recorder
+  // (SD-LEO-INFRA-CORRECTIVE-FINDING-REDIRECT-001). Replaces direct createSD()
+  // emission; findings now persist in feedback (category='corrective_finding')
+  // and are promoted to SDs deliberately via scripts/corrective-triage.mjs.
+  const recordedFindings = [];
 
   for (const group of groups) {
-    const { dims, sdType, category, label } = group;
+    const { dims, label } = group;
     const dimSummary = dims.map(d => `${d.dimensionName} (${d.dimId})`).join(', ');
     const lowestScore = dims[0]?.score ?? score.total_score;
     const title = `Corrective: ${label} Gap — ${dimSummary} (score ${score.total_score ?? '?'}/100)`;
@@ -567,46 +570,32 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
       score.rubric_snapshot, score.total_score, action
     );
 
-    // QF-20260503-858: dedup — skip if a draft corrective already targets the
-    // same source-SD + dimension set. Prevents the duplicate-emission noise
-    // observed 2026-05-03 (15/24 post-filter SDs were duplicates).
     const dimensionIds = dims.map(d => d.dimId);
-    const dupSdKey = await findDuplicateCorrective(supabase, score.sd_id, dimensionIds);
-    if (dupSdKey) {
-      console.log(`[corrective-sd-generator] eva.corrective.skipped_duplicate source_sd_id=${score.sd_id} dims=${[...dimensionIds].sort().join(',')} existing=${dupSdKey}`);
-      await _logAudit(supabase, scoreId, 'skipped_duplicate', dupSdKey, score.vision_id, {
-        source_sd_id: score.sd_id,
-        dimensions: dimensionIds,
-        existing_sd_key: dupSdKey,
-      });
-      continue;
-    }
-
-    // Generate SD key through standard pipeline
-    const sdKey = await generateSDKey({ source: 'CORR', type: sdType, title });
+    const correctiveClass = label === 'Vision' ? 'vision_gap'
+      : label === 'Architecture' ? 'arch_gap'
+      : 'other_gap';
+    const sourceGate = score.rubric_snapshot?.mode === 'sd-heal'
+      ? 'eva_heal_score'
+      : 'eva_vision_score';
+    const dynamicPriority = priorityResult?.priority ?? tier.priority;
 
     try {
-      const dynamicPriority = priorityResult?.priority ?? tier.priority;
-      const newSD = await createSD({
-        sdKey,
+      const result = await recordCorrectiveFinding(supabase, {
+        source_sd_id: score.sd_id ?? null,
+        source_gate: sourceGate,
+        gate_run_id: scoreId,
+        corrective_class: correctiveClass,
+        dimensions: dimensionIds,
+        tier: action,
+        score: score.total_score ?? null,
         title,
         description,
-        type: sdType,
-        priority: dynamicPriority,
-        category,
-        parentId: ORCHESTRATOR_ID,
-        rationale: `Vision score of ${score.total_score ?? '?'}/100 is below the ${action} threshold. Corrective action required for ${label} dimensions: ${dimSummary}.`,
-        strategic_objectives: dims.map(d => ({ objective: `Improve ${d.dimensionName} above ${THRESHOLDS.ACCEPT}`, metric: `EVA ${d.dimId} >= ${THRESHOLDS.ACCEPT}` })),
-        success_criteria: dims.map(d => ({ criterion: `${d.dimensionName} gap addressed`, measure: `EVA re-score shows ${d.dimId} >= ${THRESHOLDS.ACCEPT}` })),
-        success_metrics: [{ metric: 'EVA dimension score', target: String(THRESHOLDS.ACCEPT), actual: String(lowestScore) }],
-        key_principles: [{ principle: 'Vision alignment', description: `Address ${label} gap(s) to improve EVA vision score` }],
         metadata: {
           source: 'corrective_sd_generator',
-          source_sd_id: score.sd_id ?? null,
-          score_id: scoreId,
-          vision_origin_score_id: scoreId,
+          dim_summary: dimSummary,
+          lowest_dim_score: lowestScore,
+          vision_id: score.vision_id ?? null,
           action_tier: action,
-          dimensions: dims.map(d => d.dimId),
           gate_exemptions: ['GATE_VISION_SCORE'],
           intelligence_priority: {
             priority: dynamicPriority,
@@ -615,47 +604,67 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
             reason_codes: priorityResult?.reason_codes ?? [],
             source: priorityResult?.source ?? 'static',
           },
+          // Stored for triage CLI promote — payload identical to pre-redesign
+          // createSD args, so promotion produces the same SD as before.
+          promote_payload: {
+            sdType: group.sdType,
+            category: group.category,
+            parentId: ORCHESTRATOR_ID,
+            priority: dynamicPriority,
+            rationale: `Vision score of ${score.total_score ?? '?'}/100 is below the ${action} threshold. Corrective action required for ${label} dimensions: ${dimSummary}.`,
+            strategic_objectives: dims.map(d => ({ objective: `Improve ${d.dimensionName} above ${THRESHOLDS.ACCEPT}`, metric: `EVA ${d.dimId} >= ${THRESHOLDS.ACCEPT}` })),
+            success_criteria: dims.map(d => ({ criterion: `${d.dimensionName} gap addressed`, measure: `EVA re-score shows ${d.dimId} >= ${THRESHOLDS.ACCEPT}` })),
+            success_metrics: [{ metric: 'EVA dimension score', target: String(THRESHOLDS.ACCEPT), actual: String(lowestScore) }],
+            key_principles: [{ principle: 'Vision alignment', description: `Address ${label} gap(s) to improve EVA vision score` }],
+          },
         },
       });
 
-      // Set vision_origin_score_id (not handled by createSD)
-      await supabase
-        .from('strategic_directives_v2')
-        .update({ vision_origin_score_id: scoreId })
-        .eq('sd_key', newSD.sd_key);
+      recordedFindings.push({ feedbackId: result.feedbackId, recorded: result.recorded, dims, label });
+      await _logAudit(supabase, scoreId, action, null, score.vision_id, {
+        feedback_id: result.feedbackId,
+        recorded: result.recorded,
+        dedup_hash: result.dedupHash,
+        corrective_class: correctiveClass,
+        source_gate: sourceGate,
+      });
 
-      createdSDs.push({ sdKey: newSD.sd_key, sdId: newSD.id, dims, label });
-      allGeneratedIds.push(newSD.id);
-      await _logAudit(supabase, scoreId, action, newSD.sd_key, score.vision_id);
-
-      // Publish corrective SD created event
-      publishVisionEvent(VISION_EVENTS.CORRECTIVE_SD_CREATED, {
+      // Replaces CORRECTIVE_SD_CREATED — no SD created at this stage.
+      publishVisionEvent(VISION_EVENTS.CORRECTIVE_FINDING_RECORDED ?? 'eva.corrective.finding_recorded', {
         originSdKey: score.sd_id || null,
-        correctiveSdKey: newSD.sd_key,
+        feedbackId: result.feedbackId,
+        recorded: result.recorded,
         scoreId,
         action,
-        dimensions: dims.map(d => d.dimId),
+        dimensions: dimensionIds,
         label,
+        correctiveClass,
+        sourceGate,
       });
-    } catch (sdErr) {
-      console.warn(`[corrective-sd-generator] Failed to create ${label} SD: ${sdErr?.message}`);
+    } catch (recErr) {
+      console.warn(`[corrective-sd-generator] Failed to record ${label} finding: ${recErr?.message}`);
       continue;
     }
   }
 
-  if (createdSDs.length === 0) {
-    throw new Error('Failed to create any corrective SDs');
+  if (recordedFindings.length === 0) {
+    throw new Error('Failed to record any corrective findings');
   }
 
-  // 7. Update generated_sd_ids with all created SD IDs
-  await supabase
-    .from('eva_vision_scores')
-    .update({ generated_sd_ids: allGeneratedIds })
-    .eq('id', scoreId);
-
-  // Backward-compatible return: primary SD = first created; sds = full list
-  const primary = createdSDs[0];
-  return { created: true, action, sdKey: primary.sdKey, sdId: primary.sdId, sds: createdSDs };
+  // 7. Backward-compatible return shim: existing callers may destructure
+  //    {created, action, sdKey, sdId, sds}. We preserve those keys (as null/[]
+  //    since no SDs are created at this stage) and add feedbackIds as additive
+  //    new field. eva_vision_scores.generated_sd_ids no longer updated here —
+  //    triage CLI promote will update it when an SD is actually created.
+  return {
+    created: false,
+    action,
+    sdKey: null,
+    sdId: null,
+    sds: [],
+    feedbackIds: recordedFindings.map(f => f.feedbackId),
+    findings: recordedFindings,
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
