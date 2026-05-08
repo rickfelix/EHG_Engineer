@@ -532,9 +532,17 @@ describe('Stage Chain: Full 1→25 Pipeline with Real Outputs', () => {
     });
 
     it('Stage 24 → consumes Stage 23+5 output', async () => {
+      // SD-LEO-FEAT-STAGE-LIVE-ANNOUNCE-001 FR-4: Stage 24 refuses unless upstream
+      // launch readiness verdict is PASS/READY (or HOLD with chairman_override).
+      // The chained stage23 output may be SKIPPED here when upstream artifact
+      // preflight fails in the synthetic test fixture, so we override with a
+      // PASS verdict to verify the wiring rather than the gating behavior
+      // (the gating behavior is covered by tests/unit/eva/stage-templates/stage-24-routing.test.js).
+      const stage23ForGoLive = { ...stageOutputs[23], verdict: 'READY' };
       stageOutputs[24] = await analyzeStage24({
-        stage23Data: stageOutputs[23],
+        stage23Data: stage23ForGoLive,
         stage05Data: stageOutputs[5],
+        stage22Data: stageOutputs[22],
         ventureName: VENTURE_NAME,
         logger: silentLogger,
       });
