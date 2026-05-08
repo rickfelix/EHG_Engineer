@@ -120,6 +120,7 @@ scripts/implement-*.mjs
 scripts/insert-*.mjs
 scripts/insert-*.cjs
 !scripts/insert-stage17-issue-pattern.mjs
+!scripts/insert-pat-port-isol-001.mjs
 scripts/investigate-*.cjs
 scripts/list-*.mjs
 scripts/list-*.cjs
