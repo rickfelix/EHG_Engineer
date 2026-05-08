@@ -262,10 +262,37 @@ export class HandoffOrchestrator {
       }
 
       // Get gates for this handoff type
-      const gates = await executor.getRequiredGates(sd, options);
+      const hardcodedGates = await executor.getRequiredGates(sd, options);
+
+      // Inject DFE escalation gate (parity with BaseExecutor.execute and dryRunHandoff)
+      const hasDFE = hardcodedGates.some(g => g.name === 'DFE_ESCALATION_GATE');
+      if (!hasDFE) {
+        const { createDFEEscalationGate } = await import('./gates/dfe-escalation-gate.js');
+        hardcodedGates.push(createDFEEscalationGate(this.supabase, `${normalizedType}-gate`));
+      }
+
+      // QF-20260508-515: Apply gate policies in precheck path (writer/consumer asymmetry).
+      // Mirrors execute (BaseExecutor.js:246) and dryRunHandoff (HandoffOrchestrator.js:377-387).
+      // Honors validation_gate_registry.applicability='DISABLED' rows so precheck can no longer
+      // block infrastructure SDs on gates the registry explicitly disabled (e.g., GATE_VISION_SCORE
+      // for sd_type=infrastructure since 2026-02-19).
+      const { applyGatePolicies } = await import('./gate-policy-resolver.js');
+      const { filteredGates, fallbackUsed } = await applyGatePolicies(
+        this.supabase,
+        hardcodedGates,
+        {
+          sdType: sd?.sd_type,
+          validationProfile: sd?.validation_profile || options?.validationProfile,
+          sdId: sd?.sd_key || sdId
+        }
+      );
+
+      if (fallbackUsed) {
+        console.log('   [GatePolicy] Using hardcoded gate set (DB policy unavailable)');
+      }
 
       // Run ALL gates using batch validation (doesn't stop on first failure)
-      const result = await this.validationOrchestrator.validateGatesAll(gates, {
+      const result = await this.validationOrchestrator.validateGatesAll(filteredGates, {
         sdId,
         sd,
         options,
