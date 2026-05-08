@@ -1177,21 +1177,35 @@ describe('Stage 23: analyzeStage23 (Launch Readiness Kill Gate)', () => {
 });
 
 
-describe('Stage 24: analyzeStage24', () => {
+describe('Stage 24: analyzeStage24 (Go Live & Announce)', () => {
   beforeEach(() => { mockComplete.mockReset(); });
 
-  // analyzeStage24 = stage-24-marketing-prep.js (REFUSED).
-  // Imports checkReleaseReadiness from stage-24.js which does not export it,
-  // causing TypeError when called. REFUSED otherwise (no LLM synthesis).
-  it.skip('produces valid launch scorecard with AARRR metrics', async () => {
-    // Skipped: analyzeStage24 is REFUSED — requires real data from upstream SD completion.
-    // Additionally imports checkReleaseReadiness from stage-24.js which is not exported there.
+  // SD-LEO-FEAT-STAGE-LIVE-ANNOUNCE-001 FR-2: analyzeStage24 now dispatches to the
+  // canonical stage-24-go-live.js (was misrouted to archived stage-24-marketing-prep.js,
+  // which was a stale Stage 23 copy). Stale copies archived to docs/archived/orphan-stage-23-modules/.
+  // FR-4: Entry-precondition refusal — throws if Stage 23 verdict is not PASS/READY (or HOLD with chairman_override).
+
+  it('returns ready_to_launch when Stage 23 verdict is "READY" (production reality)', async () => {
+    const result = await analyzeStage24({
+      stage23Data: { verdict: 'READY' },
+      stage22Data: { channels: [] },
+      ventureName: 'Test Venture',
+      logger: silentLogger,
+    });
+    expect(result.launch_status).toBe('ready_to_launch');
+    expect(result.readiness_verdict).toBe('READY');
   });
 
-  it('throws when called (broken import or REFUSED)', async () => {
-    // checkReleaseReadiness is not exported from stage-24.js — TypeError is expected
+  it('throws when Stage 23 verdict is "NOT_READY" (FR-4 refusal)', async () => {
+    await expect(analyzeStage24({
+      stage23Data: { verdict: 'NOT_READY' },
+      logger: silentLogger,
+    })).rejects.toThrow(/NOT_READY/);
+  });
+
+  it('throws when stage23Data is missing entirely (FR-4 refusal)', async () => {
     await expect(analyzeStage24({ logger: silentLogger }))
-      .rejects.toThrow();
+      .rejects.toThrow(/MISSING/);
   });
 });
 
