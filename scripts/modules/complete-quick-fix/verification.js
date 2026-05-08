@@ -13,34 +13,75 @@ import { execSync } from 'child_process';
 export const QF_HARD_LOC_CAP = 75;
 
 /**
- * Validate LOC constraint against the QF hard cap (CLAUDE.md routing).
- * @param {number} actualLoc - Actual lines of code
+ * Validate source-LOC constraint against the QF hard cap (CLAUDE.md routing).
+ *
+ * SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001:
+ *   - Cap now applies to source-only LOC (test LOC excluded; FR-1)
+ *   - --force-complete (forceComplete=true) bypasses the cap entirely (FR-2)
+ *   - Escalation UPDATE only writes actual_source_loc/actual_test_loc when within
+ *     the loosened CHECK; falls back to logging the rejected values (FR-5)
+ *
+ * @param {number} sourceLoc - Source-only lines of code (the policy-relevant value)
+ * @param {number} testLoc - Test-only LOC (recorded but not capped)
  * @param {string} qfId - Quick-fix ID
  * @param {object} supabase - Supabase client
  * @param {Function} prompt - Prompt function for user input
+ * @param {object} flags - { forceComplete?: bool, reason?: string, nonInteractive?: bool }
  * @returns {Promise<boolean>} True if validation passed, false if should exit
  */
-export async function validateLOC(actualLoc, qfId, supabase, prompt) {
-  if (actualLoc <= QF_HARD_LOC_CAP) {
+export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, flags = {}) {
+  // FR-2: --force-complete bypasses the cap entirely (audit trail in verification_notes JSON)
+  if (flags.forceComplete) {
+    console.log(`\n⚠️  --force-complete: source-LOC cap bypassed (source=${sourceLoc}, test=${testLoc}, reason="${flags.reason}")`);
     return true;
   }
 
-  console.log('\n❌ CANNOT COMPLETE - LOC EXCEEDS LIMIT\n');
-  console.log(`   Actual LOC: ${actualLoc}`);
+  if (sourceLoc <= QF_HARD_LOC_CAP) {
+    return true;
+  }
+
+  console.log('\n❌ CANNOT COMPLETE - SOURCE LOC EXCEEDS LIMIT\n');
+  console.log(`   Source LOC: ${sourceLoc}`);
+  console.log(`   Test LOC:   ${testLoc} (excluded from cap)`);
   console.log(`   Limit:      ${QF_HARD_LOC_CAP}\n`);
   console.log('⚠️  This issue must be escalated to a full Strategic Directive.\n');
+  console.log('   To bypass with audit trail: --force-complete --reason "<text>"\n');
 
   const escalate = await prompt('Auto-escalate to SD? (yes/no): ');
 
   if (escalate.toLowerCase().startsWith('y')) {
-    const { error: updateError } = await supabase
+    // FR-5: write split-LOC fields, fall back if CHECK rejects
+    let updateError = null;
+    let updateResult = await supabase
       .from('quick_fixes')
       .update({
         status: 'escalated',
-        escalation_reason: `Actual LOC (${actualLoc}) exceeds ${QF_HARD_LOC_CAP} line hard cap`,
-        actual_loc: actualLoc
+        escalation_reason: `Actual source LOC (${sourceLoc}) exceeds ${QF_HARD_LOC_CAP} line hard cap (test LOC: ${testLoc})`,
+        actual_source_loc: sourceLoc,
+        actual_test_loc: testLoc
       })
       .eq('id', qfId);
+    updateError = updateResult.error;
+
+    // FR-5 fallback: if loosened CHECK still rejects, escalate without writing LOC fields
+    if (updateError && /actual_loc_reasonable/i.test(updateError.message || '')) {
+      console.log(`   ⚠️  CHECK rejected (${updateError.message}); falling back: escalate WITHOUT writing LOC fields, log to verification_notes`);
+      const fallbackNotes = JSON.stringify({
+        escalated_with_loc_check_violation: true,
+        rejected_source_loc: sourceLoc,
+        rejected_test_loc: testLoc,
+        timestamp: new Date().toISOString()
+      });
+      const fallback = await supabase
+        .from('quick_fixes')
+        .update({
+          status: 'escalated',
+          escalation_reason: `Actual source LOC (${sourceLoc}) exceeds cap; CHECK rejected LOC write (see verification_notes for forensics)`,
+          verification_notes: fallbackNotes
+        })
+        .eq('id', qfId);
+      updateError = fallback.error;
+    }
 
     if (updateError) {
       console.log('❌ Failed to escalate:', updateError.message);
@@ -52,7 +93,7 @@ export async function validateLOC(actualLoc, qfId, supabase, prompt) {
     return false;
   }
 
-  console.log(`\n⚠️  Quick-fix not completed. Reduce LOC to ≤${QF_HARD_LOC_CAP} or escalate.\n`);
+  console.log(`\n⚠️  Quick-fix not completed. Reduce source LOC to ≤${QF_HARD_LOC_CAP}, or use --force-complete --reason "<text>".\n`);
   return false;
 }
 
@@ -199,22 +240,37 @@ export function verifyTestCoverage(filesChanged) {
 
 /**
  * Validate self-verification results
+ *
+ * SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2: --force-complete bypasses
+ * the low-confidence proceed-anyway prompt. Audit trail goes in verification_notes.
+ *
  * @param {object} verificationResults - Results from self-verification
  * @param {Function} prompt - Prompt function for user input
+ * @param {object} flags - { forceComplete?: bool, reason?: string }
  * @returns {Promise<boolean>} True if verification passed
  */
-export async function validateSelfVerification(verificationResults, prompt) {
+export async function validateSelfVerification(verificationResults, prompt, flags = {}) {
   if (!verificationResults.passed) {
+    if (flags.forceComplete) {
+      console.log(`\n⚠️  --force-complete: self-verification blockers bypassed (reason="${flags.reason}")`);
+      verificationResults.blockers.forEach((blocker, i) => console.log(`   [bypassed] ${i + 1}. ${blocker}`));
+      return true;
+    }
     console.log('\n❌ CANNOT COMPLETE - Verification blockers detected\n');
     console.log('   Resolve the following issues:\n');
     verificationResults.blockers.forEach((blocker, i) => {
       console.log(`   ${i + 1}. ${blocker}`);
     });
-    console.log('\n   Run this script again after resolving blockers.\n');
+    console.log('\n   To bypass with audit trail: --force-complete --reason "<text>"\n');
+    console.log('   Run this script again after resolving blockers.\n');
     return false;
   }
 
   if (verificationResults.confidence < 80) {
+    if (flags.forceComplete) {
+      console.log(`\n⚠️  --force-complete: low-confidence (${verificationResults.confidence}%) bypassed (reason="${flags.reason}")`);
+      return true;
+    }
     console.log(`\n⚠️  VERIFICATION PASSED BUT CONFIDENCE LOW (${verificationResults.confidence}%)\n`);
     console.log('   Warnings detected:\n');
     verificationResults.warnings.forEach((warning, i) => {
