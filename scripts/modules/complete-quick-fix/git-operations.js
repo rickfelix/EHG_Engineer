@@ -348,6 +348,24 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
   let filesChanged = [];
   let diffAnalysis = {};
 
+  // QF-20260509-779: refresh origin/main BEFORE computing the diff so the
+  // 3-dot symmetric difference doesn't include commits already merged via
+  // main during a campaign-mode session (when this worktree was created).
+  // Without this fetch, file-count was inflated to 13 when the QF commit only
+  // changed 4 files — every prior-merged-this-session PR's files leaked into
+  // filesChanged via the stale local origin/main ref. Fetch is best-effort:
+  // if offline / no remote, fall through with the existing (possibly stale)
+  // ref — preserves backward compat.
+  try {
+    execSync('git fetch origin main --quiet', {
+      cwd: testDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 10000
+    });
+  } catch {
+    // Best-effort — silent fall-through if offline or no upstream.
+  }
+
   try {
     // QF-20260503-820: use three-dot syntax (origin/main...HEAD) so the diff is
     // scoped to "what THIS branch changed since divergence" — independent of how
