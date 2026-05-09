@@ -875,6 +875,41 @@ async function main() {
     }
   }
 
+  // --- ENFORCEMENT 14: File-Claim Layer (SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001) ---
+  // For Write/Edit/MultiEdit calls: consult file_claim_locks for the target path.
+  // REFUSE if a peer holds a fresh claim (<10min heartbeat); auto-claim if unclaimed
+  // or stale. Local LRU cache (size 64, TTL 30s) keeps p95 latency <50ms.
+  // Set FILE_CLAIM_ENFORCED=off in .env for emergency disable.
+  if (
+    process.env.FILE_CLAIM_ENFORCED !== 'off' &&
+    (TOOL_NAME === 'Write' || TOOL_NAME === 'Edit' || TOOL_NAME === 'MultiEdit')
+  ) {
+    try {
+      const filePath = (input && (input.file_path || input.filePath || input.path)) || null;
+      if (filePath) {
+        const path = require('path');
+        const normalizedPath = path.posix.normalize(filePath.replace(/\\/g, '/'));
+        const fileClaimGuard = require('./lib/file-claim-guard.cjs');
+        const result = await fileClaimGuard.checkClaim({
+          filePath: normalizedPath,
+          mySessionId: _SESSION_ID,
+          staleThresholdSeconds: parseInt(process.env.FILE_CLAIM_STALE_THRESHOLD_SECONDS || '600', 10),
+        });
+        if (result.refused) {
+          auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-FILE-CLAIM', result.message, 'block', { filePath: normalizedPath, holder_session_id: result.holder_session_id });
+          process.stderr.write(`ENF-FILE-CLAIM: ${result.message}\n`);
+          process.exit(2);
+        }
+        // Otherwise: claim acquired or already mine — proceed.
+      }
+    } catch (claimErr) {
+      // Fail-open: file-claim layer outage must NOT block tool execution.
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        process.stderr.write(`[pre-tool-enforce] file-claim guard errored (fail-open): ${claimErr.message}\n`);
+      }
+    }
+  }
+
   // --- ENFORCEMENT 10: Source-Side Telemetry Writer (SD-LEO-INFRA-WORKER-SOURCE-SIDE-001) ---
   // Non-blocking write of tool/timeout/silence signals to claude_sessions.
   // Fire-and-forget — never waits, never blocks, swallows all errors.

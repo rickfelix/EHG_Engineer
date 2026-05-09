@@ -594,3 +594,44 @@ When the user mentions any of these phrases, suggest `/coordinator`:
 | `/coordinator forecast` | `/coordinator workers` to see who's active |
 | `/coordinator available` | Share available SDs with idle workers |
 | Orchestrator complete | `/coordinator forecast` for full queue ETA |
+
+---
+
+## Same-SD Parallel Worker Assignment (FR-4)
+
+Added 2026-05-09 by SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 to address parallel-write contention between 2+ worker sessions holding the same SD claim concurrently.
+
+### When to use
+
+Trigger this workflow when ANY of the following are observed:
+- `npm run session:check-concurrency` surfaces 2+ sessions on the same SD/branch with `category: idle_uncommitted` or `category: stale_uncommitted` (FR-1 rescoped detection: peers with uncommitted writes regardless of heartbeat freshness)
+- A peer surfaces with `[DRIFT]` flag next to its `sd_key` (FR-7 detection: peer's sd_key tag does not match the active SD claim for the current branch)
+- A worker session attempts Write/Edit and receives `ENF-FILE-CLAIM` error from the PreToolUse hook (ENFORCEMENT 14 in `scripts/hooks/pre-tool-enforce.cjs`), indicating a peer holds a fresh per-file claim
+
+### File-claim acquisition flow
+
+When ENFORCEMENT 14 fires for a Write/Edit:
+1. The hook consults `file_claim_locks` for the target path
+2. If no holder exists OR the holder's heartbeat is stale (>10min), the hook AUTO-CLAIMS the path for the current session and proceeds
+3. If a peer holds a fresh claim, the hook REFUSES with `ENF-FILE-CLAIM` and reports the holder's session ID + heartbeat age
+
+The local in-process LRU cache (size 64, TTL 30s) holds claim lookups to keep the hook's p95 latency under 50ms. Cache invalidates automatically on commit (via `.husky/post-commit`) and on stale-session sweep.
+
+### Conflict resolution (when ENF-FILE-CLAIM fires)
+
+The blocked worker has three options:
+1. **Wait for the peer to commit** — file_claim_locks rows auto-release on `git commit` via `.husky/post-commit` (DELETEs rows for files in HEAD commit scoped to the holder's session)
+2. **Ask the coordinator to reassign** — invoke `/coordinator workers` to see who holds what; the coordinator can suggest a different file from the SD's scope that is still unclaimed
+3. **Force-takeover** — if the peer is presumed dead but their heartbeat is fresh, the operator may invoke `node scripts/sd-start.js <SD> --force-reclaim` which clears the SD claim AND co-clears all file_claim_locks held by the peer
+
+### Stale-handover
+
+If a worker session crashes mid-write, its file claims auto-release after 10 minutes of stale heartbeat via `scripts/stale-session-sweep.cjs`. The threshold is configurable via `FILE_CLAIM_STALE_THRESHOLD_SECONDS` env var (default 600). The 4 sibling release sites that co-clear file_claim_locks alongside `strategic_directives_v2.claiming_session_id` clears are:
+1. `scripts/stale-session-sweep.cjs` — main sweep loop
+2. `lib/claim-validity-gate.js` — orphaned-claim auto-release path
+3. `lib/drain-orchestrator.mjs` — `_cleanupSlot` (per-slot release)
+4. `lib/drain-orchestrator.mjs` — `shutdown` loop (all-slots release on drain)
+
+### Emergency disable
+
+Set `FILE_CLAIM_ENFORCED=off` in `.env` and restart the session to disable ENFORCEMENT 14 entirely. The coordinator should be notified — disabling the file-claim layer reverts to the pre-2026-05-09 lucky-convergence behavior where peer sessions can silently overwrite each other's work-in-progress.

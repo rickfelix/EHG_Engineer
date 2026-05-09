@@ -30,6 +30,48 @@ import { execSync } from 'child_process';
 // CLI now read from the same SSOT, satisfying the AC4 requirement that
 // both report the same active-session list within 1-second skew.
 import { getActiveSessions } from '../lib/session-manager.mjs';
+// SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 (FR-7): drift detection requires
+// reading the active SD claim for the current branch.
+import { createClient } from '@supabase/supabase-js';
+
+/**
+ * Categorize a session row for the concurrency report (SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001).
+ *
+ * Replaces the old single `computed_status === 'active'` post-filter that excluded
+ * idle/stale-cleanup peers — even when those peers held UNCOMMITTED writes that would
+ * collide with the local session. The 2026-05-09 incident in feedback row e805894f
+ * showed 2 of 3 writers were already STALE_CLEANUP at the moment of detection but
+ * still actively writing files; the old filter dropped them silently.
+ *
+ * @param {Object} session
+ * @returns {'active'|'idle_uncommitted'|'stale_uncommitted'|'inactive'}
+ */
+export function categorizeSessionForContention(session) {
+  if (!session) return 'inactive';
+  const status = session.computed_status;
+  const dirty = session.has_uncommitted_changes === true;
+  if (status === 'active') return 'active';
+  if (status === 'idle' && dirty) return 'idle_uncommitted';
+  if ((status === 'stale' || status === 'stale_cleanup') && dirty) return 'stale_uncommitted';
+  return 'inactive';
+}
+
+/**
+ * Detect sd_key drift for a peer session on the same branch as my active claim.
+ * Returns 'drift' when the peer's sd_key is null OR differs from the active claim's
+ * sd_key, indicating the peer might write files that belong to a different SD context.
+ *
+ * @param {Object} session - peer session row
+ * @param {string|null} activeClaimSdKey - sd_key of the active claim on this branch
+ * @returns {'drift'|'aligned'|'unknown'}
+ */
+export function detectSdKeyDrift(session, activeClaimSdKey) {
+  if (!activeClaimSdKey) return 'unknown';
+  if (!session) return 'unknown';
+  if (!session.sd_key) return 'drift';
+  if (session.sd_key !== activeClaimSdKey) return 'drift';
+  return 'aligned';
+}
 
 function getCurrentBranch() {
   try {
@@ -57,24 +99,42 @@ async function main() {
     process.exit(2);
   }
 
-  // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR4): delegate to the SSOT
-  // helper. getActiveSessions reads from v_active_sessions filtered by
-  // computed_status IN ('active','idle'). To preserve this script's prior
-  // behavior (active-only contention detection), we post-filter here —
-  // both scripts still read from the same SSOT query path, which is what
-  // AC4 requires. If a future refactor wants to include idle sessions in
-  // contention detection, flip the filter here.
-  // Errors from the helper bubble up; we catch and map to exit code 2.
-  let data;
+  // SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 (FR-1 rescoped): widen the contention
+  // filter to include idle/stale_cleanup peers IF they hold uncommitted writes.
+  // Validation-agent at PLAN-PRD prospective (row e9ec8e72) confirmed the source
+  // incident was NOT cross-host — 2 of 3 writers were already STALE_CLEANUP at
+  // moment of detection but had uncommitted Growth Playbook UI writes; the old
+  // active-only post-filter excluded them. Now: active surfaces always; idle/stale
+  // surfaces only with has_uncommitted_changes=true.
+  let allSessions;
   try {
-    const all = await getActiveSessions();
-    data = (all || []).filter(s => s.computed_status === 'active');
+    allSessions = await getActiveSessions();
   } catch (err) {
     console.error('[session:check-concurrency] query failed:', err.message);
     process.exit(2);
   }
 
+  const data = (allSessions || []).filter(s => categorizeSessionForContention(s) !== 'inactive');
   const others = (data || []).filter(s => s.session_id !== mySid);
+
+  // SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 (FR-7): sd_key drift detection.
+  // Read the active SD claim for the current branch, compare each peer's sd_key.
+  let activeClaimSdKey = null;
+  if (branch && url && key) {
+    try {
+      const sb = createClient(url, key);
+      const { data: claim } = await sb
+        .from('strategic_directives_v2')
+        .select('sd_key')
+        .not('claiming_session_id', 'is', null)
+        .or(`metadata->>branch.eq.${branch},sd_key.like.%${branch.replace(/^feat\//, '')}%`)
+        .limit(1)
+        .maybeSingle();
+      activeClaimSdKey = claim?.sd_key ?? null;
+    } catch {
+      // Drift detection is best-effort — failure does not abort contention check.
+    }
+  }
 
   // Same-branch contention: branch match, or either side is on main, or
   // the other session's branch is unknown (null).
@@ -102,11 +162,14 @@ async function main() {
   console.log(`  My branch:  ${branch || '(unknown)'}`);
   console.log(`  My session: ${mySid || '(CLAUDE_SESSION_ID not set)'}`);
   console.log('');
-  console.log(`  Other active sessions (same or ambiguous branch):`);
+  console.log('  Other sessions on this branch (incl. idle/stale with uncommitted writes):');
   for (const s of onSameOrAmbiguousBranch) {
+    const cat = categorizeSessionForContention(s);
+    const drift = detectSdKeyDrift(s, activeClaimSdKey);
     console.log(`    - ${s.session_id}`);
-    console.log(`        sd_key:    ${s.sd_key || '(none)'}`);
+    console.log(`        sd_key:    ${s.sd_key || '(none)'}${drift === 'drift' ? '  [DRIFT]' : ''}`);
     console.log(`        branch:    ${s.current_branch || '(unknown)'}`);
+    console.log(`        category:  ${cat}`);
     console.log(`        heartbeat: ${s.heartbeat_age_human || '(unknown)'}`);
     console.log(`        host:      ${s.hostname || '(unknown)'}`);
   }
