@@ -953,7 +953,12 @@ async function main() {
 
   // Final allow decision — audit the pass-through
   auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ALLOW', 'Tool call permitted by all enforcement rules', 'allow', {});
-  process.exitCode = 0; // Allow
+  // QF-20260509-199: process.exit(0) instead of process.exitCode=0 so fire-and-forget
+  // audit/telemetry/RCA-counter timers don't pin the event loop. BLOCK paths above
+  // already use process.exit(2); the ALLOW path was the asymmetric outlier — caused
+  // ~5s hangs in CI where Supabase fetches don't resolve. Documented contract for all
+  // those async writes is "fire and forget — never block enforcement".
+  process.exit(0);
 }
 
-main().catch(() => { process.exitCode = 0; }); // Fail-open: async errors never block
+main().catch(() => process.exit(0)); // Fail-open: async errors never block

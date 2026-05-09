@@ -71,7 +71,7 @@ const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
       );
     }
   }
-})().then(() => { process.exitCode = 0; });
+})().then(() => process.exit(0)); // QF-20260509-199: process.exit(0) so fire-and-forget telemetry timers don't pin the event loop
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
