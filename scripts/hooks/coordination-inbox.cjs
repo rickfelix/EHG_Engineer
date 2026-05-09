@@ -418,9 +418,28 @@ async function main() {
 
   let emittedDirective = false;
 
+  // QF-20260508-988: when this session is the active coordinator, FR-3a worker
+  // signals (message_type=INFO + payload.signal_type) must be deferred to the
+  // /coordinator inbox renderer (scripts/fleet-dashboard.cjs:1042) instead of
+  // being drained here. Otherwise the dashboard's `read_at IS NULL` filter
+  // never matches because this hook marks them read first.
+  // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
+  let amCoordinator = false;
+  if (!tableErr && messages && messages.length > 0) {
+    try {
+      const { getActiveCoordinatorId } = require(path.resolve(__dirname, '../../lib/coordinator/resolve.cjs'));
+      const coordinatorId = await getActiveCoordinatorId(supabase);
+      amCoordinator = coordinatorId && coordinatorId === sessionId;
+    } catch { /* fail-open: process messages normally if resolve.cjs missing */ }
+  }
+
   if (!tableErr && messages && messages.length > 0) {
     // Output each message
     for (const msg of messages) {
+      // QF-20260508-988: defer worker FR-3a signals to /coordinator inbox.
+      if (amCoordinator && msg.message_type === 'INFO' && msg.payload && msg.payload.signal_type) {
+        continue;
+      }
       const typeLabel = {
         'CLAIM_RELEASED': 'CLAIM RELEASED',
         'WORK_ASSIGNMENT': 'WORK ASSIGNMENT',
