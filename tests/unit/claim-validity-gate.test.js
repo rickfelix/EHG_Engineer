@@ -188,3 +188,83 @@ describe('assertValidClaim — CHECK 3 enhanced', () => {
     }
   });
 });
+
+// QF-20260509-711: Consumer fail-open for orphaned claims when owner session is dead.
+// Layer 2 of writer/consumer asymmetry RCA (11th witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
+describe('assertValidClaim — foreign_claim auto-release on stale owner', () => {
+  // Builds a supabase mock that routes by table. SD lookup returns sdData; claude_sessions
+  // returns ownerData. Captures the auto-release UPDATE in updateCalls for assertions.
+  function buildMock(sdData, ownerData) {
+    const updateCalls = [];
+    const claimingSession = sdData.claiming_session_id;
+    const sb = {
+      from: vi.fn((table) => {
+        if (table === 'claude_sessions') {
+          return {
+            select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: ownerData, error: null }) }) }),
+          };
+        }
+        // strategic_directives_v2
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: sdData, error: null }) }) }),
+          update: (payload) => {
+            const eq1 = (col1, val1) => ({
+              eq: (col2, val2) => {
+                updateCalls.push({ payload, where: [[col1, val1], [col2, val2]] });
+                // Simulate idempotency: nothing actually changes locally — gate already returned.
+                return Promise.resolve({ error: null });
+              },
+            });
+            return { eq: eq1 };
+          },
+        };
+      }),
+      _updateCalls: updateCalls,
+    };
+    return sb;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _worktreeCache.clear();
+    realpathSync.mockImplementation((p) => p.replace(/\\/g, '/'));
+    resolveOwnSession.mockResolvedValue({
+      data: { session_id: 'sess-me' },
+      source: 'env_var',
+    });
+  });
+
+  it('auto-releases when owner session is stale, returns ownership=unclaimed', async () => {
+    const sb = buildMock(
+      { sd_key: 'SD-ORPHAN-001', claiming_session_id: 'sess-dead', worktree_path: null, current_phase: 'PLAN_PRD' },
+      { status: 'stale', is_alive: false }
+    );
+    const result = await assertValidClaim(sb, 'SD-ORPHAN-001', { operation: 'test_op' });
+    expect(result.ownership).toBe('unclaimed');
+    expect(result.sd.claiming_session_id).toBeNull();
+    expect(sb._updateCalls).toHaveLength(1);
+    expect(sb._updateCalls[0].payload).toEqual({ claiming_session_id: null, is_working_on: false, active_session_id: null });
+    // WHERE clause MUST pin both sd_key AND claiming_session_id for idempotency
+    expect(sb._updateCalls[0].where).toEqual([['sd_key', 'SD-ORPHAN-001'], ['claiming_session_id', 'sess-dead']]);
+  });
+
+  it('auto-releases when owner session row is missing entirely', async () => {
+    const sb = buildMock(
+      { sd_key: 'SD-MISSING-001', claiming_session_id: 'sess-ghost', worktree_path: null, current_phase: 'EXEC' },
+      null
+    );
+    const result = await assertValidClaim(sb, 'SD-MISSING-001', { operation: 'test_op' });
+    expect(result.ownership).toBe('unclaimed');
+    expect(sb._updateCalls).toHaveLength(1);
+  });
+
+  it('still throws foreign_claim when owner session is active', async () => {
+    const sb = buildMock(
+      { sd_key: 'SD-LIVE-001', claiming_session_id: 'sess-other', worktree_path: null, current_phase: 'EXEC' },
+      { status: 'active', is_alive: true }
+    );
+    await expect(assertValidClaim(sb, 'SD-LIVE-001', { operation: 'test_op' }))
+      .rejects.toMatchObject({ reason: 'foreign_claim', ownerSessionId: 'sess-other' });
+    expect(sb._updateCalls).toHaveLength(0);
+  });
+});
