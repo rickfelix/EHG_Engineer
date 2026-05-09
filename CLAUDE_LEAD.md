@@ -10,6 +10,9 @@
 
 ---
 
+## Friction signaling
+**Send `/signal <type> "<body>"`** for recurrence (gate 2× / RCA 2× / tool 3× / phase >2× type-bucket median), about-to-bypass (`--no-verify` / 3rd-bypass-quota / mock-not-fix), protocol-spec friction, recognized harness bug, or memory-trend match. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. Source-of-truth: CLAUDE_CORE.md "Signaling friction to the coordinator" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
+
 ## Autonomous Continuation Directives
 
 **CRITICAL**: These directives guide autonomous agent behavior during LEAD phase execution.

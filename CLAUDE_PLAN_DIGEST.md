@@ -12,6 +12,9 @@
 
 ---
 
+## Friction signaling
+Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/signal <type> "<body>"`. CLAUDE_CORE.md "Signaling friction" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
+
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
