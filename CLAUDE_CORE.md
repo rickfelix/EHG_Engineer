@@ -1430,6 +1430,8 @@ Workers signal mid-execution friction back to the active coordinator via session
 
 **How to send:** `/signal <type> "<body>"` slash command — see /signal --help. Or directly: `node scripts/worker-signal.cjs <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
 
+**NODE_MODULES_LOCK is advisory-only.** Dashboard `INFO` broadcasts with subject `NODE_MODULES_LOCK` are narrative annotations, not an enforced lock — `NODE_MODULES_LOCK` is not in the `coordination_message_type` enum and no producer/consumer gates npm operations on it. The actual `node_modules` blast-radius safety is filesystem-level via `safeRecursiveRm` in `lib/worktree-manager.js` (junction-safe rm; see header comment there). Don't add producer/consumer hooks expecting a real lock — see QF-20260508-403 / RCA `0b0168b7-1d0a-4e84-bb85-19ee25fffa38`.
+
 ## Strategic Governance Hierarchy
 
 The EHG platform operates under a 7-layer strategic governance stack. Each layer has a database table, CLI command, and clear purpose.
