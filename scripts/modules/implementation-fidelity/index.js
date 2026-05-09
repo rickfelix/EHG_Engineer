@@ -204,6 +204,20 @@ export async function validateGate2ExecToPlan(sd_id, supabase, options = {}) {
       validation.warnings.push('No DESIGN or DATABASE analysis found - skipping Gate 2');
       validation.score = 100;
       validation.passed = true;
+      // QF-20260509-G2FID-SECTIONS (closes 7e2bd2a7): mirror docu-skip pattern
+      // (lines 88-99) so downstream sub-validators (2A:uiComponentsImplemented /
+      // userWorkflowsImplemented / userActionsSupported) read populated
+      // sections.A/B/C/D instead of undefined → 0/100. Without this, top-level
+      // GATE2 passes 100/100 but EXEC-TO-PLAN fails on sub-validator 0/100 —
+      // witnessed 11x retry pattern on SD-PRIVACYPATROL-...-D3.
+      const bypassSection = {
+        score: 100,
+        passed: true,
+        issues: [],
+        warnings: ['No DESIGN/DATABASE analysis - sub-validator section bypassed']
+      };
+      validation.sections = { A: bypassSection, B: bypassSection, C: bypassSection, D: bypassSection };
+      validation.sectionScores = { A: bypassSection, B: bypassSection, C: bypassSection, D: bypassSection };
       return validation;
     }
 
