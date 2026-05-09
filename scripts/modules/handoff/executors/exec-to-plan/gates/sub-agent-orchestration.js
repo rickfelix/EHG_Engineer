@@ -62,10 +62,21 @@ export function createSubAgentOrchestrationGate(supabase) {
       }
 
       // Cross-repo SD detection: SDs targeting external repos (e.g. ehg frontend)
-      // cannot have sub-agents invoked inline from this handoff context
-      const targetRepo = ctx.sd?.metadata?.target_repo ||
+      // cannot have sub-agents invoked inline from this handoff context.
+      // QF-20260509-CROSS-REPO-PLURAL (closes 45f3e446): also honor metadata.target_repos
+      // (plural array) which is the convention used by leo-create-sd.js --target-repos
+      // (SD-LEO-INFRA-LEO-CREATE-CROSS-001 PR #3577). Both singular and plural are
+      // in active use → 6th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.
+      const targetRepoSingular = ctx.sd?.metadata?.target_repo ||
         ctx.sd?.metadata?.implementation_notes?.target_repo;
-      if (targetRepo && targetRepo !== 'EHG_Engineer' && targetRepo !== 'rickfelix/EHG_Engineer') {
+      const targetReposArray = Array.isArray(ctx.sd?.metadata?.target_repos)
+        ? ctx.sd.metadata.target_repos
+        : [];
+      const isExternalRepo = (r) => r && r !== 'EHG_Engineer' && r !== 'rickfelix/EHG_Engineer';
+      const externalSingular = isExternalRepo(targetRepoSingular) ? targetRepoSingular : null;
+      const externalPlural = targetReposArray.find(isExternalRepo) || null;
+      const targetRepo = externalSingular || externalPlural;
+      if (targetRepo) {
         console.log(`   ⚠️  Cross-repo SD detected: target_repo=${targetRepo}`);
         console.log('   → Sub-agent orchestration skipped (agents cannot validate external repo inline)');
         console.log('   → Verify implementation manually or via cached sub-agent results');
