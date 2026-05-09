@@ -57,7 +57,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
 import { listActiveWorktrees } from '../lib/worktree-quota.js';
-import { safeRecursiveRm } from '../lib/worktree-manager.js';
+import { safeRecursiveRm, safeRecursiveCp } from '../lib/worktree-manager.js';
 import {
   isZombieOnMain,
   isNested,
@@ -441,9 +441,22 @@ function preserveUntrackedFiles({ wtPath, preserveRoot, untracked, repoRoot, log
     const tgt = path.join(dest, rel);
     try {
       fs.mkdirSync(path.dirname(tgt), { recursive: true });
-      const st = fs.statSync(src);
+      // QF-20260509-NESTED-JUNCTION: lstat (not stat) to detect symlinks/junctions
+      // without following them. safeRecursiveCp recreates links at destination
+      // instead of duplicating junction-target contents.
+      const st = fs.lstatSync(src);
       if (st.isDirectory()) {
-        fs.cpSync(src, tgt, { recursive: true });
+        safeRecursiveCp(src, tgt);
+      } else if (st.isSymbolicLink()) {
+        try {
+          const target = fs.readlinkSync(src);
+          const linkType = process.platform === 'win32' ? 'junction' : 'file';
+          fs.symlinkSync(target, tgt, linkType);
+        } catch (e) {
+          logger?.(`preserve: symlink-recreate failed for ${rel} (${e?.message || e})`);
+          skipped.push(rel);
+          continue;
+        }
       } else {
         fs.copyFileSync(src, tgt);
       }
