@@ -60,6 +60,11 @@ function fetchPrState(prNumber) {
   }
 }
 
+export function isValidQfId(id) {
+  // FR-5 shell-injection defense for branch-derived path; QF id format set by create-quick-fix.js.
+  return typeof id === 'string' && /^QF-\d{8}-\d{3}$/.test(id);
+}
+
 function fetchMergedPrByBranch(branchName) {
   try {
     const raw = execSync(
@@ -83,7 +88,7 @@ function assertGhAuthenticated() {
   }
 }
 
-async function main() {
+export async function main() {
   assertGhAuthenticated();
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -210,6 +215,11 @@ async function main() {
   } else {
     summary.orphan_evaluated = (orphanCandidates || []).length;
     for (const qf of orphanCandidates || []) {
+      if (!isValidQfId(qf.id)) {
+        log('skipped_orphan_invalid_id', { qf_id: qf.id });
+        summary.errored += 1;
+        continue;
+      }
       const branchName = `qf/${qf.id}`;
       const merged = fetchMergedPrByBranch(branchName);
       if (!merged.ok) {
@@ -278,8 +288,10 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error('orphan-qf-reaper: unhandled error:', err.message);
-  console.error(err.stack);
-  process.exit(1);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    console.error('orphan-qf-reaper: unhandled error:', err.message);
+    console.error(err.stack);
+    process.exit(1);
+  });
+}
