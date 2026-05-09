@@ -326,6 +326,12 @@ async function createFromLearn(patternId) {
  * Create SD from /inbox feedback item
  */
 async function createFromFeedback(feedbackId, options = {}) {
+  // QF-20260509-LEO-CREATE-FLAGS (closes 8a640d32 sibling-parity gap):
+  // honor --migration-reviewed / --security-reviewed in --from-feedback path
+  // (mirrors --from-plan / --child handling). Without this, the GR-MIGRATION-REVIEW
+  // / GR-SECURITY-BASELINE guardrails block SD creation from feedback rows whose
+  // description mentions migration or schema even with the flags set.
+  const { migrationReviewed = false, securityReviewed = false } = options;
   console.log(`\n📋 Creating SD from feedback: ${feedbackId}`);
 
   // Fetch feedback item (support full or partial UUID)
@@ -410,7 +416,10 @@ async function createFromFeedback(feedbackId, options = {}) {
       source: 'feedback',
       source_id: feedback.id,
       feedback_type: feedback.type,
-      feedback_priority: feedback.priority
+      feedback_priority: feedback.priority,
+      // QF-20260509-LEO-CREATE-FLAGS: propagate guardrail review flags
+      ...(migrationReviewed ? { migration_reviewed: true } : {}),
+      ...(securityReviewed ? { security_reviewed: true } : {})
     }
   });
 
@@ -1854,13 +1863,17 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         [fbTypeIdx !== -1 ? fbTypeIdx + 1 : -1,
          fbTitleIdx !== -1 ? fbTitleIdx + 1 : -1].filter(i => i > 0)
       );
-      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title']);
+      // QF-20260509-LEO-CREATE-FLAGS: include review flags so they're not
+      // mistaken for the feedback ID positional. Closes 8a640d32 sibling parity.
+      const fbKnownFlags = new Set(['--from-feedback', '--type', '--title', '--migration-reviewed', '--security-reviewed']);
       const feedbackId = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !fbFlagValuePositions.has(i) && !fbKnownFlags.has(arg)
       ) || args[1];
       await createFromFeedback(feedbackId, {
         typeOverride: fbTypeIdx !== -1 ? args[fbTypeIdx + 1] : null,
         titleOverride: fbTitleIdx !== -1 ? args[fbTitleIdx + 1] : null,
+        migrationReviewed: args.includes('--migration-reviewed'),
+        securityReviewed: args.includes('--security-reviewed'),
       });
     } else if (args[0] === '--from-qf') {
       await createFromQF(args[1]);
@@ -2006,7 +2019,12 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
     } else {
       // Direct creation: <source> <type> "<title>"
       // Detect unknown flags to prevent silent corruption (SD-LEO-FIX-CREATE-ARGS-001)
-      const knownDirectFlags = new Set(['--venture', '--vision-key', '--arch-key', '--target-repos']);
+      // QF-20260509-LEO-CREATE-FLAGS: --migration-reviewed / --security-reviewed / --yes / -y
+      // are now valid in direct-args mode (closes 8a640d32 sibling-parity gap with --from-plan).
+      const knownDirectFlags = new Set([
+        '--venture', '--vision-key', '--arch-key', '--target-repos',
+        '--migration-reviewed', '--security-reviewed', '--yes', '-y'
+      ]);
       const unknownFlags = args.filter(a => a.startsWith('-') && !knownDirectFlags.has(a));
       if (unknownFlags.length > 0) {
         console.error('\n❌ Unknown flag(s): ' + unknownFlags.join(', '));
@@ -2239,6 +2257,11 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const ventureConfig = cliVenture ? getVentureConfig(cliVenture) : null;
       const targetApp = ventureConfig?.name || cliVenture || null;
 
+      // QF-20260509-LEO-CREATE-FLAGS: honor --migration-reviewed / --security-reviewed
+      // in direct-args mode (closes 8a640d32 sibling parity with --from-plan / --from-feedback).
+      const directMigrationReviewed = args.includes('--migration-reviewed');
+      const directSecurityReviewed = args.includes('--security-reviewed');
+
       await createSD({
         sdKey,
         title,
@@ -2254,7 +2277,9 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
           ...(visionKey && { vision_key: visionKey }),
           ...(archKey && { arch_key: archKey }),
           ...(enriched?.scope && { scope: enriched.scope }),
-          ...(targetRepos && { target_repos: targetRepos })
+          ...(targetRepos && { target_repos: targetRepos }),
+          ...(directMigrationReviewed ? { migration_reviewed: true } : {}),
+          ...(directSecurityReviewed ? { security_reviewed: true } : {})
         }
       });
     }
