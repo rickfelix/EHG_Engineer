@@ -15,6 +15,13 @@
 const COLORS = ['blue', 'green', 'purple', 'orange', 'cyan', 'pink', 'yellow', 'red'];
 const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel'];
 
+// QF-20260508-648: writer/consumer asymmetry — lib/coordinator/resolve.cjs
+// setActiveCoordinator() writes metadata.is_coordinator=true; this consumer
+// must filter it out so coordinator sessions aren't assigned worker callsigns.
+function filterOutCoordinators(rows) {
+  return (rows || []).filter(w => w && w.metadata?.is_coordinator !== true);
+}
+
 const ANSI = {
   red: '\x1b[31m', blue: '\x1b[34m', green: '\x1b[32m', yellow: '\x1b[33m',
   purple: '\x1b[35m', orange: '\x1b[38;5;208m', pink: '\x1b[38;5;213m', cyan: '\x1b[36m',
@@ -59,12 +66,14 @@ async function main() {
     query = query.neq('session_id', excludeSession);
   }
 
-  const { data: workers, error } = await query.order('heartbeat_at', { ascending: false });
+  const { data: rawWorkers, error } = await query.order('heartbeat_at', { ascending: false });
 
   if (error) {
     console.error('Error querying workers:', error.message);
     process.exit(1);
   }
+
+  const workers = filterOutCoordinators(rawWorkers);
 
   if (!workers || workers.length === 0) {
     console.log('No active workers found.');
@@ -250,7 +259,11 @@ async function main() {
   console.log('');
 }
 
-main().catch(err => {
-  console.error('Fleet identity assignment failed:', err.message);
-  process.exit(1);
-});
+module.exports = { filterOutCoordinators };
+
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Fleet identity assignment failed:', err.message);
+    process.exit(1);
+  });
+}
