@@ -264,7 +264,14 @@ export async function completeQuickFix(qfId, options = {}) {
     testsPass
   };
 
-  const { complianceResults } = await runComplianceWithRefinement(qfId, qf, complianceContext, prompt);
+  // QF-20260509-COMPLIANCE-LOOP (closes 0974d18b): forward {forceComplete,reason}
+  // so the refinement-prompt at compliance-loop.js:77 auto-skips under
+  // --force-complete instead of wedging on stdin (9th-witness writer/consumer
+  // asymmetry; sibling miss in QF-20260509-552).
+  const { complianceResults } = await runComplianceWithRefinement(qfId, qf, complianceContext, prompt, {
+    forceComplete: options.forceComplete,
+    reason: options.reason
+  });
   // QF-20260508-407: forward {forceComplete, reason} so validateCompliance can
   // short-circuit the WARN-verdict prompt under --non-interactive (sibling parity
   // with validateLOC and validateSelfVerification).

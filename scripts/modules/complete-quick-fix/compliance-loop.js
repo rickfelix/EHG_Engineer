@@ -13,9 +13,12 @@ import { MAX_REFINEMENT_ATTEMPTS } from './constants.js';
  * @param {object} qf - Quick-fix record
  * @param {object} context - Context for compliance check
  * @param {Function} prompt - Prompt function for user input
+ * @param {object} [flags] - Force-complete / non-interactive flags (QF-20260509-COMPLIANCE-LOOP)
+ * @param {boolean} [flags.forceComplete] - When true, refinement-prompt auto-skips
+ * @param {string} [flags.reason] - Reason for force-complete (logged)
  * @returns {Promise<object>} Final compliance results and refinement history
  */
-export async function runComplianceWithRefinement(qfId, qf, context, prompt) {
+export async function runComplianceWithRefinement(qfId, qf, context, prompt, flags = {}) {
   console.log('\n🔄 Compliance Rubric with Auto-Refinement (max 3 attempts)\n');
 
   let complianceResults = null;
@@ -79,7 +82,16 @@ export async function runComplianceWithRefinement(qfId, qf, context, prompt) {
         console.log(`      Suggestion: ${getRefinementSuggestion(c.id)}\n`);
       });
 
-      const refineChoice = await prompt('\n   Attempt auto-refinement? (yes/no/skip): ');
+      // QF-20260509-COMPLIANCE-LOOP (closes 0974d18b): under --force-complete
+      // (or any non-interactive caller), don't wedge waiting for stdin. Treat
+      // it as 'skip' — break out of refinement and let validateCompliance
+      // (already flag-aware via QF-20260508-407) decide WARN-verdict path.
+      // 9th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 (sibling miss
+      // in QF-20260509-552 which patched validateTests + git-operations.js
+      // prompts but not this one).
+      const refineChoice = flags.forceComplete
+        ? (console.log('\n   --force-complete set — auto-skipping refinement.\n'), 'skip')
+        : await prompt('\n   Attempt auto-refinement? (yes/no/skip): ');
 
       if (refineChoice.toLowerCase() === 'skip') {
         console.log('\n   Skipping remaining refinement attempts...\n');
