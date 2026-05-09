@@ -449,6 +449,12 @@ export function createPRPrecheckGate() {
 
       const sdId = ctx.sd.sd_key || ctx.sd.id;
       const branchPatterns = [`feat/${sdId}`, `fix/${sdId}`, `docs/${sdId}`, `test/${sdId}`];
+      // QF-20260509-PRMERGE-EXACT (closes 9d55499d): exact-match regex anchored
+      // at start AND end. Pre-fix `.includes(pattern)` matched extended-suffix
+      // sibling branches (e.g. `feat/SD-X-001-stage-25-foo` matched query for
+      // SD-X-001 because headRefName.includes("feat/SD-X-001") returned true).
+      const sdIdEscaped = sdId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const exactBranchRegex = new RegExp(`^(feat|fix|docs|test)/${sdIdEscaped}$`, 'i');
 
       try {
         const { execSync } = await import('child_process');
@@ -461,9 +467,7 @@ export function createPRPrecheckGate() {
               { encoding: 'utf8', timeout: 15000 }
             );
             const prs = JSON.parse(result || '[]');
-            const matching = prs.filter(pr =>
-              branchPatterns.some(p => pr.headRefName.toLowerCase().includes(p.toLowerCase()))
-            );
+            const matching = prs.filter(pr => exactBranchRegex.test(pr.headRefName));
 
             if (matching.length > 0) {
               console.log(`   ❌ Open PR(s) found in ${repo} — run /ship first`);
@@ -515,13 +519,22 @@ export function createPRMergeVerificationGate() {
 
       const sdId = ctx.sd.sd_key || ctx.sd.id;
 
-      // Build expected branch name pattern for this SD
+      // Build expected branch name pattern for this SD (kept for logging downstream).
       const branchPatterns = [
         `feat/${sdId}`,
         `fix/${sdId}`,
         `docs/${sdId}`,
         `test/${sdId}`
       ];
+
+      // QF-20260509-PRMERGE-EXACT (closes 9d55499d): exact-match regex anchored
+      // at start AND end of branch name. Pre-fix `.includes(pattern)` matched
+      // sibling branches with extended-suffix names. Witnessed 2026-05-07
+      // SD-LEO-FEAT-STAGE-POST-LAUNCH-002 LEAD-FINAL-APPROVAL: orphan branch
+      // in non-target repo with different SD's commits caused false-positive
+      // block requiring explicit DELETE to unwedge.
+      const sdIdEscaped = sdId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const exactBranchRegex = new RegExp(`^(feat|fix|docs|test)/${sdIdEscaped}$`, 'i');
 
       try {
         const { execSync } = await import('child_process');
@@ -540,11 +553,9 @@ export function createPRMergeVerificationGate() {
 
             const prs = JSON.parse(result || '[]');
 
-            const matchingPRs = prs.filter(pr =>
-              branchPatterns.some(pattern =>
-                pr.headRefName.toLowerCase().includes(pattern.toLowerCase())
-              )
-            );
+            // QF-20260509-PRMERGE-EXACT: anchored regex (not includes) rejects
+            // extended-suffix sibling branches.
+            const matchingPRs = prs.filter(pr => exactBranchRegex.test(pr.headRefName));
 
             if (matchingPRs.length > 0) {
               openPRs.push(...matchingPRs.map(pr => ({
@@ -605,10 +616,17 @@ export function createPRMergeVerificationGate() {
 
             const branchList = execSync('git branch -r', { encoding: 'utf8', cwd: repoPath, timeout: 10000 });
 
-            for (const pattern of branchPatterns) {
+            // QF-20260509-PRMERGE-EXACT: per-branch exact-match instead of
+            // per-pattern .includes() (collapses 4 pattern iterations into 1
+            // regex test per branch).
+            {
               const matchingBranches = branchList.split('\n')
                 .map(b => b.trim())
-                .filter(b => b.toLowerCase().includes(pattern.toLowerCase()) && !b.includes('HEAD'));
+                .filter(b => {
+                  if (!b || b.includes('HEAD')) return false;
+                  const branchName = b.replace(/^origin\//, '');
+                  return exactBranchRegex.test(branchName);
+                });
 
               for (const branch of matchingBranches) {
                 const cleanBranch = branch.replace('origin/', '');
