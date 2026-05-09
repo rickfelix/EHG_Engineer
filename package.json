@@ -13,6 +13,7 @@
     "audit:ingest": "node scripts/ingest-audit-file.mjs",
     "audit:generate-sds": "node scripts/audit-to-sd.mjs",
     "audit:retro": "node scripts/audit-retro.mjs",
+    "audit:verify-integrity": "node scripts/hooks/verify-security-audit-integrity.cjs",
     "audit:stage17": "node scripts/audit-stage17-urls.mjs",
     "audit:orphan-prs": "node scripts/audit-orphan-prs.mjs",
     "audit:shared-tables": "node scripts/audit-shared-tables-residue.cjs",
