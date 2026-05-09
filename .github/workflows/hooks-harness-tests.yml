@@ -29,4 +29,5 @@ jobs:
       - name: Run hooks harness tests
         env:
           NODE_OPTIONS: --experimental-vm-modules
+          LEO_HOOK_TRACE: '1'
         run: npm test -- tests/unit/hooks/

@@ -327,7 +327,16 @@ async function validateBeforeExecution(command) {
   }
 }
 
+// QF-20260509-199 DEBUG: timing trace to identify CI hang. Will be removed.
+const _T0 = Date.now();
+const _trace = (stage) => {
+  if (process.env.LEO_HOOK_TRACE === '1') {
+    process.stderr.write(`[trace] T+${Date.now() - _T0}ms ${stage}\n`);
+  }
+};
+
 async function main() {
+  _trace('main:start');
   let input;
   try {
     input = JSON.parse(TOOL_INPUT_RAW);
@@ -335,6 +344,7 @@ async function main() {
     // Not JSON or empty - nothing to enforce
     process.exit(0);
   }
+  _trace('main:input-parsed');
 
   // --- ENFORCEMENT 9: SD Creation Must Use /sd-create Skill ---
   // Blocks direct invocation of leo-create-sd.js via Bash.
@@ -875,6 +885,7 @@ async function main() {
     }
   }
 
+  _trace('pre-enf14');
   // --- ENFORCEMENT 14: File-Claim Layer (SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001) ---
   // For Write/Edit/MultiEdit calls: consult file_claim_locks for the target path.
   // REFUSE if a peer holds a fresh claim (<10min heartbeat); auto-claim if unclaimed
@@ -889,12 +900,15 @@ async function main() {
       if (filePath) {
         const path = require('path');
         const normalizedPath = path.posix.normalize(filePath.replace(/\\/g, '/'));
+        _trace('enf14:before-require-guard');
         const fileClaimGuard = require('./lib/file-claim-guard.cjs');
+        _trace('enf14:before-checkClaim');
         const result = await fileClaimGuard.checkClaim({
           filePath: normalizedPath,
           mySessionId: _SESSION_ID,
           staleThresholdSeconds: parseInt(process.env.FILE_CLAIM_STALE_THRESHOLD_SECONDS || '600', 10),
         });
+        _trace('enf14:after-checkClaim reason=' + (result.reason || 'n/a'));
         if (result.refused) {
           auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-FILE-CLAIM', result.message, 'block', { filePath: normalizedPath, holder_session_id: result.holder_session_id });
           process.stderr.write(`ENF-FILE-CLAIM: ${result.message}\n`);
@@ -951,8 +965,10 @@ async function main() {
     }
   }
 
+  _trace('main:before-final-allow');
   // Final allow decision — audit the pass-through
   auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ALLOW', 'Tool call permitted by all enforcement rules', 'allow', {});
+  _trace('main:after-final-allow');
   // QF-20260509-199: process.exit(0) instead of process.exitCode=0 so fire-and-forget
   // audit/telemetry/RCA-counter timers don't pin the event loop. BLOCK paths above
   // already use process.exit(2); the ALLOW path was the asymmetric outlier — caused
