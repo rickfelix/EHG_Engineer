@@ -19,6 +19,7 @@
 import { main } from './modules/handoff/cli/index.js';
 import { claimGuard } from '../lib/claim-guard.mjs';
 import { startHeartbeat } from '../lib/heartbeat-manager.mjs';
+import { assertCwdValid, ExecContextError } from '../lib/exec-context-guard.mjs';
 
 // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR1 call-site migration):
 // Start an in-process heartbeat for the duration of this script. Cooperative
@@ -29,6 +30,24 @@ import { startHeartbeat } from '../lib/heartbeat-manager.mjs';
 // No-op when CLAUDE_SESSION_ID is absent (CI, ad-hoc manual runs).
 if (process.env.CLAUDE_SESSION_ID) {
   startHeartbeat(process.env.CLAUDE_SESSION_ID, { ownershipMode: 'cooperative' });
+}
+
+// SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-2): cwd-validity precondition.
+// Fail fast if the script is running from an orphaned worktree (e.g. cwd is
+// a worktree dir whose branch was deleted by `gh pr merge --delete-branch`).
+// Without this guard, downstream module imports (e.g. scripts/lib/sd-id-resolver.js)
+// crash with confusing module-not-found errors after the claim has been touched.
+// See harness backlog d66a075d for the witnessed LEAD-FINAL crash.
+try {
+  assertCwdValid();
+} catch (err) {
+  if (err instanceof ExecContextError && err.code === 'STALE_CWD') {
+    console.error(`[handoff.js] ❌ STALE_CWD precondition failed: ${err.message}`);
+    console.error('   Remediation: cd to the main repo root before running handoff.js,');
+    console.error('   or recreate the worktree with: git worktree add <path> <branch>');
+    process.exit(1);
+  }
+  throw err;
 }
 
 // SD-LEO-INFRA-CLAIM-DEFAULT-LEO-001: Pre-delegate claim assertion

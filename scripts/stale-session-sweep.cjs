@@ -39,6 +39,45 @@ const FLEET_MC_ESTIMATE_STALENESS_SEC = Number(process.env.FLEET_MC_ESTIMATE_STA
 
 const supabase = createSupabaseServiceClient();
 
+// SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3): lazy-load the ESM exec-context-guard
+// from this CJS module. Cached after first import to avoid repeated module
+// resolution. The guard's assertSweepHandoffGate() blocks current_phase resets
+// when an accepted handoff past the target reset state exists in
+// sd_phase_handoffs — generalizes QF-20260423-909 (which only covered
+// PLAN-TO-LEAD) to all 4 handoff types.
+let _execContextGuardCache = null;
+async function getExecContextGuard() {
+  if (!_execContextGuardCache) {
+    _execContextGuardCache = await import('../lib/exec-context-guard.mjs');
+  }
+  return _execContextGuardCache;
+}
+
+/**
+ * Helper: gate a current_phase reset behind assertSweepHandoffGate.
+ * Returns true when the reset is allowed; false when an accepted handoff
+ * past the target reset phase would be overridden (caller must skip update).
+ * Logs a SKIP_RESET line with full diagnostic context on block.
+ */
+async function isSweepResetAllowed(sdKey, targetResetPhase, contextLabel) {
+  const { assertSweepHandoffGate } = await getExecContextGuard();
+  try {
+    await assertSweepHandoffGate(supabase, sdKey, targetResetPhase);
+    return true;
+  } catch (err) {
+    if (err && err.code === 'ACCEPTED_HANDOFF_OVERRIDE') {
+      console.log(
+        '  SKIP_RESET: ' + sdKey + ' — ' + contextLabel +
+        ' — accepted handoff past ' + targetResetPhase + ' exists: ' + err.message
+      );
+      return false;
+    }
+    // Unexpected error — re-throw to caller (sweep aborts loudly rather
+    // than silently overriding state).
+    throw err;
+  }
+}
+
 const STALE_THRESHOLD_SECONDS = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 const LOCAL_HOSTNAME = os.hostname();
 
@@ -68,6 +107,14 @@ async function resetSdPhaseOnRelease(sdKey, reason) {
 
   const resetTo = PHASE_RESET_MAP[sd.current_phase];
   if (resetTo) {
+    // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3, AC-4/AC-5): generalized
+    // accepted-handoff override guard. Coexists with PHASE_RESET_MAP
+    // (FLEET-COORDINATION-RESILIENCE-001 FR-001) — does not change the
+    // reset map, only blocks the reset entirely when it would override
+    // an accepted handoff. Tag: NEW-GUARD.
+    if (!(await isSweepResetAllowed(sdKey, resetTo, 'PHASE_RESET_MAP/' + reason))) {
+      return;
+    }
     await supabase
       .from('strategic_directives_v2')
       .update({ current_phase: resetTo })
@@ -585,6 +632,12 @@ async function main() {
         actions.push('QA: completed ' + sd.sd_key + ' — was stuck at 100%/pending_approval with completion_date');
       }
     } else {
+      // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3, AC-4/AC-5): generalized
+      // accepted-handoff override guard for the pending_approval reset path.
+      // Tag: NEW-GUARD (pre-existing reset behavior preserved on allow).
+      if (!(await isSweepResetAllowed(sd.sd_key, 'LEAD', 'pending_approval-reset'))) {
+        continue;
+      }
       const { error } = await supabase
         .from('strategic_directives_v2')
         .update({
@@ -635,6 +688,12 @@ async function main() {
     .is('claiming_session_id', null);
 
   for (const sd of (phantomInProgress || [])) {
+    // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3, AC-4/AC-5): generalized
+    // accepted-handoff override guard for the phantom in_progress reset path.
+    // Tag: NEW-GUARD.
+    if (!(await isSweepResetAllowed(sd.sd_key, 'LEAD', 'phantom-in_progress-reset'))) {
+      continue;
+    }
     const { error } = await supabase
       .from('strategic_directives_v2')
       .update({
