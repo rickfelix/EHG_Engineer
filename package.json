@@ -266,6 +266,7 @@
     "doc:audit": "node scripts/eva/doc-health-audit.mjs",
     "story:template": "node scripts/story-requirements-template.js",
     "sd:next": "node scripts/sd-next.js",
+    "sd:cancel": "node scripts/cancel-sd.js",
     "signal": "node scripts/worker-signal.cjs",
     "sd:start": "node scripts/sd-start.js",
     "sd:drain": "node scripts/sd-drain.mjs",
