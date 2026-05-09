@@ -60,6 +60,35 @@ async function readQuickFix(qfId, options = {}) {
   console.log('📝 DESCRIPTION\n');
   console.log(`   ${qf.description}\n`);
 
+  // QF-20260508-406: DB-backed file warning. CLAUDE_*.md, *_DIGEST.md, and
+  // leo-protocol-v*.md are auto-regenerated daily at 06:00 UTC by
+  // .github/workflows/leo-kb-refresh.yml. Manual markdown edits to these
+  // files are silently overwritten unless backed by leo_protocol_sections
+  // rows + scripts/section-file-mapping*.json entries. Surfaced here so
+  // QF authors see the trap at the moment they read the spec.
+  // RCA-recommended preventive fix from QF-810 follow-up loop.
+  const dbBackedFilePattern = /(CLAUDE_[A-Z_]+\.md|CLAUDE\.md|[A-Z_]+_DIGEST\.md|leo-protocol-v[\d.]+\.md)/g;
+  const haystack = [qf.description, qf.steps_to_reproduce, qf.expected_behavior, qf.actual_behavior].filter(Boolean).join(' ');
+  const matches = [...new Set([...(haystack.matchAll(dbBackedFilePattern) || [])].map(m => m[1]))];
+  if (matches.length > 0) {
+    console.log('⚠️  DB-BACKED FILE WARNING\n');
+    console.log('   This QF references DB-generated markdown file(s):');
+    matches.forEach(m => console.log(`     - ${m}`));
+    console.log('');
+    console.log('   These files are regenerated daily at 06:00 UTC by');
+    console.log('   .github/workflows/leo-kb-refresh.yml. Direct markdown edits will be');
+    console.log('   silently overwritten on the next regen.');
+    console.log('');
+    console.log('   To make changes durable, update the source-of-truth in DB:');
+    console.log('     1. Modify or insert the relevant leo_protocol_sections row');
+    console.log('     2. Update scripts/section-file-mapping.json (full files)');
+    console.log('        or scripts/section-file-mapping-digest.json (DIGESTs)');
+    console.log('     3. Run: node scripts/generate-claude-md-from-db.js');
+    console.log('     4. Commit the regenerated markdown alongside the mapping change');
+    console.log('');
+    console.log('   See QF-20260508-810 for an example of the DB-first persistence pattern.\n');
+  }
+
   // Reproduction steps
   if (qf.steps_to_reproduce) {
     console.log('🔄 STEPS TO REPRODUCE\n');
