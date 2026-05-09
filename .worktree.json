@@ -1,7 +1,9 @@
 {
-  "sdKey": "SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001",
-  "createdAt": "2026-05-09T00:31:36.381Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
-  "baseRef": "origin/main"
+  "sdKey": "QF-20260509-552",
+  "workType": "QF",
+  "workKey": "QF-20260509-552",
+  "expectedBranch": "qf/QF-20260509-552",
+  "createdAt": "2026-05-09T11:12:33.830Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
