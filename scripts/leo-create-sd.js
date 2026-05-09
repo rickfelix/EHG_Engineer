@@ -119,8 +119,15 @@ export function parseTargetReposArg(raw) {
  * @returns {Promise<string|null>} Normalized venture prefix or null
  */
 // Quick-fix QF-20260312-516: Extract SD fields from registered vision/arch documents
-async function enrichFromVisionArch(visionKey, archKey, sb) {
-  if (!visionKey && !archKey) return null;
+// QF-20260509-171 (closes feedback 92ff36a1): return {enriched, missing} so the
+// caller can fail-fast when a supplied --vision-key/--arch-key resolves to no
+// row. Previously the function silently returned null on missing rows and the
+// caller still wrote the unresolved key into sdData.metadata, producing an
+// orphan FK-by-string (e.g. VISION-EVA-SUPPORT-CLI-L2-001 in
+// SD-EVA-SUPPORT-CLI-SKILL-ORCH-001 metadata with no source row).
+export async function enrichFromVisionArch(visionKey, archKey, sb) {
+  const missing = { vision: false, arch: false };
+  if (!visionKey && !archKey) return { enriched: null, missing };
   const result = {};
   try {
     if (visionKey) {
@@ -128,8 +135,10 @@ async function enrichFromVisionArch(visionKey, archKey, sb) {
         .from('eva_vision_documents')
         .select('sections')
         .eq('vision_key', visionKey)
-        .single();
-      if (vision?.sections) {
+        .maybeSingle();
+      if (!vision) {
+        missing.vision = true;
+      } else if (vision.sections) {
         const s = vision.sections;
         if (s.executive_summary) result.description = s.executive_summary;
         if (s.problem_statement) result.rationale = s.problem_statement;
@@ -146,8 +155,10 @@ async function enrichFromVisionArch(visionKey, archKey, sb) {
         .from('eva_architecture_plans')
         .select('sections')
         .eq('plan_key', archKey)
-        .single();
-      if (arch?.sections) {
+        .maybeSingle();
+      if (!arch) {
+        missing.arch = true;
+      } else if (arch.sections) {
         const s = arch.sections;
         if (s.route_component_structure || s.route_and_component_structure) {
           const routes = s.route_component_structure || s.route_and_component_structure;
@@ -166,7 +177,10 @@ async function enrichFromVisionArch(visionKey, archKey, sb) {
   } catch (err) {
     console.warn(`[enrichFromVisionArch] Non-fatal: ${err.message}`);
   }
-  return Object.keys(result).length > 0 ? result : null;
+  return {
+    enriched: Object.keys(result).length > 0 ? result : null,
+    missing
+  };
 }
 
 async function resolveVenturePrefix(cliVenture = null) {
@@ -2321,7 +2335,25 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const sdKey = await generateSDKey({ source, type, title, venturePrefix });
 
       // Quick-fix QF-20260312-516: Enrich SD fields from vision/arch documents
-      const enriched = await enrichFromVisionArch(visionKey, archKey, supabase);
+      // QF-20260509-171 (closes feedback 92ff36a1): refuse INSERT when a supplied
+      // --vision-key/--arch-key resolves to no row in eva_vision_documents /
+      // eva_architecture_plans. The metadata.vision_key/arch_key fields are an
+      // FK-by-string, so an unresolved key would produce an orphan SD whose
+      // strategic provenance LEAD evaluators cannot trace.
+      const enrichResult = await enrichFromVisionArch(visionKey, archKey, supabase);
+      if (enrichResult.missing.vision) {
+        console.error(`\n❌ --vision-key '${visionKey}' not found in eva_vision_documents`);
+        console.error('   Writing it to metadata would create an orphan FK-by-string with no source row.');
+        console.error('   Verify the key, or omit --vision-key.\n');
+        process.exit(1);
+      }
+      if (enrichResult.missing.arch) {
+        console.error(`\n❌ --arch-key '${archKey}' not found in eva_architecture_plans`);
+        console.error('   Writing it to metadata would create an orphan FK-by-string with no source row.');
+        console.error('   Verify the key, or omit --arch-key.\n');
+        process.exit(1);
+      }
+      const enriched = enrichResult.enriched;
       if (enriched) {
         console.log('✓ SD fields enriched from vision/architecture documents');
       }
