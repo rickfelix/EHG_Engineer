@@ -454,10 +454,21 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       .limit(1)
       .maybeSingle();
 
-    // QF-20260509-967: clobber guard. Manually-curated rows (or rows that already
-    // hold a higher quality score than the auto-generated payload) MUST NOT be
-    // overwritten. Witnessed retro 84ada45e: 10/4/5 items collapsed to 1/1/1
-    // boilerplate when the generator UPDATE'd a manually-curated row.
+    // SD-LEO-INFRA-BACKEND-WRITE-SAFETY-001 (FR-3): cross-type sd-level guard.
+    // Closes the generated_by=null leak path. Witnessed retro 84ada45e: 10/4/5
+    // items collapsed to 1/1/1 boilerplate (generated_by was null, QF-967's
+    // string-IN check did not catch).
+    {
+      const { isSafeToWriteRetro } = await import('../../lib/retro-clobber-guard.js');
+      const guard = await isSafeToWriteRetro(supabase, retrospective.sd_id);
+      if (!guard.safe) {
+        console.warn(`[ENFORCE] skipped exec-to-plan retro write for sdId=${retrospective.sd_id} reason=${guard.reason}`);
+        return null;
+      }
+    }
+
+    // QF-20260509-967: per-type clobber guard. Preserve manually-curated rows or rows
+    // with higher quality than the auto-generated payload.
     const skipOverwrite = existing && (
       existing?.metadata?.manually_curated === true
       || existing?.generated_by === 'MANUAL'
