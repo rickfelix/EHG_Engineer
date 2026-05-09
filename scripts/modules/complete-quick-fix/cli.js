@@ -84,6 +84,7 @@ export function parseArguments(args) {
       'force-complete':     { type: 'boolean' },
       'reason':             { type: 'string' },
       'non-interactive':    { type: 'boolean' },
+      'auto-pr':            { type: 'boolean' },
       'help':               { type: 'boolean', short: 'h' }
     },
     allowPositionals: true,
@@ -123,7 +124,12 @@ export function parseArguments(args) {
     verificationNotes: values['verification-notes'],
     forceComplete:     values['force-complete']   || false,
     reason:            values['reason'],
-    nonInteractive:    values['non-interactive'] || false
+    nonInteractive:    values['non-interactive'] || false,
+    // QF-20260509-407: --auto-pr opt-in flag, plus auto-enable under --non-interactive
+    // when no --pr-url provided. Eliminates the mid-run prompt-then-throw pattern
+    // (the prompt() wrapper rejects under non-interactive but only AFTER several
+    // setup steps have already run).
+    autoPr:            values['auto-pr'] || (values['non-interactive'] && !values['pr-url']) || false
   };
 
   return { qfId, options };
@@ -156,6 +162,9 @@ Options:
                         REQUIRES --reason "<text>". Used for already-merged PRs or audit-trailed exceptions.
   --reason              Required with --force-complete. Recorded in verification_notes JSON audit trail.
   --non-interactive     Fail-fast on any prompt (instead of hanging under piped stdin). Use in CI / scripts.
+                        When set without --pr-url, --auto-pr is auto-enabled to avoid mid-run prompt failure.
+  --auto-pr             Auto-create the PR via 'gh pr create' if --pr-url is not provided.
+                        Implicit under --non-interactive when no --pr-url.
   --help, -h            Show this help
 
 Programmatic Verification:
