@@ -13,6 +13,7 @@ import {
   detectEnforceAdmins,
   buildMergeArgs,
   verifyMerged,
+  verifyBranchDeleted,
 } from '../../../lib/ship/auto-merge.mjs';
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
@@ -40,10 +41,14 @@ const argvMatchers = {
     args[0] === 'pr' && args[1] === 'view' && args.includes('mergedAt'),
   prViewState: (args) =>
     args[0] === 'pr' && args[1] === 'view' && args.includes('state'),
+  prViewHeadRef: (args) =>
+    args[0] === 'pr' && args[1] === 'view' && args.includes('headRefName'),
   prReady: (args) => args[0] === 'pr' && args[1] === 'ready',
   prMerge: (args) => args[0] === 'pr' && args[1] === 'merge',
   apiProtection: (args) =>
     args[0] === 'api' && args[1].includes('branches/main/protection'),
+  apiRefHead: (args) =>
+    args[0] === 'api' && /repos\/[^/]+\/[^/]+\/git\/refs\/heads\//.test(args[1]),
 };
 
 describe('buildMergeArgs', () => {
@@ -130,11 +135,18 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
     });
 
     expect(r).toEqual({ ok: true, action: 'merged', adminUsed: true });
+    // QF-20260509-VERIFY-BRANCH-DELETED: after the mergedAt verify, the
+    // happy path now also issues a pr-view for headRefName as part of the
+    // branch-deletion verification (verifyBranchDeleted). The runner's
+    // unmatched-call default returns code=1 → verifyBranchDeleted returns
+    // null → "branch deletion not verified" advisory is logged. No
+    // additional gh api call is made when the headRefName lookup fails.
     expect(calls.map((c) => c.slice(0, 2))).toEqual([
       ['pr', 'view'],
       ['pr', 'ready'],
       ['api', 'repos/rickfelix/EHG_Engineer/branches/main/protection'],
       ['pr', 'merge'],
+      ['pr', 'view'],
       ['pr', 'view'],
     ]);
     const mergeCall = calls.find(argvMatchers.prMerge);
@@ -319,5 +331,155 @@ describe('attemptAutoMerge — input validation', () => {
     });
     expect(r.ok).toBe(false);
     expect(r.exitCode).toBe(2);
+  });
+});
+
+describe('verifyBranchDeleted (QF-20260509-VERIFY-BRANCH-DELETED — closes 4e273e05)', () => {
+  it('returns true when GET refs/heads/<branch> 404s with stderr "Not Found"', () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/SD-foo\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'gh: Not Found (HTTP 404)' } },
+    ]);
+    expect(verifyBranchDeleted(123, 'rickfelix', 'EHG_Engineer', runner)).toBe(true);
+  });
+
+  it('returns true when stderr contains the literal "404" without "Not Found"', () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/SD-bar\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'HTTP 404 from api' } },
+    ]);
+    expect(verifyBranchDeleted(123, 'rickfelix', 'EHG_Engineer', runner)).toBe(true);
+  });
+
+  it('returns false when GET refs/heads/<branch> succeeds (branch still exists)', () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/SD-baz\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 0, stdout: '{"ref":"refs/heads/feat/SD-baz"}' } },
+    ]);
+    expect(verifyBranchDeleted(123, 'rickfelix', 'EHG_Engineer', runner)).toBe(false);
+  });
+
+  it('returns null (inconclusive) when headRefName lookup fails', () => {
+    const runner = (args) => {
+      if (args[0] === 'pr' && args[1] === 'view') {
+        return { code: 1, stdout: '', stderr: 'auth required' };
+      }
+      throw new Error('should not reach api call when headRefName lookup fails');
+    };
+    expect(verifyBranchDeleted(123, 'rickfelix', 'EHG_Engineer', runner)).toBeNull();
+  });
+
+  it('returns null (inconclusive) when headRefName is empty', () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewHeadRef, result: { stdout: '' } },
+    ]);
+    expect(verifyBranchDeleted(123, 'rickfelix', 'EHG_Engineer', runner)).toBeNull();
+  });
+
+  it('returns null when API call fails for non-404 reason (e.g. timeout, auth)', () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/SD-quux\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'token expired' } },
+    ]);
+    expect(verifyBranchDeleted(123, 'rickfelix', 'EHG_Engineer', runner)).toBeNull();
+  });
+
+  it('returns null when repoOwner or repoName is missing', () => {
+    const noopRunner = () => { throw new Error('should not run'); };
+    expect(verifyBranchDeleted(123, '', 'EHG_Engineer', noopRunner)).toBeNull();
+    expect(verifyBranchDeleted(123, 'rickfelix', '', noopRunner)).toBeNull();
+    expect(verifyBranchDeleted(123, null, null, noopRunner)).toBeNull();
+  });
+});
+
+describe('attemptAutoMerge — branch-deletion verification (QF-20260509-VERIFY-BRANCH-DELETED)', () => {
+  it('logs a warning when merge succeeds but branch deletion silently failed', async () => {
+    const warnings = [];
+    const captureLogger = {
+      info: () => {},
+      warn: (msg) => warnings.push(msg),
+      error: () => {},
+    };
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+      { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-06T10:00:00Z\n' } },
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'qf/QF-foo\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 0, stdout: '{"ref":"refs/heads/qf/QF-foo"}' } },
+    ]);
+
+    const r = await attemptAutoMerge({
+      prNumber: 200,
+      repoOwner: 'rickfelix',
+      repoName: 'EHG_Engineer',
+      runner,
+      logger: captureLogger,
+    });
+
+    // The merge result itself remains successful — branch-deletion failure
+    // is advisory, not a hard-fail.
+    expect(r).toEqual({ ok: true, action: 'merged', adminUsed: false });
+    // But the warning must have been logged with actionable manual-cleanup hint.
+    expect(warnings.length).toBe(1);
+    expect(warnings[0]).toMatch(/branch deletion silently failed/);
+    expect(warnings[0]).toMatch(/manual cleanup needed/);
+    expect(warnings[0]).toMatch(/repos\/rickfelix\/EHG_Engineer\/git\/refs\/heads/);
+  });
+
+  it('logs success when merge succeeds and branch was actually deleted (404)', async () => {
+    const infos = [];
+    const captureLogger = {
+      info: (msg) => infos.push(msg),
+      warn: () => { throw new Error('should not warn on clean branch deletion'); },
+      error: () => {},
+    };
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+      { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-06T10:00:00Z\n' } },
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'qf/QF-bar\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'gh: Not Found (HTTP 404)' } },
+    ]);
+
+    const r = await attemptAutoMerge({
+      prNumber: 201,
+      repoOwner: 'rickfelix',
+      repoName: 'EHG_Engineer',
+      runner,
+      logger: captureLogger,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(infos.some((m) => /merged and branch deleted/.test(m))).toBe(true);
+  });
+
+  it('logs neutral message when branch deletion is inconclusive (lookup failed)', async () => {
+    const infos = [];
+    const captureLogger = {
+      info: (msg) => infos.push(msg),
+      warn: () => { throw new Error('should not warn when verification is inconclusive'); },
+      error: () => {},
+    };
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+      { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-06T10:00:00Z\n' } },
+      // headRefName lookup fails → verifyBranchDeleted returns null →
+      // attemptAutoMerge logs the "not verified" advisory.
+    ]);
+
+    const r = await attemptAutoMerge({
+      prNumber: 202,
+      repoOwner: 'rickfelix',
+      repoName: 'EHG_Engineer',
+      runner,
+      logger: captureLogger,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(infos.some((m) => /not verified/.test(m))).toBe(true);
   });
 });
