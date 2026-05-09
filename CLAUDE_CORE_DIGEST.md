@@ -12,6 +12,9 @@
 
 ---
 
+## Friction signaling
+Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/signal <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. CLAUDE_CORE.md "Signaling friction" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
+
 ## RCA Issue Resolution Mandate
 
 ## ⚠️ CRITICAL: Issue Resolution Protocol

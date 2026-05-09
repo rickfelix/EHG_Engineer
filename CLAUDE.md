@@ -58,6 +58,8 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 9. **Chunked reads allowed** — `Read` has a 25k-token per-call cap (hard-coded Claude Code limit, NOT context exhaustion). Paginate with `offset`/`limit` or invoke `/read-full <path>`; use `*_DIGEST.md` for phase docs. Never `cat` via Bash (tighter ~30k char cap).
 > Why: The 25k cap is per Read call (Claude Code issues #40357/#14888/#15687), independent of the 1M context window. Misinterpreting it as "context too small" causes silent partial-reads of protocol files — the leading cause of LEO compliance drift in long sessions.
 
+10. **Friction signaling** — when you hit recurrence (gate 2× / RCA 2× / tool 3×), are about to bypass (`--no-verify` / 3rd-bypass-quota / mock-not-fix), see protocol-spec friction, recognize a harness bug, or match a memory trend, `/signal <type> "<body>"` to the active coordinator. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. See CLAUDE_CORE.md "Signaling friction to the coordinator". SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
+> Why: The /signal channel is documented only in CLAUDE_CORE.md, so workers loaded into a phase file (LEAD/PLAN/EXEC) without core never see when to send. Surfacing the trigger heuristic at every entry point makes the channel discoverable at the moment friction occurs, not 3+ workers and several recurrences later.
 
 ## AUTO-PROCEED Mode
 
