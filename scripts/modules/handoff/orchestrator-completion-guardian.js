@@ -592,6 +592,19 @@ export class OrchestratorCompletionGuardian {
     const uniqueWentWell = [...new Set(aggregatedWentWell)].slice(0, 5);
     const uniqueNeedsImprovement = [...new Set(aggregatedNeedsImprovement)].slice(0, 3);
 
+    // SD-FDBK-INFRA-HANDOFF-RETRO-GENERATORS-001 (FR-6): consult guard before INSERT.
+    // This is wire-in site 1 of 4 in BOTH guardian files (handoff/ + modules/).
+    // Validation-agent at PLAN-PRD identified BOTH guardians as candidates for the
+    // witness-retro 84ada45e clobber path.
+    {
+      const { isSafeToWriteRetro } = await import('./lib/retro-clobber-guard.js');
+      const guard = await isSafeToWriteRetro(supabase, this.sdId);
+      if (!guard.safe) {
+        console.warn(`[ENFORCE] skipped orchestrator-completion-guardian INSERT for sdId=${this.sdId} reason=${guard.reason}`);
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from('retrospectives')
       .insert({
@@ -633,6 +646,17 @@ export class OrchestratorCompletionGuardian {
    * Enhance existing retrospective to meet quality threshold
    */
   async enhanceRetrospective(current) {
+    // SD-FDBK-INFRA-HANDOFF-RETRO-GENERATORS-001 (FR-6): consult guard before UPDATE.
+    // Wire-in site 2 of 4. Even on UPDATE path, the existing retro may have been
+    // manually curated AFTER the orchestrator-completion fired — guard prevents the
+    // overwrite witnessed in retro 84ada45e.
+    const { isSafeToWriteRetro } = await import('./lib/retro-clobber-guard.js');
+    const guard = await isSafeToWriteRetro(supabase, this.sdId);
+    if (!guard.safe) {
+      console.warn(`[ENFORCE] skipped orchestrator-completion-guardian UPDATE for sdId=${this.sdId} reason=${guard.reason}`);
+      return;
+    }
+
     const { error } = await supabase
       .from('retrospectives')
       .update({

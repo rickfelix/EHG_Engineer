@@ -90,13 +90,17 @@ async function cancelSD(sd, reason) {
   }
 
   const claimedSessionId = sd.claiming_session_id;
+  // SD-FDBK-INFRA-HANDOFF-RETRO-GENERATORS-001 (FR-1): drop `cancelled_at` —
+  // column does not exist on strategic_directives_v2 (sibling cols: cancellation_reason,
+  // cancelled_by, archived_at). updated_at proxies the cancellation timestamp.
+  // PR #3625 greenfield bug — not previously tested in DB before merge.
   const updates = {
     status: 'cancelled',
     current_phase: 'CANCELLED',
     cancellation_reason: reason,
+    cancelled_by: process.env.CLAUDE_SESSION_ID || null,
     claiming_session_id: null,
     is_working_on: false,
-    cancelled_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 

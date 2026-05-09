@@ -298,6 +298,15 @@ export async function satisfyOrchestratorTemplateRequirements(supabase, sdId, sd
       .limit(1);
 
     if (!retros || retros.length === 0) {
+      // SD-FDBK-INFRA-HANDOFF-RETRO-GENERATORS-001 (FR-4): defense-in-depth guard.
+      // The existence check above already prevents overwrites in normal flow, but a
+      // race could land a manual retro between the SELECT and the INSERT. Guard catches it.
+      const { isSafeToWriteRetro } = await import('../../lib/retro-clobber-guard.js');
+      const guard = await isSafeToWriteRetro(supabase, sdId);
+      if (!guard.safe) {
+        console.warn(`[ENFORCE] skipped state-transitions orchestrator-completion INSERT for sdId=${sdId} reason=${guard.reason}`);
+        return { satisfied: true, created };
+      }
       const { error: rErr } = await supabase
         .from('retrospectives')
         .insert({
@@ -465,13 +474,13 @@ export async function completeStandardSD(supabase, sdId, prd, planValidation, ga
     if (sdError) {
       throw new Error(
         `PLAN-TO-LEAD: SD status UPDATE to pending_approval failed for ${sdCanonicalId}: ${sdError.message}. ` +
-        `Root cause surfaces here — do not retry LEAD-FINAL-APPROVAL until this is resolved.`
+        'Root cause surfaces here — do not retry LEAD-FINAL-APPROVAL until this is resolved.'
       );
     }
     if (!sdUpdateResult) {
       throw new Error(
         `PLAN-TO-LEAD: SD status UPDATE returned no data for ${sdCanonicalId} (silent failure — row not matched). ` +
-        `Verify the SD id is canonical and the record exists. Do not retry LEAD-FINAL-APPROVAL until this is resolved.`
+        'Verify the SD id is canonical and the record exists. Do not retry LEAD-FINAL-APPROVAL until this is resolved.'
       );
     }
     console.log('   ✅ SD status transitioned: → pending_approval');

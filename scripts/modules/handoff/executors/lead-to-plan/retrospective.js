@@ -344,6 +344,16 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       .limit(1)
       .maybeSingle();
 
+    // SD-FDBK-INFRA-HANDOFF-RETRO-GENERATORS-001 (FR-3): defense-in-depth guard.
+    {
+      const { isSafeToWriteRetro } = await import('../../lib/retro-clobber-guard.js');
+      const guard = await isSafeToWriteRetro(supabase, retrospective.sd_id);
+      if (!guard.safe) {
+        console.warn(`[ENFORCE] skipped lead-to-plan retro write for sdId=${retrospective.sd_id} reason=${guard.reason}`);
+        return null;
+      }
+    }
+
     let data, error;
     if (existing) {
       ({ data, error } = await supabase
