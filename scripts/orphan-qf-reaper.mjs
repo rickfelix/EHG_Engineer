@@ -169,6 +169,7 @@ async function main() {
           pr_number: prNumber,
           merge_commit_sha: mergeCommitSha,
         }),
+        force_completed: true,
       })
       .eq('id', qf.id)
       .eq('status', qf.status)
@@ -249,6 +250,7 @@ async function main() {
             branch: branchName,
             merge_commit_sha: mergeCommitSha,
           }),
+          force_completed: true,
         })
         .eq('id', qf.id)
         .eq('status', qf.status)
