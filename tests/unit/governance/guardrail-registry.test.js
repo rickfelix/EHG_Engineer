@@ -83,6 +83,115 @@ describe('Guardrail Registry - check()', () => {
     expect(scopeViolation).toBeDefined();
   });
 
+  // QF-20260509-988 (PAT-GOV-LEXICAL-CLASSIFIER-DRIFT-001): GR-SCOPE-BOUNDARY
+  // strong/weak token split + orchestrator-arch exemption.
+  describe('GR-SCOPE-BOUNDARY — strong/weak token tightening', () => {
+    it('passes infrastructure SD that uses "Component A" architecturally (single weak token)', () => {
+      // Witness: SD-FDBK-INFRA-STAGE-CONFIG-PARITY-001 source feedback row a0cb6546
+      // contained "SD-LEO-ORCH-QUALITY-LIFECYCLE-LOOP-001 Component A". Pre-fix
+      // this fired GR-SCOPE-BOUNDARY because /\bcomponent\b/ matched on
+      // architectural vocabulary, not React.
+      const result = check({
+        sd_type: 'infrastructure',
+        scope: 'Refactor backend writer for SD-LEO-ORCH-... Component A: parity gate logic',
+        strategic_objectives: ['OKR-1'],
+      });
+      const scopeViolation = result.violations.find(
+        (v) => v.guardrail === 'GR-SCOPE-BOUNDARY'
+      );
+      expect(scopeViolation).toBeUndefined();
+    });
+
+    it('blocks infrastructure SD when 2+ weak UI tokens co-occur (component + ui)', () => {
+      const result = check({
+        sd_type: 'infrastructure',
+        scope: 'Add UI component for the dashboard',
+        strategic_objectives: ['OKR-1'],
+      });
+      const scopeViolation = result.violations.find(
+        (v) => v.guardrail === 'GR-SCOPE-BOUNDARY'
+      );
+      expect(scopeViolation).toBeDefined();
+    });
+
+    it('blocks infrastructure SD when a single strong UI token appears (react alone)', () => {
+      const result = check({
+        sd_type: 'infrastructure',
+        scope: 'Add a React hook for cache invalidation',
+        strategic_objectives: ['OKR-1'],
+      });
+      const scopeViolation = result.violations.find(
+        (v) => v.guardrail === 'GR-SCOPE-BOUNDARY'
+      );
+      expect(scopeViolation).toBeDefined();
+    });
+
+    it('exempts infrastructure SD with orchestrator metadata (arch_key) from weak-marker firing', () => {
+      // Orchestrator children inherit "Component A/B/C" naming canonically.
+      const result = check({
+        sd_type: 'infrastructure',
+        scope: 'Backend Component A for orchestrator parent SD-PARENT-001',
+        strategic_objectives: ['OKR-1'],
+        metadata: { arch_key: 'ARCH-001' },
+      });
+      const scopeViolation = result.violations.find(
+        (v) => v.guardrail === 'GR-SCOPE-BOUNDARY'
+      );
+      expect(scopeViolation).toBeUndefined();
+    });
+
+    it('still blocks orchestrator-context SD when a strong UI token appears (no exemption for strong markers)', () => {
+      // Exemption is bypass for weak prose collisions only — explicit React
+      // work mistakenly tagged infrastructure must still block.
+      const result = check({
+        sd_type: 'infrastructure',
+        scope: 'Component A: React tsx dashboard for orchestrator',
+        strategic_objectives: ['OKR-1'],
+        metadata: { arch_key: 'ARCH-001' },
+      });
+      const scopeViolation = result.violations.find(
+        (v) => v.guardrail === 'GR-SCOPE-BOUNDARY'
+      );
+      expect(scopeViolation).toBeDefined();
+    });
+
+    it('passes documentation SD with single weak verb (just "create")', () => {
+      const result = check({
+        sd_type: 'documentation',
+        scope: 'Create user-facing reference for the new API',
+        strategic_objectives: ['OKR-1'],
+      });
+      const scopeViolation = result.violations.find(
+        (v) => v.guardrail === 'GR-SCOPE-BOUNDARY'
+      );
+      expect(scopeViolation).toBeUndefined();
+    });
+
+    it('blocks documentation SD with 2+ weak implementation verbs (create + build)', () => {
+      const result = check({
+        sd_type: 'documentation',
+        scope: 'Create and build a generator for documentation',
+        strategic_objectives: ['OKR-1'],
+      });
+      const scopeViolation = result.violations.find(
+        (v) => v.guardrail === 'GR-SCOPE-BOUNDARY'
+      );
+      expect(scopeViolation).toBeDefined();
+    });
+
+    it('blocks documentation SD when a single strong implementation verb appears (deploy alone)', () => {
+      const result = check({
+        sd_type: 'documentation',
+        scope: 'Deploy the documentation site to staging',
+        strategic_objectives: ['OKR-1'],
+      });
+      const scopeViolation = result.violations.find(
+        (v) => v.guardrail === 'GR-SCOPE-BOUNDARY'
+      );
+      expect(scopeViolation).toBeDefined();
+    });
+  });
+
   it('blocks when no strategic objectives and no parent_sd_id', () => {
     // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-067: GR-GOVERNANCE-CASCADE is now BLOCKING
     const result = check({
