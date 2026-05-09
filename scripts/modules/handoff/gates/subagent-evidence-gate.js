@@ -133,16 +133,23 @@ function killSwitchActive() {
  */
 async function writeKillSwitchAudit(db, sdUuid, handoffType) {
   if (!db) return;
+  // QF-20260509-AUDIT-LOG-SHAPE: prior shape used `action: 'gate_bypass'` —
+  // audit_log has NO `action` column, so the insert silently failed
+  // (caught + warned). Canonical shape is event_type + entity_type +
+  // entity_id + severity + metadata + created_by. Closes feedback 327716da.
   try {
     await db.from('audit_log').insert({
+      event_type: 'gate_bypass',
+      entity_type: 'strategic_directive',
+      entity_id: sdUuid,
       severity: 'warning',
-      action: 'gate_bypass',
       metadata: {
         gate: 'GATE_SUBAGENT_EVIDENCE',
         sd_id: sdUuid,
         handoff_type: handoffType,
         reason: 'LEO_DISABLE_SUBAGENT_EVIDENCE_GATE env var set'
-      }
+      },
+      created_by: 'subagent-evidence-gate'
     });
   } catch (e) {
     // Non-blocking: auditability is secondary to correctness
