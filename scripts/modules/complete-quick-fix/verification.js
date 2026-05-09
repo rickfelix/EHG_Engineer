@@ -288,12 +288,18 @@ export async function validateSelfVerification(verificationResults, prompt, flag
 }
 
 /**
- * Validate compliance rubric results
+ * Validate compliance rubric results.
+ *
+ * QF-20260508-407 (RCA from 5-witness wedge): mirrors {forceComplete,reason}
+ * short-circuit pattern from validateLOC + validateSelfVerification. SD-FDBK
+ * FR-2 patched 2 of 3 sibling validators; this was the missed third sibling.
+ *
  * @param {object} complianceResults - Results from compliance rubric
  * @param {Function} prompt - Prompt function for user input
+ * @param {object} flags - { forceComplete?: bool, reason?: string }
  * @returns {Promise<boolean>} True if compliance passed
  */
-export async function validateCompliance(complianceResults, prompt) {
+export async function validateCompliance(complianceResults, prompt, flags = {}) {
   if (complianceResults.verdict === 'FAIL') {
     console.log('\n❌ CANNOT COMPLETE - Compliance rubric failed after all refinement attempts\n');
     console.log(`   Final Score: ${complianceResults.totalScore}/100 (${complianceResults.confidence.toFixed(1)}%)\n`);
@@ -318,6 +324,13 @@ export async function validateCompliance(complianceResults, prompt) {
         console.log(`   ${i + 1}. ${c.name} (${c.score}/${c.maxScore} points)`);
         console.log(`      ${c.evidence}\n`);
       });
+    }
+
+    // QF-20260508-407: --force-complete bypasses WARN-verdict prompt (audit
+    // trail in verification_notes JSON). 6th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.
+    if (flags.forceComplete) {
+      console.log(`   ⚠️  --force-complete: WARN-verdict prompt bypassed (reason="${flags.reason}")\n`);
+      return true;
     }
 
     const proceedCompliance = await prompt('   Proceed with completion? (yes/no): ');
