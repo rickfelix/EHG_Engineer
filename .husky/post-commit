@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+# Post-commit hook
+# SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 (FR-5a): auto-release file_claim_locks
+# rows for files in HEAD commit. Holder-scoped DELETE so peer claims survive.
+
+# Skip if env-disabled (matches FILE_CLAIM_ENFORCED gate at PreToolUse layer).
+if [ "$FILE_CLAIM_ENFORCED" = "off" ]; then
+  exit 0
+fi
+
+# Skip if Supabase env missing (CI/local without credentials).
+if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && [ -z "$SUPABASE_URL" ] && [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+  exit 0
+fi
+
+# Run the release script with HEAD commit file list. Fail-open: any error
+# (network, auth, missing module) must not block git's post-commit phase.
+node scripts/hooks/post-commit-release-file-claims.cjs 2>&1 | head -3 || true
+
+exit 0

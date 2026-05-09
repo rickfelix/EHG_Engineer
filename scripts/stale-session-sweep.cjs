@@ -904,9 +904,24 @@ async function main() {
           .update({ claiming_session_id: null, is_working_on: false })
           .eq('claiming_session_id', s.session_id);
       }
+      // SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 (FR-5): SIBLING RELEASE SITE 1/4 —
+      // co-clear file_claim_locks alongside the strategic_directives_v2 clear above.
+      try {
+        const { releaseClaimsByHolder } = require('./hooks/lib/file-claim-guard.cjs');
+        const r = await releaseClaimsByHolder({ holderSessionId: s.session_id });
+        if (r.released > 0) actions.push('  + released ' + r.released + ' file_claim_locks for ' + s.session_id);
+      } catch { /* fail-open */ }
       actions.push('RELEASED ' + s.session_id + ' — reason=' + releaseReason + ' — freed ' + s.sd_key);
     }
   }
+
+  // SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 (FR-5b): file_claim_locks reaper —
+  // DELETE rows older than the stale heartbeat threshold.
+  try {
+    const { reapStaleClaims } = require('./hooks/lib/file-claim-guard.cjs');
+    const reap = await reapStaleClaims({ staleThresholdSeconds: 600 });
+    if (reap.reaped > 0) actions.push('REAPED ' + reap.reaped + ' stale file_claim_locks (heartbeat >10min)');
+  } catch { /* fail-open */ }
 
   // 4a. Worktree conflict detection (SD-MAN-INFRA-WORKER-WORKTREE-SELF-001)
   // Detect multiple active sessions on the same feature branch (excludes main/QF)
