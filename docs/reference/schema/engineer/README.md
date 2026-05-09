@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-09T00:09:01.584Z
-**Tables**: 662
+**Generated**: 2026-05-09T01:02:54.597Z
+**Tables**: 675
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (662)
+## All Tables (675)
 
 ### LEO Protocol
 
@@ -547,6 +547,19 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sdip_ai_analysis](tables/sdip_ai_analysis.md)
 - [sdip_groups](tables/sdip_groups.md)
 - [sdip_submissions](tables/sdip_submissions.md)
+- [security_audit_events_2026_05](tables/security_audit_events_2026_05.md)
+- [security_audit_events_2026_06](tables/security_audit_events_2026_06.md)
+- [security_audit_events_2026_07](tables/security_audit_events_2026_07.md)
+- [security_audit_events_2026_08](tables/security_audit_events_2026_08.md)
+- [security_audit_events_2026_09](tables/security_audit_events_2026_09.md)
+- [security_audit_events_2026_10](tables/security_audit_events_2026_10.md)
+- [security_audit_events_2026_11](tables/security_audit_events_2026_11.md)
+- [security_audit_events_2026_12](tables/security_audit_events_2026_12.md)
+- [security_audit_events_2027_01](tables/security_audit_events_2027_01.md)
+- [security_audit_events_2027_02](tables/security_audit_events_2027_02.md)
+- [security_audit_events_2027_03](tables/security_audit_events_2027_03.md)
+- [security_audit_events_2027_04](tables/security_audit_events_2027_04.md)
+- [security_audit_events_2027_05](tables/security_audit_events_2027_05.md)
 - [self_audit_findings](tables/self_audit_findings.md)
 - [sensemaking_analyses](tables/sensemaking_analyses.md)
 - [sensemaking_personas](tables/sensemaking_personas.md)
