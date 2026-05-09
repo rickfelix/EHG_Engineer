@@ -71,11 +71,20 @@ function walkScripts(dir, accum = []) {
 // formatting variants (newlines, varying spacing).
 const RAW_RMSYNC_RECURSIVE = /\bfs\.rmSync\s*\([^)]*\brecursive\s*:\s*true/s;
 
+// QF-20260509-NESTED-JUNCTION: fs.cpSync({recursive:true}) follows Windows
+// junctions just like fs.rmSync({recursive:true}). Worktree-related files that
+// COPY recursively must use safeRecursiveCp to avoid junction-target duplication
+// (or wipe in the rare case the target is symlinked elsewhere).
+const RAW_CPSYNC_RECURSIVE = /\bfs\.cpSync\s*\([^)]*\brecursive\s*:\s*true/s;
+
 // Confirms file uses junction-safe rm. Two accepted patterns:
 //   1. References safeRecursiveRm (ESM ./lib/worktree-manager.js consumers)
 //   2. Inlines junction-aware logic (CJS callers): lstatSync + isSymbolicLink + unlinkSync
 //      indicate the file checks-and-unlinks junctions BEFORE rmSync.
 const SAFE_IMPORT = /\bsafeRecursiveRm\b|isSymbolicLink\(\)[\s\S]{0,200}\bunlinkSync\b/;
+
+// Confirms file uses junction-safe cp.
+const SAFE_CP_IMPORT = /\bsafeRecursiveCp\b/;
 
 // Worktree-related code paths — files that operate on `.worktrees/*` paths.
 // The static guard only fires on these; non-worktree rmSync (e.g., cleaning
@@ -87,7 +96,7 @@ const WORKTREE_PATH_REFERENCE = /\.worktrees|worktree-(?:reaper|manager)|wtPath|
 describe('worktree-rmsync junction safety — static guard over scripts/', () => {
   const allFiles = walkScripts(SCRIPTS_DIR);
 
-  it(`finds at least 100 source files under scripts/ (sanity)`, () => {
+  it('finds at least 100 source files under scripts/ (sanity)', () => {
     expect(allFiles.length).toBeGreaterThan(100);
   });
 
@@ -116,13 +125,43 @@ describe('worktree-rmsync junction safety — static guard over scripts/', () =>
     if (offenders.length > 0) {
       const message =
         `Found ${offenders.length} WORKTREE-RELATED file(s) using raw fs.rmSync({recursive:true}) ` +
-        `without junction-safe handling:\n` +
+        'without junction-safe handling:\n' +
         offenders.map((f) => `  - ${f}`).join('\n') +
-        `\n\nFix options:\n` +
-        `  1. ESM callers: import { safeRecursiveRm } from '../lib/worktree-manager.js' and replace the rmSync call.\n` +
-        `  2. CJS callers (cannot import ESM directly): inline the unlink-junction-first pattern. See ` +
-        `scripts/hooks/concurrent-session-worktree.cjs (QF-20260508-102) for the canonical CJS template.\n` +
-        `  3. Or scripts/worktree-reaper.mjs (QF-20260508-102) for the canonical ESM pattern.`;
+        '\n\nFix options:\n' +
+        '  1. ESM callers: import { safeRecursiveRm } from \'../lib/worktree-manager.js\' and replace the rmSync call.\n' +
+        '  2. CJS callers (cannot import ESM directly): inline the unlink-junction-first pattern. See ' +
+        'scripts/hooks/concurrent-session-worktree.cjs (QF-20260508-102) for the canonical CJS template.\n' +
+        '  3. Or scripts/worktree-reaper.mjs (QF-20260508-102) for the canonical ESM pattern.';
+      throw new Error(message);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('every WORKTREE-RELATED script that uses fs.cpSync({recursive:true}) MUST use safeRecursiveCp', () => {
+    // QF-20260509-NESTED-JUNCTION: closes 4th witness of WINDOWS-JUNCTION-FOLLOW-RECURSIVE-RM-001 chain.
+    // Reaper's preserve-untracked path used raw fs.cpSync({recursive:true}) which on Windows
+    // would copy junction-target contents (e.g. node_modules) into scratch/preserved-from-*.
+    const offenders = [];
+    for (const file of allFiles) {
+      let src;
+      try {
+        src = readFileSync(file, 'utf8');
+      } catch {
+        continue;
+      }
+      const stripped = stripComments(src);
+      if (!RAW_CPSYNC_RECURSIVE.test(stripped)) continue;
+      if (!WORKTREE_PATH_REFERENCE.test(stripped)) continue;
+      if (!SAFE_CP_IMPORT.test(stripped)) {
+        offenders.push(file.replace(/\\/g, '/'));
+      }
+    }
+    if (offenders.length > 0) {
+      const message =
+        `Found ${offenders.length} WORKTREE-RELATED file(s) using raw fs.cpSync({recursive:true}) ` +
+        'without junction-safe handling:\n' +
+        offenders.map((f) => `  - ${f}`).join('\n') +
+        '\n\nFix: import { safeRecursiveCp } from \'../lib/worktree-manager.js\' and replace the cpSync call.';
       throw new Error(message);
     }
     expect(offenders).toEqual([]);
@@ -138,6 +177,29 @@ fs.rmSync(wtPath, { recursive: true, force: true });
     expect(stripped).toMatch(RAW_RMSYNC_RECURSIVE);
     expect(stripped).toMatch(WORKTREE_PATH_REFERENCE);
     expect(stripped).not.toMatch(SAFE_IMPORT);
+  });
+
+  it('cpSync regex correctly detects synthetic worktree-related violation', () => {
+    const violation = `
+import fs from 'node:fs';
+const wtPath = '/some/.worktrees/SD-X-001';
+fs.cpSync(src, wtPath, { recursive: true });
+    `;
+    const stripped = stripComments(violation);
+    expect(stripped).toMatch(RAW_CPSYNC_RECURSIVE);
+    expect(stripped).toMatch(WORKTREE_PATH_REFERENCE);
+    expect(stripped).not.toMatch(SAFE_CP_IMPORT);
+  });
+
+  it('cpSync regex accepts ESM caller with safeRecursiveCp import', () => {
+    const guarded = `
+import { safeRecursiveCp } from '../lib/worktree-manager.js';
+import fs from 'node:fs';
+const wtPath = '/some/.worktrees/SD-X-001';
+safeRecursiveCp(src, wtPath);
+    `;
+    const stripped = stripComments(guarded);
+    expect(stripped).toMatch(SAFE_CP_IMPORT);
   });
 
   it('regex accepts ESM caller with safeRecursiveRm import', () => {
