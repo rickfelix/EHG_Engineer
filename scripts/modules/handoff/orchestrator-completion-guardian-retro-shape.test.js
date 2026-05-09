@@ -7,7 +7,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../..');
 
 const GUARDIAN_FILES = [
-  resolve(REPO_ROOT, 'scripts/modules/orchestrator-completion-guardian.js'),
   resolve(REPO_ROOT, 'scripts/modules/handoff/orchestrator-completion-guardian.js'),
 ];
 

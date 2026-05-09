@@ -133,7 +133,7 @@ export async function checkAndCompleteParentSD(sd, supabase, { shippingResults }
         console.log(`   ❌ Guardian unavailable: ${guardianError.message}`);
         console.log(`   ❌ LEGACY DIRECT-DB COMPLETION PATH IS CLOSED (SD-LEO-INFRA-PHANTOM-COMPLETION-PROOF-001).`);
         console.log(`   💡 Required action: invoke RCA on Guardian failure, OR explicitly bypass via:`);
-        console.log(`      node scripts/modules/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`);
+        console.log(`      node scripts/modules/handoff/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`);
         await recordFailedCompletion(parentSD, `Guardian unavailable: ${guardianError.message}. Legacy fallback closed by SD-LEO-INFRA-PHANTOM-COMPLETION-PROOF-001.`, null, supabase);
         throw new Error(`PHANTOM_PROOF_LEGACY_PATH_CLOSED: Guardian failed for parent ${parentSD.id} (${parentSD.sd_key || 'no sd_key'}). Direct-DB status=completed write refused. Original error: ${guardianError.message}`);
       }
@@ -167,7 +167,7 @@ export async function recordFailedCompletion(parentSD, errorMessage, report = nu
           error: errorMessage,
           validation_report: report,
           timestamp: new Date().toISOString(),
-          remediation: `node scripts/modules/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`
+          remediation: `node scripts/modules/handoff/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`
         },
         severity: 'warning',
         created_by: 'LEAD-FINAL-APPROVAL-EXECUTOR'
