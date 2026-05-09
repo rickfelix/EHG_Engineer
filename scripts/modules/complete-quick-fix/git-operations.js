@@ -49,6 +49,11 @@ export function countLocBySplit(testDir, baseRef = 'origin/main') {
   } catch {
     return result;
   }
+  // QF-20260509-409: defensive guard — execSync may return undefined under some
+  // mock setups (e.g. mockReturnValueOnce exhausted in upstream test), in which
+  // case `numstat.split` throws. The catch block above only fires on throw, not
+  // on undefined return. Match the empty-output fail-safe.
+  if (!numstat) return result;
 
   // QF-20260509-407: collect deleted-file paths so we can mark their deletion-LOC
   // as not-counting-against-tier-cap (pure dead-code removal).
