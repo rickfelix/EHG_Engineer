@@ -29,12 +29,4 @@ jobs:
       - name: Run hooks harness tests
         env:
           NODE_OPTIONS: --experimental-vm-modules
-          LEO_HOOK_TRACE: '1'
-        run: |
-          rm -f /tmp/leo-hook-trace.log
-          npm test -- tests/unit/hooks/ || true
-          echo "===== LEO_HOOK_TRACE OUTPUT ====="
-          cat /tmp/leo-hook-trace.log || echo "(no trace file)"
-          echo "===== END TRACE ====="
-          # Re-run to set proper exit code
-          npm test -- tests/unit/hooks/
+        run: npm test -- tests/unit/hooks/
