@@ -329,11 +329,15 @@ async function validateBeforeExecution(command) {
 
 // QF-20260509-199 DEBUG: timing trace to identify CI hang. Will be removed.
 const _T0 = Date.now();
+const _TRACE_FILE = process.env.LEO_HOOK_TRACE_FILE || '/tmp/leo-hook-trace.log';
 const _trace = (stage) => {
   if (process.env.LEO_HOOK_TRACE === '1') {
-    process.stderr.write(`[trace] T+${Date.now() - _T0}ms ${stage}\n`);
+    try {
+      require('fs').appendFileSync(_TRACE_FILE, `[trace pid=${process.pid} tool=${process.env.CLAUDE_TOOL_NAME || ''}] T+${Date.now() - _T0}ms ${stage}\n`);
+    } catch { /* swallow */ }
   }
 };
+_trace('module-load');
 
 async function main() {
   _trace('main:start');
