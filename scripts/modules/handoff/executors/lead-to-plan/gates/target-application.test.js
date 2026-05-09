@@ -123,6 +123,65 @@ describe('validateTargetApplication', () => {
     expect(result.pass).toBe(true);
     expect(result.score).toBe(100);
   });
+
+  // QF-20260509-986 (closes feedback ccc82ea6): respect explicit operator intent
+  describe('explicit operator intent (target_application_explicit metadata)', () => {
+    it('should NOT auto-correct EHG_Engineer→EHG when target was set explicitly at SD creation', async () => {
+      // Mirror of ccc82ea6 witness: SD-LEO-ENH-CONSTRAIN-STAGE-EHG-001
+      // (title contains "STAGE-EHG" → ehgPatterns match; SD is actually about
+      //  EHG_Engineer enforcement of stage constraints — operator's explicit
+      //  EHG_Engineer must survive the LEAD-TO-PLAN gate.)
+      const sd = createMockSD({
+        target_application: 'EHG_Engineer',
+        scope: 'Constrain stage venture frontend React UI component routing rules',
+        title: 'Constrain stage EHG enforcement (frontend stage rules)',
+        metadata: { target_application_explicit: true },
+      });
+      const supabase = createMockSupabase();
+
+      const result = await validateTargetApplication(sd, supabase);
+
+      // score 100 with "preserved/explicit" warning means the auto-correction branch was skipped.
+      // (score 80 would indicate the auto-correct UPDATE ran — the bug behavior.)
+      expect(result.pass).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.warnings.some(w => w.includes('preserved') && w.includes('explicit'))).toBe(true);
+      expect(result.warnings.some(w => w.toLowerCase().includes('corrected'))).toBe(false);
+    });
+
+    it('should still auto-correct when metadata.target_application_explicit is false (inferred at creation)', async () => {
+      const sd = createMockSD({
+        target_application: 'EHG',
+        scope: 'Update sub-agent routing in LEO protocol and CLAUDE.md generation',
+        title: 'Fix leo_protocol sub-agent routing',
+        metadata: { target_application_explicit: false },
+      });
+      const supabase = createMockSupabase();
+
+      const result = await validateTargetApplication(sd, supabase);
+
+      expect(result.pass).toBe(true);
+      expect(result.score).toBe(80);
+      expect(result.warnings.some(w => w.includes('corrected'))).toBe(true);
+    });
+
+    it('should still auto-correct when metadata is missing entirely (legacy SDs created before flag)', async () => {
+      const sd = createMockSD({
+        target_application: 'EHG',
+        scope: 'Update sub-agent routing in LEO protocol and CLAUDE.md generation',
+        title: 'Fix leo_protocol sub-agent routing',
+        // metadata omitted — pre-QF-986 SDs do not have the flag
+      });
+      delete sd.metadata;
+      const supabase = createMockSupabase();
+
+      const result = await validateTargetApplication(sd, supabase);
+
+      expect(result.pass).toBe(true);
+      expect(result.score).toBe(80);
+      expect(result.warnings.some(w => w.includes('corrected'))).toBe(true);
+    });
+  });
 });
 
 // SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001
