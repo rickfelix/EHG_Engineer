@@ -15,7 +15,7 @@
  * Part of SD-LEO-SDKEY-001: Centralize SD Creation Through /leo
  */
 
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import {
   generateSDKey,
@@ -647,6 +647,46 @@ async function createChild(parentKey, index = 0, overrides = {}) {
 }
 
 /**
+ * Compute a deterministic SHA256 hash of plan content for duplicate detection.
+ * Normalizes line endings (CRLF→LF) and trims trailing whitespace per line so
+ * that benign editor save-formatting changes don't bypass the guard.
+ *
+ * @param {string} content
+ * @returns {string} 64-char hex digest
+ */
+export function computePlanContentHash(content) {
+  if (!content) return createHash('sha256').update('').digest('hex');
+  const normalized = String(content).replace(/\r\n/g, '\n').split('\n').map(l => l.replace(/\s+$/, '')).join('\n').trimEnd();
+  return createHash('sha256').update(normalized).digest('hex');
+}
+
+/**
+ * Look up a non-cancelled SD created within the last 24h whose metadata
+ * carries the same plan_content_hash. Used to refuse duplicate INSERTs from
+ * back-to-back --from-plan runs.
+ *
+ * @param {string} hash - SHA256 hex digest from computePlanContentHash()
+ * @returns {Promise<{sd_key:string,title:string,status:string,id:string}|null>}
+ */
+export async function findRecentSDByPlanHash(hash) {
+  if (!hash) return null;
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, title, status, created_at')
+    .eq('metadata->>plan_content_hash', hash)
+    .gte('created_at', cutoff)
+    .not('status', 'in', '(cancelled,archived)')
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) {
+    console.warn(`   ⚠️  duplicate-guard query failed: ${error.message} — proceeding without guard`);
+    return null;
+  }
+  return (data && data.length > 0) ? data[0] : null;
+}
+
+/**
  * Create SD from Claude Code plan file
  *
  * When called without a path, auto-detects the most recent plan and shows
@@ -818,6 +858,15 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     mitigation: r.mitigation || 'Address during implementation'
   }));
 
+  // QF-20260509-LEO-CREATE-PLAN-DUP-GUARD (closes feedback 082b421c).
+  // Compute SHA256 of the (whitespace-normalized) plan content. We use the
+  // hash for both (i) provenance metadata and (ii) the duplicate-detection
+  // query a few lines down — same plan run twice within 24h ⇒ refuse, unless
+  // --force-create overrides. Catches the LEO-FEAT-* / LEO-FIX-* duplicate
+  // pair that landed when the auto-classifier picked different sd_types on
+  // back-to-back runs of the same plan file.
+  const planContentHash = computePlanContentHash(parsed.fullContent);
+
   // Step 12: Create SD with all extracted fields.
   // Pass priority through so plan authored `## Priority` and --priority CLI overrides reach the DB.
   // When parsed.priority is null (no header, no override), omit the field so createSD's default ('medium') applies.
@@ -836,6 +885,7 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     metadata: {
       source: 'plan',
       plan_content: parsed.fullContent,
+      plan_content_hash: planContentHash,
       plan_file_path: archiveResult.archivedPath || null,
       original_plan_path: originalPath,
       files_to_modify: parsed.files,
@@ -861,6 +911,20 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
   if (parsed.targetApplication) {
     createOptions.target_application = parsed.targetApplication;
   }
+
+  // Pre-INSERT duplicate guard (QF-20260509-LEO-CREATE-PLAN-DUP-GUARD).
+  // Same plan content within last 24h ⇒ refuse unless --force-create.
+  if (!overrides.forceCreate) {
+    const dup = await findRecentSDByPlanHash(planContentHash);
+    if (dup) {
+      console.error(`\n❌ Duplicate plan detected: SD ${dup.sd_key} (${dup.status}) was created from the same plan content within the last 24h.`);
+      console.error(`   Title: ${dup.title}`);
+      console.error('   To create another SD anyway, re-run with --force-create.');
+      console.error('   Otherwise, edit the existing SD or cancel it first (npm run sd:cancel).');
+      process.exit(1);
+    }
+  }
+
   const sd = await createSD(createOptions);
 
   // Step 13: Update additional fields that aren't in createSD signature.
@@ -1906,6 +1970,8 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // Parse boolean review flags (satisfy GR-MIGRATION-REVIEW / GR-SECURITY-BASELINE)
       const migrationReviewed = args.includes('--migration-reviewed');
       const securityReviewed = args.includes('--security-reviewed');
+      // QF-20260509-LEO-CREATE-PLAN-DUP-GUARD: override the same-plan-within-24h refusal
+      const forceCreate = args.includes('--force-create');
       // SD-LEO-INFRA-LEO-CREATE-CROSS-001: --target-repos for cross-repo SDs
       const targetReposIdxPlan = args.indexOf('--target-repos');
       const targetReposPlan = targetReposIdxPlan !== -1 ? parseTargetReposArg(args[targetReposIdxPlan + 1]) : null;
@@ -1923,7 +1989,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const knownPlanFlags = new Set([
         '--yes', '-y', '--type', '--title', '--priority', '--from-plan',
         '--vision-key', '--arch-key', '--migration-reviewed', '--security-reviewed',
-        '--target-repos'
+        '--target-repos', '--force-create'
       ]);
       const planPath = args.find((arg, i) =>
         i > 0 && !arg.startsWith('-') && !flagValuePositions.has(i) && !knownPlanFlags.has(arg)
@@ -1937,6 +2003,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         migrationReviewed,
         securityReviewed,
         targetRepos: targetReposPlan,
+        forceCreate,
       });
     } else if (args[0] === '--child') {
       // Parse --type and --title overrides for child creation
