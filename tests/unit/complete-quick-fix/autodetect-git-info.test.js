@@ -61,7 +61,11 @@ describe('autoDetectGitInfo — PR-metadata authoritative path', () => {
     expect(result.commitSha).toBe('a1b2c3d4e5f6789012345678901234567890abcd');
     expect(result.branchName).toBe('qf/QF-EXAMPLE-001');
     expect(result.actualLoc).toBe(85);
-    expect(execSync).toHaveBeenCalledTimes(1);
+    // QF-20260509-409: the count assertion was over-specified — autoDetectGitInfo
+    // also calls countLocBySplit (numstat + name-status) when actualSourceLoc is
+    // undefined. Original assertion passed only because countLocBySplit threw on
+    // undefined numstat (bug, now guarded). First-call shape assertion below is
+    // sufficient to verify gh-first.
     expect(execSync.mock.calls[0][0]).toContain('gh pr view 999');
   });
 

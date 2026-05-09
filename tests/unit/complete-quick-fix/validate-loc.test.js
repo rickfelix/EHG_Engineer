@@ -18,17 +18,23 @@ describe('QF-501 LOC-CAP-1: hard cap matches CLAUDE.md routing (Tier 3 = >75)', 
   });
 });
 
+// QF-20260509-409: validateLOC signature was extended by SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-1
+// from (loc, qfId, supabase, prompt) to (sourceLoc, testLoc, qfId, supabase, prompt, flags). These tests
+// were not updated — the testLoc/qfId/supabase positions shifted, so prompt was landing in the wrong
+// position. The ≤75-LOC tests passed silently (no prompt call) but the >75 test crashed at prompt
+// invocation (TypeError: prompt is not a function). All 4 calls now use the canonical 5-arg form.
+
 describe('QF-501 LOC-CAP-2: 31–75 LOC (Tier 2 Standard QF) is accepted', () => {
   it('returns true for 75 LOC (boundary)', async () => {
-    const r = await validateLOC(75, 'QF-X', null, async () => 'no');
+    const r = await validateLOC(75, 0, 'QF-X', null, async () => 'no');
     expect(r).toBe(true);
   });
   it('returns true for 60 LOC (mid-Tier 2)', async () => {
-    const r = await validateLOC(60, 'QF-X', null, async () => 'no');
+    const r = await validateLOC(60, 0, 'QF-X', null, async () => 'no');
     expect(r).toBe(true);
   });
   it('returns true for 51 LOC (was rejected pre-fix)', async () => {
-    const r = await validateLOC(51, 'QF-X', null, async () => 'no');
+    const r = await validateLOC(51, 0, 'QF-X', null, async () => 'no');
     expect(r).toBe(true);
   });
 });
@@ -36,7 +42,7 @@ describe('QF-501 LOC-CAP-2: 31–75 LOC (Tier 2 Standard QF) is accepted', () =>
 describe('QF-501 LOC-CAP-3: >75 LOC (Tier 3) still rejected', () => {
   it('returns false for 76 LOC and prompts for escalation', async () => {
     const prompt = vi.fn(async () => 'no');
-    const r = await validateLOC(76, 'QF-X', null, prompt);
+    const r = await validateLOC(76, 0, 'QF-X', null, prompt);
     expect(r).toBe(false);
     expect(prompt).toHaveBeenCalledOnce();
   });
