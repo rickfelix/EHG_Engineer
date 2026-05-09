@@ -262,7 +262,13 @@ export async function completeQuickFix(qfId, options = {}) {
   };
 
   const { complianceResults } = await runComplianceWithRefinement(qfId, qf, complianceContext, prompt);
-  const complianceValid = await validateCompliance(complianceResults, prompt);
+  // QF-20260508-407: forward {forceComplete, reason} so validateCompliance can
+  // short-circuit the WARN-verdict prompt under --non-interactive (sibling parity
+  // with validateLOC and validateSelfVerification).
+  const complianceValid = await validateCompliance(complianceResults, prompt, {
+    forceComplete: options.forceComplete,
+    reason: options.reason
+  });
   if (!complianceValid) {
     process.exit(1);
   }
