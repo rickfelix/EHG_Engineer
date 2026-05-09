@@ -46,6 +46,15 @@ function _supabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
+  // QF-20260509-199: detect tests/setup.js synthetic sentinel ("test.invalid.local").
+  // The sentinel exists so module-load createSupabaseServiceClient() factories don't
+  // throw during vitest collection in CI without real secrets. But the hook is spawned
+  // as a child process from runHook() which propagates process.env, so the synthetic
+  // creds reach a path that makes a REAL network call. DNS resolution for the sentinel
+  // hostname hangs 5-7s on Linux runners — far longer than the 5s test-level timeout.
+  // Treating the sentinel as "no creds" mirrors the original intent (tests don't need
+  // a live claim check; ENF-14 isn't what they're exercising).
+  if (url.includes('test.invalid.local') || key === 'test-service-role-key-not-real') return null;
   return createClient(url, key);
 }
 
