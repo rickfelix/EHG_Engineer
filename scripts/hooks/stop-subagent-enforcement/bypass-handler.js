@@ -62,16 +62,23 @@ export async function checkBypass(supabase) {
     }
 
     // Log bypass to audit
+    // QF-20260509-AUDIT-LOG-SHAPE: prior shape used `details:` — audit_log
+    // has NO `details` column (it has `metadata`), and missing entity_type/
+    // entity_id meant inserts silently failed against the canonical schema.
+    // Closes feedback 327716da.
     try {
       await supabase.from('audit_log').insert({
         event_type: 'STOP_HOOK_BYPASS',
+        entity_type: 'strategic_directive',
+        entity_id: bypass.sd_key,
         severity: 'warning',
-        details: {
+        metadata: {
           sd_key: bypass.sd_key,
           explanation: bypass.explanation,
           skipped_agents: bypass.skipped_agents,
           retrospective_id: bypass.retrospective_id
-        }
+        },
+        created_by: 'stop-hook-bypass-handler'
       });
     } catch (e) {
       console.error('Failed to log bypass to audit:', e.message);
