@@ -190,8 +190,10 @@ export class SDNextSelector {
     }
     this.unscheduledRoadmapItems = await loadUnscheduledRoadmapItems(this.supabase);
     this.feedbackItems = await loadFeedbackItems(this.supabase);
-    // SD-LEO-INFRA-SURFACE-HARNESS-BACKLOG-001: load harness backlog file
-    this.harnessBacklog = await loadHarnessBacklog();
+    // SD-LEO-INFRA-SURFACE-HARNESS-BACKLOG-001: load harness backlog.
+    // QF-20260509-818: DB-canonical (feedback table); markdown fallback gated
+    // on LEGACY_HARNESS_BACKLOG_FALLBACK=1.
+    this.harnessBacklog = await loadHarnessBacklog(this.supabase);
     this.loadMultiRepoStatus();
 
     // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Detect local signals
@@ -639,7 +641,8 @@ export class SDNextSelector {
     }
 
     if (data.fileMissing) {
-      console.log(`\n${c.bold}${c.yellow}HARNESS BACKLOG${c.reset} ${c.dim}(file missing — check docs/harness-backlog.md)${c.reset}`);
+      // Reached only on LEGACY_HARNESS_BACKLOG_FALLBACK=1 when the markdown file is absent.
+      console.log(`\n${c.bold}${c.yellow}HARNESS BACKLOG${c.reset} ${c.dim}(legacy markdown missing — unset LEGACY_HARNESS_BACKLOG_FALLBACK or restore docs/harness-backlog.md)${c.reset}`);
       return;
     }
 
@@ -677,7 +680,7 @@ export class SDNextSelector {
       console.log(`  ${ageBadge} ${symptom}`);
     }
     if (data.count > 5) {
-      console.log(`${c.dim}  +${data.count - 5} more — see docs/harness-backlog.md${c.reset}`);
+      console.log(`${c.dim}  +${data.count - 5} more — query feedback table (category='harness_backlog' AND status='new') or run /inbox${c.reset}`);
     }
     console.log(`${c.dim}  Process via [MODE: campaign] session or /leo audit${c.reset}`);
   }
