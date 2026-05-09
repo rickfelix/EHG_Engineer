@@ -289,15 +289,23 @@ function stripYamlFrontmatter(content) {
 // ─── Agent File Compilation ──────────────────────────────────────────────────
 
 function findInjectionPoint(content) {
-  // Inject after the first H1 heading's paragraph
-  const h1Match = content.match(/\n(# [^\n]+)\n/);
+  // QF-20260509-AGENT-MD: skip past YAML frontmatter so both the H1 search
+  // AND the no-H1 fallback land inside the body. Without this, agents whose
+  // body has no H1 (stories-agent, risk-agent, uat-agent, redis-specialist)
+  // had the knowledge block prepended at offset 0 — BEFORE frontmatter —
+  // breaking Claude Code's agent registration (Task tool reported the
+  // subagent_type as not-found).
+  const fmMatch = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  const baseOffset = fmMatch ? fmMatch[0].length : 0;
+  const body = content.substring(baseOffset);
+  const h1Match = body.match(/\n(# [^\n]+)\n/);
   if (h1Match) {
-    const h1End = h1Match.index + h1Match[0].length;
+    const h1End = baseOffset + h1Match.index + h1Match[0].length;
     const nextBlank = content.indexOf('\n\n', h1End);
     if (nextBlank !== -1) return nextBlank + 2;
     return h1End;
   }
-  return 0;
+  return baseOffset;
 }
 
 function compileAgentFromPartial(partialPath, agentName, agentCode, data, configCategoryMappings, allSkills) {
@@ -637,4 +645,4 @@ if (import.meta.url === `file:///${normalizedArgv}`) {
   });
 }
 
-export { main, composeKnowledgeBlock, composeSkillBlock, compileAgentFromPartial, compileAgentFromDB, fetchLiveData, AGENT_CODE_MAP, generateFrontmatter };
+export { main, composeKnowledgeBlock, composeSkillBlock, compileAgentFromPartial, compileAgentFromDB, fetchLiveData, AGENT_CODE_MAP, generateFrontmatter, findInjectionPoint };
