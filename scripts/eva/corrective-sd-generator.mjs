@@ -21,6 +21,9 @@ import { createSD } from '../leo-create-sd.js';
 import { loadIntelligenceSignals } from '../../lib/eva/intelligence-loader.js';
 import { calculateCorrectivePriority } from '../../lib/eva/corrective-priority-calculator.js';
 import { recordCorrectiveFinding } from '../../lib/eva/corrective-finding-recorder.js';
+// SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 CAPA 3: reuse the canonical
+// placeholder regex set rather than redefining it here.
+import { isPlaceholderText } from '../modules/handoff/executors/lead-to-plan/gates/placeholder-content.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -174,6 +177,112 @@ export async function isSourceSDA05Suppressed(sourceSdId, supabase) {
   } catch {
     return { suppress: false, reason: null, sourceSdKey: null };
   }
+}
+
+// SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 CAPA-1.
+// Skip when source SD status='completed' AND completion_date >= NOW() - 24h AND
+// no FAIL/BLOCKED gate evidence exists for the source SD's most-recent phase.
+// Conservative default: emit on lookup failure or NULL completion_date so legit
+// signals aren't lost (mirrors isSourceSDA05Suppressed shape).
+export async function isSourceCompletedRecently(sourceSdId, supabase) {
+  if (!sourceSdId) return { suppress: false, reason: null, sourceSdKey: null };
+  try {
+    const { data: sd } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status, completion_date')
+      .or(`sd_key.eq.${sourceSdId},id.eq.${sourceSdId}`)
+      .limit(1)
+      .maybeSingle();
+    if (!sd || sd.status !== 'completed' || !sd.completion_date) {
+      return { suppress: false, reason: null, sourceSdKey: null };
+    }
+    const hoursSince = (Date.now() - new Date(sd.completion_date).getTime()) / (1000 * 60 * 60);
+    if (hoursSince >= 24) {
+      return { suppress: false, reason: null, sourceSdKey: sd.sd_key || sd.id };
+    }
+    // Verify no FAIL/BLOCKED evidence (UPPERCASE per verdict enum)
+    const { data: failures } = await supabase
+      .from('sub_agent_execution_results')
+      .select('id, verdict')
+      .eq('sd_id', sd.id)
+      .in('verdict', ['FAIL', 'BLOCKED'])
+      .limit(1);
+    if (failures && failures.length > 0) {
+      return { suppress: false, reason: 'has_failing_gate_evidence', sourceSdKey: sd.sd_key || sd.id };
+    }
+    return {
+      suppress: true,
+      reason: 'completed_within_24h_no_failures',
+      sourceSdKey: sd.sd_key || sd.id,
+      hoursSince: Math.round(hoursSince * 10) / 10,
+    };
+  } catch {
+    return { suppress: false, reason: null, sourceSdKey: null };
+  }
+}
+
+// SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 CAPA-2.
+// Skip when source SD's parent_sd_id resolves to an orchestrator with
+// status='completed' AND completion_date older than 30 days. Orphan-parent class.
+export async function isParentOrchestratorStale(sourceSdId, supabase) {
+  if (!sourceSdId) return { suppress: false, reason: null, parentSdKey: null };
+  try {
+    const { data: sd } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, parent_sd_id')
+      .or(`sd_key.eq.${sourceSdId},id.eq.${sourceSdId}`)
+      .limit(1)
+      .maybeSingle();
+    if (!sd || !sd.parent_sd_id) return { suppress: false, reason: null, parentSdKey: null };
+    const { data: parent } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status, completion_date')
+      .eq('id', sd.parent_sd_id)
+      .maybeSingle();
+    if (!parent || parent.status !== 'completed' || !parent.completion_date) {
+      return { suppress: false, reason: null, parentSdKey: parent?.sd_key || sd.parent_sd_id };
+    }
+    const daysSince = (Date.now() - new Date(parent.completion_date).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSince <= 30) {
+      return { suppress: false, reason: null, parentSdKey: parent.sd_key || parent.id };
+    }
+    return {
+      suppress: true,
+      reason: 'parent_completed_30d_stale',
+      parentSdKey: parent.sd_key || parent.id,
+      daysSince: Math.round(daysSince),
+    };
+  } catch {
+    return { suppress: false, reason: null, parentSdKey: null };
+  }
+}
+
+// SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 CAPA-3.
+// Refuse emission when source SD's key_changes are entirely placeholder
+// templates (no concrete file/function/test reference). Reuses isPlaceholderText
+// from lead-to-plan/gates/placeholder-content.js as canonical regex set.
+export function isAllKeyChangesPlaceholder(keyChanges) {
+  if (!Array.isArray(keyChanges) || keyChanges.length === 0) return false;
+  return keyChanges.every((kc) => {
+    const text = typeof kc === 'string' ? kc : (kc?.change ?? kc?.title ?? '');
+    return isPlaceholderText(text);
+  });
+}
+
+// SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 CAPA-4.
+// Strip self-exempting handoff-gate entries from gate_exemptions[] when the
+// source_gate matches. Mapping: eva_vision_score / eva_heal_score both produce
+// findings whose vision-scoring gate IS GATE_VISION_SCORE — exempting that gate
+// is tautological self-exemption. Returns the filtered array.
+const SOURCE_GATE_TO_HANDOFF_GATE = Object.freeze({
+  eva_vision_score: 'GATE_VISION_SCORE',
+  eva_heal_score: 'GATE_VISION_SCORE',
+});
+export function stripSelfExemptingGate(gateExemptions, sourceGate) {
+  if (!Array.isArray(gateExemptions) || gateExemptions.length === 0) return [];
+  const selfExempting = SOURCE_GATE_TO_HANDOFF_GATE[sourceGate];
+  if (!selfExempting) return [...gateExemptions];
+  return gateExemptions.filter((g) => g !== selfExempting);
 }
 
 /**
@@ -478,6 +587,35 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
     }
   }
 
+  // 4b. Source-completion + parent-orchestrator suppression
+  // (SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 CAPA 1 + 2). Runs BEFORE
+  // multi-dim extraction so the audit trail is clean and no groups are formed
+  // for SDs that should never have generated a finding in the first place.
+  if (score.sd_id) {
+    const completedCheck = await isSourceCompletedRecently(score.sd_id, supabase);
+    if (completedCheck.suppress) {
+      const eventType = 'skipped_completed_source_24h';
+      console.log(`[corrective-sd-generator] eva.corrective.${eventType} source_sd_id=${completedCheck.sourceSdKey} hours_since=${completedCheck.hoursSince}`);
+      await _logAudit(supabase, scoreId, eventType, null, score.vision_id, {
+        source_sd_id: completedCheck.sourceSdKey,
+        reason: completedCheck.reason,
+        hours_since_completion: completedCheck.hoursSince,
+      });
+      return { created: false, action: 'skipped', reason: 'completed_source_24h', sdKey: null, sdId: null };
+    }
+    const parentCheck = await isParentOrchestratorStale(score.sd_id, supabase);
+    if (parentCheck.suppress) {
+      const eventType = 'skipped_stale_orchestrator_30d';
+      console.log(`[corrective-sd-generator] eva.corrective.${eventType} parent_sd_key=${parentCheck.parentSdKey} days_stale=${parentCheck.daysSince}`);
+      await _logAudit(supabase, scoreId, eventType, null, score.vision_id, {
+        parent_sd_key: parentCheck.parentSdKey,
+        reason: parentCheck.reason,
+        days_stale: parentCheck.daysSince,
+      });
+      return { created: false, action: 'skipped', reason: 'stale_orchestrator_30d', sdKey: null, sdId: null };
+    }
+  }
+
   // 5. Multi-dimension extraction and grouping (SD-MAN-INFRA-VISION-CORRECTIVE-MULTI-DIM-001)
   const tier = TIER_CONFIG[action] ?? TIER_CONFIG.escalation;
   const weakDims = _extractWeakDimensions(score.dimension_scores, 3);
@@ -554,6 +692,33 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
     }
   }
 
+  // 5c. Tautology guard (SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 CAPA-3).
+  // Refuse the entire emission when the source SD's key_changes are all
+  // placeholder templates — generating a corrective finding for an SD whose
+  // own deliverable is template noise is tautological. Conservative default:
+  // emit when key_changes is missing or unreadable.
+  if (score.sd_id) {
+    try {
+      const { data: sourceForTautology } = await supabase
+        .from('strategic_directives_v2')
+        .select('key_changes')
+        .or(`sd_key.eq.${score.sd_id},id.eq.${score.sd_id}`)
+        .limit(1)
+        .maybeSingle();
+      if (sourceForTautology && isAllKeyChangesPlaceholder(sourceForTautology.key_changes)) {
+        const eventType = 'refused_tautology_key_changes';
+        console.log(`[corrective-sd-generator] eva.corrective.${eventType} source_sd_id=${score.sd_id} reason=all_key_changes_placeholder`);
+        await _logAudit(supabase, scoreId, eventType, null, score.vision_id, {
+          source_sd_id: score.sd_id,
+          reason: 'all_key_changes_placeholder',
+        });
+        return { created: false, action: 'skipped', reason: 'tautology_key_changes', sdKey: null, sdId: null };
+      }
+    } catch {
+      // Conservative default: emit on lookup failure
+    }
+  }
+
   // 6. Record one feedback finding per group via corrective-finding-recorder
   // (SD-LEO-INFRA-CORRECTIVE-FINDING-REDIRECT-001). Replaces direct createSD()
   // emission; findings now persist in feedback (category='corrective_finding')
@@ -596,7 +761,10 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
           lowest_dim_score: lowestScore,
           vision_id: score.vision_id ?? null,
           action_tier: action,
-          gate_exemptions: ['GATE_VISION_SCORE'],
+          // SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 CAPA-4: strip the
+          // source_gate's corresponding handoff-gate entry so corrective findings
+          // don't self-exempt from the gate that justified their existence.
+          gate_exemptions: stripSelfExemptingGate(['GATE_VISION_SCORE'], sourceGate),
           intelligence_priority: {
             priority: dynamicPriority,
             band: priorityResult?.band ?? null,

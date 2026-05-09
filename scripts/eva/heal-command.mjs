@@ -678,7 +678,10 @@ async function cmdSDGenerateAll(scoreIds, options = {}) {
 
   for (const scoreId of ids) {
     try {
-      const result = await generateCorrectiveSD(scoreId);
+      // SD-FDBK-INFRA-SUPPRESS-CORRECTIVE-GENERATOR-001 FR-5: forward `options`
+      // so future override flags (e.g., --force at line 436 staleness check)
+      // reach the single-emit path identically to cmdSDGenerate (line 627).
+      const result = await generateCorrectiveSD(scoreId, options);
       if (result.created) {
         results.created.push(result);
         const sdList = result.sds || [{ sdKey: result.sdKey }];
