@@ -102,16 +102,36 @@ export async function completeQuickFix(qfId, options = {}) {
     console.error(`\n❌ ${e.message}\n`);
     process.exit(1);
   }
-  let { commitSha, branchName, actualLoc } = gitInfo;
+  let { commitSha, branchName, actualLoc, actualSourceLoc, actualTestLoc } = gitInfo;
 
-  // Manual input if not provided
-  if (!actualLoc) {
-    const locStr = await prompt('Actual lines of code changed: ');
-    actualLoc = parseInt(locStr);
+  // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001:
+  //   - Operator can override source/test split via --actual-source-loc / --actual-test-loc
+  //   - Backward-compat: --actual-loc still accepted (treated as source; test=0)
+  if (options.actualSourceLoc !== undefined) actualSourceLoc = options.actualSourceLoc;
+  if (options.actualTestLoc !== undefined) actualTestLoc = options.actualTestLoc;
+  if (actualSourceLoc === undefined && actualTestLoc === undefined && actualLoc !== undefined) {
+    actualSourceLoc = actualLoc;
+    actualTestLoc = 0;
   }
 
-  // LOC validation (hard cap at 50)
-  const locValid = await validateLOC(actualLoc, qfId, supabase, prompt);
+  // Manual input if not provided
+  if (actualLoc === undefined && actualSourceLoc === undefined) {
+    const locStr = await prompt('Actual lines of code changed: ');
+    actualLoc = parseInt(locStr);
+    actualSourceLoc = actualLoc;
+    actualTestLoc = 0;
+  }
+
+  // Compute totals for legacy single-column write + cap policy
+  if (actualSourceLoc === undefined) actualSourceLoc = 0;
+  if (actualTestLoc === undefined) actualTestLoc = 0;
+  if (actualLoc === undefined) actualLoc = actualSourceLoc + actualTestLoc;
+
+  // LOC validation — source-only cap; --force-complete bypasses
+  const locValid = await validateLOC(actualSourceLoc, actualTestLoc, qfId, supabase, prompt, {
+    forceComplete: options.forceComplete,
+    reason: options.reason
+  });
   if (!locValid) {
     process.exit(1);
   }
@@ -220,7 +240,11 @@ export async function completeQuickFix(qfId, options = {}) {
   };
 
   const verificationResults = await runSelfVerification(qfId, verificationContext);
-  const selfVerificationValid = await validateSelfVerification(verificationResults, prompt);
+  // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2: --force-complete bypasses self-verification prompts
+  const selfVerificationValid = await validateSelfVerification(verificationResults, prompt, {
+    forceComplete: options.forceComplete,
+    reason: options.reason
+  });
   if (!selfVerificationValid) {
     process.exit(1);
   }
@@ -249,18 +273,36 @@ export async function completeQuickFix(qfId, options = {}) {
   // Update record
   console.log('🔄 Updating quick-fix record...\n');
 
+  // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001:
+  //   - Write actual_source_loc + actual_test_loc (split fields; FR-1)
+  //   - Write force_completed flag (FR-6 ALTERed CHECK accepts this without test/UAT)
+  //   - --force-complete writes structured JSON audit trail to verification_notes (FR-2 / TR-3)
+  let finalVerificationNotes = verificationNotes || null;
+  if (options.forceComplete) {
+    finalVerificationNotes = JSON.stringify({
+      force_completed: true,
+      reason: options.reason,
+      operator: process.env.CLAUDE_SESSION_ID || 'unknown',
+      timestamp: new Date().toISOString(),
+      operator_supplied_notes: verificationNotes || null
+    });
+  }
+
   const { error: updateError } = await supabase
     .from('quick_fixes')
     .update({
       status: 'completed',
       actual_loc: actualLoc,
+      actual_source_loc: actualSourceLoc,
+      actual_test_loc: actualTestLoc,
+      force_completed: Boolean(options.forceComplete),
       commit_sha: commitSha,
       branch_name: branchName,
       pr_url: finalPrUrl,
       tests_passing: testsPass,
       uat_verified: uatVerified,
-      verified_by: 'UAT_AGENT',
-      verification_notes: verificationNotes || null,
+      verified_by: options.forceComplete ? 'FORCE_COMPLETE' : 'UAT_AGENT',
+      verification_notes: finalVerificationNotes,
       files_changed: filesChanged.length > 0 ? filesChanged : null,
       completed_at: new Date().toISOString()
     })

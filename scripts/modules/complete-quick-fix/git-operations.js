@@ -1,9 +1,68 @@
 /**
  * Git Operations for Complete Quick-Fix
  * Part of quick-fix modularization
+ *
+ * SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2:
+ *   countLocBySplit(): per-file source/test LOC walk over `git diff --numstat`.
+ *   Used by both PR-metadata and legacy worktree paths to populate
+ *   actualSourceLoc + actualTestLoc separately.
  */
 
 import { execSync } from 'child_process';
+
+/**
+ * Test-file path heuristic. Matches:
+ *   - `*.test.*`, `*.spec.*` (jest/vitest pattern)
+ *   - `__tests__/` (jest convention)
+ *   - `tests/` (project root)
+ *   - `e2e/`, `playwright/` (e2e harness)
+ */
+const TEST_FILE_PATTERN = /(\.test\.|\.spec\.|\b__tests__\b|\btests\/|\be2e\/|\bplaywright\b)/i;
+
+/**
+ * Walk `git diff --numstat <baseRef>..HEAD` and return { source, test, total }
+ * insertion+deletion counts split by path pattern.
+ *
+ * Used by both autoDetectGitInfo paths (PR-metadata + legacy worktree) so the
+ * conflation bug (single actual_loc) can't recur.
+ *
+ * @param {string} testDir - Directory to run git commands in
+ * @param {string} baseRef - Base branch ref (default 'origin/main')
+ * @returns {{source: number, test: number, total: number}} Split LOC counts
+ */
+export function countLocBySplit(testDir, baseRef = 'origin/main') {
+  const result = { source: 0, test: 0, total: 0 };
+  let numstat = '';
+  try {
+    numstat = execSync(`git diff --numstat ${baseRef}..HEAD`, {
+      cwd: testDir,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 10000
+    });
+  } catch {
+    return result;
+  }
+
+  for (const line of numstat.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split('\t');
+    if (parts.length < 3) continue;
+    // numstat format: <added>\t<deleted>\t<path>; binary files have '-'
+    const added = parts[0] === '-' ? 0 : parseInt(parts[0], 10) || 0;
+    const deleted = parts[1] === '-' ? 0 : parseInt(parts[1], 10) || 0;
+    const filepath = parts.slice(2).join('\t').trim();
+    const loc = added + deleted;
+    if (TEST_FILE_PATTERN.test(filepath)) {
+      result.test += loc;
+    } else {
+      result.source += loc;
+    }
+    result.total += loc;
+  }
+  return result;
+}
 
 /**
  * Sanitize branch name for safe shell usage
@@ -169,6 +228,18 @@ export function autoDetectGitInfo(testDir, options = {}) {
       result.actualLoc = additions + deletions;
       console.log(`🔍 PR #${prNumber} → actual LOC: ${result.actualLoc} (${additions} additions + ${deletions} deletions)\n`);
     }
+
+    // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2: source/test split.
+    // PR-metadata path doesn't expose per-file numstat; fall back to local diff
+    // when available (PR is from a branch we have locally).
+    if (result.actualSourceLoc === undefined) {
+      const split = countLocBySplit(testDir);
+      if (split.total > 0) {
+        result.actualSourceLoc = split.source;
+        result.actualTestLoc = split.test;
+        console.log(`🔍 PR #${prNumber} → source LOC: ${split.source}, test LOC: ${split.test} (split via git numstat)`);
+      }
+    }
     return result;
   }
 
@@ -203,6 +274,16 @@ export function autoDetectGitInfo(testDir, options = {}) {
         }
       } catch {
         result.actualLoc = null;
+      }
+    }
+
+    // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2: source/test split via numstat.
+    if (result.actualSourceLoc === undefined) {
+      const split = countLocBySplit(testDir);
+      if (split.total > 0) {
+        result.actualSourceLoc = split.source;
+        result.actualTestLoc = split.test;
+        console.log(`🔍 Auto-detected source LOC: ${split.source}, test LOC: ${split.test} (split via git numstat)`);
       }
     }
   } catch {
