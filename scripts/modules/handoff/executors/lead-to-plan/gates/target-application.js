@@ -164,6 +164,24 @@ export async function validateTargetApplication(sd, supabase) {
   }
 
   if (currentTarget && inferredTarget && currentTarget !== inferredTarget && confidence === 'high') {
+    // QF-20260509-986 (closes ccc82ea6): respect explicit operator intent.
+    // When leo-create-sd recorded target_application_explicit=true (CLI
+    // override or `## Target Application` plan header), the operator named
+    // the target deliberately — scope-text inference must not silently flip
+    // it. Inferred-from-key_changes is NOT considered explicit, so old SDs
+    // and inferred-only SDs still go through the auto-correction below.
+    if (sd?.metadata?.target_application_explicit === true) {
+      console.log('\n   ℹ️  target_application set explicitly at SD creation; skipping auto-correction.');
+      console.log(`      Current (explicit): ${currentTarget}`);
+      console.log(`      Inferred (skipped): ${inferredTarget}`);
+      return {
+        pass: true,
+        score: 100,
+        issues: [],
+        warnings: [`target_application=${currentTarget} preserved (explicit operator intent; inferred ${inferredTarget} skipped)`]
+      };
+    }
+
     // Target set but doesn't match inferred with high confidence - warn and offer correction
     console.log('\n   ⚠️  MISMATCH DETECTED');
     console.log(`   Current: ${currentTarget}`);

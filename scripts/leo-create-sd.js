@@ -1630,7 +1630,13 @@ async function createSD(options) {
     metadata: {
       ...metadata,
       created_via: 'leo-create-sd',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      // QF-20260509-986 (closes feedback ccc82ea6): provenance flag so the
+      // LEAD-TO-PLAN target-application validation gate can respect operator
+      // intent and skip auto-correction when target_application was set
+      // explicitly (CLI override or `## Target Application` plan header).
+      // Inferred-from-key_changes is NOT considered explicit.
+      target_application_explicit: Boolean(explicitTargetApp || process.env.VENTURE)
     }
   };
 
