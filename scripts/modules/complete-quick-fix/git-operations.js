@@ -20,18 +20,24 @@ import { execSync } from 'child_process';
 const TEST_FILE_PATTERN = /(\.test\.|\.spec\.|\b__tests__\b|\btests\/|\be2e\/|\bplaywright\b)/i;
 
 /**
- * Walk `git diff --numstat <baseRef>..HEAD` and return { source, test, total }
- * insertion+deletion counts split by path pattern.
+ * Walk `git diff --numstat <baseRef>..HEAD` and return source/test/total LOC
+ * counts split by path pattern, plus pure-deletion-file LOC for tier classification.
  *
  * Used by both autoDetectGitInfo paths (PR-metadata + legacy worktree) so the
  * conflation bug (single actual_loc) can't recur.
  *
+ * QF-20260509-407: also returns `sourceDeletionLoc` — LOC from source files
+ * that are pure deletions (file no longer exists in HEAD). The compliance
+ * rubric subtracts this from `source` for tier-classification (≤75-source-LOC
+ * cap) checks because dead-code removal is not new source surface and should
+ * not falsely trigger "should escalate to SD".
+ *
  * @param {string} testDir - Directory to run git commands in
  * @param {string} baseRef - Base branch ref (default 'origin/main')
- * @returns {{source: number, test: number, total: number}} Split LOC counts
+ * @returns {{source: number, test: number, total: number, sourceDeletionLoc: number}} Split LOC counts
  */
 export function countLocBySplit(testDir, baseRef = 'origin/main') {
-  const result = { source: 0, test: 0, total: 0 };
+  const result = { source: 0, test: 0, total: 0, sourceDeletionLoc: 0 };
   let numstat = '';
   try {
     numstat = execSync(`git diff --numstat ${baseRef}..HEAD`, {
@@ -44,6 +50,29 @@ export function countLocBySplit(testDir, baseRef = 'origin/main') {
     return result;
   }
 
+  // QF-20260509-407: collect deleted-file paths so we can mark their deletion-LOC
+  // as not-counting-against-tier-cap (pure dead-code removal).
+  const deletedPaths = new Set();
+  try {
+    const nameStatus = execSync(`git diff --name-status --diff-filter=D ${baseRef}..HEAD`, {
+      cwd: testDir,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 10000
+    });
+    for (const line of nameStatus.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const parts = trimmed.split('\t');
+      if (parts.length >= 2 && parts[0].startsWith('D')) {
+        deletedPaths.add(parts.slice(1).join('\t').trim());
+      }
+    }
+  } catch {
+    // diff-filter may fail in a fresh worktree; fall through with empty set
+    // (sourceDeletionLoc stays 0 — fail-safe, matches old behavior).
+  }
+
   for (const line of numstat.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
@@ -54,10 +83,15 @@ export function countLocBySplit(testDir, baseRef = 'origin/main') {
     const deleted = parts[1] === '-' ? 0 : parseInt(parts[1], 10) || 0;
     const filepath = parts.slice(2).join('\t').trim();
     const loc = added + deleted;
-    if (TEST_FILE_PATTERN.test(filepath)) {
+    const isTest = TEST_FILE_PATTERN.test(filepath);
+    if (isTest) {
       result.test += loc;
     } else {
       result.source += loc;
+      if (deletedPaths.has(filepath)) {
+        // Pure-deletion source file → all `loc` here is `deleted` (added=0).
+        result.sourceDeletionLoc += loc;
+      }
     }
     result.total += loc;
   }
@@ -237,6 +271,8 @@ export function autoDetectGitInfo(testDir, options = {}) {
       if (split.total > 0) {
         result.actualSourceLoc = split.source;
         result.actualTestLoc = split.test;
+        // QF-20260509-407: forward deletion-only source LOC for tier classification.
+        result.sourceDeletionLoc = split.sourceDeletionLoc;
         console.log(`🔍 PR #${prNumber} → source LOC: ${split.source}, test LOC: ${split.test} (split via git numstat)`);
       }
     }
@@ -283,6 +319,8 @@ export function autoDetectGitInfo(testDir, options = {}) {
       if (split.total > 0) {
         result.actualSourceLoc = split.source;
         result.actualTestLoc = split.test;
+        // QF-20260509-407: forward deletion-only source LOC for tier classification.
+        result.sourceDeletionLoc = split.sourceDeletionLoc;
         console.log(`🔍 Auto-detected source LOC: ${split.source}, test LOC: ${split.test} (split via git numstat)`);
       }
     }

@@ -70,7 +70,8 @@ describe('SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 — countLocBySplit', () =>
   it('returns zeros on empty git output (e.g. no commits past base)', () => {
     execSyncMock.mockReturnValue('');
     const r = countLocBySplit('/fake/repo');
-    expect(r).toEqual({ source: 0, test: 0, total: 0 });
+    // QF-20260509-407: signature extended with sourceDeletionLoc.
+    expect(r).toEqual({ source: 0, test: 0, total: 0, sourceDeletionLoc: 0 });
   });
 
   it('honors custom baseRef', () => {

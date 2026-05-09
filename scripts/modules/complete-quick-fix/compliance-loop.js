@@ -40,6 +40,9 @@ export async function runComplianceWithRefinement(qfId, qf, context, prompt, fla
       // test LOC with source against a stale 50-cap.
       actualSourceLoc: context.actualSourceLoc,
       actualTestLoc: context.actualTestLoc,
+      // QF-20260509-407: forward pure-deletion LOC so the rubric can subtract
+      // dead-code removal from tier-classification (loc_constraint + proper_classification).
+      sourceDeletionLoc: context.sourceDeletionLoc,
       filesChanged: context.filesChanged,
       issueDescription: qf.description,
       complexity: qf.estimated_loc > 30 ? 'medium' : 'low',

@@ -102,7 +102,7 @@ export async function completeQuickFix(qfId, options = {}) {
     console.error(`\n❌ ${e.message}\n`);
     process.exit(1);
   }
-  let { commitSha, branchName, actualLoc, actualSourceLoc, actualTestLoc } = gitInfo;
+  let { commitSha, branchName, actualLoc, actualSourceLoc, actualTestLoc, sourceDeletionLoc } = gitInfo;
 
   // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001:
   //   - Operator can override source/test split via --actual-source-loc / --actual-test-loc
@@ -254,12 +254,15 @@ export async function completeQuickFix(qfId, options = {}) {
 
   // Compliance Rubric with Auto-Refinement
   // QF-20260509-070: include source/test split so rubric uses source-only LOC.
+  // QF-20260509-407: forward sourceDeletionLoc so the rubric can subtract pure
+  // dead-code deletion from tier classification (loc_constraint + proper_classification).
   const complianceContext = {
     errorsBeforeFix: evidenceData.errorsBeforeFix,
     errorsAfterFix: evidenceData.errorsAfterFix,
     actualLoc,
     actualSourceLoc,
     actualTestLoc,
+    sourceDeletionLoc,
     filesChanged,
     testsPass
   };

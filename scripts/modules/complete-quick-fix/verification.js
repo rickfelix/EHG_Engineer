@@ -320,6 +320,16 @@ export async function validateCompliance(complianceResults, prompt, flags = {}) 
       console.log(`   ${i + 1}. ${c.name} (${c.score}/${c.maxScore} points)`);
       console.log(`      ${c.evidence}\n`);
     });
+    // QF-20260509-407: --force-complete bypasses FAIL-verdict (parity with WARN
+    // branch below). The flag docs say "Bypass self-verification + LOC-cap blocks"
+    // — without this branch, FAIL still hard-blocks even after the refinement-loop
+    // skip from QF-20260509-COMPLIANCE-LOOP. Audit trail lives in verification_notes
+    // JSON via SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2.
+    if (flags.forceComplete) {
+      console.log(`   ⚠️  --force-complete: FAIL-verdict gate bypassed (reason="${flags.reason}")`);
+      console.log('       quick_fixes.force_completed=true; failed criteria recorded in audit trail.\n');
+      return true;
+    }
     console.log('   Options:');
     console.log('   1. Manually fix issues and re-run completion script');
     console.log('   2. Escalate to full Strategic Directive\n');
