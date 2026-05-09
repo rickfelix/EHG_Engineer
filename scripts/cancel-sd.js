@@ -35,7 +35,7 @@ Atomically cancels an SD:
   - cancellation_reason set (required)
   - claiming_session_id cleared
   - is_working_on=false
-  - cancelled_at=NOW
+  - updated_at=NOW (trigger-managed cancellation timestamp)
   - claude_sessions row for the holder released
 
 Required:
@@ -90,13 +90,17 @@ async function cancelSD(sd, reason) {
   }
 
   const claimedSessionId = sd.claiming_session_id;
+  // QF-20260509-CANCEL-SD-COLDROP: strategic_directives_v2 has no dedicated
+  // cancelled_at column — original PR #3625 INSERT shape included it,
+  // causing PGRST204 "Could not find the 'cancelled_at' column" schema-cache
+  // error on first canonical use. updated_at is trigger-managed; cancellation
+  // timestamp is recoverable from updated_at WHERE status='cancelled'.
   const updates = {
     status: 'cancelled',
     current_phase: 'CANCELLED',
     cancellation_reason: reason,
     claiming_session_id: null,
     is_working_on: false,
-    cancelled_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 

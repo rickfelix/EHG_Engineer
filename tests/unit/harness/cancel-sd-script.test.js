@@ -70,4 +70,13 @@ describe('QF-20260509-CANCEL-SD: cancel-sd.js canonical script', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8'));
     expect(pkg.scripts['sd:cancel']).toBe('node scripts/cancel-sd.js');
   });
+
+  it('QF-COLDROP regression-pin: updates object does NOT include cancelled_at (column does not exist on strategic_directives_v2)', () => {
+    const src = fs.readFileSync(scriptPath, 'utf-8');
+    const idx = src.indexOf('const updates = {');
+    expect(idx).toBeGreaterThan(0);
+    const block = src.slice(idx, idx + 500);
+    expect(block).not.toMatch(/cancelled_at\s*:/);
+    expect(block).toMatch(/updated_at\s*:\s*new Date\(\)\.toISOString\(\)/);
+  });
 });
