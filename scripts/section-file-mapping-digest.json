@@ -17,6 +17,7 @@
   "CLAUDE_CORE_DIGEST.md": {
     "description": "Essential enforcement rules (~10k chars) - non-negotiable constraints only",
     "sections": [
+      "signaling_friction_pointer_digest",
       "rca_issue_resolution_mandate",
       "mandatory_phase_transitions",
       "negative_constraints_global",
@@ -29,6 +30,7 @@
   "CLAUDE_LEAD_DIGEST.md": {
     "description": "LEAD phase essentials (~3-4k chars) - approval gates and validation requirements",
     "sections": [
+      "signaling_friction_pointer_digest",
       "simplicity_first_enforcement",
       "lead_pre_approval_simplicity_gate",
       "sd_evaluation",
@@ -39,6 +41,7 @@
   "CLAUDE_PLAN_DIGEST.md": {
     "description": "PLAN phase essentials (~4k chars) - PRD requirements and constraints",
     "sections": [
+      "signaling_friction_pointer_digest",
       "prd_creation_anti_pattern",
       "plan_pre_exec_checklist",
       "negative_constraints_plan"
@@ -48,6 +51,7 @@
   "CLAUDE_EXEC_DIGEST.md": {
     "description": "EXEC phase essentials (~8k chars) - implementation requirements and constraints",
     "sections": [
+      "signaling_friction_pointer_digest",
       "exec_implementation_requirements",
       "exec_dual_test_requirement",
       "branch_hygiene_gate",

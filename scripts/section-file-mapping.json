@@ -60,6 +60,7 @@
   "CLAUDE_LEAD.md": {
     "description": "LEAD phase operations (~15-20k chars). Lean LEAD (2026-02-16).",
     "sections": [
+      "signaling_friction_pointer_phase",
       "sd_creation_process",
       "sd_creation_anti_pattern",
       "sd_creation_errors",
@@ -89,6 +90,7 @@
   "CLAUDE_PLAN.md": {
     "description": "PLAN phase operations (~20-25k chars). Lean PLAN (2026-02-16).",
     "sections": [
+      "signaling_friction_pointer_phase",
       "workflow",
       "PHASE_2_PLANNING",
       "prd_creation_anti_pattern",
@@ -127,6 +129,7 @@
   "CLAUDE_EXEC.md": {
     "description": "EXEC phase operations (~15-20k chars). Lean EXEC (2026-02-16).",
     "sections": [
+      "signaling_friction_pointer_phase",
       "workflow",
       "exec_implementation_requirements",
       "exec_retrospective_anti_patterns",
