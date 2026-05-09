@@ -123,14 +123,19 @@ function discoverEntryPoints(rootDir) {
 function getScopedJsFiles(rootDir) {
   const normalize = (p) => p.replace(/\\/g, '/');
   try {
+    // QF-20260509-393: 'scripts/**/*.js' git pathspec WITHOUT globstar config
+    // does NOT match flat scripts/*.js (no subdirectory). Was silently excluding
+    // hundreds of flat files (handoff.js, sd-next.js, fleet-dashboard.cjs, etc.).
+    // Fix: list directories recursively, filter by extension in JS.
     const result = execSync(
-      'git ls-files -- "lib/**/*.js" "lib/**/*.mjs" "lib/**/*.cjs" "scripts/**/*.js" "scripts/**/*.mjs" "scripts/**/*.cjs"',
+      'git ls-files -- "lib/" "scripts/"',
       { encoding: 'utf8', cwd: rootDir, timeout: 15000 }
     );
     return result
       .split('\n')
       .map((f) => f.trim())
       .filter(Boolean)
+      .filter((f) => /\.(js|mjs|cjs)$/.test(f))
       .map((f) => normalize(path.resolve(rootDir, f)));
   } catch (_err) {
     return [];
