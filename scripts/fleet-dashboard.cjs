@@ -4,8 +4,23 @@
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const util = require('util');
 const { spawnSync } = require('child_process');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+
+// Idle-fleet diff suppression — coordinator was generating ~120 identical
+// dashboard renders overnight. After N consecutive identical renders, emit a
+// one-liner instead. Set FLEET_DASH_SUPPRESS=false to force full render.
+const DASH_STATE_FILE = path.resolve(__dirname, '../.claude/fleet-dashboard-state.json');
+const SUPPRESS_AFTER = parseInt(process.env.FLEET_DASH_SUPPRESS_AFTER || '3', 10);
+function loadDashState() { try { return JSON.parse(fs.readFileSync(DASH_STATE_FILE, 'utf8')); } catch { return { hash: null, count: 0 }; } }
+function saveDashState(s) { try { fs.mkdirSync(path.dirname(DASH_STATE_FILE), { recursive: true }); fs.writeFileSync(DASH_STATE_FILE, JSON.stringify(s)); } catch {} }
+function normalizeRender(s) {
+  return s.replace(/\[[0-9;]*m/g, '').replace(/\d+s ago/g, '_s_').replace(/\d+m ago/g, '_m_')
+    .replace(/\d+:\d+:\d+ [AP]M/g, '_T_').replace(/\d+:\d+ [AP]M/g, '_t_').replace(/uptime \d+h\d+m/gi, '_U_')
+    .replace(/[\d.]+h ago/g, '_H_').replace(/\d{4,}m/g, '_W_');
+}
 // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B (Phase 2)
 const teamBanner = require('../lib/execute/team-banner.cjs');
 // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-004): subprocess-invoke the MC
@@ -1092,6 +1107,9 @@ async function printInbox() {
 
 async function main() {
   const section = (process.argv[2] || 'all').toLowerCase();
+  const suppressEnabled = section === 'all' && process.env.FLEET_DASH_SUPPRESS !== 'false';
+  const buf = []; const origLog = console.log;
+  if (suppressEnabled) console.log = (...a) => buf.push(util.format(...a));
   const d = await loadData();
 
   const sections = {
@@ -1134,6 +1152,21 @@ async function main() {
   }
 
   await fn();
+
+  if (suppressEnabled) {
+    console.log = origLog;
+    const out = buf.join('\n');
+    const hash = crypto.createHash('sha1').update(normalizeRender(out)).digest('hex');
+    const st = loadDashState();
+    if (st.hash === hash) st.count++; else { st.hash = hash; st.count = 1; }
+    saveDashState(st);
+    if (st.count > SUPPRESS_AFTER) {
+      const tick = (out.match(/(\d+)s ago/) || [])[1] || '?';
+      console.log(`(fleet steady-state — ${st.count} identical renders, last activity ~${tick}s ago. Force render: FLEET_DASH_SUPPRESS=false)`);
+    } else {
+      process.stdout.write(out + '\n');
+    }
+  }
 }
 
 main().catch(err => {
