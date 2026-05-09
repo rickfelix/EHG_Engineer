@@ -4,6 +4,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// SD-LEO-INFRA-BACKEND-WRITE-SAFETY-001: stub the new retro-clobber-guard helper
+// so existing tests' Supabase mocks don't need to satisfy its SELECT chain.
+vi.mock('../../../../../scripts/modules/handoff/lib/retro-clobber-guard.js', () => ({
+  isSafeToWriteRetro: vi.fn().mockResolvedValue({ safe: true, reason: 'no_retro', existingRetro: null }),
+}));
+
 import { satisfyOrchestratorTemplateRequirements } from '../../../../../scripts/modules/handoff/executors/plan-to-lead/state-transitions.js';
 
 describe('satisfyOrchestratorTemplateRequirements', () => {

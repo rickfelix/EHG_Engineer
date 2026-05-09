@@ -14,6 +14,14 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+
+// SD-LEO-INFRA-BACKEND-WRITE-SAFETY-001: stub the new retro-clobber-guard helper
+// so existing tests' Supabase mocks don't need to satisfy its SELECT chain.
+// Default: helper says "safe to write" — callers proceed to QF-967 inline guard.
+vi.mock('../../../../../scripts/modules/handoff/lib/retro-clobber-guard.js', () => ({
+  isSafeToWriteRetro: vi.fn().mockResolvedValue({ safe: true, reason: 'no_retro', existingRetro: null }),
+}));
+
 import { createHandoffRetrospective } from '../../../../../scripts/modules/handoff/executors/plan-to-exec/retrospective.js';
 
 const SD = {
