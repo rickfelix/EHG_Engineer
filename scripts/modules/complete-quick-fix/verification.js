@@ -99,25 +99,13 @@ export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, fl
 
 /**
  * Validate test results
- *
- * QF-20260509-552: sibling-parity --force-complete short-circuit (matches
- * validateLOC / validateSelfVerification / validateCompliance pattern from
- * QF-407). When --force-complete is set, log bypass with reason in audit
- * trail and accept failing tests.
- *
  * @param {object} unitResult - Unit test results
  * @param {object} e2eResult - E2E test results
  * @param {boolean} testsPass - Cached test result
- * @param {object} flags - { forceComplete?: bool, reason?: string }
  * @returns {boolean} True if tests pass
  */
-export function validateTests(unitResult, e2eResult, testsPass, flags = {}) {
+export function validateTests(unitResult, e2eResult, testsPass) {
   if (!testsPass) {
-    if (flags.forceComplete) {
-      console.log(`\n⚠️  --force-complete: failing-tests gate bypassed (reason="${flags.reason}")`);
-      console.log(`   Unit: ${unitResult?.passed ? '✅ PASS' : '❌ FAIL'}, E2E: ${e2eResult?.passed ? '✅ PASS' : '❌ FAIL'}\n`);
-      return true;
-    }
     console.log('\n❌ CANNOT COMPLETE - TESTS NOT PASSING\n');
     console.log('   Quick-fixes REQUIRE both test suites to pass (programmatically verified).\n');
     console.log('📊 Test Results:');
