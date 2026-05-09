@@ -253,10 +253,13 @@ export async function completeQuickFix(qfId, options = {}) {
   const evidenceData = await captureEvidenceData(qfId, qf);
 
   // Compliance Rubric with Auto-Refinement
+  // QF-20260509-070: include source/test split so rubric uses source-only LOC.
   const complianceContext = {
     errorsBeforeFix: evidenceData.errorsBeforeFix,
     errorsAfterFix: evidenceData.errorsAfterFix,
     actualLoc,
+    actualSourceLoc,
+    actualTestLoc,
     filesChanged,
     testsPass
   };

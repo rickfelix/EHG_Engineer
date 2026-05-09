@@ -32,6 +32,11 @@ export async function runComplianceWithRefinement(qfId, qf, context, prompt) {
       errorsBeforeFix: context.errorsBeforeFix || [],
       errorsAfterFix: context.errorsAfterFix || [],
       actualLoc: context.actualLoc,
+      // QF-20260509-070: forward source/test split so the rubric applies the
+      // source-only 75-cap (matching QF_HARD_LOC_CAP) instead of conflating
+      // test LOC with source against a stale 50-cap.
+      actualSourceLoc: context.actualSourceLoc,
+      actualTestLoc: context.actualTestLoc,
       filesChanged: context.filesChanged,
       issueDescription: qf.description,
       complexity: qf.estimated_loc > 30 ? 'medium' : 'low',
