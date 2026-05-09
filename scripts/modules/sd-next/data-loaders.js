@@ -607,21 +607,97 @@ export async function loadFeedbackItems(supabase) {
  * Keyed by absolute filePath; entry shape:
  *   { mtimeMs: number, expiresAt: number, result: HarnessBacklogParseResult }
  * 60s TTL upper bound; mtime-mismatch invalidates earlier.
+ *
+ * Cache applies ONLY to the legacy markdown fallback path. The DB-canonical
+ * path issues one query per sd:next invocation (low frequency, no cache needed).
  */
 const HARNESS_BACKLOG_TTL_MS = 60_000;
 const _harnessBacklogCache = new Map();
 
 /**
- * Load + parse docs/harness-backlog.md for the sd:next HARNESS BACKLOG section.
- * Read-only filesystem access. mtime-keyed in-memory cache (60s TTL) prevents
- * repeated reads on rapid sd:next invocations.
+ * Load harness backlog for the sd:next HARNESS BACKLOG section.
  *
- * @param {string} [filePath]  Absolute path to harness-backlog.md.
- *                             Defaults to <repo-root>/docs/harness-backlog.md
- *                             (repo root resolved relative to this module).
+ * QF-20260509-818: DB-canonical reader. Migration commit c11354c0 (2026-04-29)
+ * moved the harness backlog from `docs/harness-backlog.md` to the `feedback`
+ * table (category='harness_backlog'). The writer (`scripts/log-harness-bug.js`)
+ * and the `assist-engine.js` consumer were updated; this reader was not until
+ * QF-20260509-818 closed the 14th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.
+ *
+ * Default behavior: query the feedback table.
+ * Fallback: when `LEGACY_HARNESS_BACKLOG_FALLBACK=1` is set in the env OR no
+ * supabase client is supplied, parse the legacy markdown file. The fallback
+ * exists for emergency rollback and out-of-band tooling that has no DB access.
+ *
+ * @param {Object|null} [supabase]  Supabase client (preferred; enables DB path)
+ * @param {Object} [opts]
+ * @param {string} [opts.filePath]  Override markdown path (legacy/fallback only)
  * @returns {Promise<{ count:number, oldestAgeDays:number, items:Array, fileMissing:boolean, error:string|null }>}
  */
-export async function loadHarnessBacklog(filePath) {
+export async function loadHarnessBacklog(supabase, opts = {}) {
+  const useFallback = process.env.LEGACY_HARNESS_BACKLOG_FALLBACK === '1' || !supabase;
+  if (useFallback) {
+    return _loadHarnessBacklogFromMarkdown(opts.filePath);
+  }
+  return _loadHarnessBacklogFromDB(supabase);
+}
+
+/**
+ * QF-20260509-818: DB-canonical loader. Queries the `feedback` table for
+ * `category='harness_backlog' AND status='new'`, mapping each row into the
+ * shape consumed by `displayHarnessBacklog`.
+ *
+ * Mapping: `created_at.slice(0,10)` → date, `title` → symptom,
+ *          `metadata.source_location ?? null` → source.
+ * @private
+ */
+async function _loadHarnessBacklogFromDB(supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('feedback')
+      .select('id, title, created_at, metadata')
+      .eq('category', 'harness_backlog')
+      .eq('status', 'new')
+      .order('created_at', { ascending: true });
+    if (error) {
+      logQueryFailure('loadHarnessBacklog.db', error, { table: 'feedback' });
+      return { count: 0, oldestAgeDays: 0, items: [], fileMissing: false, error: error.message };
+    }
+    const nowMs = Date.now();
+    const items = (data || []).map((row) => {
+      const date = (row.created_at || '').slice(0, 10);
+      const itemMs = Date.parse(`${date}T00:00:00Z`);
+      const ageDays = Number.isFinite(itemMs)
+        ? Math.max(0, Math.floor((nowMs - itemMs) / 86400000))
+        : 0;
+      return {
+        date,
+        symptom: row.title || '',
+        source: row.metadata?.source_location ?? null,
+        ageDays,
+      };
+    });
+    const oldestAgeDays = items.reduce((max, item) => Math.max(max, item.ageDays), 0);
+    return { count: items.length, oldestAgeDays, items, fileMissing: false, error: null };
+  } catch (err) {
+    return {
+      count: 0,
+      oldestAgeDays: 0,
+      items: [],
+      fileMissing: false,
+      error: err?.message || String(err),
+    };
+  }
+}
+
+/**
+ * Legacy markdown loader (pre-QF-20260509-818). Read-only filesystem access
+ * with mtime-keyed in-memory cache. Retained behind LEGACY_HARNESS_BACKLOG_FALLBACK=1
+ * for emergency rollback. Exported so existing tests can target it directly.
+ *
+ * @param {string} [filePath]  Absolute path to harness-backlog.md.
+ *                             Defaults to <cwd>/docs/harness-backlog.md.
+ */
+export async function _loadHarnessBacklogFromMarkdown(filePath) {
   const resolvedPath = filePath
     ?? process.env.HARNESS_BACKLOG_PATH
     ?? path.resolve(process.cwd(), 'docs', 'harness-backlog.md');
@@ -655,7 +731,7 @@ export async function loadHarnessBacklog(filePath) {
   }
 }
 
-/** Test-only: clear the harness-backlog loader cache. */
+/** Test-only: clear the legacy markdown loader cache. */
 export function _clearHarnessBacklogCache() {
   _harnessBacklogCache.clear();
 }
