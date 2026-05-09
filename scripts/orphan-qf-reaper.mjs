@@ -162,6 +162,13 @@ async function main() {
         commit_sha: mergeCommitSha,
         compliance_verdict: 'PASS',
         compliance_details: 'Auto-reconciled by orphan-qf-reaper — PR merged on GitHub without complete-quick-fix.js flipping DB status.',
+        verified_by: 'ORPHAN_REAPER',
+        verification_notes: JSON.stringify({
+          reconciled_at: new Date().toISOString(),
+          closed_by: 'orphan_reaper',
+          pr_number: prNumber,
+          merge_commit_sha: mergeCommitSha,
+        }),
       })
       .eq('id', qf.id)
       .eq('status', qf.status)
@@ -234,6 +241,14 @@ async function main() {
           pr_url: prUrl,
           compliance_verdict: 'PASS',
           compliance_details: 'Auto-reconciled by orphan-qf-reaper (branch-derived path) — PR merged on GitHub without pr_url ever populated.',
+          verified_by: 'ORPHAN_REAPER',
+          verification_notes: JSON.stringify({
+            reconciled_at: new Date().toISOString(),
+            closed_by: 'orphan_reaper_branch_derived',
+            pr_number: prNumber,
+            branch: branchName,
+            merge_commit_sha: mergeCommitSha,
+          }),
         })
         .eq('id', qf.id)
         .eq('status', qf.status)
