@@ -796,6 +796,9 @@ async function main() {
       const stateMgr = require('./retry-state-manager.cjs');
 
       // Resolve the claimed SD key (used for RCA reset lookup).
+      // SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001: prefer st.sd?.id (UUID) over
+      // st.sd?.sd_key (string). sub_agent_execution_results.sd_id is UUID-typed;
+      // stateMgr.fetchRcaInvocationSince now also UUID-resolves as a safety net.
       let claimedSdKey = null;
       try {
         const fs2 = require('fs');
@@ -803,14 +806,35 @@ async function main() {
         const stateFile = path2.resolve(__dirname, '../../.claude/unified-session-state.json');
         if (fs2.existsSync(stateFile)) {
           const st = JSON.parse(fs2.readFileSync(stateFile, 'utf8'));
-          claimedSdKey = st.sd?.sd_key || st.sd?.id || null;
+          claimedSdKey = st.sd?.id || st.sd?.sd_key || null;
         }
       } catch {
         // Missing state file is not fatal — reset lookup simply no-ops.
       }
 
+      // SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001: read prior tool's outcome (captured
+      // by post-tool-rca-outcome.cjs PostToolUse hook) and thread into recordAndCount
+      // so signatureFor can mix the outcome digest. Different exit_code or stderr_sha
+      // → different signature → iterative TDD does not trip the 3-strikes counter.
+      let lastOutcome = null;
+      try {
+        const fs2 = require('fs');
+        const path2 = require('path');
+        const outcomeFile = path2.resolve(
+          __dirname,
+          `../../.claude/last-outcome-${_SESSION_ID}.json`
+        );
+        if (fs2.existsSync(outcomeFile)) {
+          const raw = fs2.readFileSync(outcomeFile, 'utf8');
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') lastOutcome = parsed;
+        }
+      } catch {
+        // Missing/malformed outcome file → fall through to command-only signature (back-compat).
+      }
+
       const { attempts, signature, rcaResetApplied } = await stateMgr.recordAndCount(
-        _SESSION_ID, claimedSdKey, TOOL_NAME, input
+        _SESSION_ID, claimedSdKey, TOOL_NAME, input, { lastOutcome }
       );
 
       if (signature && attempts >= 2) {

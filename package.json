@@ -17,6 +17,7 @@
     "audit:orphan-prs": "node scripts/audit-orphan-prs.mjs",
     "audit:shared-tables": "node scripts/audit-shared-tables-residue.cjs",
     "pattern:port-isol-persist": "node scripts/insert-pat-port-isol-001.mjs",
+    "hook:rca-outcome": "node scripts/hooks/post-tool-rca-outcome.cjs",
     "audit:codeguardian-mock": "node scripts/audit/codeguardian-mock-disposition.mjs",
     "quality:aggregate": "node scripts/aggregate-quality-findings.js",
     "quality:aggregate:cron": "node scripts/cron/quality-findings-aggregator.mjs",
