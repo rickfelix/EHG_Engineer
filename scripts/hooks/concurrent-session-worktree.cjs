@@ -458,6 +458,17 @@ async function cleanupStaleConcurrentWorktrees(supabase) {
       cleaned++;
     } catch {
       try {
+        // QF-20260508-102: junction-aware fallback. Raw fs.rmSync({recursive:true,force:true})
+        // on Windows follows the worktree's node_modules junction and wipes the main repo's
+        // node_modules — bricks every parallel session. Unlink the junction child FIRST,
+        // then rmSync the rest. Sibling fix in scripts/worktree-reaper.mjs uses the canonical
+        // safeRecursiveRm helper (lib/worktree-manager.js) — this CJS hook inlines the same
+        // logic to avoid CJS-to-ESM dynamic-import contortions in a hot session-startup path.
+        try {
+          const nm = path.join(wtPath, 'node_modules');
+          const lst = fs.lstatSync(nm);
+          if (lst.isSymbolicLink()) fs.unlinkSync(nm);
+        } catch { /* no junction or doesn't exist */ }
         fs.rmSync(wtPath, { recursive: true, force: true });
         cleaned++;
       } catch { /* best effort */ }

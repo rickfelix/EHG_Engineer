@@ -57,6 +57,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
 import { listActiveWorktrees } from '../lib/worktree-quota.js';
+import { safeRecursiveRm } from '../lib/worktree-manager.js';
 import {
   isZombieOnMain,
   isNested,
@@ -460,9 +461,12 @@ function removeWorktree({ wtPath, repoRoot }) {
   // git worktree remove --force
   const res = runGit(['worktree', 'remove', '--force', abs], { cwd: repoRoot });
   if (res.code === 0) return { ok: true, method: 'git-worktree-remove' };
-  // Fallback: git worktree can refuse when the dir is already partly gone; try fs.rmSync
+  // Fallback: git worktree can refuse when the dir is already partly gone; try junction-safe rm.
+  // QF-20260508-102: raw fs.rmSync({recursive:true,force:true}) on Windows follows the worktree's
+  // node_modules junction and wipes the main repo's node_modules — bricks every parallel session.
+  // safeRecursiveRm unlinks symlinks/junctions FIRST, then recursively removes the rest.
   try {
-    if (fs.existsSync(abs)) fs.rmSync(abs, { recursive: true, force: true });
+    if (fs.existsSync(abs)) safeRecursiveRm(abs);
     runGit(['worktree', 'prune'], { cwd: repoRoot });
     return { ok: true, method: 'fs-rm+prune' };
   } catch (e) {
