@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-08T22:19:24.398Z
-**Rows**: 171
+**Generated**: 2026-05-09T00:09:01.584Z
+**Rows**: 174
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (34 total)
+## Columns (37 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -52,6 +52,9 @@
 | routing_tier | `integer(32)` | YES | - | - |
 | routing_threshold_id | `uuid` | YES | - | - |
 | claiming_session_id | `text` | YES | - | - |
+| actual_source_loc | `integer(32)` | YES | - | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: source-only lines changed (excludes test files). Cap policy enforced in script (complete-quick-fix.js). |
+| actual_test_loc | `integer(32)` | YES | - | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: test-file lines changed (matched by .test./.spec./__tests__/tests/e2e/playwright path patterns). Excluded from cap. |
+| force_completed | `boolean` | **NO** | `false` | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: --force-complete CLI flag set this to true. Operator-supplied --reason recorded in verification_notes JSON. |
 
 ## Constraints
 
@@ -63,8 +66,8 @@
 - `quick_fixes_routing_threshold_id_fkey`: routing_threshold_id → work_item_thresholds(id)
 
 ### Check Constraints
-- `actual_loc_reasonable`: CHECK (((actual_loc IS NULL) OR (actual_loc <= 200)))
-- `completed_requires_verification`: CHECK ((((status = 'completed'::text) AND (tests_passing = true) AND (uat_verified = true)) OR (status <> 'completed'::text)))
+- `actual_loc_reasonable`: CHECK ((((actual_loc IS NULL) OR (actual_loc <= 1000)) AND ((actual_source_loc IS NULL) OR (actual_source_loc <= 1000)) AND ((actual_test_loc IS NULL) OR (actual_test_loc <= 5000))))
+- `completed_requires_verification`: CHECK ((((status = 'completed'::text) AND (((tests_passing = true) AND (uat_verified = true)) OR (force_completed = true))) OR (status <> 'completed'::text)))
 - `escalated_requires_reason`: CHECK ((((status = 'escalated'::text) AND (escalation_reason IS NOT NULL)) OR (status <> 'escalated'::text)))
 - `loc_reasonable`: CHECK (((estimated_loc IS NULL) OR (estimated_loc <= 200)))
 - `quick_fixes_compliance_score_check`: CHECK (((compliance_score >= 0) AND (compliance_score <= 100)))
