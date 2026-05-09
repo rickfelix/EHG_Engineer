@@ -189,30 +189,44 @@ export async function completeQuickFix(qfId, options = {}) {
     process.exit(1);
   }
 
+  // QF-20260509-779 (closes bd600229; completes QF-20260509-407 Bug C):
+  // analyzeGitDiff runs BEFORE the PR-acquisition block so createAutoPR has
+  // filesChanged available, and so the autoPr branch can fire BEFORE the
+  // PR-URL prompt. Without this hoist, the prompt at line 195 ran first and
+  // rejected under --non-interactive (correct fail-fast) but left the autoPr
+  // branch unreachable. 13th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.
+  const { filesChanged, diffAnalysis } = analyzeGitDiff(testDir, qf.description);
+
+  // Test Coverage Verification (uses filesChanged from above)
+  const testCoverage = verifyTestCoverage(filesChanged);
+
   // PR verification
-  let prUrl;
-  if (!options.prUrl) {
+  let prUrl = options.prUrl;
+
+  // QF-20260509-779: if --auto-pr is set and no --pr-url provided, create the
+  // PR FIRST so the subsequent prompt doesn't fire under --non-interactive.
+  if (!prUrl && options.autoPr) {
+    console.log('🤖 --auto-pr: creating PR via gh before PR-URL prompt');
+    const created = await createAutoPR(qfId, qf, filesChanged, actualLoc, testsPass, uatVerified, options.verificationNotes);
+    if (created) prUrl = created;
+  }
+
+  if (!prUrl) {
     const prInput = await prompt('\nGitHub PR URL (required): ');
     prUrl = prInput.trim();
-  } else {
-    prUrl = options.prUrl;
   }
 
   if (!validatePR(prUrl, qfId, qf.title)) {
     process.exit(1);
   }
 
-  // Optional: Verification notes
+  // Optional: Verification notes (after PR so autoPr-created PR body uses
+  // options.verificationNotes if provided; the prompt below only runs without
+  // --non-interactive when no notes were supplied).
   let verificationNotes = options.verificationNotes;
   if (!verificationNotes) {
     verificationNotes = await prompt('\nVerification notes (optional): ');
   }
-
-  // Git Diff Auto-Analysis
-  const { filesChanged, diffAnalysis } = analyzeGitDiff(testDir, qf.description);
-
-  // Test Coverage Verification
-  const testCoverage = verifyTestCoverage(filesChanged);
 
   // LEO Stack Restart
   console.log('🔄 LEO Stack Restart\n');
@@ -222,11 +236,9 @@ export async function completeQuickFix(qfId, options = {}) {
     console.log('   You may need to restart manually: bash scripts/leo-stack.sh restart\n');
   }
 
-  // Automatic PR Creation (if enabled and no PR provided)
+  // QF-20260509-779: --auto-pr is now handled in the PR-acquisition block above.
+  // The prior duplicate block here would have been unreachable post-hoist.
   let finalPrUrl = prUrl;
-  if (options.autoPr && !prUrl) {
-    finalPrUrl = await createAutoPR(qfId, qf, filesChanged, actualLoc, testsPass, uatVerified, verificationNotes);
-  }
 
   // Self-Verification (Combat Overconfidence)
   const verificationContext = {
