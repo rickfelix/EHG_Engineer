@@ -441,24 +441,39 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       }
     };
 
-    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-050: Upsert to prevent duplicate rows on retry
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-050: Upsert to prevent duplicate rows on retry.
+    // QF-20260509-967: also fetch quality_score, metadata, generated_by so we can
+    // skip the overwrite when the existing row is manually-curated OR has a higher
+    // quality_score than the incoming auto-generated payload.
     const { data: existing } = await supabase
       .from('retrospectives')
-      .select('id')
+      .select('id, quality_score, metadata, generated_by')
       .eq('sd_id', retrospective.sd_id)
       .eq('retrospective_type', 'EXEC_TO_PLAN')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
+    // QF-20260509-967: clobber guard. Manually-curated rows (or rows that already
+    // hold a higher quality score than the auto-generated payload) MUST NOT be
+    // overwritten. Witnessed retro 84ada45e: 10/4/5 items collapsed to 1/1/1
+    // boilerplate when the generator UPDATE'd a manually-curated row.
+    const skipOverwrite = existing && (
+      existing?.metadata?.manually_curated === true
+      || existing?.generated_by === 'MANUAL'
+      || existing?.generated_by === 'CHAIRMAN'
+      || existing?.generated_by === 'OPERATOR'
+      || (typeof existing?.quality_score === 'number' && existing.quality_score > qualityScore)
+    );
+
     let data, error;
-    if (existing) {
+    if (existing && !skipOverwrite) {
       ({ data, error } = await supabase
         .from('retrospectives')
         .update(retrospective)
         .eq('id', existing.id)
         .select());
-    } else {
+    } else if (!existing) {
       ({ data, error } = await supabase
         .from('retrospectives')
         .insert(retrospective)
@@ -468,6 +483,9 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
     if (error) {
       console.log(`\n   ⚠️  Could not save retrospective: ${error.message}`);
       console.log('   Retrospective data will not be persisted');
+    } else if (skipOverwrite) {
+      console.log(`\n   ↺ EXEC phase retrospective preserved (ID: ${existing.id}, manually-curated or higher quality — auto-gen skipped)`);
+      console.log(`   Existing Quality: ${existing.quality_score ?? 'n/a'}% | Auto-Gen Quality: ${qualityScore}%`);
     } else {
       const verb = existing ? 'updated (avoided duplicate)' : 'created';
       console.log(`\n   ✅ EXEC phase retrospective ${verb} (ID: ${data[0].id})`);

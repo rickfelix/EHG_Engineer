@@ -334,24 +334,35 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       } : null
     };
 
-    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-050: Upsert to prevent duplicate rows on retry
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-050: Upsert to prevent duplicate rows on retry.
+    // QF-20260509-967: also fetch quality_score, metadata, generated_by for clobber-guard.
     const { data: existing } = await supabase
       .from('retrospectives')
-      .select('id')
+      .select('id, quality_score, metadata, generated_by')
       .eq('sd_id', retrospective.sd_id)
       .eq('retrospective_type', retrospectiveType)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
+    // QF-20260509-967: clobber guard. Preserve manually-curated rows or rows
+    // with higher quality than the auto-generated payload.
+    const skipOverwrite = existing && (
+      existing?.metadata?.manually_curated === true
+      || existing?.generated_by === 'MANUAL'
+      || existing?.generated_by === 'CHAIRMAN'
+      || existing?.generated_by === 'OPERATOR'
+      || (typeof existing?.quality_score === 'number' && existing.quality_score > qualityScore)
+    );
+
     let data, error;
-    if (existing) {
+    if (existing && !skipOverwrite) {
       ({ data, error } = await supabase
         .from('retrospectives')
         .update(retrospective)
         .eq('id', existing.id)
         .select());
-    } else {
+    } else if (!existing) {
       ({ data, error } = await supabase
         .from('retrospectives')
         .insert(retrospective)
@@ -361,6 +372,9 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
     if (error) {
       console.log(`\n   ⚠️  Could not save retrospective: ${error.message}`);
       console.log('   Retrospective data will not be persisted');
+    } else if (skipOverwrite) {
+      console.log(`\n   ↺ Handoff retrospective preserved (ID: ${existing.id}, manually-curated or higher quality — auto-gen skipped)`);
+      console.log(`   Existing Quality: ${existing.quality_score ?? 'n/a'}% | Auto-Gen Quality: ${qualityScore}%`);
     } else {
       const verb = existing ? 'updated (avoided duplicate)' : 'created';
       console.log(`\n   ✅ Handoff retrospective ${verb} (ID: ${data[0].id})`);
