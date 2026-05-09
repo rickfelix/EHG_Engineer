@@ -602,14 +602,17 @@ async function main() {
     }
   }
 
-  // FIX #2: Proactively clear stale claiming_session_id on completed SDs to prevent churn
-  const { data: completedWithClaims } = await supabase
+  // FIX #2: Proactively clear stale claiming_session_id on completed/cancelled SDs to prevent churn.
+  // QF-20260508-997: cancelled SDs share the same orphan-claim profile as completed ones — the
+  // owning session has long since exited but the row still carries claiming_session_id, blocking
+  // re-pickup and inflating active-claims counts. Same fix applies; status filter widened.
+  const { data: terminalWithClaims } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, claiming_session_id, is_working_on')
-    .eq('status', 'completed')
+    .select('sd_key, status, claiming_session_id, is_working_on')
+    .in('status', ['completed', 'cancelled'])
     .not('claiming_session_id', 'is', null);
 
-  for (const sd of (completedWithClaims || [])) {
+  for (const sd of (terminalWithClaims || [])) {
     const { error } = await supabase
       .from('strategic_directives_v2')
       .update({ claiming_session_id: null, is_working_on: false })
@@ -617,7 +620,7 @@ async function main() {
       .select();
 
     if (!error) {
-      actions.push('QA: cleared stale claiming_session_id on completed ' + sd.sd_key);
+      actions.push('QA: cleared stale claiming_session_id on ' + sd.status + ' ' + sd.sd_key);
     }
   }
 
@@ -1197,14 +1200,14 @@ async function main() {
   // QA summary
   const stuckCompleted = stuckApproval.filter(sd => sd.progress_percentage >= 100 && sd.completion_date);
   const stuckReset = stuckApproval.filter(sd => !(sd.progress_percentage >= 100 && sd.completion_date));
-  const qaIssues = workingOnCompleted.length + orphanedClaims.length + stuckApproval.length + (completedWithClaims || []).length;
+  const qaIssues = workingOnCompleted.length + orphanedClaims.length + stuckApproval.length + (terminalWithClaims || []).length;
   if (qaIssues > 0) {
     console.log('QA FIXES (' + qaIssues + '):');
     if (workingOnCompleted.length > 0) console.log('  Released ' + workingOnCompleted.length + ' session(s) working on completed SDs');
     if (orphanedClaims.length > 0) console.log('  Released ' + orphanedClaims.length + ' session(s) with orphaned claims');
     if (stuckCompleted.length > 0) console.log('  Completed ' + stuckCompleted.length + ' SD(s) stuck at 100%/pending_approval');
     if (stuckReset.length > 0) console.log('  Reset ' + stuckReset.length + ' SD(s) from pending_approval → draft (no session working on them)');
-    if ((completedWithClaims || []).length > 0) console.log('  Cleared ' + (completedWithClaims || []).length + ' stale claiming_session_id on completed SDs');
+    if ((terminalWithClaims || []).length > 0) console.log('  Cleared ' + (terminalWithClaims || []).length + ' stale claiming_session_id on completed/cancelled SDs');
     if (claimIntegrityIssues.length > 0) console.log('  Nudged ' + claimIntegrityIssues.length + ' idle session(s) with CLAIM_REMINDER');
     console.log('');
   }
