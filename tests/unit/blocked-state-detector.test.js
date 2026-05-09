@@ -6,7 +6,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import dotenv from 'dotenv';
 import {
   detectAllBlockedState,
@@ -31,6 +31,28 @@ const HAS_REAL_DB = process.env.SUPABASE_URL
 describe.skipIf(!HAS_REAL_DB)('Blocked State Detector', () => {
   let testOrchestratorId = null;
   let testChildIds = [];
+
+  // QF-20260509-FIXTURE-LEAK (closes 21e7b7be): self-heal orphan TEST-ORCH-*/
+  // TEST-CHILD-* fixtures left by prior process-killed runs. afterEach cleanup
+  // is correct but not process-kill resilient. This pre-suite sweep deletes
+  // fixtures whose timestamp is >1h old so it never collides with concurrently-
+  // running suite instances (those use Date.now() in this run, well under 1h).
+  beforeAll(async () => {
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const { data: orphans } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key')
+      .or('id.like.TEST-ORCH-%,id.like.TEST-CHILD-%');
+    const stale = (orphans || []).filter(r => {
+      const m = (r.id || '').match(/-(\d{10,})/);
+      return m && Number(m[1]) < oneHourAgo;
+    });
+    if (stale.length > 0) {
+      const ids = stale.map(r => r.id);
+      await supabase.from('strategic_directives_v2').delete().in('id', ids);
+      console.log(`[QF-FIXTURE-LEAK] swept ${ids.length} orphan TEST-* fixture(s) older than 1h`);
+    }
+  });
 
   beforeEach(async () => {
     const timestamp = Date.now();
