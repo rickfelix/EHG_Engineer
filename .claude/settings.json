@@ -164,6 +164,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/post-tool-rca-outcome.cjs",
+            "timeout": 2
+          }
+        ]
       }
     ],
     "Stop": [

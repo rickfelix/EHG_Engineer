@@ -25,6 +25,16 @@ const crypto = require('crypto');
 
 const RETRY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
+// SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001 — UUID-shape regex.
+// fetchRcaInvocationSince queries sub_agent_execution_results.sd_id which is
+// UUID-typed. Callers may pass either UUID or sd_key string; non-UUID inputs
+// must be resolved before the PostgREST filter (silent miss otherwise).
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Module-scope 60s TTL cache for sd_key→UUID resolutions.
+const _sdKeyToUuidCache = new Map(); // key -> { uuid: string|null, expires_at: number }
+const SD_KEY_CACHE_TTL_MS = 60 * 1000;
+
 // QF-20260504-830 — known-idempotent monitoring commands are exempt from
 // signature dedup. RCA-TIERED ENFORCEMENT was tripping the 4th invocation of
 // /coordinator periodic probes (all exit 0) the same way it gates retry loops.
@@ -62,16 +72,38 @@ function stateFilePath(sessionId) {
 
 /**
  * Build a stable signature for a tool invocation.
+ *
+ * SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001: optional `lastOutcome` param mixes a
+ * digest of {exit_code, stderr_sha} into the Bash signature so iterative TDD
+ * (different failure each retry) does NOT collapse into the stuck-loop signature.
+ * Same outcome → same digest → stuck-loop detection preserved.
+ *
+ * Edit/Write/MultiEdit signatures are unchanged — file_path is the natural key.
+ *
  * @param {string} toolName
  * @param {Object} input
+ * @param {{exit_code?: number|string, stderr_sha?: string}} [lastOutcome] - optional outcome
+ *        from the prior tool call (captured by post-tool-rca-outcome.cjs).
+ *        Without it, returns the legacy command-only signature (back-compat).
  * @returns {string|null}
  */
-function signatureFor(toolName, input) {
+function signatureFor(toolName, input, lastOutcome) {
   if (!toolName || !input) return null;
   if (toolName === 'Bash') {
     const cmd = typeof input.command === 'string' ? input.command : '';
     if (!cmd) return null;
     const hash = crypto.createHash('sha256').update(cmd).digest('hex').slice(0, 16);
+    // Outcome admixture (back-compat: missing/malformed lastOutcome → command-only signature).
+    if (
+      lastOutcome &&
+      typeof lastOutcome === 'object' &&
+      (lastOutcome.exit_code !== undefined || lastOutcome.stderr_sha !== undefined)
+    ) {
+      const ec = lastOutcome.exit_code === undefined ? '' : String(lastOutcome.exit_code);
+      const ss = typeof lastOutcome.stderr_sha === 'string' ? lastOutcome.stderr_sha : '';
+      const outcomeDigest = crypto.createHash('sha256').update(`${ec}|${ss}`).digest('hex').slice(0, 8);
+      return `Bash:${hash}:${outcomeDigest}`;
+    }
     return `Bash:${hash}`;
   }
   if (toolName === 'Edit' || toolName === 'Write' || toolName === 'MultiEdit') {
@@ -80,6 +112,66 @@ function signatureFor(toolName, input) {
     return `${toolName}:${fp}`;
   }
   return null;
+}
+
+/**
+ * Resolve sd_key string → UUID for sub_agent_execution_results.sd_id queries.
+ * Returns null when input is null/undefined/unknown.
+ *
+ * SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001: closes silent UUID-vs-sd_key mismatch
+ * (6th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
+ *
+ * @param {string|null|undefined} sdKeyOrUuid
+ * @returns {Promise<string|null>}
+ */
+async function resolveSdKeyToUuid(sdKeyOrUuid) {
+  if (typeof sdKeyOrUuid !== 'string' || !sdKeyOrUuid) return null;
+  // Already a UUID — pass through.
+  if (UUID_REGEX.test(sdKeyOrUuid)) return sdKeyOrUuid;
+
+  // Cache hit?
+  const now = Date.now();
+  const cached = _sdKeyToUuidCache.get(sdKeyOrUuid);
+  if (cached && cached.expires_at > now) {
+    return cached.uuid;
+  }
+
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+
+  // OR-query against strategic_directives_v2 (sd_key.eq.X OR id.eq.X).
+  // Note: id column is UUID but PostgREST tolerates string equality in or() filter.
+  const params = new URLSearchParams();
+  params.set('select', 'id');
+  params.set('or', `(sd_key.eq.${sdKeyOrUuid},id.eq.${sdKeyOrUuid})`);
+  params.set('limit', '1');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 1200);
+  let resolved = null;
+  try {
+    const resp = await fetch(`${url}/rest/v1/strategic_directives_v2?${params.toString()}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (resp.ok) {
+      const rows = await resp.json();
+      if (Array.isArray(rows) && rows.length > 0 && typeof rows[0].id === 'string') {
+        resolved = rows[0].id;
+      }
+    }
+  } catch {
+    clearTimeout(timer);
+    // Fail-open
+  }
+
+  _sdKeyToUuidCache.set(sdKeyOrUuid, { uuid: resolved, expires_at: now + SD_KEY_CACHE_TTL_MS });
+  if (!resolved && process.env.LEO_TELEMETRY_DEBUG === '1') {
+    process.stderr.write(`[retry-state-manager] sd_key resolution failed: ${sdKeyOrUuid}\n`);
+  }
+  return resolved;
 }
 
 /**
@@ -147,10 +239,16 @@ async function fetchRcaInvocationSince(sdKey, lastResetAt) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key || !sdKey) return null;
 
+  // SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001: resolve sd_key→UUID before the
+  // PostgREST filter. sub_agent_execution_results.sd_id is UUID-typed; passing
+  // a sd_key string silently mismatches and the reset never fires.
+  const sdUuid = await resolveSdKeyToUuid(sdKey);
+  if (!sdUuid) return null;
+
   const params = new URLSearchParams();
   params.set('select', 'created_at');
   params.set('sub_agent_code', 'eq.RCA');
-  params.set('sd_id', `eq.${sdKey}`);
+  params.set('sd_id', `eq.${sdUuid}`);
   params.set('order', 'created_at.desc');
   params.set('limit', '1');
   if (lastResetAt) params.set('created_at', `gt.${lastResetAt}`);
@@ -179,6 +277,10 @@ async function fetchRcaInvocationSince(sdKey, lastResetAt) {
  * Record a tool invocation and return the current attempt count.
  * Also performs RCA-reset lookup and state pruning. Fail-open on all errors.
  *
+ * SD-LEO-INFRA-RCA-TIERED-SIGNATURE-001: optional `lastOutcome` param threads
+ * the prior tool's outcome digest into the signature, allowing iterative TDD
+ * to track at attempts=1 while preserving stuck-loop detection.
+ *
  * @param {string} sessionId
  * @param {string} sdKey
  * @param {string} toolName
@@ -186,10 +288,11 @@ async function fetchRcaInvocationSince(sdKey, lastResetAt) {
  * @param {Object} [opts]
  * @param {Function} [opts.rcaCheck] - injectable async (sdKey, lastResetAt) => ISO|null
  * @param {number}   [opts.now]      - injectable current time in ms (for tests)
+ * @param {Object}   [opts.lastOutcome] - {exit_code, stderr_sha} from prior tool call
  * @returns {Promise<{ attempts: number, signature: string|null, rcaResetApplied: boolean }>}
  */
 async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) {
-  const signature = signatureFor(toolName, toolInput);
+  const signature = signatureFor(toolName, toolInput, opts.lastOutcome);
   if (!sessionId || !signature) {
     return { attempts: 0, signature: null, rcaResetApplied: false };
   }
@@ -231,8 +334,12 @@ module.exports = {
   readState,
   writeState,
   fetchRcaInvocationSince,
+  resolveSdKeyToUuid,
   pruneStale,
   stateFilePath,
   isExempt,
-  RETRY_WINDOW_MS
+  RETRY_WINDOW_MS,
+  UUID_REGEX,
+  // Test-only export for cache reset between test cases
+  _resetSdKeyCache: () => { _sdKeyToUuidCache.clear(); },
 };
