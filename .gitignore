@@ -11,6 +11,10 @@ verification-packages/
 .worktrees/
 .cache/
 
+# Per-session worktree state (written by sd-start.js / create-quick-fix.js)
+# .worktree.json IS tracked (per-worktree metadata); .ehg-session.json is per-session ephemeral.
+.ehg-session.json
+
 # Backup files (git already provides versioning)
 *.backup
 *.bak

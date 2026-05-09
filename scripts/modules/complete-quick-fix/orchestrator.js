@@ -165,8 +165,8 @@ export async function completeQuickFix(qfId, options = {}) {
     console.log();
   }
 
-  // Validate tests
-  if (!validateTests(unitTestResult, e2eTestResult, testsPass)) {
+  // Validate tests (QF-20260509-552: forward {forceComplete,reason} flags)
+  if (!validateTests(unitTestResult, e2eTestResult, testsPass, { forceComplete: options.forceComplete, reason: options.reason })) {
     process.exit(1);
   }
 
@@ -273,8 +273,8 @@ export async function completeQuickFix(qfId, options = {}) {
     process.exit(1);
   }
 
-  // Commit & Push
-  commitSha = await commitAndPushChanges(testDir, qf, { commitSha, branchName }, actualLoc, filesChanged, finalPrUrl, testsPass, prompt);
+  // Commit & Push (QF-20260509-552: forward {forceComplete,reason} flags)
+  commitSha = await commitAndPushChanges(testDir, qf, { commitSha, branchName }, actualLoc, filesChanged, finalPrUrl, testsPass, prompt, { forceComplete: options.forceComplete, reason: options.reason });
 
   // Update record
   console.log('🔄 Updating quick-fix record...\n');
@@ -335,8 +335,8 @@ export async function completeQuickFix(qfId, options = {}) {
 
   displayCompletionSummary(qf, actualLoc, commitSha, branchName, finalPrUrl, filesChanged);
 
-  // Merge to Main
-  await mergeToMain(testDir, qf, finalPrUrl, prompt);
+  // Merge to Main (QF-20260509-552: forward {forceComplete,reason} flags)
+  await mergeToMain(testDir, qf, finalPrUrl, prompt, { forceComplete: options.forceComplete, reason: options.reason });
 
   console.log('📍 Quick-Fix Complete!\n');
 

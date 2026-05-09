@@ -369,10 +369,13 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
  * @param {Function} prompt - Prompt function for user input
  * @returns {Promise<string>} Updated commit SHA
  */
-export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, filesChanged, prUrl, testsPass, prompt) {
+export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, filesChanged, prUrl, testsPass, prompt, flags = {}) {
   console.log('\n🔄 Git Commit & Push\n');
 
-  let { commitSha } = gitInfo;
+  // QF-20260509-552: branchName was previously assigned at line 379 without
+  // being declared — JSDoc documents gitInfo.branchName but the destructure
+  // missed it, causing ReferenceError on git status check.
+  let { commitSha, branchName } = gitInfo;
 
   try {
     const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
@@ -395,7 +398,11 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
       });
       console.log(`   └${'─'.repeat(60)}┘\n`);
 
-      const shouldCommit = await prompt('   Commit these changes? (yes/no): ');
+      // QF-20260509-552: --force-complete auto-confirms commit/push prompts
+      // so --non-interactive flow does not wedge.
+      const shouldCommit = flags.forceComplete
+        ? (console.log(`   ⚠️  --force-complete: auto-confirm commit (reason="${flags.reason}")`), 'yes')
+        : await prompt('   Commit these changes? (yes/no): ');
 
       if (shouldCommit.toLowerCase().startsWith('y')) {
         console.log('\n   📦 Staging changes...');
@@ -410,7 +417,9 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
         commitSha = newCommitSha;
         console.log(`   ✅ Committed: ${newCommitSha.substring(0, 7)}\n`);
 
-        const shouldPush = await prompt('   Push to remote? (yes/no): ');
+        const shouldPush = flags.forceComplete
+          ? (console.log(`   ⚠️  --force-complete: auto-confirm push (reason="${flags.reason}")`), 'yes')
+          : await prompt('   Push to remote? (yes/no): ');
 
         if (shouldPush.toLowerCase().startsWith('y')) {
           // SD-SEC-DATA-VALIDATION-001: Validate branch name before shell use
@@ -481,7 +490,7 @@ function displayManualCommitInstructions(qf, currentBranch) {
  * @param {string} prUrl - PR URL
  * @param {Function} prompt - Prompt function for user input
  */
-export async function mergeToMain(testDir, qf, prUrl, prompt) {
+export async function mergeToMain(testDir, qf, prUrl, prompt, flags = {}) {
   console.log('🔀 Merge to Main\n');
 
   try {
@@ -491,7 +500,12 @@ export async function mergeToMain(testDir, qf, prUrl, prompt) {
       await checkPRStatus(testDir, prUrl);
     }
 
-    const shouldMerge = await prompt('   Merge to main now? (yes/no): ');
+    // QF-20260509-552: 7th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.
+    // --force-complete auto-confirms the merge prompt so --non-interactive flow
+    // does not wedge after validators were patched in QF-407 / SD-FDBK FR-2.
+    const shouldMerge = flags.forceComplete
+      ? (console.log(`   ⚠️  --force-complete: auto-confirm merge (reason="${flags.reason}")`), 'yes')
+      : await prompt('   Merge to main now? (yes/no): ');
 
     if (shouldMerge.toLowerCase().startsWith('y')) {
       console.log('\n   🔀 Merging to main...');
