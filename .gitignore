@@ -147,6 +147,12 @@ scripts/test-llm-*.js
 scripts/uat-*.js
 scripts/update-*.mjs
 scripts/update-*.js
+# scripts/verify-*.{mjs,js,cjs} silently dropped by these patterns. If you ARE
+# committing a verify-* script (production verifier, hook, etc.) you MUST add an
+# explicit `!scripts/verify-<name>.<ext>` exception below — otherwise `git add`
+# accepts it but `git status` shows nothing tracked. Witnessed: QF-20260509-393
+# (scripts/verify-security-audit-integrity.cjs silently dropped). Same trap class
+# as scripts/check-* (documented 2026-05-05 SD-LEO-INFRA-PRE-COMMIT-GUARD-001).
 scripts/verify-*.mjs
 scripts/verify-*.js
 scripts/verify-*.cjs

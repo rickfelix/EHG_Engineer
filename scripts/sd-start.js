@@ -1197,10 +1197,15 @@ async function main() {
     };
     const req = PHASE_REQUIRES[phase];
     if (req) {
+      // QF-20260509-393: was .eq('sd_key', sd.id) where sd.id is a UUID — wrong
+      // column. sd_phase_handoffs.sd_id is the UUID FK. 9th-witness PAT-LEO-INFRA-
+      // WRITER-CONSUMER-ASYMMETRY-001 (sibling: sd_phase_handoffs has BOTH sd_id
+      // UUID and historical sd_key text values; matching the wrong column produces
+      // false STUCK warnings on every PLAN_PRD-phase resume).
       const { data: handoffs } = await supabase
         .from('sd_phase_handoffs')
         .select('from_phase, to_phase, status')
-        .eq('sd_key', sd.id)
+        .eq('sd_id', sd.id)
         .eq('status', 'accepted');
       const hasRequired = (handoffs || []).some(h => h.from_phase === req.from && h.to_phase === req.to);
       if (!hasRequired) {
