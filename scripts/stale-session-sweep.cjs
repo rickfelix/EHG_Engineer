@@ -477,6 +477,11 @@ async function main() {
     // Using 'idle' silently fails when another session on the same terminal exists.
     const targetStatus = s.status === 'ACTIVE' ? 'idle' : 'released';
     // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
+    // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
+    // OR (worktree_path IS NULL AND worktree_branch IS NULL). Without worktree_branch:null here,
+    // partial-null UPDATE silently rolls back via PostgREST and the sweep churns 5-min loops.
+    // 5th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 — sibling at line ~801 was patched
+    // by QF-20260504-081 but this one was missed.
     const { error } = await supabase
       .from('claude_sessions')
       .update({
@@ -485,6 +490,7 @@ async function main() {
         released_at: now.toISOString(),
         released_reason: 'SWEEP_SD_ALREADY_COMPLETED',
         worktree_path: null,
+        worktree_branch: null,
         has_uncommitted_changes: false,
         current_branch: null
       })
@@ -506,6 +512,10 @@ async function main() {
   for (const s of orphanedClaims) {
     const targetStatus = s.status === 'ACTIVE' ? 'idle' : 'released';
     // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
+    // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
+    // OR (worktree_path IS NULL AND worktree_branch IS NULL). Vitest static guard at
+    // tests/unit/scripts/stale-session-sweep-release-payload.test.js pins this invariant
+    // for ALL release sites — adding a new release path? Add worktree_branch:null too.
     const { error } = await supabase
       .from('claude_sessions')
       .update({
@@ -514,6 +524,7 @@ async function main() {
         released_at: now.toISOString(),
         released_reason: 'SWEEP_ORPHANED_CLAIM',
         worktree_path: null,
+        worktree_branch: null,
         has_uncommitted_changes: false,
         current_branch: null
       })
@@ -868,6 +879,9 @@ async function main() {
 
       const targetStatus = evict.status === 'ACTIVE' ? 'idle' : 'released';
       // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
+      // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
+      // OR (worktree_path IS NULL AND worktree_branch IS NULL). worktree_branch:null required;
+      // sibling release at workingOnCompleted branch (line ~480) had the same bug.
       const { error } = await supabase
         .from('claude_sessions')
         .update({
@@ -876,6 +890,7 @@ async function main() {
           released_at: now.toISOString(),
           released_reason: 'SWEEP_CONFLICT_RESOLUTION',
           worktree_path: null,
+          worktree_branch: null,
           has_uncommitted_changes: false,
           current_branch: null
         })
