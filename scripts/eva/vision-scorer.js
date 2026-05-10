@@ -53,9 +53,12 @@ const THRESHOLDS = {
  * @returns {Promise<{id: string, dimensions: Array}>}
  */
 async function loadVisionDimensions(supabase, visionKey) {
+  // SD-FDBK-INFRA-EVA-VISION-DOCUMENTS-001 (Option A NARROWED, FR-1):
+  // quality_checked + quality_issues are observed read-side so scoreSD() can
+  // emit an operator-CLI warning when qc=false. No enforcement, no skip.
   const { data, error } = await supabase
     .from('eva_vision_documents')
-    .select('id, vision_key, extracted_dimensions, status')
+    .select('id, vision_key, extracted_dimensions, status, quality_checked, quality_issues')
     .eq('vision_key', visionKey)
     .limit(1)
     .single();
@@ -68,7 +71,12 @@ async function loadVisionDimensions(supabase, visionKey) {
     throw new Error(`Vision ${visionKey} has no extracted_dimensions`);
   }
 
-  return { id: data.id, dimensions: data.extracted_dimensions };
+  return {
+    id: data.id,
+    dimensions: data.extracted_dimensions,
+    qualityChecked: data.quality_checked ?? null,
+    qualityIssues: data.quality_issues ?? null,
+  };
 }
 
 /**
@@ -78,9 +86,11 @@ async function loadVisionDimensions(supabase, visionKey) {
  * @returns {Promise<{id: string, dimensions: Array}>}
  */
 async function loadArchDimensions(supabase, archKey) {
+  // SD-FDBK-INFRA-EVA-VISION-DOCUMENTS-001 (Option A NARROWED, FR-2):
+  // quality_checked + quality_issues are observed read-side. Symmetric to FR-1.
   const { data, error } = await supabase
     .from('eva_architecture_plans')
-    .select('id, plan_key, extracted_dimensions, status')
+    .select('id, plan_key, extracted_dimensions, status, quality_checked, quality_issues')
     .eq('plan_key', archKey)
     .limit(1)
     .single();
@@ -93,7 +103,39 @@ async function loadArchDimensions(supabase, archKey) {
     throw new Error(`Architecture plan ${archKey} has no extracted_dimensions`);
   }
 
-  return { id: data.id, dimensions: data.extracted_dimensions };
+  return {
+    id: data.id,
+    dimensions: data.extracted_dimensions,
+    qualityChecked: data.quality_checked ?? null,
+    qualityIssues: data.quality_issues ?? null,
+  };
+}
+
+/**
+ * SD-FDBK-INFRA-EVA-VISION-DOCUMENTS-001 (Option A NARROWED, FR-3 + FR-4).
+ *
+ * Emit a single [VisionScorer][QC-WARN] line when at least one of the loaded
+ * vision/arch rows has quality_checked === false. Suppressed when both are
+ * true (or null/undefined — "unknown" is not actionable). Operator-CLI only;
+ * no audit_log INSERT, no event-bus emit.
+ *
+ * Exported with leading underscore to signal "internal API for testing".
+ *
+ * @param {string|null|undefined} sdKey
+ * @param {boolean|null|undefined} visionQc
+ * @param {boolean|null|undefined} archQc
+ * @param {{ warn: Function }} [logger]  Defaults to console; injected for tests.
+ * @returns {boolean} true if a warning was emitted, false otherwise.
+ */
+export function _emitQualityCheckWarningIfNeeded(sdKey, visionQc, archQc, logger = console) {
+  if (visionQc === false || archQc === false) {
+    logger.warn(
+      `[VisionScorer][QC-WARN] sd_key=${sdKey || 'unknown'} ` +
+      `vision_qc=${visionQc} arch_qc=${archQc}`
+    );
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -334,6 +376,14 @@ export async function scoreSD(options = {}) {
     loadVisionDimensions(supabase, visionKey),
     loadArchDimensions(supabase, archKey),
   ]);
+
+  // SD-FDBK-INFRA-EVA-VISION-DOCUMENTS-001 (Option A NARROWED, FR-3 + FR-4):
+  // emit at most one operator-CLI warning per scoreSD() invocation when either
+  // loaded row has quality_checked=false. Read-only; no audit_log, no
+  // enforcement, no skip. Closes scripts/eva/ scorer non-consumer gap while
+  // leaving lib/eva consumers (already correct) and the 52 production qc=false
+  // rows untouched. Trigger reconciliation deferred to separate SD if witnessed.
+  _emitQualityCheckWarningIfNeeded(sdKey, visionResult.qualityChecked, archResult.qualityChecked);
 
   const visionCriteria = dimensionsToCriteria(visionResult.dimensions, 'V');
   const archCriteria = dimensionsToCriteria(archResult.dimensions, 'A');
