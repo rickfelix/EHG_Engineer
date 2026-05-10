@@ -107,6 +107,11 @@ export function getPhaseAwareStatus(item) {
  * Returns empty string when no gate is active (no badge rendered).
  * SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001
  *
+ * SD-FDBK-ENH-CADENCE-VOCAB-DISCRIMINATOR-001: source='unlock_gate_advisory'
+ * returns empty string (no blocking badge rendered). Advisory states are
+ * surfaced via separate informational helpers, not as a CADENCE-WAIT badge,
+ * since they do not block claim acquisition.
+ *
  * @param {Object} item - SD item with governance_metadata + metadata
  * @returns {string} Colored badge string (with leading space) or empty string
  */
@@ -115,6 +120,7 @@ export function getCadenceBadge(item) {
     governance_metadata: item?.governance_metadata,
     metadata: item?.metadata,
   });
+  if (gateState.source === 'unlock_gate_advisory') return '';
   if (!gateState.active) return '';
   const dayWord = gateState.days_remaining === 1 ? 'day' : 'days';
   return ` ${colors.magenta}[CADENCE-WAIT ${gateState.days_remaining} ${dayWord}]${colors.reset}`;
@@ -123,6 +129,11 @@ export function getCadenceBadge(item) {
 /**
  * Get cadence-wait reason text for inline display under an SD entry.
  * Returns empty string when no gate active.
+ *
+ * SD-FDBK-ENH-CADENCE-VOCAB-DISCRIMINATOR-001: returns empty for
+ * source='unlock_gate_advisory' — the advisory reason is informational and
+ * surfaced via different rendering paths, not via this hard-block helper.
+ *
  * @param {Object} item
  * @returns {string}
  */
@@ -131,6 +142,7 @@ export function getCadenceReason(item) {
     governance_metadata: item?.governance_metadata,
     metadata: item?.metadata,
   });
+  if (gateState.source === 'unlock_gate_advisory') return '';
   if (!gateState.active) return '';
   return gateState.reason;
 }
