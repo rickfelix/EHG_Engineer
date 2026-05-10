@@ -32,6 +32,8 @@ import {
 } from './verification.js';
 import { runComplianceWithRefinement } from './compliance-loop.js';
 import { prompt, displayCompletionSummary } from './cli.js';
+import { resolveFeedback, parseFeedbackFooters } from '../../../lib/governance/resolve-feedback.js';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -363,9 +365,104 @@ export async function completeQuickFix(qfId, options = {}) {
   // Merge to Main (QF-20260509-552: forward {forceComplete,reason} flags)
   await mergeToMain(testDir, qf, finalPrUrl, prompt, { forceComplete: options.forceComplete, reason: options.reason });
 
+  // SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 FR-1: post-merge feedback auto-resolve.
+  // Parse "Closes (feedback|harness backlog) <uuid>" footers from PR body and
+  // commit messages. Idempotent + fail-soft — DB errors warn but never fail QF
+  // completion. Env opt-out: RESOLVE_FEEDBACK_ON_QF_COMPLETE=0.
+  if (process.env.RESOLVE_FEEDBACK_ON_QF_COMPLETE !== '0') {
+    try {
+      await resolveLinkedFeedbackRows(supabase, qf, qfId, finalPrUrl, commitSha, testDir);
+    } catch (err) {
+      console.log(`   ⚠️  Feedback auto-resolve skipped: ${err?.message || err}\n`);
+    }
+  }
+
   console.log('📍 Quick-Fix Complete!\n');
 
   return qf;
+}
+
+/**
+ * SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 FR-1: post-merge auto-resolve.
+ *
+ * Collects text from (a) PR body via `gh pr view --json body,commits` and
+ * (b) the local commit message via `git log -1 --format=%B <sha>`, runs
+ * parseFeedbackFooters, and calls resolveFeedback per UUID. All steps are
+ * defensive — any failure logs a warning and continues without blocking QF
+ * completion (post-merge is informational, not gating).
+ *
+ * @param {Object} supabase
+ * @param {Object} qf  Quick-fix DB row
+ * @param {string} qfId
+ * @param {string} prUrl
+ * @param {string} commitSha
+ * @param {string} testDir
+ */
+async function resolveLinkedFeedbackRows(supabase, qf, qfId, prUrl, commitSha, testDir) {
+  const corpus = [];
+
+  // Source 1: PR body + commit messages via gh pr view
+  if (prUrl) {
+    const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+    if (prNumber && /^\d+$/.test(prNumber)) {
+      try {
+        const out = execSync(`gh pr view ${prNumber} --json body,commits`, {
+          cwd: testDir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 10000,
+        });
+        const parsed = JSON.parse(out);
+        if (parsed?.body) corpus.push(parsed.body);
+        if (Array.isArray(parsed?.commits)) {
+          for (const c of parsed.commits) {
+            if (c?.messageHeadline) corpus.push(c.messageHeadline);
+            if (c?.messageBody) corpus.push(c.messageBody);
+          }
+        }
+      } catch (e) {
+        console.log(`   ℹ️  gh pr view fallback (will try local commit): ${e.message}`);
+      }
+    }
+  }
+
+  // Source 2: local commit message (works even when PR is unavailable)
+  if (commitSha && /^[a-f0-9]{7,40}$/i.test(commitSha)) {
+    try {
+      const msg = execSync(`git log -1 --format=%B ${commitSha}`, {
+        cwd: testDir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000,
+      });
+      if (msg) corpus.push(msg);
+    } catch {
+      /* commit may already be deleted post-merge — non-fatal */
+    }
+  }
+
+  // Source 3: QF description (may carry the link from issue creation)
+  if (qf?.description) corpus.push(qf.description);
+
+  const uuids = parseFeedbackFooters(corpus.join('\n'));
+  if (uuids.length === 0) {
+    return;
+  }
+
+  console.log(`   🔗 Auto-resolving ${uuids.length} linked feedback row(s)...`);
+  const prNumberDisplay = prUrl?.match(/\/pull\/(\d+)/)?.[1];
+  for (const uuid of uuids) {
+    const notes = prNumberDisplay
+      ? `Shipped via QF-${qfId} PR #${prNumberDisplay}`
+      : `Shipped via QF-${qfId}`;
+    const result = await resolveFeedback({
+      supabase,
+      feedbackId: uuid,
+      quickFixId: qfId,
+      notes,
+    });
+    if (result.updated) {
+      console.log(`   ✅ feedback ${uuid} → resolved (notes: ${notes})`);
+    } else if (result.reason === 'no_row_or_already_resolved') {
+      console.log(`   ℹ️  feedback ${uuid} → already resolved or missing (idempotent skip)`);
+    } else {
+      console.log(`   ⚠️  feedback ${uuid} → resolve failed: ${result.error || 'unknown'}`);
+    }
+  }
 }
 
 /**
