@@ -487,9 +487,15 @@ function main() {
                 return { name: f, pid, alive, mtime: fs.statSync(path.join(markerDir, f)).mtimeMs };
               })
               .sort((a, b) => b.mtime - a.mtime);
-            // Keep ALL markers for alive PIDs; for dead PIDs, keep last 3
+            // SD-LEO-INFRA-SESSION-IDENTITY-RECONCILIATION-001 (FR-4): delete ALL
+            // dead pid-*.json markers immediately. Previously this retained the 3
+            // most-recent dead markers (`dead.slice(3)` only deleted from index 3
+            // onward) as a debug aid; the retained pid-14396.json marker was the
+            // artifact that defeated identity-reconciliation in 824a4401 phantom-
+            // active-session. Forensics use audit_log + claude_sessions; pid-marker
+            // retention is no longer worth the false-active risk.
             const dead = files.filter(f => !f.alive);
-            for (const old of dead.slice(3)) {
+            for (const old of dead) {
               try { fs.unlinkSync(path.join(markerDir, old.name)); } catch { /* best effort */ }
             }
           };

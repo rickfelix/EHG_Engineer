@@ -39,6 +39,46 @@ const FLEET_MC_ESTIMATE_STALENESS_SEC = Number(process.env.FLEET_MC_ESTIMATE_STA
 
 const supabase = createSupabaseServiceClient();
 
+/**
+ * SD-LEO-INFRA-SESSION-IDENTITY-RECONCILIATION-001 (FR-3): resolve cc_pid from
+ * a session's terminal_id, dispatching on format. Falls back to scanning
+ * .claude/session-identity/pid-*.json (cc_pid field, matched by session_id) for
+ * UUID-format terminal_ids since UUID hex chars are not a real PID.
+ *
+ * @param {string} terminalId
+ * @param {string} [sessionId] - Used for UUID-format pid-*.json lookup
+ * @returns {number|null} numeric PID or null when no match
+ */
+function resolveCcPidFromTerminalId(terminalId, sessionId) {
+  if (!terminalId || typeof terminalId !== 'string') return null;
+  // Format 1: win-cc-PORT-PID (CLI)
+  const cliMatch = /^win-cc-\d+-(\d+)$/.exec(terminalId);
+  if (cliMatch) return Number(cliMatch[1]);
+  // Format 2: win-PID (Desktop)
+  const dtMatch = /^win-(\d+)$/.exec(terminalId);
+  if (dtMatch) return Number(dtMatch[1]);
+  // Format 3: UUID — scan .claude/session-identity/pid-*.json by session_id match
+  try {
+    const markerDir = path.resolve(__dirname, '..', '.claude', 'session-identity');
+    if (!fs.existsSync(markerDir)) return null;
+    const files = fs.readdirSync(markerDir)
+      .filter(f => /^pid-\d+\.json$/.test(f));
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(markerDir, file), 'utf8'));
+        if (data?.cc_pid && (
+          data.session_id === sessionId
+          || data.session_id === terminalId
+        )) {
+          return Number(data.cc_pid);
+        }
+      } catch { /* skip malformed */ }
+    }
+  } catch { /* directory missing or unreadable */ }
+  return null;
+}
+module.exports.resolveCcPidFromTerminalId = resolveCcPidFromTerminalId;
+
 // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3): lazy-load the ESM exec-context-guard
 // from this CJS module. Cached after first import to avoid repeated module
 // resolution. The guard's assertSweepHandoffGate() blocks current_phase resets
@@ -435,13 +475,21 @@ async function main() {
 
     // Cross-reference with PID marker files: if the CC process is alive on this
     // machine, the session is running even without recent heartbeats.
-    // terminal_id formats: "win-cc-{port}-{ccPid}" (CLI) or "win-{PID}" (Desktop).
-    // Extract the last segment as the PID to check against alive markers.
+    // terminal_id formats:
+    //   1. "win-cc-{port}-{ccPid}" (CLI, e.g. win-cc-13596-22408 → PID 22408)
+    //   2. "win-{ccPid}"           (Desktop, e.g. win-13596 → PID 13596)
+    //   3. UUID                    (resolve PID via .claude/session-identity/pid-*.json cc_pid)
+    // SD-LEO-INFRA-SESSION-IDENTITY-RECONCILIATION-001 (FR-3): explicit dispatch.
+    // Required because FR-4 deletes dead pid-*.json markers more aggressively;
+    // sweep needs deterministic PID resolution from a stable secondary source rather
+    // than naive last-segment-of-hyphen-split (which silently mis-classified UUID-format
+    // terminal_ids as having last-segment hex chars instead of a real PID).
     let hasPidAlive = false;
     if (s.terminal_id) {
-      const parts = s.terminal_id.split('-');
-      const ccPid = parts[parts.length - 1]; // last segment is the ccPid
-      hasPidAlive = aliveCcPids.has(ccPid);
+      const ccPid = resolveCcPidFromTerminalId(s.terminal_id, s.session_id);
+      if (ccPid != null) {
+        hasPidAlive = aliveCcPids.has(String(ccPid));
+      }
     }
 
     // Desktop sessions use heuristic liveness (claude.exe running + recent marker).
