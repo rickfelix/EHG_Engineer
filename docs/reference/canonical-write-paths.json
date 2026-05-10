@@ -1,0 +1,30 @@
+{
+  "generated_from": "docs/reference/canonical-write-paths.md",
+  "generated_at": "2026-05-10T18:37:01.277Z",
+  "rows": [
+    {
+      "table": "feedback",
+      "canonical_helper": "lib/governance/emit-feedback.js",
+      "exempt_writers": [
+        "scripts/log-harness-bug.js",
+        "scripts/lib/lead-precheck-helpers.js",
+        "lib/eva/lifecycle-sd-bridge.js",
+        "lib/eva/bridge/replit-format-strategies.js",
+        "lib/eva/bridge/replit-prompt-formatter.js",
+        "lib/quality/assist-engine.js",
+        "lib/sub-agents/retro/db-operations.js",
+        "lib/uat/result-recorder.js",
+        "scripts/audit-completed-sd-db-content-parity.js",
+        "scripts/one-off"
+      ],
+      "rationale": "log-harness-bug + lifecycle-sd-bridge are co-canonical PA-5 emitters; replit/quality/retro/uat writers are long-tail bypass sites surfaced by the registry (refactor to emitFeedback tracked in follow-up SD); scripts/one-off prefix exempts SD-specific one-off scripts (each carries its own SD-key in filename)."
+    },
+    {
+      "table": "security_audit_events",
+      "canonical_helper": "lib/security/audit-events-emitter.js",
+      "exempt_writers": [],
+      "rationale": "Direct writer at line 116; @canonical-writer-for tag carries authority."
+    }
+  ],
+  "schema_version": 1
+}
