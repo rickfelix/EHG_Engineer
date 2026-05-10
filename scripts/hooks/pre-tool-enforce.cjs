@@ -70,8 +70,10 @@ function _auditContextHash(inputRaw) {
 }
 
 /**
- * Fire-and-forget async write to permission_audit_log.
- * Called after every enforcement decision (allow/block/override/warn).
+ * Async write to permission_audit_log. Returns a promise so block-then-exit
+ * call sites can await briefly before process.exit (otherwise the fire-and-forget
+ * fetch is dropped before the network round-trip completes — QF-20260510-148).
+ * Allow/warn paths still treat it as fire-and-forget (no await) and pay no latency.
  * Failures are logged to stderr but NEVER block enforcement.
  *
  * @param {string} sessionId   - Claude Code session ID
@@ -80,12 +82,13 @@ function _auditContextHash(inputRaw) {
  * @param {string} ruleDesc    - Human-readable rule description
  * @param {string} outcome     - 'allow' | 'block' | 'override' | 'warn'
  * @param {Object} [metadata]  - Additional context (never contains secrets)
+ * @returns {Promise<void>}    - Resolves on POST completion (or skip/error)
  */
 function auditPermissionDecision(sessionId, toolName, ruleCode, ruleDesc, outcome, metadata) {
   try {
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey) return; // Missing credentials — skip silently
+    if (!supabaseUrl || !serviceKey) return Promise.resolve(); // Missing credentials — skip silently
 
     const url = supabaseUrl + '/rest/v1/permission_audit_log';
     const body = JSON.stringify({
@@ -98,8 +101,9 @@ function auditPermissionDecision(sessionId, toolName, ruleCode, ruleDesc, outcom
       metadata: metadata || {}
     });
 
-    // Fire and forget — no await, intentionally. Enforcement must not wait for audit.
-    fetch(url, {
+    // Returns the fetch promise: callers awaiting it (block-then-exit paths) pay
+    // ~one round-trip; callers that ignore it (allow/warn) keep prior fire-and-forget.
+    return fetch(url, {
       method: 'POST',
       headers: {
         'apikey': serviceKey,
@@ -115,6 +119,7 @@ function auditPermissionDecision(sessionId, toolName, ruleCode, ruleDesc, outcom
   } catch (e) {
     // Swallow all errors — audit must never throw
     process.stderr.write('[pre-tool-enforce] AUDIT ERROR (non-blocking): ' + e.message + '\n');
+    return Promise.resolve();
   }
 }
 
@@ -400,13 +405,20 @@ async function main() {
           } catch { /* ps/wmic failure = no peer detected (fail-open) */ }
         }
         if (signal) {
-          auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'NPM-INSTALL-RACE', 'npm install concurrency guard', 'block', { signal });
+          // QF-20260510-148: await audit before exit. Fire-and-forget + immediate
+          // process.exit(2) was dropping the POST mid-flight — table had 0 rows for
+          // NPM-INSTALL-RACE despite the rule firing. 1s timeout caps user-visible delay.
+          const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'NPM-INSTALL-RACE', 'npm install concurrency guard', 'block', { signal });
           process.stderr.write(
             `NPM INSTALL RACE GUARD (QF-20260426-822): refusing concurrent npm install.\n` +
             `  Signal: ${signal}\n` +
             `  Wait ~30-60s and retry, OR isolate via: npm run session:worktree -- --sd-key <key>\n` +
             `  If staging is stuck (no actual peer): rm -rf node_modules/.staging\n`
           );
+          await Promise.race([
+            Promise.resolve(auditPromise),
+            new Promise(resolve => setTimeout(resolve, 1000))
+          ]).catch(() => { /* audit never blocks enforcement */ });
           process.exit(2);
         }
       } catch { /* fail-open on any internal error */ }
