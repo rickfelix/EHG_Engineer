@@ -226,3 +226,121 @@ describe('QF-484 ENF-SD-CREATE-SKILL: bypass mechanisms', () => {
     expect(r.code).toBe(0);
   });
 });
+
+// SD-FDBK-INFRA-ALLOW-FORCE-LEASE-001 ENF-15: force-push gate.
+// 5-condition AND gate (env-var + sole-author + branch-allowlist + --with-lease + non-protected).
+// Decision tree cascades deny-by-default. Test seam: TEST_OVERRIDE_BRANCH and
+// TEST_OVERRIDE_GIT_LOG short-circuit the git subprocess calls (the hook is spawned as
+// a CJS subprocess — module-level mocking does not apply).
+describe('ENF-15: force-push gate (SD-FDBK-INFRA-ALLOW-FORCE-LEASE-001)', () => {
+  it('T1 blocks bare --force regardless of env var', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git push origin HEAD --force'),
+      { LEO_FORCE_PUSH_OWN_BRANCH: 'allow', TEST_OVERRIDE_BRANCH: 'feat/SD-X' }
+    );
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/\[ENF-15\] BLOCKED reason=bare_force_disallowed/);
+  });
+
+  it('T2 blocks --force-with-lease on main even with env=allow', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git push --force-with-lease origin HEAD'),
+      { LEO_FORCE_PUSH_OWN_BRANCH: 'allow', TEST_OVERRIDE_BRANCH: 'main' }
+    );
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/\[ENF-15\] BLOCKED reason=protected_branch_denylist/);
+  });
+
+  it('T3 blocks when env var unset (default flag-OFF)', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git push --force-with-lease'),
+      { LEO_FORCE_PUSH_OWN_BRANCH: '', TEST_OVERRIDE_BRANCH: 'feat/SD-X' }
+    );
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/\[ENF-15\] BLOCKED reason=env_var_unset/);
+  });
+
+  it('T4 blocks when branch is not in SD/QF allowlist', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git push --force-with-lease'),
+      { LEO_FORCE_PUSH_OWN_BRANCH: 'allow', TEST_OVERRIDE_BRANCH: 'hotfix/123' }
+    );
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/\[ENF-15\] BLOCKED reason=branch_not_allowlisted/);
+  });
+
+  it('T5 blocks when commit reachable from origin/main..HEAD has non-self email', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git push --force-with-lease'),
+      {
+        LEO_FORCE_PUSH_OWN_BRANCH: 'allow',
+        TEST_OVERRIDE_BRANCH: 'feat/SD-X',
+        TEST_OVERRIDE_USER_EMAIL: 'me@example.com',
+        TEST_OVERRIDE_GIT_LOG: 'me@example.com,me@example.com\nother@example.com,me@example.com'
+      }
+    );
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/\[ENF-15\] BLOCKED reason=multi_author_branch/);
+  });
+
+  it('T6 grants override on solo SD branch when all 5 conditions pass', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git push --force-with-lease'),
+      {
+        LEO_FORCE_PUSH_OWN_BRANCH: 'allow',
+        TEST_OVERRIDE_BRANCH: 'feat/SD-FDBK-INFRA-ALLOW-FORCE-LEASE-001',
+        TEST_OVERRIDE_USER_EMAIL: 'me@example.com',
+        TEST_OVERRIDE_GIT_LOG: 'me@example.com,me@example.com\nme@example.com,me@example.com'
+      }
+    );
+    expect(r.code).toBe(0);
+    expect(r.stderr).not.toMatch(/\[ENF-15\] BLOCKED/);
+  });
+
+  it('T7 blocks --force-with-lease on release/* branch (denylist match)', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git push --force-with-lease'),
+      { LEO_FORCE_PUSH_OWN_BRANCH: 'allow', TEST_OVERRIDE_BRANCH: 'release/v2.0' }
+    );
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/\[ENF-15\] BLOCKED reason=protected_branch_denylist/);
+  });
+
+  it('T8 unrelated git commands are not affected by ENF-15', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git push origin HEAD'),
+      { LEO_FORCE_PUSH_OWN_BRANCH: 'allow', TEST_OVERRIDE_BRANCH: 'feat/SD-X' }
+    );
+    // Plain git push (no --force) must pass-through ENF-15 — should not match the gate.
+    expect(r.stderr).not.toMatch(/\[ENF-15\] BLOCKED/);
+  });
+
+  it('T9 bypasses gate when command contains --help', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git push --force-with-lease --help'),
+      { LEO_FORCE_PUSH_OWN_BRANCH: '' } // even with env unset
+    );
+    expect(r.stderr).not.toMatch(/\[ENF-15\] BLOCKED/);
+  });
+});
+
+// ENF-15 sole-contributor: requires git config user.email parity. The T6 success path
+// relies on git config in CI returning a value; vitest CI sets git config. The test
+// would otherwise fall through to git_error when user.email is empty — covered by T10.
+describe('ENF-15: git-environment edge cases', () => {
+  it('T10 blocks when commit log shows different email than current user', async () => {
+    // When user.email is "me@example.com" but commit log only has "someone-else@example.com",
+    // the gate must block (no parity between current user identity and branch authors).
+    const r = await spawnHookEnforce(
+      bashPayload('git push --force-with-lease'),
+      {
+        LEO_FORCE_PUSH_OWN_BRANCH: 'allow',
+        TEST_OVERRIDE_BRANCH: 'feat/SD-X',
+        TEST_OVERRIDE_USER_EMAIL: 'me@example.com',
+        TEST_OVERRIDE_GIT_LOG: 'someone-else@example.com,someone-else@example.com'
+      }
+    );
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/\[ENF-15\] BLOCKED reason=multi_author_branch/);
+  });
+});
