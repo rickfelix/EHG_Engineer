@@ -35,6 +35,7 @@ import {
 import { checkBypassRateLimits, displayExecutionResult } from './execution-helpers.js';
 import { detectBlockers, DETECTION_TIMEOUT_MS } from '../blocker-resolution.js';
 import { analyzeClaimRelationship, autoReleaseStaleDeadClaim } from '../../sd-next/claim-analysis.js';
+import { writeCompactAfterHandoffFlag } from './compact-after-handoff.js';
 
 // LEO 5.0 commands
 import {
@@ -848,6 +849,9 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
 
   // Display results
   await displayExecutionResult(result, handoffType, sdId);
+
+  // QF-20260510-387: Phase-aware /compact nudge on handoff success.
+  if (result.success) writeCompactAfterHandoffFlag(handoffType, sdId);
 
   return { success: result.success, sdId, handoffType, result };
 }
