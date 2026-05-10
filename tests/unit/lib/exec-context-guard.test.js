@@ -37,19 +37,41 @@ const {
 } = await import('../../../lib/exec-context-guard.mjs');
 
 /**
- * Build a Supabase chain stub returning the supplied handoffs for the
- * .from('sd_phase_handoffs').select(...).or(...).eq(...) chain that
- * assertSweepHandoffGate uses.
+ * Build a Supabase chain stub for assertSweepHandoffGate.
+ *
+ * After SD-FDBK-ENH-CASCADE-TRIGGER-3627-001 FR-1 the function uses two table
+ * paths:
+ *   1. strategic_directives_v2 .select('id').eq('sd_key', X).maybeSingle()
+ *      — sd_key→UUID resolver (called when input is not UUID-format).
+ *   2. sd_phase_handoffs .select(...).eq('sd_id', X).eq('status', 'accepted')
+ *      — accepted-handoffs query.
+ *
+ * The stub dispatches by table. Default sd_key→UUID resolves to a fixed UUID
+ * so callers passing 'SD-XXX-001' transparently route to the handoff query.
  */
-function makeSupabaseStub(handoffs, error = null) {
+function makeSupabaseStub(handoffs, error = null, opts = {}) {
+  const sdRow = opts.sdRow !== undefined ? opts.sdRow : { id: '00000000-0000-0000-0000-000000000001' };
+  const sdLookupErr = opts.sdLookupErr !== undefined ? opts.sdLookupErr : null;
   return {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        or: vi.fn(() => ({
-          eq: vi.fn(() => Promise.resolve({ data: handoffs, error })),
+    from: vi.fn((table) => {
+      if (table === 'strategic_directives_v2') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(() => Promise.resolve({ data: sdRow, error: sdLookupErr })),
+            })),
+          })),
+        };
+      }
+      // sd_phase_handoffs
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn(() => Promise.resolve({ data: handoffs, error })),
+          })),
         })),
-      })),
-    })),
+      };
+    }),
   };
 }
 
