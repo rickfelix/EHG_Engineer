@@ -183,7 +183,18 @@ async function main() {
   process.exit(1);
 }
 
-main().catch(e => {
-  console.error('[session:check-concurrency] error:', e.message);
-  process.exit(2);
-});
+// Entrypoint guard: only run main() when invoked as a CLI, NOT when this
+// module is statically re-exported (e.g. lib/claim-lifecycle-release.mjs's
+// `export { detectSdKeyDrift } from '../scripts/session-check-concurrency.js'`).
+// Without this guard the static re-export would trigger main() during ESM
+// evaluation, and main() calls process.exit(0) on the no-contention path —
+// silently aborting any consumer (notably handoff.js at PRE-HANDOFF MIGRATION
+// CHECK). 3rd witness in 7d as of 2026-05-10. RCA: feedback b1e9d6c1.
+const { pathToFileURL } = await import('url');
+const isDirectInvoke = import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectInvoke) {
+  main().catch(e => {
+    console.error('[session:check-concurrency] error:', e.message);
+    process.exit(2);
+  });
+}
