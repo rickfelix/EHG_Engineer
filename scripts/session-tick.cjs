@@ -155,14 +155,19 @@ async function tickOnce() {
     } else {
       // Steady state — SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001 FR-4: update BOTH columns.
       // claim-guard.mjs keys claim TTL on heartbeat_at (300s stale threshold).
-      const url = `${baseUrl}?session_id=eq.${encodeURIComponent(sessionId)}`;
-      await fetch(url, {
+      // QF-20260509-187 FR-2: filter `status=eq.active` so released rows are NOT
+      // patched (read-modify-write hazard guard). When the row is released by FR-1
+      // or by stale-session-sweep, this PATCH becomes a 0-row no-op and the
+      // `Prefer: count=exact` header surfaces it. Closes sibling-phantom 18b90582
+      // class (orphan tick patching released rows for hours).
+      const url = `${baseUrl}?session_id=eq.${encodeURIComponent(sessionId)}&status=eq.active`;
+      const res = await fetch(url, {
         method: 'PATCH',
         headers: {
           apikey: supabaseKey,
           Authorization: `Bearer ${supabaseKey}`,
           'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
+          Prefer: 'return=minimal,count=exact',
         },
         body: JSON.stringify({
           process_alive_at: now,
@@ -170,6 +175,15 @@ async function tickOnce() {
         }),
         signal: controller.signal,
       });
+      // Content-Range header carries `0-N/total`; total=0 means row is released.
+      // Stop ticking — preserves no-op semantics today, prevents future restart-on-released.
+      const contentRange = res.headers.get('Content-Range') || '';
+      const totalMatch = contentRange.match(/\/(\d+)$/);
+      if (totalMatch && totalMatch[1] === '0') {
+        if (debug) console.error('session-tick: row released, stopping tick loop');
+        try { clearInterval(tickInterval); } catch { /* may not be defined yet */ }
+        cleanupAndExit(0);
+      }
     }
   } catch {
     // swallow — next tick will retry. Never crash the tick loop.
@@ -237,11 +251,49 @@ function emitEarlyExitTelemetry(exitCode, lifetimeMs) {
   }
 }
 
+// QF-20260509-187 FR-1: fail-soft PATCH to release the claude_sessions row when the
+// detached tick is exiting. Closes phantom-active-session class (witnessed
+// 824a4401 + 18b90582) where parent CC dies and the row stays status=active
+// until stale-session-sweep eventually catches it (minutes-to-hours later).
+// 1s timeout, fire-and-forget — never blocks process exit.
+const RELEASE_HTTP_TIMEOUT_MS = 1000;
+function releaseRowOnExitBestEffort(reason) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) return;
+  try {
+    const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions?session_id=eq.${encodeURIComponent(sessionId)}&status=eq.active`;
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), RELEASE_HTTP_TIMEOUT_MS);
+    fetch(url, {
+      method: 'PATCH',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        status: 'released',
+        released_at: new Date().toISOString(),
+        released_reason: reason,
+      }),
+      signal: controller.signal,
+    }).catch(() => { /* best-effort */ });
+  } catch {
+    /* never block exit */
+  }
+}
+
 function cleanupAndExit(code) {
   const lifetimeMs = Date.now() - startedAt;
   if (lifetimeMs < EARLY_EXIT_THRESHOLD_MS) {
     try { emitEarlyExitTelemetry(code, lifetimeMs); } catch { /* never block exit */ }
   }
+  // QF-20260509-187 FR-1: best-effort PATCH to released BEFORE deleteMarker+exit.
+  // Reason tag lets ops grep by lifecycle path. status=eq.active filter avoids
+  // clobbering rows already released by sweep or another path (idempotent).
+  try { releaseRowOnExitBestEffort('TICK_PARENT_ESRCH'); } catch { /* never block exit */ }
   deleteMarker();
   process.exit(code);
 }
