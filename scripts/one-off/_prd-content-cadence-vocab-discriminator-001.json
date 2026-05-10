@@ -1,0 +1,239 @@
+{
+  "title": "PRD: Cadence-vocab discriminator for lib/cadence/pre-claim-gate.mjs",
+  "executive_summary": "lib/cadence/pre-claim-gate.mjs:46-80 currently treats governance_metadata.next_workable_after as a hard PR-cadence refusal whenever the timestamp is in the future. This misclassifies SDs that populate next_workable_after as advisory milestones alongside metadata.unlock_gate.type='usage_signal' or 'value_proof' (event-based unlock semantics). Two child SDs (SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B and -C) are stuck in DRAFT/LEAD because the cadence gate, child-sd-selector, status-helpers, and sd-start refuse claims. This PRD adds an explicit allowlist of refusal-eligible unlock_gate.type values (pr_cadence, time_window) and routes all other event-based types through a non-blocking source='unlock_gate_advisory' path. Consumers branch on state.source to log informationally rather than skip. Backward compatibility preserved for the no-unlock_gate path (existing PR-cadence semantics unchanged). Closes 19th-candidate witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 (cadence-vocab variant).",
+
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "lib/cadence/pre-claim-gate.mjs computeGateState must inspect metadata.unlock_gate before falling through to next_workable_after / pr_cadence_minimum_days. When metadata.unlock_gate is a non-null object with a string .type field NOT present in the exported CADENCE_REFUSAL_TYPES allowlist (default ['pr_cadence', 'time_window']), the function must early-return GateState shape { active: false, gate_until: governance_metadata.next_workable_after || null, days_remaining: null, reason: <descriptive>, source: 'unlock_gate_advisory' } regardless of the next_workable_after timestamp.",
+      "acceptance_criteria": [
+        "Vitest case: computeGateState with metadata.unlock_gate.type='usage_signal' and governance_metadata.next_workable_after set 5 years in the future returns active=false, source='unlock_gate_advisory'",
+        "Vitest case: computeGateState with metadata.unlock_gate.type='value_proof' returns active=false, source='unlock_gate_advisory'",
+        "Vitest case: computeGateState with metadata.unlock_gate.type='pr_cadence' AND next_workable_after in future falls through to existing logic and returns active=true, source='next_workable_after'",
+        "Vitest case: computeGateState with no metadata.unlock_gate AND next_workable_after in future preserves existing behavior (active=true, source='next_workable_after')"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "CADENCE_REFUSAL_TYPES must be an exported, Object.frozen Set literal in lib/cadence/pre-claim-gate.mjs. Default membership: ['pr_cadence', 'time_window']. Mirrors the freeze pattern used in lib/sd-type-enum.js CANONICAL_SD_TYPES. The Set is consulted by both producers (e.g. future writers wanting to assert refusal-eligibility) and consumers via computeGateState.",
+      "acceptance_criteria": [
+        "import { CADENCE_REFUSAL_TYPES } from 'lib/cadence/pre-claim-gate.mjs' succeeds",
+        "CADENCE_REFUSAL_TYPES instanceof Set === true and CADENCE_REFUSAL_TYPES.size === 2",
+        "CADENCE_REFUSAL_TYPES.add('foo') throws TypeError (Object.frozen Set)",
+        "Static-pin regex test asserts the literal new Set(['pr_cadence', 'time_window']) string appears in the source within the computeGateState helper region"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "scripts/modules/handoff/child-sd-selector.js lines 81-91 cadenceCleared filter must branch on state.source. When source==='unlock_gate_advisory' the child must NOT be filtered out — the function logs an informational message including '(informational — does not affect verdict)' (canonical phrase from child-sd-preflight.js) and returns true to retain the child in the candidate set. When state.active is true and source !== 'unlock_gate_advisory', existing skip behavior is preserved.",
+      "acceptance_criteria": [
+        "Vitest case asserting a child with metadata.unlock_gate.type='usage_signal' is NOT filtered out by cadenceCleared",
+        "Vitest case asserting a child with metadata.unlock_gate absent but next_workable_after in future IS filtered out (existing behavior preserved)",
+        "Console output for advisory case contains the literal substring '(informational — does not affect verdict)'"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "scripts/modules/sd-next/status-helpers.js getCadenceBadge and getCadenceReason must return empty string (no badge / no reason text) when computeGateState returns source='unlock_gate_advisory'. The existing CADENCE-WAIT magenta badge MUST NOT render for advisory states. Function signatures and return types unchanged for the non-advisory paths.",
+      "acceptance_criteria": [
+        "Vitest case: getCadenceBadge with metadata.unlock_gate.type='value_proof' returns '' (empty string)",
+        "Vitest case: getCadenceReason with metadata.unlock_gate.type='usage_signal' returns '' (empty string)",
+        "Vitest case: existing CADENCE-WAIT badge still renders when no unlock_gate present"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "scripts/sd-start.js cadence refusal point (current location ~line 470, invokes computeGateState + formatRefusalMessage) must mirror the new source-aware behavior. When state.active is false (including the new advisory path), no refusal is emitted. When state.active is true and state.source !== 'unlock_gate_advisory', the existing refusal flow is preserved including CADENCE_GATE_REFUSED audit-log row. No audit-log row is written for the advisory path (avoids misleading telemetry per validation-agent warning #4).",
+      "acceptance_criteria": [
+        "Static-pin regex test asserts scripts/sd-start.js cadence-refusal block reads state.source",
+        "No CADENCE_GATE_REFUSED audit-log row is inserted when source='unlock_gate_advisory'",
+        "Existing CADENCE_GATE_REFUSED audit-log behavior preserved for true cadence refusals"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "requirement": "formatRefusalMessage in lib/cadence/pre-claim-gate.mjs must include the source value in the formatted output so operators can distinguish unlock_gate_advisory from PR-cadence refusals. Existing 'source:' line must surface the new value verbatim.",
+      "acceptance_criteria": [
+        "Vitest case: formatRefusalMessage with gateState.source='unlock_gate_advisory' produces output containing the substring 'source:     unlock_gate_advisory'",
+        "Existing tests for source='next_workable_after' and source='derived_from_session_log' continue to pass"
+      ]
+    }
+  ],
+
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "Implementation must be backward-compatible: all callers passing only governance_metadata or only metadata.pr_cadence_minimum_days continue to receive identical GateState shape (no new required fields). New source value 'unlock_gate_advisory' is additive to the GateState.source enum.",
+      "verification": "Run scripts/modules/handoff/__tests__/ + tests/unit/cadence/ + tests/unit/sd-next/ — full regression must pass without breakage."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "CADENCE_REFUSAL_TYPES must be a frozen Set (not array) for O(1) membership lookup. Use Object.freeze(new Set([...])) idiom matching lib/sd-type-enum.js CANONICAL_SD_TYPES export pattern (precedent from SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001).",
+      "verification": "Direct mutation attempt (CADENCE_REFUSAL_TYPES.add) throws TypeError; type-check via typeof CADENCE_REFUSAL_TYPES === 'object' && CADENCE_REFUSAL_TYPES instanceof Set."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "Static-pin regression-guard test pattern: tests use fs.readFileSync + regex on a scoped helper region (NOT full file content) to avoid false-matches with JSDoc comments or unrelated code. Scope via const helperRegion = src.slice(src.indexOf('export function computeGateState'), src.indexOf('function buildGateState')) per SD-FDBK-INFRA-ORCHESTRATOR-ROUTING-PHASE-001 lesson learned (avoids `grandchildren.length > 0` false-matches).",
+      "verification": "Code review of pin test files confirms scoped slice extraction; tests pass when correct literal is present; tests fail when literal is mutated."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "Module load assertion at test-import time validates: (a) CADENCE_REFUSAL_TYPES is exported, frozen, Set; (b) computeGateState function exists; (c) formatRefusalMessage function exists. Throws fail-loud with descriptive error if any assertion fails. Pattern: precedent from SD-LEO-INFRA-WORKTREE-CLEANUP-WINDOWS-001.",
+      "verification": "Test file's top-level import block contains assertion calls; intentional removal of exports triggers test-time fail-loud."
+    },
+    {
+      "id": "TR-5",
+      "requirement": "Pre-merge DB audit query must be run during EXEC phase to enumerate existing metadata.unlock_gate.type values. Query: SELECT DISTINCT metadata->'unlock_gate'->>'type' AS t, COUNT(*) FROM strategic_directives_v2 WHERE metadata ? 'unlock_gate' GROUP BY 1. Results documented in EXEC commit message + sub_agent_execution_results metadata. Expected at PRD-time: 2 distinct values (value_proof, usage_signal). If new unknown values surface mid-EXEC, evaluate whether to extend CADENCE_REFUSAL_TYPES OR document as additional advisory types.",
+      "verification": "EXEC commit includes audit query output. If audit surfaces unknown type values, sub_agent_execution_results for testing-exec contains explicit acknowledgment of disposition."
+    }
+  ],
+
+  "acceptance_criteria": [
+    "AC-1: All 4 modified source files (lib/cadence/pre-claim-gate.mjs, scripts/modules/handoff/child-sd-selector.js, scripts/modules/sd-next/status-helpers.js, scripts/sd-start.js) pass linting + their module-load assertions at test-import time",
+    "AC-2: Vitest run on tests/unit/cadence/ + new pin tests achieves 100% pass with at minimum 8 NEW test cases (4 computeGateState scenarios + 2 consumer scenarios + 2 formatRefusalMessage scenarios) and 0 regressions in pre-existing handoff/sd-next test suites",
+    "AC-3: Live smoke validation post-merge — npm run sd:next no longer shows CADENCE-WAIT N day(s) badge for SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B and -C. node scripts/sd-start.js --child SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B is no longer refused with cadence-gate message.",
+    "AC-4: PR opened against rickfelix/EHG_Engineer with title 'fix(SD-FDBK-ENH-CADENCE-VOCAB-DISCRIMINATOR-001): cadence-vocab discriminator for unlock_gate advisory states' and body containing 'Closes feedback 41f703dc-8196-4278-95f1-4b1dab36cf28' + 'Closes (witness) PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 19th candidate (cadence-vocab variant)'",
+    "AC-5: Retrospective generated post-merge with quality_score >=70, learning_category not in ['APPLICATION_ISSUE' without affected_components], retrospective_type IS NULL (gate filter invariant)"
+  ],
+
+  "system_architecture": {
+    "overview": "Single-helper-and-consumers fix in EHG_Engineer harness internals. The architecture is unchanged at the macro level: producers continue to author governance_metadata.next_workable_after and metadata.unlock_gate, consumers (child-sd-selector, status-helpers, sd-start) continue to call computeGateState({governance_metadata, metadata}). The new logic is internal to computeGateState: an early-return branch that fires when metadata.unlock_gate is present and unlock_gate.type is not in the CADENCE_REFUSAL_TYPES allowlist. All consumers are updated to recognize the new state.source value ('unlock_gate_advisory') and surface it informationally rather than block.",
+    "components": [
+      "lib/cadence/pre-claim-gate.mjs — single source-of-truth for cadence gate state. Adds: CADENCE_REFUSAL_TYPES (frozen Set), updated computeGateState with unlock_gate discriminator branch, updated formatRefusalMessage to surface source value",
+      "scripts/modules/handoff/child-sd-selector.js — orchestrator preflight router. Updates lines 81-91 cadenceCleared filter to branch on state.source",
+      "scripts/modules/sd-next/status-helpers.js — sd:next dashboard renderer. Updates getCadenceBadge + getCadenceReason to suppress badge for advisory states",
+      "scripts/sd-start.js — SD claim entry point. Updates cadence-refusal block ~line 470 to skip refusal when source='unlock_gate_advisory'",
+      "tests/unit/cadence/pre-claim-gate-discriminator.test.mjs — NEW vitest file with 4 computeGateState scenarios + 2 formatRefusalMessage scenarios",
+      "tests/unit/handoff/child-sd-selector-unlock-gate.test.mjs — NEW vitest file with 2 consumer scenarios",
+      "tests/unit/cadence/pre-claim-gate-static-guard.test.mjs — NEW static-pin regression test (fs.readFileSync + scoped regex)"
+    ],
+    "data_flow": "1) SD-author writes metadata.unlock_gate = {type, trigger, measured_via} alongside (optional) governance_metadata.next_workable_after milestone. 2) Caller invokes computeGateState({governance_metadata, metadata}). 3) computeGateState inspects metadata.unlock_gate FIRST — if present with type NOT in CADENCE_REFUSAL_TYPES, early-returns {active:false, source:'unlock_gate_advisory', gate_until:next_workable_after||null, days_remaining:null}. 4) If unlock_gate absent OR type in allowlist, falls through to existing next_workable_after + pr_cadence_minimum_days logic. 5) Consumers (child-sd-selector, status-helpers, sd-start) inspect both state.active AND state.source to decide whether to skip, render badge, or refuse claim.",
+    "integration_points": [
+      "Producers: leo-create-sd.js / one-off SD authors writing metadata.unlock_gate.type",
+      "Consumers: scripts/modules/handoff/child-sd-selector.js (cadenceCleared filter), scripts/modules/sd-next/status-helpers.js (getCadenceBadge, getCadenceReason), scripts/sd-start.js (cadence refusal point ~line 470), and any future caller of computeGateState",
+      "Audit logging: scripts/sd-start.js CADENCE_GATE_REFUSED audit-log row insertion (suppressed for advisory states per FR-5)",
+      "DB schema: strategic_directives_v2.metadata.unlock_gate JSONB structure (unchanged); strategic_directives_v2.governance_metadata.next_workable_after (unchanged); no migrations"
+    ]
+  },
+
+  "implementation_approach": {
+    "phases": [
+      "Phase 1 (~10 min): Pre-merge DB audit. Run SELECT DISTINCT metadata->'unlock_gate'->>'type' query. Document result in EXEC commit body.",
+      "Phase 2 (~30 min): lib/cadence/pre-claim-gate.mjs — add CADENCE_REFUSAL_TYPES export + unlock_gate discriminator branch in computeGateState + update formatRefusalMessage. Write JSDoc explaining the vocabulary semantics.",
+      "Phase 3 (~20 min): Update 3 consumers (child-sd-selector lines 81-91, status-helpers getCadenceBadge+getCadenceReason, sd-start cadence-refusal block). Each consumer branches on state.source.",
+      "Phase 4 (~30 min): Write 3 vitest test files (computeGateState scenarios, consumer scenarios, static-pin guard). Use fs.readFileSync + scoped slice pattern.",
+      "Phase 5 (~10 min): Run npx vitest, fix any regressions. Commit with structured message."
+    ],
+    "tools": "vitest (existing test runner); supabase-js (DB audit query); git worktree (feat/SD-FDBK-ENH-CADENCE-VOCAB-DISCRIMINATOR-001); pgrep/process-aware sd-start.js",
+    "branch_strategy": "Single feature branch feat/SD-FDBK-ENH-CADENCE-VOCAB-DISCRIMINATOR-001 created by scripts/sd-start.js. All edits within one worktree. Single PR to origin/main."
+  },
+
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "computeGateState with metadata.unlock_gate.type='usage_signal' and governance_metadata.next_workable_after='2030-01-01T00:00:00Z' returns {active:false, source:'unlock_gate_advisory', gate_until:'2030-01-01T00:00:00Z', days_remaining:null}",
+      "test_type": "unit",
+      "expected_result": "Returned GateState object matches the assertion. days_remaining MUST be null (NOT a positive integer)."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "computeGateState with metadata.unlock_gate.type='value_proof' returns identical advisory shape as TS-1 — both event-based types follow the same advisory path",
+      "test_type": "unit",
+      "expected_result": "active=false, source='unlock_gate_advisory'"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Backward-compat: computeGateState with NO metadata.unlock_gate + future next_workable_after returns existing shape (active:true, source:'next_workable_after', positive days_remaining)",
+      "test_type": "regression",
+      "expected_result": "Existing behavior preserved exactly — no source field drift, no days_remaining computation change."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Refusal-eligible: computeGateState with metadata.unlock_gate.type='pr_cadence' falls through to next_workable_after logic and returns active:true when timestamp is future-dated",
+      "test_type": "unit",
+      "expected_result": "active=true, source='next_workable_after' — unlock_gate is present but allowlist match preserves refusal"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Consumer: child-sd-selector.js cadenceCleared filter retains child with metadata.unlock_gate.type='usage_signal' (does NOT filter out)",
+      "test_type": "integration",
+      "expected_result": "filter result includes the child; console output contains '(informational — does not affect verdict)'"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Consumer: getCadenceBadge returns empty string for advisory-source GateState (no magenta CADENCE-WAIT badge rendered)",
+      "test_type": "unit",
+      "expected_result": "Empty string return value; existing badge rendering for non-advisory source preserved"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "Static-pin guard: file content of lib/cadence/pre-claim-gate.mjs contains the literal CADENCE_REFUSAL_TYPES = new Set(['pr_cadence', 'time_window']) within the helper region between 'export function computeGateState' and 'function buildGateState'",
+      "test_type": "static_guard",
+      "expected_result": "fs.readFileSync + regex match succeeds within scoped slice; full-file regex (without slicing) would be too permissive and risk JSDoc false-matches"
+    },
+    {
+      "id": "TS-8",
+      "scenario": "Module-load assertion: importing lib/cadence/pre-claim-gate.mjs and asserting CADENCE_REFUSAL_TYPES instanceof Set + Object.isFrozen(CADENCE_REFUSAL_TYPES) returns true",
+      "test_type": "unit",
+      "expected_result": "Both assertions pass; intentional removal of Object.freeze in mutated source triggers test failure"
+    },
+    {
+      "id": "TS-9",
+      "scenario": "Smoke: post-merge npm run sd:next no longer renders [CADENCE-WAIT 1 day] or [CADENCE-WAIT 114 days] badges for SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B / -C respectively",
+      "test_type": "smoke",
+      "expected_result": "Track B display shows the children without blocking cadence badges; SDs appear claimable per /leo next ranking"
+    }
+  ],
+
+  "risks": [
+    {
+      "id": "R-1",
+      "risk": "Backward incompatibility: existing SDs may have authored metadata.unlock_gate.type values not enumerated in CADENCE_REFUSAL_TYPES. Switching the default to non-blocking could allow claims that prior versions would have refused.",
+      "mitigation": "Pre-merge DB audit (TR-5) enumerates current values. At PRD-time only 2 types observed: value_proof, usage_signal — both intentionally non-blocking. The allowlist (pr_cadence, time_window) is explicit and narrow. JSDoc on computeGateState documents the contract.",
+      "rollback_plan": "Revert PR. The change is additive only (new exported Set, new branch in one function); no schema changes, no DB writes. Reverting restores pre-change behavior identically.",
+      "severity": "medium",
+      "likelihood": "low"
+    },
+    {
+      "id": "R-2",
+      "risk": "Consumer test breakage: existing tests in tests/unit/handoff/ or tests/unit/sd-next/ may assert active=true on next_workable_after presence with mock metadata that accidentally includes a non-allowlist unlock_gate type.",
+      "mitigation": "TR-3 scoped static-pin pattern + R-TEST-1 mitigation from risk-agent: gate the new early-return on metadata.unlock_gate PRESENCE (typeof object check). Tests not setting metadata.unlock_gate are unaffected. Run full lib/eva regression to catch any breakage.",
+      "rollback_plan": "If regression tests reveal breakage, expand CADENCE_REFUSAL_TYPES to include the surprising type values OR refine the early-return predicate to require a stricter unlock_gate shape (.type must be string, must be in known-types Set).",
+      "severity": "medium",
+      "likelihood": "low"
+    },
+    {
+      "id": "R-3",
+      "risk": "Phantom-compliance: static-pin guard regex could match JSDoc comment text containing the literal 'CADENCE_REFUSAL_TYPES = new Set' rather than the actual implementation, causing false-pass on a mutated source file.",
+      "mitigation": "TR-3 + R-PHANTOM-1 mitigation from risk-agent: scope regex to slice between explicit function anchors (between /export function computeGateState/ and next /^function buildGateState/ or /^export/). Document the slicing in the test file. Mutation-test: intentionally remove the literal from source and confirm test fails.",
+      "rollback_plan": "If false-pass discovered, expand slice anchors to include both the Set literal AND the early-return branch using state.source assignment. Pin tests are cheap to refine.",
+      "severity": "low",
+      "likelihood": "low"
+    },
+    {
+      "id": "R-4",
+      "risk": "Audit-log telemetry pollution: scripts/sd-start.js CADENCE_GATE_REFUSED row could be inserted for advisory-path encounters, misclassifying advisory states as refusals in downstream analytics.",
+      "mitigation": "FR-5 + validation-agent warning #4: gate audit-log insertion on source !== 'unlock_gate_advisory'. Add explicit check + comment at the audit-log call site. Vitest can mock the audit-log insert and assert 0 calls for advisory states.",
+      "rollback_plan": "If audit-log pollution detected post-merge, run DELETE FROM audit_log WHERE category='CADENCE_GATE_REFUSED' AND created_at>=<PR-merge-time> AND sd_key IN (advisory SDs). Patch the audit-log call site with the missing guard.",
+      "severity": "low",
+      "likelihood": "low"
+    }
+  ],
+
+  "out_of_scope": [
+    "P2 ghost-completion partial-revert (atomic-revert helper + DB invariant) — separate feedback 0a06a05a-3c52-41ba-9c5e-d62582d5395a",
+    "P3 orchestrator-routing parent-phase awareness — already shipped in SD-FDBK-INFRA-ORCHESTRATOR-ROUTING-PHASE-001 (PR #3684)",
+    "P4 parent.metadata.child_count auto-maintenance — separate feedback 1a9d108a-2cde-479f-9704-6c1f0f07d500",
+    "Schema migrations to metadata.unlock_gate structure — out of scope; the field is already authored",
+    "EVA vision-document linkage / arch_key wiring — unrelated to cadence-gate vocabulary",
+    "Changes to producers that author metadata.unlock_gate (writers stay as-is)"
+  ],
+
+  "success_metrics": [
+    { "metric": "Vitest pass rate for tests/unit/cadence/ + new pin tests", "target": "100%", "actual": "TBD post-EXEC" },
+    { "metric": "Lib/eva regression test baseline change", "target": "0 new failures", "actual": "TBD post-EXEC" },
+    { "metric": "PR merged status", "target": "merged into origin/main", "actual": "TBD post-LEAD-FINAL" },
+    { "metric": "SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B/-C cadence-wait badge removed in /leo next", "target": "0 CADENCE-WAIT badges for these 2 SDs", "actual": "TBD post-merge smoke test" },
+    { "metric": "Retrospective quality_score", "target": ">=70", "actual": "TBD post-merge" }
+  ]
+}

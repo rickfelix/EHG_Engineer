@@ -78,11 +78,20 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
     // past the same window that direct sd-start would refuse.
     // (Closes feedback row f52246de — orchestrator preflight router bypassed
     // the cadence gate from PR #3353 / SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001.)
+    //
+    // SD-FDBK-ENH-CADENCE-VOCAB-DISCRIMINATOR-001: branch on state.source so
+    // unlock_gate_advisory (event-based gate types like 'usage_signal' /
+    // 'value_proof') is surfaced informationally rather than filtered out.
     const cadenceCleared = unblocked.filter(child => {
       const state = computeGateState({
         governance_metadata: child.governance_metadata,
         metadata: child.metadata,
       });
+      if (state.source === 'unlock_gate_advisory') {
+        const gateTypeStr = child.metadata?.unlock_gate?.type || 'unknown';
+        console.log(`   [child-sd-selector] ${child.sd_key || child.id} unlock_gate=${gateTypeStr} (informational — does not affect verdict)`);
+        return true;
+      }
       if (state.active) {
         console.log(`   [child-sd-selector] Skipping ${child.sd_key || child.id} - cadence gate active (${state.days_remaining}d until ${state.gate_until})`);
         return false;
