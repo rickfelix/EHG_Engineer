@@ -19,6 +19,7 @@ import {
   buildRecord,
   preserveUntrackedFiles,
   runPhantomOnlyMode,
+  loadClaimMap,
 } from '../../scripts/worktree-reaper.mjs';
 
 // ── parseArgs ──────────────────────────────────────────────────────────
@@ -240,5 +241,102 @@ describe('runPhantomOnlyMode (legacy compatibility)', () => {
       expect(logs.join('\n')).toMatch(/directory missing/);
       expect(logs.join('\n')).toMatch(/marked prunable/);
     } finally { console.log = origLog; }
+  });
+});
+
+// ── loadClaimMap ───────────────────────────────────────────────────────
+// QF-20260510-WT-CLAIM-PROTECT-001 regression pins.
+// Prior bug: query referenced v_active_sessions.worktree_path which does not
+// exist on the view; PostgrestError was silently swallowed → empty claim map
+// → all active sessions classified claim_status=absent → eligible for
+// stage1_remove. Anyone running --execute would have destroyed active work.
+
+function makeSupabaseStub({ rows = null, error = null } = {}) {
+  // Minimal stub that mimics PostgREST chain: from().select().eq() and
+  // from().select().not(). Both return a thenable resolving to {data,error}.
+  function chain() {
+    const result = Promise.resolve({ data: rows, error });
+    return {
+      eq: () => result,
+      not: () => result,
+      then: result.then.bind(result),
+    };
+  }
+  return { from: () => ({ select: () => chain() }) };
+}
+
+describe('loadClaimMap (QF-20260510-WT-CLAIM-PROTECT-001)', () => {
+  it('throws fail-loud on supabase error rather than returning empty map', async () => {
+    const supabase = makeSupabaseStub({
+      error: { message: 'column v_active_sessions.worktree_path does not exist', code: '42703' },
+    });
+    await expect(loadClaimMap(supabase)).rejects.toThrow(/loadClaimMap query failed/);
+    await expect(loadClaimMap(supabase)).rejects.toThrow(/refusing to proceed/);
+  });
+
+  it('derives worktree path from sd_key via .worktrees/<sd_key> convention', async () => {
+    const repoRoot = '/repo';
+    const supabase = makeSupabaseStub({ rows: [
+      { session_id: 's1', sd_key: 'SD-FOO-001', qf_id: null, current_branch: null, heartbeat_at: new Date().toISOString(), computed_status: 'active' },
+    ]});
+    const map = await loadClaimMap(supabase, { repoRoot });
+    const expected = path.join(repoRoot, '.worktrees', 'SD-FOO-001').replace(/\\/g, '/').toLowerCase();
+    expect(map.get(path.resolve(expected).replace(/\\/g, '/').toLowerCase())).toMatchObject({ sd_key: 'SD-FOO-001', session_id: 's1' });
+  });
+
+  it('derives worktree path from qf_id via .worktrees/qf/<qf_id> convention', async () => {
+    const repoRoot = '/repo';
+    const supabase = makeSupabaseStub({ rows: [
+      { session_id: 's2', sd_key: null, qf_id: 'QF-20260510-001', current_branch: null, heartbeat_at: new Date().toISOString(), computed_status: 'active' },
+    ]});
+    const map = await loadClaimMap(supabase, { repoRoot });
+    const expected = path.resolve(path.join(repoRoot, '.worktrees', 'qf', 'QF-20260510-001')).replace(/\\/g, '/').toLowerCase();
+    expect(map.get(expected)).toMatchObject({ qf_id: 'QF-20260510-001', session_id: 's2' });
+  });
+
+  it('falls back to current_branch basename when sd_key is stale and session moved branches', async () => {
+    const repoRoot = '/repo';
+    const supabase = makeSupabaseStub({ rows: [
+      { session_id: 's3', sd_key: 'SD-OLD-001', qf_id: null, current_branch: 'feat/SD-NEW-001', heartbeat_at: new Date().toISOString(), computed_status: 'active' },
+    ]});
+    const map = await loadClaimMap(supabase, { repoRoot });
+    const oldKey = path.resolve(path.join(repoRoot, '.worktrees', 'SD-OLD-001')).replace(/\\/g, '/').toLowerCase();
+    const newKey = path.resolve(path.join(repoRoot, '.worktrees', 'SD-NEW-001')).replace(/\\/g, '/').toLowerCase();
+    expect(map.has(oldKey)).toBe(true);
+    expect(map.has(newKey)).toBe(true);
+  });
+
+  it('parses qf/<id> branches into the qf/ subdirectory', async () => {
+    const repoRoot = '/repo';
+    const supabase = makeSupabaseStub({ rows: [
+      { session_id: 's4', sd_key: null, qf_id: null, current_branch: 'qf/QF-20260510-XYZ', heartbeat_at: new Date().toISOString(), computed_status: 'active' },
+    ]});
+    const map = await loadClaimMap(supabase, { repoRoot });
+    const key = path.resolve(path.join(repoRoot, '.worktrees', 'qf', 'QF-20260510-XYZ')).replace(/\\/g, '/').toLowerCase();
+    expect(map.has(key)).toBe(true);
+  });
+
+  it('skips rows whose heartbeat is older than the threshold', async () => {
+    const repoRoot = '/repo';
+    const old = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(); // 3hr ago, threshold is 2hr
+    const supabase = makeSupabaseStub({ rows: [
+      { session_id: 's5', sd_key: 'SD-STALE-001', qf_id: null, current_branch: null, heartbeat_at: old, computed_status: 'active' },
+    ]});
+    const map = await loadClaimMap(supabase, { repoRoot });
+    expect(map.size).toBe(0);
+  });
+
+  it('skips rows whose computed_status is not active', async () => {
+    const repoRoot = '/repo';
+    const supabase = makeSupabaseStub({ rows: [
+      { session_id: 's6', sd_key: 'SD-RELEASED-001', qf_id: null, current_branch: null, heartbeat_at: new Date().toISOString(), computed_status: 'released' },
+    ]});
+    const map = await loadClaimMap(supabase, { repoRoot });
+    expect(map.size).toBe(0);
+  });
+
+  it('returns empty map (no throw) when supabase client is absent', async () => {
+    const map = await loadClaimMap(null);
+    expect(map.size).toBe(0);
   });
 });
