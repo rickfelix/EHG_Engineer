@@ -156,7 +156,7 @@ export function inferSDType(content) {
       lowerContent.includes('vulnerability') ||
       lowerContent.includes('cve') ||
       lowerContent.includes('authentication') && lowerContent.includes('fix')) {
-    return 'fix'; // Security issues map to fix type
+    return 'bugfix'; // Security issues map to bugfix type (canonical sd_type per SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001)
   }
 
   // Check for bug/error keywords
@@ -165,7 +165,7 @@ export function inferSDType(content) {
       lowerContent.includes('broken') ||
       lowerContent.includes('failing') ||
       lowerContent.match(/\bfix\b/)) {
-    return 'fix';
+    return 'bugfix';
   }
 
   // Check for refactoring keywords

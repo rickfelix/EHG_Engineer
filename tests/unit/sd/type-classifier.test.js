@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SDTypeClassifier, SD_TYPE_PROFILES } from '../../../lib/sd/type-classifier.js';
+import { SDTypeClassifier, SD_TYPE_PROFILES, stripJsonFence } from '../../../lib/sd/type-classifier.js';
 
 describe('SDTypeClassifier', () => {
   let classifier;
@@ -21,7 +21,9 @@ describe('SDTypeClassifier', () => {
       expect(SD_TYPE_PROFILES.feature).toBeDefined();
       expect(SD_TYPE_PROFILES.infrastructure).toBeDefined();
       expect(SD_TYPE_PROFILES.library).toBeDefined();
-      expect(SD_TYPE_PROFILES.fix).toBeDefined();
+      // SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001: was `fix` (phantom — not in DB CHECK)
+      expect(SD_TYPE_PROFILES.bugfix).toBeDefined();
+      expect(SD_TYPE_PROFILES.fix).toBeUndefined();
       expect(SD_TYPE_PROFILES.enhancement).toBeDefined();
       expect(SD_TYPE_PROFILES.documentation).toBeDefined();
       expect(SD_TYPE_PROFILES.refactor).toBeDefined();
@@ -32,7 +34,7 @@ describe('SDTypeClassifier', () => {
       expect(SD_TYPE_PROFILES.feature.gateThreshold).toBe(85);
       expect(SD_TYPE_PROFILES.infrastructure.gateThreshold).toBe(80);
       expect(SD_TYPE_PROFILES.library.gateThreshold).toBe(75);
-      expect(SD_TYPE_PROFILES.fix.gateThreshold).toBe(70);
+      expect(SD_TYPE_PROFILES.bugfix.gateThreshold).toBe(70);
       expect(SD_TYPE_PROFILES.security.gateThreshold).toBe(90);
     });
 
@@ -52,9 +54,9 @@ describe('SDTypeClassifier', () => {
       expect(SD_TYPE_PROFILES.library.e2eRequired).toBe(false);
       expect(SD_TYPE_PROFILES.library.designRequired).toBe(false);
 
-      // Fix is minimal
-      expect(SD_TYPE_PROFILES.fix.prdRequired).toBe(false);
-      expect(SD_TYPE_PROFILES.fix.e2eRequired).toBe(false);
+      // Bugfix is minimal (was `fix` — renamed to canonical sd_type)
+      expect(SD_TYPE_PROFILES.bugfix.prdRequired).toBe(false);
+      expect(SD_TYPE_PROFILES.bugfix.e2eRequired).toBe(false);
 
       // Security is strict
       expect(SD_TYPE_PROFILES.security.prdRequired).toBe(true);
@@ -93,13 +95,14 @@ describe('SDTypeClassifier', () => {
       expect(result.confidence).toBeGreaterThan(0.5);
     });
 
-    it('should classify bug fixes as fix', () => {
+    it('should classify bug fixes as bugfix (canonical sd_type)', () => {
       const result = classifier.classifyByKeywords(
         'Fix login error',
         'Users are getting an error when trying to log in'
       );
 
-      expect(result.recommendedType).toBe('fix');
+      // SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001: was 'fix' (phantom). Now 'bugfix' (canonical).
+      expect(result.recommendedType).toBe('bugfix');
       expect(result.confidence).toBeGreaterThan(0.5);
     });
 
@@ -149,11 +152,13 @@ describe('SDTypeClassifier', () => {
       expect(classifier.normalizeType('library')).toBe('library');
     });
 
-    it('should normalize common variations', () => {
-      expect(classifier.normalizeType('bugfix')).toBe('fix');
-      expect(classifier.normalizeType('bug_fix')).toBe('fix');
-      expect(classifier.normalizeType('bug-fix')).toBe('fix');
-      expect(classifier.normalizeType('hotfix')).toBe('fix');
+    it('should normalize common variations to canonical bugfix', () => {
+      // SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001: typeMap was inverted — used to map
+      // canonical 'bugfix' → phantom 'fix'. Now maps synonyms TO canonical 'bugfix'.
+      expect(classifier.normalizeType('bugfix')).toBe('bugfix');
+      expect(classifier.normalizeType('bug_fix')).toBe('bugfix');
+      expect(classifier.normalizeType('bug-fix')).toBe('bugfix');
+      expect(classifier.normalizeType('hotfix')).toBe('bugfix');
     });
 
     it('should normalize abbreviations', () => {
@@ -167,7 +172,8 @@ describe('SDTypeClassifier', () => {
     it('should handle case insensitivity', () => {
       expect(classifier.normalizeType('FEATURE')).toBe('feature');
       expect(classifier.normalizeType('Infrastructure')).toBe('infrastructure');
-      expect(classifier.normalizeType('FIX')).toBe('fix');
+      // SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001: 'FIX' (any case) maps to canonical 'bugfix'
+      expect(classifier.normalizeType('FIX')).toBe('bugfix');
     });
 
     it('should default to infrastructure for unknown types', () => {
@@ -198,7 +204,8 @@ describe('SDTypeClassifier', () => {
       expect(classifier.isValidationRequired('feature', 'prd')).toBe(true);
       expect(classifier.isValidationRequired('infrastructure', 'prd')).toBe(true);
       expect(classifier.isValidationRequired('library', 'prd')).toBe(false);
-      expect(classifier.isValidationRequired('fix', 'prd')).toBe(false);
+      // SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001: was 'fix' (phantom). Now 'bugfix' (canonical).
+      expect(classifier.isValidationRequired('bugfix', 'prd')).toBe(false);
     });
 
     it('should correctly identify E2E requirements', () => {
@@ -265,7 +272,8 @@ describe('SDTypeClassifier', () => {
       expect(prompt.system).toContain('feature');
       expect(prompt.system).toContain('infrastructure');
       expect(prompt.system).toContain('library');
-      expect(prompt.system).toContain('fix');
+      // SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001: was 'fix' (phantom), now canonical 'bugfix'
+      expect(prompt.system).toContain('bugfix');
       expect(prompt.system).toContain('security');
     });
 
@@ -333,3 +341,46 @@ describe('Integration: Full Classification Flow', () => {
     expect(result.recommendedType).toBe('refactor');
   });
 });
+
+/**
+ * SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001 (FR-8): LLM fenced-JSON robustness.
+ *
+ * The witnessed precheck output included `LLM classification failed: Unexpected
+ * token '`'` because the model wrapped its JSON in a ```json ... ``` fence.
+ * stripJsonFence handles the wrapper before JSON.parse so the LLM path stays
+ * preferred and the keyword_fallback (which produced phantom 'fix') stays out.
+ */
+describe('stripJsonFence (FR-8)', () => {
+  it('passes raw JSON through unchanged', () => {
+    expect(stripJsonFence('{"sdType":"feature"}')).toBe('{"sdType":"feature"}');
+  });
+
+  it('strips ```json fenced wrapper', () => {
+    const fenced = '```json\n{"sdType":"infrastructure","confidence":0.95}\n```';
+    expect(stripJsonFence(fenced)).toBe('{"sdType":"infrastructure","confidence":0.95}');
+  });
+
+  it('strips bare ``` fenced wrapper (no json language tag)', () => {
+    const fenced = '```\n{"sdType":"feature"}\n```';
+    expect(stripJsonFence(fenced)).toBe('{"sdType":"feature"}');
+  });
+
+  it('strips fence with leading/trailing whitespace', () => {
+    const fenced = '  \n```json\n  {"a":1}  \n```  \n';
+    expect(stripJsonFence(fenced)).toBe('{"a":1}');
+  });
+
+  it('does NOT strip embedded backticks inside valid JSON', () => {
+    // A valid JSON string with backticks inside should pass through
+    const raw = '{"reasoning":"Uses `template literals` in the impl"}';
+    expect(stripJsonFence(raw)).toBe(raw);
+  });
+
+  it('JSON.parse succeeds on fenced output after strip (regression-pin for witnessed incident)', () => {
+    const llmResponse = '```json\n{"sdType":"bugfix","confidence":0.85,"reasoning":"matched fix keywords"}\n```';
+    expect(() => JSON.parse(stripJsonFence(llmResponse))).not.toThrow();
+    const parsed = JSON.parse(stripJsonFence(llmResponse));
+    expect(parsed.sdType).toBe('bugfix');
+  });
+});
+

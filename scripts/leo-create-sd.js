@@ -52,6 +52,7 @@ import { validateSDFields } from './modules/validate-sd-fields.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001: path-based target detector
 import { detectFromKeyChanges } from './modules/handoff/executors/lead-to-plan/gates/target-application.js';
+import { assertValidSdType, isValidSdType } from '../lib/sd-type-enum.js';
 
 const supabase = createSupabaseServiceClient();
 
@@ -1116,13 +1117,20 @@ function mapToDbType(userType) {
     implementation: 'implementation',
     enhancement: 'feature'  // Map enhancement to feature
   };
-  const mapped = map[userType?.toLowerCase()] || 'feature';
-
-  // PAT-SDCREATE-001: Validate the mapped type exists in VALID_DB_SD_TYPES
-  if (!VALID_DB_SD_TYPES.includes(mapped)) {
-    console.warn(`⚠️  Mapped sd_type '${mapped}' not in VALID_DB_SD_TYPES list. Defaulting to 'feature'.`);
-    return 'feature';
+  // SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001 FR-4: fail-loud on unknown sd_type.
+  // Synonym map above handles user-friendly aliases (fix → bugfix, feat → feature, etc.).
+  // Anything that does not resolve to a canonical sd_type after mapping must throw,
+  // not silently default to 'feature'. The previous warn-and-default fallback masked
+  // typos like `--type fyx` and let phantom values propagate to downstream gates.
+  const mapped = map[userType?.toLowerCase()];
+  if (!mapped) {
+    assertValidSdType(userType, `unknown --type value: no synonym match in mapToDbType for ${JSON.stringify(userType)}`);
   }
+  // assertValidSdType is the contract anchor: throws unless `mapped` is in
+  // CANONICAL_SD_TYPES (lib/sd-type-enum.js), which mirrors the DB CHECK constraint.
+  // The legacy VALID_DB_SD_TYPES const above is retained for documentation but is no
+  // longer the validator of record.
+  assertValidSdType(mapped, `mapToDbType produced non-canonical sd_type from input ${JSON.stringify(userType)}`);
   return mapped;
 }
 

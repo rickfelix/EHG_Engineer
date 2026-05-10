@@ -284,11 +284,13 @@ const SD_TYPE_THRESHOLDS = {
   feature: 90,
   security: 90,
   enhancement: 85,
-  fix: 85,
   refactor: 85,
   infrastructure: 80,
   documentation: 80,
-  // `bugfix` is the canonical db-stored value (sd-key-generator maps fix → bugfix).
+  // `bugfix` is the canonical db-stored value (sd-key-generator maps user input
+  // `fix` → `bugfix` at the synonym layer; the phantom `fix: 85` key was removed
+  // by SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001 since post-mapping nothing reaches
+  // this lookup with `'fix'`).
   // Threshold lower than feature/security because bugfix SDs address a narrow slice
   // of dimensions and are mathematically unable to hit higher thresholds against the
   // full vision rubric. A follow-up SD should port type-aware dimension filtering

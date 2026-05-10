@@ -132,13 +132,13 @@ test('extractSummary: missing section returns null', () => {
 // ---------- parsePlanFile integration ----------
 
 test('parsePlanFile: explicit Type wins over inferred (bugfix keyword present)', () => {
-  // Description contains "fix" which would make inferSDType return 'fix'.
+  // Description contains "fix" which would make inferSDType return 'bugfix'.
   // Explicit header should override that.
   const content = '# Title\n\n## Type\n\ninfrastructure\n\n## Summary\n\nFix some bug in the parser system.';
   const parsed = parsePlanFile(content);
   assert.equal(parsed.type, 'infrastructure', 'explicit header overrides keyword heuristic');
-  // Sanity: without the header, inferSDType would have returned fix
-  assert.equal(inferSDType('## Summary\n\nFix some bug.'), 'fix');
+  // Sanity: without the header, inferSDType returns canonical 'bugfix' (SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001)
+  assert.equal(inferSDType('## Summary\n\nFix some bug.'), 'bugfix');
 });
 
 test('parsePlanFile: no explicit Type falls through to inferSDType', () => {
@@ -170,8 +170,8 @@ test('parsePlanFile: empty content returns default shape with priority:null', ()
 test('parsePlanFile: invalid explicit type value falls through, priority honored', () => {
   const content = '## Type\n\nfoobar\n\n## Priority\n\ncritical\n\n## Summary\n\nSecurity vulnerability fix.';
   const parsed = parsePlanFile(content);
-  // foobar invalid → falls through to inferSDType which detects 'security'+'fix'
-  assert.equal(parsed.type, 'fix');
+  // foobar invalid → falls through to inferSDType which detects 'security'+'fix' → returns canonical 'bugfix'
+  assert.equal(parsed.type, 'bugfix');
   assert.equal(parsed.priority, 'critical');
 });
 

@@ -13,13 +13,19 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
+// SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001: phantom 'fix' and 'bug_fix' keys removed.
+// 'bugfix' is the canonical sd_type (per DB CHECK + lib/sd-type-enum.js); the synonym
+// layer in leo-create-sd.js maps user input 'fix' → 'bugfix' before reaching downstream
+// consumers. Other non-canonical keys (docs, infra, quality, qa, testing, e2e, tooling,
+// devops) are retained as defensive aliases for legacy callers — out of scope for this
+// SD per LEAD scope-lock.
 const SD_TYPE_THRESHOLDS = {
   documentation: 50, docs: 50,
   infrastructure: 50, infra: 50,
   quality: 50, qa: 50, testing: 50, e2e: 50,
   tooling: 55, devops: 55,
   feature: 55, enhancement: 55,
-  bugfix: 55, bug_fix: 55, fix: 55,
+  bugfix: 55,
   database: 68, security: 68,
   default: 70
 };

@@ -27,7 +27,15 @@
  * (non-blocking — valid=true is still returned when overall score passes).
  */
 
-/** Threshold per SD type. Exported for tests. */
+/** Threshold per SD type. Exported for tests.
+ *
+ * NOTE on non-canonical keys: 'governance', 'maintenance', 'protocol' are NOT in
+ * lib/sd-type-enum.js CANONICAL_SD_TYPES — they are domain groupings retained as
+ * defensive aliases for legacy callers. The phantom 'fix' key was removed
+ * (SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001); 'bugfix' is the canonical sd_type.
+ * Future cleanup: drop the non-canonical aliases entirely once a caller-audit
+ * confirms zero use. Out of scope for this SD per LEAD scope-lock.
+ */
 export const SD_TYPE_THRESHOLDS = {
   // Tier 1 — highest bar
   feature:        90,
@@ -40,7 +48,6 @@ export const SD_TYPE_THRESHOLDS = {
   maintenance:    70,
   protocol:       70,
   bugfix:         70,
-  fix:            70,
   documentation:  70,
   refactor:       70,
   orchestrator:   70,
