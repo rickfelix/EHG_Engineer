@@ -275,6 +275,42 @@ async function getSDDetails(sdId) {
  * FIX: parent_sd_id stores the UUID `id`, not `sd_key`. Query by both
  * to handle both legacy (id === sd_key) and modern (id is UUID) SDs.
  */
+/**
+ * SD-FDBK-INFRA-ORCHESTRATOR-ROUTING-PHASE-001 (PAT-ORCH-ROUTING-PHASE-BLINDNESS-001):
+ * Determine whether an orchestrator parent SD needs its own LEAD-TO-PLAN handoff
+ * before any leaf children can be sequenced.
+ *
+ * Returns true ONLY when ALL of:
+ *   1. sd.sd_type === 'orchestrator'
+ *   2. sd.current_phase IN ('LEAD', 'LEAD_APPROVAL')
+ *   3. sd_phase_handoffs has zero rows where sd_id=sd.id AND
+ *      handoff_type='LEAD-TO-PLAN' AND status='accepted'
+ *
+ * FAIL-LOUD: throws on PostgrestError (PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
+ * Pattern mirrors scripts/modules/parent-orchestrator-handler.js:456-462.
+ */
+async function hasParentNeedsOwnLeadToPlan(sd) {
+  if (!sd || sd.sd_type !== 'orchestrator') return false;
+  const phase = sd.current_phase;
+  if (phase !== 'LEAD' && phase !== 'LEAD_APPROVAL') return false;
+
+  const { data, error } = await supabase
+    .from('sd_phase_handoffs')
+    .select('handoff_type, status')
+    .eq('sd_id', sd.id)
+    .eq('handoff_type', 'LEAD-TO-PLAN')
+    .eq('status', 'accepted')
+    .limit(1);
+
+  if (error) {
+    throw new Error(
+      `[hasParentNeedsOwnLeadToPlan] sd_phase_handoffs query failed for ${sd.sd_key || sd.id}: ${error.message || error.code || 'unknown error'}`
+    );
+  }
+
+  return !data || data.length === 0;
+}
+
 async function getOrchestratorChildren(sdKeyOrId) {
   const { data, error } = await supabase
     .from('strategic_directives_v2')
@@ -625,10 +661,50 @@ async function main() {
   await enforceCadenceGate(sd, effectiveId);
 
   // 1.5. Orchestrator detection — route to child instead of claiming parent
+  //      EXCEPT when the parent itself needs its own LEAD-TO-PLAN handoff first
+  //      (FR-2, PAT-ORCH-ROUTING-PHASE-BLINDNESS-001), or when --parent forces
+  //      explicit parent claim (FR-3).
   const explicitChild = process.argv.includes('--child') ? process.argv[process.argv.indexOf('--child') + 1] : null;
-  if (!explicitChild) {
+  const parentFlag = process.argv.includes('--parent');
+  const confirmParentFlag = process.argv.includes('--confirm');
+
+  if (explicitChild && parentFlag) {
+    console.log(`\n${colors.red}❌ --parent and --child are mutually exclusive${colors.reset}`);
+    console.log(`   ${colors.dim}Use --parent to claim the orchestrator parent OR --child to claim a specific child, not both.${colors.reset}`);
+    process.exit(1);
+  }
+
+  let claimingParentExplicitly = false;
+  if (parentFlag) {
+    // Explicit override — claim parent regardless of children/handoff state.
+    // Safety: when parent is past LEAD-TO-PLAN AND children incomplete, require
+    // --confirm to prevent double-claiming the wrong phase (FR-3 R5 mitigation).
+    const parentNeeds = await hasParentNeedsOwnLeadToPlan(sd);
+    if (!parentNeeds) {
+      const childrenForCheck = await getOrchestratorChildren(effectiveId);
+      const incomplete = childrenForCheck.some(c => c.status !== 'completed');
+      if (incomplete && !confirmParentFlag) {
+        console.log(`\n${colors.yellow}⚠️  --parent on past-LEAD orchestrator with incomplete children${colors.reset}`);
+        console.log(`   ${colors.dim}Parent has accepted LEAD-TO-PLAN handoff; standard route-to-leaf is recommended.${colors.reset}`);
+        console.log(`   ${colors.dim}Pass --parent --confirm to override.${colors.reset}`);
+        process.exit(1);
+      }
+    }
+    console.log(`\n${colors.cyan}🔧 --parent flag${colors.reset} — claiming parent orchestrator regardless of children state`);
+    claimingParentExplicitly = true;
+  }
+
+  if (!explicitChild && !claimingParentExplicitly) {
     const children = await getOrchestratorChildren(effectiveId);
     if (children.length > 0) {
+      // FR-2: Pre-route guard — does parent need its OWN LEAD-TO-PLAN first?
+      // Without this guard, orchestrator parents whose own LEAD-TO-PLAN has not
+      // yet run are structurally unreachable (PAT-ORCH-ROUTING-PHASE-BLINDNESS-001).
+      if (await hasParentNeedsOwnLeadToPlan(sd)) {
+        console.log(`\n${colors.cyan}🔀 ORCHESTRATOR PARENT${colors.reset} — own LEAD-TO-PLAN required`);
+        console.log(`   ${colors.dim}Parent orchestrator needs own LEAD-TO-PLAN handoff first — claiming parent (PAT-ORCH-ROUTING-PHASE-BLINDNESS-001).${colors.reset}`);
+        // Fall through to parent claim (skip the route-to-leaf block below).
+      } else {
       console.log(`\n${colors.cyan}🔀 ORCHESTRATOR DETECTED${colors.reset} (${children.length} children)`);
       console.log(`   ${colors.dim}Routing to leaf-level work item (recursive through sub-orchestrators)${colors.reset}`);
 
@@ -712,6 +788,7 @@ async function main() {
       // Without this re-check, a cadence-blocked leaf is silently claimed via
       // the parent (the parent has no next_workable_after of its own).
       await enforceCadenceGate(sd, effectiveId);
+      } // close else (route-to-leaf)
     }
   }
 
