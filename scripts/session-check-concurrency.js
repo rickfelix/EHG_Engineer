@@ -24,6 +24,7 @@
 
 import 'dotenv/config';
 import { execSync } from 'child_process';
+import { pathToFileURL } from 'url';
 // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR4): use the canonical
 // getActiveSessions helper from session-manager.mjs instead of a local
 // inline query. Both `sd:next` (via its session-manager usage) and this
@@ -183,7 +184,15 @@ async function main() {
   process.exit(1);
 }
 
-main().catch(e => {
-  console.error('[session:check-concurrency] error:', e.message);
-  process.exit(2);
-});
+// SD-LEO-INFRA-BLOCK-CLAIMS-CANCELLED-001 FR-7 (RCA d24766eb): only run main()
+// when invoked as a CLI script. Without this guard, the named exports
+// (categorizeSessionForContention, detectSdKeyDrift) cannot be safely re-exported
+// by lib/claim-lifecycle-release.mjs because main()'s process.exit(0) on the
+// no-contention path silently kills any consumer (e.g. handoff.js) that imports
+// the module. 14th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+  main().catch(e => {
+    console.error('[session:check-concurrency] error:', e.message);
+    process.exit(2);
+  });
+}

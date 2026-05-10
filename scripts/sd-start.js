@@ -836,6 +836,41 @@ async function main() {
     console.log(`${colors.yellow}⚠  CLAIM_RELEASED inbox probe non-fatal error: ${probeErr.message}${colors.reset}`);
   }
 
+  // 2a-bis. SD-LEO-INFRA-BLOCK-CLAIMS-CANCELLED-001 FR-4: post-render cancellation
+  // re-check. Closes the TOCTOU window between sd:next display and sd-start invocation
+  // — another session may have cancelled the SD in the seconds between. assertValidClaim
+  // (FR-2) will also catch this, but FR-4 produces a clearer banner naming the
+  // cancellation_reason and exits before any claim-validity machinery runs.
+  // Fail-open on query error (claim-validity-gate FR-2 + claim-guard FR-1 are defenses).
+  try {
+    const { data: cancellationCheck } = await supabase
+      .from('strategic_directives_v2')
+      .select('status, cancellation_reason')
+      .eq('sd_key', effectiveId)
+      .maybeSingle();
+    if (cancellationCheck && cancellationCheck.status === 'cancelled') {
+      console.error(
+        `\n${colors.red}═══════════════════════════════════════════════════════════════════${colors.reset}`
+      );
+      console.error(
+        `${colors.red}🚫 SD_CANCELLED_DURING_STARTUP — claim refused${colors.reset}`
+      );
+      console.error(
+        `${colors.red}═══════════════════════════════════════════════════════════════════${colors.reset}`
+      );
+      console.error(`  SD:     ${effectiveId}`);
+      console.error(`  Reason: ${cancellationCheck.cancellation_reason || '(not recorded)'}`);
+      console.error('');
+      console.error('  This SD has been cancelled. Pick a different SD or restore it before claiming.');
+      console.error('');
+      process.exit(2);
+    }
+  } catch (cancelCheckErr) {
+    console.warn(
+      `${colors.yellow}⚠ [sd-start] cancellation re-check soft-failed (non-blocking): ${cancelCheckErr.message}${colors.reset}`
+    );
+  }
+
   // 2a. Validate claim identity + ownership now that session row exists.
   // SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001: Invoke the fail-closed gate so cross-CC collisions
   // are surfaced with a structured error instead of silently merged via "newest heartbeat".

@@ -45,13 +45,18 @@ describe('QF-20260509-CANCEL-SD: cancel-sd.js canonical script', () => {
     expect(src).toMatch(/cancellation_reason:\s*reason/);
   });
 
-  it('releases claude_sessions row scoped to the SD-being-cancelled', () => {
+  it('releases ALL claude_sessions rows pointing at the cancelled SD (FR-3 global release)', () => {
+    // SD-LEO-INFRA-BLOCK-CLAIMS-CANCELLED-001 FR-3 (AC-3.2) changed the contract
+    // from "release only the recorded holder" to "release all rows matching sd_key".
+    // The orphan-claim case (multiple sessions with the same sd_key under drift
+    // conditions) requires global release; the per-session-id scoping was insufficient.
     const src = fs.readFileSync(scriptPath, 'utf-8');
     expect(src).toMatch(/from\(['"]claude_sessions['"]\)/);
     expect(src).toMatch(/status:\s*'released'/);
-    // Must filter by both session_id AND sd_key (not blind release)
-    expect(src).toMatch(/\.eq\(['"]session_id['"],\s*claimedSessionId\)/);
+    // Must filter by sd_key (global) and select session_id for counting (AC-3.2)
     expect(src).toMatch(/\.eq\(['"]sd_key['"],\s*sd\.sd_key\)/);
+    expect(src).toMatch(/\.select\(['"]session_id['"]\)/);
+    expect(src).toMatch(/Released \$\{n\} claude_sessions row/);
   });
 
   it('refuses to cancel completed SDs', () => {
