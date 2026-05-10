@@ -68,8 +68,12 @@ dotenv.config();
  * Main PRD creation function
  * @param {string} sdId - Strategic Directive ID
  * @param {string} prdTitle - Optional PRD title
+ * @param {Object|null} contentOverride - Optional pre-generated PRD JSON content (SD-FDBK-INFRA-ADD-PRD-DATABASE-001).
+ *                                        When provided, LLM generation is SKIPPED but grounding + quality
+ *                                        validation gates still run, and metadata.created_via='content_arg'
+ *                                        is injected for audit-trail provenance.
  */
-export async function addPRDToDatabase(sdId, prdTitle) {
+export async function addPRDToDatabase(sdId, prdTitle, contentOverride = null) {
   console.log(`Adding PRD for ${sdId} to database...\n`);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -154,13 +158,15 @@ export async function addPRDToDatabase(sdId, prdTitle) {
 
     // Generate and validate LLM content BEFORE creating PRD
     // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: "Generate first, then insert" pattern
+    // SD-FDBK-INFRA-ADD-PRD-DATABASE-001: contentOverride bypasses LLM generation
+    // but still runs validatePRDGrounding + validatePRDQuality (R6 governance).
     const llmContent = await generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, {
       designAnalysis,
       databaseAnalysis,
       securityAnalysis,
       riskAnalysis,
       stakeholderPersonas
-    });
+    }, contentOverride);
 
     // Attach integration contract to LLM content metadata (FR-1)
     if (integrationContract) {
@@ -453,7 +459,7 @@ async function handlePersonaIngestion(sdData, sdId) {
  *
  * @returns {Object} Validated LLM content ready for PRD insertion
  */
-async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, analyses) {
+async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, analyses, contentOverride = null) {
   console.log('\n='.repeat(55));
   console.log('PHASE 3: LLM-BASED PRD CONTENT GENERATION');
   console.log('='.repeat(55));
@@ -465,11 +471,24 @@ async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, 
       console.log(`   Found ${existingStories.length} existing user stories for consistency`);
     }
 
-    const llmPrdContent = await generatePRDContentWithLLM(sdData, {
-      ...analyses,
-      personas: analyses.stakeholderPersonas,
-      existingStories
-    });
+    // SD-FDBK-INFRA-ADD-PRD-DATABASE-001: --content path skips LLM call, but
+    // still runs validatePRDGrounding + validatePRDQuality (R6) and tags
+    // metadata.created_via='content_arg' (R3 audit-trail integrity).
+    let llmPrdContent;
+    if (contentOverride) {
+      console.log('\n   📥 CONTENT OVERRIDE: using pre-generated PRD JSON (LLM skipped)');
+      llmPrdContent = contentOverride;
+      llmPrdContent.metadata = {
+        ...(llmPrdContent.metadata || {}),
+        created_via: 'content_arg'
+      };
+    } else {
+      llmPrdContent = await generatePRDContentWithLLM(sdData, {
+        ...analyses,
+        personas: analyses.stakeholderPersonas,
+        existingStories
+      });
+    }
 
     if (!llmPrdContent) {
       // Check if inline mode is active — null return is expected
@@ -564,6 +583,40 @@ async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, 
     }
 
     console.log(`   ✅ Grounding validation passed (${(groundingResults.average_confidence * 100).toFixed(0)}% average confidence)`);
+
+    // SD-FDBK-INFRA-ADD-PRD-DATABASE-001: --content path runs validatePRDQuality
+    // explicitly (R6 governance). LLM-generated content already passes through
+    // the per-story Russian-judge quality scorer downstream, but hand-authored
+    // JSON skips that path — so we run the rubric validator here on the whole
+    // payload to surface quality scores before insertion.
+    if (contentOverride) {
+      console.log('\n   🔍 Running PRD quality validation (--content path)...');
+      const qualityResult = validatePRDQuality(llmPrdContent);
+      const qualityMode = resolveEnforcementMode();
+      console.log(`   [prd-quality] score=${qualityResult.score} threshold=${qualityResult.threshold} passed=${qualityResult.passed} mode=${qualityMode}`);
+      if (!qualityResult.passed && qualityMode === 'block') {
+        console.error(`\n   ❌ PRD QUALITY GATE FAILED: score=${qualityResult.score} threshold=${qualityResult.threshold}`);
+        for (const dim of qualityResult.breakdown || []) {
+          if (dim.reasons?.length) {
+            console.error(`      - ${dim.dimension} (${dim.score}/10): ${dim.reasons.join('; ')}`);
+          }
+        }
+        process.exit(1);
+      } else if (!qualityResult.passed) {
+        console.warn(`   ⚠️  PRD quality warning (warn-only): score=${qualityResult.score} threshold=${qualityResult.threshold}`);
+      } else {
+        console.log(`   ✅ Quality validation passed`);
+      }
+      llmPrdContent.metadata = {
+        ...(llmPrdContent.metadata || {}),
+        content_quality: {
+          score: qualityResult.score,
+          threshold: qualityResult.threshold,
+          passed: qualityResult.passed,
+          mode: qualityMode
+        }
+      };
+    }
 
     // Attach grounding validation results to metadata for the PRD record
     llmPrdContent.metadata = {

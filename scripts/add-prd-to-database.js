@@ -46,9 +46,77 @@ export {
 } from './prd/prd-creator.js';
 
 // CLI entry point - delegate to modular index
+import fs from 'node:fs';
 import { addPRDToDatabase } from './prd/index.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { startHeartbeat, stopHeartbeat } from '../lib/heartbeat-manager.mjs';
+
+// SD-FDBK-INFRA-ADD-PRD-DATABASE-001: --content flag closes the INLINE-mode Catch-22.
+// 2MB cap prevents parse-bomb / memory-exhaustion on file or stdin input (R4 mitigation).
+const CONTENT_PAYLOAD_MAX_BYTES = 2 * 1024 * 1024;
+
+function readStdinSync() {
+  return fs.readFileSync(0, { encoding: 'utf8' });
+}
+
+export function loadContentPayload(rawValue) {
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    throw new Error('--content requires a value (file path with @ prefix, "-" for stdin, or literal JSON)');
+  }
+  let raw;
+  if (rawValue === '-') {
+    raw = readStdinSync();
+  } else if (rawValue.startsWith('@')) {
+    const filePath = rawValue.slice(1);
+    if (!filePath) throw new Error('--content @<path>: empty file path');
+    if (!fs.existsSync(filePath)) {
+      const err = new Error(`--content @${filePath}: file not found`);
+      err.code = 'CONTENT_FILE_NOT_FOUND';
+      throw err;
+    }
+    const stat = fs.statSync(filePath);
+    if (stat.size > CONTENT_PAYLOAD_MAX_BYTES) {
+      throw new Error(`--content @${filePath}: PAYLOAD_TOO_LARGE (${stat.size} bytes > ${CONTENT_PAYLOAD_MAX_BYTES} cap)`);
+    }
+    raw = fs.readFileSync(filePath, 'utf8');
+  } else {
+    raw = rawValue;
+  }
+  if (Buffer.byteLength(raw, 'utf8') > CONTENT_PAYLOAD_MAX_BYTES) {
+    throw new Error(`--content: PAYLOAD_TOO_LARGE (${Buffer.byteLength(raw, 'utf8')} bytes > ${CONTENT_PAYLOAD_MAX_BYTES} cap)`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    const err = new Error(`--content: INVALID_JSON (${e.message})`);
+    err.code = 'CONTENT_INVALID_JSON';
+    throw err;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('--content: payload must be a JSON object (got ' + (Array.isArray(parsed) ? 'array' : typeof parsed) + ')');
+  }
+  return parsed;
+}
+
+export function extractContentArg(args) {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--content') {
+      const value = args[i + 1];
+      const remaining = [...args.slice(0, i), ...args.slice(i + 2)];
+      return { value, remaining };
+    }
+    if (a.startsWith('--content=')) {
+      const value = a.slice('--content='.length);
+      const remaining = [...args.slice(0, i), ...args.slice(i + 1)];
+      return { value, remaining };
+    }
+  }
+  return { value: undefined, remaining: args };
+}
+
+export { CONTENT_PAYLOAD_MAX_BYTES };
 
 if (isMainModule(import.meta.url)) {
   // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR1 call-site migration):
@@ -61,11 +129,29 @@ if (isMainModule(import.meta.url)) {
     startHeartbeat(process.env.CLAUDE_SESSION_ID, { ownershipMode: 'cooperative' });
   }
 
-  const args = process.argv.slice(2);
-  if (args.length < 1) {
-    console.log('Usage: node scripts/add-prd-to-database.js <SD-ID> [PRD-Title]');
+  const argv = process.argv.slice(2);
+  if (argv.length < 1) {
+    console.log('Usage: node scripts/add-prd-to-database.js <SD-ID> [PRD-Title] [--content @path | --content - | --content \'<json>\']');
     console.log('Example: node scripts/add-prd-to-database.js SD-DASHBOARD-AUDIT-2025-08-31-A "Dashboard Audit PRD"');
+    console.log('Example: node scripts/add-prd-to-database.js SD-XXX-001 --content @./my-prd.json');
+    console.log('Example: cat prd.json | node scripts/add-prd-to-database.js SD-XXX-001 --content -');
     process.exit(1);
+  }
+
+  // SD-FDBK-INFRA-ADD-PRD-DATABASE-001: parse --content BEFORE addPRDToDatabase()
+  // so the INLINE-branch process.exit(0) at scripts/prd/index.js:540 is never reached
+  // (IR2 critical: gate-route at CLI argv-parse).
+  const { value: contentValue, remaining: args } = extractContentArg(argv);
+
+  let contentOverride = null;
+  if (contentValue !== undefined) {
+    try {
+      contentOverride = loadContentPayload(contentValue);
+    } catch (e) {
+      console.error(`\n❌ ${e.message}`);
+      if (heartbeatActive) stopHeartbeat();
+      process.exit(1);
+    }
   }
 
   const sdId = args[0];
@@ -76,7 +162,7 @@ if (isMainModule(import.meta.url)) {
   // (exit 143) — even though the PRD + user-story rows already landed in the DB.
   // Cooperative mode means stopHeartbeat does NOT release the parent session's
   // claim; only the in-process timer is cleared.
-  addPRDToDatabase(sdId, prdTitle).finally(() => {
+  addPRDToDatabase(sdId, prdTitle, contentOverride).finally(() => {
     if (heartbeatActive) stopHeartbeat();
   });
 }
