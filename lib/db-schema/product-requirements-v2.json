@@ -1,0 +1,839 @@
+{
+  "__source": "scripts/snapshot-prd-schema.js (SD-FDBK-ENH-SCRIPTS-ADD-PRD-001)",
+  "__warning_do_not_edit_by_hand": "Regenerate via npm run schema:snapshot:prd",
+  "schema_version": "76abbda4025a",
+  "generated_at": "2026-05-10T17:06:12.586Z",
+  "table": "product_requirements_v2",
+  "counts": {
+    "total_columns": 60,
+    "varchar_columns": 15,
+    "check_constraints": 8,
+    "not_null_no_default": 2,
+    "jsonb_columns": 26,
+    "triggers": 7,
+    "trigger_controlled_columns": 2,
+    "conditional_trigger_pairs": 1
+  },
+  "columns": [
+    {
+      "ordinal_position": 1,
+      "name": "id",
+      "data_type": "character varying",
+      "character_maximum_length": 100,
+      "is_nullable": false,
+      "column_default": null,
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 2,
+      "name": "directive_id",
+      "data_type": "character varying",
+      "character_maximum_length": 150,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 3,
+      "name": "title",
+      "data_type": "character varying",
+      "character_maximum_length": 500,
+      "is_nullable": false,
+      "column_default": null,
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 4,
+      "name": "version",
+      "data_type": "character varying",
+      "character_maximum_length": 20,
+      "is_nullable": true,
+      "column_default": "'1.0'::character varying",
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 5,
+      "name": "status",
+      "data_type": "character varying",
+      "character_maximum_length": 50,
+      "is_nullable": true,
+      "column_default": "'draft'::character varying",
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 6,
+      "name": "category",
+      "data_type": "character varying",
+      "character_maximum_length": 50,
+      "is_nullable": true,
+      "column_default": "'technical'::character varying",
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 7,
+      "name": "priority",
+      "data_type": "character varying",
+      "character_maximum_length": 20,
+      "is_nullable": true,
+      "column_default": "'high'::character varying",
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 8,
+      "name": "executive_summary",
+      "data_type": "text",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "text"
+    },
+    {
+      "ordinal_position": 9,
+      "name": "business_context",
+      "data_type": "text",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "text"
+    },
+    {
+      "ordinal_position": 10,
+      "name": "technical_context",
+      "data_type": "text",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "text"
+    },
+    {
+      "ordinal_position": 11,
+      "name": "functional_requirements",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 12,
+      "name": "non_functional_requirements",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 13,
+      "name": "technical_requirements",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 14,
+      "name": "system_architecture",
+      "data_type": "text",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "text"
+    },
+    {
+      "ordinal_position": 15,
+      "name": "data_model",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'{}'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 16,
+      "name": "api_specifications",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 17,
+      "name": "ui_ux_requirements",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 18,
+      "name": "implementation_approach",
+      "data_type": "text",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "text"
+    },
+    {
+      "ordinal_position": 19,
+      "name": "technology_stack",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 20,
+      "name": "dependencies",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 21,
+      "name": "test_scenarios",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 22,
+      "name": "acceptance_criteria",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 23,
+      "name": "performance_requirements",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'{}'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 24,
+      "name": "plan_checklist",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 25,
+      "name": "exec_checklist",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 26,
+      "name": "validation_checklist",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 27,
+      "name": "progress",
+      "data_type": "integer",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "0",
+      "udt_name": "int4"
+    },
+    {
+      "ordinal_position": 28,
+      "name": "phase",
+      "data_type": "character varying",
+      "character_maximum_length": 50,
+      "is_nullable": true,
+      "column_default": "'planning'::character varying",
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 29,
+      "name": "phase_progress",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'{}'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 30,
+      "name": "risks",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 31,
+      "name": "constraints",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 32,
+      "name": "assumptions",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 33,
+      "name": "stakeholders",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 34,
+      "name": "approved_by",
+      "data_type": "character varying",
+      "character_maximum_length": 100,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 35,
+      "name": "approval_date",
+      "data_type": "timestamp without time zone",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "timestamp"
+    },
+    {
+      "ordinal_position": 36,
+      "name": "planned_start",
+      "data_type": "timestamp without time zone",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "timestamp"
+    },
+    {
+      "ordinal_position": 37,
+      "name": "planned_end",
+      "data_type": "timestamp without time zone",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "timestamp"
+    },
+    {
+      "ordinal_position": 38,
+      "name": "actual_start",
+      "data_type": "timestamp without time zone",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "timestamp"
+    },
+    {
+      "ordinal_position": 39,
+      "name": "actual_end",
+      "data_type": "timestamp without time zone",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "timestamp"
+    },
+    {
+      "ordinal_position": 40,
+      "name": "created_at",
+      "data_type": "timestamp without time zone",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "CURRENT_TIMESTAMP",
+      "udt_name": "timestamp"
+    },
+    {
+      "ordinal_position": 41,
+      "name": "updated_at",
+      "data_type": "timestamp without time zone",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "CURRENT_TIMESTAMP",
+      "udt_name": "timestamp"
+    },
+    {
+      "ordinal_position": 42,
+      "name": "created_by",
+      "data_type": "character varying",
+      "character_maximum_length": 100,
+      "is_nullable": true,
+      "column_default": "'PLAN'::character varying",
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 43,
+      "name": "updated_by",
+      "data_type": "character varying",
+      "character_maximum_length": 100,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 44,
+      "name": "metadata",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'{}'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 45,
+      "name": "content",
+      "data_type": "text",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "text"
+    },
+    {
+      "ordinal_position": 46,
+      "name": "evidence_appendix",
+      "data_type": "text",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "text"
+    },
+    {
+      "ordinal_position": 47,
+      "name": "backlog_items",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'[]'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 48,
+      "name": "sd_id",
+      "data_type": "character varying",
+      "character_maximum_length": 150,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 49,
+      "name": "planning_section",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'{\"quality_gates\": [], \"risk_analysis\": {}, \"success_metrics\": [], \"timeline_breakdown\": {}, \"implementation_steps\": [], \"reasoning_depth_used\": \"standard\", \"resource_requirements\": {}}'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 50,
+      "name": "reasoning_analysis",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'{}'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 51,
+      "name": "complexity_analysis",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": "'{}'::jsonb",
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 52,
+      "name": "reasoning_depth",
+      "data_type": "character varying",
+      "character_maximum_length": 20,
+      "is_nullable": true,
+      "column_default": "'standard'::character varying",
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 53,
+      "name": "confidence_score",
+      "data_type": "integer",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "int4"
+    },
+    {
+      "ordinal_position": 55,
+      "name": "research_confidence_score",
+      "data_type": "numeric",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "numeric"
+    },
+    {
+      "ordinal_position": 56,
+      "name": "exploration_summary",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 57,
+      "name": "document_type",
+      "data_type": "character varying",
+      "character_maximum_length": 50,
+      "is_nullable": true,
+      "column_default": "'prd'::character varying",
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 58,
+      "name": "integration_operationalization",
+      "data_type": "jsonb",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "jsonb"
+    },
+    {
+      "ordinal_position": 59,
+      "name": "goal_summary",
+      "data_type": "character varying",
+      "character_maximum_length": 300,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "varchar"
+    },
+    {
+      "ordinal_position": 60,
+      "name": "venture_id",
+      "data_type": "uuid",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "uuid"
+    },
+    {
+      "ordinal_position": 61,
+      "name": "smoke_test_cmd",
+      "data_type": "text",
+      "character_maximum_length": null,
+      "is_nullable": true,
+      "column_default": null,
+      "udt_name": "text"
+    }
+  ],
+  "varchar_columns": [
+    {
+      "name": "id",
+      "max_length": 100
+    },
+    {
+      "name": "directive_id",
+      "max_length": 150
+    },
+    {
+      "name": "title",
+      "max_length": 500
+    },
+    {
+      "name": "version",
+      "max_length": 20
+    },
+    {
+      "name": "status",
+      "max_length": 50
+    },
+    {
+      "name": "category",
+      "max_length": 50
+    },
+    {
+      "name": "priority",
+      "max_length": 20
+    },
+    {
+      "name": "phase",
+      "max_length": 50
+    },
+    {
+      "name": "approved_by",
+      "max_length": 100
+    },
+    {
+      "name": "created_by",
+      "max_length": 100
+    },
+    {
+      "name": "updated_by",
+      "max_length": 100
+    },
+    {
+      "name": "sd_id",
+      "max_length": 150
+    },
+    {
+      "name": "reasoning_depth",
+      "max_length": 20
+    },
+    {
+      "name": "document_type",
+      "max_length": 50
+    },
+    {
+      "name": "goal_summary",
+      "max_length": 300
+    }
+  ],
+  "not_null_no_default": [
+    "id",
+    "title"
+  ],
+  "check_constraints": [
+    {
+      "name": "acceptance_criteria_required",
+      "definition": "CHECK (((acceptance_criteria IS NOT NULL) AND ((acceptance_criteria -> 0) IS NOT NULL)))",
+      "columns_referenced": [
+        "acceptance_criteria"
+      ],
+      "kind": "jsonb_element_presence",
+      "parsed_rule": null
+    },
+    {
+      "name": "functional_requirements_min_count",
+      "definition": "CHECK (((functional_requirements IS NOT NULL) AND ((functional_requirements -> 0) IS NOT NULL) AND ((functional_requirements -> 1) IS NOT NULL) AND ((functional_requirements -> 2) IS NOT NULL)))",
+      "columns_referenced": [
+        "functional_requirements"
+      ],
+      "kind": "jsonb_element_presence",
+      "parsed_rule": null
+    },
+    {
+      "name": "product_requirements_v2_confidence_score_check",
+      "definition": "CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))",
+      "columns_referenced": [
+        "confidence_score"
+      ],
+      "kind": "range",
+      "parsed_rule": {
+        "min": 0,
+        "max": 100
+      }
+    },
+    {
+      "name": "product_requirements_v2_document_type_check",
+      "definition": "CHECK (((document_type)::text = ANY ((ARRAY['prd'::character varying, 'refactor_brief'::character varying, 'architecture_decision_record'::character varying])::text[])))",
+      "columns_referenced": [
+        "document_type"
+      ],
+      "kind": "enum",
+      "parsed_rule": {
+        "allowed_values": [
+          "prd",
+          "refactor_brief",
+          "architecture_decision_record"
+        ]
+      }
+    },
+    {
+      "name": "product_requirements_v2_reasoning_depth_check",
+      "definition": "CHECK (((reasoning_depth)::text = ANY ((ARRAY['quick'::character varying, 'standard'::character varying, 'deep'::character varying, 'ultra'::character varying])::text[])))",
+      "columns_referenced": [
+        "reasoning_depth"
+      ],
+      "kind": "enum",
+      "parsed_rule": {
+        "allowed_values": [
+          "quick",
+          "standard",
+          "deep",
+          "ultra"
+        ]
+      }
+    },
+    {
+      "name": "product_requirements_v2_research_confidence_score_check",
+      "definition": "CHECK (((research_confidence_score >= (0)::numeric) AND (research_confidence_score <= (1)::numeric)))",
+      "columns_referenced": [
+        "research_confidence_score"
+      ],
+      "kind": "range",
+      "parsed_rule": {
+        "min": 0,
+        "max": 1
+      }
+    },
+    {
+      "name": "product_requirements_v2_status_check",
+      "definition": "CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'planning'::character varying, 'in_progress'::character varying, 'testing'::character varying, 'verification'::character varying, 'approved'::character varying, 'completed'::character varying, 'archived'::character varying, 'rejected'::character varying, 'on_hold'::character varying, 'cancelled'::character varying])::text[])))",
+      "columns_referenced": [
+        "status"
+      ],
+      "kind": "enum",
+      "parsed_rule": {
+        "allowed_values": [
+          "draft",
+          "planning",
+          "in_progress",
+          "testing",
+          "verification",
+          "approved",
+          "completed",
+          "archived",
+          "rejected",
+          "on_hold",
+          "cancelled"
+        ]
+      }
+    },
+    {
+      "name": "test_scenarios_required",
+      "definition": "CHECK (((test_scenarios IS NOT NULL) AND ((test_scenarios -> 0) IS NOT NULL)))",
+      "columns_referenced": [
+        "test_scenarios"
+      ],
+      "kind": "jsonb_element_presence",
+      "parsed_rule": null
+    }
+  ],
+  "jsonb_columns": [
+    "functional_requirements",
+    "non_functional_requirements",
+    "technical_requirements",
+    "data_model",
+    "api_specifications",
+    "ui_ux_requirements",
+    "technology_stack",
+    "dependencies",
+    "test_scenarios",
+    "acceptance_criteria",
+    "performance_requirements",
+    "plan_checklist",
+    "exec_checklist",
+    "validation_checklist",
+    "phase_progress",
+    "risks",
+    "constraints",
+    "assumptions",
+    "stakeholders",
+    "metadata",
+    "backlog_items",
+    "planning_section",
+    "reasoning_analysis",
+    "complexity_analysis",
+    "exploration_summary",
+    "integration_operationalization"
+  ],
+  "hand_coded_jsonb_shape_rules": {
+    "acceptance_criteria": {
+      "min_elements": 1
+    },
+    "functional_requirements": {
+      "min_elements": 3
+    },
+    "test_scenarios": {
+      "min_elements": 1
+    }
+  },
+  "triggers": [
+    {
+      "name": "audit_product_requirements",
+      "function_name": "governance_audit_trigger",
+      "fires_on_insert": true,
+      "fires_on_update": true,
+      "fires_before": false,
+      "kind": "AFTER_NON_MUTATING"
+    },
+    {
+      "name": "planning_section_auto_update_trigger",
+      "function_name": "update_planning_section_from_reasoning",
+      "fires_on_insert": true,
+      "fires_on_update": true,
+      "fires_before": true,
+      "kind": "BEFORE_MUTATING"
+    },
+    {
+      "name": "trg_doctrine_constraint_prd",
+      "function_name": "enforce_doctrine_of_constraint",
+      "fires_on_insert": true,
+      "fires_on_update": true,
+      "fires_before": true,
+      "kind": "BEFORE_MUTATING"
+    },
+    {
+      "name": "trg_prd_creation_source_advisory",
+      "function_name": "check_prd_creation_source",
+      "fires_on_insert": true,
+      "fires_on_update": false,
+      "fires_before": false,
+      "kind": "AFTER_NON_MUTATING"
+    },
+    {
+      "name": "trg_validate_integration_section_keys",
+      "function_name": "validate_integration_section_keys",
+      "fires_on_insert": true,
+      "fires_on_update": true,
+      "fires_before": true,
+      "kind": "BEFORE_MUTATING"
+    },
+    {
+      "name": "trigger_sync_prd_sd_linking",
+      "function_name": "sync_prd_sd_linking",
+      "fires_on_insert": true,
+      "fires_on_update": true,
+      "fires_before": true,
+      "kind": "BEFORE_MUTATING"
+    },
+    {
+      "name": "update_prd_timestamp",
+      "function_name": "update_updated_at",
+      "fires_on_insert": false,
+      "fires_on_update": true,
+      "fires_before": true,
+      "kind": "BEFORE_MUTATING"
+    }
+  ],
+  "trigger_controlled_columns": [
+    "planning_section",
+    "updated_at"
+  ],
+  "conditional_trigger_pairs": [
+    [
+      "directive_id",
+      "sd_id"
+    ]
+  ]
+}

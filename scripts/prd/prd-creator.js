@@ -12,6 +12,7 @@
 
 import { formatPRDContent } from './formatters.js';
 import { validatePRDFields } from './validate-prd-fields.js';
+import { validatePrdRow, PRDValidationError } from './schema-validator.js';
 
 /**
  * Truncate goal_summary/executive_summary to 300 characters max.
@@ -72,19 +73,27 @@ export async function createPRDEntry(supabase, prdId, sdId, sdIdValue, prdTitle,
     return existingPRD;
   }
 
+  // 3-layer validation order: validatePRDFields (content quality) → validatePrdRow (schema) → DB-side CHECK
+  const candidateRow = {
+    id: prdId,
+    directive_id: sdId,
+    sd_id: sdIdValue,
+    title: prdTitle || `Product Requirements for ${sdId}`,
+    status: 'planning',
+    category: 'technical',
+    priority: 'high',
+    executive_summary: `Technical requirements and implementation plan for ${prdTitle || sdId}. This PRD defines the scope, architecture, acceptance criteria, and test strategy for the strategic directive.`,
+    phase: 'planning',
+    created_by: 'PLAN',
+  };
+  const schemaCheck = validatePrdRow(candidateRow);
+  if (schemaCheck.warnings.length) console.warn(`   ⚠️  schema-validator warnings: ${schemaCheck.warnings.map((w) => w.kind).join(', ')}`);
+  if (!schemaCheck.ok) throw new PRDValidationError(schemaCheck.violations, schemaCheck.schema_version);
+
   const { data, error } = await supabase
     .from('product_requirements_v2')
     .insert({
-      id: prdId,
-      directive_id: sdId,
-      sd_id: sdIdValue,
-      title: prdTitle || `Product Requirements for ${sdId}`,
-      status: 'planning',
-      category: 'technical',
-      priority: 'high',
-      executive_summary: `Technical requirements and implementation plan for ${prdTitle || sdId}. This PRD defines the scope, architecture, acceptance criteria, and test strategy for the strategic directive.`,
-      phase: 'planning',
-      created_by: 'PLAN',
+      ...candidateRow,
       plan_checklist: [
         { text: 'PRD created and saved', checked: true },
         { text: 'SD requirements mapped to technical specs', checked: false },
@@ -278,6 +287,29 @@ export async function createPRDWithValidatedContent(
     // Override path: insert with warning flag after remediation attempt
     console.warn('   ⚠️  Inserting with pre_validation_warning flag (override active)\n');
   }
+
+  // 3-layer validation order: validatePRDFields (content quality, above) → validatePrdRow (schema) → DB-side CHECK
+  const candidateRowMin = {
+    id: prdId,
+    directive_id: sdId,
+    sd_id: sdIdValue,
+    title: prdTitle || `Product Requirements for ${sdId}`,
+    status: 'approved',
+    category: 'technical',
+    priority: 'high',
+    executive_summary: truncateGoalSummary(llmContent.executive_summary || `Product requirements document for Strategic Directive ${sdId}`),
+    phase: 'planning',
+    acceptance_criteria: llmContent.acceptance_criteria || [
+      'All functional requirements implemented',
+      'All tests passing (unit + E2E)',
+      'No regressions introduced',
+    ],
+    functional_requirements: llmContent.functional_requirements || [],
+    test_scenarios: llmContent.test_scenarios || [],
+  };
+  const schemaCheckV = validatePrdRow(candidateRowMin);
+  if (schemaCheckV.warnings.length) console.warn(`   ⚠️  schema-validator warnings: ${schemaCheckV.warnings.map((w) => w.kind).join(', ')}`);
+  if (!schemaCheckV.ok) throw new PRDValidationError(schemaCheckV.violations, schemaCheckV.schema_version);
 
   const { data, error } = await supabase
     .from('product_requirements_v2')
