@@ -1,0 +1,283 @@
+{
+  "executive_summary": "Add a parent-phase-aware pre-route guard to scripts/sd-start.js:627-715 so orchestrator parent SDs can be claimed for their own LEAD-TO-PLAN handoff before children are sequenced. Add a --parent CLI flag for explicit override. Closes PAT-ORCH-ROUTING-PHASE-BLINDNESS-001 — orchestrator parents whose own LEAD-TO-PLAN has not yet run (current_phase=LEAD_APPROVAL with zero accepted handoffs) are structurally unreachable today because routing short-circuits to leaf-claim the moment children.length>0, with no check on parent state. orchestrator-preflight.js SD_TYPE_PROFILES.orchestrator declares min_handoffs=2, so the parent IS expected to run its own LEAD — but no path exists. Live witness: SD-EVA-SUPPORT-CLI-SKILL-ORCH-001 stuck at status=draft, current_phase=LEAD_APPROVAL, 0 handoffs while child A is completed and B+C are draft-LEAD. Closes feedback ecf8471e-23a1-4560-accf-faa4d88a1b8f.",
+
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Add hasParentNeedsOwnLeadToPlan(supabase, sd) helper to scripts/sd-start.js. Returns false immediately when sd.sd_type !== 'orchestrator'. Returns true ONLY when sd.current_phase IN ('LEAD','LEAD_APPROVAL') AND sd_phase_handoffs has zero rows where sd_id=sd.id AND handoff_type='LEAD-TO-PLAN' AND status='accepted'. Throws on PostgrestError (FAIL-LOUD per PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Function defined in scripts/sd-start.js with JSDoc describing return contract",
+        "Static-guard regex test asserts source contains 'handoff_type', 'status', 'accepted', and 'LEAD-TO-PLAN' literals co-located within helper region",
+        "PostgrestError throws — verified by mock-supabase test returning {data:null, error:{code:'PG500'}}",
+        "Returns false without DB query when sd.sd_type is not 'orchestrator' (early-return verified by spy on supabase mock)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Modify scripts/sd-start.js orchestrator routing block (lines 627-715) to invoke hasParentNeedsOwnLeadToPlan after enforceCadenceGate and before getOrchestratorChildren leaf-routing. New decision tree branches: --parent flag → claim parent; no children → no-op; helper true → claim parent; allComplete → existing completion message; else → existing route-to-leaf.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Parent in LEAD_APPROVAL with 0 accepted LEAD-TO-PLAN handoffs gets claiming_session_id set; no child claim attempted",
+        "Parent past LEAD-TO-PLAN with incomplete children routes to leaf as before — parent untouched (backward compatibility)",
+        "Parent past LEAD-TO-PLAN with all children completed emits existing 'Run orchestrator completion' message at line 654-657",
+        "Output messages distinguish the new branch with clear text: 'Parent orchestrator needs own LEAD-TO-PLAN — claiming parent'"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Add --parent and --confirm CLI flags to scripts/sd-start.js. --parent forces parent claim regardless of children state. When --parent is set AND parent is past LEAD-TO-PLAN AND children incomplete, require --confirm subflag; without --confirm, exit 1 with advisory. --parent and --child must be mutually exclusive.",
+      "priority": "P1",
+      "acceptance_criteria": [
+        "--parent on parent in LEAD_APPROVAL claims parent (no children touched, exit 0)",
+        "--parent on past-LEAD parent with incomplete children and no --confirm exits 1 with message advising standard route-to-leaf",
+        "--parent --confirm always proceeds with parent claim",
+        "--parent and --child both set exits 1 with mutual-exclusion error"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Create tests/unit/sd-start-orch-routing-phase.test.js with at least 7 vitest cases covering hasParentNeedsOwnLeadToPlan happy path (TC-1: LEAD_APPROVAL+0 handoffs), legacy phase label (TC-2: LEAD+0 handoffs), past-LEAD (TC-3: accepted handoff exists), rejected-status edge (TC-4: status=rejected does not satisfy filter), non-orchestrator early-return (TC-5: sd_type=feature), PostgrestError fail-loud (TC-6: throws), and static-guard regression-pin (TC-7: fs.readFileSync regex assertion).",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "All 7 test cases pass under npx vitest run tests/unit/sd-start-orch-routing-phase.test.js",
+        "Test file uses canonical mock pattern matching existing tests/unit/sd-start*.test.js style",
+        "Static-guard test reads scripts/sd-start.js via fs.readFileSync and asserts via regex (mocking-independent)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Validate the fix against the live witness SD-EVA-SUPPORT-CLI-SKILL-ORCH-001 post-merge: running node scripts/sd-start.js SD-EVA-SUPPORT-CLI-SKILL-ORCH-001 must route to parent (not leaf) and log the new branch's distinguishing message. Children A, B, C must NOT be touched.",
+      "priority": "P1",
+      "acceptance_criteria": [
+        "Live witness routing decision is parent-claim on first post-merge attempt (or release-without-side-effects equivalent)",
+        "Stdout contains the FR-2 distinguishing message",
+        "Children A/B/C claiming_session_id remains unchanged after attempt",
+        "Smoke test outcome documented as evidence in PLAN-TO-LEAD handoff test_evidence section"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "requirement": "Ensure no regression in existing scripts/sd-start*.test.js test suites. Baseline pass count BEFORE the change must equal pass count AFTER the change for files matched by tests/unit/sd-start*.test.js pattern.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "vitest run tests/unit/sd-start*.test.js baseline captured before EXEC implementation begins",
+        "Same command after EXEC implementation shows identical pass count",
+        "Any new failures are immediately investigated (RCA-cascade per CLAUDE.md NC-005) — no failures may be carried into PLAN-TO-LEAD"
+      ]
+    }
+  ],
+
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "Helper hasParentNeedsOwnLeadToPlan must use canonical sd_phase_handoffs query shape mirroring scripts/modules/parent-orchestrator-handler.js:456-462: select 'handoff_type, status' filtered by sd_id=sd.id, then JS-side filter for handoff_type='LEAD-TO-PLAN' AND status='accepted'. Equivalent inline .eq('handoff_type','LEAD-TO-PLAN').eq('status','accepted') is also acceptable. Both shapes are canonical per validation-agent citation."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "Helper must be inline in scripts/sd-start.js (no separate module) — keeps the change surgical and co-located with caller. JSDoc must document the four-condition contract (orchestrator type AND phase in {LEAD,LEAD_APPROVAL} AND zero rows AND accepted-status filter)."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "No DB schema changes. No new columns, tables, indexes, or RLS policies. Read-only query on existing sd_phase_handoffs table. No changes to any file outside scripts/sd-start.js and tests/unit/sd-start-orch-routing-phase.test.js."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "Surgical implementation: total source LOC ≤50 in scripts/sd-start.js. Test LOC may be larger (≤350) for full case coverage. NO refactoring of getOrchestratorChildren, findLeafWorkItem, enforceCadenceGate, or any other adjacent helper."
+    },
+    {
+      "id": "TR-5",
+      "requirement": "Backward compatibility: existing route-to-leaf path (parents past LEAD-TO-PLAN) MUST be unchanged. Conjunctive predicate (current_phase IN {LEAD,LEAD_APPROVAL} AND zero accepted L2P) prevents past-LEAD orchestrators with anomalous zero-handoff history from spuriously routing to parent."
+    }
+  ],
+
+  "system_architecture": {
+    "overview": "Single-file modification to scripts/sd-start.js inserting a pre-route guard between the cadence gate at line 625 and the children-detection block at line 630. The guard is a small async helper plus an additional decision branch in the existing orchestrator-detection if-block. No new modules, no schema changes, no cross-file dependencies.",
+    "components": [
+      {
+        "name": "hasParentNeedsOwnLeadToPlan",
+        "type": "helper function",
+        "location": "scripts/sd-start.js (near top, alongside getOrchestratorChildren and findLeafWorkItem)",
+        "responsibility": "Determine whether the parent orchestrator SD requires its own LEAD-TO-PLAN handoff before children can be sequenced. Returns boolean. Throws on PostgrestError."
+      },
+      {
+        "name": "Routing decision branch",
+        "type": "code block",
+        "location": "scripts/sd-start.js:627-715 (modified in place)",
+        "responsibility": "Insert hasParentNeedsOwnLeadToPlan check between getOrchestratorChildren and findLeafWorkItem. Add --parent and --confirm flag handling at top of orchestrator block."
+      },
+      {
+        "name": "Vitest regression suite",
+        "type": "test file",
+        "location": "tests/unit/sd-start-orch-routing-phase.test.js (new)",
+        "responsibility": "Verify helper's decision matrix and static-guard regression-pin via 7+ test cases."
+      }
+    ],
+    "data_flow": "sd-start.js entry → enforceCadenceGate (existing, line 625) → check --parent flag (new) → getOrchestratorChildren (existing, line 630) → if children.length>0: hasParentNeedsOwnLeadToPlan (new) → branch parent-claim OR findLeafWorkItem (existing) → claim flow continues. Read-only query on sd_phase_handoffs filtered by sd_id+handoff_type+status. No writes outside the existing claim flow which sets claiming_session_id on strategic_directives_v2.",
+    "integration_points": [
+      {
+        "name": "scripts/sd-start.js claim flow",
+        "type": "internal",
+        "interaction": "helper invoked from existing orchestrator detection block; routing decision determines whether to claim parent or route to leaf"
+      },
+      {
+        "name": "sd_phase_handoffs table",
+        "type": "database read",
+        "interaction": "single SELECT per claim attempt, filtered by sd_id, handoff_type='LEAD-TO-PLAN', status='accepted'. Existing canonical pattern."
+      },
+      {
+        "name": "claim_validity_gate",
+        "type": "downstream",
+        "interaction": "unaffected — runs after routing decision regardless of branch taken"
+      },
+      {
+        "name": "parent-orchestrator-handler.js getNextAction",
+        "type": "indirect consumer",
+        "interaction": "already correctly recommends LEAD-TO-PLAN at line 461; this fix unblocks the recommendation's CLI execution path. No code changes needed in handler."
+      }
+    ]
+  },
+
+  "implementation_approach": {
+    "summary": "Three-phase EXEC plan. Phase 1: write helper + tests (TDD-style). Phase 2: integrate routing decision + flag handling. Phase 3: verify no regression + smoke test live witness post-merge.",
+    "phases": [
+      {
+        "phase": 1,
+        "name": "Helper + tests (TDD)",
+        "steps": [
+          "Add hasParentNeedsOwnLeadToPlan(supabase, sd) helper to scripts/sd-start.js near getOrchestratorChildren",
+          "Write tests/unit/sd-start-orch-routing-phase.test.js with TC-1 through TC-7",
+          "Run npx vitest run tests/unit/sd-start-orch-routing-phase.test.js — all green"
+        ]
+      },
+      {
+        "phase": 2,
+        "name": "Routing decision + flag integration",
+        "steps": [
+          "Modify scripts/sd-start.js:627-715 to invoke helper and route to parent when true",
+          "Add --parent and --confirm flag handling at top of orchestrator block",
+          "Update vitest suite if integration tests are added (optional TC-8)"
+        ]
+      },
+      {
+        "phase": 3,
+        "name": "Verification",
+        "steps": [
+          "Run npx vitest run tests/unit/sd-start*.test.js — baseline before/after must match",
+          "After PR merges to main: smoke test live witness SD-EVA-SUPPORT-CLI-SKILL-ORCH-001"
+        ]
+      }
+    ]
+  },
+
+  "acceptance_criteria": [
+    "FR-1 helper present, throws on PostgrestError, returns false for non-orchestrator types — verified by static guard + PostgrestError-throws test",
+    "FR-2 decision tree updated; all four AC-2 sub-criteria verified",
+    "FR-3 --parent flag with --confirm safety implemented; AC-3.1 through AC-3.4 verified",
+    "FR-4 vitest suite ≥7 cases passing; static-guard regex test included; PostgrestError-throws asserted",
+    "FR-5 live witness verified post-merge (PLAN-TO-LEAD evidence)",
+    "FR-6 no regression in existing tests/unit/sd-start*.test.js (baseline pass count identical)",
+    "Russian Judge ≥70% on PRD; placeholder check passes; no TBD in any field"
+  ],
+
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "test_type": "integration",
+      "scenario": "Witness SD reproduction: with SD-EVA-SUPPORT-CLI-SKILL-ORCH-001 in current state (current_phase=LEAD_APPROVAL, 0 handoffs, A=completed, B+C=draft-LEAD), run sd-start.js. Expected: parent claimed; no child touched; new branch's distinguishing message logged."
+    },
+    {
+      "id": "TS-2",
+      "test_type": "unit",
+      "scenario": "Backward compatibility: mock orchestrator with current_phase=PLAN AND existing accepted LEAD-TO-PLAN handoff AND at least one incomplete child. Expected: hasParentNeedsOwnLeadToPlan returns false; routing falls through to existing leaf-routing path."
+    },
+    {
+      "id": "TS-3",
+      "test_type": "unit",
+      "scenario": "All-children-completed branch: orchestrator past LEAD-TO-PLAN with all children completed. Expected: existing allComplete branch fires (line 637-657), helper not invoked, completion advisory emitted."
+    },
+    {
+      "id": "TS-4",
+      "test_type": "integration",
+      "scenario": "--parent flag on past-LEAD parent: pass --parent without --confirm on a parent that already has accepted LEAD-TO-PLAN with incomplete children. Expected: exit 1 with advisory. With --confirm added: claims parent successfully."
+    },
+    {
+      "id": "TS-5",
+      "test_type": "unit",
+      "scenario": "PostgrestError fail-loud: mock supabase to return {data:null, error:{code:'PG500',message:'simulated'}}. Expected: hasParentNeedsOwnLeadToPlan throws (does NOT silently return false). Static-guard test asserts the throw is in the source."
+    },
+    {
+      "id": "TS-6",
+      "test_type": "unit",
+      "scenario": "status=rejected handoff edge case: parent has one LEAD-TO-PLAN row with status='rejected' (not accepted). Expected: helper returns true (rejected status does not satisfy the accepted-only filter)."
+    },
+    {
+      "id": "TS-7",
+      "test_type": "regression",
+      "scenario": "Static-guard regression-pin: fs.readFileSync('scripts/sd-start.js','utf8'); regex assertion that the helper's source region contains all of: 'handoff_type', 'LEAD-TO-PLAN', 'status', 'accepted'. Mocking-independent — test does not invoke supabase or sd-start.js logic."
+    },
+    {
+      "id": "TS-8",
+      "test_type": "regression",
+      "scenario": "No-regression baseline: run npx vitest run tests/unit/sd-start*.test.js before EXEC implementation, capture pass count. Run again after implementation, assert identical pass count."
+    }
+  ],
+
+  "risks": [
+    {
+      "id": "R1",
+      "risk": "Backward compatibility break: past-LEAD orchestrators with anomalous zero-handoff history (legacy data) spuriously route to parent and double-claim incorrect phase",
+      "likelihood": "low",
+      "impact": "high",
+      "mitigation": "Conjunctive predicate REQUIRES BOTH current_phase IN ('LEAD','LEAD_APPROVAL') AND zero accepted L2P. Past-LEAD parents have non-LEAD current_phase and will not satisfy first conjunct. AC-2.2 verifies this via TS-2.",
+      "rollback_plan": "git revert <merge-commit> reverts both source and tests atomically. No DB rollback needed (no schema changes). Live witness reverts to current stuck state — no data corruption."
+    },
+    {
+      "id": "R2",
+      "risk": "Race condition: two sessions claim the same orchestrator simultaneously",
+      "likelihood": "very_low",
+      "impact": "low",
+      "mitigation": "Existing claim_validity_gate handles session conflicts via claiming_session_id UPDATE atomicity. New helper runs in-process before claiming_session_id is set. Race resolves identically to current code path.",
+      "rollback_plan": "Same as R1 — git revert sufficient. No new race surface introduced."
+    },
+    {
+      "id": "R3",
+      "risk": "Wrong handoff query column or missing status filter — helper either always-fires (no status filter, rejected counts as accepted) or never-fires (wrong column name)",
+      "likelihood": "medium",
+      "impact": "high",
+      "mitigation": "Use canonical pattern from parent-orchestrator-handler.js:456-462 verbatim. Static-guard test (TS-7) regex-asserts source contains 'handoff_type', 'status', 'accepted', 'LEAD-TO-PLAN' in helper region. PostgrestError-throws test catches subtle query failures.",
+      "rollback_plan": "git revert plus immediate follow-up QF if helper logic flaw discovered post-merge"
+    },
+    {
+      "id": "R5",
+      "risk": "--parent flag footgun: user runs --parent on past-LEAD orchestrator and double-claims wrong phase",
+      "likelihood": "medium",
+      "impact": "medium",
+      "mitigation": "FR-3 requires --confirm subflag for past-LEAD parents. Without --confirm, exit 1 with advisory. AC-3.2 verifies. Mutual-exclusion with --child flag (AC-3.4) prevents another footgun class.",
+      "rollback_plan": "git revert restores prior behavior. No persistent state corruption from incorrect --parent usage (claim_validity_gate is idempotent)."
+    },
+    {
+      "id": "R6",
+      "risk": "Scope creep: fixing nearby concerns (sd-start.js:183 sibling bug verifyHandoffIntegrity .eq('sd_key',sdUuid)) within this PR",
+      "likelihood": "medium",
+      "impact": "medium",
+      "mitigation": "Locked OUT OF SCOPE in SD scope. Separate QF if needed. PR review and self-review must verify no edits outside scripts/sd-start.js orchestrator block + new test file.",
+      "rollback_plan": "If scope creep occurs, revert the offending commit and re-submit clean PR. Sibling-bug fix tracked in separate work item."
+    }
+  ],
+
+  "metadata": {
+    "sd_key": "SD-FDBK-INFRA-ORCHESTRATOR-ROUTING-PHASE-001",
+    "pattern_id": "PAT-ORCH-ROUTING-PHASE-BLINDNESS-001",
+    "witness_sds": ["SD-EVA-SUPPORT-CLI-SKILL-ORCH-001"],
+    "rca_run_id": "c92aead4-b5bd-4945-9b48-9d9770aa35df",
+    "closes_feedback": ["ecf8471e-23a1-4560-accf-faa4d88a1b8f"],
+    "lead_subagent_evidence": {
+      "validation": "c449abf3-4cd3-4a4b-b4a8-e5ca0f6b460c",
+      "risk": "817cba3b-8959-44ac-b460-8d622a86619c"
+    },
+    "estimated_loc_source": 50,
+    "estimated_loc_tests": 250,
+    "tier": "T2-T3 boundary (Tier-3 by full SD workflow despite small LOC; risk-keyword-equivalent due to routing-critical path)"
+  }
+}
