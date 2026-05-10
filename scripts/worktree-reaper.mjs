@@ -219,32 +219,63 @@ function getSupabaseClient() {
   } catch { return null; }
 }
 
-async function loadClaimMap(supabase, { heartbeatThresholdMs = 2 * 60 * 60 * 1000 } = {}) {
+// QF-20260510-WT-CLAIM-PROTECT-001: v_active_sessions does NOT expose a
+// worktree_path column; the prior query referenced it and silently swallowed
+// the PostgrestError, leaving the claim map empty so every active session was
+// classified claim_status=absent and eligible for stage1_remove. Anyone
+// running --execute would have destroyed actively-claimed worktrees with
+// dirty files. Now we (a) select only schema-correct columns, (b) FAIL-LOUD
+// on supabase errors so silent corruption is impossible, and (c) derive the
+// worktree path from the .worktrees/<sd_key> | .worktrees/qf/<qf_id>
+// convention plus a current_branch fallback (handles stale-claim rows where
+// the session moved branches without releasing). Pattern witness:
+// PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 (17th).
+async function loadClaimMap(supabase, { heartbeatThresholdMs = 2 * 60 * 60 * 1000, repoRoot = process.cwd() } = {}) {
   const map = new Map();
   if (!supabase) return map;
-  try {
-    const { data, error } = await supabase
-      .from('v_active_sessions')
-      .select('session_id, sd_key, worktree_path, last_heartbeat_at, computed_status')
-      .not('worktree_path', 'is', null);
-    if (error || !data) return map;
-    const now = Date.now();
-    for (const row of data) {
-      if (row.computed_status && row.computed_status !== 'active') continue;
-      if (row.last_heartbeat_at) {
-        const hb = new Date(row.last_heartbeat_at).getTime();
-        if (Number.isFinite(hb) && now - hb > heartbeatThresholdMs) continue;
-      }
-      const normalized = normalizePath(row.worktree_path);
-      if (normalized) {
-        map.set(normalized, {
-          sd_key: row.sd_key,
-          session_id: row.session_id,
-          heartbeat_at: row.last_heartbeat_at,
-        });
-      }
+  const { data, error } = await supabase
+    .from('v_active_sessions')
+    .select('session_id, sd_key, qf_id, current_branch, heartbeat_at, computed_status')
+    .eq('computed_status', 'active');
+  if (error) {
+    throw new Error(
+      `[reaper] loadClaimMap query failed: ${error.message}` +
+      (error.code ? ` (code=${error.code})` : '') +
+      ' — refusing to proceed; silent failure here causes active-claim destruction.'
+    );
+  }
+  if (!data) return map;
+  const worktreesDir = path.join(repoRoot, '.worktrees');
+  const now = Date.now();
+  function addCandidate(wtPath, info) {
+    const normalized = normalizePath(wtPath);
+    if (normalized) map.set(normalized, info);
+  }
+  function branchToBasename(branch) {
+    if (!branch) return null;
+    const m = String(branch).match(/^(?:refs\/heads\/)?(?:feat|qf|fix|chore|hotfix)\/(.+)$/);
+    return m ? m[1] : null;
+  }
+  for (const row of data) {
+    if (row.computed_status && row.computed_status !== 'active') continue;
+    if (row.heartbeat_at) {
+      const hb = new Date(row.heartbeat_at).getTime();
+      if (Number.isFinite(hb) && now - hb > heartbeatThresholdMs) continue;
     }
-  } catch { /* fall through with empty map */ }
+    const info = {
+      sd_key: row.sd_key,
+      qf_id: row.qf_id,
+      session_id: row.session_id,
+      heartbeat_at: row.heartbeat_at,
+    };
+    if (row.sd_key) addCandidate(path.join(worktreesDir, row.sd_key), info);
+    if (row.qf_id) addCandidate(path.join(worktreesDir, 'qf', row.qf_id), info);
+    const branchBase = branchToBasename(row.current_branch);
+    if (branchBase) {
+      if (/^QF-/.test(branchBase)) addCandidate(path.join(worktreesDir, 'qf', branchBase), info);
+      else addCandidate(path.join(worktreesDir, branchBase), info);
+    }
+  }
   return map;
 }
 
