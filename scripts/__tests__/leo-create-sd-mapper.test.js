@@ -13,13 +13,19 @@ const SCRIPT_PATH = path.resolve(__dirname, '../leo-create-sd.js').replace(/\\/g
 
 function probeMapper(userType) {
   const { spawnSync } = require('node:child_process');
-  // Lift VALID_DB_SD_TYPES + mapToDbType() out of the script source and
-  // eval them in a child node, then print the result of mapToDbType(userType).
-  const src = require('node:fs').readFileSync(SCRIPT_PATH, 'utf8');
+  const fs = require('node:fs');
+  // SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001 FR-4: mapToDbType now imports
+  // assertValidSdType from lib/sd-type-enum.js. Inject the lib source so the
+  // extracted function can resolve the dep in the child eval context.
+  const src = fs.readFileSync(SCRIPT_PATH, 'utf8');
+  const enumSrc = fs.readFileSync(
+    path.resolve(__dirname, '../../lib/sd-type-enum.js')
+  , 'utf8').replace(/\bexport\s+(const|function)\b/g, '$1');
   const validMatch = src.match(/const VALID_DB_SD_TYPES = \[([\s\S]*?)\];/);
   const fnMatch = src.match(/function mapToDbType\(userType\)\s*\{[\s\S]*?\n\}/);
   if (!validMatch || !fnMatch) throw new Error('Could not extract mapper from script');
   const code =
+    enumSrc + '\n' +
     validMatch[0] + '\n' +
     fnMatch[0] + '\n' +
     'process.stdout.write(String(mapToDbType(' + JSON.stringify(userType) + ')));';

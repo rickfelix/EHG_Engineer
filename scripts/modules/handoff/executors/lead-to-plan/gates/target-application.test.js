@@ -224,7 +224,7 @@ describe('detectFromKeyChanges', () => {
   it('returns null when no path patterns match', () => {
     const result = detectFromKeyChanges([
       { type: 'feature', change: 'docs/some-prose-only-change.md' },
-      { type: 'fix', change: 'unrelated text with no path prefix' },
+      { type: 'bugfix', change: 'unrelated text with no path prefix' },
     ]);
     expect(result).toBeNull();
   });

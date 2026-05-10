@@ -10,13 +10,18 @@
  * Per-sd_type threshold configuration.
  * Defines how many of the 8 JSONB fields must be populated per SD type.
  */
+// SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001: phantom 'fix' key removed (was {requiredFields:4,
+// minDescriptionWords:50, passingScore:60}). Canonical sd_type is 'bugfix' (per DB CHECK
+// constraint and lib/sd-type-enum.js). The synonym layer in leo-create-sd.js maps user
+// input 'fix' → 'bugfix' before reaching this scoring map; nothing inside the scoring
+// pipeline should ever receive 'fix' after the FR-4 fail-loud guard.
 export const SD_TYPE_THRESHOLDS = {
   feature:        { requiredFields: 8, minDescriptionWords: 100, passingScore: 70 },
   security:       { requiredFields: 8, minDescriptionWords: 100, passingScore: 70 },
   infrastructure: { requiredFields: 6, minDescriptionWords: 50,  passingScore: 65 },
   enhancement:    { requiredFields: 6, minDescriptionWords: 50,  passingScore: 65 },
   refactor:       { requiredFields: 5, minDescriptionWords: 50,  passingScore: 60 },
-  fix:            { requiredFields: 4, minDescriptionWords: 50,  passingScore: 60 },
+  bugfix:         { requiredFields: 4, minDescriptionWords: 50,  passingScore: 60 },
   documentation:  { requiredFields: 3, minDescriptionWords: 30,  passingScore: 55 },
 };
 
