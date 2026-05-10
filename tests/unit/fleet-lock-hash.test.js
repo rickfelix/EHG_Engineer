@@ -1,7 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { promises as fsp, existsSync, readFileSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { promises as fsp, existsSync, readFileSync, utimesSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import {
   computeLockHash,
   readMarker,
@@ -10,8 +14,10 @@ import {
   peerSessionSnapshot,
   emitFractureForDiff,
   evaluateInstallDecision,
+  checkStagingState,
   MARKER_FILENAME,
-  FRACTURE_CODE
+  FRACTURE_CODE,
+  STAGING_DIRNAME
 } from '../../lib/fleet-lock-hash.mjs';
 
 // SD-LEO-INFRA-FLEET-SAFE-NODE-001 unit tests.
@@ -299,5 +305,245 @@ describe('fleet-lock-hash: evaluateInstallDecision (integration of helpers)', ()
     const d = await evaluateInstallDecision({ repoRoot: repo });
     expect(d.skip).toBe(false);
     expect(d.reason).toContain('install required: hash drift');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-LEO-INFRA-FLEET-LOCK-HASH-001
+// FR-1: .staging contention guard (mirrors pre-tool-enforce.cjs ENF-12 base check)
+// FR-3: return-shape contract pin
+// FR-4: static-guard regression-pin (writer + consumer parity)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function setStagingMtimeAge(stagingPath, ageMs) {
+  const target = new Date(Date.now() - ageMs);
+  utimesSync(stagingPath, target, target);
+}
+
+function makeStagingDir(repo, { withFile = true } = {}) {
+  const sp = path.join(repo, 'node_modules', STAGING_DIRNAME);
+  mkdirSync(sp, { recursive: true });
+  if (withFile) writeFileSync(path.join(sp, 'marker'), 'x');
+  return sp;
+}
+
+describe('fleet-lock-hash: checkStagingState (FR-1 helper)', () => {
+  let repo;
+  beforeEach(async () => { repo = await mkTmpRepo(); });
+  afterEach(async () => { await fsp.rm(repo, { recursive: true, force: true }); });
+
+  it('TS-1: state=absent when .staging does not exist', () => {
+    const r = checkStagingState(repo);
+    expect(r.state).toBe('absent');
+    expect(r.stagingPath).toMatch(/\.staging$/);
+  });
+
+  it('TS-5: state=absent when .staging exists but is empty (parity with ENF-12 readdirSync.length>0)', () => {
+    makeStagingDir(repo, { withFile: false });
+    const r = checkStagingState(repo);
+    expect(r.state).toBe('absent');
+  });
+
+  it('TS-2: state=fresh when .staging non-empty and mtime ≤ FRESHNESS_MS', () => {
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 30_000);
+    const r = checkStagingState(repo);
+    expect(r.state).toBe('fresh');
+    expect(r.mtimeAgeMs).toBeGreaterThan(0);
+    expect(r.mtimeAgeMs).toBeLessThan(60_000);
+  });
+
+  it('TS-3: state=stale_cleaned when .staging mtime > FRESHNESS_MS — auto-clean succeeds', () => {
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 120_000);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const r = checkStagingState(repo);
+    expect(r.state).toBe('stale_cleaned');
+    expect(existsSync(sp)).toBe(false);
+    expect(r.mtimeAgeMs).toBeGreaterThan(60_000);
+    const events = stderrSpy.mock.calls.map(c => c[0]).join('');
+    expect(events).toContain('staging_orphan_cleaned');
+    stderrSpy.mockRestore();
+  });
+});
+
+describe('fleet-lock-hash: evaluateInstallDecision .staging guard (FR-1 a/b/c/d/e + TS-9/TS-10/TS-13)', () => {
+  let repo;
+  beforeEach(async () => {
+    repo = await mkTmpRepo();
+    await fsp.writeFile(path.join(repo, 'package-lock.json'), '{"a":1}');
+  });
+  afterEach(async () => { await fsp.rm(repo, { recursive: true, force: true }); });
+
+  it('TS-1: no .staging — falls through to existing hash/canary logic (skip=false: no marker)', async () => {
+    const d = await evaluateInstallDecision({ repoRoot: repo });
+    expect(d.skip).toBe(false);
+    expect(d.reason).toMatch(/no hash marker/);
+  });
+
+  it('TS-2: fresh .staging defers (skip=true, reason=staging_active, retry_after_seconds=60)', async () => {
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 10_000);
+    const d = await evaluateInstallDecision({ repoRoot: repo });
+    expect(d.skip).toBe(true);
+    expect(d.reason).toBe('staging_active');
+    expect(d.retry_after_seconds).toBe(60);
+    expect(d.staging_path).toBe(sp);
+  });
+
+  it('TS-3: stale .staging auto-cleans, then falls through to hash/canary logic', async () => {
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 120_000);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const d = await evaluateInstallDecision({ repoRoot: repo });
+    expect(existsSync(sp)).toBe(false);
+    expect(d.skip).toBe(false);
+    expect(d.reason).toMatch(/no hash marker/);
+    stderrSpy.mockRestore();
+  });
+
+  it('TS-5: empty .staging (npm post-cleanup leftover) does NOT trigger contention', async () => {
+    makeStagingDir(repo, { withFile: false });
+    const d = await evaluateInstallDecision({ repoRoot: repo });
+    expect(d.skip).toBe(false);
+    expect(d.reason).toMatch(/no hash marker/);
+    expect(d.reason).not.toBe('staging_active');
+  });
+
+  it('TS-7: mtime exactly at FRESHNESS_MS boundary stays in defer band (≤60s)', async () => {
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 60_000);
+    const d = await evaluateInstallDecision({ repoRoot: repo });
+    expect(d.skip).toBe(true);
+    expect(d.reason).toBe('staging_active');
+  });
+
+  it('TS-9: storedHash=null + fresh .staging — staging-active precedence wins', async () => {
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 5_000);
+    const d = await evaluateInstallDecision({ repoRoot: repo });
+    expect(d.skip).toBe(true);
+    expect(d.reason).toBe('staging_active');
+    expect(d.currentHash).toBeNull();
+    expect(d.storedHash).toBeNull();
+  });
+
+  it('TS-10: --force-install + fresh .staging — force takes precedence with override warning', async () => {
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 5_000);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const d = await evaluateInstallDecision({ repoRoot: repo, forceInstall: true });
+    expect(d.skip).toBe(false);
+    expect(d.reason).toBe('install required: --force-install flag present');
+    const events = stderrSpy.mock.calls.map(c => c[0]).join('');
+    expect(events).toContain('staging_contention_overridden_by_force');
+    stderrSpy.mockRestore();
+  });
+
+  it('TS-11 (FR-3): return-shape contract — fresh-staging branch keys', async () => {
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 5_000);
+    const d = await evaluateInstallDecision({ repoRoot: repo });
+    expect(Object.keys(d).sort()).toEqual([
+      'canaryPresent',
+      'currentHash',
+      'reason',
+      'retry_after_seconds',
+      'skip',
+      'staging_path',
+      'storedHash'
+    ]);
+  });
+
+  it('TS-11 (FR-3): return-shape contract — no-staging branch keys (existing baseline)', async () => {
+    const d = await evaluateInstallDecision({ repoRoot: repo });
+    expect(Object.keys(d).sort()).toEqual([
+      'canaryPresent',
+      'currentHash',
+      'reason',
+      'skip',
+      'storedHash'
+    ]);
+  });
+});
+
+describe('fleet-lock-hash: TS-4 stale-staging clean FAILURE → fail-CLOSED', () => {
+  let repo;
+  beforeEach(async () => {
+    repo = await mkTmpRepo();
+    await fsp.writeFile(path.join(repo, 'package-lock.json'), '{"a":1}');
+  });
+  afterEach(async () => { await fsp.rm(repo, { recursive: true, force: true }); vi.restoreAllMocks(); });
+
+  it('TS-4: when safeRecursiveRm throws (Windows EBUSY simulation), evaluateInstallDecision returns staging_orphan_clean_failed', async () => {
+    // We cannot easily mock the dep mid-run without vi.mock at module load,
+    // so simulate the failure by making the staging directory undeletable in
+    // a portable way: replace the directory entry with an inaccessible path
+    // (use a chmod-locked dir on POSIX). Instead, we exercise the fail-CLOSED
+    // contract by mocking process.stderr.write and asserting our helper's
+    // own code path: we invoke it directly with a stale dir, then verify the
+    // event surface. Since the actual rm could succeed on this platform, we
+    // gate this assertion on the 'stale_clean_failed' branch's stderr emit.
+    //
+    // Portable approach: spy on safeRecursiveRm by importing the module's
+    // re-export and mocking. We mock the worktree-manager module so the
+    // import inside fleet-lock-hash.mjs receives our throwing helper.
+    vi.resetModules();
+    vi.doMock('../../lib/worktree-manager.js', () => ({
+      safeRecursiveRm: () => { throw new Error('EBUSY simulated'); }
+    }));
+    const mod = await import('../../lib/fleet-lock-hash.mjs?freshTS4=' + Date.now());
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 120_000);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const d = await mod.evaluateInstallDecision({ repoRoot: repo });
+    expect(d.skip).toBe(true);
+    expect(d.reason).toBe('staging_orphan_clean_failed');
+    expect(d.staging_path).toBe(sp);
+    const events = stderrSpy.mock.calls.map(c => c[0]).join('');
+    expect(events).toContain('staging_orphan_clean_failed');
+    expect(events).toContain('EBUSY simulated');
+    stderrSpy.mockRestore();
+    vi.doUnmock('../../lib/worktree-manager.js');
+  });
+});
+
+describe('fleet-lock-hash: TS-12 (FR-4) static-guard — .staging signal in writer + consumer', () => {
+  it('lib/fleet-lock-hash.mjs references .staging signal', () => {
+    const src = readFileSync(path.resolve(__dirname, '../../lib/fleet-lock-hash.mjs'), 'utf8');
+    expect(src).toMatch(/\.staging/);
+  });
+
+  it('scripts/hooks/pre-tool-enforce.cjs references .staging signal (writer-side parity per ENF-12)', () => {
+    const src = readFileSync(path.resolve(__dirname, '../../scripts/hooks/pre-tool-enforce.cjs'), 'utf8');
+    expect(src).toMatch(/\.staging/);
+    // PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 14th-witness regression-pin:
+    // if either surface drops the .staging check in future, CI fails here with
+    // a clear pointer to the asymmetry pattern.
+  });
+
+  it('TS-8: concurrent FR-1c clean race — second call sees ENOENT, tolerated', async () => {
+    const repo = await mkTmpRepo();
+    try {
+      await fsp.writeFile(path.join(repo, 'package-lock.json'), '{"a":1}');
+      const sp = makeStagingDir(repo);
+      setStagingMtimeAge(sp, 120_000);
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      // Run two concurrent evaluateInstallDecision calls. First will clean;
+      // second will see absent (or in a true race, ENOENT swallowed by
+      // safeRecursiveRm's force=true). Both must return WITHOUT throwing.
+      const [a, b] = await Promise.all([
+        evaluateInstallDecision({ repoRoot: repo }),
+        evaluateInstallDecision({ repoRoot: repo })
+      ]);
+      // At least one returns the post-clean fall-through; both have skip=false
+      // (no contention). Neither should be staging_orphan_clean_failed.
+      expect(a.reason).not.toBe('staging_orphan_clean_failed');
+      expect(b.reason).not.toBe('staging_orphan_clean_failed');
+      expect(existsSync(sp)).toBe(false);
+      stderrSpy.mockRestore();
+    } finally {
+      await fsp.rm(repo, { recursive: true, force: true });
+    }
   });
 });
