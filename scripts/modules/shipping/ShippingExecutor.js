@@ -14,6 +14,7 @@ import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import dotenv from 'dotenv';
+import { captureClaimSnapshot, releaseClaimOnPROpen } from '../../../lib/claim-lifecycle-release.mjs';
 
 dotenv.config();
 
@@ -84,6 +85,22 @@ export class ShippingExecutor {
         throw new Error('Cannot create PR from main branch');
       }
 
+      // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001 FR-1: capture pre-PR-create
+      // claim snapshot for compare-and-set release (Option B per validation-agent
+      // P1: existing columns claiming_session_id+claimed_at+heartbeat_at, no
+      // claim_version migration). Branch name is the canonical sd_key source for
+      // /ship — branches are formed as feat/<SD-KEY> or qf/<QF-KEY>.
+      const sdKeyFromBranch = (this.context.sdId || branch || '')
+        .replace(/^(feat|fix|chore|qf)\//, '');
+      let claimSnapshot = null;
+      if (sdKeyFromBranch && sdKeyFromBranch.startsWith('SD-')) {
+        try {
+          claimSnapshot = await captureClaimSnapshot(sdKeyFromBranch);
+        } catch (snapErr) {
+          console.log(`   ⚠️  Claim snapshot capture failed (non-fatal): ${snapErr.message}`);
+        }
+      }
+
       // Push if needed
       console.log('   [1/3] Ensuring branch is pushed...');
       try {
@@ -120,6 +137,22 @@ PREOF
         result.prNumber = numberMatch ? parseInt(numberMatch[1]) : null;
         result.success = true;
         console.log(`   ✅ PR #${result.prNumber} created: ${result.prUrl}`);
+
+        // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001 FR-1: release the claim on the
+        // SD whose branch the PR was opened against. Failure here is logged at
+        // warn-level but does NOT block the PR-creation pipeline (AC-1.6).
+        if (claimSnapshot) {
+          try {
+            const releaseResult = await releaseClaimOnPROpen(claimSnapshot);
+            if (releaseResult.released) {
+              console.log(`   🔓 Claim released on PR-open for ${claimSnapshot.id}`);
+            } else if (releaseResult.reason === 'already_released_or_reasserted') {
+              console.log(`   ℹ️  Claim noop (re-asserted post-snapshot or already released)`);
+            }
+          } catch (releaseErr) {
+            console.warn(`   ⚠️  PR created but claim-release failed (non-blocking): ${releaseErr.message}`);
+          }
+        }
       } else {
         // Check if PR already exists
         const existsMatch = (stdout + stderr).match(/already exists/i);
