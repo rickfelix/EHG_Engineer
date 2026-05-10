@@ -464,13 +464,49 @@ async function cleanupStaleConcurrentWorktrees(supabase) {
         // then rmSync the rest. Sibling fix in scripts/worktree-reaper.mjs uses the canonical
         // safeRecursiveRm helper (lib/worktree-manager.js) — this CJS hook inlines the same
         // logic to avoid CJS-to-ESM dynamic-import contortions in a hot session-startup path.
-        try {
-          const nm = path.join(wtPath, 'node_modules');
-          const lst = fs.lstatSync(nm);
-          if (lst.isSymbolicLink()) fs.unlinkSync(nm);
-        } catch { /* no junction or doesn't exist */ }
-        fs.rmSync(wtPath, { recursive: true, force: true });
-        cleaned++;
+        //
+        // SD-LEO-INFRA-WORKTREE-CLEANUP-WINDOWS-001 (FR-1c): CJS retry parity.
+        // ESM safeRecursiveRmWithRetry (lib/worktree-manager.js) uses delaysMs=[100,500,2000].
+        // We mirror the same schedule + same EPERM/ENOTEMPTY/EBUSY/ENOENT-benign catch set
+        // here to avoid the asymmetry where parallel SessionStart hits the CJS path AND
+        // accumulates orphans the ESM helper would have retried-and-cleaned.
+        // Parity test: tests/lib/worktree-manager-retry.test.js asserts schedule equality.
+        const CJS_RETRY_DELAYS_MS = [100, 500, 2000]; // KEEP IN SYNC with safeRecursiveRmWithRetry
+        let rmOk = false;
+        let lastErr = null;
+        for (let attempt = 0; attempt < CJS_RETRY_DELAYS_MS.length; attempt++) {
+          try {
+            const nm = path.join(wtPath, 'node_modules');
+            try {
+              const lst = fs.lstatSync(nm);
+              if (lst.isSymbolicLink()) fs.unlinkSync(nm);
+            } catch { /* no junction or doesn't exist */ }
+            fs.rmSync(wtPath, { recursive: true, force: true });
+            rmOk = !fs.existsSync(wtPath);
+            if (rmOk) break;
+            lastErr = `path still exists after attempt ${attempt + 1}`;
+          } catch (rmErr) {
+            lastErr = rmErr && rmErr.message ? rmErr.message : String(rmErr);
+            if (rmErr && rmErr.code === 'ENOENT') { rmOk = true; break; }
+          }
+          if (attempt < CJS_RETRY_DELAYS_MS.length - 1) {
+            const wait = CJS_RETRY_DELAYS_MS[attempt];
+            const deadline = Date.now() + wait;
+            while (Date.now() < deadline) { /* spin — sync hook, no sleep */ }
+          }
+        }
+        if (rmOk) {
+          cleaned++;
+        } else {
+          // Persistent failure — log structured event so the reaper sweep can pick it up
+          // on a future tick. (No DB UPDATE here: CJS hook lacks a Supabase client and
+          // the worktree-reaper.mjs scan covers the orphan path independently.)
+          logEvent('session.stale_cleanup_deferred', {
+            wtPath,
+            attempts: CJS_RETRY_DELAYS_MS.length,
+            lastError: lastErr,
+          });
+        }
       } catch { /* best effort */ }
     }
   }
