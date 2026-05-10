@@ -57,11 +57,23 @@ const STATE_DIR = path.join(os.tmpdir(), 'leo-context-nudge');
 const STATE_FILE = path.join(STATE_DIR, `session-${SESSION_ID}.json`);
 
 // Flag file that Claude sees - signals it should auto-invoke /context-compact
-const FLAG_DIR = path.join(os.homedir(), '.claude', 'flags');
+// LEO_COMPACT_FLAG_DIR env override exists for test isolation.
+const FLAG_DIR = process.env.LEO_COMPACT_FLAG_DIR || path.join(os.homedir(), '.claude', 'flags');
 const FLAG_FILE = path.join(FLAG_DIR, 'context-compact-needed.json');
 
 // Compaction marker written by PreCompact hook when auto-compaction occurs
 const COMPACTION_MARKER = path.join(FLAG_DIR, 'last-compaction.json');
+
+// QF-20260510-387: Phase-aware compact nudge after handoff success.
+// cli-main.js writes this flag on handoff success; we surface a tier-based
+// nudge here. Stale flags (>60 min) are discarded.
+const HANDOFF_FLAG_FILE = path.join(FLAG_DIR, 'compact-after-handoff.json');
+const HANDOFF_FLAG_STALE_MINUTES = 60;
+const HANDOFF_NUDGE_MESSAGES = {
+  soft: (h) => `[context-compact-nudge] ${h.handoff_type} complete (SD ${h.sd_id}). Optional /compact available; phase reasoning is minimal.`,
+  medium: (h) => `[context-compact-nudge] ${h.handoff_type} complete (SD ${h.sd_id}). /compact recommended — sub-agent verdicts are in DB. Caveat: deliberation chains will be lost; capture key reasoning in PRD/retro before compacting.`,
+  strong: (h) => `[context-compact-nudge] ${h.handoff_type} complete (SD ${h.sd_id}); retrospective published. SAFE to /compact — all phase state is in DB.`
+};
 
 // ============================================================================
 // HELPERS
@@ -116,6 +128,27 @@ function clearFlag() {
   } catch {
     // Ignore
   }
+}
+
+function readHandoffFlag() {
+  try {
+    if (!fs.existsSync(HANDOFF_FLAG_FILE)) return null;
+    const data = JSON.parse(fs.readFileSync(HANDOFF_FLAG_FILE, 'utf8'));
+    if (!data || !data.tier || !data.timestamp) return null;
+    if (minutesSince(data.timestamp) > HANDOFF_FLAG_STALE_MINUTES) {
+      try { fs.unlinkSync(HANDOFF_FLAG_FILE); } catch { /* ignore */ }
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function clearHandoffFlag() {
+  try {
+    if (fs.existsSync(HANDOFF_FLAG_FILE)) fs.unlinkSync(HANDOFF_FLAG_FILE);
+  } catch { /* ignore */ }
 }
 
 function getLastCompactionTime(stateTime) {
@@ -192,6 +225,17 @@ function main() {
 
     // Cooldown from last nudge
     if (minutesSinceLastNudge < COOLDOWN_MINUTES) {
+      writeState(state);
+      process.exit(0);
+    }
+
+    // QF-20260510-387: Phase-aware nudge takes precedence over time/turn-based level.
+    const handoffFlag = readHandoffFlag();
+    if (handoffFlag && HANDOFF_NUDGE_MESSAGES[handoffFlag.tier]) {
+      console.log(HANDOFF_NUDGE_MESSAGES[handoffFlag.tier](handoffFlag));
+      clearHandoffFlag();
+      state.lastNudgeTime = new Date().toISOString();
+      state.nudgeCount = (state.nudgeCount || 0) + 1;
       writeState(state);
       process.exit(0);
     }
