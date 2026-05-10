@@ -65,7 +65,7 @@ const functional_requirements = [
     acceptance_criteria: [
       'AC-5.1: When stub supabase returns 42703, the structured log line appears on stderr exactly once.',
       'AC-5.2: Line includes the SD key, target phase, and SQLSTATE code.',
-      'AC-5.3: Line is unambiguously parseable (key=value format suitable for log aggregation grep).',
+      'AC-5.3: Line is machine-parseable (key=value tokens) (key=value format suitable for log aggregation grep).',
     ],
   },
 ];

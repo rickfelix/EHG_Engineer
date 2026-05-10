@@ -137,7 +137,7 @@ const stories = [
     acceptance_criteria: [
       'Format: `[exec-context-guard] SCHEMA_ERROR sd_key=<X> target=<phase> sqlstate=<code> hint="check column references in lib/exec-context-guard.mjs"`',
       'Line emitted exactly once per fail-CLOSED event',
-      'Line is unambiguously parseable (key=value)',
+      'Line is machine-parseable (key=value tokens) (key=value)',
     ],
     test_scenarios: [
       'GIVEN stub returns 42703 WHEN guard runs THEN structured log line appears on stderr',
