@@ -123,6 +123,46 @@ function auditPermissionDecision(sessionId, toolName, ruleCode, ruleDesc, outcom
   }
 }
 
+/**
+ * Await an audit-write promise (with timeout cap) before exiting.
+ * Generalizes the QF-20260510-148 inline pattern so every block-then-exit
+ * site persists its permission_audit_log row instead of dropping it under
+ * fire-and-forget + immediate process.exit. Audit failures NEVER block exit.
+ *
+ * The setImmediate yield before process.exit is load-bearing: without it,
+ * libuv on Windows can assert on src\win\async.c:76 (`!(handle->flags &
+ * UV_HANDLE_CLOSING)`) when process.exit races with the in-flight fetch's
+ * async-handle cleanup, surfacing as STATUS_STACK_BUFFER_OVERRUN (0xC0000409).
+ *
+ * @param {Promise<void>} auditPromise - Return value from auditPermissionDecision
+ * @param {number} code                - process.exit() status code (typically 2)
+ * @param {number} [timeoutMs=1000]    - Max wait before forcing exit
+ * @returns {Promise<never>}           - Never resolves; always exits process
+ */
+async function auditAndExit(auditPromise, code, timeoutMs) {
+  const ms = (typeof timeoutMs === 'number') ? timeoutMs : 1000;
+  await Promise.race([
+    auditPromise,
+    new Promise(resolve => setTimeout(resolve, ms))
+  ]).catch(() => { /* audit never blocks enforcement */ });
+  // Tear down undici's keep-alive socket pool BEFORE process.exit. Without
+  // this, Windows libuv asserts on src\win\async.c:76 when process.exit races
+  // with in-flight HTTP socket cleanup, surfacing as STATUS_STACK_BUFFER_OVERRUN.
+  try {
+    const undici = require('undici');
+    if (undici && typeof undici.getGlobalDispatcher === 'function') {
+      const d = undici.getGlobalDispatcher();
+      if (d && typeof d.destroy === 'function') {
+        await Promise.race([
+          d.destroy(),
+          new Promise(resolve => setTimeout(resolve, 200))
+        ]).catch(() => {});
+      }
+    }
+  } catch { /* fail-open: undici unavailable means no pool to drain */ }
+  process.exit(code);
+}
+
 // Derive session ID once at module load time. QF-20260504-932: stdin payload
 // (Claude Code's PreToolUse contract) takes precedence over env vars, which
 // are not propagated to PreToolUse subprocesses.
@@ -307,14 +347,14 @@ async function validateBeforeExecution(command) {
 
     if (!result.valid) {
       if (tier === 'blocking') {
-        auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SCHEMA_PREFLIGHT', 'Schema pre-flight validation failed', 'block', { tableName, errors: result.errors });
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SCHEMA_PREFLIGHT', 'Schema pre-flight validation failed', 'block', { tableName, errors: result.errors });
         process.stderr.write(
           `SCHEMA VALIDATION FAILED (blocking):\n` +
           `  Table: ${tableName}\n` +
           `  Errors: ${result.errors.join('; ')}\n` +
           `  Fix the column names or types before running this command.\n`
         );
-        process.exit(2);
+        await auditAndExit(auditPromise, 2);
       } else {
         // Advisory: warn but allow
         auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SCHEMA_PREFLIGHT_ADVISORY', 'Schema pre-flight validation warning', 'warn', { tableName, errors: result.errors });
@@ -359,14 +399,14 @@ async function main() {
     // and --help still bypass.
     const DIRECT_INVOCATION = /(^|[\s;&|`])node\s+\S*\bleo-create-sd\.js\b/;
     if (DIRECT_INVOCATION.test(cmd) && !/--help/.test(cmd) && !/SD_CREATE_VIA_SKILL=1/.test(cmd)) {
-      auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-SD-CREATE-SKILL', 'SD creation skill enforcement', 'block', {});
+      const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-SD-CREATE-SKILL', 'SD creation skill enforcement', 'block', {});
       process.stderr.write(
         'PROTOCOL VIOLATION (ENF-SD-CREATE-SKILL): Direct leo-create-sd.js invocation blocked.\n' +
         'Use the /sd-create skill instead: Skill tool with skill="sd-create"\n' +
         'The skill provides description enrichment, vision readiness assessment, and post-creation chaining.\n' +
         '(If invoking from inside the /sd-create skill, prefix with SD_CREATE_VIA_SKILL=1 — see .claude/commands/sd-create.md)\n'
       );
-      process.exit(2);
+      await auditAndExit(auditPromise, 2);
     }
   }
 
@@ -479,14 +519,14 @@ async function main() {
 
           // (a) HARD BLOCK on main/master
           if (branch === 'main' || branch === 'master') {
-            auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'WORKTREE-HYGIENE-MAIN', 'Edit/Write blocked on main/master', 'block', { branch, gitRoot });
+            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'WORKTREE-HYGIENE-MAIN', 'Edit/Write blocked on main/master', 'block', { branch, gitRoot });
             process.stderr.write(
               `WORKTREE HYGIENE GUARD: Edit/Write blocked on '${branch}'.\n` +
               `  Run \`npm run session:worktree\` to create an isolated branch off origin/main.\n` +
               `  If intentional (e.g., one-off doc fix), set LEO_WORKTREE_GUARD=off and retry.\n` +
               `  Why: edits on main bypass branch isolation and force stash gymnastics at /ship.\n`
             );
-            process.exit(2);
+            await auditAndExit(auditPromise, 2);
           }
 
           // (b) WARN-ONCE on inherited dirt + non-feature branch
@@ -532,12 +572,12 @@ async function main() {
   // Applies to Task and Bash tools
   if (TOOL_NAME === 'Task' || TOOL_NAME === 'Bash') {
     if (input.run_in_background === true) {
-      auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'NC-006', 'Background execution ban (AUTO-PROCEED)', 'block', {});
+      const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'NC-006', 'Background execution ban (AUTO-PROCEED)', 'block', {});
       process.stderr.write(
         'PROTOCOL VIOLATION (NC-006): Background execution is forbidden when AUTO-PROCEED is ON.\n' +
         'Run this command in the foreground. Background tasks break the autonomous chain of thought.\n'
       );
-      process.exit(2); // Hard block
+      await auditAndExit(auditPromise, 2); // Hard block
     }
   }
 
@@ -558,7 +598,7 @@ async function main() {
           const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
           const claimedSd = state.sd?.id;
           if (claimedSd && claimedSd !== worktreeSdKey) {
-            auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'PAT-CLMMULTI-001', 'Worktree claim guard', 'block', { worktreeSdKey, claimedSd });
+            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'PAT-CLMMULTI-001', 'Worktree claim guard', 'block', { worktreeSdKey, claimedSd });
             process.stderr.write(
               `CLAIM GUARD (PAT-CLMMULTI-001): Edit/Write blocked.\n` +
               `  Target worktree: ${worktreeSdKey}\n` +
@@ -566,7 +606,7 @@ async function main() {
               `  You are editing files for a different SD than you have claimed.\n` +
               `  Switch to the correct worktree or release your claim.\n`
             );
-            process.exit(2);
+            await auditAndExit(auditPromise, 2);
           }
         }
         // No state file = no claim info = fail-open
@@ -587,28 +627,28 @@ async function main() {
     // Block new file creation in docs/plans/ (excluding archived/)
     if (/docs\/plans\/(?!archived\/)/.test(filePath) && filePath.endsWith('.md')) {
       if (!fs.existsSync(input.file_path)) {
-        auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SD-LEO-INFRA-ONLY-ENFORCEMENT-STRATEGIC-002', 'DB-only strategic artifacts: docs/plans/', 'block', { filePath });
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SD-LEO-INFRA-ONLY-ENFORCEMENT-STRATEGIC-002', 'DB-only strategic artifacts: docs/plans/', 'block', { filePath });
         process.stderr.write(
           'DB-ONLY ENFORCEMENT: Blocked new markdown file in docs/plans/.\n' +
           'Vision/architecture documents must be stored in the database.\n' +
           'Use: node scripts/eva/vision-command.mjs upsert --content "..."\n' +
           'Or:  node scripts/eva/archplan-command.mjs upsert --content "..."\n'
         );
-        process.exit(2);
+        await auditAndExit(auditPromise, 2);
       }
     }
 
     // Block ALL markdown writes to brainstorm/ (new or existing)
     // Brainstorm content belongs in brainstorm_sessions.content column, not on disk.
     if (/brainstorm\/[^/]+\.md$/.test(filePath)) {
-      auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SD-LEO-INFRA-ONLY-ENFORCEMENT-STRATEGIC-002', 'DB-only strategic artifacts: brainstorm/', 'block', { filePath });
+      const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SD-LEO-INFRA-ONLY-ENFORCEMENT-STRATEGIC-002', 'DB-only strategic artifacts: brainstorm/', 'block', { filePath });
       process.stderr.write(
         'DB-ONLY ENFORCEMENT: Blocked markdown write to brainstorm/.\n' +
         'Brainstorm content must be stored in brainstorm_sessions.content column.\n' +
         'Build content in-memory and pass it to the DB insert in Step 9.\n' +
         'Do NOT use the Write tool for brainstorm documents.\n'
       );
-      process.exit(2);
+      await auditAndExit(auditPromise, 2);
     }
   }
 
@@ -616,14 +656,14 @@ async function main() {
   // Block mcp__supabase__apply_migration — it's a write op but MCP role is read-only.
   // Read tools (execute_sql, list_tables, list_extensions, list_migrations) remain allowed.
   if (TOOL_NAME === 'mcp__supabase__apply_migration') {
-    auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SD-LEO-INFRA-MCP-READ-WRITE-001', 'MCP write operation block', 'block', {});
+    const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SD-LEO-INFRA-MCP-READ-WRITE-001', 'MCP write operation block', 'block', {});
     process.stderr.write(
       'MCP WRITE BLOCK: mcp__supabase__apply_migration is a write operation.\n' +
       'The MCP Supabase role (supabase_read_only_user) cannot execute migrations.\n' +
       'Use the database-agent instead:\n' +
       '  Agent({ subagent_type: "database-agent", prompt: "Execute migration: <path>" })\n'
     );
-    process.exit(2);
+    await auditAndExit(auditPromise, 2);
   }
 
   // --- ENFORCEMENT 2: Tool Policy Profile (Log-Only) ---
@@ -747,7 +787,7 @@ async function main() {
                       hasTestCommit = true; // Fail open on git errors
                     }
                     if (!hasTestCommit) {
-                      auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'D1-BUGFIX-TDD', 'Bugfix TDD prove-it gate', 'block', { sd_key: claimedSdKey, file_path: filePath });
+                      const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'D1-BUGFIX-TDD', 'Bugfix TDD prove-it gate', 'block', { sd_key: claimedSdKey, file_path: filePath });
                       process.stderr.write(
                         `\nD1 BUGFIX TDD GATE (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001):\n` +
                         `  Blocked: Edit on production path "${filePath}"\n` +
@@ -766,7 +806,7 @@ async function main() {
                         `    - QFs (Tier 1) do not claim SDs and are not affected\n` +
                         `    - This gate fails OPEN on errors — if you see this message, it intentionally fired\n`
                       );
-                      process.exit(2);
+                      await auditAndExit(auditPromise, 2);
                     }
                   }
                   // Non-bugfix or test-commit-present: allow
@@ -852,7 +892,7 @@ async function main() {
       if (signature && attempts >= 2) {
         const bypassed = process.env.EMERGENCY_RCA_BYPASS === 'true';
         const outcome = attempts >= 3 && !bypassed ? 'block' : 'warn';
-        auditPermissionDecision(
+        const auditPromise = auditPermissionDecision(
           _SESSION_ID, TOOL_NAME, 'RCA-TIERED-ENFORCEMENT',
           'Repeated tool invocation without intervening RCA',
           outcome,
@@ -869,7 +909,7 @@ async function main() {
             `  Once rca-agent records a result in sub_agent_execution_results, the counter resets automatically.\n` +
             `  Emergency override: set EMERGENCY_RCA_BYPASS=true for the single retry.\n`
           );
-          process.exit(2);
+          await auditAndExit(auditPromise, 2);
         }
 
         // Tier 1 warning (2nd attempt or bypassed): advisory only.
@@ -908,9 +948,9 @@ async function main() {
           staleThresholdSeconds: parseInt(process.env.FILE_CLAIM_STALE_THRESHOLD_SECONDS || '600', 10),
         });
         if (result.refused) {
-          auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-FILE-CLAIM', result.message, 'block', { filePath: normalizedPath, holder_session_id: result.holder_session_id });
+          const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-FILE-CLAIM', result.message, 'block', { filePath: normalizedPath, holder_session_id: result.holder_session_id });
           process.stderr.write(`ENF-FILE-CLAIM: ${result.message}\n`);
-          process.exit(2);
+          await auditAndExit(auditPromise, 2);
         }
         // Otherwise: claim acquired or already mine — proceed.
       }
