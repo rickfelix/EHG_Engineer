@@ -1406,7 +1406,27 @@ async function main() {
       });
 
       if (decision.skip) {
-        console.log(`   ${colors.green}✓ ${decision.reason}${colors.reset}`);
+        // SD-LEO-INFRA-FLEET-LOCK-HASH-001 FR-2: distinguish skip-due-to-hash-match
+        // from skip-due-to-staging-active so the log message is not silently
+        // misleading when contention is the cause.
+        if (decision.reason === 'staging_active') {
+          const retry = decision.retry_after_seconds ?? 60;
+          console.log(
+            `   ${colors.yellow}⚠️  install required: staging contention — peer install in progress, retry in ${retry}s${colors.reset}`
+          );
+          if (decision.staging_path) {
+            console.log(`   ${colors.dim}   staging path: ${decision.staging_path}${colors.reset}`);
+          }
+        } else if (decision.reason === 'staging_orphan_clean_failed') {
+          console.log(
+            `   ${colors.red}✖ staging orphan cleanup failed${colors.reset} — manual rm -rf required`
+          );
+          if (decision.staging_path) {
+            console.log(`   ${colors.dim}   staging path: ${decision.staging_path}${colors.reset}`);
+          }
+        } else {
+          console.log(`   ${colors.green}✓ ${decision.reason}${colors.reset}`);
+        }
       } else {
         console.log(`\n${colors.yellow}   ⚠️  ${decision.reason} — coordinating install...${colors.reset}`);
 
