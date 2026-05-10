@@ -321,6 +321,8 @@
     "worktree:reap": "node scripts/worktree-reaper.mjs",
     "worktree:reap:execute": "node scripts/worktree-reaper.mjs --execute",
     "worktree:reap:full": "node scripts/worktree-reaper.mjs --execute --stage2 --yes",
+    "worktree:cleanup-pending": "node scripts/cleanup-pending-sweep.mjs",
+    "worktree:cleanup-pending:dry": "node scripts/cleanup-pending-sweep.mjs --dry-run",
     "handoff": "node scripts/handoff.js",
     "handoff:dry-run": "node scripts/unified-handoff-system-v2.js execute --dry-run",
     "handoff:list": "node scripts/handoff.js list",
