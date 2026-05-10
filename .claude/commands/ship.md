@@ -699,7 +699,11 @@ node scripts/modules/shipping/post-merge-worktree-cleanup.js --sdKey <SD-KEY-OR-
 if [ "${STEP_6_3_RAN_QF_CLOSURE:-false}" = "false" ] && [ "${LEO_AUTOHANDOFF_ENABLED:-true}" = "true" ]; then
   SD_KEY=$(echo "$BRANCH" | sed -nE 's|^(feat|fix|refactor|docs|test)/(SD-[^-]+(-[^-/]+)*)/?.*|\2|p')
   if [ -n "$SD_KEY" ]; then
-    node scripts/post-merge-handoff-orchestrator.js --sd-key="$SD_KEY"
+    # SD-LEO-INFRA-POST-MERGE-AUTO-001 FR-1: pass --merged-branch so the orchestrator
+    # can derive an active session_id from claude_sessions when CLAUDE_SESSION_ID env
+    # is missing. $BRANCH is the original branch name (string), preserved even after
+    # `gh pr merge --delete-branch` removed the local ref.
+    node scripts/post-merge-handoff-orchestrator.js --sd-key="$SD_KEY" --merged-branch="$BRANCH"
     if [ $? -eq 0 ]; then
       export STEP_6_5_RAN_AUTOHANDOFF=true
     fi
