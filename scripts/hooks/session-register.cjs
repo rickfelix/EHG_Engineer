@@ -146,6 +146,39 @@ async function main() {
     console.log(`session-register: registered ${sessionId.slice(0, 12)}...`);
   }
 
+  // SD-LEO-INFRA-SESSION-IDENTITY-RECONCILIATION-001 (FR-1): wire reconcileAtBoot
+  // into the SessionStart hook so the three identity sources (env CLAUDE_SESSION_ID,
+  // .claude/session-identity/current, claude_sessions row) cannot drift apart.
+  // Gated behind SESSION_IDENTITY_SOT_ENABLED (default OFF). Always exits without
+  // throwing — SessionStart must never abort or new sessions cannot start.
+  try {
+    const sotEnabled = process.env.SESSION_IDENTITY_SOT_ENABLED === 'true'
+      || process.env.SESSION_IDENTITY_SOT_ENABLED === '1';
+    if (!sotEnabled) {
+      process.stderr.write(`[session-register] reconcile.skipped reason=flag_off\n`);
+    } else {
+      const sot = await import('../../lib/session-identity-sot.js');
+      const reconcile = sot.reconcileAtBoot || sot.default?.reconcileAtBoot;
+      if (typeof reconcile === 'function') {
+        const result = reconcile(sessionId);
+        const env = process.env.CLAUDE_SESSION_ID || '';
+        process.stderr.write(
+          `[session-register] reconcile.applied env=${env.slice(0, 8)} ` +
+          `wrote_pointer=${result?.wrotePointer ?? false} ` +
+          `wrote_env_file=${result?.wroteEnvFile ?? false} ` +
+          `applied=${result?.applied ?? false}` +
+          (result?.reason ? ` reason=${result.reason}` : '') +
+          `\n`
+        );
+      } else {
+        process.stderr.write(`[session-register] reconcile.failed reason=function_missing\n`);
+      }
+    }
+  } catch (reconcileErr) {
+    const msg = reconcileErr?.message || String(reconcileErr);
+    process.stderr.write(`[session-register] reconcile.failed reason=${msg.replace(/\n/g, ' ').slice(0, 200)}\n`);
+  }
+
   // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001: if the session was previously parked
   // in `awaiting_tick` (set by post-tool-loop-state.cjs after a ScheduleWakeup),
   // SessionStart now means the wakeup fired — flip to `active`. Conditional WHERE
