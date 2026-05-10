@@ -4,7 +4,7 @@
  */
 
 import { colors, trackColors } from '../colors.js';
-import { getPhaseAwareStatus, getCadenceBadge, getCadenceReason } from '../status-helpers.js';
+import { getPhaseAwareStatus, getCadenceBadge, getCadenceReason, getInconsistentSDIds, getStatusInconsistentBadge } from '../status-helpers.js';
 import { parseDependencies } from '../dependency-resolver.js';
 import { formatVisionBadge } from './vision-scorecard.js';
 import { analyzeClaimRelationship, autoReleaseStaleDeadClaim, checkEnrichmentSignal } from '../claim-analysis.js';
@@ -20,6 +20,12 @@ import { renderQFRow } from './quick-fixes.js';
  */
 export async function displayTrackSection(trackKey, trackName, items, sessionContext = {}) {
   if (items.length === 0) return;
+
+  // SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001: prefetch ghost-completed SD ids
+  // for STATUS_INCONSISTENT badge surfacing. Memoized across calls.
+  if (sessionContext.supabase && !sessionContext._inconsistentIds) {
+    sessionContext._inconsistentIds = await getInconsistentSDIds(sessionContext.supabase);
+  }
 
   console.log(`\n${trackColors[trackKey]}${colors.bold}TRACK ${trackKey}: ${trackName}${colors.reset}`);
 
@@ -195,7 +201,9 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
   // SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001: CADENCE-WAIT badge + reason line
   const cadenceBadge = getCadenceBadge(item);
   const cadenceReason = getCadenceReason(item);
-  console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${ventureBadge}${urgencyBadge}${brainstormBadge}${visionBadge}${gapBadge}${cadenceBadge}... ${statusIcon}`);
+  // SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001: STATUS_INCONSISTENT advisory badge
+  const inconsistentBadge = getStatusInconsistentBadge(item, sessionContext._inconsistentIds);
+  console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${ventureBadge}${urgencyBadge}${brainstormBadge}${visionBadge}${gapBadge}${cadenceBadge}${inconsistentBadge}... ${statusIcon}`);
   if (cadenceReason) {
     console.log(`${indent}        └─ ${colors.magenta}${cadenceReason}${colors.reset}`);
   }
