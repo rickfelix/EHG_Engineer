@@ -17,6 +17,7 @@
  * 11. RCA Tiered Enforcement (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-129) - TIERED (warn on 2nd, block on 3rd)
  * 12. npm install Concurrency Guard (QF-20260426-822) - HARD BLOCK (exit 2)
  * 13. Worktree Hygiene Guard (SD-LEO-INFRA-PRE-TOOL-WORKTREE-GUARD-001) - HARD BLOCK on main/master + WARN-ONCE on inherited dirt
+ * 15. Force-Push Gate (SD-FDBK-INFRA-ALLOW-FORCE-LEASE-001) - HARD BLOCK by default; OVERRIDE on solo SD/QF feature branches when LEO_FORCE_PUSH_OWN_BRANCH=allow
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -958,6 +959,103 @@ async function main() {
       // Fail-open: file-claim layer outage must NOT block tool execution.
       if (process.env.LEO_TELEMETRY_DEBUG === '1') {
         process.stderr.write(`[pre-tool-enforce] file-claim guard errored (fail-open): ${claimErr.message}\n`);
+      }
+    }
+  }
+
+  // --- ENFORCEMENT 15: Force-Push Gate (SD-FDBK-INFRA-ALLOW-FORCE-LEASE-001) ---
+  // Replaces the Claude Code interactive permission prompt for `git push --force-with-lease`
+  // (which is sandbox-denied under auto-proceed) with a programmatic 5-condition AND gate:
+  //   (1) bare `--force` (no `--with-lease`) → block, regardless of env var
+  //   (2) protected branch (main|master|develop|release/*) → block, regardless of env var
+  //   (3) LEO_FORCE_PUSH_OWN_BRANCH !== 'allow' → block (default deny — flag-OFF)
+  //   (4) branch not in allowlist (feat/SD-*, qf/QF-*, quick-fix/QF-*, eng/SD-*) → block
+  //   (5) commits reachable from origin/main..HEAD include any non-self author/committer email → block
+  //   override: all checks pass → audit row outcome='override' rule_code='ENF-15' + fall through
+  //
+  // Audit row is constructed BEFORE await/exit (proactively closes the 44c5b834 audit-row-drop
+  // class for this rule per QF-20260510-148 auditAndExit pattern).
+  //
+  // Test seam: TEST_OVERRIDE_BRANCH and TEST_OVERRIDE_GIT_LOG env vars short-circuit
+  // git subprocess calls during vitest runs (the hook is spawned as a CJS subprocess so
+  // module-level mocking does not apply).
+  if (TOOL_NAME === 'Bash') {
+    const cmd = (input && input.command || '').trim();
+    const FORCE_PUSH_RE = /(^|[\s;&|`])git\s+push\b[^\n]*--force\b/;
+    if (FORCE_PUSH_RE.test(cmd) && !/--help/.test(cmd)) {
+      try {
+        const { execSync } = require('child_process');
+        const HAS_WITH_LEASE = /--force-with-lease\b/.test(cmd);
+        const envVarSet = process.env.LEO_FORCE_PUSH_OWN_BRANCH === 'allow';
+
+        // Resolve current branch (test seam: TEST_OVERRIDE_BRANCH)
+        let branch = process.env.TEST_OVERRIDE_BRANCH || '';
+        if (!branch) {
+          try {
+            branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+          } catch { branch = ''; }
+        }
+
+        const PROTECTED_RE = /^(main|master|develop|release\/.*)$/;
+        const ALLOW_RE = /^(feat\/SD-|qf\/QF-|quick-fix\/QF-|eng\/SD-)/;
+
+        let decision = null; // null = pass-through; set to {outcome, reason} to act
+        if (!HAS_WITH_LEASE) {
+          decision = { outcome: 'block', reason: 'bare_force_disallowed' };
+        } else if (PROTECTED_RE.test(branch)) {
+          decision = { outcome: 'block', reason: 'protected_branch_denylist' };
+        } else if (!envVarSet) {
+          decision = { outcome: 'block', reason: 'env_var_unset' };
+        } else if (!ALLOW_RE.test(branch)) {
+          decision = { outcome: 'block', reason: 'branch_not_allowlisted' };
+        } else {
+          // Sole-contributor check via author+committer email (test seams: TEST_OVERRIDE_USER_EMAIL, TEST_OVERRIDE_GIT_LOG)
+          let userEmail = process.env.TEST_OVERRIDE_USER_EMAIL || '';
+          if (!userEmail) {
+            try { userEmail = execSync('git config user.email', { encoding: 'utf8', timeout: 1000, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { userEmail = ''; }
+          }
+          let logOut = process.env.TEST_OVERRIDE_GIT_LOG;
+          if (logOut === undefined) {
+            try {
+              logOut = execSync('git log --format=%ae,%ce origin/main..HEAD --max-count=500', { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+            } catch { logOut = null; }
+          }
+          if (logOut === null || !userEmail) {
+            decision = { outcome: 'block', reason: 'git_error' };
+          } else {
+            const lines = logOut.split('\n').map(l => l.trim()).filter(Boolean);
+            let commitCount = 0;
+            let foundForeign = false;
+            for (const line of lines) {
+              commitCount++;
+              const [ae, ce] = line.split(',').map(s => s.trim());
+              if ((ae && ae !== userEmail) || (ce && ce !== userEmail)) {
+                foundForeign = true;
+                break;
+              }
+            }
+            if (foundForeign) {
+              decision = { outcome: 'block', reason: 'multi_author_branch', commit_count_checked: commitCount };
+            } else {
+              decision = { outcome: 'override', reason: 'override_granted', commit_count_checked: commitCount };
+            }
+          }
+        }
+
+        const meta = { branch, env_var_set: envVarSet, decision_path: decision.reason };
+        if (decision.commit_count_checked !== undefined) meta.commit_count_checked = decision.commit_count_checked;
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-15', 'Force-push gate: env-var + sole-contributor + branch-allowlist + protected-branch denylist', decision.outcome, meta);
+
+        if (decision.outcome === 'block') {
+          process.stderr.write(`[ENF-15] BLOCKED reason=${decision.reason} branch=${branch || '<unknown>'} env_var_set=${envVarSet}\n`);
+          await auditAndExit(auditPromise, 2);
+        }
+        // override path: don't await — let it fire-and-forget like the final ALLOW; fall through
+      } catch (forcePushErr) {
+        // Fail-open: any internal error in ENF-15 must NOT block tool execution.
+        if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+          process.stderr.write(`[pre-tool-enforce] ENF-15 errored (fail-open): ${forcePushErr.message}\n`);
+        }
       }
     }
   }
