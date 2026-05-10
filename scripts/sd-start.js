@@ -25,6 +25,8 @@ import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
 import { resolveOwnSession } from '../lib/resolve-own-session.js';
 import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate.js';
+// SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001: FR-3 inbox poll + FR-2 sd_key drift detector
+import { hasRecentClaimReleased, formatClaimReleasedAbort, detectSdKeyDrift } from '../lib/claim-lifecycle-release.mjs';
 import sessionIdentitySot from '../lib/session-identity-sot.js';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 — pre-claim multi-signal evidence-of-life gate.
@@ -799,6 +801,41 @@ async function main() {
     console.warn(`${colors.yellow}⚠ session-identity reconciliation error (non-blocking): ${reconcileErr.message}${colors.reset}`);
   }
 
+  // 2a-pre. SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001 FR-3: honor recent CLAIM_RELEASED
+  // inbox messages BEFORE attempting any claim write. If a peer session has emitted
+  // CLAIM_RELEASED for this SD within CLAIM_RELEASED_TTL_MS (5min), abort the claim
+  // attempt — the peer is mid-release and may re-assert imminently.
+  // CRITICAL: this poll is READ-ONLY (does NOT mark the message read). Marking-read
+  // would close the FR-1/FR-3 race window: if the original consumer dies before its
+  // retry, the next consumer would not see the (now-marked-read) message and claim
+  // collision reopens. TTL retires messages naturally.
+  try {
+    const claimReleasedProbe = await hasRecentClaimReleased(effectiveId);
+    if (claimReleasedProbe.recent) {
+      const abortMsg = formatClaimReleasedAbort(effectiveId, claimReleasedProbe);
+      console.log(
+        `\n${colors.yellow}═══════════════════════════════════════════════════════════════════${colors.reset}`
+      );
+      console.log(
+        `${colors.yellow}⏸  CLAIM_RELEASED inbox-honoring gate (SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001 FR-3)${colors.reset}`
+      );
+      console.log(
+        `${colors.yellow}═══════════════════════════════════════════════════════════════════${colors.reset}`
+      );
+      console.log(`  ${abortMsg}`);
+      console.log(`  Inbox row remains visible (read-only contract); next session will also see it.`);
+      console.log(
+        `${colors.yellow}═══════════════════════════════════════════════════════════════════${colors.reset}\n`
+      );
+      process.exit(1);
+    }
+  } catch (probeErr) {
+    // Fail-open on inbox probe error: do not block claim attempts on transient
+    // network/DB issues. Log for observability; the existing claim-validity-gate
+    // remains the source-of-truth.
+    console.log(`${colors.yellow}⚠  CLAIM_RELEASED inbox probe non-fatal error: ${probeErr.message}${colors.reset}`);
+  }
+
   // 2a. Validate claim identity + ownership now that session row exists.
   // SD-LEO-INFRA-FAIL-CLOSED-CLAIM-001: Invoke the fail-closed gate so cross-CC collisions
   // are surfaced with a structured error instead of silently merged via "newest heartbeat".
@@ -887,6 +924,34 @@ async function main() {
       if (!evidenceCheck.allowReclaim && forceReclaim) {
         // Telemetry: log the override to audit_log so systemic false-positives surface.
         const evidenceList = (evidenceCheck.evidence || []).join(', ');
+
+        // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001 FR-2: enrich the audit row with
+        // sd_key drift status of the current owner. When the owner's sd_key has
+        // drifted away from the SD they claim to hold, the --force-reclaim is
+        // explicitly justified (sd_key is the source-of-truth, NOT claiming_session_id).
+        // Mirrors CROSS-HOST FR-7 stale-heartbeat-equivalence pattern.
+        let sdKeyDriftVerdict = 'unknown';
+        try {
+          const ownerSessionId = claimResult.owner?.session_id;
+          if (ownerSessionId) {
+            const { data: ownerRow } = await supabase
+              .from('claude_sessions')
+              .select('sd_key')
+              .eq('session_id', ownerSessionId)
+              .limit(1)
+              .single();
+            sdKeyDriftVerdict = detectSdKeyDrift(ownerRow, effectiveId);
+          }
+        } catch (driftErr) {
+          // Drift inspection is observational; never blocks the override.
+          sdKeyDriftVerdict = `error:${driftErr?.message?.slice(0, 80) || 'unknown'}`;
+        }
+
+        if (sdKeyDriftVerdict === 'drift') {
+          console.log(
+            `${colors.green}✓ sd_key drift detected on owner — --force-reclaim is justified (peer's sd_key has moved away from ${effectiveId}).${colors.reset}`
+          );
+        }
         console.log(
           `${colors.yellow}⚠ --force-reclaim override accepted. Evidence-of-life signals were present (${evidenceList}); proceeding anyway.${colors.reset}`
         );
@@ -901,9 +966,12 @@ async function main() {
               evidence: evidenceCheck.evidence,
               owner_session: claimResult.owner?.session_id || null,
               my_session: session.session_id,
+              // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001 FR-2 telemetry: enrich audit row
+              // with sd_key drift verdict. 'drift' = override justified by SoT-mismatch.
+              sd_key_drift: sdKeyDriftVerdict,
               at: new Date().toISOString(),
               source: 'sd-start.js',
-              ref: 'SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001'
+              ref: 'SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001+SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001'
             })
           });
         } catch (auditErr) {
