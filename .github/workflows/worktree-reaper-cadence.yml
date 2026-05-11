@@ -1,0 +1,74 @@
+# QF-20260511-414: closes 4th-class witness of PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 (reaper script existed, no automation invoked it). Stage 1 only.
+name: Worktree Reaper Cadence
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Daily 03:00 UTC, low-traffic window.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Plan-only mode (omit --execute)'
+        required: false
+        default: 'false'
+        type: boolean
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: worktree-reaper  # Shared with operator-triggered manual runs.
+  cancel-in-progress: false
+
+jobs:
+  reap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install minimal deps
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+      - name: Run reaper (Stage 1)
+        id: reap
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            npm run worktree:reap 2>&1 | tee reaper.log
+          else
+            npm run worktree:reap:execute 2>&1 | tee reaper.log
+          fi
+      - name: Write last_run_at to state file
+        if: always()
+        run: |
+          node -e "const fs=require('fs'),p=require('path');const f=p.join('.claude','worktree-reaper-state.json');const s=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,'utf8')):{schema_version:1,sweep_counter:0,last_result:null};s.last_run_at=new Date().toISOString();s.last_result='${{ job.status }}';s.sweep_counter=(s.sweep_counter||0)+1;fs.mkdirSync(p.dirname(f),{recursive:true});fs.writeFileSync(f,JSON.stringify(s,null,2)+'\n');console.log('last_run_at='+s.last_run_at);"
+          {
+            echo "## Worktree Reaper Cadence"
+            echo "- last_run_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- result: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload reaper log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worktree-reaper-log-${{ github.run_id }}
+          path: |
+            reaper.log
+            .claude/worktree-reaper-state.json
+          retention-days: 14
+      - name: Open issue on failure
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Worktree Reaper Cadence failed (run ${context.runId})`,
+              body: `Scheduled run failed. See logs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nClosure: PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 (QF-20260511-414).`,
+              labels: ['ci-failure', 'worktree-reaper']
+            });
