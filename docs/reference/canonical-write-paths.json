@@ -1,6 +1,6 @@
 {
   "generated_from": "docs/reference/canonical-write-paths.md",
-  "generated_at": "2026-05-11T17:54:35.843Z",
+  "generated_at": "2026-05-11T19:10:54.822Z",
   "rows": [
     {
       "table": "feedback",
@@ -15,9 +15,10 @@
         "lib/sub-agents/retro/db-operations.js",
         "lib/uat/result-recorder.js",
         "scripts/audit-completed-sd-db-content-parity.js",
+        "scripts/modules/inbox/auto-resolve-recovered.js",
         "scripts/one-off"
       ],
-      "rationale": "log-harness-bug + lifecycle-sd-bridge are co-canonical PA-5 emitters; replit/* (replit-format-strategies.js:570, replit-prompt-formatter.js:179) are **templated emitters** — the `supabase.from('feedback').insert(...)` strings are literal source text embedded in lines.push()/template-literal blocks that get rendered into user-facing Replit project code; they are NOT runtime callers and cannot be migrated to emitFeedback. Permanent exemption (QF-20260511-088 / feedback 7922a332, auxiliary disposition for SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 C3). quality/retro/uat writers ARE runtime bypass sites surfaced by the registry (refactor to emitFeedback tracked in follow-up SD); scripts/one-off prefix exempts SD-specific one-off scripts (each carries its own SD-key in filename)."
+      "rationale": "log-harness-bug + lifecycle-sd-bridge are co-canonical PA-5 emitters; replit/* (replit-format-strategies.js:570, replit-prompt-formatter.js:179) are **templated emitters** — the `supabase.from('feedback').insert(...)` strings are literal source text embedded in lines.push()/template-literal blocks that get rendered into user-facing Replit project code; they are NOT runtime callers and cannot be migrated to emitFeedback. Permanent exemption (QF-20260511-088 / feedback 7922a332, auxiliary disposition for SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 C3). quality/retro/uat writers ARE runtime bypass sites surfaced by the registry (refactor to emitFeedback tracked in follow-up SD); auto-resolve-recovered.js:87 is a **resolver class** — CAPA-7 worker performs `.update({status:'resolved'})` to clear stuck rows once CI workflow stabilizes; emit-feedback.js is INSERT-only with no resolve/update surface, so refactor N/A. Permanent exemption (QF-20260511-772 / feedback 720b0f6f, resolver-class precedent — future status-mutation workers follow same path). scripts/one-off prefix exempts SD-specific one-off scripts (each carries its own SD-key in filename)."
     },
     {
       "table": "security_audit_events",
