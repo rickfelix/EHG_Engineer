@@ -32,9 +32,16 @@ const GATE_NAME = 'WIRE_CHECK_GATE';
  * and nested `tests/` paths (e.g. `scripts/archive/one-time/tests/`), since
  * the previous `^tests/` anchor missed those entirely.
  *
- * Patterns are canonical only (*.test.ext, *.spec.ext, __tests__/, test/, tests/);
- * intentionally NOT matching *.test-* or similar variants to avoid
- * over-matching production files (mitigation for TS-7 negative control).
+ * QF-20260511-960 / feedback 39219c66: scripts/one-off/ is a session-private
+ * holding area for ad-hoc investigation / amendment / check scripts (convention:
+ * `_` prefix, every file in the directory). They have no permanent entry point
+ * by design and routinely cross-session-leak when LEAD-FINAL-APPROVAL runs from
+ * main-repo cwd on a sibling branch tip — producing false-positive WIRE_CHECK
+ * failures for files this SD/PR never touched. Exclude the directory.
+ *
+ * Patterns are canonical only (*.test.ext, *.spec.ext, __tests__/, test/, tests/,
+ * scripts/one-off/); intentionally NOT matching *.test-* or similar variants to
+ * avoid over-matching production files (mitigation for TS-7 negative control).
  * The `(^|\/)tests?\/` form requires a directory-boundary, so `lib/testing/`
  * and `scripts/test-helpers.js` do NOT match.
  */
@@ -42,7 +49,8 @@ export const EXCLUSION_PATTERNS = [
   /\.test\.(js|mjs|cjs|jsx|tsx)$/,
   /\.spec\.(js|mjs|cjs|jsx|tsx)$/,
   /(^|\/)__tests__\//,
-  /(^|\/)tests?\//
+  /(^|\/)tests?\//,
+  /(^|\/)scripts\/one-off\//
 ];
 
 /**

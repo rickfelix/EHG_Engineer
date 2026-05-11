@@ -71,6 +71,28 @@ describe('EXCLUSION_PATTERNS (FR-1)', () => {
       expect(pattern).toBeInstanceOf(RegExp);
     }
   });
+
+  // QF-20260511-960 / feedback 39219c66: cross-session false-positives on
+  // scripts/one-off/ files committed locally by sibling sessions. By convention
+  // every file in scripts/one-off/ has an underscore prefix and no permanent
+  // entry point, so the directory is exempt from wire-check reachability.
+  describe('scripts/one-off/ exclusion (QF-20260511-960)', () => {
+    it('matches typical underscore-prefixed one-off scripts', () => {
+      expect(isExcludedFromWireCheck('scripts/one-off/_check-205-foo.mjs')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/one-off/_verify-qf-205-bar.cjs')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/one-off/_apply-migration.mjs')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/one-off/_amend-prd-sd-leo-feat.mjs')).toBe(true);
+    });
+
+    it('does NOT match other scripts/ paths', () => {
+      expect(isExcludedFromWireCheck('scripts/handoff.js')).toBe(false);
+      expect(isExcludedFromWireCheck('scripts/sd-next.js')).toBe(false);
+      expect(isExcludedFromWireCheck('scripts/modules/foo.js')).toBe(false);
+      // Lookalike directories that share the "one-off" substring must NOT match.
+      expect(isExcludedFromWireCheck('scripts/one-offsite/foo.js')).toBe(false);
+      expect(isExcludedFromWireCheck('lib/one-off/foo.js')).toBe(false);
+    });
+  });
 });
 
 describe('call-graph-builder barrel re-export resolution (FR-2 AC-1)', () => {
