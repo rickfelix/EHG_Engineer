@@ -85,6 +85,8 @@ export function parseArguments(args) {
       'reason':             { type: 'string' },
       'non-interactive':    { type: 'boolean' },
       'auto-pr':            { type: 'boolean' },
+      // QF-20260511-258: bypass resolver-freshness stale-branch guard. Requires reason.
+      'allow-stale-branch': { type: 'boolean' },
       'help':               { type: 'boolean', short: 'h' }
     },
     allowPositionals: true,
@@ -102,6 +104,17 @@ export function parseArguments(args) {
     throw new Error(
       '[FORCE_COMPLETE_NO_REASON] --force-complete requires --reason "<text>". ' +
       'The reason is recorded in verification_notes as a structured audit trail.'
+    );
+  }
+
+  // QF-20260511-258: --allow-stale-branch REQUIRES --reason for the same audit
+  // reason. Bypassing the resolver-freshness gate without a logged reason re-opens
+  // the silent-no-op class the gate exists to prevent.
+  if (values['allow-stale-branch'] && !values['reason']) {
+    throw new Error(
+      '[ALLOW_STALE_BRANCH_NO_REASON] --allow-stale-branch requires --reason "<text>". ' +
+      'Bypassing the resolver-freshness gate produces a silent auto-resolver no-op; ' +
+      'the reason is recorded in verification_notes as a structured audit trail.'
     );
   }
 
@@ -129,7 +142,12 @@ export function parseArguments(args) {
     // when no --pr-url provided. Eliminates the mid-run prompt-then-throw pattern
     // (the prompt() wrapper rejects under non-interactive but only AFTER several
     // setup steps have already run).
-    autoPr:            values['auto-pr'] || (values['non-interactive'] && !values['pr-url']) || false
+    autoPr:            values['auto-pr'] || (values['non-interactive'] && !values['pr-url']) || false,
+    // QF-20260511-258: stale-branch guard bypass. Reason is the same --reason field
+    // (so audit trails stay unified). When set without --reason, the FORCE_COMPLETE
+    // check above would not trigger; we require --reason explicitly here too.
+    allowStaleBranch:       values['allow-stale-branch'] || false,
+    allowStaleBranchReason: values['allow-stale-branch'] ? values['reason'] : undefined
   };
 
   return { qfId, options };
@@ -165,6 +183,10 @@ Options:
                         When set without --pr-url, --auto-pr is auto-enabled to avoid mid-run prompt failure.
   --auto-pr             Auto-create the PR via 'gh pr create' if --pr-url is not provided.
                         Implicit under --non-interactive when no --pr-url.
+  --allow-stale-branch  Bypass the QF-258 resolver-freshness gate. REQUIRES --reason.
+                        Use only when shipping is the right call despite worker being
+                        forked before a resolver-relevant fix landed in main. The
+                        auto-resolver will likely no-op for this completion.
   --help, -h            Show this help
 
 Programmatic Verification:
