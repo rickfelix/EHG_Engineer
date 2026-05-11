@@ -9,6 +9,26 @@
  */
 
 import { execSync, execFileSync } from 'child_process';
+import path from 'path';
+
+// QF-20260511-123 / feedback 0930f169: prefer the QF worktree when cwd is inside
+// .worktrees/qf/<qfId>, so Tier-1 docs-QFs don't fall back to the parent repo's
+// dirty working tree on Windows (Git Bash MSYS cwd doesn't propagate via spawn).
+export function resolveQFWorktreeFromCwd(qfId, cwd = process.cwd()) {
+  if (!qfId || typeof qfId !== 'string') return null;
+  const normalized = cwd.replace(/\\/g, '/');
+  const escaped = qfId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`(.*\\/\\.worktrees\\/(?:qf\\/)?${escaped})(?:\\/|$)`, 'i');
+  const match = normalized.match(pattern);
+  if (!match) return null;
+  const candidate = path.resolve(match[1].replace(/\//g, path.sep));
+  try {
+    execSync('git rev-parse --git-dir', { cwd: candidate, stdio: ['ignore', 'pipe', 'pipe'] });
+    return candidate;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Parse `git status --short` output into a list of file paths.
