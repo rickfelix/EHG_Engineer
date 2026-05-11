@@ -33,11 +33,35 @@ function makeAuditClient({ sds, rowsByTable = {} }) {
       return queryObj;
     }
     if (name === 'feedback') {
+      // SD-FDBK-INFRA-MIGRATE-EMIT-FEEDBACK-001 FR-5: emitFeedback dedup-check
+      // chain support — `.select('id').eq('category', x).eq('metadata->>dedup_hash', h).maybeSingle()`.
+      // Returns {data: null} so the INSERT branch proceeds.
+      const insertChain = (row) => {
+        const single = async () => ({ data: { id: `fb-${calls.feedbackInserts.length + 1}` }, error: null });
+        return { select: () => ({ single }), then: (cb) => cb({ data: { id: 'inserted' }, error: null }) };
+      };
       return {
-        insert: async (row) => {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: null }) }),
+          }),
+        }),
+        insert: (row) => {
           calls.feedbackInserts.push(row);
-          return { error: null };
+          return insertChain(row);
         },
+      };
+    }
+    if (name === 'v_active_sessions') {
+      // emitFeedback FR-2 auto-fill lookup; return empty so it no-ops in tests.
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              not: async () => ({ data: [], error: null }),
+            }),
+          }),
+        }),
       };
     }
     if (name === 'sd_verification_results') {

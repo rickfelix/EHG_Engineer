@@ -18,6 +18,8 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { validateDbContentParity } from '../scripts/modules/handoff/gates/db-content-parity-gate.js';
+// SD-FDBK-INFRA-MIGRATE-EMIT-FEEDBACK-001 FR-5: route through canonical helper
+import { emitFeedback } from '../lib/governance/emit-feedback.js';
 
 function parseArgs(argv) {
   const flags = { since: null, sdId: null, dryRun: false };
@@ -57,15 +59,15 @@ export async function runAudit({ supabase, since, sdId, dryRun, auditRunId }) {
       .map((m) => `${m.table}/${JSON.stringify(m.row_filter)}: ${m.column} expected=${JSON.stringify(m.expected)} actual=${JSON.stringify(m.actual)}`)
       .join('; ');
     const title = `DB content parity gap: ${sd.sd_key}`;
-    await supabase.from('feedback').insert({
+    // SD-FDBK-INFRA-MIGRATE-EMIT-FEEDBACK-001 FR-5: canonical helper invocation.
+    // dedup_key includes auditRunId so cross-audit-run dedup is intentional (re-runs DO insert).
+    await emitFeedback({
+      supabase,
       type: 'enhancement',
-      category: 'harness_backlog',
-      status: 'new',
       severity: 'medium',
-      source_application: 'EHG_Engineer',
-      source_type: 'manual_feedback',
-      title: title.length > 120 ? title.slice(0, 117) + '...' : title,
+      title,
       description: `Audit detected ${result.mismatches.length} content-parity mismatch(es): ${summary}`,
+      dedup_key: `audit-content-parity:${sd.sd_key}:${auditRunId}`,
       metadata: {
         logged_via: 'audit-completed-sd-db-content-parity.js',
         deferred_from_sd_key: sd.sd_key,
