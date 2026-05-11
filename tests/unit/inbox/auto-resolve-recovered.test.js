@@ -20,7 +20,7 @@ vi.mock('../../../lib/utils/is-main-module.js', () => ({ isMainModule: () => fal
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://test.local';
 process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-key';
 
-const { shouldAutoResolve, parseArgs, fetchRecentRuns } = await import(
+const { shouldAutoResolve, parseArgs, fetchRecentRuns, isEligibleForResolve } = await import(
   '../../../scripts/modules/inbox/auto-resolve-recovered.js'
 );
 
@@ -124,6 +124,51 @@ describe('parseArgs', () => {
   it('ignores trailing flag without value', () => {
     const f = parseArgs(['--max-items']);
     expect(f.maxItems).toBe(20);
+  });
+});
+
+describe('isEligibleForResolve (QF-20260511-453: widen filter for status=new post-merge)', () => {
+  const NOW = new Date('2026-05-11T20:00:00Z').getTime();
+
+  it('returns true for status=new regardless of age (post-merge race)', () => {
+    // Witness: QF-499 PR #3727 merged 19:26Z, feedback emitted 19:52Z (8 min old).
+    // Before the fix, the SQL .lt(created_at, cutoffIso) excluded this row.
+    const freshNewRow = { status: 'new', created_at: '2026-05-11T19:52:00Z' };
+    expect(isEligibleForResolve(freshNewRow, 24, NOW)).toBe(true);
+  });
+
+  it('returns true for old status=new row too (no upper-age bound on new)', () => {
+    const oldNewRow = { status: 'new', created_at: '2026-04-01T00:00:00Z' };
+    expect(isEligibleForResolve(oldNewRow, 24, NOW)).toBe(true);
+  });
+
+  it('returns true for status=in_progress older than staleHours', () => {
+    const oldRow = { status: 'in_progress', created_at: '2026-05-09T00:00:00Z' };
+    expect(isEligibleForResolve(oldRow, 24, NOW)).toBe(true);
+  });
+
+  it('returns false for status=in_progress younger than staleHours', () => {
+    const freshRow = { status: 'in_progress', created_at: '2026-05-11T10:00:00Z' };
+    expect(isEligibleForResolve(freshRow, 24, NOW)).toBe(false);
+  });
+
+  it('returns false for status=resolved / triaged / other', () => {
+    expect(isEligibleForResolve({ status: 'resolved', created_at: '2026-05-09T00:00:00Z' }, 24, NOW)).toBe(false);
+    expect(isEligibleForResolve({ status: 'triaged', created_at: '2026-05-09T00:00:00Z' }, 24, NOW)).toBe(false);
+    expect(isEligibleForResolve({ status: 'wont_fix', created_at: '2026-05-09T00:00:00Z' }, 24, NOW)).toBe(false);
+  });
+
+  it('returns false for null / missing status', () => {
+    expect(isEligibleForResolve(null, 24, NOW)).toBe(false);
+    expect(isEligibleForResolve({}, 24, NOW)).toBe(false);
+    expect(isEligibleForResolve({ status: null, created_at: '2026-05-09T00:00:00Z' }, 24, NOW)).toBe(false);
+  });
+
+  it('honors variable staleHours (status=in_progress boundary)', () => {
+    // Exactly 1h old; staleHours=2 → not yet eligible; staleHours=1 → eligible.
+    const row = { status: 'in_progress', created_at: '2026-05-11T19:00:00Z' };
+    expect(isEligibleForResolve(row, 2, NOW)).toBe(false);
+    expect(isEligibleForResolve(row, 1, NOW)).toBe(true);
   });
 });
 
