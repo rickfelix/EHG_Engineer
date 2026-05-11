@@ -33,6 +33,7 @@ import {
 import { runComplianceWithRefinement } from './compliance-loop.js';
 import { prompt, displayCompletionSummary } from './cli.js';
 import { resolveFeedback, parseAndExpandFeedbackFooters } from '../../../lib/governance/resolve-feedback.js';
+import { checkResolverFreshness, logResolverFreshnessBanner } from '../../../lib/governance/check-resolver-freshness.js';
 import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -62,6 +63,19 @@ export async function completeQuickFix(qfId, options = {}) {
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // QF-20260511-258: Stale-branch guard for the post-merge feedback auto-resolver.
+  // If origin/main has commits touching resolver paths that the worker's HEAD
+  // doesn't yet have, refuse to proceed unless --allow-stale-branch is set.
+  // Closes the QF-205 recurrence class (worker forked before resolver fixes merged).
+  const freshness = checkResolverFreshness(process.cwd());
+  if (freshness.stale) {
+    const bypass = { allowed: !!options.allowStaleBranch, reason: options.allowStaleBranchReason };
+    logResolverFreshnessBanner(freshness, bypass);
+    if (!bypass.allowed) {
+      process.exit(1);
+    }
+  }
 
   // Fetch quick-fix record
   const { data: qf, error } = await supabase
