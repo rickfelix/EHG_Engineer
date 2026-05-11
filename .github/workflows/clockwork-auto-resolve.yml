@@ -1,0 +1,62 @@
+name: "Clockwork: Auto-Resolve Recovered CI Failures"
+
+# CAPA-7 of SD-LEO-INFRA-FEEDBACK-PIPELINE-HEALTH-001
+# Sibling to CAPA-2 (auto-triage). Closes stale (>24h) feedback rows with
+# status='in_progress' + category='ci_failure' when the cited workflow now has
+# K consecutive successful runs newer than row.created_at.
+# Cron offset 45 min from gh-failure-monitor producer (:00) and auto-triage (:30).
+
+on:
+  schedule:
+    # Hourly at :45 past
+    - cron: '45 * * * *'
+  workflow_dispatch:
+    inputs:
+      max_items:
+        description: 'Max items to evaluate per run'
+        default: '20'
+      k:
+        description: 'Number of consecutive successful runs required'
+        default: '5'
+      stale_hours:
+        description: 'Minimum age (hours) before a row is eligible'
+        default: '24'
+      dry_run:
+        description: 'Preview mode (no writes)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  auto-resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run auto-resolve-recovered
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FLAGS="--max-items ${{ github.event.inputs.max_items || '20' }}"
+          FLAGS="$FLAGS --k ${{ github.event.inputs.k || '5' }}"
+          FLAGS="$FLAGS --stale-hours ${{ github.event.inputs.stale_hours || '24' }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+          node scripts/modules/inbox/auto-resolve-recovered.js $FLAGS
