@@ -25,6 +25,7 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { mapHierarchy, MAX_HIERARCHY_DEPTH } from './lib/sd-hierarchy-mapper.js';
+import { isLeadDecisionPaused } from './modules/sd-next/status-helpers.js';
 
 dotenv.config();
 
@@ -640,11 +641,14 @@ async function main() {
     console.log('');
 
     // Emit RECOMMENDED_CHILD for agent consumption
-    // Find first unclaimed, non-completed child
+    // Find first unclaimed, non-completed, non-LEAD-deferred child
+    // QF-20260511-164: honor metadata.lead_decision.verdict='deferred'/'paused_pending'
+    // (sibling fix to QF-20260511-565 queue engine; closes feedback 40dd5477).
     const unclaimed = children.filter(c =>
       !c.claiming_session_id &&
       c.status !== 'completed' &&
-      c.status !== 'blocked'
+      c.status !== 'blocked' &&
+      !isLeadDecisionPaused(c)
     );
     if (unclaimed.length > 0) {
       const recommended = unclaimed[0];

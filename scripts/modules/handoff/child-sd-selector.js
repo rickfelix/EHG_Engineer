@@ -14,6 +14,7 @@ import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { sortByUrgency, scoreToBand } from '../auto-proceed/urgency-scorer.js';
 import { buildDependencyDAG, detectCycles, computeRunnableSet } from '../../../lib/orchestrator/dependency-dag.js';
 import { computeGateState } from '../../../lib/cadence/pre-claim-gate.mjs';
+import { isLeadDecisionPaused } from '../sd-next/status-helpers.js';
 
 /**
  * Check if an SD is a child (has a parent)
@@ -68,6 +69,13 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
       const blockedBy = child.metadata?.blocked_by;
       if (blockedBy && Array.isArray(blockedBy) && blockedBy.length > 0) {
         console.log(`   [child-sd-selector] Skipping ${child.sd_key || child.id} - has ${blockedBy.length} unresolved blocker(s)`);
+        return false;
+      }
+      // QF-20260511-164: honor LEAD strategic deferral encoded in metadata.lead_decision.verdict.
+      // Sibling fix to QF-20260511-565 (queue engine); closes feedback 40dd5477 + 7aed1203.
+      if (isLeadDecisionPaused(child)) {
+        const verdict = child.metadata?.lead_decision?.verdict;
+        console.log(`   [child-sd-selector] Skipping ${child.sd_key || child.id} - LEAD decision verdict=${verdict}`);
         return false;
       }
       return true;
