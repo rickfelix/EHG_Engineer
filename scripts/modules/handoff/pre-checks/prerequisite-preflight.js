@@ -16,6 +16,7 @@
 import { SD_TYPE_THRESHOLDS, DEFAULT_THRESHOLD, JSONB_FIELDS } from '../../sd-quality-scoring.js';
 import { shouldBypassUserStories } from '../../../../lib/protocol-policies/orchestrator-bypass.js';
 import { lookupSdIdForFk } from '../../auto-trigger-stories.mjs';
+import { isLightweightSDType, detectCodeProduction } from '../validation/sd-type-applicability-policy.js';
 
 /**
  * Determines whether an SD requires user stories at PLAN-TO-EXEC time.
@@ -55,6 +56,34 @@ export function canonicalizeSmokeStep(step) {
   const instruction = step.instruction || step.instruction_template || step.step;
   const expected_outcome = step.expected_outcome || step.expected_outcome_template || step.expected;
   return { instruction, expected_outcome };
+}
+
+/**
+ * Determines whether an SD requires smoke_test_steps at LEAD-TO-PLAN time.
+ *
+ * Mirrors the SMOKE_TEST_SPECIFICATION gate
+ * (scripts/modules/handoff/executors/lead-to-plan/gates/smoke-test-specification.js)
+ * which skips lightweight SD types and non-code-producing infrastructure SDs.
+ *
+ * Without this exemption the preflight rejects orchestrator / documentation /
+ * process / uat / discovery_spike / non-code infrastructure SDs even though the
+ * gate suite passes them at 100% — witnessed on SD-EVA-SUPPORT-CLI-SKILL-ORCH-001
+ * and SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001 (feedback 504a1d06 + 9a6bfa95).
+ *
+ * QF-20260511-430.
+ *
+ * @param {Object|null|undefined} sd - Strategic Directive row
+ * @returns {boolean} true if smoke_test_steps must be present
+ */
+export function shouldRequireSmokeTest(sd) {
+  if (!sd) return true;
+  const sdType = (sd.sd_type || 'feature').toLowerCase();
+  if (!isLightweightSDType(sdType)) return true;
+  if (sdType === 'infrastructure') {
+    const { producesCode } = detectCodeProduction(sd);
+    return producesCode;
+  }
+  return false;
 }
 
 /**
@@ -282,33 +311,47 @@ function checkLeadToPlanPrereqs(sd) {
   // SD-LEO-INFRA-SMOKE-TEST-SCHEMA-RECONCILE-001: canonicalize each step
   // before validity check — accepts legacy {step, expected} shape in addition
   // to canonical {instruction, expected_outcome}.
-  const smokeSteps = sd.smoke_test_steps;
-  if (!smokeSteps || !Array.isArray(smokeSteps) || smokeSteps.length === 0) {
+  //
+  // QF-20260511-430: sd_type-aware exemption mirroring SMOKE_TEST_SPECIFICATION
+  // gate. Without this, preflight rejects orchestrator/documentation/process/uat/
+  // discovery_spike/non-code infrastructure SDs that the gate passes at 100%.
+  // Parallel to USER_STORIES_BYPASSED pattern in checkPlanToExecPrereqs above.
+  if (!shouldRequireSmokeTest(sd)) {
     issues.push({
-      code: 'SMOKE_TEST_MISSING',
-      message: 'No smoke_test_steps defined',
-      remediation: 'Add smoke_test_steps: [{instruction: "...", expected_outcome: "..."}]'
+      code: 'SMOKE_TEST_BYPASSED',
+      severity: 'info',
+      message: `sd_type '${sd.sd_type}' exempt from smoke_test_steps requirement per SMOKE_TEST_SPECIFICATION gate policy`,
+      remediation: 'No action required — informational entry only.'
     });
   } else {
-    const canonicalized = smokeSteps.map(canonicalizeSmokeStep);
-    const validSteps = canonicalized.filter(s => s.instruction && s.expected_outcome);
-    if (validSteps.length === 0) {
-      const invalidStep = canonicalized[0];
-      const missingFields = [];
-      if (!invalidStep?.instruction) missingFields.push('instruction');
-      if (!invalidStep?.expected_outcome) missingFields.push('expected_outcome');
+    const smokeSteps = sd.smoke_test_steps;
+    if (!smokeSteps || !Array.isArray(smokeSteps) || smokeSteps.length === 0) {
       issues.push({
-        code: 'SMOKE_TEST_INVALID',
-        message: `smoke_test_steps[0] is missing required field(s): ${missingFields.join(', ')}`,
-        remediation: [
-          'Each step must have both fields. Canonical (preferred):',
-          '  smoke_test_steps: [',
-          '    { instruction: "Run: node scripts/handoff.js execute LEAD-TO-PLAN SD-EXAMPLE-001",',
-          '      expected_outcome: "HANDOFF_RESULT=PASS printed to stdout" }',
-          '  ]',
-          'Legacy {step, expected} shape is also accepted (auto-canonicalized).'
-        ].join('\n')
+        code: 'SMOKE_TEST_MISSING',
+        message: 'No smoke_test_steps defined',
+        remediation: 'Add smoke_test_steps: [{instruction: "...", expected_outcome: "..."}]'
       });
+    } else {
+      const canonicalized = smokeSteps.map(canonicalizeSmokeStep);
+      const validSteps = canonicalized.filter(s => s.instruction && s.expected_outcome);
+      if (validSteps.length === 0) {
+        const invalidStep = canonicalized[0];
+        const missingFields = [];
+        if (!invalidStep?.instruction) missingFields.push('instruction');
+        if (!invalidStep?.expected_outcome) missingFields.push('expected_outcome');
+        issues.push({
+          code: 'SMOKE_TEST_INVALID',
+          message: `smoke_test_steps[0] is missing required field(s): ${missingFields.join(', ')}`,
+          remediation: [
+            'Each step must have both fields. Canonical (preferred):',
+            '  smoke_test_steps: [',
+            '    { instruction: "Run: node scripts/handoff.js execute LEAD-TO-PLAN SD-EXAMPLE-001",',
+            '      expected_outcome: "HANDOFF_RESULT=PASS printed to stdout" }',
+            '  ]',
+            'Legacy {step, expected} shape is also accepted (auto-canonicalized).'
+          ].join('\n')
+        });
+      }
     }
   }
 
