@@ -13,6 +13,7 @@
  */
 
 import pg from 'pg';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -30,9 +31,20 @@ const { Client } = pg;
  * Get SSL configuration based on environment
  * SD-SEC-CONFIG-SECURITY-001: Environment-aware SSL verification
  */
-function getSSLConfig() {
+export function getSSLConfig() {
   const isProduction = process.env.NODE_ENV === 'production';
   const disableSSLVerify = process.env.DISABLE_SSL_VERIFY === 'true';
+
+  // SUPABASE_SSL_CA: path to a PEM bundle that signs the Supabase pooler chain.
+  // On Windows, the system trust store does not include the Supabase root, so
+  // pg-direct connections fail with SELF_SIGNED_CERT_IN_CHAIN. Pointing this at
+  // the Supabase-signed CA (e.g. supabase-root-2021-ca.pem) keeps verification
+  // strict instead of falling back to DISABLE_SSL_VERIFY=true. QF-20260511-917
+  // closes feedback e97a791f.
+  const caPath = process.env.SUPABASE_SSL_CA;
+  if (caPath && fs.existsSync(caPath)) {
+    return { rejectUnauthorized: true, ca: fs.readFileSync(caPath, 'utf8') };
+  }
 
   if (isProduction) {
     return { rejectUnauthorized: true };
