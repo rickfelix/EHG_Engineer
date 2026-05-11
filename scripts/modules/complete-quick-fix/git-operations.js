@@ -8,7 +8,57 @@
  *   actualSourceLoc + actualTestLoc separately.
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
+
+/**
+ * Parse `git status --short` output into a list of file paths.
+ *
+ * QF-20260511-080 (closes harness 62327062): used by commitAndPushChanges to
+ * scope `git add` to QF-touched files. Previously a blind `git add .` swept
+ * unrelated dirty state (.claude/* session-state, scripts/one-off/_*.mjs) into
+ * the QF commit when complete-quick-fix ran from the main repo CWD instead of
+ * the QF worktree.
+ *
+ * Handles short porcelain format (XY + space + path), untracked (`??`),
+ * renames (`R  old -> new` → returns new path), and quoted paths.
+ *
+ * @param {string} statusOutput - Raw output of `git status --short`
+ * @returns {string[]} Unique file paths
+ */
+export function parseGitStatusFiles(statusOutput) {
+  if (!statusOutput) return [];
+  const files = new Set();
+  for (const line of statusOutput.split('\n')) {
+    if (!line || line.length < 4) continue;
+    let rest = line.slice(3);
+    const arrowIdx = rest.indexOf(' -> ');
+    if (arrowIdx >= 0) rest = rest.slice(arrowIdx + 4);
+    if (rest.length >= 2 && rest.startsWith('"') && rest.endsWith('"')) {
+      rest = rest.slice(1, -1);
+    }
+    if (rest) files.add(rest);
+  }
+  return [...files];
+}
+
+/**
+ * Partition dirty files into QF-scoped vs unrelated by intersection with the
+ * branch's `git diff origin/main...HEAD --name-only` set (filesChanged).
+ *
+ * @param {string[]} dirtyFiles - Files reported by `git status --short`
+ * @param {string[]} scopedFiles - QF-touched files (from analyzeGitDiff)
+ * @returns {{scopedDirty: string[], unrelatedDirty: string[]}}
+ */
+export function partitionDirtyByScope(dirtyFiles, scopedFiles) {
+  const scopeSet = new Set(scopedFiles || []);
+  const scopedDirty = [];
+  const unrelatedDirty = [];
+  for (const f of dirtyFiles || []) {
+    if (scopeSet.has(f)) scopedDirty.push(f);
+    else unrelatedDirty.push(f);
+  }
+  return { scopedDirty, unrelatedDirty };
+}
 
 /**
  * Test-file path heuristic. Matches:
@@ -471,9 +521,27 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
     const gitStatus = execSync('git status --short', { encoding: 'utf-8', cwd: testDir }).trim();
 
     if (gitStatus) {
+      const dirtyFiles = parseGitStatusFiles(gitStatus);
+      const { scopedDirty, unrelatedDirty } = partitionDirtyByScope(dirtyFiles, filesChanged);
+
+      if (scopedDirty.length === 0) {
+        console.log(`   Current Branch: ${currentBranch}`);
+        console.log('   ℹ️  No QF-scoped uncommitted changes detected.');
+        if (unrelatedDirty.length > 0) {
+          console.log(`   ⚠️  Ignoring ${unrelatedDirty.length} unrelated dirty file(s) to prevent branch pollution (harness 62327062):`);
+          unrelatedDirty.slice(0, 10).forEach(f => console.log(`        - ${f}`));
+          if (unrelatedDirty.length > 10) console.log(`        ... and ${unrelatedDirty.length - 10} more`);
+        }
+        console.log(`   Current commit: ${commitSha?.substring(0, 7) || 'Unknown'}\n`);
+        return commitSha;
+      }
+
       console.log(`   Current Branch: ${currentBranch}`);
-      console.log('   Uncommitted Changes:\n');
-      console.log(gitStatus.split('\n').map(line => `      ${line}`).join('\n'));
+      if (unrelatedDirty.length > 0) {
+        console.log(`   ℹ️  Ignoring ${unrelatedDirty.length} unrelated dirty file(s) not in QF scope`);
+      }
+      console.log('   Uncommitted Changes (QF-scoped):\n');
+      scopedDirty.forEach(f => console.log(`      ${f}`));
       console.log();
 
       const commitMessage = generateCommitMessage(qf, actualLoc, filesChanged, prUrl, testsPass);
@@ -493,7 +561,7 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
 
       if (shouldCommit.toLowerCase().startsWith('y')) {
         console.log('\n   📦 Staging changes...');
-        execSync('git add .', { stdio: 'inherit', cwd: testDir });
+        execFileSync('git', ['add', '--', ...scopedDirty], { stdio: 'inherit', cwd: testDir });
 
         console.log('   📝 Creating commit...');
         // SD-SEC-DATA-VALIDATION-001: Sanitize commit message
