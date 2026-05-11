@@ -33,9 +33,14 @@ export function extractOverrideReason(operatorInput) {
  * @param {string} [params.operatorInput] - operator's most recent message (may begin with Override:)
  * @param {object} [params.client] - optional Anthropic client (for tests)
  * @param {string} [params.model]
- * @returns {Promise<{reply: string, decision_log_entry: object}>}
+ * @param {object} [params.decisionLogStore] - SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B / FR-4:
+ *   optional Phase 2 store. If provided, the entry is INSERTed via
+ *   decisionLogStore.insertEntry(entry) BEFORE returning. A throw here means
+ *   the caller MUST NOT proceed with the Todoist comment write (atomic DB-FIRST
+ *   contract). If omitted, behavior is identical to Phase 1 (build + return only).
+ * @returns {Promise<{reply: string, decision_log_entry: object, db_persisted?: boolean}>}
  */
-export async function runSubFlow({ flow, flowGuidance, subtask, history = [], operatorInput = '', client, model = DEFAULT_MODEL }) {
+export async function runSubFlow({ flow, flowGuidance, subtask, history = [], operatorInput = '', client, model = DEFAULT_MODEL, decisionLogStore = null }) {
   if (!subtask?.id) throw new Error('subtask.id is required');
 
   const sdkClient = client ?? createAnthropicClient();
@@ -72,7 +77,18 @@ export async function runSubFlow({ flow, flowGuidance, subtask, history = [], op
     references: [],
   });
 
-  return { reply, decision_log_entry };
+  // Phase 2 atomic DB-FIRST dual-write (SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B / FR-4):
+  // when a store is injected, persist the envelope to eva_support_decision_log BEFORE
+  // returning. A throw propagates to the dispatcher → slash command, which then
+  // MUST NOT post the Todoist comment. This makes DB the canonical store; Todoist
+  // becomes a human-readable mirror only when the DB write succeeds.
+  let db_persisted = false;
+  if (decisionLogStore && typeof decisionLogStore.insertEntry === 'function') {
+    const result = await decisionLogStore.insertEntry(decision_log_entry);
+    db_persisted = !!(result && (result.verified || result.inserted));
+  }
+
+  return { reply, decision_log_entry, db_persisted };
 }
 
 export default { runSubFlow, extractOverrideReason };
