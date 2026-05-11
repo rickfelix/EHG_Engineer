@@ -625,3 +625,33 @@ UPDATE product_requirements_v2 SET status = 'verification' WHERE sd_id = '<uuid>
 -- ✅ Before PLAN-TO-EXEC: ensure status is 'approved'
 UPDATE product_requirements_v2 SET status = 'approved' WHERE sd_id = '<uuid>';
 ```
+
+## Read-After-Write Verification (REQUIRED for metadata-class columns)
+
+**Rule**: After every UPDATE on a JSONB metadata-class column (`metadata`, `governance_metadata`, `success_metrics`, etc.), SELECT the row and assert the keys are present BEFORE reporting success.
+
+**Witness — QF-20260509-650 (audit ref 5e04c8c1)**: A prior database-agent SendMessage resumption claimed success patching `governance_metadata.decomposition_judgment`, `cascade_flag_overridden`, `plan_advisories`. A fresh invocation found NONE of those keys; only `orphan_check` + `risk_assessment` existed. The earlier write had actually landed in `metadata` (wrong column), and the success report compared the prompt's intent against the column it was *asked to write*, not the one it touched. Silent class of failure — no exception, no obvious symptom until much later.
+
+**Use the helper** — `lib/db/writeback-verify.mjs::updateAndVerify({...})`:
+
+```js
+import { updateAndVerify } from '../../lib/db/writeback-verify.mjs';
+
+await updateAndVerify({
+  client: supabase,
+  table: 'strategic_directives_v2',
+  match: { id: sdId },
+  column: 'governance_metadata',          // single source of truth for the write target
+  patch: { decomposition_judgment: 'split', cascade_flag_overridden: true },
+  verifyKeys: ['decomposition_judgment', 'cascade_flag_overridden'],
+});
+```
+
+The helper performs UPDATE → SELECT → assert keys present. If keys are absent it throws `WritebackVerificationError` and — critically — checks the sibling metadata column (`metadata` ↔ `governance_metadata`) and reports `foundInSibling` when the keys landed in the wrong column. That is the column-disambiguation diagnostic.
+
+**When to use**:
+- Any UPDATE that writes to `metadata`, `governance_metadata`, `success_metrics`, `policy_metadata`, or another JSONB column where downstream consumers branch on key presence.
+- SendMessage resumption flows where you must report success/failure to a parent agent.
+- Multi-key batch updates where partial-success would leave the row in an inconsistent state.
+
+**When NOT required**: Top-level scalar columns (`status`, `current_phase`, `progress`) — the column name itself is the contract, and a successful UPDATE return is sufficient evidence. The helper exists specifically because JSONB column writes can succeed while still landing in the wrong column.

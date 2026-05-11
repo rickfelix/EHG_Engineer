@@ -1,9 +1,8 @@
 {
-  "sdKey": "QF-20260510-170",
-  "workType": "QF",
-  "workKey": "QF-20260510-170",
-  "expectedBranch": "qf/QF-20260510-170",
-  "createdAt": "2026-05-10T16:12:09.772Z",
+  "sdKey": "QF-20260509-650",
+  "expectedBranch": "qf/QF-20260509-650",
+  "createdAt": "2026-05-11T01:08:44.082Z",
   "hostname": "Legion-Laptop",
-  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+  "baseRef": "origin/main"
 }
