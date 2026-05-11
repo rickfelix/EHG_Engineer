@@ -407,7 +407,8 @@
     "playground": "node scripts/generate-playground-config.cjs --open",
     "sd:query": "node scripts/sd-query.js",
     "decision:audit": "node scripts/decision-audit.js",
-    "okr:sync": "node scripts/okr-priority-sync.js"
+    "okr:sync": "node scripts/okr-priority-sync.js",
+    "check:migration-readiness": "node scripts/check-migration-readiness.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",
