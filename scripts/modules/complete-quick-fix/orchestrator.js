@@ -50,10 +50,14 @@ export async function completeQuickFix(qfId, options = {}) {
   console.log(`\n✅ Completing Quick-Fix: ${qfId}\n`);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  // Service-role required: resolveLinkedFeedbackRows performs cross-row SELECT/UPDATE
+  // on feedback rows whose table policy blocks anon-tier access. Empirically validated
+  // in PR #3697 — anon-tier client returns zero matches for rows service-role sees.
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     console.log('❌ Missing Supabase credentials in .env file');
+    console.log('   Required: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
     process.exit(1);
   }
 
