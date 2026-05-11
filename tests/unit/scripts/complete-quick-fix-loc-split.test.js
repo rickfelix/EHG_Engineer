@@ -149,6 +149,59 @@ describe('SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 — countLocBySplit', () =>
       expect.any(Object)
     );
   });
+
+  // QF-20260511-192: closes feedback 661285bc (fast-forward post-fetch
+  // over-count) + 2b792e59 (merge-commit empty diff). When `baseRef...headRef`
+  // is empty (base==head SHA after fast-forward squash, OR mergeCommit's first
+  // parent IS baseRef on a true merge), the function must retry with
+  // `headRef^1...headRef` so the commit's own contribution is measured.
+  it('falls back to headRef^1...headRef when baseRef...headRef is empty (fast-forward squash)', () => {
+    execSyncMock
+      .mockReturnValueOnce('')                            // numstat baseRef...headRef → empty
+      .mockReturnValueOnce('25\t0\tlib/foo.js\n50\t10\ttests/foo.test.js') // numstat headRef^1...headRef
+      .mockReturnValueOnce('');                           // name-status (empty deletedPaths)
+    const r = countLocBySplit('/fake/repo', 'origin/main', 'abc1234567');
+    expect(r.source).toBe(25);
+    expect(r.test).toBe(60);
+    expect(r.total).toBe(85);
+    expect(execSyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('abc1234567^1...abc1234567'),
+      expect.any(Object)
+    );
+  });
+
+  it('uses the fallback base for the diff-filter=D deleted-files probe too', () => {
+    execSyncMock
+      .mockReturnValueOnce('   \n  ')                    // numstat → whitespace-only (effectively empty)
+      .mockReturnValueOnce('10\t0\tlib/foo.js')          // fallback numstat → non-empty
+      .mockReturnValueOnce('D\tlib/legacy.js');          // name-status using fallback base
+    countLocBySplit('/fake/repo', 'origin/main', 'mergeoid');
+    expect(execSyncMock).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('--diff-filter=D mergeoid^1...mergeoid'),
+      expect.any(Object)
+    );
+  });
+
+  it('returns zeros when both the primary and fallback diffs are empty', () => {
+    execSyncMock
+      .mockReturnValueOnce('')                            // primary empty
+      .mockReturnValueOnce('');                           // fallback also empty
+    const r = countLocBySplit('/fake/repo', 'origin/main', 'rootcommit');
+    expect(r).toEqual({ source: 0, test: 0, total: 0, sourceDeletionLoc: 0 });
+  });
+
+  it('does NOT invoke the fallback when the primary diff has content', () => {
+    execSyncMock
+      .mockReturnValueOnce('5\t1\tlib/x.js')              // primary non-empty
+      .mockReturnValueOnce('');                           // name-status (no deletions)
+    countLocBySplit('/fake/repo', 'origin/main', 'HEAD');
+    expect(execSyncMock).toHaveBeenCalledTimes(2);
+    for (const call of execSyncMock.mock.calls) {
+      expect(call[0]).not.toContain('HEAD^1...HEAD');
+    }
+  });
 });
 
 // QF-20260511-129: source-code regression guard — assert that the PR-metadata
@@ -277,10 +330,14 @@ describe('QF-20260511-205 — countLocBySplit uses 3-dot diff syntax (static-pin
     expect(src).not.toMatch(/git diff --numstat \$\{baseRef\}\.\.HEAD(?!\.)/);
   });
 
-  it('name-status (--diff-filter=D) call uses 3-dot ${baseRef}...${headRef}', () => {
-    expect(src).toContain('git diff --name-status --diff-filter=D ${baseRef}...${headRef}');
-    expect(src).not.toMatch(/git diff --name-status --diff-filter=D \$\{baseRef\}\.\.\$\{headRef\}(?!\.)/);
-    expect(src).not.toMatch(/git diff --name-status --diff-filter=D \$\{baseRef\}\.\.HEAD(?!\.)/);
+  it('name-status (--diff-filter=D) call uses 3-dot <base>...${headRef}', () => {
+    // QF-20260511-192: base identifier is now ${effectiveBase} (variable rebinds
+    // to ${headRef}^1 on empty-diff fallback). Guard the 3-dot SEMANTICS, not
+    // the literal variable name — variable-name-agnostic regex below catches
+    // 2-dot regression on any identifier.
+    expect(src).toMatch(/git diff --name-status --diff-filter=D \$\{\w+\}\.\.\.\$\{headRef\}/);
+    expect(src).not.toMatch(/git diff --name-status --diff-filter=D \$\{\w+\}\.\.\$\{\w+\}(?!\.)/);
+    expect(src).not.toMatch(/git diff --name-status --diff-filter=D \$\{\w+\}\.\.HEAD(?!\.)/);
   });
 
   it('docstring documents 3-dot semantics + cross-references sister QF-20260503-820', () => {

@@ -91,6 +91,12 @@ const TEST_FILE_PATTERN = /(\.test\.|\.spec\.|\b__tests__\b|\btests\/|\be2e\/|\b
  */
 export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEAD') {
   const result = { source: 0, test: 0, total: 0, sourceDeletionLoc: 0 };
+  // QF-20260511-192: when base==head (fast-forward squash already applied) or
+  // headRef is a merge commit whose first parent IS baseRef, `baseRef...headRef`
+  // is empty. Recompute via the commit's own diff vs its first parent — works
+  // for both true merges (parent^1=pre-merge main) and squash fast-forwards
+  // (sole parent IS pre-merge main). Closes feedback 661285bc + 2b792e59.
+  let effectiveBase = baseRef;
   let numstat = '';
   try {
     numstat = execSync(`git diff --numstat ${baseRef}...${headRef}`, {
@@ -106,13 +112,27 @@ export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEA
   // mock setups (e.g. mockReturnValueOnce exhausted in upstream test), in which
   // case `numstat.split` throws. The catch block above only fires on throw, not
   // on undefined return. Match the empty-output fail-safe.
-  if (!numstat) return result;
+  if (numstat && !numstat.trim()) numstat = '';
+  if (!numstat) {
+    try {
+      numstat = execSync(`git diff --numstat ${headRef}^1...${headRef}`, {
+        cwd: testDir,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 10000
+      });
+      if (numstat && numstat.trim()) effectiveBase = `${headRef}^1`;
+      else return result;
+    } catch {
+      return result;
+    }
+  }
 
   // QF-20260509-407: collect deleted-file paths so we can mark their deletion-LOC
   // as not-counting-against-tier-cap (pure dead-code removal).
   const deletedPaths = new Set();
   try {
-    const nameStatus = execSync(`git diff --name-status --diff-filter=D ${baseRef}...${headRef}`, {
+    const nameStatus = execSync(`git diff --name-status --diff-filter=D ${effectiveBase}...${headRef}`, {
       cwd: testDir,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
