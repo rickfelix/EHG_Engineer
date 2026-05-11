@@ -180,10 +180,37 @@ export class BaseExecutor {
       }
 
       // Step 1.5: Pre-handoff migration check (auto-execute pending migrations)
+      // FR-2: consume result.blocking. Gate enforcement is governed by env
+      // flag LEO_MIGRATION_GATE_ENFORCE (default unset/'warn' = log + audit
+      // only; 'block' = hard gateFailure). Preserves options.skipMigrationCheck
+      // escape hatch — that path returns null so the gate never trips.
       let step1_5Span;
       try { step1_5Span = startSpan('step.migrationCheck', { span_type: 'phase', step_name: 'migrationCheck', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
-      await this._checkAndExecutePendingMigrations(sd, options);
+      const migrationCheckResult = await this._checkAndExecutePendingMigrations(sd, options);
       try { endSpan(step1_5Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+      if (migrationCheckResult && migrationCheckResult.blocking === true) {
+        const enforceMode = (process.env.LEO_MIGRATION_GATE_ENFORCE || 'warn').toLowerCase();
+        const pending = [
+          ...(migrationCheckResult.uncommittedManualUpdates || []),
+          ...(migrationCheckResult.pendingMigrations || []).map(m => m.file)
+        ];
+        const applyRecipe = pending.map(p => `  node scripts/apply-migration.js "${p}" --prod-deploy --issue-token <token>`).join('\n');
+        if (enforceMode === 'block') {
+          try { endSpan(rootSpan, { result: 'migration_gate_block' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }
+          return ResultBuilder.gateFailure('GATE_PENDING_MIGRATIONS', {
+            issues: pending.length
+              ? [`${pending.length} pending migration(s) — schema objects not present in live DB`, ...pending.map(p => `pending: ${p}`)]
+              : ['Pending migrations detected'],
+            score: 0,
+            max_score: 100,
+            warnings: [`apply manually:\n${applyRecipe}`, 'set LEO_MIGRATION_GATE_ENFORCE=warn to downgrade to warning-only']
+          }, `GATE_PENDING_MIGRATIONS: ${pending.length} migration(s) not yet applied to live DB`);
+        } else {
+          console.log(`   [Migration Gate] result.blocking=true but LEO_MIGRATION_GATE_ENFORCE=${enforceMode} — warning only (grace window).`);
+          if (pending.length) console.log(`   [Migration Gate] To apply manually:\n${applyRecipe}`);
+        }
+      }
 
       // Step 1.8: PAT-MSESS-BYP-001 - Multi-session claim conflict check (BLOCKING)
       // Prevents duplicate work when another Claude Code instance is already working on this SD
@@ -638,7 +665,7 @@ export class BaseExecutor {
       // Skip migration check if explicitly disabled
       if (options.skipMigrationCheck === true) {
         console.log('   [Migration Check] Skipped (disabled via options)');
-        return;
+        return null;
       }
 
       const result = await checkPendingMigrations(this.supabase, sd, {
@@ -668,14 +695,16 @@ export class BaseExecutor {
         result.pendingMigrations.forEach(m => console.log(`      • ${m.file}`));
         console.log('');
         console.log('   Options:');
-        console.log('   1. Run: node scripts/execute-manual-migrations.js');
+        console.log('   1. Run: node scripts/apply-migration.js <file> --prod-deploy --issue-token <token>');
         console.log('   2. Use /rca to perform root cause analysis on the failure');
         console.log('   3. Execute the SQL manually via psql or Supabase dashboard');
         console.log('');
       }
+      return result;
     } catch (error) {
       // Non-fatal - allow handoff to proceed
       console.log(`   [Migration Check] ⚠️ Error (non-blocking): ${error.message}`);
+      return null;
     }
   }
 
