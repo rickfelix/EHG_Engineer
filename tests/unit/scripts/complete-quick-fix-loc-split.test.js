@@ -105,6 +105,91 @@ describe('SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 — countLocBySplit', () =>
     expect(r.source).toBe(0);
     expect(r.test).toBe(15);
   });
+
+  // QF-20260511-129: pin the source/test split to the PR's actual commit boundary
+  // (mergeCommit.oid) instead of CWD HEAD. Without this, running complete-quick-fix.js
+  // from a long-lived QF/SD worktree inflates the split by orders of magnitude
+  // (QF-20260511-876: reported 1624 src / 181 test for actual 67 / 106 LOC).
+  it('defaults headRef to "HEAD" (backward-compat with legacy callers)', () => {
+    execSyncMock.mockReturnValue('5\t1\tlib/x.js');
+    countLocBySplit('/fake/repo', 'origin/main');
+    expect(execSyncMock).toHaveBeenCalledWith(
+      expect.stringContaining('origin/main...HEAD'),
+      expect.any(Object)
+    );
+  });
+
+  it('honors custom headRef parameter (pins diff to PR mergeCommit.oid)', () => {
+    execSyncMock.mockReturnValue('5\t1\tlib/x.js');
+    countLocBySplit('/fake/repo', 'origin/main', 'abc1234567');
+    expect(execSyncMock).toHaveBeenCalledWith(
+      expect.stringContaining('origin/main...abc1234567'),
+      expect.any(Object)
+    );
+    expect(execSyncMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('origin/main...HEAD'),
+      expect.any(Object)
+    );
+  });
+
+  it('passes headRef to the deleted-files diff-filter probe as well', () => {
+    // First call = numstat; second call = name-status. Both must use headRef.
+    execSyncMock
+      .mockReturnValueOnce('5\t1\tlib/x.js')
+      .mockReturnValueOnce('D\tlib/legacy.js');
+    countLocBySplit('/fake/repo', 'origin/main', 'deadbeef');
+    expect(execSyncMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('origin/main...deadbeef'),
+      expect.any(Object)
+    );
+    expect(execSyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('--diff-filter=D origin/main...deadbeef'),
+      expect.any(Object)
+    );
+  });
+});
+
+// QF-20260511-129: source-code regression guard — assert that the PR-metadata
+// branch in autoDetectGitInfo wires result.commitSha as the headRef when calling
+// countLocBySplit. Reading source via readFileSync (not import) so the guard
+// catches AST-level changes, not just behavioral drift.
+describe('QF-20260511-129 — PR-metadata path pins countLocBySplit to mergeCommit.oid', () => {
+  const src = readFileSync(
+    resolve(REPO_ROOT, 'scripts/modules/complete-quick-fix/git-operations.js'),
+    'utf-8'
+  );
+
+  it('countLocBySplit signature accepts (testDir, baseRef, headRef)', () => {
+    expect(src).toMatch(/export function countLocBySplit\(testDir,\s*baseRef\s*=\s*['"]origin\/main['"],\s*headRef\s*=\s*['"]HEAD['"]\)/);
+  });
+
+  it('PR-metadata branch passes result.commitSha as splitHeadRef (not bare "HEAD")', () => {
+    // Locate the PR-metadata branch by its unique prNumber console.log marker.
+    const prBranchStart = src.indexOf('PR-metadata authoritative path');
+    expect(prBranchStart).toBeGreaterThan(0);
+    const prBranchSnippet = src.slice(prBranchStart, prBranchStart + 4000);
+    expect(prBranchSnippet).toMatch(/splitHeadRef\s*=\s*['"]HEAD['"]/);
+    expect(prBranchSnippet).toMatch(/result\.commitSha[\s\S]*?splitHeadRef\s*=\s*result\.commitSha/);
+    expect(prBranchSnippet).toMatch(/countLocBySplit\(testDir,\s*['"]origin\/main['"],\s*splitHeadRef\)/);
+  });
+
+  it('PR-metadata branch guards with git cat-file -e before pinning to commitSha', () => {
+    const prBranchStart = src.indexOf('PR-metadata authoritative path');
+    const prBranchSnippet = src.slice(prBranchStart, prBranchStart + 4000);
+    // The guard skips the split (rather than inflating from CWD HEAD) when the
+    // commit isn't fetched locally.
+    expect(prBranchSnippet).toMatch(/git cat-file -e \$\{result\.commitSha\}/);
+    expect(prBranchSnippet).toMatch(/skipping source\/test split/);
+  });
+
+  it('legacy in-worktree branch passes "HEAD" explicitly (clarity, no behavior change)', () => {
+    const legacyStart = src.indexOf('Legacy in-worktree path');
+    expect(legacyStart).toBeGreaterThan(0);
+    const legacySnippet = src.slice(legacyStart, legacyStart + 4000);
+    expect(legacySnippet).toMatch(/countLocBySplit\(testDir,\s*['"]origin\/main['"],\s*['"]HEAD['"]\)/);
+  });
 });
 
 describe('SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 — validateLOC', () => {
@@ -183,15 +268,18 @@ describe('QF-20260511-205 — countLocBySplit uses 3-dot diff syntax (static-pin
     );
   });
 
-  it('numstat call uses 3-dot ${baseRef}...HEAD (not 2-dot)', () => {
-    expect(src).toContain('git diff --numstat ${baseRef}...HEAD');
-    // Guard against accidental 2-dot regression — the ..HEAD pattern must not
-    // appear with exactly two dots in the numstat command line.
+  it('numstat call uses 3-dot ${baseRef}...${headRef} (not 2-dot)', () => {
+    // QF-20260511-129: headRef is now parameterized (was hardcoded 'HEAD').
+    // 3-dot semantics preserved — the second segment is now ${headRef} (default 'HEAD').
+    expect(src).toContain('git diff --numstat ${baseRef}...${headRef}');
+    // Guard against accidental 2-dot regression on either ref form.
+    expect(src).not.toMatch(/git diff --numstat \$\{baseRef\}\.\.\$\{headRef\}(?!\.)/);
     expect(src).not.toMatch(/git diff --numstat \$\{baseRef\}\.\.HEAD(?!\.)/);
   });
 
-  it('name-status (--diff-filter=D) call uses 3-dot ${baseRef}...HEAD', () => {
-    expect(src).toContain('git diff --name-status --diff-filter=D ${baseRef}...HEAD');
+  it('name-status (--diff-filter=D) call uses 3-dot ${baseRef}...${headRef}', () => {
+    expect(src).toContain('git diff --name-status --diff-filter=D ${baseRef}...${headRef}');
+    expect(src).not.toMatch(/git diff --name-status --diff-filter=D \$\{baseRef\}\.\.\$\{headRef\}(?!\.)/);
     expect(src).not.toMatch(/git diff --name-status --diff-filter=D \$\{baseRef\}\.\.HEAD(?!\.)/);
   });
 
