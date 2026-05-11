@@ -143,10 +143,12 @@ Examples:
 
 // ── Environment ────────────────────────────────────────────────────────
 
-function loadDotenv() {
+function loadDotenvFromDir(startDir) {
   // Minimal loader — only if dotenv is present, but never hard-fail.
+  // Existing process.env values win (first-loader-wins), so callers can layer
+  // multiple .env sources by calling this in priority order.
   try {
-    const root = findRepoRoot(process.cwd());
+    const root = findRepoRoot(startDir);
     if (!root) return;
     const envPath = path.join(root, '.env');
     if (!fs.existsSync(envPath)) return;
@@ -164,6 +166,10 @@ function loadDotenv() {
       process.env[key] = val;
     }
   } catch { /* ignore */ }
+}
+
+function loadDotenv() {
+  loadDotenvFromDir(process.cwd());
 }
 
 function findRepoRoot(start) {
@@ -601,6 +607,14 @@ export async function main(argv = process.argv) {
   }
 
   if (opts.repo) {
+    // Load this script's own repo .env BEFORE chdir, so SUPABASE_* creds are
+    // available even when --repo points at a target without its own .env.
+    // First-loader-wins in loadDotenvFromDir, so any keys already set by the
+    // shell or by the target repo's later loadDotenv() call take precedence.
+    // Closes QF-20260511-866 / feedback 04db6c20.
+    const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+    loadDotenvFromDir(scriptDir);
+
     const target = path.resolve(opts.repo);
     if (!fs.existsSync(target)) {
       console.error(`❌ --repo path does not exist: ${target}`);
@@ -855,6 +869,7 @@ if (isMainModule) {
 export {
   parseArgs,
   assertCwdIsMainRepoRoot,
+  loadDotenvFromDir,
   loadClaimMap,
   loadSdKeySets,
   collectDirtyStatus,

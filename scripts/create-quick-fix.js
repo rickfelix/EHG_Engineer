@@ -482,6 +482,10 @@ Tiered Routing:
   - Risk keywords (security, auth, schema): Force Tier 3
     `);
     process.exit(0);
+  } else {
+    console.error(`❌ Unknown argument: ${arg}`);
+    console.error(`   Run with --help for usage information.`);
+    process.exit(1);
   }
 }
 
