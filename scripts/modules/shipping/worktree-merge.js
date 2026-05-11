@@ -13,6 +13,7 @@
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
+import { removeWorktreeViaGit } from '../../../lib/worktree-manager.js';
 
 function run(cmd, opts = {}) {
   try {
@@ -68,9 +69,12 @@ function main() {
     console.log('   🧹 Pruning worktree references...');
     run('git worktree prune', { cwd: mainRepoPath });
 
-    // Try to remove the worktree directory if it still exists
+    // Try to remove the worktree directory if it still exists.
+    // QF-20260511-446: route through removeWorktreeViaGit so the node_modules
+    // symlink is unlinked first — bare `git worktree remove --force` follows
+    // MSYS bash symlinks on Windows and wipes the main repo's node_modules.
     if (existsSync(worktreePath)) {
-      run(`git worktree remove "${worktreeRelative}" --force`, { cwd: mainRepoPath, allowFail: true });
+      removeWorktreeViaGit(worktreePath, mainRepoPath, { allowFail: true });
     }
 
     // Delete local branch reference

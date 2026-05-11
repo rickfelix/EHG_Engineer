@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
-import { safeRecursiveRm, safeRecursiveCp } from '../../../lib/worktree-manager.js';
+import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../../../lib/worktree-manager.js';
 
 // Quick-fix QF-20260211-111: Post-merge worktree cleanup for /ship
 // FR-5: Added --sdKey support for external callers (SD-LEO-INFRA-UNIFIED-WORKTREE-LIFECYCLE-001)
@@ -306,13 +306,12 @@ async function cleanupWorktreeByPath(wtPath, options = {}) {
     return { cleaned: false, reason: 'unpushed_commits', commits, ...archive, mainRepoPath, workKey: sdKey };
   }
 
-  try {
-    execSync(`git worktree remove --force "${wtPath}"`, { cwd: mainRepoPath, encoding: 'utf8', stdio: 'pipe' });
-  } catch {
-    if (fs.existsSync(wtPath)) {
-      safeRecursiveRm(wtPath);
-      execSync('git worktree prune', { cwd: mainRepoPath, stdio: 'pipe' });
-    }
+  // QF-20260511-446: pre-unlink node_modules symlink so git doesn't follow it
+  // and wipe main repo's node_modules (MSYS-symlink-on-Windows wipe vector).
+  const gitRemove = removeWorktreeViaGit(wtPath, mainRepoPath, { allowFail: true });
+  if (!gitRemove.ok && fs.existsSync(wtPath)) {
+    safeRecursiveRm(wtPath);
+    execSync('git worktree prune', { cwd: mainRepoPath, stdio: 'pipe' });
   }
   return { cleaned: true, mainRepoPath, workKey: sdKey };
 }
