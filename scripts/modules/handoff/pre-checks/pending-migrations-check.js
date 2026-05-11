@@ -15,12 +15,17 @@
  * - Only after 3 failed attempts: Escalate to user
  */
 
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { readdir } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import crypto from 'crypto';
+import { parseDeclaredObjects } from '../../../lib/migration-object-parser.js';
+import { captureObjectDefinitions } from '../../../lib/migration-verification.js';
+import { hasBeenApplied } from '../../../../lib/migration-audit-reader.js';
+import { createDatabaseClient } from '../../../lib/supabase-connection.js';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -106,14 +111,18 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
 
       if (execResult.success) {
         console.log('   ✅ DATABASE sub-agent successfully executed all migrations');
-        // Re-check to confirm
-        const recheck = await checkUncommittedManualUpdates();
-        if (recheck.length === 0) {
+        // FR-4: re-check via pg introspection (not git status). Includes a
+        // settle delay + retries to absorb supabase pooler schema-cache lag.
+        const recheck = await recheckDeclaredObjectsPostApply(sdPending);
+        if (recheck.allApplied) {
           result.hasPendingMigrations = false;
-          console.log('   ✅ Verification passed: All pending migrations have been executed');
+          console.log('   ✅ Verification passed: All declared objects present in pg after apply');
+        } else if (recheck.indeterminate) {
+          result.warnings.push(`Re-check indeterminate: ${recheck.indeterminate} file(s) declare no parseable objects`);
+          console.log(`   ⚠️  Re-check indeterminate for ${recheck.indeterminate} file(s)`);
         } else {
-          result.warnings.push(`${recheck.length} manual updates still pending after execution`);
-          console.log(`   ⚠️  ${recheck.length} file(s) still pending - may need manual review`);
+          result.errors.push(`Post-apply re-check failed: ${recheck.stillMissing.length} object(s) still missing after ${recheck.attemptsUsed} attempt(s)`);
+          recheck.stillMissing.forEach(o => console.log(`      ✗ ${o.kind} ${o.schema}.${o.name} (from ${o.file})`));
         }
       } else {
         result.errors.push(execResult.error || 'DATABASE sub-agent execution failed after all retry attempts');
@@ -581,42 +590,102 @@ async function checkSDPendingMigrations(supabase, sd) {
 }
 
 /**
- * Check if a migration has been executed in schema_migrations
+ * Check if a migration has been executed.
+ *
+ * FR-1: probe pg_proc / pg_class / pg_trigger / pg_views / pg_indexes for the
+ * objects the migration *declares* (parsed from CREATE statements). Replaces
+ * the legacy git-status / version-string check, which silently false-passed
+ * when a migration file existed but the DDL was never applied to live DB
+ * (genesis incident: SD-FDBK-INFRA-CASCADE-TRIGGER-OVERREACH-001 / PR #3703).
+ *
+ * Resolution order (fast → authoritative):
+ *  1. If the file lives in `database/migrations/` (or any path), check
+ *     `schema_migrations_applied` audit log via `hasBeenApplied(path, sha)`.
+ *     Same path + same sha => executed=true (fast path, no pg roundtrip).
+ *  2. Otherwise, parse the file's declared FUNCTION/TRIGGER/VIEW/INDEX names
+ *     and probe live pg via `captureObjectDefinitions`. All objects present
+ *     => executed=true. Any missing => executed=false, missingObjects listed.
+ *  3. If the file declares zero objects (e.g. data-only migration with
+ *     INSERT/UPDATE only) AND no audit row exists, return null (INDETERMINATE
+ *     — caller decides whether to warn or block; default = no block).
+ *
+ * @param {object} _supabase - kept for backward-compat (unused; we use direct pg)
+ * @param {string} filename - filename only (e.g. "20260101_foo.sql"); resolved
+ *                            below to one of the known migration dirs.
+ * @returns {Promise<boolean|null>} true=applied, false=not applied, null=indeterminate
  */
-async function checkMigrationExecuted(supabase, filename) {
+async function checkMigrationExecuted(_supabase, filename) {
   try {
-    // Extract version/timestamp from filename
-    const versionMatch = filename.match(/^(\d{14}|\d{8}_?\d{0,6}|\d{8})/);
-    if (!versionMatch) {
-      // No version prefix - can't verify
-      return null;
-    }
-
-    const version = versionMatch[1].replace('_', '');
-
-    // Query schema_migrations table
-    const { data, error } = await supabase
-      .from('schema_migrations')
-      .select('version, name')
-      .limit(100);
-
-    if (error) {
-      // Table might not exist - can't verify
-      return null;
-    }
-
-    if (!data || data.length === 0) {
-      return false;
-    }
-
-    // Check if this version was executed
-    return data.some(m => {
-      const mVersion = (m.version || m.name || '').toString();
-      return mVersion.includes(version) || version.includes(mVersion);
-    });
+    const resolved = resolveMigrationPath(filename);
+    if (!resolved) return null;
+    const result = await probeDeclaredObjectsExist(resolved);
+    return result.executed;
   } catch (e) {
     console.debug('[PendingMigrations] migration status check suppressed:', e?.message || e);
-    return null; // Unknown status
+    return null;
+  }
+}
+
+/**
+ * Resolve a migration filename to its on-disk absolute path by searching the
+ * known migration dirs. Returns null if not found.
+ */
+function resolveMigrationPath(filename) {
+  if (!filename) return null;
+  if (path.isAbsolute(filename) && existsSync(filename)) return filename;
+  const dirs = ['database/migrations', 'database/manual-updates', 'supabase/migrations'];
+  for (const d of dirs) {
+    const p = path.join(PROJECT_ROOT, d, path.basename(filename));
+    if (existsSync(p)) return p;
+  }
+  // filename may already include the dir (e.g. "database/migrations/foo.sql")
+  const direct = path.join(PROJECT_ROOT, filename);
+  if (existsSync(direct)) return direct;
+  return null;
+}
+
+/**
+ * Authoritative probe: are all declared schema objects from this migration
+ * present in live pg?  Used by FR-1 (pre-check) AND FR-4 (post-apply re-check).
+ *
+ * @param {string} absPath - absolute path to .sql file
+ * @returns {Promise<{executed: boolean|null, missingObjects: Array, declaredCount: number, fastPath: string|null}>}
+ */
+export async function probeDeclaredObjectsExist(absPath) {
+  if (!existsSync(absPath)) {
+    return { executed: null, missingObjects: [], declaredCount: 0, fastPath: 'file_missing' };
+  }
+  const sql = readFileSync(absPath, 'utf8');
+  const sha = crypto.createHash('sha256').update(sql).digest('hex');
+
+  // Fast path: audit log says we already applied this exact path+sha.
+  try {
+    const applied = await hasBeenApplied(absPath, sha);
+    if (applied) {
+      return { executed: true, missingObjects: [], declaredCount: 0, fastPath: 'audit_log' };
+    }
+  } catch (e) {
+    console.debug('[PendingMigrations] audit-log fast path suppressed:', e?.message || e);
+  }
+
+  const declared = parseDeclaredObjects(sql);
+  if (declared.length === 0) {
+    return { executed: null, missingObjects: [], declaredCount: 0, fastPath: 'no_declared_objects' };
+  }
+
+  let client = null;
+  try {
+    client = await createDatabaseClient('engineer', { verify: false });
+    const defs = await captureObjectDefinitions(client, declared);
+    const missing = defs.filter(d => d.definition === null);
+    return {
+      executed: missing.length === 0,
+      missingObjects: missing.map(d => ({ kind: d.kind, schema: d.schema, name: d.name })),
+      declaredCount: declared.length,
+      fastPath: null
+    };
+  } finally {
+    if (client) await client.end().catch(() => {});
   }
 }
 
@@ -625,6 +694,48 @@ async function checkMigrationExecuted(supabase, filename) {
  */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * FR-4: re-check declared schema objects after auto-apply, tolerating
+ * supabase pooler schema-cache lag (50-500ms post-DDL via REST; direct pg
+ * usually settles immediately but a short retry budget hedges).
+ *
+ * @param {Array<{file:string}>} pendingFiles - files we attempted to apply
+ * @returns {Promise<{allApplied:boolean, indeterminate:number, stillMissing:Array, attemptsUsed:number}>}
+ */
+async function recheckDeclaredObjectsPostApply(pendingFiles) {
+  const SETTLE_MS = 250;
+  const MAX_ATTEMPTS = 3;
+  const RETRY_MS = 500;
+
+  await sleep(SETTLE_MS);
+
+  let attempt = 0;
+  let stillMissing = [];
+  let indeterminate = 0;
+
+  while (attempt < MAX_ATTEMPTS) {
+    attempt++;
+    stillMissing = [];
+    indeterminate = 0;
+    for (const entry of pendingFiles) {
+      const file = entry.file || entry;
+      const absPath = resolveMigrationPath(file);
+      if (!absPath) { indeterminate++; continue; }
+      const probe = await probeDeclaredObjectsExist(absPath);
+      if (probe.executed === true) continue;
+      if (probe.executed === null) { indeterminate++; continue; }
+      // executed === false → record missing objects, tagged with their file
+      for (const m of probe.missingObjects) stillMissing.push({ ...m, file });
+    }
+    if (stillMissing.length === 0) {
+      return { allApplied: true, indeterminate, stillMissing: [], attemptsUsed: attempt };
+    }
+    if (attempt < MAX_ATTEMPTS) await sleep(RETRY_MS);
+  }
+
+  return { allApplied: false, indeterminate, stillMissing, attemptsUsed: attempt };
 }
 
 /**
