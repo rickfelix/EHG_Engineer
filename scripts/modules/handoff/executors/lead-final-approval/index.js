@@ -25,6 +25,9 @@ import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.j
 // Worktree cleanup (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
 import { cleanupWorktree, validateSdKey } from '../../../../../lib/worktree-manager.js';
 
+// SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-1 deploy-lag graceful-degrade + FR-9 LFA-only check
+import { checkProgressBreakdownLheReady } from '../../pre-checks/pending-migrations-check.js';
+
 // Workflow definitions for prerequisite chain diagnosis (SD-LEARN-FIX-ADDRESS-PAT-RETRO-002)
 import { getWorkflowForType } from '../../cli/workflow-definitions.js';
 
@@ -325,30 +328,60 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     console.log('\n📊 STATE TRANSITION: Final Approval');
     console.log('-'.repeat(50));
 
-    // Pre-insert accepted LEAD-FINAL-APPROVAL into leo_handoff_executions BEFORE updating SD.
-    // The progress enforcement trigger calls get_progress_breakdown() which checks this table
-    // (after migration 20260213_fix_lead_final_progress_check.sql). Without this pre-insert,
-    // progress stays at 90% and the trigger blocks the SD update. HandoffRecorder would normally
-    // create this record, but it runs AFTER executeSpecific, creating a chicken-and-egg.
-    // Note: leo_handoff_executions has no enforce_handoff_system trigger (unlike sd_phase_handoffs).
+    // Pre-insert LEAD-FINAL-APPROVAL into leo_handoff_executions BEFORE updating SD.
+    // The progress enforcement trigger calls get_progress_breakdown() which UNION-ALLs SPH+LHE
+    // for LEAD-FINAL-APPROVAL existence (migration 20260213_fix_lead_final_progress_check.sql).
+    // Without this pre-insert, progress stays at 90% and the trigger blocks the SD update.
+    //
+    // SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-1: when LEO_LHE_PENDING_STATUS='true',
+    // pre-insert with status='pending_acceptance' (canonical per CHECK constraint + HandoffRecorder
+    // line 582 precedent — empirical INSERT probe in scripts/one-off/_lhe-check-constraint-probe2.mjs
+    // confirms LHE accepts pending_acceptance). HandoffRecorder.recordSuccess flips to 'accepted' AFTER
+    // validation passes (FR-2 upsert path). On failure, FR-4 cleanup DELETEs the pending row.
+    //
+    // FR-1 deploy-lag graceful-degrade: when flag ON BUT FR-3 migration not yet applied (rpc
+    // lhe_pending_migration_applied missing/false), fall back to status='accepted' for THIS
+    // invocation only — emit [LFA_GRACEFUL_DEGRADE_TO_ACCEPTED] log + validation_details.degraded
+    // _to_accepted=true marker for audit (NR-2 from PLAN risk-agent).
     const normalizedScore = gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100);
+    const flagEnabled = process.env.LEO_LHE_PENDING_STATUS === 'true';
+    const lheReady = await checkProgressBreakdownLheReady(this.supabase, {
+      handoffType: 'LEAD-FINAL-APPROVAL',
+      flagEnabled
+    });
+    const usePendingPath = flagEnabled && lheReady.ready;
+    const insertStatus = usePendingPath ? 'pending_acceptance' : 'accepted';
+    const insertValidationDetails = { pre_inserted: true, verifier: 'LeadFinalApprovalExecutor' };
+    if (usePendingPath) {
+      insertValidationDetails.awaiting_recorder = true;
+    } else if (flagEnabled && !lheReady.ready) {
+      // Flag was ON but migration not applied — graceful degrade for THIS invocation.
+      insertValidationDetails.degraded_to_accepted = true;
+      insertValidationDetails.degrade_reason = lheReady.reason;
+      console.log(`   ⚠️  [LFA_GRACEFUL_DEGRADE_TO_ACCEPTED] reason=${lheReady.reason} — falling back to optimistic accepted`);
+    }
+    const insertPayload = {
+      sd_id: sd.id,
+      handoff_type: 'LEAD-FINAL-APPROVAL',
+      from_agent: 'LEAD',
+      to_agent: 'LEAD',
+      status: insertStatus,
+      validation_score: normalizedScore,
+      validation_passed: !usePendingPath, // pending_acceptance hasn't validated yet
+      validation_details: insertValidationDetails,
+      created_by: 'UNIFIED-HANDOFF-SYSTEM'
+    };
+    if (insertStatus === 'accepted') {
+      insertPayload.accepted_at = new Date().toISOString();
+    }
     const { error: preInsertError } = await this.supabase
       .from('leo_handoff_executions')
-      .insert({
-        sd_id: sd.id,
-        handoff_type: 'LEAD-FINAL-APPROVAL',
-        from_agent: 'LEAD',
-        to_agent: 'LEAD',
-        status: 'accepted',
-        validation_score: normalizedScore,
-        validation_passed: true,
-        validation_details: { pre_inserted: true, verifier: 'LeadFinalApprovalExecutor' },
-        accepted_at: new Date().toISOString(),
-        created_by: 'UNIFIED-HANDOFF-SYSTEM'
-      });
+      .insert(insertPayload);
 
     if (preInsertError) {
       console.log(`   ⚠️  Pre-insert into leo_handoff_executions failed: ${preInsertError.message}`);
+    } else if (insertStatus === 'pending_acceptance') {
+      console.log('   ✅ Pre-inserted LEAD-FINAL-APPROVAL (status=pending_acceptance, awaiting HandoffRecorder)');
     } else {
       console.log('   ✅ Pre-inserted LEAD-FINAL-APPROVAL into leo_handoff_executions');
     }
@@ -360,6 +393,8 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         console.log(`   ⚠️  MIGRATION WARNING: ${migrationCheck.missingTables.length} table(s) from migrations not found in DB`);
         console.log(`      Missing: ${migrationCheck.missingTables.join(', ')}`);
         console.log('      Migrations must be applied before marking SD completed');
+        // SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-4: cleanup pending pre-insert before reject
+        await this._cleanupPendingPreInsert(sd.id, usePendingPath);
         return ResultBuilder.rejected(
           'UNAPPLIED_MIGRATIONS',
           `Migration files exist but ${migrationCheck.missingTables.length} table(s) not found in live DB: ${migrationCheck.missingTables.join(', ')}. Apply migrations before completing.`,
@@ -388,6 +423,8 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
     if (sdError) {
       console.log(`   ❌ Failed to update SD: ${sdError.message}`);
+      // SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-4: cleanup pending pre-insert before reject
+      await this._cleanupPendingPreInsert(sd.id, usePendingPath);
       return ResultBuilder.rejected(
         'SD_UPDATE_FAILED',
         `Failed to update SD to completed: ${sdError.message}`
@@ -601,6 +638,37 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         nextOrchestratorSdKey: orchestratorChainingInfo.nextOrchestratorSdKey || null
       } : null
     };
+  }
+
+  /**
+   * SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-4 (PR-A).
+   * Atomic-revert helper: DELETE the LHE pending_acceptance row when validation
+   * later rejects between pre-insert and HandoffRecorder. No-op when:
+   *   (a) flag was OFF (legacy path inserted status='accepted', not pending)
+   *   (b) usePendingPath was false (graceful-degrade also inserted status='accepted')
+   * Idempotent — repeated calls with no matching rows are non-error. Fail-soft —
+   * cleanup errors log warning [LFA_PENDING_CLEANUP_FAILED] but never propagate.
+   * Scoped to created_by='UNIFIED-HANDOFF-SYSTEM' to avoid clobbering BYPASS or Guardian rows.
+   * @param {string} sdId - The SD UUID
+   * @param {boolean} usePendingPath - Whether the pre-insert wrote pending_acceptance
+   * @returns {Promise<void>}
+   */
+  async _cleanupPendingPreInsert(sdId, usePendingPath) {
+    if (!usePendingPath) return;
+    try {
+      const { error } = await this.supabase
+        .from('leo_handoff_executions')
+        .delete()
+        .eq('sd_id', sdId)
+        .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+        .eq('status', 'pending_acceptance')
+        .eq('created_by', 'UNIFIED-HANDOFF-SYSTEM');
+      if (error) {
+        console.warn(`   ⚠️  [LFA_PENDING_CLEANUP_FAILED] sd_id=${sdId} reason=${error.message}`);
+      }
+    } catch (cleanupErr) {
+      console.warn(`   ⚠️  [LFA_PENDING_CLEANUP_FAILED] sd_id=${sdId} reason=${cleanupErr?.message || cleanupErr}`);
+    }
   }
 
   /**

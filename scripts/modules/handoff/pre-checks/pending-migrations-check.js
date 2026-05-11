@@ -644,7 +644,37 @@ export async function displayMigrationWarnings(supabase, sd) {
   return result;
 }
 
+// SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-9 + FR-1 deploy-lag graceful-degrade.
+// LEAD-FINAL-APPROVAL (LFA) only — skipped for all other handoff types per AC-9.5.
+// Returns { ready, reason } with structured outcome:
+//   ready=true  → migration applied, FR-1 inserts status='pending_acceptance'
+//   ready=false → migration not applied, FR-1 graceful-degrades to status='accepted' for THIS invocation
+// Failure modes (all map to ready=false): RPC missing (migration not applied), RPC returns false,
+// PostgrestError. Only the LFA-flag-ON combination invokes; all others early-return ready=true.
+export async function checkProgressBreakdownLheReady(supabase, options = {}) {
+  const { handoffType, flagEnabled } = options;
+  if (handoffType !== 'LEAD-FINAL-APPROVAL') {
+    return { ready: true, reason: 'check_skipped_non_lfa', handoff_type: handoffType };
+  }
+  if (!flagEnabled) {
+    return { ready: true, reason: 'check_skipped_flag_off' };
+  }
+  try {
+    const { data, error } = await supabase.rpc('lhe_pending_migration_applied');
+    if (error) {
+      return { ready: false, reason: 'rpc_missing_or_errored', detail: error.message };
+    }
+    if (data !== true) {
+      return { ready: false, reason: 'rpc_returned_false' };
+    }
+    return { ready: true, reason: 'migration_applied' };
+  } catch (err) {
+    return { ready: false, reason: 'rpc_threw', detail: err?.message || String(err) };
+  }
+}
+
 export default {
   checkPendingMigrations,
-  displayMigrationWarnings
+  displayMigrationWarnings,
+  checkProgressBreakdownLheReady
 };

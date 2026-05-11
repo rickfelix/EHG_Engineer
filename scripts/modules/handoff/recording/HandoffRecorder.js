@@ -113,7 +113,9 @@ export class HandoffRecorder {
    * @param {object} template - Handoff template (optional)
    */
   async recordSuccess(handoffType, sdId, result, template = null) {
-    const executionId = randomUUID();
+    // SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-2: `let` (was const) so the
+    // LFA-pending upsert path can reassign to the existing row's ID after UPDATE.
+    let executionId = randomUUID();
 
     // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints
     const sdUuid = await this._resolveToUUID(sdId);
@@ -169,18 +171,66 @@ export class HandoffRecorder {
         throw new Error(`Pre-validation failed for leo_handoff_executions: ${preValidation.errors.map(e => e.message).join('; ')}`);
       }
 
-      const { error } = await this.supabase
-        .from('leo_handoff_executions')
-        .insert(execution)
-        .select();
-
-      if (error) {
-        console.error('❌ Failed to store handoff execution:', error.message);
-        console.error('   Execution data:', JSON.stringify(execution, null, 2));
-        throw error;
+      // SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001 FR-2 (PR-A):
+      // For LEAD-FINAL-APPROVAL with LEO_LHE_PENDING_STATUS='true', the executor pre-inserted
+      // a row with status='pending_acceptance' (FR-1). Look it up and UPDATE to status='accepted'
+      // instead of INSERTing a duplicate. Lookup scoped to created_by='UNIFIED-HANDOFF-SYSTEM'
+      // (FR-2a) to prevent stale-row collision after retry-after-failure (PLAN risk-agent R-2).
+      // Fallback to INSERT preserves legacy + handles flag-off-in-executor / flag-on-in-recorder edge.
+      const flagEnabled = process.env.LEO_LHE_PENDING_STATUS === 'true';
+      const isLfaFlagOn = handoffType === 'LEAD-FINAL-APPROVAL' && flagEnabled;
+      let upsertedExistingRow = false;
+      if (isLfaFlagOn) {
+        const { data: pendingRows, error: lookupError } = await this.supabase
+          .from('leo_handoff_executions')
+          .select('id')
+          .eq('sd_id', sdUuid)
+          .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+          .eq('status', 'pending_acceptance')
+          .eq('created_by', 'UNIFIED-HANDOFF-SYSTEM')
+          .limit(2);
+        if (lookupError) {
+          console.warn(`   [LFA-PENDING-UPSERT] lookup failed: ${lookupError.message} — falling back to INSERT`);
+        } else if (pendingRows && pendingRows.length >= 1) {
+          const existingId = pendingRows[0].id;
+          const updatePayload = {
+            status: 'accepted',
+            accepted_at: execution.accepted_at,
+            validation_score: execution.validation_score,
+            validation_passed: true,
+            validation_details: { ...execution.validation_details, upserted_by_recorder: true }
+          };
+          const { error: updateError } = await this.supabase
+            .from('leo_handoff_executions')
+            .update(updatePayload)
+            .eq('id', existingId);
+          if (updateError) {
+            console.warn(`   [LFA-PENDING-UPSERT] UPDATE failed: ${updateError.message} — falling back to INSERT`);
+          } else {
+            execution.id = existingId;
+            executionId = existingId; // FR-2: keep all downstream references (audit, log, createArtifact, return) on the real row ID
+            upsertedExistingRow = true;
+            console.log(`   ✅ [LFA-PENDING-UPSERT] flipped pending_acceptance → accepted (existing row ${existingId})`);
+          }
+        }
       }
 
-      console.log(`📝 Success recorded: ${executionId}`);
+      let insertError = null;
+      if (!upsertedExistingRow) {
+        const { error } = await this.supabase
+          .from('leo_handoff_executions')
+          .insert(execution)
+          .select();
+        insertError = error;
+      }
+
+      if (insertError) {
+        console.error('❌ Failed to store handoff execution:', insertError.message);
+        console.error('   Execution data:', JSON.stringify(execution, null, 2));
+        throw insertError;
+      }
+
+      console.log(`📝 Success recorded: ${execution.id}`);
 
       // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Reset handoff_fail_count on success
       try {
