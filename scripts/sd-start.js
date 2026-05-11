@@ -35,7 +35,7 @@ import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 // under a rotated session_id (the 2026-04-24 incident class).
 import { checkPreClaimEvidence } from './modules/claim-health/triangulate.js';
 import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
-import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
+import { isProcessRunning, startHeartbeat } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 // SD-LEO-INFRA-FLEET-DASHBOARD-VISIBILITY-001: shared formatter so the roster
@@ -1375,6 +1375,27 @@ async function main() {
   console.log(`Progress: ${sd.progress_percentage || 0}%`);
   console.log(`Type: ${sd.sd_type || 'feature'}`);
   console.log(`claiming_session_id: ${colors.green}${session.session_id}${colors.reset}`);
+
+  // 5.04. SD-FDBK-INFRA-CASCADE-TRIGGER-OVERREACH-001 FR-3: start heartbeat
+  // keep-alive subprocess. Prevents cleanup_stale_sessions cron (120s threshold)
+  // from flipping claude_sessions.status='stale' during long sub-agent execution
+  // — pairs with FR-2 trigger fix as defense-in-depth at the SOURCE (eliminates
+  // trigger CONDITION) vs FR-2 (fixes trigger BEHAVIOUR if condition does fire).
+  // Reuses existing lib/heartbeat-manager.mjs::startHeartbeat (30s setInterval,
+  // graceful-release exit handlers, retry logic) — already wired into
+  // add-prd-to-database.js / handoff.js / phase-preflight.js / BaseExecutor.js
+  // but NOT previously called from sd-start.js (the gap this FR-3 closes).
+  // ownershipMode='cooperative' matches existing caller conventions.
+  try {
+    const hbResult = await startHeartbeat(session.session_id, { ownershipMode: 'cooperative' });
+    if (hbResult?.success !== false) {
+      console.log(`${colors.dim}   ↻ Heartbeat keep-alive started (30s interval)${colors.reset}`);
+    }
+  } catch (hbErr) {
+    // Non-fatal: keep-alive failure does not block sd-start. FR-2 trigger fix
+    // provides backstop — claim cols preserved on stale even without keep-alive.
+    console.log(`${colors.dim}   ⚠ Heartbeat keep-alive failed to start: ${hbErr?.message || hbErr}${colors.reset}`);
+  }
 
   // 5.05. SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Set venture context on claim
   // When an SD has target_application or venture_id, propagate to session metadata

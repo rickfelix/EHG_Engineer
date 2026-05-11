@@ -1,0 +1,40 @@
+name: Post-merge Cascade-Trigger Fix Verification
+
+# SD-FDBK-INFRA-CASCADE-TRIGGER-OVERREACH-001 FR-8.
+# Runs ~3min after PR merges to main to verify the FR-2 trigger fix
+# (sync_is_working_on_with_session preserve recoverable stale) is live in
+# production DB. Emits [SD_CLAIM_COL_PRESERVATION_VERIFIED] OR
+# [SD_CLAIM_COL_PRESERVATION_DEGRADED] OR [SD_CLAIM_COL_PRESERVATION_FAILED]
+# audit markers (pattern source: PR #3691 [LFA_GRACEFUL_DEGRADE_TO_ACCEPTED]).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'database/migrations/*sync_is_working_on*'
+      - 'lib/session-manager.mjs'
+      - 'scripts/sd-start.js'
+      - 'scripts/smoke/verify-claim-col-preservation.mjs'
+  workflow_dispatch:
+
+jobs:
+  smoke-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cascade-fix-verify-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - name: Wait 3min for migration to be applied to live DB
+        run: sleep 180
+      - name: Run smoke runner
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/smoke/verify-claim-col-preservation.mjs

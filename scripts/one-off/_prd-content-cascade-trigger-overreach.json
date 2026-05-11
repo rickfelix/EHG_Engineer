@@ -1,0 +1,195 @@
+{
+  "executive_summary": "PLAN database-agent FR-1 RCA empirically CONFIRMED root cause as PATH D: AFTER UPDATE trigger sync_is_working_on_with_session on claude_sessions table fires when status flips to 'stale', clearing strategic_directives_v2.is_working_on=false + active_session_id=NULL (claiming_session_id preserved). LEAD risk-agent's 2 direct UPDATE probes had earlier disproven the original 'cascade-trigger overreach on sd_v2' hypothesis (PATH A) — 47 triggers enumerated on sd_v2, NONE clear claim cols on UPDATE. The 18-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 'claim columns cleared by .update()' framing was a coincident-timing illusion: enrichment scripts run >120s, the cron flips claude_sessions.status='stale' concurrently, the trigger clears sd_v2 claim cols, and operators saw their UPDATE land seconds later and (wrongly) attributed the clearing to their own write. cleanup_stale_sessions Block 3 then fires 30s later as SECONDARY clearer (releases all 3 cols). Fix surface: surgical CREATE OR REPLACE FUNCTION on sync_is_working_on_with_session so the clearing branch only fires on irrevocable transitions (sd_key→NULL, status→released/completed) NOT on recoverable 'stale' status. Defense-in-depth: 60s heartbeat keep-alive subprocess in sd-start.js prevents the cron from flipping status='stale' in the first place during long sub-agent execution. Plus regression-pin static guard on trigger body to detect future regressions. Closes feedback 18c57c39 + retroactively eliminates _restore-claim-*.mjs workaround pattern. ZERO backward-compat regressions per database-agent audit (cleanup_stale_sessions Block 3 still provides irrevocable 30s-grace-then-clear; handoff.js currently FAILS for in-flight sessions and Option 1 fixes this; sd:next/sd:status get extra 30s of is_working_on=true after stale flip — minor UX, still truthful). pg_cron NOT installed — external scheduler invokes cleanup_stale_sessions; trigger fix covers ALL invokers regardless of cron source.",
+
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "RCA Evidence (COMPLETE at PLAN — database-agent fabb2c47)",
+      "description": "PLAN database-agent enumerated 47 triggers on strategic_directives_v2 + 7 on product_requirements_v2 + 9 on sd_phase_handoffs + 1 on claude_sessions. Captured live pg_proc bodies for sync_is_working_on_with_session, cleanup_stale_sessions, release_sd, release_session, claim_sd, report_pid_validation_failure, enforce_progress_on_completion. Reproduced the bug deterministically via UPDATE claude_sessions SET status='stale'. Reproduction script: scripts/one-off/_db-agent-fr1-rca-reproduce-bug-2.mjs. Output: rca-fr1-out.clean.json (~78KB raw enumeration). Evidence row: sub_agent_execution_results.id=fabb2c47-011e-4c17-a017-83c313554d1b PASS @ 92.",
+      "acceptance_criteria": [
+        "47 + 7 + 9 + 1 trigger enumeration JSON exists at .worktrees/<SD>/rca-fr1-out.clean.json",
+        "PATH D reproduced: UPDATE claude_sessions SET status='stale' clears sd_v2.{is_working_on, active_session_id} but preserves claiming_session_id",
+        "PATH A disproven: UPDATE sd_v2 SET description=... preserves all claim cols",
+        "database-agent evidence row PASS @ confidence ≥85"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Surgical CREATE OR REPLACE on sync_is_working_on_with_session trigger function",
+      "description": "Modify the AFTER UPDATE trigger function on claude_sessions so the clearing branch fires ONLY on irrevocable transitions, NOT on recoverable 'stale' status. New conditional: IF (OLD.sd_key IS NOT NULL AND NEW.sd_key IS NULL) OR (OLD.status='active' AND NEW.status IN ('released','completed') AND OLD.sd_key IS NOT NULL) THEN clear claim cols on sd_v2 WHERE sd_key=OLD.sd_key AND active_session_id=OLD.session_id (CAS guard). Migration MUST end with NOTIFY pgrst, 'reload schema' in same transaction (gotcha PR #3691 W2). Backward-compat: cleanup_stale_sessions Block 3 (30s grace then irrevocable clear) UNAFFECTED — still provides backstop for genuinely stale sessions. Migration file: database/migrations/<date>_sync_is_working_on_preserve_recoverable_stale.sql. Idempotent CREATE OR REPLACE.",
+      "acceptance_criteria": [
+        "Migration file exists at database/migrations/<date>_sync_is_working_on_preserve_recoverable_stale.sql",
+        "Migration uses CREATE OR REPLACE FUNCTION (idempotent)",
+        "Migration ends with NOTIFY pgrst, 'reload schema'",
+        "Post-migration empirical test: UPDATE claude_sessions SET status='stale' → sd_v2 claim cols UNCHANGED (PATH D fix verified)",
+        "Post-migration verify: UPDATE claude_sessions SET status='released' → sd_v2 claim cols CLEARED (irrevocable transition still works)",
+        "Post-migration verify: cleanup_stale_sessions Block 3 (30s grace) still clears all 3 cols on STALE_CLEANUP",
+        "pg_proc snapshot before/after committed for reference"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Heartbeat keep-alive subprocess in sd-start.js (defense-in-depth at SOURCE)",
+      "description": "Add heartbeat keep-alive subprocess that pings claude_sessions.heartbeat_at every 60s while sd-start session is active. Prevents the 120s cleanup_stale_sessions threshold from firing for in-flight LEO sessions. Fork detached child process via child_process.fork() that runs scripts/lib/heartbeat-keepalive.mjs in a loop with SIGHUP/SIGTERM handlers for clean exit. PID written to .claude/pids/heartbeat-<session-id>.pid. Auto-stops on session release. Eliminates the trigger CONDITION at the source (status never flips to 'stale' for active sessions) — orthogonal to FR-2 (which fixes the trigger BEHAVIOUR when condition does fire). Both layers needed: FR-2 covers cases where keep-alive crashes/exits; FR-3 covers FR-2 deploy-lag + protects pre-FR-2 sessions.",
+      "acceptance_criteria": [
+        "scripts/lib/heartbeat-keepalive.mjs exists with fork-detach pattern",
+        "sd-start.js spawns keep-alive after successful claim",
+        "Keep-alive PID written to .claude/pids/heartbeat-<session-id>.pid",
+        "SIGTERM/SIGHUP handlers gracefully exit + delete pidfile",
+        "Configurable interval via env LEO_HEARTBEAT_INTERVAL_SEC (default 60)",
+        "Empirical test: claim SD, wait 150s, verify claude_sessions.status STILL 'active' (pre-fix would be 'stale')",
+        "On sd-start re-run: detect existing PID, kill stale keep-alive, spawn fresh"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Regression-pin static guard test on trigger body",
+      "description": "Add tests/unit/migrations/sync-is-working-on-trigger-static-pin.test.js that reads database/migrations/<date>_sync_is_working_on_preserve_recoverable_stale.sql via fs.readFileSync + regex assertions: (a) IF block contains 'OLD.status' AND 'released' AND 'completed' (irrevocable transitions only); (b) IF block does NOT contain 'NEW.status = ''stale''' alone without released/completed; (c) UPDATE statement contains CAS guard 'active_session_id = OLD.session_id'; (d) NOTIFY pgrst at end. Pattern source: SD-FDBK-INFRA-MIGRATE-EMIT-FEEDBACK-001 PR #3693 dual-anchor static-pin. Mocking-independent.",
+      "acceptance_criteria": [
+        "tests/unit/migrations/sync-is-working-on-trigger-static-pin.test.js exists",
+        "4 assertions: (a) irrevocable-transitions-only, (b) no stale-only-clear, (c) CAS guard, (d) NOTIFY pgrst",
+        "Test PASSES on the FR-2 migration",
+        "Inject regression (remove released/completed from IF) → test FAILS with clear message",
+        "Run via vitest in CI"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Audit trail row to session_lifecycle_events on stale-flag transitions",
+      "description": "Add audit-trail INSERT in sync_is_working_on_with_session trigger function: every time it fires (whether or not the clearing branch executes), INSERT a row into session_lifecycle_events with event_type='SESSION_STATUS_TRANSITION' + payload {old_status, new_status, sd_key, claim_cleared:true|false}. Provides observability for future RCA + helps detect if FR-3 keep-alive fails. session_lifecycle_events table created if not exists (database-agent confirms it does not yet exist). Migration in same transaction as FR-2.",
+      "acceptance_criteria": [
+        "session_lifecycle_events table exists (CREATE TABLE IF NOT EXISTS in FR-2 migration)",
+        "Trigger INSERTs audit row on every fire",
+        "payload.claim_cleared accurately reflects which branch ran",
+        "Empirical test: trigger fire → row appears in session_lifecycle_events with correct payload"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Test distribution: 12 cases / 5 distinct types",
+      "description": "Per LEAD testing-agent R-3: 6 unit tests (mocked DB calls — trigger logic shape assertions) + 3 integration tests (real DB round-trip — claim SD, flip status, verify behaviour) + 3 static-pin tests (FR-4 + 2 additional pinning trigger fn structure). Total 12 cases / 5 distinct types. Per LEAD testing-agent W-12: include consumer-side verification — after FR-2 migration applied, sd-start CLAIMED-status detection still resolves correctly.",
+      "acceptance_criteria": [
+        "12 of 12 tests PASS in vitest",
+        "6 unit + 3 integration + 3 static-pin",
+        "1 consumer-side verification (sd-start CLAIMED detection)",
+        "Tests run in CI on PR open"
+      ]
+    },
+    {
+      "id": "FR-7",
+      "title": "Documentation: CLAUDE_LEAD.md harness-fix cadence section + canonical-write-paths.md hygiene",
+      "description": "Update CLAUDE_LEAD.md 'Default Sub-Agent Invocation Cadence for Harness-Fix SDs' section with reference to this SD's empirical-disproof lesson (cascade-trigger framing was misdiagnosis; root cause was claude_sessions trigger). Add strategic_directives_v2 row to docs/reference/canonical-write-paths.md registry with exempt_writers list (handoff.js, sd-start.js, lib/sd/revert.js, lib/claim-validity-gate.js:450, lib/claim-lifecycle-release.mjs, lib/drain-orchestrator.mjs) — governance hygiene per LEAD validation-agent recommendation, not part of fix surface. Existing tests/unit/governance/canonical-helper-bypass-guard.test.js auto-detects new violations once registry updated.",
+      "acceptance_criteria": [
+        "CLAUDE_LEAD.md section updated with disproof lesson + cross-reference to this SD",
+        "docs/reference/canonical-write-paths.md row exists for strategic_directives_v2 with 6 exempt_writers",
+        "tests/unit/governance/canonical-helper-bypass-guard.test.js continues PASSING (zero new violations)"
+      ]
+    },
+    {
+      "id": "FR-8",
+      "title": "Post-merge smoke runner verify-claim-col-preservation.mjs",
+      "description": "scripts/smoke/verify-claim-col-preservation.mjs wired into post-merge to assert real DB behaviour ~3min after deploy. Spawns probe session (INSERT claude_sessions), claims temp SD, simulates cleanup_stale_sessions invocation (UPDATE claude_sessions SET status='stale'), SELECTs sd_v2 claim cols, asserts is_working_on STILL true (PATH D fix verified live). Emits [SD_CLAIM_COL_PRESERVATION_VERIFIED] audit marker (pattern per PR #3691 [LFA_GRACEFUL_DEGRADE_TO_ACCEPTED]). Cleans up probe session + SD via DELETE in finally block. Address sandbox-blocked migration risk per LEAD testing-agent C-1.",
+      "acceptance_criteria": [
+        "scripts/smoke/verify-claim-col-preservation.mjs exists",
+        "Spawns probe session, claims probe SD, simulates stale flip, asserts preservation",
+        "Emits [SD_CLAIM_COL_PRESERVATION_VERIFIED] OR [SD_CLAIM_COL_PRESERVATION_DEGRADED] audit marker",
+        "Cleans up probe rows in finally block",
+        "Post-merge action wired in CI .github/workflows/ OR runs manually after merge"
+      ]
+    }
+  ],
+
+  "system_architecture": {
+    "overview": "Database-side trigger surgical fix on claude_sessions.sync_is_working_on_with_session function (FR-2) addresses the actual root cause empirically reproduced by PLAN database-agent. App-side heartbeat keep-alive subprocess in sd-start.js (FR-3) addresses the trigger CONDITION at source (prevents status='stale' flip during long sub-agent execution). Defense-in-depth: 2 independent layers, both needed. FR-4 regression-pin static guard prevents future regressions to FR-2. FR-5 audit trail provides observability for future RCA + detection if FR-3 keep-alive fails.",
+    "components": [
+      {
+        "name": "sync_is_working_on_with_session (PG function, modified)",
+        "responsibility": "AFTER UPDATE trigger on claude_sessions. Existing behaviour: clears sd_v2.{is_working_on, active_session_id} on ANY claude_sessions.status change. New behaviour: clears ONLY on irrevocable transitions (sd_key→NULL OR status→released/completed).",
+        "interactions": "Receives OLD/NEW row context from claude_sessions UPDATE. Calls UPDATE strategic_directives_v2 SET ... WHERE sd_key=OLD.sd_key AND active_session_id=OLD.session_id (CAS guard). Adds INSERT INTO session_lifecycle_events for FR-5 audit."
+      },
+      {
+        "name": "heartbeat-keepalive.mjs (NEW Node subprocess)",
+        "responsibility": "Long-running detached process. Pings claude_sessions.heartbeat_at via Supabase service-role every LEO_HEARTBEAT_INTERVAL_SEC seconds (default 60). Eliminates cleanup_stale_sessions trigger condition for active LEO sessions.",
+        "interactions": "Spawned by sd-start.js via child_process.fork({detached:true, stdio:'ignore'}).unref(). PID written to .claude/pids/heartbeat-<session>.pid. Listens for SIGHUP/SIGTERM for clean exit. Re-spawning sd-start kills existing keep-alive PID and spawns fresh."
+      },
+      {
+        "name": "session_lifecycle_events (NEW table)",
+        "responsibility": "Append-only audit log of session status transitions. Each row: id, session_id, sd_key, event_type, old_status, new_status, claim_cleared (bool), payload jsonb, created_at.",
+        "interactions": "Written by FR-2 trigger. Read by future RCA tooling + dashboards. Indexed on (session_id, created_at) and (sd_key, created_at)."
+      },
+      {
+        "name": "verify-claim-col-preservation.mjs (NEW post-merge smoke)",
+        "responsibility": "Live DB end-to-end verification of FR-2 fix. Runs ~3min after deploy.",
+        "interactions": "Uses Supabase service-role + scripts/lib/supabase-connection.js::createDatabaseClient. Spawns probe session row, claims probe SD, simulates stale flip, asserts preservation, cleans up."
+      }
+    ],
+    "data_flow": "Long-running session: sd-start.js claims SD → forks heartbeat-keepalive subprocess → claims persist. cleanup_stale_sessions cron checks heartbeat_at every interval — for active LEO session with FR-3 keep-alive, heartbeat is fresh → status STAYS 'active' → trigger NEVER fires the clearing branch. Edge case (FR-3 keep-alive crashed): cron flips status='stale' → FR-2 trigger fires → checks transition type → 'active'→'stale' is recoverable → claim cols PRESERVED → operator can recover by reactivating session. Irrevocable case (sd_key set to NULL OR status→released/completed): trigger clears claim cols as before. cleanup_stale_sessions Block 3 (30s grace then irrevocable clear) UNAFFECTED — still provides backstop after 30s for genuinely abandoned sessions.",
+    "integration_points": [
+      "scripts/sd-start.js — calls fork() to spawn heartbeat keep-alive after successful claim_sd RPC",
+      "database/migrations/<date>_sync_is_working_on_preserve_recoverable_stale.sql — applied via supabase CLI or sandbox migration runner; sandbox-blocked path covered by FR-8 smoke runner post-merge",
+      ".github/workflows/post-merge-cascade-fix-verify.yml (NEW) — runs FR-8 smoke runner ~3min after PR merge to main",
+      "scripts/lib/supabase-connection.js — used by heartbeat keep-alive + smoke runner for service-role access"
+    ]
+  },
+
+  "acceptance_criteria": [
+    {"id": "AC-1", "description": "Migration file exists with CREATE OR REPLACE FUNCTION sync_is_working_on_with_session and ends with NOTIFY pgrst, 'reload schema'", "measure": "ls database/migrations/*_sync_is_working_on_preserve_recoverable_stale.sql + grep CREATE OR REPLACE + tail of file shows NOTIFY"},
+    {"id": "AC-2", "description": "PATH D fix empirically verified: UPDATE claude_sessions SET status='stale' does NOT clear sd_v2.{is_working_on, active_session_id, claiming_session_id}", "measure": "scripts/smoke/verify-claim-col-preservation.mjs run on live DB returns SUCCESS + emits [SD_CLAIM_COL_PRESERVATION_VERIFIED] marker"},
+    {"id": "AC-3", "description": "Irrevocable transitions still work: UPDATE claude_sessions SET status='released' DOES clear sd_v2 claim cols", "measure": "Test in FR-6 integration suite asserts post-status='released' values are NULL/false"},
+    {"id": "AC-4", "description": "Heartbeat keep-alive subprocess spawned by sd-start.js, PID file written, refresh interval respected", "measure": "After sd-start: ls .claude/pids/heartbeat-*.pid AND ps -p $(cat <pidfile>) shows live process AND claude_sessions.heartbeat_at delta < 90s after 150s"},
+    {"id": "AC-5", "description": "FR-3 keep-alive eliminates stale-flip during long sub-agent execution: claim SD, wait 150s without external heartbeat refresh, claude_sessions.status STILL 'active'", "measure": "Empirical test in FR-6 integration suite (skipped in sandboxed CI; required in post-merge smoke)"},
+    {"id": "AC-6", "description": "12 of 12 tests PASS in vitest", "measure": "npm test -- tests/unit/migrations/sync-is-working-on-trigger-static-pin.test.js + tests/integration/cascade-trigger-overreach/* + tests/unit/heartbeat-keepalive/* — 12 of 12 PASS"},
+    {"id": "AC-7", "description": "session_lifecycle_events table exists, trigger writes audit row on every fire", "measure": "INSERT INTO claude_sessions test row, UPDATE status='stale', SELECT FROM session_lifecycle_events shows row with correct payload"},
+    {"id": "AC-8", "description": "Backward compat: cleanup_stale_sessions Block 3 (30s grace then 3-col clear) still works", "measure": "Integration test: simulate Block 3 invocation, assert all 3 claim cols cleared"},
+    {"id": "AC-9", "description": "canonical-write-paths.md row added for strategic_directives_v2 with 6 exempt_writers; canonical-helper-bypass-guard.test.js still PASSES", "measure": "grep strategic_directives_v2 docs/reference/canonical-write-paths.md + npm test tests/unit/governance/canonical-helper-bypass-guard.test.js PASS"},
+    {"id": "AC-10", "description": "Post-merge smoke runner wired in CI", "measure": ".github/workflows/post-merge-cascade-fix-verify.yml exists + triggered on push to main + emits expected audit marker"},
+    {"id": "AC-11", "description": "ZERO regressions to existing handoff workflow per LEAD risk-agent backward-compat audit", "measure": "Run full handoff.js precheck on a probe SD post-FR-2 — all gates PASS"},
+    {"id": "AC-12", "description": "Documentation updated per FR-7", "measure": "git diff includes CLAUDE_LEAD.md change + canonical-write-paths.md row"}
+  ],
+
+  "test_scenarios": [
+    {"id": "TS-1", "name": "PATH D primary fix verification (real DB integration)", "given": "FR-2 migration applied; probe session+SD claimed", "when": "UPDATE claude_sessions SET status='stale' WHERE session_id=probe_session", "then": "SELECT sd_v2 → is_working_on=true, active_session_id=session_id, claiming_session_id=session_id (all PRESERVED). Pre-fix: is_working_on=false, active_session_id=NULL.", "type": "integration"},
+    {"id": "TS-2", "name": "Irrevocable transition still clears (real DB integration)", "given": "FR-2 migration applied; probe session+SD claimed", "when": "UPDATE claude_sessions SET status='released'", "then": "SELECT sd_v2 → is_working_on=false, active_session_id=NULL (CLEARED as expected for irrevocable transition)", "type": "integration"},
+    {"id": "TS-3", "name": "Heartbeat keep-alive prevents stale flip (real DB integration)", "given": "sd-start.js claims probe SD, FR-3 keep-alive spawned", "when": "Wait 150s without external heartbeat refresh", "then": "claude_sessions.heartbeat_age_seconds < 90 AND status STILL 'active'", "type": "integration"},
+    {"id": "TS-4", "name": "FR-2 trigger CAS guard prevents cross-session clearing (real DB integration)", "given": "Two probe sessions both claim same SD via race", "when": "Session A status flips → trigger UPDATE WHERE active_session_id=A.session_id", "then": "Only Session A's claim cleared, Session B's preserved (CAS WHERE clause works)", "type": "integration"},
+    {"id": "TS-5", "name": "session_lifecycle_events audit row written on every trigger fire (real DB integration)", "given": "FR-5 table created, trigger modified", "when": "UPDATE claude_sessions SET status='stale'", "then": "session_lifecycle_events row INSERTED with event_type='SESSION_STATUS_TRANSITION', old_status='active', new_status='stale', claim_cleared=false (because recoverable)", "type": "integration"},
+    {"id": "TS-6", "name": "Static-pin: trigger body contains released/completed in IF clause (unit)", "given": "FR-2 migration file exists", "when": "fs.readFileSync + regex match for 'released' AND 'completed' in IF block", "then": "Both literals present + 'stale' not in clearing condition standalone", "type": "static-pin"},
+    {"id": "TS-7", "name": "Static-pin: NOTIFY pgrst present at end of migration (unit)", "given": "FR-2 migration file exists", "when": "fs.readFileSync + regex match for NOTIFY pgrst, 'reload schema'", "then": "NOTIFY statement is in last 200 chars of file", "type": "static-pin"},
+    {"id": "TS-8", "name": "Static-pin: CAS guard 'active_session_id = OLD.session_id' present (unit)", "given": "FR-2 migration file exists", "when": "fs.readFileSync + regex match for active_session_id = OLD.session_id", "then": "Match found in WHERE clause of UPDATE", "type": "static-pin"},
+    {"id": "TS-9", "name": "Heartbeat keep-alive PID lifecycle (unit)", "given": "Mocked child_process.fork", "when": "spawn keep-alive then call clean exit", "then": "PID file created on spawn, deleted on exit, SIGTERM handler invoked", "type": "unit"},
+    {"id": "TS-10", "name": "Heartbeat keep-alive interval respected (unit)", "given": "LEO_HEARTBEAT_INTERVAL_SEC=10", "when": "Run keep-alive for 35s with mocked Supabase", "then": "supabase.update called ≥3 times with heartbeat_at field", "type": "unit"},
+    {"id": "TS-11", "name": "Heartbeat keep-alive on sd-start re-run kills stale PID (unit)", "given": "Existing PID file with dead PID", "when": "sd-start spawns new keep-alive", "then": "Stale PID file detected + replaced with new PID; no orphan processes", "type": "unit"},
+    {"id": "TS-12", "name": "Consumer-side regression: sd-start CLAIMED-status detection works post-FR-2 (integration)", "given": "FR-2 migration applied + probe session claimed SD", "when": "Run sd-start.js on the same SD from second session", "then": "sd-start reports CLAIMED status correctly (no false-negative due to is_working_on still true post-stale)", "type": "integration"}
+  ],
+
+  "implementation_approach": "EXEC sequence: (1) Write migration file FR-2 + FR-5 in same transaction (CREATE OR REPLACE FUNCTION + CREATE TABLE IF NOT EXISTS session_lifecycle_events + NOTIFY pgrst). (2) Write static-pin tests FR-4 against the migration file. (3) Write FR-3 heartbeat-keepalive.mjs + sd-start.js fork integration. (4) Write FR-3 unit tests TS-9/10/11. (5) Write FR-6 integration tests TS-1..5+12 (skipped if sandbox-blocked, run in post-merge). (6) Add canonical-write-paths.md registry row FR-7. (7) Update CLAUDE_LEAD.md with disproof lesson. (8) Wire FR-8 post-merge smoke runner in .github/workflows. (9) Apply migration via sandbox runner if available; FR-8 covers post-merge if not. Pattern source for heartbeat keep-alive: scripts/lib/lifecycle/sd-claim-reaper.mjs detached-fork pattern. Pattern source for static-pin: SD-FDBK-INFRA-MIGRATE-EMIT-FEEDBACK-001 PR #3693. Pattern source for CAS UPDATE: PR #3691 partial UNIQUE INDEX precedent.",
+
+  "integration_operationalization": {
+    "consumers": "Primary consumer: every Claude Code session running LEO Protocol (sd-start, handoff.js, sub-agent invocations). Currently affected by intermittent claim loss when sub-agent runs >120s. Post-fix: long-running enrichment + sub-agent sessions complete without _restore-claim workaround. Secondary consumer: dashboards reading claude_sessions.status (sd:next, sd:status, coordinator inbox) — get +30s window of is_working_on=true after stale flip (still truthful per database-agent backward-compat audit).",
+    "dependencies": [
+      {"name": "claude_sessions table (upstream)", "direction": "upstream", "failure_mode": "If table dropped or status enum changes, FR-2 trigger fails — but this is impossible without coordinated migration"},
+      {"name": "strategic_directives_v2 table (downstream)", "direction": "downstream", "failure_mode": "If active_session_id column dropped, CAS guard breaks — extremely unlikely; documented in FR-2 migration comments"},
+      {"name": "session_lifecycle_events table (NEW, downstream)", "direction": "downstream", "failure_mode": "If table not created, trigger INSERT fails silently (EXCEPTION handler in trigger body)"},
+      {"name": "scripts/sd-start.js (upstream caller of FR-3)", "direction": "upstream", "failure_mode": "If sd-start crashes before fork, keep-alive not spawned — FR-2 trigger still preserves claim cols (defense-in-depth)"},
+      {"name": "external scheduler invoking cleanup_stale_sessions (upstream)", "direction": "upstream", "failure_mode": "If scheduler stops, no cleanup at all — orthogonal to this SD"}
+    ],
+    "data_contracts": "FR-5 introduces session_lifecycle_events: (id BIGSERIAL PK, session_id UUID, sd_key TEXT, event_type TEXT, old_status TEXT, new_status TEXT, claim_cleared BOOL, payload JSONB, created_at TIMESTAMPTZ DEFAULT NOW()). Indexes: (session_id, created_at), (sd_key, created_at). FR-2 modifies sync_is_working_on_with_session function body — no schema change. .claude/pids/heartbeat-<session>.pid files (FR-3) — text files containing OS PID, lifecycle managed by keep-alive subprocess.",
+    "runtime_config": "Env vars: LEO_HEARTBEAT_INTERVAL_SEC (default 60, FR-3 keep-alive). LEO_HEARTBEAT_KEEPALIVE_DISABLED (default false, FR-3 disable for tests). Feature flags: NONE (migration is one-shot CREATE OR REPLACE; trigger fix applies for everyone after migration runs). Deployment sequence: (1) Apply FR-2 migration to live DB (sandbox or post-merge). (2) Merge PR (FR-3 keep-alive starts protecting new sessions immediately). (3) Run FR-8 smoke runner ~3min post-deploy.",
+    "observability_rollout": "FR-5 audit trail (session_lifecycle_events) provides per-trigger-fire observability. FR-8 smoke runner emits [SD_CLAIM_COL_PRESERVATION_VERIFIED] OR [SD_CLAIM_COL_PRESERVATION_DEGRADED] audit marker post-merge. Rollout: incremental (FR-2 migration is idempotent, can re-run; FR-3 keep-alive opt-out via env var). Rollback: revert FR-2 migration via reverse CREATE OR REPLACE FUNCTION (restoring original trigger body) + git revert PR; FR-3 keep-alive auto-stops on session release. Monitoring: SELECT count(*) FROM session_lifecycle_events WHERE created_at > NOW() - INTERVAL '1 hour' GROUP BY claim_cleared — should show ZERO claim_cleared=true rows for active sessions, all such rows should be tied to released/completed transitions."
+  },
+
+  "risks": [
+    {"id": "R-1", "description": "FR-2 trigger modification breaks an undiscovered consumer", "impact": "high", "likelihood": "low", "mitigation": "PLAN database-agent enumerated 16 functions referencing claim cols + ZERO regressions identified. Backward-compat: cleanup_stale_sessions Block 3 unchanged. handoff.js currently FAILS for in-flight sessions — Option 1 fixes this (positive change). Migration is CREATE OR REPLACE (idempotent + reversible)."},
+    {"id": "R-2", "description": "Sandbox migration application blocked (SELF_SIGNED_CERT_IN_CHAIN)", "impact": "medium", "likelihood": "high (recurring class)", "mitigation": "FR-8 post-merge smoke runner verifies live DB behaviour ~3min after deploy. PR ships migration source; merge → external scheduler / Supabase Dashboard applies; smoke runner asserts."},
+    {"id": "R-3", "description": "PostgREST schema-cache miss after CREATE OR REPLACE FUNCTION", "impact": "medium", "likelihood": "medium", "mitigation": "Migration ends with NOTIFY pgrst, 'reload schema' in same transaction (PR #3691 W2). Post-deploy verify via SELECT prosrc FROM pg_proc."},
+    {"id": "R-4", "description": "FR-3 heartbeat keep-alive subprocess crashes / orphans", "impact": "low", "likelihood": "medium", "mitigation": "FR-2 trigger fix is the PRIMARY safety net — even if keep-alive fails, trigger preserves claim cols on stale flip (recoverable transition). Defense-in-depth. PID file lifecycle prevents stale process accumulation."},
+    {"id": "R-5", "description": "FR-5 session_lifecycle_events table grows unbounded", "impact": "low", "likelihood": "high (long-term)", "mitigation": "Defer retention policy to follow-up SD. FR-5 trigger uses minimal payload. If size becomes issue: add periodic VACUUM + retention policy (e.g., DELETE WHERE created_at < NOW() - INTERVAL '90 days')."},
+    {"id": "R-6", "description": "Detached fork pattern incompatible with Claude Code sandboxing", "impact": "medium", "likelihood": "medium", "mitigation": "Test in EXEC: spawn keep-alive from sd-start, verify .pid file written, verify ps -p shows live process. If incompatible: fall back to in-process setInterval (less robust but functional). Document in FR-3 acceptance criteria."},
+    {"id": "R-7", "description": "FR-3 races with cleanup_stale_sessions: keep-alive ping arrives microseconds after cron flip → session stuck stale", "impact": "low", "likelihood": "low", "mitigation": "Trigger CAS guard (active_session_id = OLD.session_id) ensures cross-session safety. Keep-alive includes status='active' UPDATE alongside heartbeat_at refresh — explicitly resets stale flag if cron beat us to it."},
+    {"id": "R-8", "description": "Two-phase risk-agent at PLAN catches BLOCKER class only after PRD locked (PR #3691 PA-1 lesson)", "impact": "medium", "likelihood": "medium", "mitigation": "Risk-agent v2 invocation MANDATORY after this PRD is finalized but BEFORE PLAN-TO-EXEC handoff. Specifically re-checks FR-2 SQL literal against pg_proc evidence."},
+    {"id": "R-9", "description": "EXEC scope creep: migration of existing _restore-claim scripts requested", "impact": "medium", "likelihood": "medium", "mitigation": "PRD scope explicit: existing one-offs OUT of scope (Q8 deletion audit ~60% reduction). FR-2 retroactively eliminates the workaround NEED for FUTURE sessions. Existing _restore-claim-emit-feedback.mjs becomes dead code after merge — can be deleted in follow-up cleanup SD."},
+    {"id": "R-10", "description": "FR-3 conflicts with sd-claim-reaper.mjs (existing detached process)", "impact": "low", "likelihood": "low", "mitigation": "Different PID files (.claude/pids/heartbeat-* vs .claude/pids/reaper-*). Different responsibilities. Verified via code review of scripts/lib/lifecycle/."}
+  ],
+
+  "deployment_strategy": "Single PR ships migration + code in atomic unit. Migration applied via Supabase CLI / Dashboard / sandbox runner pre-merge if possible; otherwise FR-8 post-merge smoke runner verifies ~3min after merge. No staged rollout needed — fix is backward-compat per database-agent audit. Rollback path: git revert PR + reverse CREATE OR REPLACE FUNCTION migration."
+}
