@@ -32,7 +32,7 @@ import {
 } from './verification.js';
 import { runComplianceWithRefinement } from './compliance-loop.js';
 import { prompt, displayCompletionSummary } from './cli.js';
-import { resolveFeedback, parseFeedbackFooters } from '../../../lib/governance/resolve-feedback.js';
+import { resolveFeedback, parseAndExpandFeedbackFooters } from '../../../lib/governance/resolve-feedback.js';
 import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -387,7 +387,8 @@ export async function completeQuickFix(qfId, options = {}) {
  *
  * Collects text from (a) PR body via `gh pr view --json body,commits` and
  * (b) the local commit message via `git log -1 --format=%B <sha>`, runs
- * parseFeedbackFooters, and calls resolveFeedback per UUID. All steps are
+ * parseAndExpandFeedbackFooters (which also expands 8-char short IDs via DB
+ * lookup, QF-20260511-556), and calls resolveFeedback per UUID. All steps are
  * defensive — any failure logs a warning and continues without blocking QF
  * completion (post-merge is informational, not gating).
  *
@@ -438,7 +439,13 @@ async function resolveLinkedFeedbackRows(supabase, qf, qfId, prUrl, commitSha, t
   // Source 3: QF description (may carry the link from issue creation)
   if (qf?.description) corpus.push(qf.description);
 
-  const uuids = parseFeedbackFooters(corpus.join('\n'));
+  const { uuids, warnings } = await parseAndExpandFeedbackFooters({
+    text: corpus.join('\n'),
+    supabase,
+  });
+  for (const w of warnings) {
+    console.log(`   ⚠️  ${w}`);
+  }
   if (uuids.length === 0) {
     return;
   }
