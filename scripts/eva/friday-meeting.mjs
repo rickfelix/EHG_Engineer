@@ -19,6 +19,12 @@ import { getLLMClient } from '../../lib/llm/client-factory.js';
 import { gatherRdProposals as _gatherRdProposals, renderRdProposals as _renderRdProposals, buildCombinedDecisionPayload as _buildCombinedDecisionPayload, processRdProposalDecision as _processRdProposalDecision } from '../../lib/skunkworks/friday-rd-section.js';
 import { buildInsightsReport, formatInsightsForDisplay } from '../modules/learning/insights.js';
 import { gatherStitchHealth, renderStitchHealth } from '../../lib/eva/bridge/stitch-metrics.js';
+// SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B / FR-5, TR-4, US-005: Section 4b reads recent
+// eva_support_decision_log entries via the canonical store; outcome write helper
+// is callable by the /friday slash command after the chairman responds.
+import { recentEntries as _recentDecisionLogEntries } from '../../lib/eva-support/decision-log-store.js';
+import { renderMarkdown as _renderDecisionLogMarkdown } from '../eva-support/decision-log-formatter.js';
+import { writeOutcome as _writeFridayOutcome } from '../../lib/eva-support/friday-outcome-bridge.js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
@@ -356,6 +362,44 @@ function renderIntakeReview(data) {
 
   return lines.join('\n');
 }
+
+// ─── Section 4b: Recent EVA Support Decisions (SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B / FR-5, US-005)
+//
+// Reads the last 7 days of eva_support_decision_log entries and renders them via
+// the canonical formatter. Silent skip on zero entries (no empty-state UI noise per FR-5 AC).
+// Fail-soft: read errors return empty payload — Section 4b is informational, not critical-path.
+
+async function gatherRecentDecisionLogEntries({ sinceDays = 7, limit = 10 } = {}) {
+  try {
+    const since = new Date(Date.now() - sinceDays * 24 * 3600 * 1000);
+    const entries = await _recentDecisionLogEntries({ since, limit });
+    return { entries: Array.isArray(entries) ? entries : [], sinceDays, limit };
+  } catch {
+    return { entries: [], sinceDays, limit };
+  }
+}
+
+function renderRecentDecisionLogEntries(data) {
+  if (!data || !Array.isArray(data.entries) || data.entries.length === 0) {
+    // Silent skip — per FR-5 AC #4 (no empty-state UI noise).
+    return '';
+  }
+  const lines = [];
+  lines.push('');
+  lines.push('  SECTION 4b: RECENT EVA SUPPORT DECISIONS');
+  lines.push('  ' + '─'.repeat(45));
+  lines.push(`  ${data.entries.length} decision(s) in the last ${data.sinceDays} days:`);
+  lines.push('');
+  // Use the canonical renderer (FR-5 AC #2 — no new rendering code).
+  // Indent each line for visual consistency with sibling sections.
+  const md = _renderDecisionLogMarkdown(data.entries);
+  md.split('\n').forEach(line => lines.push(line ? `  ${line}` : ''));
+  return lines.join('\n');
+}
+
+// Re-export the outcome writer for the /friday slash command to call after the
+// chairman responds to the AskUserQuestion payload (FR-6, US-006).
+export const writeFridayOutcome = _writeFridayOutcome;
 
 // ─── Section 5: R&D Proposals (delegated to lib/skunkworks/friday-rd-section.js)
 
@@ -697,11 +741,12 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log('═'.repeat(55));
 
   // Gather all data in parallel
-  const [perfData, capData, consultData, intakeData, rdData, fleetData, pluginData, insightsData, stitchData] = await Promise.all([
+  const [perfData, capData, consultData, intakeData, decisionLogData, rdData, fleetData, pluginData, insightsData, stitchData] = await Promise.all([
     gatherPerformanceReview(),
     gatherCapabilityReport(),
     gatherConsultantFindings(),
     gatherIntakeReview(),
+    gatherRecentDecisionLogEntries(),
     gatherRdProposals(),
     gatherFleetTelemetry(),
     gatherPluginDiscoveries(),
@@ -714,6 +759,9 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log(renderCapabilityReport(capData));
   logger.log(renderConsultantFindings(consultData));
   logger.log(renderIntakeReview(intakeData));
+  // SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B / Section 4b: silent skip when no entries.
+  const section4b = renderRecentDecisionLogEntries(decisionLogData);
+  if (section4b) logger.log(section4b);
   logger.log(renderRdProposals(rdData));
   logger.log(renderFleetTelemetry(fleetData));
   logger.log(renderPluginDiscoveries(pluginData));

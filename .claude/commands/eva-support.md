@@ -56,19 +56,23 @@ If either is unset, exit with a clear one-line error naming the missing variable
 
 ## --task-id Invocation
 
-1. Fetch the subtask via `getTask(taskId)`.
-2. Fetch existing decision-log history via `listComments(taskId)` → `decision-log-formatter.parse()` for each comment, filter non-null, sort by `sequence`.
-3. Classify the subtask via `task-classifier.classify(subtask)`.
-4. Dispatch via `scripts/eva-support/_internal/dispatcher.js` `dispatch(flow, subtask, { history, operatorInput })`. The handler returns `{reply, decision_log_entry}`.
-5. Serialize the entry via `decision-log-formatter.serialize(entry)` and post as a Todoist comment via `todoist-client.postComment(taskId, content)`.
-6. Print to operator:
+> **Phase 2 wiring (SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B)**: decision-log entries are now persisted to `eva_support_decision_log` DB FIRST, then mirrored to Todoist. Friday meeting outcomes from `eva_friday_outcomes` are surfaced in the pushback context at invocation start. Research-flow LLM calls are cached in `eva_support_research_cache` (SHA-256 query hash, 7-day TTL).
+
+1. Surface any unconsumed Friday meeting outcomes via `lib/eva-support/friday-outcome-bridge.js` `surfacePending({ limit: 10 })` (CAS UPDATE consumed_at). Render via `renderPushbackMarkdown(rows)` and prepend to `operatorInput` as additional pushback context (or skip silently if empty). This step is fail-soft — never blocks the invocation.
+2. Fetch the subtask via `getTask(taskId)`.
+3. Fetch existing decision-log history. **Prefer the DB**: `decision-log-store.entriesForTask(taskId)` returns canonical envelopes. If the DB returns empty AND Todoist has comments, fall back to `listComments(taskId)` → `decision-log-formatter.parse()` (Phase 1 path; backfill not yet run).
+4. Classify the subtask via `task-classifier.classify(subtask)`.
+5. Dispatch via `scripts/eva-support/_internal/dispatcher.js` `dispatch(flow, subtask, { history, operatorInput, decisionLogStore: decisionLogStoreModule })`. The handler returns `{reply, decision_log_entry, db_persisted, cache?}`. **Important**: when `decisionLogStore` is injected, the DB write happens BEFORE the function returns — a thrown error here means the Todoist write MUST NOT proceed.
+6. If step 5 succeeded (no throw): serialize the entry via `decision-log-formatter.serialize(entry)` and post as a Todoist comment via `todoist-client.postComment(taskId, content)`. If the Todoist post fails, retry once with 1s backoff; on second failure, surface error to operator but leave the DB row in place — DB is canonical, Todoist is the human-readable mirror.
+7. Print to operator:
    ```
    FLOW: <flow>
    ----
    <reply>
    ----
-   Decision log entry #<sequence> written to Todoist task <taskId>.
+   Decision log entry #<sequence> persisted to DB <db_persisted> and posted to Todoist task <taskId>.
    ```
+   If the research flow returned a cache hit, also print `(cached — no LLM call this turn)`.
 
 ## memory dump Subcommand
 
@@ -88,6 +92,11 @@ If either is unset, exit with a clear one-line error naming the missing variable
 | `dispatch`, `getHandler` | `scripts/eva-support/_internal/dispatcher.js` |
 | `SYSTEM_PROMPT`, `OVERRIDE_TOKEN`, `FLOWS` | `scripts/eva-support/_internal/system-prompt.js` |
 | Per-flow handlers | `scripts/eva-support/{research,decision,draft,action-prep,platform,pure-human}.js` |
+| **Phase 2**: `insertEntry`, `recentEntries`, `entriesForTask` | `lib/eva-support/decision-log-store.js` |
+| **Phase 2**: `get`, `set`, `hashQuery`, `purgeBefore`, `purgeByQueryHash` | `lib/eva-support/research-cache.js` |
+| **Phase 2**: `surfacePending`, `writeOutcome`, `renderPushbackMarkdown` | `lib/eva-support/friday-outcome-bridge.js` |
+| **Phase 2**: schema-pin test | `tests/unit/eva-support/envelope-v1-schema-pin.test.js` |
+| **Phase 2**: backfill (run once) | `scripts/migrations/backfill-eva-decision-log.mjs` |
 
 ## 5-Task Voice Spot-Check (LEAD-FINAL Acceptance Gate)
 
