@@ -1,0 +1,50 @@
+name: Pre-merge Migration Readiness
+
+# SD-LEO-INFRA-PRE-MERGE-MIGRATION-001 FR-1.
+# Runs on PRs touching database/migrations/*.sql and detects when a
+# CREATE OR REPLACE FUNCTION migration declares a body that diverges
+# from the live DB (someone forgot to apply). Defense-in-depth for
+# PAT-LEO-INFRA-DDL-CODE-DB-STATE-DRIFT-001.
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/*.sql'
+  workflow_dispatch:
+
+jobs:
+  check-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: pre-merge-migration-readiness-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Assert secrets present
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          [ -n "$SUPABASE_URL" ] || { echo "[MIGRATION_READINESS_INFRA_ERROR] SUPABASE_URL missing"; exit 2; }
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo "[MIGRATION_READINESS_INFRA_ERROR] SUPABASE_SERVICE_ROLE_KEY missing"; exit 2; }
+      - run: npm ci --no-audit --no-fund
+      - name: Run pre-merge migration-readiness probe
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            node scripts/check-migration-readiness.mjs --pr ${{ github.event.pull_request.number }}
+          else
+            node scripts/check-migration-readiness.mjs
+          fi
