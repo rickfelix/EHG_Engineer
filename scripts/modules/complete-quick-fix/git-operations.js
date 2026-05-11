@@ -12,16 +12,10 @@ import { execSync, execFileSync } from 'child_process';
 
 /**
  * Parse `git status --short` output into a list of file paths.
- *
- * QF-20260511-080 (closes harness 62327062): used by commitAndPushChanges to
- * scope `git add` to QF-touched files. Previously a blind `git add .` swept
- * unrelated dirty state (.claude/* session-state, scripts/one-off/_*.mjs) into
- * the QF commit when complete-quick-fix ran from the main repo CWD instead of
- * the QF worktree.
- *
- * Handles short porcelain format (XY + space + path), untracked (`??`),
- * renames (`R  old -> new` → returns new path), and quoted paths.
- *
+ * QF-20260511-080 (closes harness 62327062): blind `git add .` previously
+ * swept unrelated dirty state into QF commits. Handles short porcelain
+ * (XY + path), untracked (`??`), renames (`R old -> new` → new path),
+ * and quoted paths.
  * @param {string} statusOutput - Raw output of `git status --short`
  * @returns {string[]} Unique file paths
  */
