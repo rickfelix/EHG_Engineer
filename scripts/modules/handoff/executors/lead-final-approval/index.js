@@ -699,6 +699,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
    * Auto-close feedback items linked to this SD (US-002)
    * Queries feedback table for items with matching strategic_directive_id
    * or resolution_sd_id, and transitions them to 'resolved'.
+   *
+   * QF-20260510-925: also reads metadata.deferred_from_sd_key (set by
+   * emit-feedback per SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 FR-2). Closes
+   * 18th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 — the writer
+   * channel was wired without a matching reader, leaving bundled-CAPA
+   * feedback rows stuck at status='new' after their bundling SD merged.
    */
   async autoCloseFeedback(sd) {
     const sdId = sd.id;
@@ -732,10 +738,28 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       }
     }
 
+    // 3. QF-20260510-925: Find feedback items linked via metadata.deferred_from_sd_key.
+    //    emit-feedback (SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 FR-2) writes this when a
+    //    CAPA item is deferred from a parent SD; without this reader, bundled-CAPA
+    //    rows remain status='new' forever after the bundling SD merges.
+    let linkedByDeferredFrom = [];
+    if (sdKey) {
+      const { data: deferredFeedback, error: deferredError } = await this.supabase
+        .from('feedback')
+        .select('id')
+        .filter('metadata->>deferred_from_sd_key', 'eq', sdKey)
+        .not('status', 'in', terminalStatuses);
+
+      if (!deferredError && deferredFeedback) {
+        linkedByDeferredFrom = deferredFeedback;
+      }
+    }
+
     // Deduplicate IDs
     const allIds = [...new Set([
       ...(linkedById || []).map(f => f.id),
-      ...linkedByBranch.map(f => f.id)
+      ...linkedByBranch.map(f => f.id),
+      ...linkedByDeferredFrom.map(f => f.id)
     ])];
 
     if (allIds.length === 0) {
