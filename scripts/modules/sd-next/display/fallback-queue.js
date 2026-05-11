@@ -8,6 +8,7 @@ import { checkDependenciesResolved } from '../dependency-resolver.js';
 import { displayTrackSection } from './tracks.js';
 import { rankItems } from '../rank-items.js';
 import { classifyQuickFixes } from './quick-fixes.js';
+import { isLeadDecisionPaused } from '../status-helpers.js';
 
 /**
  * Show fallback queue when no baseline is active.
@@ -132,7 +133,8 @@ export async function showFallbackQueue(supabase, options = {}) {
 
   // Show top ready SD per track.
   for (const [trackKey, trackSDs] of Object.entries(tracks)) {
-    const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on);
+    // QF-20260511-565: exclude LEAD-paused/deferred SDs from RECOMMENDED STARTING POINTS
+    const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on && !isLeadDecisionPaused(s));
     if (ready) {
       const trackLabel = `Track ${trackKey}`;
       console.log(`${colors.green}  ${trackLabel}:${colors.reset} ${ready.sd_key || ready.id} - ${ready.title.substring(0, 50)}...`);

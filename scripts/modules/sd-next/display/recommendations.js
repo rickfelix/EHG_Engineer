@@ -4,7 +4,7 @@
  */
 
 import { colors } from '../colors.js';
-import { isActionableForLead } from '../status-helpers.js';
+import { isActionableForLead, isLeadDecisionPaused } from '../status-helpers.js';
 import { checkDependenciesResolved, checkMetadataDependency, resolveMetadataBlocker } from '../dependency-resolver.js';
 import { getEstimatedDuration, formatEstimateShort } from '../../../lib/duration-estimator.js';
 import { analyzeClaimRelationship, hasActiveWorkEvidence } from '../claim-analysis.js';
@@ -262,6 +262,9 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
       // SD-LEO-INFRA-CONDITIONAL-QUEUE-GOVERNANCE-001: Skip deferred SDs from recommendations
       if (sd.metadata?.do_not_advance_without_trigger === true) continue;
+
+      // QF-20260511-565: Skip SDs paused at LEAD via metadata.lead_decision.verdict
+      if (isLeadDecisionPaused(sd)) continue;
 
       // SD-LEO-INFRA-CLAIM-GUARD-001: Skip SDs claimed by OTHER sessions (use claiming_session_id)
       if (sd.claiming_session_id && sd.claiming_session_id !== currentSessionId) {
