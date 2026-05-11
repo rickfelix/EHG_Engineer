@@ -96,7 +96,8 @@ async function main() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     console.error('[session:check-concurrency] missing SUPABASE_URL/SERVICE_ROLE_KEY — cannot query sessions');
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   // SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 (FR-1 rescoped): widen the contention
@@ -111,7 +112,8 @@ async function main() {
     allSessions = await getActiveSessions();
   } catch (err) {
     console.error('[session:check-concurrency] query failed:', err.message);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   const data = (allSessions || []).filter(s => categorizeSessionForContention(s) !== 'inactive');
@@ -153,7 +155,8 @@ async function main() {
     if (others.length > 0) {
       console.log(`  (${others.length} active session(s) on other branches — no contention)`);
     }
-    process.exit(0);
+    process.exitCode = 0;
+    return;
   }
 
   console.log('');
@@ -180,7 +183,7 @@ async function main() {
   console.log('    3. If the other session is dead but its heartbeat is recent,');
   console.log('       release via the LEO claim CLI before proceeding');
   console.log('');
-  process.exit(1);
+  process.exitCode = 1;
 }
 
 // Entrypoint guard: only run main() when invoked as a CLI, NOT when this
@@ -195,6 +198,6 @@ const isDirectInvoke = import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isDirectInvoke) {
   main().catch(e => {
     console.error('[session:check-concurrency] error:', e.message);
-    process.exit(2);
+    process.exitCode = 2;
   });
 }
