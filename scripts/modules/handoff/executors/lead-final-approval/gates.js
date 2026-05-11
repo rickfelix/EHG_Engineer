@@ -33,6 +33,10 @@ export { createWiringValidationGate };
 // Wire Check Gate — AST call graph reachability (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001-C)
 import { createWireCheckGate } from './gates/wire-check-gate.js';
 export { createWireCheckGate };
+
+// Phantom Test Audit Gate — call-surface alignment check (SD-FDBK-ENH-PAT-PHANTOM-TABLE-001)
+import { createPhantomTestAuditGate } from './gates/phantom-test-audit-gate.js';
+export { createPhantomTestAuditGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
 
@@ -1183,6 +1187,7 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // Wire Check Gate — AST call graph reachability for new files
   // (SD-MAN-INFRA-FIX-ORCHESTRATOR-CHILD-001-C)
   gates.push(createWireCheckGate(supabase));
+  gates.push(createPhantomTestAuditGate(supabase));
 
   // Learning-or-Bypass-Resolved Gate — completion safeguard
   // (SD-LEARN-FIX-ADDRESS-PAT-AGENT-001)
@@ -1212,6 +1217,7 @@ export default {
   createSmokeTestGate,
   createAutomatedUatGate,
   createWireCheckGate,
+  createPhantomTestAuditGate,
   createLearningOrBypassResolvedGate,
   createCrossSdFileOverlapTemporalShipGate,
   getRequiredGates

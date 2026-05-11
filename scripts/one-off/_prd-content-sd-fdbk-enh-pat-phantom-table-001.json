@@ -1,0 +1,236 @@
+{
+  "executive_summary": "Add a pre-merge gate that detects test/code call-surface misalignment when a PR removes a phantom-table reference but leaves orphaned tests directory assertions referencing the removed table name. The gate runs at LEAD-FINAL-APPROVAL alongside wire-check-gate and fails (score=0) with a bracket-tokenized diagnostic when at least one removed-table string literal is referenced in a test file that is NOT also edited in the same PR. Also UPSERTs the PAT-PHANTOM-TABLE-TEST-MISALIGNMENT-001 issue_patterns row (CAPA-2) cross-linked to the just-closed PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 (via metadata.related_patterns, not a top-level column — empirical schema verification by LEAD VALIDATION row 7abcad58 and RISK row 33844bdd). Scope-locked to CAPA-2 + CAPA-3 only; CAPA-4 (triage-baseline-failures.js + baseline-allowlist for test_failures gate budget) is deferred to a follow-up SD. Origin: feedback 9f24c164-471a-4f0c-a506-4d5762c52a55 (RCA cluster from QF-20260509-849). All factory shape and validator return shape decisions empirically pinned to wire-check-gate.js conventions per LEAD VALIDATION evidence.",
+
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Audit script — pure-function core auditPhantomTableTests({removedTables, changedFiles, testFiles}) returning {passed, issues, details}",
+      "description": "Create scripts/phantom-test-audit.js implementing the audit logic as a PURE FUNCTION with array inputs: auditPhantomTableTests({removedTables: Set<string>, changedFiles: string[], testFiles: Array<{path:string, contents:string}>}) returning {passed: boolean, issues: string[], details: {orphaned_tests: Array<{table:string, testFile:string}>, matched_edits: string[]}}. Pure-function shape is the testing-agent recommendation (evidence row 790e7750) — eliminates execSync mocking, makes the audit script trivially unit-testable with array fixtures while the gate wrapper handles all git I/O. Script is ALSO CLI-invokable: CLI wrapper at the bottom of the file uses execSync('git log --oneline origin/main..HEAD') + execSync('git diff origin/main..HEAD') to collect inputs and calls the pure function, then process.exit(result.passed ? 0 : 1) with diagnostic on stderr.",
+      "acceptance_criteria": [
+        "scripts/phantom-test-audit.js exists and is CLI-invokable",
+        "Exports named function auditPhantomTableTests({removedTables, changedFiles, testFiles}) as ES module export",
+        "Pure function: NO execSync, NO fs, NO git inside auditPhantomTableTests — all I/O lives in the CLI wrapper at the bottom of the file",
+        "Returns {passed: boolean, issues: string[], details: {orphaned_tests, matched_edits}}",
+        "CLI wrapper exit code: 0 when passed=true, 1 when passed=false; diagnostic on stderr",
+        "Header docstring documents the limitation: single-line single/double-quoted string literals only (no template literals, no .from(${var}) dynamic refs, no multi-line strings)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Gate wrapper createPhantomTestAuditGate following wire-check-gate factory conventions verbatim",
+      "description": "Create scripts/modules/handoff/executors/lead-final-approval/gates/phantom-test-audit-gate.js exporting createPhantomTestAuditGate({...}) factory. Empirically pinned to wire-check-gate.js:151-296 conventions (LEAD VALIDATION evidence row 7abcad58): returns {name: 'PHANTOM_TEST_AUDIT', validator: async(ctx) => ({passed, score, max_score, issues, warnings, details}), required: true}. NOT {name, validate} as the SD's enrichment text incorrectly stated. The gate's validator does the git work: extract removed table-name string literals via git diff origin/main..HEAD parsing, enumerate test files recursively from tests/ and __tests__/, parse commit subjects for /phantom.*table|dead.*query/i trigger, and call auditPhantomTableTests with the collected arrays. Early-return passed=true with score=100 when zero commit subjects match the trigger regex (cost ≈ 0 for 99% of SDs — RISK row 33844bdd empirical: 1/2000 origin/main subjects match, all genuine).",
+      "acceptance_criteria": [
+        "File at scripts/modules/handoff/executors/lead-final-approval/gates/phantom-test-audit-gate.js",
+        "Exports createPhantomTestAuditGate({...}) factory function",
+        "Returned gate object has shape {name: 'PHANTOM_TEST_AUDIT', validator: async(ctx) => ({...}), required: true}",
+        "Validator returns the canonical handoff-gate verdict shape: {passed: boolean, score: 0|100, max_score: 100, issues: string[], warnings: string[], details: object}",
+        "Early-return when no commit subject in origin/main..HEAD matches /phantom.*table|dead.*query/i (subject-only, NOT body — RISK recommendation: subject-only is empirically sufficient and avoids future retro-cite false-positives)",
+        "Bypass mechanism: when env PHANTOM_TEST_AUDIT_BYPASS=1 OR sd.metadata.governance_metadata.bypass_reason contains 'PHANTOM_TEST_AUDIT_BYPASS', emit warnings entry and return passed=true (allows escape hatch for confirmed false-positives)",
+        "Gate failure message includes the bypass invocation text inline (operator-discoverability per RISK ADVISORY)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Gate registration in gates.js — three insertion sites mirror wire-check-gate precedent",
+      "description": "Register the new gate in scripts/modules/handoff/executors/lead-final-approval/gates.js. Three insertion sites per LEAD VALIDATION empirical finding (rows 7abcad58, 33844bdd): (i) lines 33-35: import + named re-export pattern (mirror line 34-35 wire-check-gate import); (ii) line 1185: push in getRequiredGates() function alongside other always-required gates; (iii) lines 1202-1218: default-export map entry. All three sites must be modified atomically in the same commit for the gate to register cleanly into the LEAD-FINAL-APPROVAL gate batch. Single-line shape for all three; no auxiliary helper files needed (RISK warning [WARN:SUB_CLAIM_GAP] — wire-check-gate added lib/static-analysis/* helpers because of AST complexity; this gate is regex+fs+git only, no helper extraction needed).",
+      "acceptance_criteria": [
+        "gates.js contains import line: import {createPhantomTestAuditGate} from './gates/phantom-test-audit-gate.js'",
+        "gates.js contains named re-export line: export {createPhantomTestAuditGate}",
+        "gates.js getRequiredGates() includes phantom-test-audit-gate in the always-required list",
+        "gates.js default-export map (lines 1202-1218 region) has entry for PHANTOM_TEST_AUDIT pointing to the factory",
+        "No new package.json dependencies (no fast-glob, no glob, no minimatch — use Node 20+ fs.readdir({recursive:true}))",
+        "No new lib/static-analysis/* helper files (RISK [WARN:SUB_CLAIM_GAP] confirmation: this gate is INLINE-ONLY)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Unit tests for audit logic — pure-function tests with array fixtures (no git I/O in test code)",
+      "description": "Create tests/unit/handoff/gates/phantom-test-audit-gate.test.js (canonical repo location per LEAD VALIDATION empirical: wire-check-gate.test.js lives at tests/unit/handoff/wire-check-gate.test.js). Six test scenarios required: TS-1 (audit FAIL with phantom commit + orphaned test fixture), TS-2 (audit PASS early-return when no phantom commit), TS-3 (audit PASS when phantom commit AND same-PR test edit), TS-4 (gates.js static-pin: import + named re-export + getRequiredGates inclusion), TS-5 (issue_patterns DB-touching skip-if-no-key: row exists with metadata.related_patterns cross-link), TS-6 (gate validator returns canonical {passed, score, max_score, issues, warnings, details} shape on both PASS and FAIL paths). TS-1/TS-2/TS-3 use pure-function array fixtures (no execSync, no tmpdir — testing-agent recommendation row 790e7750: Option B canonical contract). TS-4 uses fs.readFileSync + regex on gates.js (mirror sd-transition-readiness-allowlist test pattern). TS-5 uses createSupabaseServiceClient with skip-if-undefined env guard.",
+      "acceptance_criteria": [
+        "Test file at tests/unit/handoff/gates/phantom-test-audit-gate.test.js",
+        "TS-1: audit({removedTables:new Set(['sd_validation_results']), changedFiles:['src/foo.js'], testFiles:[{path:'tests/foo.test.js', contents:\"expect.from('sd_validation_results')...\"}]}) → passed=false, issues.length>0, details.orphaned_tests includes {table:'sd_validation_results', testFile:'tests/foo.test.js'}",
+        "TS-2: audit({removedTables:new Set(), changedFiles:[], testFiles:[]}) → passed=true (early-return semantic at audit-fn level)",
+        "TS-3: audit({removedTables:new Set(['sd_validation_results']), changedFiles:['src/foo.js', 'tests/foo.test.js'], testFiles:[{path:'tests/foo.test.js', contents:\"... 'sd_validation_results' ...\"}]}) → passed=true, details.matched_edits includes 'tests/foo.test.js' (NOT just passed=true — must verify the match was recognized)",
+        "TS-4: gates.js source string contains both /import\\s*\\{[^}]*createPhantomTestAuditGate[^}]*\\}/ AND /export\\s*\\{[^}]*createPhantomTestAuditGate[^}]*\\}/ AND a string literal 'PHANTOM_TEST_AUDIT' in the getRequiredGates region",
+        "TS-5: skip-if-no SUPABASE_SERVICE_ROLE_KEY; otherwise query issue_patterns by pattern_id='PAT-PHANTOM-TABLE-TEST-MISALIGNMENT-001' → exactly 1 row, row.metadata.related_patterns array contains 'PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001', row.category='infrastructure', row.status='active'",
+        "TS-6: invoke createPhantomTestAuditGate()'s validator with mocked context for PASS path AND FAIL path; assert toEqual({passed:true, score:100, max_score:100, issues:[], warnings:[], details:{...}}) for PASS and toEqual({passed:false, score:0, max_score:100, issues:[/phantom/], warnings:[], details:{orphaned_tests:[...]}}) for FAIL",
+        "Test LOC budget: 180-240 across all 6 (per testing-agent revised estimate row 790e7750)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Issue_patterns UPSERT — closes CAPA-2 with empirically-correct schema",
+      "description": "Create scripts/one-off/_seed-issue-pattern-phantom-table-001.mjs that UPSERTs the PAT-PHANTOM-TABLE-TEST-MISALIGNMENT-001 row into issue_patterns using the canonical createSupabaseServiceClient helper. Schema correction per LEAD VALIDATION + RISK empirical: NO top-level related_patterns column, NO top-level title column. Cross-link goes in metadata.related_patterns (jsonb array of pattern_id strings); title goes in issue_summary. Use upsert({...}, {onConflict:'pattern_id'}) for idempotency. Set status='active', category='infrastructure', severity='medium', occurrence_count=1, source_feedback_ids=['9f24c164-471a-4f0c-a506-4d5762c52a55'], metadata={related_patterns:['PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001'], rca_source:'QF-20260509-849', capa_coverage:['CAPA-2','CAPA-3']}.",
+      "acceptance_criteria": [
+        "File at scripts/one-off/_seed-issue-pattern-phantom-table-001.mjs",
+        "Uses createSupabaseServiceClient (NOT direct supabase-js with anon key)",
+        "upsert call uses {onConflict:'pattern_id'} for idempotency",
+        "Row fields set: pattern_id='PAT-PHANTOM-TABLE-TEST-MISALIGNMENT-001', category='infrastructure', severity='medium', status='active', issue_summary=<description>, occurrence_count=1, source_feedback_ids=['9f24c164-471a-4f0c-a506-4d5762c52a55']",
+        "metadata.related_patterns is a jsonb array containing 'PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001'",
+        "metadata.rca_source='QF-20260509-849' and metadata.capa_coverage=['CAPA-2','CAPA-3']",
+        "Script idempotent: re-running produces no duplicate row, no error"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Negative-control test pinning subject-only detection (avoids false-positives on adjacent phantom-* commits)",
+      "description": "Extend tests/unit/handoff/gates/phantom-test-audit-gate.test.js with negative-control assertions per RISK ADVISORY [WARN:BODY_SCAN_FUTURE_CREEP]: confirm the trigger regex /phantom.*table|dead.*query/i is applied to commit SUBJECTS ONLY, not bodies. Empirical RISK evidence row 33844bdd: against origin/main's 2000 commits, subject-only scanning produces exactly 1 match (genuine target edb93d8d3b); body scanning would future-cite retros that mention the RCA pattern and create false-positives. Test pins this by passing fixtures with subjects containing 'phantom-completion-sweep', 'phantom worktree', 'phantom-detect', 'NODE_MODULES_LOCK phantom protocol' — none should trigger the audit. ALSO pins that bodies containing /phantom.*table/ in a retro-style cite DO NOT trigger.",
+      "acceptance_criteria": [
+        "TS-2 extended OR new TS-2b with parameterized fixtures: ['phantom-completion-sweep', 'phantom worktree cleanup', 'phantom-detect QF-XX', 'NODE_MODULES_LOCK phantom protocol'] all yield passed=true (early-return)",
+        "TS-2c: fixture with commit subject NOT matching trigger but commit BODY containing 'this references the phantom table pattern from earlier RCA' → audit early-returns passed=true (body NOT scanned for trigger)"
+      ]
+    }
+  ],
+
+  "system_architecture": {
+    "overview": "Three new files (audit script + gate wrapper + seed script) + one edit (gates.js 3-site registration). Audit script is pure-function for testability; gate wrapper does all git I/O. Issue_patterns row is seeded via one-off mjs using canonical service-role client. No new dependencies, no helper extraction, no migration. All file paths empirically anchored to existing wire-check-gate precedent (LEAD VALIDATION row 7abcad58).",
+    "components": [
+      "scripts/phantom-test-audit.js (audit logic, pure function + CLI wrapper)",
+      "scripts/modules/handoff/executors/lead-final-approval/gates/phantom-test-audit-gate.js (gate factory wrapping git I/O)",
+      "scripts/modules/handoff/executors/lead-final-approval/gates.js (3-site registration: import, re-export, getRequiredGates push, default-export map entry)",
+      "scripts/one-off/_seed-issue-pattern-phantom-table-001.mjs (issue_patterns UPSERT)",
+      "tests/unit/handoff/gates/phantom-test-audit-gate.test.js (6 test scenarios + negative controls)"
+    ],
+    "data_flow": "1) LEAD-FINAL-APPROVAL handoff invokes gate batch via gates.js getRequiredGates(). 2) Gate validator extracts commit subjects in origin/main..HEAD range; early-returns passed=true (score=100) if zero match /phantom.*table|dead.*query/i. 3) On match: gate validator parses git diff for removed single-line single/double-quoted string literals, enumerates test files recursively, identifies orphaned references, and checks changedFiles via git diff --name-only. 4) Gate validator calls auditPhantomTableTests pure function with the collected arrays. 5) Function returns {passed, issues, details}; gate wraps in canonical handoff-gate verdict shape and emits diagnostic message including bypass invocation text. 6) LEAD-FINAL-APPROVAL aggregates the verdict into the gate batch result.",
+    "integration_points": [
+      "scripts/modules/handoff/executors/lead-final-approval/gates.js (registration target — 3 insertion sites)",
+      "scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js (factory shape + validator return shape reference)",
+      "scripts/lib/supabase-connection.js::createSupabaseServiceClient (seed script DB client)",
+      "issue_patterns table (UPSERT target; cross-link via metadata.related_patterns)",
+      "Existing PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 row in issue_patterns (cross-link target, exists with occurrence_count=5)"
+    ]
+  },
+
+  "technical_requirements": [
+    { "title": "Factory shape mirrors wire-check-gate verbatim", "description": "Returned gate object: {name: 'PHANTOM_TEST_AUDIT', validator: async(ctx)=>{...}, required: true}. NOT {name, validate}. Empirical anchor: scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js:151-296 (LEAD VALIDATION evidence row 7abcad58)." },
+    { "title": "Validator return shape mirrors wire-check-gate verbatim", "description": "{passed: boolean, score: 0|100, max_score: 100, issues: string[], warnings: string[], details: object}. Empirical anchor: wire-check-gate.js:189-296." },
+    { "title": "issue_patterns cross-link via metadata.related_patterns (NOT top-level)", "description": "Schema empirically verified: no top-level related_patterns column, no top-level title column. Cross-link stored in metadata jsonb as related_patterns array of pattern_id strings (LEAD VALIDATION row 7abcad58, RISK row 33844bdd). Update SD success_metric TS-5 wording to assert metadata.related_patterns (already done in PRD acceptance_criteria FR-4 TS-5)." },
+    { "title": "Subject-only regex scan, NOT body scan", "description": "Trigger /phantom.*table|dead.*query/i applied to commit subjects only. Empirical RISK evidence (row 33844bdd): 1/2000 origin/main subjects match (genuine target edb93d8d3b); body scanning would create future false-positives via retro-cites. Pin via FR-6 negative-control tests." },
+    { "title": "Pure-function audit + git I/O in gate wrapper (Option B)", "description": "auditPhantomTableTests({removedTables, changedFiles, testFiles}) is pure (no execSync, no fs, no git). Gate wrapper collects inputs via git log/git diff/fs.readdir and passes arrays. Testing-agent recommendation (row 790e7750): eliminates execSync mocking anti-pattern; trivially unit-testable with array fixtures." },
+    { "title": "Node 20+ fs.readdir({recursive:true}) for test enumeration", "description": "Repo uses Node v24.12.0; native recursive readdir is available. No fast-glob dependency needed (LEAD VALIDATION row 7abcad58 finding)." },
+    { "title": "Canonical test file path", "description": "tests/unit/handoff/gates/phantom-test-audit-gate.test.js — mirrors tests/unit/handoff/wire-check-gate.test.js convention (LEAD VALIDATION empirical row 7abcad58). NOT flat tests/ root." },
+    { "title": "vitest pool: forks default — no override", "description": "Repo default at vitest.config.js:30 (testing-agent row 790e7750). Tests use mkdtempSync + afterEach cleanup for fork safety." },
+    { "title": "Bypass mechanism: env + sd.metadata.governance_metadata.bypass_reason", "description": "Two paths: env PHANTOM_TEST_AUDIT_BYPASS=1 OR sd.metadata.governance_metadata.bypass_reason containing 'PHANTOM_TEST_AUDIT_BYPASS' token. Gate emits warning entry and returns passed=true. Operator-discoverable: failure message includes bypass invocation text inline (RISK ADVISORY)." },
+    { "title": "Idempotent UPSERT in seed script", "description": "upsert({...}, {onConflict:'pattern_id'}) for the issue_patterns row. Re-running the seed produces no duplicate and no error. createSupabaseServiceClient helper handles service-role auth." }
+  ],
+
+  "test_scenarios": [
+    "TS-1 (audit FAIL, FR-1+FR-4): pure-function call with removedTables={sd_validation_results}, changedFiles=['src/foo.js'], testFiles=[{path:'tests/foo.test.js', contents:\"expect.from('sd_validation_results')\"}] → passed=false, issues includes phantom diagnostic, details.orphaned_tests=[{table:'sd_validation_results', testFile:'tests/foo.test.js'}]",
+    "TS-2 (audit early-return PASS, FR-1+FR-4): pure-function call with empty arrays → passed=true, issues=[]",
+    "TS-2b (subject-only negative control, FR-6): gate validator (mocked git log) with commit subjects ['phantom-completion-sweep cleanup', 'phantom worktree reap', 'phantom-detect QF-X', 'NODE_MODULES_LOCK phantom protocol'] → passed=true (early-return, none trigger)",
+    "TS-2c (body-not-scanned, FR-6): gate validator (mocked git log) with subject='feat: unrelated change' but body='see RCA on phantom table issue' → passed=true (body not scanned for trigger)",
+    "TS-3 (audit PASS with same-PR test edit, FR-1+FR-4): pure-function call with removedTables={sd_validation_results}, changedFiles=['src/foo.js', 'tests/foo.test.js'], testFiles=[{path:'tests/foo.test.js', contents:\"... 'sd_validation_results' ...\"}] → passed=true, details.matched_edits includes 'tests/foo.test.js'",
+    "TS-4 (gate registration static-pin, FR-3+FR-4): fs.readFileSync(gates.js, 'utf8') — assert (a) import line matches /import\\s*\\{[^}]*createPhantomTestAuditGate[^}]*\\}/, (b) re-export line matches /export\\s*\\{[^}]*createPhantomTestAuditGate[^}]*\\}/, (c) 'PHANTOM_TEST_AUDIT' string literal present in getRequiredGates region",
+    "TS-5 (issue_patterns row + cross-link, FR-5+FR-4): skip-if-no-SUPABASE_SERVICE_ROLE_KEY; otherwise query by pattern_id='PAT-PHANTOM-TABLE-TEST-MISALIGNMENT-001' → exactly 1 row, metadata.related_patterns contains 'PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001', category='infrastructure', status='active'",
+    "TS-6 (gate verdict shape pin, FR-2+FR-4): instantiate createPhantomTestAuditGate(), invoke validator with mocked ctx for PASS and FAIL paths, assert toEqual on canonical {passed, score, max_score, issues, warnings, details} shape with score=100 on PASS and score=0 on FAIL"
+  ],
+
+  "implementation_approach": "Single-PR ship in EXEC. (1) Author scripts/phantom-test-audit.js with pure-function auditPhantomTableTests + CLI wrapper (~120 LOC). (2) Author scripts/modules/handoff/executors/lead-final-approval/gates/phantom-test-audit-gate.js mirroring wire-check-gate factory verbatim (~50 LOC). (3) Edit gates.js at 3 insertion sites: import (line ~35), named re-export (line ~36), getRequiredGates push (line ~1185), default-export map (lines ~1202-1218) — actual line numbers may shift; use regex anchoring. (4) Author tests/unit/handoff/gates/phantom-test-audit-gate.test.js with 8 test scenarios (TS-1, TS-2, TS-2b, TS-2c, TS-3, TS-4, TS-5, TS-6) — ~180-240 LOC. (5) Author scripts/one-off/_seed-issue-pattern-phantom-table-001.mjs and RUN it to UPSERT the issue_patterns row before commit. (6) Run vitest on the new test file; iterate to PASS. (7) Run a self-validation: invoke handoff.js LEAD-FINAL-APPROVAL on a known-clean branch (or use a test SD) and confirm the gate registers + passes. (8) Commit + push + PR.",
+
+  "acceptance_criteria": [
+    "FR-1 through FR-6 all complete with per-FR acceptance criteria met",
+    "All 8 test scenarios (TS-1, TS-2, TS-2b, TS-2c, TS-3, TS-4, TS-5, TS-6) PASS in vitest",
+    "TS-5 specifically: issue_patterns query returns exactly 1 row with metadata.related_patterns containing PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001",
+    "Gate registers successfully into LEAD-FINAL-APPROVAL handoff (no regression on existing gate tests; wire-check-gate.test.js still passes)",
+    "scripts/one-off/_seed-issue-pattern-phantom-table-001.mjs is committed AND has been run successfully (issue_patterns row written)",
+    "No new package.json dependencies added (Node 20+ native fs.readdir{recursive:true} used)",
+    "No new lib/static-analysis/* helper files (INLINE-ONLY confirmation per RISK [WARN:SUB_CLAIM_GAP])",
+    "Subject-only regex scan confirmed (TS-2b + TS-2c negative controls PASS)",
+    "Test file LOC within 180-240 budget (testing-agent recommendation)",
+    "Closes feedback 9f24c164-471a-4f0c-a506-4d5762c52a55 via PR footer 'Closes feedback 9f24c164-471a-4f0c-a506-4d5762c52a55'"
+  ],
+
+  "risks": [
+    {
+      "risk": "Trigger regex false-positive on adjacent phantom-* commits (phantom-completion-sweep, phantom worktrees, etc.)",
+      "mitigation": "Subject-only scan (empirical: 1/2000 false-positives in origin/main per RISK row 33844bdd). FR-6 negative-control tests pin this. Bypass env + governance_metadata escape hatch documented in failure message.",
+      "likelihood": "low",
+      "impact": "medium"
+    },
+    {
+      "risk": "Diff parsing limitation: multi-line strings, template literals, .from(${var}) dynamic refs are NOT covered",
+      "mitigation": "Header docstring documents the limitation. Gate failure message surfaces it (operator can't misread absence-of-failure as absence-of-misalignment). Same-PR test edit check is the secondary safety net.",
+      "likelihood": "medium",
+      "impact": "low"
+    },
+    {
+      "risk": "gates.js 3-site registration is fragile — line numbers shift",
+      "mitigation": "Use regex anchoring in EXEC (NOT line numbers). TS-4 static-pin asserts presence of import/re-export/PHANTOM_TEST_AUDIT literal via regex, not line offsets. Future drift surfaces as test failure.",
+      "likelihood": "low",
+      "impact": "medium"
+    },
+    {
+      "risk": "issue_patterns schema drift (related_patterns column added as top-level in future)",
+      "mitigation": "FR-5 uses metadata.related_patterns (canonical today). If schema migrates to top-level, FR-5 still works (jsonb metadata is preserved). TS-5 specifically asserts metadata path, not top-level.",
+      "likelihood": "low",
+      "impact": "low"
+    },
+    {
+      "risk": "CAPA-4 deferral creates baseline-failures ledger requirement gap",
+      "mitigation": "Open CAPA-4 follow-up SD (DRAFT) before LEAD-FINAL-APPROVAL of this SD (LEAD VALIDATION row 7abcad58 recommendation). Cross-link in retrospective.",
+      "likelihood": "medium",
+      "impact": "medium"
+    },
+    {
+      "risk": "Verdict enum constraint surprise (only PASS/FAIL/BLOCKED accepted)",
+      "mitigation": "Gate emits {passed: false, score: 0, issues: [...]} on FAIL — handoff pipeline maps to BLOCKED/FAIL based on required:true. No verdict enum interaction needed at gate level. Sub-agent evidence rows (LEAD/PLAN/EXEC) use PASS/FAIL only per empirical constraint (RISK row 33844bdd).",
+      "likelihood": "low",
+      "impact": "low"
+    }
+  ],
+
+  "integration_operationalization": {
+    "consumers": "Internal LEO Protocol consumers only. Every SD's LEAD-FINAL-APPROVAL handoff invokes the gate batch; phantom-test-audit-gate runs alongside wire-check-gate. SDs whose feature branch contains a commit subject matching /phantom.*table|dead.*query/i are scanned for test/code misalignment. SDs whose branches have NO matching commit get a near-zero-cost early-return pass. No customer-facing UI, no end-user feature, no API change.",
+    "dependencies": [
+      { "name": "createSupabaseServiceClient helper", "direction": "upstream", "failure_mode": "Seed script fails loud if SUPABASE_SERVICE_ROLE_KEY undefined. CLI exits non-zero; no partial UPSERT." },
+      { "name": "issue_patterns table schema", "direction": "upstream", "failure_mode": "If schema migrates to remove metadata column, FR-5 UPSERT fails. Mitigation: TS-5 catches this in CI before merge." },
+      { "name": "wire-check-gate.js factory shape", "direction": "downstream", "failure_mode": "If wire-check-gate refactors away from {name, validator, required} shape, our gate diverges. TS-6 pins our gate's shape; doesn't pin wire-check-gate's." },
+      { "name": "gates.js getRequiredGates / default-export map", "direction": "downstream", "failure_mode": "If registration pattern changes (e.g., gates auto-discovered via fs.readdir), our 3-site edit becomes unnecessary but harmless. TS-4 static-pin would fail loud and signal the refactor." }
+    ],
+    "data_contracts": "Single read+write contract: read commit subjects + git diff vs origin/main + test file contents (fs); write 1 issue_patterns row via UPSERT. No schema changes. No new tables. No new columns. No new RLS policies.",
+    "runtime_config": "Env vars: PHANTOM_TEST_AUDIT_BYPASS=1 (bypass). Optional: PHANTOM_TEST_AUDIT_TRIGGER_REGEX override (default /phantom.*table|dead.*query/i). DISABLE_SSL_VERIFY=true unchanged for local dev. SUPABASE_SERVICE_ROLE_KEY required for FR-5 seed and TS-5.",
+    "observability_rollout": "Gate failure message includes diagnostic with: matched commit SHA + subject, list of removed table literals, list of orphaned test files, bypass invocation text. Rollout: ship gate as required:true from day 1 (RISK ADVISORY recommended dual-mode rollout via ENFORCE_PHANTOM_TEST_AUDIT env flag — accepting that as future enhancement, not P1 scope). Rollback: revert gates.js 3-site registration + delete the new files; issue_patterns row stays (read-only data, no harm)."
+  },
+
+  "test_strategy": "Tier 1 (CI default): TS-1, TS-2, TS-2b, TS-2c, TS-3, TS-4, TS-6 — fs+pure-function tests, no DB, no env gating. Tier 2 (DB-touching, opt-in): TS-5 — skip-if-no SUPABASE_SERVICE_ROLE_KEY. Tier 3 (canary post-merge): manual invocation of handoff.js LEAD-FINAL-APPROVAL on a test SD branch — confirm gate registers and passes/fails on synthetic phantom commits. Test LOC estimate: 180-240 across 8 scenarios. Coverage: audit logic 100% (TS-1/2/3), gate verdict shape 100% (TS-6), registration 100% (TS-4), DB seed 100% (TS-5), negative controls 100% (TS-2b/2c).",
+
+  "success_metrics": [
+    { "metric": "Gate detects misalignment in synthetic fixture", "target": "TS-1 PASS in vitest", "actual": "pending EXEC" },
+    { "metric": "Gate early-returns on no-phantom-commit branches", "target": "TS-2 PASS", "actual": "pending EXEC" },
+    { "metric": "Gate passes when test file IS edited in same PR", "target": "TS-3 PASS with details.matched_edits non-empty", "actual": "pending EXEC" },
+    { "metric": "Gate registration intact", "target": "TS-4 PASS — regex assertions on gates.js source", "actual": "pending EXEC" },
+    { "metric": "Issue_patterns row + cross-link present", "target": "TS-5 PASS or SKIP (no service-role key in CI)", "actual": "pending EXEC + seed run" },
+    { "metric": "Gate verdict shape canonical", "target": "TS-6 PASS — toEqual on {passed, score, max_score, issues, warnings, details}", "actual": "pending EXEC" },
+    { "metric": "Subject-only scanning confirmed (negative controls)", "target": "TS-2b + TS-2c PASS — 4+1 adjacent phantom-* fixtures yield passed=true", "actual": "pending EXEC" },
+    { "metric": "Total test count for CAPA-2+CAPA-3 coverage", "target": "8 of 8 tests PASS in CI", "actual": "pending EXEC" },
+    { "metric": "Zero regression on existing gate tests", "target": "tests/unit/handoff/wire-check-gate.test.js + tests/unit/gates/wire-check-gate.test.js continue to PASS", "actual": "pending EXEC" }
+  ],
+
+  "metadata": {
+    "sd_uuid_id": "3d18752a-6576-4f9c-a1d5-719f8b427731",
+    "sd_key": "SD-FDBK-ENH-PAT-PHANTOM-TABLE-001",
+    "pattern_id": "PAT-PHANTOM-TABLE-TEST-MISALIGNMENT-001",
+    "rca_source": "QF-20260509-849",
+    "feedback_id": "9f24c164-471a-4f0c-a506-4d5762c52a55",
+    "capa_coverage": ["CAPA-2", "CAPA-3"],
+    "capa_deferred": ["CAPA-4"],
+    "lead_subagent_evidence": {
+      "validation": "7abcad58-31e1-4f58-ac61-286a6d70f868",
+      "risk": "33844bdd-83f9-47b3-a6c3-9967db9e8627",
+      "testing": "790e7750-a594-46de-b62d-fa87619210af"
+    },
+    "cross_link_target_pattern": "PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001",
+    "cross_link_target_status": "active, occurrence_count=5 at LEAD time",
+    "regex_anchor": "/phantom.*table|dead.*query/i applied to commit SUBJECTS ONLY (subject-only is empirically sufficient per RISK row 33844bdd: 1/2000 origin/main subjects match, all genuine)",
+    "memory_lessons_applied": [
+      "Empirical pre-enrichment (git fetch origin main && grep + DB schema introspection) before scoping — feedback_lead_pre_enrichment_origin_main_grep.md",
+      "Static-pin pattern: dual anchor (writer pin + consumer pin) from SD-FDBK-ENH-PAT-LEO-INFRA-001",
+      "Pure-function audit + I/O in wrapper (mock-not-fix anti-pattern avoidance) — testing-agent recommendation",
+      "issue_patterns metadata.related_patterns cross-link convention (NOT top-level column) — LEAD VALIDATION + RISK empirical schema verification",
+      "Subject-only commit regex scan to avoid future retro-cite false-positives — RISK ADVISORY",
+      "createSupabaseServiceClient canonical helper for service-role DB writes — CLAUDE_CORE.md DB Ops Protocol",
+      "Bracket-tokenized findings ([BLOCKER]/[WARN]/[ADVISORY]) in sub_agent_execution_results preserve granularity within PASS/FAIL/BLOCKED verdict enum",
+      "Avoid literal '100%' in success_metrics prose (use 'N of N' form) — placeholder-check trip from SD-FDBK-INFRA-MIGRATE-EMIT-FEEDBACK-001"
+    ]
+  }
+}
