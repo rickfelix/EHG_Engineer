@@ -532,6 +532,24 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
   return { filesChanged, diffAnalysis };
 }
 
+// QF-20260511-365 / feedback 869f7cf3: classify a path as docs-only so the
+// orchestrator can skip the unit+e2e test run for docs-only QFs (the gate
+// otherwise re-surfaces pre-existing baseline failures unrelated to the QF,
+// burning a bypass-quota slot per ship). Patterns deliberately strict — anything
+// outside this list (including config files, package.json, .yml) opts back in.
+export function isDocsOnlyPath(file) {
+  if (!file || typeof file !== 'string') return false;
+  const f = file.replace(/\\/g, '/');
+  if (/^docs\//i.test(f)) return true;
+  if (/(^|\/)(README|LICENSE|LICENCE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT|NOTICE|AUTHORS)(\.|$)/i.test(f)) return true;
+  return /\.(md|markdown|rst|adoc|txt)$/i.test(f);
+}
+
+export function isDocsOnlyDiff(filesChanged) {
+  if (!Array.isArray(filesChanged) || filesChanged.length === 0) return false;
+  return filesChanged.every(isDocsOnlyPath);
+}
+
 /**
  * Commit and push changes
  * @param {string} testDir - Directory to run git commands in
