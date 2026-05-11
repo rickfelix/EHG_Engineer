@@ -9,6 +9,101 @@
 import { colors } from './colors.js';
 import { computeGateState } from '../../../lib/cadence/pre-claim-gate.mjs';
 
+// SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001: ghost-completed detection state.
+// Module-load-time guard so we warn at most once per process when the
+// v_sd_completion_integrity view is absent.
+let _ghostWarnEmitted = false;
+let _inconsistentIdsCache = null;
+
+/**
+ * Query v_sd_completion_integrity and return a Set of sd_ids where
+ * is_ghost_completed=true. Memoized for the lifetime of the process — sd:next
+ * runs as a one-shot CLI so a single query per invocation is the right shape.
+ *
+ * Falls through gracefully when the view is missing (PostgrestError 42P01),
+ * returning an empty Set and emitting console.warn exactly once.
+ *
+ * SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001
+ *
+ * @param {Object} supabase - supabase client
+ * @returns {Promise<Set<string>>} Set of ghost-completed SD ids (varchar(50))
+ */
+export async function getInconsistentSDIds(supabase) {
+  if (_inconsistentIdsCache) return _inconsistentIdsCache;
+  if (!supabase) {
+    _inconsistentIdsCache = new Set();
+    return _inconsistentIdsCache;
+  }
+  try {
+    const { data, error } = await supabase
+      .from('v_sd_completion_integrity')
+      .select('id')
+      .eq('is_ghost_completed', true);
+    if (error) {
+      // 42P01 = relation does not exist; PostgREST also reports schema-cache
+      // misses with a "Could not find the table ... in the schema cache" msg.
+      const msg = error.message || '';
+      if (
+        error.code === '42P01' ||
+        /relation .* does not exist/i.test(msg) ||
+        /Could not find the table .* in the schema cache/i.test(msg)
+      ) {
+        if (!_ghostWarnEmitted) {
+          console.warn('[status-helpers] v_sd_completion_integrity view not present — STATUS_INCONSISTENT badges disabled (apply migration 20260510_v_sd_completion_integrity.sql)');
+          _ghostWarnEmitted = true;
+        }
+        _inconsistentIdsCache = new Set();
+        return _inconsistentIdsCache;
+      }
+      // Other errors: don't crash sd:next render, but log once
+      if (!_ghostWarnEmitted) {
+        console.warn(`[status-helpers] v_sd_completion_integrity query failed: ${error.message}`);
+        _ghostWarnEmitted = true;
+      }
+      _inconsistentIdsCache = new Set();
+      return _inconsistentIdsCache;
+    }
+    _inconsistentIdsCache = new Set((data || []).map(r => r.id));
+    return _inconsistentIdsCache;
+  } catch (e) {
+    if (!_ghostWarnEmitted) {
+      console.warn(`[status-helpers] v_sd_completion_integrity threw: ${e.message}`);
+      _ghostWarnEmitted = true;
+    }
+    _inconsistentIdsCache = new Set();
+    return _inconsistentIdsCache;
+  }
+}
+
+/**
+ * Build STATUS_INCONSISTENT badge string for an SD if its id is in the
+ * inconsistent set. Returns empty string when the SD is not ghost-completed
+ * OR when the inconsistent set is unavailable.
+ *
+ * Advisory only — does not affect routing or claim eligibility.
+ *
+ * SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001
+ *
+ * @param {Object} item - SD item
+ * @param {Set<string>} inconsistentSet - Set returned by getInconsistentSDIds
+ * @returns {string} Colored badge string (with leading space) or empty string
+ */
+export function getStatusInconsistentBadge(item, inconsistentSet) {
+  if (!inconsistentSet || inconsistentSet.size === 0) return '';
+  if (!item || !item.id) return '';
+  if (!inconsistentSet.has(item.id)) return '';
+  return ` ${colors.red}[STATUS_INCONSISTENT]${colors.reset}`;
+}
+
+/**
+ * Reset internal caches. Intended for test isolation — production callers
+ * should not need this (CLI is one-shot). SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001
+ */
+export function _resetInconsistentCache() {
+  _inconsistentIdsCache = null;
+  _ghostWarnEmitted = false;
+}
+
 // Phase-to-required-handoff mapping for stuck detection
 const PHASE_REQUIRES_HANDOFF = {
   PLAN_PRD: { from: 'LEAD', to: 'PLAN' },

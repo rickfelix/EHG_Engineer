@@ -1,0 +1,217 @@
+{
+  "executive_summary": "SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001 closes PAT-GHOST-COMPLETION-PARTIAL-REVERT-001 (RCA identified 2027 ghost-completed SDs after BYPASS-COMPLETION whitelist exemption, with ~96% of completed SDs showing dual-table mismatch between sd_phase_handoffs and leo_handoff_executions). This SD delivers the immediate-value detection-and-remediation layer: an atomic-revert helper (lib/sd/revert.js) that performs status+current_phase+progress+metadata writes in a single supabase UPDATE call eliminating the partial-revert class; a read-only DB VIEW v_sd_completion_integrity that uses sd_phase_handoffs as the canonical evidence source (per RCA finding that leo_handoff_executions is an unreconciled optimistic write-through cache); a STATUS_INCONSISTENT badge in sd:next surfacing ghost-completed SDs to operators; a read-only audit script scripts/audit-ghost-completed-sds.mjs with optional --execute flag for bulk revert remediation; and a comprehensive regression-pin test suite. The companion follow-up SD (filed as feedback 7260707e) will sequence the LeadFinalApprovalExecutor pre-insert refactor + LHE reconciliation constraint + SPH-only completion trigger after this SD ships. Scope is intentionally non-invasive (zero new write enforcement, zero new triggers, single read-only DB view + lib code + scripts + tests) to ship visibility and remediation tooling quickly with low blast radius.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Atomic-revert helper at lib/sd/revert.js exports an async revertSD(sdId, reason, options) function that performs a single supabase.from('strategic_directives_v2').update({status:'draft', current_phase:'LEAD', progress:0, metadata:{...existingMetadata, reverted_at, reverted_reason}}).eq('id', sdId) call. Idempotent: if metadata.reverted_at already set, returns the existing payload unchanged. Fail-loud: throws on PostgrestError with bracket-tokenized [SD_REVERT_FAILED] error message. Optional opts: {dry_run: boolean} returns planned payload without writing; {preserve_metadata: object} allows callers to merge extra fields into metadata.",
+      "acceptance_criteria": [
+        "Source contains exactly ONE .from('strategic_directives_v2').update(...) call inside revertSD function body (static-pin regex test with scoped-slice)",
+        "Idempotency: calling revertSD twice in a row produces identical metadata.reverted_at timestamps; second call is a no-op write (returns was_idempotent=true)",
+        "Dry-run mode: revertSD(id, reason, {dry_run: true}) returns the planned payload object without invoking supabase.update",
+        "Fail-loud: simulated PostgrestError causes revertSD to throw with message matching /\\[SD_REVERT_FAILED\\]/",
+        "preserve_metadata option: revertSD(id, reason, {preserve_metadata: {x: 1}}) merges {x:1} into the metadata payload before write"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Read-only DB VIEW v_sd_completion_integrity exposing columns (id varchar, sd_key, uuid_id, status, current_phase, sd_type, updated_at, created_at, is_ghost_completed boolean, lfa_rejected_count integer, lfa_last_attempted_at timestamptz) where is_ghost_completed = (status='completed' AND COALESCE(sd_type,'') NOT IN ('orchestrator','documentation','docs') AND NOT EXISTS (SELECT 1 FROM sd_phase_handoffs WHERE sd_id=strategic_directives_v2.id AND handoff_type IN ('LEAD-FINAL-APPROVAL','BYPASS-COMPLETION') AND status='accepted')). View is read-only with zero write enforcement and zero trigger behavior, ensuring zero impact on existing UPDATE paths. The lfa_rejected_count and lfa_last_attempted_at enrichment columns spare the audit script 2000+ round-trips when investigating ghosts.",
+      "acceptance_criteria": [
+        "Migration file at database/migrations/<date>_v_sd_completion_integrity.sql creates the view as a single CREATE OR REPLACE VIEW statement",
+        "Query SELECT is_ghost_completed FROM v_sd_completion_integrity WHERE id='b737c27f-3e83-4887-999e-3c1ae158faf4' returns true (witness)",
+        "View correctly whitelists BYPASS-COMPLETION accepted handoffs alongside LEAD-FINAL-APPROVAL (per database-agent W-3): a synthetic SD with status='completed' + accepted BYPASS-COMPLETION handoff returns is_ghost_completed=false",
+        "Orchestrator and documentation SDs are excluded from is_ghost_completed=true even when they lack LEAD-FINAL-APPROVAL SPH rows (exemption is intentional per RCA — they have alternate completion paths via complete_orchestrator_sd)",
+        "NULL sd_type values do not produce NULL is_ghost_completed (COALESCE wraps the NOT IN check)",
+        "lfa_rejected_count returns the integer count of rejected LEAD-FINAL-APPROVAL handoffs for each SD (verified non-null for witness)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "STATUS_INCONSISTENT badge in scripts/modules/sd-next/status-helpers.js: when an SD displayed in sd:next has is_ghost_completed=true (queried from v_sd_completion_integrity), getStatusBadge appends 'STATUS_INCONSISTENT' label (red color, matches existing STUCK badge styling) to the badge list. Non-blocking advisory only — does not affect routing, claim eligibility, or sd:next ordering. Falls through gracefully if view is absent (try/catch wraps the view query, returns empty inconsistent-set on error; logs single console.warn at module-load not per-call).",
+      "acceptance_criteria": [
+        "scripts/modules/sd-next/status-helpers.js exports getInconsistentSDIds(supabase) returning Set<id> of ghost-completed SDs from v_sd_completion_integrity",
+        "getStatusBadge returns badge text containing 'STATUS_INCONSISTENT' when called with an SD whose id is in the inconsistent set",
+        "Try/catch around view query: if view doesn't exist (PostgrestError 42P01), getInconsistentSDIds returns empty Set without throwing (logs single console.warn at module-load not per-call)",
+        "npm run sd:next prints STATUS_INCONSISTENT badge for the witness SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-A when it appears in the queue display",
+        "getInconsistentSDIds is memoized per sd:next invocation (single query, not per-SD)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Audit script at scripts/audit-ghost-completed-sds.mjs that queries v_sd_completion_integrity, prints a table report (sd_key, sd_type, age_days, lfa_rejected_count, lfa_last_attempted_at), and reports total ghost count. Default mode is read-only (no DB writes). --execute flag applies revertSD() to each ghost SD AFTER an explicit user confirmation prompt at the terminal (uses readline; rejects in non-TTY environments unless --force-yes is set). --filter <sd_type> narrows the scope using CANONICAL_SD_TYPES validation. --json output mode for downstream tooling.",
+      "acceptance_criteria": [
+        "Read-only invocation node scripts/audit-ghost-completed-sds.mjs prints >=1 row for the witness SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-A on a DB containing it",
+        "Read-only mode performs zero writes (verified by no UPDATEs to strategic_directives_v2 during invocation)",
+        "--execute mode without --force-yes in non-TTY environment exits with code 2 and message [INTERACTIVE_CONFIRM_REQUIRED]",
+        "--json output mode produces a single JSON array on stdout parseable by JSON.parse",
+        "--filter feature returns ghost SDs with sd_type='feature' only; --filter <invalid> exits code 3 [INVALID_FILTER]"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Regression-pin test suite: tests/unit/sd-revert.test.js (static-pin guard for single-UPDATE shape via fs.readFileSync + regex on lib/sd/revert.js source with scoped-slice + brace-depth walker, idempotency mock test, dry-run path test, fail-loud throw test, preserve_metadata merge test), tests/integration/sd-completion-integrity-view.test.js (view exists, witness detected, BYPASS-COMPLETION exemption verified, sd_type NULL handling), tests/unit/sd-next-ghost-badge.test.js (getInconsistentSDIds returns Set, badge appends STATUS_INCONSISTENT, graceful fallback when view missing, memoization holds within single invocation), tests/integration/audit-ghost-completed-sds.test.js (read-only mode + --json mode + non-TTY --execute gate). All tests use vitest 4.1.4. Static-pin tests are mocking-independent (read source file via fs). Shared helper at tests/helpers/static-pin.js for cross-SD reuse.",
+      "acceptance_criteria": [
+        "tests/unit/sd-revert.test.js asserts the regex /\\.from\\(['\"]strategic_directives_v2['\"]\\)\\s*\\.update\\(/g matches exactly ONCE inside the revertSD function body slice (scoped via brace-depth walker, not file-wide)",
+        "tests/integration/sd-completion-integrity-view.test.js queries the view with the witness id and asserts is_ghost_completed=true; queries a control SD (with accepted LEAD-FINAL-APPROVAL) and asserts is_ghost_completed=false",
+        "tests/unit/sd-next-ghost-badge.test.js mocks supabase client returning view rows, asserts badge text contains 'STATUS_INCONSISTENT'; mocks PostgrestError 42P01 and asserts empty Set + exactly one console.warn (using vi.resetModules)",
+        "tests/integration/audit-ghost-completed-sds.test.js spawns the script in a child process with various flag combinations; non-TTY --execute exits code 2",
+        "All FR-5 tests pass on first run with zero new failures in the existing vitest baseline; meta-test asserts static-pin red-green-red (deliberately mutate revertSD source temporarily and confirm test detects)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "lib/sd/revert.js MUST be implemented as an ES module (import/export syntax) co-located with lib/sd/index.js and lib/sd/type-classifier.js. MUST import createSupabaseServiceClient from lib/supabase-client.js (canonical pattern). MUST NOT introduce new top-level npm dependencies. The revertSD function signature: async (sdId: string, reason: string, options?: {dry_run?: boolean, preserve_metadata?: object}) => Promise<{updated: boolean, payload: object, was_idempotent: boolean}>. NOTE: strategic_directives_v2.id is varchar(50) holding mixed formats (uuid + sd_key) — function MUST NOT cast or assume uuid shape."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "DB VIEW v_sd_completion_integrity migration MUST use CREATE OR REPLACE VIEW syntax (idempotent for re-runs). View MUST NOT have INDEXES (views don't support direct indexing in postgres; relies on underlying table indexes idx_sd_phase_handoffs_sd_id + idx_strategic_directives_status). The EXISTS predicate MUST include both LEAD-FINAL-APPROVAL and BYPASS-COMPLETION accepted handoffs (per database-agent W-3). COALESCE wraps sd_type in the NOT IN check to handle NULL values (W-5). Underlying joins use sd_phase_handoffs via sd_id FK (varchar=varchar — both are character varying(50), per DB-agent W-1 finding). Migration filename pattern: database/migrations/<YYYYMMDD>_v_sd_completion_integrity.sql."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "scripts/modules/sd-next/status-helpers.js MUST keep all changes additive — existing getStatusBadge logic is unchanged; new STATUS_INCONSISTENT badge is appended via concatenation/composition not in-place replacement. The function getInconsistentSDIds MUST be memoized for a single sd:next invocation (single query per CLI call, not per-SD). MUST handle missing view (PostgrestError 42P01 'relation does not exist') by returning empty Set + module-load-time console.warn (using top-level state to ensure one-warn-per-process)."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "scripts/audit-ghost-completed-sds.mjs MUST use node:readline for interactive confirmation and process.stdin.isTTY check. MUST gate --execute behavior behind explicit y/yes confirmation (case-insensitive). MUST batch the revertSD calls in groups of 10 with progress reporting between batches. MUST exit code 0 on success, 1 on Supabase error, 2 on [INTERACTIVE_CONFIRM_REQUIRED], 3 on [INVALID_FILTER] (value not in CANONICAL_SD_TYPES from lib/sd/type-classifier.js)."
+    },
+    {
+      "id": "TR-5",
+      "requirement": "Static-pin guard tests MUST use fs.readFileSync + a precisely-scoped regex slicing the revertSD function body via brace-depth walker (NOT a file-wide search — comments and JSDoc may legitimately mention forbidden patterns). Test scope pattern: locate /export\\s+async\\s+function\\s+revertSD/, walk braces to find matching closure, then run the regex on that substring slice. Per memory note (cadence-vocab discriminator SD): dual-anchor static-pin pattern applies — whole-file regex for module-level decl + scoped slice for in-function usage. Shared helper at tests/helpers/static-pin.js for cross-SD reuse."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "criterion": "revertSD helper at lib/sd/revert.js exists and exports an async function with the documented signature; static-pin test passes including red-green-red meta-test",
+      "verification": "Test runs vitest tests/unit/sd-revert.test.js — all 8 assertions pass; meta-test temporarily mutates revertSD body to split UPDATE and verifies static-pin catches it"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "DB view v_sd_completion_integrity is applied to the dev database and returns is_ghost_completed=true for the witness SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-A AND properly exempts SDs with accepted BYPASS-COMPLETION handoffs",
+      "verification": "Integration test queries view directly via supabase client and asserts witness=true + control=false (synthetic SD with BYPASS-COMPLETION accepted)"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "sd:next display includes STATUS_INCONSISTENT badge for ghost-completed SDs when they appear in the queue",
+      "verification": "Run npm run sd:next on a DB with the witness, capture stdout, assert STATUS_INCONSISTENT token is present"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Audit script scripts/audit-ghost-completed-sds.mjs runs read-only by default and reports >=1 ghost SD (witness present) AND validates filter input against CANONICAL_SD_TYPES",
+      "verification": "Test executes the script in a child process, captures stdout, asserts the table includes the witness sd_key; invalid --filter value exits code 3"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Zero regression: full vitest suite passes with zero NEW failures relative to origin/main HEAD 052a3c8c4b",
+      "verification": "Run vitest in the worktree, compare failure list to baseline; baseline failures (e.g., lib/eva 123 pre-existing pollution per memory) are accepted; net-new failures fail this AC"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "All 5 FRs covered by acceptance_criteria within their respective FR entries above (FR-1 through FR-5)",
+      "verification": "Manual cross-check during PLAN-TO-EXEC handoff: gate-1-plan-to-exec.js confirms each FR has >=1 acceptance_criteria entry"
+    }
+  ],
+  "system_architecture": {
+    "overview": "Layered detection-and-remediation architecture: (1) DB layer adds a read-only VIEW v_sd_completion_integrity that uses sd_phase_handoffs as the canonical evidence source (NOT leo_handoff_executions, which RCA confirmed is an unreconciled optimistic write-through cache). The view whitelists both LEAD-FINAL-APPROVAL and BYPASS-COMPLETION as valid completion handoffs. (2) Lib layer adds lib/sd/revert.js with the atomic-revert helper exposing revertSD(). (3) UI/CLI layer surfaces ghost-completed SDs via STATUS_INCONSISTENT badge in sd:next and via the audit script. The companion follow-up SD will add the enforcement trigger AFTER LeadFinalApprovalExecutor pre-insert is refactored to status='pending'.",
+    "components": [
+      {"name": "lib/sd/revert.js", "purpose": "Atomic-revert helper — single supabase.update call writing 4 column groups in one transaction; supports dry_run + preserve_metadata options", "interfaces": "async revertSD(sdId, reason, options) -> {updated, payload, was_idempotent}", "loc_estimate": 90},
+      {"name": "database/migrations/<date>_v_sd_completion_integrity.sql", "purpose": "Read-only VIEW exposing is_ghost_completed + lfa_rejected_count + lfa_last_attempted_at per SD using sd_phase_handoffs as canonical evidence; whitelists LEAD-FINAL-APPROVAL + BYPASS-COMPLETION; exempts orchestrator/documentation/docs sd_types via COALESCE-safe NOT IN", "interfaces": "SELECT * FROM v_sd_completion_integrity WHERE is_ghost_completed = true", "loc_estimate": 45},
+      {"name": "scripts/modules/sd-next/status-helpers.js (additive change)", "purpose": "STATUS_INCONSISTENT badge composition + getInconsistentSDIds memoized accessor with graceful fallback", "interfaces": "getInconsistentSDIds(supabase) -> Promise<Set<string>>; getStatusBadge enhancement", "loc_estimate": 35},
+      {"name": "scripts/audit-ghost-completed-sds.mjs", "purpose": "Operator tool — read-only audit report + optional --execute bulk revert with TTY-confirmation gate + CANONICAL_SD_TYPES filter validation", "interfaces": "CLI: [--execute] [--filter <sd_type>] [--json] [--force-yes]", "loc_estimate": 90},
+      {"name": "tests/helpers/static-pin.js + tests/unit/sd-revert.test.js + tests/integration/sd-completion-integrity-view.test.js + tests/unit/sd-next-ghost-badge.test.js + tests/integration/audit-ghost-completed-sds.test.js", "purpose": "Shared static-pin helper + regression-pin tests covering all 5 FRs + meta-test for static-pin red-green-red verification", "interfaces": "vitest test cases", "loc_estimate": 420}
+    ],
+    "data_flow": "1) Operator runs npm run sd:next OR scripts/audit-ghost-completed-sds.mjs. 2) Both query v_sd_completion_integrity. 3) View runs SQL: SELECT sd.*, EXISTS(SPH lookup whitelisting LEAD-FINAL-APPROVAL + BYPASS-COMPLETION) AS is_ghost_completed plus correlated subqueries for lfa_rejected_count and lfa_last_attempted_at. 4) Caller renders badge OR audit table. 5) If --execute, audit script invokes revertSD(id) per ghost; revertSD performs single supabase.update writing status+current_phase+progress+metadata atomically. 6) View is queried fresh on next render, ghost-flag changes accordingly. NO write-back loop, NO triggers, NO LHE involvement.",
+    "integration_points": [
+      "Supabase service client via lib/supabase-client.js (existing pattern, no new dependency)",
+      "scripts/modules/sd-next/status-helpers.js integration with existing sd:next render pipeline (additive only)",
+      "Migration applies via standard pipeline (database/migrations folder picked up by deployment scripts)",
+      "Vitest 4.1.4 test runner (existing setup, no config changes required)",
+      "CANONICAL_SD_TYPES enum from lib/sd/type-classifier.js (existing canonical reference)"
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      {"phase": "EXEC-1", "description": "Implement lib/sd/revert.js with revertSD + 5 unit tests (static-pin scoped, idempotency, dry-run, fail-loud, preserve_metadata). Verify static-pin uses brace-depth walker not file-wide regex.", "estimated_duration": "60 min"},
+      {"phase": "EXEC-2", "description": "Author database/migrations/<date>_v_sd_completion_integrity.sql with CREATE OR REPLACE VIEW including BYPASS-COMPLETION whitelist + COALESCE NULL-safe sd_type check + enrichment columns. Apply migration. Write integration test asserting witness=true + BYPASS-COMPLETION control=false.", "estimated_duration": "45 min"},
+      {"phase": "EXEC-3", "description": "Extend scripts/modules/sd-next/status-helpers.js with getInconsistentSDIds (memoized) + STATUS_INCONSISTENT badge logic. Add unit test for badge appending + graceful fallback + memoization. Verify npm run sd:next shows badge for witness.", "estimated_duration": "40 min"},
+      {"phase": "EXEC-4", "description": "Implement scripts/audit-ghost-completed-sds.mjs with readline-gated --execute and CANONICAL_SD_TYPES filter validation. Test in child process with --json mode + --filter mode + read-only mode. Verify [INTERACTIVE_CONFIRM_REQUIRED] in non-TTY and [INVALID_FILTER] on bad input.", "estimated_duration": "60 min"},
+      {"phase": "EXEC-5", "description": "Run full vitest suite, compare against origin/main baseline. Address any new failures (none expected — additive changes only). Final commit with closes-feedback footer.", "estimated_duration": "30 min"}
+    ],
+    "rollout_strategy": "Single-commit single-PR. Migration ships in the same PR as the consuming code so view + caller are always in sync. No feature flag needed (zero behavior change for non-ghost SDs; ghost SDs gain a cosmetic badge + audit visibility but no enforcement).",
+    "rollback_strategy": "If view causes performance issues: DROP VIEW v_sd_completion_integrity (single statement; no data loss since view is computed). If badge/audit causes sd:next issues: revert PR; getInconsistentSDIds is wrapped in try/catch so even a partial revert leaves sd:next functional."
+  },
+  "test_scenarios": [
+    {"id": "TS-1", "test_type": "unit", "scenario": "revertSD performs exactly one supabase.from('strategic_directives_v2').update() call inside its function body — verified via static-pin regex on scoped source slice (brace-depth walker)", "expected_result": "Test asserts regex match count equals 1 within revertSD body slice; fails if 0 or >=2 matches"},
+    {"id": "TS-2", "test_type": "unit", "scenario": "revertSD called twice with same sdId returns identical metadata.reverted_at timestamps (idempotency); second call returns was_idempotent=true", "expected_result": "First call writes new reverted_at; second call returns identical timestamp and was_idempotent=true"},
+    {"id": "TS-3", "test_type": "unit", "scenario": "revertSD throws bracket-tokenized [SD_REVERT_FAILED] when supabase mock returns PostgrestError", "expected_result": "Test catches error, asserts error.message matches /\\[SD_REVERT_FAILED\\]/"},
+    {"id": "TS-4", "test_type": "integration", "scenario": "v_sd_completion_integrity view returns is_ghost_completed=true for witness SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-A and false for legitimately-completed SDs (with accepted LEAD-FINAL-APPROVAL in SPH)", "expected_result": "Witness flagged; control row not flagged"},
+    {"id": "TS-5", "test_type": "integration", "scenario": "v_sd_completion_integrity excludes orchestrator and documentation sd_types from ghost detection via COALESCE-safe NOT IN", "expected_result": "Synthetic orchestrator-type SD with status='completed' and no LEAD-FINAL-APPROVAL has is_ghost_completed=false; NULL sd_type produces non-null is_ghost_completed"},
+    {"id": "TS-6", "test_type": "unit", "scenario": "getInconsistentSDIds returns empty Set + logs warn-once when v_sd_completion_integrity view is absent (PostgrestError 42P01) — using vi.resetModules() in beforeEach", "expected_result": "Mock view-missing error; getInconsistentSDIds resolves to empty Set; console.warn called exactly once at module load"},
+    {"id": "TS-7", "test_type": "integration", "scenario": "scripts/audit-ghost-completed-sds.mjs --json mode produces JSON.parseable output containing >=1 entry for the witness", "expected_result": "Child process exit code 0; stdout is valid JSON array; array contains witness sd_key"},
+    {"id": "TS-8", "test_type": "smoke", "scenario": "End-to-end smoke: apply migration, run npm run sd:next, assert witness displays STATUS_INCONSISTENT badge in queue output", "expected_result": "Migration applies cleanly; sd:next output contains STATUS_INCONSISTENT for witness row"},
+    {"id": "TS-9", "test_type": "integration", "scenario": "v_sd_completion_integrity whitelists BYPASS-COMPLETION handoffs alongside LEAD-FINAL-APPROVAL (per database-agent W-3)", "expected_result": "Synthetic SD with status='completed' + accepted BYPASS-COMPLETION SPH row returns is_ghost_completed=false"},
+    {"id": "TS-10", "test_type": "integration", "scenario": "Audit script read-only mode performs zero writes to strategic_directives_v2", "expected_result": "Captured supabase audit_log before/after invocation shows no UPDATE events for the SD ids in the report"},
+    {"id": "TS-11", "test_type": "integration", "scenario": "Audit script --execute in non-TTY exits with code 2 and message [INTERACTIVE_CONFIRM_REQUIRED]", "expected_result": "Child process spawned without TTY; exit code 2; stderr/stdout contains [INTERACTIVE_CONFIRM_REQUIRED]"},
+    {"id": "TS-12", "test_type": "integration", "scenario": "Audit script --filter validates against CANONICAL_SD_TYPES enum and exits code 3 on invalid value", "expected_result": "node scripts/audit-ghost-completed-sds.mjs --filter notarealtype exits with code 3 and message [INVALID_FILTER]"},
+    {"id": "TS-13", "test_type": "unit", "scenario": "getInconsistentSDIds is memoized within a single sd:next invocation — multiple calls hit DB only once", "expected_result": "Mock supabase.from spy is called exactly once across 5 invocations of getInconsistentSDIds in same module scope"},
+    {"id": "TS-14", "test_type": "unit", "scenario": "Static-pin meta-test (red-green-red): temporarily mutate revertSD source to use two .update() calls, run static-pin test, expect failure, restore, expect pass", "expected_result": "Pre-mutate: green. Post-mutate: red (match count 2). Post-restore: green (match count 1)"}
+  ],
+  "risks": [
+    {
+      "id": "R-1",
+      "description": "View query performance on strategic_directives_v2 (~3139 rows confirmed by database-agent). Full view scan is 5ms server-side + 143-157ms client RTT via pooler.",
+      "severity": "medium",
+      "probability": "low",
+      "mitigation": "Use EXISTS (not IN) for short-circuit evaluation; sd_phase_handoffs has idx_sd_phase_handoffs_sd_id (confirmed); view is queried at most once per sd:next call via memoization in status-helpers. Database-agent measured server-side 5ms (20x under target). Client RTT dominated by aws-1-us-east-1 pooler not server execution.",
+      "rollback_plan": "DROP VIEW v_sd_completion_integrity; remove getInconsistentSDIds from status-helpers; sd:next reverts to pre-change behavior."
+    },
+    {
+      "id": "R-2",
+      "description": "Static-pin regex test for revertSD single-UPDATE shape may match unrelated occurrences in JSDoc comments or string literals, causing false-positive test passes/failures.",
+      "severity": "medium",
+      "probability": "medium",
+      "mitigation": "Use scoped-slice pattern: locate /export\\s+async\\s+function\\s+revertSD/, find matching brace depth via walker, run regex only on that substring. Per memory note (cadence-vocab discriminator SD): dual-anchor pattern. Test the test by deliberately mutating revertSD to use two .update() calls and verify the regex catches it (TS-14 red-green-red meta-test).",
+      "rollback_plan": "If static-pin test produces false positives, fall back to AST-based check using a JS parser (espree or @babel/parser); document the change in test header."
+    },
+    {
+      "id": "R-3",
+      "description": "Audit script --execute mode applies revertSD() to 2027 ghost SDs (database-agent W-2 empirical baseline). If any have downstream consumers (open PRs, dashboards, dependent SDs) that assume status='completed', mass-revert could surprise operators or break automation.",
+      "severity": "high",
+      "probability": "medium",
+      "mitigation": "Default mode is read-only; --execute requires explicit y/yes TTY confirmation; --execute prints the full revert plan BEFORE applying and prompts again with batch size and ghost count; non-TTY callers must pass --force-yes which is documented as 'use only after thorough dry-run review'. Document operator playbook in script JSDoc. Audit script prominently displays the 2027 baseline in its header so operators understand the scale.",
+      "rollback_plan": "If mass-revert breaks consumers, revertSD is itself idempotent and the reverted SDs can be re-completed via the normal handoff pipeline (LEAD-FINAL-APPROVAL or BYPASS-COMPLETION). Migration check: list affected SDs from audit_log within 24h and offer one-off re-complete script if needed."
+    },
+    {
+      "id": "R-4",
+      "description": "View migration may conflict with existing functions/triggers that reference strategic_directives_v2 or sd_phase_handoffs if their schema is fragile.",
+      "severity": "low",
+      "probability": "low",
+      "mitigation": "Use CREATE OR REPLACE VIEW (idempotent). View selects standard columns only (id varchar(50), sd_key, uuid_id, status, current_phase, sd_type, updated_at, computed booleans and counts). Does not modify base-table schema. Database-agent confirmed no collision with 9 existing v_sd* views and no other v_sd_completion_* names.",
+      "rollback_plan": "DROP VIEW IF EXISTS v_sd_completion_integrity CASCADE; idempotent removal."
+    }
+  ],
+  "metadata": {
+    "target_application": "EHG_Engineer",
+    "validation_method": "automated_tests + integration_view_query + manual_smoke",
+    "validation_mode": "non_blocking_advisory",
+    "pattern_addressed": "PAT-GHOST-COMPLETION-PARTIAL-REVERT-001",
+    "rca_findings_summary": "Existing enforce_progress_on_completion trigger bypassed via LeadFinalApprovalExecutor optimistic LHE pre-insert. 2027 ghost-completed SDs after BYPASS-COMPLETION whitelist exemption. View uses SPH-only (canonical) — LHE deemed unreliable.",
+    "tier_classification": "tier_3",
+    "loc_estimate_src": 220,
+    "loc_estimate_test": 420,
+    "loc_estimate_total": 640,
+    "closes_feedback_uuid": "0a06a05a-3c52-41ba-9c5e-d62582d5395a",
+    "follow_up_feedback_uuid": "7260707e-72b9-4bbe-b4d7-020846d51922",
+    "created_via": "content_arg",
+    "self_validating_ship": true,
+    "self_validating_ship_note": "This SD's own audit script (FR-4) can detect this SD's own ghost-completion state if it ever drifted to status=completed without proper handoffs — providing self-test capability.",
+    "subagent_evidence": {
+      "lead_validation": "25605122-8981-4a9e-99cd-495e66e43df3",
+      "lead_risk": "83c5df93-d972-4d14-9a7b-1bdacf11283f",
+      "plan_testing": "67fc80ba-a4d4-412e-9a73-992220aea952",
+      "plan_database": "c9274093-1188-46b1-a6a2-56cd7fa8974f"
+    },
+    "prd_refinements_post_subagent": "Updated to incorporate W-1 (varchar id), W-3 (BYPASS-COMPLETION whitelist), W-5 (COALESCE NULL-safe sd_type), W-7 (lfa enrichment columns), 6 additional test scenarios (TS-9 through TS-14), and corrected baseline 2027 not 275."
+  }
+}
