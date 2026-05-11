@@ -92,8 +92,9 @@ const TEST_FILE_PATTERN = /(\.test\.|\.spec\.|\b__tests__\b|\btests\/|\be2e\/|\b
 export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEAD') {
   const result = { source: 0, test: 0, total: 0, sourceDeletionLoc: 0 };
   let numstat = '';
+  let effectiveRange = `${baseRef}...${headRef}`;
   try {
-    numstat = execSync(`git diff --numstat ${baseRef}...${headRef}`, {
+    numstat = execSync(`git diff --numstat ${effectiveRange}`, {
       cwd: testDir,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -101,6 +102,29 @@ export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEA
     });
   } catch {
     return result;
+  }
+  // QF-20260511-741: empty 3-dot diff fallback. When baseRef has been
+  // fast-forwarded to or IS headRef (post-fetch fast-forward case, or
+  // true-merge-commit case where mergeCommit.oid IS origin/main tip),
+  // 3-dot returns empty and the caller would otherwise fall back to GitHub-
+  // API total as 100% source LOC. Retry against headRef's first parent so
+  // the actual file changes are counted. Only fires for explicit commit
+  // SHAs (headRef !== 'HEAD'); the legacy in-worktree HEAD path has no
+  // equivalent fallback because HEAD^...HEAD would compare against the
+  // previous commit, not the PR base. Closes feedback 2b792e59 + 661285bc.
+  if (!numstat && headRef !== 'HEAD') {
+    try {
+      effectiveRange = `${headRef}^...${headRef}`;
+      numstat = execSync(`git diff --numstat ${effectiveRange}`, {
+        cwd: testDir,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 10000
+      });
+    } catch {
+      // First parent unreachable (shallow clone, root commit). Fall through
+      // with empty numstat — fail-safe matches original empty-result behavior.
+    }
   }
   // QF-20260509-409: defensive guard — execSync may return undefined under some
   // mock setups (e.g. mockReturnValueOnce exhausted in upstream test), in which
@@ -112,7 +136,7 @@ export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEA
   // as not-counting-against-tier-cap (pure dead-code removal).
   const deletedPaths = new Set();
   try {
-    const nameStatus = execSync(`git diff --name-status --diff-filter=D ${baseRef}...${headRef}`, {
+    const nameStatus = execSync(`git diff --name-status --diff-filter=D ${effectiveRange}`, {
       cwd: testDir,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],

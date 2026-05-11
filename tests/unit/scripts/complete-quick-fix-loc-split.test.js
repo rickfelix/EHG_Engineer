@@ -268,17 +268,25 @@ describe('QF-20260511-205 — countLocBySplit uses 3-dot diff syntax (static-pin
     );
   });
 
-  it('numstat call uses 3-dot ${baseRef}...${headRef} (not 2-dot)', () => {
+  it('numstat call uses 3-dot baseRef...headRef (not 2-dot)', () => {
     // QF-20260511-129: headRef is now parameterized (was hardcoded 'HEAD').
-    // 3-dot semantics preserved — the second segment is now ${headRef} (default 'HEAD').
-    expect(src).toContain('git diff --numstat ${baseRef}...${headRef}');
+    // QF-20260511-741: the 3-dot range is now hoisted into an `effectiveRange`
+    // variable so an empty 3-dot result can be retried against headRef^.
+    // The literal `${baseRef}...${headRef}` template lives at the variable
+    // init site; execSync references the variable.
+    expect(src).toContain('`${baseRef}...${headRef}`');
+    expect(src).toMatch(/git diff --numstat \$\{effectiveRange\}/);
     // Guard against accidental 2-dot regression on either ref form.
     expect(src).not.toMatch(/git diff --numstat \$\{baseRef\}\.\.\$\{headRef\}(?!\.)/);
     expect(src).not.toMatch(/git diff --numstat \$\{baseRef\}\.\.HEAD(?!\.)/);
   });
 
-  it('name-status (--diff-filter=D) call uses 3-dot ${baseRef}...${headRef}', () => {
-    expect(src).toContain('git diff --name-status --diff-filter=D ${baseRef}...${headRef}');
+  it('name-status (--diff-filter=D) call shares the same range as numstat', () => {
+    // QF-20260511-741: both numstat and diff-filter route through
+    // ${effectiveRange} so the fallback (headRef^...headRef) is applied
+    // symmetrically — diff-filter against original 3-dot when numstat
+    // fell back would mis-count deletions.
+    expect(src).toMatch(/git diff --name-status --diff-filter=D \$\{effectiveRange\}/);
     expect(src).not.toMatch(/git diff --name-status --diff-filter=D \$\{baseRef\}\.\.\$\{headRef\}(?!\.)/);
     expect(src).not.toMatch(/git diff --name-status --diff-filter=D \$\{baseRef\}\.\.HEAD(?!\.)/);
   });
