@@ -590,7 +590,27 @@ async function enforceCadenceGate(sd, effectiveId) {
 }
 
 async function main() {
-  const sdId = process.argv[2];
+  // QF-20260511-069 / PAT-CLI-ARGV-POSITIONAL-FLAG-COLLISION-001:
+  // The bare `process.argv[2]` reader previously swallowed leading flags
+  // (e.g. `node sd-start.js --parent SD-X` made sdId='--parent') and surfaced
+  // as PostgREST PGRST116 from getSDDetails(...).single() over zero rows.
+  // Skip recognized zero-arity flags and value-arity flag pairs, then pick
+  // the first remaining positional as the SD identifier.
+  const VALUE_FLAGS = new Set([
+    '--child',
+    '--override-cadence-gate',
+    '--pattern-id',
+    '--followup-sd-key',
+  ]);
+  const argv = process.argv.slice(2);
+  let sdId = null;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (VALUE_FLAGS.has(a)) { i++; continue; }
+    if (a.startsWith('--')) continue;
+    sdId = a;
+    break;
+  }
 
   if (!sdId) {
     console.log(`${colors.red}${colors.bold}Error: SD ID required${colors.reset}`);
