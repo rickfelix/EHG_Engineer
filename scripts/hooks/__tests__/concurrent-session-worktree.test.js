@@ -191,6 +191,49 @@ describe('getActiveDbClaims', () => {
   });
 });
 
+describe('checkBranchFreshness (QF-20260511-228 — closes feedback acd4e5ab)', () => {
+  // Early-return paths don't shell out, so they're safe to exercise behaviorally.
+  // The git-touching path is asserted via static-guard at the bottom of this block.
+  let checkBranchFreshness;
+  beforeEach(() => { ({ checkBranchFreshness } = loadHookExports()); });
+
+  it('returns null when branch is "main"', () => {
+    expect(checkBranchFreshness('main')).toBeNull();
+  });
+  it('returns null when branch is "unknown" (getBranch fallback)', () => {
+    expect(checkBranchFreshness('unknown')).toBeNull();
+  });
+  it('returns null for empty/missing branch', () => {
+    expect(checkBranchFreshness('')).toBeNull();
+    expect(checkBranchFreshness(undefined)).toBeNull();
+    expect(checkBranchFreshness(null)).toBeNull();
+  });
+
+  it('static-guard: hook source contains the expected git rev-list and warning shape', () => {
+    const src = fs.readFileSync(HOOK_PATH, 'utf8');
+    // The function must use rev-list against origin/main (not e.g. main, not @{upstream})
+    expect(src).toMatch(/git rev-list --count HEAD\.\.origin\/main/);
+    // Threshold must be configurable via STALE_BRANCH_WARN_THRESHOLD env, default 10
+    expect(src).toMatch(/STALE_BRANCH_WARN_THRESHOLD\b/);
+    expect(src).toMatch(/\|\|\s*['"]10['"]/);
+    // Loud warning banner must be emitted
+    expect(src).toMatch(/STALE BRANCH WARNING/);
+    // Telemetry event name must match dotted convention used elsewhere
+    expect(src).toMatch(/session\.stale_branch_warning/);
+  });
+
+  it('static-guard: main() wires checkBranchFreshness after getBranch()', () => {
+    const src = fs.readFileSync(HOOK_PATH, 'utf8');
+    // Anchor on `const mySessionId = getCurrentSessionId()` (unique to main())
+    // to skip the unrelated `const branch = getBranch()` inside detectWorkType().
+    const idx = src.indexOf('const mySessionId = getCurrentSessionId()');
+    expect(idx).toBeGreaterThan(0);
+    const slice = src.slice(idx, idx + 600);
+    expect(slice).toMatch(/const branch = getBranch\(\)/);
+    expect(slice).toMatch(/checkBranchFreshness\s*\(\s*branch\s*\)/);
+  });
+});
+
 // ─── Mock supabase client ───────────────────────────────────────────────────
 
 function mockSupabase({ sdRows = [], sdError = null, sessionRows = [] } = {}) {

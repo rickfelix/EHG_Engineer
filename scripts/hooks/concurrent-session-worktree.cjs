@@ -117,6 +117,36 @@ function getBranch() {
 }
 
 /**
+ * QF-20260511-228 (closes feedback acd4e5ab) — Stale-branch detection.
+ * Warns when HEAD is significantly behind origin/main, preventing silent
+ * regression of already-shipped fixes (4× witnessed: QF-442/QF-699/QF-818
+ * + 12-commit-behind session that filed the feedback). Threshold via
+ * STALE_BRANCH_WARN_THRESHOLD env (default 10).
+ */
+function checkBranchFreshness(branch) {
+  if (!branch || branch === 'main' || branch === 'unknown') return null;
+  try {
+    const out = execSync('git rev-list --count HEAD..origin/main', {
+      encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore']
+    }).trim();
+    const behind = parseInt(out, 10);
+    if (!Number.isFinite(behind)) return null;
+    const threshold = parseInt(process.env.STALE_BRANCH_WARN_THRESHOLD || '10', 10);
+    if (behind > threshold) {
+      console.log('\n========================================');
+      console.log('  STALE BRANCH WARNING');
+      console.log('========================================');
+      console.log(`  Current branch: ${branch}`);
+      console.log(`  Behind origin/main by: ${behind} commit(s) (threshold ${threshold})`);
+      console.log(`  Suggestion: git pull origin main --ff-only  (or fresh worktree from main)`);
+      console.log('========================================\n');
+      logEvent('session.stale_branch_warning', { branch, commits_behind_main: behind, threshold });
+    }
+    return { behind, threshold, warned: behind > threshold };
+  } catch { return null; }
+}
+
+/**
  * Check if we are already inside a worktree
  */
 function isInsideWorktree() {
@@ -639,6 +669,9 @@ async function main() {
   const codebase = getCodebase();
   const branch = getBranch();
 
+  // QF-20260511-228 (closes feedback acd4e5ab): warn when on a stale branch
+  checkBranchFreshness(branch);
+
   // FR-1: Check for concurrent sessions
   const concurrent = await findConcurrentSessions(supabase, mySessionId, codebase, branch);
 
@@ -787,7 +820,7 @@ async function main() {
 // Test exports (used by scripts/hooks/__tests__/concurrent-session-worktree.test.js)
 // Gating `main()` behind `require.main === module` lets tests `require()` this
 // file without triggering the SessionStart side-effects.
-module.exports = { isWorktreeInUseBySession, getActiveDbClaims, cleanupStaleConcurrentWorktrees };
+module.exports = { isWorktreeInUseBySession, getActiveDbClaims, cleanupStaleConcurrentWorktrees, checkBranchFreshness };
 
 if (require.main === module) {
   // Run with timeout protection (hook has 5s timeout)
