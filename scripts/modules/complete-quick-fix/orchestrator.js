@@ -261,8 +261,12 @@ export async function completeQuickFix(qfId, options = {}) {
   let finalPrUrl = prUrl;
 
   // Self-Verification (Combat Overconfidence)
+  // QF-20260511-056: forward source/test split so verifyLOCConstraint can apply
+  // the cap to source-only LOC (matches compliance-rubric context below).
   const verificationContext = {
     actualLoc,
+    actualSourceLoc,
+    actualTestLoc,
     filesChanged,
     testsPass,
     uatVerified,
