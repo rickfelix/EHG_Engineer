@@ -19,7 +19,7 @@ import fs from 'fs';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff } from './git-operations.js';
 import {
   validateLOC,
   validateTests,
@@ -162,9 +162,17 @@ export async function completeQuickFix(qfId, options = {}) {
     process.exit(1);
   }
 
+  // QF-20260511-365 / feedback 869f7cf3: hoist analyzeGitDiff above the test-run
+  // block so docs-only QFs can skip the unit+e2e suite (otherwise the gate
+  // re-surfaces pre-existing baseline failures unrelated to the QF on every ship,
+  // burning a bypass-quota slot per ship). Original hoist site (closer to
+  // createAutoPR) is preserved as a no-op reference; filesChanged/diffAnalysis
+  // are now computed once here and reused later in the PR-acquisition block.
+  const { filesChanged, diffAnalysis } = analyzeGitDiff(testDir, qf.description);
+  const docsOnlyDiff = isDocsOnlyDiff(filesChanged);
+
   // Test verification - PROGRAMMATIC (not self-reported)
   console.log('\n🧪 PROGRAMMATIC TEST VERIFICATION\n');
-  console.log('   Running tests to verify fix quality (not self-reported)...\n');
 
   let unitTestResult = null;
   let e2eTestResult = null;
@@ -176,7 +184,16 @@ export async function completeQuickFix(qfId, options = {}) {
   if (options.skipTestRun) {
     testsPass = options.testsPass !== undefined ? options.testsPass : true;
     console.log(`   ⚠️  Skipping test run (--skip-tests); testsPass=${testsPass}\n`);
+  } else if (docsOnlyDiff) {
+    // QF-20260511-365 / feedback 869f7cf3: docs-only diff bypasses the test-run
+    // gate. The diff contains zero source files (docs/, *.md, *.rst, README/
+    // LICENSE/CHANGELOG, etc.), so the unit+e2e suite would only re-validate
+    // unrelated pre-existing baseline failures. testsPass=true is sound here
+    // because there is no source to validate; docmon + bypass-guard still run.
+    testsPass = true;
+    console.log(`   📚 Docs-only diff detected (${filesChanged.length} file(s)); skipping unit+e2e tests.\n`);
   } else {
+    console.log('   Running tests to verify fix quality (not self-reported)...\n');
     // Run unit tests in target application directory
     console.log('━━━ Unit Tests ━━━\n');
     unitTestResult = runTests('unit', { testDir });
@@ -215,13 +232,11 @@ export async function completeQuickFix(qfId, options = {}) {
     process.exit(1);
   }
 
-  // QF-20260509-779 (closes bd600229; completes QF-20260509-407 Bug C):
-  // analyzeGitDiff runs BEFORE the PR-acquisition block so createAutoPR has
-  // filesChanged available, and so the autoPr branch can fire BEFORE the
-  // PR-URL prompt. Without this hoist, the prompt at line 195 ran first and
-  // rejected under --non-interactive (correct fail-fast) but left the autoPr
-  // branch unreachable. 13th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.
-  const { filesChanged, diffAnalysis } = analyzeGitDiff(testDir, qf.description);
+  // QF-20260509-779 / QF-20260511-365: analyzeGitDiff was hoisted above the
+  // test-run block so docs-only QFs can short-circuit the test gate. filesChanged
+  // and diffAnalysis are reused here. (Original hoist motivation: ensure
+  // createAutoPR has filesChanged available and the autoPr branch fires BEFORE
+  // the PR-URL prompt. 13th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.)
 
   // Test Coverage Verification (uses filesChanged from above)
   const testCoverage = verifyTestCoverage(filesChanged);
