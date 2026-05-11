@@ -61,21 +61,34 @@ export function shouldAutoResolve(runs, rowCreatedAt, k) {
   return new Date(newest.createdAt) > new Date(rowCreatedAt);
 }
 
+// status=new rows are eligible immediately (post-merge race; K-consecutive-success
+// already enforces correctness). status=in_progress still requires the stale-hours
+// min-age so we don't churn rows the triage pipeline is actively working.
+export function isEligibleForResolve(item, staleHours, now = Date.now()) {
+  if (!item || typeof item.status !== 'string') return false;
+  if (item.status === 'new') return true;
+  if (item.status === 'in_progress') {
+    const ageMs = now - new Date(item.created_at).getTime();
+    return ageMs >= staleHours * 3600_000;
+  }
+  return false;
+}
+
 async function run() {
   const flags = parseArgs();
   const supabase = getSupabase();
-  const cutoffIso = new Date(Date.now() - flags.staleHours * 3600_000).toISOString();
   console.log(`[auto-resolve-recovered] stale>${flags.staleHours}h k=${flags.k} max=${flags.maxItems} dry=${flags.dryRun}`);
 
   const { data: items, error } = await supabase.from('feedback')
-    .select('id, title, metadata, created_at')
-    .eq('status', 'in_progress').eq('category', 'ci_failure')
-    .lt('created_at', cutoffIso).order('created_at', { ascending: true }).limit(flags.maxItems);
+    .select('id, status, title, metadata, created_at')
+    .in('status', ['in_progress', 'new']).eq('category', 'ci_failure')
+    .order('created_at', { ascending: true }).limit(flags.maxItems);
   if (error) { console.error('[auto-resolve-recovered] Query error:', error.message); process.exit(1); }
   if (!items?.length) { console.log('[auto-resolve-recovered] No stuck rows.'); return; }
 
   let resolved = 0, skipped = 0;
   for (const item of items) {
+    if (!isEligibleForResolve(item, flags.staleHours)) { skipped++; continue; }
     const { workflow_name, repo } = item.metadata || {};
     if (!workflow_name || !repo) { skipped++; continue; }
     const runs = fetchRecentRuns(repo, workflow_name, flags.k);
