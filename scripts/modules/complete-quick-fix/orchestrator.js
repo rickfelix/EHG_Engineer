@@ -19,7 +19,7 @@ import fs from 'fs';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd } from './git-operations.js';
 import {
   validateLOC,
   validateTests,
@@ -91,7 +91,13 @@ export async function completeQuickFix(qfId, options = {}) {
 
   // Determine test directory from target_application
   const targetApplication = qf.target_application || 'EHG';
-  const testDir = REPO_PATHS[targetApplication] || EHG_ROOT;
+  let testDir = REPO_PATHS[targetApplication] || EHG_ROOT;
+
+  const cwdWorktree = resolveQFWorktreeFromCwd(qfId);
+  if (cwdWorktree && cwdWorktree !== testDir) {
+    console.log(`📂 Auto-detected QF worktree CWD; overriding Test Dir from ${testDir} → ${cwdWorktree}`);
+    testDir = cwdWorktree;
+  }
 
   console.log(`📋 Quick-Fix: ${qf.title}`);
   console.log(`   Type: ${qf.type}`);
