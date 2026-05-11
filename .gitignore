@@ -101,6 +101,8 @@ scripts/add-*.cjs
 scripts/analyze-*.cjs
 scripts/apply-*.mjs
 scripts/apply-*.js
+# Production canonical apply script (SD-LEO-INFRA-CANONICAL-SCRIPTS-APPLY-001)
+!scripts/apply-migration.js
 scripts/check-*.mjs
 scripts/check-*.js
 scripts/check-*.cjs

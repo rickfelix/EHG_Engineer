@@ -6,6 +6,8 @@
   "scripts": {
     "schema:snapshot:prd": "node scripts/snapshot-prd-schema.js",
     "schema:check-drift": "node scripts/snapshot-prd-schema.js --check-drift",
+    "migration:apply": "node scripts/apply-migration.js",
+    "migration:issue-token": "node scripts/apply-migration.js --issue-token",
     "setup-db": "node scripts/setup-database.js",
     "setup-db-supabase": "node scripts/setup-database-supabase.js",
     "check-directives": "node scripts/check-directives-data.js",
