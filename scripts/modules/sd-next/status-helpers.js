@@ -104,6 +104,25 @@ export function _resetInconsistentCache() {
   _ghostWarnEmitted = false;
 }
 
+// QF-20260511-565: LEAD strategic pause/defer signal encoded in metadata.lead_decision.verdict.
+// Status enum is narrow (cancelled/completed/draft/in_progress) and cannot express this state,
+// so the queue engine must read it from metadata. Matches the precedent set by
+// project_sd_eva_support_parent_paused_2026_05_11.md and
+// project_sd_eva_support_phase3_lead_deferred.md.
+const PAUSED_VERDICT_RE = /^(deferred|paused_pending)/;
+
+/**
+ * True when an SD has been paused/deferred at LEAD via metadata.lead_decision.verdict.
+ * Tolerates missing metadata, missing lead_decision, or non-string verdict.
+ *
+ * @param {Object} item - SD-like row with optional metadata.lead_decision.verdict
+ * @returns {boolean}
+ */
+export function isLeadDecisionPaused(item) {
+  const verdict = item?.metadata?.lead_decision?.verdict;
+  return typeof verdict === 'string' && PAUSED_VERDICT_RE.test(verdict);
+}
+
 // Phase-to-required-handoff mapping for stuck detection
 const PHASE_REQUIRES_HANDOFF = {
   PLAN_PRD: { from: 'LEAD', to: 'PLAN' },
@@ -149,6 +168,17 @@ export function getPhaseAwareStatus(item) {
   // If handoff chain data is attached, check for stuck state
   if (item._stuck) {
     return `${colors.red}STUCK${colors.reset}`;
+  }
+
+  // QF-20260511-565: LEAD strategic pause via metadata.lead_decision.verdict
+  // outranks phase-based status — an SD paused at LEAD that happens to sit in
+  // PLAN_PRD must not display PLANNING (would mislead operators per CLAUDE.md
+  // badge legend), it must display PAUSED/DEFERRED.
+  if (isLeadDecisionPaused(item)) {
+    const verdict = item.metadata.lead_decision.verdict;
+    return verdict === 'deferred'
+      ? `${colors.dim}DEFERRED${colors.reset}`
+      : `${colors.dim}PAUSED${colors.reset}`;
   }
 
   // Phase-based status takes priority over dependency resolution
@@ -255,6 +285,11 @@ export function isActionableForLead(item) {
 
   // SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Not actionable if stuck
   if (item._stuck) {
+    return false;
+  }
+
+  // QF-20260511-565: Not actionable if LEAD paused/deferred via metadata.lead_decision
+  if (isLeadDecisionPaused(item)) {
     return false;
   }
 
