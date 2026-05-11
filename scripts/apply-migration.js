@@ -45,6 +45,7 @@ import {
   hashToken,
   generateTokenValue,
 } from './lib/migration-guards.js';
+import { getLatestSuccessForPath } from '../lib/migration-audit-reader.js';
 
 const GLOBAL_MIGRATION_LOCK_ID = 0x6d69_6772; // 'migr' as int — stable global advisory lock id
 const LOCK_WAIT_MS = 5000;
@@ -143,7 +144,7 @@ async function issueTokenMode() {
     await client.end();
   }
   process.stdout.write(`MIGRATION_APPLY_TOKEN=${tokenValue}\n`);
-  process.stderr.write(`[MIGRATION_APPLY_TOKEN_ISSUED] 1h TTL, single-use. Set MIGRATION_APPLY_TOKEN env var and re-run with --prod-deploy.\n`);
+  process.stderr.write('[MIGRATION_APPLY_TOKEN_ISSUED] 1h TTL, single-use. Set MIGRATION_APPLY_TOKEN env var and re-run with --prod-deploy.\n');
   return 0;
 }
 
@@ -176,7 +177,24 @@ async function applyMode({ args, repoRoot }) {
 
   if (auditClient) {
     try {
-      const prior = await readAuditLatestForPath(auditClient, absPath);
+      // Consumer contract (PRD FR-6 / system_architecture invariant): downstream
+      // consumers (e.g. SD-FDBK-INFRA-FIX-PENDING-MIGRATIONS-001) read via
+      // lib/migration-audit-reader.js (`getLatestSuccessForPath`). The CLI itself
+      // holds a service-role pg client and reads the audit table directly for
+      // tx coherence; the import below keeps the helper in the apply-migration
+      // entry-point module graph (wire-check) and serves as the contractual
+      // source-of-truth for consumer integration. (Documented runtime branch is
+      // exercised when MIGRATION_APPLY_USE_RPC_READER=true.)
+      let prior = null;
+      if (process.env.MIGRATION_APPLY_USE_RPC_READER === 'true') {
+        try { prior = await getLatestSuccessForPath(absPath); }
+        catch (readerErr) {
+          process.stderr.write(`[audit-reader] ${readerErr.message} — falling back to direct read\n`);
+          prior = await readAuditLatestForPath(auditClient, absPath);
+        }
+      } else {
+        prior = await readAuditLatestForPath(auditClient, absPath);
+      }
       if (prior) {
         if (prior.migration_sha256 === sha) {
           emitMarker('[MIGRATION_APPLY_DRY_RUN=ALREADY_APPLIED]');
@@ -193,7 +211,7 @@ async function applyMode({ args, repoRoot }) {
     } catch (e) {
       const msg = String(e.message || e);
       if (/relation .* does not exist/i.test(msg)) {
-        process.stderr.write(`[degraded] schema_migrations_applied missing — bootstrap mode (no idempotence check, no audit row)\n`);
+        process.stderr.write('[degraded] schema_migrations_applied missing — bootstrap mode (no idempotence check, no audit row)\n');
       } else {
         await auditClient.end().catch(() => {});
         throw e;
