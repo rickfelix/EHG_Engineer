@@ -24,6 +24,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { routeWorkItem } from '../lib/utils/work-item-router.js';
 import { getRepoPaths, ENGINEER_ROOT } from '../lib/repo-paths.js';
+import { preclaimFeedbackRows, resolveFeedbackIds } from '../lib/feedback/preclaim-feedback-rows.js';
+import { releasePreclaim } from '../lib/feedback/release-preclaim.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -176,6 +178,81 @@ async function createQuickFix(options = {}) {
 
   // Generate ID
   const qfId = generateQuickFixId();
+
+  // SD-FDBK-INFRA-PER-FEEDBACK-ROW-001 / FR-1+FR-3: atomic per-feedback-row pre-claim.
+  // Skipped when --feedback-id omitted (full backward-compatibility).
+  if (options.feedbackId) {
+    const creatorSessionId = process.env.CLAUDE_SESSION_ID || null;
+    let resolvedIds;
+    try {
+      resolvedIds = await resolveFeedbackIds(supabase, options.feedbackId);
+    } catch (e) {
+      console.error(`\n❌ [${e.code || 'FEEDBACK_ID_ERROR'}] ${e.message}`);
+      process.exit(1);
+    }
+    const { claimed, conflicts } = await preclaimFeedbackRows({
+      supabase, feedbackIds: resolvedIds, pendingQfId: qfId, sessionId: creatorSessionId,
+    });
+    if (conflicts.length > 0) {
+      // FR-3: print every conflict; release any partially-claimed siblings before exit.
+      for (const c of conflicts) {
+        const age = c.heartbeat_at ? `${Math.floor((Date.now() - new Date(c.heartbeat_at).getTime()) / 1000)}s ago` : 'unknown';
+        console.error(`\n❌ [SIBLING_CLAIM] feedback ${c.id.slice(0,8)} already claimed by QF-${c.qf_id || '?'} (session ${c.session_id ? c.session_id.slice(0,8) : '?'}, heartbeat ${age})`);
+      }
+      // FR-3: force-claim override with per-session daily quota
+      if (options.forceClaim) {
+        if (!options.forceClaimReason || !String(options.forceClaimReason).trim()) {
+          console.error(`\n❌ [FORCE_CLAIM_REASON_REQUIRED] --force-claim requires --force-claim-reason "<text>"`);
+          if (claimed.length > 0) await releasePreclaim({ supabase, quickFixId: qfId });
+          process.exit(1);
+        }
+        const QUOTA = parseInt(process.env.LEO_FORCE_CLAIM_DAILY_QUOTA || '3', 10);
+        const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+        const { data: bypassRows } = await supabase
+          .from('audit_log')
+          .select('id')
+          .eq('category', 'force_claim_override')
+          .eq('session_id', creatorSessionId)
+          .gte('created_at', since);
+        const used = (bypassRows || []).length;
+        if (used >= QUOTA) {
+          console.error(`\n❌ [FORCE_CLAIM_QUOTA_EXHAUSTED] ${used}/${QUOTA} used in last 24h for session ${(creatorSessionId||'?').slice(0,8)}`);
+          if (claimed.length > 0) await releasePreclaim({ supabase, quickFixId: qfId });
+          process.exit(1);
+        }
+        // Attempt to force-claim the still-conflicting rows by setting quick_fix_id over their existing claim.
+        const conflictIds = conflicts.map(c => c.id);
+        const claimedAt = new Date().toISOString();
+        for (const id of conflictIds) {
+          const { data: cur } = await supabase.from('feedback').select('metadata').eq('id', id).maybeSingle();
+          const newMeta = { ...(cur?.metadata || {}), qf_claim_state: 'pending', qf_claim_at: claimedAt, qf_claim_forced: true };
+          await supabase.from('feedback').update({ quick_fix_id: qfId, session_id: creatorSessionId, metadata: newMeta }).eq('id', id);
+        }
+        await supabase.from('audit_log').insert({
+          category: 'force_claim_override',
+          session_id: creatorSessionId,
+          severity: 'warning',
+          message: `force-claim override on ${conflictIds.length} feedback row(s) for QF ${qfId}: ${options.forceClaimReason}`,
+          metadata: { qf_id: qfId, feedback_ids: conflictIds, reason: options.forceClaimReason, quota_used: used + 1, quota_max: QUOTA },
+        });
+        console.log(`\n⚠️  [FORCE_CLAIM] Override applied to ${conflictIds.length} row(s) (quota ${used + 1}/${QUOTA}). Audit_log row emitted.`);
+      } else {
+        if (claimed.length > 0) {
+          const { released } = await releasePreclaim({ supabase, quickFixId: qfId });
+          console.error(`   ↩ Released ${released.length} partially-claimed sibling(s) to keep state clean.`);
+        }
+        process.exit(1);
+      }
+    }
+    console.log(`\n✓ Pre-claimed ${claimed.length + (options.forceClaim ? conflicts.length : 0)} feedback row(s) for ${qfId}`);
+    await supabase.from('audit_log').insert({
+      category: 'feedback_qf_preclaim',
+      session_id: creatorSessionId,
+      severity: 'info',
+      message: `Pre-claimed ${claimed.length} feedback row(s) for QF ${qfId}`,
+      metadata: { qf_id: qfId, feedback_ids: resolvedIds, claimed: claimed.map(c=>c.id), forced: options.forceClaim ? conflicts.map(c=>c.id) : [] },
+    });
+  }
 
   // Unified Work-Item Router: determine tier based on LOC + risk keywords.
   // Pass `scope` derived from the user's expected/actual fields — those describe
@@ -449,6 +526,12 @@ for (let i = 0; i < args.length; i++) {
       process.exit(1);
     }
     options.targetApplication = val;
+  } else if (arg === '--feedback-id') {
+    options.feedbackId = args[++i];
+  } else if (arg === '--force-claim') {
+    options.forceClaim = true;
+  } else if (arg === '--force-claim-reason' || arg === '--reason') {
+    options.forceClaimReason = args[++i];
   } else if (arg === '--help' || arg === '-h') {
     console.log(`
 LEO Quick-Fix Workflow - Create Issue
