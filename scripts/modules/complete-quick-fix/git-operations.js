@@ -39,13 +39,17 @@ const TEST_FILE_PATTERN = /(\.test\.|\.spec\.|\b__tests__\b|\btests\/|\be2e\/|\b
  *
  * @param {string} testDir - Directory to run git commands in
  * @param {string} baseRef - Base branch ref (default 'origin/main')
+ * @param {string} headRef - Head ref to diff against base (default 'HEAD'). Pass the
+ *   PR's mergeCommit.oid when verifying a merged PR from an unrelated CWD so the
+ *   split is pinned to the PR's actual commits, not the operator's working tree
+ *   (QF-20260511-129; closes feedback 9cda54e5 verifier-LOC over-count, 10+ witnesses).
  * @returns {{source: number, test: number, total: number, sourceDeletionLoc: number}} Split LOC counts
  */
-export function countLocBySplit(testDir, baseRef = 'origin/main') {
+export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEAD') {
   const result = { source: 0, test: 0, total: 0, sourceDeletionLoc: 0 };
   let numstat = '';
   try {
-    numstat = execSync(`git diff --numstat ${baseRef}...HEAD`, {
+    numstat = execSync(`git diff --numstat ${baseRef}...${headRef}`, {
       cwd: testDir,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -64,7 +68,7 @@ export function countLocBySplit(testDir, baseRef = 'origin/main') {
   // as not-counting-against-tier-cap (pure dead-code removal).
   const deletedPaths = new Set();
   try {
-    const nameStatus = execSync(`git diff --name-status --diff-filter=D ${baseRef}...HEAD`, {
+    const nameStatus = execSync(`git diff --name-status --diff-filter=D ${baseRef}...${headRef}`, {
       cwd: testDir,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -276,14 +280,29 @@ export function autoDetectGitInfo(testDir, options = {}) {
     // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2: source/test split.
     // PR-metadata path doesn't expose per-file numstat; fall back to local diff
     // when available (PR is from a branch we have locally).
+    // QF-20260511-129: pin the head ref to the PR's mergeCommit.oid so the split is
+    // computed against the PR's actual commit boundary — NOT the operator's CWD HEAD.
+    // Without this, running complete-quick-fix.js from any unrelated worktree (or
+    // long-lived QF branch) inflated the source/test LOC by orders of magnitude
+    // (QF-20260511-876: 1624 src / 181 test reported for actual 67 / 106 LOC).
     if (result.actualSourceLoc === undefined) {
-      const split = countLocBySplit(testDir);
+      let splitHeadRef = 'HEAD';
+      if (result.commitSha) {
+        try {
+          execSync(`git cat-file -e ${result.commitSha}`, { cwd: testDir, stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000 });
+          splitHeadRef = result.commitSha;
+        } catch {
+          console.log(`⚠️  PR commit ${result.commitSha.substring(0, 7)} not present locally — skipping source/test split (would over-report from CWD HEAD)`);
+          return result;
+        }
+      }
+      const split = countLocBySplit(testDir, 'origin/main', splitHeadRef);
       if (split.total > 0) {
         result.actualSourceLoc = split.source;
         result.actualTestLoc = split.test;
         // QF-20260509-407: forward deletion-only source LOC for tier classification.
         result.sourceDeletionLoc = split.sourceDeletionLoc;
-        console.log(`🔍 PR #${prNumber} → source LOC: ${split.source}, test LOC: ${split.test} (split via git numstat)`);
+        console.log(`🔍 PR #${prNumber} → source LOC: ${split.source}, test LOC: ${split.test} (split via git numstat @ ${splitHeadRef.substring(0, 7)})`);
       }
     }
     return result;
@@ -324,8 +343,10 @@ export function autoDetectGitInfo(testDir, options = {}) {
     }
 
     // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2: source/test split via numstat.
+    // QF-20260511-129: legacy path runs in-worktree, where CWD HEAD ≡ QF-branch tip
+    // by design, so 'HEAD' is correct. Passed explicitly for parity with PR-metadata path.
     if (result.actualSourceLoc === undefined) {
-      const split = countLocBySplit(testDir);
+      const split = countLocBySplit(testDir, 'origin/main', 'HEAD');
       if (split.total > 0) {
         result.actualSourceLoc = split.source;
         result.actualTestLoc = split.test;
