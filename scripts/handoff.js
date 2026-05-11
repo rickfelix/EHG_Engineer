@@ -6,7 +6,14 @@
  * Uses the modular handoff system for improved maintainability.
  *
  * This is a thin wrapper that delegates to the modular implementation
- * in scripts/modules/handoff/cli/
+ * in scripts/modules/handoff/cli/. The modular handoff executors in
+ * scripts/modules/handoff/executors/ perform the actual UPDATEs on
+ * strategic_directives_v2 (phase transitions, claim-col writes, status flips).
+ *
+ * @canonical-writer-for: strategic_directives_v2
+ * (Per docs/reference/canonical-write-paths.md — handoff.js is the canonical
+ * writer for SD-V2 phase/status transitions. Other writers must be in
+ * exempt_writers list. Originating SD: SD-FDBK-INFRA-CASCADE-TRIGGER-OVERREACH-001 FR-7.)
  *
  * Usage:
  *   node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
