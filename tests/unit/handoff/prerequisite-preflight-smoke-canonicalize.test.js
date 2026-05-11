@@ -79,7 +79,9 @@ describe('checkLeadToPlanPrereqs smoke_test_steps via canonicalizer', () => {
         const builder = {
           select: () => builder,
           eq: () => builder,
-          single: async () => ({ data: sdRow, error: null })
+          or: () => builder,  // SD-LEO-REFAC-CONSOLIDATE-KEY-RESOLUTION-001 routes preflight through resolveSdInput which calls .or()
+          single: async () => ({ data: sdRow, error: null }),
+          update: () => ({ eq: async () => ({ error: null }) })  // QF-20260511-430: autoFixDeficiencies on feature SD (requiredFields=8) invokes .update().eq()
         };
         return builder;
       }
@@ -90,7 +92,9 @@ describe('checkLeadToPlanPrereqs smoke_test_steps via canonicalizer', () => {
     return {
       id: 'SD-TEST-CANON-001',
       sd_key: 'SD-TEST-CANON-001',
-      sd_type: 'bugfix',
+      // QF-20260511-430: sd_type must be NON-lightweight so SMOKE_TEST_MISSING/INVALID
+      // paths fire; bugfix is now in LIGHTWEIGHT_SD_TYPES and would bypass smoke checks.
+      sd_type: 'feature',
       description: 'a '.repeat(60),
       success_criteria: [{ criterion: 'x', measure: 'y' }],
       strategic_objectives: ['Objective 1'],
