@@ -20,8 +20,13 @@ import { execSync } from 'child_process';
 const TEST_FILE_PATTERN = /(\.test\.|\.spec\.|\b__tests__\b|\btests\/|\be2e\/|\bplaywright\b)/i;
 
 /**
- * Walk `git diff --numstat <baseRef>..HEAD` and return source/test/total LOC
+ * Walk `git diff --numstat <baseRef>...HEAD` and return source/test/total LOC
  * counts split by path pattern, plus pure-deletion-file LOC for tier classification.
+ *
+ * QF-20260511-205: 3-dot (symmetric difference from common ancestor) is required;
+ * 2-dot inflates counts by including main-side commits when origin/main has
+ * advanced since branch divergence. Sister fix to QF-20260503-820 which migrated
+ * analyzeGitDiff() at line ~370 to the same 3-dot syntax.
  *
  * Used by both autoDetectGitInfo paths (PR-metadata + legacy worktree) so the
  * conflation bug (single actual_loc) can't recur.
@@ -40,7 +45,7 @@ export function countLocBySplit(testDir, baseRef = 'origin/main') {
   const result = { source: 0, test: 0, total: 0, sourceDeletionLoc: 0 };
   let numstat = '';
   try {
-    numstat = execSync(`git diff --numstat ${baseRef}..HEAD`, {
+    numstat = execSync(`git diff --numstat ${baseRef}...HEAD`, {
       cwd: testDir,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -59,7 +64,7 @@ export function countLocBySplit(testDir, baseRef = 'origin/main') {
   // as not-counting-against-tier-cap (pure dead-code removal).
   const deletedPaths = new Set();
   try {
-    const nameStatus = execSync(`git diff --name-status --diff-filter=D ${baseRef}..HEAD`, {
+    const nameStatus = execSync(`git diff --name-status --diff-filter=D ${baseRef}...HEAD`, {
       cwd: testDir,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -288,8 +293,8 @@ export function autoDetectGitInfo(testDir, options = {}) {
   if (!isInQFWorktree(testDir)) {
     throw new Error(
       `Cannot auto-detect git info: CWD '${testDir}' is not a recognized QF worktree, ` +
-      `and --pr-url was not supplied. Pass --commit-sha / --branch-name / --actual-loc explicitly, ` +
-      `or pass --pr-url <github-pr-url> for post-merge auto-detection.`
+      'and --pr-url was not supplied. Pass --commit-sha / --branch-name / --actual-loc explicitly, ' +
+      'or pass --pr-url <github-pr-url> for post-merge auto-detection.'
     );
   }
 

@@ -74,11 +74,19 @@ describe('SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 — countLocBySplit', () =>
     expect(r).toEqual({ source: 0, test: 0, total: 0, sourceDeletionLoc: 0 });
   });
 
-  it('honors custom baseRef', () => {
+  it('honors custom baseRef (QF-20260511-205: 3-dot symmetric diff)', () => {
     execSyncMock.mockReturnValue('5\t1\tlib/x.js');
     countLocBySplit('/fake/repo', 'origin/develop');
+    // QF-20260511-205: must use 3-dot (origin/develop...HEAD), NOT 2-dot.
+    // 2-dot inflates by including main-side commits when origin/main has
+    // advanced since branch divergence (witnessed 9468 LOC across 752 files
+    // on a branch with zero unique commits when 2-dot was in use).
     expect(execSyncMock).toHaveBeenCalledWith(
-      expect.stringContaining('origin/develop..HEAD'),
+      expect.stringContaining('origin/develop...HEAD'),
+      expect.any(Object)
+    );
+    expect(execSyncMock).not.toHaveBeenCalledWith(
+      expect.stringMatching(/origin\/develop\.\.HEAD(?!\.)/),
       expect.any(Object)
     );
   });
@@ -163,5 +171,68 @@ describe('SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 — static source-code regr
     expect(src).toContain('actual_loc_reasonable');
     expect(src).toContain('completed_requires_verification');
     expect(src).toContain('force_completed = TRUE');
+  });
+});
+
+describe('QF-20260511-205 — countLocBySplit uses 3-dot diff syntax (static-pin)', () => {
+  let src;
+  beforeEach(() => {
+    src = readFileSync(
+      resolve(REPO_ROOT, 'scripts/modules/complete-quick-fix/git-operations.js'),
+      'utf8'
+    );
+  });
+
+  it('numstat call uses 3-dot ${baseRef}...HEAD (not 2-dot)', () => {
+    expect(src).toContain('git diff --numstat ${baseRef}...HEAD');
+    // Guard against accidental 2-dot regression — the ..HEAD pattern must not
+    // appear with exactly two dots in the numstat command line.
+    expect(src).not.toMatch(/git diff --numstat \$\{baseRef\}\.\.HEAD(?!\.)/);
+  });
+
+  it('name-status (--diff-filter=D) call uses 3-dot ${baseRef}...HEAD', () => {
+    expect(src).toContain('git diff --name-status --diff-filter=D ${baseRef}...HEAD');
+    expect(src).not.toMatch(/git diff --name-status --diff-filter=D \$\{baseRef\}\.\.HEAD(?!\.)/);
+  });
+
+  it('docstring documents 3-dot semantics + cross-references sister QF-20260503-820', () => {
+    // Pin doc-comment changes so future cleanups don't silently drop the
+    // reason 3-dot is required (would invite a regression to the old 2-dot
+    // form that produced 9468-LOC inflation on this branch's repro case).
+    expect(src).toContain('<baseRef>...HEAD');
+    expect(src).toContain('QF-20260511-205');
+    expect(src).toContain('QF-20260503-820');
+  });
+
+  it('countLocBySplit body contains no 2-dot ${baseRef}..HEAD occurrence (anchored)', () => {
+    // Scope to the countLocBySplit function body so other call sites
+    // (e.g. analyzeGitDiff, which already used 3-dot per QF-20260503-820)
+    // aren't matched. The function ends before validateBranchName.
+    const fnStart = src.indexOf('export function countLocBySplit');
+    expect(fnStart).toBeGreaterThan(0);
+    const fnEnd = src.indexOf('function validateBranchName', fnStart);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const body = src.slice(fnStart, fnEnd);
+    expect(body).not.toMatch(/\$\{baseRef\}\.\.HEAD(?!\.)/);
+  });
+});
+
+describe('QF-20260511-205 — countLocBySplit behavior with 3-dot diff', () => {
+  beforeEach(() => execSyncMock.mockReset());
+
+  it('passes the 3-dot ref form to execSync for the default origin/main base', () => {
+    execSyncMock.mockReturnValue('10\t2\tlib/x.js');
+    countLocBySplit('/fake/repo');
+    // First call is the numstat; assert command shape.
+    const firstCall = execSyncMock.mock.calls[0];
+    expect(firstCall[0]).toBe('git diff --numstat origin/main...HEAD');
+  });
+
+  it('name-status call (deletion enumeration) also uses 3-dot', () => {
+    execSyncMock.mockReturnValue('10\t2\tlib/x.js');
+    countLocBySplit('/fake/repo', 'origin/main');
+    // Second call is the --diff-filter=D enumeration.
+    const secondCall = execSyncMock.mock.calls[1];
+    expect(secondCall?.[0]).toBe('git diff --name-status --diff-filter=D origin/main...HEAD');
   });
 });
