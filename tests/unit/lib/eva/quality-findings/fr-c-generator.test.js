@@ -16,6 +16,9 @@ import {
   generateRemediationSdsForVenture,
   generateRemediationSdsBatch,
   selectPendingFindings,
+  isLikelyTestFixture,
+  FIXTURE_VENTURE_ID_PREFIX,
+  FIXTURE_SIG_PREFIX,
   FR_C_REMEDIATION_SEVERITIES,
   FR_C_OPEN_SD_STATUSES,
 } from '../../../../../lib/eva/quality-findings/sd-generator.js';
@@ -184,6 +187,100 @@ describe('FR-C generator — unit', () => {
 });
 
 // ============================================================================
+// UNIT — fixture discriminator (PAT-TEST-FIXTURE-PROMOTION-001 systemic fix)
+// ============================================================================
+
+describe('FR-C generator — fixture discriminator', () => {
+  let prevEnv;
+  beforeEach(() => {
+    prevEnv = process.env.FR_C_ALLOW_FIXTURE_FINDINGS;
+    delete process.env.FR_C_ALLOW_FIXTURE_FINDINGS;
+  });
+  afterEach(() => {
+    if (prevEnv === undefined) delete process.env.FR_C_ALLOW_FIXTURE_FINDINGS;
+    else process.env.FR_C_ALLOW_FIXTURE_FINDINGS = prevEnv;
+  });
+
+  test('FIXTURE_VENTURE_ID_PREFIX and FIXTURE_SIG_PREFIX exposed as constants', () => {
+    expect(FIXTURE_VENTURE_ID_PREFIX).toBe('fc000000-');
+    expect(FIXTURE_SIG_PREFIX).toBe('t-');
+  });
+
+  test('isLikelyTestFixture identifies fc000000- venture_id', () => {
+    expect(isLikelyTestFixture({ venture_id: 'fc000000-0000-4000-8000-abcdef012345', evidence_pointer: { sig: 's-real' } })).toBe(true);
+  });
+
+  test('isLikelyTestFixture identifies t-* sig', () => {
+    expect(isLikelyTestFixture({ venture_id: '11111111-2222-3333-4444-555555555555', evidence_pointer: { sig: 't-foo' } })).toBe(true);
+  });
+
+  test('isLikelyTestFixture passes through production rows', () => {
+    expect(isLikelyTestFixture({ venture_id: '11111111-2222-3333-4444-555555555555', evidence_pointer: { sig: 's-prod' } })).toBe(false);
+    expect(isLikelyTestFixture({ venture_id: '11111111-2222-3333-4444-555555555555', evidence_pointer: null })).toBe(false);
+    expect(isLikelyTestFixture({ venture_id: '11111111-2222-3333-4444-555555555555' })).toBe(false);
+    expect(isLikelyTestFixture(null)).toBe(false);
+  });
+
+  test('selectPendingFindings filters fixture rows and emits test_fixture_skipped audit_log', async () => {
+    const fixtureRow = { id: 'fix-1', venture_id: 'fc000000-aaaa-bbbb-cccc-dddddddddddd', finding_category: 'lint', severity: 'medium', evidence_pointer: { sig: 'unused' }, stage_number: 20, created_at: '2026-05-11T00:00:00Z' };
+    const sigFixtureRow = { id: 'fix-2', venture_id: '99999999-2222-3333-4444-555555555555', finding_category: 'unit_test', severity: 'high', evidence_pointer: { sig: 't-spike' }, stage_number: 20, created_at: '2026-05-11T00:00:01Z' };
+    const prodRow = { id: 'prod-1', venture_id: '99999999-2222-3333-4444-555555555555', finding_category: 'lint', severity: 'medium', evidence_pointer: { sig: 's-prod' }, stage_number: 20, created_at: '2026-05-11T00:00:02Z' };
+
+    const auditInsert = vi.fn().mockResolvedValue({ data: null, error: null });
+    const findingsThenable = {
+      data: [fixtureRow, sigFixtureRow, prodRow], error: null,
+      select: function () { return this; },
+      eq: function () { return this; },
+      in: function () { return this; },
+      order: function () { return this; },
+      then: function (cb) { return cb({ data: this.data, error: this.error }); },
+    };
+
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'venture_quality_findings') return findingsThenable;
+        if (table === 'audit_log') return { insert: auditInsert };
+        throw new Error('unexpected table: ' + table);
+      }),
+    };
+
+    const result = await selectPendingFindings(supabase, null);
+    expect(result).toEqual([prodRow]);
+    expect(auditInsert).toHaveBeenCalledTimes(2);
+    const events = auditInsert.mock.calls.map((c) => c[0]);
+    expect(events.every((e) => e.event_type === 'test_fixture_skipped')).toBe(true);
+    expect(events[0].entity_id).toBe('fix-1');
+    expect(events[0].metadata.venture_id).toBe(fixtureRow.venture_id);
+    expect(events[1].entity_id).toBe('fix-2');
+    expect(events[1].metadata.sig).toBe('t-spike');
+  });
+
+  test('FR_C_ALLOW_FIXTURE_FINDINGS=true bypasses the discriminator (test escape hatch)', async () => {
+    process.env.FR_C_ALLOW_FIXTURE_FINDINGS = 'true';
+    const fixtureRow = { id: 'fix-1', venture_id: 'fc000000-aaaa-bbbb-cccc-dddddddddddd', finding_category: 'lint', severity: 'medium', evidence_pointer: { sig: 't-x' }, stage_number: 20, created_at: '2026-05-11T00:00:00Z' };
+    const auditInsert = vi.fn();
+    const findingsThenable = {
+      data: [fixtureRow], error: null,
+      select: function () { return this; },
+      eq: function () { return this; },
+      in: function () { return this; },
+      order: function () { return this; },
+      then: function (cb) { return cb({ data: this.data, error: this.error }); },
+    };
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'venture_quality_findings') return findingsThenable;
+        if (table === 'audit_log') return { insert: auditInsert };
+        throw new Error('unexpected table: ' + table);
+      }),
+    };
+    const result = await selectPendingFindings(supabase, null);
+    expect(result).toEqual([fixtureRow]);
+    expect(auditInsert).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
 // INTEGRATION — HAS_REAL_DB-gated
 // ============================================================================
 
@@ -192,8 +289,15 @@ describe.skipIf(!HAS_REAL_DB)('FR-C generator — integration (HAS_REAL_DB)', ()
   let testVentureId;
   let createdSdKeys;
   let createdFindingIds;
+  let prevFixtureEnv;
 
   beforeEach(() => {
+    // Integration suite seeds rows that match fixture sentinels (fc000000-
+    // venture_id, t-* sigs). Bypass the discriminator here so generator paths
+    // can exercise dedup/rate-limit on those rows; production cron never sets
+    // this env var (PAT-TEST-FIXTURE-PROMOTION-001).
+    prevFixtureEnv = process.env.FR_C_ALLOW_FIXTURE_FINDINGS;
+    process.env.FR_C_ALLOW_FIXTURE_FINDINGS = 'true';
     supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
     // Stable per-test venture ID so cleanup can target it. Use a sentinel UUID
     // prefix to make rows easy to recognise in case cleanup misses any.
@@ -215,6 +319,8 @@ describe.skipIf(!HAS_REAL_DB)('FR-C generator — integration (HAS_REAL_DB)', ()
         await supabase.from('audit_log').delete().eq('metadata->>venture_id', testVentureId);
       } catch { /* noop */ }
     }
+    if (prevFixtureEnv === undefined) delete process.env.FR_C_ALLOW_FIXTURE_FINDINGS;
+    else process.env.FR_C_ALLOW_FIXTURE_FINDINGS = prevFixtureEnv;
   });
 
   async function seedFinding({ category = 'lint', severity = 'medium', sig = `s-${Date.now()}-${Math.random()}` } = {}) {
