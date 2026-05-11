@@ -1,6 +1,15 @@
-# Session Prologue - LEO Protocol v4.3.3 - UI Parity Governance 4.3.3
+# Session Prologue - LEO Protocol v4.4.1
 *Copy-paste this at session start to align Claude with EHG_Engineer practices*
 *Generated: 2025-12-03T23:21:50.817Z*
+
+## Operating Mode
+
+At SessionStart, `scripts/hooks/session-role-orient.cjs` emits a `[ROLE]` block naming your role and channel:
+- **SOLO** — no active coordinator. Canonical pause points apply. Fall through to `/leo assist` Phase 1 when `/leo next` returns no workable SD under AUTO-PROCEED=ON.
+- **WORKER** — under coordinator. `/signal <type> "<body>"` when recurrence (gate 2×, RCA 2×, tool 3×) | bypass intent | spec/PRD friction | harness-bug recognized | memory-trend match.
+- **COORDINATOR** — drain worker signals via `/coordinator inbox`. 3+ matching signals within 60min auto-promote to feedback (category=harness_backlog).
+
+If you don't see a `[ROLE]` line at session start, the hook is unregistered or failed silently — check `.claude/settings.json` and run `echo '{"session_id":"<uuid>"}' | node scripts/hooks/session-role-orient.cjs` to probe.
 
 ## Core Directives
 
