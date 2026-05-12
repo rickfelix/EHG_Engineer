@@ -1,61 +1,37 @@
 /**
- * Tests for stage-execution-worker._canAutoAdvance (FR-3 + FR-4 decision matrix)
- * SD-LEO-INFRA-VENTURE-GATE-UNIFICATION-001 FR-6.
+ * Tests for stage-execution-worker._canAutoAdvance — POST-RPC REFACTOR.
  *
- * Validates the unified governance decision logic across:
- *   - master toggle (global_auto_proceed)
- *   - kill/promotion gates (kill_stages + promotion_stages from stage_config — Layer 2)
- *   - per-stage override (stage_overrides[stage_n].auto_proceed false/true) — Layer 3
- *   - review-mode default-pause (S7/S8/S9/S11) unless explicit opt-in — Layer 4
+ * SD-LEO-REFAC-GATE-AUTO-ADVANCE-001 FR-2 + REGRESSION REG-2:
+ * The 4-layer governance logic moved from the worker into the SECURITY DEFINER
+ * RPC `can_auto_advance(p_stage_number int)`. These tests preserve the
+ * original 12-case decision matrix as a CONTRACT — only the mock surface
+ * shifts from supabase.from(...) chains to supabase.rpc(...).
  *
- * Closes empirical witness: NameSignal venture 57e2645a-... blocked at S8 BMC
- * because review-mode default-pause path was race-dependent.
+ * For the worker-vs-RPC equivalence test (snapshot-frozen), see
+ * tests/integration/eva/can-auto-advance-equivalence.test.js.
  */
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
-import { _resetCacheForTest } from '../../../lib/eva/stage-governance.js';
 
-const V2_FIXTURE = [
-  { stage_number: 3,  gate_type: 'kill',      review_mode: 'auto'   },
-  { stage_number: 5,  gate_type: 'kill',      review_mode: 'auto'   },
-  { stage_number: 6,  gate_type: 'none',      review_mode: 'auto'   },
-  { stage_number: 7,  gate_type: 'none',      review_mode: 'review' },
-  { stage_number: 8,  gate_type: 'none',      review_mode: 'review' },
-  { stage_number: 9,  gate_type: 'none',      review_mode: 'review' },
-  { stage_number: 10, gate_type: 'promotion', review_mode: 'auto'   },
-  { stage_number: 11, gate_type: 'none',      review_mode: 'review' },
-  { stage_number: 13, gate_type: 'kill',      review_mode: 'auto'   },
-  { stage_number: 16, gate_type: 'promotion', review_mode: 'auto'   },
-  { stage_number: 17, gate_type: 'promotion', review_mode: 'auto'   },
-  { stage_number: 23, gate_type: 'kill',      review_mode: 'auto'   },
-  { stage_number: 24, gate_type: 'promotion', review_mode: 'auto'   },
-  { stage_number: 25, gate_type: 'promotion', review_mode: 'auto'   },
-  { stage_number: 26, gate_type: 'none',      review_mode: 'auto'   },
-];
+/**
+ * The RPC verdict shape returned by Supabase RPC: an array with one row.
+ * Reasons enum: global_off | kill_promotion_gate | explicit_pause |
+ *               review_default_pause | config_missing | stage_not_found |
+ *               approved
+ */
+function rpcRow(can, reason, layer) {
+  return { data: [{ can, reason, layer }], error: null };
+}
+function rpcError(message) {
+  return { data: null, error: new Error(message) };
+}
 
-function mockSupabase({ global_auto_proceed = true, stage_overrides = {} } = {}) {
-  const stageConfigReader = vi.fn(async () => ({ data: V2_FIXTURE, error: null }));
-  const cdcReader = vi.fn(async () => ({ data: { global_auto_proceed, stage_overrides }, error: null }));
-
+function mockSupabase(rpcResponder) {
   return {
-    from: vi.fn((table) => {
-      if (table === 'stage_config') {
-        return { select: () => ({ order: stageConfigReader }) };
-      }
-      if (table === 'chairman_dashboard_config') {
-        return {
-          select: () => ({
-            eq: () => ({ maybeSingle: cdcReader }),
-          }),
-        };
-      }
-      return { select: () => ({}) };
+    rpc: vi.fn(async (fnName, args) => {
+      if (fnName !== 'can_auto_advance') throw new Error(`unexpected RPC ${fnName}`);
+      return rpcResponder(args.p_stage_number);
     }),
-    channel: vi.fn(() => ({
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn(function (cb) { cb?.('SUBSCRIBED'); return this; }),
-      unsubscribe: vi.fn(),
-    })),
   };
 }
 
@@ -66,100 +42,94 @@ function makeWorker(supabase) {
   });
 }
 
-describe('worker._canAutoAdvance (unified governance)', () => {
-  beforeEach(() => { _resetCacheForTest(); });
-
+describe('worker._canAutoAdvance (RPC-backed, post-refactor)', () => {
   describe('L1: master toggle', () => {
     test('master=false blocks every stage', async () => {
-      const w = makeWorker(mockSupabase({ global_auto_proceed: false }));
-      expect(await w._canAutoAdvance(6)).toBe(false);  // plain
-      expect(await w._canAutoAdvance(8)).toBe(false);  // review
-      expect(await w._canAutoAdvance(3)).toBe(false);  // kill
+      const w = makeWorker(mockSupabase(() => rpcRow(false, 'global_off', 1)));
+      expect(await w._canAutoAdvance(6)).toBe(false);
+      expect(await w._canAutoAdvance(8)).toBe(false);
+      expect(await w._canAutoAdvance(3)).toBe(false);
     });
   });
 
-  describe('L2: kill / promotion gates (NEVER overrideable)', () => {
-    test('kill gate blocks even with stage_override.auto_proceed=true', async () => {
-      const w = makeWorker(mockSupabase({
-        stage_overrides: { stage_3: { auto_proceed: true } },
-      }));
+  describe('L2: kill / promotion gates (never auto-advance)', () => {
+    test('kill gate S3 blocks regardless of master/override', async () => {
+      const w = makeWorker(mockSupabase((s) =>
+        s === 3 ? rpcRow(false, 'kill_promotion_gate', 2) : rpcRow(true, 'approved', null)
+      ));
       expect(await w._canAutoAdvance(3)).toBe(false);
     });
 
-    test('promotion gate blocks even with stage_override.auto_proceed=true', async () => {
-      const w = makeWorker(mockSupabase({
-        stage_overrides: { stage_16: { auto_proceed: true } },
-      }));
-      expect(await w._canAutoAdvance(16)).toBe(false);  // S16 Issue B audit fix
+    test('promotion gate S10 blocks regardless of master/override', async () => {
+      const w = makeWorker(mockSupabase((s) =>
+        s === 10 ? rpcRow(false, 'kill_promotion_gate', 2) : rpcRow(true, 'approved', null)
+      ));
+      expect(await w._canAutoAdvance(10)).toBe(false);
     });
 
-    test('all kill gates block by default', async () => {
-      const w = makeWorker(mockSupabase());
-      for (const s of [3, 5, 13, 23]) {
-        expect(await w._canAutoAdvance(s)).toBe(false);
-      }
-    });
-
-    test('all promotion gates block by default', async () => {
-      const w = makeWorker(mockSupabase());
-      for (const s of [10, 16, 17, 24, 25]) {
-        expect(await w._canAutoAdvance(s)).toBe(false);
-      }
+    test('promotion gate S16 blocks (the historical drift case)', async () => {
+      const w = makeWorker(mockSupabase((s) =>
+        s === 16 ? rpcRow(false, 'kill_promotion_gate', 2) : rpcRow(true, 'approved', null)
+      ));
+      expect(await w._canAutoAdvance(16)).toBe(false);
     });
   });
 
-  describe('L3: per-stage explicit pause (auto_proceed=false)', () => {
-    test('explicit pause blocks a non-review stage', async () => {
-      const w = makeWorker(mockSupabase({
-        stage_overrides: { stage_6: { auto_proceed: false, reason: 'paused' } },
-      }));
+  describe('L3: per-stage explicit pause', () => {
+    test('stage_overrides.stage_6.auto_proceed=false blocks S6', async () => {
+      const w = makeWorker(mockSupabase((s) =>
+        s === 6 ? rpcRow(false, 'explicit_pause', 3) : rpcRow(true, 'approved', null)
+      ));
+      expect(await w._canAutoAdvance(6)).toBe(false);
+    });
+  });
+
+  describe('L4: review-mode default-pause', () => {
+    test('S7 review-mode without opt-in blocks', async () => {
+      const w = makeWorker(mockSupabase((s) =>
+        s === 7 ? rpcRow(false, 'review_default_pause', 4) : rpcRow(true, 'approved', null)
+      ));
+      expect(await w._canAutoAdvance(7)).toBe(false);
+    });
+
+    test('S11 review-mode without opt-in blocks', async () => {
+      const w = makeWorker(mockSupabase((s) =>
+        s === 11 ? rpcRow(false, 'review_default_pause', 4) : rpcRow(true, 'approved', null)
+      ));
+      expect(await w._canAutoAdvance(11)).toBe(false);
+    });
+
+    test('S8 review-mode WITH stage_overrides opt-in passes', async () => {
+      const w = makeWorker(mockSupabase((s) =>
+        s === 8 ? rpcRow(true, 'approved', null) : rpcRow(false, 'review_default_pause', 4)
+      ));
+      expect(await w._canAutoAdvance(8)).toBe(true);
+    });
+  });
+
+  describe('all-clear paths', () => {
+    test('S6 plain auto-mode passes', async () => {
+      const w = makeWorker(mockSupabase(() => rpcRow(true, 'approved', null)));
+      expect(await w._canAutoAdvance(6)).toBe(true);
+    });
+
+    test('S26 plain auto-mode passes', async () => {
+      const w = makeWorker(mockSupabase(() => rpcRow(true, 'approved', null)));
+      expect(await w._canAutoAdvance(26)).toBe(true);
+    });
+  });
+
+  describe('RPC error / missing rows fail-safe to block', () => {
+    test('RPC error returns false', async () => {
+      const w = makeWorker(mockSupabase(() => rpcError('network down')));
       expect(await w._canAutoAdvance(6)).toBe(false);
     });
 
-    test('explicit pause blocks a review stage too', async () => {
-      const w = makeWorker(mockSupabase({
-        stage_overrides: { stage_8: { auto_proceed: false } },
-      }));
-      expect(await w._canAutoAdvance(8)).toBe(false);
-    });
-  });
-
-  describe('L4: review-mode default-pause (FR-4 — the NameSignal bug fix)', () => {
-    test('review-mode stage with NO override blocks (default-pause)', async () => {
-      const w = makeWorker(mockSupabase());
-      for (const s of [7, 8, 9, 11]) {
-        expect(await w._canAutoAdvance(s)).toBe(false);
-      }
-    });
-
-    test('review-mode stage with auto_proceed=true opt-in advances', async () => {
-      const w = makeWorker(mockSupabase({
-        stage_overrides: { stage_8: { auto_proceed: true, set_by: 'chairman' } },
-      }));
-      expect(await w._canAutoAdvance(8)).toBe(true);  // NameSignal mechanical unblock
-    });
-
-    test('all review stages support opt-in', async () => {
-      const w = makeWorker(mockSupabase({
-        stage_overrides: {
-          stage_7: { auto_proceed: true },
-          stage_8: { auto_proceed: true },
-          stage_9: { auto_proceed: true },
-          stage_11: { auto_proceed: true },
-        },
-      }));
-      for (const s of [7, 8, 9, 11]) {
-        expect(await w._canAutoAdvance(s)).toBe(true);
-      }
-    });
-  });
-
-  describe('Default path (plain stages, no override)', () => {
-    test('non-review, non-gate stage with master on advances by default', async () => {
-      const w = makeWorker(mockSupabase());
-      for (const s of [6, 26]) {
-        expect(await w._canAutoAdvance(s)).toBe(true);
-      }
+    test('Empty data rows return false (config_missing-equivalent)', async () => {
+      const w = makeWorker({
+        rpc: vi.fn(async () => ({ data: [], error: null })),
+      });
+      expect(await w._canAutoAdvance(6)).toBe(false);
     });
   });
 });
