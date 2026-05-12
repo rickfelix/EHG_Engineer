@@ -1,0 +1,52 @@
+name: can-auto-advance tests
+
+# SD-LEO-REFAC-GATE-AUTO-ADVANCE-001 FR-6 / TESTING #5 BLOCKING:
+# Neither test:unit nor test:integration runs in CI today. This workflow
+# gates the new tests so they cannot rot post-merge.
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/stage-execution-worker.js'
+      - 'database/migrations/**can_auto_advance**'
+      - 'tests/unit/eva/worker-can-auto-advance.test.js'
+      - 'tests/integration/eva/can-auto-advance-equivalence.test.js'
+      - 'tests/fixtures/can-auto-advance-pre-refactor.snapshot.js'
+      - '.github/workflows/can-auto-advance-tests.yml'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit tests (worker mock)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run worker._canAutoAdvance unit tests
+        run: npx vitest run tests/unit/eva/worker-can-auto-advance.test.js
+
+  integration:
+    name: Integration tests (live RPC equivalence)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL != '' && secrets.SUPABASE_SERVICE_ROLE_KEY != '' }}
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run RPC equivalence tests
+        run: npx vitest run tests/integration/eva/can-auto-advance-equivalence.test.js
