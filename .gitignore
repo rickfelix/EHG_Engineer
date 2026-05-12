@@ -72,6 +72,7 @@ tests/e2e/visual/**/*-snapshots/
 
 # Temporary investigation/debugging scripts directory
 scripts/temp/
+scripts/tmp/
 
 # One-off debugging and query scripts (temporary investigation tools)
 query-*.cjs
@@ -285,6 +286,12 @@ src/client/dist/
 .claude/projects/
 .claude/.protocol-sync/
 .claude/tmp-*
+.claude/tmp/
+.claude/pids/
+.claude/active-coordinator.json
+.claude/fleet-dashboard-state.json
+.claude/worktree-reaper-state.json
+.claude/retry-state-*.json.tmp-*
 .claude-code-config.json
 .claude-status-line
 .leo-status.json
