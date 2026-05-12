@@ -1,0 +1,47 @@
+name: Boundary Config Coherence
+
+# SD-LEO-INFRA-REALITY-GATE-ARTIFACT-001 FR-7.
+# Asserts that every required artifact_type in public.gate_boundary_config
+# maps to some upstream stage's lifecycle_stage_config.required_artifacts.
+# Prevents the drift class that produced the NameSignal 9->10 false-negative
+# gate failure (engine_risk_assessment / engine_revenue_model — names no
+# stage ever emitted).
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/*gate_boundary_config*.sql'
+      - 'database/migrations/*lifecycle_stage_config*.sql'
+      - 'database/migrations/*stage_artifact_requirements*.sql'
+      - 'lib/eva/artifact-types.js'
+      - 'lib/eva/reality-gates.js'
+      - 'scripts/validate-boundary-config-coherence.mjs'
+  workflow_dispatch:
+
+jobs:
+  boundary-coherence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    concurrency:
+      group: boundary-config-coherence-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Assert secrets present
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          [ -n "$SUPABASE_URL" ] || { echo "[BOUNDARY_CHECK_INFRA_ERROR] SUPABASE_URL missing"; exit 2; }
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo "[BOUNDARY_CHECK_INFRA_ERROR] SUPABASE_SERVICE_ROLE_KEY missing"; exit 2; }
+      - run: npm ci --no-audit --no-fund
+      - name: Run boundary-config coherence validator
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/validate-boundary-config-coherence.mjs
