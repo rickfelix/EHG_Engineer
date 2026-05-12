@@ -57,7 +57,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
 import { listActiveWorktrees } from '../lib/worktree-quota.js';
-import { safeRecursiveRm, safeRecursiveCp } from '../lib/worktree-manager.js';
+import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../lib/worktree-manager.js';
 import {
   isZombieOnMain,
   isNested,
@@ -508,9 +508,14 @@ function preserveUntrackedFiles({ wtPath, preserveRoot, untracked, repoRoot, log
 
 function removeWorktree({ wtPath, repoRoot }) {
   const abs = path.resolve(wtPath);
-  // git worktree remove --force
-  const res = runGit(['worktree', 'remove', '--force', abs], { cwd: repoRoot });
-  if (res.code === 0) return { ok: true, method: 'git-worktree-remove' };
+  // QF-20260512-347: route through removeWorktreeViaGit so node_modules symlinks
+  // (Windows junctions / MSYS bash symlinks) are pre-unlinked before `git worktree
+  // remove --force` follows them and wipes the main repo's node_modules. QF-446
+  // (PR #3724) shipped this helper across 3 shipping sites; the reaper was the
+  // missed 4th site (witness 2026-05-11T23:33Z destroyed main repo node_modules
+  // across 4 parallel sessions).
+  const primary = removeWorktreeViaGit(abs, repoRoot, { allowFail: true });
+  if (primary.ok) return { ok: true, method: 'git-worktree-remove' };
   // Fallback: git worktree can refuse when the dir is already partly gone; try junction-safe rm.
   // QF-20260508-102: raw fs.rmSync({recursive:true,force:true}) on Windows follows the worktree's
   // node_modules junction and wipes the main repo's node_modules — bricks every parallel session.
