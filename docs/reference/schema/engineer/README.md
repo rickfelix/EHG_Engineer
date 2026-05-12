@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-12T15:22:25.101Z
-**Tables**: 679
+**Generated**: 2026-05-12T16:40:57.046Z
+**Tables**: 681
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (679)
+## All Tables (681)
 
 ### LEO Protocol
 
@@ -404,6 +404,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [fleet_liveness_estimates](tables/fleet_liveness_estimates.md)
 - [folder_structure_snapshot](tables/folder_structure_snapshot.md)
 - [gap_analysis_results](tables/gap_analysis_results.md)
+- [gate_boundary_config](tables/gate_boundary_config.md)
+- [gate_boundary_config_audit](tables/gate_boundary_config_audit.md)
 - [gate_failure_patterns](tables/gate_failure_patterns.md)
 - [gate_health_history](tables/gate_health_history.md)
 - [gate_requirements_templates](tables/gate_requirements_templates.md)
