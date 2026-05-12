@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { StageExecutionWorker, CHAIRMAN_GATES, getOperatingMode } from '../../../lib/eva/stage-execution-worker.js';
+import { StageExecutionWorker, getOperatingMode } from '../../../lib/eva/stage-execution-worker.js';
 
 // Mock dependencies
 vi.mock('../../../lib/eva/eva-orchestrator.js', () => ({

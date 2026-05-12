@@ -57,6 +57,10 @@ describe('Stage timing zero fix (SD-FIX-STAGE-TIMING-ZEROS-ORCH-001-A)', () => {
     const mockChain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      // SD-LEO-INFRA-VENTURE-GATE-UNIFICATION-001 FR-3: worker now reads stage_config via
+      // stage-governance.js which terminates with .order(...). Empty result is fine (sets degrade
+      // to empty; isBlocking / isReview / isKill all return false, which is correct for these tests).
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
       maybeSingle: vi.fn().mockResolvedValue({ data: null }),
       single: vi.fn().mockResolvedValue({ data: { work_type: 'artifact_only' } }),
       upsert: mockUpsert,
