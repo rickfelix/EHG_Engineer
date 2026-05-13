@@ -260,6 +260,9 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
       .single();
 
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
+      // QF-20260512-300: Skip test-harness SDs (metadata.is_test=true) from recommendations
+      if (sd.metadata?.is_test === true) continue;
+
       // SD-LEO-INFRA-CONDITIONAL-QUEUE-GOVERNANCE-001: Skip deferred SDs from recommendations
       if (sd.metadata?.do_not_advance_without_trigger === true) continue;
 
