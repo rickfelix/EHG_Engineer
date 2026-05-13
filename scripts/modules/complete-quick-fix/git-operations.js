@@ -731,6 +731,19 @@ export async function mergeToMain(testDir, qf, prUrl, prompt, flags = {}) {
             return;
           }
         } catch (ghMergeErr) {
+          // QF-20260512-519: `gh pr merge --merge --delete-branch` may exit non-zero
+          // when the server-side merge succeeded but the local --delete-branch step
+          // failed (e.g., an orphan worktree holds the branch). Re-query PR state
+          // before falling through to local-merge — the local-merge fallback also
+          // breaks when an orphan worktree holds [main] (harness backlog d40eb680).
+          try {
+            const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+            const stateOut = execSync(`gh pr view ${prNumber} --json state`, { encoding: 'utf-8', cwd: testDir }).trim();
+            if (stateOut.includes('"MERGED"')) {
+              console.log(`   ✅ PR merged via GitHub (post-merge cleanup may have failed; non-critical)\n`);
+              return;
+            }
+          } catch { /* unable to verify — fall through */ }
           console.log(`   ⚠️  GitHub merge failed: ${ghMergeErr.message}`);
           console.log('   Attempting local merge...\n');
         }
