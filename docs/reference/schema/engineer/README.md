@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-12T20:35:01.858Z
-**Tables**: 682
+**Generated**: 2026-05-13T11:27:58.333Z
+**Tables**: 687
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (682)
+## All Tables (687)
 
 ### LEO Protocol
 
@@ -418,6 +418,10 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [governance_decisions](tables/governance_decisions.md)
 - [governance_policies](tables/governance_policies.md)
 - [governance_proposals](tables/governance_proposals.md)
+- [gvos_adherence_logs](tables/gvos_adherence_logs.md)
+- [gvos_archetypes](tables/gvos_archetypes.md)
+- [gvos_token_versions](tables/gvos_token_versions.md)
+- [gvos_tokens](tables/gvos_tokens.md)
 - [hap_blocks_v2](tables/hap_blocks_v2.md)
 - [import_audit](tables/import_audit.md)
 - [improvement_quality_assessments](tables/improvement_quality_assessments.md)
@@ -692,6 +696,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_financial_projections](tables/venture_financial_projections.md)
 - [venture_fundamentals](tables/venture_fundamentals.md)
+- [venture_gvos_profile](tables/venture_gvos_profile.md)
 - [venture_market_analysis](tables/venture_market_analysis.md)
 - [venture_milestones](tables/venture_milestones.md)
 - [venture_nursery](tables/venture_nursery.md)
