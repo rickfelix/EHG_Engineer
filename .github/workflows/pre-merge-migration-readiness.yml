@@ -40,6 +40,11 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          # QF-20260513-258: DATABASE_URL is a fallback used by
+          # check-migration-readiness.mjs when SUPABASE_POOLER_URL is unset.
+          # Either env var is sufficient — supabase-connection.js skips the
+          # password requirement once connectionString is provided.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |

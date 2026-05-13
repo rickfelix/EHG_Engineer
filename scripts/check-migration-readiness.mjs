@@ -227,7 +227,15 @@ async function main() {
 
   let client;
   try {
-    client = await createDatabaseClient('engineer', { verify: true });
+    // QF-20260513-258: In CI (pre-merge-migration-readiness.yml) the
+    // pooler/admin password isn't a configured secret — only DATABASE_URL /
+    // SUPABASE_POOLER_URL are exposed. Pass connectionString explicitly so
+    // supabase-connection.js skips the SUPABASE_DB_PASSWORD requirement.
+    const connectionString =
+      process.env.SUPABASE_POOLER_URL ||
+      process.env.DATABASE_URL ||
+      undefined;
+    client = await createDatabaseClient('engineer', { verify: true, connectionString });
   } catch (err) {
     console.error(`[${OUTCOME.INFRA_ERROR}] could not connect to live DB: ${err.message}`);
     console.log(JSON.stringify({ outcome: OUTCOME.INFRA_ERROR, error: err.message }));
