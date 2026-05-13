@@ -19,6 +19,27 @@ permissions:
   contents: read
 
 jobs:
+  preflight:
+    name: Check integration credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      has_creds: ${{ steps.check.outputs.has_creds }}
+    steps:
+      - id: check
+        # secrets.* is allowed in step-level env, NOT in job-level if. Convert
+        # presence-of-secret to a string output so `integration` can gate via
+        # `needs.preflight.outputs.has_creds`.
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [[ -n "$SUPABASE_URL" && -n "$SUPABASE_KEY" ]]; then
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+          fi
+
   unit:
     name: Unit tests (worker mock)
     runs-on: ubuntu-latest
@@ -37,7 +58,8 @@ jobs:
     name: Integration tests (live RPC equivalence)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL != '' && secrets.SUPABASE_SERVICE_ROLE_KEY != '' }}
+    needs: preflight
+    if: needs.preflight.outputs.has_creds == 'true'
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
