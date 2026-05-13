@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-12T20:35:01.858Z
+**Generated**: 2026-05-13T11:27:58.333Z
 **Rows**: 1
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (85 total)
+## Columns (86 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -108,6 +108,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | venture_type | `text` | YES | - | Classifies the venture by its primary technology focus: ui (frontend/design), backend (API/services), mixed (full-stack), or data (analytics/ML). NULL for unclassified ventures. Added by SD-LEO-INFRA-SRIP-WIREFRAME-GATING-001. |
 | autonomy_level | `text` | YES | `'L0'::text` | Venture autonomy level: L0=Manual, L1=Guided, L2=Supervised, L3=Autonomous, L4=Full Auto |
 | target_platform | `text` | **NO** | `'both'::text` | Platform targeting: web (desktop only), mobile (mobile only), both (mobile-first + desktop) |
+| business_model_class | `text` | YES | - | Coarse business model classification used by GVOS Composer auto-classifier. Enum-constrained to prevent typo bypass of Artist-Expressive gating (SECURITY-003 from SD-GVOS-COMPOSER-SNAPSHOTLOCKED-REGISTRY-ORCH-001). NULL on existing rows; chairman fills per venture. |
 
 ## Constraints
 
@@ -125,6 +126,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 ### Check Constraints
 - `ventures_autonomy_level_check`: CHECK ((autonomy_level = ANY (ARRAY['L0'::text, 'L1'::text, 'L2'::text, 'L3'::text, 'L4'::text])))
+- `ventures_business_model_class_enum`: CHECK (((business_model_class IS NULL) OR (business_model_class = ANY (ARRAY['saas'::text, 'fintech'::text, 'healthcare'::text, 'civic'::text, 'ecommerce'::text, 'marketplace'::text, 'devtools'::text, 'media'::text, 'gaming'::text, 'artist'::text, 'publishing'::text, 'gallery'::text, 'agency'::text, 'education'::text, 'consumer'::text]))))
 - `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)))
 - `ventures_health_status_check`: CHECK (((health_status)::text = ANY ((ARRAY['healthy'::character varying, 'warning'::character varying, 'critical'::character varying])::text[])))
 - `ventures_pipeline_mode_check`: CHECK ((pipeline_mode = ANY (ARRAY['building'::text, 'operations'::text, 'growth'::text, 'scaling'::text, 'exit_prep'::text, 'divesting'::text, 'sold'::text])))
@@ -136,9 +138,17 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 ## Indexes
 
+- `idx_ventures_artist_class`
+  ```sql
+  CREATE INDEX idx_ventures_artist_class ON public.ventures USING btree (id) WHERE (business_model_class = 'artist'::text)
+  ```
 - `idx_ventures_brand_variants`
   ```sql
   CREATE INDEX idx_ventures_brand_variants ON public.ventures USING gin (brand_variants)
+  ```
+- `idx_ventures_business_model_class`
+  ```sql
+  CREATE INDEX idx_ventures_business_model_class ON public.ventures USING btree (business_model_class) WHERE (business_model_class IS NOT NULL)
   ```
 - `idx_ventures_code`
   ```sql
