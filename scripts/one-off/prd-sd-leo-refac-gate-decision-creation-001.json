@@ -1,0 +1,227 @@
+{
+  "title": "PRD: Gate Decision-Creation Truth Unification — DECISION_CREATING_STAGES Set drift",
+  "status": "planning",
+  "executive_summary": "Replace the hand-maintained DECISION_CREATING_STAGES Set in lib/eva/chairman-decision-watcher.js (worker module) with a stage_config-derived runtime lookup. Closes the 6th writer-consumer asymmetry in 24h (pentalogy completion). Empirical incident: NameSignal venture stuck at S16 promotion gate on 2026-05-12 because Set excluded S16 — band-aid INSERT used to unblock. Mirror the pentalogy fix pattern: introduce SECURITY DEFINER RPC stage_creates_decision(p_stage_number INT) that returns TABLE(creates_decision BOOLEAN, gate_type TEXT, review_mode TEXT), wired to chairman_decision_watcher.createOrReusePendingDecision. Backfill rows for currently-stuck ventures (empirically 0 today, kept as defense-in-depth rescue path). Audit other hand-maintained stage-classifier mirrors. Ship target: ~60-100 src + ~250-350 test LOC across 2-4 files + 1 migration; sd_type=refactor / intensity=structural; threshold 75%.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "stage_config-derived runtime lookup (RPC + defensive fallback) for DECISION_CREATING_STAGES drift fix",
+      "description": "Replace const DECISION_CREATING_STAGES Set in lib/eva/chairman-decision-watcher.js:19-21 with a runtime-resolved lookup. Adopt FR-1(b) RPC path with FR-1(a) module-level defensive fallback combined (RISK PLAN-1 recommendation).",
+      "acceptance_criteria": [
+        "New SECURITY DEFINER RPC stage_creates_decision(p_stage_number INT) RETURNS TABLE(creates_decision BOOLEAN, gate_type TEXT, review_mode TEXT) deployed via migration",
+        "RPC reads stage_config; STABLE; search_path = public, pg_temp; REVOKE EXECUTE FROM PUBLIC; GRANT EXECUTE TO authenticated, service_role",
+        "creates_decision = (gate_type IN ('kill','promotion') OR review_mode = 'review')",
+        "chairman-decision-watcher.js exports/uses isDecisionCreatingStage(stageNumber, supabase) async helper that calls RPC; falls back to in-process Set [3,5,7,8,9,10,11,13,16,17,18,19,23,24,25] on RPC error, logs WARN",
+        "Fallback Set differs from origin Set: ADDS S16 (correct: gate_type=promotion), REMOVES S20 (correct: gate_type=none)",
+        "No 60s caching for RPC path (FR-1(b) preferred; cache lookup is only used as fallback if RPC unavailable)"
+      ],
+      "files_affected": [
+        "lib/eva/chairman-decision-watcher.js (lines 19-21 removed; line 188 swap to RPC lookup; new helper added)",
+        "database/migrations/20260513_stage_creates_decision_rpc.sql (new)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Swap chairman-decision-watcher.js createOrReusePendingDecision call-site to stage_config-derived lookup",
+      "description": "Update createOrReusePendingDecision at chairman-decision-watcher.js:188 (and any internal callers within the module) to use the new async isDecisionCreatingStage helper instead of DECISION_CREATING_STAGES.has(stageNumber). Preserve existing observability log line.",
+      "acceptance_criteria": [
+        "Old: if (!DECISION_CREATING_STAGES.has(stageNumber)) → New: const { creates, gate_type, review_mode } = await isDecisionCreatingStage(stageNumber, supabase); if (!creates) { ... }",
+        "Existing log line [Decision] Skipping decision creation for non-gate stage N is preserved verbatim",
+        "Worker call sites (5 verified by RISK sub-agent: eva-orchestrator.js:1080, stage-execution-worker.js:970/1678/2609, stage-templates/stage-10.js:268, analysis-steps/stage-17-blueprint-review.js:458) continue to work unchanged — they invoke createOrReusePendingDecision (the gate is internal to chairman-decision-watcher.js)",
+        "decision_type derivation: gate_type IN ('kill','promotion') → 'stage_gate'; review_mode = 'review' → 'review'; covered by tests"
+      ],
+      "files_affected": [
+        "lib/eva/chairman-decision-watcher.js:188"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Backfill missing chairman_decisions rows for ventures stuck on gate stages (dry-run + chairman approval)",
+      "description": "Idempotent backfill script that identifies ventures currently on a decision-creating stage with no chairman_decisions row, and inserts minimal pending rows. Dry-run by default; --apply flag gated on explicit chairman approval. Empirical: 0 candidates today (DATABASE sub-agent confirmed); ship as defense-in-depth rescue path.",
+      "acceptance_criteria": [
+        "scripts/backfill-chairman-decisions-missing-rows.mjs created; dry-run default; --apply flag required for INSERT",
+        "Query filters: venture.status NOT IN ('archived','killed') AND killed_at IS NULL AND current_lifecycle_stage < 23 AND stage_creates_decision(current_lifecycle_stage).creates_decision = TRUE",
+        "LEFT JOIN chairman_decisions ON (venture_id, lifecycle_stage); INSERT only WHERE chairman_decisions row does NOT exist at any status (not just pending)",
+        "Uses ON CONFLICT (venture_id, lifecycle_stage, attempt_number) DO NOTHING for idempotency",
+        "Dry-run output: list of ventures + stages that would be backfilled; written to stdout AND PR description block",
+        "decision_type derivation per FR-2; status='pending'; decision='pending'; attempt_number=1"
+      ],
+      "files_affected": [
+        "scripts/backfill-chairman-decisions-missing-rows.mjs (new)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Audit other hand-maintained stage-classifier sets/arrays across lib/eva, lib/governance, scripts, src",
+      "description": "Static analysis script that greps for hand-maintained stage-number arrays/sets across lib/eva, lib/governance, scripts, src. Output is JSONB metadata sidecar — no refactors in this SD. Hard cut-off: if >2 candidates found OR any cross-repo (EHG UI) finding, defer all refactors to follow-up SD.",
+      "acceptance_criteria": [
+        "scripts/audit-stage-classifier-sets.mjs created; matches patterns: new Set(\\[\\d, ...]), const \\w+_STAGES =, [3,5,7,...]-style array literals near stage logic",
+        "Audit output written to sd_metadata.fr4_audit_findings (JSONB array of {file, line, snippet, classification})",
+        "If N>2 candidates OR cross-repo finding: PRD-time decision documented; follow-up SD key recorded as 'fr4_followup_sd' in sd_metadata",
+        "Audit script is read-only — no file writes outside metadata"
+      ],
+      "files_affected": [
+        "scripts/audit-stage-classifier-sets.mjs (new)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Test coverage for chairman-decision-watcher refactor: 26 unit + 1 regression (S16) + 4 audit + 1 Playwright e2e",
+      "description": "Comprehensive test suite covering the new lookup and ensuring no regressions.",
+      "acceptance_criteria": [
+        "26 unit tests in tests/lib/eva/chairman-decision-watcher-lookup.test.js (vitest): one per stage S1-S26, asserting expected creates_decision/gate_type/review_mode values",
+        "1 regression test: advance fixture venture to S16 → chairman_decisions row created within 60s (asserts NameSignal-class incident cannot recur)",
+        "4 audit tests in tests/scripts/audit-stage-classifier-sets.test.js: assert audit script identifies known mirrors AND certifies no additional drift OR returns documented follow-up SD",
+        "1 Playwright e2e test in tests/e2e/chairman-decision-creation-on-gate-advance.spec.ts: fixture venture cascades to a gate stage → chairman_decisions row asserted via DB query within 60s",
+        "All 32+ tests pass in CI; vitest + Playwright reports attached to PR"
+      ],
+      "files_affected": [
+        "tests/lib/eva/chairman-decision-watcher-lookup.test.js (new)",
+        "tests/scripts/audit-stage-classifier-sets.test.js (new)",
+        "tests/e2e/chairman-decision-creation-on-gate-advance.spec.ts (new)",
+        "tests/integration/chairman-decision-s16-regression.test.js (new)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Node 24+ runtime for chairman-decision-watcher worker", "description": "EHG_Engineer worker module runs on Node 24+ (matches existing eva-orchestrator and stage-execution-worker runtimes)." },
+    { "id": "TR-2", "title": "PostgreSQL SECURITY DEFINER RPC for stage_creates_decision lookup", "description": "New RPC function stage_creates_decision(p_stage_number INT) deployed to public schema; SECURITY DEFINER + STABLE marker + search_path hardening; mirrors can_auto_advance RPC shape from SD-LEO-REFAC-GATE-AUTO-ADVANCE-001." },
+    { "id": "TR-3", "title": "vitest + Playwright test runners for 32 tests (unit, regression, audit, e2e)", "description": "Existing vitest 1.x harness for FR-5 unit/regression/audit suites (26+1+4 tests); Playwright for the e2e cascade-to-gate-stage assertion." },
+    { "id": "TR-4", "title": "Existing stage-governance.js cache pattern available as fallback template", "description": "lib/eva/stage-governance.js implements a 60s TTL cache; used as architectural reference but NOT invoked at runtime in this SD (we adopt RPC primary path with in-process Set fallback, no caching)." },
+    { "id": "TR-5", "title": "Existing can_auto_advance RPC pattern to mirror for new RPC", "description": "database/migrations/20260512_can_auto_advance_rpc.sql line-for-line template for SECURITY DEFINER + REVOKE FROM PUBLIC + GRANT EXECUTE TO authenticated/service_role hardening on stage_creates_decision RPC." },
+    { "id": "TR-6", "title": "No new runtime dependencies or client-library version bumps", "description": "Refactor uses existing @supabase/supabase-js client; no package.json adds/upgrades for this SD." }
+  ],
+  "system_architecture": "DATA FLOW: worker (eva-orchestrator | stage-execution-worker | stage-templates) → createOrReusePendingDecision(stageNumber) → isDecisionCreatingStage(stageNumber, supabase) → RPC stage_creates_decision(p_stage_number) → stage_config table → returns {creates_decision, gate_type, review_mode} → if creates_decision: INSERT chairman_decisions row (decision_type derived from gate_type/review_mode); else: log [Decision] Skipping. FALLBACK PATH: on RPC error (network, role denial, function missing), use in-process Set [3,5,7,8,9,10,11,13,16,17,18,19,23,24,25] and log WARN; behavior degrades gracefully to today's (post-fix) behavior. KEY EXPORTS: isDecisionCreatingStage(stageNumber, supabase) is the single exported gate; chairman-decision-watcher.js internals are otherwise unchanged. INTEGRATION POINTS: (1) stage_config table (read), (2) chairman_decisions table (write, FR-3 backfill only), (3) 5 worker call sites that invoke createOrReusePendingDecision (no signature change). TESTABILITY: isDecisionCreatingStage is exported; tests can stub supabase to assert RPC vs fallback behavior; the fallback Set is exported as a constant for assertion in CI drift check.",
+  "implementation_approach": "EXEC will land 2 PRs sequentially. PR-1 (backend RPC + worker swap): (a) New migration database/migrations/20260513_stage_creates_decision_rpc.sql copying can_auto_advance template's SECURITY DEFINER + REVOKE-FROM-PUBLIC + GRANT shape; (b) Add isDecisionCreatingStage(stageNumber, supabase) async helper at top of lib/eva/chairman-decision-watcher.js with in-process Set fallback [3,5,7,8,9,10,11,13,16,17,18,19,23,24,25]; (c) Swap line 188 createOrReusePendingDecision logic from DECISION_CREATING_STAGES.has() to await isDecisionCreatingStage(); preserve [Decision] Skipping log line verbatim; (d) Delete the old const DECISION_CREATING_STAGES Set; (e) Add 26 unit tests + 1 S16 regression test; (f) CI drift assertion (fallback Set parity with stage_config-derived set). PR-2 (FR-3 backfill + FR-4 audit + e2e): (a) scripts/backfill-chairman-decisions-missing-rows.mjs (dry-run default, --apply gated); (b) scripts/audit-stage-classifier-sets.mjs (read-only, persists to sd_metadata.fr4_audit_findings); (c) 4 audit tests; (d) 1 Playwright e2e (fixture venture cascade-to-gate, assert chairman_decisions row within 60s); (e) PR description includes dry-run output of backfill and audit findings (empirically expected: 0 ventures, 0 additional drift). Total: ~60-100 src + ~250-350 test LOC across 2-4 files + 1 migration. Force-complete eligibility evaluated per Tier-2 threshold and sub-agent gate scores.",
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "S16 advance creates chairman_decisions row (regression for NameSignal incident)",
+      "given": "Fixture venture at lifecycle_stage=15; stage_creates_decision RPC returns creates_decision=true for S16",
+      "when": "Worker advances venture to S16 and invokes createOrReusePendingDecision",
+      "then": "Exactly 1 chairman_decisions row INSERTed with venture_id=fixture, lifecycle_stage=16, status='pending', decision_type='stage_gate'; no [Decision] Skipping log line for S16"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "S20 advance does NOT create chairman_decisions row (correct behavior post-fix)",
+      "given": "Fixture venture at lifecycle_stage=19; stage_config.S20 has gate_type='none', review_mode='auto'",
+      "when": "Worker advances venture to S20",
+      "then": "0 chairman_decisions rows INSERTed for S20; [Decision] Skipping decision creation for non-gate stage 20 log line emitted"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "RPC error falls back to in-process Set",
+      "given": "Supabase RPC stage_creates_decision throws (simulated network error)",
+      "when": "Worker advances venture to S16",
+      "then": "WARN log emitted; fallback Set used (which INCLUDES S16); chairman_decisions row INSERTed; no [Decision] Skipping log line"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Each of 26 stages returns expected creates_decision per stage_config",
+      "given": "stage_config table populated with 26 stages and current gate_type/review_mode values",
+      "when": "isDecisionCreatingStage called for each stage 1..26",
+      "then": "Result matches predicate (gate_type IN ('kill','promotion') OR review_mode='review') for each stage; no false positives or negatives"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "FR-3 backfill dry-run produces 0 inserts (empirical state)",
+      "given": "Live DB at PR-creation time (DATABASE sub-agent confirmed 0 candidates)",
+      "when": "scripts/backfill-chairman-decisions-missing-rows.mjs invoked without --apply",
+      "then": "Output: 0 ventures identified; 0 INSERTs performed; PR description block updated with dry-run timestamp"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "FR-4 audit returns no-other-drift OR follow-up SD key",
+      "given": "Audit script scans lib/eva, lib/governance, scripts, src",
+      "when": "scripts/audit-stage-classifier-sets.mjs invoked",
+      "then": "Output JSONB persisted to sd_metadata.fr4_audit_findings; if N>2 candidates or cross-repo finding, fr4_followup_sd field populated with referenced SD key"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "CI drift check fails if fallback Set diverges from stage_config-derived set",
+      "given": "CI runs an assertion that fallback Set === SELECT stage_number FROM stage_config WHERE gate_type IN ('kill','promotion') OR review_mode='review'",
+      "when": "Either fallback Set or stage_config is modified",
+      "then": "CI fails until both are aligned; prevents future drift"
+    },
+    {
+      "id": "TS-8",
+      "scenario": "E2E: fixture venture cascade to gate stage within 60s",
+      "given": "Playwright test starts a fresh fixture venture; advances via cascade to S17 (next gate)",
+      "when": "Test polls chairman_decisions table for matching row",
+      "then": "Row appears within 60s; assertion passes"
+    }
+  ],
+  "acceptance_criteria": [
+    "AC-1: chairman-decision-watcher.js no longer contains DECISION_CREATING_STAGES Set literal (verified via grep)",
+    "AC-2: New RPC stage_creates_decision deployed and callable from authenticated + service_role; REVOKE-PUBLIC verified",
+    "AC-3: S16 advance creates chairman_decisions row in regression test AND e2e test (TS-1, TS-8)",
+    "AC-4: S20 advance does NOT create chairman_decisions row post-fix (TS-2; documents intentional behavior change per plan + DATABASE sub-agent)",
+    "AC-5: RPC failure falls back to in-process Set with WARN log (TS-3)",
+    "AC-6: 32+ tests pass (26 unit + 1 regression + 4 audit + 1 e2e); CI green",
+    "AC-7: FR-3 backfill ships idempotent + dry-run-default; empirical 0-row apply documented in PR description",
+    "AC-8: FR-4 audit findings persisted to sd_metadata.fr4_audit_findings; follow-up SD filed if drift discovered",
+    "AC-9: CI drift check asserts fallback Set parity with stage_config-derived set (TS-7)",
+    "AC-10: Sub-agent confidence ≥85% on DATABASE + REGRESSION + TESTING at EXEC-TO-PLAN handoff",
+    "AC-11: Russian Judge score on PR ≥70%; no boilerplate acceptance criteria"
+  ],
+  "integration_operationalization": {
+    "consumers": "Primary consumer: EVA worker (lib/eva/chairman-decision-watcher.js) — invoked from 5 call sites (eva-orchestrator.js:1080, stage-execution-worker.js:970/1678/2609, stage-templates/stage-10.js:268, analysis-steps/stage-17-blueprint-review.js:458). Indirect consumer: chairman UI (renders chairman_decisions rows produced by this code path; no UI changes in this SD). Operator journey: chairman observes ventures correctly stopping at S16/promotion gates for explicit approval (post-fix) instead of silently advancing past with no decision row (pre-fix). Empirical witness: NameSignal venture stuck at S16 on 2026-05-12 — band-aid INSERT used; this SD prevents recurrence.",
+    "dependencies": [
+      {
+        "name": "stage_config table",
+        "direction": "upstream",
+        "failure_mode": "If gate_type/review_mode columns become NULL or table is dropped, RPC returns NULL → caller treats as creates_decision=false → workers silently skip ALL gates (regression to pre-S16-fix behavior, but for all stages). Mitigation: defensive fallback Set in chairman-decision-watcher.js + CI drift check (TS-7) keeps fallback Set current."
+      },
+      {
+        "name": "chairman_decisions table",
+        "direction": "downstream",
+        "failure_mode": "If unique partial index idx_chairman_decisions_unique_pending or uq_chairman_decision_attempt is dropped, FR-3 backfill could double-INSERT pending rows. Mitigation: backfill uses ON CONFLICT DO NOTHING + LEFT JOIN pre-filter (covers idempotency without relying solely on DB constraint)."
+      },
+      {
+        "name": "Supabase service-role auth",
+        "direction": "upstream",
+        "failure_mode": "If service-role JWT expires or REVOKE EXECUTE on RPC blocks authenticated role, worker RPC calls return 42501 (permission denied). Mitigation: fallback Set ensures continuity; WARN logs trigger alerts."
+      },
+      {
+        "name": "can_auto_advance RPC (template)",
+        "direction": "upstream",
+        "failure_mode": "Not a runtime dependency; only a code-template reference. Migration patterns mirror this RPC's shape. If can_auto_advance is dropped, no runtime impact on stage_creates_decision."
+      }
+    ],
+    "data_contracts": "NEW RPC: stage_creates_decision(p_stage_number INT) RETURNS TABLE(creates_decision BOOLEAN, gate_type TEXT, review_mode TEXT). Reads from public.stage_config (columns: stage_number, gate_type, review_mode). NEW WRITES: chairman_decisions (FR-3 backfill only) — columns venture_id (UUID NOT NULL FK), lifecycle_stage (INT NOT NULL), decision_type (TEXT CHECK IN 'stage_gate','review'), decision (TEXT, defaults to 'pending'), status (TEXT, defaults to 'pending'), attempt_number (INT, defaults to 1). UNIQUE: (venture_id, lifecycle_stage, attempt_number). PARTIAL UNIQUE: (venture_id, lifecycle_stage) WHERE status='pending'. NO BREAKING SCHEMA CHANGES.",
+    "runtime_config": "No new env vars. Migration deployed via existing pipeline (npm run migration:apply). RPC SECURITY DEFINER → no client-side credential changes. Rollout: deploy migration → smoke-test stage_creates_decision(16) returns {creates_decision: true} → merge PR (CI runs all 32 tests pre-merge). No feature flag needed; the lookup change is a pure refactor with defensive fallback. Deployment sequence: (1) migration first, (2) worker code second; running both at once is safe because the fallback Set covers the migration-deploy-lag window.",
+    "observability_rollout": "METRICS: New log line [Decision] Lookup fell back to in-process Set (creates=N for stage M) emitted when RPC fails — count via existing log aggregation. EXISTING preserved: [Decision] Skipping decision creation for non-gate stage N. ROLLOUT: monitor for fallback-log occurrences for 7 days post-merge; >5 occurrences/day = investigate RPC availability. ROLLBACK: (1) git revert of worker change reverts to old hand-maintained Set (S16 bug returns; not desirable but reversible); (2) DROP FUNCTION stage_creates_decision is safe (fallback Set continues working); (3) FR-3 backfill is reversible via DELETE FROM chairman_decisions WHERE created_at >= <backfill_timestamp> AND status='pending' AND decision='pending'. PR description must include rollback steps."
+  },
+  "risks": [
+    {
+      "risk": "Worker hot path latency on every gate-advance due to RPC round-trip",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "RPC is single-row, STABLE-marked, served from connection-pooled service-role client; expected <50ms p99. No caching for FR-1(b) primary path; fallback Set zero-latency. Measured during PLAN smoke test."
+    },
+    {
+      "risk": "S20 behavior change is silent (was creating decision rows, now skipping)",
+      "impact": "medium",
+      "likelihood": "medium",
+      "mitigation": "Documented in AC-4 and PR description. stage_config.S20 says gate_type='none' — this aligns SoT with behavior. If chairman discovers S20 was intentionally creating decisions, the fix is to UPDATE stage_config.S20.gate_type='review' (single-row migration, no code change), not to revert this SD. Risk accepted by plan ('do not change stage_config; the Set is the drifted mirror')."
+    },
+    {
+      "risk": "FR-3 backfill apply against unexpected state (e.g., manual band-aid rows not yet visible)",
+      "impact": "medium",
+      "likelihood": "low",
+      "mitigation": "Dry-run default; --apply gated; LEFT JOIN pre-filter on ANY existing chairman_decisions row (not just pending). Empirical 0 candidates today per DATABASE sub-agent — apply is no-op in current state but ships as defense-in-depth."
+    },
+    {
+      "risk": "FR-4 audit surfaces >2 additional mirrors, expanding scope",
+      "impact": "low",
+      "likelihood": "medium",
+      "mitigation": "Bounded read-only; persists to sd_metadata.fr4_audit_findings; refactors deferred to follow-up SD with key recorded in fr4_followup_sd. Hard cut-off enforced in audit script (>2 = automatic defer)."
+    },
+    {
+      "risk": "SECURITY DEFINER RPC misconfigured (missing REVOKE PUBLIC or wrong search_path)",
+      "impact": "medium",
+      "likelihood": "low",
+      "mitigation": "Migration copies can_auto_advance RPC's hardening line-for-line. DATABASE sub-agent gate at EXEC-TO-PLAN verifies SECURITY DEFINER + REVOKE/GRANT + search_path. CI smoke test: anon-role RPC invocation returns 42501."
+    }
+  ]
+}
