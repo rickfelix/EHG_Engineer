@@ -127,9 +127,14 @@ export async function createDatabaseClient(projectKey = 'ehg', options = {}) {
                    process.env.SUPABASE_DB_PASSWORD ||
                    process.env.EHG_DB_PASSWORD;
 
-  if (!password) {
+  // QF-20260513-258: password is only required when we need to BUILD a
+  // connection string from parts. If the caller passed a complete
+  // connectionString (e.g. SUPABASE_POOLER_URL in CI), credentials are
+  // already encoded in the URL — don't force a separate password env var.
+  if (!password && !options.connectionString) {
     throw new Error(
-      'Database password not found. Set SUPABASE_DB_PASSWORD or EHG_DB_PASSWORD in .env file. ' +
+      'Database password not found. Set SUPABASE_DB_PASSWORD or EHG_DB_PASSWORD in .env file, ' +
+      'or pass options.connectionString. ' +
       'SECURITY: Hardcoded password fallbacks are not allowed.'
     );
   }
