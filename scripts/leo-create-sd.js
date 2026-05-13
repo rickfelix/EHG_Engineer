@@ -957,7 +957,7 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     if (updateError) {
       console.warn(`   ⚠️  Could not update additional fields: ${updateError.message}`);
     } else {
-      console.log(`   ✅ Updated: risks`);
+      console.log('   ✅ Updated: risks');
     }
   }
 
@@ -2093,7 +2093,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         } catch (err) {
           console.error(`\n❌ Invalid --scope-slice JSON: ${err.message}`);
           console.error(`   Received: ${childScopeSliceRaw}`);
-          console.error(`   Expected shape: {"stages": [18], "deliverable_globs": ["src/stage18/**"]}`);
+          console.error('   Expected shape: {"stages": [18], "deliverable_globs": ["src/stage18/**"]}');
           process.exit(1);
         }
       }
@@ -2288,34 +2288,86 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const targetRepos = targetReposIdx !== -1 ? parseTargetReposArg(args[targetReposIdx + 1]) : null;
 
       // FR-003: Auto-route to orchestrator creator when arch key has phases
+      // SD-FDBK-REFAC-LEO-CREATE-003-001: decision logic extracted to
+      // scripts/modules/leo-create-sd/auto-route-decider.js. Layers A
+      // (locked_decisions intent gate) and B (PR-staged disambiguator) prevent
+      // misclassification of single-SD intent as orchestrator (witnessed on
+      // SD-GVOS-COMPOSER-SNAPSHOTLOCKED-REGISTRY-ORCH-001).
       if (visionKey && archKey) {
+        let archPlan = null;
+        let brainstormSession = null;
         try {
           const sb = createSupabaseServiceClient();
-          const { data: archPlan } = await sb
+          const { data: archPlanData, error: archPlanErr } = await sb
             .from('eva_architecture_plans')
             .select('content, sections')
             .eq('plan_key', archKey)
             .single();
-          const structuredPhaseCount = archPlan?.sections?.implementation_phases?.length || 0;
-          const hasMultipleStructuredPhases = structuredPhaseCount >= 2;
-          const contentPhaseMatches = archPlan?.content
-            ? (archPlan.content.match(/^##?\s*(Phase|Implementation Phase|Step)\s+\d/gim) || [])
-            : [];
-          const hasMultipleContentPhases = contentPhaseMatches.length >= 2;
-          if (hasMultipleStructuredPhases || hasMultipleContentPhases) {
-            console.log(`\n🔄 Auto-routing to orchestrator creator (${structuredPhaseCount || contentPhaseMatches.length} phases detected)...`);
-            const { execSync } = await import('child_process');
-            const cmd = `node scripts/create-orchestrator-from-plan.js --vision-key ${visionKey} --arch-key ${archKey} --title "${title}" --auto-children`;
-            execSync(cmd, { stdio: 'inherit', cwd: process.cwd() });
-            process.exit(0);
+          if (archPlanErr) {
+            if (archPlanErr.code === 'PGRST116') {
+              // Not found: likely a typo in --arch-key. Warn, skip FR-003, continue.
+              console.warn(`\n⚠️  archPlan not found for --arch-key='${archKey}', skipping FR-003 auto-route.`);
+              console.warn('   Verify spelling, or omit --arch-key to skip the auto-route check.');
+              archPlan = null;
+            } else {
+              throw archPlanErr;
+            }
+          } else {
+            archPlan = archPlanData;
+          }
+
+          // Reverse-lookup the brainstorm session that authored this plan key.
+          // Uses metadata->>plan_key (no FK exists; JSONB-only linkage). .limit(2)
+          // so we can distinguish 0 / 1 / 2+ rows (conservative bias on ambiguity).
+          if (archPlan) {
+            const { data: bsRows } = await sb
+              .from('brainstorm_sessions')
+              .select('metadata')
+              .eq('metadata->>plan_key', archKey)
+              .limit(2);
+            brainstormSession = Array.isArray(bsRows) && bsRows.length === 1 ? bsRows[0] : null;
           }
         } catch (routeErr) {
           // QF-20260409-561 (P1): Fail loud; silent fallback violated feedback_auto_decompose_sd_hierarchy.
+          // SD-FDBK-REFAC-LEO-CREATE-003-001 FR-5: PGRST116 was already handled above.
           console.error(`\n❌ Orchestrator auto-routing FAILED: ${routeErr.message}`);
           console.error(`   Check orphans: SELECT sd_key FROM strategic_directives_v2 WHERE metadata->>'vision_key'='${visionKey}';`);
           console.error('   Clean via database-agent, then re-run (create-orchestrator-from-plan.js will resume).');
           process.exit(1);
         }
+
+        const { shouldAutoRouteToOrchestrator } = await import('./modules/leo-create-sd/auto-route-decider.js');
+        const decision = shouldAutoRouteToOrchestrator({
+          archPlan,
+          brainstormSession,
+          archKey,
+          visionKey,
+          title,
+          options: { forceOrchestrator: args.includes('--force-orchestrator') },
+        });
+
+        // FR-4: emit a single structured telemetry line on every decision.
+        console.log(`[AUTO-ROUTE-DECISION] ${JSON.stringify(decision.telemetry)}`);
+
+        if (decision.route === 'orchestrator' && (decision.telemetry.structured_phase_count > 0 || decision.telemetry.content_phase_count >= 2)) {
+          console.log(`\n🔄 Auto-routing to orchestrator creator (${decision.telemetry.structured_phase_count || decision.telemetry.content_phase_count} phases detected)...`);
+          try {
+            const { execSync } = await import('child_process');
+            const cmd = `node scripts/create-orchestrator-from-plan.js --vision-key ${visionKey} --arch-key ${archKey} --title "${title}" --auto-children`;
+            execSync(cmd, { stdio: 'inherit', cwd: process.cwd() });
+            process.exit(0);
+          } catch (execErr) {
+            console.error(`\n❌ Orchestrator auto-routing FAILED: ${execErr.message}`);
+            console.error(`   Check orphans: SELECT sd_key FROM strategic_directives_v2 WHERE metadata->>'vision_key'='${visionKey}';`);
+            console.error('   Clean via database-agent, then re-run (create-orchestrator-from-plan.js will resume).');
+            process.exit(1);
+          }
+        } else if (decision.route === 'single' && (decision.layer_a_signal !== 'absent' || decision.layer_b_signal !== 'absent')) {
+          // FR-4 UX hint: explain the single-SD route + how to override.
+          console.error('↪ Single-SD route taken. To force orchestrator: re-run with --force-orchestrator,');
+          console.error('  or set LEO_AUTO_ROUTE_LAYER_A=off LEO_AUTO_ROUTE_LAYER_B=off to bypass both gates.');
+        }
+        // else: fall through to normal single-SD creation flow.
 
         // Advisory: warn about uncovered architecture phases (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
         try {
