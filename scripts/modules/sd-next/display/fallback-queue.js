@@ -134,7 +134,8 @@ export async function showFallbackQueue(supabase, options = {}) {
   // Show top ready SD per track.
   for (const [trackKey, trackSDs] of Object.entries(tracks)) {
     // QF-20260511-565: exclude LEAD-paused/deferred SDs from RECOMMENDED STARTING POINTS
-    const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on && !isLeadDecisionPaused(s));
+    // QF-20260512-300: exclude test-harness SDs (metadata.is_test=true) from recommendations
+    const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on && !isLeadDecisionPaused(s) && s.metadata?.is_test !== true);
     if (ready) {
       const trackLabel = `Track ${trackKey}`;
       console.log(`${colors.green}  ${trackLabel}:${colors.reset} ${ready.sd_key || ready.id} - ${ready.title.substring(0, 50)}...`);

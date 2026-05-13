@@ -19,6 +19,10 @@ import { renderQFRow } from './quick-fixes.js';
  * @param {Object} sessionContext - Session context {claimedSDs, currentSession, activeSessions, supabase}
  */
 export async function displayTrackSection(trackKey, trackName, items, sessionContext = {}) {
+  // QF-20260512-300: drop test-harness SDs (metadata.is_test=true) before display
+  // so fixtures like SD-TEST-MP1GU8PO-* don't leak into the workable queue.
+  // QFs and SDs without metadata pass through (optional chaining returns undefined).
+  items = items.filter(item => item.metadata?.is_test !== true);
   if (items.length === 0) return;
 
   // SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001: prefetch ghost-completed SD ids
