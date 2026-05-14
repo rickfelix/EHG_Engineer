@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-13T11:27:58.333Z
-**Rows**: 2,553
+**Generated**: 2026-05-14T00:42:41.193Z
+**Rows**: 2,559
 **RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (60 total)
+## Columns (61 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -87,6 +87,7 @@ Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integ
 | goal_summary | `character varying(300)` | YES | - | - |
 | venture_id | `uuid` | YES | - | FK to ventures.id. Scopes this PRD to a specific venture. Should match the parent SD venture_id. |
 | smoke_test_cmd | `text` | YES | - | Shell command executed by integration smoke test gate during PLAN-TO-LEAD handoff. Non-zero exit blocks completion. |
+| activation_test_id | `text` | YES | - | @activation reference to the required end-to-end test that verifies the schema -> worker -> UI chain works against real (or migration-applied test) data. NULL when no chain ships. See SD-LEO-INFRA-REQUIRE-END-END-001 for the activation-invariant pattern. |
 
 ## Constraints
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-13T11:27:58.333Z
-**Tables**: 687
+**Generated**: 2026-05-14T00:42:41.193Z
+**Tables**: 689
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (687)
+## All Tables (689)
 
 ### LEO Protocol
 
@@ -181,6 +181,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 ### Other
 
 - [_migration_metadata](tables/_migration_metadata.md)
+- [activation_catalog_expectations](tables/activation_catalog_expectations.md)
 - [activity_logs](tables/activity_logs.md)
 - [advisory_checkpoints](tables/advisory_checkpoints.md)
 - [aegis_constitutions](tables/aegis_constitutions.md)
@@ -420,6 +421,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [governance_proposals](tables/governance_proposals.md)
 - [gvos_adherence_logs](tables/gvos_adherence_logs.md)
 - [gvos_archetypes](tables/gvos_archetypes.md)
+- [gvos_prompt_rubrics](tables/gvos_prompt_rubrics.md)
 - [gvos_token_versions](tables/gvos_token_versions.md)
 - [gvos_tokens](tables/gvos_tokens.md)
 - [hap_blocks_v2](tables/hap_blocks_v2.md)
