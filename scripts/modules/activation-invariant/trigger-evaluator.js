@@ -21,12 +21,19 @@ const SCHEMA_TYPES = new Set(['schema', 'database', 'migration']);
 const SURFACE_TYPES = new Set(['feature', 'ui', 'component', 'route']);
 const WORKER_TYPES = new Set(['worker', 'consumer', 'api', 'service', 'job']);
 
-// Lane 2: free-text anchors. Carefully chosen — both schema-evidence AND
-// consumer-evidence must match for the SD to trigger. Anchors are word-
-// boundary regexes so "schema" matches but not "schematic".
-const SCHEMA_TEXT_REGEX = /\b(schema|migration|column|table|side[- ]table|seed|catalog|registry)\b/i;
-const SURFACE_TEXT_REGEX = /\b(ui|component|route|page|panel|render|view|menu|navigation|admin)\b/i;
-const WORKER_TEXT_REGEX = /\b(worker|consumer|api|service|job|orchestrat\w*|pipeline|trigger|hook)\b/i;
+// Lane 2: free-text anchors. Carefully tuned (QF-20260513-725) — wide single
+// words (column/table alone, view/panel/admin/render, pipeline/trigger/hook/
+// orchestrator) are dropped because LEO-infra SDs casually mention them
+// without shipping a real chain (58% FP rate on May-2026 cohort before tuning).
+// Replaced with stronger phrase anchors: action-bound schema terms, paired UI
+// patterns, role-bound worker/consumer mentions.
+//
+// Tuning regression check: GVOS-S17-PROMPT-QUALITY, GVOS-S17-E2E-PLAYWRIGHT,
+// and the synthetic motivating fixture must still trigger this lane. See
+// trigger-evaluator.test.js for the production-SD coverage tests.
+const SCHEMA_TEXT_REGEX = /\b(schema (migration|change|update|adds)|migration (adds|creates|introduces)|new[ -]table|side[- ]table|seed migration|catalog table|registry table|new (catalog|registry)|gvos_[a-z_]+|adds [a-z_]+_(table|rubric))\b/i;
+const SURFACE_TEXT_REGEX = /\b(ui[ -]?component|react[- ]component|new[- ]component|chairman[^.]*view|dashboard|user[- ]facing|panel[^.]*renders|page[^.]*renders|component[^.]*renders)\b/i;
+const WORKER_TEXT_REGEX = /\b(s\d+ worker|stage[ -]\d+ worker|worker[^.]*(populates|writes|consumes|reads|hook)|consumer[^.]*(reads|consumes|populates)|new[- ](consumer|worker|api))\b/i;
 
 /**
  * Pull all free-text fields from a single key_changes entry. Tolerant of

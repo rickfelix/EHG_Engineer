@@ -76,9 +76,12 @@ describe('evaluateTrigger — free-text (Lane 2) handles heterogeneous shapes', 
   });
 
   it('does NOT trigger when text mentions schema-only (no consumer surface or worker)', () => {
+    // Tightened regex (QF-20260513-725) requires action-bound schema phrases.
+    // Use one that matches so this test exercises the lane-pair logic
+    // (schema yes, consumer no -> trigger false), not just regex selectivity.
     const sd = {
       key_changes: [
-        { title: 'Migration', detail: 'Add new column to product_requirements_v2' },
+        { title: 'Migration adds new catalog table', detail: 'Backfill rows for product_requirements_v2' },
       ],
     };
     const result = evaluateTrigger(sd);
@@ -112,6 +115,34 @@ describe('evaluateTrigger — both-lane match', () => {
     expect(result.lane1.passed).toBe(true);
     expect(result.lane2.passed).toBe(true);
     expect(result.reason).toBe('both_lanes_match');
+  });
+});
+
+describe('evaluateTrigger — tightened regex regression (QF-20260513-725)', () => {
+  it('does NOT trigger on bare word "schema" or "migration" mentions', () => {
+    // Pre-tuning, these single words alone triggered Lane 2 schemaMatch.
+    // Post-tuning, action-bound phrases required.
+    const sd = { key_changes: [{ title: 'Refactor', detail: 'Adjust schema considerations in the worker code path' }] };
+    expect(evaluateTrigger(sd).lane2.schemaMatch).toBe(false);
+  });
+
+  it('does NOT trigger on bare "view" / "panel" / "admin" mentions', () => {
+    // Pre-tuning, these single words alone triggered Lane 2 surfaceMatch.
+    const sd = { key_changes: [{ title: 'Schema migration', detail: 'Review admin queue; view changes; panel for audit log' }] };
+    // schema phrase matches schema regex, but no consumer phrase matches.
+    const result = evaluateTrigger(sd);
+    expect(result.lane2.schemaMatch).toBe(true);
+    expect(result.lane2.consumerMatch).toBe(false);
+    expect(result.triggered).toBe(false);
+  });
+
+  it('does NOT trigger on bare "trigger" / "hook" / "pipeline" mentions', () => {
+    // Pre-tuning, these LEO-infra-common words triggered Lane 2 workerMatch.
+    const sd = { key_changes: [{ title: 'Migration adds new catalog table', detail: 'Use DB trigger and pipeline hook to dedupe' }] };
+    const result = evaluateTrigger(sd);
+    expect(result.lane2.schemaMatch).toBe(true);
+    expect(result.lane2.consumerMatch).toBe(false);
+    expect(result.triggered).toBe(false);
   });
 });
 
