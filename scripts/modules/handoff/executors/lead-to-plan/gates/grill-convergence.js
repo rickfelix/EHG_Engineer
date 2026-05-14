@@ -23,7 +23,14 @@ export function createGrillConvergenceGate(supabase) {
     name: 'GATE_GRILL_CONVERGENCE',
     description: 'SDs with open_questions_for_plan_phase must have a fresh /grill convergence artifact before LEAD-TO-PLAN (phase-1 warn, phase-2 hard-fail)',
     threshold: 70,
-    async execute(sd) {
+    required: false,
+    remediation: 'Run `node scripts/pocock/grill-runner.mjs --sd-id <SD-ID>` against open questions OR set metadata.grill_bypass=true with grill_bypass_reason (≥10 chars). Bypass quota: 3 per SD, 10 per day globally.',
+    validator: async (ctx) => executeGrillConvergence(ctx.sd, supabase),
+  };
+}
+
+async function executeGrillConvergence(sd, supabase) {
+  {
       const openQuestions = sd?.metadata?.open_questions_for_plan_phase || [];
       const sdKey = sd?.sd_key || sd?.id;
 
@@ -204,8 +211,7 @@ export function createGrillConvergenceGate(supabase) {
           artifact_count: (artifacts || []).length,
         },
       };
-    },
-  };
+  }
 }
 
 export default createGrillConvergenceGate;
