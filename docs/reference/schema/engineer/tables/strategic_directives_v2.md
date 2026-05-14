@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-14T15:47:37.710Z
+**Generated**: 2026-05-14T16:41:03.113Z
 **Rows**: 3,184
 **RLS**: Enabled (7 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (99 total)
+## Columns (100 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -121,6 +121,7 @@ Use the id column instead - it is the canonical identifier. |
 | non_vertical_justification | `text` | YES | - | C1: LEAD or chairman rationale when approving a non-vertical child SD (e.g., "Schema migration must precede backend logic, intentional split"). Required when non_vertical=true and SD reaches PLAN-TO-EXEC handoff. |
 | wiring_validated | `boolean` | YES | - | Derived boolean maintained by trg_zz_maintain_wiring_validated on leo_wiring_validations insert/update. true = all required checks passed-or-waived; false = at least one required check failed unwaived; null = required checks missing. Gate logic reads this column, not the underlying validation rows. |
 | scope_slice | `jsonb` | YES | - | Optional slice of parent orchestrator scope this child claims. Shape: {stages?: number[], deliverable_globs?: string[]}. When set, scope-completion-gate filters parent arch plan deliverables through this slice before scoring. When NULL, gate scores the full parent deliverable set (pre-SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A behavior). |
+| adrs_consulted | `ARRAY` | **NO** | `ARRAY[]::text[]` | - |
 
 ## Constraints
 
