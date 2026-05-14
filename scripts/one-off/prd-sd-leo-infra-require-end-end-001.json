@@ -1,0 +1,299 @@
+{
+  "title": "PRD: Activation Invariant Test Requirement at SD Completion Gate",
+  "executive_summary": "Adds a new LEAD-FINAL-APPROVAL gate (`activation-invariant-gate.js`) that blocks SD completion when an SD ships a schema+UI+worker chain but lacks an end-to-end test asserting the chain works against real data. Closes the 26th writer-consumer asymmetry witness at SD-orchestration scale by extending the canonical TESTING sub-agent rule-set. Adds one column (`product_requirements_v2.activation_test_id`), one side table (`activation_catalog_expectations`), one audit CLI (`scripts/audit-activation-chain.mjs`), and a one-off retroactive scanner. Layer A (SD-FDBK-REFAC-LEO-CREATE-003-001 PR #3758) closed SD-creation fragmentation; this PRD closes Layer B (completion-gate has no cross-SD activation invariant).",
+  "business_context": "Three GVOS sibling SDs shipped as 'completed' on 2026-05-13. Each individual SD met its narrow scope and passed all gates. But the integrated chain failed silently: gvos_archetypes catalog has 0 rows (seed never written), gvos_prompt_rubrics table does not exist (migration 007 absent), venture_gvos_profile has 0 rows across all 574 ventures (S11 worker never updated). Every venture's S17 view silently renders the legacy 4-variant Bootstrap pipeline, NOT the GVOS Awwwards-tier output the strategic intent specified. The completion gate had no mechanism to catch this. This SD installs that mechanism.",
+  "technical_context": "Stack: JavaScript ESM. New dep: acorn (MIT, ~200KB) for FR-4 audit utility's call-graph analysis. Repository: EHG_Engineer monorepo. Gate registration is manual via getRequiredGates() in scripts/modules/handoff/executors/lead-final-approval/gates.js lines 1150-1224. Sub-agent evidence rows write to sub_agent_execution_results with canonical insert shape from lib/sub-agent-executor/results-storage.js lines 267-327 (5-min dedupe window on sd_id+sub_agent_code). Bypass flag pattern from BaseExecutor.js: --bypass-validation --bypass-reason already exists; we tag activation-invariant skips inside the reason text (ACTIV-CHAIN-DEFERRED:<ticket>) rather than adding a new flag.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Define activation-invariant test class",
+      "description": "Establish a new required-test class identified by product_requirements_v2.activation_test_id. Trigger: any SD whose key_changes (via DUAL-SCAN: structured type IN (schema,feature,ui,database) AND free-text regex over change|detail|title|impact|description) match the schema+UI+worker chain pattern. The test must operate against a real (or migration-applied test) database, execute the schema -> worker -> UI path end-to-end, and assert a non-trivial DOM/state outcome.",
+      "acceptance_criteria": [
+        "New column product_requirements_v2.activation_test_id TEXT NULL exists in production DB",
+        "Column documented via COMMENT ON COLUMN with @activation tag convention",
+        "Reading PRDs: rows pre-existing this migration return NULL (read by CI guard as 'no chain, no test required')",
+        "CLAUDE_PLAN.md + CLAUDE_EXEC.md sections describe when to populate the field and what the test shape looks like (example reference + 1 sibling-SD diff)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Completion-gate enforcement at LEAD-FINAL-APPROVAL",
+      "description": "New gate activation-invariant-gate.js registered in gates.js::getRequiredGates() for LEAD-FINAL-APPROVAL. For trigger-class SDs, gate PASSES if PRD.activation_test_id is non-empty AND the test file exists AND a TESTING sub-agent evidence row with verdict=PASS and metadata.activation_invariant_verified=true exists within 24h. Gate FAILS with remediation block (CLI tag [ACTIVATION_INVARIANT_AUDIT]) listing missing component, example diffs, and re-run command. Bypass via existing --bypass-validation --bypass-reason 'ACTIV-CHAIN-DEFERRED:<ticket>' (no new flag added).",
+      "acceptance_criteria": [
+        "Gate registered and visible in handoff.js precheck LEAD-FINAL-APPROVAL output",
+        "Gate signature matches { name, validator, required } and returns { passed, score, max_score, issues, warnings, details }",
+        "Trigger evaluator implements DUAL-SCAN (structured type match AND free-text regex on the heterogeneous key_changes shape)",
+        "Gate uses phase='LEAD-FINAL-APPROVAL' exactly when querying sub_agent_execution_results",
+        "Bypass reason ACTIV-CHAIN-DEFERRED:<ticket> recognized; rate-limited to 3/SD via existing handoff bypass quota; logged to audit_log",
+        "Intentionally-incomplete test SD (synthetic fixture) is BLOCKED by the gate"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Catalog-empty CI guard",
+      "description": "New side table activation_catalog_expectations (sd_id uuid FK, table_name text, seed_migration_path text, created_at timestamptz) PK=(sd_id, table_name). For SDs that introduce catalog/registry tables expected to be seeded, PLAN authors INSERT rows declaring the expectation. CI workflow runs node scripts/check-activation-catalog.mjs <SD-ID> post-migration: for each declared expectation, asserts SELECT COUNT(*) > 0 FROM <table_name>. FAILS with link to the seed migration that was supposed to land.",
+      "acceptance_criteria": [
+        "Side table created with FK to strategic_directives_v2(id) ON DELETE CASCADE",
+        "RLS policies match existing strategic_directives_v2 patterns (service-role write, authenticated read)",
+        "scripts/check-activation-catalog.mjs reads expectations and asserts non-zero counts",
+        "GitHub Actions workflow step added to existing CI matrix (does NOT create new workflow file)",
+        "Intentionally-unseeded catalog SD fixture is BLOCKED by the CI guard"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Activation-chain audit utility",
+      "description": "New CLI node scripts/audit-activation-chain.mjs <SD-ID>. Reads SD's metadata + PRD (schema migrations + UI components touched). For each touched table: COUNT(*) + report. For each touched UI testid: render synthetic venture + assert presence. Outputs activation-chain coverage score (0-5 dimensions: registry, route, menu, flag, E2E). Dual mode: default human table; --json for machine consumption. Exit code: 0 if >=4/5, 1 otherwise.",
+      "acceptance_criteria": [
+        "Utility runs against SD-GVOS-COMPOSER-SNAPSHOTLOCKED-REGISTRY-ORCH-001 and outputs a coverage score <4/5 (empirical premise validation)",
+        "Utility runs against a known-good completed SD and outputs >=4/5",
+        "JSON output schema documented in script header comment",
+        "Test fixtures live in tests/fixtures/activation-chain/ (good + bad samples)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Document the Activation Invariant Rule",
+      "description": "Add a new section to CLAUDE_PLAN.md (PRD authoring) and CLAUDE_EXEC.md (test writing) explaining when activation_test_id is required, what the test should look like, and link to FR-4 audit utility.",
+      "acceptance_criteria": [
+        "CLAUDE_PLAN.md section under '## Activation Invariant Rule' added with: trigger conditions, PRD field reference, example",
+        "CLAUDE_EXEC.md section under '## Activation Invariant Test Pattern' added with: test layout, real-DB vs migration-applied-test-DB guidance, assertion patterns",
+        "Both files regenerated via node scripts/generate-claude-md-from-db.js if DB-sourced — verify via lint pass"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Retroactive scan of completed SDs",
+      "description": "One-off scripts/one-off/scan-completed-sds-for-activation-gap.mjs. Find SDs marked completed since 2026-01-01 that match FR-1 trigger. Run FR-4 audit. Report SDs with coverage_score < 0.9 as suspected gaps. Each gap files a feedback row with stable title [ACTIVATION_CHAIN_GAP] SD-<KEY> missing: <components> (idempotent via SELECT-then-INSERT dedupe per auto-resolve-recovered.js pattern). Remediation per finding is OUT OF SCOPE — separate SD per gap.",
+      "acceptance_criteria": [
+        "Scanner runs to completion without error on full historical SD set",
+        "Re-running scanner does NOT create duplicate feedback rows (verified by row count before/after second run)",
+        "Feedback rows include JSON code-fence in body with coverage + missing list (machine-parseable)",
+        "Feedback rows tagged category='harness_backlog' for campaign routing",
+        "Final report includes summary: Scanned N completed SDs; M flagged with gap; P% coverage average"
+      ]
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "requirement_type": "NON_FUNCTIONAL",
+      "title": "Performance budget for activation invariant gate",
+      "description": "FR-2 activation-invariant gate adds <2 seconds to LEAD-FINAL-APPROVAL handoff. Both the PRD query (single row by sd_id, indexed) and the sub_agent_execution_results query (single row by sd_id+sub_agent_code, 24h window, indexed) must complete within this budget. Measured via [GATE_LOG] structured timing."
+    },
+    {
+      "requirement_type": "NON_FUNCTIONAL",
+      "title": "Retroactive scanner idempotency",
+      "description": "FR-6 scan-completed-sds-for-activation-gap.mjs must be safely re-runnable. Subsequent runs against the same historical SD set produce zero net new feedback rows. Dedupe key: (category=harness_backlog, title startsWith [ACTIVATION_CHAIN_GAP] SD-<KEY>, status NOT IN resolved|wont_fix)."
+    },
+    {
+      "requirement_type": "NON_FUNCTIONAL",
+      "title": "Backward compatibility with 3170 existing SDs",
+      "description": "New column product_requirements_v2.activation_test_id is NULL-safe and NULL-default. Existing SDs and PRDs without this field do NOT trigger the gate. Gate only fires when DUAL-SCAN heuristic matches the schema+UI+worker chain pattern (strict regex anchors)."
+    },
+    {
+      "requirement_type": "NON_FUNCTIONAL",
+      "title": "Observability via structured [GATE_LOG]",
+      "description": "All activation-invariant gate decisions emit a [GATE_LOG] JSON line including: gate_name, sd_id, verdict, score, trigger_matched (boolean + reason), evidence_row_id_if_found, elapsed_ms. Format matches existing GATE_LOG convention in gates.js."
+    },
+    {
+      "requirement_type": "NON_FUNCTIONAL",
+      "title": "Bypass auditability via existing audit_log",
+      "description": "Bypass invocations via --bypass-validation --bypass-reason 'ACTIV-CHAIN-DEFERRED:<ticket>' write to the existing audit_log table with severity=warning, source=activation_invariant_gate, sd_id, reason_text, quota_remaining. No new audit channel created."
+    }
+  ],
+  "technical_requirements": [
+    {
+      "requirement_type": "TECHNICAL",
+      "title": "ESM JavaScript on Node 20+",
+      "description": "All new files use ECMAScript modules (import/export). Compatible with the existing EHG_Engineer codebase Node 20+ runtime. No TypeScript compilation step added."
+    },
+    {
+      "requirement_type": "TECHNICAL",
+      "title": "Acorn parser for FR-4 audit utility",
+      "description": "Add acorn ^8.x as a runtime dependency (MIT-licensed, ~200KB, zero transitive deps). Used only by scripts/audit-activation-chain.mjs to parse JS imports/exports and build a call-graph identifying UI testids touched by the SD's modified components."
+    },
+    {
+      "requirement_type": "TECHNICAL",
+      "title": "Supabase service-role connection",
+      "description": "All DB access in new scripts uses scripts/lib/supabase-connection.js::createSupabaseServiceClient. This pooler-aware helper handles connection lifecycle correctly (avoids raw direct-URL timeouts; see CLAUDE_CORE.md Supabase Database Operations section)."
+    },
+    {
+      "requirement_type": "TECHNICAL",
+      "title": "Manual gate registration in getRequiredGates()",
+      "description": "New activation-invariant-gate.js is pushed to the array returned by getRequiredGates() in scripts/modules/handoff/executors/lead-final-approval/gates.js (lines 1150-1224). No auto-discovery; the explicit registration is intentional and matches all existing gates."
+    },
+    {
+      "requirement_type": "TECHNICAL",
+      "title": "Canonical sub-agent evidence row shape",
+      "description": "TESTING sub-agent evidence rows for activation-invariant verification follow the canonical lib/sub-agent-executor/results-storage.js insert shape: sd_id (uuid), sub_agent_code='TESTING', phase='LEAD-FINAL-APPROVAL', verdict, confidence, metadata.activation_invariant_verified=true. 5-minute dedupe window on (sd_id, sub_agent_code) means re-runs UPDATE in place."
+    },
+    {
+      "requirement_type": "TECHNICAL",
+      "title": "Existing bypass flag with reason-text discriminator",
+      "description": "No new --bypass-* flag added. Bypass is via existing --bypass-validation --bypass-reason 'ACTIV-CHAIN-DEFERRED:<ticket>'. The gate's bypass evaluator regex-matches the reason text for the ACTIV-CHAIN-DEFERRED prefix and applies the same per-SD/global quota (3/SD, 10/day) already enforced by handoff.js."
+    }
+  ],
+  "system_architecture": "## Failure Chain (Pipeline Ordering)\n\nLayer 1 (CLOSED, PR #3758): leo-create-sd.js auto-router fragmented chairman locks\n  -> Layer 2 (THIS SD): Each fragment's completion gate had no cross-SD activation invariant\n    -> Layer 3 (downstream remediation, OUT OF SCOPE): GVOS-ACTIVATION-REMEDIATION-001 backfills specific gap\n\n## Components (FR-ordered upstream-to-downstream)\nFR-1 (column + convention) -> FR-2 (gate + sub-agent rule) -> FR-3 (CI catalog guard) -> FR-4 (audit utility) -> FR-5 (doc) -> FR-6 (retroactive scan, consumes FR-4)\n\n## Component Inventory\n- NEW Activation invariant gate: scripts/modules/handoff/executors/lead-final-approval/gates/activation-invariant-gate.js\n- MODIFIED Gate registration in scripts/modules/handoff/executors/lead-final-approval/gates.js (push to getRequiredGates)\n- MODIFIED TESTING sub-agent rule extension at .claude/agents/testing-agent.md\n- NEW Audit utility scripts/audit-activation-chain.mjs\n- NEW Catalog CI guard scripts/check-activation-catalog.mjs\n- NEW Retroactive scanner scripts/one-off/scan-completed-sds-for-activation-gap.mjs\n- NEW Migration adding activation_test_id column to product_requirements_v2\n- NEW Migration creating activation_catalog_expectations side table\n- MODIFIED CLAUDE_PLAN.md + CLAUDE_EXEC.md doc sections (FR-5)\n- NEW Trigger heuristic helper scripts/modules/activation-invariant/trigger-evaluator.js\n- NEW Test fixtures tests/fixtures/activation-chain/{good,bad}/*.json\n- NEW Vitest specs scripts/modules/activation-invariant/*.test.js",
+  "data_model": "Two schema additions:\n\n1. product_requirements_v2.activation_test_id TEXT NULL — relative path to the activation invariant test spec (e.g., tests/e2e/activation-invariant/gvos-chain.spec.ts). NULL means no chain in this PRD.\n   Migration: ALTER TABLE product_requirements_v2 ADD COLUMN IF NOT EXISTS activation_test_id TEXT;\n   Annotation: COMMENT ON COLUMN product_requirements_v2.activation_test_id IS '@activation reference to required test for invariant verification'\n\n2. activation_catalog_expectations side table (PK on sd_id+table_name, FK to strategic_directives_v2(id) ON DELETE CASCADE):\n   Columns: sd_id uuid, table_name text, seed_migration_path text, created_at timestamptz DEFAULT now(), created_by text\n   Index on table_name for catalog-wide queries\n   RLS: service_role write, authenticated read (matches strategic_directives_v2 patterns)\n\nBoth migrations NULL-safe; backward-compatible across 3170 existing SDs (verified by DATABASE sub-agent).",
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "title": "Gate blocks intentionally-incomplete activation chain",
+      "scenario": "Given a synthetic fixture SD with key_changes containing schema+ui types AND PRD.activation_test_id=NULL, when LEAD-FINAL-APPROVAL precheck runs, then GATE_ACTIVATION_INVARIANT FAILS with score<70 and remediation message naming the missing component."
+    },
+    {
+      "id": "TS-2",
+      "title": "Gate passes when activation_test_id present and PASS evidence exists",
+      "scenario": "Given fixture SD with key_changes containing schema+ui AND PRD.activation_test_id set AND a TESTING sub_agent_execution_results row with verdict=PASS and metadata.activation_invariant_verified=true within 24h, when handoff runs, gate PASSES with score 100."
+    },
+    {
+      "id": "TS-3",
+      "title": "Trigger heuristic handles heterogeneous key_changes",
+      "scenario": "Given SD-GVOS-S17-PROMPT-QUALITY-ORCH-001 actual key_changes (which use {title, detail} not {type}), when trigger evaluator runs, it matches via DUAL-SCAN free-text regex over change|detail|title|impact|description."
+    },
+    {
+      "id": "TS-4",
+      "title": "Catalog CI guard fails on unseeded registry",
+      "scenario": "Given a fixture SD with an activation_catalog_expectations row pointing at an empty test table, when check-activation-catalog.mjs runs, it exits 1 and prints the seed migration path that was supposed to land."
+    },
+    {
+      "id": "TS-5",
+      "title": "Audit utility correctly scores GVOS empirical premise",
+      "scenario": "Given SD-GVOS-COMPOSER-SNAPSHOTLOCKED-REGISTRY-ORCH-001 (real production data), when audit-activation-chain.mjs runs, output coverage <4/5 with non-empty missing list. Validates empirical premise."
+    },
+    {
+      "id": "TS-6",
+      "title": "Retroactive scanner idempotency",
+      "scenario": "Run scan-completed-sds-for-activation-gap.mjs twice in succession. Second run produces same set of feedback rows; no duplicate INSERTs. Verified by SELECT count comparison."
+    },
+    {
+      "id": "TS-7",
+      "title": "Bypass discriminator works via existing reason flag",
+      "scenario": "Given a trigger-class SD without activation_test_id, when handoff executes with --bypass-validation --bypass-reason ACTIV-CHAIN-DEFERRED:JIRA-123, gate logs bypass to audit_log, decrements quota counter, and proceeds. Quota exhaustion (4th bypass on same SD) blocks."
+    }
+  ],
+  "acceptance_criteria": [
+    "All 7 test scenarios pass",
+    "GATE_ACTIVATION_INVARIANT visible in handoff.js precheck LEAD-FINAL-APPROVAL output",
+    "TESTING sub-agent evidence row schema documented in .claude/agents/testing-agent.md",
+    "FR-4 audit utility produces score<4/5 for SD-GVOS-COMPOSER-SNAPSHOTLOCKED-REGISTRY-ORCH-001 (empirical premise validation)",
+    "FR-6 scanner runs to completion against full history; emits >=1 feedback row; re-run produces 0 net new rows",
+    "Both migrations apply cleanly via database-agent (no SUPABASE_DB_PASSWORD required when SUPABASE_POOLER_URL set)",
+    "Memory entry filed: 26th writer-consumer asymmetry witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001",
+    "Russian Judge PRD score >= 70",
+    "Total PR set: <=5 PRs, each <=100 LOC ideal, <=200 LOC max with justification"
+  ],
+  "risks": [
+    {
+      "risk": "Trigger heuristic false-positive rate too high (every UI-tweak SD triggers the gate)",
+      "severity": "medium",
+      "mitigation": "DUAL-SCAN with strict regex anchors; require BOTH schema-type AND (worker|consumer) phrase match. Test against 50 recent completed SDs as part of FR-4; tune until false-positive < 10%. Document tuning constants at top of trigger-evaluator.js."
+    },
+    {
+      "risk": "Process friction: another required test per qualifying SD adds EXEC overhead",
+      "severity": "medium",
+      "mitigation": "Bounded scope: one test per affected surface, NOT one per FR. Use bypass discriminator for genuinely-deferred chains with ticket reference. Quota = 3/SD enforces accountability."
+    },
+    {
+      "risk": "Schema migration applied before code that reads it (FR-1 column before FR-2 gate)",
+      "severity": "low",
+      "mitigation": "PR ordering: migration PR ships FIRST and is independently revertable. Gate code reads coalesce(activation_test_id, NULL) so absence of column would NOT crash (NULL default)."
+    },
+    {
+      "risk": "Retroactive scanner overwhelms feedback inbox with 50+ rows on first run",
+      "severity": "low",
+      "mitigation": "First run gated behind --commit flag (dry-run by default). LEAD reviews dry-run output before committing. Rows tagged category=harness_backlog (not critical) so triage routing handles them."
+    },
+    {
+      "risk": "Activation test takes too long to run in CI (real DB + UI render)",
+      "severity": "low",
+      "mitigation": "Use migration-applied test database with seed fixtures (NOT production). Render via vitest+jsdom or playwright-component. Target <30s per activation test."
+    }
+  ],
+  "constraints": [
+    "Must NOT create a new sub-agent code — extend TESTING (per DATABASE sub-agent decision; avoids gate-pipeline rewiring at every handoff)",
+    "Must NOT add a new --bypass-* flag — discriminate via --bypass-reason text (ACTIV-CHAIN-DEFERRED:<ticket>)",
+    "Migration must be NULL-safe and backward-compatible (3170 existing SDs)",
+    "Stay within 5 PRs total; each <=100 LOC ideal"
+  ],
+  "assumptions": [
+    "Supabase service-role client is available in handoff.js context (already true)",
+    "PRDs created via add-prd-to-database.js consistently populate activation_test_id when PLAN author follows updated CLAUDE_PLAN.md (FR-5 enforces this via documentation)",
+    "The 3 GVOS sibling SDs (now completed=true) are NOT remediated by this SD — remediation is the separate SD-GVOS-ACTIVATION-REMEDIATION-001",
+    "TESTING sub-agent already runs at LEAD-FINAL-APPROVAL handoff (confirmed via gates.js inspection)"
+  ],
+  "goal_summary": "Add a LEAD-FINAL-APPROVAL gate that requires SDs shipping schema+UI+worker chains to have a real-DB end-to-end test asserting the chain works. Closes 26th writer-consumer asymmetry witness at SD-orchestration scale.",
+  "implementation_approach": "Five-PR sequence ordered upstream-to-downstream (matches Failure Chain in system_architecture). PR1: Migrations (activation_test_id column + activation_catalog_expectations side table). PR2: trigger-evaluator.js helper + gate (activation-invariant-gate.js) + register in getRequiredGates(). PR3: TESTING sub-agent rule extension (.claude/agents/testing-agent.md) + bypass quota wiring. PR4: audit-activation-chain.mjs (FR-4) + check-activation-catalog.mjs (FR-3). PR5: CLAUDE_PLAN.md + CLAUDE_EXEC.md doc sections (FR-5) + retroactive scanner (FR-6, dry-run by default). Each PR ≤100 LOC ideal, ≤200 LOC max with justification. Vitest specs ride with code in same PR. PR1 must merge before PR2-5 (migration dependency). PR3-5 can ship in any order after PR2.",
+  "integration_operationalization": {
+    "consumers": [
+      {
+        "consumer": "LEO orchestrator (handoff.js execute LEAD-FINAL-APPROVAL)",
+        "journey": "When an EXEC/PLAN session attempts to mark a trigger-class SD complete, the gate runs synchronously, blocks with remediation, and exits non-zero."
+      },
+      {
+        "consumer": "EXEC engineer (human or session)",
+        "journey": "On gate failure, reads remediation message in console, writes the activation invariant test spec, populates PRD.activation_test_id via add-prd-to-database.js, re-runs handoff."
+      },
+      {
+        "consumer": "LEAD reviewer of FR-6 scanner output",
+        "journey": "Receives summary report + feedback rows in /leo inbox; decides which historical gaps to remediate via follow-up SDs."
+      },
+      {
+        "consumer": "GitHub Actions CI",
+        "journey": "Post-migration workflow step runs check-activation-catalog.mjs; failure blocks PR merge."
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "strategic_directives_v2.id (FK target)",
+        "direction": "upstream",
+        "failure_mode": "FK violation if SD deleted while expectation row exists (CASCADE handles)"
+      },
+      {
+        "name": "product_requirements_v2.sd_id (existing)",
+        "direction": "upstream",
+        "failure_mode": "Gate skips if no PRD row exists (logs warning, score 0/100)"
+      },
+      {
+        "name": "sub_agent_execution_results (TESTING evidence)",
+        "direction": "upstream",
+        "failure_mode": "Gate FAILS if no TESTING row within 24h with activation_invariant_verified=true; remediation: run testing-agent"
+      },
+      {
+        "name": "feedback table (FR-6 writes here)",
+        "direction": "downstream",
+        "failure_mode": "Race condition with auto-resolve-recovered.js: 5-min safety window mirrors orphan-qf-reaper.mjs pattern"
+      },
+      {
+        "name": "audit_log (bypass writes)",
+        "direction": "downstream",
+        "failure_mode": "audit_log unavailable -> bypass still proceeds but logs error (consistent with existing handoff.js bypass behavior)"
+      }
+    ],
+    "data_contracts": "Two new schema objects detailed in data_model field. Both NULL-safe, backward compatible, RLS-policied. No breaking changes to existing tables/columns. Sub-agent evidence rows extend metadata schema with metadata.activation_invariant_verified: boolean field (additive, optional).",
+    "runtime_config": "No new env vars required for production. CI workflow may set ACTIVATION_INVARIANT_BYPASS_QUOTA_MULTIPLIER env (default 1.0) for test environments to relax quota during fixture testing. No feature flag needed — gate is on for all trigger-class SDs immediately. Deployment sequence: (1) migrations apply, (2) gate registered in next handoff.js release, (3) FR-6 scanner runs once in dry-run, then committed.",
+    "observability_rollout": "Metrics: count of [GATE_LOG] GATE_ACTIVATION_INVARIANT lines in handoff logs (PASS vs FAIL), count of ACTIV-CHAIN-DEFERRED bypasses in audit_log. Rollout: gate is non-disruptive (FAIL on existing in-flight SDs is rare because trigger heuristic is strict). Rollback: revert PR for gates.js registration removes gate from chain; data migrations are additive (no rollback needed for NULL columns and unreferenced side table)."
+  },
+  "exploration_summary": "Explore agent + DATABASE sub-agent inspected (1) scripts/modules/handoff/executors/lead-final-approval/gates/smoke-test-gate.js (signature, return shape, PRD access), (2) scripts/modules/handoff/executors/lead-final-approval/gates/phantom-test-audit-gate.js (bypass precedent), (3) scripts/modules/handoff/executors/lead-final-approval/gates.js lines 1150-1224 (manual gate registration via getRequiredGates), (4) lib/sub-agent-executor/results-storage.js lines 267-327 (evidence insert shape, 5-min dedupe), (5) scripts/modules/inbox/auto-resolve-recovered.js lines 77-104 (idempotent feedback writer pattern), (6) database/migrations/010_add_prd_column_descriptions.sql (COMMENT ON TABLE precedent — plain English only, @activation tag is new convention), (7) .claude/agents/testing-agent.partial (sub-agent registration format). Conclusion: greenfield activation-invariant infrastructure; no duplicate gates/sub-agents/utilities exist; TESTING extension is canonical path (not new sub-agent code).",
+  "smoke_test_cmd": "node scripts/handoff.js precheck LEAD-FINAL-APPROVAL SD-LEO-INFRA-REQUIRE-END-END-001 && node scripts/audit-activation-chain.mjs SD-GVOS-COMPOSER-SNAPSHOTLOCKED-REGISTRY-ORCH-001",
+  "metadata": {
+    "baseline_observation": "## Baseline Observation\n\nCommand run (2026-05-13 by SD-LEO-INFRA-REQUIRE-END-END-001 LEAD phase): empirical verification of GVOS sibling SD completion state.\n\nOutput observed: 3 GVOS sibling SDs all status=completed phase=COMPLETED; Layer A shipped via SD-FDBK-REFAC-LEO-CREATE-003-001 PR #3758 merged 2026-05-13; no duplicate gate exists (smoke-test-gate.js / phantom-test-audit-gate.js / wire-check-gate.js are orthogonal); no existing audit utility scripts/audit-activation-chain.mjs.\n\nFirst point of failure (root cause): The completion gate for LEAD-FINAL-APPROVAL has NO mechanism to assert that an SD shipping a schema+UI+worker chain has an end-to-end test verifying the chain works against real data. Each individual SD's narrow scope test passed in isolation; the cross-SD activation invariant was untested. Result: 3 SDs marked complete with feature-dark output to 574 ventures.\n\nExpected output (after this SD ships): For any trigger-class SD without activation_test_id populated AND verified, LEAD-FINAL-APPROVAL gate emits [ACTIVATION_INVARIANT_AUDIT] FAIL with remediation and exits non-zero. SD cannot be marked completed.",
+    "lead_addendum_consumed": {
+      "validation_evidence_row": "97692da2-8c68-4ddd-b82e-8f831d8fb6e2",
+      "design_evidence_row": "e5d7caf1-49cb-4945-b7ce-7a6dffef6f2f",
+      "database_evidence_row": "6d7eaf00-eacb-498a-8256-1f369c82ed6b",
+      "design_informed": true,
+      "database_analysis": {
+        "design_informed": true
+      },
+      "prd_bound_risks_addressed": [
+        "dual-scan trigger (FR-2 AC)",
+        "expects_seed location locked to side table (FR-3)",
+        "explicit activation_test_id (FR-1)",
+        "FR-6 idempotency (TS-6)",
+        "phase-token alignment (FR-2 AC)",
+        "filename drift (constraints + technical_context)"
+      ]
+    }
+  }
+}

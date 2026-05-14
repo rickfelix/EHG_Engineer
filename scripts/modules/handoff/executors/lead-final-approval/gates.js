@@ -44,6 +44,11 @@ export { createLearningOrBypassResolvedGate };
 import { createCrossSdFileOverlapTemporalShipGate } from './gates/cross-sd-file-overlap-temporal-ship.js';
 export { createCrossSdFileOverlapTemporalShipGate };
 
+// Activation Invariant Gate — schema+UI+worker chain end-to-end test enforcement
+// (SD-LEO-INFRA-REQUIRE-END-END-001 FR-2; 26th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001)
+import { createActivationInvariantGate } from './gates/activation-invariant-gate.js';
+export { createActivationInvariantGate };
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -1201,6 +1206,12 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // within the configured window. High-risk = FAIL, medium = WARN unless ack'd.
   gates.push(createCrossSdFileOverlapTemporalShipGate(supabase));
 
+  // Activation Invariant Gate — blocks completion when an SD ships a
+  // schema+UI+worker chain without an end-to-end test asserting the chain
+  // works against real data. Closes 26th writer-consumer asymmetry witness.
+  // (SD-LEO-INFRA-REQUIRE-END-END-001 FR-2)
+  gates.push(createActivationInvariantGate(supabase, prdRepo));
+
   return gates;
 }
 
@@ -1220,5 +1231,6 @@ export default {
   createPhantomTestAuditGate,
   createLearningOrBypassResolvedGate,
   createCrossSdFileOverlapTemporalShipGate,
+  createActivationInvariantGate,
   getRequiredGates
 };

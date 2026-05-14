@@ -316,6 +316,56 @@ When invoked with `Mode: post-implementation`, verify:
 
 This is the existing post-implementation testing behavior and remains unchanged from prior versions.
 
+## Activation Invariant Test Class (SD-LEO-INFRA-REQUIRE-END-END-001 / FR-2)
+
+The activation invariant gate runs at LEAD-FINAL-APPROVAL and blocks completion when an SD ships a schema+UI+worker chain without an end-to-end test asserting the chain works against real data. Closes 26th writer-consumer asymmetry witness (PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
+
+### When the gate triggers
+
+The gate's trigger heuristic (`scripts/modules/activation-invariant/trigger-evaluator.js`) is a DUAL-SCAN: it fires when EITHER (a) `key_changes[*].type` contains schema/database/migration AND (feature/ui/component/route OR worker/consumer/api/service), OR (b) free-text across key_changes + description + title matches the same schema-evidence AND consumer-evidence pattern with word-boundary regexes.
+
+Pure migrations and pure UI tweaks do not trigger. False-positive rate target: <10% (tuneable via constants in trigger-evaluator.js).
+
+### Required testing-agent output
+
+For triggered SDs, the testing-agent MUST write a `sub_agent_execution_results` row with:
+- `sub_agent_code='TESTING'`
+- `phase='LEAD-FINAL-APPROVAL'` (exactly; matches existing gate convention)
+- `verdict='PASS'`
+- `metadata.activation_invariant_verified=true`
+- `created_at` within 24h of the LEAD-FINAL-APPROVAL handoff
+
+The gate at `scripts/modules/handoff/executors/lead-final-approval/gates/activation-invariant-gate.js` reads this row exactly. Verdict and verified flag are both required — verdict=PASS alone with `activation_invariant_verified=false` fails the gate.
+
+### Verifying the activation invariant test
+
+The activation invariant test path is declared in `product_requirements_v2.activation_test_id`. To verify it:
+
+1. Confirm the test file exists at the declared path.
+2. Confirm the test actually exercises the schema -> worker -> UI chain (not just unit-test the gate or trigger heuristic).
+3. The test must operate against a real DB (or migration-applied test DB) and assert a non-trivial DOM/state outcome dependent on the data layer being populated.
+4. Run the test via the appropriate runner (vitest for unit, playwright for E2E). All assertions must pass.
+
+If all conditions hold, write the evidence row with `verdict='PASS'` and `metadata.activation_invariant_verified=true`. Otherwise write `verdict='FAIL'` with details.
+
+### Bypass channel (existing handoff.js infrastructure)
+
+No new bypass flag added. To skip the activation invariant gate (rate-limited 3/SD and 10/day):
+
+```bash
+node scripts/handoff.js execute LEAD-FINAL-APPROVAL <SD-ID> \
+  --bypass-validation \
+  --bypass-reason "ACTIV-CHAIN-DEFERRED:<ticket-ref>"
+```
+
+The gate scans `sd.metadata.governance_metadata.bypass_reason` for the `ACTIV-CHAIN-DEFERRED` token. handoff.js increments the existing per-SD and global bypass quotas and logs to audit_log; no separate quota system for activation invariant.
+
+### Helper utilities
+
+- `node scripts/audit-activation-chain.mjs <SD-ID>` — runs the FR-4 audit: reports a 0-5 coverage score (registry, route, menu, flag, E2E dimensions) for any SD's chain. Use `--json` for machine consumption.
+- `node scripts/check-activation-catalog.mjs <SD-ID>` — reads `activation_catalog_expectations` rows and asserts COUNT(*) > 0 against each declared table. Exits 1 on any unseeded catalog.
+- `node scripts/one-off/scan-completed-sds-for-activation-gap.mjs` — retroactive scan; dry-run by default; emits `[ACTIVATION_CHAIN_GAP] SD-<KEY>` feedback rows (idempotent via SELECT-then-INSERT dedupe on title prefix + category=harness_backlog).
+
 ## Remember
 
 You are an **Intelligent Trigger** for the QA system. The comprehensive testing logic, test generation, and validation workflows live in the scripts—not in this prompt. Your value is in recognizing testing needs and routing them to the appropriate validation system.
