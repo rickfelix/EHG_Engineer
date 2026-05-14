@@ -34,7 +34,9 @@ import {
   // Translation Fidelity Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
   createTranslationFidelityGate,
   // Marketing Schema Drift Gate (SD-EHG-MARKETING-DISTRIBUTION-INFRASTRUCTURE-ORCH-001-A)
-  createMarketingSchemaDriftGate
+  createMarketingSchemaDriftGate,
+  // Grill Convergence Gate (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-C, Child C)
+  createGrillConvergenceGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -169,6 +171,11 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Scoped to Marketing Distribution phase B/C/D SDs; runs verify-marketing-schema.mjs
     // and blocks LEAD-TO-PLAN when live DB drifts from committed manifest.
     gates.push(createMarketingSchemaDriftGate());
+
+    // Grill Convergence Gate (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-C, Child C)
+    // Blocks LEAD-TO-PLAN when open_questions_for_plan_phase non-empty and no
+    // fresh /grill artifact. Phase-1 warn by default; LEO_GRILL_HARD_FAIL=true → hard-fail.
+    gates.push(createGrillConvergenceGate(this.supabase));
 
     return gates;
   }

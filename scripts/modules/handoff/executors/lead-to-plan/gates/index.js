@@ -95,3 +95,9 @@ export {
   validateMarketingSchemaDrift,
   createMarketingSchemaDriftGate
 } from './marketing-schema-drift.js';
+
+// Grill Convergence Gate (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-C, Child C)
+// Blocks LEAD-TO-PLAN when SD has open_questions_for_plan_phase and no fresh
+// /grill convergence artifact. Phase-1 warn (default); phase-2 hard-fail via
+// LEO_GRILL_HARD_FAIL=true. Bypass quota: 3/SD, 10/day.
+export { createGrillConvergenceGate } from './grill-convergence.js';
