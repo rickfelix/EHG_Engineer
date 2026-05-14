@@ -29,50 +29,66 @@ if [ -z "$repo_root" ]; then
 fi
 cd "$repo_root"
 
-# Check whether CONTEXT.md is in the staged diff for this commit
-if ! git diff --cached --name-only | grep -qx 'CONTEXT.md'; then
-  exit 0   # CONTEXT.md not touched — nothing to enforce
-fi
-
-# Read the first line of the staged CONTEXT.md content
-staged_first_line="$(git show :CONTEXT.md 2>/dev/null | head -n1 || true)"
-
-# Bypass override for emergencies (logged to audit_log by the next session start)
-if [ "${POCOCK_CONTEXT_MD_BYPASS:-}" = "1" ]; then
-  echo "[pocock-commit-msg] WARNING: POCOCK_CONTEXT_MD_BYPASS=1 — allowing manual CONTEXT.md edit (will be flagged in retro)"
-  exit 0
-fi
-
-# Marker pattern
-marker_regex='^<!--[[:space:]]*POCOCK-RPC-SIGNED:[[:space:]]*([0-9a-fA-F]{16,})[[:space:]]*-->$'
-
-if [[ ! "$staged_first_line" =~ $marker_regex ]]; then
-  cat >&2 <<'EOF'
+# =============================================================================
+# Branch 1: CONTEXT.md (Child A) — POCOCK-RPC-SIGNED marker
+# =============================================================================
+if git diff --cached --name-only | grep -qx 'CONTEXT.md'; then
+  # Bypass override (Child A)
+  if [ "${POCOCK_CONTEXT_MD_BYPASS:-}" = "1" ]; then
+    echo "[pocock-commit-msg] WARNING: POCOCK_CONTEXT_MD_BYPASS=1 — allowing manual CONTEXT.md edit (will be flagged in retro)"
+  else
+    staged_first_line="$(git show :CONTEXT.md 2>/dev/null | head -n1 || true)"
+    marker_regex='^<!--[[:space:]]*POCOCK-RPC-SIGNED:[[:space:]]*([0-9a-fA-F]{16,})[[:space:]]*-->$'
+    if [[ ! "$staged_first_line" =~ $marker_regex ]]; then
+      cat >&2 <<'EOF'
 
 ╔════════════════════════════════════════════════════════════════════════╗
-║  pocock-commit-msg: CONTEXT.md edit rejected                           ║
+║  pocock-commit-msg: CONTEXT.md edit rejected (Child A)                 ║
 ╠════════════════════════════════════════════════════════════════════════╣
-║                                                                        ║
 ║  CONTEXT.md is a canonical writer artifact rendered from the           ║
 ║  pocock_glossary_terms table. Manual edits create writer-consumer      ║
-║  asymmetry (PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).              ║
-║                                                                        ║
-║  To add a term:                                                        ║
-║    1. Term enters as 'draft' via auto-promote OR direct INSERT into    ║
-║       pocock_glossary_terms.                                           ║
-║    2. Chairman flips draft → approved via:                             ║
-║         SELECT promote_glossary_term('<uuid>', 'chairman');            ║
-║    3. CONTEXT.md regenerator re-renders this file with a fresh         ║
-║       POCOCK-RPC-SIGNED marker.                                        ║
-║                                                                        ║
-║  Emergency override (logged to audit):                                 ║
-║    POCOCK_CONTEXT_MD_BYPASS=1 git commit -m "<message>"                ║
-║                                                                        ║
+║  asymmetry. Use promote_glossary_term RPC + regenerator instead.       ║
+║  Emergency override: POCOCK_CONTEXT_MD_BYPASS=1 git commit ...         ║
 ╚════════════════════════════════════════════════════════════════════════╝
-
 EOF
-  exit 1
+      exit 1
+    fi
+  fi
 fi
 
-# Marker present — allow commit
+# =============================================================================
+# Branch 2: docs/adr/*.md (Child B) — POCOCK-ADR-RPC-SIGNED marker per file
+# =============================================================================
+adr_files="$(git diff --cached --name-only | grep -E '^docs/adr/[0-9]{4}-[a-z0-9-]+\.md$' || true)"
+if [ -n "$adr_files" ]; then
+  if [ "${POCOCK_ADR_BYPASS:-}" = "1" ]; then
+    echo "[pocock-commit-msg] WARNING: POCOCK_ADR_BYPASS=1 — allowing manual docs/adr/ edit (will be flagged in retro)"
+    exit 0
+  fi
+  adr_marker_regex='^<!--[[:space:]]*POCOCK-ADR-RPC-SIGNED:[[:space:]]*([0-9a-fA-F]{16,})[[:space:]]*-->$'
+  while IFS= read -r adr_file; do
+    [ -z "$adr_file" ] && continue
+    staged_adr_first_line="$(git show ":$adr_file" 2>/dev/null | head -n1 || true)"
+    if [[ ! "$staged_adr_first_line" =~ $adr_marker_regex ]]; then
+      cat >&2 <<EOF
+
+╔════════════════════════════════════════════════════════════════════════╗
+║  pocock-commit-msg: docs/adr/ edit rejected (Child B)                  ║
+╠════════════════════════════════════════════════════════════════════════╣
+║  File: $adr_file
+║  docs/adr/ is a derived view rendered from the pocock_adrs table.      ║
+║  Manual edits create writer-consumer asymmetry.                        ║
+║  To modify ADRs:                                                       ║
+║    1. INSERT into pocock_adrs OR call accept_adr(int, text) RPC        ║
+║    2. Run scripts/pocock/regenerate-adr-docs.mjs                       ║
+║    3. Stage and commit the regenerator output                          ║
+║  Emergency override: POCOCK_ADR_BYPASS=1 git commit ...                ║
+╚════════════════════════════════════════════════════════════════════════╝
+EOF
+      exit 1
+    fi
+  done <<< "$adr_files"
+fi
+
+# All gates passed — allow commit
 exit 0

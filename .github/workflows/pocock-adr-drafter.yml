@@ -1,0 +1,71 @@
+name: Pocock ADR Drafter (Friday cron)
+
+on:
+  schedule:
+    # Friday 03:30 UTC (30 min offset from Child A glossary cron to avoid lock contention)
+    - cron: '30 3 * * 5'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run draft-adr-from-pivot in --dry-run mode (no DB writes)'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: pocock-adr-drafter
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run draft-adr-from-pivot.mjs
+        id: draft_adr
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            node scripts/pocock/draft-adr-from-pivot.mjs --dry-run | tee pocock-adr-drafter.log
+          else
+            node scripts/pocock/draft-adr-from-pivot.mjs | tee pocock-adr-drafter.log
+          fi
+
+      - name: Upload run logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocock-adr-drafter-${{ github.run_id }}
+          path: pocock-adr-drafter.log
+          retention-days: 30
+
+      - name: Emit failure-row escalation feedback on script failure
+        if: failure()
+        env:
+          POCOCK_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node -e "
+          (async () => {
+            const { createClient } = await import('@supabase/supabase-js');
+            const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+            const { error } = await s.from('feedback').insert({
+              title: 'pocock-adr-drafter.yml Friday cron failure',
+              description: 'Cron run failed. Investigate via workflow run URL: ' + process.env.POCOCK_RUN_URL,
+              severity: 'medium',
+              category: 'pocock_adr_drafter_failure',
+              component: 'pocock',
+              status: 'new',
+            });
+            if (error) console.error('feedback INSERT failed:', error.message);
+            else console.log('failure feedback row emitted');
+          })();
+          "
