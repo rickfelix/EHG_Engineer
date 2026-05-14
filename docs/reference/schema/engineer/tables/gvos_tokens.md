@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-14T10:20:45.102Z
-**Rows**: 31
+**Generated**: 2026-05-14T11:32:02.295Z
+**Rows**: 46
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,7 @@
 | sunset_at | `timestamp with time zone` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| prompt_emission | `jsonb` | YES | - | - |
 
 ## Constraints
 
@@ -49,7 +50,7 @@
 - `gvos_tokens_name_key`: UNIQUE (name)
 
 ### Check Constraints
-- `gvos_tokens_category_check`: CHECK ((category = ANY (ARRAY['structural'::text, 'kinetic'::text, 'atmospheric'::text, 'compliance'::text, 'typography'::text, 'vertical-expansion'::text, 'hidden-risk'::text, 'pack'::text])))
+- `gvos_tokens_category_check`: CHECK ((category = ANY (ARRAY['structural'::text, 'kinetic'::text, 'atmospheric'::text, 'compliance'::text, 'typography'::text, 'vertical-expansion'::text, 'hidden-risk'::text, 'pack'::text, 'motion'::text])))
 - `gvos_tokens_version_major_check`: CHECK ((version_major >= 0))
 - `gvos_tokens_version_minor_check`: CHECK ((version_minor >= 0))
 - `gvos_tokens_version_patch_check`: CHECK ((version_patch >= 0))
