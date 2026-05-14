@@ -89,9 +89,17 @@ if (stateMatches(preState, targetState)) {
   process.exit(0);
 }
 
+// QF-20260514-801: Order matters. gvos_prompt_rubrics has a unique constraint
+// uq_gvos_prompt_rubrics_active_one that permits only one active row at a time.
+// We must deactivate the currently-active row BEFORE activating the new one.
+// In activate mode, v1 is currently active and must go first. In rollback mode,
+// v2 is currently active and must go first. Sort the rubric steps so the
+// transitioning-to-false step runs ahead of the transitioning-to-true step.
+const v1Step = { name: 'set v1 active', target: targetState.v1_active, fn: () => setV1Active(targetState.v1_active), compensate: () => setV1Active(preState.v1_active) };
+const v2Step = { name: 'set v2 active', target: targetState.v2_active, fn: () => setV2Active(targetState.v2_active), compensate: () => setV2Active(preState.v2_active) };
+const rubricSteps = [v1Step, v2Step].sort((a, b) => (a.target === false ? -1 : 1) - (b.target === false ? -1 : 1));
 const steps = [
-  { name: 'set v2 active',           fn: () => setV2Active(targetState.v2_active),       compensate: () => setV2Active(preState.v2_active) },
-  { name: 'set v1 active',           fn: () => setV1Active(targetState.v1_active),       compensate: () => setV1Active(preState.v1_active) },
+  ...rubricSteps,
   { name: 'set sub-flag is_enabled', fn: () => setFlagEnabled(targetState.flag_enabled), compensate: () => setFlagEnabled(preState.flag_enabled) }
 ];
 
