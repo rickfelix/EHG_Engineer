@@ -1,0 +1,54 @@
+name: pocock-weekly-deepening
+# SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-D (Child D) — Friday cron entry
+# point. Emits >=3 SD-LEO-DEEPEN-* drafts via Pocock Deletion Test scoring.
+
+on:
+  schedule:
+    - cron: '0 9 * * 5'   # Friday 09:00 UTC
+  workflow_dispatch:        # manual override
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pocock-weekly-deepening
+  cancel-in-progress: false
+
+jobs:
+  weekly-deepening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies (lean)
+        run: npm ci --omit=dev --omit=optional --no-audit --no-fund
+
+      - name: Run weekly deepening report
+        id: deepening
+        run: |
+          node scripts/pocock/weekly-deepening-report.mjs --emit-sds --min-candidates 3
+
+      - name: Resolve any prior failure feedback rows
+        if: success()
+        run: |
+          node -e "
+          import('@supabase/supabase-js').then(async ({createClient}) => {
+            const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+            const { error } = await s.from('feedback')
+              .update({ status: 'resolved' })
+              .eq('category', 'pocock_weekly_deepening_failure')
+              .eq('status', 'new');
+            if (error) console.error('auto-resolve warn:', error.message);
+            else console.log('auto-resolved prior pocock-weekly-deepening failures');
+          });
+          "
