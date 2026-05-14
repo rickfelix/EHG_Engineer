@@ -1,0 +1,77 @@
+name: Pocock Glossary Promotion (Friday cron)
+
+on:
+  schedule:
+    # Friday 03:00 UTC
+    - cron: '0 3 * * 5'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run auto-promote in --dry-run mode (no DB writes)'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: pocock-glossary-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run auto-promote-glossary-term.mjs
+        id: auto_promote
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            node scripts/pocock/auto-promote-glossary-term.mjs --dry-run | tee pocock-auto-promote.log
+          else
+            node scripts/pocock/auto-promote-glossary-term.mjs | tee pocock-auto-promote.log
+          fi
+
+      - name: Run glossary-bypass-parity-check.mjs
+        id: parity_check
+        run: node scripts/pocock/glossary-bypass-parity-check.mjs | tee pocock-parity.log
+
+      - name: Upload run logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocock-promotion-${{ github.run_id }}
+          path: |
+            pocock-auto-promote.log
+            pocock-parity.log
+          retention-days: 30
+
+      - name: Emit failure-row escalation feedback on script failure
+        if: failure()
+        env:
+          POCOCK_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node -e "
+          (async () => {
+            const { createClient } = await import('@supabase/supabase-js');
+            const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+            const { error } = await s.from('feedback').insert({
+              title: 'pocock-glossary-promotion.yml Friday cron failure',
+              description: 'Cron run failed. Investigate via the workflow run URL: ' + process.env.POCOCK_RUN_URL,
+              severity: 'medium',
+              category: 'pocock_cron_failure',
+              component: 'pocock',
+              status: 'new',
+            });
+            if (error) console.error('feedback INSERT failed:', error.message);
+            else console.log('failure feedback row emitted');
+          })();
+          "

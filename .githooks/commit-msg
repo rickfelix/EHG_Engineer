@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# .githooks/commit-msg — Pocock CONTEXT.md bypass-prevention hook (Child A)
+#
+# Blocks commits that include manual CONTEXT.md edits unless the diff carries
+# a fresh RPC-generated signed marker line at top.
+#
+# Marker format (rendered by CONTEXT.md regenerator):
+#   <!-- POCOCK-RPC-SIGNED: <sha256> -->
+#
+# A "fresh" marker = the first line of CONTEXT.md is an HTML comment whose
+# token after POCOCK-RPC-SIGNED matches the sha256 of the rendered DB content.
+# The renderer always rewrites this line atomically. Manual edits will not
+# carry a freshly-computed marker → commit rejected.
+#
+# Install once per clone:
+#   git config core.hooksPath .githooks
+#   chmod +x .githooks/commit-msg
+#
+# R6 mitigation from LEAD risk-agent evidence 0f7a236b. Prevents the
+# writer-consumer asymmetry pattern (PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001)
+# from re-emerging via manual CONTEXT.md drift.
+
+set -eo pipefail
+
+# Run from repo root regardless of where the hook fires
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$repo_root" ]; then
+  exit 0   # not in a git repo — nothing to enforce
+fi
+cd "$repo_root"
+
+# Check whether CONTEXT.md is in the staged diff for this commit
+if ! git diff --cached --name-only | grep -qx 'CONTEXT.md'; then
+  exit 0   # CONTEXT.md not touched — nothing to enforce
+fi
+
+# Read the first line of the staged CONTEXT.md content
+staged_first_line="$(git show :CONTEXT.md 2>/dev/null | head -n1 || true)"
+
+# Bypass override for emergencies (logged to audit_log by the next session start)
+if [ "${POCOCK_CONTEXT_MD_BYPASS:-}" = "1" ]; then
+  echo "[pocock-commit-msg] WARNING: POCOCK_CONTEXT_MD_BYPASS=1 — allowing manual CONTEXT.md edit (will be flagged in retro)"
+  exit 0
+fi
+
+# Marker pattern
+marker_regex='^<!--[[:space:]]*POCOCK-RPC-SIGNED:[[:space:]]*([0-9a-fA-F]{16,})[[:space:]]*-->$'
+
+if [[ ! "$staged_first_line" =~ $marker_regex ]]; then
+  cat >&2 <<'EOF'
+
+╔════════════════════════════════════════════════════════════════════════╗
+║  pocock-commit-msg: CONTEXT.md edit rejected                           ║
+╠════════════════════════════════════════════════════════════════════════╣
+║                                                                        ║
+║  CONTEXT.md is a canonical writer artifact rendered from the           ║
+║  pocock_glossary_terms table. Manual edits create writer-consumer      ║
+║  asymmetry (PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).              ║
+║                                                                        ║
+║  To add a term:                                                        ║
+║    1. Term enters as 'draft' via auto-promote OR direct INSERT into    ║
+║       pocock_glossary_terms.                                           ║
+║    2. Chairman flips draft → approved via:                             ║
+║         SELECT promote_glossary_term('<uuid>', 'chairman');            ║
+║    3. CONTEXT.md regenerator re-renders this file with a fresh         ║
+║       POCOCK-RPC-SIGNED marker.                                        ║
+║                                                                        ║
+║  Emergency override (logged to audit):                                 ║
+║    POCOCK_CONTEXT_MD_BYPASS=1 git commit -m "<message>"                ║
+║                                                                        ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+EOF
+  exit 1
+fi
+
+# Marker present — allow commit
+exit 0
