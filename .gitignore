@@ -109,6 +109,7 @@ scripts/check-*.js
 scripts/check-*.cjs
 # Production check-* scripts (must be committed) — add an explicit negation below
 !scripts/check-migration-readiness.mjs
+!scripts/check-activation-catalog.mjs
 scripts/cleanup-*.js
 !scripts/cleanup-phantom-worktrees.js
 scripts/complete-*.mjs
