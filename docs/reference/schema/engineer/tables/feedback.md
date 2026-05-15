@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-14T18:45:42.119Z
-**Rows**: 1,061
+**Generated**: 2026-05-15T21:43:36.171Z
+**Rows**: 1,068
 **RLS**: Enabled (8 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (63 total)
+## Columns (64 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -81,6 +81,7 @@
 | promoted_to_sd_id | `character varying(50)` | YES | - | sd_key string of the SD created when triage CLI promoted this finding. NULL until promotion. varchar(50) matches feedback.sd_id semantics. |
 | promoted_at | `timestamp with time zone` | YES | - | Timestamp when triage CLI promoted this finding to an SD. Set together with promoted_to_sd_id. |
 | promoted_by | `text` | YES | - | session_id of the operator who ran corrective-triage promote. Audit trail. |
+| provenance_source | `text` | YES | - | AI-provenance source per Pocock pattern. Format: agent:SEAT:ROUND_ID | human:USER_ID. NULL = legacy / human-authored. Phase-1 permissive (no CHECK). SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-F. |
 
 ## Constraints
 
