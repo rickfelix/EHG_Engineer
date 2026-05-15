@@ -482,6 +482,27 @@ When invoked by the auto-trigger system (via `lib/rca/rca-orchestrator.js`), pro
 
 **IMPORTANT**: The `experts_consulted` array must NEVER be empty. Every RCA must include at least one expert consultation.
 
+### Phase-1 Feedback-Loop Discipline (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-G)
+
+Per Pocock /diagnose Phase-1 pattern ("Build a feedback loop IS the skill"), every RCA payload MUST include EXACTLY ONE of:
+
+```jsonc
+// Option A — a deterministic test seam that reproduces the failure:
+"feedback_loop": {
+  "command": "npx vitest run scripts/.../gate.test.js",  // 5..500 chars, no shell-chain metacharacters
+  "time_to_fail_seconds": 30,                             // integer 1..3600 (no NaN, no floats, no strings)
+  "deterministic": true                                   // strict boolean (no "true", no 1)
+}
+
+// Option B — explicit declaration that no good test seam exists:
+"no_seam_exists": {
+  "rationale": "No good test seam exists because the orchestrator hook fires synchronously inside a global stage transition that can only be exercised end-to-end in production."
+  // length >=30 chars trimmed, >=5 unique lowercase tokens, must not match banlist /^(none|n\/a|na|tbd|todo|unknown|skip)\.?\s*$/i
+}
+```
+
+**Enforcement**: `RCA_FEEDBACK_LOOP_GATE` (registered at both EXEC-TO-PLAN and PLAN-TO-LEAD handoffs) reads `sub_agent_execution_results` for RCA rows in the current phase window, validates via `scripts/modules/pocock/rca-feedback-loop.js::validateRcaPayload`. Three modes via `app_config` key `rca.feedback_loop.enforcement_mode`: `advisory` (default v1 — warn-only), `blocking` (Phase-2 cutover), `disabled` (no-op). When `no_seam_exists` is taken under `blocking` mode, the gate writes to `architectural_prevention_findings` (idempotent upsert on `(source_rca_id, source_sd_key)`) for consumption by `scripts/pocock/weekly-deepening-report.mjs`.
+
 ### Classification Rules
 
 | Category | When to Use |

@@ -34,3 +34,8 @@ export { createAcceptanceCriteriaTraceabilityGate } from './acceptance-criteria-
 // implementation evidence (PRD acceptance_criteria + git diff) via the
 // vision-fidelity sub-agent. Severity tiering per sd_type — see severity-policy.js.
 export { createVisionFidelityGate } from './vision-fidelity.js';
+
+// RCA Feedback-Loop Enforcement (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-G)
+// Reuses the EXEC-TO-PLAN gate creator — readEnforcementMode + Pocock
+// /diagnose Phase-1 discipline applies to RCA results emitted in either phase.
+export { createRcaFeedbackLoopGate } from '../../exec-to-plan/gates/rca-feedback-loop-gate.js';
