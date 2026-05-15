@@ -40,3 +40,6 @@ export { createWiringValidationGate } from './wiring-validation.js';
 
 // UI Interactivity Check (SD-MAN-INFRA-LEO-GATE-IMPROVEMENTS-001)
 export { createUiInteractivityCheckGate } from './ui-interactivity-check.js';
+
+// RCA Feedback-Loop Enforcement (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-G)
+export { createRcaFeedbackLoopGate } from './rca-feedback-loop-gate.js';
