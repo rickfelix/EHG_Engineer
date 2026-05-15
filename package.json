@@ -89,6 +89,7 @@
     "test:validate:full": "node scripts/test-validate-system.js --verbose",
     "docs:boundary": "node scripts/generate-boundary-examples.js",
     "skill:audit": "node scripts/skill-audit.js",
+    "skill:audit:body": "node scripts/pocock/audit-skill-bodies.mjs",
     "prio:top3": "node scripts/wsjf-priority-fetcher.js",
     "session:prologue": "node scripts/generate-session-prologue.js",
     "db:create": "node scripts/execute-database-sql.js",
