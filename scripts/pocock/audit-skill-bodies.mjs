@@ -199,17 +199,18 @@ function renderReport({ rows, summary, top3 }) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const result = await runAudit(args);
+  const statusStream = args.json ? process.stderr : process.stdout;
   if (args.json) {
     process.stdout.write(JSON.stringify(result.summary, null, 2) + '\n');
   } else {
-    process.stdout.write(`Skill body audit: ${result.summary.total_files} files, ${result.summary.offender_count} offender(s) over ${result.summary.threshold} LOC.\n`);
+    statusStream.write(`Skill body audit: ${result.summary.total_files} files, ${result.summary.offender_count} offender(s) over ${result.summary.threshold} LOC.\n`);
     if (result.top3.length > 0) {
-      process.stdout.write('Top offenders:\n');
-      result.top3.forEach((t, i) => process.stdout.write(`  ${i + 1}. ${t.path} (${t.body_loc} LOC)\n`));
+      statusStream.write('Top offenders:\n');
+      result.top3.forEach((t, i) => statusStream.write(`  ${i + 1}. ${t.path} (${t.body_loc} LOC)\n`));
     }
   }
   if (args.write) {
-    process.stdout.write(`Report written: ${path.relative(process.cwd(), args.reportPath)}\n`);
+    statusStream.write(`Report written: ${path.relative(process.cwd(), args.reportPath)}\n`);
   }
   process.exit(0);
 }
