@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-14T18:45:42.119Z
+**Generated**: 2026-05-15T21:43:36.171Z
 **Rows**: 12
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (14 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,7 @@
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | accepted_at | `timestamp with time zone` | YES | - | - |
 | approved_by | `text` | YES | - | - |
+| provenance_source | `text` | YES | - | AI-provenance source per Pocock pattern. Format: agent:SEAT:ROUND_ID | human:USER_ID. NULL = legacy / human-authored. SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-F. |
 
 ## Constraints
 
