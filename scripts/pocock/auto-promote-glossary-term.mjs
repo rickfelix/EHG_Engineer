@@ -39,6 +39,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import {
+  readProvenanceFlag,
+  formatAgent,
+  injectPrefixIdempotent
+} from '../modules/pocock/provenance-flag.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -254,17 +259,26 @@ async function draftTerm({ term, aliases, count, confidence, source_events }) {
     log('info', 'DRY_RUN: would draft term', { term, count, confidence });
     return;
   }
-  const { error } = await supabase.from('pocock_glossary_terms').insert({
+  // SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-F: AI-provenance default field
+  // (Phase-1 wire-but-OFF — emission gated by readProvenanceFlag).
+  const flag = await readProvenanceFlag('glossary', { supabase });
+  let definition = 'AUTO-DRAFT pending chairman review. See source_events for context.';
+  const row = {
     term,
-    definition: 'AUTO-DRAFT pending chairman review. See source_events for context.',
+    definition,
     avoid_aliases: aliases,
     occurrence_count: count,
     confidence_score: confidence,
     status: 'draft',
     source_events,
-  });
+  };
+  if (flag.emit_source) {
+    row.provenance_source = formatAgent('AUTO_PROMOTE_GLOSSARY', LOCK_OWNER);
+    if (flag.prefix_enabled) row.definition = injectPrefixIdempotent(definition);
+  }
+  const { error } = await supabase.from('pocock_glossary_terms').insert(row);
   if (error) log('warn', 'pocock_glossary_terms INSERT failed', { term, error: error.message });
-  else log('info', 'drafted glossary term', { term, count, confidence });
+  else log('info', 'drafted glossary term', { term, count, confidence, provenance: flag.emit_source });
 }
 
 async function main() {

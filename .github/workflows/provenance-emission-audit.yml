@@ -1,0 +1,130 @@
+# Provenance emission audit (warn-only Phase 1)
+# SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-F
+#
+# Triggers on PRs that touch canonical-writer surfaces. Audits AI-provenance
+# emission rate per Pocock pattern. Posts a sticky comment when overall
+# coverage is below 100%. Phase 1: WARN-ONLY (exits 0 always). Phase 2
+# cutover flips to fail-CI via POCOCK_PROVENANCE_AUDIT_BLOCKING=true once
+# enough writers have wired and operated under Phase-1 observation.
+
+name: Provenance Emission Audit
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/modules/handoff/**/*.js'
+      - 'scripts/modules/handoff/**/*.mjs'
+      - 'scripts/modules/handoff/**/*.cjs'
+      - 'scripts/pocock/**/*.js'
+      - 'scripts/pocock/**/*.mjs'
+      - 'scripts/modules/validation/**/*.js'
+      - 'scripts/modules/validation/**/*.mjs'
+      - 'scripts/modules/pocock/provenance-flag.js'
+      - 'scripts/pocock/audit-provenance-emission.mjs'
+      - '.github/workflows/provenance-emission-audit.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: provenance-emission-audit-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      POCOCK_PROVENANCE_AUDIT_BLOCKING: 'false'
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run provenance emission audit
+        id: audit
+        run: |
+          set -e
+          node scripts/pocock/audit-provenance-emission.mjs --json > provenance-summary.json
+          echo "=== Audit Summary ==="
+          cat provenance-summary.json
+          OFFENDER_COUNT=$(node -e "console.log(JSON.parse(require('fs').readFileSync('provenance-summary.json','utf8')).offender_count)")
+          COVERAGE_PCT=$(node -e "console.log(JSON.parse(require('fs').readFileSync('provenance-summary.json','utf8')).overall_coverage_pct ?? 'n/a')")
+          echo "offender_count=$OFFENDER_COUNT" >> "$GITHUB_OUTPUT"
+          echo "coverage_pct=$COVERAGE_PCT" >> "$GITHUB_OUTPUT"
+          echo "## Provenance Emission Audit" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Overall coverage: **${COVERAGE_PCT}%** | Offenders: **$OFFENDER_COUNT**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat provenance-summary.json >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provenance-emission-audit-${{ github.event.pull_request.number }}
+          path: |
+            provenance-summary.json
+            skills/PROVENANCE-EMISSION-REPORT.md
+          retention-days: 14
+
+      - name: Post sticky PR comment
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          OFFENDER_COUNT: ${{ steps.audit.outputs.offender_count }}
+          COVERAGE_PCT: ${{ steps.audit.outputs.coverage_pct }}
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- provenance-emission-audit -->';
+            const summary = JSON.parse(fs.readFileSync('provenance-summary.json', 'utf8'));
+            const offenderCount = Number(process.env.OFFENDER_COUNT || '0');
+            const coverage = process.env.COVERAGE_PCT;
+            const lines = [];
+            lines.push(marker);
+            lines.push('## Provenance Emission Audit (warn-only Phase 1)');
+            lines.push('');
+            lines.push(`Writers scanned: **${summary.total_writers_scanned}** · In-scope writers: **${summary.writers_with_in_scope_calls}** · Overall coverage: **${coverage}%** · Offenders: **${offenderCount}**`);
+            lines.push('');
+            if (offenderCount === 0) {
+              lines.push('All in-scope writer call sites emit provenance_source.');
+            } else {
+              lines.push('### Top lowest-coverage writers');
+              lines.push('');
+              lines.push('| Rank | Writer | In-Scope | Emits | Coverage |');
+              lines.push('|---:|--------|---------:|------:|---------:|');
+              summary.top_offenders.forEach((t, i) => {
+                lines.push(`| ${i + 1} | \`${t.writer_path}\` | ${t.in_scope_call_sites} | ${t.emit_count} | ${t.coverage_pct ?? 'n/a'}% |`);
+              });
+              lines.push('');
+              lines.push('Full table: see workflow artifact `provenance-emission-audit-<pr#>` (`PROVENANCE-EMISSION-REPORT.md`).');
+            }
+            lines.push('');
+            lines.push('_Phase 1 is warn-only — this comment does not fail CI. Phase 2 cutover gated on per-writer wiring + observation window._');
+            const body = lines.join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Enforce blocking mode (Phase 2 only)
+        if: env.POCOCK_PROVENANCE_AUDIT_BLOCKING == 'true' && steps.audit.outputs.offender_count != '0'
+        run: |
+          echo "::error::POCOCK_PROVENANCE_AUDIT_BLOCKING=true and offenders detected. Failing CI per Phase 2 cutover."
+          exit 1
