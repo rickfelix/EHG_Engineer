@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-15T21:43:36.171Z
+**Generated**: 2026-05-15T22:39:21.049Z
 **Rows**: 3
 **RLS**: Enabled (2 policies)
 
@@ -38,6 +38,10 @@
 - `architectural_prevention_findings_pkey`
   ```sql
   CREATE UNIQUE INDEX architectural_prevention_findings_pkey ON public.architectural_prevention_findings USING btree (id)
+  ```
+- `idx_apf_rca_sd_alive`
+  ```sql
+  CREATE UNIQUE INDEX idx_apf_rca_sd_alive ON public.architectural_prevention_findings USING btree (source_rca_id, source_sd_key) WHERE (deleted_at IS NULL)
   ```
 - `idx_arch_prev_source_rca`
   ```sql
