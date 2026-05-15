@@ -1,0 +1,120 @@
+# Skill body audit (warn-only Phase 1)
+# SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-E
+#
+# Triggers on PRs that touch skill files. Audits body LOC per Pocock
+# progressive-disclosure pattern. Posts a sticky comment on offenders.
+# Phase 1: WARN-ONLY (exits 0 always). Phase 2 cutover flips to fail-CI
+# via SKILL_BODY_AUDIT_BLOCKING=true once the top-3 refactor SDs land.
+
+name: Skill Body Audit
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**/SKILL.md'
+      - '.claude/commands/*.md'
+      - '.claude/skills/*.md'
+      - 'scripts/pocock/audit-skill-bodies.mjs'
+      - '.github/workflows/skill-body-audit.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: skill-body-audit-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SKILL_BODY_AUDIT_BLOCKING: 'false'
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run audit
+        id: audit
+        run: |
+          set -e
+          node scripts/pocock/audit-skill-bodies.mjs --json > audit-summary.json
+          echo "=== Audit Summary ==="
+          cat audit-summary.json
+          OFFENDER_COUNT=$(node -e "console.log(JSON.parse(require('fs').readFileSync('audit-summary.json','utf8')).offender_count)")
+          echo "offender_count=$OFFENDER_COUNT" >> "$GITHUB_OUTPUT"
+          echo "## Skill Body Audit" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Offenders over 200 LOC: **$OFFENDER_COUNT**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat audit-summary.json >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skill-body-audit-${{ github.event.pull_request.number }}
+          path: |
+            audit-summary.json
+            skills/SKILL-BODY-AUDIT-REPORT.md
+          retention-days: 14
+
+      - name: Post sticky PR comment
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          OFFENDER_COUNT: ${{ steps.audit.outputs.offender_count }}
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- skill-body-audit -->';
+            const summary = JSON.parse(fs.readFileSync('audit-summary.json', 'utf8'));
+            const offenderCount = Number(process.env.OFFENDER_COUNT || '0');
+            const lines = [];
+            lines.push(marker);
+            lines.push('## Skill Body Audit (warn-only Phase 1)');
+            lines.push('');
+            lines.push(`Files audited: **${summary.total_files}** · Offenders over ${summary.threshold} LOC: **${offenderCount}**`);
+            lines.push('');
+            if (offenderCount === 0) {
+              lines.push('No offenders detected on this PR. Pocock pattern preserved.');
+            } else {
+              lines.push('### Top offenders');
+              lines.push('');
+              lines.push('| Rank | Path | Body LOC | Overage | Recommendation |');
+              lines.push('|---:|------|--------:|--------:|----------------|');
+              summary.top_offenders.forEach((t, i) => {
+                lines.push(`| ${i + 1} | \`${t.path}\` | ${t.body_loc} | +${t.overage} | ${t.recommendation} |`);
+              });
+              lines.push('');
+              lines.push('Full table: see workflow artifact `skill-body-audit-<pr#>` (`SKILL-BODY-AUDIT-REPORT.md`).');
+            }
+            lines.push('');
+            lines.push('_Phase 1 is warn-only — this comment does not fail CI. Phase 2 cutover gated on top-3 refactor SDs landing._');
+            const body = lines.join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Enforce blocking mode (Phase 2 only)
+        if: env.SKILL_BODY_AUDIT_BLOCKING == 'true' && steps.audit.outputs.offender_count != '0'
+        run: |
+          echo "::error::SKILL_BODY_AUDIT_BLOCKING=true and offenders detected. Failing CI per Phase 2 cutover."
+          exit 1
