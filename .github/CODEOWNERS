@@ -73,3 +73,10 @@ CONTRIBUTING.md @rickfelix
 /database/migrations/20260516130000_add_scope_completion_chain.sql @rickfelix
 /database/migrations/20260516130001_add_bypass_ledger.sql @rickfelix
 /database/migrations/20260516130002_add_witnesses_view.sql @rickfelix
+
+# Sibling B advisory pipeline files (SD-WRITERCONSUMER-ASYMMETRY-...-001-B FR-B-9 + COND-RISK CODEOWNERS-HOOK-INJECTOR).
+/.claude/hooks/pre-tool-goal-context.cjs @rickfelix
+/config/brainstorm-vocab.json @rickfelix
+/lib/goal-evaluator/voting.mjs @rickfelix
+/database/migrations/20260516140000_add_goal_evaluator_verdicts.sql @rickfelix
+/database/migrations/20260516140001_add_verdict_acted_as_column.sql @rickfelix
