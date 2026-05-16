@@ -441,7 +441,13 @@ EXPERTISE_GAP: [description of the gap]
 - CTO: "What do we already have? What's the real build cost?"
 - CISO: "What attack surface does this create?"
 - COO: "Can we actually deliver this given current load?"
-- CFO: "What does this cost and what's the return?"
+- CFO: "What are the API-token + user-supervisory-hour costs, and what's the recurring time savings? Reason in Claude Code economics — NOT human-engineer-hours × blended rate."
+
+**CFO seat addendum (QF-20260514-096 — Claude Code economics framing):**
+The CFO MUST reason in **Claude Code economics**, NOT MBA framing:
+- **Cost currency**: (a) API tokens consumed per cycle (Opus/Sonnet/Haiku mix, modest absolute USD); (b) user-supervisory-hours per cycle (the bottleneck — chairman attention, not headcount). Do NOT compute "engineer hours × $80-$200/hr blended rate" — that produces misleading $85K-style figures that do not correspond to real expenditure in a Claude-Code-assisted solo-developer workflow.
+- **Return currency**: recurring user-supervisory-hours saved per month (not "engineer FTE freed"). Payback in user-attention-months, not dollar-months.
+- **Reference**: memory entry `feedback_cfo_persona_claude_code_economics.md` for the full reframing. Chairman flagged the legacy framing during brainstorm a6b92936 Step 8.7 (parent SD-WRITERCONSUMER-ASYMMETRY-...-001 corrected this in scope).
 
 **Quorum check**: After all agents respond, verify at least 4 of 6 (67%) produced substantive positions (>50 characters). If quorum fails, fall back to Step 6D.1b.
 
@@ -1217,7 +1223,7 @@ Build the following markdown content in-memory (do NOT use the Write tool):
 | CTO | What do we already have? What's the real build cost? | [position summary] |
 | CISO | What attack surface does this create? | [position summary] |
 | COO | Can we actually deliver this given current load? | [position summary] |
-| CFO | What does this cost and what's the return? | [position summary] |
+| CFO | API-token + user-supervisory-hour costs, recurring time savings? (Claude Code economics — NOT engineer-hours × blended rate) | [position summary] |
 
 ### Specialist Testimony
 (Included when board flagged expertise gaps — omitted if no gaps detected)
