@@ -629,6 +629,57 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
       return { success: false };
     }
 
+    // SD-WRITERCONSUMER-ASYMMETRY-...-001-A FR-A-5: bypass_ledger row + paired validation_audit_log emission.
+    // FAIL-CLOSED-WITH-RETRY: 3-retry exponential 100/300/900ms; throw on exhaustion (caller MUST FAIL handoff).
+    // emitValidationAuditLog helper provides writer-consumer symmetry with bypass_ledger.audit_log_id.
+    const { randomUUID } = await import('crypto');
+    const { emitValidationAuditLog } = await import('../../../lib/emit-validation-audit-log.mjs');
+    const supabaseForBypassLedger = createSupabaseServiceClient();
+    const ledgerCorrelationId = randomUUID();
+    const { data: ledgerRow, error: ledgerErr } = await supabaseForBypassLedger
+      .from('bypass_ledger')
+      .insert({
+        bypass_type: 'validation_bypass',
+        bypass_reason: bypassReason,
+        sd_id: typeof sdId === 'string' && /^[0-9a-fA-F-]{36}$/.test(sdId) ? sdId : null,
+        sd_key: typeof sdId === 'string' && !/^[0-9a-fA-F-]{36}$/.test(sdId) ? sdId : null,
+        phase: handoffType,
+        bypass_actor: process.env.CLAUDE_SESSION_ID || 'unknown',
+        correlation_id: ledgerCorrelationId,
+      })
+      .select('id, correlation_id')
+      .single();
+    if (ledgerErr) {
+      console.warn(`   ⚠️  bypass_ledger insert failed: ${ledgerErr.message} — proceeding with shape check, parity check will catch`);
+    }
+    if (ledgerRow) {
+      try {
+        const audit = await emitValidationAuditLog({
+          supabase: supabaseForBypassLedger,
+          correlation_id: ledgerRow.correlation_id,
+          sd_id: typeof sdId === 'string' && /^[0-9a-fA-F-]{36}$/.test(sdId) ? sdId : null,
+          validator_name: 'cli_main_bypass_validation',
+          failure_reason: `--bypass-validation invoked for ${handoffType}: ${bypassReason}`,
+          failure_category: 'bypass',
+          metadata: { handoff_type: handoffType, bypass_ledger_id: ledgerRow.id, bypass_reason: bypassReason },
+          execution_context: 'cli-main.js:handleExecuteCommand',
+        });
+        await supabaseForBypassLedger
+          .from('bypass_ledger')
+          .update({ audit_log_id: audit.id, audit_log_written_at: audit.written_at })
+          .eq('id', ledgerRow.id);
+      } catch (auditErr) {
+        // FAIL-CLOSED: per RISK F-A-R-11 + COND-RISK-01 — caller MUST FAIL handoff.
+        console.error('');
+        console.error('❌ BYPASS AUDIT EMISSION FAILED (FAIL-CLOSED)');
+        console.error('═'.repeat(50));
+        console.error(`   ${auditErr.message}`);
+        console.error('   Resolution: retry the handoff once DB connectivity is restored.');
+        console.error('');
+        return { success: false };
+      }
+    }
+
     // SD-LEARN-FIX-ADDRESS-PAT-AGENT-001: Bypass shape enforcement
     // Require --pattern-id or --followup-sd-key (enforcement-table evidence)
     const { validateBypassShape } = await import('../bypass-rubric.js');

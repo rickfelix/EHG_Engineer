@@ -102,6 +102,26 @@ export function createLearningOrBypassResolvedGate(supabase) {
 
       console.log(`   ${warnOnly ? '⚠️  WARN' : '❌ BLOCK'}: ${message}`);
 
+      // SD-WRITERCONSUMER-ASYMMETRY-...-001-A FR-A-6: emit validation_audit_log entry on bypass branch
+      // (Same gate consuming bypass entries also produces a witness entry for the parity check.)
+      try {
+        const { randomUUID } = await import('crypto');
+        const { emitValidationAuditLog } = await import('../../../../../lib/emit-validation-audit-log.mjs');
+        await emitValidationAuditLog({
+          supabase,
+          correlation_id: randomUUID(),
+          sd_id: sdId,
+          validator_name: 'learning_or_bypass_resolved_gate',
+          failure_reason: message,
+          failure_category: warnOnly ? 'bypass_warning' : 'bypass_rejected',
+          metadata: { gate: GATE_NAME, bypass_count: auditEntries.length, enforce_flag: enforceFlag, learning_ran: false },
+          execution_context: 'lead-final-approval/gates/learning-or-bypass-resolved-gate.js',
+        });
+      } catch (auditErr) {
+        // Gate diagnostic emission is best-effort — do not change gate verdict if audit fails.
+        console.warn(`   ⚠️  Gate audit emission failed (non-blocking): ${auditErr.message}`);
+      }
+
       return {
         passed: warnOnly,
         score: warnOnly ? 60 : 0,

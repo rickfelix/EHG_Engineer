@@ -66,3 +66,10 @@ CONTRIBUTING.md @rickfelix
 /server/routes/stage17.js @rickfelix
 /docs/architecture/stage17-contracts.md @rickfelix
 /scripts/audit-stage17-urls.mjs @rickfelix
+# Audit-trail integrity (SD-WRITERCONSUMER-ASYMMETRY-...-001-A FR-A-12 + COND-RISK-02).
+# Files that govern bypass auditing: any change MUST be reviewed for parity preservation.
+/scripts/ci/audit-log-parity-check.mjs @rickfelix
+/scripts/lib/emit-validation-audit-log.mjs @rickfelix
+/database/migrations/20260516130000_add_scope_completion_chain.sql @rickfelix
+/database/migrations/20260516130001_add_bypass_ledger.sql @rickfelix
+/database/migrations/20260516130002_add_witnesses_view.sql @rickfelix
