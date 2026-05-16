@@ -86,3 +86,10 @@ CONTRIBUTING.md @rickfelix
 /lib/contract-chain/walker.mjs @rickfelix
 /database/migrations/20260516150000_add_contract_chain_links.sql @rickfelix
 /database/migrations/20260516150001_add_d_app_feature_flag.sql @rickfelix
+
+# Sibling F hardening (SD-WRITERCONSUMER-ASYMMETRY-...-001-F FR-F-3).
+/.claude/hooks/ @rickfelix
+/lib/goal-evaluator/ @rickfelix
+/scripts/lineage/detect-replication.mjs @rickfelix
+/docs/process/memory-review-sop.md @rickfelix
+/database/migrations/20260516160000_add_shadow_sampling_protocol.sql @rickfelix
