@@ -159,6 +159,29 @@ export function createDbContentParityGate() {
       const mismatchSummaries = result.mismatches.map(
         (m) => `${m.table || '?'} WHERE ${JSON.stringify(m.row_filter || {})}: column=${m.column} expected=${JSON.stringify(m.expected)} actual=${JSON.stringify(m.actual)}`
       );
+
+      // SD-WRITERCONSUMER-ASYMMETRY-...-001-A FR-A-7: emit validation_audit_log on drift detection
+      // (PLAN-TO-LEAD phase per VALIDATION F-A-V-05 — NOT LEAD-FINAL).
+      if (!result.pass && !result.skipped) {
+        try {
+          const { randomUUID } = await import('crypto');
+          const { emitValidationAuditLog } = await import('../../../lib/emit-validation-audit-log.mjs');
+          const supabase = createSupabaseServiceClient();
+          await emitValidationAuditLog({
+            supabase,
+            correlation_id: randomUUID(),
+            sd_id: result.sd_uuid,
+            validator_name: 'db_content_parity_gate',
+            failure_reason: `DB/code drift detected: ${mismatchSummaries.length} mismatch(es). ${mismatchSummaries[0] || ''}`,
+            failure_category: 'db_content_drift',
+            metadata: { gate: 'DB_CONTENT_PARITY', mismatch_count: mismatchSummaries.length, mismatches: mismatchSummaries.slice(0, 5), phase: 'PLAN-TO-LEAD' },
+            execution_context: 'handoff/gates/db-content-parity-gate.js',
+          });
+        } catch (auditErr) {
+          console.warn(`   ⚠️  DB content parity audit emission failed (non-blocking): ${auditErr.message}`);
+        }
+      }
+
       return {
         pass: result.pass,
         score: result.score,

@@ -142,6 +142,25 @@ export function createActivationInvariantGate(supabase, prdRepo) {
       if (typeof bypassReason === 'string' && bypassReason.includes(BYPASS_TOKEN)) {
         console.log(`   ⚠️  Bypass active via reason-text "${BYPASS_TOKEN}"`);
         logEvent({ sd_id: sdId, verdict: 'BYPASS', bypass_reason: bypassReason });
+
+        // SD-WRITERCONSUMER-ASYMMETRY-...-001-A FR-A-6: emit validation_audit_log on bypass branch.
+        try {
+          const { randomUUID } = await import('crypto');
+          const { emitValidationAuditLog } = await import('../../../../../lib/emit-validation-audit-log.mjs');
+          await emitValidationAuditLog({
+            supabase,
+            correlation_id: randomUUID(),
+            sd_id: sdId,
+            validator_name: 'activation_invariant_gate',
+            failure_reason: `Activation invariant bypassed via ${BYPASS_TOKEN}: ${bypassReason}`,
+            failure_category: 'bypass',
+            metadata: { gate: GATE_NAME, bypass_token: BYPASS_TOKEN, bypass_reason: bypassReason },
+            execution_context: 'lead-final-approval/gates/activation-invariant-gate.js',
+          });
+        } catch (auditErr) {
+          console.warn(`   ⚠️  Activation invariant bypass audit emission failed (non-blocking): ${auditErr.message}`);
+        }
+
         return {
           passed: true,
           score: 100,
