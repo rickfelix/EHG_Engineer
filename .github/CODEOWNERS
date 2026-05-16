@@ -80,3 +80,9 @@ CONTRIBUTING.md @rickfelix
 /lib/goal-evaluator/voting.mjs @rickfelix
 /database/migrations/20260516140000_add_goal_evaluator_verdicts.sql @rickfelix
 /database/migrations/20260516140001_add_verdict_acted_as_column.sql @rickfelix
+
+# Sibling D contract chain + runtime probe coverage (SD-WRITERCONSUMER-ASYMMETRY-...-001-D FR-D-5).
+/scripts/modules/handoff/executors/lead-final-approval/gates/runtime-probe-coverage-gate.js @rickfelix
+/lib/contract-chain/walker.mjs @rickfelix
+/database/migrations/20260516150000_add_contract_chain_links.sql @rickfelix
+/database/migrations/20260516150001_add_d_app_feature_flag.sql @rickfelix
