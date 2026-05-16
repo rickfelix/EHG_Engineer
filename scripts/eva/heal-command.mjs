@@ -544,8 +544,21 @@ async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
       };
     }
 
+    // SD-WRITERCONSUMER-ASYMMETRY-DETECTION-SCOPECOMPLETION-ORCH-001-0 / FR-C0-5
+    // Verdict-tier override: per-SD lineage verdict trumps score-based threshold.
+    // BACKFILLED_LOW_CONFIDENCE → 'unverified' (NOT 'accept', NOT 'gap_closure_sd').
+    // Recursive-failure-mode mitigation per TESTING AC-C0-006.
+    const { data: lineageRow } = await supabase
+      .from('strategic_directives_v2')
+      .select('lineage_verdict')
+      .eq('sd_key', sdScore.sd_key)
+      .maybeSingle();
+    const lineageVerdict = lineageRow?.lineage_verdict ?? null;
+
     let thresholdAction = 'accept';
-    if (sdScore.total_score < 70) thresholdAction = 'escalate';
+    if (lineageVerdict === 'BACKFILLED_LOW_CONFIDENCE') {
+      thresholdAction = 'unverified';
+    } else if (sdScore.total_score < 70) thresholdAction = 'escalate';
     else if (sdScore.total_score < 83) thresholdAction = 'gap_closure_sd';
     else if (sdScore.total_score < 93) thresholdAction = 'minor_sd';
 
