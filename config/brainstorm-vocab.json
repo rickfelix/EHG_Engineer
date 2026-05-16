@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "vocabulary_version": "1.0.0",
+  "terms": [
+    { "term": "feature_implemented", "description": "A net-new feature is shipped with passing tests + handoff PASS", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "test_passing", "description": "A test or test suite reports PASS in the local test runner", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "gate_clear", "description": "A handoff gate returns PASS verdict in sd_phase_handoffs", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "sub_agent_pass", "description": "A sub-agent writes a PASS verdict row in sub_agent_execution_results", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "ci_green", "description": "All required GitHub Actions checks return SUCCESS conclusion", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "pr_merged", "description": "PR transitions to state=MERGED in GitHub", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "migration_applied", "description": "A database migration is applied via apply-migration.js 3-factor guard", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "audit_log_emitted", "description": "A validation_audit_log or audit_log row is written for the event", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "retrospective_authored", "description": "A retrospectives row with retro_type=SD_COMPLETION is published with quality_score >=60", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "sd_completed", "description": "An SD transitions to status=completed with LEAD-FINAL-APPROVAL handoff accepted", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "scope_locked", "description": "LEAD scope-lock produces metadata.literal_scope + metadata.lead_decision on the SD", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "prd_authored", "description": "A product_requirements_v2 row exists for the SD with status=approved + activation_test_id populated", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" },
+    { "term": "handoff_accepted", "description": "An sd_phase_handoffs row exists with status=accepted for the specified phase transition", "added_at": "2026-05-16T13:30:00Z", "added_by": "sibling-b-init", "status": "active" }
+  ]
+}
