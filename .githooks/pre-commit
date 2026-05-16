@@ -28,8 +28,10 @@ if ls prds/*.md 2>/dev/null | grep -q .; then
     exit 1
 fi
 
-# Check for handoff files
-if ls handoffs/*.md docs/**/handoff-*.md 2>/dev/null | grep -q .; then
+# Check for handoff files (QF-20260516-082: closes harness 9655eef2 — the
+# previous glob `docs/**/handoff-*.md` matched reference docs in docs/reference/
+# that aren't actual handoff records; scope to canonical handoff locations only).
+if ls handoffs/*.md docs/handoffs/*.md 2>/dev/null | grep -q .; then
     echo -e "${RED}❌${NC}"
     echo -e "${RED}ERROR: Handoff files detected!${NC}"
     echo "Handoffs must be stored in database only"

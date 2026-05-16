@@ -124,6 +124,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
       { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
     ]);
 
     const r = await attemptAutoMerge({
@@ -141,11 +142,14 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
     // unmatched-call default returns code=1 → verifyBranchDeleted returns
     // null → "branch deletion not verified" advisory is logged. No
     // additional gh api call is made when the headRefName lookup fails.
+    // QF-20260516-082: verifyMerged cross-checks state==='MERGED' after
+    // mergedAt, adding one more pr-view call to the happy path.
     expect(calls.map((c) => c.slice(0, 2))).toEqual([
       ['pr', 'view'],
       ['pr', 'ready'],
       ['api', 'repos/rickfelix/EHG_Engineer/branches/main/protection'],
       ['pr', 'merge'],
+      ['pr', 'view'],
       ['pr', 'view'],
       ['pr', 'view'],
     ]);
@@ -159,6 +163,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       { match: argvMatchers.apiProtection, result: { stdout: 'true\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
       { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
     ]);
 
     const r = await attemptAutoMerge({
@@ -179,6 +184,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
       { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
     ]);
 
     const r = await attemptAutoMerge({
@@ -195,10 +201,11 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
   });
 });
 
-describe('verifyMerged (QF-20260504-195)', () => {
-  it('returns true when mergedAt is a populated ISO timestamp', () => {
+describe('verifyMerged (QF-20260504-195, QF-20260516-082)', () => {
+  it('returns true when mergedAt is populated AND state===MERGED', () => {
     const { runner } = makeRunner([
       { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
     ]);
     expect(verifyMerged(568, runner)).toBe(true);
   });
@@ -218,6 +225,25 @@ describe('verifyMerged (QF-20260504-195)', () => {
   it('returns false on empty stdout', () => {
     const { runner } = makeRunner([
       { match: argvMatchers.prViewMergedAt, result: { stdout: '' } },
+    ]);
+    expect(verifyMerged(568, runner)).toBe(false);
+  });
+
+  it('QF-20260516-082 (closes harness 72a3a5f1): returns false when mergedAt populated but state===OPEN (queued-but-not-merged race)', () => {
+    // Empirical witness: PR rickfelix/ehg#600 returned mergedAt timestamp via
+    // gh while pulls REST endpoint showed merged=false, mergeable_state=unstable.
+    // state==='OPEN' is the authoritative tie-breaker that catches this race.
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-13T23:25:00Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'OPEN\n' } },
+    ]);
+    expect(verifyMerged(600, runner)).toBe(false);
+  });
+
+  it('QF-20260516-082: returns false when state lookup itself fails', () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-04T22:23:28Z\n' } },
+      // No prViewState matcher → runner returns code=1 → verifyMerged false.
     ]);
     expect(verifyMerged(568, runner)).toBe(false);
   });
@@ -405,6 +431,7 @@ describe('attemptAutoMerge — branch-deletion verification (QF-20260509-VERIFY-
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
       { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-06T10:00:00Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       { match: argvMatchers.prViewHeadRef, result: { stdout: 'qf/QF-foo\n' } },
       { match: argvMatchers.apiRefHead, result: { code: 0, stdout: '{"ref":"refs/heads/qf/QF-foo"}' } },
     ]);
@@ -439,6 +466,7 @@ describe('attemptAutoMerge — branch-deletion verification (QF-20260509-VERIFY-
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
       { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-06T10:00:00Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       { match: argvMatchers.prViewHeadRef, result: { stdout: 'qf/QF-bar\n' } },
       { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'gh: Not Found (HTTP 404)' } },
     ]);
@@ -467,6 +495,7 @@ describe('attemptAutoMerge — branch-deletion verification (QF-20260509-VERIFY-
       { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
       { match: argvMatchers.prMerge, result: { stdout: '' } },
       { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-06T10:00:00Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
       // headRefName lookup fails → verifyBranchDeleted returns null →
       // attemptAutoMerge logs the "not verified" advisory.
     ]);
