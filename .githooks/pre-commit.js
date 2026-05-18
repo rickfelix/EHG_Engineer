@@ -46,10 +46,13 @@ function checkFilesystemDrift() {
     }
   }
 
-  // Check for handoff files
+  // Check for handoff files (QF-20260518-905: match bash hook narrowing from
+  // QF-20260516-082. Previous glob `docs/**/handoff-*.md` matched reference docs
+  // in docs/reference/ that aren't actual handoff records; scope to canonical
+  // handoff locations only).
   const handoffPatterns = [
     'handoffs/**/*.md',
-    'docs/**/handoff-*.md'
+    'docs/handoffs/*.md'
   ];
 
   for (const pattern of handoffPatterns) {
