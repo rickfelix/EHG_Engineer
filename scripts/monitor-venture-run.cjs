@@ -121,12 +121,40 @@ async function loadExpectedArtifactsByStage() {
   return map;
 }
 
+// SD-LEO-REFAC-CANONICALIZE-STAGE-CONFIG-001 FR-3 / COND-18: drift detection.
+// Asserts SD_REQUIRED_STAGES value matches lifecycle_stage_config.work_type='sd_required'.
+// Throws on drift. Exported for unit testing + called at process startup.
+async function assertSdRequiredStagesMatchCanonical(sbClient = sb) {
+  const { data, error } = await sbClient
+    .from('lifecycle_stage_config')
+    .select('stage_number')
+    .eq('work_type', 'sd_required')
+    .order('stage_number');
+  if (error) {
+    throw new Error(`SD_REQUIRED_STAGES drift check failed (cannot read lifecycle_stage_config): ${error.message}`);
+  }
+  const canonical = new Set((data || []).map((r) => r.stage_number));
+  const missingFromLocal = [...canonical].filter((s) => !SD_REQUIRED_STAGES.has(s));
+  const extraInLocal = [...SD_REQUIRED_STAGES].filter((s) => !canonical.has(s));
+  if (missingFromLocal.length > 0 || extraInLocal.length > 0) {
+    throw new Error(
+      `SD_REQUIRED_STAGES drift detected. Local=${[...SD_REQUIRED_STAGES].sort()}, ` +
+      `Canonical=${[...canonical].sort()}, missing=${missingFromLocal}, extra=${extraInLocal}. ` +
+      `Update SD_REQUIRED_STAGES in scripts/monitor-venture-run.cjs OR fix lifecycle_stage_config.`
+    );
+  }
+  return true;
+}
+
 // Module export for testability (vitest reaches in via require)
 module.exports = module.exports || {};
 module.exports.isWorkerSourceForStage = isWorkerSourceForStage;
 module.exports.loadExpectedArtifactsByStage = loadExpectedArtifactsByStage;
 module.exports.ADVISORY_SOURCES = ADVISORY_SOURCES;
 module.exports.ADVISORY_SUFFIXES = ADVISORY_SUFFIXES;
+module.exports.SD_REQUIRED_STAGES = SD_REQUIRED_STAGES;
+module.exports.approveDecision = approveDecision;
+module.exports.assertSdRequiredStagesMatchCanonical = assertSdRequiredStagesMatchCanonical;
 
 let lastStage = null;
 let issues = [];
@@ -198,6 +226,15 @@ async function getStageTransitions() {
 }
 
 async function approveDecision(decisionId, stage) {
+  // SD-LEO-REFAC-CANONICALIZE-STAGE-CONFIG-001 FR-3: refuse auto-approval of
+  // sd_required stages. SD_REQUIRED_STAGES is the canonical cache of stages
+  // where work_type='sd_required' — the venture needs an SD before the stage
+  // can advance, so auto-approval would silently skip required work.
+  if (SD_REQUIRED_STAGES.has(stage)) {
+    const msg = `Stage ${stage} requires an SD (work_type=sd_required); auto-approval refused`;
+    console.log(`[${ts()}]    BLOCKED: ${msg}`);
+    return { data: null, error: { code: 'SD_REQUIRED_GUARD', message: msg } };
+  }
   if (stage >= STOP_AT_STAGE) {
     console.log(`[${ts()}]    BLOCKED: Refusing to approve S${stage} — at or past STOP_AT_STAGE (${STOP_AT_STAGE})`);
     return { data: null, error: { message: `Stage ${stage} >= STOP_AT_STAGE ${STOP_AT_STAGE}` } };
@@ -435,6 +472,16 @@ async function main() {
   // rather than silently falling back to stale data — operator must see the error.
   try {
     expectedArtifactsByStage = await loadExpectedArtifactsByStage();
+  } catch (err) {
+    console.error(`[FATAL] ${err.message}`);
+    process.exit(1);
+  }
+
+  // SD-LEO-REFAC-CANONICALIZE-STAGE-CONFIG-001 FR-3 / COND-18: assert
+  // SD_REQUIRED_STAGES constant matches canonical work_type='sd_required'.
+  try {
+    await assertSdRequiredStagesMatchCanonical();
+    console.log(`[${ts()}] [STARTUP] SD_REQUIRED_STAGES drift check PASSED (${[...SD_REQUIRED_STAGES]})`);
   } catch (err) {
     console.error(`[FATAL] ${err.message}`);
     process.exit(1);
