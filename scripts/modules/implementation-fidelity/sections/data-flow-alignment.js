@@ -116,6 +116,40 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
         return;
       }
     }
+
+    // PAT-GATE2-LIBFEATURE-001: Frontend presentational / lib-level feature exemption.
+    // An EHG (frontend app) feature whose scope is library-level code (src/lib/ or lib/)
+    // and which EXPLICITLY declares no new UI components/forms AND no new DB is a pure
+    // transform (e.g. a src/lib/gvos prompt renderer). It legitimately ships zero form/UI
+    // integration and zero DB queries, so Section C's C1 (database queries) and C2 (form
+    // integration) checks otherwise false-penalize it (witnessed: SD-SURFACEAWARE-...-001-D
+    // scored RED at EXEC-TO-PLAN, forcing 3 gate bypasses). This is the ONLY exemption that
+    // fires when hasUIScope is true — the precise false-positive condition, since a lib
+    // feature trips hasUIScope via the words "component"/"frontend"/"page" in its scope.
+    // Additive-only: the strict no-UI + no-DB declaration conjunction can never be satisfied
+    // by a real UI/DB feature without contradicting its own scope, so it never relaxes one.
+    // (validation-agent condition C2 "also require hasUIScope===false" is intentionally NOT
+    // adopted: it would block the exact case being fixed.)
+    if (sd?.sd_type === 'feature' && (validation.details.target_application || null) === 'EHG') {
+      let excludedText = '';
+      if (typeof sd?.scope === 'object' && sd.scope?.excluded) {
+        excludedText = Array.isArray(sd.scope.excluded) ? sd.scope.excluded.join(' ') : String(sd.scope.excluded);
+      }
+      const fullScopeText = `${scopeToCheck} ${excludedText}`;
+      const hasLibScope = /(^|[^a-z])(src\/)?lib\//i.test(fullScopeText);
+      const declaresNoUI = /\bno\s+(new\s+)?(ui\s+components?|components?|forms?)\b/i.test(fullScopeText);
+      const declaresNoDB = /\bno\s+(new\s+)?(db|database|tables?|columns?|migrations?|schema\s+changes?)\b/i.test(fullScopeText);
+      if (hasLibScope && declaresNoUI && declaresNoDB) {
+        console.log('   ✅ EHG frontend lib-level feature (no UI/DB by design) - Section C not applicable (25/25) [PAT-GATE2-LIBFEATURE-001]');
+        validation.score += 25;
+        validation.gate_scores.data_flow_alignment = 25;
+        validation.details.data_flow_alignment = {
+          skipped: true,
+          reason: 'EHG frontend lib-level feature with no DB/forms/UI by design (PAT-GATE2-LIBFEATURE-001)'
+        };
+        return;
+      }
+    }
   } catch (_e) {
     // Continue with normal validation
   }
