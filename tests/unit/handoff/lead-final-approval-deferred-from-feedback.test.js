@@ -52,13 +52,13 @@ describe('QF-20260510-925: autoCloseFeedback metadata.deferred_from_sd_key chann
     const startIdx = src.indexOf('// 3. QF-20260510-925');
     expect(startIdx).toBeGreaterThan(-1);
     // Match a slice that captures the if-gate immediately following the comment.
-    const slice = src.slice(startIdx, startIdx + 600);
+    const slice = src.slice(startIdx, startIdx + 1000); // widened for QF-20260520-436 defer_only comment+filter
     expect(slice).toMatch(/let\s+linkedByDeferredFrom\s*=\s*\[\];\s*if\s*\(sdKey\)/);
   });
 
   it('terminalStatuses exclusion is preserved on the new query', () => {
     const startIdx = src.indexOf('// 3. QF-20260510-925');
-    const slice = src.slice(startIdx, startIdx + 900);
+    const slice = src.slice(startIdx, startIdx + 1400); // widened for QF-20260520-436 defer_only comment+filter
     expect(slice).toMatch(/\.not\('status',\s*'in',\s*terminalStatuses\)/);
   });
 });

@@ -810,12 +810,19 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     //    emit-feedback (SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 FR-2) writes this when a
     //    CAPA item is deferred from a parent SD; without this reader, bundled-CAPA
     //    rows remain status='new' forever after the bundling SD merges.
+    //
+    //    QF-20260520-436: EXCLUDE metadata.defer_only=true. deferred_from_sd_key is
+    //    overloaded — log-harness-bug.js sets it on items merely DEFERRED to a future
+    //    campaign (the surfacing SD did NOT address them), marking them defer_only.
+    //    Auto-closing those silently drops backlog work. Bundled-CAPA rows (emit-feedback
+    //    without defer_only) still auto-close as intended.
     let linkedByDeferredFrom = [];
     if (sdKey) {
       const { data: deferredFeedback, error: deferredError } = await this.supabase
         .from('feedback')
         .select('id')
         .filter('metadata->>deferred_from_sd_key', 'eq', sdKey)
+        .not('metadata->>defer_only', 'eq', 'true')
         .not('status', 'in', terminalStatuses);
 
       if (!deferredError && deferredFeedback) {
