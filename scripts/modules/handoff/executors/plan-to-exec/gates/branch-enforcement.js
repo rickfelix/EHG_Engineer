@@ -83,6 +83,20 @@ export function createBranchEnforcementGate(sd, appPath) {
   return {
     name: 'GATE6_BRANCH_ENFORCEMENT',
     validator: async (ctx) => {
+      // Self-skip when the target repo has no usable git (e.g. EHG consolidated repo)
+      const { isGitCapableRepo } = await import('../../../../../../lib/repo-paths.js');
+      if (sd && sd.target_application && !isGitCapableRepo(sd.target_application)) {
+        console.log('\n🔒 GATE 6: SKIPPED — target repo not git-capable (N/A)');
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`GATE6 N/A: target_application='${sd.target_application}' has no usable git repository; branch isolation via worktree`],
+          details: { skipped_not_applicable: true, target_application: sd.target_application }
+        };
+      }
+
       console.log('\n🔒 GATE 6: Git Branch Enforcement (Proactive v2)');
       console.log('-'.repeat(50));
 

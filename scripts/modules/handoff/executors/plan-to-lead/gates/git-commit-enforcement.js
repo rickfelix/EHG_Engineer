@@ -20,7 +20,9 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
   const sdType = (sd.sd_type || '').toLowerCase();
   const isBugfixSD = sdType === 'bugfix' || sdType === 'bug_fix';
 
-  // Documentation/Infrastructure/Bugfix SDs get relaxed enforcement
+  // Documentation/Infrastructure/Bugfix SDs get relaxed enforcement.
+  // Also self-skip when the target repo has no usable git (e.g. EHG consolidated repo) —
+  // this is type-agnostic and covers refactor/database/security/etc. on EHG target.
   if (isNonCodeSD || isBugfixSD) {
     const sdTypeLabel = isBugfixSD ? 'Bugfix' : 'Documentation/Infrastructure';
     return {
@@ -49,10 +51,35 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
     };
   }
 
-  // Standard SDs get full commit enforcement
+  // Standard SDs get full commit enforcement, UNLESS the target repo has no usable git.
   return {
     name: 'GATE5_GIT_COMMIT_ENFORCEMENT',
     validator: async (ctx) => {
+      // Self-skip when the target repo has no usable git (e.g. EHG consolidated repo).
+      // This fires for any sd_type (refactor/database/security/feature/…) targeting EHG.
+      const { isGitCapableRepo } = await import('../../../../../../lib/repo-paths.js');
+      const isGitIncapableTarget = sd && sd.target_application && !isGitCapableRepo(sd.target_application);
+      if (isGitIncapableTarget) {
+        console.log('\n🔒 GATE 5: Git Commit Enforcement');
+        console.log('-'.repeat(50));
+        console.log(`   ℹ️  target_application='${sd.target_application}' has no usable git repository`);
+        console.log('   ✅ Skipping strict commit enforcement (git-incapable target)');
+        console.log('   📝 Branch isolation handled via worktree; commits live in EHG_Engineer');
+
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`GATE5 N/A: target_application='${sd.target_application}' has no usable git repository; commit enforcement skipped`],
+          details: {
+            skipped_not_applicable: true,
+            target_application: sd.target_application,
+            workflow_modification: 'Commit enforcement skipped — target repo is not git-capable'
+          }
+        };
+      }
+
       console.log('\n🔒 GATE 5: Git Commit Enforcement');
       console.log('-'.repeat(50));
 
