@@ -66,6 +66,12 @@ async function main() {
         logged_via: 'log-harness-bug.js',
         source_location: file,
         deferred_from_sd_key: sd,
+        // QF-20260520-436: harness-backlog items are DEFERRED for a future
+        // campaign — the surfacing SD did NOT address them. defer_only=true tells
+        // lead-final-approval autoCloseFeedback NOT to resolve them when that SD
+        // completes (deferred_from_sd_key alone is overloaded: emit-feedback uses
+        // it for bundled-CAPA that the SD *does* resolve).
+        defer_only: true,
       },
     });
 
