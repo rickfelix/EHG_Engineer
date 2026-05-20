@@ -228,7 +228,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
   getRequiredGates(sd, options) {
     const gates = [];
-    const appPath = options._appPath;
+    // QF-20260520-358: same precheck/execute divergence as plan-to-exec — precheckHandoff()
+    // calls getRequiredGates() without setup(), so options._appPath is undefined and the git
+    // commit enforcement gate (below) defaults to EHG_ROOT. Fall back to the pure resolver.
+    const appPath = options._appPath || this.determineTargetRepository(sd);
 
     // SD Start Gate - FIRST (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
     // Ensures CLAUDE_CORE.md AND CLAUDE_LEAD.md (destination phase) are read before handoff

@@ -116,7 +116,13 @@ export class PlanToExecExecutor extends BaseExecutor {
     await this._loadValidators();
 
     const gates = [];
-    const appPath = options._appPath;
+    // QF-20260520-358: the precheck path (HandoffOrchestrator.precheckHandoff) calls
+    // getRequiredGates() WITHOUT running setup(), which is the only place options._appPath
+    // is set. Without this fallback, precheck passes appPath=undefined to the branch/arch
+    // gates -> GitBranchVerifier defaults to EHG_ROOT (often detached HEAD) -> false
+    // "Could not determine current branch" on every SD precheck. determineTargetRepository
+    // is a pure resolver, so calling it here mirrors execute() with no side effects.
+    const appPath = options._appPath || this.determineTargetRepository(sd);
     const parentOrchestrator = options._isParentOrchestrator;
 
     // SD Start Gate - FIRST (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
