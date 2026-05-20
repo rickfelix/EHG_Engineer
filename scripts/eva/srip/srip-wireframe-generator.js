@@ -17,6 +17,9 @@ import { ARTIFACT_TYPES } from '../../../lib/eva/artifact-types.js';
 import { writeArtifact } from '../../../lib/eva/artifact-persistence-service.js';
 import { getLLMClient } from '../../../lib/llm/index.js';
 import { getDesignReferencesByArchetype } from '../../../lib/eva/services/design-reference-library.js';
+// SD-SURFACEAWARE-WIREFRAME-GENERATION-MARKETING-ORCH-001-C
+// Route through the canonical surface-tagging path so neither generator emits untagged screens.
+import { applySurfaceTags } from '../../../lib/eva/wireframe-surface-normalizer.js';
 
 const SPECIALIST_AGENTS = [
   { role: 'UX Architect', focus: 'information architecture, navigation, content hierarchy, user mental models' },
@@ -300,9 +303,14 @@ export async function generateWireframes({
     return { success: false, error: 'Generation failed' };
   }
 
-  // 3. Persist as blueprint_wireframes artifact
+  // 3. Apply canonical surface tagging (flag-gated via EVA_SURFACE_AWARE_ENABLED)
+  // SD-SURFACEAWARE-WIREFRAME-GENERATION-MARKETING-ORCH-001-C: routes through shared
+  // normalizer so this generator never emits untagged screens when the flag is on.
+  const taggedScreens = applySurfaceTags(wireframes.screens);
+
+  // 4. Persist as blueprint_wireframes artifact
   const artifactData = {
-    screens: wireframes.screens,
+    screens: taggedScreens,
     flows: wireframes.flows || [],
     design_system_notes: wireframes.design_system_notes || {},
     specialist_scores: specialistScores,
@@ -326,7 +334,7 @@ export async function generateWireframes({
     title: `UI Wireframes - ${ventureName}`,
     artifactData,
     metadata: {
-      screen_count: wireframes.screens.length,
+      screen_count: taggedScreens.length,
       flow_count: (wireframes.flows || []).length,
       avg_specialist_score: avgScore,
       refinement_cycles: refinementCount,
@@ -339,12 +347,12 @@ export async function generateWireframes({
   });
 
   const duration = Date.now() - startTime;
-  logger.log(`[WireframeGen] Complete in ${duration}ms: ${wireframes.screens.length} screens, avg score ${avgScore.toFixed(1)}`);
+  logger.log(`[WireframeGen] Complete in ${duration}ms: ${taggedScreens.length} screens, avg score ${avgScore.toFixed(1)}`);
 
   return {
     success: true,
     artifactId,
-    screen_count: wireframes.screens.length,
+    screen_count: taggedScreens.length,
     flow_count: (wireframes.flows || []).length,
     specialist_scores: specialistScores,
     avg_score: avgScore,

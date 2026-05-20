@@ -1,0 +1,39 @@
+-- SD-SURFACEAWARE-WIREFRAME-GENERATION-MARKETING-ORCH-001-C
+-- Rollback script for the wireframe_screens surface backfill.
+--
+-- PURPOSE:
+--   Reverses the effect of scripts/backfill-wireframe-screen-surfaces.mjs by
+--   resetting surface + page_type to NULL on rows updated by the backfill run.
+--
+-- SAFETY:
+--   - The original schema migration (20260520_add_surface_columns_to_wireframe_screens.sql)
+--     added these columns as NULLABLE — resetting to NULL restores the pre-backfill state.
+--   - This does NOT drop the columns (that would be a schema change, requiring a separate
+--     migration and explicit review).
+--
+-- WHEN TO USE:
+--   1. If the backfill script produced incorrect classifications (e.g. a rule change).
+--   2. If the columns need to be re-populated from scratch after a classifier update.
+--
+-- HOW TO TARGET SPECIFIC RUNS:
+--   Replace '<backfill_run_timestamp>' with the updated_at range from the backfill log.
+--   If the timestamp is unknown, restrict to rows where surface IS NOT NULL.
+--
+-- =========================================================================
+-- ROLLBACK (DO NOT apply automatically — requires explicit human invocation)
+-- =========================================================================
+
+-- Option A: Reset ALL rows backfilled (safe — sets back to NULL, schema still present)
+-- BEGIN;
+--   UPDATE public.wireframe_screens
+--     SET surface = NULL, page_type = NULL
+--     WHERE surface IS NOT NULL;
+-- COMMIT;
+
+-- Option B: Reset only rows updated AFTER a specific timestamp (more surgical)
+-- BEGIN;
+--   UPDATE public.wireframe_screens
+--     SET surface = NULL, page_type = NULL
+--     WHERE surface IS NOT NULL
+--       AND updated_at >= '<backfill_run_timestamp>';
+-- COMMIT;

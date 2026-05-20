@@ -1,9 +1,7 @@
 {
-  "sdKey": "QF-20260512-190",
-  "workType": "QF",
-  "workKey": "QF-20260512-190",
-  "expectedBranch": "qf/QF-20260512-190",
-  "createdAt": "2026-05-12T11:03:18.071Z",
-  "hostname": "Legion-Laptop",
-  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
+  "sdKey": "SD-SURFACEAWARE-WIREFRAME-GENERATION-MARKETING-ORCH-001-C",
+  "expectedBranch": "feat/SD-SURFACEAWARE-WIREFRAME-GENERATION-MARKETING-ORCH-001-C",
+  "createdAt": "2026-05-20T14:53:41.788Z",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+  "baseRef": "origin/main"
 }
