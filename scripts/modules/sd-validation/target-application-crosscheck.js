@@ -45,6 +45,15 @@ const MIXED_PATTERNS = [
   /\bcross[-\s]repo\b/i
 ];
 
+// SD-LEO-INFRA-CODE-PATH-AWARE-001: code-path hints (case-sensitive substrings).
+// Catches the marketing/UI-vocabulary mislabel that the phrase patterns above
+// miss — a backend SD whose scope references EHG_Engineer code paths but whose
+// target_application was set to EHG. The gate at
+// handoff/executors/lead-to-plan/gates/target-application.js owns the canonical
+// PATH_PATTERN_DICTIONARY; this is an intentionally small defense-in-depth subset.
+const ENGINEER_PATH_HINTS = ['lib/eva/', 'lib/sub-agents/', 'lib/governance/', 'scripts/', 'database/migrations/', '.claude/'];
+const EHG_PATH_HINTS = ['src/components/', 'src/pages/', 'src/stages/', 'src/ventures/', 'src/hooks/', '/ehg/'];
+
 /**
  * @param {{scope?: string|null, target_application?: string|null}} input
  * @returns {{verdict: 'PASS'|'WARN'|'BLOCK', reasons: string[], matchedPhrase?: string}}
@@ -85,6 +94,22 @@ export function validateTargetApplication({ scope, target_application }) {
       reasons.push('sd-start.js will open a worktree in the wrong repo unless target_application is corrected to "EHG"');
       return finalize(reasons, match[0]);
     }
+  }
+
+  // SD-LEO-INFRA-CODE-PATH-AWARE-001: code-path-aware mismatch (catches the
+  // marketing/UI-vocabulary case the phrase patterns miss). Mixed = both repos
+  // referenced → no flag (cross-repo SD).
+  const hasEngineerPath = ENGINEER_PATH_HINTS.some(p => scope.includes(p));
+  const hasEhgPath = EHG_PATH_HINTS.some(p => scope.includes(p));
+  if (hasEngineerPath && !hasEhgPath && target_application === 'EHG') {
+    reasons.push('scope references EHG_Engineer code paths (e.g. lib/eva/, scripts/, database/migrations/) but target_application="EHG"');
+    reasons.push('code-path signal indicates EHG_Engineer; correct target_application to "EHG_Engineer" (SD-LEO-INFRA-CODE-PATH-AWARE-001)');
+    return finalize(reasons, 'code-path:EHG_Engineer');
+  }
+  if (hasEhgPath && !hasEngineerPath && target_application === 'EHG_Engineer') {
+    reasons.push('scope references ehg-app code paths (e.g. src/components/) but target_application="EHG_Engineer"');
+    reasons.push('code-path signal indicates EHG; correct target_application to "EHG" (SD-LEO-INFRA-CODE-PATH-AWARE-001)');
+    return finalize(reasons, 'code-path:EHG');
   }
 
   return { verdict: 'PASS', reasons: ['no repo-scope mismatch detected'] };

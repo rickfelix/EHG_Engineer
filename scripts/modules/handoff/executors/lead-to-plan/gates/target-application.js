@@ -34,6 +34,11 @@ export const PATH_PATTERN_DICTIONARY = {
     'lib/utils/',
     'lib/telemetry/',
     'lib/team/',
+    'lib/governance/',
+    // SD-LEO-INFRA-CODE-PATH-AWARE-001: migrations live in EHG_Engineer; without
+    // this entry, migration-bearing backend SDs miss the EHG_Engineer vote.
+    'database/migrations/',
+    'database/',
     '.claude/',
     'CLAUDE.md',
     'CLAUDE_CORE.md',
@@ -72,6 +77,47 @@ export function detectFromKeyChanges(keyChanges) {
   if (ehgVotes === 0 && engineerVotes === 0) return null;
   if (ehgVotes === engineerVotes) return null;
   return ehgVotes > engineerVotes ? 'EHG' : 'EHG_Engineer';
+}
+
+/**
+ * SD-LEO-INFRA-CODE-PATH-AWARE-001: derive a CODE-PATH signal for an SD from
+ * its key_changes AND its scope/description/title text. Unlike the prose
+ * keyword inference (engineerPatterns/ehgPatterns below), this looks at the
+ * actual deliverable code paths, which are an objective signal of which repo
+ * the work lives in. Used to suppress the vocabulary-driven EHG_Engineer->EHG
+ * auto-correction that mislabels backend SDs whose scope happens to use
+ * marketing/UI vocabulary.
+ *
+ * Path substrings are matched case-sensitively against PATH_PATTERN_DICTIONARY
+ * (the same canonical dictionary detectFromKeyChanges uses — no second dict).
+ *
+ * @param {Object} sd - Strategic Directive (key_changes, scope, description, title)
+ * @returns {'EHG_Engineer'|'EHG'|'mixed'|null}
+ *   'EHG_Engineer' — only EHG_Engineer paths referenced
+ *   'EHG'          — only ehg-app paths referenced
+ *   'mixed'        — both referenced (cross-repo; do not auto-correct)
+ *   null           — no recognizable code paths
+ */
+export function detectPathSignalFromSd(sd) {
+  const parts = [];
+  if (Array.isArray(sd?.key_changes)) {
+    for (const kc of sd.key_changes) {
+      if (kc && typeof kc === 'object' && typeof kc.change === 'string') parts.push(kc.change);
+    }
+  }
+  for (const field of ['scope', 'description', 'title']) {
+    if (typeof sd?.[field] === 'string') parts.push(sd[field]);
+  }
+  const blob = parts.join(' ');
+  if (!blob) return null;
+
+  const ehg = PATH_PATTERN_DICTIONARY.EHG.some(p => blob.includes(p));
+  const engineer = PATH_PATTERN_DICTIONARY.EHG_Engineer.some(p => blob.includes(p));
+
+  if (ehg && engineer) return 'mixed';
+  if (engineer) return 'EHG_Engineer';
+  if (ehg) return 'EHG';
+  return null;
 }
 
 /**
@@ -180,6 +226,26 @@ export async function validateTargetApplication(sd, supabase) {
         issues: [],
         warnings: [`target_application=${currentTarget} preserved (explicit operator intent; inferred ${inferredTarget} skipped)`]
       };
+    }
+
+    // SD-LEO-INFRA-CODE-PATH-AWARE-001: code-path-aware suppression. When the
+    // flip would downgrade EHG_Engineer->EHG but the SD's key_changes/scope
+    // reference EHG_Engineer code paths (only, or mixed cross-repo), the
+    // deliverables live in EHG_Engineer regardless of marketing/UI scope
+    // vocabulary — do NOT auto-correct to EHG (this is the defect class that
+    // mislabeled SD-SURFACEAWARE B/C/E and SD-ACTIVATE). A clean EHG-only path
+    // signal (no EHG_Engineer paths) still flips through the block below.
+    if (currentTarget === 'EHG_Engineer' && inferredTarget === 'EHG') {
+      const pathSignal = detectPathSignalFromSd(sd);
+      if (pathSignal === 'EHG_Engineer' || pathSignal === 'mixed') {
+        console.log(`\n   ℹ️  Code-path signal (${pathSignal}) overrides scope-vocabulary inference; preserving target_application=EHG_Engineer.`);
+        return {
+          pass: true,
+          score: 100,
+          issues: [],
+          warnings: [`target_application=EHG_Engineer preserved: deliverables reference EHG_Engineer code paths (code-path signal=${pathSignal}); scope-vocabulary inferred EHG was suppressed (SD-LEO-INFRA-CODE-PATH-AWARE-001)`]
+        };
+      }
     }
 
     // Target set but doesn't match inferred with high confidence - warn and offer correction
