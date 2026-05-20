@@ -44,6 +44,11 @@ export const SD_TYPE_THRESHOLDS = {
   // Tier 2 — standard bar
   infrastructure: 80,
   enhancement:    80,
+  // QF-20260520-600: database (schema/migration) SDs are infra-class. Without this entry
+  // they fell to _default 80 with no dimension narrowing (database absent from
+  // SD_TYPE_ADDRESSABLE_DIMENSIONS too), hard-blocking LEAD-TO-PLAN and forcing a manual
+  // metadata.vision_addressable_dimensions workaround (witnessed SD-FDBK-GEN-FIX-TRG-ENFORCE-001).
+  database:       80,
   // Tier 3 — lower bar
   maintenance:    70,
   protocol:       70,
@@ -83,6 +88,10 @@ export const SD_TYPE_ADDRESSABLE_DIMENSIONS = {
   // so EHG_Engineer CLI-first infra SDs score on real dim coverage instead of
   // silently floor-rule-passing. PAT-HF-LEADTOPLAN-1cbfab60 was the standing evidence.
   infrastructure: ['architecture', 'reliability', 'scalability', 'performance', 'security', 'maintainability', 'automation', 'observability', 'cli', 'workflow', 'protocol', 'governance'],
+  // QF-20260520-600: database/migration SDs address schema/data/architecture dimensions, not
+  // the full product vision — narrow like infrastructure so the adjusted threshold reflects
+  // real dim coverage instead of demanding a full-vision score from a migration.
+  database:       ['architecture', 'reliability', 'scalability', 'performance', 'security', 'maintainability', 'data', 'governance', 'compliance', 'observability'],
   enhancement:    null,
   maintenance:    ['reliability', 'maintainability', 'performance', 'security', 'architecture'],
   protocol:       ['process', 'governance', 'compliance', 'documentation', 'automation', 'quality'],

@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateVisionScore, SD_TYPE_THRESHOLDS, DIMENSION_WARNING_THRESHOLD } from '../../../scripts/modules/handoff/executors/lead-to-plan/gates/vision-score.js';
+import { validateVisionScore, SD_TYPE_THRESHOLDS, SD_TYPE_ADDRESSABLE_DIMENSIONS, DIMENSION_WARNING_THRESHOLD } from '../../../scripts/modules/handoff/executors/lead-to-plan/gates/vision-score.js';
 
 describe('vision-score-gate: validateVisionScore', () => {
   describe('Path 1: no score available', () => {
@@ -117,6 +117,34 @@ describe('vision-score-gate: validateVisionScore', () => {
       expect(result.passed).toBe(true);
       expect(result.score).toBe(100);
       expect(result.warnings).toEqual([]);
+    });
+  });
+
+  // QF-20260520-600: database sd_type must be infra-class, not _default with no narrowing.
+  describe('database sd_type (QF-20260520-600)', () => {
+    it('is registered as a tier-2 (80) threshold with a database-relevant addressable-dims list', () => {
+      expect(SD_TYPE_THRESHOLDS.database).toBe(80);
+      expect(Array.isArray(SD_TYPE_ADDRESSABLE_DIMENSIONS.database)).toBe(true);
+      expect(SD_TYPE_ADDRESSABLE_DIMENSIONS.database.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('passes at the base threshold boundary (score=80) and fails just below (79) when no dimension data', async () => {
+      const at = await validateVisionScore({ sd_key: 'SD-DB', sd_type: 'database', vision_score: 80, vision_score_action: 'minor_sd' }, null);
+      expect(at.passed).toBe(true);
+      const below = await validateVisionScore({ sd_key: 'SD-DB', sd_type: 'database', vision_score: 79, vision_score_action: 'gap_closure_sd' }, null);
+      expect(below.passed).toBe(false);
+    });
+
+    it('narrows the threshold via addressable dims so a partial-coverage database SD is not held to the full bar', async () => {
+      // 3 of 6 dims match the database addressable set -> adjusted threshold = max(80*3/6, 80*0.6) = 48.
+      // Without the database entry in SD_TYPE_ADDRESSABLE_DIMENSIONS, patterns=null -> no narrowing -> bar stays 80 and 50 would fail.
+      const dimension_scores = {
+        architecture_alignment: 70, reliability_posture: 70, security_controls: 70,
+        unrelated_dim_one: 40, unrelated_dim_two: 40, unrelated_dim_three: 40,
+      };
+      const sd = { sd_key: 'SD-DB', sd_type: 'database', vision_score: 50, vision_score_action: 'gap_closure_sd', dimension_scores };
+      const result = await validateVisionScore(sd, null);
+      expect(result.passed).toBe(true);
     });
   });
 
