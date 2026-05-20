@@ -261,6 +261,18 @@ export class HandoffOrchestrator {
         };
       }
 
+      // Thread _appPath so precheck resolves the same target repo as execute.
+      // Non-fatal: if setup throws (e.g. DB unavailable) precheck continues with whatever
+      // options were already populated.
+      try {
+        if (typeof executor.setup === 'function') {
+          await executor.setup(sdId, sd, options);
+        }
+      } catch (e) {
+        // Non-fatal: precheck continues
+        console.warn(`   [precheck] executor.setup skipped: ${e.message}`);
+      }
+
       // Get gates for this handoff type
       const hardcodedGates = await executor.getRequiredGates(sd, options);
 
