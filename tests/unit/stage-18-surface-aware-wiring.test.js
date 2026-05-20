@@ -24,7 +24,8 @@ vi.mock('../../lib/eva/utils/parse-json.js', () => ({
 }));
 
 import TEMPLATE from '../../lib/eva/stage-templates/stage-18.js';
-import { analyzeStage18MarketingCopy } from '../../lib/eva/stage-templates/analysis-steps/stage-18-marketing-copy.js';
+import { analyzeStage18MarketingCopy, resolveMarketingWireframe } from '../../lib/eva/stage-templates/analysis-steps/stage-18-marketing-copy.js';
+import { classifySurface } from '../../lib/eva/stage-templates/analysis-steps/stage-15-wireframe-generator.js';
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn() };
 
@@ -138,5 +139,47 @@ describe('flag-off byte-identical parity (COND-2)', () => {
     const withoutData = mockComplete.mock.calls[0][1];
 
     expect(withData).toBe(withoutData); // byte-identical baseline prompt
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// classifySurface — stored screen_name shape (FR-fix for untagged ventures)
+// ════════════════════════════════════════════════════════════════════
+describe('classifySurface — canonical stored screen_name shape', () => {
+  it('classifies from screen_name when name is absent (venture_artifacts shape)', () => {
+    expect(classifySurface({ screen_name: 'Landing Page' }).surface).toBe('marketing');
+    expect(classifySurface({ screen_name: 'Signup/Registration' }).surface).toBe('auth');
+    expect(classifySurface({ screen_name: 'Dashboard' }).surface).toBe('app');
+  });
+
+  it('still prefers name over screen_name when both are present', () => {
+    expect(classifySurface({ name: 'Pricing', screen_name: 'Dashboard' }).surface).toBe('marketing');
+  });
+
+  it('falls back to title when name and screen_name are absent', () => {
+    expect(classifySurface({ title: 'Home Page' }).surface).toBe('marketing');
+  });
+
+  it('resolveMarketingWireframe resolves the marketing screen from untagged screen_name screens (Cron Canary shape)', () => {
+    // Mirrors the live Cron Canary venture_artifacts wireframe_screens artifact:
+    // untagged (no surface field), screen_name-shaped screens.
+    const screens = [
+      { screen_id: 's1', screen_name: 'Landing Page' },
+      { screen_id: 's2', screen_name: 'Signup/Registration' },
+      { screen_id: 's3', screen_name: 'Dashboard' },
+      { screen_id: 's4', screen_name: 'Monitors' },
+    ];
+    const mw = resolveMarketingWireframe({ screens });
+    expect(mw).not.toBeNull();
+    expect(mw.screen_name).toBe('Landing Page');
+  });
+
+  it('resolveMarketingWireframe returns null when no screen_name resolves to marketing', () => {
+    const screens = [
+      { screen_id: 's1', screen_name: 'Dashboard' },
+      { screen_id: 's2', screen_name: 'Settings' },
+      { screen_id: 's3', screen_name: 'Monitors' },
+    ];
+    expect(resolveMarketingWireframe({ screens })).toBeNull();
   });
 });
