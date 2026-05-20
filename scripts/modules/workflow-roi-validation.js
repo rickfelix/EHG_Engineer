@@ -208,11 +208,14 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     // Check if LEAD has documented answers to strategic questions
     try {
       // Check for LEAD review documentation in handoff metadata
+      // QF-20260520-261: handoff rows are written as 'LEAD-FINAL-APPROVAL', not 'LEAD-FINAL'.
+      // The old .eq('handoff_type','LEAD-FINAL') never matched, so strategic_review was never
+      // credited -> Gate 4 sections stuck at 72/100 (<85%) on every Pocock-Phase-4 SD. Match both.
       const { data: leadHandoff } = await supabase
         .from('sd_phase_handoffs')
         .select('metadata, created_at')
         .eq('sd_id', sd_id)
-        .eq('handoff_type', 'LEAD-FINAL')
+        .or('handoff_type.eq.LEAD-FINAL,handoff_type.eq.LEAD-FINAL-APPROVAL')
         .order('created_at', { ascending: false })
         .limit(1);
 
