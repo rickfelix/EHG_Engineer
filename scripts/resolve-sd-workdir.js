@@ -29,6 +29,7 @@ import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from
 // SD-LEO-INFRA-LEO-INFRA-WORKTREE-001: SUBSTRATE_ITEMS + validateWorktreeSubstrate
 // for the post-creation completeness gate.
 import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError, SUBSTRATE_ITEMS, validateWorktreeSubstrate } from '../lib/worktree-manager.js';
+import { provisionWorktreeNodeModules, getIsolationMode, getFreeDiskBytes, countActiveFreshSessions } from '../lib/worktree-provision.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -231,7 +232,7 @@ function verifyWorktreeRegistered(worktreePath, repoRoot) {
 /**
  * Create a new worktree for the SD
  */
-function createWorktree(sdKey, repoRoot) {
+function createWorktree(sdKey, repoRoot, opts = {}) {
   const worktreesDir = path.join(repoRoot, WORKTREES_DIR);
   const worktreePath = path.join(worktreesDir, sdKey);
 
@@ -249,7 +250,7 @@ function createWorktree(sdKey, repoRoot) {
       // that DB and scan paths missed. Without this, handoff.js and other
       // scripts run from the worktree fail with NEXT_PUBLIC_SUPABASE_URL
       // is required. Closes feedback row c9d07065.
-      const essentials = ensureWorktreeEssentials(worktreePath, repoRoot);
+      const essentials = ensureWorktreeEssentials(worktreePath, repoRoot, { activeSessionCount: opts.activeSessionCount });
       if (!essentials.ok) {
         emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'pre-existing', errors: essentials.errors });
       }
@@ -351,7 +352,7 @@ function createWorktree(sdKey, repoRoot) {
     baseRef
   }, null, 2));
 
-  const essentials = ensureWorktreeEssentials(worktreePath, repoRoot);
+  const essentials = ensureWorktreeEssentials(worktreePath, repoRoot, { activeSessionCount: opts.activeSessionCount });
   if (!essentials.ok) {
     emitLog({ event: 'worktree.essentials_partial', sdKey, errors: essentials.errors });
   }
@@ -405,7 +406,7 @@ function createWorktree(sdKey, repoRoot) {
  * SUBSTRATE_ITEMS membership; .env.local is opportunistic (not in the
  * substrate contract but copied if present).
  */
-function ensureWorktreeEssentials(worktreePath, repoRoot) {
+function ensureWorktreeEssentials(worktreePath, repoRoot, opts = {}) {
   // SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001 US-004: Structured error return
   // instead of swallowed catches. Best-effort semantics preserved (no throw) but
   // failures are surfaced so callers can log and operators can diagnose.
@@ -420,13 +421,19 @@ function ensureWorktreeEssentials(worktreePath, repoRoot) {
     const targetModules = path.join(worktreePath, 'node_modules');
     if (fs.existsSync(sourceModules) && !fs.existsSync(targetModules)) {
       try {
-        if (process.platform === 'win32') {
-          fs.symlinkSync(sourceModules, targetModules, 'junction');
-        } else {
-          fs.symlinkSync(sourceModules, targetModules, 'dir');
-        }
+        // SD-LEO-INFRA-SMART-PER-WORKTREE-001: isolate node_modules under concurrency
+        // (immune to shared-store wipes), else junction. provision handles the
+        // junction fallback internally. ADDITIVE — does NOT touch sd-start's
+        // fleet-safe MAIN install path.
+        provisionWorktreeNodeModules(worktreePath, {
+          repoRoot,
+          mode: getIsolationMode(),
+          activeSessionCount: opts.activeSessionCount,
+          freeDiskBytes: getFreeDiskBytes(worktreePath),
+          deps: { log: () => {} },
+        });
       } catch (err) {
-        errors.push({ step: 'symlink_node_modules', message: err.message });
+        errors.push({ step: 'provision_node_modules', message: err.message });
       }
     }
   }
@@ -491,6 +498,10 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
     };
   }
 
+  // SD-LEO-INFRA-SMART-PER-WORKTREE-001: fetch heartbeat-fresh active-session count once
+  // (auto mode only) to drive the isolate-vs-junction decision in ensureWorktreeEssentials.
+  const _activeSessionCount = getIsolationMode() === 'auto' ? await countActiveFreshSessions({}) : undefined;
+
   // SD-LEO-INFRA-MULTI-REPO-ROUTING-001: Resolve repo root from SD's target_application
   // When an SD targets a venture repo, create worktrees in that repo instead of EHG_Engineer
   if (!targetApp) {
@@ -537,7 +548,7 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
     } else {
       const branch = getWorktreeBranch(dbResult.path);
       emitLog({ event: 'worktree.resolved', sdKey, source: 'db', resolvedCwd: dbResult.path, outcome: 'success' });
-      const dbEssentials = ensureWorktreeEssentials(dbResult.path, repoRoot);
+      const dbEssentials = ensureWorktreeEssentials(dbResult.path, repoRoot, { activeSessionCount: _activeSessionCount });
       if (!dbEssentials.ok) emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'db', errors: dbEssentials.errors });
       return {
         sdKey, cwd: dbResult.path, source: 'db', success: true,
@@ -556,7 +567,7 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
     // Persist to DB for future lookups
     await persistWorktreePath(sdKey, scanResult.path, branch);
 
-    const scanEssentials = ensureWorktreeEssentials(scanResult.path, repoRoot);
+    const scanEssentials = ensureWorktreeEssentials(scanResult.path, repoRoot, { activeSessionCount: _activeSessionCount });
     if (!scanEssentials.ok) emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'scan', errors: scanEssentials.errors });
     return {
       sdKey, cwd: scanResult.path, source: 'scan', success: true,
@@ -568,7 +579,7 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
   if (mode === 'claim') {
     // Create one
     try {
-      const created = createWorktree(sdKey, repoRoot);
+      const created = createWorktree(sdKey, repoRoot, { activeSessionCount: _activeSessionCount });
       emitLog({ event: 'worktree.resolved', sdKey, source: 'created', resolvedCwd: created.path, outcome: 'success' });
 
       // Persist to DB
