@@ -466,6 +466,33 @@ async function main() {
     }
   }
 
+  // --- ENFORCEMENT 12c: Destructive `npm ci` shared-store wipe guard (harness 95022758) ---
+  // `npm ci` does `rm -rf node_modules` first. Through a worktree junction, or in
+  // the main repo root while worktrees junction to it, that rm -rf wipes the
+  // SHARED store and bricks every parallel session (root cause verified
+  // 2026-05-21: NOT worktree-removal). Redirect to the additive `npm install`.
+  // Same LEO_NPM_INSTALL_GUARD=off escape as ENFORCEMENT 12. Fail-open.
+  if (TOOL_NAME === 'Bash' && process.env.LEO_NPM_INSTALL_GUARD !== 'off') {
+    try {
+      const { npmCiWouldWipeSharedStore } = require('../../lib/npm-ci-junction-guard.cjs');
+      const verdict = npmCiWouldWipeSharedStore({ command: input.command || '', cwd: input.cwd || process.cwd() });
+      if (verdict.wipes) {
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'NPM-CI-SHARED-WIPE', `npm ci would wipe shared node_modules (${verdict.reason})`, 'block', { reason: verdict.reason });
+        process.stderr.write(
+          `NPM CI SHARED-STORE WIPE GUARD (harness 95022758): refusing \`npm ci\`.\n` +
+          `  Reason: ${verdict.reason} — npm ci's \`rm -rf node_modules\` would wipe the SHARED store and brick every parallel session.\n` +
+          `  Use the additive install instead:  npm install --ignore-scripts --no-audit --no-fund\n` +
+          `  Override (single-session only):    LEO_NPM_INSTALL_GUARD=off\n`
+        );
+        await Promise.race([
+          Promise.resolve(auditPromise),
+          new Promise(resolve => setTimeout(resolve, 1000))
+        ]).catch(() => { /* audit never blocks enforcement */ });
+        process.exit(2);
+      }
+    } catch { /* fail-open on any internal error */ }
+  }
+
   // --- ENFORCEMENT 13: Worktree Hygiene Guard (SD-LEO-INFRA-PRE-TOOL-WORKTREE-GUARD-001) ---
   // PreToolUse check on Edit/Write — catches the most common parallel-session
   // failure mode at the moment of first damage:
