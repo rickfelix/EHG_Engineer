@@ -64,6 +64,16 @@ async function inRolledBackTx(work) {
   }
 }
 
+// Strip standalone BEGIN;/COMMIT; lines so a migration's own transaction control cannot
+// commit (and thus defeat the isolation of) the test's outer BEGIN..ROLLBACK. The
+// migration's DDL still runs; only its tx boundaries are neutralized for the test.
+function stripTxControl(sql) {
+  return sql.split('\n').filter((line) => !/^\s*(BEGIN|COMMIT)\s*;\s*$/i.test(line)).join('\n');
+}
+async function applyMigration(sql) {
+  return client.query(stripTxControl(sql));
+}
+
 describe.skipIf(!HAS_DB)('D1 — neutralized wireframe_screens surface migration (feedback 6359dc60)', () => {
   it('table does not exist; applying the migration is a clean no-op (no error, no table created)', async () => {
     await inRolledBackTx(async () => {
@@ -71,7 +81,7 @@ describe.skipIf(!HAS_DB)('D1 — neutralized wireframe_screens surface migration
       expect(before.rows[0].reg).toBeNull(); // table never existed
 
       // Should NOT throw "relation does not exist" — the to_regclass guard takes the ELSE branch.
-      await expect(client.query(D1_SQL)).resolves.toBeDefined();
+      await expect(applyMigration(D1_SQL)).resolves.toBeDefined();
 
       const after = await client.query("SELECT to_regclass('public.wireframe_screens') AS reg");
       expect(after.rows[0].reg).toBeNull(); // still no table — pure no-op
@@ -81,7 +91,7 @@ describe.skipIf(!HAS_DB)('D1 — neutralized wireframe_screens surface migration
   it('forward-compatible branch: when the table exists, the guarded ALTERs add surface + page_type', async () => {
     await inRolledBackTx(async () => {
       await client.query('CREATE TABLE public.wireframe_screens (id int PRIMARY KEY)');
-      await client.query(D1_SQL);
+      await applyMigration(D1_SQL);
       const cols = await client.query(`
         SELECT column_name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'wireframe_screens'
@@ -120,7 +130,7 @@ describe.skipIf(!HAS_DB)('D2 — drop check_conditional_pass_retrospective (feed
 
   it('after the drop, a prospective CONDITIONAL_PASS with valid justification + conditions succeeds', async () => {
     await inRolledBackTx(async () => {
-      await client.query(D2_SQL);
+      await applyMigration(D2_SQL);
       const res = await insertCp({ mode: 'prospective', justification: GOOD_JUSTIFICATION, conditions: GOOD_CONDITIONS });
       expect(res.rows[0].id).toBeTruthy();
     });
@@ -128,7 +138,7 @@ describe.skipIf(!HAS_DB)('D2 — drop check_conditional_pass_retrospective (feed
 
   it('after the drop, sibling check_justification_required still rejects a short justification', async () => {
     await inRolledBackTx(async () => {
-      await client.query(D2_SQL);
+      await applyMigration(D2_SQL);
       await expect(
         insertCp({ mode: 'prospective', justification: 'too short', conditions: GOOD_CONDITIONS })
       ).rejects.toThrow(/check_justification_required/);
@@ -137,7 +147,7 @@ describe.skipIf(!HAS_DB)('D2 — drop check_conditional_pass_retrospective (feed
 
   it('after the drop, sibling check_conditions_required still rejects empty conditions', async () => {
     await inRolledBackTx(async () => {
-      await client.query(D2_SQL);
+      await applyMigration(D2_SQL);
       await expect(
         insertCp({ mode: 'prospective', justification: GOOD_JUSTIFICATION, conditions: [] })
       ).rejects.toThrow(/check_conditions_required/);
@@ -149,7 +159,7 @@ describe.skipIf(!HAS_DB)('D2 — drop check_conditional_pass_retrospective (feed
       const before = await client.query(
         "SELECT count(*)::int AS n FROM sub_agent_execution_results WHERE verdict='CONDITIONAL_PASS' AND validation_mode='retrospective'"
       );
-      await client.query(D2_SQL);
+      await applyMigration(D2_SQL);
       const after = await client.query(
         "SELECT count(*)::int AS n FROM sub_agent_execution_results WHERE verdict='CONDITIONAL_PASS' AND validation_mode='retrospective'"
       );
@@ -189,7 +199,7 @@ describe.skipIf(!HAS_DB)('D3 — auto_set_is_parent corrected-parent guard (feed
 
   it('normal path preserved: a child write auto-sets an un-marked parent to is_parent=true', async () => {
     await inRolledBackTx(async () => {
-      await client.query(D3_SQL);
+      await applyMigration(D3_SQL);
       const { parentId } = await seedParentChild({ withCorrectionMarker: false });
       const r = await client.query("SELECT metadata->>'is_parent' AS v FROM strategic_directives_v2 WHERE id=$1", [parentId]);
       expect(r.rows[0].v).toBe('true');
@@ -198,7 +208,7 @@ describe.skipIf(!HAS_DB)('D3 — auto_set_is_parent corrected-parent guard (feed
 
   it('guarded path: a child write does NOT re-promote a parent whose latest marker is to=false', async () => {
     await inRolledBackTx(async () => {
-      await client.query(D3_SQL);
+      await applyMigration(D3_SQL);
       const { parentId, childId } = await seedParentChild({ withCorrectionMarker: false });
       // Auto-set fired on insert -> true. Now deliberately correct to false + record marker.
       await client.query(

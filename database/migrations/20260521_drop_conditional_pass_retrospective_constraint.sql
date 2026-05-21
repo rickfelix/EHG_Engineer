@@ -36,8 +36,12 @@
 -- APPLY-TO-PROD is gated on explicit user go. Do NOT apply automatically.
 -- ============================================================================
 
+BEGIN;
+
 ALTER TABLE public.sub_agent_execution_results
   DROP CONSTRAINT IF EXISTS check_conditional_pass_retrospective;
+
+COMMIT;
 
 -- ============================================================================
 -- ROLLBACK (re-add the retrospective-only restriction) — ONLY safe while there are
