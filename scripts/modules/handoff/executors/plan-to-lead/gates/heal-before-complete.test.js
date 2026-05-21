@@ -24,7 +24,7 @@ vi.mock('../../../../../../scripts/eva/vision-scorer.js', () => ({
   }),
 }));
 
-import { createHealBeforeCompleteGate } from './heal-before-complete.js';
+import { createHealBeforeCompleteGate, trackBestHealScore } from './heal-before-complete.js';
 
 /**
  * Build a routed mock supabase tuned for heal-before-complete.
@@ -189,6 +189,37 @@ describe('HEAL_BEFORE_COMPLETE — FR-2 iteration loop', () => {
       expect(result.details.iterations).toBeLessThanOrEqual(MAX_HEAL_ITERATIONS);
     }
     expect(MAX_HEAL_ITERATIONS).toBe(3); // sanity: spec is honored
+  });
+
+  // QF-20260521-939 (RCA 12329ab5): convergence-guard logic — best-tracking + regression-stop.
+  // The non-fast (feature) integration path keeps the score static across iterations, so the
+  // guard logic is unit-tested directly via the exported pure helper the loop uses.
+  it('TS-F: an improving score updates the best and does not stop', () => {
+    expect(trackBestHealScore({ bestScore: 70, bestScoreObj: { id: 'a' } }, 83, { id: 'b' }))
+      .toEqual({ bestScore: 83, bestScoreObj: { id: 'b' }, regression: false });
+  });
+
+  it('TS-G: a regressed score keeps the BEST and signals regression (report best, not the worse roll)', () => {
+    expect(trackBestHealScore({ bestScore: 83, bestScoreObj: { id: 'best' } }, 70, { id: 'worse' }))
+      .toEqual({ bestScore: 83, bestScoreObj: { id: 'best' }, regression: true });
+  });
+
+  it('TS-H: an equal score is neither improvement nor regression', () => {
+    expect(trackBestHealScore({ bestScore: 80, bestScoreObj: { id: 'x' } }, 80, { id: 'y' }))
+      .toEqual({ bestScore: 80, bestScoreObj: { id: 'x' }, regression: false });
+  });
+
+  it('TS-I: the witnessed 80→83→70→58 loop reports best 83 and stops at the first regression', () => {
+    let state = { bestScore: 80, bestScoreObj: { id: 's80' } };
+    let stopped = false;
+    for (const [score, obj] of [[83, { id: 's83' }], [70, { id: 's70' }], [58, { id: 's58' }]]) {
+      const r = trackBestHealScore(state, score, obj);
+      state = { bestScore: r.bestScore, bestScoreObj: r.bestScoreObj };
+      if (r.regression) { stopped = true; break; }
+    }
+    expect(stopped).toBe(true);
+    expect(state.bestScore).toBe(83); // NOT 58 — the witnessed-bug invariant
+    expect(state.bestScoreObj).toEqual({ id: 's83' });
   });
 
   // QF-20260506-295: per-SD vision_addressable_dimensions threshold override
