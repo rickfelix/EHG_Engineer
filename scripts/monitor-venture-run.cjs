@@ -149,6 +149,7 @@ async function assertSdRequiredStagesMatchCanonical(sbClient = sb) {
 // Module export for testability (vitest reaches in via require)
 module.exports = module.exports || {};
 module.exports.isWorkerSourceForStage = isWorkerSourceForStage;
+module.exports.computeMissingArtifacts = computeMissingArtifacts;
 module.exports.loadExpectedArtifactsByStage = loadExpectedArtifactsByStage;
 module.exports.ADVISORY_SOURCES = ADVISORY_SOURCES;
 module.exports.ADVISORY_SUFFIXES = ADVISORY_SUFFIXES;
@@ -444,17 +445,29 @@ async function poll() {
   return true;
 }
 
+// QF-20260521-259 (closes feedback 02431bca + edb8fc43): a required deliverable counts as
+// "delivered" if a row of that artifact_type exists from a worker-source row OR an advisory-SUFFIX
+// row (-post-hook / -analysis). Several required deliverables are legitimately emitted that way
+// (wireframe_screens via stage-15-post-hook; identity_brand_guidelines via stage-10-analysis stored
+// at lifecycle_stage=12), and were previously reported as false missing_artifact positives because
+// SD-LEO-REFAC-REFACTOR-MONITOR-EXPECTED-001 filtered to worker rows only. Pure ADVISORY_SOURCES
+// (devils-advocate, manual-upload, lifecycle-sd-bridge) remain commentary and do not satisfy a
+// required artifact_type. Pure function for testability (vitest reaches in via require).
+function computeMissingArtifacts(stage, arts, expected) {
+  const deliveredTypes = new Set(
+    (arts || [])
+      .filter((a) => isWorkerSourceForStage(a.source, stage)
+        || (a.source && ADVISORY_SUFFIXES.some((suf) => a.source.endsWith(suf))))
+      .map((a) => a.artifact_type)
+  );
+  return (expected || []).filter((e) => !deliveredTypes.has(e));
+}
+
 function validateStageArtifacts(stage, arts) {
   const expected = expectedArtifactsByStage.get(stage);
   if (!expected || expected.length === 0) return;
 
-  // SD-LEO-REFAC-REFACTOR-MONITOR-EXPECTED-001: filter to worker rows only.
-  // Advisory rows (stage-gates, devils-advocate, *-analysis, etc.) are observability metadata,
-  // not required deliverables — including them inflated the missing-set with false positives.
-  const workerArts = arts.filter((a) => isWorkerSourceForStage(a.source, stage));
-  const types = new Set(workerArts.map((a) => a.artifact_type));
-
-  const missing = expected.filter((e) => !types.has(e));
+  const missing = computeMissingArtifacts(stage, arts, expected);
   if (missing.length > 0) {
     const msg = `S${stage} missing expected: ${missing.join(', ')}`;
     issues.push({ stage, type: 'missing_artifact', msg, ts: ts() });
