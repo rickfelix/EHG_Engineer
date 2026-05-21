@@ -1004,6 +1004,19 @@ Convert to backlog item or future SD
 
 ---
 
+## Retrospective Gate Invariants (RETROSPECTIVE_EXISTS / RETROSPECTIVE_QUALITY_GATE)
+
+An SD-completion retrospective must satisfy **all four** invariants or the PLAN-TO-LEAD and LEAD-FINAL-APPROVAL gates treat it as missing (enforced in `scripts/modules/handoff/retro-filters.js`):
+
+1. **Existence** — at least one `retrospectives` row for the SD (`sd_id` = the SD **UUID**, not the SD key).
+2. **`retro_type = 'SD_COMPLETION'`** — excludes SPRINT / INCIDENT / AUDIT retros.
+3. **`retrospective_type IS NULL`** — handoff-time retros set this column to the phase (`LEAD_TO_PLAN`, `PLAN_TO_EXEC`, …) and are deliberately excluded by the freshness filter. **Do NOT set `retrospective_type` on a manually-authored SD-completion retro** — setting both `retro_type='SD_COMPLETION'` and `retrospective_type='SD_COMPLETION'` is the most common reason a freshly-written retro "disappears" from the gate.
+4. **Freshness** — `created_at` AFTER the SD's accepted LEAD-TO-PLAN handoff timestamp (defense-in-depth that also catches any handoff-type retros missed by #3).
+
+Quality is scored separately (`quality_score >= 60%`, ≥70 for infrastructure SDs); the `auto_validate_retrospective_quality` trigger computes it from the richness of `what_went_well` / `key_learnings` / `action_items` / `what_needs_improvement`. Note `learning_category` rejects `INFRASTRUCTURE` — use `PROCESS_IMPROVEMENT`.
+
+> The canonical table is **`retrospectives`** (NOT `sd_retrospectives`).
+
 ## Related Documentation
 
 - [Sub-Agent Patterns Guide](../../reference/agent-patterns-guide.md) - Base patterns

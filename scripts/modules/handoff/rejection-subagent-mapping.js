@@ -566,11 +566,11 @@ const REJECTION_MAP = {
     category: 'workflow',
     promptFn: (ctx) => {
       const brief = fivePointBrief({
-        symptom: `No quality retrospective found for ${ctx.sdId}. LEAD-FINAL-APPROVAL blocked.`,
-        location: `sd_retrospectives table WHERE sd_id='${ctx.sdId}'`,
+        symptom: `No qualifying SD-completion retrospective found for ${ctx.sdId}. LEAD-FINAL-APPROVAL blocked.`,
+        location: `retrospectives table WHERE sd_id='${ctx.sdId}'`,
         frequency: 'Blocking final approval',
-        priorAttempts: 'Retrospective not yet generated',
-        desiredOutcome: `Generate retrospective for ${ctx.sdId} with quality score >= 60%. Include SD-specific learnings, not boilerplate.`
+        priorAttempts: 'Retrospective not yet generated, or written with the wrong structural fields so the gate filter excludes it (see desiredOutcome).',
+        desiredOutcome: `Generate an SD-completion retrospective for ${ctx.sdId} that satisfies the gate filter (scripts/modules/handoff/retro-filters.js): (1) retro_type='SD_COMPLETION'; (2) retrospective_type IS NULL — handoff-time retros tag this column (LEAD_TO_PLAN/etc.) and are excluded, so do NOT set it; (3) created_at AFTER the SD's LEAD-TO-PLAN acceptance; (4) quality_score >= 60% with SD-specific learnings, not boilerplate.`
       });
       return 'Quality retrospective required for final approval.' +
         taskInvocation('retro-agent', brief);
