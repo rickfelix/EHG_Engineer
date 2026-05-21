@@ -45,11 +45,35 @@ jobs:
           # Either env var is sufficient — supabase-connection.js skips the
           # password requirement once connectionString is provided.
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # QF-20260521-494 / PAT-CI-DB-TLS-VERIFY-GAP-001 (witness 3): the
+          # pg-direct probe connects to the Supabase pooler, whose CA is not in
+          # the GitHub runner trust store, so strict verification throws
+          # SELF_SIGNED_CERT_IN_CHAIN (INFRA_ERROR) on every PR — the gate has
+          # never once succeeded. This is a READ-ONLY introspection
+          # (pg_proc / pg_trigger) to a known host on an ephemeral runner, so
+          # relaxing verification here is acceptable. Follow-up (Option B):
+          # bundle the Supabase CA + default SUPABASE_SSL_CA in
+          # supabase-connection.js to restore strict verification everywhere.
+          DISABLE_SSL_VERIFY: 'true'
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
+          # QF-20260521-494: INFRA_ERROR (exit 2) means the probe could not run
+          # (DB unreachable / secret missing) — that is environmental, NOT a
+          # readiness verdict. Surface it as a non-blocking warning so it
+          # neither red-Xes the PR (this gate is advisory defense-in-depth) nor
+          # spawns immortal ci_failure feedback rows (auto-resolve-recovered
+          # needs K successful re-runs, which a never-succeeding gate can never
+          # produce). A real divergence/conflict (exit 1) STILL fails the gate.
+          set +e
           if [ -n "${{ github.event.pull_request.number }}" ]; then
             node scripts/check-migration-readiness.mjs --pr ${{ github.event.pull_request.number }}
           else
             node scripts/check-migration-readiness.mjs
           fi
+          code=$?
+          if [ "$code" = "2" ]; then
+            echo "::warning::Pre-merge migration-readiness probe could not run (INFRA_ERROR, exit 2); advisory check skipped — not blocking. See log above."
+            exit 0
+          fi
+          exit "$code"
