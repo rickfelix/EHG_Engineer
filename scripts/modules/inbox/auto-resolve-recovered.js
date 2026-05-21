@@ -74,6 +74,39 @@ export function isEligibleForResolve(item, staleHours, now = Date.now()) {
   return false;
 }
 
+// 0187ad17: query the most-recent PR for a branch. Injectable exec for testability.
+export function fetchBranchPr(repo, branch, exec = execSync) {
+  const b = String(branch).replace(/"/g, '');
+  try {
+    const raw = exec(`gh pr list --repo ${repo} --head "${b}" --state all --json number,state,mergedAt --limit 1`, { encoding: 'utf8', timeout: 15000 });
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+// 0187ad17: a ci_failure on a branch whose PR is MERGED or CLOSED is moot regardless of workflow
+// health — this closes the immortal-row gap where a 100%-failing workflow never produces the
+// K consecutive successes shouldAutoResolve() requires. `prList` is `gh pr list --json` output
+// (most-recent first).
+export function isPrMoot(prList) {
+  if (!Array.isArray(prList) || prList.length === 0) return { moot: false };
+  const pr = prList[0];
+  const state = String(pr.state || '').toUpperCase();
+  return { moot: state === 'MERGED' || state === 'CLOSED', number: pr.number, state };
+}
+
+async function resolveItem(supabase, item, resolutionType, notes, dryRun) {
+  if (dryRun) { console.log(`  [DRY-RUN] ${item.id.slice(0, 8)} → ${resolutionType}`); return true; }
+  const { error: upErr } = await supabase.from('feedback').update({
+    status: 'resolved', resolution_type: resolutionType, resolution_notes: notes,
+    resolved_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  }).eq('id', item.id);
+  if (upErr) { console.error(`  [ERROR] ${item.id.slice(0, 8)}: ${upErr.message}`); return false; }
+  console.log(`  [OK] ${item.id.slice(0, 8)} → resolved (${resolutionType})`);
+  return true;
+}
+
 async function run() {
   const flags = parseArgs();
   const supabase = getSupabase();
@@ -89,16 +122,32 @@ async function run() {
   let resolved = 0, skipped = 0;
   for (const item of items) {
     if (!isEligibleForResolve(item, flags.staleHours)) { skipped++; continue; }
-    const { workflow_name, repo } = item.metadata || {};
-    if (!workflow_name || !repo) { skipped++; continue; }
-    const runs = fetchRecentRuns(repo, workflow_name, flags.k);
-    if (!shouldAutoResolve(runs, item.created_at, flags.k)) { skipped++; continue; }
-    const oldest = runs[runs.length - 1].createdAt;
-    const newest = runs[0].createdAt;
-    const notes = `Auto-resolved by clockwork-auto-resolve (CAPA-7): workflow "${workflow_name}" had ${flags.k}/${flags.k} consecutive successful runs (oldest ${oldest}, newest ${newest}); newest > row.created_at ${item.created_at}.`;
-    if (flags.dryRun) { console.log(`  [DRY-RUN] ${item.id.slice(0, 8)} → ${workflow_name}`); resolved++; continue; }
-    const { error: upErr } = await supabase.from('feedback').update({ status: 'resolved', resolution_type: 'auto_resolved', resolution_notes: notes, resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', item.id);
-    if (upErr) { console.error(`  [ERROR] ${item.id.slice(0, 8)}: ${upErr.message}`); skipped++; } else { console.log(`  [OK] ${item.id.slice(0, 8)} → resolved (${workflow_name})`); resolved++; }
+    const { workflow_name, repo, branch } = item.metadata || {};
+    if (!repo) { skipped++; continue; }
+
+    // Path 1 (CAPA-7): the cited workflow self-healed (K consecutive successes).
+    if (workflow_name) {
+      const runs = fetchRecentRuns(repo, workflow_name, flags.k);
+      if (shouldAutoResolve(runs, item.created_at, flags.k)) {
+        const oldest = runs[runs.length - 1].createdAt, newest = runs[0].createdAt;
+        const notes = `Auto-resolved (CAPA-7): workflow "${workflow_name}" had ${flags.k}/${flags.k} consecutive successful runs (oldest ${oldest}, newest ${newest}); newest > row.created_at ${item.created_at}.`;
+        if (await resolveItem(supabase, item, 'auto_resolved', notes, flags.dryRun)) resolved++; else skipped++;
+        continue;
+      }
+    }
+
+    // Path 2 (0187ad17): the row's branch PR is MERGED/CLOSED → the ci_failure is moot regardless
+    // of workflow health (closes the immortal-row gap for never-succeeding workflows).
+    if (branch) {
+      const pr = isPrMoot(fetchBranchPr(repo, branch) || []);
+      if (pr.moot) {
+        const notes = `Auto-resolved (0187ad17 PR-merged-moot): branch "${branch}" PR #${pr.number} is ${pr.state}; the cited ci_failure is moot regardless of workflow health.`;
+        if (await resolveItem(supabase, item, 'pr_merged_moot', notes, flags.dryRun)) resolved++; else skipped++;
+        continue;
+      }
+    }
+
+    skipped++;
   }
   console.log(`\n[auto-resolve-recovered] Resolved=${resolved} Skipped=${skipped} Total=${items.length} Mode=${flags.dryRun ? 'dry-run' : 'live'}`);
 }
