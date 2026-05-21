@@ -1,0 +1,52 @@
+-- Migration: SD-LEO-INFRA-DATABASE-SCHEMA-OBJECT-001 (D2 — closes feedback 2af121c6)
+-- Drop the over-strict check_conditional_pass_retrospective constraint on
+-- sub_agent_execution_results.
+--
+-- ============================================================================
+-- RCA (completed in LEAD phase; re-verified read-only by DATABASE sub-agent 2026-05-21)
+-- ============================================================================
+-- The constraint was added deliberately by SD-LEO-PROTOCOL-V4-4-0 AC-004
+-- (migration 20251115114444_add_validation_modes_to_sub_agent_results.sql) as:
+--     CHECK ((verdict <> 'CONDITIONAL_PASS') OR (validation_mode = 'retrospective'))
+-- i.e. CONDITIONAL_PASS was permitted ONLY in retrospective mode. In practice this
+-- rejects legitimate PLAN-phase / prospective sub-agent reviews that want to record a
+-- CONDITIONAL_PASS carrying EXEC conditions, forcing a PASS+metadata workaround and
+-- impairing the handoff evidence pipeline (feedback 2af121c6).
+--
+-- DECISION: plain DROP. The sibling guards already enforce evidence quality
+-- INDEPENDENTLY of validation_mode and are PRESERVED:
+--   * check_conditions_required     — CONDITIONAL_PASS => non-empty conditions array
+--   * check_justification_required  — CONDITIONAL_PASS => justification length >= 50
+--   * valid_verdict                 — verdict in the allowed enum
+--   * check_validation_mode_values  — validation_mode in ('prospective','retrospective')
+-- Dropping only the mode restriction lets CONDITIONAL_PASS persist in any valid mode
+-- while the quality bar (conditions + justification) still holds.
+--
+-- LIVE STATE (2026-05-21): 1305+ retrospective + 1 null-mode CONDITIONAL_PASS rows,
+-- 0 prospective. The null-mode row satisfies the surviving sibling guards
+-- (conditions_len=2, justification_len=324) -> zero collateral. No pg_depend objects
+-- reference this constraint -> DROP has no dependents. No existing row is altered.
+--
+-- ⚠️ ONE-WAY DOOR: re-ADDing this constraint will FAIL once any prospective
+-- CONDITIONAL_PASS row exists. Only re-add while zero prospective CONDITIONAL_PASS rows
+-- are present (see rollback below); otherwise a NOT VALID / partial constraint would be
+-- required and is out of scope.
+--
+-- APPLY PATH (Windows direct pg): set DISABLE_SSL_VERIFY=true.
+-- APPLY-TO-PROD is gated on explicit user go. Do NOT apply automatically.
+-- ============================================================================
+
+BEGIN;
+
+ALTER TABLE public.sub_agent_execution_results
+  DROP CONSTRAINT IF EXISTS check_conditional_pass_retrospective;
+
+COMMIT;
+
+-- ============================================================================
+-- ROLLBACK (re-add the retrospective-only restriction) — ONLY safe while there are
+-- ZERO prospective CONDITIONAL_PASS rows; otherwise this ADD CONSTRAINT will error.
+-- ============================================================================
+-- ALTER TABLE public.sub_agent_execution_results
+--   ADD CONSTRAINT check_conditional_pass_retrospective
+--   CHECK ((verdict <> 'CONDITIONAL_PASS') OR (validation_mode = 'retrospective'));
