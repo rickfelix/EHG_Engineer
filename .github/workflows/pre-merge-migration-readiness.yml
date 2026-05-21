@@ -47,6 +47,16 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          # QF-20260521-275 (PAT-CI-DB-TLS-VERIFY-GAP-001): the GitHub-hosted runner's
+          # trust store does not include the Supabase pooler chain, so getSSLConfig()'s
+          # default rejectUnauthorized:true throws "self-signed certificate in
+          # certificate chain" and the probe hard-fails (INFRA_ERROR, exit 2) on every
+          # migration PR even when the migration is correct (e.g. PR #3815). This is
+          # the same TLS-relaxation the sibling DB workflows rely on. DISABLE_SSL_VERIFY
+          # (not NODE_TLS_REJECT_UNAUTHORIZED=0, which pg's explicit per-socket option
+          # overrides) is the lever getSSLConfig() honors. Read-only pg_proc/pg_trigger
+          # introspection from an ephemeral runner to a known host — residual risk accepted.
+          DISABLE_SSL_VERIFY: 'true'
         run: |
           if [ -n "${{ github.event.pull_request.number }}" ]; then
             node scripts/check-migration-readiness.mjs --pr ${{ github.event.pull_request.number }}
