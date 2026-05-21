@@ -400,11 +400,14 @@ async function createQuickFix(options = {}) {
       });
 
       if (result.mode === 'worktree') {
-        // Symlink node_modules into worktree
+        // SD-LEO-INFRA-SMART-PER-WORKTREE-001: smart provisioning — isolate
+        // node_modules under concurrency (immune to shared-store wipes), else junction.
         try {
-          symlinkNodeModules(result.path);
-        } catch (symlinkErr) {
-          console.log(`   ⚠️  node_modules symlink failed: ${symlinkErr.message}`);
+          const { provisionWorktreeNodeModulesAuto } = await import('../lib/worktree-provision.js');
+          const prov = await provisionWorktreeNodeModulesAuto(result.path, { repoRoot: ENGINEER_ROOT });
+          console.log(`   📦 node_modules: ${prov.strategy} (${prov.reason})`);
+        } catch (provErr) {
+          console.log(`   ⚠️  node_modules provisioning failed: ${provErr.message}`);
           console.log('   Run `npm install --ignore-scripts --no-audit --no-fund` in the worktree if needed (NOT `npm ci` — its rm -rf wipes the shared store; harness 95022758).\n');
         }
 

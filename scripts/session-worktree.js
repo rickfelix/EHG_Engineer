@@ -21,6 +21,7 @@ import {
   listWorktrees,
   getRepoRoot
 } from '../lib/worktree-manager.js';
+import { provisionWorktreeNodeModulesAuto } from '../lib/worktree-provision.js';
 
 function parseArgs(argv) {
   const args = {};
@@ -207,13 +208,14 @@ async function main() {
       process.exit(0);
     }
 
-    // Symlink node_modules
+    // SD-LEO-INFRA-SMART-PER-WORKTREE-001: smart provisioning (isolate under
+    // concurrency, else junction). Falls back to junction on isolate failure.
     if (!args.noSymlink) {
       try {
-        symlinkNodeModules(result.path, getRepoRoot());
-        console.log('node_modules linked successfully.');
+        const prov = await provisionWorktreeNodeModulesAuto(result.path, { repoRoot: getRepoRoot() });
+        console.log(`node_modules: ${prov.strategy} (${prov.reason}).`);
       } catch (err) {
-        console.error(`Warning: Could not link node_modules: ${err.message}`);
+        console.error(`Warning: Could not provision node_modules: ${err.message}`);
         console.error('You may need to run `npm install --ignore-scripts --no-audit --no-fund` inside the worktree (NOT `npm ci` — its rm -rf wipes the shared store; harness 95022758).');
       }
     }
