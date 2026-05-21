@@ -47,21 +47,26 @@ function isFalseValue(v) {
   return v === false || v === 'false';
 }
 
+// main() RETURNS an exit code rather than calling process.exit(): on Windows, calling
+// process.exit() while the dotenvx preload's uv_async handle (and supabase-js sockets)
+// are still open aborts the process with a libuv UV_HANDLE_CLOSING assertion
+// (exit 0xC0000409). Setting process.exitCode and letting the event loop drain avoids it.
 async function main() {
   const { sd, reason, dryRun } = parseArgs(process.argv.slice(2));
   if (!sd || !reason) {
     console.error('Usage: node scripts/correct-sd-is-parent.mjs <SD-KEY-or-UUID> --reason "<why>" [--dry-run]');
     console.error('Both an SD identifier and a non-empty --reason are required (the reason is recorded in the audit marker).');
-    process.exit(1);
+    return 1;
   }
   if (reason.trim().length < 10) {
     console.error('--reason must be a substantive explanation (>= 10 chars); it is persisted in the is_parent_change_history audit trail.');
-    process.exit(1);
+    return 1;
   }
 
   const supabase = createClient(
     process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
   const queryField = UUID_RE.test(sd) ? 'id' : 'sd_key';
@@ -71,8 +76,8 @@ async function main() {
     .eq(queryField, sd)
     .maybeSingle();
 
-  if (fetchErr) { console.error('Lookup error:', fetchErr.message); process.exit(1); }
-  if (!row) { console.error(`Strategic Directive not found for ${queryField}=${sd}`); process.exit(1); }
+  if (fetchErr) { console.error('Lookup error:', fetchErr.message); return 1; }
+  if (!row) { console.error(`Strategic Directive not found for ${queryField}=${sd}`); return 1; }
 
   const metadata = row.metadata || {};
   const governance = row.governance_metadata || {};
@@ -86,15 +91,14 @@ async function main() {
   if (isFalseValue(currentIsParent) && latest && isFalseValue(latest.to)) {
     console.log(`No-op: ${row.sd_key} already has metadata.is_parent=false with a matching is_parent_change_history marker.`);
     console.log(`  latest marker: ${JSON.stringify(latest)}`);
-    process.exit(0);
+    return 0;
   }
 
-  const changedAt = new Date().toISOString();
   const entry = {
     from: currentIsParent === undefined ? null : currentIsParent,
     to: false,
     reason: reason.trim(),
-    changed_at: changedAt,
+    changed_at: new Date().toISOString(),
     changed_by: 'correct-sd-is-parent.mjs'
   };
 
@@ -107,7 +111,7 @@ async function main() {
 
   if (dryRun) {
     console.log('\n--dry-run: no write performed.');
-    process.exit(0);
+    return 0;
   }
 
   const { error: updateErr } = await supabase
@@ -115,9 +119,12 @@ async function main() {
     .update({ metadata: newMetadata, governance_metadata: newGovernance })
     .eq('id', row.id);
 
-  if (updateErr) { console.error('Update error:', updateErr.message); process.exit(1); }
+  if (updateErr) { console.error('Update error:', updateErr.message); return 1; }
 
   console.log('\n✅ Correction recorded. auto_set_is_parent() will no longer re-promote this parent on child writes.');
+  return 0;
 }
 
-main().catch(err => { console.error('Fatal:', err.message); process.exit(1); });
+main()
+  .then((code) => { process.exitCode = code; })
+  .catch((err) => { console.error('Fatal:', err.message); process.exitCode = 1; });

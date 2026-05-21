@@ -19,12 +19,25 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'fs';
+import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { createDatabaseClient } from '../../scripts/lib/supabase-connection.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIG = (f) => resolve(__dirname, '../../database/migrations', f);
+const WT_ROOT = resolve(__dirname, '../..');
+const WRITER = resolve(WT_ROOT, 'scripts/correct-sd-is-parent.mjs');
+const HAS_SUPABASE = Boolean(
+  (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL) && process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+const SD_SELF_UUID = '207b77d3-1691-45d1-bdec-9f5e000ebc54';
+
+function runWriter(args) {
+  return spawnSync('node', [WRITER, ...args], {
+    cwd: WT_ROOT, encoding: 'utf8', env: { ...process.env, DISABLE_SSL_VERIFY: 'true' },
+  });
+}
 
 const D1_SQL = readFileSync(MIG('20260520_add_surface_columns_to_wireframe_screens.sql'), 'utf8');
 const D2_SQL = readFileSync(MIG('20260521_drop_conditional_pass_retrospective_constraint.sql'), 'utf8');
@@ -228,4 +241,26 @@ describe.skipIf(!HAS_DB)('D3 — auto_set_is_parent corrected-parent guard (feed
     );
     return { parentId, childId };
   }
+});
+
+describe('D3 writer — scripts/correct-sd-is-parent.mjs CLI contract (FR-4 / TS-8)', () => {
+  it('exits non-zero and complains when --reason is missing (no DB needed)', () => {
+    const r = runWriter(['SD-LEO-INFRA-DATABASE-SCHEMA-OBJECT-001']);
+    expect(r.status).not.toBe(0);
+    expect(`${r.stderr}${r.stdout}`).toMatch(/reason/i);
+  });
+
+  it('exits non-zero when --reason is too short (< 10 chars, no DB needed)', () => {
+    const r = runWriter(['SD-LEO-INFRA-DATABASE-SCHEMA-OBJECT-001', '--reason', 'short']);
+    expect(r.status).not.toBe(0);
+  });
+
+  it.skipIf(!HAS_SUPABASE)('--dry-run previews the is_parent=false correction without writing', () => {
+    const r = runWriter([SD_SELF_UUID, '--reason', 'regression dry-run: verify writer marker shape', '--dry-run']);
+    expect(r.status).toBe(0);
+    // Either the preview path ("metadata.is_parent: ... -> false") or the already-corrected
+    // no-op path ("already has metadata.is_parent=false") — both exit 0 and mention is_parent,
+    // and neither performs a write in --dry-run.
+    expect(r.stdout).toMatch(/is_parent/);
+  });
 });
