@@ -373,6 +373,20 @@ async function loadToleranceBuffer(supabase) {
  * @param {Object} supabase - Supabase client
  * @returns {Object} Gate configuration
  */
+/**
+ * QF-20260521-939 (RCA 12329ab5): convergence guard for the re-heal loop. scoreSD() re-rolls a
+ * NON-deterministic vision score on UNCHANGED SD content, so the loop must keep the BEST score+row
+ * and stop the moment a re-roll regresses below it — committing the last (often worse) roll forces
+ * spurious EXHAUSTED + a --bypass-validation. Pure + exported for direct unit testing.
+ * @param {{bestScore:number, bestScoreObj:any}} state - best seen so far
+ * @returns {{ bestScore:number, bestScoreObj:any, regression:boolean }}
+ */
+export function trackBestHealScore(state, newScore, newScoreObj) {
+  if (newScore > state.bestScore) return { bestScore: newScore, bestScoreObj: newScoreObj, regression: false };
+  if (newScore < state.bestScore) return { bestScore: state.bestScore, bestScoreObj: state.bestScoreObj, regression: true };
+  return { bestScore: state.bestScore, bestScoreObj: state.bestScoreObj, regression: false };
+}
+
 export function createHealBeforeCompleteGate(supabase) {
   return {
     name: 'HEAL_BEFORE_COMPLETE',
@@ -972,6 +986,14 @@ export function createHealBeforeCompleteGate(supabase) {
 
         let currentScore = sdHealScore;
         let currentScoreObj = latestScore;
+        // QF-20260521-939 (RCA 12329ab5): scoreSD() re-rolls a NON-deterministic vision score on
+        // UNCHANGED SD content, so track the BEST score+row across iterations and stop on a
+        // regression — the loop must not commit the last (often worse) roll (witnessed 80→83→70→58).
+        // No SD content is ever written, so "revert" only changes which already-persisted
+        // eva_vision_scores row the verdict reports; no DB rollback is needed.
+        let bestScore = sdHealScore;
+        let bestScoreObj = latestScore;
+        let regressionStop = false;
         let healIterations = 0;
         const iterationHistory = [];
 
@@ -1012,7 +1034,22 @@ export function createHealBeforeCompleteGate(supabase) {
           currentScoreObj = newScoreObj;
           currentScore = newScoreObj.total_score;
           console.log(`   📈 Iteration ${healIterations} produced score ${currentScore}`);
+
+          // QF-20260521-939: keep the best score+row; stop if a later re-roll regresses below it.
+          const conv = trackBestHealScore({ bestScore, bestScoreObj }, currentScore, newScoreObj);
+          bestScore = conv.bestScore;
+          bestScoreObj = conv.bestScoreObj;
+          if (conv.regression) {
+            regressionStop = true;
+            console.log(`   🛑 Regression detected (${currentScore} < best ${bestScore}); reverting to best score and stopping re-heal.`);
+            break;
+          }
         }
+
+        // QF-20260521-939: evaluate the verdict against the BEST score/row seen, not the last
+        // (possibly-regressed) iteration. bestScore >= currentScore always, so this only helps.
+        currentScore = bestScore;
+        currentScoreObj = bestScoreObj;
 
         // Convergence — PASS
         if (currentScore >= effectiveThreshold) {
@@ -1075,6 +1112,8 @@ export function createHealBeforeCompleteGate(supabase) {
           details: {
             verdict: 'EXHAUSTED',
             reason_code: GATE_REASON_CODES.HEAL_EXHAUSTED,
+            regression_stopped: regressionStop,
+            best_score: bestScore,
             sd_heal_score: currentScore,
             original_score: sdHealScore,
             auto_re_healed: healIterations > 0,
