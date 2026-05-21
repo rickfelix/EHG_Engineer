@@ -405,7 +405,7 @@ async function createQuickFix(options = {}) {
           symlinkNodeModules(result.path);
         } catch (symlinkErr) {
           console.log(`   ⚠️  node_modules symlink failed: ${symlinkErr.message}`);
-          console.log('   Run npm ci in the worktree if needed.\n');
+          console.log('   Run `npm install --ignore-scripts --no-audit --no-fund` in the worktree if needed (NOT `npm ci` — its rm -rf wipes the shared store; harness 95022758).\n');
         }
 
         const action = result.created ? 'Created' : 'Reusing existing';

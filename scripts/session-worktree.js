@@ -214,7 +214,7 @@ async function main() {
         console.log('node_modules linked successfully.');
       } catch (err) {
         console.error(`Warning: Could not link node_modules: ${err.message}`);
-        console.error('You may need to run npm ci inside the worktree.');
+        console.error('You may need to run `npm install --ignore-scripts --no-audit --no-fund` inside the worktree (NOT `npm ci` — its rm -rf wipes the shared store; harness 95022758).');
       }
     }
 
