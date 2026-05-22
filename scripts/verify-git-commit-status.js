@@ -25,6 +25,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 
 import { resolveRepoPath } from '../lib/repo-paths.js';
+import { resolveWorktreeCwd } from '../lib/resolve-worktree-cwd.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -45,6 +46,10 @@ class GitCommitVerifier {
     this.sdId = sdId;
     this.legacyId = options.legacyId || null; // SD-VENTURE-STAGE0-UI-001: Support legacy_id search
     this.appPath = appPath;
+    // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: the directory git commands actually run in.
+    // Resolved in verify() to the SD's worktree when its branch lives in one (the
+    // cross-repo / multi-session case); falls back to appPath (repo root) otherwise.
+    this.effectiveCwd = appPath;
     this.results = {
       cleanWorkingDirectory: false,
       commitsExist: false,
@@ -78,7 +83,7 @@ class GitCommitVerifier {
    */
   async gitCommand(command) {
     try {
-      const { stdout, stderr } = await execAsync(command, { cwd: this.appPath });
+      const { stdout, stderr } = await execAsync(command, { cwd: this.effectiveCwd });
       return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
     } catch (error) {
       return {
@@ -398,6 +403,19 @@ class GitCommitVerifier {
       this.results.blockers.push('Not a git repository');
       this.results.verdict = 'FAIL';
       return this.results;
+    }
+
+    // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: when the SD's branch is checked out in
+    // a worktree of this repo (the cross-repo / multi-session case — e.g. an
+    // EHG SD whose branch lives in ehg/.worktrees/<SD>/ while ehg main is on
+    // another branch), run the branch + dirty-file checks THERE, not in the
+    // repo root. Falls back to appPath when no worktree matches, so single-
+    // session and EHG_Engineer self-target behavior is byte-identical.
+    const resolvedCwd = resolveWorktreeCwd(this.appPath, { sdId: this.sdId });
+    if (resolvedCwd && resolvedCwd !== this.appPath) {
+      this.effectiveCwd = resolvedCwd;
+      console.log(`Worktree resolved: ${resolvedCwd}`);
+      console.log('   (branch + dirty-file checks run in the SD worktree, not the repo root)');
     }
 
     // Run all checks
