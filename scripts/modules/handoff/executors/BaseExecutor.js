@@ -8,11 +8,10 @@
 import ResultBuilder from '../ResultBuilder.js';
 import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
-import { resolveRepoPath } from '../../../../lib/repo-paths.js';
+import { resolveRepoPath, ENGINEER_ROOT } from '../../../../lib/repo-paths.js';
 // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Shared git context to eliminate redundant execSync calls
 import { SharedGitContext } from '../shared-git-context.js';
 
@@ -35,47 +34,25 @@ import { trackWriteSource } from '../../../../lib/eva/cli-write-gate.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Module-level cache for getRepoPath()
-// Eliminates redundant `git rev-parse --show-toplevel` calls (was called 2x per getRepoPath invocation)
-let _cachedGitRoot = null;
-
 /**
- * Get cross-platform repository path
- * SD-LEO-INFRA-GATE-WORKTREE-FIXES-001: Use git rev-parse for worktree-safe resolution.
- * __dirname fails in worktrees because it resolves inside .worktrees/ subdirectory.
+ * Get cross-platform repository path.
+ *
+ * QF-20260522-272: Delegate to the canonical registry-based resolver in
+ * lib/repo-paths.js, which returns absolute paths and is therefore independent
+ * of the current working directory / git worktree. The previous implementation
+ * derived paths from `git rev-parse --show-toplevel` and resolved EHG as a
+ * `<gitRoot>/../ehg` sibling; when a handoff ran with its cwd inside a worktree,
+ * gitRoot was the worktree, so EHG resolved to a nonexistent
+ * `<repo>/.worktrees/ehg` path. That broke GATE6_BRANCH_ENFORCEMENT (and the
+ * userStory app-path check) for every EHG-targeted SD run from a worktree.
+ * This matches the already-correct getRepoPath in lead-to-plan/utils.js and
+ * lead-final-approval/gates.js.
+ *
  * @param {string} repoName - 'EHG_Engineer' or 'EHG'/'ehg'
  * @returns {string} Resolved absolute path
  */
 function getRepoPath(repoName) {
-  const normalizedName = repoName.toLowerCase();
-
-  // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Cache git root to avoid redundant execSync calls
-  if (_cachedGitRoot === null) {
-    try {
-      _cachedGitRoot = execSync('git rev-parse --show-toplevel', {
-        encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe']
-      }).trim();
-      // QF-20260404-445: If resolved path is inside a deleted worktree (node_modules
-      // missing), fall back to __dirname-based resolution. This prevents
-      // ERR_MODULE_NOT_FOUND when handoffs run after worktree cleanup.
-      const nmPath = path.join(_cachedGitRoot, 'node_modules');
-      if (_cachedGitRoot.includes('.worktrees') && !fs.existsSync(nmPath)) {
-        console.debug('[BaseExecutor] Dead worktree detected, falling back to __dirname');
-        _cachedGitRoot = path.resolve(__dirname, '../../../../');
-      }
-    } catch (e) {
-      // Intentionally suppressed: Fallback when git rev-parse unavailable
-      console.debug('[BaseExecutor] getRepoPath git rev-parse fallback:', e?.message || e);
-      _cachedGitRoot = path.resolve(__dirname, '../../../../');
-    }
-  }
-
-  if (normalizedName.includes('engineer')) {
-    return _cachedGitRoot;
-  }
-  // EHG/ehg is sibling to EHG_Engineer
-  return path.resolve(_cachedGitRoot, '../ehg');
+  return resolveRepoPath(repoName) || ENGINEER_ROOT;
 }
 
 export class BaseExecutor {
