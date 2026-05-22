@@ -32,6 +32,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 
 import { resolveRepoPath } from '../lib/repo-paths.js';
+import { resolveWorktreeCwd } from '../lib/resolve-worktree-cwd.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -82,6 +83,12 @@ class GitBranchVerifier {
     this.sdTitle = sdTitle || '';
     this.appPath = appPath;
     this.worktreeMode = options.worktreeMode || false;
+    // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: directory git commands run in. Resolved
+    // to the SD's worktree in verify() ONLY in standard (non-worktree) mode.
+    // In worktreeMode the verifier intentionally reads the MAIN repo's branch to
+    // decide whether main must switch away so the worktree can hold the branch,
+    // so worktreeMode keeps appPath (byte-identical to prior behavior).
+    this.effectiveCwd = appPath;
     this.expectedBranchName = this.generateBranchName(sdId, sdTitle);
 
     // SD-LEO-INFRA-CROSS-REPO-MERGE-001 (FR-2): defensive scope assertion.
@@ -163,7 +170,7 @@ class GitBranchVerifier {
    */
   async gitCommand(command) {
     try {
-      const { stdout, stderr } = await execAsync(command, { cwd: this.appPath });
+      const { stdout, stderr } = await execAsync(command, { cwd: this.effectiveCwd });
       return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
     } catch (error) {
       return {
@@ -606,6 +613,24 @@ class GitBranchVerifier {
       this.results.blockers.push('Not a git repository');
       this.results.verdict = 'FAIL';
       return this.results;
+    }
+
+    // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: in STANDARD (non-worktree) mode, if the
+    // SD's branch is checked out in a worktree of this repo, run the read checks
+    // there so we don't false-fail against the repo root's current branch. In
+    // worktreeMode we deliberately keep appPath (the verifier reads the MAIN
+    // repo's branch to decide whether main must switch away for worktree
+    // checkout) — see the constructor note. Symmetric with GATE5's GitCommitVerifier.
+    if (!this.worktreeMode) {
+      const resolvedCwd = resolveWorktreeCwd(this.appPath, {
+        expectedBranch: this.expectedBranchName,
+        sdId: this.sdId,
+      });
+      if (resolvedCwd && resolvedCwd !== this.appPath) {
+        this.effectiveCwd = resolvedCwd;
+        console.log(`🌲 Worktree resolved: ${resolvedCwd}`);
+        console.log('   (branch checks run in the SD worktree, not the repo root)');
+      }
     }
 
     // f651e8eb: prefer existing canonical (no-slug) branch over creating a

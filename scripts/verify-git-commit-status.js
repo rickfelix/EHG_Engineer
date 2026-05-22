@@ -25,6 +25,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 
 import { resolveRepoPath } from '../lib/repo-paths.js';
+import { resolveWorktreeCwd } from '../lib/resolve-worktree-cwd.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -45,6 +46,10 @@ class GitCommitVerifier {
     this.sdId = sdId;
     this.legacyId = options.legacyId || null; // SD-VENTURE-STAGE0-UI-001: Support legacy_id search
     this.appPath = appPath;
+    // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: the directory git commands actually run in.
+    // Resolved in verify() to the SD's worktree when its branch lives in one (the
+    // cross-repo / multi-session case); falls back to appPath (repo root) otherwise.
+    this.effectiveCwd = appPath;
     this.results = {
       cleanWorkingDirectory: false,
       commitsExist: false,
@@ -78,7 +83,7 @@ class GitCommitVerifier {
    */
   async gitCommand(command) {
     try {
-      const { stdout, stderr } = await execAsync(command, { cwd: this.appPath });
+      const { stdout, stderr } = await execAsync(command, { cwd: this.effectiveCwd });
       return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
     } catch (error) {
       return {
@@ -103,7 +108,14 @@ class GitCommitVerifier {
       /-quality-report\.md$/,
       /-stories-summary\.json$/,
       /^credential-scan-results\.json$/,
-      /^SD-.*-README\.md$/
+      /^SD-.*-README\.md$/,
+      // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: worktree-runtime artifacts. Now that
+      // GATE5 resolves and reads the SD's worktree (not the repo root), these
+      // tooling-maintained files (.worktree.json heartbeat/session metadata,
+      // .worktree-nm-mode node_modules marker) are routinely dirty in a worktree
+      // and must NOT block the handoff — they are not source changes.
+      /^\.worktree\.json$/,
+      /^\.worktree-nm-mode$/
     ];
 
     return tempPatterns.some(p => p.test(filePath));
@@ -132,10 +144,18 @@ class GitCommitVerifier {
       return true;
     }
 
-    // Parse uncommitted files
+    // Parse uncommitted files.
+    // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: porcelain format is "XY <path>", but
+    // gitCommand() trims the whole stdout, which strips the leading status space
+    // of the FIRST line when X is blank (e.g. " M .worktree.json" -> "M .worktree
+    // .json"). A naive substring(3) then drops the path's first char
+    // (".worktree.json" -> "worktree.json"), defeating root-level artifact
+    // exclusions in isRootTempFile. Parse the path after the status+separator so
+    // it is correct whether or not the leading space was trimmed.
     this.results.uncommittedFiles = uncommittedLines.map(line => {
-      const status = line.substring(0, 2);
-      const file = line.substring(3);
+      const m = line.match(/^(.{1,2})\s+(.+)$/);
+      const status = m ? m[1] : line.substring(0, 2);
+      const file = m ? m[2] : line.substring(3);
       return { status, file };
     });
 
@@ -398,6 +418,19 @@ class GitCommitVerifier {
       this.results.blockers.push('Not a git repository');
       this.results.verdict = 'FAIL';
       return this.results;
+    }
+
+    // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: when the SD's branch is checked out in
+    // a worktree of this repo (the cross-repo / multi-session case — e.g. an
+    // EHG SD whose branch lives in ehg/.worktrees/<SD>/ while ehg main is on
+    // another branch), run the branch + dirty-file checks THERE, not in the
+    // repo root. Falls back to appPath when no worktree matches, so single-
+    // session and EHG_Engineer self-target behavior is byte-identical.
+    const resolvedCwd = resolveWorktreeCwd(this.appPath, { sdId: this.sdId });
+    if (resolvedCwd && resolvedCwd !== this.appPath) {
+      this.effectiveCwd = resolvedCwd;
+      console.log(`Worktree resolved: ${resolvedCwd}`);
+      console.log('   (branch + dirty-file checks run in the SD worktree, not the repo root)');
     }
 
     // Run all checks
