@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-21T13:01:30.316Z
-**Rows**: 23,210
+**Generated**: 2026-05-22T02:08:53.107Z
+**Rows**: 23,255
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -56,7 +56,6 @@
 - `sub_agent_execution_results_invocation_id_key`: UNIQUE (invocation_id)
 
 ### Check Constraints
-- `check_conditional_pass_retrospective`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR (validation_mode = 'retrospective'::text)))
 - `check_conditions_required`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR ((conditions IS NOT NULL) AND (jsonb_array_length(conditions) > 0))))
 - `check_justification_required`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR ((justification IS NOT NULL) AND (length(justification) >= 50))))
 - `check_validation_mode_values`: CHECK ((validation_mode = ANY (ARRAY['prospective'::text, 'retrospective'::text])))
