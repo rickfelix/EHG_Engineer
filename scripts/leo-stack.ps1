@@ -27,7 +27,13 @@ param(
     [string]$Command = "help",
 
     [Alias("f")]
-    [switch]$Fast
+    [switch]$Fast,
+
+    # When set with start/restart, deletes EHG App's node_modules\.vite optimize
+    # cache before starting, forcing a clean re-optimize. Hard-reset escape hatch
+    # for a corrupted/thrashed dep cache. (PR ehg#622 serves dev deps no-cache, so
+    # this is rarely needed, but it's here when a full reset is wanted.)
+    [switch]$ClearViteCache
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -119,6 +125,30 @@ function Clear-Port {
     }
 
     return $true
+}
+
+# Function to tree-kill EHG App (Vite) dev servers regardless of bound port.
+# Port-based cleanup only frees 8080; when 8080 is taken a new `npm run dev` makes
+# Vite drift to 8081+, and those instances survive every restart, accumulate as
+# zombies, and thrash the shared node_modules\.vite optimize cache -- the root
+# cause of stale dep-cache "Failed to fetch dynamically imported module" 404s that
+# survive reloads and restarts. Scoped strictly to $AppDir's Vite bin path in the
+# command line, so dev servers for OTHER projects are never touched. taskkill /T
+# kills the tree (cmd -> npm -> vite); the npm/cmd parents exit once vite dies.
+function Stop-OrphanDevServers {
+    $orphans = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like "*$AppDir\node_modules*vite*" })
+    if ($orphans.Count -eq 0) { return 0 }
+
+    Write-Log "WARN" "[CLEAN] Found $($orphans.Count) EHG App dev-server process(es) (including any port-drifted); tree-killing..." "Yellow"
+    foreach ($orphan in $orphans) {
+        try {
+            & taskkill /T /F /PID $orphan.ProcessId 2>&1 | Out-Null
+            Write-Log "INFO" "   Killed dev-server PID $($orphan.ProcessId)" "Gray"
+        } catch { }
+    }
+    Start-Sleep -Seconds 1
+    return $orphans.Count
 }
 
 # Function to start EHG_Engineer server (port 3000)
@@ -386,6 +416,10 @@ function Stop-AllServers {
         }
     }
 
+    # Catch EHG App dev servers that drifted to non-8080 ports (zombies that
+    # port-based cleanup misses and that thrash the shared Vite optimize cache).
+    Stop-OrphanDevServers | Out-Null
+
     Write-Log "INFO" "[OK] All servers stopped" "Green"
 }
 
@@ -455,16 +489,49 @@ function Show-Status {
     Write-Log "INFO" "[MEM] Memory: ${freeMemMB}MB free / ${totalMemMB}MB total" "White"
 }
 
+# Post-start health check: exactly one listener per managed port and no extra
+# (port-drifted) EHG App dev servers. Surfaces the zombie/duplicate condition
+# that previously went undetected until it corrupted the Vite optimize cache.
+function Test-StackHealth {
+    $issues = 0
+    foreach ($port in @(3000, 8080)) {
+        $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+        if ($listeners.Count -gt 1) {
+            Write-Log "WARN" "[HEALTH] Port $port has $($listeners.Count) listeners (expected 1)" "Yellow"
+            $issues++
+        }
+    }
+    $viteProcs = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like "*$AppDir\node_modules*vite*" })
+    if ($viteProcs.Count -gt 1) {
+        Write-Log "WARN" "[HEALTH] $($viteProcs.Count) EHG App dev servers detected (expected 1) - possible port drift; run 'clean'" "Yellow"
+        $issues++
+    }
+    if ($issues -eq 0) {
+        Write-Log "INFO" "[HEALTH] OK - one listener per port, single EHG App dev server" "Green"
+    }
+}
+
 # Function to start all servers
 function Start-AllServers {
     $modeText = if ($Fast) { "(FAST MODE)" } else { "" }
     Write-Log "INFO" "[START] Starting LEO Stack $modeText..." "Blue"
     Write-Host "=================================="
 
-    # Clean up any existing processes
+    # Optional hard reset of the EHG App Vite optimize cache (opt-in via -ClearViteCache)
+    if ($ClearViteCache) {
+        $viteCache = Join-Path $AppDir "node_modules\.vite"
+        if (Test-Path $viteCache) {
+            Write-Log "WARN" "[CLEAN] Clearing EHG App Vite optimize cache..." "Yellow"
+            Remove-Item -Recurse -Force $viteCache -ErrorAction SilentlyContinue
+        }
+    }
+
+    # Clean up any existing processes (ports + any port-drifted EHG App dev servers)
     Write-Log "INFO" "Cleaning ports..." "Blue"
     Clear-Port -Port 3000 -Name "EHG_Engineer" | Out-Null
     Clear-Port -Port 8080 -Name "EHG App" | Out-Null
+    Stop-OrphanDevServers | Out-Null
 
     Write-Host "=================================="
     Write-Log "INFO" "Starting servers (${StartupDelay}s delay between each)..." "Blue"
@@ -491,6 +558,7 @@ function Start-AllServers {
 
     Start-Sleep -Seconds 2
     Show-Status
+    Test-StackHealth
 }
 
 # Function to restart all servers
@@ -586,6 +654,12 @@ function Show-Help {
     Write-Host "  start -Fast      - Quick startup with reduced delays" -ForegroundColor White
     Write-Host "  restart -Fast    - Quick restart with shorter cooldown" -ForegroundColor White
     Write-Host ""
+    Write-Host "Cache Reset (-ClearViteCache):" -ForegroundColor Yellow
+    Write-Host "  restart -ClearViteCache  - Wipe EHG App's Vite optimize cache, then restart" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Note: stop / restart / clean now also tree-kill EHG App dev servers that" -ForegroundColor DarkGray
+    Write-Host "      drifted to non-8080 ports (zombies that port-based cleanup missed)." -ForegroundColor DarkGray
+    Write-Host ""
     Write-Host "Advanced Commands:" -ForegroundColor Yellow
     Write-Host "  emergency        - FORCE kill all node processes" -ForegroundColor White
     Write-Host "  start-engineer   - Start only EHG_Engineer (3000)" -ForegroundColor White
@@ -616,6 +690,7 @@ switch ($Command) {
     "clean" {
         Clear-Port -Port 3000 -Name "EHG_Engineer"
         Clear-Port -Port 8080 -Name "EHG App"
+        Stop-OrphanDevServers | Out-Null
     }
     "emergency" { Invoke-EmergencyCleanup }
     "start-engineer" { Start-Engineer }
