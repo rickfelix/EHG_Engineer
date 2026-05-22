@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-21T13:01:30.316Z
+**Generated**: 2026-05-22T02:08:53.107Z
 **Rows**: 53
 **RLS**: Enabled (2 policies)
 
