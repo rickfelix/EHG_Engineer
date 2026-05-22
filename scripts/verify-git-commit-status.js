@@ -144,10 +144,18 @@ class GitCommitVerifier {
       return true;
     }
 
-    // Parse uncommitted files
+    // Parse uncommitted files.
+    // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: porcelain format is "XY <path>", but
+    // gitCommand() trims the whole stdout, which strips the leading status space
+    // of the FIRST line when X is blank (e.g. " M .worktree.json" -> "M .worktree
+    // .json"). A naive substring(3) then drops the path's first char
+    // (".worktree.json" -> "worktree.json"), defeating root-level artifact
+    // exclusions in isRootTempFile. Parse the path after the status+separator so
+    // it is correct whether or not the leading space was trimmed.
     this.results.uncommittedFiles = uncommittedLines.map(line => {
-      const status = line.substring(0, 2);
-      const file = line.substring(3);
+      const m = line.match(/^(.{1,2})\s+(.+)$/);
+      const status = m ? m[1] : line.substring(0, 2);
+      const file = m ? m[2] : line.substring(3);
       return { status, file };
     });
 

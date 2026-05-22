@@ -177,4 +177,25 @@ describe('SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: GATE5 ignores worktree-runtime art
     expect(v.isRootTempFile('config.json')).toBe(false);
     expect(v.isRootTempFile('scripts/foo.js')).toBe(false);
   });
+
+  it('checkCleanWorkingDirectory: a leading .worktree.json (status space trimmed by stdout.trim) is excluded -> clean', async () => {
+    const v = new GitCommitVerifier('SD-X', '/repo');
+    // gitCommand trims the whole stdout, so the first porcelain line arrives as
+    // "M .worktree.json" (leading status space stripped). The robust parse must
+    // still recover ".worktree.json" so isRootTempFile excludes it.
+    vi.spyOn(v, 'gitCommand').mockResolvedValue({ stdout: 'M .worktree.json', stderr: '', success: true });
+    const ok = await v.checkCleanWorkingDirectory();
+    expect(ok).toBe(true);
+    expect(v.results.cleanWorkingDirectory).toBe(true);
+    expect(v.results.uncommittedFiles[0].file).toBe('.worktree.json');
+  });
+
+  it('checkCleanWorkingDirectory: a leading real source file (status space trimmed) is parsed correctly and still blocks', async () => {
+    const v = new GitCommitVerifier('SD-X', '/repo');
+    vi.spyOn(v, 'gitCommand').mockResolvedValue({ stdout: 'M src/foo.js', stderr: '', success: true });
+    const ok = await v.checkCleanWorkingDirectory();
+    expect(ok).toBe(false); // genuine source change still blocks
+    // path must be "src/foo.js", NOT the pre-fix corrupted "rc/foo.js"
+    expect(v.results.uncommittedFiles[0].file).toBe('src/foo.js');
+  });
 });
