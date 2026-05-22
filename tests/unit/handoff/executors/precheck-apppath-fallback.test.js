@@ -24,6 +24,7 @@ vi.mock('../../../../lib/worktree-quota.js', async (importOriginal) => {
 });
 import { resolveWorktreeCwd, extractSdId, stripRefsHeads } from '../../../../lib/resolve-worktree-cwd.js';
 import { listActiveWorktrees } from '../../../../lib/worktree-quota.js';
+import GitCommitVerifier from '../../../../scripts/verify-git-commit-status.js';
 
 const fakeSupabase = {
   from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ order: () => ({ limit: () => ({}) }) }) }) }) }),
@@ -162,5 +163,18 @@ describe('SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: resolveWorktreeCwd', () => {
       { path: '/repo/.worktrees/detached', head: 'abc123' }, // no branch field
     ]);
     expect(resolveWorktreeCwd('/repo', { sdId: 'SD-X-001' })).toBeNull();
+  });
+});
+
+describe('SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: GATE5 ignores worktree-runtime artifacts', () => {
+  it('isRootTempFile excludes .worktree.json and .worktree-nm-mode (routinely dirty in every worktree)', () => {
+    const v = new GitCommitVerifier('SD-X', '/repo');
+    // Now that GATE5 reads the SD worktree, these tooling-maintained files would
+    // otherwise block every worktree-based handoff.
+    expect(v.isRootTempFile('.worktree.json')).toBe(true);
+    expect(v.isRootTempFile('.worktree-nm-mode')).toBe(true);
+    // Sanity: genuine source changes are still NOT treated as temp artifacts.
+    expect(v.isRootTempFile('config.json')).toBe(false);
+    expect(v.isRootTempFile('scripts/foo.js')).toBe(false);
   });
 });

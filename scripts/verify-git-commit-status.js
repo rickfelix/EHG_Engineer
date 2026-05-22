@@ -108,7 +108,14 @@ class GitCommitVerifier {
       /-quality-report\.md$/,
       /-stories-summary\.json$/,
       /^credential-scan-results\.json$/,
-      /^SD-.*-README\.md$/
+      /^SD-.*-README\.md$/,
+      // SD-LEO-INFRA-BRANCH-AWARE-PLAN-001: worktree-runtime artifacts. Now that
+      // GATE5 resolves and reads the SD's worktree (not the repo root), these
+      // tooling-maintained files (.worktree.json heartbeat/session metadata,
+      // .worktree-nm-mode node_modules marker) are routinely dirty in a worktree
+      // and must NOT block the handoff — they are not source changes.
+      /^\.worktree\.json$/,
+      /^\.worktree-nm-mode$/
     ];
 
     return tempPatterns.some(p => p.test(filePath));
