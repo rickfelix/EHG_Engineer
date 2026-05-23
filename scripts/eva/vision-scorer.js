@@ -353,6 +353,25 @@ async function writeVisionGaps(supabase, sdKey, scoreId, dimensionScores) {
   console.log(`   📊 Wrote ${gaps.length} gap(s) to eva_vision_gaps for ${sdKey}`);
 }
 
+// SD-FDBK-FIX-VISION-SCORER-DETERMINISM-001 (FR-2): a fixed seed makes re-scores
+// of unchanged content reproducible on providers that honor it (OpenAI/Gemini/
+// Ollama). It is threaded only where supported; AnthropicAdapter has no seed
+// parameter (documented in the per-provider determinism matrix below). Combined
+// with temperature:0 (FR-1) this removes the sampling variance that was the RCA
+// root of the HEAL-loop divergence (same SD scored 80/83/70/58).
+//
+// Per-provider determinism matrix (FR-7):
+//   Gemini  — honors temperature:0 + generationConfig.seed
+//   OpenAI  — honors temperature:0 + body.seed
+//   Ollama  — honors temperature:0 + options.seed
+//   Anthropic — honors temperature:0 (scoreSD passes no per-call thinkingBudget,
+//               so the thinking-mode temperature-delete branch never fires); no seed
+// Residual non-determinism NOT addressed here (backstopped by the convergence
+// guard QF-20260521-939 + corrective-SD MIN_OCCURRENCES): cloud backend
+// batching/MoE, the programmatic agent-loop tool/fetch ordering, and the inline
+// Claude-Code scoring path.
+const VISION_SCORE_SEED = 1729;
+
 export async function scoreSD(options = {}) {
   const {
     sdKey,
@@ -438,7 +457,7 @@ export async function scoreSD(options = {}) {
   const startTime = Date.now();
 
   try {
-    const result = await llmClient.complete(systemPrompt, userPrompt, { maxTokens: 8000, timeout: 180000 });
+    const result = await llmClient.complete(systemPrompt, userPrompt, { maxTokens: 8000, timeout: 180000, temperature: 0, seed: VISION_SCORE_SEED });
     rawResponse = result.content;
   } catch (err) {
     throw new Error(`LLM call failed: ${err.message}`);
@@ -454,7 +473,7 @@ export async function scoreSD(options = {}) {
 Fix and return ONLY valid JSON with all ${allCriteria.length} dimensions.
 Previous response (truncated):
 ${rawResponse.substring(0, 1000)}`;
-      const retry = await llmClient.complete(systemPrompt, repairPrompt, { maxTokens: 8000, timeout: 180000 });
+      const retry = await llmClient.complete(systemPrompt, repairPrompt, { maxTokens: 8000, timeout: 180000, temperature: 0, seed: VISION_SCORE_SEED });
       parsed = parseAndValidateResponse(retry.content, allCriteria);
     } catch (retryErr) {
       console.error('[vision-scorer] LLM retry parse error:', retryErr?.message || retryErr);

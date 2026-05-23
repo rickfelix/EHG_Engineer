@@ -39,7 +39,9 @@ const supabase = createSupabaseServiceClient();
 const tools = [
   createSupabaseTool(supabase),
   createSupabaseUpsertTool(supabase),
-  createOllamaTool(),
+  // SD-FDBK-FIX-VISION-SCORER-DETERMINISM-001 (FR-4): pin sampling on the LIVE
+  // programmatic scoring path (seed matches the cloud-path VISION_SCORE_SEED=1729).
+  createOllamaTool({ temperature: 0, seed: 1729 }),
 ];
 
 const SYSTEM_PROMPT = `You are an EVA vision alignment scorer. Your task is to:
