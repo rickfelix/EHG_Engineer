@@ -104,4 +104,20 @@ describe('resolveVentureRepoUrl (TS-6 precedence)', () => {
     expect(await resolveVentureRepoUrl(null, VID)).toBeNull();
     expect(await resolveVentureRepoUrl(makeSupabase({}), '')).toBeNull();
   });
+
+  it('rejects a non-GitHub host (create-new fallback)', async () => {
+    const sb = makeSupabase({
+      ventures: { data: { repo_url: 'https://evil.example.com/x/y' }, error: null },
+      venture_artifacts: { data: [], error: null },
+    });
+    expect(await resolveVentureRepoUrl(sb, VID)).toBeNull();
+  });
+
+  it('rejects a repo_url with shell metacharacters, falls back to the safe artifact', async () => {
+    const sb = makeSupabase({
+      ventures: { data: { repo_url: 'https://github.com/x/y; rm -rf /' }, error: null },
+      venture_artifacts: { data: [{ metadata: { lovable_artifact: { type: 'github_sync', repo_url: 'https://github.com/rickfelix/safe-repo' } } }], error: null },
+    });
+    expect(await resolveVentureRepoUrl(sb, VID)).toBe('https://github.com/rickfelix/safe-repo');
+  });
 });
