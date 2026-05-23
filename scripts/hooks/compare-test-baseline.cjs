@@ -17,7 +17,13 @@
 
 const fs = require('fs');
 const path = require('path');
-const { captureBaseline, captureUnitTestState, captureTypeCheckState } = require('./capture-baseline-test-state');
+// Explicit .cjs extension: these hooks were renamed .js → .cjs (package "type":
+// "module") but this require was left extensionless, which Node's CommonJS
+// loader does NOT resolve to a .cjs file — `npm run hooks:baseline` crashed at
+// load with MODULE_NOT_FOUND. Fixed here alongside the FR-5 skip-drift wiring,
+// since the local gate's skip-awareness can't run until the module loads.
+const { captureBaseline, captureUnitTestState, captureTypeCheckState } = require('./capture-baseline-test-state.cjs');
+const { skipDriftStatus } = require('../lib/skip-drift.cjs');
 
 const SESSION_STATE_FILE = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
 
@@ -70,6 +76,24 @@ function compareTestCounts(baseline, current, label) {
     result.status = 'CLEAN';
   } else {
     result.status = 'STABLE';  // Same failures as baseline
+  }
+
+  // FR-5 (SD-FDBK-INFRA-VITEST-PROJECT-SPLIT-001): skip-count drift. A no-DB
+  // unit run where every DB-guarded suite silently skips keeps `failed` at the
+  // baseline (often 0), so the failure-only checks above would pass it as a
+  // false green. Flag when the skipped count leaves the recorded baseline's
+  // ±10% band (abs floor 10). Cold start (no recorded baseline skip count) is
+  // 'NEW' and is treated as a pass. SKIP_DRIFT never masks a REGRESSION.
+  const skip = skipDriftStatus({
+    baselineSkipped: baseline?.skipped,
+    currentSkipped: current?.skipped,
+  });
+  result.baseline_skipped = skip.baselineSkipped == null ? (baseline?.skipped || 0) : skip.baselineSkipped;
+  result.current_skipped = skip.currentSkipped;
+  result.skip_drift = skip.drift;
+  result.skip_status = skip.status;
+  if (skip.status === 'SKIP_DRIFT' && result.status !== 'REGRESSION') {
+    result.status = 'SKIP_DRIFT';
   }
 
   return result;
@@ -146,13 +170,21 @@ function generateComparisonReport(baseline, current) {
     (report.comparisons.engineer_tests.fixed || 0) +
     (report.comparisons.app_tests.fixed || 0);
 
-  // Determine overall status
+  // FR-5: count comparisons whose skipped count drifted out of band.
+  report.summary.total_skip_drift = Object.values(report.comparisons)
+    .filter(c => c.skip_status === 'SKIP_DRIFT').length;
+
+  // Determine overall status. SKIP_DRIFT is a failing state (ranks below
+  // REGRESSION so a real regression is never masked).
   const hasRegression = Object.values(report.comparisons).some(c => c.status === 'REGRESSION');
+  const hasSkipDrift = Object.values(report.comparisons).some(c => c.status === 'SKIP_DRIFT');
   const hasImprovement = Object.values(report.comparisons).some(c => c.status === 'IMPROVED');
   const allClean = Object.values(report.comparisons).every(c => c.status === 'CLEAN');
 
   if (hasRegression) {
     report.summary.overall_status = 'REGRESSION';
+  } else if (hasSkipDrift) {
+    report.summary.overall_status = 'SKIP_DRIFT';
   } else if (allClean) {
     report.summary.overall_status = 'CLEAN';
   } else if (hasImprovement) {
@@ -177,6 +209,7 @@ function printReport(report) {
 
   for (const [key, comparison] of Object.entries(report.comparisons)) {
     const icon = comparison.status === 'REGRESSION' ? '❌' :
+                 comparison.status === 'SKIP_DRIFT' ? '❌' :
                  comparison.status === 'IMPROVED' ? '✅' :
                  comparison.status === 'CLEAN' ? '✅' : '⚪';
     console.log(`${icon} ${comparison.label}: ${comparison.status}`);
@@ -189,6 +222,10 @@ function printReport(report) {
     }
     if (comparison.fixed > 0) {
       console.log(`   FIXED: ${comparison.fixed}`);
+    }
+    if (comparison.skip_status === 'SKIP_DRIFT') {
+      const sign = comparison.skip_drift >= 0 ? '+' : '';
+      console.log(`   SKIP DRIFT: ${comparison.current_skipped} skipped vs baseline ${comparison.baseline_skipped} (${sign}${comparison.skip_drift}) — possible vacuous green`);
     }
   }
 
@@ -235,8 +272,9 @@ function main() {
 
   printReport(report);
 
-  // Exit with appropriate code
-  if (report.summary.overall_status === 'REGRESSION') {
+  // Exit with appropriate code. SKIP_DRIFT is a failing state alongside
+  // REGRESSION (FR-5: a vacuous-green run must not pass silently).
+  if (report.summary.overall_status === 'REGRESSION' || report.summary.overall_status === 'SKIP_DRIFT') {
     process.exit(1);
   }
 }
