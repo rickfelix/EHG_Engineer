@@ -20,8 +20,9 @@ const router = Router();
 /**
  * POST /api/github/create-and-seed
  * Creates a new GitHub repo for the venture, then seeds it with docs + designs.
+ * Exported as a named handler so the build-into / slug-collision branches are unit-testable.
  */
-router.post('/create-and-seed', asyncHandler(async (req, res) => {
+export async function createAndSeedHandler(req, res) {
   const { ventureId, ventureName } = req.body || {};
 
   if (!ventureId || !isValidUuid(ventureId)) {
@@ -137,6 +138,8 @@ router.post('/create-and-seed', asyncHandler(async (req, res) => {
       errors: [err.message],
     });
   }
-}));
+}
+
+router.post('/create-and-seed', asyncHandler(createAndSeedHandler));
 
 export default router;
