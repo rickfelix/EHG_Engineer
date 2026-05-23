@@ -14,6 +14,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
 
@@ -47,34 +48,53 @@ function saveSessionState(state) {
 }
 
 /**
- * Run unit tests and capture results
+ * Run unit tests and capture results.
+ *
+ * SD-FDBK-INFRA-VITEST-PROJECT-SPLIT-001 (FR-4): the engineer baseline targets
+ * the no-DB `unit` vitest project (testScript='test:unit') so the capture
+ * terminates deterministically (db-dir suites that previously hung against the
+ * test.invalid.local sentinel now live in the opt-in `db` project). The vitest
+ * JSON report is written to a temp file via --outputFile (not stdout) so a
+ * 16k-test report cannot overflow execSync's default maxBuffer. A non-zero exit
+ * (tests failed) is EXPECTED — the JSON file is still written, so we parse it
+ * regardless and only treat a missing/unparseable file as a capture failure.
+ *
+ * The delta-comparison model (compare-test-baseline.cjs) only flags NEW
+ * failures beyond this recorded baseline, so a stable non-zero `failed` count
+ * is fine — it is the denominator, not a pass/fail gate.
+ *
+ * @param {string} workingDir
+ * @param {string} [testScript='test'] npm script to run (engineer uses 'test:unit')
  */
-function captureUnitTestState(workingDir) {
+function captureUnitTestState(workingDir, testScript = 'test') {
+  const outFile = path.join(
+    os.tmpdir(),
+    `vitest-baseline-${Date.now()}-${Math.random().toString(36).slice(2)}.json`
+  );
   try {
-    // Run tests with JSON reporter for structured output
-    const result = execSync('npm run test -- --reporter=json 2>/dev/null || true', {
-      encoding: 'utf8',
+    execSync(`npm run ${testScript} -- --reporter=json --outputFile=${JSON.stringify(outFile)}`, {
       cwd: workingDir,
-      timeout: 60000  // 60 second timeout
+      timeout: 480000, // 8 min — unit project completes deterministically (~6 min for ~1.2k files)
+      stdio: 'ignore', // results go to outFile; keeps execSync off the maxBuffer path
     });
+  } catch {
+    // Non-zero exit (failing tests) or timeout: fall through and try the JSON file,
+    // which vitest writes even when tests fail.
+  }
 
-    // Try to parse JSON output, fall back to text parsing
-    try {
-      return JSON.parse(result);
-    } catch {
-      // Parse text output for basic stats
-      const passMatch = result.match(/(\d+)\s+pass/i);
-      const failMatch = result.match(/(\d+)\s+fail/i);
-      const skipMatch = result.match(/(\d+)\s+skip/i);
-
-      return {
-        passed: passMatch ? parseInt(passMatch[1]) : 0,
-        failed: failMatch ? parseInt(failMatch[1]) : 0,
-        skipped: skipMatch ? parseInt(skipMatch[1]) : 0,
-        raw_output: result.substring(0, 1000)  // Keep first 1000 chars
-      };
-    }
+  try {
+    const json = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+    try { fs.unlinkSync(outFile); } catch { /* best-effort cleanup */ }
+    return {
+      passed: json.numPassedTests ?? 0,
+      failed: json.numFailedTests ?? 0,
+      skipped: (json.numPendingTests ?? 0) + (json.numTodoTests ?? 0),
+      total: json.numTotalTests ?? 0,
+      test_files_failed: json.numFailedTestSuites ?? 0,
+      project: testScript,
+    };
   } catch (error) {
+    try { fs.unlinkSync(outFile); } catch { /* best-effort cleanup */ }
     return { error: error.message, captured: false };
   }
 }
@@ -134,7 +154,9 @@ function captureBaseline() {
   const baseline = {
     captured_at: new Date().toISOString(),
     engineer: {
-      unit_tests: captureUnitTestState(ENGINEER_DIR),
+      // FR-4: capture the no-DB `unit` project (deterministic), not the full
+      // suite (which hung against the test.invalid.local sentinel).
+      unit_tests: captureUnitTestState(ENGINEER_DIR, 'test:unit'),
       type_check: captureTypeCheckState(ENGINEER_DIR)
     },
     app: {
