@@ -94,13 +94,20 @@ function isWorkerSourceForStage(source, stage) {
   if (!source) return false;
   if (ADVISORY_SOURCES.has(source)) return false;
   if (ADVISORY_SUFFIXES.some((suf) => source.endsWith(suf))) return false;
+  // Canonical EVA worker sources are emitted as 'analysis-step:stage-NN' (and
+  // 'analysis-step:stage-NN-<suffix>' for projections, e.g. S14/S26 typed arrays).
+  // Strip the 'analysis-step:' prefix so they match the stage-NN forms below; otherwise
+  // typed-array stages report false 'missing_artifact'. harness_backlog 87a65161.
+  const normalized = source.startsWith('analysis-step:')
+    ? source.slice('analysis-step:'.length)
+    : source;
   const padded = `stage-${String(stage).padStart(2, '0')}`;
   const unpadded = `stage-${stage}`;
   return (
-    source === padded ||
-    source === unpadded ||
-    source.startsWith(`${padded}-`) ||
-    source.startsWith(`${unpadded}-`)
+    normalized === padded ||
+    normalized === unpadded ||
+    normalized.startsWith(`${padded}-`) ||
+    normalized.startsWith(`${unpadded}-`)
   );
 }
 

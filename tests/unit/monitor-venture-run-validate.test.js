@@ -36,6 +36,15 @@ describe('isWorkerSourceForStage — source-aware filter', () => {
       expect(isWorkerSourceForStage('stage-17-strategy-stats', 17)).toBe(true);
     });
 
+    it('matches canonical EVA analysis-step:stage-NN sources (typed-array stages S14/S26) — harness_backlog 87a65161', () => {
+      expect(isWorkerSourceForStage('analysis-step:stage-14', 14)).toBe(true);
+      expect(isWorkerSourceForStage('analysis-step:stage-14-projection', 14)).toBe(true);
+      expect(isWorkerSourceForStage('analysis-step:stage-26', 26)).toBe(true);
+      expect(isWorkerSourceForStage('analysis-step:stage-26-projection', 26)).toBe(true);
+      // wrong stage still rejected
+      expect(isWorkerSourceForStage('analysis-step:stage-99', 14)).toBe(false);
+    });
+
     it('matches both padded and unpadded forms regardless of which is used', () => {
       // If production data ever uses stage-1 instead of stage-01, the filter
       // still matches — defensive against the empirical convention shifting.

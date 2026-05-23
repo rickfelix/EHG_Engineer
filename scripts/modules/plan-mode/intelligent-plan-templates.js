@@ -255,7 +255,7 @@ npm run sd:status         # Check SD status
  */
 export function generatePlanPlan(sdContext) {
   const { id, title, type, typeProfile, _complexity, scope, keyChanges } = sdContext;
-  const _intensity = getWorkflowIntensity(sdContext);
+  const intensity = getWorkflowIntensity(sdContext);
 
   const sections = [];
 
@@ -403,7 +403,7 @@ node scripts/handoff.js plan-to-exec  # Transition to EXEC
  */
 export function generateExecPlan(sdContext) {
   const { id, title, type, typeProfile, _complexity, keyChanges } = sdContext;
-  const _intensity = getWorkflowIntensity(sdContext);
+  const intensity = getWorkflowIntensity(sdContext);
 
   const sections = [];
 
