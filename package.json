@@ -55,6 +55,8 @@
     "test:sd-key-generator-gate": "node --test tests/unit/sd-key-generator-coverage.test.mjs",
     "test:unit": "vitest run --project unit",
     "test:db": "vitest run --project db",
+    "test:db-guards": "node scripts/audit-db-test-guards.mjs",
+    "test:db-guards:staged": "node scripts/audit-db-test-guards.mjs --staged",
     "test:integration": "vitest run --project db tests/integration/",
     "test:integration:sd-creation": "vitest run tests/integration/sd-creation/",
     "test:integration:cross-sd-gate": "vitest run tests/integration/cross-sd-overlap-gate/",

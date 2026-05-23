@@ -17,9 +17,10 @@
  *   node scripts/audit-db-test-guards.mjs --list     # just list flagged files (exit 0)
  *   node scripts/audit-db-test-guards.mjs --json      # machine-readable report
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execSync } from 'node:child_process';
 
 const REPO_ROOT = join(fileURLToPath(import.meta.url), '..', '..');
 const TESTS_ROOT = join(REPO_ROOT, 'tests');
@@ -48,6 +49,23 @@ export function isUnguardedDbTest(content) {
   return DB_IMPORT_SIGNAL.test(content) && !GUARD_SIGNAL.test(content);
 }
 
+/**
+ * True when a repo-relative path is a test file that belongs to the no-DB `unit`
+ * vitest project (so a DB guard is required). Files routed to the `db` project
+ * (DB dirs, smoke, *.db.test.js) and non-unit dirs are exempt.
+ * @param {string} relPath repo-relative, forward-slash path
+ */
+export function isUnitProjectTestPath(relPath) {
+  const p = relPath.split(sep).join('/');
+  if (!p.endsWith('.test.js') || p.endsWith('.spec.js') || p.endsWith('.db.test.js')) return false;
+  if (!p.startsWith('tests/')) return false;
+  const seg = p.split('/');
+  const top = seg[1]; // tests/<top>/...
+  if (DB_DIRS.has(top) || SKIP_DIRS.has(top)) return false;
+  if (DB_FILE_NAMES.has(seg[seg.length - 1])) return false;
+  return true;
+}
+
 function walk(dir, topLevelName = null) {
   const out = [];
   let entries;
@@ -73,10 +91,54 @@ function walk(dir, topLevelName = null) {
   return out;
 }
 
+/**
+ * Staged-file gate (pre-commit): block only NEWLY staged unit-project test
+ * files that touch a DB without a guard. This prevents regressions without
+ * forcing the ~74 grandfathered pure-logic client-importers to be wrapped.
+ */
+function runStaged() {
+  let staged = [];
+  try {
+    const out = execSync('git diff --cached --name-only --diff-filter=ACM', {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    });
+    staged = out.split('\n').map((s) => s.trim()).filter(Boolean);
+  } catch (e) {
+    console.error(`[audit-db-test-guards] --staged: could not read staged files: ${e.message}`);
+    return; // fail-open: never block a commit on a git read error
+  }
+
+  const violations = [];
+  for (const rel of staged) {
+    if (!isUnitProjectTestPath(rel)) continue;
+    const abs = join(REPO_ROOT, rel);
+    if (!existsSync(abs)) continue;
+    let content;
+    try { content = readFileSync(abs, 'utf8'); } catch { continue; }
+    if (isUnguardedDbTest(content)) violations.push(rel.split(sep).join('/'));
+  }
+
+  if (violations.length === 0) {
+    console.log('[audit-db-test-guards] --staged: ✅ no new unguarded DB-touching unit tests');
+    return;
+  }
+  console.log(`[audit-db-test-guards] --staged: ❌ ${violations.length} staged unit test(s) touch a DB without a guard:`);
+  for (const v of violations) console.log(`   ${v}`);
+  console.log('\n   Wrap the suite in describeDb (import { describeDb } from tests/helpers/db-available.js)');
+  console.log('   or move it to the db project (tests/integration|database|db-invariants or name it *.db.test.js).');
+  process.exitCode = 1;
+}
+
 function main() {
   const args = process.argv.slice(2);
   const listOnly = args.includes('--list');
   const asJson = args.includes('--json');
+
+  if (args.includes('--staged')) {
+    runStaged();
+    return;
+  }
 
   let files = [];
   try {
