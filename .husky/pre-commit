@@ -351,6 +351,32 @@ fi
 echo "✅ Artifact persistence service enforcement passed"
 
 # ============================================================================
+# STAGE 1.6: DB-Test Guard (BLOCKING for new unguarded DB unit tests)
+# ============================================================================
+# SD-FDBK-INFRA-VITEST-PROJECT-SPLIT-001 (FR-3): a newly staged test that
+# belongs to the no-DB `unit` vitest project must self-skip without a database
+# (describeDb / HAS_REAL_DB), or it will fail/hang the default `npm test` run
+# against the test.invalid.local sentinel. Only STAGED unit-project test files
+# are checked, so the ~74 grandfathered pure-logic client-importers are not
+# forced to change. Fail-open on git/scan errors.
+# ============================================================================
+echo ""
+echo "🔍 Running DB-test guard (staged unit tests)..."
+
+GUARD_HELPER="scripts/audit-db-test-guards.mjs"
+if [ ! -f "$GUARD_HELPER" ]; then
+  echo "  ⚠️  $GUARD_HELPER not found — guard skipped (commit proceeds)."
+else
+  if ! node "$GUARD_HELPER" --staged; then
+    echo ""
+    echo "  Pre-commit blocked by Stage 1.6 (DB-test guard)."
+    echo "  Emergency bypass (logged): git commit --no-verify"
+    echo ""
+    exit 1
+  fi
+fi
+
+# ============================================================================
 # Auto-fix Linting Issues
 # ============================================================================
 echo "🔍 Running ESLint auto-fix on staged files..."
