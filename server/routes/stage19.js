@@ -68,11 +68,15 @@ router.get('/:ventureId/replit-prompts', asyncHandler(async (req, res) => {
   }
 
   const scope = req.query.scope === 'wireframes' ? 'wireframes' : 'sprint';
+  // SD-LEO-FEAT-STAGE-REPLIT-PROMPTS-001: ?mode=build-into is an advisory hint; the
+  // formatter resolves the authoritative mode from the ventures.repo_url SSOT.
+  const modeHint = req.query.mode === 'build-into' ? 'build-into' : undefined;
 
   try {
-    const result = await formatReplitOptimized(ventureId, { scope });
+    const result = await formatReplitOptimized(ventureId, { scope, mode: modeHint });
     return res.status(200).json({
       ventureName: result.manifest?.ventureName || 'Venture',
+      mode: result.manifest?.mode || 'create-new',
       planPrompt: result.planModePrompt?.content || '',
       featurePrompts: (result.featurePrompts || []).map((fp) => ({
         title: fp.title || fp.filename || 'Feature',
