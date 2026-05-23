@@ -122,4 +122,93 @@ describe('auto_populate_retrospective_fields trigger predicate (SD-LEO-FIX-FIX-A
     expect(error).toBeTruthy();
     expect(error.message).toMatch(/PUBLISHED retrospectives must have quality_score >= 70|non-empty action_items/);
   });
+
+  // SD-FDBK-FIX-FIX-RETROSPECTIVE-TRIGGER-001 (harness_backlog 8bc451f0): the publish-gate
+  // quality_score>=70 check used to fire (alphabetically) BEFORE the score-compute trigger,
+  // so a direct PUBLISHED insert with good content but no pre-set score raised P0001. The
+  // enforcement was relocated to run AFTER the score is computed, on every publish path.
+
+  skipIfNoDb('direct PUBLISHED insert with rich content and no pre-set quality_score succeeds (firing-order fix)', async () => {
+    const payload = {
+      sd_id: TEST_SD_UUID,
+      project_name: `TEST-RETRO-GATE-ORDER-${Date.now()}`,
+      retro_type: 'SD_COMPLETION',
+      title: `Regression row — direct PUBLISHED positive path ${Date.now()}`,
+      status: 'PUBLISHED',
+      generated_by: 'MANUAL',
+      learning_category: 'PROCESS_IMPROVEMENT',
+      target_application: 'EHG_Engineer',
+      auto_generated: false,
+      conducted_date: new Date().toISOString(),
+      what_went_well: [
+        'Publish-gate enforcement now runs after the score is computed.',
+        'Direct PUBLISHED inserts no longer require the DRAFT-then-PUBLISH workaround.',
+        'Fix is order-independent: enforcement lives in the compute trigger.',
+        'Trigger names were preserved so historical migrations are not orphaned.',
+        'Scoring logic was kept byte-identical, verified by smoke tests.'
+      ],
+      key_learnings: [
+        'PostgreSQL fires BEFORE-row triggers alphabetically by name, placing the check before the compute.',
+        'Relocating the quality_score>=70 check into auto_validate_retrospective_quality removes the ordering dependency.',
+        'The should_recalculate=false path must still enforce the gate using the stored score on status-only updates.',
+        'Co-locating compute and enforcement makes the gate robust to future trigger additions.',
+        'Regression tests assert the score is computed and lands at >=70 with no pre-set value.'
+      ],
+      action_items: [
+        'Drop the DRAFT-then-PUBLISH workaround in retro-writing tooling where convenient.',
+        'Resolve harness_backlog 8bc451f0.',
+        'Keep this regression test to prevent re-break.'
+      ],
+      what_needs_improvement: [
+        'Trigger ordering implications should be documented when a new retrospectives trigger is added.',
+        'Regression coverage on retrospectives triggers was thin before this SD.',
+        'A lint could flag publish gates that read a column another trigger computes.'
+      ]
+    };
+
+    const { data, error } = await supabase
+      .from('retrospectives')
+      .insert(payload)
+      .select('id, status, quality_score')
+      .single();
+
+    expect(error).toBeNull();
+    expect(data).toBeTruthy();
+    insertedRetroIds.push(data.id);
+    expect(data.status).toBe('PUBLISHED');
+    expect(data.quality_score).toBeGreaterThanOrEqual(70);
+  });
+
+  skipIfNoDb('status-only DRAFT->PUBLISHED update with a low stored score still raises P0001', async () => {
+    // Insert a low-quality DRAFT (lands; publish gate not applied), then publish via a
+    // status-only update (no content change -> score NOT recomputed). The gate must enforce
+    // the STORED score and raise — no publish path may bypass the >=70 gate.
+    const draft = {
+      sd_id: TEST_SD_UUID,
+      project_name: `TEST-RETRO-GATE-ORDER-${Date.now()}`,
+      retro_type: 'SD_COMPLETION',
+      title: `Regression row — status-only publish enforcement ${Date.now()}`,
+      status: 'DRAFT',
+      generated_by: 'MANUAL',
+      learning_category: 'PROCESS_IMPROVEMENT',
+      target_application: 'EHG_Engineer',
+      auto_generated: false,
+      conducted_date: new Date().toISOString(),
+      what_went_well: ['one'],
+      key_learnings: ['two'],
+      action_items: ['three'],
+      what_needs_improvement: ['four']
+    };
+
+    const { data: draftRow, error: draftErr } = await supabase
+      .from('retrospectives').insert(draft).select('id, quality_score').single();
+    expect(draftErr).toBeNull();
+    insertedRetroIds.push(draftRow.id);
+    expect(draftRow.quality_score).toBeLessThan(70);
+
+    const { error: pubErr } = await supabase
+      .from('retrospectives').update({ status: 'PUBLISHED' }).eq('id', draftRow.id);
+    expect(pubErr).toBeTruthy();
+    expect(pubErr.message).toMatch(/PUBLISHED retrospectives must have quality_score >= 70|non-empty action_items/);
+  });
 });
