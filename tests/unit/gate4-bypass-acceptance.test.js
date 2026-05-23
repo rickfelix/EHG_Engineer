@@ -26,7 +26,7 @@ vi.mock('../../scripts/modules/pattern-tracking.js', () => ({
   getPatternStats: vi.fn().mockResolvedValue({ total: 0, resolved: 0 })
 }));
 
-function createMockSupabase({ prdData = null, handoffs = [], retroData = null } = {}) {
+function createMockSupabase({ prdData = null, handoffs = [], retroData = null, sdData = { id: 'sd-uuid', sd_key: 'test-sd', sd_type: 'feature' } } = {}) {
   const mockSingle = (data) => ({
     data,
     error: data ? null : { message: 'Not found', code: 'PGRST116' }
@@ -34,6 +34,23 @@ function createMockSupabase({ prdData = null, handoffs = [], retroData = null } 
 
   return {
     from: vi.fn((table) => {
+      // validateGate4LeadFinal resolves sd_key/UUID via strategic_directives_v2.select().or().single()
+      // before any other query (SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001). Without this branch the
+      // default mock has no .or() and the lookup throws -> function returns early/partial.
+      if (table === 'strategic_directives_v2') {
+        return {
+          select: vi.fn().mockReturnValue({
+            // primary lookup: .or().single()
+            or: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue(mockSingle(sdData))
+            }),
+            // D2 retro-UUID resolution: .eq('sd_key').single()
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue(mockSingle(sdData))
+            })
+          })
+        };
+      }
       if (table === 'product_requirements_v2') {
         return {
           select: vi.fn().mockReturnValue({
@@ -61,6 +78,13 @@ function createMockSupabase({ prdData = null, handoffs = [], retroData = null } 
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
+              // validateExecutiveApproval D2 query: .eq().order().limit().single()
+              order: vi.fn().mockReturnValue({
+                limit: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue(mockSingle(retroData))
+                })
+              }),
+              // legacy callers: .eq().single()
               single: vi.fn().mockResolvedValue(mockSingle(retroData))
             })
           })
@@ -152,5 +176,44 @@ describe('PAT-GATE4-BYPASS-001: Gate 4 Bypass Acceptance', () => {
     // Should auto-pass (Gate 4 is only for design/database pattern)
     expect(result.passed).toBe(true);
     expect(result.score).toBe(100);
+  });
+
+  it('fetches gate1/gate2 from canonical handoff metadata when only gate3 is provided (harness_backlog 5986136e)', async () => {
+    // Repro: the PLAN-TO-LEAD wrapper supplies ONLY gate3 (the fresh ctx result). gate1 now
+    // lives ONLY under canonical gate_results.GATE1_PRD_QUALITY (legacy gate1_validation is no
+    // longer written). Before the fix, the all-null guard (!g1 && !g2 && !g3) was false because
+    // gate3 was set, so the canonical fetch was suppressed and gate1/gate2 stayed undefined ->
+    // gates_passed=1 ("only 1/3 gates cleared"). After the fix the validator fetches any missing
+    // gate, so all three are credited.
+    const gateResults = { gate3: { passed: true, score: 85 } };
+
+    const handoffs = [
+      { handoff_type: 'PLAN-TO-EXEC', status: 'accepted', metadata: { gate_results: { GATE1_PRD_QUALITY: { passed: true, score: 92 } } }, created_at: '2026-01-01' },
+      { handoff_type: 'EXEC-TO-PLAN', status: 'accepted', metadata: { gate_results: { GATE2_IMPLEMENTATION_FIDELITY: { passed: true, score: 88 } } }, created_at: '2026-01-02' }
+    ];
+
+    const supabase = createMockSupabase({
+      prdData: {
+        metadata: { design_analysis: { exists: true } },
+        directive_id: 'test-sd',
+        title: 'Test',
+        created_at: new Date().toISOString()
+      },
+      handoffs,
+      retroData: { id: 'retro-1', quality_score: 80 }
+    });
+
+    const result = await validateGate4LeadFinal('test-sd', supabase, gateResults);
+
+    // gate3 came directly from the caller; gate1/gate2 must be FETCHED from canonical
+    // handoff metadata even though gate3 was already present. Before the fix both stayed
+    // 'none' (canonical fetch suppressed by the all-null guard). _gateDataSources is set
+    // before the Section A-D scoring, so this assertion is robust to unrelated baseline
+    // breakage in those later sections (harness_backlog 75bdb4da).
+    expect(result._gateDataSources.gate3).toBe('direct');
+    expect(result._gateDataSources.gate1).toBe('canonical');
+    expect(result._gateDataSources.gate2).toBe('canonical');
+    // All three handoffs were accepted, so bypass-credit tracking sees all three.
+    expect(result._acceptedHandoffs).toEqual({ gate1: true, gate2: true, gate3: true });
   });
 });

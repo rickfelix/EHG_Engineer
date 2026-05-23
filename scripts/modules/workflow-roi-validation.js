@@ -124,7 +124,22 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     const acceptedHandoffs = { gate1: false, gate2: false, gate3: false };
     // SD-LEARN-FIX-ADDRESS-PAT-AUTO-002: Track data sources for audit trail
     const gateDataSources = { gate1: 'none', gate2: 'none', gate3: 'none' };
-    if (!gateResults.gate1 && !gateResults.gate2 && !gateResults.gate3) {
+    // Mark any DIRECTLY-provided gate results as accepted/direct up front. A caller may
+    // legitimately supply only a SUBSET — e.g. the PLAN-TO-LEAD wrapper passes the
+    // freshly-computed gate3 from ctx but not gate1/gate2. Provided values are never
+    // clobbered by the canonical fetch below (the `if (!gateResults.gateN)` guards).
+    if (gateResults.gate1) { acceptedHandoffs.gate1 = true; gateDataSources.gate1 = 'direct'; }
+    if (gateResults.gate2) { acceptedHandoffs.gate2 = true; gateDataSources.gate2 = 'direct'; }
+    if (gateResults.gate3) { acceptedHandoffs.gate3 = true; gateDataSources.gate3 = 'direct'; }
+
+    // Fetch ANY gate not provided directly. BUGFIX (harness_backlog 5986136e): the guard
+    // was `!gate1 && !gate2 && !gate3` (fetch only when ALL THREE absent). A partial caller
+    // — the PLAN-TO-LEAD wrapper supplying gate3-from-ctx — made that guard false and
+    // suppressed the canonical fetch for gate1/gate2, leaving them null -> spurious
+    // "only 1/3 gates cleared" at PLAN-TO-LEAD on every code SD. (gate1_validation legacy key
+    // is no longer written; gate1 lives only under gate_results.GATE1_PRD_QUALITY.) Now we
+    // fetch whenever ANY gate is missing and credit accepted handoffs independently.
+    if (!gateResults.gate1 || !gateResults.gate2 || !gateResults.gate3) {
       // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched handoff data when available
       const handoffs = options.prefetched?.handoffHistory || (await supabase
         .from('sd_phase_handoffs')
@@ -135,26 +150,31 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
       if (handoffs) {
         for (const handoff of handoffs) {
           // PLAN-TO-EXEC: Gate 1 (PRD Quality)
-          // Read canonical gate_results first, fall back to legacy key
+          // Read canonical gate_results first, fall back to legacy key. Acceptance is
+          // credited regardless of whether the gate value is already present.
           if (handoff.handoff_type === 'PLAN-TO-EXEC') {
             if (handoff.status === 'accepted') acceptedHandoffs.gate1 = true;
-            if (handoff.metadata?.gate_results?.GATE1_PRD_QUALITY) {
-              gateResults.gate1 = handoff.metadata.gate_results.GATE1_PRD_QUALITY;
-              gateDataSources.gate1 = 'canonical';
-            } else if (handoff.metadata?.gate1_validation) {
-              gateResults.gate1 = handoff.metadata.gate1_validation;
-              gateDataSources.gate1 = 'legacy';
+            if (!gateResults.gate1) {
+              if (handoff.metadata?.gate_results?.GATE1_PRD_QUALITY) {
+                gateResults.gate1 = handoff.metadata.gate_results.GATE1_PRD_QUALITY;
+                gateDataSources.gate1 = 'canonical';
+              } else if (handoff.metadata?.gate1_validation) {
+                gateResults.gate1 = handoff.metadata.gate1_validation;
+                gateDataSources.gate1 = 'legacy';
+              }
             }
           }
           // EXEC-TO-PLAN: Gate 2 (Implementation Fidelity)
           if (handoff.handoff_type === 'EXEC-TO-PLAN') {
             if (handoff.status === 'accepted') acceptedHandoffs.gate2 = true;
-            if (handoff.metadata?.gate_results?.GATE2_IMPLEMENTATION_FIDELITY) {
-              gateResults.gate2 = handoff.metadata.gate_results.GATE2_IMPLEMENTATION_FIDELITY;
-              gateDataSources.gate2 = 'canonical';
-            } else if (handoff.metadata?.gate2_validation) {
-              gateResults.gate2 = handoff.metadata.gate2_validation;
-              gateDataSources.gate2 = 'legacy';
+            if (!gateResults.gate2) {
+              if (handoff.metadata?.gate_results?.GATE2_IMPLEMENTATION_FIDELITY) {
+                gateResults.gate2 = handoff.metadata.gate_results.GATE2_IMPLEMENTATION_FIDELITY;
+                gateDataSources.gate2 = 'canonical';
+              } else if (handoff.metadata?.gate2_validation) {
+                gateResults.gate2 = handoff.metadata.gate2_validation;
+                gateDataSources.gate2 = 'legacy';
+              }
             }
           }
           // PLAN-TO-LEAD: Gate 3 (Traceability)
@@ -162,21 +182,18 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
           // then nested gate_results.GATE3_TRACEABILITY
           if (handoff.handoff_type === 'PLAN-TO-LEAD') {
             if (handoff.status === 'accepted') acceptedHandoffs.gate3 = true;
-            if (handoff.metadata?.gate_results?.GATE3_TRACEABILITY) {
-              gateResults.gate3 = handoff.metadata.gate_results.GATE3_TRACEABILITY;
-              gateDataSources.gate3 = 'canonical';
-            } else if (handoff.metadata?.gate3_validation) {
-              gateResults.gate3 = handoff.metadata.gate3_validation;
-              gateDataSources.gate3 = 'legacy';
+            if (!gateResults.gate3) {
+              if (handoff.metadata?.gate_results?.GATE3_TRACEABILITY) {
+                gateResults.gate3 = handoff.metadata.gate_results.GATE3_TRACEABILITY;
+                gateDataSources.gate3 = 'canonical';
+              } else if (handoff.metadata?.gate3_validation) {
+                gateResults.gate3 = handoff.metadata.gate3_validation;
+                gateDataSources.gate3 = 'legacy';
+              }
             }
           }
         }
       }
-    } else {
-      // Gate results provided directly - assume all accepted
-      if (allGateResults.gate1) { acceptedHandoffs.gate1 = true; gateDataSources.gate1 = 'direct'; }
-      if (allGateResults.gate2) { acceptedHandoffs.gate2 = true; gateDataSources.gate2 = 'direct'; }
-      if (allGateResults.gate3) { acceptedHandoffs.gate3 = true; gateDataSources.gate3 = 'direct'; }
     }
     // Store for Section D access and audit trail
     validation._acceptedHandoffs = acceptedHandoffs;
