@@ -443,7 +443,7 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
   console.log('STEP 1: GIT STATE CHECK');
   console.log('─'.repeat(50));
   try {
-    const { checkGitState } = await import('../../check-git-state.js');
+    const { checkGitState } = await import('../../../check-git-state.js');
     const gitResult = await checkGitState();
     if (!gitResult.passed) {
       console.log('');
