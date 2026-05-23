@@ -14,6 +14,7 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { pathToFileURL } from 'url';
 
 const execAsync = promisify(exec);
 
@@ -185,18 +186,24 @@ async function checkGitState() {
   return result;
 }
 
-// CLI execution
-const args = process.argv.slice(2);
-const jsonOutput = args.includes('--json');
-
-checkGitState().then(result => {
-  if (jsonOutput) {
-    console.log(JSON.stringify(result, null, 2));
-  }
-  process.exit(result.passed ? 0 : 1);
-}).catch(err => {
-  console.error('Error:', err.message);
-  process.exit(1);
-});
-
 export { checkGitState };
+
+// CLI execution — only when run directly (node scripts/check-git-state.js), NOT when
+// imported. Without this guard, importing the module (e.g. from the handoff precheck CLI
+// at scripts/modules/handoff/cli/cli-main.js) runs checkGitState() + process.exit() in the
+// HOST process, halting it on dirty git. Regression exposed by QF-20260523-481 (which fixed
+// the precheck's import path); guarded here so import is side-effect-free.
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+  const args = process.argv.slice(2);
+  const jsonOutput = args.includes('--json');
+
+  checkGitState().then(result => {
+    if (jsonOutput) {
+      console.log(JSON.stringify(result, null, 2));
+    }
+    process.exit(result.passed ? 0 : 1);
+  }).catch(err => {
+    console.error('Error:', err.message);
+    process.exit(1);
+  });
+}
