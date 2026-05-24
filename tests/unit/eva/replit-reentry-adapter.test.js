@@ -22,6 +22,16 @@ vi.mock('@supabase/supabase-js', () => ({
   })),
 }));
 
+// QF-20260523-634 / e99b1f8a: importReplitBuild also persists Stage 20 via
+// writeArtifact (artifact-persistence-service), not only the mocked supabase
+// client. Unmocked, the real writeArtifact throws against the mock client and
+// pushes a "Stage 20 artifact failed" error, so result.success is false even
+// though the stage upserts succeed. Mock it to a resolved no-op so success
+// reflects the upsert path these tests assert on.
+vi.mock('../../../lib/eva/artifact-persistence-service.js', () => ({
+  writeArtifact: vi.fn().mockResolvedValue({ id: 'mock-artifact', success: true }),
+}));
+
 const { importReplitBuild } = await import('../../../lib/eva/bridge/replit-reentry-adapter.js');
 
 describe('Replit Re-entry Adapter', () => {
