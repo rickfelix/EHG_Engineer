@@ -70,7 +70,7 @@ the existing active venture** instead of throwing, so a genuinely-successful req
 `failed`. A genuine synthesis failure still throws upstream (before the insert) and is recorded
 `failed` with no orphan venture.
 
-> **Known follow-on (systemic, deferred):** the robust fix is a durable
+> **Known follow-on (systemic, deferred):** the complete fix adds a durable
 > `venture_briefs.stage_zero_request_id` FK plus a request-id idempotency short-circuit in
 > `checkForDuplicate` and a reconcile step in `releaseStaleClaims` (so a stale row whose venture
 > already exists is marked `completed` rather than re-queued). Name-based correlation is fragile
