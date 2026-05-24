@@ -5,7 +5,7 @@
 **Scope:** Architecture canonicalization only — no code changes authorized by this ADR.
 **Repos:** `ehg` (runtime UI + intake producer), `EHG_Engineer` (Stage 0 backend + queue consumer).
 
-> Naming note: repo ADR convention is `NNNN-slug.md` (e.g. `0012-...`). This file uses the explicitly requested name `ADR-STAGE0-INTAKE-001.md`. Rename to `0013-canonical-stage0-intake-spine.md` if convention alignment is preferred.
+> Naming note: filename lowercased to `adr-stage0-intake-001.md` to satisfy the repo doc-naming convention (DOCMON NAMING-UPPERCASE). The repo also uses an `NNNN-slug.md` ADR style (e.g. `0012-...`); rename to `0013-canonical-stage0-intake-spine.md` if strict convention alignment is later preferred. The logical ADR id remains ADR-STAGE0-INTAKE-001.
 
 ---
 

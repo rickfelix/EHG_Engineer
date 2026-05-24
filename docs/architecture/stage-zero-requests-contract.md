@@ -1,7 +1,7 @@
 # `stage_zero_requests` — Cross-Repo Intake Contract
 
 **Status:** Active · **SD:** SD-LEO-INFRA-STAGE-OPPORTUNITY-INTAKE-001 (FR-005, gap G5)
-**Authoritative architecture:** [ADR-STAGE0-INTAKE-001](../adr/ADR-STAGE0-INTAKE-001.md)
+**Authoritative architecture:** [ADR-STAGE0-INTAKE-001](../adr/adr-stage0-intake-001.md)
 
 `stage_zero_requests` is the canonical intake queue and the **single cross-repo handshake** for
 the Stage 0 venture-intake spine. It is written by the `ehg` UI (producer) and drained by the
