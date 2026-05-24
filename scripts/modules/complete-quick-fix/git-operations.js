@@ -201,6 +201,31 @@ export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEA
 }
 
 /**
+ * Split LOC into source/test from a PR's per-file additions/deletions
+ * (`gh pr view --json files`). Fallback for when the local numstat split is
+ * unavailable — e.g. the PR commit isn't present locally (--merge non-squash, or
+ * completing from an unrelated CWD). Without this, a test-only QF was misreported
+ * as 100% source LOC and falsely escalated to Tier-3 (feedback 1becd80a;
+ * QF-20260523-562: 84 add ≈ 5 src + 79 test, but reported 86/0). Classification
+ * mirrors countLocBySplit's TEST_FILE_PATTERN so the two paths agree.
+ *
+ * @param {Array<{path?:string,additions?:number,deletions?:number}>} files
+ * @returns {{source:number, test:number, total:number}}
+ */
+export function countLocByPrFiles(files) {
+  const result = { source: 0, test: 0, total: 0 };
+  for (const f of files || []) {
+    const filepath = f?.path || '';
+    if (!filepath) continue;
+    const loc = (Number(f.additions) || 0) + (Number(f.deletions) || 0);
+    if (TEST_FILE_PATTERN.test(filepath)) result.test += loc;
+    else result.source += loc;
+    result.total += loc;
+  }
+  return result;
+}
+
+/**
  * Sanitize branch name for safe shell usage
  * SD-SEC-DATA-VALIDATION-001: Validate git branch names
  * @param {string} branchName - Branch name to validate
@@ -277,7 +302,9 @@ export function isInQFWorktree(testDir) {
  * @returns {object} Parsed JSON: { state, headRefName, mergeCommit, additions, deletions, url }
  */
 export function fetchPRMetadata(prNumber, testDir) {
-  const fields = 'state,headRefName,mergeCommit,additions,deletions,url';
+  // 1becd80a: include `files` (per-file additions/deletions) so the source/test
+  // split can fall back to the PR file list when the merge commit isn't local.
+  const fields = 'state,headRefName,mergeCommit,additions,deletions,url,files';
   let raw;
   try {
     raw = execSync(`gh pr view ${prNumber} --json ${fields}`, {
@@ -375,22 +402,38 @@ export function autoDetectGitInfo(testDir, options = {}) {
     // (QF-20260511-876: 1624 src / 181 test reported for actual 67 / 106 LOC).
     if (result.actualSourceLoc === undefined) {
       let splitHeadRef = 'HEAD';
+      let localSplitAvailable = true;
       if (result.commitSha) {
         try {
           execSync(`git cat-file -e ${result.commitSha}`, { cwd: testDir, stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000 });
           splitHeadRef = result.commitSha;
         } catch {
-          console.log(`⚠️  PR commit ${result.commitSha.substring(0, 7)} not present locally — skipping source/test split (would over-report from CWD HEAD)`);
-          return result;
+          // 1becd80a: PR commit not present locally (--merge non-squash, or running
+          // from an unrelated CWD). The local numstat split would over-report from
+          // CWD HEAD, so fall back to the PR file list below instead of skipping —
+          // skipping defaulted test-only QFs to source=total/test=0 (false Tier-3).
+          console.log(`⚠️  PR commit ${result.commitSha.substring(0, 7)} not present locally — using gh PR file list for source/test split`);
+          localSplitAvailable = false;
         }
       }
-      const split = countLocBySplit(testDir, 'origin/main', splitHeadRef);
-      if (split.total > 0) {
+      if (localSplitAvailable) {
+        const split = countLocBySplit(testDir, 'origin/main', splitHeadRef);
+        if (split.total > 0) {
+          result.actualSourceLoc = split.source;
+          result.actualTestLoc = split.test;
+          // QF-20260509-407: forward deletion-only source LOC for tier classification.
+          result.sourceDeletionLoc = split.sourceDeletionLoc;
+          console.log(`🔍 PR #${prNumber} → source LOC: ${split.source}, test LOC: ${split.test} (split via git numstat @ ${splitHeadRef.substring(0, 7)})`);
+        }
+      }
+      // 1becd80a fallback: PR-file-list split when the local numstat split was
+      // unavailable (commit not local) or returned empty. pr.files is populated
+      // by fetchPRMetadata's `files` field.
+      if (result.actualSourceLoc === undefined && Array.isArray(pr.files) && pr.files.length > 0) {
+        const split = countLocByPrFiles(pr.files);
         result.actualSourceLoc = split.source;
         result.actualTestLoc = split.test;
-        // QF-20260509-407: forward deletion-only source LOC for tier classification.
-        result.sourceDeletionLoc = split.sourceDeletionLoc;
-        console.log(`🔍 PR #${prNumber} → source LOC: ${split.source}, test LOC: ${split.test} (split via git numstat @ ${splitHeadRef.substring(0, 7)})`);
+        console.log(`🔍 PR #${prNumber} → source LOC: ${split.source}, test LOC: ${split.test} (split via gh PR file list)`);
       }
     }
     return result;

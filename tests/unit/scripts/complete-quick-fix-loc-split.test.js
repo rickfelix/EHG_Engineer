@@ -178,10 +178,11 @@ describe('QF-20260511-129 — PR-metadata path pins countLocBySplit to mergeComm
   it('PR-metadata branch guards with git cat-file -e before pinning to commitSha', () => {
     const prBranchStart = src.indexOf('PR-metadata authoritative path');
     const prBranchSnippet = src.slice(prBranchStart, prBranchStart + 4000);
-    // The guard skips the split (rather than inflating from CWD HEAD) when the
-    // commit isn't fetched locally.
+    // When the commit isn't fetched locally, the guard avoids inflating from CWD
+    // HEAD by falling back to the PR file list (1becd80a) instead of skipping the
+    // split (skipping defaulted test-only QFs to 100% source LOC → false Tier-3).
     expect(prBranchSnippet).toMatch(/git cat-file -e \$\{result\.commitSha\}/);
-    expect(prBranchSnippet).toMatch(/skipping source\/test split/);
+    expect(prBranchSnippet).toMatch(/using gh PR file list/);
   });
 
   it('legacy in-worktree branch passes "HEAD" explicitly (clarity, no behavior change)', () => {
