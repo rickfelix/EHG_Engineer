@@ -538,13 +538,14 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
       emitLog({ event: 'worktree.db_path_invalid', sdKey, path: dbResult.path, errorCode: 'INVALID_WORKTREE_PATH' });
       // Fall through to scan
     } else if (!validateWorktreePath(dbResult.path, repoRoot)) {
-      emitLog({ event: 'worktree.db_path_rejected', sdKey, path: dbResult.path, errorCode: 'INVALID_WORKTREE_PATH' });
-      return {
-        sdKey, cwd: repoRoot, source: 'legacy', success: false,
-        worktree: { exists: false },
-        errorCode: 'INVALID_WORKTREE_PATH',
-        error: `Worktree path rejected (outside repo): ${dbResult.path}`
-      };
+      // QF-20260523-524 / df03b199: a DB worktree_path OUTSIDE the resolved
+      // repoRoot is almost always a STALE cross-repo pointer (e.g. an old
+      // EHG_Engineer-rooted path persisted for an SD whose target_application is
+      // now an ehg venture). Don't hard-fail — discard the stale pointer and fall
+      // through to scan/create in the correct repoRoot. The rejected path is never
+      // USED, so this is safe (mirrors the isValidWorktree fall-through above).
+      emitLog({ event: 'worktree.db_path_rejected', sdKey, path: dbResult.path, errorCode: 'INVALID_WORKTREE_PATH', outcome: 'fall_through_to_scan' });
+      // Fall through to scan (no return).
     } else {
       const branch = getWorktreeBranch(dbResult.path);
       emitLog({ event: 'worktree.resolved', sdKey, source: 'db', resolvedCwd: dbResult.path, outcome: 'success' });
