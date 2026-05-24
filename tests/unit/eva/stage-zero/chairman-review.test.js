@@ -50,6 +50,13 @@ function createMockSupabase(overrides = {}) {
     insert: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    // .limit()/.maybeSingle() are used by the companies lookup + queue reads; without them the
+    // shared mock chain threw "limit is not a function" at chairman-review.js:102 (pre-existing).
+    limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({
+      data: { id: 'v-1', name: 'TestVenture' },
+      error: null,
+    }),
     single: vi.fn().mockResolvedValue({
       data: { id: 'v-1', name: 'TestVenture' },
       error: null,
@@ -59,6 +66,48 @@ function createMockSupabase(overrides = {}) {
   return {
     from: vi.fn(() => ({ ...mockChain })),
     _mockChain: mockChain,
+  };
+}
+
+// SD-LEO-INFRA-STAGE-OPPORTUNITY-INTAKE-001 (F4): mock that distinguishes the venture
+// INSERT chain (.insert().select().single()) from the idempotency LOOKUP chain
+// (.select().eq().in().order().limit().maybeSingle()) so the 23505 guard can be exercised.
+function makeGuardSupabase({ insertError = null, existingVenture = null, onSelect = () => {} } = {}) {
+  const venturesTable = {
+    insert: vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn().mockResolvedValue({
+          data: insertError ? null : { id: 'v-new', name: 'TestVenture' },
+          error: insertError,
+        }),
+      })),
+    })),
+    select: vi.fn(() => {
+      onSelect();
+      return {
+        eq: vi.fn(() => ({
+          in: vi.fn(() => ({
+            order: vi.fn(() => ({
+              limit: vi.fn(() => ({
+                maybeSingle: vi.fn().mockResolvedValue({ data: existingVenture, error: null }),
+              })),
+            })),
+          })),
+        })),
+      };
+    }),
+  };
+  return {
+    from: vi.fn((table) =>
+      table === 'ventures'
+        ? venturesTable
+        : {
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          },
+    ),
   };
 }
 
@@ -182,6 +231,61 @@ describe('ChairmanReview', () => {
         expect.objectContaining({ reason: expect.any(String) }),
         expect.objectContaining({ supabase: mockSupabase }),
       );
+    });
+
+    // SD-LEO-INFRA-STAGE-OPPORTUNITY-INTAKE-001 (F4): idempotency guard for stale-claim re-runs.
+    it('returns the existing active venture on a 23505 unique-name collision (idempotent re-run)', async () => {
+      const existingVenture = { id: 'v-existing', name: 'TestVenture', status: 'active' };
+      const mockSupabase = makeGuardSupabase({
+        insertError: {
+          code: '23505',
+          message: 'duplicate key value violates unique constraint "idx_ventures_unique_active_name"',
+        },
+        existingVenture,
+      });
+
+      const result = await persistVentureBrief(
+        { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+        { supabase: mockSupabase, logger: silentLogger, company_id: 'co-1' },
+      );
+
+      // Re-run completes idempotently with the venture created by the original run — NOT a throw,
+      // so the queue processor records the request 'completed' instead of 'failed'.
+      expect(result).toEqual(existingVenture);
+    });
+
+    it('still throws on a 23505 collision when no existing active venture is found', async () => {
+      const mockSupabase = makeGuardSupabase({
+        insertError: {
+          code: '23505',
+          message: 'duplicate key value violates unique constraint "idx_ventures_unique_active_name"',
+        },
+        existingVenture: null,
+      });
+
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+          { supabase: mockSupabase, logger: silentLogger, company_id: 'co-1' },
+        ),
+      ).rejects.toThrow('Failed to create venture');
+    });
+
+    it('throws on a non-unique-violation DB error without attempting the idempotent lookup', async () => {
+      const onSelect = vi.fn();
+      const mockSupabase = makeGuardSupabase({
+        insertError: { code: '23503', message: 'foreign key violation' },
+        onSelect,
+      });
+
+      await expect(
+        persistVentureBrief(
+          { decision: 'ready', brief: validBrief, validation: { valid: true, errors: [] } },
+          { supabase: mockSupabase, logger: silentLogger, company_id: 'co-1' },
+        ),
+      ).rejects.toThrow('Failed to create venture');
+      // A non-23505 error must skip the idempotent lookup entirely.
+      expect(onSelect).not.toHaveBeenCalled();
     });
   });
 });
