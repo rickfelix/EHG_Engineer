@@ -21,12 +21,22 @@ import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { inheritStrategicFields, inferSDType } from './modules/child-sd-template.js';
 import { generateTraceableMetrics, mapDimensionsToPhases } from './modules/vision-arch-traceability.js';
-import { scoreSDAtConception } from './leo-create-sd.js';
+import { scoreSDAtConception, parseTargetReposArg } from './leo-create-sd.js';
 
 dotenv.config();
 
 // QF-20260409-561 (P0): DB-authoritative sd_type list (mirrors sd_type_check constraint).
 const DB_VALID_SD_TYPES = ['feature','implementation','infrastructure','bugfix','refactor','documentation','orchestrator','database','security','performance','enhancement','docs','discovery_spike','ux_debt','uat'];
+
+// QF-20260524-566 / feedback 0ee3c3b8 Bug 2: persist metadata.target_repos[] onto the
+// orchestrator SD and its auto-created children for cross-repo orchestrators, so
+// PR_MERGE_VERIFICATION (computeReposForSD) scopes correctly at LEAD-FINAL. No-op when
+// targetRepos is null/empty (single-repo orchestrators are unchanged). Pure + exported.
+export function withTargetRepos(metadata, targetRepos) {
+  return Array.isArray(targetRepos) && targetRepos.length > 0
+    ? { ...metadata, target_repos: targetRepos }
+    : metadata;
+}
 
 /**
  * C1 (SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001): VERTICAL-SLICE CHECK
@@ -163,6 +173,8 @@ async function main() {
   const title = getArg('--title');
   const autoChildren = args.includes('--auto-children');
   const dryRun = args.includes('--dry-run');
+  // QF-20260524-566 / feedback 0ee3c3b8 Bug 2: forwarded from leo-create-sd.js auto-route.
+  const targetRepos = parseTargetReposArg(getArg('--target-repos'));
 
   if (!visionKey && !archKey) {
     console.error('Error: At least one of --vision-key or --arch-key is required');
@@ -293,13 +305,13 @@ async function main() {
     dependencies: [],
     risks: [],
     stakeholders: [],
-    metadata: {
+    metadata: withTargetRepos({
       is_orchestrator: true,
       vision_key: visionKey,
       arch_key: archKey,
       auto_generated: true,
       child_count: phases.length
-    },
+    }, targetRepos),
     key_changes: phases.map(p => `Phase ${p.number}: ${p.title}`),
     target_application: 'EHG_Engineer',
     created_at: new Date().toISOString(),
@@ -411,7 +423,7 @@ async function main() {
         target_application: 'EHG_Engineer',
         non_vertical: sliceCheck.non_vertical,
         non_vertical_justification: sliceCheck.justification,
-        metadata: {
+        metadata: withTargetRepos({
           vision_key: visionKey,
           arch_key: archKey,
           phase_number: phase.number,
@@ -423,7 +435,7 @@ async function main() {
             justification: sliceCheck.justification,
             detector_version: 'C1-v1-heuristic'
           }
-        },
+        }, targetRepos),
         key_changes: [phase.title],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
