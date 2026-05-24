@@ -73,6 +73,17 @@ export const FLOOR_MINIMUM_SCORE = 60;
 export const MIN_ADJUSTED_THRESHOLD_RATIO = 0.6;
 
 /**
+ * SD-FDBK-INFRA-GATE-VISION-SCORE-001: a dimension scored at/above this floor is
+ * "meaningfully addressed" by a focused null-pattern-type SD
+ * (feature/governance/enhancement). Used to AUTO-DETECT addressable dimensions for
+ * those types so a focused feature no longer needs manual
+ * metadata.vision_addressable_dimensions tuning. Calibrated to the dimension
+ * midpoint; paired with the FLOOR_MINIMUM_SCORE (60) addressable-average floor and
+ * the MIN_ADJUSTED_THRESHOLD_RATIO (0.6) threshold floor for abuse-resistance.
+ */
+export const NARROW_FEATURE_DIM_FLOOR = 50;
+
+/**
  * Dimension addressability by SD type.
  * Maps SD type to a Set of dimension name patterns that the type CAN address.
  * Dimensions not in this set are considered non-addressable for that SD type.
@@ -119,28 +130,62 @@ export const SD_TYPE_ADDRESSABLE_DIMENSIONS = {
  * @param {Object|null} sdMetadata - SD's metadata column (may carry per-SD override)
  * @returns {{ addressable: number, total: number }}
  */
+/**
+ * Resolve the array of addressable dimension NAMES for an SD. Single source of
+ * truth for both countAddressableDimensions and the addressable-average floor.
+ * Precedence:
+ *   1. Manual override: a non-empty sdMetadata.vision_addressable_dimensions pattern
+ *      list (QF-20260505-102) — wins over everything.
+ *   2. null-pattern types (SD_TYPE_ADDRESSABLE_DIMENSIONS[type] === null:
+ *      feature/governance/enhancement/orchestrator) with NO manual override —
+ *      SD-FDBK-INFRA-GATE-VISION-SCORE-001 carve-out: AUTO-DETECT addressable dims as
+ *      those scored >= NARROW_FEATURE_DIM_FLOOR. A focused feature only "addresses"
+ *      the dims it scored meaningfully on, so it no longer needs manual
+ *      vision_addressable_dimensions tuning. A broad feature whose dims all clear the
+ *      floor yields all-addressable → no narrowing → the full bar is preserved.
+ *   3. Other types: case-insensitive substring match against the type's pattern list.
+ *
+ * @param {string} sdType
+ * @param {Object|null} dimensionScores - JSONB { dimName: score, ... }
+ * @param {Object|null} sdMetadata - SD's metadata column (may carry per-SD override)
+ * @returns {string[]} addressable dimension names
+ */
+export function getAddressableDimNames(sdType, dimensionScores, sdMetadata) {
+  if (!dimensionScores || typeof dimensionScores !== 'object') return [];
+  const dimNames = Object.keys(dimensionScores);
+
+  const sdLevelPatterns = sdMetadata?.vision_addressable_dimensions;
+  if (Array.isArray(sdLevelPatterns) && sdLevelPatterns.length > 0) {
+    return dimNames.filter(name =>
+      sdLevelPatterns.some(p => name.toLowerCase().includes(String(p).toLowerCase())));
+  }
+
+  const patterns = SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
+  if (patterns === null || patterns === undefined) {
+    // Carve-out: auto-detect addressable dims from scores for null-pattern types.
+    return dimNames.filter(name =>
+      typeof dimensionScores[name] === 'number' && dimensionScores[name] >= NARROW_FEATURE_DIM_FLOOR);
+  }
+
+  return dimNames.filter(name =>
+    patterns.some(p => name.toLowerCase().includes(p.toLowerCase())));
+}
+
+/**
+ * Count addressable dimensions for an SD type. Delegates to getAddressableDimNames.
+ * Returns { addressable, total } counts.
+ *
+ * @param {string} sdType
+ * @param {Object|null} dimensionScores - JSONB { dimName: score, ... }
+ * @param {Object|null} sdMetadata - SD's metadata column (may carry per-SD override)
+ * @returns {{ addressable: number, total: number }}
+ */
 export function countAddressableDimensions(sdType, dimensionScores, sdMetadata) {
   if (!dimensionScores || typeof dimensionScores !== 'object') {
     return { addressable: 0, total: 0 };
   }
-
-  const dimNames = Object.keys(dimensionScores);
-  const total = dimNames.length;
-
-  const sdLevelPatterns = sdMetadata?.vision_addressable_dimensions;
-  const patterns = (Array.isArray(sdLevelPatterns) && sdLevelPatterns.length > 0)
-    ? sdLevelPatterns
-    : SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
-
-  if (patterns === null || patterns === undefined) {
-    return { addressable: total, total }; // all addressable
-  }
-
-  const addressable = dimNames.filter(name => {
-    const lower = name.toLowerCase();
-    return patterns.some(p => lower.includes(p.toLowerCase()));
-  }).length;
-
+  const total = Object.keys(dimensionScores).length;
+  const addressable = getAddressableDimNames(sdType, dimensionScores, sdMetadata).length;
   return { addressable, total };
 }
 
@@ -449,33 +494,46 @@ export async function validateVisionScore(sd, supabase) {
   }
 
   // ── Floor rule: minimum average score for addressable dims ────────────────
+  // SD-FDBK-INFRA-GATE-VISION-SCORE-001: applies to the type-pattern path AND the
+  // null-type auto-detect carve-out path (so a focused feature must score WELL on the
+  // dims it addresses, not merely narrow the set). The manual-override path is
+  // intentionally excluded to preserve its prior behavior (backward-compat).
   if (total > 0 && addressable > 0 && addressable < total && dimensionScores) {
-    const patterns = SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
-    if (patterns) {
-      const addressableDimScores = Object.entries(dimensionScores)
-        .filter(([name]) => patterns.some(p => name.toLowerCase().includes(p.toLowerCase())))
+    const hasManualOverride = Array.isArray(sd.metadata?.vision_addressable_dimensions)
+      && sd.metadata.vision_addressable_dimensions.length > 0;
+    const typePatterns = SD_TYPE_ADDRESSABLE_DIMENSIONS[sdType];
+    let addressableDimScores = null;
+    if (typePatterns) {
+      // Type-pattern path (unchanged behavior).
+      addressableDimScores = Object.entries(dimensionScores)
+        .filter(([name]) => typePatterns.some(p => name.toLowerCase().includes(p.toLowerCase())))
         .map(([, score]) => score)
         .filter(s => typeof s === 'number');
+    } else if (!hasManualOverride) {
+      // null-type auto-detect carve-out path: score the auto-detected addressable dims.
+      addressableDimScores = getAddressableDimNames(sdType, dimensionScores, sd.metadata)
+        .map(name => dimensionScores[name])
+        .filter(s => typeof s === 'number');
+    }
 
-      if (addressableDimScores.length > 0) {
-        const avgScore = addressableDimScores.reduce((a, b) => a + b, 0) / addressableDimScores.length;
-        if (avgScore < FLOOR_MINIMUM_SCORE) {
-          console.log(`   ❌ Floor rule: addressable dim avg ${Math.round(avgScore)}/100 < ${FLOOR_MINIMUM_SCORE} minimum`);
-          await logGateEvaluation(supabase, {
-            sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
-            baseThreshold, adjustedThreshold: threshold, score: visionScore,
-            verdict: 'blocked_floor_score', floorRuleTriggered: true,
-            context: `Addressable dim avg ${Math.round(avgScore)} below floor minimum ${FLOOR_MINIMUM_SCORE}`,
-          });
-          return {
-            passed: false,
-            score: 0,
-            maxScore: 100,
-            details: `Floor rule: addressable dim avg ${Math.round(avgScore)}/100 below minimum ${FLOOR_MINIMUM_SCORE}`,
-            remediation: `Improve addressable dimension scores to avg >= ${FLOOR_MINIMUM_SCORE}`,
-            warnings: [],
-          };
-        }
+    if (addressableDimScores && addressableDimScores.length > 0) {
+      const avgScore = addressableDimScores.reduce((a, b) => a + b, 0) / addressableDimScores.length;
+      if (avgScore < FLOOR_MINIMUM_SCORE) {
+        console.log(`   ❌ Floor rule: addressable dim avg ${Math.round(avgScore)}/100 < ${FLOOR_MINIMUM_SCORE} minimum`);
+        await logGateEvaluation(supabase, {
+          sdId: sdKey, sdType, totalDims: total, addressableCount: addressable,
+          baseThreshold, adjustedThreshold: threshold, score: visionScore,
+          verdict: 'blocked_floor_score', floorRuleTriggered: true,
+          context: `Addressable dim avg ${Math.round(avgScore)} below floor minimum ${FLOOR_MINIMUM_SCORE}`,
+        });
+        return {
+          passed: false,
+          score: 0,
+          maxScore: 100,
+          details: `Floor rule: addressable dim avg ${Math.round(avgScore)}/100 below minimum ${FLOOR_MINIMUM_SCORE}`,
+          remediation: `Improve addressable dimension scores to avg >= ${FLOOR_MINIMUM_SCORE}`,
+          warnings: [],
+        };
       }
     }
   }
