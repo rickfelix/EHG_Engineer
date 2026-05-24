@@ -40,7 +40,10 @@ jobs:
       - name: Run verifier
         env:
           SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
-          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+          # SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 (FR-3): trust the committed
+          # Supabase CA instead of disabling verification. verify-marketing-schema.mjs
+          # also auto-detects this bundle via getSSLConfig() (FR-2/FR-4).
+          NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/certs/supabase-root-2021-ca.pem
         run: |
           if [ -z "$SUPABASE_POOLER_URL" ]; then
             echo "::warning::SUPABASE_POOLER_URL secret not set — skipping live schema verify"

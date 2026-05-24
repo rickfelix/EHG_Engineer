@@ -75,7 +75,10 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_POOLER_URL: ${{ secrets.DATABASE_URL }}
-          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+          # SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 (FR-3): trust the committed
+          # Supabase CA instead of disabling verification. The pg-direct path
+          # also auto-detects this bundle via getSSLConfig() (FR-2/FR-4).
+          NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/certs/supabase-root-2021-ca.pem
         run: npm run schema:docs:engineer
         continue-on-error: false
 
@@ -86,7 +89,10 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.EHG_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.EHG_SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_POOLER_URL: ${{ secrets.EHG_POOLER_URL }}
-          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+          # SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 (FR-3): trust the committed
+          # Supabase CA instead of disabling verification. The pg-direct path
+          # also auto-detects this bundle via getSSLConfig() (FR-2/FR-4).
+          NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/certs/supabase-root-2021-ca.pem
         run: npm run schema:docs:app
         continue-on-error: true  # EHG app might not be configured yet
 

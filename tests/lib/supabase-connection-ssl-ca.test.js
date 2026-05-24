@@ -53,17 +53,28 @@ describe('getSSLConfig — SUPABASE_SSL_CA env (QF-20260511-917)', () => {
     expect(cfg.ca).toContain('FAKE-FOR-TEST');
   });
 
-  it('falls through to default-strict when SUPABASE_SSL_CA is unset', () => {
+  // SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 (FR-2): with no explicit SUPABASE_SSL_CA,
+  // getSSLConfig auto-detects the committed certs/supabase-root-2021-ca.pem so
+  // strict verification is the default everywhere. (Pre-FR-2 these returned a
+  // bare {rejectUnauthorized:true} with no ca.)
+  it('auto-detects the committed CA bundle when SUPABASE_SSL_CA is unset (FR-2)', () => {
     const cfg = getSSLConfig();
-    expect(cfg).toEqual({ rejectUnauthorized: true });
-    expect(cfg.ca).toBeUndefined();
+    expect(cfg.rejectUnauthorized).toBe(true);
+    expect(typeof cfg.ca).toBe('string');
+    expect(cfg.ca).toContain('BEGIN CERTIFICATE');
   });
 
-  it('falls through when SUPABASE_SSL_CA points at a missing file', () => {
+  it('falls through to the committed CA bundle when SUPABASE_SSL_CA points at a missing file (FR-2)', () => {
     process.env.SUPABASE_SSL_CA = join(tmpDir, 'does-not-exist.pem');
     const cfg = getSSLConfig();
-    expect(cfg).toEqual({ rejectUnauthorized: true });
-    expect(cfg.ca).toBeUndefined();
+    expect(cfg.rejectUnauthorized).toBe(true);
+    expect(cfg.ca).toContain('BEGIN CERTIFICATE');
+  });
+
+  it('auto-detected bundle carries the root + intermediate CA certs (FR-2)', () => {
+    const cfg = getSSLConfig();
+    const certCount = (String(cfg.ca).match(/BEGIN CERTIFICATE/g) || []).length;
+    expect(certCount).toBe(2);
   });
 
   it('SUPABASE_SSL_CA takes precedence over DISABLE_SSL_VERIFY=true', () => {
