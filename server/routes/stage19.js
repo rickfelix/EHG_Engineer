@@ -48,20 +48,18 @@ function validateRegistrationBody(body) {
 /**
  * GET /api/stage19/:ventureId/replit-prompts
  *
- * Returns the Plan Mode prompt and per-feature prompts for a venture, ready
- * to display in Stage 19's Replit workflow UI. Both formats are grounded in
- * the chairman-approved S18 marketing copy via the `Binding contract` block
- * (per the §0 Rule 7 round-trip refinement on 2026-04-28).
+ * Returns the Claude-Code-ready readiness summary for a venture's Stage 19 build.
+ * SD-S19-SEEDS-A-CLAUDECODEREADY-ORCH-001-E retired the paste-into-Replit-Agent
+ * prompts payload (planPrompt + per-feature prompts): the ehg S19 UI (Child D) now
+ * consumes `readiness`, and Claude Code builds the features from the seeded repo
+ * (CLAUDE.md + docs/build-tasks.md) rather than from pasted prompts.
  *
  * Response shape:
  * {
  *   ventureName: string,
- *   planPrompt: string,
- *   featurePrompts: [{ title, content, points, priority }],
+ *   mode: string,
  *   warnings?: string[],
  *   generatedAt: string,
- *   // SD-S19-SEEDS-A-CLAUDECODEREADY-ORCH-001-C: additive Claude-Code-ready readiness
- *   // contract (consumed by the ehg S19 UI from Child D; prompts removed in Child E).
  *   readiness: { repoReady: boolean, seededArtifacts: string[], buildPlanSummary: object },
  * }
  */
@@ -78,21 +76,15 @@ router.get('/:ventureId/replit-prompts', asyncHandler(async (req, res) => {
 
   try {
     const result = await formatReplitOptimized(ventureId, { scope, mode: modeHint });
-    // SD-S19-SEEDS-A-CLAUDECODEREADY-ORCH-001-C: additive Claude-Code-ready readiness
-    // contract for the cutover. Child D switches the ehg S19 UI to consume this; the
-    // prompts payload below stays until Child E. Best-effort — resolveRepoReadiness
-    // never throws, so a readiness failure can't break the load-bearing prompts response.
+    // SD-S19-SEEDS-A-CLAUDECODEREADY-ORCH-001-E: the paste-into-Replit-Agent prompts
+    // payload (planPrompt + featurePrompts) has been retired — the ehg S19 UI (Child D)
+    // consumes the readiness contract instead, and Claude Code builds from the seeded
+    // repo. The route now returns venture identity + readiness. resolveRepoReadiness
+    // never throws.
     const readiness = await resolveRepoReadiness(ventureId);
     return res.status(200).json({
       ventureName: result.manifest?.ventureName || 'Venture',
       mode: result.manifest?.mode || 'create-new',
-      planPrompt: result.planModePrompt?.content || '',
-      featurePrompts: (result.featurePrompts || []).map((fp) => ({
-        title: fp.title || fp.filename || 'Feature',
-        content: fp.content || '',
-        points: fp.storyPoints ?? 0,
-        priority: fp.priority || 'medium',
-      })),
       warnings: result.warnings || [],
       generatedAt: result.manifest?.exportedAt || new Date().toISOString(),
       readiness,
