@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { promises as fsp, existsSync, readFileSync, utimesSync, mkdirSync, writeFileSync } from 'node:fs';
+import { promises as fsp, existsSync, readFileSync, utimesSync, mkdirSync, writeFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -413,9 +413,26 @@ describe('fleet-lock-hash: evaluateInstallDecision .staging guard (FR-1 a/b/c/d/
   it('TS-7: mtime exactly at FRESHNESS_MS boundary stays in defer band (≤60s)', async () => {
     const sp = makeStagingDir(repo);
     setStagingMtimeAge(sp, 60_000);
-    const d = await evaluateInstallDecision({ repoRoot: repo });
+    // QF-20260523-824 (closes feedback 414fdace): inject a deterministic clock so
+    // mtimeAgeMs == 60_000 EXACTLY. The original test let wall-clock time elapse
+    // between setting mtime and the freshness read, so age drifted to >60_000
+    // ~1-in-3 runs and flipped fresh→stale. now = mtime + 60_000 removes the race
+    // and pins the inclusive (≤) boundary.
+    const mtimeMs = statSync(sp).mtimeMs;
+    const d = await evaluateInstallDecision({ repoRoot: repo, now: mtimeMs + 60_000 });
     expect(d.skip).toBe(true);
     expect(d.reason).toBe('staging_active');
+  });
+
+  it('TS-7b: mtime 1ms PAST FRESHNESS_MS is stale (boundary is inclusive ≤, not <)', async () => {
+    const sp = makeStagingDir(repo);
+    setStagingMtimeAge(sp, 60_000);
+    const mtimeMs = statSync(sp).mtimeMs;
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const d = await evaluateInstallDecision({ repoRoot: repo, now: mtimeMs + 60_001 });
+    expect(d.skip).toBe(false); // stale → auto-cleaned → falls through to hash/canary logic
+    expect(existsSync(sp)).toBe(false);
+    stderrSpy.mockRestore();
   });
 
   it('TS-9: storedHash=null + fresh .staging — staging-active precedence wins', async () => {
