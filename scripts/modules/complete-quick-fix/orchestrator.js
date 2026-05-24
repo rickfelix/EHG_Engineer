@@ -8,7 +8,7 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { restartLeoStack } from '../../../lib/server-manager.js';
 import { runSelfVerification } from '../../../lib/quickfix-self-verifier.js';
 import {
@@ -301,7 +301,18 @@ export async function completeQuickFix(qfId, options = {}) {
     overCapReason: options.overCapReason
   };
 
-  const verificationResults = await runSelfVerification(qfId, verificationContext);
+  // QF-20260524-309 (a38f6b06): prefer the testDir (QF worktree) copy of the self-verifier
+  // over this orchestrator's bundled import, so running the main repo's complete-quick-fix.js
+  // from a worktree cannot run a stale verifier when the main tree predates a merged fix.
+  let runSV = runSelfVerification;
+  try {
+    const localVerifier = path.join(testDir, 'lib', 'quickfix-self-verifier.js');
+    if (testDir && fs.existsSync(localVerifier)) {
+      const mod = await import(pathToFileURL(localVerifier).href);
+      if (typeof mod.runSelfVerification === 'function') runSV = mod.runSelfVerification;
+    }
+  } catch { /* fall back to the bundled verifier */ }
+  const verificationResults = await runSV(qfId, verificationContext);
   // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2: --force-complete bypasses self-verification prompts
   const selfVerificationValid = await validateSelfVerification(verificationResults, prompt, {
     forceComplete: options.forceComplete,
