@@ -35,7 +35,7 @@ import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 // under a rotated session_id (the 2026-04-24 incident class).
 import { checkPreClaimEvidence } from './modules/claim-health/triangulate.js';
 import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
-import { isProcessRunning, startHeartbeat } from '../lib/heartbeat-manager.mjs';
+import { isProcessRunning, startHeartbeat, stopHeartbeat } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 // SD-LEO-INFRA-FLEET-DASHBOARD-VISIBILITY-001: shared formatter so the roster
@@ -1758,7 +1758,24 @@ async function main() {
   console.log('═'.repeat(50));
 }
 
-main().catch(error => {
-  console.error(`${colors.red}Fatal error: ${error.message}${colors.reset}`);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    // QF-20260523-820: sd-start is a claim-and-exit CLI. startHeartbeat() (called
+    // mid-flow per FR-3 of SD-FDBK-INFRA-CASCADE-TRIGGER-OVERREACH-001) arms a ref'd
+    // 30s setInterval that holds Node's event loop open. Without an explicit exit the
+    // success path never returns — the process hangs until an external watchdog
+    // SIGTERMs it (exit 143). The orchestrator path masked this because its
+    // all-complete / no-child branches exit before the heartbeat is armed; the
+    // "found a workable child" branch falls through to here and hangs (true blast
+    // radius: every non-error-terminating run). Stop the heartbeat and exit, mirroring
+    // the QF-20260424-805 fix in add-prd-to-database.js. stopHeartbeat() clears the
+    // interval but does NOT release the claim (cooperative ownership) — the claim
+    // persists for the agent's subsequent work. RCA: sub_agent_execution_results
+    // c0c08fd6-c722-44a7-95d4-5c4126c2dd40.
+    stopHeartbeat();
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error(`${colors.red}Fatal error: ${error.message}${colors.reset}`);
+    process.exit(1);
+  });
