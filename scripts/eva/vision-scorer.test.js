@@ -9,6 +9,7 @@ import {
   DEFAULT_ARCH_KEY,
   _emitQualityCheckWarningIfNeeded,
 } from './vision-scorer.js';
+import { OpenAIAdapter } from '../../lib/sub-agents/vetting/provider-adapters.js';
 
 function fakeSupabase(row) {
   return {
@@ -228,5 +229,102 @@ describe('_emitQualityCheckWarningIfNeeded (FR-3, FR-4)', () => {
     expect(logger.warn).toHaveBeenCalledTimes(2);
     expect(logger.warn.mock.calls[0][0]).toContain('sd_key=unknown');
     expect(logger.warn.mock.calls[1][0]).toContain('sd_key=unknown');
+  });
+});
+
+// SD-FDBK-FIX-VISION-SCORER-DETERMINISM-001 — determinism wiring.
+// Source-pin the scoreSD call sites + programmatic path (the established
+// "don't spin up the full pipeline" convention above), plus a behavioral test
+// of the additive adapter seed guard.
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const SCORER_SRC = readFileSync(join(ROOT, 'scripts/eva/vision-scorer.js'), 'utf8');
+const ADAPTERS_SRC = readFileSync(join(ROOT, 'lib/sub-agents/vetting/provider-adapters.js'), 'utf8');
+const OLLAMA_TOOL_SRC = readFileSync(join(ROOT, 'lib/programmatic/tools/ollama-tool.js'), 'utf8');
+const PROG_SCORER_SRC = readFileSync(join(ROOT, 'scripts/programmatic/vision-scorer.js'), 'utf8');
+
+describe('FR-1/FR-2: scoreSD pins temperature:0 + seed on both validation calls', () => {
+  it('defines a fixed VISION_SCORE_SEED constant', () => {
+    expect(SCORER_SRC).toMatch(/const VISION_SCORE_SEED\s*=\s*\d+/);
+  });
+
+  it('passes temperature:0 and seed on BOTH complete() calls (main + repair retry)', () => {
+    // TS-A/TS-B/TS-C: both llmClient.complete() option objects carry the pins.
+    const matches = SCORER_SRC.match(/temperature:\s*0,\s*seed:\s*VISION_SCORE_SEED/g) || [];
+    expect(matches.length).toBe(2);
+  });
+
+  it('does NOT pass a per-call thinkingBudget (FR-3: so Anthropic honors temperature:0)', () => {
+    // The thinking-mode temperature-delete branch only fires on a per-call
+    // options.thinkingBudget>0; scoreSD must never set it (the instance-level
+    // adapter.thinkingBudget in client-factory does not reach complete()).
+    const completeCalls = SCORER_SRC.match(/llmClient\.complete\([^;]*?\)/gs) || [];
+    expect(completeCalls.length).toBeGreaterThanOrEqual(2);
+    for (const c of completeCalls) expect(c).not.toMatch(/thinkingBudget/);
+  });
+
+  it('documents the per-provider determinism matrix (FR-7)', () => {
+    expect(SCORER_SRC).toMatch(/determinism matrix/i);
+    expect(SCORER_SRC).toMatch(/Anthropic.*no seed|no seed/i);
+  });
+});
+
+describe('FR-2: adapter seed guards (source pins for non-OpenAI providers)', () => {
+  it('GoogleAdapter sets generationConfig.seed only when options.seed is defined', () => {
+    expect(ADAPTERS_SRC).toMatch(/if \(options\.seed !== undefined\)\s*\{\s*generationConfig\.seed = options\.seed/);
+  });
+
+  it('OllamaAdapter spreads seed only when defined (not the temperature ?? idiom)', () => {
+    expect(ADAPTERS_SRC).toMatch(/options\.seed !== undefined \? \{ seed: options\.seed \} : \{\}/);
+  });
+
+  it('AnthropicAdapter never forwards a seed (no seed key in the adapter)', () => {
+    // Anthropic SDK has no seed param; ensure we did not add one.
+    const anthropicBlock = ADAPTERS_SRC.slice(
+      ADAPTERS_SRC.indexOf('class AnthropicAdapter'),
+      ADAPTERS_SRC.indexOf('class OpenAIAdapter')
+    );
+    expect(anthropicBlock).not.toMatch(/\.seed\b|seed:/);
+  });
+});
+
+describe('FR-2: OpenAIAdapter seed guard (behavioral)', () => {
+  function spyFetch(captured) {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      captured.body = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ choices: [{ message: { content: '{}' } }] }) };
+    });
+  }
+
+  it('includes body.seed + temperature only as passed; omits seed when undefined', async () => {
+    const adapter = new OpenAIAdapter({ apiKey: 'test-key', model: 'gpt-test' });
+
+    const withSeed = {};
+    let spy = spyFetch(withSeed);
+    try {
+      await adapter.complete('sys', 'usr', { temperature: 0, seed: 99, maxTokens: 10 });
+      expect(withSeed.body.seed).toBe(99);
+      expect(withSeed.body.temperature).toBe(0);
+    } finally { spy.mockRestore(); }
+
+    const noSeed = {};
+    spy = spyFetch(noSeed);
+    try {
+      await adapter.complete('sys', 'usr', { temperature: 0, maxTokens: 10 });
+      expect(noSeed.body).not.toHaveProperty('seed');
+      expect(noSeed.body.temperature).toBe(0);
+    } finally { spy.mockRestore(); }
+  });
+});
+
+describe('FR-4: programmatic scoring path pins sampling', () => {
+  it('createOllamaTool threads optional temperature/seed into the inner complete()', () => {
+    expect(OLLAMA_TOOL_SRC).toMatch(/samplingTemperature\s*=\s*options\.temperature/);
+    expect(OLLAMA_TOOL_SRC).toMatch(/samplingSeed\s*=\s*options\.seed/);
+    expect(OLLAMA_TOOL_SRC).toMatch(/samplingTemperature !== undefined \? \{ temperature: samplingTemperature \}/);
+    expect(OLLAMA_TOOL_SRC).toMatch(/samplingSeed !== undefined \? \{ seed: samplingSeed \}/);
+  });
+
+  it('the programmatic vision-scorer constructs the ollama tool with temperature:0 + a fixed seed', () => {
+    expect(PROG_SCORER_SRC).toMatch(/createOllamaTool\(\{\s*temperature:\s*0,\s*seed:\s*\d+\s*\}\)/);
   });
 });
