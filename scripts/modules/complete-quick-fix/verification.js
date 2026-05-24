@@ -36,6 +36,14 @@ export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, fl
     return true;
   }
 
+  // SD-FDBK-ENH-SOURCE-LOC-CAP-001: --over-cap-reason bypasses ONLY the source-LOC cap
+  // (audit trail in verification_notes). Unlike --force-complete it does NOT touch the
+  // failing-tests, compliance, or self-verification (scope-creep) gates.
+  if (flags.overCapReason && sourceLoc > QF_HARD_LOC_CAP) {
+    console.log(`\n⚠️  --over-cap-reason: source-LOC cap bypassed (source=${sourceLoc}, test=${testLoc}, cap=${QF_HARD_LOC_CAP}, reason="${flags.overCapReason}")`);
+    return true;
+  }
+
   if (sourceLoc <= QF_HARD_LOC_CAP) {
     return true;
   }
