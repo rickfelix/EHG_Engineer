@@ -108,6 +108,20 @@ export function parseTargetReposArg(raw) {
   return normalized;
 }
 
+/**
+ * Build the create-orchestrator-from-plan.js exec command for the auto-route path,
+ * forwarding --target-repos for cross-repo orchestrator SDs (QF-20260524-566 /
+ * feedback 0ee3c3b8 Bug 2). Pure + exported for unit testing. `targetRepos` is the
+ * normalized array from parseTargetReposArg (or null for single-repo SDs).
+ */
+export function buildOrchestratorCmd({ visionKey, archKey, title, targetRepos } = {}) {
+  let cmd = `node scripts/create-orchestrator-from-plan.js --vision-key ${visionKey} --arch-key ${archKey} --title "${title}" --auto-children`;
+  if (Array.isArray(targetRepos) && targetRepos.length > 0) {
+    cmd += ` --target-repos ${targetRepos.join(',')}`;
+  }
+  return cmd;
+}
+
 // ============================================================================
 // Venture Context Resolution (SD-LEO-INFRA-SD-NAMESPACING-001)
 // ============================================================================
@@ -2353,7 +2367,9 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
           console.log(`\n🔄 Auto-routing to orchestrator creator (${decision.telemetry.structured_phase_count || decision.telemetry.content_phase_count} phases detected)...`);
           try {
             const { execSync } = await import('child_process');
-            const cmd = `node scripts/create-orchestrator-from-plan.js --vision-key ${visionKey} --arch-key ${archKey} --title "${title}" --auto-children`;
+            // QF-20260524-566 / feedback 0ee3c3b8 Bug 2: forward --target-repos so the
+            // orchestrator + auto-created children inherit metadata.target_repos.
+            const cmd = buildOrchestratorCmd({ visionKey, archKey, title, targetRepos });
             execSync(cmd, { stdio: 'inherit', cwd: process.cwd() });
             process.exit(0);
           } catch (execErr) {
