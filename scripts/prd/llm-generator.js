@@ -22,6 +22,8 @@ import {
 // Imports are static (not dynamic) so the module graph loads cleanly at test time;
 // behavior change still gated by PRD_REWRITE_LOOP env var (default OFF).
 import { applyRewriteLoop } from '../modules/prd/rewrite-loop.js';
+// SD-FDBK-ENH-PRD-AUTHORING-QUERY-001: live table metadata grounding (fail-soft).
+import { buildLiveTableMetadataSection } from './table-metadata-query.js';
 
 /**
  * Check if inline PRD generation mode is enabled.
@@ -200,6 +202,14 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
     return null;
   }
 
+  // SD-FDBK-ENH-PRD-AUTHORING-QUERY-001: ground the prompt in production reality by
+  // injecting live row counts + columns for tables this SD references. Computed once
+  // here (the only async seam) so both the inline and external-API paths get it via
+  // context; fully fail-soft (returns '' when no DB/creds/tables).
+  if (context.supabase && context.liveTableMetadataSection === undefined) {
+    context.liveTableMetadataSection = await buildLiveTableMetadataSection(context.supabase, sd, context);
+  }
+
   if (isInlineModeEnabled()) {
     return generatePRDInline(sd, context);
   }
@@ -376,6 +386,12 @@ export function buildPRDGenerationContext(sd, context = {}) {
   const constraints = getImplementationContextConstraints(implCtx);
   if (constraints) {
     sections.push(`## CONTEXT CONSTRAINTS (${implCtx.toUpperCase()})\n${constraints}`);
+  }
+
+  // 9.5 Live table metadata (SD-FDBK-ENH-PRD-AUTHORING-QUERY-001) — production reality
+  // check injected just before the task so the LLM sees real counts/columns last.
+  if (context.liveTableMetadataSection) {
+    sections.push(context.liveTableMetadataSection);
   }
 
   // 10. Generation Instructions — concise
