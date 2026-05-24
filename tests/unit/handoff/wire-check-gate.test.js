@@ -21,6 +21,7 @@ import { buildCallGraph } from '../../../lib/static-analysis/call-graph-builder.
 import { checkReachability } from '../../../lib/static-analysis/reachability-checker.js';
 import {
   EXCLUSION_PATTERNS,
+  KNOWN_DYNAMIC_PATTERNS,
   isExcludedFromWireCheck
 } from '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js';
 
@@ -91,6 +92,33 @@ describe('EXCLUSION_PATTERNS (FR-1)', () => {
       // Lookalike directories that share the "one-off" substring must NOT match.
       expect(isExcludedFromWireCheck('scripts/one-offsite/foo.js')).toBe(false);
       expect(isExcludedFromWireCheck('lib/one-off/foo.js')).toBe(false);
+    });
+  });
+
+  // QF-20260524-430 / feedback 9e61167f: the EVA stage-template tree is loaded only
+  // via runtime dynamic import() + readdirSync, so static reachability cannot trace it.
+  describe('KNOWN_DYNAMIC_PATTERNS — lib/eva/stage-templates dynamic-load tree (9e61167f)', () => {
+    it('excludes stage templates and analysis-steps under lib/eva/stage-templates/', () => {
+      expect(isExcludedFromWireCheck('lib/eva/stage-templates/stage-16.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/eva/stage-templates/analysis-steps/stage-16-positioning-brief.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/eva/stage-templates/index.js')).toBe(true);
+    });
+
+    it('does NOT over-match lookalike paths or other lib/eva files (boundary-safe)', () => {
+      expect(isExcludedFromWireCheck('lib/eva/stage-templates-foo/x.js')).toBe(false);
+      expect(isExcludedFromWireCheck('lib/eva/stage-registry.js')).toBe(false);
+      expect(isExcludedFromWireCheck('lib/eva/stage-execution-worker.js')).toBe(false);
+    });
+
+    it('still checks ordinary new lib/ and scripts/ files (no loss of real coverage)', () => {
+      expect(isExcludedFromWireCheck('lib/governance/resolve-feedback.js')).toBe(false);
+      expect(isExcludedFromWireCheck('scripts/handoff.js')).toBe(false);
+    });
+
+    it('exports KNOWN_DYNAMIC_PATTERNS as a non-empty regex list', () => {
+      expect(Array.isArray(KNOWN_DYNAMIC_PATTERNS)).toBe(true);
+      expect(KNOWN_DYNAMIC_PATTERNS.length).toBeGreaterThan(0);
+      for (const p of KNOWN_DYNAMIC_PATTERNS) expect(p).toBeInstanceOf(RegExp);
     });
   });
 });
