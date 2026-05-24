@@ -18,9 +18,12 @@ import {
   SD_TYPE_ADDRESSABLE_DIMENSIONS,
   MIN_ADDRESSABLE_DIMENSIONS,
   MIN_ADJUSTED_THRESHOLD_RATIO,
+  NARROW_FEATURE_DIM_FLOOR,
   countAddressableDimensions,
+  getAddressableDimNames,
   calculateDynamicThreshold,
   buildTierRemediationHint,
+  validateVisionScore,
 } from './vision-score.js';
 
 // Convert dim names to the JSONB shape the real gate consumes
@@ -172,6 +175,68 @@ describe('calculateDynamicThreshold — sanity (unchanged behavior)', () => {
 
   it('returns base when total is 0 (no dimension data)', () => {
     expect(calculateDynamicThreshold(80, 0, 0)).toBe(80);
+  });
+});
+
+describe('SD-FDBK-INFRA-GATE-VISION-SCORE-001 — narrow/focused-feature carve-out', () => {
+  it('NARROW_FEATURE_DIM_FLOOR is pinned at 50 (calibration)', () => {
+    expect(NARROW_FEATURE_DIM_FLOOR).toBe(50);
+  });
+
+  it('getAddressableDimNames auto-detects a focused feature from scores (>= floor)', () => {
+    const dims = { a: 90, b: 85, c: 80, d: 30, e: 20, f: 10 };
+    expect(getAddressableDimNames('feature', dims).sort()).toEqual(['a', 'b', 'c']);
+    expect(countAddressableDimensions('feature', dims)).toEqual({ addressable: 3, total: 6 });
+  });
+
+  it('broad feature (all dims >= floor) stays all-addressable (no narrowing → full bar)', () => {
+    const dims = { a: 88, b: 77, c: 66, d: 55 };
+    expect(countAddressableDimensions('feature', dims)).toEqual({ addressable: 4, total: 4 });
+  });
+
+  it('manual vision_addressable_dimensions override still wins over score-based auto-detect', () => {
+    const dims = { security_posture: 90, performance_x: 90, cli_y: 90 };
+    const meta = { vision_addressable_dimensions: ['security'] };
+    expect(getAddressableDimNames('feature', dims, meta)).toEqual(['security_posture']);
+  });
+
+  it('non-null pattern types stay pattern-based (not score-based) — no leakage from the carve-out', () => {
+    const dims = { user_delight: 90, architecture_clarity: 90 };
+    // refactor pattern set has 'architecture' but not 'user'/'delight'
+    expect(getAddressableDimNames('refactor', dims).sort()).toEqual(['architecture_clarity']);
+  });
+
+  it('gate: focused-good feature passes at the narrowed threshold without manual tuning', async () => {
+    const sd = {
+      sd_key: 'TEST-FOCUSED-GOOD', sd_type: 'feature',
+      vision_score: 60, vision_score_action: 'gap_closure_sd',
+      dimension_scores: { a: 90, b: 85, c: 80, d: 20, e: 15, f: 10 }, metadata: {},
+    };
+    // addressable 3/6 → threshold max(90*3/6=45, 54)=54; addressable avg 85 >= 60; score 60 >= 54 → pass
+    const r = await validateVisionScore(sd, null);
+    expect(r.passed).toBe(true);
+  });
+
+  it('gate: broad-but-mediocre feature still faces the full 90 bar (cannot game the carve-out)', async () => {
+    const sd = {
+      sd_key: 'TEST-BROAD-MEDIOCRE', sd_type: 'feature',
+      vision_score: 55, vision_score_action: 'gap_closure_sd',
+      dimension_scores: { a: 55, b: 56, c: 54, d: 55, e: 53, f: 57 }, metadata: {},
+    };
+    // all dims >= 50 → addressable == total → no narrowing → bar 90; 55 < 90 → block
+    const r = await validateVisionScore(sd, null);
+    expect(r.passed).toBe(false);
+  });
+
+  it('gate: focused-but-weak feature is blocked by the addressable-average floor', async () => {
+    const sd = {
+      sd_key: 'TEST-FOCUSED-WEAK', sd_type: 'feature',
+      vision_score: 58, vision_score_action: 'gap_closure_sd',
+      dimension_scores: { a: 55, b: 52, c: 51, d: 10, e: 10, f: 10 }, metadata: {},
+    };
+    // addressable [55,52,51] avg 52.7 < 60 → avg-floor hard-blocks before the threshold check
+    const r = await validateVisionScore(sd, null);
+    expect(r.passed).toBe(false);
   });
 });
 
