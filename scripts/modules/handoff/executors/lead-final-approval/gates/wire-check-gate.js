@@ -54,11 +54,34 @@ export const EXCLUSION_PATTERNS = [
 ];
 
 /**
+ * Known dynamic-load trees: directories whose modules are loaded EXCLUSIVELY via
+ * runtime dynamic import() / readdirSync glob — never via a static import statement
+ * reachable from an entry point. Static call-graph analysis cannot trace them, so a
+ * NEW file in such a tree is a guaranteed false-positive "unreachable" finding. This
+ * is a DIFFERENT reason than EXCLUSION_PATTERNS (files with no runtime entry by
+ * design — tests, one-off scripts), kept separate so each intent stays explicit.
+ *
+ * lib/eva/stage-templates/ — the EVA stage-execution worker loads every stage
+ * template and analysis-step via `await import('./stage-templates/...')`, and the
+ * barrel (index.js) auto-discovers stage-NN.js via readdirSync, NOT static
+ * re-exports. Verified 2026-05-24: no static import chain reaches the tree from any
+ * in-scope WIRE_CHECK entry point. Flagged stage-16-positioning-brief.js on
+ * SD-LEO-FEAT-VENTURE-GROUNDED-STAGE-001. feedback 9e61167f (GREENLIT 2026-05-23).
+ * The trailing `/` keeps this boundary-safe (does NOT match `stage-templates-foo/`).
+ */
+export const KNOWN_DYNAMIC_PATTERNS = [
+  /(^|\/)lib\/eva\/stage-templates\//
+];
+
+/**
  * @param {string} file - Forward-slash relative path from repo root
- * @returns {boolean} true when the path matches any EXCLUSION_PATTERN
+ * @returns {boolean} true when the path is excluded from the reachability check —
+ *   either a test/spec/one-off path (EXCLUSION_PATTERNS) or a known dynamic-load
+ *   tree static analysis cannot trace (KNOWN_DYNAMIC_PATTERNS).
  */
 export function isExcludedFromWireCheck(file) {
-  return EXCLUSION_PATTERNS.some((re) => re.test(file));
+  return EXCLUSION_PATTERNS.some((re) => re.test(file)) ||
+    KNOWN_DYNAMIC_PATTERNS.some((re) => re.test(file));
 }
 
 /**
