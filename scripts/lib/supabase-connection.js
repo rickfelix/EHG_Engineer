@@ -46,15 +46,29 @@ export function getSSLConfig() {
     return { rejectUnauthorized: true, ca: fs.readFileSync(caPath, 'utf8') };
   }
 
-  if (isProduction) {
-    return { rejectUnauthorized: true };
-  }
-
+  // Explicit insecure escape hatch. Checked BEFORE the bundled-CA auto-detect
+  // below so a developer who deliberately opts out (e.g. a stale bundle after a
+  // CA rotation) still connects. No longer the first-line workaround.
   if (disableSSLVerify) {
     return { rejectUnauthorized: false };
   }
 
-  // Default: enable SSL verification
+  // SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 (FR-2): auto-detect the committed
+  // Supabase CA bundle so strict verification is the default everywhere with
+  // zero env configuration. The pooler chains to a self-signed Supabase Root
+  // 2021 CA that is absent from Node's bundled trust store and the GitHub runner
+  // store, so without trusting it explicitly the pg-direct path throws
+  // SELF_SIGNED_CERT_IN_CHAIN. The bundle lives two dirs up from scripts/lib/.
+  const bundledCaPath = join(__dirname, '..', '..', 'certs', 'supabase-root-2021-ca.pem');
+  if (fs.existsSync(bundledCaPath)) {
+    return { rejectUnauthorized: true, ca: fs.readFileSync(bundledCaPath, 'utf8') };
+  }
+
+  if (isProduction) {
+    return { rejectUnauthorized: true };
+  }
+
+  // Default: enable SSL verification (no custom CA available to trust).
   return { rejectUnauthorized: true };
 }
 

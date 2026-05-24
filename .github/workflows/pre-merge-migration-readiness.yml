@@ -45,16 +45,13 @@ jobs:
           # Either env var is sufficient — supabase-connection.js skips the
           # password requirement once connectionString is provided.
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          # QF-20260521-494 / PAT-CI-DB-TLS-VERIFY-GAP-001 (witness 3): the
-          # pg-direct probe connects to the Supabase pooler, whose CA is not in
-          # the GitHub runner trust store, so strict verification throws
-          # SELF_SIGNED_CERT_IN_CHAIN (INFRA_ERROR) on every PR — the gate has
-          # never once succeeded. This is a READ-ONLY introspection
-          # (pg_proc / pg_trigger) to a known host on an ephemeral runner, so
-          # relaxing verification here is acceptable. Follow-up (Option B):
-          # bundle the Supabase CA + default SUPABASE_SSL_CA in
-          # supabase-connection.js to restore strict verification everywhere.
-          DISABLE_SSL_VERIFY: 'true'
+          # SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 (FR-3, reverses QF-20260521-494):
+          # the pg-direct probe connects to the Supabase pooler, whose self-signed
+          # Supabase Root 2021 CA is absent from the runner trust store. Trust that
+          # CA explicitly via the committed bundle (also auto-detected by
+          # getSSLConfig per FR-2) instead of disabling verification, restoring
+          # strict TLS on this gate.
+          NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/certs/supabase-root-2021-ca.pem
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |

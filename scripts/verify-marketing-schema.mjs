@@ -25,6 +25,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import pg from 'pg';
+// SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 (FR-4): strict TLS via the bundled
+// Supabase CA instead of a hardcoded rejectUnauthorized:false.
+import { getSSLConfig } from './lib/supabase-connection.js';
 
 const { Client } = pg;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -67,7 +70,7 @@ async function connect() {
   if (!url) {
     throw new Error('SUPABASE_POOLER_URL not set — required for schema introspection');
   }
-  const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  const client = new Client({ connectionString: url, ssl: getSSLConfig() });
   await client.connect();
   return client;
 }

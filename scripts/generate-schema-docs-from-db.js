@@ -27,6 +27,9 @@ import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
+// SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 (FR-4): strict TLS via the bundled
+// Supabase CA instead of a hardcoded rejectUnauthorized:false bypass.
+import { getSSLConfig } from './lib/supabase-connection.js';
 
 const { Client } = pg;
 
@@ -68,7 +71,7 @@ class SchemaDocumentationGenerator {
     // PostgreSQL client (for advanced queries)
     this.pgClient = new Client({
       connectionString: CONFIG.poolerUrl,
-      ssl: { rejectUnauthorized: false, checkServerIdentity: () => undefined }
+      ssl: getSSLConfig()
     });
 
     await this.pgClient.connect();

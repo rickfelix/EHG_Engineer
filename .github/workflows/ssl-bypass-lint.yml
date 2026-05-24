@@ -1,0 +1,37 @@
+name: SSL Bypass Lint
+
+# SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 (FR-5 / feedback 25a8ded8):
+# Blocks reintroduction of TLS-verification bypasses on DB connections in CI.
+# The Supabase pooler chains to a self-signed Supabase Root 2021 CA absent from
+# the runner trust store; the correct fix is to TRUST that CA (NODE_EXTRA_CA_CERTS
+# = certs/supabase-root-2021-ca.pem, or getSSLConfig() auto-detect), NOT to set
+# DISABLE_SSL_VERIFY=true / NODE_TLS_REJECT_UNAUTHORIZED=0 (which disable
+# verification entirely and expose CI DB connections to MITM).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ssl-bypass-lint:
+    name: Assert no TLS-bypass env vars in active workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan active workflows for TLS-verification bypasses
+        run: |
+          # Match YAML env assignments that disable TLS verification.
+          # Exclude archived/ workflows and this lint file itself.
+          matches=$(grep -rnE "(DISABLE_SSL_VERIFY:[[:space:]]*['\"]?true|NODE_TLS_REJECT_UNAUTHORIZED:[[:space:]]*['\"]?0)" \
+            .github/workflows --include='*.yml' --include='*.yaml' \
+            | grep -vE 'archived/|ssl-bypass-lint\.yml') || true
+          if [ -n "$matches" ]; then
+            echo "::error::TLS verification bypass found in active CI workflow(s). Trust the Supabase CA via NODE_EXTRA_CA_CERTS=certs/supabase-root-2021-ca.pem (or getSSLConfig() auto-detect) instead of disabling verification. SD-FDBK-INFRA-RESTORE-STRICT-TLS-001 FR-5."
+            echo "--- offending lines ---"
+            echo "$matches"
+            exit 1
+          fi
+          echo "✅ No TLS-bypass env vars in active CI workflows."
