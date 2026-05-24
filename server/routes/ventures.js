@@ -5,11 +5,41 @@
  */
 
 import { Router } from 'express';
+import { createClient } from '@supabase/supabase-js';
 import { dbLoader } from '../config.js';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid, validateUuidParam, isValidStringLength } from '../middleware/validate.js';
+import { deleteVentureFully } from '../../lib/deleteVentureFully.js';
 
 const router = Router();
+
+// Resolve a service-role Supabase client. Prefers an injected client
+// (req.app.locals.supabase) so route tests can supply a mock; falls back to a
+// fresh service-role client for the running server.
+function resolveServiceClient(req) {
+  return (
+    req?.app?.locals?.supabase ||
+    createClient(
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    )
+  );
+}
+
+/**
+ * Aggregate an array of deleteVentureFully() results into the master-reset
+ * cleanup summary shape (preserves the pre-refactor response contract).
+ */
+function aggregateTeardownResults(results) {
+  return {
+    repos_deleted: results.filter(r => r.phases?.github_repo?.status === 'deleted').length,
+    repos_failed: results.filter(r => r.phases?.github_repo?.status === 'failed').length,
+    credentials_revoked: results.reduce((n, r) => n + (r.phases?.credentials?.revoked?.length || 0), 0),
+    credentials_failed: results.reduce((n, r) => n + (r.phases?.credentials?.failed?.length || 0), 0),
+    credentials_skipped: results.reduce((n, r) => n + (r.phases?.credentials?.skipped?.length || 0), 0),
+    registry_cleaned: results.some(r => r.phases?.registry?.cleaned),
+  };
+}
 
 // Get all ventures
 router.get('/', asyncHandler(async (req, res) => {
@@ -396,168 +426,81 @@ router.post('/competitor-analysis', asyncHandler(async (req, res) => {
 // SD-LEO-INFRA-BRIDGE-ARTIFACT-ENRICHMENT-001 (extended cleanup)
 // SD-LEO-INFRA-VENTURE-CLEANUP-ORCHESTRATOR-001-B (external resource teardown)
 router.post('/master-reset', asyncHandler(async (req, res) => {
-  // Use service-role client for admin operations (RPC requires service_role or chairman)
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-  );
+  // SD-SINGLEVENTURE-AND-BULK-DELETE-ORCH-001-B: master-reset now loops the
+  // shared single-venture teardown helper (deleteVentureFully) instead of
+  // inlining phases 1-6 + master_reset_portfolio, so the single, bulk, and
+  // portfolio paths share one teardown engine. Aggregate behavior is preserved
+  // (incl. the orphan stage_zero_requests sweep) and guarded by an integration
+  // regression test.
+  const supabase = resolveServiceClient(req);
 
-  // Phase 1: Collect venture repo info BEFORE deletion
-  const { data: provisioningRows } = await supabase
-    .from('venture_provisioning_state')
-    .select('venture_id, venture_name, github_repo_url');
+  // Collect ALL venture ids (master_reset_portfolio deleted every venture; the
+  // helper looks up each venture's repo/name internally).
+  const { data: ventures, error: listErr } = await supabase
+    .from('ventures')
+    .select('id');
+  if (listErr) {
+    return res.status(500).json({ success: false, error: listErr.message, phase: 'list_ventures' });
+  }
+  const ventureIds = (ventures || []).map(v => v.id).filter(Boolean);
 
-  const repoUrls = (provisioningRows || [])
-    .map(r => r.github_repo_url)
-    .filter(Boolean);
-
-  const ventureNames = (provisioningRows || [])
-    .map(r => r.venture_name)
-    .filter(Boolean);
-
-  const ventureIds = (provisioningRows || [])
-    .map(r => r.venture_id)
-    .filter(Boolean);
-
-  // Phase 1.5a: External resource teardown (Vercel, filesystem, Docker)
-  const { runTeardown } = await import('../../lib/cleanup/index.js');
-  const teardownResults = {};
-  for (const ventureId of ventureIds) {
-    teardownResults[ventureId] = await runTeardown(ventureId);
+  // Loop the shared full-teardown helper per venture.
+  const results = [];
+  for (const id of ventureIds) {
+    results.push(await deleteVentureFully(id, { supabase }));
   }
 
-  // Phase 1.5a2: Mark venture_resources as cleaned (SD-LEO-INFRA-UNIFIED-VENTURE-CREATION-001-B)
-  let resourcesCleanedCount = 0;
+  // Preserve the one master_reset_portfolio step per-venture delete does not
+  // cover: sweep orphan stage_zero_requests with no venture_id. Non-fatal.
+  let orphansCleaned = 0;
   try {
-    const { markResourcesCleaned } = await import('../../lib/venture-resources.js');
-    for (const ventureId of ventureIds) {
-      resourcesCleanedCount += await markResourcesCleaned(ventureId);
-    }
-    console.log(`[master-reset] ${resourcesCleanedCount} venture resource(s) marked as cleaned`);
-  } catch (resErr) {
-    console.error('[master-reset] Resource cleanup non-fatal:', resErr.message);
+    const { data: orphans } = await supabase
+      .from('stage_zero_requests')
+      .delete()
+      .is('venture_id', null)
+      .select('id');
+    orphansCleaned = orphans?.length || 0;
+  } catch (orphanErr) {
+    console.error('[master-reset] orphan stage_zero_requests cleanup non-fatal:', orphanErr.message);
   }
 
-  // Phase 1.5b: REVOKE — Credential revocation at external providers BEFORE DB deletion
-  // SD-LEO-INFRA-VENTURE-CLEANUP-ORCHESTRATOR-001-C
-  // This MUST run while the relational mapping (managed_applications -> application_credentials) is intact
-  let credentialCleanup = { revoked: [], failed: [], skipped: [] };
-  try {
-    const { cleanup: cleanupCredentials } = await import('../../lib/cleanup/credentials.js');
-    credentialCleanup = await cleanupCredentials(ventureIds, { dryRun: false });
-    if (credentialCleanup.failed.length > 0) {
-      console.warn(`[master-reset] ${credentialCleanup.failed.length} credential(s) failed revocation — quarantined for manual review`);
-    }
-  } catch (credErr) {
-    // Non-blocking: credential revocation failure should not prevent reset
-    console.error('[master-reset] Credential revocation error:', credErr.message);
-    credentialCleanup = { revoked: [], failed: [{ error: credErr.message }], skipped: [] };
-  }
-
-  // Phase 2: Execute existing DB master reset RPC
-  const { data: rpcResult, error: rpcErr } = await supabase
-    .rpc('master_reset_portfolio');
-
-  if (rpcErr) {
-    return res.status(500).json({
-      success: false,
-      error: rpcErr.message,
-      phase: 'database_reset',
-    });
-  }
-
-  const dbCount = rpcResult?.count ?? 0;
-  const cleanupResults = { repos_deleted: [], repos_failed: [], registry_cleaned: false };
-
-  // Phase 3: Delete GitHub repos
-  if (repoUrls.length > 0) {
-    const { execSync } = await import('child_process');
-
-    for (const url of repoUrls) {
-      // Extract owner/repo from URL (https://github.com/owner/repo or owner/repo)
-      const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
-      const repoSlug = match ? match[1].replace(/\.git$/, '') : url.replace(/\.git$/, '');
-
-      if (!repoSlug || repoSlug.split('/').length !== 2) {
-        cleanupResults.repos_failed.push({ repo: url, reason: 'invalid repo format' });
-        continue;
-      }
-
-      // SAFETY: Never delete core repos
-      const PROTECTED_REPOS = new Set([
-        'rickfelix/ehg', 'rickfelix/EHG_Engineer', 'rickfelix/ehg_engineer',
-      ]);
-      if (PROTECTED_REPOS.has(repoSlug) || PROTECTED_REPOS.has(repoSlug.toLowerCase())) {
-        cleanupResults.repos_failed.push({ repo: repoSlug, reason: 'PROTECTED — core repo, skipped' });
-        continue;
-      }
-
-      try {
-        execSync(`gh repo delete ${repoSlug} --yes`, {
-          timeout: 15000,
-          stdio: 'pipe',
-        });
-        cleanupResults.repos_deleted.push(repoSlug);
-      } catch (err) {
-        const msg = err.stderr?.toString() || err.message;
-        // Not found is OK (already deleted)
-        if (msg.includes('not found') || msg.includes('404')) {
-          cleanupResults.repos_deleted.push(`${repoSlug} (already gone)`);
-        } else {
-          cleanupResults.repos_failed.push({ repo: repoSlug, reason: msg.substring(0, 200) });
-        }
-      }
-    }
-  }
-
-  // Phase 4: Clean applications/registry.json
-  try {
-    const { readFileSync, writeFileSync } = await import('fs');
-    const { resolve } = await import('path');
-    const registryPath = resolve(process.cwd(), 'applications/registry.json');
-
-    const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
-    const apps = registry.applications || {};
-    const ventureNameSet = new Set(ventureNames.map(n => n.toLowerCase()));
-
-    // Remove APP entries matching deleted venture names (keep APP001=ehg, APP002=test-leo-project)
-    const coreApps = new Set(['ehg', 'ehg_engineer', 'test-leo-project']);
-    let removed = 0;
-    for (const [key, app] of Object.entries(apps)) {
-      const name = (app.name || '').toLowerCase();
-      if (ventureNameSet.has(name) && !coreApps.has(name)) {
-        delete apps[key];
-        removed++;
-      }
-    }
-
-    if (removed > 0) {
-      registry.metadata.total_apps = Object.keys(apps).length;
-      registry.metadata.active_apps = Object.values(apps).filter(a => a.status === 'active').length;
-      registry.metadata.last_updated = new Date().toISOString();
-      writeFileSync(registryPath, JSON.stringify(registry, null, 2) + '\n', 'utf8');
-      cleanupResults.registry_cleaned = true;
-    }
-  } catch (err) {
-    cleanupResults.registry_error = err.message;
-  }
+  const succeeded = results.filter(r => r.success).length;
 
   res.json({
     success: true,
-    count: dbCount,
-    message: `${dbCount} venture(s) and all related data deleted.`,
+    count: succeeded,
+    message: `${succeeded} venture(s) and all related data deleted.`,
     cleanup: {
-      repos_deleted: cleanupResults.repos_deleted.length,
-      repos_failed: cleanupResults.repos_failed.length,
-      credentials_revoked: credentialCleanup.revoked.length,
-      credentials_failed: credentialCleanup.failed.length,
-      credentials_skipped: credentialCleanup.skipped.length,
-      registry_cleaned: cleanupResults.registry_cleaned,
-      teardown: teardownResults,
-      details: { ...cleanupResults, credentials: credentialCleanup },
+      ...aggregateTeardownResults(results),
+      orphans_cleaned: orphansCleaned,
+      details: { results },
     },
   });
+}));
+
+// ── Single-venture full teardown ───────────────────────────────────
+// SD-SINGLEVENTURE-AND-BULK-DELETE-ORCH-001-B
+router.post('/:id/full-delete', validateUuidParam('id'), asyncHandler(async (req, res) => {
+  const supabase = resolveServiceClient(req);
+  const result = await deleteVentureFully(req.params.id, { supabase });
+  return res.status(result.success ? 200 : 500).json(result);
+}));
+
+// ── Bulk full teardown ─────────────────────────────────────────────
+// SD-SINGLEVENTURE-AND-BULK-DELETE-ORCH-001-B
+router.post('/bulk-full-delete', asyncHandler(async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter(Boolean) : null;
+  if (!ids || ids.length === 0) {
+    return res.status(400).json({ success: false, error: 'Request body must include a non-empty ids[] array' });
+  }
+  const supabase = resolveServiceClient(req);
+  const results = [];
+  for (const id of ids) {
+    results.push(await deleteVentureFully(id, { supabase }));
+  }
+  const succeeded = results.filter(r => r.success).length;
+  const failed = results.length - succeeded;
+  return res.json({ success: failed === 0, succeeded, failed, results });
 }));
 
 export default router;
