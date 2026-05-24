@@ -16,9 +16,12 @@ const fs = require('fs');
 const path = require('path');
 const { detectProjectDir } = require('./lib/detect-context.cjs');
 
-// Session state file path
+// Session state file path — SD-FDBK-ENH-SESSION-STATE-SCOPING-001: resolve via the canonical
+// resolver (same ~/.claude-sessions mechanism as unified-state-manager) instead of hardcoding
+// the legacy shared file, so writes land in the per-session file and converge with the writer.
+const { getSessionStateFilePath, resolveStateReadPath } = require('./lib/session-state-resolver.cjs');
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || detectProjectDir();
-const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
+const SESSION_STATE_FILE = getSessionStateFilePath(PROJECT_DIR); // scoped write/metadata path
 // Sync marker file for race condition prevention (PAT-ASYNC-RACE-001)
 const SYNC_MARKER_FILE = path.join(PROJECT_DIR, '.claude', '.protocol-sync');
 
@@ -65,8 +68,10 @@ const PROTOCOL_FILE_EQUIVALENTS = {
  */
 function readSessionState() {
   try {
-    if (fs.existsSync(SESSION_STATE_FILE)) {
-      const content = fs.readFileSync(SESSION_STATE_FILE, 'utf8');
+    // Read-fallback: scoped file if it exists, else legacy (no fresh-session regression).
+    const readPath = resolveStateReadPath(PROJECT_DIR);
+    if (fs.existsSync(readPath)) {
+      const content = fs.readFileSync(readPath, 'utf8');
       // Handle BOM if present
       const cleanContent = content.replace(/^\uFEFF/, '');
       return JSON.parse(cleanContent);

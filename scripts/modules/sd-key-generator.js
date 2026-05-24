@@ -19,6 +19,9 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+// SD-FDBK-ENH-SESSION-STATE-SCOPING-001: resolve the state path via the canonical resolver
+// (read-fallback to legacy) instead of hardcoding the shared file.
+import { resolveStateReadPath } from '../hooks/lib/session-state-resolver.cjs';
 
 dotenv.config();
 
@@ -27,7 +30,6 @@ dotenv.config();
 // ============================================================================
 
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
-const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
 
 /**
  * Read the unified session state to check protocol file read status
@@ -35,8 +37,10 @@ const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-st
  */
 function readSessionState() {
   try {
-    if (fs.existsSync(SESSION_STATE_FILE)) {
-      const content = fs.readFileSync(SESSION_STATE_FILE, 'utf8');
+    // Read-fallback: scoped file if it exists, else legacy (no fresh-session regression).
+    const readPath = resolveStateReadPath(PROJECT_DIR);
+    if (fs.existsSync(readPath)) {
+      const content = fs.readFileSync(readPath, 'utf8');
       const cleanContent = content.replace(/^\uFEFF/, ''); // Handle BOM
       return JSON.parse(cleanContent);
     }
