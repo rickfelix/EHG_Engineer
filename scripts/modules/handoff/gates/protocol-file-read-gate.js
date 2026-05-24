@@ -24,10 +24,13 @@
 
 import fs from 'fs';
 import path from 'path';
+// SD-FDBK-ENH-SESSION-STATE-SCOPING-001: resolve via the canonical resolver (scoped write,
+// read-fallback to legacy) instead of hardcoding the shared file.
+import { getSessionStateFilePath, resolveStateReadPath } from '../../../hooks/lib/session-state-resolver.cjs';
 
 // Session state file path
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
-const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
+const SESSION_STATE_FILE = getSessionStateFilePath(PROJECT_DIR); // scoped write path
 
 /**
  * Get the protocol mode from environment
@@ -78,8 +81,10 @@ const HANDOFF_FILE_REQUIREMENTS = HANDOFF_FILE_REQUIREMENTS_FULL;
  */
 function readSessionState() {
   try {
-    if (fs.existsSync(SESSION_STATE_FILE)) {
-      const content = fs.readFileSync(SESSION_STATE_FILE, 'utf8');
+    // Read-fallback: scoped file if it exists, else legacy (no fresh-session regression).
+    const readPath = resolveStateReadPath(PROJECT_DIR);
+    if (fs.existsSync(readPath)) {
+      const content = fs.readFileSync(readPath, 'utf8');
       // Handle BOM if present
       const cleanContent = content.replace(/^\uFEFF/, '');
       return JSON.parse(cleanContent);
