@@ -570,6 +570,14 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     return { success: false };
   }
 
+  // QF-20260523-071 (closes feedback 4f455676): accept the short 'LEAD-FINAL'
+  // as an alias for the canonical 'LEAD-FINAL-APPROVAL'. Several next-step hints
+  // and docs say 'LEAD-FINAL', so rejecting it cost a round-trip. Reassign to the
+  // canonical form BEFORE validation so every downstream use gets the long name.
+  if (handoffType && handoffType.toUpperCase() === 'LEAD-FINAL') {
+    handoffType = 'LEAD-FINAL-APPROVAL';
+  }
+
   // Validate handoff type is not a task ID (common AI confusion)
   const normalizedHandoffType = handoffType.toUpperCase();
   const validHandoffTypes = ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'];
