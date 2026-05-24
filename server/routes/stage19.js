@@ -22,6 +22,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid } from '../middleware/validate.js';
 import { formatReplitOptimized } from '../../lib/eva/bridge/replit-prompt-formatter.js';
+import { resolveRepoReadiness } from '../../lib/eva/bridge/repo-readiness.js';
 import { writeArtifact } from '../../lib/eva/artifact-persistence-service.js';
 import { ARTIFACT_TYPES } from '../../lib/eva/artifact-types.js';
 
@@ -59,6 +60,9 @@ function validateRegistrationBody(body) {
  *   featurePrompts: [{ title, content, points, priority }],
  *   warnings?: string[],
  *   generatedAt: string,
+ *   // SD-S19-SEEDS-A-CLAUDECODEREADY-ORCH-001-C: additive Claude-Code-ready readiness
+ *   // contract (consumed by the ehg S19 UI from Child D; prompts removed in Child E).
+ *   readiness: { repoReady: boolean, seededArtifacts: string[], buildPlanSummary: object },
  * }
  */
 router.get('/:ventureId/replit-prompts', asyncHandler(async (req, res) => {
@@ -74,6 +78,11 @@ router.get('/:ventureId/replit-prompts', asyncHandler(async (req, res) => {
 
   try {
     const result = await formatReplitOptimized(ventureId, { scope, mode: modeHint });
+    // SD-S19-SEEDS-A-CLAUDECODEREADY-ORCH-001-C: additive Claude-Code-ready readiness
+    // contract for the cutover. Child D switches the ehg S19 UI to consume this; the
+    // prompts payload below stays until Child E. Best-effort — resolveRepoReadiness
+    // never throws, so a readiness failure can't break the load-bearing prompts response.
+    const readiness = await resolveRepoReadiness(ventureId);
     return res.status(200).json({
       ventureName: result.manifest?.ventureName || 'Venture',
       mode: result.manifest?.mode || 'create-new',
@@ -86,6 +95,7 @@ router.get('/:ventureId/replit-prompts', asyncHandler(async (req, res) => {
       })),
       warnings: result.warnings || [],
       generatedAt: result.manifest?.exportedAt || new Date().toISOString(),
+      readiness,
     });
   } catch (err) {
     console.error('[stage19-route] replit-prompts failed', JSON.stringify({
