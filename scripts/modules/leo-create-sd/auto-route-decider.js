@@ -67,8 +67,14 @@ export const PR_N_PATTERN = /PR-\d+/;
  * @returns {{ structuredPhaseCount: number, contentMatches: string[] }}
  */
 export function countArchPhases(archPlan) {
-  const structuredPhaseCount =
-    archPlan?.sections?.implementation_phases?.length || 0;
+  // 0ee3c3b8: implementation_phases is sometimes stored as a prose STRING, not an
+  // array of phase objects. `?.length` on a string returns its CHARACTER count
+  // (e.g. 1140), which falsely tripped hasMultipleStructured and auto-routed a
+  // single feature SD to the orchestrator creator (→ empty 0-child shell). Only an
+  // array is a real structured phase count; a string falls through to the content-
+  // heading regex / Layer B below.
+  const phases = archPlan?.sections?.implementation_phases;
+  const structuredPhaseCount = Array.isArray(phases) ? phases.length : 0;
   const contentMatches = archPlan?.content
     ? archPlan.content.match(LAYER_B_HEADING_REGEX) || []
     : [];
