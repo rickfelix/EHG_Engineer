@@ -170,3 +170,48 @@ describe('SUCCESS_METRICS gate — FR-1 placeholder distinction', () => {
     expect(result.details.achievement.metric_scores[0].reason_code).toBe(GATE_REASON_CODES.SUCCESS_METRICS_PLACEHOLDER_VALUE);
   });
 });
+
+describe('SUCCESS_METRICS gate — QF-20260524-746 (auto-populate/parse catch-22 fix)', () => {
+  beforeEach(() => { vi.spyOn(console, 'log').mockImplementation(() => {}); });
+
+  it('evidence-suffixed auto-populated percentage passes (catch-22 broken — not a bare-100% placeholder)', async () => {
+    const supabase = makeSupabase({
+      successMetrics: [
+        { metric: 'Implementation completeness', target: '100%', actual: '100% (auto: 6/6 stories complete)', _auto_populated: true },
+      ],
+    });
+    const result = await createSuccessMetricsGate(supabase).validator(makeCtx());
+    expect(result.passed).toBe(true);
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it('descriptive "N of N" actual meeting target passes (no longer misparsed as the leading integer)', async () => {
+    const supabase = makeSupabase({
+      successMetrics: [
+        { metric: 'Implementation completeness', target: '100%', actual: '6 of 6 FRs implemented' },
+      ],
+    });
+    const result = await createSuccessMetricsGate(supabase).validator(makeCtx());
+    expect(result.passed).toBe(true);
+  });
+
+  it('inline "N/M" actual converts to a percentage and passes a >=80% target', async () => {
+    const supabase = makeSupabase({
+      successMetrics: [
+        { metric: 'Test coverage', target: '>=80%', actual: '6/6 modules covered' },
+      ],
+    });
+    const result = await createSuccessMetricsGate(supabase).validator(makeCtx());
+    expect(result.passed).toBe(true);
+  });
+
+  it('partial "N of M" below target still FAILS (gate integrity preserved — no weakening)', async () => {
+    const supabase = makeSupabase({
+      successMetrics: [
+        { metric: 'Implementation completeness', target: '100%', actual: '5 of 6 FRs implemented' },
+      ],
+    });
+    const result = await createSuccessMetricsGate(supabase).validator(makeCtx());
+    expect(result.passed).toBe(false);
+  });
+});
