@@ -49,7 +49,7 @@ function scoreScopeBreadth(title, description, type, estimatedLoc) {
 
   if (estimatedLoc > 400) { score = Math.max(score, 4); reasons.push(`high LOC estimate: ${estimatedLoc}`); }
   else if (estimatedLoc > 200) { score = Math.max(score, 3); reasons.push(`moderate LOC estimate: ${estimatedLoc}`); }
-  else if (estimatedLoc <= 75) { score = Math.min(score, 2); reasons.push(`small LOC estimate: ${estimatedLoc}`); }
+  else if (estimatedLoc > 0 && estimatedLoc <= 75) { score = Math.min(score, 2); reasons.push(`small LOC estimate: ${estimatedLoc}`); }
 
   if (['typo', 'rename', 'config', 'env', 'lint', 'format'].some(k => combined.includes(k))) {
     score = Math.min(score, 2); reasons.push('narrow scope signal');
@@ -151,7 +151,7 @@ function scoreDecompositionLikelihood(title, description, type, estimatedLoc) {
   if (estimatedLoc > 800) { score = 5; reasons.push(`very high LOC (${estimatedLoc}) — orchestrator almost certain`); }
   else if (estimatedLoc > 400) { score = Math.max(score, 4); reasons.push(`high LOC (${estimatedLoc}) — likely needs children`); }
   else if (estimatedLoc > 200) { score = Math.max(score, 3); reasons.push(`moderate LOC (${estimatedLoc}) — may need 2-3 children`); }
-  else if (estimatedLoc <= 100) { score = Math.min(score, 2); reasons.push(`low LOC (${estimatedLoc}) — single SD likely`); }
+  else if (estimatedLoc > 0 && estimatedLoc <= 100) { score = Math.min(score, 2); reasons.push(`low LOC (${estimatedLoc}) — single SD likely`); }
 
   const visionHits = VISION_SIGNAL_KEYWORDS.filter(k => combined.includes(k));
   if (visionHits.length >= 2) { score = Math.max(score, 4); reasons.push(`strategic scope signals: ${visionHits.join(', ')}`); }
@@ -196,9 +196,12 @@ export async function evaluateVisionReadiness(input) {
 
   const combined = `${title} ${description}`.toLowerCase();
   const hasRiskKeywords = RISK_KEYWORDS.some(k => combined.includes(k));
+  // Orchestrator-type SDs coordinate children by definition - never a Quick Fix.
+  // (Score is LOC-blind on a title-only invocation, so rely on the declared type.)
+  const isOrchestrator = type === 'orchestrator' || type === 'orchestration';
 
   let route, summary;
-  if (totalScore <= 7 && !hasRiskKeywords) {
+  if (totalScore <= 7 && !hasRiskKeywords && !isOrchestrator) {
     route = 'QUICK_FIX';
     summary = `Score ${totalScore}/20 — small, well-scoped work. Quick Fix recommended.`;
   } else if (totalScore >= 13) {
