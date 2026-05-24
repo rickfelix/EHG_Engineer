@@ -49,6 +49,11 @@ describe('parseFeedbackFooters', () => {
     expect(parseFeedbackFooters(text)).toEqual([VALID_UUID_1]);
   });
 
+  it('tolerates trailing text after the uuid on the footer line (QF-20260523-167)', () => {
+    const text = `### Verification\nCloses feedback ${VALID_UUID_1}. Shipped via QF-X. RCA c0c08fd6\n`;
+    expect(parseFeedbackFooters(text)).toEqual([VALID_UUID_1]);
+  });
+
   it('parses single "Closes harness backlog <uuid>" footer (alternate verb)', () => {
     const text = `body line\n\nCloses harness backlog ${VALID_UUID_1}\n`;
     expect(parseFeedbackFooters(text)).toEqual([VALID_UUID_1]);
@@ -269,8 +274,8 @@ describe('resolve-feedback.js static-pin', () => {
     expect(RESOLVE_FB_SRC).toMatch(/^const SHORT_ID_REGEX = \/\^\[0-9a-f\]\{8\}\$\/i;$/m);
   });
 
-  it('FOOTER_REGEX_LOOSE accepts 8-36 char hex-and-dash payloads', () => {
-    expect(RESOLVE_FB_SRC).toMatch(/^const FOOTER_REGEX_LOOSE = \/\^\[ \\t\]\*Closes\\s\+\(\?:feedback\|harness\\s\+backlog\)\\s\+\(\[0-9a-f\]\[0-9a-f-\]\{7,35\}\)\[ \\t\]\*\$\/gim;$/m);
+  it('FOOTER_REGEX_LOOSE accepts 8-36 char hex-and-dash payloads with a non-hex boundary (QF-20260523-167: tolerates trailing text)', () => {
+    expect(RESOLVE_FB_SRC).toMatch(/^const FOOTER_REGEX_LOOSE = \/\^\[ \\t\]\*Closes\\s\+\(\?:feedback\|harness\\s\+backlog\)\\s\+\(\[0-9a-f\]\[0-9a-f-\]\{7,35\}\)\(\?!\[0-9a-f-\]\)\/gim;$/m);
   });
 
   it('UUID range bounds use canonical "0000-0000-0000-000000000000" / "ffff-ffff-ffff-ffffffffffff" tails', () => {

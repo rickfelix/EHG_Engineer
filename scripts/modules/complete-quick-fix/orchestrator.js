@@ -16,6 +16,7 @@ import {
   generateEvidenceSummary
 } from '../../../lib/utils/quickfix-evidence-capture.js';
 import fs from 'fs';
+import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
@@ -567,17 +568,29 @@ async function createAutoPR(qfId, qf, filesChanged, actualLoc, testsPass, uatVer
     // Check if gh CLI is installed
     execSync('which gh', { stdio: 'pipe' });
 
-    // Generate PR title and body - sanitize for shell usage
+    // Title is still a shell arg, so keep it sanitized.
     const prTitle = sanitizeForShell(`fix(${validatedQfId}): ${qf.title || 'Quick fix'}`);
-    const prBody = sanitizeForShell(generatePRBody(validatedQfId, qf, filesChanged, actualLoc, testsPass, uatVerified, verificationNotes));
+    // QF-20260523-167 / feedback d66e0850: write the body to a temp file and use
+    // --body-file instead of --body "<sanitized>". sanitizeForShell collapsed every
+    // newline to a space, flattening the whole PR body — including any
+    // "Closes feedback <uuid>" footer — onto one line, so the post-merge resolver's
+    // line-anchored FOOTER_REGEX never matched and linked feedback was never closed.
+    // A body file preserves newlines and needs no shell escaping.
+    const prBody = generatePRBody(validatedQfId, qf, filesChanged, actualLoc, testsPass, uatVerified, verificationNotes);
+    const bodyFile = path.join(os.tmpdir(), `qf-pr-body-${validatedQfId}-${Date.now()}.md`);
+    fs.writeFileSync(bodyFile, prBody, 'utf-8');
 
     console.log(`   Creating PR: fix(${validatedQfId}): ${qf.title}\n`);
 
-    // SD-SEC-DATA-VALIDATION-001: Use sanitized inputs
-    const prOutput = execSync(`gh pr create --title "${prTitle}" --body "${prBody}"`, {
-      encoding: 'utf-8',
-      stdio: 'pipe'
-    });
+    let prOutput;
+    try {
+      prOutput = execSync(`gh pr create --title "${prTitle}" --body-file "${bodyFile}"`, {
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      });
+    } finally {
+      try { fs.unlinkSync(bodyFile); } catch { /* best-effort temp cleanup */ }
+    }
 
     // Extract PR URL from output
     const urlMatch = prOutput.match(/https:\/\/github\.com\/[^\s]+/);
