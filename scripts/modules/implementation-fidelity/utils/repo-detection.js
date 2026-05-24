@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { readFile } from 'fs/promises';
 import { getSDSearchTerms } from './git-helpers.js';
 import { resolveRepoPath, ENGINEER_ROOT } from '../../../../lib/repo-paths.js';
+import { resolveWorktreeCwd } from '../../../../lib/resolve-worktree-cwd.js';
 
 const execAsync = promisify(exec);
 
@@ -110,9 +111,11 @@ export async function detectImplementationRepos(sd_id, supabase) {
   const cwd = process.cwd();
   const cwdNorm = cwd.replace(/\\/g, '/');
   const foundRepos = [];
+  // SD-FDBK-ENH-GATE2-IMPLEMENTATION-FIDELITY-002: the SD-KEY (not the UUID) drives worktree
+  // resolution — resolveWorktreeCwd's extractSdId regex matches the SD-key form, not a UUID.
+  const sdKey = searchTerms.find(t => t.startsWith('SD-'));
 
   if (cwdNorm.includes('.worktrees/')) {
-    const sdKey = searchTerms.find(t => t.startsWith('SD-'));
     if (sdKey && cwdNorm.includes(sdKey)) {
       console.log(`   📋 Worktree detected for ${sdKey}, using cwd: ${cwd}`);
       foundRepos.push(cwd);
@@ -155,7 +158,30 @@ export async function detectImplementationRepos(sd_id, supabase) {
     foundRepos.push(cwd);
   }
 
-  return foundRepos;
+  // SD-FDBK-ENH-GATE2-IMPLEMENTATION-FIDELITY-002: redirect each resolved repo to the SD's
+  // worktree when one exists. The git `--all` commit scan above is worktree-agnostic (worktrees
+  // share the repo's .git object DB), so foundRepos holds repo ROOTS — but the downstream
+  // section validators also run non-`--all` FILESYSTEM scans (migration dirs, test dirs,
+  // readFile) that read the on-disk checkout. For an EHG-targeted SD whose code lives in an
+  // ehg worktree on a non-default branch, scanning the root (parked on another branch) misses
+  // the files → false-RED ~68 → forced --bypass-validation. Mirrors the GATE5/GATE6 fix
+  // (SD-LEO-INFRA-BRANCH-AWARE-PLAN-001 via resolveWorktreeCwd). Null-fallback keeps
+  // EHG_Engineer self-target + non-worktree runs byte-identical; normalize + de-dup preserves
+  // primaryMigrationRepo ordering (target repo stays first).
+  const resolved = [];
+  const seen = new Set();
+  for (const repo of foundRepos) {
+    const redirected = (sdKey ? resolveWorktreeCwd(repo, { sdId: sdKey }) : null) || repo;
+    const norm = path.resolve(redirected).replace(/\\/g, '/');
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    resolved.push(redirected);
+    if (redirected !== repo) {
+      console.log(`   🌲 Worktree resolved for fidelity scan: ${redirected} (was ${repo})`);
+    }
+  }
+
+  return resolved;
 }
 
 /**
