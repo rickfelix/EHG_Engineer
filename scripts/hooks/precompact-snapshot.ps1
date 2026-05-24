@@ -37,6 +37,34 @@ if (Test-Path $sessionState) {
     }
 }
 
+# QF-20260524-337: Preserve protocol-file-read tracking across compaction.
+# This hook previously scratch-built $state and overwrote the file, dropping
+# protocolFilesRead/protocolFileReadStatus/etc. Post-compaction /sd-create then
+# re-blocked with "CLAUDE_CORE.md has not been read" (sd-key-generator.js Case 1,
+# feedback 6bbe551f). Read the existing state and carry these keys forward so a
+# session that already read the protocol files stays unblocked after compaction.
+$preservedKeys = @(
+    'protocolFilesRead', 'protocolFilesReadAt', 'protocolFileReadStatus',
+    'protocolGate', 'protocolFilesPartiallyRead', 'protocolReadConfirmations',
+    'protocolFileEscalations'
+)
+$preserved = @{}
+if (Test-Path $UnifiedStateFile) {
+    try {
+        $existingRaw = Get-Content $UnifiedStateFile -Raw -ErrorAction Stop
+        if ($existingRaw) {
+            $existingState = ($existingRaw.TrimStart([char]0xFEFF) | ConvertFrom-Json -ErrorAction Stop)
+            foreach ($key in $preservedKeys) {
+                if (($existingState.PSObject.Properties.Name -contains $key) -and ($null -ne $existingState.$key)) {
+                    $preserved[$key] = $existingState.$key
+                }
+            }
+        }
+    } catch {
+        # Corrupt/unreadable existing state - proceed without preservation (fail-open)
+    }
+}
+
 # Build unified state JSON
 $timestamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ"
 $state = @{
@@ -66,6 +94,11 @@ $state = @{
         keyDecisions = @()
         pendingActions = @("Restore context after session start")
     }
+}
+
+# QF-20260524-337: Merge preserved protocol-read tracking back into the new state.
+foreach ($key in $preserved.Keys) {
+    $state[$key] = $preserved[$key]
 }
 
 # Write unified state (atomic write via temp file)
