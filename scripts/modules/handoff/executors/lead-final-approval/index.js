@@ -460,7 +460,10 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
     // SD-LEO-INFRA-REALITY-CHECK-VALIDATE-001: Auto-update aligned KR current_values
     try {
-      const { updateKRFromSDCompletion } = await import('../../../../lib/eva/kr-reality-checker.js');
+      // QF-20260524-872: 5 parent hops to reach repo-root lib/eva/ from this dir
+      // (4 hops resolved to the non-existent scripts/lib/eva/, silently skipping the
+      // KR reality-check); mirrors the 5-hop lib/eva import on line ~132.
+      const { updateKRFromSDCompletion } = await import('../../../../../lib/eva/kr-reality-checker.js');
       const krResult = await updateKRFromSDCompletion(sd.sd_key || sd.id, this.supabase);
       if (krResult.updated.length > 0) {
         console.log(`   ✅ KR auto-update: ${krResult.updated.join(', ')} updated to target`);
