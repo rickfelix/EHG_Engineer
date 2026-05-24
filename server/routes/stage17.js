@@ -4,7 +4,9 @@
  * Path: /api/stage17
  *
  * SD-LEO-ORCH-REPLACE-GOOGLE-STITCH-001-B: Stitch-specific routes removed.
- * Retained: S17 archetype generation, selection, approval, QA, and upload endpoints.
+ * SD-LEO-REFAC-EXTRACT-S17-ARCHETYPE-001: legacy archetype-generation endpoints
+ * removed (GVOS composer is the live path). Retained: strategy-recommendation,
+ * selection, refine, approval, QA, and upload endpoints.
  *
  * @module server/routes/stage17
  */
@@ -12,7 +14,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { isValidUuid } from '../middleware/validate.js';
-import { generateArchetypes } from '../../lib/eva/stage-17/archetype-generator.js';
 import { submitPass1Selection, submitPass2Selection, isDesignPassComplete, SelectionError } from '../../lib/eva/stage-17/selection-flow.js';
 import { runQARubric, uploadToGitHub, UploadError } from '../../lib/eva/stage-17/qa-rubric.js';
 import { recommendStrategies } from '../../lib/eva/stage-17/strategy-recommender.js';
@@ -56,121 +57,6 @@ router.post('/:ventureId/strategy-recommendation', asyncHandler(async (req, res)
     status: 'success',
     data: result,
   });
-}));
-
-/**
- * Quick-fix QF-20260513-179: GVOS composer gate (backend half of FR-6).
- * Mirrors EHG/src/integrations/feature-flags/useFeatureFlag.ts semantics server-side.
- * When s17_use_gvos_composer flag is ENABLED, skip the legacy archetype generator
- * (closes the 29th writer-consumer-asymmetry witness — flag was wired in DB + frontend
- * but backend POST handler never read it, still spawning per-screen Opus calls).
- * ventureId param accepted for future per-venture targeting (current flag is global).
- */
-export async function isGvosComposerEnabled(ventureId, supabase) {
-  if (!supabase) return false;
-  try {
-    const { data, error } = await supabase
-      .from('leo_feature_flags')
-      .select('is_enabled')
-      .eq('flag_key', 's17_use_gvos_composer')
-      .maybeSingle();
-    if (error || !data) return false;
-    return data.is_enabled === true;
-  } catch {
-    return false;
-  }
-}
-
-/** Per-venture rate limiter for archetype generation (1 call per 10s per venture). */
-const archetypeRateLimiter = new Map();
-const ARCHETYPE_RATE_LIMIT_TTL_MS = 10_000;
-
-/** Active archetype generation AbortControllers keyed by ventureId. */
-const activeArchetypeGenerations = new Map();
-
-// Clean up stale rate limiter entries every 60s
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, ts] of archetypeRateLimiter) {
-    if (now - ts > ARCHETYPE_RATE_LIMIT_TTL_MS) archetypeRateLimiter.delete(key);
-  }
-}, 60_000).unref();
-
-/**
- * POST /api/stage17/:ventureId/archetypes
- * Generates 6 HTML design archetypes per screen.
- */
-router.post('/:ventureId/archetypes', asyncHandler(async (req, res) => {
-  const { ventureId } = req.params;
-
-  if (!isValidUuid(ventureId)) {
-    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
-  }
-
-  const now = Date.now();
-  const lastCall = archetypeRateLimiter.get(ventureId);
-  if (lastCall && now - lastCall < ARCHETYPE_RATE_LIMIT_TTL_MS) {
-    const retryAfter = Math.ceil((ARCHETYPE_RATE_LIMIT_TTL_MS - (now - lastCall)) / 1000);
-    return res.status(429).json({ error: 'Too Many Requests', code: 'RATE_LIMITED', retryAfter });
-  }
-  archetypeRateLimiter.set(ventureId, now);
-
-  const supabase = req.app.locals.supabase || req.supabase;
-
-  // Quick-fix QF-20260513-179: skip legacy archetype generator when GVOS composer is active.
-  // SD-LEO-FEAT-GVOS-ACTIVATION-REMEDIATION-001 / FR-6 backend half (closes 29th writer-consumer asymmetry).
-  if (await isGvosComposerEnabled(ventureId, supabase)) {
-    console.info(`[stage17-route] GVOS composer active for ${ventureId.slice(0, 8)} — skipping legacy archetype generator`);
-    return res.status(202).json({ status: 'skipped', reason: 'gvos_composer_active', message: 'Legacy archetype generation skipped — venture is using GVOS composer (s17_use_gvos_composer flag enabled).' });
-  }
-
-  const existing = activeArchetypeGenerations.get(ventureId);
-  if (existing) {
-    existing.abort();
-    console.info(`[stage17-route] Cancelled previous archetype generation for ${ventureId.slice(0, 8)}`);
-  }
-
-  const ac = new AbortController();
-  activeArchetypeGenerations.set(ventureId, ac);
-
-  res.status(202).json({ status: 'generating', message: 'Archetype generation started. Monitor progress via artifact count.' });
-
-  // SD-S17-STRATEGYFIRST: pass preview and strategy query params
-  const previewMode = req.query.preview === 'true';
-  const strategyFilter = req.query.strategy || undefined;
-
-  generateArchetypes(ventureId, supabase, { signal: ac.signal, preview: previewMode, strategy: strategyFilter })
-    .then(result => {
-      const label = result.cancelled ? 'cancelled' : 'complete';
-      console.log(`[stage17-route] stage17/archetypes ${label}: ${result.artifactIds?.length ?? 0} archetypes for ${ventureId.slice(0, 8)}`);
-    })
-    .catch(err => {
-      console.error('[stage17-route] stage17/archetypes background failed:', err.message ?? err);
-    })
-    .finally(() => {
-      activeArchetypeGenerations.delete(ventureId);
-    });
-  return;
-}));
-
-/**
- * POST /api/stage17/:ventureId/archetypes/cancel
- */
-router.post('/:ventureId/archetypes/cancel', asyncHandler(async (req, res) => {
-  const { ventureId } = req.params;
-  if (!isValidUuid(ventureId)) {
-    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
-  }
-
-  const ac = activeArchetypeGenerations.get(ventureId);
-  if (ac) {
-    ac.abort();
-    activeArchetypeGenerations.delete(ventureId);
-    console.info(`[stage17-route] Archetype generation cancelled for ${ventureId.slice(0, 8)}`);
-    return res.json({ cancelled: true, message: 'Generation will stop after the current screen completes.' });
-  }
-
-  return res.status(404).json({ cancelled: false, message: 'No active archetype generation found for this venture.' });
 }));
 
 /**

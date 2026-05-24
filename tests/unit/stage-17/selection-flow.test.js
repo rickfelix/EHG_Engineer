@@ -8,7 +8,7 @@ import {
 
 const mockGenerateRefinedVariants = vi.fn().mockResolvedValue(['ref-1', 'ref-2', 'ref-3', 'ref-4']);
 
-vi.mock('../../../lib/eva/stage-17/archetype-generator.js', () => ({
+vi.mock('../../../lib/eva/stage-17/refinement.js', () => ({
   generateRefinedVariants: (...args) => mockGenerateRefinedVariants(...args),
 }));
 
