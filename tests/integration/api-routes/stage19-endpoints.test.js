@@ -229,9 +229,9 @@ describe('Stage 19 register-deployment endpoint', () => {
   });
 });
 
-// SD-S19-SEEDS-A-CLAUDECODEREADY-ORCH-001-C — the GET route now ADDS a Claude-Code-ready
-// readiness summary alongside the (still load-bearing) prompts payload. These assert the
-// backward-compatible contract Child D consumes and Child E later trims.
+// SD-S19-SEEDS-A-CLAUDECODEREADY-ORCH-001-E — the GET route now returns ONLY the
+// Claude-Code-ready readiness summary (+ venture identity); the paste-into-Replit-Agent
+// prompts payload (planPrompt/featurePrompts) was retired. These assert the trimmed contract.
 describe('Stage 19 GET /:ventureId/replit-prompts readiness contract', () => {
   const handlers = findRoute('get', '/:ventureId/replit-prompts');
 
@@ -257,26 +257,27 @@ describe('Stage 19 GET /:ventureId/replit-prompts readiness contract', () => {
     resolveRepoReadiness.mockResolvedValue(READINESS);
   });
 
-  it('TS-1: returns the existing prompts payload UNCHANGED plus a top-level readiness summary', async () => {
+  it('TS-1: returns readiness + venture identity, and NO prompts payload', async () => {
     const res = createMockRes();
     await runHandlerChain(handlers, getReq(VALID_UUID), res);
 
     expect(res.statusCode).toBe(200);
-    // Existing prompts contract — every key the live ehg S19 UI relies on today.
+    // Retained: the venture identity the ehg S19 UI reads.
     expect(res.jsonData).toEqual(expect.objectContaining({
       ventureName: 'Canvas AI',
       mode: 'build-into',
-      planPrompt: 'PLAN MODE PROMPT',
-      featurePrompts: [{ title: 'Dashboard', content: 'build dashboard', points: 3, priority: 'high' }],
       warnings: ['heads up'],
       generatedAt: '2026-05-24T00:00:00.000Z',
     }));
-    // Additive readiness contract (Child D consumes this).
+    // Readiness contract (consumed by the ehg S19 UI from Child D).
     expect(res.jsonData.readiness).toEqual(READINESS);
     expect(resolveRepoReadiness).toHaveBeenCalledWith(VALID_UUID);
+    // SD-...-E: the paste-into-Replit-Agent prompts payload is gone.
+    expect(res.jsonData).not.toHaveProperty('planPrompt');
+    expect(res.jsonData).not.toHaveProperty('featurePrompts');
   });
 
-  it('still returns the prompts payload when the repo is not ready (additive — never blocks prompts)', async () => {
+  it('returns readiness even when the repo is not ready (still no prompts payload)', async () => {
     resolveRepoReadiness.mockResolvedValue({
       repoReady: false,
       seededArtifacts: ['CLAUDE.md', 'docs/build-tasks.md', '.replit'],
@@ -285,9 +286,9 @@ describe('Stage 19 GET /:ventureId/replit-prompts readiness contract', () => {
     const res = createMockRes();
     await runHandlerChain(handlers, getReq(VALID_UUID), res);
     expect(res.statusCode).toBe(200);
-    expect(res.jsonData.planPrompt).toBe('PLAN MODE PROMPT'); // prompts still present
-    expect(res.jsonData.featurePrompts).toHaveLength(1);
     expect(res.jsonData.readiness.repoReady).toBe(false);
+    expect(res.jsonData).not.toHaveProperty('planPrompt');
+    expect(res.jsonData).not.toHaveProperty('featurePrompts');
   });
 
   it('rejects an invalid ventureId with 400 before resolving prompts or readiness', async () => {

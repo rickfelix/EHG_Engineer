@@ -284,28 +284,29 @@ describe('seedRepo() — (d) preserves an existing replit.md', () => {
     expect(result.docsCommitted).toContain('replit.md (preserved — repo shipped its own)');
   });
 
-  it('DOES write a fresh replit.md when none exists', async () => {
+  // SD-S19-SEEDS-A-CLAUDECODEREADY-ORCH-001-E: a fresh replit.md is no longer seeded —
+  // CLAUDE.md (committed by the Claude-Code-ready block) supersedes the legacy Agent template.
+  it('does NOT write a fresh replit.md when none exists (CLAUDE.md supersedes)', async () => {
     replitMdAlreadyExists = false;
     const { seedRepo } = await import('../../../lib/eva/bridge/replit-repo-seeder.js');
 
     const result = await seedRepo('v-fresh', 'https://github.com/foo/bar.git');
 
     const replitWrites = writeCalls.filter(w => w.path.endsWith('replit.md'));
-    expect(replitWrites).toHaveLength(1); // written once
-    expect(result.docsCommitted).toContain('replit.md (agent-optimized)');
+    expect(replitWrites).toHaveLength(0); // no fresh replit.md is generated
+    expect(result.docsCommitted).toContain('replit.md (not seeded — CLAUDE.md supersedes)');
   });
 
-  it('the fresh agent-optimized replit.md does not reference docs/designs when no designs were written', async () => {
+  it('seeds the Claude-Code-ready docs/build-tasks.md (and no fresh replit.md)', async () => {
     replitMdAlreadyExists = false;
     const { seedRepo } = await import('../../../lib/eva/bridge/replit-repo-seeder.js');
 
-    await seedRepo('v-nodesigns', 'https://github.com/foo/bar.git');
+    const result = await seedRepo('v-ccready', 'https://github.com/foo/bar.git');
 
-    const replitWrite = writeCalls.find(w => w.path.endsWith('replit.md'));
-    expect(replitWrite).toBeDefined();
-    // No stage_17_approved_desktop artifacts in the mock → docs/designs/ empty →
-    // template must fall back to docs/wireframes.md.
-    expect(replitWrite.content).not.toContain('docs/designs/');
-    expect(replitWrite.content).toContain('docs/wireframes.md');
+    // docs/build-tasks.md is always (re)written by the Claude-Code-ready block.
+    expect(writeCalls.filter(w => w.path.endsWith('build-tasks.md')).length).toBeGreaterThanOrEqual(1);
+    expect(result.docsCommitted).toContain('docs/build-tasks.md');
+    // No legacy replit.md was generated.
+    expect(writeCalls.filter(w => w.path.endsWith('replit.md'))).toHaveLength(0);
   });
 });
