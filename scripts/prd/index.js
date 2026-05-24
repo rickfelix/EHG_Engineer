@@ -484,6 +484,9 @@ async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, 
       };
     } else {
       llmPrdContent = await generatePRDContentWithLLM(sdData, {
+        // SD-FDBK-ENH-PRD-AUTHORING-QUERY-001: thread supabase so the generator can
+        // inject live table metadata (row counts + columns) for production grounding.
+        supabase,
         ...analyses,
         personas: analyses.stakeholderPersonas,
         existingStories
