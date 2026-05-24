@@ -157,7 +157,8 @@ export async function completeQuickFix(qfId, options = {}) {
   // LOC validation — source-only cap; --force-complete bypasses
   const locValid = await validateLOC(actualSourceLoc, actualTestLoc, qfId, supabase, prompt, {
     forceComplete: options.forceComplete,
-    reason: options.reason
+    reason: options.reason,
+    overCapReason: options.overCapReason
   });
   if (!locValid) {
     process.exit(1);
@@ -294,7 +295,10 @@ export async function completeQuickFix(qfId, options = {}) {
     uatVerified,
     testsVerifiedRecently: true,
     diffAnalysis,
-    testCoverage
+    testCoverage,
+    // SD-FDBK-ENH-SOURCE-LOC-CAP-001: thread the LOC-only bypass to verifyLOCConstraint
+    // (Check 1) so a single --over-cap-reason clears BOTH enforcement points together.
+    overCapReason: options.overCapReason
   };
 
   const verificationResults = await runSelfVerification(qfId, verificationContext);
@@ -359,6 +363,16 @@ export async function completeQuickFix(qfId, options = {}) {
     finalVerificationNotes = JSON.stringify({
       force_completed: true,
       reason: options.reason,
+      operator: process.env.CLAUDE_SESSION_ID || 'unknown',
+      timestamp: new Date().toISOString(),
+      operator_supplied_notes: verificationNotes || null
+    });
+  } else if (options.overCapReason) {
+    // SD-FDBK-ENH-SOURCE-LOC-CAP-001: audit-trail the LOC-only bypass. Distinct from
+    // force_completed — this records ONLY a source-LOC-cap waiver; all other gates ran.
+    finalVerificationNotes = JSON.stringify({
+      over_cap_reason: options.overCapReason,
+      over_cap_source_loc: actualSourceLoc,
       operator: process.env.CLAUDE_SESSION_ID || 'unknown',
       timestamp: new Date().toISOString(),
       operator_supplied_notes: verificationNotes || null

@@ -83,6 +83,8 @@ export function parseArguments(args) {
       'verification-notes': { type: 'string' },
       'force-complete':     { type: 'boolean' },
       'reason':             { type: 'string' },
+      // SD-FDBK-ENH-SOURCE-LOC-CAP-001: bypass ONLY the source-LOC cap (not tests/compliance/self-verify)
+      'over-cap-reason':    { type: 'string' },
       'non-interactive':    { type: 'boolean' },
       'auto-pr':            { type: 'boolean' },
       // QF-20260511-258: bypass resolver-freshness stale-branch guard. Requires reason.
@@ -118,6 +120,16 @@ export function parseArguments(args) {
     );
   }
 
+  // SD-FDBK-ENH-SOURCE-LOC-CAP-001: --over-cap-reason requires a non-empty justification.
+  // It bypasses ONLY the source-LOC cap (validateLOC + self-verifier Check 1), NOT the
+  // failing-tests / compliance / scope-creep gates, and is recorded in verification_notes.
+  if (values['over-cap-reason'] !== undefined && !String(values['over-cap-reason']).trim()) {
+    throw new Error(
+      '[OVER_CAP_REASON_REQUIRED] --over-cap-reason requires a non-empty "<text>" justification. ' +
+      'It bypasses ONLY the source-LOC cap (not tests/compliance/self-verification) and is recorded in verification_notes.'
+    );
+  }
+
   // FR-3: persist --non-interactive so prompt() can fail-fast
   if (values['non-interactive']) {
     _nonInteractiveMode = true;
@@ -137,6 +149,7 @@ export function parseArguments(args) {
     verificationNotes: values['verification-notes'],
     forceComplete:     values['force-complete']   || false,
     reason:            values['reason'],
+    overCapReason:     values['over-cap-reason']   || undefined,
     nonInteractive:    values['non-interactive'] || false,
     // QF-20260509-407: --auto-pr opt-in flag, plus auto-enable under --non-interactive
     // when no --pr-url provided. Eliminates the mid-run prompt-then-throw pattern
