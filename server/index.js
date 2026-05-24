@@ -63,7 +63,6 @@ import stage24Routes from './routes/stage24.js';
 import githubRepoRoutes from './routes/github-repo.js';
 import protocolLintRoutes, { requireAdminRole } from './routes/protocol-lint.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
-import { resumeIncompleteArchetypeJobs } from '../lib/eva/stage-17/auto-resume.js';
 
 // Import Story API
 import * as storiesAPI from '../src/api/stories.js';
@@ -301,12 +300,6 @@ async function startServer() {
       const startupSupabase = dbLoader.getClient?.() || require('../lib/supabase-client.js').createSupabaseServiceClient?.();
       if (startupSupabase) validateArtifactTypeConstraints(startupSupabase).catch(() => {});
     }).catch(() => {});
-
-    // S17 archetype generation auto-resume on startup
-    // SD-S17-ARCHETYPE-GENERATION-RESILIENCE-ORCH-001-A
-    resumeIncompleteArchetypeJobs().catch(err =>
-      console.error('[startup] Auto-resume scan failed:', err.message)
-    );
   });
 }
 
