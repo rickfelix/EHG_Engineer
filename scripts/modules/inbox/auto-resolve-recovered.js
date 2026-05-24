@@ -61,6 +61,21 @@ export function shouldAutoResolve(runs, rowCreatedAt, k) {
   return new Date(newest.createdAt) > new Date(rowCreatedAt);
 }
 
+// QF-20260523-339: a workflow producing ZERO successes over its recent runs (or
+// no runs at all in the window) is unhealthy — Path 1 (K consecutive successes)
+// can never clear its ci_failure rows. `runs` is fetchRecentRuns output (most-
+// recent first, up to k):
+//   null                       -> false (transient gh error / unknown; do not resolve)
+//   []                         -> true  (no runs in window: workflow deleted/renamed/inactive)
+//   >= minRuns and none success -> true  (0% success)
+//   else                       -> false (a recent run succeeded, or too few runs to judge)
+export function isWorkflowUnhealthy(runs, minRuns) {
+  if (!Array.isArray(runs)) return false;
+  if (runs.length === 0) return true;
+  if (runs.length < minRuns) return false;
+  return runs.every(r => !r || r.conclusion !== 'success');
+}
+
 // status=new rows are eligible immediately (post-merge race; K-consecutive-success
 // already enforces correctness). status=in_progress still requires the stale-hours
 // min-age so we don't churn rows the triage pipeline is actively working.
@@ -120,14 +135,19 @@ async function run() {
   if (!items?.length) { console.log('[auto-resolve-recovered] No stuck rows.'); return; }
 
   let resolved = 0, skipped = 0;
+  // QF-20260523-339: emit ONE aggregated unhealthy-workflow alert per workflow,
+  // not one per immortal row.
+  const alertedWorkflows = new Set();
   for (const item of items) {
     if (!isEligibleForResolve(item, flags.staleHours)) { skipped++; continue; }
     const { workflow_name, repo, branch } = item.metadata || {};
     if (!repo) { skipped++; continue; }
 
     // Path 1 (CAPA-7): the cited workflow self-healed (K consecutive successes).
+    // runs is hoisted so Path 3 (workflow_unhealthy) can reuse the same fetch.
+    let runs = null;
     if (workflow_name) {
-      const runs = fetchRecentRuns(repo, workflow_name, flags.k);
+      runs = fetchRecentRuns(repo, workflow_name, flags.k);
       if (shouldAutoResolve(runs, item.created_at, flags.k)) {
         const oldest = runs[runs.length - 1].createdAt, newest = runs[0].createdAt;
         const notes = `Auto-resolved (CAPA-7): workflow "${workflow_name}" had ${flags.k}/${flags.k} consecutive successful runs (oldest ${oldest}, newest ${newest}); newest > row.created_at ${item.created_at}.`;
@@ -145,6 +165,21 @@ async function run() {
         if (await resolveItem(supabase, item, 'pr_merged_moot', notes, flags.dryRun)) resolved++; else skipped++;
         continue;
       }
+    }
+
+    // Path 3 (QF-20260523-339): the workflow is unhealthy — 0% success over the recent runs
+    // (or no runs at all). Path 1 can never clear these rows. Resolve as workflow_unhealthy and
+    // emit ONE aggregated alert per workflow instead of leaving one immortal row per failed run.
+    if (workflow_name && isWorkflowUnhealthy(runs, flags.k)) {
+      const wfKey = `${repo}|${workflow_name}`;
+      if (!alertedWorkflows.has(wfKey)) {
+        console.warn(`[auto-resolve-recovered] ⚠️  WORKFLOW_UNHEALTHY: "${workflow_name}" (${repo}) — 0 successful runs in the last ${flags.k} (or no runs). Resolving its stuck ci_failure rows as workflow_unhealthy; investigate or retire the workflow itself.`);
+        alertedWorkflows.add(wfKey);
+      }
+      const detail = runs.length === 0 ? 'no runs found in window' : `0/${runs.length} recent runs succeeded`;
+      const notes = `Auto-resolved (QF-20260523-339 workflow_unhealthy): workflow "${workflow_name}" is unhealthy (${detail}); Path-1 K-consecutive-success can never clear this row. One aggregated alert emitted per workflow — investigate/repair or retire the workflow.`;
+      if (await resolveItem(supabase, item, 'workflow_unhealthy', notes, flags.dryRun)) resolved++; else skipped++;
+      continue;
     }
 
     skipped++;

@@ -20,7 +20,7 @@ vi.mock('../../../lib/utils/is-main-module.js', () => ({ isMainModule: () => fal
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://test.local';
 process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-key';
 
-const { shouldAutoResolve, parseArgs, fetchRecentRuns, isEligibleForResolve } = await import(
+const { shouldAutoResolve, parseArgs, fetchRecentRuns, isEligibleForResolve, isWorkflowUnhealthy } = await import(
   '../../../scripts/modules/inbox/auto-resolve-recovered.js'
 );
 
@@ -202,5 +202,41 @@ describe('fetchRecentRuns', () => {
     const mockExec = vi.fn(() => 'not-json-at-all');
     const result = fetchRecentRuns('owner/repo', 'Workflow', 5, mockExec);
     expect(result).toBe(null);
+  });
+});
+
+describe('isWorkflowUnhealthy (QF-20260523-339: 0%-success / no-runs sweep)', () => {
+  const fail = (c = 'failure') => ({ conclusion: c, createdAt: '2026-05-10T10:00:00Z' });
+  const success = () => ({ conclusion: 'success', createdAt: '2026-05-10T10:00:00Z' });
+
+  it('returns false for null (transient gh error / unknown — never resolve on uncertainty)', () => {
+    expect(isWorkflowUnhealthy(null, 5)).toBe(false);
+    expect(isWorkflowUnhealthy(undefined, 5)).toBe(false);
+  });
+
+  it('returns true for empty array (no runs in window: workflow deleted/renamed/inactive)', () => {
+    expect(isWorkflowUnhealthy([], 5)).toBe(true);
+  });
+
+  it('returns true when >= minRuns and none succeeded (0% success)', () => {
+    expect(isWorkflowUnhealthy([fail(), fail(), fail(), fail(), fail()], 5)).toBe(true);
+  });
+
+  it('returns false when fewer than minRuns (insufficient evidence)', () => {
+    expect(isWorkflowUnhealthy([fail(), fail()], 5)).toBe(false);
+  });
+
+  it('returns false when at least one recent run succeeded', () => {
+    expect(isWorkflowUnhealthy([fail(), fail(), success(), fail(), fail()], 5)).toBe(false);
+  });
+
+  it('treats cancelled/null/neutral conclusions as non-success', () => {
+    expect(isWorkflowUnhealthy([fail('cancelled'), fail('neutral'), fail(null), fail(), fail()], 5)).toBe(true);
+  });
+
+  it('honors variable minRuns (3 failures: unhealthy at minRuns=3, not at minRuns=5)', () => {
+    const threeFails = [fail(), fail(), fail()];
+    expect(isWorkflowUnhealthy(threeFails, 3)).toBe(true);
+    expect(isWorkflowUnhealthy(threeFails, 5)).toBe(false);
   });
 });
