@@ -23,6 +23,7 @@ function normalizeRender(s) {
 }
 // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B (Phase 2)
 const teamBanner = require('../lib/execute/team-banner.cjs');
+const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-004): subprocess-invoke the MC
 // engine to enrich workers with P(alive). Failures fall back to existing
 // binary display, preserving pre-MC behavior.
@@ -1054,15 +1055,10 @@ async function printPredictions(d) {
   console.log('');
 }
 
-// Helper: parse dependencies from various formats (string, array, JSONB)
-function parseDeps(deps) {
-  if (!deps) return [];
-  if (Array.isArray(deps)) return deps.map(d => typeof d === 'string' ? d : (d.sd_key || d.id || '')).filter(Boolean);
-  if (typeof deps === 'string') {
-    try { return parseDeps(JSON.parse(deps)); } catch (e) { return deps.split(',').map(s => s.trim()).filter(Boolean); }
-  }
-  return [];
-}
+// QF-20260525-542: delegate to the canonical SD-key blocker rule (was divergent
+// local logic that extracted sd_key/id and treated placeholders as available,
+// contradicting the sweep). Both tools now agree via parse-sd-dependencies.cjs.
+const parseDeps = parseSdDependencies;
 
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a — top-level require so the
 // wire-check call-graph builder (lib/static-analysis/call-graph-builder.js)
