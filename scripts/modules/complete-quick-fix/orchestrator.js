@@ -273,10 +273,21 @@ export async function completeQuickFix(qfId, options = {}) {
 
   // LEO Stack Restart
   console.log('🔄 LEO Stack Restart\n');
-  const restartResult = await restartLeoStack({ verbose: true });
-  if (!restartResult.success) {
-    console.log(`   ⚠️  LEO stack restart failed: ${restartResult.message}`);
-    console.log('   You may need to restart manually: bash scripts/leo-stack.sh restart\n');
+  // SD-FDBK-ENH-COMPLETE-QUICK-FIX-001 (Part B): inside a QF worktree, `leo-stack.sh restart`
+  // always fails (the stack runs from the main repo, not the worktree) and is irrelevant to
+  // completing the QF. The old red "restart failed" warning was routinely mistaken for a
+  // verification problem and nudged operators toward the over-broad --force-complete. In a
+  // worktree, skip the attempt and emit a calm informational note instead. (This warning never
+  // fed self-verification confidence — that comes from the self-verifier's own checks.)
+  const inWorktree = typeof testDir === 'string' && /[\\/]\.worktrees[\\/]/.test(testDir);
+  if (inWorktree) {
+    console.log('   ℹ️  LEO stack restart skipped in worktree (expected; the stack runs from the main repo). Does not affect verification.\n');
+  } else {
+    const restartResult = await restartLeoStack({ verbose: true });
+    if (!restartResult.success) {
+      console.log(`   ⚠️  LEO stack restart failed: ${restartResult.message}`);
+      console.log('   You may need to restart manually: bash scripts/leo-stack.sh restart\n');
+    }
   }
 
   // QF-20260509-779: --auto-pr is now handled in the PR-acquisition block above.
@@ -316,6 +327,9 @@ export async function completeQuickFix(qfId, options = {}) {
   // SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 FR-2: --force-complete bypasses self-verification prompts
   const selfVerificationValid = await validateSelfVerification(verificationResults, prompt, {
     forceComplete: options.forceComplete,
+    // SD-FDBK-ENH-COMPLETE-QUICK-FIX-001: granular bypass for the low-confidence proceed-anyway
+    // prompt only (mirrors how validateCompliance receives acceptComplianceWarn).
+    acceptLowConfidence: options.acceptLowConfidence,
     reason: options.reason
   });
   if (!selfVerificationValid) {

@@ -91,6 +91,8 @@ export function parseArguments(args) {
       'allow-stale-branch': { type: 'boolean' },
       // QF-20260524-587: granular WARN-verdict compliance bypass. Requires reason.
       'accept-compliance-warn': { type: 'boolean' },
+      // SD-FDBK-ENH-COMPLETE-QUICK-FIX-001: granular low-confidence self-verify bypass. Requires reason.
+      'accept-low-confidence': { type: 'boolean' },
       'help':               { type: 'boolean', short: 'h' }
     },
     allowPositionals: true,
@@ -142,6 +144,16 @@ export function parseArguments(args) {
     );
   }
 
+  // SD-FDBK-ENH-COMPLETE-QUICK-FIX-001: --accept-low-confidence REQUIRES --reason. It clears ONLY the
+  // self-verification LOW-CONFIDENCE proceed-anyway prompt (so completion works under --non-interactive)
+  // and does NOT bypass verification blockers, the LOC cap, or compliance — unlike --force-complete.
+  if (values['accept-low-confidence'] && !values['reason']) {
+    throw new Error(
+      '[ACCEPT_LOW_CONFIDENCE_NO_REASON] --accept-low-confidence requires --reason "<text>". ' +
+      'It clears ONLY the low-confidence self-verification prompt (not blockers/LOC/compliance) and is recorded in verification_notes.'
+    );
+  }
+
   // FR-3: persist --non-interactive so prompt() can fail-fast
   if (values['non-interactive']) {
     _nonInteractiveMode = true;
@@ -163,6 +175,7 @@ export function parseArguments(args) {
     reason:            values['reason'],
     overCapReason:     values['over-cap-reason']   || undefined,
     acceptComplianceWarn: values['accept-compliance-warn'] || false,
+    acceptLowConfidence: values['accept-low-confidence'] || false,
     nonInteractive:    values['non-interactive'] || false,
     // QF-20260509-407: --auto-pr opt-in flag, plus auto-enable under --non-interactive
     // when no --pr-url provided. Eliminates the mid-run prompt-then-throw pattern
@@ -216,6 +229,10 @@ Options:
   --accept-compliance-warn  Clear ONLY the WARN-verdict compliance prompt (so completion
                         works under --non-interactive). REQUIRES --reason. Does NOT bypass
                         FAIL-verdict, the LOC cap, or self-verification — narrower and safer
+                        than --force-complete. Recorded in verification_notes.
+  --accept-low-confidence   Clear ONLY the self-verification LOW-CONFIDENCE proceed-anyway prompt
+                        (so completion works under --non-interactive). REQUIRES --reason. Does NOT
+                        bypass verification blockers, the LOC cap, or compliance — narrower and safer
                         than --force-complete. Recorded in verification_notes.
   --help, -h            Show this help
 

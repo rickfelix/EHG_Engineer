@@ -297,6 +297,16 @@ export async function validateSelfVerification(verificationResults, prompt, flag
       console.log(`   ${i + 1}. ${warning}`);
     });
 
+    // SD-FDBK-ENH-COMPLETE-QUICK-FIX-001: --accept-low-confidence clears ONLY this low-confidence
+    // proceed-anyway prompt (so completion works under --non-interactive) WITHOUT the over-broad
+    // --force-complete (which also clears blockers/LOC/compliance). Audit trail in verification_notes.
+    // The earlier !verificationResults.passed blocker branch is unaffected — only --force-complete
+    // bypasses blockers.
+    if (flags.acceptLowConfidence) {
+      console.log(`\n   ⚠️  --accept-low-confidence: low-confidence (${verificationResults.confidence}%) prompt cleared (reason="${flags.reason}"). Blockers/LOC/compliance/scope gates still enforced.\n`);
+      return true;
+    }
+
     const proceed = await prompt('\n   Proceed anyway? (yes/no): ');
     if (!proceed.toLowerCase().startsWith('y')) {
       console.log('\n   Completion cancelled. Review warnings and try again.\n');
