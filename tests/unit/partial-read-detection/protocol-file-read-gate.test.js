@@ -5,9 +5,23 @@
  * Tests for partial read warning and confirmation in protocol-file-read-gate.js
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+
+// SD-FDBK-FIX-FIX-STALE-HARNESS-001: hermetic session-state isolation. The gate resolves
+// its state file via session-state-resolver.cjs (scoped path, SD-FDBK-ENH-SESSION-STATE-
+// SCOPING-001); without controlling that path the gate read a different file than these
+// tests wrote, causing stale failures. Mock the resolver to a unique temp file.
+const hoisted = vi.hoisted(() => {
+  const tmpDir = process.env.RUNNER_TEMP || process.env.TEMP || process.env.TMP || process.env.TMPDIR || '.';
+  return { stateFile: `${tmpDir}/pfrg-partial-hermetic-${process.pid}-${Date.now()}.json` };
+});
+vi.mock('../../../scripts/hooks/lib/session-state-resolver.cjs', () => ({
+  getSessionStateFilePath: () => hoisted.stateFile,
+  resolveStateReadPath: () => hoisted.stateFile,
+}));
+
 import {
   validateProtocolFileRead,
   getPartialReadDetails,
@@ -17,9 +31,9 @@ import {
   markProtocolFileRead
 } from '../../../scripts/modules/handoff/gates/protocol-file-read-gate.js';
 
-// Test environment setup
-const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
-const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
+// Test environment setup — state file is the hermetic temp path (see vi.mock above) so the
+// gate's reads/writes and these helpers operate on the same file.
+const SESSION_STATE_FILE = hoisted.stateFile;
 const BACKUP_FILE = SESSION_STATE_FILE + '.test-backup';
 
 // Helper to read session state
@@ -169,7 +183,9 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
             lastReadAt: '2026-01-30T10:00:00.000Z',
             lastReadWasPartial: true,
             lastPartialRead: {
-              limit: 200,
+              // limit < 30 (SUFFICIENT_READ_THRESHOLD) so it exercises the confirmation
+              // path; >=30 now auto-passes per SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-063.
+              limit: 20,
               offset: 0,
               readAt: '2026-01-30T10:00:00.000Z'
             }
@@ -177,7 +193,9 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
         }
       });
 
-      const result = await validateProtocolFileRead('EXEC-TO-PLAN', {});
+      // EXEC-TO-PLAN now maps to CLAUDE_PLAN.md; this fixture is a CLAUDE_EXEC.md partial,
+      // so use PLAN-TO-EXEC (the handoff that requires CLAUDE_EXEC.md) to exercise it.
+      const result = await validateProtocolFileRead('PLAN-TO-EXEC', {});
 
       expect(result.pass).toBe(false);
       expect(result.requiresConfirmation).toBe(true);
@@ -194,7 +212,8 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
             lastReadAt: '2026-01-30T10:00:00.000Z',
             lastReadWasPartial: true,
             lastPartialRead: {
-              limit: 150,
+              // limit < 30 so the warning/confirmation path runs (>=30 auto-passes).
+              limit: 20,
               offset: 50,
               readAt: '2026-01-30T10:00:00.000Z'
             }
@@ -202,9 +221,10 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
         }
       });
 
-      const result = await validateProtocolFileRead('PLAN-TO-EXEC', {});
+      // Fixture is a CLAUDE_PLAN.md partial; EXEC-TO-PLAN requires CLAUDE_PLAN.md (dest-phase).
+      const result = await validateProtocolFileRead('EXEC-TO-PLAN', {});
 
-      expect(result.warnings.some(w => w.includes('limit=150'))).toBe(true);
+      expect(result.warnings.some(w => w.includes('limit=20'))).toBe(true);
     });
   });
 
@@ -218,7 +238,8 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
             lastReadAt: '2026-01-30T10:00:00.000Z',
             lastReadWasPartial: true,
             lastPartialRead: {
-              limit: 200,
+              // limit < 30 so the confirmFullRead path runs (>=30 auto-passes).
+              limit: 20,
               offset: 0,
               readAt: '2026-01-30T10:00:00.000Z'
             }
@@ -226,7 +247,8 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
         }
       });
 
-      const result = await validateProtocolFileRead('EXEC-TO-PLAN', { confirmFullRead: true });
+      // CLAUDE_EXEC.md fixture → PLAN-TO-EXEC (requires CLAUDE_EXEC.md).
+      const result = await validateProtocolFileRead('PLAN-TO-EXEC', { confirmFullRead: true });
 
       expect(result.pass).toBe(true);
       expect(result.score).toBe(85);
@@ -246,7 +268,8 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
             lastReadAt: '2026-01-30T10:00:00.000Z',
             lastReadWasPartial: true,
             lastPartialRead: {
-              limit: 100,
+              // limit < 30 so the partial-read path runs and the prior confirmation applies.
+              limit: 20,
               offset: 0,
               readAt: '2026-01-30T10:00:00.000Z'
             }
@@ -259,7 +282,8 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
         }]
       });
 
-      const result = await validateProtocolFileRead('LEAD-TO-PLAN', {});
+      // CLAUDE_LEAD.md fixture → PLAN-TO-LEAD (requires CLAUDE_LEAD.md).
+      const result = await validateProtocolFileRead('PLAN-TO-LEAD', {});
 
       expect(result.pass).toBe(true);
       expect(result.score).toBe(85);
@@ -280,7 +304,8 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
         }
       });
 
-      const result = await validateProtocolFileRead('EXEC-TO-PLAN', {});
+      // CLAUDE_EXEC.md fixture → PLAN-TO-EXEC (requires CLAUDE_EXEC.md).
+      const result = await validateProtocolFileRead('PLAN-TO-EXEC', {});
 
       expect(result.pass).toBe(true);
       expect(result.score).toBe(100);
@@ -361,7 +386,8 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
         }
       });
 
-      const result = await validateProtocolFileRead('EXEC-TO-PLAN', {});
+      // CLAUDE_EXEC.md fixture → PLAN-TO-EXEC (requires CLAUDE_EXEC.md).
+      const result = await validateProtocolFileRead('PLAN-TO-EXEC', {});
 
       expect(result.warnings.length).toBeGreaterThan(0);
       expect(result.warnings.some(w => w.includes('CLAUDE_EXEC.md'))).toBe(true);
