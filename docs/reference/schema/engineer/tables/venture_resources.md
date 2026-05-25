@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-24T00:59:59.293Z
-**Rows**: 2
+**Generated**: 2026-05-25T12:49:18.097Z
+**Rows**: 4
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (9 total)
+## Columns (11 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -27,6 +27,8 @@
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| repo_url | `text` | YES | - | - |
+| deployment_url | `text` | YES | - | - |
 
 ## Constraints
 
@@ -40,7 +42,7 @@
 - `venture_resources_venture_id_resource_type_resource_identif_key`: UNIQUE (venture_id, resource_type, resource_identifier)
 
 ### Check Constraints
-- `venture_resources_resource_type_check`: CHECK ((resource_type = ANY (ARRAY['github_repo'::text, 'vercel_deployment'::text, 'local_directory'::text, 'supabase_project'::text, 'domain'::text, 'npm_package'::text])))
+- `venture_resources_resource_type_check`: CHECK ((resource_type = ANY (ARRAY['github_repo'::text, 'vercel_deployment'::text, 'local_directory'::text, 'supabase_project'::text, 'domain'::text, 'npm_package'::text, 'replit_deployment'::text])))
 - `venture_resources_status_check`: CHECK ((status = ANY (ARRAY['active'::text, 'cleaned'::text, 'failed'::text, 'orphaned'::text])))
 
 ## Indexes
@@ -56,6 +58,10 @@
 - `venture_resources_pkey`
   ```sql
   CREATE UNIQUE INDEX venture_resources_pkey ON public.venture_resources USING btree (id)
+  ```
+- `venture_resources_venture_deployment_url_uniq`
+  ```sql
+  CREATE UNIQUE INDEX venture_resources_venture_deployment_url_uniq ON public.venture_resources USING btree (venture_id, deployment_url) WHERE (deployment_url IS NOT NULL)
   ```
 - `venture_resources_venture_id_resource_type_resource_identif_key`
   ```sql
