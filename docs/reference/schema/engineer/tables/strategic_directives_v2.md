@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-25T12:49:18.097Z
-**Rows**: 3,254
+**Generated**: 2026-05-25T16:39:10.906Z
+**Rows**: 3,256
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -443,6 +443,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION fn_auto_close_feedback_on_sd_completion()`
+
+### trg_auto_close_quick_fixes_on_sd_completion
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_auto_close_quick_fixes_on_sd_completion()`
 
 ### trg_auto_complete_parent_orchestrator
 

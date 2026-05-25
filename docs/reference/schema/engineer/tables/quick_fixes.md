@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-25T12:49:18.097Z
-**Rows**: 332
+**Generated**: 2026-05-25T16:39:10.906Z
+**Rows**: 344
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (37 total)
+## Columns (38 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -55,6 +55,7 @@
 | actual_source_loc | `integer(32)` | YES | - | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: source-only lines changed (excludes test files). Cap policy enforced in script (complete-quick-fix.js). |
 | actual_test_loc | `integer(32)` | YES | - | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: test-file lines changed (matched by .test./.spec./__tests__/tests/e2e/playwright path patterns). Excluded from cap. |
 | force_completed | `boolean` | **NO** | `false` | SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001: --force-complete CLI flag set this to true. Operator-supplied --reason recorded in verification_notes JSON. |
+| resolution_sd_id | `text` | YES | - | SD that resolved/superseded this QF. When that SD completes, trg_auto_close_quick_fixes_on_sd_completion cancels this QF. Populated operator-confirmed via the FR-3 close-the-loop prompt (SD-LEO-INFRA-AUTO-CLOSE-QUICK-001). |
 
 ## Constraints
 
@@ -63,6 +64,7 @@
 
 ### Foreign Keys
 - `quick_fixes_escalated_to_sd_id_fkey`: escalated_to_sd_id → strategic_directives_v2(id)
+- `quick_fixes_resolution_sd_id_fkey`: resolution_sd_id → strategic_directives_v2(id)
 - `quick_fixes_routing_threshold_id_fkey`: routing_threshold_id → work_item_thresholds(id)
 
 ### Check Constraints
@@ -95,6 +97,10 @@
 - `idx_quick_fixes_escalated_to_sd`
   ```sql
   CREATE INDEX idx_quick_fixes_escalated_to_sd ON public.quick_fixes USING btree (escalated_to_sd_id) WHERE (escalated_to_sd_id IS NOT NULL)
+  ```
+- `idx_quick_fixes_resolution_sd_id`
+  ```sql
+  CREATE INDEX idx_quick_fixes_resolution_sd_id ON public.quick_fixes USING btree (resolution_sd_id) WHERE (resolution_sd_id IS NOT NULL)
   ```
 - `idx_quick_fixes_severity`
   ```sql
