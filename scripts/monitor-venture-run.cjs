@@ -13,8 +13,11 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const VENTURE_ID = process.env.VENTURE_ID || '94856fc6-9ba9-4f56-9a5c-85041031a0fc';
-const VENTURE_NAME = process.env.VENTURE_NAME || 'LexiGuard';
+// Quick-fix QF-20260521-024: VENTURE_ID is required (no hard-coded default — the
+// former LexiGuard default 94856fc6 was a since-deleted venture). main() guards the
+// live path below; --dry-run-validate needs no venture and runs without it.
+const VENTURE_ID = process.env.VENTURE_ID;
+const VENTURE_NAME = process.env.VENTURE_NAME || (VENTURE_ID ? `venture ${VENTURE_ID.slice(0, 8)}` : null);
 const STOP_AT_STAGE = parseInt(process.env.STOP_AT_STAGE || '17', 10);
 const POLL_MS = 30000;
 
@@ -502,6 +505,13 @@ async function main() {
     process.exit(0);
   }
 
+  // Quick-fix QF-20260521-024: the live monitor path needs a real venture. Fail fast
+  // with a clear message instead of querying a deleted/blank venture id.
+  if (!VENTURE_ID) {
+    console.error('[FATAL] VENTURE_ID env var is required for the live monitor (set VENTURE_ID=<uuid> [VENTURE_NAME=<name>]).');
+    process.exit(1);
+  }
+
   // Load DB-authoritative artifact map BEFORE polling begins. On failure, exit non-zero
   // rather than silently falling back to stale data — operator must see the error.
   try {
@@ -569,4 +579,8 @@ async function main() {
   }, 10800000);
 }
 
-main().catch(e => { console.error('FATAL:', e); process.exit(1); });
+// Quick-fix QF-20260521-024: only auto-run as the direct entry point. Tests require()
+// this module for its pure exports (isWorkerSourceForStage etc.) and must not trigger main().
+if (require.main === module) {
+  main().catch(e => { console.error('FATAL:', e); process.exit(1); });
+}
