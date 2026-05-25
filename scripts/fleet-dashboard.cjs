@@ -293,6 +293,17 @@ async function loadData() {
     for (const w of mc.workers) mcByWorker[w.session_id] = w;
   }
 
+  // QF-20260525-836: surface open/in_progress QFs (aging ones went unseen). Degrade-safe.
+  let quickFixes = [];
+  try {
+    const { data: qfRows } = await supabase
+      .from('quick_fixes')
+      .select('id, title, status, claiming_session_id, created_at')
+      .in('status', ['open', 'in_progress'])
+      .order('created_at', { ascending: true });
+    quickFixes = qfRows || [];
+  } catch { /* degrade-safe: empty QF section */ }
+
   return {
     sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap,
     claimedSdIds, activeSessions, staleSessions, idleSessions,
@@ -301,6 +312,7 @@ async function loadData() {
     drainAgents,
     mc, mcByWorker,
     executeTeams,
+    quickFixes, // QF-20260525-836
     revivalPending // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
   };
 }
@@ -511,6 +523,27 @@ function printAvailable(d) {
     }
   }
 
+  console.log('');
+}
+
+// QF-20260525-836: open/in_progress QFs (age + holder). Dashboard had no QUICK
+// FIXES section, so QFs aging with no PR went unseen. Display only.
+function printQuickFixes(d) {
+  const qfs = d.quickFixes || [];
+  console.log('QUICK FIXES (' + qfs.length + ')');
+  console.log('─'.repeat(72));
+  if (qfs.length === 0) {
+    console.log('  (no open quick-fixes)');
+    console.log('');
+    return;
+  }
+  const now = Date.now();
+  console.log('  ' + pad('ID', 18) + pad('Status', 12) + pad('Age', 6) + pad('Holder', 10) + 'Title');
+  for (const qf of qfs) {
+    const ageH = qf.created_at ? Math.max(0, Math.round((now - Date.parse(qf.created_at)) / 3600000)) + 'h' : '?';
+    const holder = qf.claiming_session_id ? String(qf.claiming_session_id).substring(0, 8) : '—';
+    console.log('  ' + pad(qf.id, 18) + pad(qf.status, 12) + pad(ageH, 6) + pad(holder, 10) + (qf.title || '').substring(0, 40));
+  }
   console.log('');
 }
 
@@ -1116,6 +1149,8 @@ async function main() {
     workers:       () => printWorkers(d),
     orchestrator:  () => printOrchestrator(d),
     available:     () => printAvailable(d),
+    quickfixes:    () => printQuickFixes(d), // QF-20260525-836
+    qf:            () => printQuickFixes(d), // QF-20260525-836 (alias)
     revival:       () => printRevivalPending(d),
     coordination:  () => printCoordination(d),
     coaching:      async () => await printCoaching(d),
@@ -1133,6 +1168,7 @@ async function main() {
       printDrainAgents(d);
       printOrchestrator(d);
       printAvailable(d);
+      printQuickFixes(d); // QF-20260525-836
       printRevivalPending(d); // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
       printCoordination(d);
       await printInbox(); // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a
@@ -1147,7 +1183,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, coordination, coaching, health, qa, forecast, predictions, inbox, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, team, all');
     process.exit(1);
   }
 

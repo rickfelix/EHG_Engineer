@@ -725,6 +725,44 @@ async function main() {
     }
   }
 
+  // QF-20260525-836: clear stale quick_fixes.claiming_session_id (mirrors the SD
+  // terminal-claim clear above) — a QF whose holder died stayed claimed forever.
+  // Conservative bar (holder gone or heartbeat >15min) avoids yanking a live-but-
+  // quiet worker's claim. Degrade-safe: query failure warns, never blocks the sweep.
+  try {
+    const { data: claimedQfs } = await supabase
+      .from('quick_fixes')
+      .select('id, status, claiming_session_id')
+      .in('status', ['open', 'in_progress'])
+      .not('claiming_session_id', 'is', null);
+
+    if (claimedQfs && claimedQfs.length > 0) {
+      const holderIds = [...new Set(claimedQfs.map(q => q.claiming_session_id))];
+      const { data: holderRows } = await supabase
+        .from('claude_sessions')
+        .select('session_id, heartbeat_at')
+        .in('session_id', holderIds);
+      const hbAgeBySession = new Map();
+      for (const r of (holderRows || [])) {
+        hbAgeBySession.set(r.session_id, r.heartbeat_at ? (now.getTime() - Date.parse(r.heartbeat_at)) / 1000 : Infinity);
+      }
+      for (const qf of claimedQfs) {
+        const ageSec = hbAgeBySession.has(qf.claiming_session_id) ? hbAgeBySession.get(qf.claiming_session_id) : Infinity;
+        if (ageSec <= VERY_STALE_SECONDS) continue; // holder alive/recent — leave claimed
+        const { error } = await supabase
+          .from('quick_fixes')
+          .update({ claiming_session_id: null })
+          .eq('id', qf.id)
+          .eq('claiming_session_id', qf.claiming_session_id); // race guard: only if still held by the same dead session
+        if (!error) {
+          actions.push('QF: cleared stale claiming_session_id on ' + qf.status + ' ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
+        }
+      }
+    }
+  } catch (qfErr) {
+    warnings.push('QF_CLAIM_SWEEP: ' + qfErr.message);
+  }
+
   // QF-20260426-SWEEP-PHANTOM-DETECT: detect phantom in_progress SDs
   // (status=in_progress + claiming_session_id IS NULL). These are invisible to
   // sd:next's workable filter and silently park work until manual reset. Reset
