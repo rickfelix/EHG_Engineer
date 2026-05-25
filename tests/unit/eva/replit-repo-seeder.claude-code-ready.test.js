@@ -81,6 +81,7 @@ describe('seedRepo() — Claude-Code-ready artifacts (Child B wiring)', () => {
     const paths = seedPaths();
     expect(paths.some(p => /\/CLAUDE\.md$/.test(p))).toBe(true);
     expect(paths.some(p => /\/docs\/build-tasks\.md$/.test(p))).toBe(true);
+    expect(paths.some(p => /\/docs\/design-prompts\.md$/.test(p))).toBe(true); // FR-2 (TS-2)
     expect(paths.some(p => /\/\.replit$/.test(p))).toBe(true);
   });
 
