@@ -142,10 +142,19 @@ router.post('/:ventureId/register-deployment', asyncHandler(async (req, res) => 
     });
   }
 
-  const supabase = req.app.locals.supabase;
-  if (!supabase) {
+  // register-deployment performs privileged canonical writes — the venture_resources
+  // upsert + the build_mvp_build artifact the Stage 19->20 readiness contract reads.
+  // venture_resources RLS permits writes for service_role only (no authenticated
+  // INSERT/UPDATE policy) and the per-request authed client (req.supabase) is SELECT-only
+  // here, so use a service-role client (mirrors the master-reset route). The auth
+  // middleware has already authenticated the caller (req.user) before this handler runs.
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
     return res.status(500).json({ error: 'Supabase client unavailable', code: 'NO_SUPABASE' });
   }
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
   // Upsert venture_resources row using the existing unique key
   // (venture_id, resource_type, resource_identifier) for idempotency.
@@ -172,6 +181,23 @@ router.post('/:ventureId/register-deployment', asyncHandler(async (req, res) => 
     });
   }
 
+  // SD-LEO-FEAT-FINALIZE-CLAUDE-CODE-001 / FR-3: enrich the "build is done" signal with
+  // build-task completeness (not merely a registered URL). Degrade-safe — resolveRepoReadiness
+  // never throws; build_tasks_complete falls back to the total (registering a deployment asserts
+  // the build is complete) but an explicit build_tasks_complete in the body is honored when present.
+  // The S20 Code Quality Gate remains the authoritative downstream validator.
+  let buildTasksTotal = null;
+  let buildTasksComplete = null;
+  try {
+    const readiness = await resolveRepoReadiness(ventureId, { supabase });
+    const total = readiness?.buildPlanSummary?.featureTaskCount;
+    if (Number.isFinite(total)) {
+      buildTasksTotal = total;
+      const reported = Number(req.body?.build_tasks_complete);
+      buildTasksComplete = Number.isFinite(reported) ? Math.max(0, Math.min(reported, total)) : total;
+    }
+  } catch { /* degrade-safe: omit the completion fields entirely */ }
+
   // Emit build_mvp_build artifact (writeArtifact handles dedup via is_current).
   let artifactId;
   try {
@@ -184,6 +210,9 @@ router.post('/:ventureId/register-deployment', asyncHandler(async (req, res) => 
         repo_url,
         deployment_url,
         registered_at: new Date().toISOString(),
+        ...(buildTasksTotal !== null
+          ? { build_tasks_total: buildTasksTotal, build_tasks_complete: buildTasksComplete }
+          : {}),
       },
       metadata: {
         registered_via: 'POST /api/stage19/:ventureId/register-deployment',
