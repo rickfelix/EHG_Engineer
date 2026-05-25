@@ -47,16 +47,23 @@ function saveSessionState(state) {
 }
 
 /**
- * Get model info from environment or Claude Code metadata
+ * Get model info from environment or Claude Code metadata.
+ *
+ * @param {string} [sessionId] - Resolved session id (from the canonical cascade in
+ *   main()). When omitted, falls back to the env var for backward compatibility.
  */
-function getModelInfo() {
+function getModelInfo(sessionId) {
   // Claude Code sets these environment variables
   const modelId = process.env.CLAUDE_MODEL || process.env.ANTHROPIC_MODEL || 'unknown';
-  const sessionId = process.env.CLAUDE_SESSION_ID || 'unknown';
+  // SD-FDBK-REFAC-ADOPT-RESOLVESESSIONID-CASCADE-001: prefer the resolved session id.
+  // PostToolUse subprocesses do NOT receive CLAUDE_SESSION_ID, so the env-only read
+  // collapsed every tracked row onto session_id='unknown'. The no-arg path preserves
+  // the prior env-based behavior for any direct/legacy caller.
+  const resolvedSessionId = sessionId || process.env.CLAUDE_SESSION_ID || 'unknown';
 
   return {
     model_id: modelId,
-    session_id: sessionId,
+    session_id: resolvedSessionId,
     timestamp: new Date().toISOString()
   };
 }
@@ -64,9 +71,20 @@ function getModelInfo() {
 /**
  * Main hook execution
  */
-function main() {
+async function main() {
+  // SD-FDBK-REFAC-ADOPT-RESOLVESESSIONID-CASCADE-001: resolve the session id via the
+  // canonical cascade (stdin session_id → CLAUDE_SESSION_ID env → session-identity
+  // marker → null). PostToolUse does not propagate CLAUDE_SESSION_ID, so the prior
+  // env-only read recorded 'unknown' for every tool execution. Fail-open: any resolver
+  // error leaves sessionId undefined and getModelInfo() falls back to env.
+  let sessionId;
+  try {
+    const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
+    sessionId = await resolveSessionId();
+  } catch { /* fall back to env inside getModelInfo */ }
+
   const state = loadSessionState();
-  const modelInfo = getModelInfo();
+  const modelInfo = getModelInfo(sessionId);
 
   // Increment tool executions
   state.tool_executions = (state.tool_executions || 0) + 1;
