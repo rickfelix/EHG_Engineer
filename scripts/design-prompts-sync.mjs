@@ -13,7 +13,7 @@
  *   node scripts/design-prompts-sync.mjs            # write the checksum
  *   node scripts/design-prompts-sync.mjs --check    # exit 1 if the checksum is stale
  */
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, realpathSync } from 'fs';
 import { createHash } from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -30,18 +30,28 @@ export function canonicalChecksum(jsonText) {
   return createHash('sha256').update(JSON.stringify(norm)).digest('hex');
 }
 
-const sum = canonicalChecksum(readFileSync(SRC, 'utf8'));
-const check = process.argv.includes('--check');
+// Run the CLI body ONLY when executed directly (`node scripts/design-prompts-sync.mjs`),
+// not when imported for canonicalChecksum. Otherwise importing this module (the parity
+// test, the cross-repo check) would rewrite SUM as a side effect and silently defeat the
+// freshness gate — a corrupted committed checksum would be overwritten before the test
+// ever reads it. (SD-LEO-INFRA-UNIFY-STAGE-DESIGN-001 Phase 3)
+const invokedDirectly =
+  process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
 
-if (check) {
-  let committed = '';
-  try { committed = readFileSync(SUM, 'utf8').trim(); } catch { /* missing */ }
-  if (committed !== sum) {
-    console.error(`[design-prompts] checksum STALE\n  committed: ${committed || '(none)'}\n  actual:    ${sum}\n  run: npm run design-prompts:sync`);
-    process.exit(1);
+if (invokedDirectly) {
+  const sum = canonicalChecksum(readFileSync(SRC, 'utf8'));
+  const check = process.argv.includes('--check');
+
+  if (check) {
+    let committed = '';
+    try { committed = readFileSync(SUM, 'utf8').trim(); } catch { /* missing */ }
+    if (committed !== sum) {
+      console.error(`[design-prompts] checksum STALE\n  committed: ${committed || '(none)'}\n  actual:    ${sum}\n  run: npm run design-prompts:sync`);
+      process.exit(1);
+    }
+    console.log('[design-prompts] checksum OK', sum);
+  } else {
+    writeFileSync(SUM, sum + '\n', 'utf8');
+    console.log('[design-prompts] wrote checksum', sum);
   }
-  console.log('[design-prompts] checksum OK', sum);
-} else {
-  writeFileSync(SUM, sum + '\n', 'utf8');
-  console.log('[design-prompts] wrote checksum', sum);
 }
