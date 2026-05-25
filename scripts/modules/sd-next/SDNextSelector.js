@@ -622,6 +622,13 @@ export class SDNextSelector {
       console.log(`  ${badge} ${cat}${title}${age > 7 ? ` ${c.red}(${age}d)${c.reset}` : ` ${c.dim}(${age}d)${c.reset}`}`);
     }
     console.log(`${c.dim}  Run /inbox to triage${c.reset}`);
+    // QF-20260525-298: surface verify-first at the moment of triage. Rows can be
+    // already-fixed (fixed before filing, or by an unrelated commit/QF that never
+    // closed this row) — investigating them wastes a session, especially on a
+    // local branch that trails origin/main.
+    if (this.feedbackItems.length > 0) {
+      console.log(`${c.dim}  ⚠️  Verify against origin/main first — items may already be fixed (git grep the cited QF/feedback-id; git show origin/main:<file>)${c.reset}`);
+    }
   }
 
   /**
@@ -683,6 +690,10 @@ export class SDNextSelector {
       console.log(`${c.dim}  +${data.count - 5} more — query feedback table (category='harness_backlog' AND status='new') or run /inbox${c.reset}`);
     }
     console.log(`${c.dim}  Process via [MODE: campaign] session or /leo audit${c.reset}`);
+    // QF-20260525-298: verify-first nudge (see displayFeedbackInbox). Backlog items
+    // are especially prone to being already-fixed-but-not-closed under heavy
+    // parallel-session QF throughput.
+    console.log(`${c.dim}  ⚠️  Verify against origin/main first — items may already be fixed (git grep the cited QF/feedback-id; git show origin/main:<file>)${c.reset}`);
   }
 
   async displayTracks() {
