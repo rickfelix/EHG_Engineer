@@ -235,12 +235,10 @@ const VALIDATION_CONFIG = {
   // Everything else is implicitly 'skip'
 };
 
-// Regex patterns to detect Supabase operations in Bash commands
-const SUPABASE_PATTERNS = [
-  /\.from\(\s*['"`](\w+)['"`]\s*\)/,        // .from('table_name')
-  /supabase\.from\(\s*['"`](\w+)['"`]\s*\)/, // supabase.from('table_name')
-  /\.rpc\(\s*['"`](\w+)['"`]/,               // .rpc('function_name')
-];
+// Supabase operation detection + execution gate (ENF-05 / QF-20260525-658).
+// SUPABASE_PATTERNS is the single source consumed here AND for the ENFORCEMENT 7
+// gate; isSupabaseExecution distinguishes a real call from a quoted mention.
+const { SUPABASE_PATTERNS, isSupabaseExecution } = require(path.resolve(__dirname, 'lib', 'supabase-operative.cjs'));
 
 /**
  * Determine enforcement tier for the current Bash command context.
@@ -770,7 +768,9 @@ async function main() {
   // Tiered: blocking for migrations/handoffs, advisory for general scripts, skip otherwise.
   if (TOOL_NAME === 'Bash') {
     const command = input.command || '';
-    if (SUPABASE_PATTERNS.some(p => p.test(command))) {
+    // ENF-05 (QF-20260525-658): validate only when the call is actually executed
+    // by a JS runner — not when it is a quoted MENTION inside echo/git commit/gh pr.
+    if (isSupabaseExecution(command)) {
       await validateBeforeExecution(command);
     }
   }
