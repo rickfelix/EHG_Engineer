@@ -149,6 +149,51 @@ describe('EvaOrchestrator', () => {
     });
   });
 
+  describe('processStage - artifact requirements query (regression for QF-20260525-570)', () => {
+    it('queries stage_artifact_requirements by stage_number, never lifecycle_stage', async () => {
+      // Regression guard: stage_artifact_requirements has a `stage_number` column and
+      // NO `lifecycle_stage` column. QF-20260420-405 wrongly used `lifecycle_stage` here;
+      // the thrown PostgREST error was swallowed by the surrounding catch{}, silently
+      // leaving requiredArtifacts empty so the reality-gate never enforced them. Fixed in
+      // QF-20260525-570; this test prevents the column name from regressing again.
+      const eqCalls = [];
+      const ventureRow = {
+        id: 'v-1', name: 'Test Venture', status: 'active',
+        current_lifecycle_stage: 1, archetype: 'saas',
+        created_at: '2026-01-01', autonomy_level: 'L0',
+      };
+      function makeBuilder(table) {
+        const builder = {
+          select: vi.fn(() => builder),
+          eq: vi.fn((col) => { eqCalls.push({ table, col }); return builder; }),
+          in: vi.fn(() => builder),
+          is: vi.fn(() => builder),
+          single: vi.fn().mockResolvedValue({ data: ventureRow, error: null }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: ventureRow, error: null }),
+          insert: vi.fn(() => builder),
+          update: vi.fn(() => builder),
+        };
+        return builder;
+      }
+      const mockSupabase = { from: vi.fn((table) => makeBuilder(table)) };
+
+      await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true, status: 'PASS' }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      const sarCalls = eqCalls.filter((c) => c.table === 'stage_artifact_requirements');
+      expect(sarCalls.some((c) => c.col === 'stage_number')).toBe(true);
+      expect(sarCalls.some((c) => c.col === 'lifecycle_stage')).toBe(false);
+    });
+  });
+
   describe('processStage - gate blocking', () => {
     it('should return BLOCKED when stage gate fails', async () => {
       const mockSupabase = createMockSupabase();
