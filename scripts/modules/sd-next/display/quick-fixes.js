@@ -97,7 +97,12 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
   summary.topQF = classified[0] || null;
   // QF-20260525-522: exclude verify-first (possibly-superseded) QFs from the
   // auto-startable pick so AUTO-PROCEED doesn't route a session to dead work.
-  summary.topStartableQF = classified.find(qf => !qf._escalate && !qf._isClaimedByOther && !qf._verifyFirst) || null;
+  // QF-20260525-701: also require status==='open'. Loaders fetch [open, in_progress],
+  // and _verifyFirst only flags 'open' rows — so an orphaned in_progress QF (dead holder
+  // => claiming_session_id null, no PR) would otherwise be emitted as AUTO_PROCEED_ACTION:
+  // qf_start and auto-started without verify-first. in_progress is either actively owned or
+  // orphaned; neither is auto-startable.
+  summary.topStartableQF = classified.find(qf => qf.status === 'open' && !qf._escalate && !qf._isClaimedByOther && !qf._verifyFirst) || null;
 
   return { summary, classified };
 }
