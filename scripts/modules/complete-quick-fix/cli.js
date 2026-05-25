@@ -89,6 +89,8 @@ export function parseArguments(args) {
       'auto-pr':            { type: 'boolean' },
       // QF-20260511-258: bypass resolver-freshness stale-branch guard. Requires reason.
       'allow-stale-branch': { type: 'boolean' },
+      // QF-20260524-587: granular WARN-verdict compliance bypass. Requires reason.
+      'accept-compliance-warn': { type: 'boolean' },
       'help':               { type: 'boolean', short: 'h' }
     },
     allowPositionals: true,
@@ -130,6 +132,16 @@ export function parseArguments(args) {
     );
   }
 
+  // QF-20260524-587: --accept-compliance-warn REQUIRES --reason. It clears ONLY the
+  // WARN-verdict compliance prompt (so completion works under --non-interactive) and does
+  // NOT bypass FAIL-verdict, the LOC cap, or self-verification — unlike --force-complete.
+  if (values['accept-compliance-warn'] && !values['reason']) {
+    throw new Error(
+      '[ACCEPT_COMPLIANCE_WARN_NO_REASON] --accept-compliance-warn requires --reason "<text>". ' +
+      'It clears ONLY the WARN-verdict compliance prompt (not FAIL/LOC/self-verification) and is recorded in verification_notes.'
+    );
+  }
+
   // FR-3: persist --non-interactive so prompt() can fail-fast
   if (values['non-interactive']) {
     _nonInteractiveMode = true;
@@ -150,6 +162,7 @@ export function parseArguments(args) {
     forceComplete:     values['force-complete']   || false,
     reason:            values['reason'],
     overCapReason:     values['over-cap-reason']   || undefined,
+    acceptComplianceWarn: values['accept-compliance-warn'] || false,
     nonInteractive:    values['non-interactive'] || false,
     // QF-20260509-407: --auto-pr opt-in flag, plus auto-enable under --non-interactive
     // when no --pr-url provided. Eliminates the mid-run prompt-then-throw pattern
@@ -200,6 +213,10 @@ Options:
                         Use only when shipping is the right call despite worker being
                         forked before a resolver-relevant fix landed in main. The
                         auto-resolver will likely no-op for this completion.
+  --accept-compliance-warn  Clear ONLY the WARN-verdict compliance prompt (so completion
+                        works under --non-interactive). REQUIRES --reason. Does NOT bypass
+                        FAIL-verdict, the LOC cap, or self-verification — narrower and safer
+                        than --force-complete. Recorded in verification_notes.
   --help, -h            Show this help
 
 Programmatic Verification:

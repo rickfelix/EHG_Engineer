@@ -363,6 +363,14 @@ export async function validateCompliance(complianceResults, prompt, flags = {}) 
       return true;
     }
 
+    // QF-20260524-587: --accept-compliance-warn clears ONLY this WARN-verdict prompt
+    // (so completion works under --non-interactive) WITHOUT the over-broad --force-complete
+    // (which also clears FAIL/LOC/self-verification). Audit trail in verification_notes.
+    if (flags.acceptComplianceWarn) {
+      console.log(`   ⚠️  --accept-compliance-warn: WARN-verdict prompt cleared (reason="${flags.reason}"). FAIL/LOC/self-verification gates still enforced.\n`);
+      return true;
+    }
+
     const proceedCompliance = await prompt('   Proceed with completion? (yes/no): ');
     if (!proceedCompliance.toLowerCase().startsWith('y')) {
       console.log('\n   Completion cancelled. Improve compliance score and try again.\n');
