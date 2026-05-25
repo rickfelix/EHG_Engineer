@@ -30,7 +30,7 @@ export async function verifyGitCommits(sdId, sd, determineTargetRepository) {
   }
 
   try {
-    const { default: GitCommitVerifier } = await import('../../../verify-git-commit-status.js');
+    const { default: GitCommitVerifier } = await import('../../../../verify-git-commit-status.js');
     const appPath = determineTargetRepository(sd);
     // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-E: Pass sd_key for commit search
     const verifier = new GitCommitVerifier(sdId, appPath, { sdKey: sd?.sd_key });

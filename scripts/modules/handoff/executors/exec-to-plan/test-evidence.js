@@ -164,7 +164,7 @@ export async function autoCompleteDeliverablesForSD(supabase, sdId) {
   console.log('-'.repeat(50));
 
   try {
-    const { autoCompleteDeliverables, checkDeliverablesNeedCompletion } = await import('../auto-complete-deliverables.js');
+    const { autoCompleteDeliverables, checkDeliverablesNeedCompletion } = await import('../../auto-complete-deliverables.js');
 
     const needsCompletion = await checkDeliverablesNeedCompletion(sdId, supabase);
     if (needsCompletion.needs_completion) {
