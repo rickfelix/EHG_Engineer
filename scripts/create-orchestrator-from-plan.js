@@ -397,10 +397,14 @@ async function main() {
         traceability: archKey ? 'arch_dimension' : 'vision_dimension'
       }));
 
+      // QF-20260524-350: the title column is varchar(500); a long Implementation
+      // Phase title/prose overflowed it (22001). Cap it like description/scope/rationale.
+      const rawChildTitle = `Phase ${phase.number}: ${phase.title}`;
+      const childTitle = rawChildTitle.length > 500 ? `${rawChildTitle.slice(0, 497)}...` : rawChildTitle;
       const childSD = {
         id: childId,
         sd_key: childKey,
-        title: `Phase ${phase.number}: ${phase.title}`,
+        title: childTitle,
         description: phase.description || phase.content?.trim().slice(0, 2000) || `Phase ${phase.number}: ${phase.title}`,
         sd_type: childType,
         category: orchestratorSD.category,
