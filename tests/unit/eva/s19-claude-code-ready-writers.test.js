@@ -3,10 +3,14 @@
  * Claude-Code-ready repo artifact writers (pure builders, no DB/git/fs).
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { buildClaudeMd } from '../../../lib/eva/bridge/claude-md-writer.js';
 import { buildBuildTasks } from '../../../lib/eva/bridge/build-tasks-writer.js';
 import { buildReplitConfig } from '../../../lib/eva/bridge/replit-config-writer.js';
 import { buildDesignPrompts } from '../../../lib/eva/bridge/design-prompts-writer.js';
+import { canonicalChecksum } from '../../../scripts/design-prompts-sync.mjs';
 
 describe('buildClaudeMd', () => {
   const md = buildClaudeMd({ name: 'Canvas AI' });
@@ -130,5 +134,44 @@ describe('buildReplitConfig', () => {
 
   it('is deterministic for the same input', () => {
     expect(buildReplitConfig()).toBe(buildReplitConfig());
+  });
+});
+
+// SD-LEO-INFRA-UNIFY-STAGE-DESIGN-001 (Phase 2): the shared bodies (audits 2-4 +
+// Feedback 5) are now sourced from the vendored single source, not hand-mirrored.
+// These guard that the writer consumes the JSON, that the committed checksum is
+// fresh, and that the stage-specific S19 creation prompt did NOT regress to the
+// S17 "Landing Page Creation" wording. The cross-repo S17==S19 equality is enforced
+// by the twinned CI checksum gate (so we deliberately do NOT hardcode the checksum
+// here — that would reintroduce the dual-maintenance this SD removes).
+describe('shared design-prompts parity (SD-LEO-INFRA-UNIFY-STAGE-DESIGN-001)', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const SRC = join(here, '../../../lib/eva/bridge/shared-design-prompts.json');
+  const SUM = join(here, '../../../lib/eva/bridge/shared-design-prompts.sha256');
+  const shared = JSON.parse(readFileSync(SRC, 'utf8'));
+  const md = buildDesignPrompts();
+
+  it('vendored shared source holds exactly the shared bodies (audits 2-4 + Feedback 5)', () => {
+    expect(shared.map((p) => p.id)).toEqual([2, 3, 4, 5]);
+    for (const p of shared) {
+      expect(typeof p.summary).toBe('string');
+      expect(p.text.length).toBeGreaterThan(50);
+    }
+  });
+
+  it('docs/design-prompts.md sources every shared body from the JSON verbatim', () => {
+    for (const p of shared) {
+      expect(md).toContain(p.text);
+    }
+  });
+
+  it('preserves the S19 creation prompt (New Page Creation), not the S17 Landing one', () => {
+    expect(md).toContain('New Page Creation Prompt');
+    expect(md).not.toContain('Landing Page Creation');
+  });
+
+  it('committed checksum is fresh (edit JSON => npm run design-prompts:sync)', () => {
+    const committed = readFileSync(SUM, 'utf8').trim();
+    expect(committed).toBe(canonicalChecksum(readFileSync(SRC, 'utf8')));
   });
 });

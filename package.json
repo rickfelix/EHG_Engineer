@@ -35,6 +35,8 @@
     "show-context": "node scripts/switch-context.js show",
     "list-apps": "node scripts/switch-context.js list",
     "encrypt-test": "node lib/security/encryption.cjs validate",
+    "design-prompts:sync": "node scripts/design-prompts-sync.mjs",
+    "design-prompts:check": "node scripts/design-prompts-sync.mjs --check",
     "sync-github": "node scripts/sync-github.js",
     "sync-supabase": "node scripts/sync-supabase.js",
     "sync-app": "node scripts/sync-manager.js",
