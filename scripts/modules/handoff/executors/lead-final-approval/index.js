@@ -505,6 +505,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.warn(`   ⚠️  PR-tracking populator failed (non-blocking): ${populatorError.message}`);
     }
 
+    // SD-LEO-INFRA-AUTO-CLOSE-QUICK-001 (FR-3): close-the-loop advisory.
+    // Surface open QFs this SD may have superseded so the operator can link them
+    // (quick_fixes.resolution_sd_id) for trg_auto_close_quick_fixes_on_sd_completion.
+    // Advisory only — never auto-links, prompts, or blocks completion.
+    try {
+      const { runQfResolutionLinkAdvisory } = await import('./hooks/qf-resolution-link-advisory.js');
+      await runQfResolutionLinkAdvisory(sd, this.supabase);
+    } catch (qfAdvisoryError) {
+      console.warn(`   ⚠️  QF resolution-link advisory failed (non-blocking): ${qfAdvisoryError.message}`);
+    }
+
     // SD-LEO-INFRA-PROGRAMMATIC-TOOL-CALLING-001: Auto-populate retrospective via programmatic scorer.
     // Generates SD-specific insights with real file references — avoids RETROSPECTIVE_QUALITY_GATE failures.
     // Fail-safe: non-blocking, never prevents SD completion.
