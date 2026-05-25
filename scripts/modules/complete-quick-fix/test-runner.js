@@ -6,15 +6,61 @@
 import { execSync } from 'child_process';
 import { TEST_TIMEOUT_UNIT, TEST_TIMEOUT_E2E } from './constants.js';
 
+/** Whole no-DB unit suite (used only when the diff can't be resolved to tests). */
+export const WHOLE_SUITE_UNIT_COMMAND = 'npm run test:unit';
+
+/**
+ * Build the unit-test command, change-scoped to the QF's own unit-test files.
+ *
+ * SD-FDBK-INFRA-CHANGE-SCOPE-COMPLETE-001: the whole `npm run test:unit` suite
+ * exceeds TEST_TIMEOUT_UNIT (and re-surfaces pre-existing baseline failures
+ * unrelated to the QF), so a verified Tier-1 QF can't be completed without a
+ * --skip-tests / --force-complete bypass.
+ *
+ * EXEC finding (deviates from PRD FR-1's literal `vitest related`): both
+ * `vitest related` and `vitest --changed` must transform EVERY test file in the
+ * project to build the import graph, and a pre-existing baseline file throws
+ * ERR_LOAD_URL during that collection — so graph-building modes fail wholesale
+ * in this repo's unit project (the exact baseline-poisoning the SD escapes). A
+ * TARGETED run of explicit test-file paths does NOT build the full graph and is
+ * clean/fast. So we resolve the QF's actual unit-test files (see
+ * getScopedUnitTestFiles in git-operations.js) and run exactly those:
+ *   `npx vitest run --project unit <testFiles> --passWithNoTests`
+ * --passWithNoTests keeps an empty/already-filtered set a pass, not a hard fail
+ * (FR-3). When no test files are supplied, fall back to the whole-suite command
+ * (used only for the diff-unknown last-resort path; FR-1 backward-compat).
+ *
+ * Pure (no side effects) for unit-testability (FR-5). Each path is double-quoted
+ * so a path with a space — or a shell metacharacter — cannot break or inject.
+ *
+ * @param {string[]} testFiles - repo-relative unit-test file paths to run
+ * @returns {string} shell command string
+ */
+export function buildUnitTestCommand(testFiles) {
+  if (!Array.isArray(testFiles) || testFiles.length === 0) {
+    return WHOLE_SUITE_UNIT_COMMAND;
+  }
+  const quoted = testFiles
+    .filter(f => typeof f === 'string' && f.trim().length > 0)
+    .map(f => `"${f.replace(/"/g, '\\"')}"`)
+    .join(' ');
+  if (!quoted) {
+    return WHOLE_SUITE_UNIT_COMMAND;
+  }
+  return `npx vitest run --project unit ${quoted} --passWithNoTests`;
+}
+
 /**
  * Run tests programmatically and return results
  * @param {string} testType - 'unit' or 'e2e'
- * @param {object} options - Test options including testDir for target application
+ * @param {object} options - Test options. `testDir` sets cwd; `testFiles`
+ *   (unit only) change-scopes the run to exactly those unit-test files — omit
+ *   for the whole-suite run (backward compatible).
  * @returns {object} Test results with passed, output, exitCode
  */
 export function runTests(testType, options = {}) {
   const testCommands = {
-    unit: 'npm run test:unit',
+    unit: buildUnitTestCommand(options.testFiles),
     e2e: 'npm run test:e2e -- --grep="smoke" --reporter=list'
   };
 
