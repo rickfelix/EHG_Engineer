@@ -537,21 +537,32 @@ function Sync-Repo {
             Write-Log "WARN" "[SYNC] $Name on '$branch' (not main) - serving local, not auto-pulling" "Yellow"
             return
         }
-        # No pre-emptive dirty check: rely on `merge --ff-only`, which fast-forwards
-        # cleanly when uncommitted files (e.g. the perpetually-churned .claude/.protocol-sync)
-        # are NOT in the incoming diff, and safely aborts (never clobbers) when they are.
+        # Only pull a genuinely-idle primary tree. Two layers:
+        #  (1) skip if there are uncommitted *tracked* changes beyond the auto-churn
+        #      safelist (.claude/.protocol-sync) — protects a session actively editing
+        #      in the primary tree, without the safelisted file blocking every pull.
+        #      Untracked files are ignored: ff-only can't harm them and the tree
+        #      always carries many (scripts/one-off/, etc.).
+        #  (2) `merge --ff-only` as the backstop — never clobbers; aborts on conflict.
         git fetch origin main --quiet 2>$null
         $behind = (git rev-list --count HEAD..origin/main 2>$null)
-        if ($behind -match '^\d+$' -and [int]$behind -gt 0) {
-            Write-Log "INFO" "[SYNC] $Name is $behind commit(s) behind origin/main - fast-forwarding..." "Blue"
-            git merge --ff-only origin/main --quiet 2>$null
-            if ($LASTEXITCODE -eq 0) {
-                Write-Log "INFO" "[SYNC] $Name updated to $(git rev-parse --short HEAD)" "Green"
-            } else {
-                Write-Log "WARN" "[SYNC] $Name ff-only merge declined (diverged or local changes conflict) - serving local" "Yellow"
-            }
-        } else {
+        if (-not ($behind -match '^\d+$' -and [int]$behind -gt 0)) {
             Write-Log "INFO" "[SYNC] $Name already current with origin/main" "Green"
+            return
+        }
+        $meaningful = @(git status --porcelain --untracked-files=no 2>$null |
+            Where-Object { $_ -and ($_ -notmatch '\.claude[\\/]\.protocol-sync') })
+        if ($meaningful.Count -gt 0) {
+            $files = ($meaningful | ForEach-Object { ($_ -replace '^...', '').Trim() }) -join ', '
+            Write-Log "WARN" "[SYNC] $Name is $behind behind but has uncommitted edits ($files) - NOT pulling, protecting in-progress work (commit/stash to update)" "Yellow"
+            return
+        }
+        Write-Log "INFO" "[SYNC] $Name is $behind commit(s) behind origin/main - fast-forwarding..." "Blue"
+        git merge --ff-only origin/main --quiet 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Log "INFO" "[SYNC] $Name updated to $(git rev-parse --short HEAD)" "Green"
+        } else {
+            Write-Log "WARN" "[SYNC] $Name ff-only merge declined (diverged or local changes conflict) - serving local" "Yellow"
         }
     } finally {
         Pop-Location

@@ -391,21 +391,32 @@ sync_repo() {
             log "WARN" "${YELLOW}[SYNC] $name on '$branch' (not main) - serving local, not auto-pulling${NC}"
             exit 0
         fi
-        # No pre-emptive dirty check: rely on `merge --ff-only`, which fast-forwards
-        # cleanly when uncommitted files (e.g. the perpetually-churned .claude/.protocol-sync)
-        # are NOT in the incoming diff, and safely aborts (never clobbers) when they are.
+        # Only pull a genuinely-idle primary tree. Two layers:
+        #  (1) skip if there are uncommitted *tracked* changes beyond the auto-churn
+        #      safelist (.claude/.protocol-sync) — protects a session actively editing
+        #      in the primary tree, without the safelisted file blocking every pull.
+        #      Untracked files are ignored (ff-only can't harm them; the tree carries many).
+        #  (2) `merge --ff-only` as the backstop — never clobbers; aborts on conflict.
         git fetch origin main --quiet 2>/dev/null
         local behind
         behind=$(git rev-list --count HEAD..origin/main 2>/dev/null)
-        if [ -n "$behind" ] && [ "$behind" -gt 0 ] 2>/dev/null; then
-            log "INFO" "${BLUE}[SYNC] $name is $behind commit(s) behind origin/main - fast-forwarding...${NC}"
-            if git merge --ff-only origin/main --quiet 2>/dev/null; then
-                log "INFO" "${GREEN}[SYNC] $name updated to $(git rev-parse --short HEAD)${NC}"
-            else
-                log "WARN" "${YELLOW}[SYNC] $name ff-only merge declined (diverged or local changes conflict) - serving local${NC}"
-            fi
-        else
+        if [ -z "$behind" ] || ! [ "$behind" -gt 0 ] 2>/dev/null; then
             log "INFO" "${GREEN}[SYNC] $name already current with origin/main${NC}"
+            exit 0
+        fi
+        local meaningful
+        meaningful=$(git status --porcelain --untracked-files=no 2>/dev/null | grep -vE '\.claude/\.protocol-sync')
+        if [ -n "$meaningful" ]; then
+            local files
+            files=$(echo "$meaningful" | sed 's/^...//' | paste -sd ',' -)
+            log "WARN" "${YELLOW}[SYNC] $name is $behind behind but has uncommitted edits ($files) - NOT pulling, protecting in-progress work (commit/stash to update)${NC}"
+            exit 0
+        fi
+        log "INFO" "${BLUE}[SYNC] $name is $behind commit(s) behind origin/main - fast-forwarding...${NC}"
+        if git merge --ff-only origin/main --quiet 2>/dev/null; then
+            log "INFO" "${GREEN}[SYNC] $name updated to $(git rev-parse --short HEAD)${NC}"
+        else
+            log "WARN" "${YELLOW}[SYNC] $name ff-only merge declined (diverged or local changes conflict) - serving local${NC}"
         fi
     )
 }
