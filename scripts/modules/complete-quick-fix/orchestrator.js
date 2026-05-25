@@ -20,7 +20,7 @@ import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, touchesFrontend, getScopedUnitTestFiles } from './git-operations.js';
 import {
   validateLOC,
   validateTests,
@@ -196,17 +196,57 @@ export async function completeQuickFix(qfId, options = {}) {
     console.log(`   📚 Docs-only diff detected (${filesChanged.length} file(s)); skipping unit+e2e tests.\n`);
   } else {
     console.log('   Running tests to verify fix quality (not self-reported)...\n');
-    // Run unit tests in target application directory
-    console.log('━━━ Unit Tests ━━━\n');
-    unitTestResult = runTests('unit', { testDir });
 
-    console.log('\n━━━ E2E Smoke Tests ━━━\n');
-    e2eTestResult = runTests('e2e', { testDir });
+    // SD-FDBK-INFRA-CHANGE-SCOPE-COMPLETE-001: change-scope the gate to THIS QF's
+    // diff instead of the whole suite. The whole `npm run test:unit` run exceeds
+    // TEST_TIMEOUT_UNIT (and re-surfaces unrelated baseline failures), and the
+    // Playwright e2e smoke run can't execute headless — both forced a per-ship
+    // bypass even for a verified Tier-1 QF whose own tests are green.
+    //   • Unit: run only tests RELATED to the QF's changed source files (FR-1);
+    //     empty source set → buildUnitTestCommand falls back to the whole suite.
+    //   • E2E: run the Playwright smoke suite only when the diff touches the
+    //     frontend/browser surface (FR-2); a backend-only diff skips it.
+    const scopedTestFiles = getScopedUnitTestFiles(filesChanged, testDir);
+    const runE2E = touchesFrontend(filesChanged);
+
+    console.log('━━━ Unit Tests ━━━\n');
+    if (scopedTestFiles.length > 0) {
+      // Targeted run of exactly the QF's unit-test files — clean/fast and free of
+      // the baseline-graph poisoning that breaks `vitest related`/`--changed`.
+      console.log(`   🎯 Change-scoped to ${scopedTestFiles.length} unit-test file(s): ${scopedTestFiles.join(', ')}\n`);
+      unitTestResult = runTests('unit', { testDir, testFiles: scopedTestFiles });
+    } else if (Array.isArray(filesChanged) && filesChanged.length > 0) {
+      // Diff is known but no unit-test file maps to it (coverage gap, not a gate
+      // failure). The whole suite would only re-surface unrelated baseline
+      // failures, so skip the unit run and let UAT + compliance + self-verifier
+      // gate. verifyTestCoverage (below) surfaces the gap explicitly.
+      unitTestResult = {
+        passed: true,
+        exitCode: 0,
+        skippedNoScoped: true,
+        output: 'No unit-test file maps to the changed files; scoped unit run skipped (coverage gap, not a failure).'
+      };
+      console.log('   ⏭️  No unit-test file maps to the changed files; skipping scoped unit run (coverage gap, not a failure). UAT + compliance still gate.\n');
+    } else {
+      // Diff not resolvable (e.g. offline / detached) — fall back to the whole
+      // suite as a last resort (backward compatible).
+      console.log('   ℹ️  Diff not resolvable; running whole unit suite (fallback).\n');
+      unitTestResult = runTests('unit', { testDir });
+    }
+
+    if (runE2E) {
+      console.log('\n━━━ E2E Smoke Tests ━━━\n');
+      e2eTestResult = runTests('e2e', { testDir });
+    } else {
+      console.log('\n━━━ E2E Smoke Tests ━━━\n');
+      console.log('   ⏭️  Diff does not touch the frontend/browser surface; skipping e2e smoke (backend-only QF).\n');
+    }
 
     displayTestResults(unitTestResult, e2eTestResult);
 
-    // Determine overall pass/fail
-    testsPass = unitTestResult.passed && e2eTestResult.passed;
+    // Overall pass/fail. E2E only gates when it actually ran (FR-2); a skipped
+    // e2e (backend-only diff) does not pull testsPass down.
+    testsPass = unitTestResult.passed && (e2eTestResult ? e2eTestResult.passed : true);
     console.log();
   }
 

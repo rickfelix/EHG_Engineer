@@ -10,6 +10,7 @@
 
 import { execSync, execFileSync } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 
 // QF-20260511-123 / feedback 0930f169: prefer the QF worktree when cwd is inside
 // .worktrees/qf/<qfId>, so Tier-1 docs-QFs don't fall back to the parent repo's
@@ -591,6 +592,101 @@ export function isDocsOnlyPath(file) {
 export function isDocsOnlyDiff(filesChanged) {
   if (!Array.isArray(filesChanged) || filesChanged.length === 0) return false;
   return filesChanged.every(isDocsOnlyPath);
+}
+
+// SD-FDBK-INFRA-CHANGE-SCOPE-COMPLETE-001 (FR-2): classify a path as
+// frontend/e2e-relevant so the orchestrator can gate the Playwright e2e smoke
+// run on whether the diff actually touches the browser surface. A backend-only
+// QF (e.g. a lib/ or scripts/ fix) cannot be exercised by a headless e2e run
+// (no server/browser in the sandbox) and shouldn't be blocked on one. Strict by
+// design and CONSERVATIVE in the run direction — ANY frontend-pattern match runs
+// e2e; only an all-backend diff skips it.
+export function isFrontendPath(file) {
+  if (!file || typeof file !== 'string') return false;
+  const f = file.replace(/\\/g, '/');
+  // React/Vue/Svelte component sources.
+  if (/\.(tsx|jsx|vue|svelte)$/i.test(f)) return true;
+  // Conventional frontend source roots (any depth).
+  if (/(^|\/)src\/(components|pages|app|views|layouts|features|routes|hooks|ui)\//i.test(f)) return true;
+  if (/(^|\/)client\//i.test(f)) return true;
+  if (/(^|\/)public\//i.test(f)) return true;
+  // Styling.
+  if (/\.(css|scss|sass|less)$/i.test(f)) return true;
+  // E2E / browser-test harness.
+  if (/(^|\/)e2e\//i.test(f) || /(^|\/)tests\/e2e\//i.test(f) || /\bplaywright\b/i.test(f)) return true;
+  return false;
+}
+
+export function touchesFrontend(filesChanged) {
+  if (!Array.isArray(filesChanged) || filesChanged.length === 0) return false;
+  return filesChanged.some(isFrontendPath);
+}
+
+// SD-FDBK-INFRA-CHANGE-SCOPE-COMPLETE-001 (FR-1 / TR-2): the changed SOURCE files
+// (JS/TS, non-test) whose conventional unit tests we resolve below. Reuses the
+// same TEST_FILE_PATTERN the LOC-split uses.
+const SOURCE_EXT_PATTERN = /\.(jsx?|cjs|mjs|tsx?)$/i;
+export function getRelatedSourceFiles(filesChanged) {
+  if (!Array.isArray(filesChanged)) return [];
+  return filesChanged.filter(
+    f => typeof f === 'string' && SOURCE_EXT_PATTERN.test(f) && !TEST_FILE_PATTERN.test(f)
+  );
+}
+
+// Basename of a source path, sans directory and source extension. 'lib/foo.js' -> 'foo'.
+export function sourceBasename(file) {
+  const f = String(file).replace(/\\/g, '/');
+  const name = f.slice(f.lastIndexOf('/') + 1);
+  return name.replace(SOURCE_EXT_PATTERN, '');
+}
+
+// Conventional unit-test paths for a changed source file. The unit project's
+// include is `**/*.test.js` (see vitest.config.js), so we only generate .test.js
+// co-located and __tests__ siblings — anything else won't run in that project.
+export function candidateTestPaths(file) {
+  const f = String(file).replace(/\\/g, '/');
+  const slash = f.lastIndexOf('/');
+  const dir = slash >= 0 ? f.slice(0, slash) : '';
+  const base = sourceBasename(f);
+  if (!base) return [];
+  return [
+    dir ? `${dir}/${base}.test.js` : `${base}.test.js`,
+    dir ? `${dir}/__tests__/${base}.test.js` : `__tests__/${base}.test.js`,
+  ];
+}
+
+// Resolve the unit-test files that the gate should run for this QF's diff,
+// WITHOUT building vitest's project-wide import graph (which throws ERR_LOAD_URL
+// on a pre-existing baseline file — the reason `vitest related`/`--changed` are
+// non-viable here). Two precise, baseline-poisoning-safe sources:
+//   1. changed files that ARE unit tests (`*.test.js`) — the common "fix + its
+//      regression test" QF;
+//   2. conventional co-located / __tests__ siblings of changed source files.
+// Returns existing repo-relative paths (deduped). Empty ⇒ caller treats as a
+// coverage gap (pass-with-warning), NOT a failure (FR-3).
+export function getScopedUnitTestFiles(filesChanged, testDir) {
+  if (!Array.isArray(filesChanged) || filesChanged.length === 0) return [];
+  const root = testDir || process.cwd();
+  const exists = (rel) => {
+    try { return fs.existsSync(path.join(root, rel)); } catch { return false; }
+  };
+  const found = new Set();
+
+  // 1. changed unit-test files
+  for (const f of filesChanged) {
+    if (typeof f === 'string' && /\.test\.js$/i.test(f) && exists(f)) {
+      found.add(f.replace(/\\/g, '/'));
+    }
+  }
+
+  // 2. conventional siblings of changed source files
+  for (const src of getRelatedSourceFiles(filesChanged)) {
+    for (const cand of candidateTestPaths(src)) {
+      if (exists(cand)) found.add(cand);
+    }
+  }
+
+  return [...found];
 }
 
 /**
