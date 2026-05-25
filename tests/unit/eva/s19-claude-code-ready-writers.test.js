@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { buildClaudeMd } from '../../../lib/eva/bridge/claude-md-writer.js';
 import { buildBuildTasks } from '../../../lib/eva/bridge/build-tasks-writer.js';
 import { buildReplitConfig } from '../../../lib/eva/bridge/replit-config-writer.js';
+import { buildDesignPrompts } from '../../../lib/eva/bridge/design-prompts-writer.js';
 
 describe('buildClaudeMd', () => {
   const md = buildClaudeMd({ name: 'Canvas AI' });
@@ -33,6 +34,10 @@ describe('buildClaudeMd', () => {
     expect(out).toContain('# CLAUDE.md — this venture');
     expect(out.length).toBeGreaterThan(200);
   });
+
+  it('references docs/design-prompts.md as the per-page build playbook (FR-4)', () => {
+    expect(md).toContain('docs/design-prompts.md');
+  });
 });
 
 describe('buildBuildTasks', () => {
@@ -52,7 +57,7 @@ describe('buildBuildTasks', () => {
   it('emits a non-empty minimal skeleton when there are no screens', () => {
     const md = buildBuildTasks({ name: 'EmptyVenture', screens: [] });
     expect(md.trim().length).toBeGreaterThan(100);
-    expect(md).toContain('Child 2 — Core features');
+    expect(md).toContain('Child 2 — Additional pages');
     expect(md).toMatch(/discover current state/i);
   });
 
@@ -62,9 +67,39 @@ describe('buildBuildTasks', () => {
     expect(md).toContain('# Build Tasks — Venture');
   });
 
+  it('omits the Lovable-built landing screen and references the prompts doc (FR-3)', () => {
+    const md = buildBuildTasks({
+      name: 'Canvas AI',
+      screens: [{ name: 'Landing Page' }, { name: 'Dashboard' }, { name: 'Settings' }],
+    });
+    expect(md).toContain('docs/design-prompts.md');   // per-page build playbook reference
+    expect(md).toMatch(/intentionally omitted/i);      // landing-skip note
+    expect(md).toContain('2.1 Dashboard');             // landing skipped → Dashboard is first
+    expect(md).toContain('2.2 Settings');
+    expect(md).not.toContain('Landing Page**');        // no grandchild build task for the landing
+  });
+
   it('is deterministic for the same input', () => {
     const args = { name: 'Canvas AI', screens: [{ name: 'Dashboard' }] };
     expect(buildBuildTasks(args)).toBe(buildBuildTasks(args));
+  });
+});
+
+describe('buildDesignPrompts (FR-1)', () => {
+  const md = buildDesignPrompts();
+  it('emits all four reusable prompts', () => {
+    expect(md).toMatch(/New page creation|New Page Creation/);
+    expect(md).toContain('Text & Typography Audit');
+    expect(md).toContain('Layout & Composition Audit');
+    expect(md).toContain('Build Quality Audit');
+  });
+  it('inherits the landing design system and does not rebuild the landing', () => {
+    expect(md).toContain('src/routes/index.tsx');
+    expect(md).toMatch(/do not rebuild/i);
+  });
+  it('is deterministic and non-trivial', () => {
+    expect(buildDesignPrompts()).toBe(md);
+    expect(md.length).toBeGreaterThan(2000);
   });
 });
 
