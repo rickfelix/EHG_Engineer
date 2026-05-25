@@ -236,7 +236,13 @@ export class ShippingContextBuilder {
         { timeout: 15000 }
       );
 
-      const runData = JSON.parse(runs);
+      // Quick-fix QF-20260525-254: the shell fallback (|| echo "[]") can yield a
+      // non-array when JSON.parse returns the string "[]" (e.g. Windows cmd echoes
+      // the quotes). runData.length>0 then passes but runData.filter() below throws
+      // "runData.filter is not a function". Guard to an array so CI context degrades
+      // gracefully to empty instead of erroring out.
+      const parsedRuns = JSON.parse(runs);
+      const runData = Array.isArray(parsedRuns) ? parsedRuns : [];
       context.recentRuns = runData;
 
       if (runData.length > 0) {
