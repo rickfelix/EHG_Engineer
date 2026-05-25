@@ -307,7 +307,7 @@ for (let i = 1; i < args.length; i++) {
       const query = args.join(' ');
       await searchIssues(query, options);
     }
-  } catch (_error) {
+  } catch (error) {
     console.error('\n❌ Error:', error.message);
     console.error('\nFull error:', error);
     process.exit(1);
