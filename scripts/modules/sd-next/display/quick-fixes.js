@@ -11,6 +11,14 @@ const MAX_DISPLAY = 10;
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 
+// QF-20260525-522: freshness/supersession gate. AUTO-PROCEED must NOT auto-route
+// to a QF that may have been resolved by a *different* SD (one with no PR of its
+// own). A QF that is old, still 'open', unclaimed, and has no PR/commit is a
+// supersession risk — it gets flagged 'verify-first' and held out of
+// topStartableQF so AUTO_PROCEED_ACTION:qf_start is not emitted for it (the queue
+// falls through to /leo assist instead). Tunable via SD_NEXT_QF_STALE_DAYS.
+const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;
+
 /**
  * Classify open quick fixes: compute per-QF escalation flag, claim badge,
  * and return the summary + classified list. Pure presentation-adjacent logic;
@@ -66,7 +74,16 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
       }
     }
 
-    return { ...qf, _triage: triage, _escalate: escalate, _claimBadge: claimBadge, _isClaimedByOther: isClaimedByOther };
+    // QF-20260525-522: supersession risk — old, open, unclaimed, no PR/commit.
+    const verifyFirst =
+      !escalate &&
+      qf.status === 'open' &&
+      !claimingSessionId &&
+      !qf.pr_url &&
+      !qf.commit_sha &&
+      ageDays(qf.created_at) >= STALE_QF_DAYS;
+
+    return { ...qf, _triage: triage, _escalate: escalate, _claimBadge: claimBadge, _isClaimedByOther: isClaimedByOther, _verifyFirst: verifyFirst };
   });
 
   classified.sort((a, b) => {
@@ -78,7 +95,9 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
   });
 
   summary.topQF = classified[0] || null;
-  summary.topStartableQF = classified.find(qf => !qf._escalate && !qf._isClaimedByOther) || null;
+  // QF-20260525-522: exclude verify-first (possibly-superseded) QFs from the
+  // auto-startable pick so AUTO-PROCEED doesn't route a session to dead work.
+  summary.topStartableQF = classified.find(qf => !qf._escalate && !qf._isClaimedByOther && !qf._verifyFirst) || null;
 
   return { summary, classified };
 }
@@ -109,8 +128,13 @@ export function renderQFRow(qf, indent = '') {
     const tier = qf._triage ? qf._triage.tier : inferTier(qf.estimated_loc);
     const tierBadge = `[T${tier}]`;
     const statusBadge = qf.status === 'in_progress' ? `${colors.cyan}WIP${colors.reset} ` : '';
-    console.log(`${indent}  ${colors.bold}${tierBadge}${colors.reset} ${badge}${statusBadge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
+    // QF-20260525-522: surface why a stale QF was held out of auto-start.
+    const verifyBadge = qf._verifyFirst ? `${colors.yellow}⚠ VERIFY-FIRST${colors.reset} ` : '';
+    console.log(`${indent}  ${colors.bold}${tierBadge}${colors.reset} ${badge}${verifyBadge}${statusBadge}${qf.id} - ${truncate(qf.title, 45)}  ${colors.dim}${qf.severity}  ${age}${colors.reset}`);
     console.log(`${indent}       ${colors.dim}Est: ${loc} | Type: ${qf.type} | Target: ${target}${colors.reset}`);
+    if (qf._verifyFirst) {
+      console.log(`${indent}       ${colors.dim}⚠ open ${ageDays(qf.created_at)}d & unclaimed — may already be resolved by another SD; verify before starting (not auto-routed)${colors.reset}`);
+    }
   }
 }
 
@@ -154,12 +178,20 @@ function inferTier(estimatedLoc) {
 }
 
 /**
+ * Whole-day age of a timestamp. QF-20260525-522: shared by the freshness gate
+ * and formatAge so the "verify-first" threshold and the displayed age agree.
+ */
+function ageDays(createdAt) {
+  if (!createdAt) return 0;
+  return Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
  * Format a human-readable age from a timestamp.
  */
 function formatAge(createdAt) {
   if (!createdAt) return '';
-  const diffMs = Date.now() - new Date(createdAt).getTime();
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const days = ageDays(createdAt);
   if (days === 0) return 'today';
   if (days === 1) return '1d old';
   return `${days}d old`;
