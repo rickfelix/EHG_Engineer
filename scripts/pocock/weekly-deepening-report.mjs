@@ -165,13 +165,22 @@ async function main() {
     process.exit(1);
   }
   if (!findings || findings.length < opts.minCandidates) {
-    const msg = `Insufficient unconsumed findings (${(findings || []).length} < ${opts.minCandidates})`;
-    if (opts.dryRun) {
-      process.stdout.write(JSON.stringify({ dry_run: true, candidates_available: (findings || []).length, message: msg }) + '\n');
-      process.exit(0);
-    }
-    await emitFailureFeedback(msg);
-    process.exit(1);
+    // QF-20260524-711: "no unconsumed findings to deepen this week" is a normal
+    // quiet-week NO-OP, not a failure. Previously the emit path called
+    // emitFailureFeedback() + exit 1, turning the Friday cron red on main and
+    // spamming the inbox with pocock_weekly_deepening_failure rows (e.g. "0 < 3").
+    // Treat insufficient INPUT as a graceful no-op in BOTH dry-run and emit modes.
+    // (The post-emission shortfall path below — findings existed but emission fell
+    // short — remains a real failure, since that signals a scoring/emit defect.)
+    const msg = `Insufficient unconsumed findings (${(findings || []).length} < ${opts.minCandidates}) — no-op`;
+    process.stdout.write(JSON.stringify({
+      no_op: true,
+      dry_run: !!opts.dryRun,
+      candidates_available: (findings || []).length,
+      min_candidates: opts.minCandidates,
+      message: msg,
+    }) + '\n');
+    process.exit(0);
   }
 
   if (opts.dryRun) {
