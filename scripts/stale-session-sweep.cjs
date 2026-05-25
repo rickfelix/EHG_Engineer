@@ -372,6 +372,52 @@ function checkNpmInstallLock() {
   }
 }
 
+/**
+ * QF-20260525-836 + QF-20260525-211 (early-exit gap): clear stale quick_fixes.claiming_session_id.
+ * Extracted from main() and called BEFORE the "No sessions with claims" early-return so an
+ * orphaned QF claim is reaped even when zero SD-claiming sessions remain — the exact common case
+ * after the fleet winds down (verified live 2026-05-25: QF-20260525-127 stayed claimed across
+ * multiple sweeps because each early-returned before this block ever ran).
+ * Conservative bar (holder gone or heartbeat > VERY_STALE) avoids yanking a live worker's claim.
+ * Degrade-safe: query failure warns, never blocks the sweep.
+ */
+async function clearStaleQfClaims(supabase, now, actions, warnings) {
+  const veryStaleSeconds = STALE_THRESHOLD_SECONDS * 3; // 15min = definitely dead
+  try {
+    const { data: claimedQfs } = await supabase
+      .from('quick_fixes')
+      .select('id, status, claiming_session_id')
+      .in('status', ['open', 'in_progress'])
+      .not('claiming_session_id', 'is', null);
+
+    if (claimedQfs && claimedQfs.length > 0) {
+      const holderIds = [...new Set(claimedQfs.map(q => q.claiming_session_id))];
+      const { data: holderRows } = await supabase
+        .from('claude_sessions')
+        .select('session_id, heartbeat_at')
+        .in('session_id', holderIds);
+      const hbAgeBySession = new Map();
+      for (const r of (holderRows || [])) {
+        hbAgeBySession.set(r.session_id, r.heartbeat_at ? (now.getTime() - Date.parse(r.heartbeat_at)) / 1000 : Infinity);
+      }
+      for (const qf of claimedQfs) {
+        const ageSec = hbAgeBySession.has(qf.claiming_session_id) ? hbAgeBySession.get(qf.claiming_session_id) : Infinity;
+        if (ageSec <= veryStaleSeconds) continue; // holder alive/recent — leave claimed
+        const { error } = await supabase
+          .from('quick_fixes')
+          .update({ claiming_session_id: null })
+          .eq('id', qf.id)
+          .eq('claiming_session_id', qf.claiming_session_id); // race guard: only if still held by the same dead session
+        if (!error) {
+          actions.push('QF: cleared stale claiming_session_id on ' + qf.status + ' ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
+        }
+      }
+    }
+  } catch (qfErr) {
+    warnings.push('QF_CLAIM_SWEEP: ' + qfErr.message);
+  }
+}
+
 async function main() {
   const now = new Date();
   const actions = [];
@@ -390,8 +436,16 @@ async function main() {
     process.exit(1);
   }
 
+  // QF-20260525-211 (early-exit gap): reap orphaned QF claims BEFORE the early-return below,
+  // so a stale QF claim is cleared even when zero SD-claiming sessions remain (fleet wound down).
+  await clearStaleQfClaims(supabase, now, actions, warnings);
+
   if (!sessions || sessions.length === 0) {
-    console.log('[' + now.toLocaleTimeString() + '] SWEEP: No sessions with claims. All clear.');
+    if (actions.length > 0) {
+      console.log('[' + now.toLocaleTimeString() + '] SWEEP: ' + actions.join('; '));
+    } else {
+      console.log('[' + now.toLocaleTimeString() + '] SWEEP: No sessions with claims. All clear.');
+    }
     return;
   }
 
@@ -562,12 +616,17 @@ async function main() {
   const sdStatusMap = {};
   (claimedSdStatus || []).forEach(sd => { sdStatusMap[sd.sd_key] = sd; });
 
+  // QF-20260525-211 (B2): include 'cancelled', not just 'completed'. Cancelled SDs with a
+  // live claiming session previously skipped this bilateral release and fell through to the
+  // SD-only clear (FIX #2 below), leaving the session's stale sd_key to feed CLAIM_FIX churn.
   const workingOnCompleted = classified.filter(s => {
     const sd = sdStatusMap[s.sd_key];
-    return sd && sd.status === 'completed';
+    return sd && (sd.status === 'completed' || sd.status === 'cancelled');
   });
 
   for (const s of workingOnCompleted) {
+    const sdTerminalStatus = sdStatusMap[s.sd_key]?.status;
+    const releasedReason = sdTerminalStatus === 'cancelled' ? 'SWEEP_SD_CANCELLED' : 'SWEEP_SD_ALREADY_COMPLETED';
     // Use 'released' not 'idle' — stale sessions can't become 'idle' due to
     // idx_claude_sessions_unique_terminal_active (one active/idle per terminal).
     // Using 'idle' silently fails when another session on the same terminal exists.
@@ -584,7 +643,7 @@ async function main() {
         sd_key: null,
         status: targetStatus,
         released_at: now.toISOString(),
-        released_reason: 'SWEEP_SD_ALREADY_COMPLETED',
+        released_reason: releasedReason,
         worktree_path: null,
         worktree_branch: null,
         has_uncommitted_changes: false,
@@ -598,8 +657,8 @@ async function main() {
         .from('strategic_directives_v2')
         .update({ claiming_session_id: null, is_working_on: false })
         .eq('sd_key', s.sd_key);
-      await resetSdPhaseOnRelease(s.sd_key, 'SWEEP_SD_ALREADY_COMPLETED');
-      actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — ' + s.sd_key + ' already completed');
+      await resetSdPhaseOnRelease(s.sd_key, releasedReason);
+      actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — ' + s.sd_key + ' already ' + (sdTerminalStatus || 'completed'));
     }
   }
 
@@ -726,43 +785,9 @@ async function main() {
     }
   }
 
-  // QF-20260525-836: clear stale quick_fixes.claiming_session_id (mirrors the SD
-  // terminal-claim clear above) — a QF whose holder died stayed claimed forever.
-  // Conservative bar (holder gone or heartbeat >15min) avoids yanking a live-but-
-  // quiet worker's claim. Degrade-safe: query failure warns, never blocks the sweep.
-  try {
-    const { data: claimedQfs } = await supabase
-      .from('quick_fixes')
-      .select('id, status, claiming_session_id')
-      .in('status', ['open', 'in_progress'])
-      .not('claiming_session_id', 'is', null);
-
-    if (claimedQfs && claimedQfs.length > 0) {
-      const holderIds = [...new Set(claimedQfs.map(q => q.claiming_session_id))];
-      const { data: holderRows } = await supabase
-        .from('claude_sessions')
-        .select('session_id, heartbeat_at')
-        .in('session_id', holderIds);
-      const hbAgeBySession = new Map();
-      for (const r of (holderRows || [])) {
-        hbAgeBySession.set(r.session_id, r.heartbeat_at ? (now.getTime() - Date.parse(r.heartbeat_at)) / 1000 : Infinity);
-      }
-      for (const qf of claimedQfs) {
-        const ageSec = hbAgeBySession.has(qf.claiming_session_id) ? hbAgeBySession.get(qf.claiming_session_id) : Infinity;
-        if (ageSec <= VERY_STALE_SECONDS) continue; // holder alive/recent — leave claimed
-        const { error } = await supabase
-          .from('quick_fixes')
-          .update({ claiming_session_id: null })
-          .eq('id', qf.id)
-          .eq('claiming_session_id', qf.claiming_session_id); // race guard: only if still held by the same dead session
-        if (!error) {
-          actions.push('QF: cleared stale claiming_session_id on ' + qf.status + ' ' + qf.id + ' (holder ' + String(qf.claiming_session_id).slice(0, 8) + ' hb ' + (ageSec === Infinity ? 'gone' : Math.round(ageSec) + 's') + ')');
-        }
-      }
-    }
-  } catch (qfErr) {
-    warnings.push('QF_CLAIM_SWEEP: ' + qfErr.message);
-  }
+  // QF-20260525-211: the QF stale-claim clear formerly inlined here now runs via
+  // clearStaleQfClaims() before the early-return above, so it executes on every sweep
+  // (including the zero-SD-claim case). Do not re-add it here — that would double-run it.
 
   // QF-20260426-SWEEP-PHANTOM-DETECT: detect phantom in_progress SDs
   // (status=in_progress + claiming_session_id IS NULL). These are invisible to
@@ -1165,11 +1190,33 @@ async function main() {
   for (const s of classified.filter(c => c.status === 'ACTIVE' && c.sd_key)) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
-      .select('sd_key, claiming_session_id, is_working_on')
+      .select('sd_key, status, claiming_session_id, is_working_on')
       .eq('sd_key', s.sd_key)
       .single();
 
     if (!sd) continue;
+
+    // QF-20260525-211 (B1): never re-assert a claim on a terminal SD. FIX #2 above cleared
+    // claiming_session_id on completed/cancelled SDs; without this guard CLAIM_FIX would
+    // immediately re-assert it (the live session's sd_key still matches), oscillating the
+    // claim every 5-min cycle. Instead clear the session's stale sd_key (bilateral release).
+    if (sd.status === 'completed' || sd.status === 'cancelled') {
+      await supabase
+        .from('claude_sessions')
+        .update({
+          sd_key: null,
+          status: s.status === 'ACTIVE' ? 'idle' : 'released',
+          released_at: now.toISOString(),
+          released_reason: 'SWEEP_SD_TERMINAL_CLAIM_FIX',
+          worktree_path: null,
+          worktree_branch: null,
+          current_branch: null,
+        })
+        .eq('session_id', s.session_id)
+        .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this terminal SD
+      actions.push('CLAIM_FIX: cleared stale sd_key on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' is ' + sd.status + ')');
+      continue;
+    }
 
     // Fix broken claim: session thinks it owns SD but SD doesn't know
     if (sd.claiming_session_id !== s.session_id) {

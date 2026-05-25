@@ -114,9 +114,36 @@ async function cancelSD(sd, reason) {
   }
   console.log(`✓ SD ${sd.sd_key} cancelled (status=cancelled, current_phase=CANCELLED)`);
 
-  // Release the holder's claude_sessions row, if any
+  // QF-20260525-211 (A1): write an audit_log row so cancellations are visible to the audit
+  // stream. Previously the reason landed ONLY in the cancellation_reason column, which
+  // coordination tooling does not surface — which is why a cancellation trace appeared
+  // missing during investigation. Non-fatal: the SD is already cancelled; a failed audit
+  // write should not mask that, but it is surfaced loudly.
+  const { error: auditErr } = await supabase
+    .from('audit_log')
+    .insert({
+      event_type: 'sd_cancelled',
+      entity_type: 'strategic_directive',
+      entity_id: sd.sd_key || sd.id,
+      old_value: { status: sd.status, current_phase: sd.current_phase, is_working_on: sd.is_working_on },
+      new_value: { status: 'cancelled', current_phase: 'CANCELLED' },
+      metadata: { reason, prior_claiming_session: claimedSessionId || null, source: 'cancel-sd.js' },
+      severity: 'warning',
+      created_by: 'cancel-sd.js',
+    });
+  if (auditErr) {
+    console.warn(`⚠️  audit_log write for ${sd.sd_key} failed (non-fatal):`, auditErr.message);
+  } else {
+    console.log(`✓ audit_log: sd_cancelled recorded for ${sd.sd_key}`);
+  }
+
+  // Release the holder's claude_sessions row, if any.
+  // QF-20260525-211 (A2): VERIFIED release. A fire-and-forget warn-and-swallow could silently
+  // fail (e.g. a CHECK violation returning 204) and leave the dangling claim that feeds the
+  // stale-session-sweep CLAIM_FIX churn. A genuine error is now fatal so the caller knows the
+  // claim was NOT released. (Zero rows affected is expected & fine — the holder already moved on.)
   if (claimedSessionId) {
-    const { error: csErr } = await supabase
+    const { data: releasedRows, error: csErr } = await supabase
       .from('claude_sessions')
       .update({
         status: 'released',
@@ -126,11 +153,16 @@ async function cancelSD(sd, reason) {
         released_at: new Date().toISOString(),
       })
       .eq('session_id', claimedSessionId)
-      .eq('sd_key', sd.sd_key);  // only release if THIS SD was the active claim
+      .eq('sd_key', sd.sd_key)  // only release if THIS SD was the active claim
+      .select('session_id');
     if (csErr) {
-      console.warn(`⚠️  claude_sessions release for ${claimedSessionId.slice(0, 8)} failed (non-fatal):`, csErr.message);
-    } else {
+      console.error(`❌ claude_sessions release for ${claimedSessionId.slice(0, 8)} FAILED:`, csErr.message);
+      console.error('   SD is cancelled but its claim was NOT released — the dangling claim will feed sweep churn. Resolve manually.');
+      process.exit(1);
+    } else if (releasedRows && releasedRows.length > 0) {
       console.log(`✓ Released claude_sessions row for holder ${claimedSessionId.slice(0, 8)}`);
+    } else {
+      console.log(`ℹ️  Holder ${claimedSessionId.slice(0, 8)} no longer claimed ${sd.sd_key} (already released) — nothing to do.`);
     }
   }
 
