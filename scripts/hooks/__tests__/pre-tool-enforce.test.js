@@ -352,3 +352,39 @@ describe('ENF-15: git-environment edge cases', () => {
     expect(r.stderr).toMatch(/\[ENF-15\] BLOCKED reason=multi_author_branch/);
   });
 });
+
+// QF-20260525-345 (RCA 6188492f): ENF-15 must match only the OPERATIVE `git push …
+// --force` command, never an incidental MENTION of the phrase inside a quoted argument.
+// Pre-fix the boundary class `[\s;&|`]` admitted a bare space AND a backtick, so PR/issue
+// bodies (markdown code-spans use backticks), commit messages, and echo/grep that
+// referenced the phrase were blocked. Mirrors the QF-484 ENF-SD-CREATE-SKILL fix.
+describe('ENF-15: quoted-mention false-positives no longer block (QF-20260525-345)', () => {
+  // Non-allowlisted branch + override flag unset → a FALSE match would surface as
+  // `[ENF-15] BLOCKED reason=env_var_unset` (the reported bug). Post-fix these are not
+  // the operative command, so ENF-15 must pass-through (no [ENF-15] BLOCKED emitted).
+  const env = { LEO_FORCE_PUSH_OWN_BRANCH: '', TEST_OVERRIDE_BRANCH: 'hotfix/123' };
+
+  it('T11 gh pr --body with backtick-markdown mention does not block (reported case)', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('gh pr create --body "share the command `git push --force-with-lease` here"'),
+      env
+    );
+    expect(r.stderr).not.toMatch(/\[ENF-15\] BLOCKED/);
+  });
+
+  it('T12 git commit -m with phrase mention does not block', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('git commit -m "fix: handle git push --force edge case"'),
+      env
+    );
+    expect(r.stderr).not.toMatch(/\[ENF-15\] BLOCKED/);
+  });
+
+  it('T13 echo with phrase mention does not block', async () => {
+    const r = await spawnHookEnforce(
+      bashPayload('echo "run git push --force-with-lease to deploy"'),
+      env
+    );
+    expect(r.stderr).not.toMatch(/\[ENF-15\] BLOCKED/);
+  });
+});
