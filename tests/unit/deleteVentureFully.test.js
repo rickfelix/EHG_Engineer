@@ -21,14 +21,14 @@
  */
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-const { execSyncMock, runTeardownMock, markResourcesMock, cleanupCredsMock } = vi.hoisted(() => ({
-  execSyncMock: vi.fn(),
+const { execFileSyncMock, runTeardownMock, markResourcesMock, cleanupCredsMock } = vi.hoisted(() => ({
+  execFileSyncMock: vi.fn(),
   runTeardownMock: vi.fn(),
   markResourcesMock: vi.fn(),
   cleanupCredsMock: vi.fn(),
 }));
 
-vi.mock('child_process', () => ({ execSync: execSyncMock }));
+vi.mock('child_process', () => ({ execFileSync: execFileSyncMock }));
 vi.mock('../../lib/cleanup/index.js', () => ({ runTeardown: runTeardownMock }));
 vi.mock('../../lib/venture-resources.js', () => ({ markResourcesCleaned: markResourcesMock }));
 vi.mock('../../lib/cleanup/credentials.js', () => ({ cleanup: cleanupCredsMock }));
@@ -68,7 +68,7 @@ function makeSupabase(repoUrl = null, rpc) {
 
 describe('deleteVentureFully — destructive path security invariants', () => {
   beforeEach(() => {
-    execSyncMock.mockReset();
+    execFileSyncMock.mockReset();
     runTeardownMock.mockReset().mockResolvedValue({ success: true });
     markResourcesMock.mockReset().mockResolvedValue(1);
     cleanupCredsMock.mockReset().mockResolvedValue({ revoked: [], failed: [], skipped: [] });
@@ -78,7 +78,7 @@ describe('deleteVentureFully — destructive path security invariants', () => {
     const result = await deleteVentureFully(null, { supabase: makeSupabase() });
     expect(result.success).toBe(false);
     expect(result.error).toBe('ventureId is required');
-    expect(execSyncMock).not.toHaveBeenCalled();
+    expect(execFileSyncMock).not.toHaveBeenCalled();
   });
 
   // FR-2: PROTECTED_REPOS guard ------------------------------------------------
@@ -86,8 +86,10 @@ describe('deleteVentureFully — destructive path security invariants', () => {
     const supabase = makeSupabase('https://github.com/rickfelix/canvas-ai');
     const result = await deleteVentureFully(VENTURE_ID, { supabase });
 
-    expect(execSyncMock).toHaveBeenCalledTimes(1);
-    expect(execSyncMock.mock.calls[0][0]).toBe('gh repo delete rickfelix/canvas-ai --yes');
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+    // QF-20260525-419: shell-free execFileSync with the slug after '--' (cannot be a flag).
+    expect(execFileSyncMock.mock.calls[0][0]).toBe('gh');
+    expect(execFileSyncMock.mock.calls[0][1]).toEqual(['repo', 'delete', '--yes', '--', 'rickfelix/canvas-ai']);
     expect(result.phases.github_repo.status).toBe('deleted');
     expect(result.phases.github_repo.slug).toBe('rickfelix/canvas-ai');
   });
@@ -100,7 +102,7 @@ describe('deleteVentureFully — destructive path security invariants', () => {
     const supabase = makeSupabase(url);
     const result = await deleteVentureFully(VENTURE_ID, { supabase });
 
-    expect(execSyncMock).not.toHaveBeenCalled();
+    expect(execFileSyncMock).not.toHaveBeenCalled();
     expect(result.phases.github_repo.status).toBe('skipped');
     expect(result.phases.github_repo.reason).toMatch(/PROTECTED/);
   });
@@ -114,7 +116,7 @@ describe('deleteVentureFully — destructive path security invariants', () => {
     const supabase = makeSupabase(url);
     const result = await deleteVentureFully(VENTURE_ID, { supabase });
 
-    expect(execSyncMock).not.toHaveBeenCalled();
+    expect(execFileSyncMock).not.toHaveBeenCalled();
     expect(result.phases.github_repo.status).toBe('failed');
     expect(result.phases.github_repo.reason).toMatch(/invalid or unsafe/);
   });
@@ -158,7 +160,7 @@ describe('deleteVentureFully — destructive path security invariants', () => {
 
     expect(result.success).toBe(false);
     expect(result.phases.db.success).toBe(false);
-    expect(execSyncMock).not.toHaveBeenCalled(); // never reached the gh delete after DB failure
+    expect(execFileSyncMock).not.toHaveBeenCalled(); // never reached the gh delete after DB failure
   });
 
   it('dryRun: skips the DB delete and the gh repo delete', async () => {
@@ -168,9 +170,36 @@ describe('deleteVentureFully — destructive path security invariants', () => {
     const result = await deleteVentureFully(VENTURE_ID, { supabase, dryRun: true });
 
     expect(rpc).not.toHaveBeenCalled();
-    expect(execSyncMock).not.toHaveBeenCalled();
+    expect(execFileSyncMock).not.toHaveBeenCalled();
     expect(result.phases.db.dryRun).toBe(true);
     expect(result.phases.github_repo.status).toBe('skipped');
+  });
+
+  // QF-20260525-419 SEC-D-01: a leading-dash slug (arg-injection vector) is rejected
+  // before any delete invocation — it would otherwise be parsed by gh as a flag.
+  it('SEC-D-01: rejects a leading-dash slug before any delete invocation', async () => {
+    const supabase = makeSupabase('https://github.com/-rf/victim');
+    const result = await deleteVentureFully(VENTURE_ID, { supabase });
+
+    expect(execFileSyncMock).not.toHaveBeenCalled();
+    expect(result.phases.github_repo.status).toBe('failed');
+    expect(result.phases.github_repo.reason).toMatch(/invalid or unsafe/);
+  });
+
+  // QF-20260525-419 SEC-D-02: a missing gh binary throws ENOENT ("command not found").
+  // It must be classified as a real failure, never mistaken for an "already gone" success.
+  it('SEC-D-02: classifies a missing gh binary (ENOENT) as failed, not deleted', async () => {
+    execFileSyncMock.mockImplementation(() => {
+      const e = new Error('spawn gh ENOENT');
+      e.code = 'ENOENT';
+      throw e;
+    });
+    const supabase = makeSupabase('https://github.com/rickfelix/canvas-ai');
+    const result = await deleteVentureFully(VENTURE_ID, { supabase });
+
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+    expect(result.phases.github_repo.status).toBe('failed');
+    expect(result.phases.github_repo.reason).toMatch(/gh CLI not found/);
   });
 });
 
@@ -186,6 +215,12 @@ describe('parseRepoSlug / isProtectedRepo', () => {
   it('flags slugs with shell metacharacters as invalid', () => {
     expect(parseRepoSlug('https://github.com/rickfelix/evil;whoami').valid).toBe(false);
     expect(parseRepoSlug(null)).toEqual({ slug: null, valid: false });
+  });
+
+  it('SEC-D-01: rejects a leading-dash owner or repo segment (mid-segment dashes still valid)', () => {
+    expect(parseRepoSlug('https://github.com/-rf/victim').valid).toBe(false);
+    expect(parseRepoSlug('https://github.com/owner/-evil').valid).toBe(false);
+    expect(parseRepoSlug('https://github.com/rickfelix/canvas-ai').valid).toBe(true);
   });
 
   it('treats the core repos (and lowercase variants) as protected', () => {
