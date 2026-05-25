@@ -34,7 +34,7 @@
     "switch-context": "node scripts/switch-context.js",
     "show-context": "node scripts/switch-context.js show",
     "list-apps": "node scripts/switch-context.js list",
-    "encrypt-test": "node lib/security/encryption.js validate",
+    "encrypt-test": "node lib/security/encryption.cjs validate",
     "sync-github": "node scripts/sync-github.js",
     "sync-supabase": "node scripts/sync-supabase.js",
     "sync-app": "node scripts/sync-manager.js",

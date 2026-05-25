@@ -11,7 +11,7 @@ import path from 'path';
 import { exec  } from 'child_process';
 import { promisify  } from 'util';
 import readline from 'readline';
-import encryption from '../lib/security/encryption';
+import encryption from '../lib/security/encryption.cjs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { isMainModule } from '../lib/utils/is-main-module.js';
