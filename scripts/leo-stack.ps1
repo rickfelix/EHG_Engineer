@@ -512,10 +512,70 @@ function Test-StackHealth {
     }
 }
 
+# Git freshness — ensure a repo serves the latest origin/main before the server
+# starts. leo-stack restart restarts the *processes* but historically never pulled,
+# so the dev servers served whatever the local working tree happened to be on. That
+# is why merged work could be invisible in the running app (e.g. CronLinter showed
+# the retired Stage-19 build-method UI because the ehg tree was behind the commit
+# that removed it). Fast-forward only when safely on a clean `main`; otherwise warn
+# and serve local — never clobber a feature branch or uncommitted work. Opt out via
+# LEO_STACK_NO_PULL=1.
+function Sync-Repo {
+    param([string]$Dir, [string]$Name)
+    if (-not (Test-Path $Dir)) {
+        Write-Log "WARN" "[SYNC] $Name dir not found ($Dir) - skipping" "Yellow"
+        return
+    }
+    Push-Location $Dir
+    try {
+        $branch = (git rev-parse --abbrev-ref HEAD 2>$null)
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log "WARN" "[SYNC] $Name is not a git repo - skipping" "Yellow"
+            return
+        }
+        if ($branch -ne "main") {
+            Write-Log "WARN" "[SYNC] $Name on '$branch' (not main) - serving local, not auto-pulling" "Yellow"
+            return
+        }
+        # No pre-emptive dirty check: rely on `merge --ff-only`, which fast-forwards
+        # cleanly when uncommitted files (e.g. the perpetually-churned .claude/.protocol-sync)
+        # are NOT in the incoming diff, and safely aborts (never clobbers) when they are.
+        git fetch origin main --quiet 2>$null
+        $behind = (git rev-list --count HEAD..origin/main 2>$null)
+        if ($behind -match '^\d+$' -and [int]$behind -gt 0) {
+            Write-Log "INFO" "[SYNC] $Name is $behind commit(s) behind origin/main - fast-forwarding..." "Blue"
+            git merge --ff-only origin/main --quiet 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "INFO" "[SYNC] $Name updated to $(git rev-parse --short HEAD)" "Green"
+            } else {
+                Write-Log "WARN" "[SYNC] $Name ff-only merge declined (diverged or local changes conflict) - serving local" "Yellow"
+            }
+        } else {
+            Write-Log "INFO" "[SYNC] $Name already current with origin/main" "Green"
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
+function Sync-Repos {
+    if ($env:LEO_STACK_NO_PULL -eq "1") {
+        Write-Log "WARN" "[SYNC] LEO_STACK_NO_PULL=1 - skipping repo freshness check (serving local)" "Yellow"
+        return
+    }
+    Write-Log "INFO" "[SYNC] Ensuring repos are current with origin/main..." "Blue"
+    Sync-Repo -Dir $EngineerDir -Name "EHG_Engineer"
+    Sync-Repo -Dir $AppDir -Name "EHG App (ehg)"
+}
+
 # Function to start all servers
 function Start-AllServers {
     $modeText = if ($Fast) { "(FAST MODE)" } else { "" }
     Write-Log "INFO" "[START] Starting LEO Stack $modeText..." "Blue"
+    Write-Host "=================================="
+
+    # Pull latest origin/main for both repos so the servers never serve stale code.
+    Sync-Repos
     Write-Host "=================================="
 
     # Optional hard reset of the EHG App Vite optimize cache (opt-in via -ClearViteCache)
