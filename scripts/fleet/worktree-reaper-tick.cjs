@@ -20,14 +20,16 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 
 const DEFAULT_CADENCE = 12; // every 12th sweep ≈ 1 hour at 5-min intervals
 const STATE_RELATIVE = path.join('.claude', 'worktree-reaper-state.json');
 const STATE_SCHEMA_VERSION = 1;
 
 function readState(statePath) {
-  if (!fs.existsSync(statePath)) return { schema_version: STATE_SCHEMA_VERSION, sweep_counter: 0, last_run_at: null, last_result: null };
+  // SD-FDBK-INFRA-WORKTREE-REAPER-RELIABILITY-001: last_pid/last_spawn_at are additive
+  // (schema stays v1); old state files without them default to null.
+  if (!fs.existsSync(statePath)) return { schema_version: STATE_SCHEMA_VERSION, sweep_counter: 0, last_run_at: null, last_result: null, last_pid: null, last_spawn_at: null };
   try {
     const raw = fs.readFileSync(statePath, 'utf8');
     const parsed = JSON.parse(raw);
@@ -36,9 +38,27 @@ function readState(statePath) {
       sweep_counter: Number.isFinite(parsed.sweep_counter) ? parsed.sweep_counter : 0,
       last_run_at: parsed.last_run_at || null,
       last_result: parsed.last_result || null,
+      last_pid: Number.isInteger(parsed.last_pid) ? parsed.last_pid : null,
+      last_spawn_at: parsed.last_spawn_at || null,
     };
   } catch {
-    return { schema_version: STATE_SCHEMA_VERSION, sweep_counter: 0, last_run_at: null, last_result: null };
+    return { schema_version: STATE_SCHEMA_VERSION, sweep_counter: 0, last_run_at: null, last_result: null, last_pid: null, last_spawn_at: null };
+  }
+}
+
+/**
+ * Liveness probe via signal-0. Returns true if the pid is a running process
+ * (ours → clean return; alive-but-not-ours → EPERM). A missing process throws
+ * ESRCH → false. Used by the single-flight guard so a new tick never stacks a
+ * second reaper on top of one that is still running.
+ */
+function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return !!(e && e.code === 'EPERM');
   }
 }
 
@@ -105,44 +125,68 @@ function tick(opts = {}) {
     return { invoked: false, counter: state.sweep_counter, cadence, result: 'script_missing', enabled: true };
   }
 
+  // Single-flight guard: if the previous reaper is still running, do not stack a
+  // second one. A new sweep tick fires hourly; a slow stage2 reap could still be
+  // mid-run, and overlapping reapers race on the same worktrees.
+  if (isPidAlive(state.last_pid)) {
+    logger(`WORKTREE REAPER TICK: sweep=${state.sweep_counter} — prior reaper (pid=${state.last_pid}) still running; skipping launch`);
+    state.last_run_at = new Date().toISOString();
+    state.last_result = 'skipped_in_flight';
+    writeState(statePath, state);
+    return { invoked: false, counter: state.sweep_counter, cadence, result: 'skipped_in_flight', pid: state.last_pid, enabled: true };
+  }
+
   const args = [reaperScript];
   if (execute) args.push('--execute');
   if (stage2) args.push('--stage2', '--yes');
 
   logger(`WORKTREE REAPER TICK: sweep=${state.sweep_counter} cadence=${cadence} execute=${execute} stage2=${stage2}`);
 
+  // SD-FDBK-INFRA-WORKTREE-REAPER-RELIABILITY-001: run the reaper OUT-OF-BAND.
+  // Previously this blocked the sweep on a synchronous spawnSync (timeout 5 min).
+  // The sweep is launched by the coordinator with a ~2-min process budget, so a slow
+  // stage2 reap blocked the sweep past its budget and the WHOLE sweep was SIGTERM'd
+  // (exit 143). A detached + unref'd child lets the sweep return immediately while the
+  // reaper runs independently; its stdout/stderr go to a log file instead of the
+  // sweep's stdio. The reaper self-recovers on later ticks, so a killed/slow reap is safe.
   let result = 'unknown';
+  let pid = null;
   try {
-    const res = spawnSync(process.execPath, args, {
-      cwd: repoRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 5 * 60 * 1000,
-    });
-    if (res.error) {
-      result = 'spawn_error:' + (res.error.code || 'unknown');
-    } else if (res.status === 0) {
-      result = 'pass';
-    } else if (res.status === 2) {
-      result = 'cwd_guard_triggered';
-    } else {
-      result = `exit_${res.status}`;
+    const logPath = path.join(repoRoot, '.claude', 'worktree-reaper-last.log');
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    const logFd = fs.openSync(logPath, 'a');
+    try {
+      fs.writeSync(logFd, `\n=== reaper spawned ${new Date().toISOString()} sweep=${state.sweep_counter} execute=${execute} stage2=${stage2} ===\n`);
+      const child = spawn(process.execPath, args, {
+        cwd: repoRoot,
+        detached: true,
+        windowsHide: true,
+        stdio: ['ignore', logFd, logFd],
+      });
+      child.unref();
+      pid = child.pid || null;
+      result = 'spawned';
+      logger(`  reaper spawned out-of-band (pid=${pid}) — output -> ${logPath}`);
+    } finally {
+      fs.closeSync(logFd); // child has its own duped fd; closing the parent copy is safe
     }
-    // Emit one summary line; full output goes to the sweep's stderr/stdout.
-    const stdout = (res.stdout || '').split('\n').filter(Boolean);
-    const summaryLine = stdout.find((l) => l.startsWith('Stage 1') || l.includes('WORKTREE REAPER')) || '';
-    if (summaryLine) logger(`  ${summaryLine.trim()}`);
   } catch (e) {
-    result = 'exception';
-    logger(`  reaper threw: ${e && e.message ? e.message : String(e)}`);
+    // Never throw — the sweep's claim-cleanup must complete regardless.
+    result = 'spawn_error:' + (e && e.code ? e.code : 'unknown');
+    logger(`  reaper spawn failed: ${e && e.message ? e.message : String(e)}`);
   }
 
   state.last_run_at = new Date().toISOString();
   state.last_result = result;
+  if (result === 'spawned') {
+    state.last_pid = pid;
+    state.last_spawn_at = new Date().toISOString();
+  } else {
+    state.last_pid = null;
+  }
   writeState(statePath, state);
 
-  return { invoked: true, counter: state.sweep_counter, cadence, result, enabled: true };
+  return { invoked: result === 'spawned', counter: state.sweep_counter, cadence, result, pid, enabled: true };
 }
 
 module.exports = {
@@ -150,6 +194,7 @@ module.exports = {
   readState,
   writeState,
   isEnabled,
+  isPidAlive,
   resolveExecuteMode,
   DEFAULT_CADENCE,
   STATE_RELATIVE,

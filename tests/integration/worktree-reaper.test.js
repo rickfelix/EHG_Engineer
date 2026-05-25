@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
+import { execFileSync } from 'node:child_process';
 import {
   parseArgs,
   stageForCategories,
@@ -20,6 +21,7 @@ import {
   preserveUntrackedFiles,
   runPhantomOnlyMode,
   loadClaimMap,
+  removeWorktree,
 } from '../../scripts/worktree-reaper.mjs';
 
 // ── parseArgs ──────────────────────────────────────────────────────────
@@ -338,5 +340,54 @@ describe('loadClaimMap (QF-20260510-WT-CLAIM-PROTECT-001)', () => {
   it('returns empty map (no throw) when supabase client is absent', async () => {
     const map = await loadClaimMap(null);
     expect(map.size).toBe(0);
+  });
+});
+
+// ── TS-5: removeWorktree junction-safety regression guard ──────────────
+// SD-FDBK-INFRA-WORKTREE-REAPER-RELIABILITY-001 part (b).
+// Pins QF-446 / QF-347 / QF-102: removing a worktree whose node_modules is a
+// REAL isolated directory (not a junction) must NOT reach out and delete the
+// shared main-repo node_modules. Prior witnessed incidents (2026-05-11T23:33Z)
+// destroyed the main repo's node_modules across 4 parallel sessions.
+
+function git(args, cwd) {
+  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+}
+
+describe('removeWorktree — TS-5 real isolated node_modules (SD-FDBK-INFRA-WORKTREE-REAPER-RELIABILITY-001)', () => {
+  let mainRepo;
+
+  beforeEach(() => {
+    mainRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'reaper-ts5-'));
+    git(['init', '-q', '-b', 'main'], mainRepo);
+    git(['config', 'user.email', 'ts5@test.local'], mainRepo);
+    git(['config', 'user.name', 'ts5'], mainRepo);
+    git(['commit', '--allow-empty', '-q', '-m', 'init'], mainRepo);
+    // The SHARED main-repo node_modules (the store that must survive).
+    fs.mkdirSync(path.join(mainRepo, 'node_modules', 'left-pad'), { recursive: true });
+    fs.writeFileSync(path.join(mainRepo, 'node_modules', 'left-pad', 'index.js'), 'MAIN_STORE_SENTINEL');
+  });
+
+  afterEach(() => {
+    try { fs.rmSync(mainRepo, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  it('removes a worktree with a REAL isolated node_modules and leaves the shared main store intact', () => {
+    const wt = path.join(mainRepo, '.worktrees', 'SD-TS5');
+    git(['worktree', 'add', '-q', '--detach', wt], mainRepo);
+    // Real isolated node_modules inside the worktree (a genuine directory, NOT a junction).
+    fs.mkdirSync(path.join(wt, 'node_modules', 'dep'), { recursive: true });
+    fs.writeFileSync(path.join(wt, 'node_modules', 'dep', 'index.js'), 'WORKTREE_LOCAL_DEP');
+    expect(fs.existsSync(wt)).toBe(true);
+
+    const res = removeWorktree({ wtPath: wt, repoRoot: mainRepo });
+
+    expect(res.ok).toBe(true);
+    // Worktree directory is gone…
+    expect(fs.existsSync(wt)).toBe(false);
+    // …but the SHARED main-repo node_modules + sentinel are byte-for-byte intact.
+    const sentinel = path.join(mainRepo, 'node_modules', 'left-pad', 'index.js');
+    expect(fs.existsSync(sentinel)).toBe(true);
+    expect(fs.readFileSync(sentinel, 'utf8')).toBe('MAIN_STORE_SENTINEL');
   });
 });
