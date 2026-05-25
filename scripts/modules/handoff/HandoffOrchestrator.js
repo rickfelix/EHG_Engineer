@@ -24,6 +24,32 @@ import {
 import { captureHandoffGate } from '../../../lib/flywheel/capture.js';
 import { runPrerequisitePreflight } from './pre-checks/prerequisite-preflight.js';
 
+/**
+ * QF-20260525-378: fold a FAILED prerequisite preflight into a precheck verdict
+ * for parity with execute(), which HARD-FAILS on it. Precheck previously only
+ * logged a failed preflight and returned success=result.passed from the gates
+ * alone, so precheck PASSED while execute FAILED on e.g. USER_STORIES_MISSING.
+ * Pure + exported for unit testing.
+ * @param {{passed?:boolean, issues?:object[], failedGates?:object[]}} result Gate-validation result
+ * @param {{passed?:boolean, issues?:{code:string,message:string}[]}} preflight Prerequisite preflight result
+ * @returns {{success:boolean, issues:object[], failedGates:object[]}}
+ */
+export function applyPreflightToVerdict(result, preflight) {
+  const failed = !!preflight && preflight.passed === false;
+  const pfIssues = failed ? preflight.issues.map(i => `[${i.code}] ${i.message}`) : [];
+  return {
+    success: (result?.passed ?? false) && !failed,
+    issues: [
+      ...pfIssues.map(issue => ({ gate: 'PREREQUISITE_PREFLIGHT', issue })),
+      ...((result && result.issues) || [])
+    ],
+    failedGates: [
+      ...(failed ? [{ name: 'PREREQUISITE_PREFLIGHT', issues: pfIssues }] : []),
+      ...((result && result.failedGates) || [])
+    ]
+  };
+}
+
 export class HandoffOrchestrator {
   constructor(options = {}) {
     // Create or use injected Supabase client
@@ -344,12 +370,15 @@ export class HandoffOrchestrator {
         console.log('─'.repeat(60));
       }
 
+      // QF-20260525-378: fold a failed prerequisite preflight into the verdict
+      // for parity with execute() (which hard-fails on it). See helper above.
+      const verdict = applyPreflightToVerdict(result, preflight);
       return {
-        success: result.passed,
         handoffType: normalizedType,
         sdId,
         sdTitle: sd.title,
-        ...result
+        ...result,
+        ...verdict
       };
 
     } catch (error) {
