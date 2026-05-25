@@ -131,10 +131,18 @@ function spawnHookEnforce(stdinPayload, extraEnv = {}) {
     stdio: ['pipe', 'pipe', 'pipe'],
     // SUPABASE_URL='' short-circuits audit-log writes so tests don't hit the DB.
     // Other ENF guards keyed off env vars set to safe-default values.
+    // QF-20260525-425: disable the LEARN-129 RCA repeat-invocation guard (ENF 11).
+    // These tests spawn the hook repeatedly with the SAME command (e.g. T3-T7,T10 all
+    // send 'git push --force-with-lease') under a constant session_id ('enf9-test'),
+    // so the session-scoped 10-min repeat counter (.claude/retry-state-enf9-test.json)
+    // accumulates across cases AND runs, tripping a tiered block that pre-empts the
+    // enforcement rule under test → non-deterministic RED. The guard is orthogonal to
+    // ENF-15/ENF-SD-CREATE-SKILL, so neutralize it (mirrors LEO_NPM_INSTALL_GUARD above).
     env: {
       ...process.env,
       SUPABASE_URL: '',
       LEO_NPM_INSTALL_GUARD: 'off',
+      LEO_RCA_ENFORCEMENT: 'off',
       ...extraEnv
     }
   });
