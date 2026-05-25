@@ -21,6 +21,9 @@ import {
 import { getRemediation } from './remediations.js';
 import { clearState as clearAutoProceedState } from '../../auto-proceed-state.js';
 import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.js';
+// CAPA-1 (QF-20260525-306): parse "Closes feedback <uuid>" footers from merged SD
+// commits — autoCloseFeedback closes only by link, mirroring the QF orchestrator gap.
+import { parseAndExpandFeedbackFooters, resolveFeedback } from '../../../../../lib/governance/resolve-feedback.js';
 
 // Worktree cleanup (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
 import { cleanupWorktree, validateSdKey } from '../../../../../lib/worktree-manager.js';
@@ -851,8 +854,21 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       ...linkedByDeferredFrom.map(f => f.id)
     ])];
 
+    // CAPA-1 (QF-20260525-306): also resolve feedback referenced ONLY by a
+    // "Closes feedback <uuid>" footer in the SD's merged commits — the link-based
+    // queries above miss those. Fail-soft + env opt-out; runs even with 0 links.
+    // PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.
+    let footerCount = 0;
+    if (process.env.RESOLVE_FEEDBACK_ON_SD_COMPLETE !== '0') {
+      try {
+        footerCount = await this.resolveFeedbackFooters(sd);
+      } catch (footerErr) {
+        console.warn(`   ⚠️  Footer-based feedback resolve failed (non-blocking): ${footerErr.message}`);
+      }
+    }
+
     if (allIds.length === 0) {
-      return { closedCount: 0 };
+      return { closedCount: footerCount };
     }
 
     const { data: updated, error: updateError } = await this.supabase
@@ -870,7 +886,51 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       throw new Error(`Failed to auto-close feedback: ${updateError.message}`);
     }
 
-    return { closedCount: updated?.length || 0 };
+    return { closedCount: (updated?.length || 0) + footerCount };
+  }
+
+  /**
+   * CAPA-1 (QF-20260525-306): parse "Closes feedback <uuid>" footers from the SD's
+   * merged commit messages (squash-merge embeds the PR body) and resolve each row,
+   * mirroring complete-quick-fix orchestrator.resolveLinkedFeedbackRows. Returns the
+   * count newly resolved. Caller wraps fail-soft.
+   * @param {Object} sd
+   * @returns {Promise<number>}
+   */
+  async resolveFeedbackFooters(sd) {
+    const sdKey = sd.sd_key || sd.id;
+    const corpus = [];
+    // Only shell out for a well-formed key (avoids any injection via --grep arg).
+    if (typeof sdKey === 'string' && /^[A-Za-z0-9_-]+$/.test(sdKey)) {
+      try {
+        const { execSync } = await import('node:child_process');
+        const log = execSync(`git log origin/main --grep="${sdKey}" --format=%B -n 30`, {
+          encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 10000,
+        });
+        if (log) corpus.push(log);
+      } catch {
+        /* git unavailable or no match — non-fatal */
+      }
+    }
+    if (sd.description) corpus.push(sd.description);
+
+    const { uuids, warnings } = await parseAndExpandFeedbackFooters({
+      text: corpus.join('\n'), supabase: this.supabase,
+    });
+    for (const w of warnings) console.log(`   ⚠️  ${w}`);
+
+    let resolved = 0;
+    for (const uuid of uuids) {
+      const result = await resolveFeedback({
+        supabase: this.supabase, feedbackId: uuid, sdId: sd.id,
+        notes: `Closed by footer in SD ${sdKey} (LEAD-FINAL-APPROVAL)`,
+      });
+      if (result.updated) {
+        resolved++;
+        console.log(`   ✅ feedback ${uuid} → resolved (footer in ${sdKey})`);
+      }
+    }
+    return resolved;
   }
 
   // QF-20260424-806: accept context (sdId, details, score) and forward it to
