@@ -370,12 +370,66 @@ status() {
 }
 
 # Function to start all servers
+# Git freshness — see leo-stack.ps1 Sync-Repo for the full rationale. restart
+# restarts the processes but historically never pulled, so the dev servers served
+# whatever the local working tree was on (merged work could be invisible in the
+# running app). Fast-forward only when safely on a clean `main`; otherwise warn and
+# serve local — never clobber a feature branch or uncommitted work. Opt out via
+# LEO_STACK_NO_PULL=1.
+sync_repo() {
+    local dir="$1"
+    local name="$2"
+    if [ ! -e "$dir/.git" ]; then
+        log "WARN" "${YELLOW}[SYNC] $name is not a git repo - skipping${NC}"
+        return
+    fi
+    (
+        cd "$dir" || exit 0
+        local branch
+        branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        if [ "$branch" != "main" ]; then
+            log "WARN" "${YELLOW}[SYNC] $name on '$branch' (not main) - serving local, not auto-pulling${NC}"
+            exit 0
+        fi
+        # No pre-emptive dirty check: rely on `merge --ff-only`, which fast-forwards
+        # cleanly when uncommitted files (e.g. the perpetually-churned .claude/.protocol-sync)
+        # are NOT in the incoming diff, and safely aborts (never clobbers) when they are.
+        git fetch origin main --quiet 2>/dev/null
+        local behind
+        behind=$(git rev-list --count HEAD..origin/main 2>/dev/null)
+        if [ -n "$behind" ] && [ "$behind" -gt 0 ] 2>/dev/null; then
+            log "INFO" "${BLUE}[SYNC] $name is $behind commit(s) behind origin/main - fast-forwarding...${NC}"
+            if git merge --ff-only origin/main --quiet 2>/dev/null; then
+                log "INFO" "${GREEN}[SYNC] $name updated to $(git rev-parse --short HEAD)${NC}"
+            else
+                log "WARN" "${YELLOW}[SYNC] $name ff-only merge declined (diverged or local changes conflict) - serving local${NC}"
+            fi
+        else
+            log "INFO" "${GREEN}[SYNC] $name already current with origin/main${NC}"
+        fi
+    )
+}
+
+sync_repos() {
+    if [ "$LEO_STACK_NO_PULL" = "1" ]; then
+        log "WARN" "${YELLOW}[SYNC] LEO_STACK_NO_PULL=1 - skipping repo freshness check (serving local)${NC}"
+        return
+    fi
+    log "INFO" "${BLUE}[SYNC] Ensuring repos are current with origin/main...${NC}"
+    sync_repo "$ENGINEER_DIR" "EHG_Engineer"
+    sync_repo "$APP_DIR" "EHG App (ehg)"
+}
+
 start_all() {
     local mode_text=""
     if [ "$FAST_MODE" = true ]; then
         mode_text="(FAST MODE)"
     fi
     log "INFO" "${BLUE}[START] Starting LEO Stack $mode_text...${NC}"
+    echo "=================================="
+
+    # Pull latest origin/main for both repos so the servers never serve stale code.
+    sync_repos
     echo "=================================="
 
     # Clean up any existing processes
