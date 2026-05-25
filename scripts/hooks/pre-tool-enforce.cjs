@@ -432,7 +432,13 @@ async function main() {
   // Disable in tests via LEO_NPM_INSTALL_GUARD=off.
   if (TOOL_NAME === 'Bash' && process.env.LEO_NPM_INSTALL_GUARD !== 'off') {
     const cmd = (input.command || '').trim();
-    const NPM_INSTALL_RE = /(?:^|[\s;&|(])npm\s+(install|i|ci)(?:\s+|$)/;
+    // QF-20260525-889 (sibling of QF-20260525-345 / RCA 6188492f): match `npm
+    // install|i|ci` only as the OPERATIVE command — at start or after a true shell
+    // separator (; | & ( newline, && ||), NOT after a bare space. The prior boundary
+    // class `[\s;&|(]` admitted a space, so a mention of the phrase inside a quoted
+    // argument (echo "run npm install first", git commit -m, docs) false-positived
+    // and was blocked. Trailing `(?:\s+|$)` is unchanged (avoids "npm installation").
+    const NPM_INSTALL_RE = /(?:^|[;&|(\n]|&&|\|\|)\s*npm\s+(install|i|ci)(?:\s+|$)/;
     if (NPM_INSTALL_RE.test(cmd) && !/--help/.test(cmd)) {
       try {
         const fs = require('fs');

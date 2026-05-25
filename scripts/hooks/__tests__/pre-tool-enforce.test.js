@@ -5,7 +5,7 @@
 // silently no-op fleet-wide. Post-fix: hook reads {tool_name, tool_input,
 // session_id} JSON payload from stdin per documented PreToolUse contract.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import path from 'node:path';
 
 const HOOK_PATH = path.resolve(__dirname, '../pre-tool-enforce.cjs').replace(/\\/g, '/');
@@ -386,5 +386,46 @@ describe('ENF-15: quoted-mention false-positives no longer block (QF-20260525-34
       env
     );
     expect(r.stderr).not.toMatch(/\[ENF-15\] BLOCKED/);
+  });
+});
+
+// QF-20260525-889 (sibling of QF-345 / RCA 6188492f): ENF-12 npm-install race guard
+// must match only the OPERATIVE `npm install|i|ci`, not a mention inside a quoted arg.
+// The guard only blocks when a concurrency signal is present, so these tests stage an
+// active node_modules/.staging fixture (signal=ON) and disable the process scan for
+// determinism, then assert the FP mention passes while a real install still blocks.
+describe('ENF-12 npm-install guard: quoted-mention false-positives no longer block (QF-20260525-889)', () => {
+  let tmp;
+  beforeAll(() => {
+    const fs = require('node:fs');
+    const os = require('node:os');
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'enf12-'));
+    fs.mkdirSync(path.join(tmp, 'node_modules', '.staging'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'node_modules', '.staging', 'lock'), 'x'); // signal active
+  });
+  afterAll(() => {
+    try { require('node:fs').rmSync(tmp, { recursive: true, force: true }); } catch { /* best-effort */ }
+  });
+
+  // cwd → the staged fixture so the guard sees an active signal; guard ON
+  // (LEO_NPM_INSTALL_GUARD='' overrides spawnHookEnforce's default 'off'); process
+  // scan OFF for determinism (rely only on the staging signal).
+  function npmPayload(command) {
+    return JSON.stringify({
+      session_id: 'enf12-test', tool_name: 'Bash',
+      tool_input: { command, cwd: tmp }, hook_event_name: 'PreToolUse'
+    });
+  }
+  const env = { LEO_NPM_INSTALL_GUARD: '', LEO_NPM_INSTALL_GUARD_PS: 'off' };
+
+  it('echo mention of npm install does not trip the race guard (signal active)', async () => {
+    const r = await spawnHookEnforce(npmPayload('echo "run npm install first"'), env);
+    expect(r.stderr).not.toMatch(/NPM INSTALL RACE GUARD/);
+  });
+
+  it('real npm install with active staging still blocks (true-positive preserved)', async () => {
+    const r = await spawnHookEnforce(npmPayload('npm install'), env);
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/NPM INSTALL RACE GUARD/);
   });
 });
