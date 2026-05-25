@@ -3,6 +3,9 @@
  * Part of SD-LEO-REFACTOR-IMPL-FIDELITY-001
  */
 
+import { existsSync } from 'fs';
+import { readdir } from 'fs/promises';
+import path from 'path';
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
 import { getSectionEnforcement } from '../sd-type-section-policy.js';
 
@@ -154,6 +157,27 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
     // Continue with normal validation
   }
 
+  // SD-FDBK-ENH-GATE2-AWARE-SECTION-001: N/A-aware Section C, mirroring the Section B
+  // fix in PR #3911 (database-fidelity.js). Zero DB footprint (no SD-matched migration
+  // files AND no .from()/.rpc()/SQL DDL/DML in the diff) → Section C is Not Applicable;
+  // award full credit instead of the ~13/25 partial that RED-capped zero-DB frontend
+  // feature SDs. Full credit == denominator-neutral under the hardcoded max_score=100
+  // score-as-percentage model (index.js unchanged, as in PR #3911). Sits AFTER the
+  // existing exemptions (they keep precedence); any DB signal / detection error falls
+  // through to normal C1/C2/C3 scoring below.
+  const dbScope = await detectDatabaseScope(sd_id, supabase);
+  if (!dbScope.hasMigrations && !dbScope.hasQueries) {
+    validation.score += 25;
+    validation.gate_scores.data_flow_alignment = 25;
+    validation.details.data_flow_alignment = {
+      applicable: false,
+      reason: 'Not applicable — SD has zero database footprint (no migration files, no database queries detected)',
+      db_scope: dbScope,
+    };
+    console.log('   ✅ Section C N/A — zero database footprint (no migrations, no DB queries) — full credit (25/25)');
+    return;
+  }
+
   // Re-use exemptSections from top of function for sub-section checks
   const isC1Exempt = exemptSections.includes('C1_queries');
   const isC2Exempt = exemptSections.includes('C2_form_integration');
@@ -262,4 +286,55 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
   validation.gate_scores.data_flow_alignment = sectionScore;
   validation.details.data_flow_alignment = sectionDetails;
   console.log(`\n   Section C Score: ${sectionScore}/25`);
+}
+
+/**
+ * SD-FDBK-ENH-GATE2-AWARE-SECTION-001: zero-DB-footprint detector for the Section C
+ * N/A check. DELIBERATE byte-for-byte DUPLICATE of detectDatabaseScope in
+ * database-fidelity.js (PR #3911) so both DB-centric sections agree — TODO: extract
+ * to utils/index.js (deferred to avoid touching the PR #3911 file + its mock test).
+ * Signals: hasMigrations (SD-matched migration file on disk) + hasQueries (.from(/.rpc(
+ * or SQL DDL/DML in the diff). Conservative: returns true/true on error (no free N/A).
+ * @returns {Promise<{hasMigrations:boolean, hasQueries:boolean, detection_error?:boolean}>}
+ */
+async function detectDatabaseScope(sd_id, supabase) {
+  try {
+    const implementationRepos = await detectImplementationRepos(sd_id, supabase);
+    const searchTerms = await getSDSearchTerms(sd_id, supabase);
+    const searchLower = searchTerms.map(t => t.replace('SD-', '').toLowerCase());
+
+    // Signal 1: SD-matched migration files on disk (mirrors B1 detection).
+    let hasMigrations = false;
+    const migrationDirs = ['database/migrations', 'supabase/migrations', 'migrations'];
+    for (const repo of implementationRepos) {
+      for (const dir of migrationDirs) {
+        const fullPath = path.join(repo, dir);
+        if (existsSync(fullPath)) {
+          const files = await readdir(fullPath);
+          if (files.some(f => searchLower.some(term => f.toLowerCase().includes(term)))) {
+            hasMigrations = true;
+          }
+        }
+      }
+    }
+
+    // Signal 2: database query signals in the SD's diff.
+    let gitDiff = '';
+    for (const repo of implementationRepos) {
+      try {
+        gitDiff += await gitLogForSD(
+          `git -C "${repo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+          searchTerms,
+          { timeout: 15000 }
+        );
+      } catch (_) { /* skip repos without matching commits */ }
+    }
+    const dbSignal = /\.from\(|\.rpc\(|create\s+table|alter\s+table|insert\s+into|update\s+\w+\s+set|delete\s+from|create\s+policy|alter\s+policy/i;
+    const hasQueries = dbSignal.test(gitDiff);
+
+    return { hasMigrations, hasQueries };
+  } catch (error) {
+    // Conservative: on detection failure do NOT grant the N/A pass.
+    return { hasMigrations: true, hasQueries: true, detection_error: true };
+  }
 }
