@@ -1,0 +1,60 @@
+name: Design Prompts Cross-Repo Parity
+
+# SD-LEO-INFRA-UNIFY-STAGE-DESIGN-001 (Phase 3) — twinned advisory gate.
+#
+# The shared design-prompt bodies (the 3 design audits + the required Feedback
+# page) are vendored byte-equivalent into both repos: S17 (rickfelix/ehg UI,
+# src/components/stage17/gvos/shared-design-prompts.json) and S19 (here,
+# lib/eva/bridge/shared-design-prompts.json). This runs on PRs that touch the
+# shared source or its tooling, shallow-clones the sibling rickfelix/ehg repo,
+# and compares canonical checksums so the two copies can never silently diverge
+# (the QF/PR #3941 class of drift). The twin workflow lives in rickfelix/ehg and
+# triggers on the frontend copy.
+#
+# ADVISORY: continue-on-error: true. Flip to blocking (remove that line + add
+# "Design Prompts Cross-Repo Parity" to required status checks) in a 1-line
+# follow-up once the false-positive rate is confirmed ~0.
+
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/bridge/shared-design-prompts.json'
+      - 'lib/eva/bridge/shared-design-prompts.sha256'
+      - 'lib/eva/bridge/design-prompts-writer.js'
+      - 'scripts/design-prompts-sync.mjs'
+      - 'scripts/design-prompts-cross-repo-check.mjs'
+      - '.github/workflows/design-prompts-cross-repo.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true  # ADVISORY; remove this line to make blocking
+    steps:
+      - name: Checkout EHG_Engineer
+        uses: actions/checkout@v4
+
+      - name: Checkout sibling EHG repo
+        uses: actions/checkout@v4
+        with:
+          repository: rickfelix/ehg
+          path: ehg-sibling
+          token: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compare shared design-prompts checksum across repos
+        run: node scripts/design-prompts-cross-repo-check.mjs ehg-sibling/src/components/stage17/gvos/shared-design-prompts.json
+
+      - name: Note about advisory mode
+        if: failure()
+        run: |
+          echo "::warning ::S17/S19 shared design-prompts diverged. This gate is in advisory mode (continue-on-error). Re-vendor the shared JSON into both repos and run 'npm run design-prompts:sync'. See SD-LEO-INFRA-UNIFY-STAGE-DESIGN-001."
