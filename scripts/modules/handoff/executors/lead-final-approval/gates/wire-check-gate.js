@@ -87,10 +87,13 @@ export function isExcludedFromWireCheck(file) {
 /**
  * Discover entry point files from package.json scripts and known pipeline scripts.
  *
+ * Exported (SD-FDBK-ENH-WIRE-CHECK-GATE-001) so unit tests can assert the
+ * discovered entry set directly without invoking the whole gate.
+ *
  * @param {string} rootDir - Project root
  * @returns {string[]} Absolute paths (forward slashes)
  */
-function discoverEntryPoints(rootDir) {
+export function discoverEntryPoints(rootDir) {
   const entries = new Set();
   const normalize = (p) => p.replace(/\\/g, '/');
 
@@ -130,12 +133,21 @@ function discoverEntryPoints(rootDir) {
   }
 
   // 2. Known pipeline entry points
+  //
+  // SD-FDBK-ENH-WIRE-CHECK-GATE-001: server/index.js is the Express HTTP entry
+  // point. It is NOT referenced by any package.json script and was not among
+  // the pipeline entries, so lib/ modules reachable ONLY through a server route
+  // (server/index.js -> server/routes/*.js -> lib/...) had no traversal root and
+  // false-positived as "unreachable" (e.g. lib/eva/stage-17/refinement.js via the
+  // /api/stage17 route). Seeding it pairs with the server/ scope addition in
+  // getScopedJsFiles below — both are required for the chain to resolve.
   const knownEntries = [
     'scripts/leo-orchestrator-enforced.js',
     'scripts/handoff.js',
     'scripts/sd-next.js',
     'scripts/eva/eva-pipeline.js',
     'scripts/generate-claude-md-from-db.js',
+    'server/index.js',
   ];
 
   for (const entry of knownEntries) {
@@ -146,20 +158,29 @@ function discoverEntryPoints(rootDir) {
 }
 
 /**
- * Get all JS files in the project scope (lib + scripts directories).
+ * Get all JS files in the project scope (lib + scripts + server directories).
+ *
+ * Exported (SD-FDBK-ENH-WIRE-CHECK-GATE-001) so unit tests can assert the
+ * scoped file set directly without invoking the whole gate.
  *
  * @param {string} rootDir - Project root
  * @returns {string[]} Absolute paths (forward slashes)
  */
-function getScopedJsFiles(rootDir) {
+export function getScopedJsFiles(rootDir) {
   const normalize = (p) => p.replace(/\\/g, '/');
   try {
     // QF-20260509-393: 'scripts/**/*.js' git pathspec WITHOUT globstar config
     // does NOT match flat scripts/*.js (no subdirectory). Was silently excluding
     // hundreds of flat files (handoff.js, sd-next.js, fleet-dashboard.cjs, etc.).
     // Fix: list directories recursively, filter by extension in JS.
+    //
+    // SD-FDBK-ENH-WIRE-CHECK-GATE-001: include server/ so Express route modules
+    // become nodes in the call graph. Without them, a lib/ module reachable only
+    // via server/index.js -> server/routes/*.js -> lib/... is unreachable in the
+    // graph and false-positives. Pairs with the server/index.js entry point seed
+    // in discoverEntryPoints above.
     const result = execSync(
-      'git ls-files -- "lib/" "scripts/"',
+      'git ls-files -- "lib/" "scripts/" "server/"',
       { encoding: 'utf8', cwd: rootDir, timeout: 15000 }
     );
     return result

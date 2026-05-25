@@ -336,3 +336,119 @@ describe('wire-check-gate exports SD-LEO-INFRA-WIRE-CHECK-GATE-001 fix surface',
     expect(catchBlock).not.toMatch(/passed:\s*true/);
   });
 });
+
+// ─── SD-FDBK-ENH-WIRE-CHECK-GATE-001: server/ scope + server entry point ──
+// A lib/ module reachable ONLY through an Express route
+// (server/index.js -> server/routes/*.js -> lib/...) was flagged unreachable
+// because getScopedJsFiles scanned only lib/+scripts/ and discoverEntryPoints
+// never seeded server/index.js. These tests pin both scope surfaces and prove
+// the reachability semantics (positive) while preserving orphan detection
+// (negative control), per the prospective testing-agent truth table.
+describe('wire-check-gate server-route scope (SD-FDBK-ENH-WIRE-CHECK-GATE-001)', () => {
+  let getScopedJsFiles;
+  let discoverEntryPoints;
+  let buildCallGraph;
+  let checkReachability;
+  let REPO_ROOT;
+
+  beforeEach(async () => {
+    const url = await import('url');
+    const __filename2 = url.fileURLToPath(import.meta.url);
+    const __dirname2 = path.dirname(__filename2);
+    REPO_ROOT = path.resolve(__dirname2, '../../../');
+
+    const gateMod = await import(
+      '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js'
+    );
+    getScopedJsFiles = gateMod.getScopedJsFiles;
+    discoverEntryPoints = gateMod.discoverEntryPoints;
+
+    const cgMod = await import('../../../lib/static-analysis/call-graph-builder.js');
+    buildCallGraph = cgMod.buildCallGraph;
+    const rcMod = await import('../../../lib/static-analysis/reachability-checker.js');
+    checkReachability = rcMod.checkReachability;
+  });
+
+  // FR-001 (live repo): server/ files are now in the call-graph scope
+  it('getScopedJsFiles includes server route modules and server/index.js', () => {
+    const files = getScopedJsFiles(REPO_ROOT);
+    expect(Array.isArray(files)).toBe(true);
+    expect(files.some((f) => f.endsWith('/server/index.js'))).toBe(true);
+    expect(files.some((f) => f.endsWith('/server/routes/stage17.js'))).toBe(true);
+  });
+
+  // FR-002 (live repo): server/index.js is a discovered entry point
+  it('discoverEntryPoints seeds server/index.js as an entry point', () => {
+    const entries = discoverEntryPoints(REPO_ROOT);
+    const expected = path.resolve(REPO_ROOT, 'server/index.js').replace(/\\/g, '/');
+    expect(entries).toContain(expected);
+  });
+
+  // FR-003 (positive fixture): a lib leaf reachable only via entry->route->lib
+  // is classified reachable — mirrors the gate's own scope+entry pipeline.
+  it('classifies a server-route-only lib module as reachable', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wire-srv-pos-'));
+    try {
+      fs.mkdirSync(path.join(tmpDir, 'server', 'routes'), { recursive: true });
+      fs.mkdirSync(path.join(tmpDir, 'lib'), { recursive: true });
+      const leaf = path.join(tmpDir, 'lib', 'leaf.js');
+      const route = path.join(tmpDir, 'server', 'routes', 'r.js');
+      const index = path.join(tmpDir, 'server', 'index.js');
+      fs.writeFileSync(leaf, 'export const leaf = 1;');
+      fs.writeFileSync(route, "import { leaf } from '../../lib/leaf.js';\nexport default leaf;");
+      fs.writeFileSync(index, "import r from './routes/r.js';\nconsole.log(r);");
+
+      const allFiles = [index, route, leaf].map((f) => f.replace(/\\/g, '/'));
+      const entryPoints = [index.replace(/\\/g, '/')]; // as discoverEntryPoints would seed
+      const leafNorm = leaf.replace(/\\/g, '/');
+
+      const { graph } = buildCallGraph(allFiles, tmpDir);
+      const { reachable, unreachable } = checkReachability(graph, entryPoints, [leafNorm]);
+
+      expect(reachable.has(leafNorm)).toBe(true);
+      expect(unreachable.size).toBe(0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // FR-004 (negative control): a genuinely orphaned lib file stays unreachable
+  // even with server/ in scope + the server entry seeded — no over-broadening.
+  it('still flags a genuinely orphaned lib module as unreachable', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wire-srv-neg-'));
+    try {
+      fs.mkdirSync(path.join(tmpDir, 'server'), { recursive: true });
+      fs.mkdirSync(path.join(tmpDir, 'lib'), { recursive: true });
+      const orphan = path.join(tmpDir, 'lib', 'orphan.js');
+      const index = path.join(tmpDir, 'server', 'index.js');
+      fs.writeFileSync(orphan, 'export const o = 1;'); // imported by nobody
+      fs.writeFileSync(index, "console.log('no imports here');");
+
+      const allFiles = [index, orphan].map((f) => f.replace(/\\/g, '/'));
+      const entryPoints = [index.replace(/\\/g, '/')];
+      const orphanNorm = orphan.replace(/\\/g, '/');
+
+      const { graph } = buildCallGraph(allFiles, tmpDir);
+      const { reachable, unreachable } = checkReachability(graph, entryPoints, [orphanNorm]);
+
+      expect(unreachable.has(orphanNorm)).toBe(true);
+      expect(reachable.size).toBe(0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // FR-005 (source pins): guard the two scope surfaces against regression.
+  it('source pins the server/ pathspec and the server/index.js entry', async () => {
+    const url = await import('url');
+    const __filename2 = url.fileURLToPath(import.meta.url);
+    const __dirname2 = path.dirname(__filename2);
+    const gateFile = path.resolve(__dirname2, '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js');
+    const source = fs.readFileSync(gateFile, 'utf8');
+    expect(source).toMatch(/git ls-files[^\n]*"server\/"/);
+    expect(source).toMatch(/['"`]server\/index\.js['"`]/);
+    // Both functions must be exported for the assertions above to import them.
+    expect(source).toMatch(/export function getScopedJsFiles/);
+    expect(source).toMatch(/export function discoverEntryPoints/);
+  });
+});
