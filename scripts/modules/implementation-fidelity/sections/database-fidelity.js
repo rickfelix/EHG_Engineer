@@ -60,6 +60,30 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
     return;
   }
 
+  // SD-FDBK-ENH-GATE2-FIDELITY-AWARE-001: N/A-aware Section B. When the SD has a
+  // genuinely zero database footprint — no migration files AND no database queries
+  // (no supabase .from()/.rpc(), no SQL DDL/DML) anywhere in its diff — the
+  // migration-centric Database Implementation Fidelity checks are Not Applicable.
+  // Award full credit (mirrors the SKIP/exempt/ADVISORY idiom above) instead of the
+  // ~18-19/35 partial that dragged frontend-only feature SDs to a RED verdict
+  // (regressed SD-SINGLEVENTURE-AND-BULK-DELETE-ORCH-001-C: 77% despite Design 20/25
+  // + E2E 20/20 + TESTING PASS). Target-agnostic: keys on real DB signal, NOT
+  // sd_type/target, so a sd_type=feature targeting the EHG frontend qualifies — the
+  // existing sd_type==='frontend' frontend_mode did not catch it. Conservative: ANY
+  // DB signal (or a detection error) falls through to normal Section B scoring.
+  const dbScope = await detectDatabaseScope(sd_id, supabase);
+  if (!dbScope.hasMigrations && !dbScope.hasQueries) {
+    validation.score += 35;
+    validation.gate_scores.database_fidelity = 35;
+    validation.details.database_fidelity = {
+      applicable: false,
+      reason: 'Not applicable — SD has zero database footprint (no migration files, no database queries detected)',
+      db_scope: dbScope,
+    };
+    console.log('   ✅ Section B N/A — zero database footprint (no migrations, no DB queries) — full credit (35/35)');
+    return;
+  }
+
   let sectionScore = 0;
   const sectionDetails = {};
   sectionDetails.exemptions = { B1: isB1Exempt, B2: isB2Exempt, B3: isB3Exempt };
@@ -204,6 +228,65 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
   validation.gate_scores.database_fidelity = sectionScore;
   validation.details.database_fidelity = sectionDetails;
   console.log(`\n   Section B Score: ${sectionScore}/35`);
+}
+
+/**
+ * SD-FDBK-ENH-GATE2-FIDELITY-AWARE-001: Detect whether an SD has any database
+ * footprint, used to decide if Section B (Database Implementation Fidelity) is
+ * Not Applicable. Two independent signals:
+ *   - hasMigrations: an SD-matched migration file exists on disk (filesystem scan,
+ *     same dirs/match as B1).
+ *   - hasQueries: the SD's diff contains a database query signal — a supabase
+ *     client call (.from( / .rpc() or SQL DDL/DML (CREATE/ALTER TABLE, INSERT,
+ *     UPDATE ... SET, DELETE FROM, CREATE POLICY).
+ * Conservative on failure: returns hasMigrations/hasQueries = true (detection_error)
+ * so a scan failure falls through to normal scoring rather than granting a free N/A.
+ *
+ * @param {string} sd_id
+ * @param {Object} supabase
+ * @returns {Promise<{hasMigrations: boolean, hasQueries: boolean, detection_error?: boolean}>}
+ */
+async function detectDatabaseScope(sd_id, supabase) {
+  try {
+    const implementationRepos = await detectImplementationRepos(sd_id, supabase);
+    const searchTerms = await getSDSearchTerms(sd_id, supabase);
+    const searchLower = searchTerms.map(t => t.replace('SD-', '').toLowerCase());
+
+    // Signal 1: SD-matched migration files on disk (mirrors B1 detection).
+    let hasMigrations = false;
+    const migrationDirs = ['database/migrations', 'supabase/migrations', 'migrations'];
+    for (const repo of implementationRepos) {
+      for (const dir of migrationDirs) {
+        const fullPath = path.join(repo, dir);
+        if (existsSync(fullPath)) {
+          const files = await readdir(fullPath);
+          if (files.some(f => searchLower.some(term => f.toLowerCase().includes(term)))) {
+            hasMigrations = true;
+          }
+        }
+      }
+    }
+
+    // Signal 2: database query signals in the SD's diff.
+    let gitDiff = '';
+    for (const repo of implementationRepos) {
+      try {
+        gitDiff += await gitLogForSD(
+          `git -C "${repo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+          searchTerms,
+          { timeout: 15000 }
+        );
+      } catch (_) { /* skip repos without matching commits */ }
+    }
+    const dbSignal = /\.from\(|\.rpc\(|create\s+table|alter\s+table|insert\s+into|update\s+\w+\s+set|delete\s+from|create\s+policy|alter\s+policy/i;
+    const hasQueries = dbSignal.test(gitDiff);
+
+    return { hasMigrations, hasQueries };
+  } catch (error) {
+    // Conservative: on detection failure, do NOT grant the N/A pass — fall through
+    // to normal Section B scoring.
+    return { hasMigrations: true, hasQueries: true, detection_error: true };
+  }
 }
 
 /**
