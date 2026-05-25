@@ -537,13 +537,18 @@ function Sync-Repo {
             Write-Log "WARN" "[SYNC] $Name on '$branch' (not main) - serving local, not auto-pulling" "Yellow"
             return
         }
-        # Only pull a genuinely-idle primary tree. Two layers:
+        # Only pull a genuinely-idle primary tree. Three layers:
         #  (1) skip if there are uncommitted *tracked* changes beyond the auto-churn
         #      safelist (.claude/.protocol-sync) — protects a session actively editing
         #      in the primary tree, without the safelisted file blocking every pull.
         #      Untracked files are ignored: ff-only can't harm them and the tree
         #      always carries many (scripts/one-off/, etc.).
-        #  (2) `merge --ff-only` as the backstop — never clobbers; aborts on conflict.
+        #  (2) skip if another live Claude Code session is on this branch — a clean
+        #      tree can still have a session reading/about-to-edit it, and ff-merge
+        #      rewrites tracked files under it (the concurrent-session corruption
+        #      class). safe-to-pull-tree.mjs prints BUSY/IDLE; key on the token so a
+        #      crash/missing-creds prints neither and fails OPEN to ff-only safety.
+        #  (3) `merge --ff-only` as the backstop — never clobbers; aborts on conflict.
         git fetch origin main --quiet 2>$null
         $behind = (git rev-list --count HEAD..origin/main 2>$null)
         if (-not ($behind -match '^\d+$' -and [int]$behind -gt 0)) {
@@ -555,6 +560,12 @@ function Sync-Repo {
         if ($meaningful.Count -gt 0) {
             $files = ($meaningful | ForEach-Object { ($_ -replace '^...', '').Trim() }) -join ', '
             Write-Log "WARN" "[SYNC] $Name is $behind behind but has uncommitted edits ($files) - NOT pulling, protecting in-progress work (commit/stash to update)" "Yellow"
+            return
+        }
+        $pullGuard = ""
+        try { $pullGuard = (& node (Join-Path $EngineerDir "scripts/lib/safe-to-pull-tree.mjs") $branch 2>$null | Out-String) } catch { $pullGuard = "" }
+        if ($pullGuard -match 'BUSY') {
+            Write-Log "WARN" "[SYNC] $Name is $behind behind but another live session is on '$branch' ($($pullGuard.Trim())) - NOT pulling, avoids mutating files under an active session" "Yellow"
             return
         }
         Write-Log "INFO" "[SYNC] $Name is $behind commit(s) behind origin/main - fast-forwarding..." "Blue"
