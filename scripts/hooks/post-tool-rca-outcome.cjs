@@ -82,15 +82,24 @@ function digestStderr(stderr) {
     const flag = (process.env.LEO_RCA_OUTCOME_CAPTURE || 'on').toLowerCase();
     if (flag === 'off' || flag === '0' || flag === 'false') return;
 
-    // Resolve session id (env first per existing hook precedent).
+    // SD-FDBK-REFAC-ADOPT-RESOLVESESSIONID-CASCADE-001: read the stdin payload FIRST,
+    // then resolve session_id from it (canonical cascade: stdin session_id → env).
+    // PostToolUse does NOT propagate CLAUDE_SESSION_ID, so the prior env-only resolve
+    // (run BEFORE the stdin read) always yielded '' and this hook silently no-op'd —
+    // the last-outcome file was never written and the RCA tiered-signature feature was
+    // effectively dead. stdin is single-consumption, so resolve from the already-parsed
+    // payload via the canonical isValidSessionId rather than calling resolveSessionId()
+    // (which would re-read drained stdin).
+    const payload = await getStdinJson(STDIN_TIMEOUT_MS);
+    if (!payload || typeof payload !== 'object') return;
+
+    const { isValidSessionId } = require('../../lib/hooks/session-id.cjs');
     const sessionId =
+      (isValidSessionId(payload.session_id) && payload.session_id) ||
       process.env.CLAUDE_SESSION_ID ||
       process.env.SESSION_ID ||
       '';
     if (!sessionId) return;
-
-    const payload = await getStdinJson(STDIN_TIMEOUT_MS);
-    if (!payload || typeof payload !== 'object') return;
 
     // Claude Code hook payload: tool_response is the structured outcome.
     // Accept multiple shapes for robustness across hook protocol versions.

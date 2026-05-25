@@ -116,6 +116,29 @@ describe('L4 — post-tool-rca-outcome.cjs', () => {
     expect(fs.existsSync(outFile)).toBe(false);
   });
 
+  it('TS-19: resolves session_id from the stdin payload when env is absent (SD-FDBK-REFAC-ADOPT-RESOLVESESSIONID-CASCADE-001)', () => {
+    // Real PostToolUse contract: CLAUDE_SESSION_ID is NOT propagated to the hook
+    // subprocess, but the stdin payload carries session_id. Before the fix this hook
+    // resolved from env BEFORE reading stdin → '' → silent no-op. Now it must resolve
+    // from payload.session_id and write the outcome file.
+    const payloadSession = 'payload-sess-' + Math.random().toString(36).slice(2);
+    const payload = JSON.stringify({
+      session_id: payloadSession,
+      tool_name: 'Bash',
+      tool_response: { exit_code: 2, stderr: 'TypeError: x' },
+    });
+    const env = { ...process.env, CLAUDE_TOOL_NAME: 'Bash', LEO_RETRY_STATE_DIR: tmpDir };
+    delete env.CLAUDE_SESSION_ID; // simulate the real PostToolUse env (no session id)
+    delete env.SESSION_ID;
+    const result = spawnSync('node', [HOOK_PATH], { input: payload, env, encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    const outFile = path.join(tmpDir, `last-outcome-${payloadSession}.json`);
+    expect(fs.existsSync(outFile)).toBe(true);
+    const written = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+    expect(written.tool_name).toBe('Bash');
+    expect(written.exit_code).toBe(2);
+  });
+
   it('non-Bash tool → no file written (signatures are file_path-keyed)', () => {
     const payload = JSON.stringify({
       tool_name: 'Edit',
