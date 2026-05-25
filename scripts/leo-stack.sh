@@ -391,12 +391,17 @@ sync_repo() {
             log "WARN" "${YELLOW}[SYNC] $name on '$branch' (not main) - serving local, not auto-pulling${NC}"
             exit 0
         fi
-        # Only pull a genuinely-idle primary tree. Two layers:
+        # Only pull a genuinely-idle primary tree. Three layers:
         #  (1) skip if there are uncommitted *tracked* changes beyond the auto-churn
         #      safelist (.claude/.protocol-sync) — protects a session actively editing
         #      in the primary tree, without the safelisted file blocking every pull.
         #      Untracked files are ignored (ff-only can't harm them; the tree carries many).
-        #  (2) `merge --ff-only` as the backstop — never clobbers; aborts on conflict.
+        #  (2) skip if another live Claude Code session is on this branch — a clean
+        #      tree can still have a session reading/about-to-edit it, and ff-merge
+        #      rewrites tracked files under it (the concurrent-session corruption
+        #      class). safe-to-pull-tree.mjs prints BUSY/IDLE; key on the token so a
+        #      crash/missing-creds prints neither and fails OPEN to ff-only safety.
+        #  (3) `merge --ff-only` as the backstop — never clobbers; aborts on conflict.
         git fetch origin main --quiet 2>/dev/null
         local behind
         behind=$(git rev-list --count HEAD..origin/main 2>/dev/null)
@@ -410,6 +415,12 @@ sync_repo() {
             local files
             files=$(echo "$meaningful" | sed 's/^...//' | paste -sd ',' -)
             log "WARN" "${YELLOW}[SYNC] $name is $behind behind but has uncommitted edits ($files) - NOT pulling, protecting in-progress work (commit/stash to update)${NC}"
+            exit 0
+        fi
+        local guard
+        guard=$(node "$ENGINEER_DIR/scripts/lib/safe-to-pull-tree.mjs" "$branch" 2>/dev/null || true)
+        if echo "$guard" | grep -q '^BUSY'; then
+            log "WARN" "${YELLOW}[SYNC] $name is $behind behind but another live session is on '$branch' ($guard) - NOT pulling, avoids mutating files under an active session${NC}"
             exit 0
         fi
         log "INFO" "${BLUE}[SYNC] $name is $behind commit(s) behind origin/main - fast-forwarding...${NC}"
