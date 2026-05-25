@@ -87,11 +87,21 @@ describe('buildBuildTasks', () => {
 
 describe('buildDesignPrompts (FR-1)', () => {
   const md = buildDesignPrompts();
-  it('emits all four reusable prompts', () => {
+  it('emits the New Page creation prompt (S19 builds additional pages, not the landing)', () => {
     expect(md).toMatch(/New page creation|New Page Creation/);
     expect(md).toContain('Text & Typography Audit');
     expect(md).toContain('Layout & Composition Audit');
     expect(md).toContain('Build Quality Audit');
+  });
+  // Parity with the ehg S17 source (designPrompts.ts): the shared parts — the
+  // landing-page focus on every audit, and the required Feedback page — must be present.
+  it('each audit leads with a landing-page focus (in sync with S17)', () => {
+    expect(md.match(/Landing-page focus/g) || []).toHaveLength(3);
+  });
+  it('includes the required Feedback page (Prompt 5)', () => {
+    expect(md).toContain('Prompt 5');
+    expect(md).toMatch(/Feedback [Pp]age/);
+    expect(md).toContain('/feedback');
   });
   it('inherits the landing design system and does not rebuild the landing', () => {
     expect(md).toContain('src/routes/index.tsx');
