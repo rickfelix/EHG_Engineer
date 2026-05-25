@@ -277,6 +277,11 @@ function extractTableName(command) {
  * @param {string} command
  * @returns {Object<string, *>}
  */
+// SD-FDBK-INFRA-HARDEN-ORCHESTRATOR-CHILD-001: literal coercion for mutation values lives in
+// a small shared, unit-tested module (this hook runs main() at load, so it cannot be required
+// from a test — the pure coercion logic is extracted to be testable).
+const { coerceLiteral } = require(path.resolve(__dirname, 'lib', 'coerce-literal.cjs'));
+
 function extractParams(command) {
   const params = {};
   let match;
@@ -310,14 +315,20 @@ function extractParams(command) {
 
   // .insert({ col: val, ... }) / .update({ col: val, ... }) / .upsert({ col: val, ... })
   // Extract object keys from simple { key: val } patterns
+  // SD-FDBK-INFRA-HARDEN-ORCHESTRATOR-CHILD-001: extract keys AND coerce literal values
+  // (true/false/number/quoted-string). Previously every value was stamped 'unknown', which
+  // the schema-preflight then type-checked against the real column udt_name — falsely flagging
+  // every non-string column (e.g. .update({ is_working_on: true }) → "Type mismatch" → BLOCK).
+  // Non-literal values stay 'unknown' (the schema-preflight type-check-skip sentinel; the
+  // unknown-column check still runs). Quoted-string alternative is first so values containing
+  // commas/colons are captured whole before the [^,]+ fallback.
   const mutationPattern = /\.(?:insert|update|upsert)\(\s*\{([^}]+)\}/g;
   while ((match = mutationPattern.exec(command)) !== null) {
     const objectBody = match[1];
-    // Extract keys from "key: value" or "key : value" patterns
-    const keyPattern = /(\w+)\s*:/g;
-    let keyMatch;
-    while ((keyMatch = keyPattern.exec(objectBody)) !== null) {
-      params[keyMatch[1]] = 'unknown';
+    const kvPattern = /(\w+)\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`|true|false|-?\d+(?:\.\d+)?|[^,]+)/g;
+    let kvMatch;
+    while ((kvMatch = kvPattern.exec(objectBody)) !== null) {
+      params[kvMatch[1]] = coerceLiteral(kvMatch[2]);
     }
   }
 

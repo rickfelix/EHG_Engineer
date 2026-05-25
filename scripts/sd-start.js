@@ -748,7 +748,14 @@ async function main() {
         } catch { /* non-fatal — handoff will surface the error */ }
 
         console.log(`\n${colors.green}✅ All children completed${colors.reset}`);
-        console.log(`   Run orchestrator completion: node scripts/handoff.js execute PLAN-TO-LEAD ${effectiveId}`);
+        // SD-FDBK-INFRA-HARDEN-ORCHESTRATOR-CHILD-001: the parent completion handoff writes a
+        // rollup that requires the PARENT to be claimed, but sd-start routes orchestrators to
+        // leaves and cannot claim the parent. Use the sanctioned claim helper, run the handoff,
+        // then release — instead of an ad-hoc inline is_working_on UPDATE.
+        console.log(`   Orchestrator completion needs the PARENT claimed. Run:`);
+        console.log(`   ${colors.cyan}CLAUDE_SESSION_ID=<sid> node scripts/claim-orchestrator-for-rollup.mjs ${effectiveId}${colors.reset}`);
+        console.log(`   ${colors.cyan}node scripts/handoff.js execute PLAN-TO-LEAD ${effectiveId}${colors.reset}`);
+        console.log(`   ${colors.cyan}CLAUDE_SESSION_ID=<sid> node scripts/claim-orchestrator-for-rollup.mjs ${effectiveId} --release${colors.reset}`);
         console.log('═'.repeat(50));
         process.exit(0);
       }
