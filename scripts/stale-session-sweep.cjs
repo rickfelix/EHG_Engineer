@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
@@ -1098,11 +1099,10 @@ async function main() {
     .filter(c => {
       if (c.status === 'completed') return false;
       if (claimedByActive.has(c.sd_key)) return false;
-      // Check dependencies are satisfied
-      if (c.dependencies && Array.isArray(c.dependencies) && c.dependencies.length > 0) {
-        const allDepsMet = c.dependencies.every(dep => completedKeys.has(dep));
-        if (!allDepsMet) return false;
-      }
+      // QF-20260525-542: canonical SD-key blocker rule (was completedKeys.has(dep) on
+      // raw elements — object-shaped placeholders never matched → false BLOCKED).
+      const depKeys = parseSdDependencies(c.dependencies);
+      if (depKeys.length > 0 && !depKeys.every(k => completedKeys.has(k))) return false;
       return true;
     })
     .map(c => c.sd_key);
@@ -1110,8 +1110,9 @@ async function main() {
   const blocked = allSDs
     .filter(c => {
       if (c.status === 'completed') return false;
-      if (!c.dependencies || !Array.isArray(c.dependencies) || c.dependencies.length === 0) return false;
-      return !c.dependencies.every(dep => completedKeys.has(dep));
+      const depKeys = parseSdDependencies(c.dependencies); // QF-20260525-542: canonical rule
+      if (depKeys.length === 0) return false;
+      return !depKeys.every(k => completedKeys.has(k));
     })
     .map(c => c.sd_key);
 

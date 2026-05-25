@@ -1656,9 +1656,11 @@ async function createSD(options) {
     risks: (typeof risks !== 'undefined' && risks && risks.length > 0) ? risks : [
       { risk: 'Implementation may not fully address root cause', likelihood: 'low', impact: 'low', mitigation: 'Verify against original evidence; re-queue via /learn if pattern recurs' }
     ],
-    dependencies: (typeof dependencies !== 'undefined' && dependencies && dependencies.length > 0) ? dependencies : [
-      { dependency: 'none', type: 'internal', status: 'available' }
-    ],
+    // QF-20260525-542: write an empty array when there are no real deps. The prior
+    // { dependency: 'none', status: 'available' } placeholder is not an SD-key, so the
+    // coordinator's canonical blocker rule ignores it anyway — but an empty array keeps
+    // the column honest and avoids confusing any consumer that inspects raw entries.
+    dependencies: (typeof dependencies !== 'undefined' && dependencies && dependencies.length > 0) ? dependencies : [],
     implementation_guidelines: (typeof implementation_guidelines !== 'undefined' && implementation_guidelines && implementation_guidelines.length > 0) ? implementation_guidelines : [
       `Implement changes for: ${title}`,
       'Verify no regressions in existing functionality'
