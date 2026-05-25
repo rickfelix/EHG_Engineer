@@ -353,6 +353,7 @@ export async function completeQuickFix(qfId, options = {}) {
   // with validateLOC and validateSelfVerification).
   const complianceValid = await validateCompliance(complianceResults, prompt, {
     forceComplete: options.forceComplete,
+    acceptComplianceWarn: options.acceptComplianceWarn,
     reason: options.reason
   });
   if (!complianceValid) {
