@@ -30,7 +30,7 @@ import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from
 // cannot drift away from the createWorktree behavior.
 // SD-LEO-INFRA-LEO-INFRA-WORKTREE-001: SUBSTRATE_ITEMS + validateWorktreeSubstrate
 // for the post-creation completeness gate.
-import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError, SUBSTRATE_ITEMS, validateWorktreeSubstrate } from '../lib/worktree-manager.js';
+import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError, SUBSTRATE_ITEMS, VENTURE_SUBSTRATE_ITEMS, validateWorktreeSubstrate } from '../lib/worktree-manager.js';
 import { provisionWorktreeNodeModules, getIsolationMode, getFreeDiskBytes, countActiveFreshSessions } from '../lib/worktree-provision.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
@@ -367,7 +367,13 @@ function createWorktree(sdKey, repoRoot, opts = {}) {
   // via lib/protocol-policies/worktree-failure-classification.js), releases
   // the claim via release_sd RPC, and exits non-zero. The incomplete worktree
   // directory is preserved on disk for operator inspection.
-  const substrate = validateWorktreeSubstrate(worktreePath);
+  // FR-3: a venture worktree (inside a venture clone) uses the minimal venture substrate
+  // (.git + package.json) — it legitimately lacks EHG_Engineer's scripts/lib, and node_modules/.env
+  // are installed by the venture's own build during EXEC, not prerequisites at claim time.
+  const substrate = validateWorktreeSubstrate(
+    worktreePath,
+    opts.isVentureWorktree ? VENTURE_SUBSTRATE_ITEMS : SUBSTRATE_ITEMS
+  );
   if (!substrate.ok) {
     emitLog({
       event: 'worktree.incomplete',
@@ -529,6 +535,9 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
   // resolveRepoPathDbFirst, registry fallback) — getVenturePath alone is registry-only and
   // misses DB-tracked ventures (e.g. CronLinter) backfilled into applications but never
   // written to registry.json, so their worktree wrongly fell through to EHG_Engineer.
+  // FR-3: track whether the per-SD worktree will live INSIDE a venture clone — drives the
+  // venture-aware substrate gate (a venture worktree lacks EHG_Engineer's scripts/lib/node_modules/.env).
+  let isVentureWorktree = false;
   {
     // Platform SDs make NO DB call and never enter the venture branch (helper short-circuits) —
     // byte-identical platform path, FR-6 invariant intact.
@@ -546,6 +555,7 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
     }
     const ventureRoot = resolveVentureRepoRoot(targetApp, repoRoot, { getVenturePath: resolveVenturePathFn });
     repoRoot = ventureRoot.repoRoot;
+    isVentureWorktree = ventureRoot.source === 'venture';
     for (const logEntry of ventureRoot.logs) {
       emitLog({ ...logEntry, sdKey });
     }
@@ -600,7 +610,7 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
   if (mode === 'claim') {
     // Create one
     try {
-      const created = createWorktree(sdKey, repoRoot, { activeSessionCount: _activeSessionCount });
+      const created = createWorktree(sdKey, repoRoot, { activeSessionCount: _activeSessionCount, isVentureWorktree });
       emitLog({ event: 'worktree.resolved', sdKey, source: 'created', resolvedCwd: created.path, outcome: 'success' });
 
       // Persist to DB
