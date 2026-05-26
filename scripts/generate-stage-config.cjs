@@ -159,6 +159,41 @@ async function loadDBConfig() {
   return byStage;
 }
 
+// SD-LEO-INFRA-RECONCILE-VENTURE-LIFECYCLE-001 / FR-6
+// Cross-table name-parity assertion. Fails when lifecycle_stage_config.stage_name
+// disagrees with stage_config.stage_name for any stage_number present in BOTH
+// tables. Pure I/O wrapper around a SQL JOIN — no business logic.
+// Exported (via _testHooks) so unit fixtures can drive it without spinning up CI.
+async function assertCrossTableNameParity(supabase) {
+  const [lifecycleRes, stageRes] = await Promise.all([
+    supabase.from('lifecycle_stage_config').select('stage_number, stage_name').order('stage_number'),
+    supabase.from('stage_config').select('stage_number, stage_name').order('stage_number'),
+  ]);
+  if (lifecycleRes.error) throw new Error(`lifecycle_stage_config read failed: ${lifecycleRes.error.message}`);
+  if (stageRes.error) throw new Error(`stage_config read failed: ${stageRes.error.message}`);
+
+  const lifecycleByStage = new Map();
+  for (const row of lifecycleRes.data || []) lifecycleByStage.set(row.stage_number, row.stage_name);
+
+  const divergences = [];
+  for (const row of stageRes.data || []) {
+    const lcName = lifecycleByStage.get(row.stage_number);
+    // INNER-join semantics: only flag when both rows exist. Stages present in only
+    // one table are out of scope for parity (different lifecycle vs config concerns).
+    if (lcName !== undefined && lcName !== row.stage_name) {
+      divergences.push({
+        stage_number: row.stage_number,
+        lifecycle_stage_config_name: lcName,
+        stage_config_name: row.stage_name,
+      });
+    }
+  }
+  return divergences;
+}
+
+// Expose for unit tests (FR-6 TS-1): allows fixture-driven verification.
+module.exports._testHooks = { assertCrossTableNameParity };
+
 // ---------------------------------------------------------------------------
 // Mapping helpers
 // ---------------------------------------------------------------------------
@@ -405,14 +440,46 @@ async function main() {
       process.exit(1);
     }
     const existing = fs.readFileSync(OUTPUT_PATH, 'utf8');
-    if (existing === output) {
-      console.error('CHECK PASSED: stage-config.js is up to date');
-      process.exit(0);
-    } else {
+    if (existing !== output) {
       console.error('CHECK FAILED: stage-config.js is out of date');
-      console.error('Run: node scripts/generate-stage-config.js --write');
+      console.error('Run: node scripts/generate-stage-config.cjs --write');
       process.exit(1);
     }
+
+    // SD-LEO-INFRA-RECONCILE-VENTURE-LIFECYCLE-001 / FR-6: cross-table name parity.
+    // Reuses the existing DB connection. INNER-join semantics on stage_number;
+    // stages in only one table are out of scope. Re-fetching here (instead of
+    // sharing the loadDBConfig dbConfig variable) keeps the assertion's input
+    // narrow and explicit — the failure message names the divergent stage_number.
+    try {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+      if (supabaseUrl && supabaseKey) {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const divergences = await assertCrossTableNameParity(supabase);
+        if (divergences.length > 0) {
+          console.error('CHECK FAILED: cross-table stage_name parity violations:');
+          for (const d of divergences) {
+            console.error(
+              `  stage_number=${d.stage_number}: lifecycle_stage_config='${d.lifecycle_stage_config_name}' vs stage_config='${d.stage_config_name}'`
+            );
+          }
+          console.error('');
+          console.error('Reconcile via: UPDATE lifecycle_stage_config SET stage_name = (SELECT stage_name FROM stage_config sc WHERE sc.stage_number = lifecycle_stage_config.stage_number)');
+          console.error('  WHERE stage_number IN (' + divergences.map((d) => d.stage_number).join(', ') + ') AND stage_name IS DISTINCT FROM (SELECT stage_name FROM stage_config sc WHERE sc.stage_number = lifecycle_stage_config.stage_number);');
+          process.exit(1);
+        }
+      } else {
+        console.error('CHECK NOTE: cross-table parity check skipped (no Supabase credentials)');
+      }
+    } catch (err) {
+      // Connectivity failure is FATAL for --check (we cannot prove parity blindly).
+      console.error(`CHECK FAILED: cross-table parity check errored: ${err.message}`);
+      process.exit(1);
+    }
+
+    console.error('CHECK PASSED: stage-config.js is up to date AND cross-table names agree');
+    process.exit(0);
   }
 
   if (FLAG_WRITE) {
