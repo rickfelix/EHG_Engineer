@@ -252,4 +252,86 @@ router.post('/:ventureId/register-deployment', asyncHandler(async (req, res) => 
   });
 }));
 
+/**
+ * POST /api/stage19/:ventureId/deployment-url
+ * QF-20260526-976 — lightweight live-deployment-URL capture (used by the Stage-17 field).
+ *
+ * Records ONLY the live deployment URL in the CANONICAL venture_resources slot
+ * (resource_type='replit_deployment', resource_identifier + deployment_url column) so it
+ * flows to every existing consumer: the S19->S20 exit gate, the integration-test-runner
+ * stagingUrl, Stage-21 visual assets, and the venture registry. Unlike register-deployment
+ * this does NOT emit the build_mvp_build artifact and does NOT advance the stage, so
+ * recording the URL early (e.g. at Stage 17) never prematurely satisfies the "build done"
+ * gate. The field is multi-consumer, so we reuse the existing resource_type rather than
+ * renaming/forking it.
+ *
+ * Request body: { deployment_url: string } — must be a valid https:// URL.
+ * Returns 200 with { ventureId, deployment_url, resource_id }.
+ */
+router.post('/:ventureId/deployment-url', asyncHandler(async (req, res) => {
+  const { ventureId } = req.params;
+  if (!isValidUuid(ventureId)) {
+    return res.status(400).json({ error: 'Invalid ventureId format', code: 'INVALID_VENTURE_ID' });
+  }
+  const deployment_url = typeof req.body?.deployment_url === 'string' ? req.body.deployment_url.trim() : '';
+  if (!deployment_url || !HTTPS_URL_RE.test(deployment_url)) {
+    return res.status(400).json({
+      error: 'URL validation failed',
+      code: 'VALIDATION_FAILED',
+      invalid: ['deployment_url'],
+      reason: { deployment_url: 'must be a valid https:// URL' },
+    });
+  }
+
+  // venture_resources RLS permits writes for service_role only (same constraint as
+  // register-deployment); the per-request authed client is SELECT-only. The auth
+  // middleware has already authenticated the caller before this handler runs.
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    return res.status(500).json({ error: 'Supabase client unavailable', code: 'NO_SUPABASE' });
+  }
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+
+  // Carry the venture's existing repo_url onto the row (the column is set on the canonical
+  // row by register-deployment) so a new resource row is complete regardless of nullability.
+  const { data: venture } = await supabase
+    .from('ventures')
+    .select('repo_url')
+    .eq('id', ventureId)
+    .maybeSingle();
+
+  // Canonical upsert — same store + unique key as register-deployment, but resource-only:
+  // NO build_mvp_build artifact, NO stage advance.
+  const { data: resourceRow, error: upsertErr } = await supabase
+    .from('venture_resources')
+    .upsert({
+      venture_id: ventureId,
+      resource_type: 'replit_deployment',
+      resource_identifier: deployment_url,
+      provider: 'replit',
+      status: 'active',
+      repo_url: venture?.repo_url ?? null,
+      deployment_url,
+    }, { onConflict: 'venture_id,resource_type,resource_identifier' })
+    .select('id')
+    .single();
+
+  if (upsertErr) {
+    console.error('[stage19-route] deployment-url upsert failed', upsertErr.message);
+    return res.status(500).json({
+      error: 'Failed to persist venture_resources',
+      code: 'RESOURCE_UPSERT_FAILED',
+      detail: upsertErr.message,
+    });
+  }
+
+  return res.status(200).json({
+    ventureId,
+    deployment_url,
+    resource_id: resourceRow?.id,
+  });
+}));
+
 export default router;
