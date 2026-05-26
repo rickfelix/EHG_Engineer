@@ -21,6 +21,7 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { getVenturePath } from '../lib/venture-resolver.js';
+import { resolveVentureRepoRoot } from '../lib/venture-repo-root.js';
 import { sanitizeBranchName, checkDirtyWorktree, verifyGitignore, acquireWorktreeLock, releaseLock } from '../lib/worktree-guards.js';
 import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from '../lib/worktree-quota.js';
 // SD-LEO-INFRA-START-WORKTREE-BRANCH-001: delegate base-ref resolution + fetch
@@ -520,14 +521,18 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
     }
   }
 
-  if (targetApp && targetApp !== 'EHG_Engineer') {
-    const venturePath = getVenturePath(targetApp);
-    if (venturePath && fs.existsSync(path.join(venturePath, '.git'))) {
-      repoRoot = venturePath;
-      emitLog({ event: 'worktree.venture_repo_resolved', sdKey, targetApp, repoRoot: venturePath });
-    } else {
-      emitLog({ event: 'worktree.venture_repo_not_found', sdKey, targetApp, resolvedPath: venturePath });
-      // Fall through to default repoRoot (EHG_Engineer)
+  // SD-LEO-INFRA-VENTURE-BUILD-EXEC-001 FR-6: venture-vs-platform repoRoot decision
+  // is extracted to the pure lib/venture-repo-root.js helper so the platform
+  // invariant (null/EHG_Engineer never routes to a venture) is regression-tested
+  // without this file's heavy import graph. Behavior is identical: platform SDs
+  // keep `repoRoot` untouched and emit nothing; a venture with a real .git clone
+  // overrides repoRoot and emits venture_repo_resolved; a missing clone falls
+  // through to the default and emits venture_repo_not_found.
+  {
+    const ventureRoot = resolveVentureRepoRoot(targetApp, repoRoot, { getVenturePath });
+    repoRoot = ventureRoot.repoRoot;
+    for (const logEntry of ventureRoot.logs) {
+      emitLog({ ...logEntry, sdKey });
     }
   }
 
@@ -666,4 +671,4 @@ if (isMainScript) {
   });
 }
 
-export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath };
+export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot };
