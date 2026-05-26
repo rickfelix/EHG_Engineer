@@ -35,6 +35,56 @@ const SCHEMA_TEXT_REGEX = /\b(schema (migration|change|update|adds)|migration (a
 const SURFACE_TEXT_REGEX = /\b(ui[ -]?component|react[- ]component|new[- ]component|chairman[^.]*view|dashboard|user[- ]facing|panel[^.]*renders|page[^.]*renders|component[^.]*renders)\b/i;
 const WORKER_TEXT_REGEX = /\b(s\d+ worker|stage[ -]\d+ worker|worker[^.]*(populates|writes|consumes|reads|hook)|consumer[^.]*(reads|consumes|populates)|new[- ](consumer|worker|api))\b/i;
 
+// Negation-awareness (backlog 50a9da45): the Lane-2 regexes above are pure
+// keyword matchers, so "no schema migration" / "without a new worker" match the
+// same as the affirmative form — a UI-only SD that disclaims data-layer work
+// then false-triggers (witnessed on SD-LEO-INFRA-STAGE-BUILD-MODEL-001).
+// hasAffirmativeMatch() skips any occurrence negated within its own clause.
+// HARD negations only (no/not/never/without/none/neither/nor + n't): soft
+// "existing/current" qualifiers are deliberately NOT suppressed, because an
+// existing consumer reading newly-written data is exactly the writer-consumer
+// asymmetry this gate must catch — a false-negative (real chain ships untested)
+// is worse than a false-positive (cleared via the ACTIV-CHAIN-DEFERRED bypass).
+const NEGATION_CUE_REGEX = /\b(?:no|not|never|without|none|neither|nor|rather than|instead of)\b|n['’]t\b/i;
+
+// Look back at most this many chars before a match for a negation cue, and never
+// across a hard clause boundary ([.;:,] or newline) so a negation in a prior
+// clause ("No data layer. The worker writes X.") does not leak forward.
+const NEGATION_LOOKBACK_CHARS = 40;
+
+/**
+ * True iff `regex` has at least one occurrence in `text` that is NOT negated —
+ * i.e. not immediately preceded, within the same clause and within
+ * NEGATION_LOOKBACK_CHARS, by a hard negation cue. Drop-in replacement for a
+ * bare `regex.test(text)` that no longer counts negated phrasing as a positive
+ * signal (backlog 50a9da45).
+ *
+ * @param {RegExp} regex  case-insensitive, non-global signal regex
+ * @param {string} text   aggregated free text
+ * @returns {boolean}
+ */
+function hasAffirmativeMatch(regex, text) {
+  if (typeof text !== 'string' || text.length === 0) return false;
+  // Clone with the global flag so exec() can iterate every occurrence.
+  const scanner = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : regex.flags + 'g');
+  let m;
+  while ((m = scanner.exec(text)) !== null) {
+    if (m[0].length === 0) { scanner.lastIndex++; continue; } // defensive; signal regexes never match empty
+    let preceding = text.slice(Math.max(0, m.index - NEGATION_LOOKBACK_CHARS), m.index);
+    // Trim to the current clause: drop up to & including the last hard boundary
+    // so only a SAME-clause negation counts.
+    const boundary = Math.max(
+      preceding.lastIndexOf('.'), preceding.lastIndexOf(';'),
+      preceding.lastIndexOf(':'), preceding.lastIndexOf(','),
+      preceding.lastIndexOf('\n'),
+    );
+    if (boundary !== -1) preceding = preceding.slice(boundary + 1);
+    if (!NEGATION_CUE_REGEX.test(preceding)) return true; // an affirmative occurrence
+    // else this occurrence is negated — keep scanning for a non-negated one.
+  }
+  return false;
+}
+
 /**
  * Pull all free-text fields from a single key_changes entry. Tolerant of
  * heterogeneous shapes; coerces non-string values to empty string.
@@ -129,9 +179,11 @@ export function evaluateTrigger(sd) {
   const lane1Passed = lane1SchemaMatch && lane1ConsumerMatch;
 
   const text = collectFreeText(sd);
-  const lane2SchemaMatch = SCHEMA_TEXT_REGEX.test(text);
-  const lane2SurfaceMatch = SURFACE_TEXT_REGEX.test(text);
-  const lane2WorkerMatch = WORKER_TEXT_REGEX.test(text);
+  // Negation-aware (backlog 50a9da45): a negated phrase ("no schema migration")
+  // does NOT count as a positive signal. See hasAffirmativeMatch above.
+  const lane2SchemaMatch = hasAffirmativeMatch(SCHEMA_TEXT_REGEX, text);
+  const lane2SurfaceMatch = hasAffirmativeMatch(SURFACE_TEXT_REGEX, text);
+  const lane2WorkerMatch = hasAffirmativeMatch(WORKER_TEXT_REGEX, text);
   const lane2ConsumerMatch = lane2SurfaceMatch || lane2WorkerMatch;
   const lane2Passed = lane2SchemaMatch && lane2ConsumerMatch;
 
@@ -175,7 +227,9 @@ export const TRIGGER_INTERNALS = {
   SCHEMA_TEXT_REGEX,
   SURFACE_TEXT_REGEX,
   WORKER_TEXT_REGEX,
+  NEGATION_CUE_REGEX,
   entryFreeText,
   collectStructuredTypes,
   collectFreeText,
+  hasAffirmativeMatch,
 };

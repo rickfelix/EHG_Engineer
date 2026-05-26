@@ -71,6 +71,8 @@ The Stage-1 implementation uses path heuristics + free-text regexes. False posit
 - Adjusting the `SCHEMA_TYPES`, `SURFACE_TYPES`, `WORKER_TYPES` sets and the `SCHEMA_TEXT_REGEX`, `SURFACE_TEXT_REGEX`, `WORKER_TEXT_REGEX` patterns at the top of `trigger-evaluator.js`.
 - Documenting tuning decisions in this file and the SD's retrospective.
 
+**Negation-awareness (backlog `50a9da45`):** Lane-2 matches are negation-aware via `hasAffirmativeMatch()` — an occurrence preceded within its clause by a hard negation cue (`no` / `not` / `never` / `without` / `none` / `neither` / `nor`, or an `n't` contraction) is not counted, so `"no schema migration"` no longer false-triggers a UI-only SD. Soft "pre-existing" qualifiers (`existing` / `current`) are **intentionally not** suppressed: an existing consumer reading newly-written data is precisely the writer-consumer asymmetry this gate must catch, so suppressing them would risk false-negatives (a real chain shipping untested) — strictly worse than a false-positive, which the operator clears with the `ACTIV-CHAIN-DEFERRED` bypass.
+
 Future Stage-2 tuning may add acorn-based AST call-graph analysis for more precise touched-file classification.
 
 ## Anti-patterns

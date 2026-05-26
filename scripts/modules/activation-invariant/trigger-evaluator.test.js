@@ -164,3 +164,53 @@ describe('evaluateTrigger — false-positive guards', () => {
     expect(result.lane1.types).toEqual([]);
   });
 });
+
+describe('evaluateTrigger — negation-aware Lane 2 (backlog 50a9da45)', () => {
+  const { hasAffirmativeMatch, SCHEMA_TEXT_REGEX, SURFACE_TEXT_REGEX, WORKER_TEXT_REGEX } = TRIGGER_INTERNALS;
+
+  it('UI-only SD that disclaims schema work does NOT trigger (the witnessed case)', () => {
+    // SD-LEO-INFRA-STAGE-BUILD-MODEL-001: a display-only panel SD saying
+    // "No schema migration" must not false-trigger the schema+UI+worker gate.
+    const sd = {
+      key_changes: [{
+        title: 'Build-model panel',
+        detail: 'New dashboard panel renders build progress. No schema migration; reads existing columns.',
+      }],
+    };
+    const result = evaluateTrigger(sd);
+    expect(result.triggered).toBe(false);
+    // Consumer signal IS present — it's the negated schema that stops the trigger,
+    // proving the negation logic (not a missing consumer) did the work.
+    expect(result.lane2.consumerMatch).toBe(true);
+    expect(result.lane2.schemaMatch).toBe(false);
+  });
+
+  it('suppresses a schema signal negated within its clause', () => {
+    expect(hasAffirmativeMatch(SCHEMA_TEXT_REGEX, 'this SD has no schema migration')).toBe(false);
+    expect(hasAffirmativeMatch(SCHEMA_TEXT_REGEX, 'ships without a new table')).toBe(false);
+    expect(hasAffirmativeMatch(SCHEMA_TEXT_REGEX, 'this SD ships a schema migration')).toBe(true);
+  });
+
+  it('suppresses surface/worker signals after no / never / n\'t cues', () => {
+    expect(hasAffirmativeMatch(WORKER_TEXT_REGEX, "doesn't add a new worker")).toBe(false);
+    expect(hasAffirmativeMatch(SURFACE_TEXT_REGEX, 'never renders a new dashboard')).toBe(false);
+    expect(hasAffirmativeMatch(WORKER_TEXT_REGEX, 'a new worker populates the table')).toBe(true);
+    expect(hasAffirmativeMatch(SURFACE_TEXT_REGEX, 'a new dashboard for the chairman')).toBe(true);
+  });
+
+  it('a negation in a PRIOR clause does not leak onto an affirmative chain', () => {
+    const sd = {
+      description: 'No legacy support. Schema migration adds gvos_x; a worker populates it and the dashboard renders the result.',
+    };
+    const result = evaluateTrigger(sd);
+    expect(result.triggered).toBe(true);
+    expect(result.lane2.schemaMatch).toBe(true);
+  });
+
+  it('does NOT suppress on soft "existing/current" qualifiers (avoids false-negatives)', () => {
+    // An existing consumer reading newly-written data is exactly the asymmetry the
+    // gate must catch, so "existing"/"current" are deliberately NOT negation cues.
+    expect(hasAffirmativeMatch(WORKER_TEXT_REGEX, 'the existing worker writes telemetry')).toBe(true);
+    expect(hasAffirmativeMatch(SURFACE_TEXT_REGEX, 'the current dashboard renders it')).toBe(true);
+  });
+});
