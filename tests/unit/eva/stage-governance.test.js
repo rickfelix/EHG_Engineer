@@ -29,11 +29,23 @@ const V2_FIXTURE = [
   { stage_number: 11, stage_name: 'Naming & Visual Identity', stage_key: 'naming_visual_identity', gate_type: 'none', review_mode: 'review', chunk: 'THE_IDENTITY' },
 ];
 
+// QF-20260526-511: stage-governance._readFresh now Promise.all-reads BOTH
+// stage_config AND lifecycle_stage_config, and requires lifecycle.work_type=
+// 'decision_gate' to classify kill/promotion. Mock must dispatch per table;
+// using V2_FIXTURE rows (no work_type) for both silently empties kill/promotion.
+function deriveLifecycleRows(stageRows) {
+  return stageRows.map((r) => ({
+    stage_number: r.stage_number,
+    work_type: r.gate_type === 'kill' || r.gate_type === 'promotion' ? 'decision_gate' : 'artifact_only',
+  }));
+}
+
 function mockSupabase(rows, { failChannel = false } = {}) {
+  const lifecycleRows = deriveLifecycleRows(rows);
   return {
-    from: vi.fn(() => ({
+    from: vi.fn((table) => ({
       select: vi.fn(() => ({
-        order: vi.fn(async () => ({ data: rows, error: null })),
+        order: vi.fn(async () => ({ data: table === 'lifecycle_stage_config' ? lifecycleRows : rows, error: null })),
       })),
     })),
     channel: failChannel
@@ -84,19 +96,21 @@ describe('stage-governance', () => {
     expect(gov.isBlocking(16)).toBe(true);
   });
 
-  test('cache: second call within TTL does not re-fetch (mock from() called once)', async () => {
+  test('cache: second call within TTL does not re-fetch (one refresh = 2 .from() calls — stage_config + lifecycle_stage_config)', async () => {
+    // QF-20260526-511: 2 .from() per refresh after the _readFresh Promise.all of both tables.
     const supabase = mockSupabase(V2_FIXTURE);
     await getStageGovernance(supabase);
     await getStageGovernance(supabase);
-    expect(supabase.from).toHaveBeenCalledTimes(1);
+    expect(supabase.from).toHaveBeenCalledTimes(2);
   });
 
   test('_resetCacheForTest forces a re-fetch', async () => {
+    // QF-20260526-511: 2 refreshes × 2 tables = 4 .from() calls.
     const supabase = mockSupabase(V2_FIXTURE);
     await getStageGovernance(supabase);
     _resetCacheForTest();
     await getStageGovernance(supabase);
-    expect(supabase.from).toHaveBeenCalledTimes(2);
+    expect(supabase.from).toHaveBeenCalledTimes(4);
   });
 
   test('falls back gracefully when realtime channel API is unavailable', async () => {
