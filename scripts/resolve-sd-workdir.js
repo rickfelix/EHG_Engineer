@@ -22,6 +22,7 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { getVenturePath } from '../lib/venture-resolver.js';
 import { resolveVentureRepoRoot } from '../lib/venture-repo-root.js';
+import { resolveRepoPathDbFirst } from '../lib/repo-paths.js';
 import { sanitizeBranchName, checkDirtyWorktree, verifyGitignore, acquireWorktreeLock, releaseLock } from '../lib/worktree-guards.js';
 import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from '../lib/worktree-quota.js';
 // SD-LEO-INFRA-START-WORKTREE-BRANCH-001: delegate base-ref resolution + fetch
@@ -521,15 +522,29 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
     }
   }
 
-  // SD-LEO-INFRA-VENTURE-BUILD-EXEC-001 FR-6: venture-vs-platform repoRoot decision
-  // is extracted to the pure lib/venture-repo-root.js helper so the platform
-  // invariant (null/EHG_Engineer never routes to a venture) is regression-tested
-  // without this file's heavy import graph. Behavior is identical: platform SDs
-  // keep `repoRoot` untouched and emit nothing; a venture with a real .git clone
-  // overrides repoRoot and emits venture_repo_resolved; a missing clone falls
-  // through to the default and emits venture_repo_not_found.
+  // SD-LEO-INFRA-VENTURE-BUILD-EXEC-001 FR-6 + FR-3: venture-vs-platform repoRoot decision.
+  // The platform invariant (null/EHG_Engineer never routes to a venture) is held by the
+  // pure lib/venture-repo-root.js helper (regression-tested without this file's heavy graph).
+  // FR-3: the venture path is resolved DB-FIRST (applications.local_path via
+  // resolveRepoPathDbFirst, registry fallback) — getVenturePath alone is registry-only and
+  // misses DB-tracked ventures (e.g. CronLinter) backfilled into applications but never
+  // written to registry.json, so their worktree wrongly fell through to EHG_Engineer.
   {
-    const ventureRoot = resolveVentureRepoRoot(targetApp, repoRoot, { getVenturePath });
+    // Platform SDs make NO DB call and never enter the venture branch (helper short-circuits) —
+    // byte-identical platform path, FR-6 invariant intact.
+    let resolveVenturePathFn = getVenturePath;
+    if (targetApp && targetApp !== 'EHG_Engineer') {
+      try {
+        const sb = createSupabaseServiceClient();
+        const dbPath = await resolveRepoPathDbFirst(targetApp, sb);
+        // resolveRepoPathDbFirst already falls back to the registry resolver, so its result
+        // is the authoritative venture path; wrap it as a sync closure for the pure helper.
+        resolveVenturePathFn = () => dbPath;
+      } catch {
+        // DB unavailable — keep the registry-only resolver (prior behavior).
+      }
+    }
+    const ventureRoot = resolveVentureRepoRoot(targetApp, repoRoot, { getVenturePath: resolveVenturePathFn });
     repoRoot = ventureRoot.repoRoot;
     for (const logEntry of ventureRoot.logs) {
       emitLog({ ...logEntry, sdKey });
