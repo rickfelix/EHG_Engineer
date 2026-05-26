@@ -8,6 +8,20 @@
 #
 # Field types: string, integer, number, object, array, boolean
 # Constraints: required, minLength, min, max, minItems
+#
+# ── NAME-FIELD DISPOSITION ───────────────────────────────────────────────
+# The `name:` field on each stage in this file is HISTORICAL (pre-2026-04-21
+# redesign) and is NOT the canonical stage name. The canonical SSOT for
+# stage_number -> name is `stage_config.stage_name` (DB), accessed via
+# `lib/eva/stage-governance.js`. The role of this file at runtime is the
+# `consumes:` / `produces:` data contract, not naming.
+#
+# Do NOT rely on the `name:` values here for UI labels or anywhere a user-
+# facing stage name is needed — read from stage_config via stage-governance.
+# Cross-table parity for stage_name is enforced by:
+#   scripts/generate-stage-config.cjs --check
+# Reference: SD-LEO-INFRA-RECONCILE-VENTURE-LIFECYCLE-001 / FR-4.
+# ─────────────────────────────────────────────────────────────────────────
 
 stages:
   1:
