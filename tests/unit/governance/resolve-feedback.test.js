@@ -91,6 +91,27 @@ describe('parseFeedbackFooters', () => {
     const text = `closes Feedback ${VALID_UUID_1}\nCLOSES HARNESS BACKLOG ${VALID_UUID_2}\n`;
     expect(parseFeedbackFooters(text)).toEqual([VALID_UUID_1, VALID_UUID_2]);
   });
+
+  // QF-20260526-975: hyphenated + colon variants
+  it('accepts hyphenated "Closes-feedback: <uuid>" variant', () => {
+    const text = `body\n\nCloses-feedback: ${VALID_UUID_1}\n`;
+    expect(parseFeedbackFooters(text)).toEqual([VALID_UUID_1]);
+  });
+
+  it('accepts "Closes-harness-backlog: <uuid>" variant', () => {
+    const text = `body\n\nCloses-harness-backlog: ${VALID_UUID_1}\n`;
+    expect(parseFeedbackFooters(text)).toEqual([VALID_UUID_1]);
+  });
+
+  it('accepts no-space "Closes-feedback:<uuid>" (colon alone as separator)', () => {
+    const text = `body\n\nCloses-feedback:${VALID_UUID_1}\n`;
+    expect(parseFeedbackFooters(text)).toEqual([VALID_UUID_1]);
+  });
+
+  it('still rejects mid-sentence hyphenated reference (line-start anchor preserved)', () => {
+    const text = `something Closes-feedback: ${VALID_UUID_1} not at line start`;
+    expect(parseFeedbackFooters(text)).toEqual([]);
+  });
 });
 
 describe('resolveFeedback', () => {
@@ -274,8 +295,8 @@ describe('resolve-feedback.js static-pin', () => {
     expect(RESOLVE_FB_SRC).toMatch(/^const SHORT_ID_REGEX = \/\^\[0-9a-f\]\{8\}\$\/i;$/m);
   });
 
-  it('FOOTER_REGEX_LOOSE accepts 8-36 char hex-and-dash payloads with a non-hex boundary (QF-20260523-167: tolerates trailing text)', () => {
-    expect(RESOLVE_FB_SRC).toMatch(/^const FOOTER_REGEX_LOOSE = \/\^\[ \\t\]\*Closes\\s\+\(\?:feedback\|harness\\s\+backlog\)\\s\+\(\[0-9a-f\]\[0-9a-f-\]\{7,35\}\)\(\?!\[0-9a-f-\]\)\/gim;$/m);
+  it('FOOTER_REGEX_LOOSE accepts 8-36 char hex-and-dash payloads with a non-hex boundary (QF-20260523-167: tolerates trailing text; QF-20260526-975: hyphenated + colon variants)', () => {
+    expect(RESOLVE_FB_SRC).toMatch(/^const FOOTER_REGEX_LOOSE = \/\^\[ \\t\]\*Closes\[-\\s\]\+\(\?:feedback\|harness\[-\\s\]\+backlog\)\[:\\s\]\+\(\[0-9a-f\]\[0-9a-f-\]\{7,35\}\)\(\?!\[0-9a-f-\]\)\/gim;$/m);
   });
 
   it('UUID range bounds use canonical "0000-0000-0000-000000000000" / "ffff-ffff-ffff-ffffffffffff" tails', () => {
