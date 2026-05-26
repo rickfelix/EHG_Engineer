@@ -84,15 +84,34 @@ export function createBranchEnforcementGate(sd, appPath) {
     name: 'GATE6_BRANCH_ENFORCEMENT',
     validator: async (ctx) => {
       // Self-skip when the target repo has no usable git (e.g. EHG consolidated repo)
-      const { isGitCapableRepo } = await import('../../../../../../lib/repo-paths.js');
+      const { isGitCapableRepo, isVentureRepo } = await import('../../../../../../lib/repo-paths.js');
       if (sd && sd.target_application && !isGitCapableRepo(sd.target_application)) {
-        console.log('\n🔒 GATE 6: SKIPPED — target repo not git-capable (N/A)');
+        // SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 FR-4 (SECURITY VB-4): legitimate skip ONLY for
+        // PLATFORM repos (EHG detached HEAD; branch ops genuinely N/A, isolation via worktree). For a
+        // VENTURE repo, "not git-capable" = not locally cloned / no branch — fail CLOSED rather than
+        // free-pass branch enforcement (the exact gate-self-skip this reconciliation removes).
+        if (isVentureRepo(sd.target_application)) {
+          console.log(`\n🔒 GATE 6: FAIL-CLOSED — venture repo '${sd.target_application}' not locally git-capable`);
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [
+              `GATE6 FAIL-CLOSED: venture repo '${sd.target_application}' is not locally git-capable, so branch `
+              + `isolation cannot be verified. Free-pass removed per SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 FR-4 / `
+              + `SECURITY VB-4. Clone the venture repo (or route via the bridge with a git-capable checkout) first.`
+            ],
+            warnings: [],
+            details: { fail_closed_venture_repo: true, target_application: sd.target_application }
+          };
+        }
+        console.log('\n🔒 GATE 6: SKIPPED — platform target repo not git-capable (N/A, detached HEAD)');
         return {
           passed: true,
           score: 100,
           max_score: 100,
           issues: [],
-          warnings: [`GATE6 N/A: target_application='${sd.target_application}' has no usable git repository; branch isolation via worktree`],
+          warnings: [`GATE6 N/A: platform target_application='${sd.target_application}' has no usable git repository; branch isolation via worktree`],
           details: { skipped_not_applicable: true, target_application: sd.target_application }
         };
       }

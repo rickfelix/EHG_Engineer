@@ -48,6 +48,9 @@ import { runTriageGate } from './modules/triage-gate.js';
 import { evaluateVisionReadiness, formatRubricResult } from './modules/vision-readiness-rubric.js';
 import { scoreSD } from './eva/vision-scorer.js';
 import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
+// SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 (FR-5): canonical no-venture sd_type set — used to
+// guard the applications auto-register so engineering/governance work never mints a spurious venture.
+import { LEGITIMATE_NO_VENTURE_SD_TYPES } from '../lib/eva/bridge/sd-router.js';
 import { validateSDFields } from './modules/validate-sd-fields.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001: path-based target detector
@@ -1741,15 +1744,32 @@ async function createSD(options) {
   try {
     const appName = sdData.target_application;
     if (appName) {
-      const { data: existing } = await supabase
-        .from('applications').select('id').ilike('name', appName).limit(1);
-      if (!existing || existing.length === 0) {
-        const PLATFORM_REPOS = new Set(['ehg', 'ehg_engineer']);
-        const kind = PLATFORM_REPOS.has(String(appName).toLowerCase()) ? 'platform' : 'venture';
-        const normalized = String(appName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-        const { error: regErr } = await supabase
-          .from('applications').insert({ name: appName, normalized_name: normalized, kind, status: 'active' });
-        if (!regErr) console.log(`   📇 Registered target_application '${appName}' (${kind}) in applications registry`);
+      const PLATFORM_REPOS = new Set(['ehg', 'ehg_engineer']);
+      const isPlatform = PLATFORM_REPOS.has(String(appName).toLowerCase());
+      // FR-5 NO-VENTURE GUARD (mirrors lib/eva/bridge/sd-router.js isLegitimateNoVenture):
+      // engineering/governance LEO work (sd_type in LEGITIMATE_NO_VENTURE_SD_TYPES, or
+      // metadata.engineering_only=true) must NOT mint a NEW 'venture' registry entry. Such an SD
+      // legitimately targets a platform repo (default EHG_Engineer); a NON-platform target on it
+      // is a misroute, so we skip registration (surfaced loudly) rather than polluting the registry
+      // with a phantom venture the deferred fail-closed trigger would then accept.
+      const isNoVentureWork = LEGITIMATE_NO_VENTURE_SD_TYPES.has(sdData.sd_type)
+        || sdData.metadata?.engineering_only === true;
+      if (!isPlatform && isNoVentureWork) {
+        console.warn(
+          `   ⚠️  Skipping applications auto-register: engineering SD (sd_type=${sdData.sd_type}) has a `
+          + `non-platform target_application '${appName}'. Engineering/governance work should target a `
+          + `platform repo (EHG/EHG_Engineer) — refusing to mint a phantom venture (FR-5 no-venture guard).`
+        );
+      } else {
+        const { data: existing } = await supabase
+          .from('applications').select('id').ilike('name', appName).limit(1);
+        if (!existing || existing.length === 0) {
+          const kind = isPlatform ? 'platform' : 'venture';
+          const normalized = String(appName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          const { error: regErr } = await supabase
+            .from('applications').insert({ name: appName, normalized_name: normalized, kind, status: 'active' });
+          if (!regErr) console.log(`   📇 Registered target_application '${appName}' (${kind}) in applications registry`);
+        }
       }
     }
   } catch (regErr) {

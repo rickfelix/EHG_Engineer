@@ -2,6 +2,9 @@
 import { createSupabaseClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+// FR-5 (SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001): exclude venture-build SDs from prio:top3
+// so they don't starve the platform priority queue (same isolation as sd:next's ventureTrack).
+import { isVentureBuildSD } from './modules/sd-next/rank-items.js';
 
 dotenv.config();
 
@@ -14,7 +17,7 @@ class WSJFPriorityFetcher {
     try {
       const { data: directives, error } = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, title, status, priority, created_at')
+        .select('id, title, status, priority, created_at, target_application')
         .in('status', ['draft', 'in_progress', 'active', 'pending_approval'])
         .order('created_at', { ascending: false })
         .limit(50);
@@ -24,9 +27,16 @@ class WSJFPriorityFetcher {
         return [];
       }
 
+      // FR-5: drop venture-build SDs — they live in the isolated venture queue, not the
+      // platform top-3. Platform SDs (target_application null or ehg/ehg_engineer) remain.
+      const platformDirectives = directives.filter((d) => !isVentureBuildSD(d));
+      if (platformDirectives.length === 0) {
+        return [];
+      }
+
       // Fallback: prioritize by priority field (if exists) then status order then created_at
       const statusPriority = { 'in_progress': 4, 'active': 3, 'pending_approval': 2, 'draft': 1 };
-      const sorted = directives.sort((a, b) => {
+      const sorted = platformDirectives.sort((a, b) => {
         // First sort by priority if available
         if (a.priority && b.priority) {
           if (a.priority !== b.priority) return b.priority - a.priority;

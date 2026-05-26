@@ -51,6 +51,21 @@ const SECRET_PATTERNS = [
   { pattern: /sk-[a-zA-Z0-9]{48}/g, replacement: '[OPENAI_KEY_REDACTED]' },
   { pattern: /sk-ant-[a-zA-Z0-9\-]{80,}/g, replacement: '[ANTHROPIC_KEY_REDACTED]' },
 
+  // ── Venture-stack secrets (SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 C3 / SECURITY VB-3) ──
+  // The venture build stack is Clerk (auth) + Gemini/Google AI + Replit (host) — NOT the
+  // Supabase/GitHub the platform scanner already knew. Without these, a ventures secret
+  // leaking into a seeded/pushed artifact scanned PASS (false negative). label is used by
+  // scanSecrets() to name the leak class in the blocking-gate message.
+  // Clerk live secret key (sk_live_/sk_test_) — the high-blast-radius one.
+  { pattern: /sk_(?:live|test)_[a-zA-Z0-9]{20,}/g, replacement: '[CLERK_SECRET_KEY_REDACTED]', label: 'clerk_secret_key' },
+  // Clerk publishable key (pk_live_/pk_test_) — lower sensitivity but named in VB-3.
+  { pattern: /pk_(?:live|test)_[a-zA-Z0-9]{20,}/g, replacement: '[CLERK_PUBLISHABLE_KEY_REDACTED]', label: 'clerk_publishable_key' },
+  // Google AI / Gemini API key (AIza + 35 chars).
+  { pattern: /AIza[a-zA-Z0-9_\-]{35}/g, replacement: '[GOOGLE_AI_KEY_REDACTED]', label: 'google_ai_key' },
+  // Replit DB URL (carries an embedded credential) + REPLIT_* env-style secrets.
+  { pattern: /https?:\/\/[^\s'"@]+:[^\s'"@]+@[^\s'"]*\.replit\.[a-z]+/gi, replacement: '[REPLIT_DB_URL_REDACTED]', label: 'replit_db_url' },
+  { pattern: /REPLIT_[A-Z0-9_]*(?:TOKEN|KEY|SECRET|DB_URL|PASSWORD)\s*[=:]\s*['"]?([^\s'"]+)['"]?/gi, replacement: 'REPLIT_SECRET=[REDACTED]', label: 'replit_secret' },
+
   // Generic secret patterns
   { pattern: /secret\s*[=:]\s*['"]?([^\s'"]{16,})['"]?/gi, replacement: 'secret=[REDACTED]' },
   { pattern: /token\s*[=:]\s*['"]?([^\s'"]{16,})['"]?/gi, replacement: 'token=[REDACTED]' },
@@ -148,9 +163,38 @@ export function containsSecrets(text) {
   return false;
 }
 
+/**
+ * Scan text for secrets and report WHICH classes matched.
+ *
+ * Unlike containsSecrets (boolean), this returns the distinct category labels so a
+ * blocking gate (e.g. the venture push path, SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001
+ * C3 / VB-3) can tell the operator exactly what leaked. Category is the pattern's
+ * `label` when present, else a slug derived from its replacement token.
+ *
+ * @param {string} text
+ * @returns {{ found: boolean, categories: string[] }}
+ */
+export function scanSecrets(text) {
+  if (!text || typeof text !== 'string') {
+    return { found: false, categories: [] };
+  }
+  const categories = new Set();
+  for (const { pattern, replacement, label } of SECRET_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(text)) {
+      const category = label
+        || String(replacement).replace(/[=:].*$/, '').replace(/[\[\]]/g, '').replace(/_?REDACTED/i, '').replace(/_+$/,'').toLowerCase()
+        || 'secret';
+      categories.add(category);
+    }
+  }
+  return { found: categories.size > 0, categories: [...categories] };
+}
+
 export default {
   redactSecrets,
   redactObject,
   containsSecrets,
+  scanSecrets,
   SECRET_PATTERNS
 };
