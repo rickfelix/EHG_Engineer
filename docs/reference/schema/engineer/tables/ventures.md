@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-25T16:39:10.906Z
+**Generated**: 2026-05-26T03:27:58.605Z
 **Rows**: 7
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (86 total)
+## Columns (87 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -109,6 +109,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | autonomy_level | `text` | YES | `'L0'::text` | Venture autonomy level: L0=Manual, L1=Guided, L2=Supervised, L3=Autonomous, L4=Full Auto |
 | target_platform | `text` | **NO** | `'both'::text` | Platform targeting: web (desktop only), mobile (mobile only), both (mobile-first + desktop) |
 | business_model_class | `text` | YES | - | Coarse business model classification used by GVOS Composer auto-classifier. Enum-constrained to prevent typo bypass of Artist-Expressive gating (SECURITY-003 from SD-GVOS-COMPOSER-SNAPSHOTLOCKED-REGISTRY-ORCH-001). NULL on existing rows; chairman fills per venture. |
+| build_model | `character varying(20)` | YES | - | SSOT venture build path at Stage 19: leo_bridge (LEO-SD bridge — orchestrator+child SDs) | seeded_repo (seed repo + Replit Agent + S20 gate) | NULL (arbiter default = seeded_repo until the venture EXEC loop ships). SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001. |
 
 ## Constraints
 
@@ -125,6 +126,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `ventures_vision_id_fkey`: vision_id → eva_vision_documents(id)
 
 ### Check Constraints
+- `ck_ventures_build_model`: CHECK (((build_model IS NULL) OR ((build_model)::text = ANY ((ARRAY['leo_bridge'::character varying, 'seeded_repo'::character varying])::text[]))))
 - `ventures_autonomy_level_check`: CHECK ((autonomy_level = ANY (ARRAY['L0'::text, 'L1'::text, 'L2'::text, 'L3'::text, 'L4'::text])))
 - `ventures_business_model_class_enum`: CHECK (((business_model_class IS NULL) OR (business_model_class = ANY (ARRAY['saas'::text, 'fintech'::text, 'healthcare'::text, 'civic'::text, 'ecommerce'::text, 'marketplace'::text, 'devtools'::text, 'media'::text, 'gaming'::text, 'artist'::text, 'publishing'::text, 'gallery'::text, 'agency'::text, 'education'::text, 'consumer'::text]))))
 - `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)))
