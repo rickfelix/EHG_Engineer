@@ -99,6 +99,86 @@ export function loadContentPayload(rawValue) {
   return parsed;
 }
 
+/**
+ * QF-20260526-436: shape pre-check for --content payloads.
+ *
+ * loadContentPayload() catches JSON syntax errors (bracket-typos, trailing
+ * commas) and asserts the top-level is an object. Beyond that, payloads with
+ * the WRONG SHAPE — e.g. `integration_operationalization: []` (array instead
+ * of object), `functional_requirements: ['string']` (strings instead of
+ * objects), `risks: {}` (object instead of array) — pass loadContentPayload
+ * silently and burn full sub-agent orchestration before failing at the
+ * quality gate or quietly producing a malformed PRD row.
+ *
+ * This pure check enforces the PRD content contract used by scripts/prd/
+ * downstream code. Only validates the SHAPE / TYPE of keys when PRESENT —
+ * required-key enforcement and minimum-array-size enforcement remain in
+ * scripts/prd/quality-validator.js (which the orchestrator runs after sub-agent
+ * work).
+ *
+ * Throws Error with `code = 'CONTENT_SHAPE_VIOLATION'` and a multi-line
+ * message naming every offending key, so the user can fix them all in one
+ * edit instead of one-at-a-time discovery.
+ *
+ * @param {object} payload — already parsed JSON object (post loadContentPayload)
+ * @throws {Error} with code 'CONTENT_SHAPE_VIOLATION' if any key has the wrong type
+ */
+export function validateContentPayloadShape(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    const e = new Error(`--content: SHAPE_VIOLATION (top-level): expected object, got ${Array.isArray(payload) ? 'array' : payload === null ? 'null' : typeof payload}`);
+    e.code = 'CONTENT_SHAPE_VIOLATION';
+    throw e;
+  }
+  const errors = [];
+  const typeOf = (v) => Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v;
+  const expectArray = (key) => {
+    if (!(key in payload)) return;
+    if (!Array.isArray(payload[key])) {
+      errors.push(`.${key}: expected array, got ${typeOf(payload[key])}`);
+    }
+  };
+  const expectObject = (key) => {
+    if (!(key in payload)) return;
+    const v = payload[key];
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) {
+      errors.push(`.${key}: expected object, got ${typeOf(v)}`);
+    }
+  };
+  const expectArrayOfObjects = (key) => {
+    if (!(key in payload)) return;
+    if (!Array.isArray(payload[key])) {
+      errors.push(`.${key}: expected array, got ${typeOf(payload[key])}`);
+      return;
+    }
+    payload[key].forEach((item, idx) => {
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+        errors.push(`.${key}[${idx}]: expected object, got ${typeOf(item)}`);
+      }
+    });
+  };
+  // Array-of-object PRD fields (rubric requires per-item structure)
+  expectArrayOfObjects('functional_requirements');
+  expectArrayOfObjects('technical_requirements');
+  expectArrayOfObjects('test_scenarios');
+  expectArrayOfObjects('risks');
+  expectArrayOfObjects('smoke_test_steps');
+  // Loose-array fields (item shape varies; just enforce top-level type)
+  expectArray('acceptance_criteria');
+  expectArray('strategic_objectives');
+  expectArray('key_changes');
+  // Object fields (the integration_operationalization typo bit me directly here)
+  expectObject('integration_operationalization');
+  expectObject('metadata');
+  expectObject('system_architecture');
+  expectObject('implementation_approach');
+
+  if (errors.length > 0) {
+    const e = new Error(`--content: SHAPE_VIOLATIONS (${errors.length}):\n  - ${errors.join('\n  - ')}`);
+    e.code = 'CONTENT_SHAPE_VIOLATION';
+    throw e;
+  }
+}
+
 export function extractContentArg(args) {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -147,6 +227,9 @@ if (isMainModule(import.meta.url)) {
   if (contentValue !== undefined) {
     try {
       contentOverride = loadContentPayload(contentValue);
+      // QF-20260526-436: fail-fast shape pre-check BEFORE addPRDToDatabase()
+      // spends ~5 min on sub-agent orchestration on a malformed payload.
+      validateContentPayloadShape(contentOverride);
     } catch (e) {
       console.error(`\n❌ ${e.message}`);
       if (heartbeatActive) stopHeartbeat();
