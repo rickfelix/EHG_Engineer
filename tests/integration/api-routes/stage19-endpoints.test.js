@@ -22,6 +22,20 @@ vi.mock('../../../lib/eva/artifact-persistence-service.js', () => ({
   writeArtifact: (...args) => mockWriteArtifact(...args),
 }));
 
+// QF-20260526-976: both POST handlers (register-deployment + deployment-url) perform
+// service-role writes and construct their OWN supabase client via `createClient(url, key)`
+// — they do NOT use req.app.locals.supabase. Mock @supabase/supabase-js so createClient
+// returns the mock the test installed via buildSupabaseMock(). A hoisted reference holds
+// the "current" mock; createMockReq updates it so each test wires both the per-request
+// (req.app.locals.supabase) and the in-handler (createClient) supabase to the same object.
+// Also seed env so the endpoints' (!supabaseUrl || !serviceRoleKey) gate passes.
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://test.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role-key';
+let currentMockSupabase = null;
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => currentMockSupabase),
+}));
+
 // Mock validateUuid so we control validation independently of the regex impl.
 vi.mock('../../../server/middleware/validate.js', () => ({
   isValidUuid: (v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
@@ -49,7 +63,7 @@ const VALID_UUID = '11111111-2222-3333-4444-555555555555';
 const VALID_REPO = 'https://github.com/owner/repo';
 const VALID_DEPLOYMENT = 'https://my-app.example.replit.app';
 
-function buildSupabaseMock({ upsertResult = null, upsertError = null } = {}) {
+function buildSupabaseMock({ upsertResult = null, upsertError = null, ventureRepoUrl = null } = {}) {
   const upsertSpy = vi.fn().mockReturnValue({
     select: vi.fn(() => ({
       single: vi.fn().mockResolvedValue({
@@ -58,18 +72,33 @@ function buildSupabaseMock({ upsertResult = null, upsertError = null } = {}) {
       }),
     })),
   });
+  // QF-20260526-976: the lightweight deployment-url endpoint also reads
+  // ventures.repo_url so the new resource row is complete; chain shape =
+  // .from('ventures').select('repo_url').eq('id', ...).maybeSingle().
+  const venturesSelectSpy = vi.fn(() => ({
+    eq: vi.fn(() => ({
+      maybeSingle: vi.fn().mockResolvedValue({ data: ventureRepoUrl ? { repo_url: ventureRepoUrl } : null, error: null }),
+    })),
+  }));
   return {
     from: vi.fn((table) => {
       if (table === 'venture_resources') {
         return { upsert: upsertSpy };
       }
+      if (table === 'ventures') {
+        return { select: venturesSelectSpy };
+      }
       return { upsert: vi.fn() };
     }),
     _upsertSpy: upsertSpy,
+    _venturesSelectSpy: venturesSelectSpy,
   };
 }
 
 function createMockReq(params = {}, body = {}, supabase = buildSupabaseMock()) {
+  // Wire the test's mock supabase into BOTH consumers: req.app.locals.supabase (legacy
+  // per-request client) AND the in-handler createClient() (the actual write path).
+  currentMockSupabase = supabase;
   return { params, body, app: { locals: { supabase } } };
 }
 
@@ -226,6 +255,130 @@ describe('Stage 19 register-deployment endpoint', () => {
       expect(res.jsonData.code).toBe('VALIDATION_FAILED');
       expect(res.jsonData.invalid.sort()).toEqual(['deployment_url', 'repo_url']);
     });
+  });
+});
+
+// QF-20260526-976 — lightweight deployment-URL endpoint (no build_mvp_build artifact,
+// no stage advance) so a Stage-17 field can record the live deployment URL into the
+// canonical venture_resources slot without tripping the S19→S20 build-done gate.
+describe('Stage 19 deployment-url endpoint (lightweight, no artifact)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockWriteArtifact.mockResolvedValue('artifact-1');
+  });
+
+  const handlers = findRoute('post', '/:ventureId/deployment-url');
+
+  it('TS-DU-A: happy path → 200, upserts canonical venture_resources, NO writeArtifact (NO build_mvp_build emitted)', async () => {
+    const supabase = buildSupabaseMock({ ventureRepoUrl: VALID_REPO });
+    const req = createMockReq(
+      { ventureId: VALID_UUID },
+      { deployment_url: VALID_DEPLOYMENT },
+      supabase,
+    );
+    const res = createMockRes();
+    await runHandlerChain(handlers, req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonData).toEqual(expect.objectContaining({
+      ventureId: VALID_UUID,
+      deployment_url: VALID_DEPLOYMENT,
+      resource_id: 'res-1',
+    }));
+    // Response intentionally does NOT include an artifact_id / artifact_type — this
+    // endpoint is build_mvp_build-free.
+    expect(res.jsonData).not.toHaveProperty('artifact_id');
+    expect(res.jsonData).not.toHaveProperty('artifact_type');
+
+    // Canonical write: same store + same resource_type + same unique key as register-deployment.
+    expect(supabase._upsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        venture_id: VALID_UUID,
+        resource_type: 'replit_deployment',
+        resource_identifier: VALID_DEPLOYMENT,
+        deployment_url: VALID_DEPLOYMENT,
+        // ventures.repo_url is carried onto the row when present (defensive completeness).
+        repo_url: VALID_REPO,
+      }),
+      expect.objectContaining({ onConflict: expect.any(String) }),
+    );
+
+    // CRITICAL contract: this endpoint must NEVER emit the build_mvp_build artifact —
+    // an early Stage-17 capture must not falsely satisfy the S19→S20 "build done" gate.
+    expect(mockWriteArtifact).not.toHaveBeenCalled();
+  });
+
+  it('TS-DU-A2: ventures.repo_url is null → upsert still proceeds with repo_url=null', async () => {
+    // The endpoint pulls repo_url defensively; an empty/null venture row must not block the write.
+    const supabase = buildSupabaseMock({ ventureRepoUrl: null });
+    const req = createMockReq(
+      { ventureId: VALID_UUID },
+      { deployment_url: VALID_DEPLOYMENT },
+      supabase,
+    );
+    const res = createMockRes();
+    await runHandlerChain(handlers, req, res);
+    expect(res.statusCode).toBe(200);
+    expect(supabase._upsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        venture_id: VALID_UUID,
+        resource_type: 'replit_deployment',
+        resource_identifier: VALID_DEPLOYMENT,
+        deployment_url: VALID_DEPLOYMENT,
+        repo_url: null,
+      }),
+      expect.any(Object),
+    );
+    expect(mockWriteArtifact).not.toHaveBeenCalled();
+  });
+
+  it('TS-DU-B-1: rejects http:// (insecure) deployment_url with 400 VALIDATION_FAILED', async () => {
+    const req = createMockReq(
+      { ventureId: VALID_UUID },
+      { deployment_url: 'http://insecure.example' },
+    );
+    const res = createMockRes();
+    await runHandlerChain(handlers, req, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonData.code).toBe('VALIDATION_FAILED');
+    expect(res.jsonData.invalid).toContain('deployment_url');
+    expect(mockWriteArtifact).not.toHaveBeenCalled();
+  });
+
+  it('TS-DU-B-2: rejects empty / missing deployment_url with 400 VALIDATION_FAILED', async () => {
+    const req = createMockReq({ ventureId: VALID_UUID }, {});
+    const res = createMockRes();
+    await runHandlerChain(handlers, req, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonData.code).toBe('VALIDATION_FAILED');
+    expect(res.jsonData.invalid).toContain('deployment_url');
+  });
+
+  it('TS-DU-C: idempotent — re-submitting the same URL returns the same resource_id (unique key on venture_id+resource_type+resource_identifier)', async () => {
+    const supabase = buildSupabaseMock({ ventureRepoUrl: VALID_REPO, upsertResult: { id: 'res-1' } });
+    const body = { deployment_url: VALID_DEPLOYMENT };
+    const req1 = createMockReq({ ventureId: VALID_UUID }, body, supabase);
+    const res1 = createMockRes();
+    await runHandlerChain(handlers, req1, res1);
+    const req2 = createMockReq({ ventureId: VALID_UUID }, body, supabase);
+    const res2 = createMockRes();
+    await runHandlerChain(handlers, req2, res2);
+    expect(res1.statusCode).toBe(200);
+    expect(res2.statusCode).toBe(200);
+    expect(res1.jsonData.resource_id).toBe(res2.jsonData.resource_id);
+    expect(mockWriteArtifact).not.toHaveBeenCalled();
+  });
+
+  it('TS-DU-D: rejects invalid UUID with 400 INVALID_VENTURE_ID', async () => {
+    const req = createMockReq(
+      { ventureId: 'not-a-uuid' },
+      { deployment_url: VALID_DEPLOYMENT },
+    );
+    const res = createMockRes();
+    await runHandlerChain(handlers, req, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonData.code).toBe('INVALID_VENTURE_ID');
+    expect(mockWriteArtifact).not.toHaveBeenCalled();
   });
 });
 
