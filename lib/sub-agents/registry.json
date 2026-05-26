@@ -1,0 +1,67 @@
+{
+  "_meta": {
+    "schema_version": "1.0.0",
+    "ssot_for": "lib/sub-agents/resolve-repo.js — per-sub-agent cross-repo capability flags",
+    "created_by": "SD-LEO-INFRA-FLEET-WIDE-SUB-001",
+    "design_decisions": {
+      "format": "JSON file (NOT module export — avoids self-checksum side-effect bug class from SD-LEO-INFRA-UNIFY-STAGE-DESIGN-001; NOT DB column — capabilities are code-bundled not data-mutable)",
+      "default_when_unknown": "supports_cross_repo:true (safer default — if a sub-agent fails on cross-repo, the PLAN-TO-EXEC gate's CONDITIONAL_PASS surfaces it with diagnostic detail rather than silently skipping)",
+      "skip_reason_codes": "sub_agent_engineer_only (DATABASE writes — needs ENGINEER_ROOT), sub_agent_ehg_only (would require an EHG-specific bundle/test runner)"
+    }
+  },
+  "default_supports_cross_repo": true,
+  "sub_agents": {
+    "DESIGN": {
+      "supports_cross_repo": true,
+      "probe_path": "src/components",
+      "notes": "Original cross-repo fix landed via SD-LEO-INFRA-CROSS-REPO-AWARE-001 (PR #3971). Refactored to delegate to resolveSubAgentRepo by this SD."
+    },
+    "SECURITY": {
+      "supports_cross_repo": true,
+      "probe_path": null,
+      "notes": "Scans for auth/RLS/credential patterns. Venture-specific scan is correct (each venture has its own security surface)."
+    },
+    "PERFORMANCE": {
+      "supports_cross_repo": true,
+      "probe_path": "package.json",
+      "notes": "Bundle-size / load-time checks per-venture. May need venture-specific config (vite vs other bundlers) — surface via warnings, not blockers."
+    },
+    "DEPENDENCY": {
+      "supports_cross_repo": true,
+      "probe_path": "package.json",
+      "notes": "npm audit + outdated checks per-venture. CronGenius uses bun — npm CLI may behave differently; see SD-LEO-INFRA-VENTURE-TEST-RUNNER-001 (CAPA-5 follow-up)."
+    },
+    "API": {
+      "supports_cross_repo": true,
+      "probe_path": "src/api",
+      "notes": "Was previously hardcoded to scan ehg/src/api and ehg/src/routes."
+    },
+    "REGRESSION": {
+      "supports_cross_repo": true,
+      "probe_path": null,
+      "notes": "Module-scope DEFAULT_REPO_PATH at regression.js:34 was LOAD-BEARING eager-resolution at import. Refactored to lazy via resolveSubAgentRepo. Regression-pin test required before refactor."
+    },
+    "QUICKFIX": {
+      "supports_cross_repo": true,
+      "probe_path": null,
+      "notes": "Default repo was 'ehg' (line 37); additional process.cwd() at line 76."
+    },
+    "STORIES_CODEBASE": {
+      "supports_cross_repo": true,
+      "probe_path": "src",
+      "notes": "Different shape from other sub-agents — PRD-input-driven, returns patterns (not verdict). Surfaces _resolution_metadata in returned patterns object; parent stories module folds into evidence row's metadata.repo_path. Was hardcoded path.resolve(__dirname, '../../../../..') → getRepoRoot() (worktree-aware)."
+    },
+    "DATABASE_SCHEMA": {
+      "supports_cross_repo": false,
+      "only_repo": "EHG_Engineer",
+      "skip_reason": "sub_agent_engineer_only",
+      "notes": "Validates schema changes which live in EHG_Engineer's database/migrations/. Venture-specific schema changes do not exist (ventures use the consolidated Supabase database)."
+    },
+    "DATABASE_MIGRATION": {
+      "supports_cross_repo": false,
+      "only_repo": "EHG_Engineer",
+      "skip_reason": "sub_agent_engineer_only",
+      "notes": "Applies migrations via temp file in process.cwd()/.temp/. Must stay in EHG_Engineer (where migrations live)."
+    }
+  }
+}
