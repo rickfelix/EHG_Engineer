@@ -1733,6 +1733,29 @@ async function createSD(options) {
     console.warn(`   ⚠️  GATE_SD_QUALITY pre-check skipped: ${vErr.message}`);
   }
 
+  // SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 (FR-5): auto-register target_application in the
+  // `applications` registry BEFORE the SD insert, so the (deferred) fail-closed routing trigger
+  // never blocks legitimate SD creation on an unregistered name. Fail-soft: a registry write
+  // error must NOT block SD creation — the registry is a precondition, not a gate, and the
+  // enforcing trigger is not yet active.
+  try {
+    const appName = sdData.target_application;
+    if (appName) {
+      const { data: existing } = await supabase
+        .from('applications').select('id').ilike('name', appName).limit(1);
+      if (!existing || existing.length === 0) {
+        const PLATFORM_REPOS = new Set(['ehg', 'ehg_engineer']);
+        const kind = PLATFORM_REPOS.has(String(appName).toLowerCase()) ? 'platform' : 'venture';
+        const normalized = String(appName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        const { error: regErr } = await supabase
+          .from('applications').insert({ name: appName, normalized_name: normalized, kind, status: 'active' });
+        if (!regErr) console.log(`   📇 Registered target_application '${appName}' (${kind}) in applications registry`);
+      }
+    }
+  } catch (regErr) {
+    console.warn(`   ⚠️  applications registry auto-register skipped (non-blocking): ${regErr.message}`);
+  }
+
   const { data, error } = await supabase
     .from('strategic_directives_v2')
     .insert(sdData)
