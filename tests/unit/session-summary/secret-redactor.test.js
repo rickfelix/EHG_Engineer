@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { redactSecrets, redactObject, containsSecrets } from '../../../scripts/modules/session-summary/secret-redactor.js';
+import { redactSecrets, redactObject, containsSecrets, scanSecrets } from '../../../scripts/modules/session-summary/secret-redactor.js';
 
 describe('SecretRedactor', () => {
   describe('redactSecrets', () => {
@@ -243,6 +243,57 @@ describe('SecretRedactor', () => {
 
     it('should handle special regex characters in surrounding text', () => {
       expect(redactSecrets('[test] api_key=secret_value_12345 {info}')).toContain('[REDACTED]');
+    });
+  });
+
+  // SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 C3 / SECURITY VB-3 / AT-SEC-3:
+  // stack-aware secret detection for the venture build stack (Clerk + Gemini + Replit),
+  // which the platform Supabase/GitHub scanner previously missed (false-PASS).
+  describe('C3 venture-stack secrets (Clerk / Gemini / Replit)', () => {
+    // Assemble secret-SHAPED fixtures at runtime so no literal secret lands in committed
+    // source — GitHub push-protection / secret-scanning would otherwise flag these test
+    // values (the very patterns C3 detects). join() yields the full string at runtime.
+    const j = (...p) => p.join('');
+    const CLERK_SK = j('sk', '_live_', 'aBcdEFgh1234567890ZyXwVu');
+    const CLERK_PK = j('pk', '_live_', 'ZHVtbXkxMjM0NTY3ODkwYWJjZGVm');
+    const GEMINI = j('AIza', 'SyD1234567890abcdefghIJKLMNOPqrstuv');
+
+    it('detects + redacts a BARE Clerk secret key (sk_live_)', () => {
+      const src = `createClerkClient({ secretKey: "${CLERK_SK}" })`;
+      expect(containsSecrets(src)).toBe(true);
+      const red = redactSecrets(src);
+      expect(red).not.toContain(CLERK_SK);
+      expect(red).toContain('CLERK_SECRET_KEY_REDACTED');
+      expect(scanSecrets(src).categories).toContain('clerk_secret_key');
+    });
+
+    it('detects a Clerk publishable key (pk_live_)', () => {
+      expect(scanSecrets(CLERK_PK).categories).toContain('clerk_publishable_key');
+    });
+
+    it('detects + redacts a bare Gemini / Google AI key (AIza...)', () => {
+      const src = `url=https://generativelanguage.googleapis.com/v1?key=${GEMINI}`;
+      expect(containsSecrets(src)).toBe(true);
+      const red = redactSecrets(src);
+      expect(red).not.toContain(GEMINI);
+      expect(red).toContain('GOOGLE_AI_KEY_REDACTED');
+      expect(scanSecrets(src).categories).toContain('google_ai_key');
+    });
+
+    it('detects a Replit DB URL (embedded credential) and REPLIT_* secrets', () => {
+      expect(scanSecrets(j('DATABASE_URL=https://u:', 'p4ss', '@db.app.replit.dev/x')).categories).toContain('replit_db_url');
+      expect(scanSecrets(j('REPLIT_TOKEN=', 'abc123def456ghi789')).categories).toContain('replit_secret');
+    });
+
+    it('scanSecrets reports multiple distinct categories and is empty for benign text', () => {
+      const multi = `${CLERK_SK} and key=${GEMINI}`;
+      const cats = scanSecrets(multi).categories;
+      expect(cats).toContain('clerk_secret_key');
+      expect(cats).toContain('google_ai_key');
+
+      const benign = scanSecrets('ventureName=CronLinter build_tasks_complete=7 just normal text');
+      expect(benign.found).toBe(false);
+      expect(benign.categories).toEqual([]);
     });
   });
 });

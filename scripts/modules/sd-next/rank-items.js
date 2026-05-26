@@ -36,6 +36,27 @@ export const SEVERITY_TO_RANK = {
   low:      1000,
 };
 
+/**
+ * Platform application names — target_application values that are NOT ventures.
+ * Kept local (a tiny stable Set) to preserve this module's pure / IO-free contract;
+ * mirrors the name-based platform set in lib/repo-paths.js (isVentureRepo).
+ */
+const PLATFORM_APPLICATIONS = new Set(['ehg', 'ehg_engineer']);
+
+/**
+ * FR-5 (SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001): a venture-build SD is any SD whose
+ * target_application is set to a non-platform value. These are ISOLATED into a dedicated
+ * `ventureTrack` (returned separately from `tracks`) so they never starve or pollute the
+ * platform sd:next recommendation/display, which read tracks.A/B/C/STANDALONE.
+ *
+ * @param {Object} sd
+ * @returns {boolean}
+ */
+export function isVentureBuildSD(sd) {
+  const ta = (sd?.target_application || '').trim().toLowerCase();
+  return ta.length > 0 && !PLATFORM_APPLICATIONS.has(ta);
+}
+
 /** Branch-name keywords that promote a bug-type QF to Track A (Infrastructure). */
 const TRACK_A_BRANCH_KEYWORDS = [
   'infra',
@@ -160,6 +181,10 @@ export function rankItems(items, context = {}) {
 
   const now = context.now ?? Date.now();
   const tracks = { A: [], B: [], C: [], STANDALONE: [] };
+  // FR-5: isolated venture-build queue — returned separately from `tracks` so platform
+  // sd:next recommendation/display (which read tracks.A/B/C/STANDALONE) never surface or
+  // get starved by venture SDs. A future venture-specific view can read this field.
+  const ventureTrack = [];
   const misplacedDeps = [];
   const orphanBaseline = [];
 
@@ -240,7 +265,7 @@ export function rankItems(items, context = {}) {
     const urgencyBand = sd.metadata?.urgency_band ?? (urgencyScore !== null ? scoreToBand(urgencyScore) : 'P3');
     const urgencyNumeric = bandToNumeric(urgencyBand);
 
-    tracks[trackKey].push({
+    const rankedEntry = {
       ...(baselineItem || {}),
       ...sd,
       kind: 'sd',
@@ -256,21 +281,31 @@ export function rankItems(items, context = {}) {
       urgency_numeric: urgencyNumeric,
       is_deferred: isDeferred,
       actual: actuals[sd.sd_key] || actuals[sd.id]
-    });
+    };
+
+    // FR-5: venture-build SDs go to the isolated ventureTrack, NOT the platform tracks.
+    if (isVentureBuildSD(sd)) {
+      rankedEntry.track = 'VENTURE';
+      ventureTrack.push(rankedEntry);
+    } else {
+      tracks[trackKey].push(rankedEntry);
+    }
   }
 
   // Sort within each track: urgency band (P0 first) → urgency score (desc) → composite_rank
+  const byUrgencyThenRank = (a, b) => {
+    const bandDiff = (a.urgency_numeric ?? 3) - (b.urgency_numeric ?? 3);
+    if (bandDiff !== 0) return bandDiff;
+    const scoreDiff = (b.urgency_score ?? 0) - (a.urgency_score ?? 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return (a.composite_rank ?? a.sequence_rank ?? 9999) - (b.composite_rank ?? b.sequence_rank ?? 9999);
+  };
   for (const trackKey of Object.keys(tracks)) {
-    tracks[trackKey].sort((a, b) => {
-      const bandDiff = (a.urgency_numeric ?? 3) - (b.urgency_numeric ?? 3);
-      if (bandDiff !== 0) return bandDiff;
-      const scoreDiff = (b.urgency_score ?? 0) - (a.urgency_score ?? 0);
-      if (scoreDiff !== 0) return scoreDiff;
-      return (a.composite_rank ?? a.sequence_rank ?? 9999) - (b.composite_rank ?? b.sequence_rank ?? 9999);
-    });
+    tracks[trackKey].sort(byUrgencyThenRank);
   }
+  ventureTrack.sort(byUrgencyThenRank);
 
-  return { tracks, misplacedDeps, orphanBaseline };
+  return { tracks, ventureTrack, misplacedDeps, orphanBaseline };
 }
 
 /**

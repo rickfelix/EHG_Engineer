@@ -14,6 +14,7 @@ import {
   buildMergeArgs,
   verifyMerged,
   verifyBranchDeleted,
+  isPlatformRepo,
 } from '../../../lib/ship/auto-merge.mjs';
 
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
@@ -170,6 +171,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       prNumber: 42,
       repoOwner: 'o',
       repoName: 'r',
+      allowExternalMerge: true, // mechanic test — not exercising the C2 trust gate
       runner,
       logger: silentLogger,
     });
@@ -191,6 +193,7 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
       prNumber: 42,
       repoOwner: 'o',
       repoName: 'r',
+      allowExternalMerge: true, // mechanic test — not exercising the C2 trust gate
       runner,
       logger: silentLogger,
     });
@@ -310,6 +313,7 @@ describe('attemptAutoMerge — hard-fail (FR-3, TS-4)', () => {
       prNumber: 99,
       repoOwner: 'o',
       repoName: 'r',
+      allowExternalMerge: true, // mechanic test — not exercising the C2 trust gate
       runner,
       logger: silentLogger,
     });
@@ -338,6 +342,7 @@ describe('attemptAutoMerge — race recovery (FR-4, TS-5)', () => {
       prNumber: 99,
       repoOwner: 'o',
       repoName: 'r',
+      allowExternalMerge: true, // mechanic test — not exercising the C2 trust gate
       runner,
       logger: silentLogger,
     });
@@ -352,6 +357,7 @@ describe('attemptAutoMerge — input validation', () => {
       prNumber: undefined,
       repoOwner: 'o',
       repoName: 'r',
+      allowExternalMerge: true, // mechanic test — not exercising the C2 trust gate
       runner: vi.fn(),
       logger: silentLogger,
     });
@@ -510,5 +516,92 @@ describe('attemptAutoMerge — branch-deletion verification (QF-20260509-VERIFY-
 
     expect(r.ok).toBe(true);
     expect(infos.some((m) => /not verified/.test(m))).toBe(true);
+  });
+});
+
+// SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 C2 / AT-SEC-2: external-repo human merge-gate.
+describe('isPlatformRepo (C2 trust allowlist)', () => {
+  it('is true only for the two platform repos (case-insensitive)', () => {
+    expect(isPlatformRepo('rickfelix', 'ehg')).toBe(true);
+    expect(isPlatformRepo('rickfelix', 'EHG_Engineer')).toBe(true);
+    expect(isPlatformRepo('RickFelix', 'EHG')).toBe(true);
+  });
+  it('is false for venture/external/unknown repos and missing args', () => {
+    expect(isPlatformRepo('rickfelix', 'commitcraft-ai')).toBe(false);
+    expect(isPlatformRepo('someorg', 'someventure')).toBe(false);
+    expect(isPlatformRepo(null, 'ehg')).toBe(false);
+    expect(isPlatformRepo('rickfelix', undefined)).toBe(false);
+  });
+});
+
+describe('attemptAutoMerge — C2 external-repo merge-gate (SECURITY VB-2)', () => {
+  it('REFUSES a non-platform (venture) repo by default and never calls gh', async () => {
+    const { runner, calls } = makeRunner([]); // any gh call would be "unmatched"
+    const r = await attemptAutoMerge({
+      prNumber: 7,
+      repoOwner: 'rickfelix',
+      repoName: 'commitcraft-ai', // a venture repo, not platform
+      runner,
+      logger: silentLogger,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.requiresHumanMerge).toBe(true);
+    expect(r.reason).toMatch(/requires human merge/);
+    expect(r.exitCode).toBe(0); // gated, not an error
+    expect(calls).toHaveLength(0); // fail-closed BEFORE any gh invocation
+  });
+
+  it('REFUSES an unknown/unresolvable repo (fail-closed)', async () => {
+    const { runner, calls } = makeRunner([]);
+    const r = await attemptAutoMerge({ prNumber: 7, repoOwner: undefined, repoName: undefined, runner, logger: silentLogger });
+    expect(r.ok).toBe(false);
+    expect(r.requiresHumanMerge).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('ALLOWS a platform repo (proceeds to merge)', async () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+      { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-25T00:00:00Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
+    ]);
+    const r = await attemptAutoMerge({ prNumber: 7, repoOwner: 'rickfelix', repoName: 'ehg', runner, logger: silentLogger });
+    expect(r.ok).toBe(true);
+    expect(r.requiresHumanMerge).toBeUndefined();
+  });
+
+  it('allowExternalMerge:true overrides the gate for a non-platform repo', async () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+      { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-25T00:00:00Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
+    ]);
+    const r = await attemptAutoMerge({ prNumber: 7, repoOwner: 'someorg', repoName: 'someventure', runner, logger: silentLogger, allowExternalMerge: true });
+    expect(r.ok).toBe(true);
+  });
+
+  it('honors an injected isTrustedRepo predicate', async () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+      { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: '2026-05-25T00:00:00Z\n' } },
+      { match: argvMatchers.prViewState, result: { stdout: 'MERGED\n' } },
+      { match: argvMatchers.prViewHeadRef, result: { stdout: 'feat/x\n' } },
+      { match: argvMatchers.apiRefHead, result: { code: 1, stderr: 'Not Found (404)' } },
+    ]);
+    const r = await attemptAutoMerge({
+      prNumber: 7, repoOwner: 'trusted', repoName: 'venture', runner, logger: silentLogger,
+      isTrustedRepo: (o, n) => o === 'trusted' && n === 'venture',
+    });
+    expect(r.ok).toBe(true);
   });
 });

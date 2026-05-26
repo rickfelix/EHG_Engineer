@@ -57,13 +57,37 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
     validator: async (ctx) => {
       // Self-skip when the target repo has no usable git (e.g. EHG consolidated repo).
       // This fires for any sd_type (refactor/database/security/feature/…) targeting EHG.
-      const { isGitCapableRepo } = await import('../../../../../../lib/repo-paths.js');
+      const { isGitCapableRepo, isVentureRepo } = await import('../../../../../../lib/repo-paths.js');
       const isGitIncapableTarget = sd && sd.target_application && !isGitCapableRepo(sd.target_application);
       if (isGitIncapableTarget) {
+        // SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 FR-4 (SECURITY VB-4): a not-git-capable target
+        // is a legitimate skip ONLY for PLATFORM repos — EHG is locked to detached HEAD, so its
+        // branch/commit ops are genuinely N/A and its commits live in the EHG_Engineer worktree.
+        // For a VENTURE repo, "not git-capable" means it is not locally cloned / has no branch;
+        // silently free-passing commit enforcement there is the exact gate-self-skip this SD closes.
+        if (isVentureRepo(sd.target_application)) {
+          console.log('\n🔒 GATE 5: Git Commit Enforcement');
+          console.log('-'.repeat(50));
+          console.log(`   ⛔ venture target_application='${sd.target_application}' is not locally git-capable`);
+          console.log('   ❌ FAIL-CLOSED: cannot verify venture build commits (no local clone/branch)');
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [
+              `GATE5 FAIL-CLOSED: venture repo '${sd.target_application}' is not locally git-capable, so commit status `
+              + `cannot be verified. Free-pass removed per SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 FR-4 / SECURITY VB-4. `
+              + `Clone the venture repo (or route via the bridge with a git-capable checkout) before this handoff.`
+            ],
+            warnings: [],
+            details: { fail_closed_venture_repo: true, target_application: sd.target_application }
+          };
+        }
+        // Platform repo (EHG) — legitimate N/A skip (detached HEAD; commits in EHG_Engineer worktree).
         console.log('\n🔒 GATE 5: Git Commit Enforcement');
         console.log('-'.repeat(50));
-        console.log(`   ℹ️  target_application='${sd.target_application}' has no usable git repository`);
-        console.log('   ✅ Skipping strict commit enforcement (git-incapable target)');
+        console.log(`   ℹ️  platform target_application='${sd.target_application}' has no usable git repository (detached HEAD)`);
+        console.log('   ✅ Skipping strict commit enforcement (git-incapable platform target)');
         console.log('   📝 Branch isolation handled via worktree; commits live in EHG_Engineer');
 
         return {
@@ -71,11 +95,11 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
           score: 100,
           max_score: 100,
           issues: [],
-          warnings: [`GATE5 N/A: target_application='${sd.target_application}' has no usable git repository; commit enforcement skipped`],
+          warnings: [`GATE5 N/A: platform target_application='${sd.target_application}' has no usable git repository; commit enforcement skipped`],
           details: {
             skipped_not_applicable: true,
             target_application: sd.target_application,
-            workflow_modification: 'Commit enforcement skipped — target repo is not git-capable'
+            workflow_modification: 'Commit enforcement skipped — platform target repo is not git-capable'
           }
         };
       }

@@ -181,11 +181,15 @@ router.post('/:ventureId/register-deployment', asyncHandler(async (req, res) => 
     });
   }
 
-  // SD-LEO-FEAT-FINALIZE-CLAUDE-CODE-001 / FR-3: enrich the "build is done" signal with
-  // build-task completeness (not merely a registered URL). Degrade-safe — resolveRepoReadiness
-  // never throws; build_tasks_complete falls back to the total (registering a deployment asserts
-  // the build is complete) but an explicit build_tasks_complete in the body is honored when present.
-  // The S20 Code Quality Gate remains the authoritative downstream validator.
+  // SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 / FR-4: the "build is done" signal must be
+  // EVIDENCE-BASED, not asserted. Registering a deployment URL records the build PLAN total
+  // but does NOT by itself prove the build is complete — build_tasks_complete now defaults to
+  // null (unverified) rather than the total. Only an explicit, verified build_tasks_complete in
+  // the request body is honored. The S19->S20 exit gate (verifyBuildMvpBuildPresent) and the S20
+  // Code Quality Gate enforce real completion downstream.
+  //   Superseded prior behavior (SD-LEO-FEAT-FINALIZE-CLAUDE-CODE-001 / FR-3): complete fell back
+  //   to the total, so a bare register-deployment asserted an unverified N/N (e.g. CronLinter 7/7).
+  // Degrade-safe — resolveRepoReadiness never throws.
   let buildTasksTotal = null;
   let buildTasksComplete = null;
   try {
@@ -194,7 +198,7 @@ router.post('/:ventureId/register-deployment', asyncHandler(async (req, res) => 
     if (Number.isFinite(total)) {
       buildTasksTotal = total;
       const reported = Number(req.body?.build_tasks_complete);
-      buildTasksComplete = Number.isFinite(reported) ? Math.max(0, Math.min(reported, total)) : total;
+      buildTasksComplete = Number.isFinite(reported) ? Math.max(0, Math.min(reported, total)) : null;
     }
   } catch { /* degrade-safe: omit the completion fields entirely */ }
 
@@ -211,7 +215,14 @@ router.post('/:ventureId/register-deployment', asyncHandler(async (req, res) => 
         deployment_url,
         registered_at: new Date().toISOString(),
         ...(buildTasksTotal !== null
-          ? { build_tasks_total: buildTasksTotal, build_tasks_complete: buildTasksComplete }
+          ? {
+              build_tasks_total: buildTasksTotal,
+              build_tasks_complete: buildTasksComplete,
+              // FR-4: explicit provenance — true only when a verified completion count
+              // (>= total) was supplied. A bare register-deployment leaves this false.
+              build_completion_verified:
+                buildTasksComplete !== null && buildTasksComplete >= buildTasksTotal,
+            }
           : {}),
       },
       metadata: {

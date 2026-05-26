@@ -9,6 +9,7 @@ import {
   SEVERITY_TO_RANK,
   qfUrgencyBand,
   qfTrack,
+  isVentureBuildSD,
 } from '../scripts/modules/sd-next/rank-items.js';
 
 /** Minimal SD factory so each test only spells out what it cares about. */
@@ -337,5 +338,47 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
     const { tracks } = rankItems(items, { now: NOW });
     const allIds = [...tracks.A, ...tracks.B, ...tracks.C, ...tracks.STANDALONE].map(x => x.id);
     assert.deepEqual(allIds, ['QF-OPEN']);
+  });
+});
+
+// SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 FR-5: venture-build queue isolation.
+describe('isVentureBuildSD + venture queue isolation (FR-5)', () => {
+  it('isVentureBuildSD: only non-platform target_application is a venture', () => {
+    assert.equal(isVentureBuildSD({ target_application: null }), false);
+    assert.equal(isVentureBuildSD({ target_application: '' }), false);
+    assert.equal(isVentureBuildSD({ target_application: 'ehg' }), false);
+    assert.equal(isVentureBuildSD({ target_application: 'EHG' }), false);
+    assert.equal(isVentureBuildSD({ target_application: 'EHG_Engineer' }), false);
+    assert.equal(isVentureBuildSD({ target_application: 'CronLinter' }), true);
+    assert.equal(isVentureBuildSD({ target_application: 'Canvas AI' }), true);
+  });
+
+  it('routes venture-build SDs to ventureTrack, NOT the platform tracks', () => {
+    const items = [
+      sd({ id: 'SD-PLAT-1', sd_key: 'SD-PLAT-1', status: 'active', category: 'infrastructure', target_application: null }),
+      sd({ id: 'SD-PLAT-2', sd_key: 'SD-PLAT-2', status: 'active', category: 'quality', target_application: 'EHG_Engineer' }),
+      sd({ id: 'SD-VEN-1', sd_key: 'SD-VEN-1', status: 'active', category: 'feature', target_application: 'CronLinter' }),
+      sd({ id: 'SD-VEN-2', sd_key: 'SD-VEN-2', status: 'active', category: 'infrastructure', target_application: 'Canvas AI' }),
+    ];
+    const result = rankItems(items, {});
+    const platformIds = [...result.tracks.A, ...result.tracks.B, ...result.tracks.C, ...result.tracks.STANDALONE].map(x => x.sd_id);
+    const ventureIds = result.ventureTrack.map(x => x.sd_id);
+
+    assert.ok(Array.isArray(result.ventureTrack), 'ventureTrack is an array');
+    assert.deepEqual(ventureIds.sort(), ['SD-VEN-1', 'SD-VEN-2']);
+    assert.ok(!platformIds.includes('SD-VEN-1') && !platformIds.includes('SD-VEN-2'), 'venture SDs absent from platform tracks');
+    assert.ok(platformIds.includes('SD-PLAT-1') && platformIds.includes('SD-PLAT-2'), 'platform SDs present in platform tracks');
+    assert.ok(result.ventureTrack.every(x => x.track === 'VENTURE'), 'ventureTrack entries marked track=VENTURE');
+  });
+
+  it('completed/cancelled venture SDs are excluded from both tracks and ventureTrack', () => {
+    const items = [
+      sd({ id: 'SD-VEN-DONE', sd_key: 'SD-VEN-DONE', status: 'completed', target_application: 'CronLinter' }),
+      sd({ id: 'SD-VEN-CANCEL', sd_key: 'SD-VEN-CANCEL', status: 'cancelled', target_application: 'Canvas AI' }),
+    ];
+    const result = rankItems(items, {});
+    assert.equal(result.ventureTrack.length, 0);
+    const platformIds = [...result.tracks.A, ...result.tracks.B, ...result.tracks.C, ...result.tracks.STANDALONE];
+    assert.equal(platformIds.length, 0);
   });
 });
