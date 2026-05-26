@@ -179,6 +179,50 @@ async function createQuickFix(options = {}) {
   // Generate ID
   const qfId = generateQuickFixId();
 
+  // QF-20260526-106: route + INSERT the quick_fixes row BEFORE the per-feedback-row
+  // pre-claim. The pre-claim sets feedback.quick_fix_id = qfId, which the
+  // fk_feedback_quick_fix constraint rejects unless the quick_fixes row already
+  // exists (backlog b06e04f8). The common no-feedback-id path is behaviorally
+  // identical — insert simply moves ahead of the skipped pre-claim.
+
+  // Route once; the same decision drives initial status (escalated vs open) and is reused below.
+  const scopeText = [expected, actual].filter(Boolean).join('\n');
+  const routingDecision = await routeWorkItem({
+    estimatedLoc,
+    type,
+    scope: scopeText,
+    description,
+    entryPoint: 'create-quick-fix',
+  }, supabase);
+  const isTier3 = routingDecision.tier === 3;
+  const initialStatus = isTier3 ? 'escalated' : 'open';
+
+  {
+    const { error: insertErr } = await supabase
+      .from('quick_fixes')
+      .insert({
+        id: qfId,
+        title,
+        type,
+        severity,
+        description,
+        steps_to_reproduce: steps,
+        expected_behavior: expected,
+        actual_behavior: actual,
+        estimated_loc: estimatedLoc,
+        target_application: targetApplication,
+        status: initialStatus,
+        escalation_reason: isTier3 ? routingDecision.escalationReason : null,
+        routing_tier: routingDecision.tier,
+        routing_threshold_id: routingDecision.thresholdId !== 'fallback' && routingDecision.thresholdId !== 'error-multiple-active' ? routingDecision.thresholdId : null,
+        created_at: new Date().toISOString()
+      });
+    if (insertErr) {
+      console.log('❌ Failed to create quick-fix record:', insertErr.message);
+      process.exit(1);
+    }
+  }
+
   // SD-FDBK-INFRA-PER-FEEDBACK-ROW-001 / FR-1+FR-3: atomic per-feedback-row pre-claim.
   // Skipped when --feedback-id omitted (full backward-compatibility).
   if (options.feedbackId) {
@@ -204,6 +248,7 @@ async function createQuickFix(options = {}) {
         if (!options.forceClaimReason || !String(options.forceClaimReason).trim()) {
           console.error(`\n❌ [FORCE_CLAIM_REASON_REQUIRED] --force-claim requires --force-claim-reason "<text>"`);
           if (claimed.length > 0) await releasePreclaim({ supabase, quickFixId: qfId });
+          await supabase.from('quick_fixes').delete().eq('id', qfId);
           process.exit(1);
         }
         const QUOTA = parseInt(process.env.LEO_FORCE_CLAIM_DAILY_QUOTA || '3', 10);
@@ -218,6 +263,7 @@ async function createQuickFix(options = {}) {
         if (used >= QUOTA) {
           console.error(`\n❌ [FORCE_CLAIM_QUOTA_EXHAUSTED] ${used}/${QUOTA} used in last 24h for session ${(creatorSessionId||'?').slice(0,8)}`);
           if (claimed.length > 0) await releasePreclaim({ supabase, quickFixId: qfId });
+          await supabase.from('quick_fixes').delete().eq('id', qfId);
           process.exit(1);
         }
         // Attempt to force-claim the still-conflicting rows by setting quick_fix_id over their existing claim.
@@ -241,6 +287,10 @@ async function createQuickFix(options = {}) {
           const { released } = await releasePreclaim({ supabase, quickFixId: qfId });
           console.error(`   ↩ Released ${released.length} partially-claimed sibling(s) to keep state clean.`);
         }
+        // QF-20260526-106: remove the just-created quick_fixes row so the failed
+        // pre-claim leaves no orphan (the FK we just satisfied is now the only
+        // referent — deleting it after releasing the feedback claim is safe).
+        await supabase.from('quick_fixes').delete().eq('id', qfId);
         process.exit(1);
       }
     }
@@ -254,23 +304,15 @@ async function createQuickFix(options = {}) {
     });
   }
 
-  // Unified Work-Item Router: determine tier based on LOC + risk keywords.
-  // Pass `scope` derived from the user's expected/actual fields — those describe
-  // the change itself. `description` often references existing patterns by name
-  // (e.g., "extends the needsAuth gate") which would false-trigger a description-level scan.
-  const scopeText = [expected, actual].filter(Boolean).join('\n');
-  const routingDecision = await routeWorkItem({
-    estimatedLoc,
-    type,
-    scope: scopeText,
-    description,
-    entryPoint: 'create-quick-fix',
-  }, supabase);
-
+  // QF-20260526-106: the quick_fixes row was inserted ABOVE (before pre-claim).
+  // The remaining steps just present the routing decision and (for Tier 3) exit.
   console.log(`\n📊 Routing Decision: ${routingDecision.tierLabel} (${estimatedLoc} LOC, threshold: ${routingDecision.thresholdId})`);
 
+  // Re-read the just-inserted row to keep the original return shape for callers.
+  const { data } = await supabase.from('quick_fixes').select('*').eq('id', qfId).single();
+
   // Tier 3: Escalate to full Strategic Directive
-  if (routingDecision.tier === 3) {
+  if (isTier3) {
     console.log('\n⚠️  ESCALATION REQUIRED\n');
     console.log(`Reason: ${routingDecision.escalationReason}`);
     console.log('This requires a full Strategic Directive.\n');
@@ -278,69 +320,9 @@ async function createQuickFix(options = {}) {
     console.log('   1. Create Strategic Directive with LEAD approval');
     console.log('   2. Run: node scripts/add-prd-to-database.js SD-XXX');
     console.log('   3. Follow full LEAD→PLAN→EXEC workflow\n');
-
-    // Still create the quick-fix record but mark as escalated
-    const { data, error } = await supabase
-      .from('quick_fixes')
-      .insert({
-        id: qfId,
-        title,
-        type,
-        severity,
-        description,
-        steps_to_reproduce: steps,
-        expected_behavior: expected,
-        actual_behavior: actual,
-        estimated_loc: estimatedLoc,
-        target_application: targetApplication,
-        status: 'escalated',
-        escalation_reason: routingDecision.escalationReason,
-        routing_tier: routingDecision.tier,
-        routing_threshold_id: routingDecision.thresholdId !== 'fallback' && routingDecision.thresholdId !== 'error-multiple-active' ? routingDecision.thresholdId : null,
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.log('❌ Failed to create quick-fix record:', error.message);
-      process.exit(1);
-    }
-
     console.log(`✅ Quick-fix record created: ${qfId}`);
     console.log('   Status: ESCALATED (requires full SD)');
-
     return { escalated: true, qfId, data };
-  }
-
-  // Tier 1 or Tier 2: Create quick-fix record
-  // Note: 'approved' is not a valid quick_fixes status (constraint: quick_fixes_status_check).
-  // Tier 1 QFs are auto-approved (no LEAD review) but DB status starts as 'open'.
-  const qfStatus = 'open';
-  const { data, error } = await supabase
-    .from('quick_fixes')
-    .insert({
-      id: qfId,
-      title,
-      type,
-      severity,
-      description,
-      steps_to_reproduce: steps,
-      expected_behavior: expected,
-      actual_behavior: actual,
-      estimated_loc: estimatedLoc,
-      target_application: targetApplication,
-      status: qfStatus,
-      routing_tier: routingDecision.tier,
-      routing_threshold_id: routingDecision.thresholdId !== 'fallback' && routingDecision.thresholdId !== 'error-multiple-active' ? routingDecision.thresholdId : null,
-      created_at: new Date().toISOString()
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.log('❌ Failed to create quick-fix:', error.message);
-    process.exit(1);
   }
 
   console.log(`\n✅ Quick-fix created: ${qfId}\n`);
