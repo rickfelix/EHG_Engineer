@@ -17,6 +17,30 @@ import { getPatternStats } from './pattern-tracking.js';
 import { requiresDesignDatabaseGates, requiresDesignDatabaseGatesSync, validateStreamCompletion } from './sd-type-checker.js';
 
 /**
+ * FR-3 (SD-LEO-INFRA-CROSS-REPO-AWARE-001): decide whether a DESIGN execution row earns
+ * its 20/20 credit. A PASS produced by scanning an unresolved/empty repo
+ * (metadata.repo_resolved === false, or metadata.components_dir_exists === false) is an
+ * always-green false-negative and must NOT score full credit. Rows predating the
+ * metadata contract (keys undefined) keep full credit for backward compatibility.
+ * Pure + exported for unit testing.
+ *
+ * @param {Object} designResult - a sub_agent_execution_results row (verdict, metadata, ...)
+ * @returns {{awardCredit: boolean, repoUnresolved: boolean, componentsMissing: boolean, repo_resolved: *, components_dir_exists: *}}
+ */
+export function evaluateDesignExecutionCredit(designResult) {
+  const dmeta = (designResult && designResult.metadata) || {};
+  const repoUnresolved = dmeta.repo_resolved === false;
+  const componentsMissing = dmeta.components_dir_exists === false;
+  return {
+    awardCredit: !(repoUnresolved || componentsMissing),
+    repoUnresolved,
+    componentsMissing,
+    repo_resolved: dmeta.repo_resolved,
+    components_dir_exists: dmeta.components_dir_exists
+  };
+}
+
+/**
  * Validate DESIGN→DATABASE workflow for PLAN→EXEC handoff
  * Phase-Aware Weighting System (Readiness Focus)
  *
@@ -167,19 +191,46 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
       console.log('   ❌ DESIGN sub-agent NOT executed - BLOCKING (0/20)');
     } else {
       const designResult = designResults[0];
-      validation.score += 20;
-      validation.gate_scores.design_execution = 20;
-      validation.details.design_execution = {
-        verdict: designResult.verdict,
-        confidence: designResult.confidence,
-        timestamp: designResult.created_at,
-        workflow_analysis: designResult.metadata?.workflow_analysis
-      };
-      console.log(`   ✅ DESIGN sub-agent executed (verdict: ${designResult.verdict}) (20/20)`);
+      // FR-3 (SD-LEO-INFRA-CROSS-REPO-AWARE-001): fail-closed on an unresolved/empty repo.
+      // A PASS verdict produced by scanning the wrong (cwd) or a non-existent repo yields
+      // zero violations — an always-green false-negative. evaluateDesignExecutionCredit
+      // withholds the 20/20 credit when the repo-resolution metadata says the scan target
+      // was unresolved/empty; legacy rows (keys undefined) keep full credit.
+      const credit = evaluateDesignExecutionCredit(designResult);
+      if (!credit.awardCredit) {
+        validation.gate_scores.design_execution = 0;
+        validation.failed_gates.push('DESIGN_EXECUTION');
+        validation.issues.push(
+          `DESIGN ran against an unresolved/empty repo (repo_resolved=${credit.repo_resolved}, ` +
+          `components_dir_exists=${credit.components_dir_exists}) — verdict ${designResult.verdict} is an ` +
+          `always-green false-negative, not valid evidence. Ensure the SD target_application resolves to the UI repo.`
+        );
+        validation.details.design_execution = {
+          verdict: designResult.verdict,
+          confidence: designResult.confidence,
+          timestamp: designResult.created_at,
+          repo_resolved: credit.repo_resolved,
+          components_dir_exists: credit.components_dir_exists,
+          credit_withheld: true
+        };
+        console.log(`   ❌ DESIGN ran against an unresolved/empty repo - credit withheld (0/20)`);
+      } else {
+        validation.score += 20;
+        validation.gate_scores.design_execution = 20;
+        validation.details.design_execution = {
+          verdict: designResult.verdict,
+          confidence: designResult.confidence,
+          timestamp: designResult.created_at,
+          repo_resolved: credit.repo_resolved,
+          components_dir_exists: credit.components_dir_exists,
+          workflow_analysis: designResult.metadata?.workflow_analysis
+        };
+        console.log(`   ✅ DESIGN sub-agent executed (verdict: ${designResult.verdict}) (20/20)`);
 
-      // Check for DESIGN failures
-      if (designResult.verdict === 'FAIL') {
-        validation.warnings.push('DESIGN sub-agent verdict was FAIL - review workflow analysis');
+        // Check for DESIGN failures
+        if (designResult.verdict === 'FAIL') {
+          validation.warnings.push('DESIGN sub-agent verdict was FAIL - review workflow analysis');
+        }
       }
     }
 
