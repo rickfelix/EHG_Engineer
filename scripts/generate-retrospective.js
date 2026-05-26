@@ -31,6 +31,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { resolveSdInput } from './lib/sd-id-resolver.js';
 import dotenv from 'dotenv';
 // import fs from 'fs'; // Currently unused - available for file operations if needed
 
@@ -48,21 +49,15 @@ function _toJsonb(arr) {
   return JSON.stringify(arr);
 }
 
-async function generateRetrospective(sdId) {
+async function generateRetrospective(sdInput) {
   console.log('\n🔍 CONTINUOUS IMPROVEMENT COACH');
   console.log('═'.repeat(60));
-  console.log(`Generating retrospective for SD: ${sdId}`);
+  console.log(`Generating retrospective for SD: ${sdInput}`);
 
-  // Get SD details
-  const { data: sd, error: sdError } = await supabase
-    .from('strategic_directives_v2')
-    .select('*')
-    .eq('id', sdId)
-    .single();
-
-  if (sdError || !sd) {
-    throw new Error(`SD not found: ${sdId}`);
-  }
+  // Accept either UUID or sd_key (parity with handoff.js and other LEO entry points).
+  // Feedback e402e5c4: usage said <SD_UUID> but downstream code keys off sd.id (UUID FK),
+  // so we resolve once here and use the canonical UUID for all subsequent queries.
+  const { sdId, sd } = await resolveSdInput(sdInput, supabase);
 
   console.log(`SD: ${sd.sd_key} - ${sd.title}`);
   console.log(`Status: ${sd.status}, Progress: ${sd.progress}%`);
@@ -339,15 +334,15 @@ async function generateRetrospective(sdId) {
 
 // CLI usage
 async function main() {
-  const sdId = process.argv[2];
+  const sdInput = process.argv[2];
 
-  if (!sdId) {
-    console.error('Usage: node generate-retrospective.js <SD_UUID>');
+  if (!sdInput) {
+    console.error('Usage: node generate-retrospective.js <SD_UUID|SD_KEY>');
     process.exit(1);
   }
 
   try {
-    const result = await generateRetrospective(sdId);
+    const result = await generateRetrospective(sdInput);
     console.log(JSON.stringify(result));
     process.exit(result.success ? 0 : 1);
   } catch (error) {
