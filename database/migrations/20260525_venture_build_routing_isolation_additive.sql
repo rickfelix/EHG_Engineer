@@ -59,8 +59,11 @@ CREATE OR REPLACE FUNCTION public.set_updated_at_applications()
 RETURNS trigger LANGUAGE plpgsql AS $fn$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
 $fn$;
-DROP TRIGGER IF EXISTS trg_applications_updated_at ON public.applications;
-CREATE TRIGGER trg_applications_updated_at
+-- CREATE OR REPLACE TRIGGER (PG14+) is the idempotent form the pre-merge migration-readiness
+-- probe accepts on an already-existing object (this migration is applied during EXEC, then the
+-- file rides the PR — so the trigger already exists at merge-check time). Equivalent to the prior
+-- DROP-IF-EXISTS + CREATE, re-runnable cleanly.
+CREATE OR REPLACE TRIGGER trg_applications_updated_at
   BEFORE UPDATE ON public.applications
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at_applications();
 
