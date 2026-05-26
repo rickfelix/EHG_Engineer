@@ -26,6 +26,11 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
+// SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001 (FR-3): single shared definition of which
+// classified session statuses count as "currently holding the SD claim" — used
+// by BOTH the available-to-claim filter and the worker-render filter below so
+// they cannot drift. Absorbs QF-20260526-577.
+const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/holding-statuses.cjs');
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
@@ -1118,7 +1123,11 @@ async function main() {
 
   // Dependency-aware availability: only suggest SDs whose deps are all completed
   const completedKeys = new Set(allSDs.filter(c => c.status === 'completed').map(c => c.sd_key));
-  const claimedByActive = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_key));
+  // SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001 (FR-3) / absorbed QF-20260526-577: was
+  // `status === 'ACTIVE'` only, which let an ALIVE_NO_HEARTBEAT or
+  // ALIVE_SOURCE_SIDE holder's SD be advertised available-to-claim while the
+  // same session was simultaneously rendered as a live worker below (L1144).
+  const claimedByActive = computeClaimedSdKeys(classified);
 
   const available = allSDs
     .filter(c => {
@@ -1141,7 +1150,11 @@ async function main() {
     })
     .map(c => c.sd_key);
 
-  const activeSessions = classified.filter(s => s.status === 'ACTIVE' || s.status === 'ALIVE_NO_HEARTBEAT');
+  // SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001 (FR-3): use the same CLAIM_HOLDING_STATUSES
+  // set the available-filter above uses, so worker-render and available-listing
+  // can never disagree about who is holding a claim. Previously omitted the
+  // third claim-holding status, ALIVE_SOURCE_SIDE.
+  const activeSessions = classified.filter(s => CLAIM_HOLDING_STATUSES.has(s.status));
 
   // 6b. QA — Claim Integrity: detect idle sessions with no SD claim and nudge them
   const { data: idleSessions } = await supabase

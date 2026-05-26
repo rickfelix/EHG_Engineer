@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-SURFACEAWARE-WIREFRAME-GENERATION-MARKETING-ORCH-001-C",
-  "expectedBranch": "feat/SD-SURFACEAWARE-WIREFRAME-GENERATION-MARKETING-ORCH-001-C",
-  "createdAt": "2026-05-20T14:53:41.788Z",
-  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+  "sdKey": "SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001",
+  "createdAt": "2026-05-26T19:22:01.637Z",
+  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
