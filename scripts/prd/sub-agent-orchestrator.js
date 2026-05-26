@@ -10,6 +10,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { executeSubAgent } from '../../lib/sub-agent-executor.js';
+import { resolveRepoPathDbFirst } from '../../lib/repo-paths.js';
+import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
 import {
   formatObjectives,
   formatArrayField,
@@ -111,7 +113,31 @@ export async function executeDesignAnalysis(sdId, sdData, personaContextBlock = 
 
     console.log('Executing DESIGN sub-agent programmatically...\n');
 
-    const designResult = await executeSubAgent('DESIGN', sdId, { timeout: 120000 });
+    // FR-1 (SD-LEO-INFRA-CROSS-REPO-AWARE-001): resolve the SD's UI repo from
+    // target_application (DB-first) and thread it into DESIGN so it scans the right
+    // repo instead of cwd / a hardcoded 'ehg'. Without this the design gate is a
+    // silent always-green no-op for every cross-repo UI SD (RCA-DESIGN-...-CWD-001).
+    let repoPath = null;
+    try {
+      let supabase = null;
+      try {
+        supabase = await createSupabaseServiceClient('engineer', { verbose: false });
+      } catch {
+        // No client → resolveRepoPathDbFirst falls back to the registry resolver.
+      }
+      repoPath = await resolveRepoPathDbFirst(sdData.target_application, supabase);
+    } catch (resolveErr) {
+      console.warn(`   ⚠️  DESIGN repo resolution failed (${resolveErr.message}); the DESIGN module will resolve from target_application`);
+    }
+    if (repoPath) {
+      console.log(`   📁 DESIGN repo_path resolved from target_application='${sdData.target_application}': ${repoPath}`);
+    }
+
+    const designResult = await executeSubAgent('DESIGN', sdId, {
+      timeout: 120000,
+      repo_path: repoPath || undefined,
+      target_application: sdData.target_application
+    });
     const designOutput = formatSubAgentResult(designResult, 'DESIGN');
 
     console.log('Design analysis complete!\n');
