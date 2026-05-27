@@ -396,6 +396,84 @@ export class HandoffRecorder {
   }
 
   /**
+   * Record a WAIT verdict — handoff blocked but not a validation failure.
+   *
+   * SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-5: WAIT is distinct from FAIL.
+   * Used when a gate returns wait=true (e.g. parent orchestrator awaiting children
+   * completion). Records a sd_phase_handoffs row with status='blocked' +
+   * metadata.wait=true so the row appears in audit trail but does NOT increment
+   * handoff_fail_count and does NOT set rejection_reason.
+   *
+   * @param {string} handoffType - Handoff type
+   * @param {string} sdId - Strategic Directive ID
+   * @param {object} result - Wait result (must have waitVerdict=true)
+   * @param {object} template - Handoff template (optional)
+   */
+  async recordWait(handoffType, sdId, result, template = null) {
+    const executionId = randomUUID();
+    const sdUuid = await this._resolveToUUID(sdId);
+
+    const waitReasons = Array.isArray(result.waitReasons) ? result.waitReasons : [];
+    const waitingGates = Array.isArray(result.waitingGates) ? result.waitingGates : [];
+
+    const execution = {
+      id: executionId,
+      template_id: template?.id,
+      from_phase: handoffType.split('-')[0],
+      to_phase: (() => { const p = handoffType.split('-')[2]; return ['LEAD', 'PLAN', 'EXEC'].includes(p) ? p : 'LEAD'; })(),
+      sd_id: sdUuid,
+      handoff_type: handoffType,
+      // Use existing 'blocked' status (no schema change required); discriminator is metadata.wait
+      status: 'blocked',
+      executive_summary: `Handoff WAIT: ${result.message || waitReasons.join('; ')}`,
+      deliverables_manifest: 'Handoff blocked on WAIT condition — prerequisite not yet satisfied (not a validation failure).',
+      key_decisions: 'No decisions — waiting on prerequisite (e.g. child SDs completion).',
+      known_issues: '',
+      resource_utilization: '',
+      action_items: waitReasons.map(r => `- [ ] ${r}`).join('\n') || '- [ ] Resolve WAIT condition then re-run handoff',
+      completeness_report: `Waiting on ${waitingGates.length} gate(s): ${waitingGates.join(', ')}`,
+      // NOT rejected — this is a wait state
+      validation_score: 0,
+      validation_passed: false,
+      validation_details: {
+        wait: true,
+        wait_verdict: true,
+        waiting_gates: waitingGates,
+        wait_reasons: waitReasons,
+        recorded_at: new Date().toISOString()
+      },
+      // No rejection_reason — that field is reserved for actual failures
+      rejection_reason: null,
+      metadata: {
+        wait: true,
+        waiting_gates: waitingGates,
+        wait_reasons: waitReasons,
+        wait_protocol: 'SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001'
+      },
+      created_by: 'UNIFIED-HANDOFF-SYSTEM'
+    };
+
+    try {
+      const { error } = await this.supabase
+        .from('sd_phase_handoffs')
+        .insert(execution)
+        .select();
+
+      if (error) {
+        console.error('❌ Failed to store handoff WAIT:', error.message);
+        return null;
+      }
+
+      console.log(`📝 WAIT recorded: ${executionId} (no retry budget consumed)`);
+      // INTENTIONALLY: do NOT increment handoff_fail_count — wait is not a failure.
+      return executionId;
+    } catch (error) {
+      console.error('⚠️  Could not store WAIT:', error.message);
+      return null;
+    }
+  }
+
+  /**
    * Record a system error
    * @param {string} handoffType - Handoff type
    * @param {string} sdId - Strategic Directive ID

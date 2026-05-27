@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-05-07 6:56:33 AM
+**Generated**: 2026-05-27 4:44:53 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 **Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
@@ -9,9 +9,6 @@
 > For migration execution and phase transitions, see CLAUDE_CORE.md.
 
 ---
-
-## Friction signaling
-**Send `/signal <type> "<body>"`** for recurrence (gate 2× / RCA 2× / tool 3× / phase >2× type-bucket median), about-to-bypass (`--no-verify` / 3rd-bypass-quota / mock-not-fix), protocol-spec friction, recognized harness bug, or memory-trend match. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. Source-of-truth: CLAUDE_CORE.md "Signaling friction to the coordinator" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
 
 ## Autonomous Continuation Directives
 
@@ -83,6 +80,10 @@ security, testing, performance, database, documentation, accessibility, code_qua
 ### Functions
 - `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
 - `generate_baseline_issue_key(p_category)`: Generates unique issue key
+
+## Friction signaling
+
+**Send `/signal <type> "<body>"`** for recurrence (gate 2× / RCA 2× / tool 3× / phase >2× type-bucket median), about-to-bypass (`--no-verify` / 3rd-bypass-quota / mock-not-fix), protocol-spec friction, recognized harness bug, or memory-trend match. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. Source-of-truth: CLAUDE_CORE.md "Signaling friction to the coordinator" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
 
 ## 🔍 Explore Before Validation (LEAD Phase)
 
@@ -1328,33 +1329,6 @@ Sequential LEAD approval allows learning from earlier children to inform later d
 
 > **Team Capabilities**: For orchestrator SDs with parallel children, agents can spawn specialist teams to accelerate cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
-## SD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off SD creation scripts like:**
-- `create-*-sd.js`
-- `create-sd*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/leo-create-sd.js
-```
-
-### Why This Matters
-- One-off scripts bypass validation and governance
-- They create maintenance burden (100+ orphaned scripts)
-- They fragment the codebase and confuse future developers
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-sd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/leo-create-sd.js`
-2. Follow interactive prompts
-3. SD is properly validated and tracked in database
-
 ## Vision V2 SD Handling (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Reference Check
@@ -1396,6 +1370,33 @@ All Vision V2 SDs contain this metadata:
   "note": "Similar files may exist in the codebase that you can learn from, but we are creating from new."
 }
 ```
+
+## SD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off SD creation scripts like:**
+- `create-*-sd.js`
+- `create-sd*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/leo-create-sd.js
+```
+
+### Why This Matters
+- One-off scripts bypass validation and governance
+- They create maintenance burden (100+ orphaned scripts)
+- They fragment the codebase and confuse future developers
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-sd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/leo-create-sd.js`
+2. Follow interactive prompts
+3. SD is properly validated and tracked in database
 
 ## Parent-Child SD Phase Governance
 
@@ -1558,6 +1559,6 @@ At LEAD-phase scope-lock, before running `add-prd-to-database.js`, invoke `testi
 
 ---
 
-*Generated from database: 2026-05-07*
+*Generated from database: 2026-05-27*
 *Protocol Version: 4.4.1*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

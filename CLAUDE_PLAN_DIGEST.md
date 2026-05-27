@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-05-07T10:56:33.699Z -->
-<!-- git_commit: 7f182311 -->
-<!-- db_snapshot_hash: 55520ea162d958d1 -->
+<!-- generated_at: 2026-05-27T20:44:53.935Z -->
+<!-- git_commit: 9c8d531d -->
+<!-- db_snapshot_hash: 04691d7eb5ae8136 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_PLAN_DIGEST.md - PLAN Phase (Enforcement)
@@ -13,7 +13,8 @@
 ---
 
 ## Friction signaling
-Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/signal <type> "<body>"`. CLAUDE_CORE.md "Signaling friction" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
+
+Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/signal <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. CLAUDE_CORE.md "Signaling friction" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
 
 ## PLAN Phase Negative Constraints
 
@@ -161,5 +162,5 @@ On 2026-04-06 during SD-LEO-REFAC-STAGE-ADVANCEMENT-ENGINE-001 child decompositi
 
 ---
 
-*DIGEST generated: 2026-05-07 6:56:33 AM*
+*DIGEST generated: 2026-05-27 4:44:53 PM*
 *Protocol: 4.4.1*

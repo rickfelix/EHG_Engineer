@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-05-07 6:56:33 AM
+**Generated**: 2026-05-27 4:44:53 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
@@ -10,9 +10,6 @@
 > For database schema reference, see `docs/reference/database-agent-patterns.md`.
 
 ---
-
-## Friction signaling
-**Send `/signal <type> "<body>"`** for recurrence (gate 2× / RCA 2× / tool 3× / phase >2× type-bucket median), about-to-bypass (`--no-verify` / 3rd-bypass-quota / mock-not-fix), protocol-spec friction, recognized harness bug, or memory-trend match. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. Source-of-truth: CLAUDE_CORE.md "Signaling friction to the coordinator" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
 
 ## Autonomous Continuation Directives
 
@@ -139,6 +136,10 @@ Launch 1-3 Plan agents based on complexity:
 Do NOT launch 3 agents for every task—that wastes time on simple decisions.
 > Why: Three perspectives costs 3× the context. For a decision where the answer is clear, the extra agents produce noise without signal. Match the number of perspectives to the actual uncertainty in the decision.
 
+## Friction signaling
+
+**Send `/signal <type> "<body>"`** for recurrence (gate 2× / RCA 2× / tool 3× / phase >2× type-bucket median), about-to-bypass (`--no-verify` / 3rd-bypass-quota / mock-not-fix), protocol-spec friction, recognized harness bug, or memory-trend match. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. Source-of-truth: CLAUDE_CORE.md "Signaling friction to the coordinator" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
+
 ## Branch Creation (Automated at LEAD-TO-PLAN)
 
 ## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
@@ -203,30 +204,6 @@ LEAD Phase                    PLAN Phase                   EXEC Phase
 ```
 
 
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
-
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -264,6 +241,30 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
+
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
 
 ## Phase-Specific Sub-Agent Guidance: PLAN
 
@@ -826,21 +827,6 @@ node scripts/add-prd-to-database.js {SD-ID}
 - ⚠️ Never create PRDs as markdown files
 - ⚠️ Never skip validation gates
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -892,6 +878,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -2433,6 +2434,6 @@ For every keyword-list FR expansion, include in acceptance_criteria: "Substring-
 
 ---
 
-*Generated from database: 2026-05-07*
+*Generated from database: 2026-05-27*
 *Protocol Version: 4.4.1*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

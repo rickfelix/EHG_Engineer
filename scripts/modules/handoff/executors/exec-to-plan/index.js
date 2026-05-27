@@ -45,6 +45,10 @@ import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.
 // Scope Completion Verification Gate (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
 import { createScopeCompletionGate } from '../../gates/scope-completion-gate.js';
 
+// Parent Orchestrator Detection (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-1, FR-2)
+import { isParentOrchestrator as isParentOrchestratorAsync } from '../../../../../lib/handoff/parent-detection.js';
+import { getParentOrchestratorExecToPlanGates } from './parent-orchestrator.js';
+
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 
@@ -202,7 +206,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
     return null;
   }
 
-  getRequiredGates(sd, _options) {
+  async getRequiredGates(sd, _options) {
     const gates = [];
 
     // SD Start Gate - FIRST (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
@@ -219,6 +223,19 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
     // DB-enforced: requires fresh sub_agent_execution_results rows for TESTING + SECURITY
     gates.push(createSubagentEvidenceGate(this.supabase));
+
+    // Parent orchestrator short-circuit (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-2)
+    // Parent SDs delegate implementation to children — they don't write code in their own
+    // branch, so SCOPE_COMPLETION_VERIFICATION + integration/E2E/wireframe gates produce
+    // hard-fails on parents. Symmetric to the existing plan-to-exec parent path.
+    // Checked BEFORE isOrchestratorChild because a parent_sd_id alone does not make this
+    // a child (the parent itself wouldn't have parent_sd_id set).
+    const isParent = await isParentOrchestratorAsync(sd, this.supabase);
+    if (isParent) {
+      console.log('\n   📋 PARENT ORCHESTRATOR GATE SET (reduced) for EXEC-TO-PLAN');
+      gates.push(...getParentOrchestratorExecToPlanGates(this.supabase, sd));
+      return gates;
+    }
 
     // Orchestrator children get a reduced gate set — they are tactical decompositions
     // of a parent SD and should not face standalone SD requirements like full

@@ -325,6 +325,39 @@ export class BaseExecutor {
 
       try { endSpan(step3Span, { result: gateResults.passed ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
+      // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-5: WAIT verdict short-circuit.
+      // A WAIT verdict means the handoff is correctly blocked (e.g. parent orchestrator
+      // awaiting children completion) but it is NOT a validation failure — no RCA, no
+      // retry budget burn, no rejection_reason. Return a non-success result that the
+      // recorder + UI treat distinctly (blocked_wait status, no failure metrics).
+      if (!gateResults.passed && gateResults.waitVerdict) {
+        console.log('');
+        console.log('⏳ HANDOFF BLOCKED — WAIT VERDICT (not a failure)');
+        console.log('-'.repeat(50));
+        console.log(`   Waiting gates: ${gateResults.waitingGates.join(', ')}`);
+        gateResults.waitReasons.forEach(r => console.log(`   - ${r}`));
+        console.log('   Retry budget NOT consumed; handoff will re-evaluate on next attempt.');
+        console.log('');
+
+        try { endSpan(rootSpan, { result: 'wait' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+        // Build a wait-specific result. Mark success=false (handoff did not pass) but
+        // include wait discriminator so HandoffOrchestrator skips recordFailure and
+        // HandoffRecorder routes to a wait-status row.
+        return {
+          success: false,
+          wait: true,
+          waitVerdict: true,
+          waitingGates: gateResults.waitingGates,
+          waitReasons: gateResults.waitReasons,
+          message: gateResults.waitReasons.join('; ') || 'Handoff blocked — waiting on prerequisites',
+          warnings: gateResults.warnings,
+          gateResults: gateResults.gateResults,
+          handoffType: this.handoffType,
+          sdId
+        };
+      }
+
       // SD-LEARN-010:US-005: Handle bypass validation
       if (!gateResults.passed) {
         if (options.bypassValidation) {
