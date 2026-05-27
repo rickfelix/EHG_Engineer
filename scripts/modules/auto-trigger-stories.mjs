@@ -28,6 +28,25 @@ import { randomUUID } from 'crypto';
 import { isPersonaStoryRoleEnabled } from '../lib/persona-extractor.js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
 
+/**
+ * SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B helper.
+ *
+ * Returns true when every acceptance criterion in the array carries
+ * is_boilerplate=true, indicating the auto-generation took the boilerplate
+ * template path (lib/sub-agents/modules/stories/quality-generation.js
+ * generateAcceptanceCriteria sets this flag on every templated AC).
+ *
+ * Used at story-insert time to default such stories to status='draft',
+ * keeping them invisible to USER_STORY_QUALITY gate until a human/sub-agent
+ * promotes them via scripts/promote-user-stories.js.
+ *
+ * Exported for unit testing.
+ */
+export function allAcsBoilerplate(criteria) {
+  if (!Array.isArray(criteria) || criteria.length === 0) return false;
+  return criteria.every(ac => ac && typeof ac === 'object' && ac.is_boilerplate === true);
+}
+
 // ============================================
 // LLM Configuration for Story Generation (v1.2.0)
 // Uses factory-resolved model with opus tier for PLAN phase
@@ -873,7 +892,11 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
           user_benefit: story.user_benefit,
           story_points: story.story_points || 3,
           priority: normalizePriorityForUserStory(story.priority),
-          status: 'ready',
+          // SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B: auto-generated stories
+          // with all-boilerplate acceptance criteria default to draft so they don't
+          // block PLAN-TO-EXEC until a human promotes them via promote-user-stories.js.
+          // LLM-generated stories (non-boilerplate ACs) stay at ready (no regression).
+          status: allAcsBoilerplate(story.acceptance_criteria) ? 'draft' : 'ready',
           acceptance_criteria: story.acceptance_criteria,
           implementation_context: typeof story.implementation_context === 'object'
             ? JSON.stringify(story.implementation_context)
@@ -1100,7 +1123,10 @@ async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, pr
       user_benefit: extractUserBenefit(fr.description, fr.rationale),
       story_points: storyPoints,
       priority: priority,
-      status: 'ready',
+      // SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B: see allAcsBoilerplate
+      // helper. Boilerplate-template path almost always returns true here; LLM-path
+      // (other generator above) returns false for high-quality stories.
+      status: allAcsBoilerplate(transformedCriteria) ? 'draft' : 'ready',
       acceptance_criteria: transformedCriteria, // Now SD-type-aware
       implementation_context: fr.description || fr.requirement || 'Implementation details to be defined during EXEC phase',
       given_when_then: [],
@@ -1108,6 +1134,8 @@ async function generateUserStoriesFromPRD(supabase, prd, resolvedSdId, sdKey, pr
       architecture_references: [],
       technical_notes: fr.rationale || '',
       created_by: 'PRODUCT_REQUIREMENTS_EXPERT',
+      // SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B: see note above on
+      // status assignment. Boilerplate template path → draft; promote after enrichment.
       // E2E Test Path (v1.3.0): Auto-populated based on SD type
       e2e_test_path: e2eConfig.path,
       e2e_test_status: e2eConfig.status,
