@@ -211,6 +211,7 @@
     "context:monitor": "node scripts/context-monitor.js check",
     "memory:view": "node scripts/view-memory.js",
     "memory:reindex": "node scripts/modules/memory/reindex.mjs",
+    "memory:lint:db-references": "node scripts/lint-memory-db-references.mjs",
     "cli": "node scripts/cli.cjs",
     "agent:metrics": "node lib/agents/metrics-dashboard.cjs",
     "agent:metrics:agent": "node lib/agents/metrics-dashboard.cjs agent",
