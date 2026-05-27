@@ -176,6 +176,62 @@ async function createQuickFix(options = {}) {
     // EVA pre-check is non-blocking — continue even if it fails
   }
 
+  // QF-20260527-250: pre-INSERT dedup gate. QF-20260526-885 + QF-20260526-106
+  // were created 89s apart by UAT_AGENT for the same feedback symptom
+  // (b06e04f8) because nothing here checks for existing open QFs. HARD gate
+  // runs when --feedback-id is supplied; SOFT title-prefix gate when not.
+  // The override --allow-duplicate "<reason>" preserves audited escape.
+  let resolvedFeedbackIds = null;
+  if (options.feedbackId) {
+    try {
+      resolvedFeedbackIds = await resolveFeedbackIds(supabase, options.feedbackId);
+    } catch (e) {
+      console.error(`\n❌ [${e.code || 'FEEDBACK_ID_ERROR'}] ${e.message}`);
+      process.exit(1);
+    }
+    const { data: linkedFb } = await supabase
+      .from('feedback').select('id, quick_fix_id')
+      .in('id', resolvedFeedbackIds).not('quick_fix_id', 'is', null);
+    const linkedQfIds = [...new Set((linkedFb || []).map(r => r.quick_fix_id))];
+    if (linkedQfIds.length > 0) {
+      const { data: openRivals } = await supabase
+        .from('quick_fixes').select('id, status, title')
+        .in('id', linkedQfIds).in('status', ['open', 'in_progress']);
+      if (openRivals && openRivals.length > 0) {
+        console.error(`\n❌ [DUPLICATE_QF] feedback already claimed by ${openRivals.length} open QF(s):`);
+        for (const qf of openRivals) {
+          console.error(`     ${qf.id} (${qf.status}): ${(qf.title || '').slice(0, 80)}`);
+        }
+        if (!options.allowDuplicate) {
+          console.error('   Inspect: node scripts/read-quick-fix.js <id>');
+          console.error('   Override (audited): --allow-duplicate "<reason>"');
+          process.exit(1);
+        }
+        console.warn(`\n⚠️  [ALLOW_DUPLICATE] proceeding anyway: ${options.allowDuplicate}`);
+      }
+    }
+  } else {
+    const prefix = (title || '').toLowerCase().slice(0, 40);
+    if (prefix.length >= 10) {
+      const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { data: similar } = await supabase
+        .from('quick_fixes').select('id, title, created_at')
+        .eq('status', 'open').gte('created_at', since)
+        .ilike('title', `${prefix}%`);
+      if (similar && similar.length > 0) {
+        console.error(`\n⚠️  [POSSIBLE_DUPLICATE_QF] ${similar.length} similar open QF(s) created in last 60 min:`);
+        for (const qf of similar) {
+          console.error(`     ${qf.id} (${qf.created_at}): ${(qf.title || '').slice(0, 80)}`);
+        }
+        if (!options.allowDuplicate) {
+          console.error('   Override (audited): --allow-duplicate "<reason>"');
+          process.exit(1);
+        }
+        console.warn(`\n⚠️  [ALLOW_DUPLICATE] proceeding anyway: ${options.allowDuplicate}`);
+      }
+    }
+  }
+
   // Generate ID
   const qfId = generateQuickFixId();
 
@@ -227,13 +283,8 @@ async function createQuickFix(options = {}) {
   // Skipped when --feedback-id omitted (full backward-compatibility).
   if (options.feedbackId) {
     const creatorSessionId = process.env.CLAUDE_SESSION_ID || null;
-    let resolvedIds;
-    try {
-      resolvedIds = await resolveFeedbackIds(supabase, options.feedbackId);
-    } catch (e) {
-      console.error(`\n❌ [${e.code || 'FEEDBACK_ID_ERROR'}] ${e.message}`);
-      process.exit(1);
-    }
+    // QF-20260527-250: feedback IDs already resolved by the dedup gate above.
+    const resolvedIds = resolvedFeedbackIds;
     const { claimed, conflicts } = await preclaimFeedbackRows({
       supabase, feedbackIds: resolvedIds, pendingQfId: qfId, sessionId: creatorSessionId,
     });
@@ -517,6 +568,13 @@ for (let i = 0; i < args.length; i++) {
     options.forceClaim = true;
   } else if (arg === '--force-claim-reason' || arg === '--reason') {
     options.forceClaimReason = args[++i];
+  } else if (arg === '--allow-duplicate') {
+    // QF-20260527-250: audited override for dedup gate.
+    options.allowDuplicate = args[++i];
+    if (!options.allowDuplicate || !String(options.allowDuplicate).trim()) {
+      console.error(`❌ --allow-duplicate requires a non-empty reason`);
+      process.exit(1);
+    }
   } else if (arg === '--help' || arg === '-h') {
     console.log(`
 LEO Quick-Fix Workflow - Create Issue
@@ -536,6 +594,7 @@ Options:
   --actual               Actual behavior
   --estimated-loc        Estimated lines of code (default: 10)
   --target-application   Target repo: 'EHG' or 'EHG_Engineer' (auto-detected from cwd)
+  --allow-duplicate      Audited override for dedup gate; requires non-empty <reason>
   --help, -h             Show this help
 
 Examples:
