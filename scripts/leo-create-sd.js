@@ -158,7 +158,19 @@ export async function enrichFromVisionArch(visionKey, archKey, sb) {
         missing.vision = true;
       } else if (vision.sections) {
         const s = vision.sections;
-        if (s.executive_summary) result.description = s.executive_summary;
+        // QF-20260527-904: skip description enrichment for program-level visions.
+        // executive_summary > 2000 chars signals a mega-program vision (e.g.
+        // VISION-LEO-WRITER-CONSUMER-ASYMMETRY-L2-001) whose multi-child plan
+        // and 10-week scope text is wrong for any narrow follow-up SD that
+        // references it. 3rd witness logged 2026-05-27.
+        const PROGRAM_VISION_SUMMARY_CHARS = 2000;
+        if (s.executive_summary) {
+          if (s.executive_summary.length > PROGRAM_VISION_SUMMARY_CHARS) {
+            console.warn(`[enrichFromVisionArch] Skipping description enrichment: vision ${visionKey} executive_summary is ${s.executive_summary.length} chars (>${PROGRAM_VISION_SUMMARY_CHARS} — program-level). Author SD-specific description manually at LEAD.`);
+          } else {
+            result.description = s.executive_summary;
+          }
+        }
         if (s.problem_statement) result.rationale = s.problem_statement;
         if (s.success_criteria) {
           result.success_criteria = (Array.isArray(s.success_criteria)
