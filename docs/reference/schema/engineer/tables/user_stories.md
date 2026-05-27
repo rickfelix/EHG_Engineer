@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-27T17:28:16.594Z
-**Rows**: 9,264
+**Generated**: 2026-05-27T19:49:10.334Z
+**Rows**: 9,292
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -28,7 +28,7 @@
 | user_benefit | `text` | **NO** | - | - |
 | story_points | `integer(32)` | YES | - | - |
 | priority | `character varying(20)` | YES | `'medium'::character varying` | - |
-| status | `character varying(50)` | YES | `'draft'::character varying` | - |
+| status | `character varying(50)` | YES | `'draft'::character varying` | Story lifecycle status. Default changed to draft 2026-05-27 per SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B. Auto-generated boilerplate stories default to draft (invisible to USER_STORY_QUALITY gate); human/sub-agent enrichment + scripts/promote-user-stories.js moves them to ready (scoreable). Existing rows unaffected by this migration. |
 | sprint | `character varying(50)` | YES | - | - |
 | acceptance_criteria | `jsonb` | YES | `'[]'::jsonb` | - |
 | definition_of_done | `jsonb` | YES | `'[]'::jsonb` | - |
