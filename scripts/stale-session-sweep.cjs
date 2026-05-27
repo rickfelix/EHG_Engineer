@@ -1381,8 +1381,11 @@ async function main() {
   });
   console.log('');
 
-  // Stale sessions (exclude ALIVE_NO_HEARTBEAT — shown above with active workers)
-  const stale = classified.filter(s => s.status !== 'ACTIVE' && s.status !== 'ALIVE_NO_HEARTBEAT');
+  // QF-20260526-279: route through CLAIM_HOLDING_STATUSES so STALE/DEAD render
+  // matches the ACTIVE WORKERS filter at L1157. The prior inverse-negation
+  // missed ALIVE_SOURCE_SIDE — a session in that state appeared in BOTH lists
+  // (7th writer-consumer-asymmetry witness, PAT-LEO-INFRA-WCA-001).
+  const stale = classified.filter(s => !CLAIM_HOLDING_STATUSES.has(s.status));
   if (stale.length > 0) {
     console.log('STALE/DEAD (' + stale.length + '):');
     stale.forEach(s => {
