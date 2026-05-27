@@ -99,8 +99,12 @@ User may override at any point by stating `[MODE: product]` or `[MODE: campaign]
 | Orchestrator done | ON | ON | /learn → auto-continue |
 | Orchestrator done | ON | OFF | /learn → show queue → PAUSE |
 | All blocked | * | * | PAUSE |
+| Parent EXEC-TO-PLAN | * | * | **PARENT_DELEGATED_COMPLETION only** — SCOPE_COMPLETION skipped (deliverables in children) |
+| Parent PLAN-TO-LEAD (children incomplete) | * | * | **WAIT** verdict (not FAIL) — no retry budget burn, no RCA trigger |
 
 > Why (TERMINAL): A non-final handoff means gate-validated state must be written to the DB before the next phase begins. Skipping this orphans the SD — the next session finds no handoff record and cannot determine what was approved or completed.
+
+> Why (Parent WAIT): Parent orchestrators block at PLAN-TO-LEAD until all children reach status='completed'. This is a known lifecycle state, not a validation failure. See `leo_protocol_sections` id=439 "Orchestrator Parent Lifecycle" subsection for the full table (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001).
 
 ## Work Item Routing
 
@@ -190,4 +194,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-05-07 6:56:33 AM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-05-27 4:44:53 PM | Protocol: LEO 4.4.1 | Source: Database*

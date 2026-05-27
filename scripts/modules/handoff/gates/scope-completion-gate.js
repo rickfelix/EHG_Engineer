@@ -12,6 +12,7 @@
 import fs from 'fs';
 import path from 'path';
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
+import { isParentOrchestrator } from '../../../../lib/handoff/parent-detection.js';
 
 import { execSync } from 'child_process';
 // PROJECT_ROOT prefers `git rev-parse --show-toplevel` (worktree-aware) over
@@ -282,11 +283,35 @@ export async function validateScopeCompletion(sdKey) {
   const supabase = createSupabaseServiceClient();
 
   // 1. Get the SD's arch_key + scope_slice from metadata
+  //    `id` added for SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-3 — parent-orchestrator
+  //    detection needs the UUID to query children via parent_sd_id.
   const { data: sd } = await supabase
     .from('strategic_directives_v2')
-    .select('metadata, scope_slice, parent_sd_id')
+    .select('id, metadata, scope_slice, parent_sd_id')
     .eq('sd_key', sdKey)
     .single();
+
+  // Parent-orchestrator soft-pass (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-3):
+  // parents delegate implementation to children — their own branch never holds
+  // the deliverables listed in their arch plan. Defense-in-depth alongside the
+  // EXEC-TO-PLAN executor short-circuit (FR-2) for cases where this gate runs in
+  // a context the executor short-circuit doesn't cover (PLAN-TO-LEAD, ad-hoc invocations).
+  if (await isParentOrchestrator(sd, supabase)) {
+    console.log('   ℹ️  Parent orchestrator — deliverables tracked by children, not parent (soft-pass)');
+    return {
+      pass: true,
+      score: 100,
+      issues: [],
+      warnings: [
+        'Parent orchestrator — SCOPE_COMPLETION_VERIFICATION soft-passed; children carry implementation deliverables. See SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001.',
+      ],
+      checklist: [],
+      details: {
+        type: 'parent-orchestrator',
+        delegated_to_children: true,
+      },
+    };
+  }
 
   // Soft-pass path (SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A):
   // children that inherit parent arch_key but have not declared a scope_slice

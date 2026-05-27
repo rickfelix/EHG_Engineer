@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-05-07T10:56:33.699Z -->
-<!-- git_commit: 7f182311 -->
-<!-- db_snapshot_hash: 55520ea162d958d1 -->
+<!-- generated_at: 2026-05-27T20:44:53.935Z -->
+<!-- git_commit: 9c8d531d -->
+<!-- db_snapshot_hash: 04691d7eb5ae8136 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
@@ -11,9 +11,6 @@
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
 
 ---
-
-## Friction signaling
-Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/signal <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. CLAUDE_CORE.md "Signaling friction" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
 
 ## RCA Issue Resolution Mandate
 
@@ -71,6 +68,10 @@ Every sub-agent invocation MUST include these five elements:
 > Why: Skipping these commands is the most common cause of orphaned SDs — directives that appear in-progress but have no handoff records, making them invisible to the queue and unresumable by new sessions.
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
+
+## Friction signaling
+
+Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/signal <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. CLAUDE_CORE.md "Signaling friction" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
 
 ## Mandatory Agent Invocation Rules
 
@@ -268,5 +269,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-05-07 6:56:33 AM*
+*DIGEST generated: 2026-05-27 4:44:53 PM*
 *Protocol: 4.4.1*

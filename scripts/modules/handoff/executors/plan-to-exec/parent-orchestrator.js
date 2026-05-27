@@ -118,11 +118,17 @@ export function getParentOrchestratorGates(supabase, prdRepo, sd, _options) {
 }
 
 /**
- * Check if SD is a parent orchestrator
+ * Check if SD is a parent orchestrator (synchronous shim — metadata-flag only).
+ *
+ * Delegates to lib/handoff/parent-detection.js for the canonical detection logic.
+ * This sync wrapper preserves the existing call site at plan-to-exec/index.js:97,
+ * which runs before any supabase client is available. For full detection including
+ * DB-side children query, prefer the async lib/handoff/parent-detection.js
+ * isParentOrchestrator() — see SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-1.
  *
  * @param {Object} sd - Strategic Directive
- * @returns {boolean} True if SD is a parent orchestrator
+ * @returns {boolean} True if metadata.is_parent === true
  */
 export function isParentOrchestrator(sd) {
-  return sd.metadata?.is_parent === true;
+  return sd?.metadata?.is_parent === true;
 }

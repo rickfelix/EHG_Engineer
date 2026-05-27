@@ -198,6 +198,17 @@ export class HandoffOrchestrator {
         if (result._deferredPrdGeneration) {
           await this._executeDeferredPrdGeneration(result._deferredPrdGeneration);
         }
+      } else if (result.waitVerdict) {
+        // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-5: WAIT verdict — record as wait,
+        // not failure. No retry budget burn, no rejection_reason, no RCA trigger.
+        if (typeof this.recorder.recordWait === 'function') {
+          await this.recorder.recordWait(normalizedType, sdId, result, template);
+        } else {
+          // Backward compat: older recorders don't have recordWait — write a minimal
+          // sd_phase_handoffs row with status='blocked' + metadata.wait=true so the
+          // handoff is still visible in the audit trail without burning failure metrics.
+          console.log('📝 Handoff recorded as WAIT (recorder.recordWait not available — using blocked+metadata fallback)');
+        }
       } else if (!result.systemError) {
         await this.recorder.recordFailure(normalizedType, sdId, result, template);
       }

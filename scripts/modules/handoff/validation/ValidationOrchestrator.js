@@ -212,7 +212,11 @@ export class ValidationOrchestrator {
       failedGate: null,
       skippedGates: [],        // NEW: List of skipped gate names
       issues: [],
-      warnings: []
+      warnings: [],
+      // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-4/FR-5: WAIT verdict tracking
+      waitVerdict: false,      // True if any required gate returned wait=true (not a failure)
+      waitingGates: [],        // Gate names that returned wait=true
+      waitReasons: []          // Per-gate wait_reason strings
     };
 
     // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Pre-fetch shared gate data
@@ -303,13 +307,32 @@ export class ValidationOrchestrator {
         // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: SKIPPED counts as satisfied (not a failure)
         // Only FAIL (not SKIPPED) should block handoff for required gates
         if (!gateResult.passed && gate.required !== false && !isSkipped) {
-          results.passed = false;
-          if (!results.failedGate) results.failedGate = gate.name;
-          // Defensive check for optional issues array (PAT-SCHEMA-VALIDATION-001)
-          if (gateResult.issues && Array.isArray(gateResult.issues)) {
-            results.issues.push(...gateResult.issues);
+          // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-4/FR-5: WAIT verdict propagation.
+          // wait=true means "blocked, but not a validation failure" — e.g. parent
+          // orchestrator awaiting children completion. Track separately from the
+          // failed-gate path so the executor can record blocked_wait status without
+          // burning retry budget or triggering RCA.
+          if (gateResult.wait === true) {
+            results.waitVerdict = true;
+            results.waitingGates.push(gate.name);
+            if (gateResult.wait_reason) {
+              results.waitReasons.push(`${gate.name}: ${gateResult.wait_reason}`);
+            }
+            // Still mark not-passed so handoff doesn't advance, but DO NOT set failedGate
+            // (failedGate is a failure marker — wait is not a failure).
+            results.passed = false;
+            // Defensive: still copy warnings (which include the WAIT message) but skip issues
+            // since the gate already returned issues=[] for wait verdicts.
+            earlyExit = true;
+          } else {
+            results.passed = false;
+            if (!results.failedGate) results.failedGate = gate.name;
+            // Defensive check for optional issues array (PAT-SCHEMA-VALIDATION-001)
+            if (gateResult.issues && Array.isArray(gateResult.issues)) {
+              results.issues.push(...gateResult.issues);
+            }
+            earlyExit = true; // Stop after processing this tier's results
           }
-          earlyExit = true; // Stop after processing this tier's results
         }
       }
     }

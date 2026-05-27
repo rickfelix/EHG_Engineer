@@ -147,7 +147,15 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
     console.log(`   ✅ Completed: ${completedChildren.length}/${childSDs.length}`);
 
     if (incompleteChildren.length > 0) {
-      console.log('   ❌ Incomplete children:');
+      // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-4:
+      // Waiting on children is NOT a validation failure — it is a known-and-expected
+      // state in the parent orchestrator lifecycle (parent's PLAN-TO-LEAD blocks until
+      // children COMPLETE). Returning passed=false with wait=true tells the handoff
+      // executor to record handoff_status='blocked_wait' (or 'blocked' + metadata.wait
+      // flag fallback) WITHOUT incrementing retry_count or setting rejection_reason.
+      // See CLAUDE.md SD Continuation Truth Table — Orchestrator Parent Lifecycle.
+      const incompleteList = incompleteChildren.map(c => c.sd_key || c.id);
+      console.log('   ⏳ WAITING on incomplete children (not a failure — expected parent lifecycle state):');
       incompleteChildren.forEach(c => {
         console.log(`      - ${c.sd_key || c.id}: ${c.status}`);
       });
@@ -155,9 +163,17 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
         passed: false,
         score: 0,
         max_score: 100,
-        issues: [`Parent SD has ${incompleteChildren.length} incomplete children`],
-        warnings: [],
-        remediation: `Complete all child SDs before finalizing parent: ${incompleteChildren.map(c => c.sd_key || c.id).join(', ')}`
+        wait: true,
+        wait_reason: `Parent orchestrator waiting on ${incompleteChildren.length} child SD(s) to complete: ${incompleteList.join(', ')}`,
+        issues: [],
+        warnings: [`WAIT: parent orchestrator blocked until children complete (${incompleteList.length} pending)`],
+        remediation: `Wait for children to complete via their own LEAD→FINAL cycles: ${incompleteList.join(', ')}. Re-run PLAN-TO-LEAD when all children reach status='completed'.`,
+        details: {
+          is_parent_sd: true,
+          total_children: childSDs.length,
+          completed_children: completedChildren.length,
+          incomplete_children: incompleteList,
+        },
       };
     }
 

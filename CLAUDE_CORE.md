@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-05-07 6:56:33 AM
+**Generated**: 2026-05-27 4:44:53 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -87,6 +87,41 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
+
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -128,41 +163,6 @@ bash scripts/leo-stack.sh restart   # All 3 servers
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -379,38 +379,74 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
-## 🖥️ UI Parity Requirement (MANDATORY)
+## Queue Ranking and QF Track Inference
 
-**Every backend data contract field MUST have a corresponding UI representation.**
+**Purpose**: Document the unified queue ranking model used by `npm run sd:next`,
+established by SD-LEO-INFRA-UNIFY-QUICK-FIX-001.
 
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+### Single Source of Truth: `scripts/modules/sd-next/rank-items.js`
 
-### Requirements
+Both the baseline-active path (`SDNextSelector.js::displayTracks`) and the
+no-baseline fallback path (`display/fallback-queue.js::showFallbackQueue`)
+delegate ranking to the same pure `rankItems(items, context)` function. The
+urgency bands, vision gap weighting, OKR impact blending, and policy boost
+apply uniformly regardless of whether a baseline is active.
 
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
+Do NOT reintroduce inline sort logic or `composite_rank` arithmetic in the
+orchestrator files — that divergence was the bug this SD fixed.
 
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
+### QF Track Inference
 
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
+Quick Fixes rank alongside SDs in the same track sections. The QF → track
+assignment is inferred from existing `quick_fixes` columns; there is no
+`quick_fixes.track` schema column and none should be added.
 
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
+| `quick_fixes.type` | Default Track | Override |
+|---------------------|---------------|----------|
+| `bug`               | C (Quality)   | Track A if `branch_name` contains an infra keyword |
+| `polish`            | C (Quality)   | Track A if `branch_name` contains an infra keyword |
+| `documentation`     | STANDALONE    | (none) |
+| anything else       | STANDALONE    | (none) |
 
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+Infra keyword set (in `rank-items.js::TRACK_A_BRANCH_KEYWORDS`): `infra`,
+`hook`, `gate`, `protocol`, `workflow`, `sd-next`, `handoff`. The
+heuristic is conservative by design — false-positive Track A assignment
+pollutes the Infrastructure track with mis-categorised work.
+
+### QF Severity → sequence_rank + urgency band
+
+| Severity   | sequence_rank | Default band (fresh) | Band (age > 7 days) |
+|------------|---------------|----------------------|---------------------|
+| `critical` | 100           | P0                   | P0                  |
+| `high`     | 200           | P1                   | P0                  |
+| `medium`   | 500           | P2                   | P0                  |
+| `low`      | 1000          | P3                   | P3                  |
+
+Tuning: edit `SEVERITY_TO_RANK` and `qfUrgencyBand` in `rank-items.js` —
+single-line changes; do not propagate these constants elsewhere.
+
+### Anti-patterns
+
+- ❌ Adding a `quick_fixes.track` column. We infer at read time on purpose.
+- ❌ Duplicating ranking logic in a new caller. Import `rankItems` instead.
+- ❌ Reintroducing a separate `OPEN QUICK FIXES` section at the bottom of
+  `sd:next` output. QFs render inline inside their track via
+  `display/tracks.js::displaySDItem` (branch on `item.kind === 'qf'`).
+- ❌ Conflating `item.kind` (routing discriminator) with `qf.type`
+  (DB column holding bug/polish/documentation). They are separate signals.
+
+### AUTO_PROCEED_ACTION envelope (unchanged)
+
+The refactor preserves the existing envelope shape exactly:
+
+```
+AUTO_PROCEED_ACTION:{"action":"start"|"qf_start"|"continue"|...,
+                     "sd_id": "<key>"|null, "qf_id": "<id>"|null,
+                     "reason": "<text>"}
+```
+
+Downstream consumers (`coordination-inbox.cjs`, integration tests) continue
+to parse without modification.
 
 ## Execution Philosophy
 
@@ -481,74 +517,38 @@ Do **not** replace these layers with a blanket "close all QFs with any pr_url se
 
 > Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
 
-## Queue Ranking and QF Track Inference
+## 🖥️ UI Parity Requirement (MANDATORY)
 
-**Purpose**: Document the unified queue ranking model used by `npm run sd:next`,
-established by SD-LEO-INFRA-UNIFY-QUICK-FIX-001.
+**Every backend data contract field MUST have a corresponding UI representation.**
 
-### Single Source of Truth: `scripts/modules/sd-next/rank-items.js`
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
 
-Both the baseline-active path (`SDNextSelector.js::displayTracks`) and the
-no-baseline fallback path (`display/fallback-queue.js::showFallbackQueue`)
-delegate ranking to the same pure `rankItems(items, context)` function. The
-urgency bands, vision gap weighting, OKR impact blending, and policy boost
-apply uniformly regardless of whether a baseline is active.
+### Requirements
 
-Do NOT reintroduce inline sort logic or `composite_rank` arithmetic in the
-orchestrator files — that divergence was the bug this SD fixed.
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
 
-### QF Track Inference
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
 
-Quick Fixes rank alongside SDs in the same track sections. The QF → track
-assignment is inferred from existing `quick_fixes` columns; there is no
-`quick_fixes.track` schema column and none should be added.
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
 
-| `quick_fixes.type` | Default Track | Override |
-|---------------------|---------------|----------|
-| `bug`               | C (Quality)   | Track A if `branch_name` contains an infra keyword |
-| `polish`            | C (Quality)   | Track A if `branch_name` contains an infra keyword |
-| `documentation`     | STANDALONE    | (none) |
-| anything else       | STANDALONE    | (none) |
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
 
-Infra keyword set (in `rank-items.js::TRACK_A_BRANCH_KEYWORDS`): `infra`,
-`hook`, `gate`, `protocol`, `workflow`, `sd-next`, `handoff`. The
-heuristic is conservative by design — false-positive Track A assignment
-pollutes the Infrastructure track with mis-categorised work.
-
-### QF Severity → sequence_rank + urgency band
-
-| Severity   | sequence_rank | Default band (fresh) | Band (age > 7 days) |
-|------------|---------------|----------------------|---------------------|
-| `critical` | 100           | P0                   | P0                  |
-| `high`     | 200           | P1                   | P0                  |
-| `medium`   | 500           | P2                   | P0                  |
-| `low`      | 1000          | P3                   | P3                  |
-
-Tuning: edit `SEVERITY_TO_RANK` and `qfUrgencyBand` in `rank-items.js` —
-single-line changes; do not propagate these constants elsewhere.
-
-### Anti-patterns
-
-- ❌ Adding a `quick_fixes.track` column. We infer at read time on purpose.
-- ❌ Duplicating ranking logic in a new caller. Import `rankItems` instead.
-- ❌ Reintroducing a separate `OPEN QUICK FIXES` section at the bottom of
-  `sd:next` output. QFs render inline inside their track via
-  `display/tracks.js::displaySDItem` (branch on `item.kind === 'qf'`).
-- ❌ Conflating `item.kind` (routing discriminator) with `qf.type`
-  (DB column holding bug/polish/documentation). They are separate signals.
-
-### AUTO_PROCEED_ACTION envelope (unchanged)
-
-The refactor preserves the existing envelope shape exactly:
-
-```
-AUTO_PROCEED_ACTION:{"action":"start"|"qf_start"|"continue"|...,
-                     "sd_id": "<key>"|null, "qf_id": "<id>"|null,
-                     "reason": "<text>"}
-```
-
-Downstream consumers (`coordination-inbox.cjs`, integration tests) continue
-to parse without modification.
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Sub-Agent Routing Reference
 
@@ -664,38 +664,6 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
-
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -736,6 +704,38 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Why**: SD-LEO-INFRA-CENTRALIZED-POST-STAGE-001 revealed that the S17 doc-gen hook failed silently on every run since it was shipped (wrong column name in query). Because the error was caught as non-fatal, the pipeline continued without vision/architecture docs, and S19 generated an unvalidated sprint plan.
 
 **Rule**: "Non-fatal" means the hook threw an unexpected exception. "Hook ran but wrote zero rows to its target table" is a **data integrity failure** that must surface.
+
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -1430,8 +1430,6 @@ Workers signal mid-execution friction back to the active coordinator via session
 
 **How to send:** `/signal <type> "<body>"` slash command — see /signal --help. Or directly: `node scripts/worker-signal.cjs <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
 
-**NODE_MODULES_LOCK is advisory-only.** Dashboard `INFO` broadcasts with subject `NODE_MODULES_LOCK` are narrative annotations, not an enforced lock — `NODE_MODULES_LOCK` is not in the `coordination_message_type` enum and no producer/consumer gates npm operations on it. The actual `node_modules` blast-radius safety is filesystem-level via `safeRecursiveRm` in `lib/worktree-manager.js` (junction-safe rm; see header comment there). Don't add producer/consumer hooks expecting a real lock — see QF-20260508-403 / RCA `0b0168b7-1d0a-4e84-bb85-19ee25fffa38`.
-
 ## Strategic Governance Hierarchy
 
 The EHG platform operates under a 7-layer strategic governance stack. Each layer has a database table, CLI command, and clear purpose.
@@ -1500,10 +1498,10 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
 | PAT-HF-LEADTOPLAN-3612ea70 | handoff_failure | [HIGH] high | 8 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
-| PAT-HF-EXECTOPLAN-46d4008b | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
-| PAT-HF-PLANTOEXEC-900f5f1d | handoff_failure | [HIGH] high | 5 | [STABLE] | N/A |
+| PAT-HF-LEADTOPLAN-e756f97d | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
+| PAT-HF-PLANTOEXEC-82e31435 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
+| PAT-RETRO-LEADTOPLAN-e756f97d | session_retrospective | [HIGH] high | 7 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOEXEC-82e31435 | session_retrospective | [HIGH] high | 7 | [STABLE] | N/A |
 
 ### Prevention Checklists
 
@@ -1522,57 +1520,60 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. PLAN_TO_EXEC Handoff Retrospective: Phase 2: DB Vote Audit Trail + Deterministic Tie-Breaking Rules [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/7/2026 | **Score**: 100
+### 1. SD Completion Retrospective: Stage 19 Binding Contract for S18 Marketing Copy + Pre-Approval Playbook [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 4/28/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-78428251] Gate SUCCESS_METRICS failed: score 74/100
-- [PAT-AUTO-8eebdcf9] Gate SUCCESS_METRICS failed: score 65/100
+- sd-start created the worktree from the main repo HEAD (not from a clean main), leaving the branch pr...
+- handoff.js LEAD-TO-PLAN auto-created a slug-named branch (feat/SD-...-stage-19-binding-contract-for-...
 
 **Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+- [ ] File a Tier 1 QF for the replit-repo-seeder idempotency fix (commit 235b4285dc, ...
+- [ ] Consider tightening the Stage 19 binding contract from prompt-level (soft) to ty...
 
-### 2. LEAD_TO_PLAN Handoff Retrospective: Phase 1: Fleet Roster at Decision Points (~25 LOC, 1-2 hours) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/8/2026 | **Score**: 100
+### 2. SD Completion Retrospective: Reconcile S18-S26 phantom SDs — validation-agent reframe saved 7 legitimate SDs from incorrect cancellation [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 4/28/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-78428251] Gate SUCCESS_METRICS failed: score 74/100
-- [PAT-AUTO-8eebdcf9] Gate SUCCESS_METRICS failed: score 65/100
+- Supabase ilike does NOT support POSIX bracket expressions like `%S1[7-9]%` — initial dry-run silentl...
+- scripts/audit-*.js is gitignored by an over-broad sweep rule — required a .gitignore whitelist excep...
 
 **Action Items**:
-- [ ] Verify: Fleet Roster at Decision Points (~25 LOC, 1-2 hours) deliverables comple...
-- [ ] Validate: All tests passing for SD-FLEETAWARE-SESSION-IDENTITY-HARDENING-ORCH-00...
+- [ ] Wire scripts/audit-phantom-completions.js into a periodic check via .github/work...
+- [ ] Add reference memory: "Supabase ilike does NOT support POSIX bracket expressions...
 
-### 3. PLAN_TO_EXEC Handoff Retrospective: DB migration: trigger bypass coordination + RPC function [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/7/2026 | **Score**: 100
+### 3. SD Completion Retrospective: Phantom-completion structural gate — fail-closed SHIP_REVIEW_FINDINGS_PROOF + legacy direct-DB completion path closure (SD-3 of 3) [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 4/28/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-bb04852b] Gate GATE_SD_QUALITY failed: score 55/100
-- [PAT-AUTO-37b32cd1] Gate SUCCESS_METRICS failed: score 69/100
+- helpers.js edit left an orphan `if (false)` block from the original control flow — required cleanup ...
+- `gh pr merge --auto` queues but does NOT trigger automatic rebase to clear DIRTY status against main...
 
 **Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+- [ ] Wire SHIP_REVIEW_FINDINGS_PROOF into getRequiredGates() at scripts/modules/hando...
+- [ ] Apply 2 migrations to live DB: database/migrations/20260428_validation_gate_regi...
 
-### 4. PLAN_TO_EXEC Handoff Retrospective: Stage 16 Config Template Mismatch: Financial Projections vs API Contract Artifact [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/7/2026 | **Score**: 100
+### 4. PLAN-phase retrospective: SD-LEO-INFRA-EHG-REPO-ADD-001 — EHG supabase db push CI workflow + 20260427 migration drift backfill [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 4/28/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-8eebdcf9] Gate SUCCESS_METRICS failed: score 65/100
-- [PAT-AUTO-bb04852b] Gate GATE_SD_QUALITY failed: score 55/100
+- Three sub-agent runs returned WARNING with documented "verdict_intent: CONDITIONAL_PASS" because val...
+- PLAN TESTING gate flagged 3 missing scenarios (supabase-link auth pre-flight failure, ledger update ...
 
 **Action Items**:
-- [ ] Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during i...
+- [ ] Add scheduled (cron) run of check-migration-ledger-drift.js to EHG repo so ledge...
+- [ ] Adopt pg_get_viewdef-snapshot-in-header as a database-agent default pattern for ...
 
-### 5. LEAD_TO_PLAN Handoff Retrospective: Stitch Integration Wiring Fix S15 S17 Hooks [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/8/2026 | **Score**: 100
+### 5. SD Completion Retrospective: SD-LEO-INFRA-START-WORKTREE-BRANCH-001 — Worktree Base-Ref Hardening [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 4/28/2026 | **Score**: 100
 
 **Key Improvements**:
-- The SD-001-C facade introduction that caused this regression should have had a more thorough integra...
-- The EXEC-TO-PLAN gate has a systemic issue where sub-validator exemptions are not propagated, requir...
+- Pre-existing test failures in tests/unit/worktree-manager.test.js (4 failures in verifyWorktreeRegis...
+- FR7 (backfill audit of poisoned worktrees) was deferred per LEAD Q8 — population size unknown, separ...
 
 **Action Items**:
-- [ ] Verify: S15 hook calls stitch-provisioner.postStage15Hook() instead of stitch-ad...
-- [ ] Validate: S15 hook stores stitch_project artifact in venture_artifacts for SD-LE...
+- [ ] File QF for tests/unit/worktree-manager.test.js verifyWorktreeRegisteredSync moc...
+- [ ] Decide whether to file an SD for FR7 backfill audit of poisoned worktrees, scope...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1638,7 +1639,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-05-07*
+*Generated from database: 2026-05-27*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-05-07T10:56:33.699Z",
-  "git_commit": "7f182311",
-  "db_snapshot_hash": "55520ea162d958d1",
+  "generated_at": "2026-05-27T20:44:53.935Z",
+  "git_commit": "9c8d531d",
+  "db_snapshot_hash": "04691d7eb5ae8136",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 15756,
-      "estimated_tokens": 3939,
-      "content_hash": "99b40a74971c5a6a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
+      "chars": 17122,
+      "estimated_tokens": 4281,
+      "content_hash": "73cf0e66c39200ca",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 77829,
-      "estimated_tokens": 19458,
-      "content_hash": "1524ee5a32db584d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
+      "chars": 78576,
+      "estimated_tokens": 19644,
+      "content_hash": "a691779509b2bbb4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 62099,
-      "estimated_tokens": 15525,
-      "content_hash": "132f7ab8a8713102",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
+      "chars": 62595,
+      "estimated_tokens": 15649,
+      "content_hash": "2a2c9abd2a595bfc",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 89145,
-      "estimated_tokens": 22287,
-      "content_hash": "cd3265d6c0814653",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
+      "chars": 89641,
+      "estimated_tokens": 22411,
+      "content_hash": "6e3eede6b1db3276",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 80718,
-      "estimated_tokens": 20180,
-      "content_hash": "686a2266bfc3b4c4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
+      "chars": 81214,
+      "estimated_tokens": 20304,
+      "content_hash": "ac5127658a8cd35f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9401,
       "estimated_tokens": 2351,
-      "content_hash": "bc8844a6979b0e19",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
+      "content_hash": "e206d12820edb002",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 11019,
-      "estimated_tokens": 2755,
-      "content_hash": "4686468b39cad744",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
+      "chars": 11325,
+      "estimated_tokens": 2832,
+      "content_hash": "c071d50c2e92c7e1",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 4906,
-      "estimated_tokens": 1227,
-      "content_hash": "c573e7f2b8156361",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
+      "chars": 5212,
+      "estimated_tokens": 1303,
+      "content_hash": "dc4e1f8bac495db2",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 7896,
-      "estimated_tokens": 1974,
-      "content_hash": "ee83b8c8ab651aa7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
+      "chars": 8202,
+      "estimated_tokens": 2051,
+      "content_hash": "936f242027f9472a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 10319,
-      "estimated_tokens": 2580,
-      "content_hash": "cebd658916528daa",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
+      "chars": 10625,
+      "estimated_tokens": 2657,
+      "content_hash": "72480fd7fd93602f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }
