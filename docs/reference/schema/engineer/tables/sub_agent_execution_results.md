@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-26T21:15:18.825Z
-**Rows**: 23,817
+**Generated**: 2026-05-27T00:58:23.754Z
+**Rows**: 23,840
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (24 total)
+## Columns (25 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -42,6 +42,7 @@
 | raw_output | `jsonb` | YES | - | Full Task result payload (truncated to 256KB with truncated flag if larger) |
 | source | `text` | YES | `'manual'::text` | Where this record came from: manual, task_hook, sub_agent_executor |
 | phase | `text` | YES | - | First-class handoff phase (e.g., LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL). Promoted from metadata->>'phase' by SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-C. During burn-in, writers dual-write to this column AND metadata.phase; readers may consult either. |
+| executed_from_cwd | `text` | YES | - | SD-LEO-INFRA-FLEET-WIDE-SUB-001 FR-7: absolute cwd the sub-agent process ran from. NULL for legacy rows (LEGACY gate rule skips check). When populated, PLAN-TO-EXEC SUB_AGENT_REPO_RESOLUTION gate compares to metadata.repo_path: equal means CWD_LEAK (BLOCKED). |
 
 ## Constraints
 

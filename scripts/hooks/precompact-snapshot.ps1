@@ -1,6 +1,20 @@
 # precompact-snapshot.ps1
 # Fires before Claude auto-compacts - saves critical state to file
 # SD-LEO-INFRA-UNIFY-CONTEXT-PRESERVATION-001: Now uses unified state manager
+#
+# CANONICAL: this PS1 is the ONLY PreCompact hook wired in .claude/settings.json.
+# QF-20260526-344 removed the parallel scripts/hooks/precompact-unified.js (never
+# wired) to eliminate two-implementation confusion that previously misled an RCA
+# (QF-20260524-337). The deleted JS carried two dormant capabilities not present
+# here:
+#   - PAT-CLMCOMPACT-01: extend claude_sessions.heartbeat_at in DB before
+#     compaction (prevents claim staleness during 30-60s compactions).
+#   - SD-LEO-INFRA-COMPACTION-CLAIM-001: persist session_id alongside SD state
+#     for post-compaction re-claim.
+# If either becomes a real pain again, restore by either porting the DB writes
+# into this PS1 (preferred — single chokepoint) or adding a PS1->node bridge
+# call AFTER the state file Move-Item below. Recover the prior JS via git show
+# pre-merge-of-QF-20260526-344~1:scripts/hooks/precompact-unified.js.
 
 param()
 
