@@ -276,6 +276,7 @@
     "git:recover": "node scripts/git-commit-recovery.js",
     "lead:dossier": "node scripts/lead-dossier.js",
     "doc:audit": "node scripts/eva/doc-health-audit.mjs",
+    "vision:readiness:report": "node scripts/eva/vision-readiness-report.mjs",
     "story:template": "node scripts/story-requirements-template.js",
     "sd:next": "node scripts/sd-next.js",
     "sd:cancel": "node scripts/cancel-sd.js",

@@ -48,9 +48,15 @@ const THRESHOLDS = {
 
 /**
  * Load Vision dimensions from eva_vision_documents.
+ *
+ * SD-LEO-INFRA-VISION-DOCUMENT-READINESS-001 FR-1: graceful failure instead of throw.
+ * Returns {notReady: true, reason} for unready visions so scoreSD can short-circuit
+ * with verdict-shaped response (human_review_floor_dims) and emit audit row.
+ * Callers needing throw-behavior should set options.strictVisionReadiness=true on scoreSD.
+ *
  * @param {Object} supabase
  * @param {string} visionKey - e.g. 'VISION-EHG-L1-001'
- * @returns {Promise<{id: string, dimensions: Array}>}
+ * @returns {Promise<{id: string|null, dimensions: Array, qualityChecked: boolean|null, qualityIssues: any, notReady?: boolean, reason?: string, ventureId?: string|null}>}
  */
 async function loadVisionDimensions(supabase, visionKey) {
   // SD-FDBK-INFRA-EVA-VISION-DOCUMENTS-001 (Option A NARROWED, FR-1):
@@ -58,17 +64,35 @@ async function loadVisionDimensions(supabase, visionKey) {
   // emit an operator-CLI warning when qc=false. No enforcement, no skip.
   const { data, error } = await supabase
     .from('eva_vision_documents')
-    .select('id, vision_key, extracted_dimensions, status, quality_checked, quality_issues')
+    .select('id, vision_key, extracted_dimensions, status, quality_checked, quality_issues, venture_id')
     .eq('vision_key', visionKey)
     .limit(1)
     .single();
 
+  // SD-LEO-INFRA-VISION-DOCUMENT-READINESS-001 FR-1: graceful failure (was throw)
   if (error || !data) {
-    throw new Error(`Vision document not found: ${visionKey} (${error?.message || 'no rows'})`);
+    return {
+      id: null,
+      dimensions: [],
+      qualityChecked: null,
+      qualityIssues: null,
+      notReady: true,
+      reason: 'vision_not_found',
+      ventureId: null,
+      errorMessage: error?.message || 'no rows',
+    };
   }
 
   if (!data.extracted_dimensions?.length) {
-    throw new Error(`Vision ${visionKey} has no extracted_dimensions`);
+    return {
+      id: data.id,
+      dimensions: [],
+      qualityChecked: data.quality_checked ?? null,
+      qualityIssues: data.quality_issues ?? null,
+      notReady: true,
+      reason: 'extracted_dimensions_null',
+      ventureId: data.venture_id ?? null,
+    };
   }
 
   return {
@@ -76,6 +100,7 @@ async function loadVisionDimensions(supabase, visionKey) {
     dimensions: data.extracted_dimensions,
     qualityChecked: data.quality_checked ?? null,
     qualityIssues: data.quality_issues ?? null,
+    ventureId: data.venture_id ?? null,
   };
 }
 
@@ -384,6 +409,7 @@ export async function scoreSD(options = {}) {
   } = options;
 
   const supabase = supabaseOverride || createSupabaseServiceClient();
+  const strictVisionReadiness = options.strictVisionReadiness === true;
 
   // Register vision event handlers (idempotent — safe to call on every scoreSD() invocation).
   // Handlers are subscribed here so they are always registered before vision.scored is published,
@@ -395,6 +421,44 @@ export async function scoreSD(options = {}) {
     loadVisionDimensions(supabase, visionKey),
     loadArchDimensions(supabase, archKey),
   ]);
+
+  // SD-LEO-INFRA-VISION-DOCUMENT-READINESS-001 FR-1+FR-2: vision graceful-failure short-circuit.
+  // loadVisionDimensions now returns notReady=true instead of throwing for unready docs (56/272
+  // baseline). Strict mode (options.strictVisionReadiness=true) preserves the original throw for
+  // callers that need it. Default mode: return verdict-shaped response with human_review_floor_dims
+  // (existing GATE_VISION_SCORE vocabulary; no new enum needed) + write audit row to
+  // vision_readiness_blocked so operators can prioritize Stage-4 enrichment campaigns.
+  if (visionResult.notReady) {
+    if (strictVisionReadiness) {
+      // Backward-compat: throw original error shape
+      if (visionResult.reason === 'vision_not_found') {
+        throw new Error(`Vision document not found: ${visionKey} (${visionResult.errorMessage})`);
+      }
+      throw new Error(`Vision ${visionKey} has no extracted_dimensions`);
+    }
+    // Default mode: graceful failure + audit
+    const { writeVisionReadinessBlocked } = await import('../../lib/eva/audit-vision-readiness.js');
+    await writeVisionReadinessBlocked({
+      visionKey,
+      ventureId: visionResult.ventureId,
+      reason: visionResult.reason,
+      evidence: { vision_key: visionKey, extracted_dimensions: null, error_message: visionResult.errorMessage },
+      mode: 'WARNING',
+      attemptedBy: sdKey || 'unknown',
+      supabase,
+    }).catch((auditErr) => {
+      // Audit failure must NOT crash scoreSD — log and continue
+      console.warn(`[VisionScorer] audit write failed (non-fatal): ${auditErr.message}`);
+    });
+    console.log(`[VisionScorer] vision_not_ready (${visionResult.reason}) for ${visionKey}; returning human_review_floor_dims verdict`);
+    return {
+      verdict: 'human_review_floor_dims',
+      confidence: 60,
+      totalScore: null,
+      reason: 'vision_not_ready',
+      evidence: { vision_key: visionKey, vision_reason: visionResult.reason, extracted_dimensions: null },
+    };
+  }
 
   // SD-FDBK-INFRA-EVA-VISION-DOCUMENTS-001 (Option A NARROWED, FR-3 + FR-4):
   // emit at most one operator-CLI warning per scoreSD() invocation when either
