@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-27T02:04:12.665Z
+**Generated**: 2026-05-27T12:01:05.838Z
 **Rows**: 275
 **RLS**: Enabled (2 policies)
 
@@ -53,7 +53,7 @@
 - `eva_vision_documents_vision_key_key`: UNIQUE (vision_key)
 
 ### Check Constraints
-- `eva_vision_documents_active_rich_check`: CHECK ((((status)::text <> 'active'::text) OR ((extracted_dimensions IS NOT NULL) AND (char_length(content) > 500)))) NOT VALID
+- `eva_vision_documents_active_rich_check`: CHECK ((((status)::text <> 'active'::text) OR ((extracted_dimensions IS NOT NULL) AND (char_length(content) > 500))))
 - `eva_vision_documents_level_check`: CHECK (((level)::text = ANY ((ARRAY['L1'::character varying, 'L2'::character varying])::text[])))
 - `eva_vision_documents_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'superseded'::character varying, 'archived'::character varying, 'draft_seed'::character varying])::text[])))
 
