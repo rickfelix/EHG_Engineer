@@ -326,4 +326,82 @@ describe('SUB_AGENT_REPO_RESOLUTION gate', () => {
     expect(result.score).toBe(50);
     expect(result.warnings.some(w => w.includes('connection refused'))).toBe(true);
   });
+
+  // QF-20260527-673: worktree-path normalization. The view's strict-equality
+  // false-positives a sub-agent run in a git worktree (valid same-repo path).
+  // Pre-normalize forward-slashes and accept `.worktrees/<id>` subpaths.
+  describe('QF-20260527-673: worktree-path normalization (view violation override)', () => {
+    it('overrides VIOLATION to HEALTHY when writer is `.worktrees/<id>` subpath of expected (backslashes)', async () => {
+      const viewRows = [{
+        id: 'W1', sub_agent_code: 'DESIGN', phase: 'PLAN',
+        target_application: 'EHG_Engineer',
+        expected_repo_path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer',
+        metadata_repo_path: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C',
+        metadata_repo_resolved: true,
+        executed_from_cwd: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C',
+        compliance_status: 'violation',
+      }];
+      const rawRows = [{ id: 'W1', sub_agent_code: 'DESIGN', metadata: { repo_path: 'C:\\...\\EHG_Engineer\\.worktrees\\SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C', repo_resolved: true } }];
+      const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+      const result = await gate.validator({ sd: makeSD({ target_application: 'EHG_Engineer' }) });
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.details.buckets.healthy).toHaveLength(1);
+      expect(result.details.buckets.violation).toHaveLength(0);
+    });
+
+    it('overrides VIOLATION to HEALTHY when slashes differ but normalized paths match', async () => {
+      const viewRows = [{
+        id: 'S1', sub_agent_code: 'SECURITY', phase: 'PLAN',
+        target_application: 'EHG_Engineer',
+        expected_repo_path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer',
+        metadata_repo_path: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer',
+        metadata_repo_resolved: true,
+        executed_from_cwd: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer',
+        compliance_status: 'violation',
+      }];
+      const rawRows = [{ id: 'S1', sub_agent_code: 'SECURITY', metadata: { repo_path: 'C:\\...\\EHG_Engineer', repo_resolved: true } }];
+      const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+      const result = await gate.validator({ sd: makeSD({ target_application: 'EHG_Engineer' }) });
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.details.buckets.healthy).toHaveLength(1);
+    });
+
+    it('preserves BLOCKED VIOLATION when writer is genuinely different repo (must not regress)', async () => {
+      const viewRows = [{
+        id: 'V1', sub_agent_code: 'DESIGN', phase: 'PLAN',
+        target_application: 'EHG_Engineer',
+        expected_repo_path: '/path/to/EHG_Engineer',
+        metadata_repo_path: '/path/to/different-repo',
+        metadata_repo_resolved: true,
+        executed_from_cwd: '/path/to/EHG_Engineer',
+        compliance_status: 'violation',
+      }];
+      const rawRows = [{ id: 'V1', sub_agent_code: 'DESIGN', metadata: { repo_path: '/path/to/different-repo', repo_resolved: true } }];
+      const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+      const result = await gate.validator({ sd: makeSD({ target_application: 'EHG_Engineer' }) });
+      expect(result.passed).toBe(false);
+      expect(result.score).toBe(0);
+      expect(result.reasonCode).toBe(REASON_CODES.VIOLATION);
+      expect(result.details.buckets.violation).toHaveLength(1);
+    });
+
+    it('preserves BLOCKED VIOLATION when writer is a sibling .worktrees of a different repo', async () => {
+      const viewRows = [{
+        id: 'V2', sub_agent_code: 'DESIGN', phase: 'PLAN',
+        target_application: 'EHG_Engineer',
+        expected_repo_path: '/path/to/EHG_Engineer',
+        metadata_repo_path: '/path/to/different-repo/.worktrees/SD-X-001',
+        metadata_repo_resolved: true,
+        executed_from_cwd: '/path/to/EHG_Engineer',
+        compliance_status: 'violation',
+      }];
+      const rawRows = [{ id: 'V2', sub_agent_code: 'DESIGN', metadata: { repo_path: '/path/to/different-repo/.worktrees/SD-X-001', repo_resolved: true } }];
+      const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+      const result = await gate.validator({ sd: makeSD({ target_application: 'EHG_Engineer' }) });
+      expect(result.passed).toBe(false);
+      expect(result.details.buckets.violation).toHaveLength(1);
+    });
+  });
 });
