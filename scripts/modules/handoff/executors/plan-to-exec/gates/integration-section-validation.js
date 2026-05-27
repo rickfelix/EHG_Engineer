@@ -116,14 +116,22 @@ function validateIntegrationContent(integrationData) {
  * @returns {string} Human-readable remediation
  */
 function generateRemediation(missing, empty) {
-  const allIssues = [...missing.map(k => `missing: ${SUBSECTION_NAMES[k]}`),
-                     ...empty.map(k => `empty: ${SUBSECTION_NAMES[k]}`)];
+  // QF-20260527-709: surface canonical snake_case JSONB keys + doc reference.
+  // The PG CHECK trigger on integration_operationalization accepts only the
+  // snake_case keys below, but the prior message used display labels with '&'
+  // separators, forcing operators through trial-and-error to find the
+  // canonical key names.
+  const allIssues = [
+    ...missing.map(k => `missing: ${k} (${SUBSECTION_NAMES[k]})`),
+    ...empty.map(k => `empty: ${k} (${SUBSECTION_NAMES[k]})`)
+  ];
 
   return `To resolve:
 1. Open the PRD in database or regenerate with template
 2. Complete the "Integration & Operationalization" section
 3. Fill in these subsections: ${allIssues.join(', ')}
-4. Reference: CLAUDE_PLAN.md "Integration & Operationalization Rubric"`;
+4. Canonical JSONB keys (product_requirements_v2.integration_operationalization): ${REQUIRED_SUBSECTIONS.join(', ')}
+5. Reference: docs/guides/prd-integration-section-guide.md and CLAUDE_PLAN.md "Integration & Operationalization Rubric"`;
 }
 
 /**
