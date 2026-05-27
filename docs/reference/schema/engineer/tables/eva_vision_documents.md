@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-26T21:15:18.825Z
-**Rows**: 272
+**Generated**: 2026-05-27T00:58:23.754Z
+**Rows**: 274
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -53,14 +53,19 @@
 - `eva_vision_documents_vision_key_key`: UNIQUE (vision_key)
 
 ### Check Constraints
+- `eva_vision_documents_active_rich_check`: CHECK ((((status)::text <> 'active'::text) OR ((extracted_dimensions IS NOT NULL) AND (char_length(content) > 500)))) NOT VALID
 - `eva_vision_documents_level_check`: CHECK (((level)::text = ANY ((ARRAY['L1'::character varying, 'L2'::character varying])::text[])))
-- `eva_vision_documents_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'superseded'::character varying, 'archived'::character varying])::text[])))
+- `eva_vision_documents_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'superseded'::character varying, 'archived'::character varying, 'draft_seed'::character varying])::text[])))
 
 ## Indexes
 
 - `eva_vision_documents_pkey`
   ```sql
   CREATE UNIQUE INDEX eva_vision_documents_pkey ON public.eva_vision_documents USING btree (id)
+  ```
+- `eva_vision_documents_venture_level_active_uniq`
+  ```sql
+  CREATE UNIQUE INDEX eva_vision_documents_venture_level_active_uniq ON public.eva_vision_documents USING btree (venture_id, level) WHERE ((venture_id IS NOT NULL) AND ((status)::text = 'active'::text))
   ```
 - `eva_vision_documents_vision_key_key`
   ```sql
