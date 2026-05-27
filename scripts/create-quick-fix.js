@@ -203,8 +203,8 @@ async function createQuickFix(options = {}) {
           console.error(`     ${qf.id} (${qf.status}): ${(qf.title || '').slice(0, 80)}`);
         }
         if (!options.allowDuplicate) {
-          console.error(`   Inspect: node scripts/read-quick-fix.js <id>`);
-          console.error(`   Override (audited): --allow-duplicate "<reason>"`);
+          console.error('   Inspect: node scripts/read-quick-fix.js <id>');
+          console.error('   Override (audited): --allow-duplicate "<reason>"');
           process.exit(1);
         }
         console.warn(`\n⚠️  [ALLOW_DUPLICATE] proceeding anyway: ${options.allowDuplicate}`);
@@ -224,7 +224,7 @@ async function createQuickFix(options = {}) {
           console.error(`     ${qf.id} (${qf.created_at}): ${(qf.title || '').slice(0, 80)}`);
         }
         if (!options.allowDuplicate) {
-          console.error(`   Override (audited): --allow-duplicate "<reason>"`);
+          console.error('   Override (audited): --allow-duplicate "<reason>"');
           process.exit(1);
         }
         console.warn(`\n⚠️  [ALLOW_DUPLICATE] proceeding anyway: ${options.allowDuplicate}`);
