@@ -121,6 +121,48 @@ describe('EXCLUSION_PATTERNS (FR-1)', () => {
       for (const p of KNOWN_DYNAMIC_PATTERNS) expect(p).toBeInstanceOf(RegExp);
     });
   });
+
+  // Harness backlog b9127f37 / SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C: the EVA Support
+  // CLI skill modules are loaded ONLY via the slash command at .claude/commands/eva-support.md
+  // (markdown skill). Static AST cannot trace through markdown, so lib/eva-support/** and
+  // scripts/eva-support/** appear unreachable to the call-graph walker even though the
+  // dispatcher correctly imports them at runtime.
+  describe('KNOWN_DYNAMIC_PATTERNS — eva-support slash-command-loaded modules (b9127f37)', () => {
+    it('excludes lib/eva-support/** modules', () => {
+      expect(isExcludedFromWireCheck('lib/eva-support/sd-reader.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/eva-support/sd-blocker-surface.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/eva-support/sd-decision-log-writer.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/eva-support/sd-cross-ref-store.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/eva-support/sd-recommendation-emitter.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/eva-support/decision-log-store.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/eva-support/research-cache.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/eva-support/friday-outcome-bridge.js')).toBe(true);
+    });
+
+    it('excludes scripts/eva-support/** modules (dispatcher + 6 sub-flows)', () => {
+      expect(isExcludedFromWireCheck('scripts/eva-support/_internal/dispatcher.js')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/eva-support/research.js')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/eva-support/decision.js')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/eva-support/draft.js')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/eva-support/action-prep.js')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/eva-support/platform.js')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/eva-support/pure-human.js')).toBe(true);
+      expect(isExcludedFromWireCheck('scripts/eva-support/decision-log-formatter.js')).toBe(true);
+    });
+
+    it('does NOT over-match lookalike paths (boundary-safe)', () => {
+      expect(isExcludedFromWireCheck('lib/eva-support-helpers/x.js')).toBe(false);
+      expect(isExcludedFromWireCheck('scripts/eva-supportive-tooling/x.js')).toBe(false);
+      expect(isExcludedFromWireCheck('lib/eva/support-utils.js')).toBe(false);
+      expect(isExcludedFromWireCheck('scripts/eva/support.js')).toBe(false);
+    });
+
+    it('does NOT exempt unrelated lib/eva or scripts/eva files', () => {
+      expect(isExcludedFromWireCheck('lib/eva/stage-registry.js')).toBe(false);
+      expect(isExcludedFromWireCheck('scripts/eva/eva-pipeline.js')).toBe(false);
+      expect(isExcludedFromWireCheck('lib/eva/vision-governance-service.js')).toBe(false);
+    });
+  });
 });
 
 describe('call-graph-builder barrel re-export resolution (FR-2 AC-1)', () => {

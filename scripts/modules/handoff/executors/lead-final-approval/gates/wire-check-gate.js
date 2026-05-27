@@ -70,7 +70,24 @@ export const EXCLUSION_PATTERNS = [
  * The trailing `/` keeps this boundary-safe (does NOT match `stage-templates-foo/`).
  */
 export const KNOWN_DYNAMIC_PATTERNS = [
-  /(^|\/)lib\/eva\/stage-templates\//
+  /(^|\/)lib\/eva\/stage-templates\//,
+  // lib/eva-support/ — slash-command-loaded modules. The runtime entry point is
+  // `.claude/commands/eva-support.md` (markdown skill invoked by `/eva-support`),
+  // which in turn dispatches through `scripts/eva-support/_internal/dispatcher.js`.
+  // The dispatcher and 6 sub-flow modules ARE reachable from scripts/handoff.js
+  // via the orchestrator code path, but only through the markdown skill — static
+  // AST cannot trace through markdown.
+  //
+  // Phase 1/2 modules (decision-log-store, research-cache, friday-outcome-bridge)
+  // shipped without exemption because their commits predated the gate's current
+  // form. Phase 3 (SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C) hit the gate and the
+  // exemption is required — same architectural shape as stage-templates. Filed
+  // harness-backlog b9127f37 for the long-term fix (gate discovers .claude/
+  // commands/*.md slash-command entry points).
+  /(^|\/)lib\/eva-support\//,
+  // scripts/eva-support/ — the dispatcher.js + 6 sub-flow handlers. Same reasoning:
+  // slash-command-loaded, no static reachability from current entry-point set.
+  /(^|\/)scripts\/eva-support\//
 ];
 
 /**
