@@ -32,6 +32,7 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { resolveSdInput } from './lib/sd-id-resolver.js';
+import { getFilteredRetrospective } from './modules/handoff/retro-filters.js';
 import dotenv from 'dotenv';
 // import fs from 'fs'; // Currently unused - available for file operations if needed
 
@@ -62,19 +63,21 @@ async function generateRetrospective(sdInput) {
   console.log(`SD: ${sd.sd_key} - ${sd.title}`);
   console.log(`Status: ${sd.status}, Progress: ${sd.progress}%`);
 
-  // Check if retrospective already exists
-  const { data: existing } = await supabase
-    .from('retrospectives')
-    .select('id')
-    .eq('sd_id', sdId)
-    .limit(1);
+  // QF-20260526-904: route through getFilteredRetrospective so the writer
+  // sees the same row the LEAD-FINAL-APPROVAL gate and PLAN-TO-LEAD
+  // RETROSPECTIVE_QUALITY_GATE see (retro_type='SD_COMPLETION' AND
+  // retrospective_type IS NULL AND created_at > LEAD-TO-PLAN-accepted_at).
+  // The prior bare existence check reported existed:true for handoff-time
+  // retros, forcing operators to hand-roll INSERTs to satisfy the gate
+  // (6th writer-consumer-asymmetry witness, PAT-LEO-INFRA-WCA-001).
+  const { retrospective: existing } = await getFilteredRetrospective(sdId, sd.created_at, supabase);
 
-  if (existing && existing.length > 0) {
-    console.log(`\n⚠️  Retrospective already exists (ID: ${existing[0].id})`);
+  if (existing) {
+    console.log(`\n⚠️  Retrospective already exists (ID: ${existing.id})`);
     return {
       success: true,
       existed: true,
-      retrospective_id: existing[0].id
+      retrospective_id: existing.id
     };
   }
 
