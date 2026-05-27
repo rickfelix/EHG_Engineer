@@ -3,17 +3,28 @@
  *
  * Runs all checks for a dimension rubric, computes weighted score,
  * and generates deterministic reasoning + gap lists.
+ *
+ * SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001 (FR-2):
+ *   runRubricChecks accepts optional `context.targetPath`. When present,
+ *   creates a per-call check-types registry rooted at that path (so venture
+ *   codebases can be scored). When omitted, uses the default EHG_Engineer-
+ *   rooted `checkTypes` export (preserves identity for existing callers).
  */
 
-import { checkTypes } from './check-types.js';
+import { checkTypes as defaultCheckTypes, createCheckTypes } from './check-types.js';
 
 /**
  * Run all checks in a rubric definition.
  * @param {object} rubric - { id, name, checks: [{ id, label, type, weight, params }] }
- * @param {object} context - { supabase } for DB checks
+ * @param {object} context - { supabase, targetPath? } — `targetPath` (optional)
+ *   when supplied creates a per-call check-types registry rooted at that path.
+ *   When omitted, uses the EHG_Engineer-rooted default (backward-compatible).
  * @returns {Promise<Array<{ id, label, type, weight, passed, evidence }>>}
  */
 export async function runRubricChecks(rubric, context = {}) {
+  const checkTypes = context.targetPath
+    ? createCheckTypes({ targetPath: context.targetPath })
+    : defaultCheckTypes;
   const results = [];
   for (const check of rubric.checks) {
     const runner = checkTypes[check.type];

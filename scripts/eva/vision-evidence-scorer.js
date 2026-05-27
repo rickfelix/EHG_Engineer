@@ -7,9 +7,17 @@
  * programmatically. Same codebase = same score, guaranteed.
  *
  * Usage:
- *   node scripts/eva/vision-evidence-scorer.js              # Score and output JSON
- *   node scripts/eva/vision-evidence-scorer.js --persist     # Score and persist to DB
- *   node scripts/eva/vision-evidence-scorer.js --verbose     # Show per-check evidence detail
+ *   node scripts/eva/vision-evidence-scorer.js                              # Score EHG self (default)
+ *   node scripts/eva/vision-evidence-scorer.js --persist                     # ...and persist to DB
+ *   node scripts/eva/vision-evidence-scorer.js --verbose                     # Show per-check evidence
+ *   node scripts/eva/vision-evidence-scorer.js --vision-key VISION-FOO-L2-001 --target-path /path/to/venture-repo
+ *                                                                            # Score a venture codebase
+ *                                                                            # (arch-key auto-derives to ARCH-FOO-001;
+ *                                                                            #  pass --arch-key explicitly to override)
+ *
+ * SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001: --target-path flag enables venture-codebase
+ * scoring (instead of always evaluating EHG_Engineer). Non-EHG vision-keys auto-derive the
+ * arch-key and refuse silent fallback to ARCH-EHG-L1-001 if the derived arch plan is missing.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -34,20 +42,114 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+/**
+ * SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001 (FR-3):
+ *   Derive an arch-key from a non-EHG vision-key. Pattern:
+ *     VISION-<CTX>-<...>-L<N>-<NNN>  →  ARCH-<CTX>-001
+ *   Examples:
+ *     VISION-CRONGENIUS-API-L2-001 → ARCH-CRONGENIUS-001
+ *     VISION-FOO-L1-001            → ARCH-FOO-001
+ *
+ * Pure + exportable for unit testing. Returns null if the vision-key shape
+ * does not yield a derivable context segment.
+ */
+export function deriveArchKeyFromVisionKey(visionKey) {
+  if (!visionKey || typeof visionKey !== 'string') return null;
+  if (!visionKey.startsWith('VISION-')) return null;
+  // Strip VISION- prefix, then walk segments until we hit a level marker (L<digit>) or numeric suffix.
+  const rest = visionKey.slice('VISION-'.length);
+  const parts = rest.split('-');
+  const ctxParts = [];
+  for (const p of parts) {
+    if (/^L\d+$/i.test(p)) break;
+    if (/^\d+$/.test(p)) break;
+    ctxParts.push(p);
+  }
+  if (ctxParts.length === 0) return null;
+  return `ARCH-${ctxParts[0].toUpperCase()}-001`;
+}
+
 function parseArgs(argv) {
-  const args = { persist: false, verbose: false, visionKey: DEFAULT_VISION_KEY, archKey: DEFAULT_ARCH_KEY };
+  const args = {
+    persist: false,
+    verbose: false,
+    visionKey: DEFAULT_VISION_KEY,
+    archKey: null,             // null = derive/default at main() time so non-EHG visions can fail loudly
+    explicitArchKey: false,    // tracks whether --arch-key was explicitly supplied
+    targetPath: null,          // FR-3: optional absolute dir for venture-codebase scoring
+  };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--persist') args.persist = true;
     if (argv[i] === '--verbose') args.verbose = true;
     if (argv[i] === '--vision-key' && argv[i + 1]) args.visionKey = argv[++i];
-    if (argv[i] === '--arch-key' && argv[i + 1]) args.archKey = argv[++i];
+    if (argv[i] === '--arch-key' && argv[i + 1]) { args.archKey = argv[++i]; args.explicitArchKey = true; }
+    if (argv[i] === '--target-path' && argv[i + 1]) args.targetPath = argv[++i];
   }
   return args;
+}
+
+/**
+ * SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001 (FR-3):
+ *   Resolve the effective arch-key for a given vision-key + explicit-arch-key
+ *   contract. Pure for unit testing. Returns { archKey, derived, error }.
+ *
+ *   - EHG vision-keys (VISION-EHG-*) without explicit --arch-key → default to ARCH-EHG-L1-001 (legacy).
+ *   - Non-EHG vision-keys without explicit --arch-key → auto-derive (e.g.,
+ *     VISION-CRONGENIUS-API-L2-001 → ARCH-CRONGENIUS-001). If derivation fails,
+ *     return error so caller can fail loudly (no silent EHG fallback).
+ *   - Explicit --arch-key always wins.
+ */
+export function resolveArchKey({ visionKey, archKey, explicitArchKey }) {
+  if (explicitArchKey && archKey) {
+    return { archKey, derived: false, error: null };
+  }
+  const isEhgVision = typeof visionKey === 'string' && /^VISION-EHG[-_]/i.test(visionKey);
+  if (isEhgVision) {
+    return { archKey: DEFAULT_ARCH_KEY, derived: false, error: null };
+  }
+  // Non-EHG vision-key without explicit arch-key → derive.
+  const derivedKey = deriveArchKeyFromVisionKey(visionKey);
+  if (!derivedKey) {
+    return {
+      archKey: null,
+      derived: false,
+      error: `Non-EHG vision-key '${visionKey}' did not yield a derivable arch-key. Pass --arch-key explicitly.`,
+    };
+  }
+  return { archKey: derivedKey, derived: true, error: null };
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const supabase = getSupabase();
+
+  // SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001 (FR-3): resolve arch-key with non-EHG handling.
+  const archResolution = resolveArchKey(args);
+  if (archResolution.error) {
+    console.error(`❌ ${archResolution.error}`);
+    process.exit(1);
+  }
+  args.archKey = archResolution.archKey;
+  if (archResolution.derived) {
+    console.log(`   Derived arch-key '${args.archKey}' from vision-key '${args.visionKey}' (no --arch-key supplied)`);
+  }
+
+  // SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001 (FR-3): validate --target-path if supplied.
+  let resolvedTargetPath = null;
+  if (args.targetPath) {
+    const { resolve: pResolve } = await import('path');
+    const { existsSync, statSync } = await import('fs');
+    resolvedTargetPath = pResolve(args.targetPath);
+    if (!existsSync(resolvedTargetPath)) {
+      console.error(`❌ --target-path '${args.targetPath}' (resolved to '${resolvedTargetPath}') does not exist.`);
+      process.exit(1);
+    }
+    if (!statSync(resolvedTargetPath).isDirectory()) {
+      console.error(`❌ --target-path '${args.targetPath}' (resolved to '${resolvedTargetPath}') is not a directory.`);
+      process.exit(1);
+    }
+    console.log(`   Target path: ${resolvedTargetPath} (venture-scoring mode)`);
+  }
 
   // Git freshness check
   const gitMeta = getGitMeta();
@@ -83,6 +185,12 @@ async function main() {
     process.exit(1);
   }
 
+  // SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001 (FR-3): fail loudly if derived arch-key not found.
+  if (archResolution.derived && !arch) {
+    console.error(`❌ Derived arch-key '${args.archKey}' not found in eva_architecture_plans. Create the arch plan first via 'archplan-command.mjs upsert --plan-key ${args.archKey} --vision-key ${args.visionKey}' OR pass --arch-key explicitly. Refusing silent fallback to EHG architecture.`);
+    process.exit(1);
+  }
+
   // 3. Build dimension weight map from DB metadata
   const dbDimensions = [
     ...(vision.extracted_dimensions || []).map((d, i) => ({
@@ -110,7 +218,8 @@ async function main() {
       continue;
     }
 
-    const checkResults = await runRubricChecks(rubric, { supabase });
+    // FR-2: thread targetPath through context so rubrics evaluate the venture codebase when supplied.
+    const checkResults = await runRubricChecks(rubric, { supabase, ...(resolvedTargetPath ? { targetPath: resolvedTargetPath } : {}) });
     const score = computeDimensionScore(checkResults);
     const reasoning = generateReasoning(checkResults);
     const gaps = generateGaps(checkResults);
