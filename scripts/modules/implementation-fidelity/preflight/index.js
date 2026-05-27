@@ -118,16 +118,23 @@ async function checkAmbiguityResolution(sd_id, validation, supabase) {
     if (combinedDiff) {
       const diff = combinedDiff;
 
+      // QF-20260527-303: tighten ambiguity patterns to avoid identifier-context
+      // false positives. The prior /ambiguous/gi matched ESLint rule names like
+      // 'no-ambiguous-locators' even though those are deliberate config strings,
+      // not ambiguity markers. Word-boundary lookarounds exclude hyphen and
+      // letter neighbors so identifier-cased usages (kebab-case, camelCase,
+      // snake_case via `_` not present in `[a-z-]`) no longer trigger. Witnessed
+      // blocking SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C EXEC-TO-PLAN.
       const ambiguityPatterns = [
         /TODO:.*\?/gi,
         /FIXME/gi,
         /HACK/gi,
-        /not sure/gi,
-        /unclear/gi,
-        /ambiguous/gi,
+        /(?<![a-z-])not sure(?![a-z-])/gi,
+        /(?<![a-z-])unclear(?![a-z-])/gi,
+        /(?<![a-z-])ambiguous(?![a-z-])/gi,
         /\?\?\?/g,
-        /need to ask/gi,
-        /don't know/gi
+        /(?<![a-z-])need to ask(?![a-z-])/gi,
+        /(?<![a-z-])don't know(?![a-z-])/gi
       ];
 
       const foundAmbiguities = [];
