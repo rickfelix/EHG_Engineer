@@ -6,10 +6,14 @@
  * validated after EXEC completion, blocking PLAN_verification at 0% progress
  * despite all deliverables being complete.
  *
- * **PREVENTION**: This script auto-validates user stories when:
- * 1. EXEC→PLAN handoff is created
- * 2. All deliverables are marked complete
- * 3. User stories exist but are still 'pending'
+ * **PREVENTION**: This script performs TWO promotions at EXEC-TO-PLAN, in order:
+ * 1. status='ready' → status='completed' when all sd_scope_deliverables are completed
+ * 2. validation_status='pending' → 'validated' for stories that are status='completed'
+ *
+ * Both transitions are universally required at EXEC-TO-PLAN. Sampled feature SDs at
+ * handoff (POST-LAUNCH-001, VISUAL-ASSETS-001, ARTIFACT-INTEGRATION-001, VISION-V2-006,
+ * E2E-VENTURE-LIFECYCLE-003) all show stories ending in status=completed+validated.
+ * See CLAUDE_EXEC.md "User stories at EXEC-TO-PLAN" for the protocol description.
  *
  * **Integration Point**: Called by EXEC-TO-PLAN gate pipeline (SD-LEO-FIX-STORIES-SUB-AGENT-001)
  *
@@ -65,6 +69,22 @@ async function autoValidateUserStories(sdId, sbClient) {
   if (!allDeliverablesComplete) {
     console.log('⏸️  Deliverables not all complete, skipping auto-validation');
     return { validated: false, message: 'Deliverables incomplete' };
+  }
+
+  // 2b. Promote status='ready' -> 'completed' (deliverables prove the work landed)
+  const readyStories = stories.filter(s => s.status === 'ready');
+  if (readyStories.length > 0) {
+    console.log(`📈 Promoting ${readyStories.length} ready stories to completed (deliverables done)...`);
+    const { error: promoteError } = await supabase
+      .from('user_stories')
+      .update({ status: 'completed' })
+      .eq('sd_id', sdId)
+      .eq('status', 'ready');
+    if (promoteError) {
+      console.error('❌ Error promoting ready->completed:', promoteError.message);
+      return { validated: false, error: promoteError.message };
+    }
+    readyStories.forEach(s => { s.status = 'completed'; });
   }
 
   // 3. Auto-validate completed user stories (must be both completed AND pending validation)

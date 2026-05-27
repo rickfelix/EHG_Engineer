@@ -1457,6 +1457,15 @@ The ACCEPTANCE_CRITERIA_VALIDATION gate scores stories as follows:
 
 Threshold: overall score >= 60 AND no story scores 0.
 
+### Status Transition Reference (EXEC-TO-PLAN)
+
+At EXEC-TO-PLAN, user stories must end in `status='completed'` with `validation_status='validated'`. Two distinct promotions happen:
+
+1. **`status='ready' → 'completed'`** — proves the work landed. Auto-promoted by `scripts/auto-validate-user-stories-on-exec-complete.js` when all `sd_scope_deliverables` for the SD are `completion_status='completed'`. Manual promotion is also valid when you cite per-story evidence (see Anti-Pattern above).
+2. **`validation_status='pending' → 'validated'`** — proves the work meets acceptance criteria. Auto-promoted by the same script for stories already at `status='completed'`.
+
+The script runs as part of the EXEC-TO-PLAN gate pipeline; both transitions are required for the ACCEPTANCE_CRITERIA_VALIDATION gate to score above 50.
+
 ## Playwright MCP Integration
 
 ## 🎭 Playwright MCP Integration
