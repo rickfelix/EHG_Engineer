@@ -4,6 +4,7 @@
   "description": "LEO Protocol development environment with Claude Code multi-agent workflow support",
   "type": "module",
   "scripts": {
+    "stories:promote": "node scripts/promote-user-stories.js",
     "schema:snapshot:prd": "node scripts/snapshot-prd-schema.js",
     "schema:check-drift": "node scripts/snapshot-prd-schema.js --check-drift",
     "migration:apply": "node scripts/apply-migration.js",
