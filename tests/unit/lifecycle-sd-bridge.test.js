@@ -37,9 +37,26 @@ function createMockSupabase({ insertError = null, selectData = [], selectError =
   });
 
   return {
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockResolvedValue({ error: insertError }),
-      select: mockSelect,
+    from: vi.fn((table) => {
+      // SD-LEO-INFRA-UNIFY-VENTURE-NON-001 / Child C: handle the refusal-gate
+      // lookups against eva_vision_documents (canonical + draft_seed).
+      // Default to a chairman-approved L2 so tests of convertSprintToSDs pass
+      // through the new assertVentureVisionReady gate.
+      if (table === 'eva_vision_documents') {
+        const vc = {
+          select: vi.fn(() => vc),
+          eq: vi.fn(() => vc),
+          in: vi.fn(() => vc),
+          order: vi.fn(() => vc),
+          limit: vi.fn(() => vc),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+        };
+        return vc;
+      }
+      return {
+        insert: vi.fn().mockResolvedValue({ error: insertError }),
+        select: mockSelect,
+      };
     }),
   };
 }
