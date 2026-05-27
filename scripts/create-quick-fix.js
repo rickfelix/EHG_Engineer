@@ -485,8 +485,19 @@ async function createQuickFix(options = {}) {
       }
     } catch (err) {
       console.log(`   ❌ Worktree creation failed: ${err.message}`);
-      console.log('   Falling back to branch-only mode.\n');
 
+      // Feedback fa98a703: when quota is the cause, refuse to fall back into
+      // `git checkout -b` in the parent CWD — that switches the in-flight
+      // session's branch and forces a manual restore.
+      if (err.errorCode === 'WORKTREE_QUOTA_EXCEEDED') {
+        console.log('   ❌ Quota exhausted — aborting to preserve parent branch.');
+        console.log('   💡 Reap stale worktrees first, then retry:');
+        console.log('      node scripts/worktree-reaper.mjs --execute');
+        console.log('      node scripts/worktree-reaper.mjs --execute --stage2 --yes');
+        process.exit(1);
+      }
+
+      console.log('   Falling back to branch-only mode.\n');
       process.env.EHG_WORKTREE_MODE = 'main-fallback';
 
       // Fallback: try simple branch creation
