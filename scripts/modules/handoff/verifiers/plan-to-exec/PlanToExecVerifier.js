@@ -166,7 +166,12 @@ export class PlanToExecVerifier {
         console.log(`\n📝 User stories check: SKIPPED (sd_type='${sd.sd_type}')`);
       } else {
         console.log('\n📝 Checking for user stories...');
-        const { data: stories, error: userStoriesError } = await this.supabase
+        // SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B: USER_STORY_QUALITY gate
+        // only scores promoted stories (status IN ready, active). Auto-generated
+        // boilerplate stories default to status=draft; PRD author/sub-agent must
+        // run scripts/promote-user-stories.js after enriching them. Two-tier query:
+        // (1) all stories for visibility/messaging; (2) scoreable stories for the gate.
+        const { data: allStories, error: userStoriesError } = await this.supabase
           .from('user_stories')
           .select('id, story_key, title, status, user_role, user_want, user_benefit, acceptance_criteria, story_points, implementation_context, sd_id')
           .eq('sd_id', sd.id);
@@ -174,6 +179,10 @@ export class PlanToExecVerifier {
         if (userStoriesError) {
           return rejectHandoff(this.supabase,sdId, 'USER_STORIES_ERROR', `Error querying user stories: ${userStoriesError.message}`);
         }
+
+        const scoreableStatuses = ['ready', 'active'];
+        const stories = (allStories || []).filter(s => scoreableStatuses.includes(s.status));
+        const draftCount = (allStories || []).filter(s => s.status === 'draft').length;
 
         if (!stories || stories.length === 0) {
           // Fallback: check if PRD content has embedded user_stories before rejecting
@@ -187,6 +196,18 @@ export class PlanToExecVerifier {
             console.log(`   ⚠️  No user stories in table, but found ${embeddedStories.length} in PRD content (fallback)`);
             console.log('   💡 Run add-prd-to-database.js to migrate stories to the user_stories table');
             userStories = embeddedStories;
+          } else if (draftCount > 0) {
+            // SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B: stories exist but
+            // all are at status=draft (auto-generated boilerplate). Treat as
+            // pending-promotion rather than missing. SOFT-PASS the user-stories
+            // existence check; ALSO short-circuit the downstream quality validator
+            // (cannot score draft stories without LLM cost burned on boilerplate).
+            console.log(`   ⚠️  ${draftCount} story(ies) at status=draft (auto-generated, pending promotion)`);
+            console.log(`   💡 Run: node scripts/promote-user-stories.js --sd-id ${sd.sd_key} --all-non-boilerplate`);
+            console.log('       (or --story-keys US-001,US-002 to promote specific stories after enrichment)');
+            userStories = [];  // empty scoreable set; quality validator path skipped below
+            // Mark this SD as in soft-pass mode so the quality validator block early-returns.
+            // Using a local symbol via storyQualityResult preset (set below at the validation block).
           } else {
             console.log('   ❌ No user stories found');
             return rejectHandoff(this.supabase,sdId, 'NO_USER_STORIES', 'User stories are MANDATORY before EXEC phase.', {
@@ -195,18 +216,29 @@ export class PlanToExecVerifier {
               hint: 'If stories exist in the PRD, run add-prd-to-database.js to sync them to the user_stories table.'
             });
           }
+        } else {
+          userStories = stories;
+          console.log(`   ✅ User stories found: ${userStories.length} scoreable (status IN ready, active)`);
+          if (draftCount > 0) {
+            console.log(`   ℹ️  ${draftCount} additional story(ies) at status=draft (pending promotion; not scored)`);
+          }
+          completedStories = userStories.filter(s => s.status === 'completed').length;
+          console.log(`   📊 Status: ${completedStories}/${userStories.length} completed`);
         }
-
-        userStories = stories;
-        console.log(`   ✅ User stories found: ${userStories.length}`);
-        completedStories = userStories.filter(s => s.status === 'completed').length;
-        console.log(`   📊 Status: ${completedStories}/${userStories.length} completed`);
       }
 
       // 3a-2. User Story Quality Validation
       let storyQualityResult = { valid: true, averageScore: 100, warnings: [] };
 
-      if (!isParentOrchestrator && requiresUserStories) {
+      // SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001 Option B: if userStories is empty
+      // because all stories are at status=draft (pending promotion), short-circuit
+      // the quality validator. Soft-pass with promotion-suggestion warning instead.
+      const scoreableEmpty = (!isParentOrchestrator && requiresUserStories && userStories.length === 0);
+      if (scoreableEmpty) {
+        console.log('\n🔍 Validating user story quality... ⏭  SKIPPED (all stories at status=draft pending promotion)');
+        console.log(`   💡 Quality gate will run once stories are promoted via scripts/promote-user-stories.js`);
+        storyQualityResult = { valid: true, averageScore: null, warnings: ['No stories at status=ready or active to score; promotion pending'] };
+      } else if (!isParentOrchestrator && requiresUserStories) {
         console.log('\n🔍 Validating user story quality...');
         const storyMinimumScore = getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
         console.log(`   SD Type: ${sd.sd_type || 'unknown'}, Category: ${sd.category || 'unknown'} → Minimum Score: ${storyMinimumScore}%`);
