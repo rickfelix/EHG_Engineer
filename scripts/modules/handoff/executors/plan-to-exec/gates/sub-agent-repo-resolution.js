@@ -39,6 +39,30 @@ const INTRA_REPO_TARGETS = new Set(['EHG', 'EHG_Engineer']);
 // Statuses that block the gate (BLOCKED verdict)
 const BLOCKING_STATUSES = new Set(['cwd_leak', 'violation', 'explicit_null']);
 
+/**
+ * QF-20260527-673: normalize a filesystem path for cross-platform gate
+ * comparison. Forward-slashifies backslashes (Windows writers vs Linux CI
+ * applications.local_path) and strips trailing slashes.
+ */
+function normalizePathForGate(p) {
+  if (!p || typeof p !== 'string') return null;
+  return p.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+/**
+ * QF-20260527-673: a writer-emitted repo_path is "toplevel-compatible" with
+ * the expected repo path when they're equal post-normalization OR when the
+ * writer is a `.worktrees/<id>` subdirectory of the expected toplevel. A
+ * sub-agent that ran from a git worktree records the worktree path (per
+ * resolve-repo.js executed_from_cwd semantics) — a valid path inside the
+ * same repo per `git rev-parse --show-toplevel` but not string-equal.
+ */
+function pathsAreToplevelCompatible(writerNorm, expectedNorm) {
+  if (!writerNorm || !expectedNorm) return false;
+  if (writerNorm === expectedNorm) return true;
+  return writerNorm.startsWith(expectedNorm + '/.worktrees/');
+}
+
 // Statuses that downgrade to CONDITIONAL_PASS
 const CONDITIONAL_STATUSES = new Set(['skipped', 'empty_probe', 'unresolved_intra']);
 
@@ -84,6 +108,20 @@ function classifyRow(viewRow, rawRow, targetApp) {
     };
   }
   if (viewRow.compliance_status === 'violation') {
+    // QF-20260527-673: worktree-path normalization. The view does strict-
+    // equality between metadata.repo_path and applications.local_path, which
+    // false-positive blocks worktree paths (valid same-repo paths) and
+    // slash-variant mismatches. Override only when post-normalize writer
+    // resolves under the expected toplevel.
+    const writerNorm = normalizePathForGate(viewRow.metadata_repo_path);
+    const expectedNorm = normalizePathForGate(viewRow.expected_repo_path);
+    if (pathsAreToplevelCompatible(writerNorm, expectedNorm)) {
+      return {
+        status: 'healthy',
+        reasonCode: REASON_CODES.HEALTHY,
+        detail: `worktree-path normalized: ${writerNorm} resolves under ${expectedNorm}`
+      };
+    }
     return {
       status: 'violation',
       reasonCode: REASON_CODES.VIOLATION,
