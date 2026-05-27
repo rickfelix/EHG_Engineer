@@ -35,12 +35,28 @@ const {
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-function createMockSupabase({ insertError = null, existingOrchestrator = null, failOnNthInsert = -1 } = {}) {
+function createMockSupabase({ insertError = null, existingOrchestrator = null, failOnNthInsert = -1, visionDoc } = {}) {
   let selectCallCount = 0;
   let insertCallCount = 0;
+  // SD-LEO-INFRA-UNIFY-VENTURE-NON-001 / Child C: refusal gate queries eva_vision_documents
+  // before any insert. Default to a canonical chairman-approved L2 so existing tests pass through.
+  const defaultVision = visionDoc === undefined
+    ? { vision_key: 'VISION-TEST-L2-001', version: 'v1', content: 'x', updated_at: '2026-05-27' }
+    : visionDoc;
 
   return {
     from: vi.fn((table) => {
+      if (table === 'eva_vision_documents') {
+        const chain = {
+          select: vi.fn(() => chain),
+          eq: vi.fn(() => chain),
+          in: vi.fn(() => chain),
+          order: vi.fn(() => chain),
+          limit: vi.fn(() => chain),
+          maybeSingle: vi.fn().mockResolvedValue({ data: defaultVision, error: null }),
+        };
+        return chain;
+      }
       if (table === 'strategic_directives_v2') {
         return {
           select: vi.fn().mockReturnThis(),
@@ -315,7 +331,29 @@ describe('LifecycleSDBridge', () => {
               single: vi.fn().mockResolvedValue({ data: null, error: null }),
             };
           }
-          return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
+          if (table === 'eva_vision_documents') {
+            const vc = {
+              select: vi.fn(() => vc),
+              eq: vi.fn(() => vc),
+              in: vi.fn(() => vc),
+              order: vi.fn(() => vc),
+              limit: vi.fn(() => vc),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+            };
+            return vc;
+          }
+          if (table === 'eva_vision_documents') {
+          const vc = {
+            select: vi.fn(() => vc),
+            eq: vi.fn(() => vc),
+            in: vi.fn(() => vc),
+            order: vi.fn(() => vc),
+            limit: vi.fn(() => vc),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+          };
+          return vc;
+        }
+        return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
         }),
         rpc: vi.fn().mockResolvedValue({ data: { cancelled_sds: 0, cancelled_prds: 0 }, error: null }),
       };
@@ -359,7 +397,29 @@ describe('LifecycleSDBridge', () => {
               single: vi.fn().mockResolvedValue({ data: null, error: null }),
             };
           }
-          return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
+          if (table === 'eva_vision_documents') {
+            const vc = {
+              select: vi.fn(() => vc),
+              eq: vi.fn(() => vc),
+              in: vi.fn(() => vc),
+              order: vi.fn(() => vc),
+              limit: vi.fn(() => vc),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+            };
+            return vc;
+          }
+          if (table === 'eva_vision_documents') {
+          const vc = {
+            select: vi.fn(() => vc),
+            eq: vi.fn(() => vc),
+            in: vi.fn(() => vc),
+            order: vi.fn(() => vc),
+            limit: vi.fn(() => vc),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+          };
+          return vc;
+        }
+        return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
         }),
         rpc: vi.fn().mockResolvedValue({ data: { cancelled_sds: 0, cancelled_prds: 0 }, error: null }),
       };
@@ -402,7 +462,29 @@ describe('LifecycleSDBridge', () => {
               single: vi.fn().mockResolvedValue({ data: null, error: null }),
             };
           }
-          return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
+          if (table === 'eva_vision_documents') {
+            const vc = {
+              select: vi.fn(() => vc),
+              eq: vi.fn(() => vc),
+              in: vi.fn(() => vc),
+              order: vi.fn(() => vc),
+              limit: vi.fn(() => vc),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+            };
+            return vc;
+          }
+          if (table === 'eva_vision_documents') {
+          const vc = {
+            select: vi.fn(() => vc),
+            eq: vi.fn(() => vc),
+            in: vi.fn(() => vc),
+            order: vi.fn(() => vc),
+            limit: vi.fn(() => vc),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+          };
+          return vc;
+        }
+        return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
         }),
         rpc: vi.fn().mockResolvedValue({ data: { cancelled_sds: 0 }, error: null }),
       };
@@ -522,6 +604,17 @@ describe('LifecycleSDBridge', () => {
             single: vi.fn().mockResolvedValue({ data: null, error: null }),
           };
         }
+        if (table === 'eva_vision_documents') {
+          const vc = {
+            select: vi.fn(() => vc),
+            eq: vi.fn(() => vc),
+            in: vi.fn(() => vc),
+            order: vi.fn(() => vc),
+            limit: vi.fn(() => vc),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+          };
+          return vc;
+        }
         return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
       });
       mockSb.rpc = vi.fn().mockResolvedValue({ data: { cancelled_sds: 0, cancelled_prds: 0 }, error: null });
@@ -568,6 +661,17 @@ describe('LifecycleSDBridge', () => {
             update: vi.fn().mockReturnThis(),
             single: vi.fn().mockResolvedValue({ data: null, error: null }),
           };
+        }
+        if (table === 'eva_vision_documents') {
+          const vc = {
+            select: vi.fn(() => vc),
+            eq: vi.fn(() => vc),
+            in: vi.fn(() => vc),
+            order: vi.fn(() => vc),
+            limit: vi.fn(() => vc),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+          };
+          return vc;
         }
         return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
       });
