@@ -1,0 +1,40 @@
+name: S19 design-prompts parity tests
+
+# QF-20260527-871 (SD-LEO-INFRA-UNIFY-STAGE-DESIGN-001 FR-3 follow-up):
+# The S19 Claude-Code-ready writer parity tests live in this repo at
+# tests/unit/eva/s19-claude-code-ready-writers.test.js but were only
+# advisory via the broad test-coverage.yml workflow (continue-on-error).
+# This dedicated path-scoped vitest job makes them BLOCKING for any PR
+# that touches the writer surface — matching the can-auto-advance-tests.yml
+# pattern adopted by SD-LEO-REFAC-GATE-AUTO-ADVANCE-001.
+
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/bridge/claude-md-writer.js'
+      - 'lib/eva/bridge/build-tasks-writer.js'
+      - 'lib/eva/bridge/replit-config-writer.js'
+      - 'lib/eva/bridge/design-prompts-writer.js'
+      - 'scripts/design-prompts-sync.mjs'
+      - 'tests/unit/eva/s19-claude-code-ready-writers.test.js'
+      - '.github/workflows/s19-design-prompts-tests.yml'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit tests (S19 writer parity)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run S19 design-prompts writer tests
+        run: npx vitest run tests/unit/eva/s19-claude-code-ready-writers.test.js
