@@ -120,9 +120,15 @@ describe('envelope v1.0 schema pin (formatter + eva_support_decision_log)', () =
       }
     });
 
-    it('table columns do NOT include extras beyond REQUIRED_FIELDS + created_at', () => {
-      // Allowed extras: created_at (metadata, not envelope)
-      const allowedExtras = new Set(['created_at']);
+    it('table columns do NOT include extras beyond REQUIRED_FIELDS + created_at + Phase 3 audit columns', () => {
+      // Allowed extras:
+      //   created_at - row metadata, not envelope (original Phase 2 allowance)
+      //   decision_kind + metadata - Phase 3 audit columns added by
+      //     SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C / FR-0 Migration 2. These are
+      //     additive non-breaking — the Phase 2 envelope writer (insertEntry)
+      //     does not pass them; decision_kind has a DEFAULT='sd_recommendation'
+      //     so existing Phase 2 inserts succeed unchanged.
+      const allowedExtras = new Set(['created_at', 'decision_kind', 'metadata']);
       for (const col of columnNames) {
         const isRequiredField = EXPECTED_REQUIRED_FIELDS.includes(col);
         const isAllowedExtra = allowedExtras.has(col);
