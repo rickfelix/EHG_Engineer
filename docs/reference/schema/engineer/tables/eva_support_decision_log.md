@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-27T02:04:12.665Z
-**Rows**: 0
+**Generated**: 2026-05-27T12:01:05.838Z
+**Rows**: 3
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (15 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,8 @@
 | tokens_out | `integer(32)` | **NO** | - | - |
 | references | `jsonb` | **NO** | `'[]'::jsonb` | JSONB array of citation refs. Name matches envelope v1.0 REQUIRED_FIELDS verbatim; quote as "references" in raw SQL to avoid FK-reference keyword ambiguity. |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| decision_kind | `text` | **NO** | `'sd_recommendation'::text` | Enum tag for EVA Support decision-log entry kind. DEFAULT 'sd_recommendation' preserves the existing Phase 2 insertEntry API (REQUIRED_FIELDS does not include decision_kind). See PRD-SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C FR-5: sd_recommendation (chairman-facing SD creation suggestion), reader_disabled (EVA_SD_READER_ENABLED=false audit), reader_error (sd-reader query failure), render_crashed (recommendation render failed but audit row landed via try/finally), skipped_duplicate (≥80% intent match with existing SD). |
+| metadata | `jsonb` | **NO** | `'{}'::jsonb` | JSONB payload specific to decision_kind. For sd_recommendation: { eva_invocation_id, intent_text, recommended_sd_key, confidence, counterfactual, outcome: approved|declined|skipped_duplicate|render_crashed, override_reason?, dup_sd_key?, error_message? }. For reader_disabled: { eva_invocation_id, flag_value: false|unset, invoked_at }. Schema is forward-extensible without column changes. |
 
 ## Constraints
 
@@ -38,6 +40,7 @@
 - `eva_support_decision_log_pkey`: PRIMARY KEY (task_id, sequence)
 
 ### Check Constraints
+- `eva_support_decision_log_decision_kind_check`: CHECK ((decision_kind = ANY (ARRAY['sd_recommendation'::text, 'reader_disabled'::text, 'reader_error'::text, 'render_crashed'::text, 'skipped_duplicate'::text])))
 - `eva_support_decision_log_eva_reply_summary_check`: CHECK ((length(eva_reply_summary) <= 500))
 - `eva_support_decision_log_operator_input_summary_check`: CHECK ((length(operator_input_summary) <= 500))
 - `eva_support_decision_log_schema_version_check`: CHECK (((schema_version)::text = '1.0'::text))

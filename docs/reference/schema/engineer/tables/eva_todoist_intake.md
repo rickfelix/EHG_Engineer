@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-27T02:04:12.665Z
+**Generated**: 2026-05-27T12:01:05.838Z
 **Rows**: 304
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (35 total)
+## Columns (36 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -53,6 +53,7 @@
 | enrichment_status | `character varying(20)` | YES | `'pending'::character varying` | - |
 | enrichment_summary | `text` | YES | - | - |
 | chairman_reviewed_at | `timestamp with time zone` | YES | - | - |
+| sd_refs | `jsonb` | **NO** | `'[]'::jsonb` | JSONB array of SD cross-references for EVA Support Phase 3. Each entry: { sd_id (uuid), source ("eva_cross_ref"|"chairman_manual"), confidence (0-100), evidence_substring (min 5 chars), status?: ("active"|"rejected") }. Writes use jsonb concatenation (sd_refs = sd_refs || new_entry::jsonb) — never full-row replace. See PRD-SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C FR-2. |
 
 ## Constraints
 
