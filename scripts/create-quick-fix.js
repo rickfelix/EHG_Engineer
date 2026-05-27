@@ -297,7 +297,7 @@ async function createQuickFix(options = {}) {
       // FR-3: force-claim override with per-session daily quota
       if (options.forceClaim) {
         if (!options.forceClaimReason || !String(options.forceClaimReason).trim()) {
-          console.error(`\n❌ [FORCE_CLAIM_REASON_REQUIRED] --force-claim requires --force-claim-reason "<text>"`);
+          console.error('\n❌ [FORCE_CLAIM_REASON_REQUIRED] --force-claim requires --force-claim-reason "<text>"');
           if (claimed.length > 0) await releasePreclaim({ supabase, quickFixId: qfId });
           await supabase.from('quick_fixes').delete().eq('id', qfId);
           process.exit(1);
@@ -424,7 +424,7 @@ async function createQuickFix(options = {}) {
       }
 
       // Dynamically import worktree-manager (ESM)
-      const { createWorkTypeWorktree, symlinkNodeModules } = await import('../lib/worktree-manager.js');
+      const { createWorkTypeWorktree, symlinkNodeModules: _symlinkNodeModules } = await import('../lib/worktree-manager.js');
 
       const result = createWorkTypeWorktree({
         workType: 'QF',
@@ -572,7 +572,7 @@ for (let i = 0; i < args.length; i++) {
     // QF-20260527-250: audited override for dedup gate.
     options.allowDuplicate = args[++i];
     if (!options.allowDuplicate || !String(options.allowDuplicate).trim()) {
-      console.error(`❌ --allow-duplicate requires a non-empty reason`);
+      console.error('❌ --allow-duplicate requires a non-empty reason');
       process.exit(1);
     }
   } else if (arg === '--help' || arg === '-h') {
@@ -611,7 +611,7 @@ Tiered Routing:
     process.exit(0);
   } else {
     console.error(`❌ Unknown argument: ${arg}`);
-    console.error(`   Run with --help for usage information.`);
+    console.error('   Run with --help for usage information.');
     process.exit(1);
   }
 }
