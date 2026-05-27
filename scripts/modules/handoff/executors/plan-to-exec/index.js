@@ -34,7 +34,9 @@ import {
   // Bugfix Coverage Preflight — advisory (SD-LEARN-FIX-ADDRESS-PAT-EXECTOPLAN-001, FR-3)
   createBugfixCoveragePreflightGate,
   // Cross-SD File-Overlap Temporal Gate (SD-LEO-INFRA-CROSS-FILE-OVERLAP-001 FR-2a)
-  createCrossSdFileOverlapTemporalGate
+  createCrossSdFileOverlapTemporalGate,
+  // Sub-Agent Repo Resolution Gate (SD-LEO-INFRA-FLEET-WIDE-SUB-001 FR-3)
+  createSubAgentRepoResolutionGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -139,6 +141,12 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Sub-Agent Evidence Gate (SD-LEO-INFRA-OPUS-MODULE-SUB-001)
     // DB-enforced: requires fresh sub_agent_execution_results rows for the required set
     gates.push(createSubagentEvidenceGate(this.supabase));
+
+    // Sub-Agent Repo Resolution Gate (SD-LEO-INFRA-FLEET-WIDE-SUB-001 FR-3)
+    // Runs RIGHT AFTER subagent-evidence so the same rows it validated for
+    // existence are then validated for correct repo_path. Applies to parent-
+    // orchestrator, orchestrator-child, and standalone paths.
+    gates.push(createSubAgentRepoResolutionGate(this.supabase));
 
     // Parent orchestrators get simplified gates
     if (parentOrchestrator) {

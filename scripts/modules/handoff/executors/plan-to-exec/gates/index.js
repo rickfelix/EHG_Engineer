@@ -37,3 +37,8 @@ export { createBugfixCoveragePreflightGate } from './bugfix-coverage-preflight.j
 // Detects file overlap with SDs shipped within the configured window
 // (default 48h) using PRD target_files as the oracle.
 export { createCrossSdFileOverlapTemporalGate } from './cross-sd-file-overlap-temporal.js';
+
+// Sub-Agent Repo Resolution Gate (SD-LEO-INFRA-FLEET-WIDE-SUB-001 FR-3)
+// Validates every sub_agent_execution_results row for this SD ran against the
+// correct repo (closes the 8-locus cwd-default leak from PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001)
+export { createSubAgentRepoResolutionGate, REASON_CODES as SUB_AGENT_REPO_REASON_CODES } from './sub-agent-repo-resolution.js';

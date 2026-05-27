@@ -1,0 +1,6 @@
+{
+  "_comment": "SD-LEO-INFRA-FLEET-WIDE-SUB-001 FR-4 — directory-scoped override that enables the no-process-cwd-in-sub-agents rule for every file under lib/sub-agents/**. The rule itself self-gates by filename, but this override makes the rule active in the project's flat config setup. The rule's escape hatch (// eslint-disable-next-line no-process-cwd-in-sub-agents -- <REASON>) requires a non-empty REASON.",
+  "rules": {
+    "no-process-cwd-in-sub-agents": "error"
+  }
+}
