@@ -94,59 +94,16 @@ async function executeMigration() {
       process.exit(1);
     } else {
       console.log('✅ Migration completed successfully!\n');
-
-      // Verify created objects
-      console.log('🔍 Verifying created objects...\n');
-
-      // Check tables
-      const tableCheck = await client.query(`
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-        AND table_name IN ('tech_stack_references', 'prd_research_audit_log', 'system_health')
-        ORDER BY table_name
-      `);
-      console.log(`📋 Tables created: ${tableCheck.rows.length}/3`);
-      tableCheck.rows.forEach(row => console.log(`   ✓ ${row.table_name}`));
-
-      // Check columns
-      const columnCheck = await client.query(`
-        SELECT
-          table_name,
-          column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-        AND (
-          (table_name = 'user_stories' AND column_name = 'implementation_context') OR
-          (table_name = 'product_requirements_v2' AND column_name = 'research_confidence_score')
-        )
-        ORDER BY table_name, column_name
-      `);
-      console.log(`\n📝 Columns added: ${columnCheck.rows.length}/2`);
-      columnCheck.rows.forEach(row => console.log(`   ✓ ${row.table_name}.${row.column_name}`));
-
-      // Check function
-      const functionCheck = await client.query(`
-        SELECT routine_name
-        FROM information_schema.routines
-        WHERE routine_schema = 'public'
-        AND routine_name = 'cleanup_expired_tech_stack_references'
-      `);
-      console.log(`\n⚙️  Functions created: ${functionCheck.rows.length}/1`);
-      functionCheck.rows.forEach(row => console.log(`   ✓ ${row.routine_name}()`));
-
-      // Check system_health initialization
-      const healthCheck = await client.query(`
-        SELECT service_name, circuit_breaker_state, failure_count
-        FROM system_health
-        WHERE service_name = 'context7'
-      `);
-      console.log(`\n🏥 System health initialized: ${healthCheck.rows.length}/1`);
-      healthCheck.rows.forEach(row => {
-        console.log(`   ✓ ${row.service_name}: ${row.circuit_breaker_state} (failures: ${row.failure_count})`);
-      });
-
-      console.log('\n✅ All components verified successfully!\n');
+      // QF-20260527-008: removed the leaked-template post-verify block that
+      // queried hardcoded objects from an unrelated historical migration
+      // (tech_stack_references, prd_research_audit_log, system_health,
+      // user_stories.implementation_context, product_requirements_v2.research_confidence_score,
+      // cleanup_expired_tech_stack_references). It reported false-positive
+      // "verified" output for every migration. Per-migration invariants now
+      // live inside the SQL itself via DO blocks with RAISE EXCEPTION — see
+      // database/migrations/20260527_cleanup_non_venture_l2_violators.sql
+      // and database/migrations/20260527_validate_active_rich_check.sql for
+      // the canonical pattern.
     }
 
   } catch (error) {
