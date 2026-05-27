@@ -16,6 +16,8 @@ Parse `$ARGUMENTS` for:
 - **`--no-team`**: If present, skip multi-perspective team analysis. Default: team analysis is ON.
 - **`--domain <domain>`**: One of `venture`, `protocol`, `integration`, `architecture`. If not provided, auto-detect or ask.
 - **`--stage <stage>`**: Phase within the selected domain (see Step 3). If not provided, ask the user.
+- **`--venture <name>`**: Optional — names the venture (matched against `ventures.name`). Pre-empts the multi-venture awareness lookup in Step 4 and sets the session's `venture_ids` early. Common pattern: `/brainstorm --venture CronGenius`.
+- **`--seed-from <status>`**: Optional, currently accepts `draft_seed`. SD-LEO-INFRA-UNIFY-VENTURE-NON-001 / Child D. When set together with `--venture <name>`, pre-loads any archived stub L2 doc (`eva_vision_documents` row with `venture_id = <resolved> AND status = '<value>' AND level = 'L2'`) as Step 4.5 seed context. Surfaced to chairman as "prior intake — seed content was: ...". Used to recover from the lifecycle-sd-bridge `VENTURE_L2_VISION_DRAFT_SEED` self-service unblock path. If no matching row found, warn and fall through to a normal brainstorm.
 
 If no topic is provided, offer OKR-driven options using AskUserQuestion:
 
@@ -190,6 +192,46 @@ Related past brainstorm: "[topic]" ([date]) - Outcome: [outcome_type]
 ## Step 4.5: Domain Knowledge Context Injection
 
 If a venture was identified in Step 4 with an `industry` field, inject accumulated domain knowledge into the session context. This is **non-blocking** — if it fails or returns empty, proceed normally.
+
+### 4.5b: Archived Seed Context (Child D, `--seed-from=<status>`)
+
+If `--seed-from <status>` AND `--venture <name>` were both passed in Step 1, query the archived L2 vision doc for the resolved venture and pre-load its content as additional seed material:
+
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const ventureId = '<RESOLVED_VENTURE_ID>';
+const seedStatus = '<SEED_FROM_VALUE>'; // typically 'draft_seed'
+supabase.from('eva_vision_documents')
+  .select('vision_key, content, version, updated_at')
+  .eq('venture_id', ventureId)
+  .eq('level', 'L2')
+  .eq('status', seedStatus)
+  .order('updated_at', { ascending: false })
+  .limit(1)
+  .maybeSingle()
+  .then(({data}) => {
+    if (data) console.log('SEED_CONTEXT:', JSON.stringify(data));
+    else console.log('SEED_CONTEXT: none');
+  });
+"
+```
+
+**If SEED_CONTEXT is returned**:
+- Surface to the chairman as: *"Prior intake found for this venture (status=`<seed_status>`, vision_key=`<key>`, last updated `<date>`). Seed content was: `<content excerpt, first 1000 chars>`. The brainstorm will use this as initial context."*
+- Include the seed metadata in the session's `metadata.seed_source = '<seed_status>'` and `metadata.seed_vision_key = '<key>'` for traceability
+- Use the content as additional Step 4.5 context alongside any DOMAIN_CONTEXT
+
+**If SEED_CONTEXT is "none"**:
+- Warn: *"No `<seed_status>` L2 doc for venture `<name>`; proceeding without seed context"*
+- Fall through to the normal brainstorm flow (do NOT block)
+
+**Convention** (when to use `--seed-from=draft_seed`):
+- Recover from a `VENTURE_L2_VISION_DRAFT_SEED` ServiceError surfaced by `lifecycle-sd-bridge.js` (SD Child C; lands later)
+- Re-engage with a venture whose Stage-1 stub was archived by SD-LEO-INFRA-UNIFY-VENTURE-NON-001 Child B.1 (10 ventures total — CronGenius, CronRead, AltText-AI, CronLingo, DocDraft, and 5 others)
+- Skip if starting fresh with no prior stub (just use `--venture <name>` alone)
 
 ```bash
 node -e "
