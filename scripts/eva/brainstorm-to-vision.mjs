@@ -234,6 +234,7 @@ async function main() {
           status: 'draft',
           chairman_approved: false,
           source_brainstorm_id: session.id,
+          venture_id: session.metadata?.venture_id || null,
           created_by: 'brainstorm-to-vision-pipeline',
         }, { onConflict: 'vision_key' });
 
