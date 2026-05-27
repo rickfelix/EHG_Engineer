@@ -1078,6 +1078,7 @@ describe('Stage 19: analyzeStage19', () => {
 
     const result = await analyzeStage19({
       stage18Data: genStage18(),
+      ventureName: 'IntegrationTestVenture',
       logger: silentLogger,
     });
 
