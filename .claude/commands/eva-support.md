@@ -122,3 +122,83 @@ Before LEAD-FINAL-APPROVAL, the chairman runs `/eva-support --task-id <id>` agai
 /eva-support --task-id 12345 --operator-input "Override: time-boxed, just pick one"
 /eva-support memory dump 12345
 ```
+
+## Phase 3: SD Surface (SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C)
+
+Phase 3 extends EVA Support to surface open `strategic_directives_v2` SDs alongside
+Todoist tasks. EVA reads SDs read-only and emits `/leo create` command STRINGS for
+the chairman to run manually — EVA never invokes `/leo create` directly.
+
+### Feature flag (fail-safe disabled)
+
+`EVA_SD_READER_ENABLED` controls the SD surface:
+
+| Value | Behavior |
+|-------|----------|
+| `true` | SD reader active. Reply envelope prefixes "Related SDs:" block when matches/blockers exist. |
+| `false` or unset | SD reader disabled. Reader returns `[]` and writes one `eva_support_decision_log` row with `decision_kind=reader_disabled` per invocation (auditable killswitch). |
+
+For the first 30 days post-ship, the chairman enables the flag explicitly per session.
+
+### Killswitch (≤60s blast-cut)
+
+If a defect surfaces (bad recommendation acted on, RLS leak, drift in writer/consumer
+contract):
+
+```bash
+# 1-line revert — add or change in .env, then reload the Claude Code session:
+echo "EVA_SD_READER_ENABLED=false" >> .env
+```
+
+The reader returns `[]` on next invocation. A `reader_disabled` audit row confirms
+the killswitch is engaged. No code change or deploy needed.
+
+### Phase 3 components
+
+| Component | Path |
+|-----------|------|
+| Active-SD predicate (shared) | `lib/sd/active-sd-predicate.js` |
+| SD reader (read-only, flag-gated) | `lib/eva-support/sd-reader.js` |
+| SD blocker surface | `lib/eva-support/sd-blocker-surface.js` |
+| Dispatcher middleware ("Related SDs:" prefix) | `scripts/eva-support/_internal/dispatcher.js` |
+| SD↔Todoist cross-ref store | `lib/eva-support/sd-cross-ref-store.js` |
+| Recommendation emitter (emit-only, override_reason ≥12 chars) | `lib/eva-support/sd-recommendation-emitter.js` |
+| Phase 3 audit writer | `lib/eva-support/sd-decision-log-writer.js` |
+| Migration 1 (sd_refs column) | `database/migrations/20260527_eva-support-sd-refs-column.sql` |
+| Migration 2 (decision_kind + metadata columns) | `database/migrations/20260527_eva-support-decision-log-decision-kind-metadata.sql` |
+| Migration 3 (decision_kind DEFAULT) | `database/migrations/20260527_eva-support-decision-log-decision-kind-default.sql` |
+| CI invariant T1 (no spawn imports) | `tests/ci/eva-support-no-process-spawn-imports.test.js` |
+| CI invariant T2 (supabase-write allowlist) | `tests/ci/eva-support-supabase-write-allowlist.test.js` |
+| CI invariant T3 (ESLint no-restricted-imports config check) | `tests/ci/eva-support-eslint-restricted-imports-config.test.js` |
+| CI invariant T7 (sd-reader → decision-log-store write boundary) | `tests/ci/eva-support-sd-reader-no-log-write-boundary.test.js` |
+| ESLint per-directory override | `eslint.config.js` (final block) |
+| CODEOWNERS gating | `.github/CODEOWNERS` |
+
+### Approval contract
+
+When the chairman asks EVA "what should I build to unblock X", the emitter outputs:
+
+1. A `/leo create` command preview (copy-paste required to execute).
+2. A confidence score (0-100).
+3. A counterfactual ("Why NOT to create").
+4. Top-3 dup-candidate `sd_key`s (if any).
+5. Approve / Decline prompts.
+
+To approve: respond with `Override: <reason ≥12 chars>`. The emitter writes one
+`eva_support_decision_log` row with `decision_kind=sd_recommendation`,
+`metadata.outcome=approved`, and `metadata.override_reason` captured verbatim.
+Chairman then copies the emitted command and runs it manually in a separate prompt.
+
+To decline: take no action OR respond with anything other than a long-enough
+override. The emitter writes an audit row with `metadata.outcome=declined`.
+
+When a dup-candidate has confidence ≥80%, the emitter skips the command entirely
+and surfaces the existing `sd_key`. Audit row records `metadata.outcome=skipped_duplicate`
++ `metadata.dup_sd_key`.
+
+### Emit-only invariants (CI-enforced)
+
+The four invariant tests above must pass on every PR touching `lib/eva-support/**` or
+`scripts/eva-support/**`. CODEOWNERS requires chairman review for all changes to
+these paths. Together they ensure EVA cannot accidentally gain a write path to
+`strategic_directives_v2` or a subprocess-execution capability via future drift.

@@ -49,6 +49,16 @@ CONTRIBUTING.md @rickfelix
 **/security* @rickfelix
 **/credentials* @rickfelix
 
+# EVA Support — emit-only contract per SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C / FR-8.
+# All changes to these paths require chairman review because they govern the
+# writer/consumer boundary between EVA recommendations and production code
+# (strategic_directives_v2). The CI invariant tests under tests/ci/eva-support-*
+# enforce the emit-only contract structurally; CODEOWNERS adds human review.
+/lib/eva-support/ @rickfelix
+/scripts/eva-support/ @rickfelix
+/lib/sd/active-sd-predicate.js @rickfelix
+/tests/ci/eva-support-*.test.js @rickfelix
+
 # Stage templates barrel — protected per SD-LEO-INFRA-STAGE-TEMPLATE-BARREL-001
 # Any change to a stage-NN.js file should also touch the contract test below
 # (tests/unit/eva/stage-templates/index.test.js). The auto-discovery barrel
