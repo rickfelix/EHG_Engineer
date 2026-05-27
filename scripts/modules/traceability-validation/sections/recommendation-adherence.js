@@ -74,7 +74,26 @@ export async function validateRecommendationAdherence(sd_id, designAnalysis, dat
   const hasDesignFidelityData = designFidelityScore !== undefined ||
     (designFidelityDetails && (designFidelityDetails.components_implemented > 0 || designFidelityDetails.component_files?.length > 0));
 
-  if (designAnalysis && hasDesignFidelityData) {
+  // QF-20260527-961: when DESIGN sub-agent returned an applicability-skip
+  // reason (backend_only_diff, ehg_only_diff, engineer_only_diff), there are
+  // zero design recommendations TO adhere to — treat as 100% adherence rather
+  // than falling through to the "no design fidelity data" 50% default.
+  // Witnessed blocking SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C PLAN-TO-LEAD.
+  const APPLICABILITY_SKIP_REASONS = new Set([
+    'backend_only_diff',
+    'ehg_only_diff',
+    'engineer_only_diff',
+  ]);
+  const designSkipReason = designAnalysis?.skip_reason
+    || designAnalysis?.metadata?.skip_reason
+    || designAnalysis?.results?.metadata?.skip_reason;
+
+  if (designAnalysis && designSkipReason && APPLICABILITY_SKIP_REASONS.has(designSkipReason)) {
+    sectionScore += 10;
+    sectionDetails.design_adherence_percent = 100;
+    sectionDetails.design_skip_reason = designSkipReason;
+    console.log(`   OK Design adherence: 100% (DESIGN applicability-skipped: ${designSkipReason})`);
+  } else if (designAnalysis && hasDesignFidelityData) {
     let adherencePercent;
     if (designFidelityScore !== undefined) {
       adherencePercent = (designFidelityScore / 25) * 100;
