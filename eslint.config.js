@@ -199,5 +199,28 @@ export default [
       'playwright-selectors/no-ambiguous-locators': 'warn',       // Catches page.locator('button')
       'playwright-selectors/require-locator-specificity': 'warn'  // Catches compound selectors
     }
-  }
+  },
+  // SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C / FR-8 / T3 invariant:
+  // EVA Support is emit-only. Process-spawning module imports are banned in
+  // lib/eva-support/** + scripts/eva-support/**. This rule complements the
+  // T1 CI test (tests/ci/eva-support-no-process-spawn-imports.test.js) with
+  // IDE-time and lint-time enforcement. Both layers must agree; T3 CI test
+  // (tests/ci/eva-support-eslint-restricted-imports-config.test.js) verifies
+  // this config block exists.
+  {
+    files: ['lib/eva-support/**/*.{js,mjs,cjs,ts}', 'scripts/eva-support/**/*.{js,mjs,cjs,ts}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: [
+          { name: 'child_process', message: 'EVA Support is emit-only (SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-C / FR-8 T1). Emit a /leo create command string for the chairman to run manually.' },
+          { name: 'execa', message: 'EVA Support is emit-only — no subprocess execution.' },
+          { name: 'cross-spawn', message: 'EVA Support is emit-only — no subprocess execution.' },
+          { name: 'shelljs', message: 'EVA Support is emit-only — no shell execution.' },
+        ],
+        patterns: [
+          { group: ['**/decision-log-store*'], importNames: ['insertEntry'], message: 'sd-reader.js (and other read-only modules) must not write via the Phase 2 envelope (T7 boundary). Use lib/eva-support/sd-decision-log-writer.js for Phase 3 audit rows.' },
+        ],
+      }],
+    },
+  },
 ];
