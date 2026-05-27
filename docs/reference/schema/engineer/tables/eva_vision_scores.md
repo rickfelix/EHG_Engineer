@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-27T12:01:05.838Z
-**Rows**: 3,665
+**Generated**: 2026-05-27T17:28:16.594Z
+**Rows**: 3,670
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (12 total)
+## Columns (15 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -30,6 +30,9 @@
 | rubric_snapshot | `jsonb` | **NO** | - | - |
 | scored_at | `timestamp with time zone` | **NO** | `now()` | - |
 | created_by | `text` | YES | - | - |
+| metadata | `jsonb` | **NO** | `'{}'::jsonb` | Free-form scoring metadata (e.g., invalidation provenance, scorer version notes). SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001. |
+| invalidated_at | `timestamp with time zone` | YES | - | Non-null when the score is known-invalid (e.g., scored against wrong codebase, scorer bug). SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001. |
+| invalidation_reason | `text` | YES | - | Free-form reason citing the pilot finding / SD that invalidated this score. SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001. |
 
 ## Constraints
 
