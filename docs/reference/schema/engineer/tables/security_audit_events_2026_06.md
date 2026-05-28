@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-28T13:36:48.100Z
+**Generated**: 2026-05-28T13:55:21.126Z
 **Rows**: null
 **RLS**: Disabled
 
@@ -42,9 +42,6 @@
 
 ### Primary Key
 - `security_audit_events_2026_06_pkey`: PRIMARY KEY (id, occurred_at)
-
-### Foreign Keys
-- `fk_sae_venture_id`: venture_id → ventures(id)
 
 ### Check Constraints
 - `chk_sae_event_type`: CHECK (((event_type)::text = ANY ((ARRAY['nfkd_collision'::character varying, 'port_isol_violation'::character varying, 'capability_suppression'::character varying, 'fail_closed_error'::character varying])::text[])))
