@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-28T13:55:21.126Z
-**Rows**: 6,465
+**Generated**: 2026-05-28T17:45:31.644Z
+**Rows**: 6,496
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -117,7 +117,6 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `action_items_max_25`: CHECK (((action_items IS NULL) OR (jsonb_typeof(action_items) <> 'array'::text) OR (jsonb_array_length(action_items) <= 25)))
 - `check_learning_category`: CHECK ((learning_category = ANY (ARRAY['APPLICATION_ISSUE'::text, 'PROCESS_IMPROVEMENT'::text, 'TESTING_STRATEGY'::text, 'DATABASE_SCHEMA'::text, 'DEPLOYMENT_ISSUE'::text, 'PERFORMANCE_OPTIMIZATION'::text, 'USER_EXPERIENCE'::text, 'SECURITY_VULNERABILITY'::text, 'DOCUMENTATION'::text])))
 - `check_protocol_improvements_is_array`: CHECK (((jsonb_typeof(protocol_improvements) = 'array'::text) OR (protocol_improvements IS NULL)))
-- `check_target_application`: CHECK ((target_application = ANY (ARRAY['EHG'::text, 'EHG_Engineer'::text])))
 - `key_learnings_max_30`: CHECK (((key_learnings IS NULL) OR (jsonb_typeof(key_learnings) <> 'array'::text) OR (jsonb_array_length(key_learnings) <= 30)))
 - `protocol_improvements_max_25`: CHECK (((protocol_improvements IS NULL) OR (jsonb_typeof(protocol_improvements) <> 'array'::text) OR (jsonb_array_length(protocol_improvements) <= 25)))
 - `retrospectives_checkpoint_effectiveness_check`: CHECK (((checkpoint_effectiveness >= 0) AND (checkpoint_effectiveness <= 100)))
@@ -277,6 +276,16 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION validate_retrospective_coverage()`
+
+### trg_validate_retrospective_target_application
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION validate_retrospective_target_application()`
+
+### trg_validate_retrospective_target_application
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION validate_retrospective_target_application()`
 
 ### trigger_auto_populate_retrospective_fields
 
