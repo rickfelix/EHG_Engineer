@@ -1,7 +1,8 @@
 {
-  "sdKey": "SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001",
-  "createdAt": "2026-05-27T23:43:32.951Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
+  "sdKey": "SD-LEO-INFRA-AUTOMATE-STAGE-CASCADE-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-AUTOMATE-STAGE-CASCADE-001",
+  "createdAt": "2026-05-28T01:15:11.078Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
   "baseRef": "origin/main"
 }
