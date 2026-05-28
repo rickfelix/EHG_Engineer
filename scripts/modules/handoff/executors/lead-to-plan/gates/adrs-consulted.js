@@ -26,6 +26,8 @@ const STOP_KEYWORDS_DEFAULT = [
   'adversarial sub-agent', 'progressive disclosure', 'skill body',
 ];
 
+import { shouldSkipForType } from '../../../../../../lib/handoff/gate-skip-detection.js';
+
 export function createAdrsConsultedGate(supabase) {
   return {
     name: 'GATE_ADRS_CONSULTED',
@@ -33,14 +35,16 @@ export function createAdrsConsultedGate(supabase) {
     threshold: 70,
     async execute(sd) {
       // Scope: refactor SDs only
-      if (sd.sd_type !== 'refactor') {
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-4: use canonical helper.
+      const skip = shouldSkipForType(sd, ['refactor'], { gateName: 'GATE_ADRS_CONSULTED' });
+      if (skip.skip) {
         return {
           name: 'GATE_ADRS_CONSULTED',
           score: 100,
           passed: true,
-          message: 'SD is not refactor type — gate not applicable',
+          message: skip.reason,
           warnings: [],
-          details: { sd_type: sd.sd_type, skipped: true },
+          details: { sd_type: sd.sd_type, skipped: true, skip_reason: skip.reason },
         };
       }
 

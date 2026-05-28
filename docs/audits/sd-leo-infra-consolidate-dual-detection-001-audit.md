@@ -2,17 +2,17 @@
 
 Generated (deterministic): 2026-05-28T00:00:00Z
 Repo: EHG_Engineer
-Git HEAD: 1b450c8113
-Files scanned: 2973
+Git HEAD: b6a7a99d6f
+Files scanned: 2974
 
 ## Summary
 
 | Cluster | Description | Total | MIGRATE | KEEP_META_ONLY | FOLLOW_UP | EXCLUDE |
 |---------|-------------|------:|--------:|---------------:|----------:|--------:|
 | A | SD-type detection | 92 | 12 | 3 | 39 | 38 |
-| B | Claim ownership detection | 72 | 26 | 0 | 22 | 24 |
-| C | Gate-skip detection | 15 | 3 | 0 | 6 | 6 |
-| **Total** | — | **179** | **41** | — | **67** | — |
+| B | Claim ownership detection | 83 | 26 | 0 | 22 | 35 |
+| C | Gate-skip detection | 16 | 4 | 0 | 6 | 6 |
+| **Total** | — | **191** | **42** | — | **67** | — |
 
 **This SD ships MIGRATE + KEEP_METADATA_ONLY.** MIGRATE_FOLLOW_UP sites file as a follow-up SD/QF after this one merges. EXCLUDE_OUT_OF_SCOPE sites are not touched.
 
@@ -142,6 +142,17 @@ Multiple call sites determine "who holds this SD" by reading claude_sessions.cla
 | B.5 | `lib/claim/holding-statuses.cjs` | 23 | EXCLUDE_OUT_OF_SCOPE | `const CLAIM_HOLDING_STATUSES = new Set([` |
 | B.5 | `lib/claim/holding-statuses.cjs` | 41 | EXCLUDE_OUT_OF_SCOPE | `if (CLAIM_HOLDING_STATUSES.has(s.status)) claimed.add(s.sd_key);` |
 | B.5 | `lib/claim/holding-statuses.cjs` | 46 | EXCLUDE_OUT_OF_SCOPE | `module.exports = { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys };` |
+| B.5 | `lib/claim/ownership-detection.js` | 18 | EXCLUDE_OUT_OF_SCOPE | `* Re-exports CLAIM_HOLDING_STATUSES from lib/claim/holding-statuses.cjs so consumers` |
+| B.5 | `lib/claim/ownership-detection.js` | 24 | EXCLUDE_OUT_OF_SCOPE | `const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('./holding-statuses.cjs');` |
+| B.5 | `lib/claim/ownership-detection.js` | 26 | EXCLUDE_OUT_OF_SCOPE | `export { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys };` |
+| B.1 | `lib/claim/ownership-detection.js` | 64 | EXCLUDE_OUT_OF_SCOPE | `if (sdErr \|\| !sd \|\| !sd.claiming_session_id) return null;` |
+| B.1 | `lib/claim/ownership-detection.js` | 69 | EXCLUDE_OUT_OF_SCOPE | `.eq('session_id', sd.claiming_session_id)` |
+| B.4 | `lib/claim/ownership-detection.js` | 80 | EXCLUDE_OUT_OF_SCOPE | `is_alive: session.is_alive === true,` |
+| B.6 | `lib/claim/ownership-detection.js` | 81 | EXCLUDE_OUT_OF_SCOPE | `has_uncommitted_changes: session.has_uncommitted_changes === true,` |
+| B.5 | `lib/claim/ownership-detection.js` | 102 | EXCLUDE_OUT_OF_SCOPE | `* CLAIM_HOLDING_STATUSES). Used by sweep and dashboard to render active workers.` |
+| B.5 | `lib/claim/ownership-detection.js` | 119 | EXCLUDE_OUT_OF_SCOPE | `if (CLAIM_HOLDING_STATUSES.has(holdingStatus)) {` |
+| B.6 | `lib/claim/ownership-detection.js` | 142 | EXCLUDE_OUT_OF_SCOPE | `if (session.has_uncommitted_changes === true) return 'ALIVE_SOURCE_SIDE';` |
+| B.4 | `lib/claim/ownership-detection.js` | 146 | EXCLUDE_OUT_OF_SCOPE | `if (session.is_alive === true) return 'ALIVE_NO_HEARTBEAT';` |
 | B.3 | `lib/inbox/unified-inbox-builder.js` | 153 | MIGRATE_FOLLOW_UP | `is_working_on: row.is_working_on,` |
 | B.3 | `lib/quality/context-analyzer.js` | 132 | MIGRATE_FOLLOW_UP | `const adjustedScore = sd.is_working_on ? score * 1.5 : score;` |
 | B.3 | `lib/quality/context-analyzer.js` | 193 | MIGRATE_FOLLOW_UP | `const workingSD = recentSDs.find(sd => sd.is_working_on);` |
@@ -216,7 +227,8 @@ Multiple call sites decide whether a handoff gate should run by checking gate.co
 | C.4 | `scripts/create-refactor-brief.js` | 85 | MIGRATE_FOLLOW_UP | `if (sd.sd_type !== 'refactor') {` |
 | C.4 | `scripts/hooks/stop-subagent-enforcement/post-completion-validator.js` | 104 | MIGRATE_FOLLOW_UP | `if (sd.sd_type !== 'orchestrator') {` |
 | C.4 | `scripts/lib/governance-policy-checker.js` | 176 | MIGRATE_FOLLOW_UP | `if (sd.sd_type !== 'orchestrator' && !sd.relationship_type?.includes('orchestrator')) return null;` |
-| C.4 | `scripts/modules/handoff/executors/lead-to-plan/gates/adrs-consulted.js` | 36 | MIGRATE | `if (sd.sd_type !== 'refactor') {` |
+| C.1 | `scripts/modules/handoff/executors/lead-to-plan/gates/adrs-consulted.js` | 29 | MIGRATE | `import { shouldSkipForType } from '../../../../../../lib/handoff/gate-skip-detection.js';` |
+| C.1 | `scripts/modules/handoff/executors/lead-to-plan/gates/adrs-consulted.js` | 39 | MIGRATE | `const skip = shouldSkipForType(sd, ['refactor'], { gateName: 'GATE_ADRS_CONSULTED' });` |
 | C.1 | `scripts/modules/handoff/validation/ValidationOrchestrator.js` | 250 | MIGRATE | `if (gate.condition && !(await gate.condition(context))) {` |
 | C.1 | `scripts/modules/handoff/validation/ValidationOrchestrator.js` | 1028 | MIGRATE | `if (gate.condition && !(await gate.condition(context))) {` |
 | C.4 | `scripts/modules/intensity-detector.js` | 106 | MIGRATE_FOLLOW_UP | `if (sd.sd_type !== 'refactor') {` |
