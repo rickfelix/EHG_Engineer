@@ -902,6 +902,17 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     mitigation: r.mitigation || 'Address during implementation'
   }));
 
+  // SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-2): build the four newly-extractable fields
+  // from parsed.* and pass them through createOptions. Each is null when the plan omitted
+  // the section, so createSD's fallthrough applies buildDefault*/inline-default (and warns,
+  // FR-4) — preserving current behavior for plans that lack these sections.
+  // success_metrics + smoke_test_steps are gate-relevant (SUCCESS_METRICS_PLACEHOLDER_VALUE /
+  // SMOKE_TEST_SPECIFICATION); key_principles + scope are non-gating enrichment.
+  const successMetrics = (parsed.successMetrics ?? []);
+  const smokeTestSteps = (parsed.smokeTestSteps ?? []);
+  const keyPrinciples = (parsed.keyPrinciples ?? []);
+  const planScope = parsed.planScope || null;
+
   // QF-20260509-LEO-CREATE-PLAN-DUP-GUARD (closes feedback 082b421c).
   // Compute SHA256 of the (whitespace-normalized) plan content. We use the
   // hash for both (i) provenance metadata and (ii) the duplicate-detection
@@ -924,8 +935,15 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
     strategic_objectives: strategicObjectives.length > 0 ? strategicObjectives : null,
     // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-3): pass scope and key_changes through createOptions
     // so createSD INSERTs them atomically — no UPDATE-after-INSERT race, and detector at the buildDefault* call site sees rich content.
-    scope: scope || null,
+    // SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-2): an explicit `## Scope` section wins over the
+    // file-table/summary-derived scope; falls back to the prior value when the plan omits it.
+    scope: planScope || scope || null,
     key_changes: keyChanges.length > 0 ? keyChanges : null,
+    // SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-2): newly-extractable fields — null when absent so
+    // createSD applies buildDefault*/inline-default and emits the FR-4 section-named warning.
+    success_metrics: successMetrics.length > 0 ? successMetrics : null,
+    smoke_test_steps: smokeTestSteps.length > 0 ? smokeTestSteps : null,
+    key_principles: keyPrinciples.length > 0 ? keyPrinciples : null,
     metadata: {
       source: 'plan',
       plan_content: parsed.fullContent,
@@ -1461,6 +1479,25 @@ async function createSD(options) {
     // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-2): three-step fallback so detector sees scope from BOTH caller paths
     // (plan-file passes options.scope after FR-3 atomic-INSERT refactor; /leo create stores it in options.metadata.scope).
     : buildDefaultSmokeTestSteps(type, title, options.scope ?? options.metadata?.scope ?? description);
+
+  // SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-4): when a --from-plan SD falls back to a
+  // buildDefault*() generic for a gate-relevant field, surface the gap at creation time
+  // (naming the field and the plan section it expected) instead of letting a placeholder
+  // slip through to a downstream handoff gate. Non-blocking; creation continues. Only
+  // fires for plan-sourced SDs — interactive /leo create and inherited child SDs use
+  // defaults intentionally. No warning is emitted when the field was extracted from the plan.
+  if (metadata?.source === 'plan') {
+    const extractedSuccessMetrics = Array.isArray(success_metrics) && success_metrics.length > 0;
+    const extractedSmokeTestSteps = Array.isArray(smoke_test_steps) && smoke_test_steps.length > 0;
+    if (!extractedSuccessMetrics) {
+      process.stderr.write('⚠️  --from-plan: success_metrics not found in plan; using generic default. Add a "## Success Metrics" section to avoid placeholder gate failures.\n');
+    }
+    // buildDefaultSmokeTestSteps returns [] for lightweight types (no placeholder substituted),
+    // so only warn when a default was actually produced.
+    if (!extractedSmokeTestSteps && Array.isArray(finalSmokeTestSteps) && finalSmokeTestSteps.length > 0) {
+      process.stderr.write('⚠️  --from-plan: smoke_test_steps not found in plan; using generic default. Add a "## Smoke Test Steps" section to avoid placeholder gate failures.\n');
+    }
+  }
 
   // ========================================================================
   // GOVERNANCE GUARDRAILS (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007)
