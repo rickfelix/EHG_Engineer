@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-27T19:49:10.334Z
-**Tables**: 697
+**Generated**: 2026-05-28T01:59:01.161Z
+**Tables**: 700
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (697)
+## All Tables (700)
 
 ### LEO Protocol
 
@@ -242,6 +242,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [capital_transactions](tables/capital_transactions.md)
 - [cascade_invalidation_flags](tables/cascade_invalidation_flags.md)
 - [cascade_invalidation_log](tables/cascade_invalidation_log.md)
+- [cascade_watcher_heartbeats](tables/cascade_watcher_heartbeats.md)
 - [chairman_approval_requests](tables/chairman_approval_requests.md)
 - [chairman_constraints](tables/chairman_constraints.md)
 - [chairman_dashboard_config](tables/chairman_dashboard_config.md)
@@ -333,6 +334,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_audit_log](tables/eva_audit_log.md)
 - [eva_automation_executions](tables/eva_automation_executions.md)
 - [eva_automation_rules](tables/eva_automation_rules.md)
+- [eva_cascade_errors](tables/eva_cascade_errors.md)
 - [eva_chat_conversations](tables/eva_chat_conversations.md)
 - [eva_chat_messages](tables/eva_chat_messages.md)
 - [eva_circuit_breaker](tables/eva_circuit_breaker.md)
@@ -376,6 +378,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_vision_documents](tables/eva_vision_documents.md)
 - [eva_vision_gaps](tables/eva_vision_gaps.md)
 - [eva_vision_iterations](tables/eva_vision_iterations.md)
+- [eva_vision_rubric_cache](tables/eva_vision_rubric_cache.md)
 - [eva_vision_scores](tables/eva_vision_scores.md)
 - [eva_weekly_review_templates](tables/eva_weekly_review_templates.md)
 - [eva_youtube_config](tables/eva_youtube_config.md)
