@@ -7,6 +7,9 @@
 
 import { isInfrastructureSDSync } from '../../../../sd-type-checker.js';
 import { autoResolveFailedHandoffs } from '../../../gates/auto-resolve-failures.js';
+// SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 TR-1: construct the WAIT verdict through
+// the shared helper (this gate is the PR #4021 precedent; shape is unchanged).
+import { buildWaitResult } from '../../../../../../lib/handoff/wait-verdict.js';
 
 /**
  * Create the PREREQUISITE_HANDOFF_CHECK gate validator
@@ -159,11 +162,9 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
       incompleteChildren.forEach(c => {
         console.log(`      - ${c.sd_key || c.id}: ${c.status}`);
       });
-      return {
-        passed: false,
+      return buildWaitResult({
         score: 0,
         max_score: 100,
-        wait: true,
         wait_reason: `Parent orchestrator waiting on ${incompleteChildren.length} child SD(s) to complete: ${incompleteList.join(', ')}`,
         issues: [],
         warnings: [`WAIT: parent orchestrator blocked until children complete (${incompleteList.length} pending)`],
@@ -174,7 +175,7 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
           completed_children: completedChildren.length,
           incomplete_children: incompleteList,
         },
-      };
+      });
     }
 
     console.log('   ✅ All children completed - parent SD ready for final approval');
