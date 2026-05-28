@@ -94,6 +94,24 @@ function classifyRow(viewRow, rawRow, targetApp) {
 
   // View has spoken: explicit BLOCKED statuses
   if (viewRow.compliance_status === 'cwd_leak') {
+    // QF-20260528-426: extend QF-20260527-673 path normalization to the cwd_leak
+    // branch (the violation branch already had it). The view flags cwd_leak on
+    // strict equality between executed_from_cwd and metadata.repo_path — but on
+    // Windows the writer records backslashes while applications.local_path uses
+    // forward slashes, so an intra-repo sub-agent that legitimately ran from its
+    // own repo (cwd == repo == expected, modulo slashes) is false-blocked. If the
+    // normalized writer path resolves under the expected toplevel, the sub-agent
+    // ran from the CORRECT repo — not a leak. A real cross-repo leak (writer path
+    // not under expected) still falls through to BLOCKED below.
+    const writerNorm = normalizePathForGate(viewRow.metadata_repo_path);
+    const expectedNorm = normalizePathForGate(viewRow.expected_repo_path);
+    if (pathsAreToplevelCompatible(writerNorm, expectedNorm)) {
+      return {
+        status: 'healthy',
+        reasonCode: REASON_CODES.HEALTHY,
+        detail: `cwd_leak normalized: ${writerNorm} resolves under expected ${expectedNorm} (correct repo, not a leak)`
+      };
+    }
     return {
       status: 'cwd_leak',
       reasonCode: REASON_CODES.CWD_LEAK,

@@ -404,4 +404,67 @@ describe('SUB_AGENT_REPO_RESOLUTION gate', () => {
       expect(result.details.buckets.violation).toHaveLength(1);
     });
   });
+
+  // QF-20260528-426: extend the QF-673 path normalization to the cwd_leak branch.
+  // The view flags cwd_leak on strict executed_from_cwd == metadata.repo_path, which
+  // false-blocks Windows intra-repo sub-agents (backslash cwd == backslash repo, but
+  // applications.local_path is forward-slash). Normalize first; rescue only when the
+  // writer resolves under expected. Real cross-repo leaks must still block.
+  describe('QF-20260528-426: cwd_leak normalization (view cwd_leak override)', () => {
+    it('overrides CWD_LEAK to HEALTHY when slashes differ but normalized paths match', async () => {
+      const viewRows = [{
+        id: 'CL1', sub_agent_code: 'DESIGN', phase: 'PLAN',
+        target_application: 'EHG_Engineer',
+        expected_repo_path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer',
+        metadata_repo_path: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer',
+        metadata_repo_resolved: true,
+        executed_from_cwd: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer',
+        compliance_status: 'cwd_leak',
+      }];
+      const rawRows = [{ id: 'CL1', sub_agent_code: 'DESIGN', metadata: { repo_path: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer', repo_resolved: true } }];
+      const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+      const result = await gate.validator({ sd: makeSD({ target_application: 'EHG_Engineer' }) });
+      expect(result.passed).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.details.buckets.healthy).toHaveLength(1);
+      expect(result.details.buckets.cwd_leak).toHaveLength(0);
+    });
+
+    it('overrides CWD_LEAK to HEALTHY when writer is a `.worktrees/<id>` subpath of expected', async () => {
+      const viewRows = [{
+        id: 'CL2', sub_agent_code: 'DESIGN', phase: 'PLAN',
+        target_application: 'EHG_Engineer',
+        expected_repo_path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer',
+        metadata_repo_path: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260528-426',
+        metadata_repo_resolved: true,
+        executed_from_cwd: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260528-426',
+        compliance_status: 'cwd_leak',
+      }];
+      const rawRows = [{ id: 'CL2', sub_agent_code: 'DESIGN', metadata: { repo_path: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260528-426', repo_resolved: true } }];
+      const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+      const result = await gate.validator({ sd: makeSD({ target_application: 'EHG_Engineer' }) });
+      expect(result.passed).toBe(true);
+      expect(result.details.buckets.healthy).toHaveLength(1);
+      expect(result.details.buckets.cwd_leak).toHaveLength(0);
+    });
+
+    it('preserves BLOCKED CWD_LEAK when writer is genuinely a different repo (must not regress)', async () => {
+      const viewRows = [{
+        id: 'CL3', sub_agent_code: 'DESIGN', phase: 'PLAN',
+        target_application: 'EHG_Engineer',
+        expected_repo_path: '/path/to/EHG_Engineer',
+        metadata_repo_path: '/path/to/different-repo',
+        metadata_repo_resolved: true,
+        executed_from_cwd: '/path/to/different-repo',
+        compliance_status: 'cwd_leak',
+      }];
+      const rawRows = [{ id: 'CL3', sub_agent_code: 'DESIGN', metadata: { repo_path: '/path/to/different-repo', repo_resolved: true } }];
+      const gate = createSubAgentRepoResolutionGate(buildSupabase({ viewRows, rawRows }));
+      const result = await gate.validator({ sd: makeSD({ target_application: 'EHG_Engineer' }) });
+      expect(result.passed).toBe(false);
+      expect(result.score).toBe(0);
+      expect(result.reasonCode).toBe(REASON_CODES.CWD_LEAK);
+      expect(result.details.buckets.cwd_leak).toHaveLength(1);
+    });
+  });
 });
