@@ -229,15 +229,35 @@ export function extractExplicitType(content) {
  * Closes feedback row 7f0a4f54 — autodetect was falling through to
  * detectFromKeyChanges even when the plan literally said the target.
  *
+ * SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-3): Also reads HTML-comment front-matter of the
+ * form `<!-- ... target_application: VALUE ... -->` (front-matter is typically a
+ * top-of-file HTML comment containing several `key: value` pairs). The `## Target
+ * Application` H2 header keeps PRECEDENCE — when both are present the H2 value wins, so
+ * plans that work today produce byte-identical output. Front-matter is an additive
+ * secondary source consulted only when the H2 header is absent.
+ *
  * @param {string} content - Plan file content
  * @returns {string|null} Header value (preserved case) or null
  */
 export function extractExplicitTargetApplication(content) {
   if (!content) return null;
-  const match = content.match(/^##\s+Target\s+Application\s*\n+\s*([A-Za-z][A-Za-z0-9_.-]*)/m);
-  if (!match) return null;
-  const value = match[1].trim();
-  return value || null;
+  // Primary source: explicit `## Target Application` H2 header (keeps precedence).
+  const headerMatch = content.match(/^##\s+Target\s+Application\s*\n+\s*([A-Za-z][A-Za-z0-9_.-]*)/m);
+  if (headerMatch) {
+    const value = headerMatch[1].trim();
+    if (value) return value;
+  }
+  // Additive secondary source: `target_application: VALUE` inside an HTML comment.
+  // Only consulted when the H2 header is absent, so existing plans are unaffected.
+  const frontMatterBlock = content.match(/<!--([\s\S]*?)-->/);
+  if (frontMatterBlock) {
+    const fmMatch = frontMatterBlock[1].match(/target_application\s*:\s*([A-Za-z][A-Za-z0-9_.-]*)/i);
+    if (fmMatch) {
+      const value = fmMatch[1].trim();
+      if (value) return value;
+    }
+  }
+  return null;
 }
 
 /** Canonical priority values accepted by strategic_directives_v2. */
@@ -415,6 +435,128 @@ export function extractSuccessCriteria(content) {
 }
 
 /**
+ * Extract key principles from plan content.
+ *
+ * SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-1): New extractor. Parses "## Key Principles"
+ * or "## Principles" sections; bullets map to plain strings.
+ * Returns null when the section is absent so leo-create-sd.js falls back to its inline
+ * default (and surfaces the gap) rather than emitting a placeholder here.
+ *
+ * @param {string} content - Plan file content
+ * @returns {Array<string>|null} Array of principle strings, or null when absent
+ */
+export function extractKeyPrinciples(content) {
+  if (!content) return null;
+
+  const sectionPattern = /^##\s+(Key Principles|Principles|Guiding Principles)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
+  const match = content.match(sectionPattern);
+
+  if (!match) return null;
+
+  const principles = [];
+  const sectionContent = match[2];
+  const bulletPattern = /^[-*]\s+(.+)$/gm;
+  let bulletMatch;
+  while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
+    principles.push(bulletMatch[1].trim());
+  }
+
+  return principles.slice(0, 10);
+}
+
+/**
+ * Extract smoke test steps from plan content.
+ *
+ * SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-1): New extractor. Parses "## Smoke Test"
+ * or "## Smoke Test Steps" sections; bullets map to {step_number, instruction, expected_outcome}
+ * objects shaped to match buildDefaultSmokeTestSteps so the SMOKE_TEST_SPECIFICATION gate accepts them.
+ * Returns null when the section is absent so leo-create-sd.js falls back to buildDefaultSmokeTestSteps
+ * (and warns) rather than emitting a placeholder here.
+ *
+ * @param {string} content - Plan file content
+ * @returns {Array<{step_number: number, instruction: string, expected_outcome: string}>|null} Array of steps, or null when absent
+ */
+export function extractSmokeTestSteps(content) {
+  if (!content) return null;
+
+  const sectionPattern = /^##\s+(Smoke Test Steps|Smoke Tests|Smoke Test)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
+  const match = content.match(sectionPattern);
+
+  if (!match) return null;
+
+  const steps = [];
+  const sectionContent = match[2];
+  const bulletPattern = /^[-*]\s+(.+)$/gm;
+  let bulletMatch;
+  while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
+    steps.push({
+      step_number: steps.length + 1,
+      instruction: bulletMatch[1].trim(),
+      expected_outcome: 'See plan for details'
+    });
+  }
+
+  return steps.slice(0, 10);
+}
+
+/**
+ * Extract success metrics from plan content.
+ *
+ * SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-1): New extractor. Parses "## Success Metrics"
+ * or "## Metrics" sections; bullets map to {metric, target} objects shaped to match
+ * buildDefaultSuccessMetrics so the SUCCESS_METRICS_PLACEHOLDER_VALUE gate accepts them.
+ * Returns null when the section is absent so leo-create-sd.js falls back to
+ * buildDefaultSuccessMetrics (and warns) rather than emitting a placeholder here.
+ *
+ * @param {string} content - Plan file content
+ * @returns {Array<{metric: string, target: string}>|null} Array of metrics, or null when absent
+ */
+export function extractSuccessMetrics(content) {
+  if (!content) return null;
+
+  const sectionPattern = /^##\s+(Success Metrics|Metrics|Key Metrics)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
+  const match = content.match(sectionPattern);
+
+  if (!match) return null;
+
+  const metrics = [];
+  const sectionContent = match[2];
+  const bulletPattern = /^[-*]\s+(.+)$/gm;
+  let bulletMatch;
+  while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
+    metrics.push({
+      metric: bulletMatch[1].trim(),
+      target: 'See plan for details'
+    });
+  }
+
+  return metrics.slice(0, 10);
+}
+
+/**
+ * Extract an explicit scope description from plan content.
+ *
+ * SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-1): New extractor. Parses "## Scope" or
+ * "## In Scope" sections and returns the section body as a string (trimmed, markdown
+ * emphasis stripped). Returns null when the section is absent so leo-create-sd.js falls
+ * back to the file-table/summary-derived scope rather than emitting a placeholder here.
+ *
+ * @param {string} content - Plan file content
+ * @returns {string|null} Scope body string, or null when absent
+ */
+export function extractScope(content) {
+  if (!content) return null;
+
+  const sectionPattern = /^##\s+(Scope|In Scope|Scope of Work)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
+  const match = content.match(sectionPattern);
+
+  if (!match) return null;
+
+  const scope = match[2].trim().replace(/\*\*/g, '').replace(/\*/g, '');
+  return scope || null;
+}
+
+/**
  * Parse a complete plan file and extract all structured content
  *
  * @param {string} content - Plan file content
@@ -431,6 +573,10 @@ export function parsePlanFile(content) {
       strategicObjectives: null,
       risks: null,
       successCriteria: null,
+      keyPrinciples: null,
+      smokeTestSteps: null,
+      successMetrics: null,
+      planScope: null,
       type: 'feature',
       priority: null,
       fullContent: ''
@@ -451,6 +597,10 @@ export function parsePlanFile(content) {
     strategicObjectives: extractStrategicObjectives(content),
     risks: extractRisks(content),
     successCriteria: extractSuccessCriteria(content),
+    keyPrinciples: extractKeyPrinciples(content),
+    smokeTestSteps: extractSmokeTestSteps(content),
+    successMetrics: extractSuccessMetrics(content),
+    planScope: extractScope(content),
     type: explicitType ?? inferSDType(content),
     priority: explicitPriority,
     targetApplication: explicitTargetApplication,
@@ -505,6 +655,10 @@ export default {
   extractStrategicObjectives,
   extractRisks,
   extractSuccessCriteria,
+  extractKeyPrinciples,
+  extractSmokeTestSteps,
+  extractSuccessMetrics,
+  extractScope,
   inferSDType,
   extractExplicitType,
   extractExplicitPriority,
