@@ -160,7 +160,8 @@ export class PlanToLeadExecutor extends BaseExecutor {
   }
 
   async setup(sdId, sd, options) {
-    const appPath = this.determineTargetRepository(sd);
+    // FR-1 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): DB-first for ventures, sync platform path unchanged.
+    const appPath = await this.resolveTargetRepository(sd);
     options._appPath = appPath;
     options._sd = sd;
 
