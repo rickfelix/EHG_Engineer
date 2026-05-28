@@ -7,7 +7,36 @@
  * Fixes GAP-001 (SDs missing from DB after successful migration).
  */
 
+// SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 (FR-4): WAIT for the "applied but not yet
+// verified" race window; FAIL only when verification actually ran and crashed.
+import { buildWaitResult, buildFailResult } from '../../../../../../lib/handoff/wait-verdict.js';
+
 const BLOCKING_SD_TYPES = ['database'];
+
+/**
+ * FR-4: classify a migration's verification state from its tracking fields.
+ *   - applied_at IS NOT NULL && verified_at IS NULL && last_verification_error IS NULL
+ *       → 'wait' (migration applied, verification not yet attempted — race window)
+ *   - last_verification_error IS NOT NULL
+ *       → 'fail' (verification ran and crashed — a real failure, not a race window)
+ *   - otherwise → 'ok' (verified, or not-yet-applied / no tracking info)
+ *
+ * @param {Object} m - Migration descriptor (may carry applied_at/verified_at/last_verification_error).
+ * @returns {'wait'|'fail'|'ok'}
+ */
+function classifyMigrationVerificationState(m) {
+  if (!m) return 'ok';
+  const lastErr = m.last_verification_error ?? null;
+  if (lastErr !== null && lastErr !== undefined && String(lastErr).length > 0) {
+    return 'fail';
+  }
+  const appliedAt = m.applied_at ?? null;
+  const verifiedAt = m.verified_at ?? null;
+  if (appliedAt && !verifiedAt) {
+    return 'wait';
+  }
+  return 'ok';
+}
 
 /**
  * Create the GATE_MIGRATION_DATA_VERIFICATION gate validator
@@ -45,6 +74,51 @@ export function createMigrationDataVerificationGate(supabase) {
         }
 
         console.log(`   📋 Found ${migrations.length} migration(s)`);
+
+        // FR-4: verification-state race window. A migration that is applied but
+        // not yet verified (and has no recorded verification error) is mid-flight
+        // — return WAIT (preserve retry budget; re-check later). A migration whose
+        // verification actually ran and recorded an error is a REAL failure → FAIL.
+        const stateClassified = migrations.map(m => ({ m, state: classifyMigrationVerificationState(m) }));
+        const crashed = stateClassified.filter(x => x.state === 'fail');
+        const unverifiedYet = stateClassified.filter(x => x.state === 'wait');
+
+        if (crashed.length > 0) {
+          const errs = crashed.map(x => `${x.m.name || 'migration'}: ${x.m.last_verification_error}`);
+          console.log(`   ❌ Migration verification crashed (real failure): ${errs.join('; ')}`);
+          return buildFailResult({
+            score: 0,
+            max_score: 100,
+            issues: [
+              `Migration verification FAILED for ${crashed.length}/${migrations.length} migration(s)`,
+              ...errs
+            ],
+            details: {
+              reason: 'MIGRATION_VERIFICATION_ERROR',
+              sdType,
+              migrationCount: migrations.length,
+              failed: crashed.map(x => ({ name: x.m.name, last_verification_error: x.m.last_verification_error }))
+            },
+            remediation: 'Migration verification ran and crashed — inspect last_verification_error, fix the migration or verifier, then re-run.'
+          });
+        }
+
+        if (unverifiedYet.length > 0) {
+          const names = unverifiedYet.map(x => x.m.name || 'migration');
+          console.log(`   ⏳ WAIT: ${unverifiedYet.length} migration(s) applied but not yet verified: ${names.join(', ')}`);
+          return buildWaitResult({
+            score: 0,
+            max_score: 100,
+            wait_reason: `${unverifiedYet.length} migration(s) applied but verification not yet attempted: ${names.join(', ')}`,
+            details: {
+              reason: 'MIGRATION_VERIFICATION_PENDING',
+              sdType,
+              migrationCount: migrations.length,
+              pending: names
+            },
+            remediation: 'Migration is applied; verification has not run yet. Re-check shortly. If it never verifies before the wait ceiling, it will surface as a real failure.'
+          });
+        }
 
         // Step 2: Verify each migration's data was applied
         const results = [];
@@ -165,7 +239,12 @@ async function findSdMigrations(supabase, sdId, sdKey) {
         migrations.push({
           name: m.name || m.file || 'unknown',
           tables: m.tables || m.target_tables || [],
-          expectedRows: m.expected_rows || m.row_count || null
+          expectedRows: m.expected_rows || m.row_count || null,
+          // FR-4: verification-state tracking fields (no schema change — these
+          // travel in the PLAN-TO-EXEC handoff metadata migration descriptor).
+          applied_at: m.applied_at ?? null,
+          verified_at: m.verified_at ?? null,
+          last_verification_error: m.last_verification_error ?? null
         });
       }
     }
