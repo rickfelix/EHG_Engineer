@@ -2,17 +2,17 @@
 
 Generated (deterministic): 2026-05-28T00:00:00Z
 Repo: EHG_Engineer
-Git HEAD: 0410b70d33
+Git HEAD: 1b450c8113
 Files scanned: 2973
 
 ## Summary
 
 | Cluster | Description | Total | MIGRATE | KEEP_META_ONLY | FOLLOW_UP | EXCLUDE |
 |---------|-------------|------:|--------:|---------------:|----------:|--------:|
-| A | SD-type detection | 98 | 14 | 7 | 39 | 38 |
+| A | SD-type detection | 92 | 12 | 3 | 39 | 38 |
 | B | Claim ownership detection | 72 | 26 | 0 | 22 | 24 |
 | C | Gate-skip detection | 15 | 3 | 0 | 6 | 6 |
-| **Total** | — | **185** | **43** | — | **67** | — |
+| **Total** | — | **179** | **41** | — | **67** | — |
 
 **This SD ships MIGRATE + KEEP_METADATA_ONLY.** MIGRATE_FOLLOW_UP sites file as a follow-up SD/QF after this one merges. EXCLUDE_OUT_OF_SCOPE sites are not touched.
 
@@ -80,11 +80,7 @@ Multiple call sites classify an SD's type by reading sd_type column, metadata.is
 | A.7 | `scripts/leo-create-sd.js` | 1762 | MIGRATE_FOLLOW_UP | `// engineering/governance LEO work (sd_type in LEGITIMATE_NO_VENTURE_SD_TYPES, or` |
 | A.7 | `scripts/leo-create-sd.js` | 1767 | MIGRATE_FOLLOW_UP | `const isNoVentureWork = LEGITIMATE_NO_VENTURE_SD_TYPES.has(sdData.sd_type)` |
 | A.2 | `scripts/leo-orchestrator/validation.js` | 44 | MIGRATE | `return currentSD && (currentSD.priority \|\| currentSD.sd_type === 'infrastructure');` |
-| A.3 | `scripts/lib/handoff-preflight.js` | 163 | KEEP_METADATA_ONLY | `const isParentOrchestrator = sd.metadata?.is_parent === true;` |
-| A.3 | `scripts/lib/handoff-preflight.js` | 294 | KEEP_METADATA_ONLY | `const isParentOrchestrator = sd.metadata?.is_parent === true;` |
 | A.1 | `scripts/modules/auto-trigger-stories.mjs` | 398 | MIGRATE_FOLLOW_UP | `if (sd.sd_type === 'database' && prd.metadata?.schema) {` |
-| A.3 | `scripts/modules/decomposition-gate.js` | 107 | KEEP_METADATA_ONLY | `if (sd.metadata?.is_parent === true \|\| sd.metadata?.requires_children === true) {` |
-| A.3 | `scripts/modules/handoff/executors/plan-to-exec/parent-orchestrator.js` | 133 | MIGRATE | `return sd?.metadata?.is_parent === true;` |
 | A.6 | `scripts/modules/handoff/executors/plan-to-lead/gates/smoke-test-evidence.js` | 44 | MIGRATE | `if (sdKey.startsWith('SD-LEARN-')) return false;` |
 | A.6 | `scripts/modules/handoff/executors/plan-to-lead/index.js` | 110 | MIGRATE | `if (sdKey.startsWith('SD-LEARN-')) return;` |
 | A.2 | `scripts/modules/handoff/orchestrator-completion-guardian.js` | 77 | KEEP_METADATA_ONLY | `// 1. sd_type === 'orchestrator'` |
@@ -92,7 +88,6 @@ Multiple call sites classify an SD's type by reading sd_type column, metadata.is
 | A.3 | `scripts/modules/handoff/orchestrator-completion-guardian.js` | 81 | KEEP_METADATA_ONLY | `const hasIsParentFlag = parent.metadata?.is_parent === true;` |
 | A.1 | `scripts/modules/handoff/verifiers/lead-to-plan/prd-readiness.js` | 286 | MIGRATE | `if (sd.sd_type === 'documentation') return result;` |
 | A.2 | `scripts/modules/handoff/verifiers/lead-to-plan/prd-readiness.js` | 286 | MIGRATE | `if (sd.sd_type === 'documentation') return result;` |
-| A.3 | `scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js` | 84 | MIGRATE | `const isParentOrchestrator = sd.metadata?.is_parent === true;` |
 | A.1 | `scripts/modules/human-verification-validator.js` | 392 | MIGRATE_FOLLOW_UP | `if (sd.sd_type === 'database') {` |
 | A.1 | `scripts/modules/human-verification-validator.js` | 398 | MIGRATE_FOLLOW_UP | `if (sd.sd_type === 'security') {` |
 | A.2 | `scripts/modules/implementation-fidelity/sections/data-flow-alignment.js` | 109 | MIGRATE_FOLLOW_UP | `if (sd?.sd_type === 'feature' && !hasUIScope) {` |
@@ -114,7 +109,6 @@ Multiple call sites classify an SD's type by reading sd_type column, metadata.is
 | A.4 | `scripts/orchestrator-preflight.js` | 135 | MIGRATE | `sd.metadata?.is_orchestrator === true \|\|` |
 | A.1 | `scripts/pcvp-anomaly-detection.cjs` | 107 | MIGRATE_FOLLOW_UP | `severity: sd.sd_type === 'feature' ? 'critical' : 'warning',` |
 | A.2 | `scripts/pcvp-anomaly-detection.cjs` | 107 | MIGRATE_FOLLOW_UP | `severity: sd.sd_type === 'feature' ? 'critical' : 'warning',` |
-| A.3 | `scripts/phase-preflight.js` | 261 | KEEP_METADATA_ONLY | `explicitFlag: sd.metadata?.is_parent === true,` |
 | A.1 | `scripts/sd-start.js` | 284 | MIGRATE | `*   1. sd.sd_type === 'orchestrator'` |
 | A.2 | `scripts/sd-start.js` | 284 | MIGRATE | `*   1. sd.sd_type === 'orchestrator'` |
 | A.2 | `scripts/sd-start.js` | 359 | MIGRATE | `* When a child is itself an orchestrator (sd_type === 'orchestrator' or has children),` |
