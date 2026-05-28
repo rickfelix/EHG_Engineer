@@ -2,17 +2,17 @@
 
 Generated (deterministic): 2026-05-28T00:00:00Z
 Repo: EHG_Engineer
-Git HEAD: b5ece84460
-Files scanned: 2971
+Git HEAD: 0410b70d33
+Files scanned: 2973
 
 ## Summary
 
 | Cluster | Description | Total | MIGRATE | KEEP_META_ONLY | FOLLOW_UP | EXCLUDE |
 |---------|-------------|------:|--------:|---------------:|----------:|--------:|
-| A | SD-type detection | 74 | 20 | 7 | 39 | 8 |
-| B | Claim ownership detection | 71 | 26 | 0 | 22 | 23 |
-| C | Gate-skip detection | 9 | 3 | 0 | 6 | 0 |
-| **Total** | — | **154** | **49** | — | **67** | — |
+| A | SD-type detection | 98 | 14 | 7 | 39 | 38 |
+| B | Claim ownership detection | 72 | 26 | 0 | 22 | 24 |
+| C | Gate-skip detection | 15 | 3 | 0 | 6 | 6 |
+| **Total** | — | **185** | **43** | — | **67** | — |
 
 **This SD ships MIGRATE + KEEP_METADATA_ONLY.** MIGRATE_FOLLOW_UP sites file as a follow-up SD/QF after this one merges. EXCLUDE_OUT_OF_SCOPE sites are not touched.
 
@@ -32,6 +32,30 @@ Multiple call sites classify an SD's type by reading sd_type column, metadata.is
 | A.2 | `lib/governance/guardrail-registry.js` | 183 | MIGRATE_FOLLOW_UP | `const isOrchestrator = childrenCount >= 3 \|\| sdData.sd_type === 'orchestrator';` |
 | A.3 | `lib/handoff/parent-detection.js` | 36 | EXCLUDE_OUT_OF_SCOPE | `const metadataFlag = sd.metadata?.is_parent === true;` |
 | A.3 | `lib/handoff/parent-detection.js` | 66 | EXCLUDE_OUT_OF_SCOPE | `return sd?.metadata?.is_parent === true;` |
+| A.7 | `lib/sd/type-detection.js` | 19 | EXCLUDE_OUT_OF_SCOPE | `*   - lib/eva/bridge/sd-router.js — LEGITIMATE_NO_VENTURE_SD_TYPES Set` |
+| A.7 | `lib/sd/type-detection.js` | 32 | EXCLUDE_OUT_OF_SCOPE | `import { LEGITIMATE_NO_VENTURE_SD_TYPES } from '../eva/bridge/sd-router.js';` |
+| A.1 | `lib/sd/type-detection.js` | 53 | EXCLUDE_OUT_OF_SCOPE | `*   - sd.sd_type === 'orchestrator'` |
+| A.2 | `lib/sd/type-detection.js` | 53 | EXCLUDE_OUT_OF_SCOPE | `*   - sd.sd_type === 'orchestrator'` |
+| A.4 | `lib/sd/type-detection.js` | 54 | EXCLUDE_OUT_OF_SCOPE | `*   - sd.metadata?.is_orchestrator === true` |
+| A.3 | `lib/sd/type-detection.js` | 55 | EXCLUDE_OUT_OF_SCOPE | `*   - sd.metadata?.is_parent === true   (legacy parent-orchestrator flag)` |
+| A.1 | `lib/sd/type-detection.js` | 68 | EXCLUDE_OUT_OF_SCOPE | `sd.sd_type === 'orchestrator' \|\|` |
+| A.2 | `lib/sd/type-detection.js` | 68 | EXCLUDE_OUT_OF_SCOPE | `sd.sd_type === 'orchestrator' \|\|` |
+| A.4 | `lib/sd/type-detection.js` | 69 | EXCLUDE_OUT_OF_SCOPE | `sd.metadata?.is_orchestrator === true \|\|` |
+| A.3 | `lib/sd/type-detection.js` | 70 | EXCLUDE_OUT_OF_SCOPE | `sd.metadata?.is_parent === true` |
+| A.1 | `lib/sd/type-detection.js` | 100 | EXCLUDE_OUT_OF_SCOPE | `sd.sd_type === 'orchestrator' \|\|` |
+| A.2 | `lib/sd/type-detection.js` | 100 | EXCLUDE_OUT_OF_SCOPE | `sd.sd_type === 'orchestrator' \|\|` |
+| A.4 | `lib/sd/type-detection.js` | 101 | EXCLUDE_OUT_OF_SCOPE | `sd.metadata?.is_orchestrator === true \|\|` |
+| A.3 | `lib/sd/type-detection.js` | 102 | EXCLUDE_OUT_OF_SCOPE | `sd.metadata?.is_parent === true` |
+| A.1 | `lib/sd/type-detection.js` | 112 | EXCLUDE_OUT_OF_SCOPE | `*   - sd.sd_type === 'venture'  (rare; most ventures use other sd_types)` |
+| A.2 | `lib/sd/type-detection.js` | 112 | EXCLUDE_OUT_OF_SCOPE | `*   - sd.sd_type === 'venture'  (rare; most ventures use other sd_types)` |
+| A.5 | `lib/sd/type-detection.js` | 113 | EXCLUDE_OUT_OF_SCOPE | `*   - sd.metadata?.is_venture === true` |
+| A.1 | `lib/sd/type-detection.js` | 126 | EXCLUDE_OUT_OF_SCOPE | `sd.sd_type === 'venture' \|\|` |
+| A.2 | `lib/sd/type-detection.js` | 126 | EXCLUDE_OUT_OF_SCOPE | `sd.sd_type === 'venture' \|\|` |
+| A.5 | `lib/sd/type-detection.js` | 127 | EXCLUDE_OUT_OF_SCOPE | `sd.metadata?.is_venture === true` |
+| A.7 | `lib/sd/type-detection.js` | 141 | EXCLUDE_OUT_OF_SCOPE | `*   - sd.sd_type is in LEGITIMATE_NO_VENTURE_SD_TYPES (from lib/eva/bridge/sd-router.js)` |
+| A.7 | `lib/sd/type-detection.js` | 148 | EXCLUDE_OUT_OF_SCOPE | `return LEGITIMATE_NO_VENTURE_SD_TYPES.has(sd.sd_type);` |
+| A.3 | `lib/sd/type-detection.js` | 168 | EXCLUDE_OUT_OF_SCOPE | `if (sd.metadata?.is_orchestrator === true \|\| sd.metadata?.is_parent === true) {` |
+| A.4 | `lib/sd/type-detection.js` | 168 | EXCLUDE_OUT_OF_SCOPE | `if (sd.metadata?.is_orchestrator === true \|\| sd.metadata?.is_parent === true) {` |
 | A.1 | `lib/utils/sd-type-validation.js` | 259 | EXCLUDE_OUT_OF_SCOPE | `requiresDatabase: sd.sd_type === 'database' \|\| (sd.scope \|\| '').toLowerCase().includes('schema'),` |
 | A.1 | `lib/utils/sd-type-validation.js` | 262 | EXCLUDE_OUT_OF_SCOPE | `requiresDesign: sd.sd_type === 'feature' && ((sd.scope \|\| '').toLowerCase().includes('ui') \|\|` |
 | A.2 | `lib/utils/sd-type-validation.js` | 262 | EXCLUDE_OUT_OF_SCOPE | `requiresDesign: sd.sd_type === 'feature' && ((sd.scope \|\| '').toLowerCase().includes('ui') \|\|` |
@@ -60,7 +84,6 @@ Multiple call sites classify an SD's type by reading sd_type column, metadata.is
 | A.3 | `scripts/lib/handoff-preflight.js` | 294 | KEEP_METADATA_ONLY | `const isParentOrchestrator = sd.metadata?.is_parent === true;` |
 | A.1 | `scripts/modules/auto-trigger-stories.mjs` | 398 | MIGRATE_FOLLOW_UP | `if (sd.sd_type === 'database' && prd.metadata?.schema) {` |
 | A.3 | `scripts/modules/decomposition-gate.js` | 107 | KEEP_METADATA_ONLY | `if (sd.metadata?.is_parent === true \|\| sd.metadata?.requires_children === true) {` |
-| A.2 | `scripts/modules/handoff/executors/BaseExecutor.js` | 115 | MIGRATE | `const isOrchestrator = sd?.sd_type === 'orchestrator';` |
 | A.3 | `scripts/modules/handoff/executors/plan-to-exec/parent-orchestrator.js` | 133 | MIGRATE | `return sd?.metadata?.is_parent === true;` |
 | A.6 | `scripts/modules/handoff/executors/plan-to-lead/gates/smoke-test-evidence.js` | 44 | MIGRATE | `if (sdKey.startsWith('SD-LEARN-')) return false;` |
 | A.6 | `scripts/modules/handoff/executors/plan-to-lead/index.js` | 110 | MIGRATE | `if (sdKey.startsWith('SD-LEARN-')) return;` |
@@ -79,12 +102,15 @@ Multiple call sites classify an SD's type by reading sd_type column, metadata.is
 | A.2 | `scripts/modules/leo-orchestrator/requirement-validators.js` | 118 | MIGRATE | `return currentSD && (currentSD.priority \|\| currentSD.sd_type === 'infrastructure');` |
 | A.2 | `scripts/modules/orchestrator-validation.mjs` | 152 | MIGRATE_FOLLOW_UP | `return currentSD && (currentSD.priority \|\| currentSD.sd_type === 'infrastructure');` |
 | A.2 | `scripts/modules/orchestrator/phase-requirements.js` | 95 | MIGRATE | `return currentSD && (currentSD.priority \|\| currentSD.sd_type === 'infrastructure');` |
-| A.2 | `scripts/modules/parent-orchestrator-handler.js` | 58 | MIGRATE | `// 2. sd_type === 'orchestrator' (type-based)` |
-| A.3 | `scripts/modules/parent-orchestrator-handler.js` | 60 | MIGRATE | `const hasIsParentFlag = sd.metadata?.is_parent === true;` |
-| A.1 | `scripts/modules/parent-orchestrator-handler.js` | 61 | MIGRATE | `const isOrchestratorType = sd.sd_type === 'orchestrator';` |
-| A.2 | `scripts/modules/parent-orchestrator-handler.js` | 61 | MIGRATE | `const isOrchestratorType = sd.sd_type === 'orchestrator';` |
+| A.2 | `scripts/modules/parent-orchestrator-handler.js` | 57 | MIGRATE | `// sd_type === 'orchestrator', DB-children) now lives inside the canonical helper.` |
 | A.1 | `scripts/modules/sd-next/SDNextSelector.js` | 415 | MIGRATE_FOLLOW_UP | `if (sd.sd_type === 'orchestrator' && sd.status !== 'completed' && sd.status !== 'cancelled') {` |
 | A.2 | `scripts/modules/sd-next/SDNextSelector.js` | 415 | MIGRATE_FOLLOW_UP | `if (sd.sd_type === 'orchestrator' && sd.status !== 'completed' && sd.status !== 'cancelled') {` |
+| A.7 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 9 | EXCLUDE_OUT_OF_SCOPE | `*   A - SD-type detection (sd_type column, metadata.is_* flags, sd_key prefix, LEGITIMATE_NO_VENTURE_SD_TYPES)` |
+| A.1 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 41 | EXCLUDE_OUT_OF_SCOPE | `{ id: 'A.1', description: 'sd_type direct comparison (e.g. sd.sd_type === "orchestrator")', pattern: /\bsd\.sd` |
+| A.2 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 41 | EXCLUDE_OUT_OF_SCOPE | `{ id: 'A.1', description: 'sd_type direct comparison (e.g. sd.sd_type === "orchestrator")', pattern: /\bsd\.sd` |
+| A.7 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 47 | EXCLUDE_OUT_OF_SCOPE | `{ id: 'A.7', description: 'LEGITIMATE_NO_VENTURE_SD_TYPES usage', pattern: /\bLEGITIMATE_NO_VENTURE_SD_TYPES\b` |
+| A.8 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 48 | EXCLUDE_OUT_OF_SCOPE | `{ id: 'A.8', description: 'category check (sd.category === "...")', pattern: /\bsd\.category\s*===?\s*["']/ },` |
+| A.7 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 332 | EXCLUDE_OUT_OF_SCOPE | `description: 'Multiple call sites classify an SD\'s type by reading sd_type column, metadata.is_* flags, sd_ke` |
 | A.4 | `scripts/orchestrator-preflight.js` | 135 | MIGRATE | `sd.metadata?.is_orchestrator === true \|\|` |
 | A.1 | `scripts/pcvp-anomaly-detection.cjs` | 107 | MIGRATE_FOLLOW_UP | `severity: sd.sd_type === 'feature' ? 'critical' : 'warning',` |
 | A.2 | `scripts/pcvp-anomaly-detection.cjs` | 107 | MIGRATE_FOLLOW_UP | `severity: sd.sd_type === 'feature' ? 'critical' : 'warning',` |
@@ -92,14 +118,12 @@ Multiple call sites classify an SD's type by reading sd_type column, metadata.is
 | A.1 | `scripts/sd-start.js` | 284 | MIGRATE | `*   1. sd.sd_type === 'orchestrator'` |
 | A.2 | `scripts/sd-start.js` | 284 | MIGRATE | `*   1. sd.sd_type === 'orchestrator'` |
 | A.2 | `scripts/sd-start.js` | 359 | MIGRATE | `* When a child is itself an orchestrator (sd_type === 'orchestrator' or has children),` |
-| A.1 | `scripts/sd-start.js` | 1496 | MIGRATE | `if (sd.sd_type === 'orchestrator' && wtBranch && !wtBranch.includes(effectiveId)) {` |
-| A.2 | `scripts/sd-start.js` | 1496 | MIGRATE | `if (sd.sd_type === 'orchestrator' && wtBranch && !wtBranch.includes(effectiveId)) {` |
 | A.1 | `scripts/verify-l2p/prd-readiness.js` | 301 | MIGRATE_FOLLOW_UP | `if (sd.sd_type === 'documentation') return result;` |
 | A.2 | `scripts/verify-l2p/prd-readiness.js` | 301 | MIGRATE_FOLLOW_UP | `if (sd.sd_type === 'documentation') return result;` |
 
 ### Rationale per classification
 
-- **EXCLUDE_OUT_OF_SCOPE**: Canonical helper file — defines the pattern, not a consumer.
+- **EXCLUDE_OUT_OF_SCOPE**: Canonical helper file — defines the pattern, not a consumer. / One-off diagnostic script; not part of production routing.
 - **KEEP_METADATA_ONLY**: Hot-path runs mid-handoff; metadata-flag-only preserves read-after-write transactional consistency (per RISK C1). Uses sync helper variant.
 - **MIGRATE**: HIGH-IMPACT call site on the production handoff/claim/routing path. In scope for this SD.
 - **MIGRATE_FOLLOW_UP**: Lower-impact consumer (enrichment script, utility CLI, server route). Files as follow-up SD/QF after this SD ships.
@@ -148,6 +172,7 @@ Multiple call sites determine "who holds this SD" by reading claude_sessions.cla
 | B.1 | `scripts/modules/sd-next/display/recommendations.js` | 273 | MIGRATE | `if (sd.claiming_session_id && sd.claiming_session_id !== currentSessionId) {` |
 | B.1 | `scripts/modules/sd-next/display/recommendations.js` | 276 | MIGRATE | `const claimingSession = activeSessions.find(s => s.session_id === sd.claiming_session_id);` |
 | B.1 | `scripts/modules/sd-next/display/recommendations.js` | 279 | MIGRATE | `claimingSessionId: sd.claiming_session_id,` |
+| B.5 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 62 | EXCLUDE_OUT_OF_SCOPE | `{ id: 'B.5', description: 'CLAIM_HOLDING_STATUSES import or use', pattern: /\bCLAIM_HOLDING_STATUSES\b/ },` |
 | B.1 | `scripts/one-off/_lead-enrich-sd-fdbk-infra-cascade-trigger-overreach-001.mjs` | 291 | EXCLUDE_OUT_OF_SCOPE | `console.log('claiming_session_id:', data.claiming_session_id);` |
 | B.3 | `scripts/one-off/_lead-enrich-sd-fdbk-infra-cascade-trigger-overreach-001.mjs` | 292 | EXCLUDE_OUT_OF_SCOPE | `console.log('is_working_on:', data.is_working_on);` |
 | B.1 | `scripts/one-off/_lead-enrich-sd-fdbk-infra-cascade-trigger-overreach-001.mjs` | 296 | EXCLUDE_OUT_OF_SCOPE | `if (data.claiming_session_id !== SESSION) {` |
@@ -203,9 +228,16 @@ Multiple call sites decide whether a handoff gate should run by checking gate.co
 | C.4 | `scripts/modules/intensity-detector.js` | 106 | MIGRATE_FOLLOW_UP | `if (sd.sd_type !== 'refactor') {` |
 | C.2 | `scripts/modules/traceability-validation/sections/recommendation-adherence.js` | 88 | MIGRATE_FOLLOW_UP | `\|\| designAnalysis?.metadata?.skip_reason` |
 | C.2 | `scripts/modules/traceability-validation/sections/recommendation-adherence.js` | 89 | MIGRATE_FOLLOW_UP | `\|\| designAnalysis?.results?.metadata?.skip_reason;` |
+| C.1 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 11 | EXCLUDE_OUT_OF_SCOPE | `*   C - Gate-skip detection (gate.condition, context.skipGate, metadata.skip_*)` |
+| C.3 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 11 | EXCLUDE_OUT_OF_SCOPE | `*   C - Gate-skip detection (gate.condition, context.skipGate, metadata.skip_*)` |
+| C.1 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 66 | EXCLUDE_OUT_OF_SCOPE | `{ id: 'C.1', description: 'gate.condition or shouldSkip pattern', pattern: /\b(?:gate\.condition\|shouldSkipGa` |
+| C.3 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 68 | EXCLUDE_OUT_OF_SCOPE | `{ id: 'C.3', description: 'context.skipGate explicit injection', pattern: /\bcontext\.skipGate\b/ },` |
+| C.1 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 342 | EXCLUDE_OUT_OF_SCOPE | `description: 'Multiple call sites decide whether a handoff gate should run by checking gate.condition callback` |
+| C.3 | `scripts/one-off/_audit-dual-detection-clusters.mjs` | 342 | EXCLUDE_OUT_OF_SCOPE | `description: 'Multiple call sites decide whether a handoff gate should run by checking gate.condition callback` |
 
 ### Rationale per classification
 
+- **EXCLUDE_OUT_OF_SCOPE**: One-off diagnostic script; not part of production routing.
 - **MIGRATE**: HIGH-IMPACT call site on the production handoff/claim/routing path. In scope for this SD.
 - **MIGRATE_FOLLOW_UP**: Lower-impact consumer (enrichment script, utility CLI, server route). Files as follow-up SD/QF after this SD ships.
 

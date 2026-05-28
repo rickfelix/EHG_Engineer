@@ -53,14 +53,13 @@ export class ParentOrchestratorHandler {
     }
 
     // SD-LEO-FIX-PARENT-BLOCK-001: Robust parent detection
-    // Check multiple indicators:
-    // 1. metadata.is_parent === true (explicit flag)
-    // 2. sd_type === 'orchestrator' (type-based)
-    // 3. Has children in database (dynamic check)
-    const hasIsParentFlag = sd.metadata?.is_parent === true;
-    const isOrchestratorType = sd.sd_type === 'orchestrator';
+    // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-2: 3-signal OR-merge (metadata.is_parent,
+    // sd_type === 'orchestrator', DB-children) now lives inside the canonical helper.
+    const { isOrchestrator } = await import('../../lib/sd/type-detection.js');
+    const isParent = await isOrchestrator(sd, this.supabase);
 
-    // Get children (also used for dynamic parent detection)
+    // Get children for the surface payload (helper does its own child-lookup for detection;
+    // we still need the row data here for the rendered children[] array below).
     const { data: children } = await this.supabase
       .from('strategic_directives_v2')
       // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
@@ -68,10 +67,6 @@ export class ParentOrchestratorHandler {
       .eq('parent_sd_id', sd.id)
       // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
     .order('sd_key', { ascending: true });
-
-    // SD-LEO-FIX-PARENT-BLOCK-001: Accept as parent if any indicator is true
-    const hasChildren = children && children.length > 0;
-    const isParent = hasIsParentFlag || isOrchestratorType || hasChildren;
 
     if (!isParent) {
       return { isParent: false, sd, children: [] };

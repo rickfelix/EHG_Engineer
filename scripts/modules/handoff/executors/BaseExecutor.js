@@ -112,7 +112,10 @@ export class BaseExecutor {
       // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-094: Orchestrator SDs are exempt from worktree
       // isolation (check c) because they coordinate children and don't produce code directly.
       // They still must pass identity (a) and ownership (b) checks.
-      const isOrchestrator = sd?.sd_type === 'orchestrator';
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-2: use canonical helper
+      // (sync variant — hot-path mid-handoff, metadata-flag-only per RISK C1).
+      const { isOrchestratorSync } = await import('../../../../lib/sd/type-detection.js');
+      const isOrchestrator = isOrchestratorSync(sd);
       try {
         const { assertValidClaim, ClaimIdentityError } = await import('../../../../lib/claim-validity-gate.js');
         const sdKeyForGate = sd?.sd_key || sdId;

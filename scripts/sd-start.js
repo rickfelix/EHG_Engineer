@@ -1492,8 +1492,10 @@ async function main() {
 
     // QF-20260314-250: Child claim verification gate
     // Warn when orchestrator sd:start resolves to a child's worktree
+    // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-2: use canonical helper.
     const wtBranch = worktreeInfo.worktree.branch || '';
-    if (sd.sd_type === 'orchestrator' && wtBranch && !wtBranch.includes(effectiveId)) {
+    const { isOrchestratorSync } = await import('../lib/sd/type-detection.js');
+    if (isOrchestratorSync(sd) && wtBranch && !wtBranch.includes(effectiveId)) {
       const childMatch = wtBranch.match(/SD-[A-Z0-9-]+/);
       if (childMatch) {
         console.log(`\n${colors.yellow}⚠️  CHILD CLAIM VERIFICATION REQUIRED${colors.reset}`);
