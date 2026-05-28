@@ -60,6 +60,7 @@ import {
 } from '../lib/fleet-lock-hash.mjs';
 // SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: cross-check scope vs target_application
 import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-validation/target-application-crosscheck.js';
+import { shouldShowVenturePipelinePointer, VENTURE_PIPELINE_POINTER } from '../lib/leo/venture-pipeline-pointer.js';
 
 dotenv.config();
 
@@ -1691,6 +1692,12 @@ async function main() {
   // 6.5. Phase-appropriate context file (SD-LEO-INFRA-RESUME-INTEGRITY-HANDOFF-001)
   const contextFile = getPhaseContextFile(sd.current_phase);
   console.log(`\n${colors.bold}Load context:${colors.reset} ${colors.cyan}${contextFile}${colors.reset}`);
+
+  // SD-LEO-INFRA-VENTURE-LIFECYCLE-PIPELINE-001 (FR-4): surface the venture pipeline
+  // pointer for orchestrator/venture SDs so LEAD sees the canonical sequence + circuit-breaker rule.
+  if (shouldShowVenturePipelinePointer(sd)) {
+    console.log(`\n${colors.bold}${colors.cyan}${VENTURE_PIPELINE_POINTER}${colors.reset}`);
+  }
 
   // 6.7. Handoff count warning (SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001)
   // Warns when claiming an SD with extensive prior work — possible compacted session
