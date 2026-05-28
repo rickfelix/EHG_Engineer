@@ -448,7 +448,11 @@ export class HandoffRecorder {
         wait: true,
         waiting_gates: waitingGates,
         wait_reasons: waitReasons,
-        wait_protocol: 'SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001'
+        wait_protocol: 'SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001',
+        // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5: persist wait-loop accounting
+        // so the NEXT attempt's max-wait ceiling can detect a perpetually-stuck gate.
+        wait_attempts: Number(result.waitMetadata?.wait_attempts) || 0,
+        first_wait_at: result.waitMetadata?.first_wait_at || new Date().toISOString()
       },
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
