@@ -1,0 +1,132 @@
+{
+  "dimensions": [
+    {
+      "id": "A01",
+      "name": "stateless_shared_services",
+      "score": 100,
+      "reasoning": "Passed (4/4): VentureContextManager exports createVentureContextManager; No singleton pattern in domain services; Service index re-exports multiple service modules; Stage templates are stateless functions (no class state).",
+      "gaps": []
+    },
+    {
+      "id": "A02",
+      "name": "database_single_source_of_truth",
+      "score": 100,
+      "reasoning": "Passed (5/5): Supabase client used throughout the codebase; Database migrations directory has migration files; Artifact versioning exports createVersionedArtifact; No file-based state for venture data (no JSON flat-file state); Strategic directives stored in database table.",
+      "gaps": []
+    },
+    {
+      "id": "A03",
+      "name": "eva_hub_and_orchestration_model",
+      "score": 100,
+      "reasoning": "Passed (5/5): EVA orchestrator exports processStage; Concurrent venture orchestrator exports class; Stage-zero orchestrator exports executeStageZero; EVA orchestrator routes to stages without embedded domain logic; Orchestrator state machine exports validateStateTransition.",
+      "gaps": []
+    },
+    {
+      "id": "A04",
+      "name": "event_rounds_priority_queue_work_routing",
+      "score": 100,
+      "reasoning": "Passed (4/4): Rounds scheduler exports registerRound; Event bus exports initializeEventBus; Urgency scorer exports calculateUrgencyScore for prioritization; Run-rounds CLI executes registered rounds.",
+      "gaps": []
+    },
+    {
+      "id": "A05",
+      "name": "event_bus_integration",
+      "score": 100,
+      "reasoning": "Passed (4/4): Handler registry exports registerHandler; Event router exports processEvent; Multiple event handler implementations exist; Event handlers cover lifecycle events (stage-completed, gate-evaluated).",
+      "gaps": []
+    },
+    {
+      "id": "A06",
+      "name": "lifecycle_stage_orchestration_and_artifact_versioning",
+      "score": 100,
+      "reasoning": "Passed (4/4): At least 25 stage template files exist; Artifact versioning exports createVersionedArtifact; Artifact version chain exports createChain; Venture state machine exports VentureStateMachine class.",
+      "gaps": []
+    },
+    {
+      "id": "A07",
+      "name": "chairman_governance_gatekeeping",
+      "score": 100,
+      "reasoning": "Passed (5/5): Chairman decision watcher polls for pending decisions; No timeout enforcement on chairman decisions; Chairman override tracker provides absolute authority; Chairman governance panels module exists; DFE escalation gate routes decisions to chairman_decisions table.",
+      "gaps": []
+    },
+    {
+      "id": "V01",
+      "name": "automation_by_default",
+      "score": 100,
+      "reasoning": "Passed (4/4): Urgency scorer exports calculateUrgencyScore; Stage execution engine exports executeStage; Stage templates have deterministic execute functions; Auto-proceed state persisted to file or DB.",
+      "gaps": []
+    },
+    {
+      "id": "V02",
+      "name": "chairman_governance_model",
+      "score": 100,
+      "reasoning": "Passed (5/5): Chairman decision watcher exists and polls for decisions; Chairman preference store manages thresholds; Chairman override tracker at stage entry; No auto-approval or timeout bypass in chairman modules; Chairman backend modules exist (>=5 chairman-*.js).",
+      "gaps": []
+    },
+    {
+      "id": "V03",
+      "name": "analysisstep_active_intelligence",
+      "score": 100,
+      "reasoning": "Passed (4/4): Analysis steps index registers stage analysis modules; At least 20 individual stage analysis files exist; Analysis steps produce structured output (return object/JSON); Analysis steps reference prior stage data (compounding).",
+      "gaps": []
+    },
+    {
+      "id": "V04",
+      "name": "decision_filter_engine_escalation",
+      "score": 100,
+      "reasoning": "Passed (4/4): DFE exports evaluateDecision function; DFE has multiple trigger types defined; DFE context adapter exports transformForPresentation; Reality gates export evaluateRealityGate.",
+      "gaps": []
+    },
+    {
+      "id": "V05",
+      "name": "cross_stage_data_contracts",
+      "score": 100,
+      "reasoning": "Passed (4/4): Stage contracts module exports getContract; YAML contract loader exports loadContractsFromYaml; Contracts define consumes/produces per stage; Output schema extractor exports extractOutputSchema.",
+      "gaps": []
+    },
+    {
+      "id": "V06",
+      "name": "cli_authoritative_workflow",
+      "score": 100,
+      "reasoning": "Passed (4/4): run-stage.js imports and invokes stage execution engine; run-rounds.js imports and invokes rounds scheduler; CLI commands registered in package.json scripts; Stage execution engine exports executeStage.",
+      "gaps": []
+    },
+    {
+      "id": "V07",
+      "name": "unlimited_compute_posture",
+      "score": 100,
+      "reasoning": "Passed (5/5): Token tracker exports recordTokenUsage; DFE cost_threshold trigger exists for awareness; Compute posture scorer exports scoreComputePosture; No hard budget enforcement blocking LLM calls; Governance compute posture exports getComputePosture.",
+      "gaps": []
+    },
+    {
+      "id": "V08",
+      "name": "chairman_dashboard_scope",
+      "score": 100,
+      "reasoning": "Passed (4/4): Scope validation enforcer exports validateScope; Never-autonomous registry exports checkAutonomousAllowed; V08 scope auth scorer produces deterministic score; Never-autonomous registry exports enforceAutonomousCheck.",
+      "gaps": []
+    },
+    {
+      "id": "V09",
+      "name": "strategic_governance_cascade",
+      "score": 100,
+      "reasoning": "Passed (5/5): Cascade validator exports validateCascade; aegis_constitutions table has records; eva_vision_documents and eva_architecture_plans have records; Cascade validation produces blocking failures on violation; Cascade invalidation engine exports getStaleDocuments.",
+      "gaps": []
+    },
+    {
+      "id": "V10",
+      "name": "okr_driven_prioritization",
+      "score": 100,
+      "reasoning": "Passed (4/4): OKR monthly handler exports runOkrMonthlySnapshot; OKR monthly generator exports runOkrMonthlyGeneration; OKR hard tier integrated into urgency scoring; OKR stale archival exports archiveStaleOkrs.",
+      "gaps": []
+    },
+    {
+      "id": "V11",
+      "name": "governance_guardrail_enforcement",
+      "score": 100,
+      "reasoning": "Passed (4/4): Guardrail validator exports validateGuardrails; Guardrail registry defines named guardrails; Guardrail intelligence analyzer exports analyzeGuardrailResults; Guardrail registry exports check enforcement function.",
+      "gaps": []
+    }
+  ],
+  "total_score": 100,
+  "summary": "Evidence-based scoring: 18/18 dimensions pass (>= 93). Total: 100/100."
+}

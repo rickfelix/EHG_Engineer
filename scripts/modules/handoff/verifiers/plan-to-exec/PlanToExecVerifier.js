@@ -81,7 +81,11 @@ export class PlanToExecVerifier {
       }
 
       // PAT-PARENT-DET: Detect parent orchestrator SDs
-      const isParentOrchestrator = sd.metadata?.is_parent === true;
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 Phase 5: use canonical helper.
+      // Async variant OR-merges metadata flag with DB children query — strictly broader
+      // than the prior metadata-only check; catches parents with children-in-DB but no flag.
+      const { isParentOrchestrator: detectParentOrchestrator } = await import('../../../../../lib/handoff/parent-detection.js');
+      const isParentOrchestrator = await detectParentOrchestrator(sd, this.supabase);
       if (isParentOrchestrator) {
         console.log('\n   🎯 PARENT ORCHESTRATOR DETECTED');
         console.log('      Skipping implementation-specific validation (user stories, workflow review)');

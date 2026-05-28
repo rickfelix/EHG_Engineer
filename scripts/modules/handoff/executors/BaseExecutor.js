@@ -112,7 +112,30 @@ export class BaseExecutor {
       // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-094: Orchestrator SDs are exempt from worktree
       // isolation (check c) because they coordinate children and don't produce code directly.
       // They still must pass identity (a) and ownership (b) checks.
-      const isOrchestrator = sd?.sd_type === 'orchestrator';
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-2: use canonical helper
+      // (sync variant — hot-path mid-handoff, metadata-flag-only per RISK C1).
+      const { isOrchestratorSync } = await import('../../../../lib/sd/type-detection.js');
+      const isOrchestrator = isOrchestratorSync(sd);
+
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-3: pre-handoff claim diagnostic.
+      // Reads the canonical claim holder so handoff failure logs include holder liveness
+      // status (alive_source_side vs active vs alive_no_heartbeat). This is informational —
+      // claim-validity-gate.js below does the authoritative ownership check.
+      const { getClaimHolder } = await import('../../../../lib/claim/ownership-detection.js');
+      const claimHolder = await getClaimHolder(sd?.sd_key, this.supabase).catch(() => null);
+      if (claimHolder) {
+        console.log(`   [claim-diag] sd_key=${sd?.sd_key} holder=${claimHolder.session_id?.slice?.(0, 8) || '?'} status=${claimHolder.holding_status}`);
+      }
+
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-4: gate-skip diagnostic.
+      // Records whether this SD would be a candidate for the documentation-only fast-path
+      // (skips heavy code-validation gates). Diagnostic only — actual gate routing still
+      // owned by the per-handoff gate set.
+      const { shouldSkipForType } = await import('../../../../lib/handoff/gate-skip-detection.js');
+      const codeValidationSkip = shouldSkipForType(sd, ['feature', 'bugfix', 'security', 'enhancement', 'refactor', 'performance'], { gateName: 'BaseExecutor.codeValidationCandidate' });
+      if (codeValidationSkip.skip) {
+        console.log(`   [skip-diag] ${codeValidationSkip.reason}`);
+      }
       try {
         const { assertValidClaim, ClaimIdentityError } = await import('../../../../lib/claim-validity-gate.js');
         const sdKeyForGate = sd?.sd_key || sdId;

@@ -257,8 +257,11 @@ async function detectParentChildHierarchy(sd) {
   console.log('='.repeat(60));
 
   // Check multiple signals for parent status - not just a boolean flag
+  // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 Phase 5: explicitFlag delegates to canonical
+  // helper (sync variant — surrounding multi-signal collection is intentionally preserved).
+  const { isParentOrchestratorSync } = await import('../lib/handoff/parent-detection.js');
   const parentSignals = {
-    explicitFlag: sd.metadata?.is_parent === true,
+    explicitFlag: isParentOrchestratorSync(sd),
     hasChildDefinitions: Array.isArray(sd.metadata?.child_sds) && sd.metadata.child_sds.length > 0,
     hasChildCount: (sd.metadata?.child_count || 0) > 0,
     hasPhases: Array.isArray(sd.metadata?.phases) && sd.metadata.phases.length > 1,

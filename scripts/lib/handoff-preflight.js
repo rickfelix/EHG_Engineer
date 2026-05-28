@@ -160,7 +160,10 @@ async function validateSDHandoffState(sdId, targetPhase, _options = {}) {
     };
 
     // Check for modified workflow SD types
-    const isParentOrchestrator = sd.metadata?.is_parent === true;
+    // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 Phase 5: sync helper preserves
+    // hot-path read-after-write transactional consistency (per LEAD RISK C1).
+    const { isParentOrchestratorSync } = await import('../../lib/handoff/parent-detection.js');
+    const isParentOrchestrator = isParentOrchestratorSync(sd);
     const sdType = sd.sd_type?.toLowerCase() || 'feature';
 
     let skipHandoffs = [];
@@ -291,7 +294,9 @@ async function verifyCompleteHandoffChain(sdId) {
     }
 
     // Check for modified workflow
-    const isParentOrchestrator = sd.metadata?.is_parent === true;
+    // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 Phase 5: sync helper (hot-path).
+    const { isParentOrchestratorSync } = await import('../../lib/handoff/parent-detection.js');
+    const isParentOrchestrator = isParentOrchestratorSync(sd);
     const sdType = sd.sd_type?.toLowerCase() || 'feature';
 
     let expectedChain = [...result.chain.expected];
