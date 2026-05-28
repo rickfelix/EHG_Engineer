@@ -44,6 +44,16 @@ let frontendVentureId;
 beforeAll(async () => {
   supabase = getSupabaseClient();
 
+  // Self-clean: remove any parity-test ventures leaked by prior runs that were killed
+  // before afterAll ran (mirrors the afterAll teardown, scoped by name prefix).
+  const { data: stale } = await supabase.from('ventures').select('id').like('name', 'parity-test-%');
+  const staleIds = (stale ?? []).map((v) => v.id);
+  if (staleIds.length > 0) {
+    await supabase.from('chairman_decisions').delete().in('venture_id', staleIds);
+    await supabase.from('venture_analysis_artifacts').delete().in('venture_id', staleIds);
+    await supabase.from('ventures').delete().in('id', staleIds);
+  }
+
   // Seed CLI-path venture (mirrors chairman-review.js insert pattern)
   const { data: cliVenture, error: cliErr } = await supabase
     .from('ventures')
