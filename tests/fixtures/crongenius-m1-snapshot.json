@@ -1,0 +1,801 @@
+{
+  "captured_at": "2026-05-28T01:58:04.406Z",
+  "sd_source": "SD-LEO-INFRA-AUTOMATE-STAGE-CASCADE-001",
+  "rationale": "COND-1 baseline: FR-A refactor must preserve byte-identical orchestrator+children structure for same inputs",
+  "vision": {
+    "vision_key": "VISION-CRONGENIUS-API-L2-001",
+    "level": "L2",
+    "status": "active",
+    "chairman_approved": true,
+    "version": 1,
+    "extracted_dimensions": [
+      {
+        "name": "primitive_as_api_playbook",
+        "weight": 0.35,
+        "description": "Measures whether the approach validates the core thesis of turning a commodity primitive into a high-margin, API-first surface, capturing this learning regardless of commercial outcome.",
+        "source_section": "Strategic Framing — Learning Bet, Not P&L Bet"
+      },
+      {
+        "name": "lean_mvp_execution",
+        "weight": 0.25,
+        "description": "Measures adherence to the de-risked M1 scope and sequential M2 rollout, prioritizing cheap hypothesis testing and learning over premature scaling.",
+        "source_section": "M1 — Smallest Viable MVP"
+      },
+      {
+        "name": "market_validation_gate",
+        "weight": 0.2,
+        "description": "Measures commitment to the hard, data-driven 'kill/scale' decision gate with pre-committed numeric criteria before committing M2 resources.",
+        "source_section": "Hard Market-Validation Gate (between M1 and M2)"
+      },
+      {
+        "name": "architectural_defensibility",
+        "weight": 0.1,
+        "description": "Measures the implementation of key architectural invariants, like model-agnosticism and the deterministic validator, to build a defensible moat beyond a simple LLM wrapper.",
+        "source_section": "Architectural Invariants"
+      },
+      {
+        "name": "brand_risk_mitigation",
+        "weight": 0.1,
+        "description": "Measures the enforcement of the brand firewall and other production-safety invariants to protect the parent company and end-users from reputational and operational risk.",
+        "source_section": "Architectural Invariants"
+      }
+    ],
+    "sections": {
+      "personas": "Three customer personas surfaced by Stage-10 identity_persona_brand artifact. 1. Pragmatic Developer Pete — IDE/CLI-native developer; values clear API documentation; pain is constant Googling of cron syntax breaking dev-flow, plus production incidents from scheduling errors that web cron builders cannot validate against scripts/CI. Motivation: efficiency, code quality, ship reliably. 2. DevOps Champion Diana — manages CI/CD pipelines across services; pain is inconsistent cron implementations causing pipeline failures; values standardization and reliability. 3. SRE Lead Sam — pain is config errors causing production incidents; motivation is programmatic elimination of error classes; values reliable dependencies. All three operate in production-adjacent contexts where a wrong cron expression is a real outage risk, not a cosmetic concern.",
+      "out_of_scope": "Explicit non-goals for this L2 vision. 1. Hitting Stage-13 December 2023 M1 date as written (operationally dishonest; re-scoped to 8-12 weeks from L2 approval). 2. Shipping fine-tuned NLP model at M1 (deferred until M1 traffic produces training data we do not currently have). 3. Shipping all 4 distribution surfaces (Python SDK, TypeScript SDK, VS Code extension, GitHub Action) in parallel at M2 — CTO + COO forbid parallelism; must be sequential one-at-a-time with 2-week harden window between each. 4. Paid tiers at M1 (paid pricing follows market-validation signal, not precedes it). 5. Public EHG attribution before 12-month / zero-P0 milestone (brand firewall). 6. Claiming 'more reliable than generalist LLMs' without measurement (moat claim must be measurable from M1).",
+      "evolution_plan": "Phase M1 (8-12 weeks from L2 approval): Smallest viable MVP — ONE endpoint (NL-to-validated-cron, standard flavor only), GPT-4o-mini or Claude Haiku inference (NOT fine-tuned), deterministic cron-syntax validator post-LLM, auth + free tier only, public OpenAPI + curl examples, request audit log, --dry-run flag, confidence score on every output, hard liability disclaimer, free-tier abuse guards (hCaptcha, IP+email throttle, anomaly detection). Hard Market-Validation Gate: kill/scale evaluation against pre-committed numeric criteria. Chairman re-approval required to unlock M2. Phase M2 (only on M1 validation-gate pass): expand distribution surfaces ONE AT A TIME (CTO+COO consensus). Specific ordering deferred to PRD-time decision informed by M1 telemetry; L2 invariant is sequential. Candidates: GitHub Action, Python SDK, TypeScript SDK, VS Code extension. Each ships, hardens for 2 weeks, then next begins. Phase M3 (TBD): Fine-tuned NLP model self-hosted (gated on accumulated training data + measured cost advantage vs generalist LLMs); signed cron expressions with attestation (moat-shift candidate); multi-region clock-guarantee infrastructure.",
+      "success_metrics": "Mandatory quarterly KPIs that the orchestrator SD-tree MUST surface as queryable DB views (CFO structural ask — Claude Code economics framing). 1. token_cost_per_shipped_feature — sum of LLM API spend tagged to each child SD session_id, rolled up to feature. 2. chairman_hours_per_shipped_feature — derived from claude_sessions active time on CronGenius-targeted SDs. 3. monthly_inference_cost_per_1k_requests — from the API gateway / model serving layer. 4. ltv_cac_ratio_trend — quarterly snapshot, alarm if it stays <2x past Q4. Current modeled 1.6x is below industry-norm 3x+. 5. free_tier_abuse_rate — percentage of free-tier requests from non-converting IPs/keys (early-warning on margin-crush). Trigger: if Q1-Q2 show inference cost trending past $0.005/req at scale OR LTV:CAC stuck at 1.6x, L2 vision triggers chairman re-deliberation.",
+      "success_criteria": "1. M1-to-M2 market-validation gate: 50 paying $29 accounts AND >=30% week-4 retention OR >=3 inbound integration requests from agent frameworks (LangChain, Claude tools, etc.). Chairman re-approval required to unlock M2. 2. Validator accuracy >=99.5% on a deterministic cron-syntax benchmark (the validator, not the LLM, owns this number — cron is a regular language, easily parsed). 3. Brand-firewall preserved for 12 months with zero P0 customer incidents before any public EHG attribution. 4. Playbook captured: at M2 entry OR at kill, the 'primitive-as-API' playbook is documented as a reusable EHG portfolio asset regardless of CronGenius commercial outcome. 5. All requests logged for >=90 days for customer forensics + training-data accumulation.",
+      "ui_ux_wireframes": "M1 has NO end-user UI surface beyond the developer portal — CronGenius is an API-first product. The developer portal provides: sign-up, API key management (with prefixed/scoped/rotatable key creation flow), usage dashboard, public OpenAPI specification page, curl/HTTP examples. UI is intentionally minimal at M1 (Stripe-style developer portal aesthetic — precise, professional, 'Sage' archetype voice consistent with brand). M2 distribution-surface decisions (VS Code extension UI, GitHub Action workflow YAML examples) will require dedicated wireframes per surface during PRD; current L2 vision deliberately defers those to PRD-time based on M1 market signal.",
+      "executive_summary": "CronGenius is EHG's first venture L2 vision and sets precedent for every subsequent venture launch. Chairman confirmed Direction A — 'Cron as an Integrated Primitive' — on 2026-05-27 after artifact-derived synthesis of 48 EVA-pipeline stage outputs. The board (CSO + CFO converging) frames this venture as a strategic learning bet: revenue is the experimental signal, not the goal. The defensible insight is not 'cron scheduling' but rather that commodity primitives (cron, regex, JSON-path, IaC snippets) become higher-margin when reshaped as API-first, agent-callable, integration-native surfaces. CronGenius is the cheapest possible test of that thesis at production rigor. Stage-8 BMC projected -278.9% 3yr ROI and PSF=51/100 are real signals informing this deliberate scope choice.",
+      "problem_statement": "Developers, DevOps engineers, and SREs frequently struggle to write correct cron expressions, causing scheduling errors that fail production jobs. Crontab.guru dominates as a free web UI; open-source libraries handle cron-to-English; none provide bidirectional natural-language to cron and cron to natural-language as an API-callable, agent-integrable primitive that lives inside code, CI/CD pipelines, and Infrastructure-as-Code rather than as a manual web tool requiring context-switching. Pragmatic Developer Pete constantly Googles cron syntax (breaking IDE flow, causing production incidents). DevOps Champion Diana battles inconsistent cron implementations across services causing pipeline failures. SRE Lead Sam wants programmatic elimination of entire config-error classes.",
+      "technical_approach": "Architectural invariants required by the L2 vision (board-derived, CTO load-bearing). 1. Model-agnostic CronInferenceProvider abstraction layer — pluggable inference with implementations for fine-tuned-internal, openai, anthropic, bedrock behind a router that A/Bs by tier or falls back on quality regression. The moat thesis cannot be a single point of failure. 2. Deterministic post-model grammar validator (CISO+CTO load-bearing) — cron is a regular language; every model output is untrusted text until the parser reduces it to a typed CronExpression struct. Output not matching grammar is rejected with structured error. 3. Per-key scoping + prefixed keys (CISO MVP-blocking) — crongen_live_ format for secret-scanning partner-program detection; scoped at creation; rotatable with overlapping validity windows; revocable in <60s. 4. Free-tier abuse guards at MVP (CISO+CRO) — hCaptcha, email-domain throttle, IP signup rate limit, prompt-embedding anomaly detection. Not deferred. 5. Brand firewall (CRO) — separate brand, no EHG attribution publicly until 12mo zero-P0. 6. Marketplace isolation (CISO) — marketplace-issued keys are a separate keyspace, revocable independently.",
+      "key_decision_points": "Six key decision points the L2 vision binds for downstream PRD/EXEC phases. DP1 (M1 scope): single endpoint, no fine-tuned model, no paid tiers, no SDKs. Confirmed by board (CTO+CSO+COO converging). Decision is FIXED at L2; PRD cannot re-open without chairman re-deliberation. DP2 (Hard market-validation gate between M1 and M2): 50 paid + 30% W4 retention OR 3 inbound agent-framework integrations. Numeric, pre-committed. Decision is FIXED. DP3 (M2 distribution-surface sequencing): SEQUENTIAL not parallel is FIXED at L2. Specific ordering (GitHub Action vs Python SDK first) deferred to PRD informed by M1 telemetry — chairman + PRD decide. DP4 (Inference architecture): model-agnostic CronInferenceProvider abstraction is FIXED at L2 (CTO load-bearing). Specific M1 default (GPT-4o-mini vs Claude Haiku) deferred to PRD benchmark. DP5 (Brand firewall): no public EHG attribution for 12 months / zero P0 incidents. FIXED at L2 (CRO unique). DP6 (Hiring trigger): first hire unblocked at 1000 paying OR 100 Business-tier OR PSF<60 after 6mo. FIXED at L2 (COO non-negotiable).",
+      "integration_patterns": "Integration pattern 1 (M1 contract): pure HTTP/JSON REST. Request: { 'natural_language': string, 'flavor': 'standard'|'aws', 'dry_run': boolean }. Response: { 'cron_expression': string, 'confidence_score': number 0-1, 'validator_verdict': 'pass'|'reject', 'request_id': uuid }. Authentication: Bearer + prefixed key (crongen_live_...). This contract is the integration spine for ALL future distribution surfaces. Integration pattern 2 (M2 distribution surfaces - sequential): GitHub Action wraps the M1 HTTP contract; Python SDK and TypeScript SDK wrap the same; VS Code extension wraps the SDK. Each shares the same auth + contract + audit-log integration. NO surface re-implements the inference or validator logic. Integration pattern 3 (Marketplace isolation - CISO): if/when CronGenius integrates with Postman/RapidAPI/similar marketplaces, marketplace-issued keys are a separate keyspace (prefix crongen_mkt_...), revocable independently, with audit-log entries that distinguish marketplace-origin traffic. Customer data plane and marketplace data plane do NOT share key namespace. Integration pattern 4 (Agent framework integration): native OpenAI function-calling schema + Anthropic tool-use schema published as canonical artifacts in the OpenAPI spec, enabling agents (LangChain, Claude tool-use, Bedrock agents) to call CronGenius without custom adapter code. This is the 'agent-first' moat in concrete contract form.",
+      "competitive_landscape": "Competitive density: HIGH per Stage-4 truth_competitive_analysis. Average market price $20/mo; CronGenius positioned premium at $29 per Stage-7 pricing model. Three primary competitors identified. 1. Crontab.guru — DE-FACTO standard, dominant brand recognition, FREE web UI, large existing user base. Critical weaknesses: no API for programmatic access, no NL-to-cron generation (only cron-to-English), manual workflow only — cannot be integrated into scripts/CI/CD pipelines. This is CronGenius's primary differentiation lever. 2. Open-source libraries (cron-parser et al.) — handle cron-to-English in code but DO NOT do NL-to-cron generation; require language-specific dependency, not API-callable from arbitrary contexts. 3. Cronitor — bundles cron features into a DevOps observability platform (potential adjacent expansion path for CronGenius into Direction B 'Cron Knowledge Layer' if M1 validates). Pricing models in space: freemium, usage-based, subscription. Bidirectional NL-cron + API-first + agent-integrable is the defensible white space.",
+      "information_architecture": "Component topology for M1: API gateway (Cloudflare or equivalent for TLS/rate-limit/abuse-signal) -> Auth service (prefixed crongen_live_ keys with per-scope rotation, revocation in <60s) -> CronInferenceProvider abstraction layer (pluggable LLM backends behind a single interface) -> Deterministic cron-grammar validator (single source of truth for cron syntax across all surfaces) -> Request audit log (90-day retention of NL_input, cron_output, model_version, validator_verdict, confidence_score, dry_run_flag). Data architecture: requests table partitioned by month for audit-log retention; api_keys table with prefixed-key indexes for fast secret-scanning revocation; abuse_signals table fed by free-tier guards (hCaptcha verdicts, IP/email throttle hits, embedding-anomaly clusters). Observability architecture: 5 quarterly KPIs (token_cost_per_shipped_feature, chairman_hours_per_shipped_feature, monthly_inference_cost_per_1k_requests, ltv_cac_ratio_trend, free_tier_abuse_rate) instrumented from day-1 of M1 as Supabase views queryable from the orchestrator SD-tree dashboard. Single source of truth: claude_sessions table for chairman-hours; per-SD session_id tags for token-cost; API gateway emits inference-cost telemetry."
+    },
+    "quality_checked": true
+  },
+  "archplan": {
+    "plan_key": "ARCH-CRONGENIUS-001",
+    "vision_key": "VISION-CRONGENIUS-API-L2-001",
+    "status": "active",
+    "chairman_approved": true,
+    "version": 2,
+    "extracted_dimensions": [
+      {
+        "name": "model_agnostic_interface",
+        "weight": 0.2,
+        "description": "Measures if components consuming inference services are decoupled from specific LLM provider SDKs via the CronInferenceProvider abstraction.",
+        "source_section": "Cross-cutting invariants"
+      },
+      {
+        "name": "centralized_cron_validation",
+        "weight": 0.2,
+        "description": "Measures if a single, deterministic cron-syntax validator is the sole source of truth for grammar checks across all components.",
+        "source_section": "Cross-cutting invariants"
+      },
+      {
+        "name": "scoped_api_key_security",
+        "weight": 0.15,
+        "description": "Measures the implementation of prefixed, scoped, and rotatable API keys with a sub-60-second revocation propagation.",
+        "source_section": "Components (M1) / Auth service"
+      },
+      {
+        "name": "structured_audit_logging",
+        "weight": 0.15,
+        "description": "Measures if all API requests are logged to the append-only request_audit_log with the specified schema and retention policy.",
+        "source_section": "Components (M1) / Request audit log"
+      },
+      {
+        "name": "multi_layered_abuse_prevention",
+        "weight": 0.15,
+        "description": "Measures the presence of multiple, distinct free-tier abuse guards like hCaptcha, rate limiting, and anomaly detection.",
+        "source_section": "Components (M1) / Free-tier abuse guard"
+      },
+      {
+        "name": "day_one_observability",
+        "weight": 0.1,
+        "description": "Measures if the five required KPIs are exposed via a queryable Supabase view from the initial M1 launch.",
+        "source_section": "Cross-cutting invariants / Observability invariant"
+      },
+      {
+        "name": "minimal_api_surface",
+        "weight": 0.05,
+        "description": "Measures adherence to the strictly defined M1 API surface, avoiding scope creep from M2 components like SDKs or integrations.",
+        "source_section": "API Surface (M1)"
+      }
+    ],
+    "sections": {
+      "data_layer": "- **`request_audit_log` table** — append-only, 90-day retention, indexed on (request_id, timestamp)\n  - columns: timestamp, request_id, api_key_id (FK), NL_input, cron_output, model_version, validator_verdict, confidence_score, dry_run_flag, abuse_signals_jsonb\n- **`api_keys` table** — prefixed/scoped/rotatable\n  - columns: key_id, key_prefix, hashed_secret, owner_email, scopes_array, created_at, revoked_at, last_used_at\n- **`kpi_view` (Supabase view)** — exposes 5 chairman-required KPIs: token_cost, chairman_hours, inference_cost/1k, LTV:CAC, abuse_rate",
+      "extracted_at": "2026-05-27T17:53:37.536Z",
+      "api_surface_m1": "- **POST /v1/cron** — single endpoint. Request body: `{ \"input\": \"<NL or cron>\", \"dry_run\": bool, \"direction\": \"nl_to_cron\"|\"cron_to_nl\" }`. Response: `{ \"output\": \"<cron or NL>\", \"confidence\": float, \"validator_verdict\": \"valid\"|\"invalid\"|\"warning\", \"disclaimer\": \"<text>\", \"request_id\": \"<uuid>\" }`\n- **POST /v1/auth/keys** — portal-only, issue new API key (returns once, prefixed)\n- **DELETE /v1/auth/keys/{key_id}** — portal-only, revoke key (propagation <60s)",
+      "risk_mitigation": "- **Model-cost runaway**: rate limits + free-tier abuse guard + per-key spend cap\n- **Hallucinated cron expressions**: deterministic validator gate refuses invalid output before returning\n- **API key compromise**: prefixed keys enable abuse detection in logs; revocation propagates <60s via Cloudflare KV\n- **Distribution-surface scope creep**: hard M1→M2 kill-criteria gate (50 paid + 30% W4 retention OR 3 inbound agent-framework integrations)",
+      "testing_strategy": "- **Per-phase**: unit tests for each component + integration test for the cross-component flow\n- **Cron-syntax validator**: golden corpus of 200+ cron flavors (Unix, Quartz, AWS EventBridge, K8s)\n- **Abuse guard**: synthetic abuse traces (key-leak, prompt-injection, signup-flood)\n- **End-to-end**: 5-KPI dashboard renders from real M1 traffic (smoke test against staging)",
+      "extraction_source": "content_parse",
+      "architectural_plan": "### Components (M1)\n- **API gateway** (Cloudflare or equivalent) — TLS, rate limit, abuse signal collection\n- **Auth service** — API key issuance, prefixed/scoped/rotatable keys, revocation propagation <60s\n- **`CronInferenceProvider` abstraction layer** — pluggable inference (M1 default: GPT-4o-mini or Claude Haiku; M2+: fine-tuned-internal candidate)\n- **Cron-syntax validator** — deterministic regular-grammar parser, multi-flavor; gates both `NL→cron` output and `cron→NL` input\n- **Request audit log** — 90-day retention of `(timestamp, request_id, NL_input, cron_output, model_version, validator_verdict, confidence_score, dry_run_flag)` for customer forensics + training data accumulation\n- **Free-tier abuse guard** — hCaptcha + email-domain throttle + IP signup rate limit + prompt-embedding anomaly detection\n- **Self-service developer portal** — sign-up, key management, usage dashboard, public OpenAPI spec, curl examples\n\n### Components deferred to M2 (only on M1-validation-gate pass)\n- SDK(s) (TypeScript and/or Python, ordered by M1 telemetry)\n- GitHub Action\n- VS Code extension\n- Paid tier billing + Business-tier SLA infrastructure\n- Marketplace integrations (Postman/RapidAPI) with isolated keyspace\n\n### Components deferred to M3 / TBD\n- Fine-tuned NLP model self-hosted (gated on accumulated training data + measured cost advantage vs generalist LLMs)\n- Multi-region clock-guarantee infrastructure\n- Signed cron expressions with attestation (moat-shift candidate per CRO)\n\n### Cross-cutting invariants\n- **Single source of truth for cron grammar**: the deterministic validator is shared across all components and all distribution surfaces\n- **Model-agnostic interface**: no component above the inference layer may import a specific LLM provider's SDK\n- **Observability invariant**: all 5 KPIs above are wired from day one of M1 to a Supabase view queryable from the orchestrator SD-tree dashboard\n- **Liability disclaimer + `--dry-run` + confidence score** on every output (CISO/CRO non-deferrable)\n- **MVP-blocking security**: post-model grammar validator + prefixed keys + free-tier abuse guards at MVP (not deferred)\n- **Brand firewall**: no public EHG attribution for 12mo / zero-P0 (CRO unique)",
+      "implementation_phases": [
+        {
+          "title": "Core inference primitive (single endpoint + validator + audit log)",
+          "number": 1,
+          "description": "- **Title**: CronGenius M1 Phase 1 — Core inference primitive",
+          "deliverables": [],
+          "estimate_loc": null,
+          "child_designation": "child",
+          "covered_by_sd_key": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001-A"
+        },
+        {
+          "title": "Authentication and abuse prevention",
+          "number": 2,
+          "description": "- **Title**: CronGenius M1 Phase 2 — Auth + abuse prevention",
+          "deliverables": [],
+          "estimate_loc": null,
+          "child_designation": "child",
+          "covered_by_sd_key": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001-B"
+        },
+        {
+          "title": "Observability KPIs and minimal self-service portal",
+          "number": 3,
+          "description": "- **Title**: CronGenius M1 Phase 3 — Observability + self-service portal",
+          "deliverables": [],
+          "estimate_loc": null,
+          "child_designation": "child",
+          "covered_by_sd_key": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001-C"
+        }
+      ],
+      "legacy_deprecation_plan": "- **Pre-existing CronGenius app** (Vite landing page at Replit URL) — Phase 1 introduces the API surface alongside; the landing page remains as marketing. Phase 3's portal extends the existing app's route tree.",
+      "route_and_component_structure": "- **API routes** (Cloudflare Workers): `/v1/cron`, `/v1/auth/keys`, `/v1/auth/keys/{id}` (DELETE)\n- **Portal routes** (existing Vite app, added in Phase 3): `/portal/signup`, `/portal/keys`, `/portal/usage`, `/portal/docs`\n\n---",
+      "stack_and_repository_decisions": "- **Repository**: `crongenius` (Replit deploy: `8e43038b-...janeway.replit.dev`, GitHub: `rickfelix/crongenius`)\n- **Tech stack**: Vite + TypeScript + shadcn/ui + Cloudflare Workers (wrangler.jsonc) + Bun (bun.lock)\n- **Inference**: model-agnostic via `CronInferenceProvider` abstraction (M1 default LLM TBD per provider economics)\n- **Storage**: Supabase (audit log table + KPI view)\n- **Distribution surface M1**: HTTPS POST /v1/cron only"
+    },
+    "quality_checked": true,
+    "quality_issues": []
+  },
+  "orchestrator": {
+    "sd_key": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001",
+    "title": "CronGenius M1 Launch Orchestrator",
+    "sd_type": "orchestrator",
+    "category": "feature",
+    "status": "in_progress",
+    "current_phase": "PLAN_VERIFICATION",
+    "priority": "high",
+    "scope": "Orchestrator coordinating 3 implementation phase(s)",
+    "rationale": "Auto-generated from vision (VISION-CRONGENIUS-API-L2-001) and architecture (ARCH-CRONGENIUS-001) plans",
+    "target_application": "CronGenius",
+    "success_metrics": [
+      {
+        "actual": "N/A",
+        "metric": "Vision: primitive_as_api_playbook alignment",
+        "source": "VISION-CRONGENIUS-API-L2-001:primitive_as_api_playbook",
+        "target": ">=90%",
+        "measurement": "EVA vision score dimension",
+        "traceability": "vision_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Vision: lean_mvp_execution alignment",
+        "source": "VISION-CRONGENIUS-API-L2-001:lean_mvp_execution",
+        "target": ">=90%",
+        "measurement": "EVA vision score dimension",
+        "traceability": "vision_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Vision: market_validation_gate alignment",
+        "source": "VISION-CRONGENIUS-API-L2-001:market_validation_gate",
+        "target": ">=90%",
+        "measurement": "EVA vision score dimension",
+        "traceability": "vision_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Vision: architectural_defensibility alignment",
+        "source": "VISION-CRONGENIUS-API-L2-001:architectural_defensibility",
+        "target": ">=90%",
+        "measurement": "EVA vision score dimension",
+        "traceability": "vision_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Vision: brand_risk_mitigation alignment",
+        "source": "VISION-CRONGENIUS-API-L2-001:brand_risk_mitigation",
+        "target": ">=90%",
+        "measurement": "EVA vision score dimension",
+        "traceability": "vision_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Architecture: model_agnostic_interface implementation",
+        "source": "ARCH-CRONGENIUS-001:model_agnostic_interface",
+        "target": ">=90%",
+        "measurement": "Architecture dimension coverage",
+        "traceability": "arch_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Architecture: centralized_cron_validation implementation",
+        "source": "ARCH-CRONGENIUS-001:centralized_cron_validation",
+        "target": ">=90%",
+        "measurement": "Architecture dimension coverage",
+        "traceability": "arch_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Architecture: scoped_api_key_security implementation",
+        "source": "ARCH-CRONGENIUS-001:scoped_api_key_security",
+        "target": ">=90%",
+        "measurement": "Architecture dimension coverage",
+        "traceability": "arch_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Architecture: structured_audit_logging implementation",
+        "source": "ARCH-CRONGENIUS-001:structured_audit_logging",
+        "target": ">=90%",
+        "measurement": "Architecture dimension coverage",
+        "traceability": "arch_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Architecture: multi_layered_abuse_prevention implementation",
+        "source": "ARCH-CRONGENIUS-001:multi_layered_abuse_prevention",
+        "target": ">=90%",
+        "measurement": "Architecture dimension coverage",
+        "traceability": "arch_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Architecture: day_one_observability implementation",
+        "source": "ARCH-CRONGENIUS-001:day_one_observability",
+        "target": ">=90%",
+        "measurement": "Architecture dimension coverage",
+        "traceability": "arch_dimension"
+      },
+      {
+        "actual": "N/A",
+        "metric": "Architecture: minimal_api_surface implementation",
+        "source": "ARCH-CRONGENIUS-001:minimal_api_surface",
+        "target": ">=90%",
+        "measurement": "Architecture dimension coverage",
+        "traceability": "arch_dimension"
+      }
+    ],
+    "key_principles": [
+      "Single endpoint at M1 (no plural surfaces)",
+      "Model-agnostic interface (no LLM SDK imports above inference layer)",
+      "MVP-blocking security (validator + prefixed keys + abuse guards at M1, not deferred)",
+      "--dry-run + confidence-score + liability disclaimer on every output",
+      "Brand firewall (no public EHG attribution for 12 months / zero P0)",
+      "Sequential M2 distribution surfaces (not parallel)",
+      "Hard M1-to-M2 kill-criteria gate (50 paid + 30 percent W4 retention OR 3 inbound agent-framework integrations)"
+    ],
+    "strategic_objectives": [
+      "Ship CronGenius M1 as a single POST /v1/cron endpoint backed by a model-agnostic CronInferenceProvider abstraction, with deterministic cron-syntax validator gating every output and structured 90-day audit log capturing all requests for forensics and future training data accumulation.",
+      "Deliver MVP-blocking security at M1: prefixed/scoped/rotatable API keys with sub-60-second revocation propagation, plus multi-layered free-tier abuse prevention (hCaptcha + email-domain throttle + IP signup rate limit + prompt-embedding anomaly detection).",
+      "Wire all five chairman-required quarterly KPIs (token_cost, chairman_hours, inference_cost_per_1k, LTV_CAC, abuse_rate) into a queryable Supabase view from day-one of M1 and expose a minimal self-service developer portal with public OpenAPI spec, curl examples, and prominent liability disclaimer.",
+      "Hold M1 to the chairman-approved invariants: single endpoint (no plural surfaces), no fine-tuned model (deferred to M3), sequential M2 distribution surfaces (not parallel), model-agnostic interface (no LLM SDK imports above inference layer), brand firewall (no public EHG attribution for 12 months / zero P0).",
+      "Establish the hard M1-to-M2 validation gate with chairman-pre-committed kill criteria: ship M2 only if M1 produces 50 paid customers plus 30 percent W4 retention OR 3 inbound agent-framework integrations (Anthropic MCP, OpenAI Agents SDK, LangChain, etc.)."
+    ],
+    "success_criteria": [
+      {
+        "measure": "curl test against staging returns full payload shape; manual production smoke after deploy",
+        "criterion": "POST /v1/cron endpoint live in production with --dry-run + confidence-score + liability-disclaimer wired through every response"
+      },
+      {
+        "measure": "grep audit + import-boundary lint rule passes in CI",
+        "criterion": "CronInferenceProvider abstraction has at least one concrete implementation and zero LLM-provider imports in any module above the inference layer"
+      },
+      {
+        "measure": "golden corpus of 200+ cron expressions across flavors passes; invalid expressions are refused before return",
+        "criterion": "Deterministic cron-syntax validator covers Unix and Quartz cron flavors at minimum and gates both NL-to-cron output and cron-to-NL input"
+      },
+      {
+        "measure": "verify via SQL: row count after smoke traffic > 0; retention policy attached",
+        "criterion": "request_audit_log table populated on every request with 90-day retention, indexed on (request_id, timestamp)"
+      },
+      {
+        "measure": "revoke a key, time the propagation lag to next /v1/cron request",
+        "criterion": "api_keys table supports prefixed/scoped/rotatable keys with revocation propagation under 60 seconds via Cloudflare KV"
+      },
+      {
+        "measure": "abuse-trace test suite passes; legitimate-traffic regression suite passes",
+        "criterion": "Free-tier abuse guard middleware blocks synthetic abuse traces (signup-flood, prompt-injection, key-leak) without false positives on legitimate traffic"
+      },
+      {
+        "measure": "SQL query returns 5 named columns; dashboard renders all 5 values",
+        "criterion": "kpi_view Supabase view exposes all 5 chairman-required KPIs queryable from orchestrator SD-tree dashboard"
+      },
+      {
+        "measure": "manual UX walkthrough; OpenAPI spec validates against OpenAPI 3.1 schema",
+        "criterion": "Self-service portal supports sign-up, key create/revoke, usage chart, and exposes /openapi.yaml plus curl examples with liability disclaimer prominently displayed"
+      }
+    ],
+    "implementation_guidelines": [],
+    "dependencies": [
+      {
+        "type": "phase-ordering",
+        "dependency": "Phase 2 (Auth + abuse prevention) depends on Phase 1 (POST /v1/cron endpoint must exist before auth middleware can wrap it)"
+      },
+      {
+        "type": "phase-ordering",
+        "dependency": "Phase 3 (Observability + portal) depends on both Phase 1 (audit log feeds KPIs) and Phase 2 (key management UI needs keys API)"
+      },
+      {
+        "type": "external-service",
+        "dependency": "M1-default LLM provider (GPT-4o-mini or Claude Haiku per Phase 1 inference layer)",
+        "resolved_at": "Phase 1 PRD time"
+      },
+      {
+        "type": "infrastructure",
+        "resolved": true,
+        "dependency": "Cloudflare Workers + KV (existing CronGenius deployment per wrangler.jsonc)"
+      },
+      {
+        "type": "infrastructure",
+        "resolved": true,
+        "dependency": "Supabase project (CronGenius venture-scoped instance)"
+      }
+    ],
+    "risks": [
+      {
+        "risk": "Model-cost runaway from unbounded free-tier traffic",
+        "severity": "high",
+        "mitigation": "Per-key rate limits + free-tier abuse guard + per-key spend cap enforced in Phase 2 middleware"
+      },
+      {
+        "risk": "Hallucinated cron expressions returned to user despite deterministic validator gate",
+        "severity": "high",
+        "mitigation": "Validator gate refuses invalid output before return; --dry-run + confidence-score + liability disclaimer surface uncertainty"
+      },
+      {
+        "risk": "API key compromise / leak via developer carelessness",
+        "severity": "medium",
+        "mitigation": "Prefixed keys enable instant detection in logs; revocation propagates under 60 seconds via Cloudflare KV; audit log retention enables forensics"
+      },
+      {
+        "risk": "Distribution-surface scope creep into M2 surfaces before validation",
+        "severity": "medium",
+        "mitigation": "Hard M1-to-M2 kill-criteria gate (50 paid + 30 percent W4 retention OR 3 inbound integrations) precommitted by chairman; sequential not parallel surfaces is invariant"
+      },
+      {
+        "risk": "Generalist LLM accuracy on cron expressions reaches >99 percent at low cost, eroding moat",
+        "severity": "medium",
+        "mitigation": "CronInferenceProvider abstraction enables model swap without rewrite; moat-shift candidate is signed cron expressions with attestation (M3 TBD per CRO)"
+      },
+      {
+        "risk": "Brand contamination if M1 has a P0 incident before 12-month firewall lapses",
+        "severity": "low",
+        "mitigation": "No public EHG attribution for 12 months at zero P0 incidents (brand firewall invariant); audit log enables rapid forensics on any incident"
+      }
+    ],
+    "stakeholders": [
+      {
+        "name": "Chairman",
+        "role": "Vision owner + M1/M2 kill-criteria gate enforcer + biweekly validation interviews",
+        "involvement": "sync-on-pilot-milestones, sync-on-kill-criteria-evaluation"
+      },
+      {
+        "name": "CronGenius developer (pilot venture team)",
+        "role": "Phase 1-3 implementation in crongenius repo (Vite + TypeScript + Cloudflare Workers + Bun)",
+        "involvement": "sequential-phase-execution"
+      },
+      {
+        "name": "EHG_Engineer LEO Protocol",
+        "role": "PRD authoring, gate enforcement, retrospective capture per child SD",
+        "involvement": "per-child-handoffs"
+      },
+      {
+        "name": "M1 paying customers (target: 50 by gate)",
+        "role": "Validation signal for M1-to-M2 progression",
+        "involvement": "biweekly-chairman-validation-interviews"
+      }
+    ],
+    "metadata": {
+      "arch_key": "ARCH-CRONGENIUS-001",
+      "is_parent": true,
+      "vision_key": "VISION-CRONGENIUS-API-L2-001",
+      "child_count": 3,
+      "auto_generated": true,
+      "is_orchestrator": true
+    },
+    "key_changes": [
+      {
+        "change": "New: POST /v1/cron Cloudflare Worker endpoint plus CronInferenceProvider abstraction in CronGenius Vite + TypeScript codebase",
+        "impact": "Adds the M1 product surface; foundation for all subsequent M2 distribution surfaces (SDK, GitHub Action, VS Code extension)"
+      },
+      {
+        "change": "New: deterministic cron-syntax validator module shared across NL-to-cron and cron-to-NL flows; refuses invalid output before return",
+        "impact": "Cross-cutting invariant: single source of truth for cron grammar across all current and future distribution surfaces"
+      },
+      {
+        "change": "New: request_audit_log + api_keys Supabase tables with 90-day retention and prefixed-key schema",
+        "impact": "Enables forensics, abuse detection, and accumulates training data for the M3 fine-tuned-model decision"
+      },
+      {
+        "change": "New: Free-tier abuse guard middleware combining hCaptcha + email throttle + IP rate limit + prompt-embedding anomaly detection",
+        "impact": "CISO non-deferrable; protects against signup-flood, prompt-injection, and key-abuse vectors at M1 (not deferred to M2)"
+      },
+      {
+        "change": "New: kpi_view Supabase view exposing 5 chairman-required quarterly KPIs queryable from orchestrator SD-tree dashboard",
+        "impact": "Day-one observability invariant; enables chairman validation interviews and hard M1-to-M2 kill-criteria gate enforcement"
+      },
+      {
+        "change": "New: minimal self-service developer portal (sign-up, key management, usage chart) plus public OpenAPI spec at /openapi.yaml with curl examples",
+        "impact": "Removes adoption friction; lets developers self-serve onboarding without chairman-attention cost"
+      }
+    ],
+    "description": "Orchestrator coordinating CronGenius M1 launch (first venture through the EHG canonical pipeline). Implements chairman-approved Direction A 'Cron as Integrated Primitive' (API-first, agent-first, freemium tiers at zero/29/99 dollars) via three sequential phases derived from ARCH-CRONGENIUS-001 implementation_phases. Phase 1 ships the single POST /v1/cron endpoint with CronInferenceProvider model-agnostic abstraction, deterministic cron-syntax validator, and structured 90-day audit log. Phase 2 adds prefixed/scoped/rotatable API key auth and multi-layered free-tier abuse prevention via hCaptcha plus email throttle plus IP rate limit plus prompt-embedding anomaly detection. Phase 3 wires the five chairman-required KPIs (token cost, chairman hours, inference cost per 1k, LTV CAC ratio, abuse rate) into a Supabase view and ships a minimal self-service developer portal with OpenAPI spec. All three phases enforce cross-cutting invariants: single source of truth for cron grammar, model-agnostic interface (no LLM SDK imports above the inference layer), MVP-blocking security, dry-run plus confidence-score plus liability disclaimer on every output, and brand firewall (no public EHG attribution for 12 months at zero P0 incidents). Hard M1 to M2 kill-criteria gate: 50 paid plus 30 percent W4 retention OR 3 inbound agent-framework integrations. See VISION-CRONGENIUS-API-L2-001 chairman brainstorm 2026-05-27 and project_crongenius_first_venture_pilot_2026_05_27.md.",
+    "non_vertical": false,
+    "non_vertical_justification": null
+  },
+  "children": [
+    {
+      "sd_key": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001-A",
+      "title": "Phase 1: Core inference primitive (single endpoint + validator + audit log)",
+      "sd_type": "feature",
+      "category": "feature",
+      "status": "in_progress",
+      "current_phase": "PLAN_PRD",
+      "priority": "high",
+      "scope": "- **Title**: CronGenius M1 Phase 1 — Core inference primitive",
+      "rationale": "- **Title**: CronGenius M1 Phase 1 — Core inference primitive",
+      "target_application": "CronGenius",
+      "success_metrics": [
+        {
+          "metric": "primitive_as_api_playbook implementation",
+          "source": "ARCH-CRONGENIUS-001:primitive_as_api_playbook",
+          "target": ">=90%",
+          "measurement": "Dimension coverage",
+          "traceability": "arch_dimension"
+        },
+        {
+          "metric": "centralized_cron_validation implementation",
+          "source": "ARCH-CRONGENIUS-001:centralized_cron_validation",
+          "target": ">=90%",
+          "measurement": "Dimension coverage",
+          "traceability": "arch_dimension"
+        },
+        {
+          "metric": "structured_audit_logging implementation",
+          "source": "ARCH-CRONGENIUS-001:structured_audit_logging",
+          "target": ">=90%",
+          "measurement": "Dimension coverage",
+          "traceability": "arch_dimension"
+        }
+      ],
+      "key_principles": [
+        {
+          "principle": "Follow LEO Protocol for all changes",
+          "description": "Applied in Core inference primitive (single endpoint + validator + audit log)"
+        },
+        {
+          "principle": "Ensure backward compatibility",
+          "description": "Applied in Core inference primitive (single endpoint + validator + audit log)"
+        }
+      ],
+      "strategic_objectives": [
+        "Ship POST /v1/cron as a Cloudflare Worker handling both nl_to_cron and cron_to_nl directions with --dry-run + confidence-score + liability-disclaimer wired through every response",
+        "Implement the CronInferenceProvider TypeScript interface with at least one concrete implementation (GPT-4o-mini or Claude Haiku); zero LLM-provider SDK imports allowed above the inference layer (lint-enforced model-agnostic invariant)",
+        "Build a deterministic cron-syntax validator that gates every output, covering Unix and Quartz cron flavors at minimum, refusing invalid output before return with a remediation hint",
+        "Create the request_audit_log Supabase table (append-only, 90-day retention, indexed on request_id and timestamp) and wire write-on-every-request so Phase 3 KPIs and forensics work from day-one"
+      ],
+      "success_criteria": [
+        {
+          "measure": "integration test against staging",
+          "criterion": "POST /v1/cron returns documented response shape {output, confidence, validator_verdict, disclaimer, request_id} for valid input"
+        },
+        {
+          "measure": "lint passes in CI; grep audit confirms zero offending imports",
+          "criterion": "CronInferenceProvider interface has at least one concrete implementation and lint-rule blocks any LLM-provider SDK import above the inference layer"
+        },
+        {
+          "measure": "vitest golden-corpus suite passes",
+          "criterion": "Cron-syntax validator passes against golden corpus of 200+ Unix + Quartz expressions and refuses invalid input with a remediation hint"
+        },
+        {
+          "measure": "SQL count after smoke traffic > 0; retention policy visible in migration file",
+          "criterion": "request_audit_log row written on every /v1/cron call within 1 second; 90-day retention policy enforced at table creation"
+        },
+        {
+          "measure": "response shape test asserts all 3 fields populated",
+          "criterion": "All output includes --dry-run flag, confidence_score float, and liability disclaimer text per chairman M1 invariant"
+        }
+      ],
+      "implementation_guidelines": [
+        "Read existing code before modifying",
+        "Add tests for the specific failure pattern"
+      ],
+      "dependencies": [
+        {
+          "type": "infrastructure",
+          "resolved": true,
+          "dependency": "Cloudflare Workers + wrangler.jsonc (existing in crongenius repo)"
+        },
+        {
+          "type": "datastore",
+          "resolved": true,
+          "dependency": "Supabase CronGenius venture instance for request_audit_log table"
+        },
+        {
+          "type": "external-service",
+          "dependency": "LLM provider API key (GPT-4o-mini OR Claude Haiku) - PLAN-time decision",
+          "resolved_at": "PLAN phase"
+        }
+      ],
+      "risks": [
+        {
+          "risk": "Model-cost runaway during initial rollout without rate limits (rate limits land in Phase 2)",
+          "severity": "medium",
+          "mitigation": "Phase 1 deploys behind feature flag with hard daily request cap until Phase 2 rate-limit middleware ships; staging-only initially",
+          "rollback_plan": "Disable feature flag via wrangler env var; no redeploy needed"
+        },
+        {
+          "risk": "CronInferenceProvider interface design flaws discovered after Phase 2/3 build on top",
+          "severity": "medium",
+          "mitigation": "PLAN phase includes architecture review with Phase 2/3 PRD authors; interface contract tests catch breaking changes",
+          "rollback_plan": "Interface is pure TypeScript types; breaking changes revertible via single commit before Phase 2 lands"
+        },
+        {
+          "risk": "Validator misses an edge-case cron flavor (e.g., AWS EventBridge, K8s) causing false rejects",
+          "severity": "low",
+          "mitigation": "Golden corpus seeded from public cron-flavor reference docs; validator returns warning verdict (not hard reject) on flavor-mismatch",
+          "rollback_plan": "Validator is pure function; edge-case fix is single-commit + test addition"
+        },
+        {
+          "risk": "Audit log table schema needs migration after Phase 2 adds abuse_signals column",
+          "severity": "low",
+          "mitigation": "Schema designed with extensibility (jsonb metadata column reserved); Phase 2 migration is additive only",
+          "rollback_plan": "Migrations are reversible via down-migration; no data loss"
+        }
+      ],
+      "stakeholders": [],
+      "metadata": {
+        "arch_key": "ARCH-CRONGENIUS-001",
+        "vision_key": "VISION-CRONGENIUS-API-L2-001",
+        "phase_number": 1,
+        "auto_generated": true,
+        "wiring_required": true,
+        "contract_governed": true,
+        "parent_orchestrator": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001",
+        "vertical_slice_check": {
+          "non_vertical": false,
+          "justification": null,
+          "detector_version": "C1-v1-heuristic"
+        },
+        "contract_parent_chain": [
+          "3c8b77cf-02a7-4895-8ea3-bb7669f6ce46"
+        ]
+      },
+      "key_changes": [
+        {
+          "change": "New: src/inference/CronInferenceProvider.ts TypeScript interface defining infer(input, direction) contract",
+          "impact": "Foundation for model-agnostic invariant; enables M3 LLM swap without rewrite"
+        },
+        {
+          "change": "New: src/inference/providers/{openai|claude}.ts concrete implementation calling M1 default LLM (decided at PLAN time)",
+          "impact": "Delivers initial inference layer; zero SDK imports above this file enforced by lint"
+        },
+        {
+          "change": "New: src/validation/cron-grammar.ts deterministic regular-grammar parser covering Unix + Quartz cron flavors",
+          "impact": "Cross-cutting invariant: single source of truth for cron grammar across all flows"
+        },
+        {
+          "change": "New: src/api/cron.ts Cloudflare Worker handler for POST /v1/cron routing input through CronInferenceProvider + validator",
+          "impact": "Primary M1 product surface; foundation for Phase 2 auth-wrapping"
+        },
+        {
+          "change": "New: migrations/001_request_audit_log.sql creating Supabase append-only table with 90-day retention policy",
+          "impact": "Enables forensics + Phase 3 KPI view + future training data accumulation"
+        },
+        {
+          "change": "New: tests/cron-validator.test.ts golden-corpus suite of 200+ cron expressions + tests/cron-endpoint.test.ts integration tests",
+          "impact": "Regression-pin for all subsequent phases; ensures validator + endpoint contract stability"
+        }
+      ],
+      "description": "Phase 1 of CronGenius M1 launch: deliver the core inference primitive as a single POST /v1/cron endpoint backed by the model-agnostic CronInferenceProvider abstraction, a deterministic cron-syntax validator that gates every output (both NL-to-cron and cron-to-NL), and a structured request_audit_log table with 90-day retention capturing every request (timestamp, request_id, NL_input, cron_output, model_version, validator_verdict, confidence_score, dry_run_flag). This phase is foundational: Phase 2 (auth + abuse prevention) and Phase 3 (observability + portal) build on top of this endpoint. Estimate: 250-400 LOC in the CronGenius Vite + TypeScript + Cloudflare Workers + Bun + Supabase stack. Per chairman M1 invariants: --dry-run + confidence-score + liability-disclaimer wired through every response, zero LLM-provider SDK imports above the inference layer (lint-enforced model-agnostic interface), and the validator refuses invalid output before returning. M1 default LLM (GPT-4o-mini OR Claude Haiku) chosen at PLAN-time per provider economics.",
+      "non_vertical": false,
+      "non_vertical_justification": null
+    },
+    {
+      "sd_key": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001-B",
+      "title": "Phase 2: Authentication and abuse prevention",
+      "sd_type": "implementation",
+      "category": "feature",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "priority": "high",
+      "scope": "- **Title**: CronGenius M1 Phase 2 — Auth + abuse prevention",
+      "rationale": "- **Title**: CronGenius M1 Phase 2 — Auth + abuse prevention",
+      "target_application": "CronGenius",
+      "success_metrics": [
+        {
+          "metric": "centralized_cron_validation implementation",
+          "source": "ARCH-CRONGENIUS-001:centralized_cron_validation",
+          "target": ">=90%",
+          "measurement": "Dimension coverage",
+          "traceability": "arch_dimension"
+        },
+        {
+          "metric": "multi_layered_abuse_prevention implementation",
+          "source": "ARCH-CRONGENIUS-001:multi_layered_abuse_prevention",
+          "target": ">=90%",
+          "measurement": "Dimension coverage",
+          "traceability": "arch_dimension"
+        }
+      ],
+      "key_principles": [
+        {
+          "principle": "Follow LEO Protocol for all changes",
+          "description": "Applied in Authentication and abuse prevention"
+        },
+        {
+          "principle": "Ensure backward compatibility",
+          "description": "Applied in Authentication and abuse prevention"
+        }
+      ],
+      "strategic_objectives": [
+        {
+          "metric": "P2 deliverables verified complete",
+          "objective": "- **Title**: CronGenius M1 Phase 2 — Auth + abuse prevention"
+        },
+        {
+          "metric": "All quality gates passed",
+          "objective": "Maintain code quality and test coverage"
+        },
+        {
+          "metric": "Phase contribution verified",
+          "objective": "Contribute to: Phase 1: Core inference primitive (single endpoint + validator + audit log)"
+        }
+      ],
+      "success_criteria": [
+        {
+          "measure": "All items checked off",
+          "criterion": "Authentication and abuse prevention deliverables complete"
+        },
+        {
+          "measure": "CI pipeline green",
+          "criterion": "All tests passing"
+        },
+        {
+          "measure": "PR merged",
+          "criterion": "Code review approved"
+        },
+        {
+          "measure": "DOCMON validation passed",
+          "criterion": "Documentation updated"
+        }
+      ],
+      "implementation_guidelines": [],
+      "dependencies": [],
+      "risks": [],
+      "stakeholders": [],
+      "metadata": {
+        "arch_key": "ARCH-CRONGENIUS-001",
+        "vision_key": "VISION-CRONGENIUS-API-L2-001",
+        "phase_number": 2,
+        "auto_generated": true,
+        "wiring_required": true,
+        "contract_governed": true,
+        "parent_orchestrator": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001",
+        "vertical_slice_check": {
+          "non_vertical": false,
+          "justification": null,
+          "detector_version": "C1-v1-heuristic"
+        },
+        "contract_parent_chain": [
+          "3c8b77cf-02a7-4895-8ea3-bb7669f6ce46"
+        ]
+      },
+      "key_changes": [
+        "Authentication and abuse prevention"
+      ],
+      "description": "- **Title**: CronGenius M1 Phase 2 — Auth + abuse prevention",
+      "non_vertical": false,
+      "non_vertical_justification": null
+    },
+    {
+      "sd_key": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001-C",
+      "title": "Phase 3: Observability KPIs and minimal self-service portal",
+      "sd_type": "implementation",
+      "category": "feature",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "priority": "high",
+      "scope": "- **Title**: CronGenius M1 Phase 3 — Observability + self-service portal",
+      "rationale": "- **Title**: CronGenius M1 Phase 3 — Observability + self-service portal",
+      "target_application": "CronGenius",
+      "success_metrics": [
+        {
+          "metric": "centralized_cron_validation implementation",
+          "source": "ARCH-CRONGENIUS-001:centralized_cron_validation",
+          "target": ">=90%",
+          "measurement": "Dimension coverage",
+          "traceability": "arch_dimension"
+        },
+        {
+          "metric": "day_one_observability implementation",
+          "source": "ARCH-CRONGENIUS-001:day_one_observability",
+          "target": ">=90%",
+          "measurement": "Dimension coverage",
+          "traceability": "arch_dimension"
+        },
+        {
+          "metric": "minimal_api_surface implementation",
+          "source": "ARCH-CRONGENIUS-001:minimal_api_surface",
+          "target": ">=90%",
+          "measurement": "Dimension coverage",
+          "traceability": "arch_dimension"
+        }
+      ],
+      "key_principles": [
+        {
+          "principle": "Follow LEO Protocol for all changes",
+          "description": "Applied in Observability KPIs and minimal self-service portal"
+        },
+        {
+          "principle": "Ensure backward compatibility",
+          "description": "Applied in Observability KPIs and minimal self-service portal"
+        }
+      ],
+      "strategic_objectives": [
+        {
+          "metric": "P3 deliverables verified complete",
+          "objective": "- **Title**: CronGenius M1 Phase 3 — Observability + self-service portal"
+        },
+        {
+          "metric": "All quality gates passed",
+          "objective": "Maintain code quality and test coverage"
+        },
+        {
+          "metric": "Phase contribution verified",
+          "objective": "Contribute to: Phase 1: Core inference primitive (single endpoint + validator + audit log)"
+        }
+      ],
+      "success_criteria": [
+        {
+          "measure": "All items checked off",
+          "criterion": "Observability KPIs and minimal self-service portal deliverables complete"
+        },
+        {
+          "measure": "CI pipeline green",
+          "criterion": "All tests passing"
+        },
+        {
+          "measure": "PR merged",
+          "criterion": "Code review approved"
+        },
+        {
+          "measure": "DOCMON validation passed",
+          "criterion": "Documentation updated"
+        }
+      ],
+      "implementation_guidelines": [],
+      "dependencies": [],
+      "risks": [],
+      "stakeholders": [],
+      "metadata": {
+        "arch_key": "ARCH-CRONGENIUS-001",
+        "vision_key": "VISION-CRONGENIUS-API-L2-001",
+        "phase_number": 3,
+        "auto_generated": true,
+        "wiring_required": true,
+        "contract_governed": true,
+        "parent_orchestrator": "SD-CRONGENIUS-M1-LAUNCH-ORCHESTRATOR-ORCH-001",
+        "vertical_slice_check": {
+          "non_vertical": false,
+          "justification": null,
+          "detector_version": "C1-v1-heuristic"
+        },
+        "contract_parent_chain": [
+          "3c8b77cf-02a7-4895-8ea3-bb7669f6ce46"
+        ]
+      },
+      "key_changes": [
+        "Observability KPIs and minimal self-service portal"
+      ],
+      "description": "- **Title**: CronGenius M1 Phase 3 — Observability + self-service portal",
+      "non_vertical": false,
+      "non_vertical_justification": null
+    }
+  ]
+}
