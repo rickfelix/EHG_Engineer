@@ -26,7 +26,7 @@ vi.mock('../../scripts/modules/pattern-tracking.js', () => ({
   getPatternStats: vi.fn().mockResolvedValue({ total: 0, resolved: 0 })
 }));
 
-function createMockSupabase({ prdData = null, handoffs = [], retroData = null, sdData = { id: 'sd-uuid', sd_key: 'test-sd', sd_type: 'feature' } } = {}) {
+function createMockSupabase({ prdData = null, handoffs = [], retroData = null, subAgentResults = [], sdData = { id: 'sd-uuid', sd_key: 'test-sd', sd_type: 'feature' } } = {}) {
   const mockSingle = (data) => ({
     data,
     error: data ? null : { message: 'Not found', code: 'PGRST116' }
@@ -87,6 +87,15 @@ function createMockSupabase({ prdData = null, handoffs = [], retroData = null, s
               // legacy callers: .eq().single()
               single: vi.fn().mockResolvedValue(mockSingle(retroData))
             })
+          })
+        };
+      }
+      // QF-20260528-877: Section B evidence fallback queries sub_agent_execution_results
+      // via .select().eq('sd_id', uuid), awaited directly (no .single()).
+      if (table === 'sub_agent_execution_results') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: subAgentResults, error: null })
           })
         };
       }
@@ -215,5 +224,84 @@ describe('PAT-GATE4-BYPASS-001: Gate 4 Bypass Acceptance', () => {
     expect(result._gateDataSources.gate2).toBe('canonical');
     // All three handoffs were accepted, so bypass-credit tracking sees all three.
     expect(result._acceptedHandoffs).toEqual({ gate1: true, gate2: true, gate3: true });
+  });
+});
+
+describe('QF-20260528-877: Section B sub-agent evidence fallback', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const prdData = {
+    metadata: { design_analysis: { exists: true } },
+    directive_id: 'test-sd',
+    title: 'Test',
+    created_at: new Date().toISOString()
+  };
+
+  it('awards full B1/B2 from evidence rows when gate3 telemetry is absent', async () => {
+    // gate3 is provided but WITHOUT details.sub_agent_effectiveness — the common case where the
+    // details sub-object was not threaded into PLAN-TO-LEAD handoff metadata.
+    const gateResults = {
+      gate2: { passed: true, score: 90 },
+      gate3: { passed: true, score: 85 }
+    };
+    const subAgentResults = [
+      { recommendations: 'x'.repeat(600), detailed_analysis: 'analysis' },
+      { recommendations: 'short', detailed_analysis: null }
+    ];
+
+    const supabase = createMockSupabase({ prdData, subAgentResults });
+    const result = await validateGate4LeadFinal('test-sd', supabase, gateResults);
+
+    const b = result.details.value_delivered;
+    expect(b.b1_from_evidence).toBe(true);
+    expect(b.b2_from_evidence).toBe(true);
+    expect(b.substantial_recommendations).toBe(true);
+    // B1=10 + B2=10 + B3=5 (gate2>=80) = 25/25 raw -> scaled 35/35
+    expect(result.gate_scores.value_delivered).toBe(35);
+  });
+
+  it('preserves the 7/10 defaults when no evidence rows exist (no regression)', async () => {
+    const gateResults = {
+      gate2: { passed: true, score: 90 },
+      gate3: { passed: true, score: 85 }
+    };
+
+    const supabase = createMockSupabase({ prdData, subAgentResults: [] });
+    const result = await validateGate4LeadFinal('test-sd', supabase, gateResults);
+
+    const b = result.details.value_delivered;
+    expect(b.b1_estimated).toBe(true);
+    expect(b.b2_estimated).toBe(true);
+    expect(b.b1_from_evidence).toBeUndefined();
+    // B1=7 + B2=7 + B3=5 = 19/25 raw -> scaled round(26.6)=27/35
+    expect(result.gate_scores.value_delivered).toBe(27);
+  });
+
+  it('uses gate3 telemetry directly when present (evidence fallback not triggered)', async () => {
+    const gateResults = {
+      gate2: { passed: true, score: 90 },
+      gate3: {
+        passed: true,
+        score: 85,
+        details: {
+          sub_agent_effectiveness: {
+            total_execution_time_ms: 5 * 60 * 1000, // 5 min < 15 -> B1=10
+            substantial_recommendations: true         // -> B2=10
+          }
+        }
+      }
+    };
+
+    const supabase = createMockSupabase({ prdData });
+    const result = await validateGate4LeadFinal('test-sd', supabase, gateResults);
+
+    const b = result.details.value_delivered;
+    expect(b.total_execution_time_minutes).toBe(5);
+    expect(b.substantial_recommendations).toBe(true);
+    expect(b.b1_from_evidence).toBeUndefined();
+    expect(b.b2_from_evidence).toBeUndefined();
+    expect(result.gate_scores.value_delivered).toBe(35);
   });
 });
