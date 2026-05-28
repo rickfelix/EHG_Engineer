@@ -14,8 +14,9 @@ const RUBRIC_FILE_PATTERN = /^(V\d{2}|A\d{2}|T\d{2})-/;
 
 /**
  * Validate a rubric definition has required fields.
+ * Exported so SD-LEO-INFRA-VENTURE-RUBRIC-SEMANTIC-001 rubric-generator can reuse.
  */
-function validateRubric(rubric, filename) {
+export function validateRubric(rubric, filename) {
   const errors = [];
   if (!rubric.id) errors.push('missing id');
   if (!rubric.name) errors.push('missing name');
@@ -32,6 +33,55 @@ function validateRubric(rubric, filename) {
   }
   if (errors.length > 0) {
     throw new Error(`Invalid rubric ${filename}: ${errors.join(', ')}`);
+  }
+}
+
+/**
+ * SD-LEO-INFRA-VENTURE-RUBRIC-SEMANTIC-001 (FR-4): stricter rules for
+ * LLM-generated rubrics. Runs validateRubric first, then enforces:
+ *   (a) checks.length >= 3
+ *   (b) each check.type ∈ ALLOWED_CHECK_TYPES (the 6 deterministic types)
+ *   (c) each check.params has a concrete-reference field with a non-empty
+ *       string value (glob / pattern / module / table)
+ *   (d) sum of check.weight values ∈ [98, 102] (±2 tolerance for rounding)
+ *
+ * @param {object} rubric - rubric to validate
+ * @param {string} source - identifier used in error messages
+ * @throws {Error} on violation
+ */
+export const ALLOWED_CHECK_TYPES = Object.freeze([
+  'file_exists',
+  'code_pattern',
+  'anti_pattern',
+  'export_exists',
+  'db_row_exists',
+  'file_count',
+]);
+
+const CONCRETE_PARAM_FIELDS = ['glob', 'pattern', 'module', 'table'];
+
+export function validateRubricStrict(rubric, source) {
+  validateRubric(rubric, source);
+  const errors = [];
+  if (rubric.checks.length < 3) {
+    errors.push(`checks.length=${rubric.checks.length} (LLM rubrics require >= 3 checks per dimension)`);
+  }
+  let weightSum = 0;
+  for (const check of rubric.checks) {
+    if (!ALLOWED_CHECK_TYPES.includes(check.type)) {
+      errors.push(`check ${check.id} type='${check.type}' is not in ALLOWED_CHECK_TYPES (${ALLOWED_CHECK_TYPES.join(',')})`);
+    }
+    const hasConcrete = CONCRETE_PARAM_FIELDS.some(f => typeof check.params[f] === 'string' && check.params[f].length > 0);
+    if (!hasConcrete) {
+      errors.push(`check ${check.id} params has no non-empty concrete-reference field (one of: ${CONCRETE_PARAM_FIELDS.join(',')})`);
+    }
+    weightSum += Number(check.weight) || 0;
+  }
+  if (weightSum < 98 || weightSum > 102) {
+    errors.push(`weight sum=${weightSum} is outside [98,102] (rubric weights must sum to ~100)`);
+  }
+  if (errors.length > 0) {
+    throw new Error(`Invalid LLM rubric ${source}: ${errors.join('; ')}`);
   }
 }
 

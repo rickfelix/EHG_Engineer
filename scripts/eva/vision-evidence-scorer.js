@@ -27,6 +27,9 @@ import { dirname, join } from 'path';
 import { loadAllRubrics } from './evidence-rubrics/index.js';
 import { runRubricChecks, computeDimensionScore, generateReasoning, generateGaps } from './evidence-checks/check-runner.js';
 import { ensureFresh, getGitMeta, warnIfWorktree } from './git-freshness.js';
+// SD-LEO-INFRA-VENTURE-RUBRIC-SEMANTIC-001 (FR-1/FR-2/FR-3): venture-aware rubric path
+import { computeCacheKey, getCachedRubrics, setCachedRubrics } from '../../lib/eva/rubric-cache.js';
+import { generateVentureRubrics } from '../../lib/eva/rubric-generator.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -99,6 +102,74 @@ function parseArgs(argv) {
  *     return error so caller can fail loudly (no silent EHG fallback).
  *   - Explicit --arch-key always wins.
  */
+/**
+ * SD-LEO-INFRA-VENTURE-RUBRIC-SEMANTIC-001 (FR-1):
+ *   Pure predicate; identifies EHG self-scoring vision-keys for the
+ *   early-return path that preserves the deterministic rubric library.
+ *   Accepts `VISION-EHG-...` and `VISION-EHG_...` (case-insensitive).
+ */
+export function isEhgVisionKey(visionKey) {
+  return typeof visionKey === 'string' && /^VISION-EHG[-_]/i.test(visionKey);
+}
+
+/**
+ * SD-LEO-INFRA-VENTURE-RUBRIC-SEMANTIC-001 (FR-1):
+ *   Resolve which rubric Map to use for a given vision-key, with optional
+ *   dependency injection for testing (cache/generator/loader can be replaced).
+ *
+ * @param {object} args
+ * @param {string} args.visionKey
+ * @param {string} args.planKey
+ * @param {object} args.vision - eva_vision_documents row (must include extracted_dimensions; content_hash optional)
+ * @param {object} args.arch - eva_architecture_plans row (must include extracted_dimensions; content_hash optional)
+ * @param {object} args.supabase - service client (used by cache get/set)
+ * @param {string} [args.targetPath]
+ * @param {object} [args.deps] - injection hatch: { loadAllRubrics, computeCacheKey, getCachedRubrics, setCachedRubrics, generateVentureRubrics }
+ * @returns {Promise<{ rubrics: Map<string, object>, source: string }>}
+ */
+export async function selectRubricMap({ visionKey, planKey, vision, arch, supabase, targetPath, deps = {} }) {
+  const loaders = {
+    loadAllRubrics: deps.loadAllRubrics ?? loadAllRubrics,
+    computeCacheKey: deps.computeCacheKey ?? computeCacheKey,
+    getCachedRubrics: deps.getCachedRubrics ?? getCachedRubrics,
+    setCachedRubrics: deps.setCachedRubrics ?? setCachedRubrics,
+    generateVentureRubrics: deps.generateVentureRubrics ?? generateVentureRubrics,
+  };
+  if (isEhgVisionKey(visionKey)) {
+    const rubrics = await loaders.loadAllRubrics();
+    return { rubrics, source: 'Loaded EHG deterministic rubrics (static library)' };
+  }
+  const cacheKey = loaders.computeCacheKey({
+    vision_key: visionKey,
+    plan_key: planKey,
+    vision_content_hash: vision?.content_hash,
+    plan_content_hash: arch?.content_hash,
+  });
+  const cached = await loaders.getCachedRubrics(supabase, cacheKey);
+  if (cached) {
+    return {
+      rubrics: cached,
+      source: `Loaded venture-aware rubrics from cache (cache_key=${cacheKey.slice(0, 12)}…)`,
+    };
+  }
+  const { rubrics: generated, meta } = await loaders.generateVentureRubrics({
+    vision, arch, targetPath, retries: 1,
+  });
+  await loaders.setCachedRubrics(
+    supabase, cacheKey, generated,
+    {
+      vision_key: visionKey, plan_key: planKey,
+      vision_content_hash: vision?.content_hash,
+      plan_content_hash: arch?.content_hash,
+    },
+    { generator_model: meta.generator_model, generator_cost_usd: null }
+  );
+  return {
+    rubrics: generated,
+    source: `Generated ${generated.size} venture-aware rubrics (model=${meta.generator_model || 'unknown'}, persisted to eva_vision_rubric_cache)`,
+  };
+}
+
 export function resolveArchKey({ visionKey, archKey, explicitArchKey }) {
   if (explicitArchKey && archKey) {
     return { archKey, derived: false, error: null };
@@ -163,20 +234,19 @@ async function main() {
   }
   console.log(`   Scoring codebase at: ${gitMeta.shortSha} (${gitMeta.branch})\n`);
 
-  // 1. Load rubrics
-  const rubrics = await loadAllRubrics();
-  console.log(`   Loaded ${rubrics.size} evidence rubrics`);
-
-  // 2. Load dimension metadata (weights) from DB
+  // 1. Load dimension metadata (vision + arch) FIRST — needed before rubric branch.
+  //    SD-LEO-INFRA-VENTURE-RUBRIC-SEMANTIC-001 (FR-1): includes content + content_hash
+  //    (GENERATED STORED via 20260527_eva_vision_rubric_cache_and_content_hash.sql) so the
+  //    venture branch can compute a stable cache key without re-hashing content in JS.
   const { data: vision } = await supabase
     .from('eva_vision_documents')
-    .select('id, extracted_dimensions')
+    .select('id, extracted_dimensions, content, content_hash')
     .eq('vision_key', args.visionKey)
     .single();
 
   const { data: arch } = await supabase
     .from('eva_architecture_plans')
-    .select('id, extracted_dimensions')
+    .select('id, extracted_dimensions, content, content_hash')
     .eq('plan_key', args.archKey)
     .single();
 
@@ -190,6 +260,19 @@ async function main() {
     console.error(`❌ Derived arch-key '${args.archKey}' not found in eva_architecture_plans. Create the arch plan first via 'archplan-command.mjs upsert --plan-key ${args.archKey} --vision-key ${args.visionKey}' OR pass --arch-key explicitly. Refusing silent fallback to EHG architecture.`);
     process.exit(1);
   }
+
+  // 2. Load rubrics — branch on vision-key.
+  //    SD-LEO-INFRA-VENTURE-RUBRIC-SEMANTIC-001 (FR-1):
+  //    - EHG vision-key (matches /^VISION-EHG[-_]/i): static deterministic rubrics (unchanged).
+  //    - Non-EHG vision-key: LLM-generated venture-aware rubrics, content-hash cached.
+  //    Refuses silent fallback to EHG rubrics when the venture branch fails (TR-6).
+  const { rubrics, source: rubricSource } = await selectRubricMap({
+    visionKey: args.visionKey,
+    planKey: args.archKey,
+    vision, arch, supabase,
+    targetPath: resolvedTargetPath || process.cwd(),
+  });
+  console.log(`   ${rubricSource}: ${rubrics.size} rubrics`);
 
   // 3. Build dimension weight map from DB metadata
   const dbDimensions = [
