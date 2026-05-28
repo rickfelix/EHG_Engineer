@@ -8,7 +8,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
-export const DEFAULT_MODEL = 'claude-opus-4-7';
+export const DEFAULT_MODEL = 'claude-opus-4-8';
 
 export function createAnthropicClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

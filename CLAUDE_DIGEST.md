@@ -86,7 +86,7 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 1. **Follow LEAD→PLAN→EXEC** - Target gate pass rate: 85%. SD-type overrides (60-90% range) require documented justification per CLAUDE_LEAD.md.
 > Why: Each phase produces a gate-validated artifact (strategic intent → PRD → code). Skipping phases means the next gate has no artifact to validate against, causing failures that are expensive to unwind.
 2. **Sub-agent evidence required at every handoff** - Invoke required agents via the Task tool before running `handoff.js execute`. Each agent writes to `sub_agent_execution_results`; handoff blocks with `SUBAGENT_EVIDENCE_MISSING` if no fresh row exists for the current phase. Manual DB checks are not evidence.
-> Why: Gates query `sub_agent_execution_results` for formal, database-backed validation. Opus 4.7 defaults to fewer sub-agent spawns — this rule makes invocation a hard requirement, not a best practice. Prompt-level "should use sub-agents" is not enforceable; the row is.
+> Why: Gates query `sub_agent_execution_results` for formal, database-backed validation. Opus 4.8 defaults to fewer sub-agent spawns — this rule makes invocation a hard requirement, not a best practice. Prompt-level "should use sub-agents" is not enforceable; the row is.
 3. **Database-first** - No markdown files as source of truth
 > Why: Markdown files drift silently and are never validated. The DB enforces schema constraints, tracks state transitions, and is the only source future sessions can query reliably to resume work.
 4. **USE PROCESS SCRIPTS** - ⚠️ Never bypass add-prd-to-database.js or handoff.js outside a documented emergency path ⚠️
