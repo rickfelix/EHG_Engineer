@@ -12,6 +12,11 @@ import {
   extractStrategicObjectives,
   extractRisks,
   extractSuccessCriteria,
+  extractKeyPrinciples,
+  extractSmokeTestSteps,
+  extractSuccessMetrics,
+  extractScope,
+  extractExplicitTargetApplication,
   SUMMARY_CAP,
   EXPLICIT_TYPE_ENUM,
   EXPLICIT_PRIORITY_ENUM,
@@ -225,4 +230,175 @@ test('extractStrategicObjectives: absent section returns null (removed summary f
 test('extractRisks: absent section returns null', () => {
   const content = '## Summary\n\nNo risks section here.';
   assert.equal(extractRisks(content), null);
+});
+
+// ---------- SD-FDBK-INFRA-LEO-CREATE-PLAN-001 (FR-1, FR-3) ----------
+
+// extractKeyPrinciples (FR-1)
+
+test('extractKeyPrinciples: present with bullets returns string[]', () => {
+  const content = '## Key Principles\n- Keep it backward compatible\n- Fail fast on bad input\n';
+  assert.deepEqual(extractKeyPrinciples(content), [
+    'Keep it backward compatible',
+    'Fail fast on bad input',
+  ]);
+});
+
+test('extractKeyPrinciples: matches ## Principles alias', () => {
+  const content = '## Principles\n- One principle\n';
+  assert.deepEqual(extractKeyPrinciples(content), ['One principle']);
+});
+
+test('extractKeyPrinciples: absent section returns null (not [])', () => {
+  const content = '# Plan\n\n## Summary\n\nNo principles section here.';
+  assert.equal(extractKeyPrinciples(content), null);
+});
+
+// extractSmokeTestSteps (FR-1)
+
+test('extractSmokeTestSteps: present with bullets returns {step_number, instruction, expected_outcome}[]', () => {
+  const content = '## Smoke Test Steps\n- Run the parser on a fixture\n- Confirm null when section absent\n';
+  assert.deepEqual(extractSmokeTestSteps(content), [
+    { step_number: 1, instruction: 'Run the parser on a fixture', expected_outcome: 'See plan for details' },
+    { step_number: 2, instruction: 'Confirm null when section absent', expected_outcome: 'See plan for details' },
+  ]);
+});
+
+test('extractSmokeTestSteps: matches ## Smoke Test alias', () => {
+  const content = '## Smoke Test\n- Single step\n';
+  const out = extractSmokeTestSteps(content);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].instruction, 'Single step');
+});
+
+test('extractSmokeTestSteps: absent section returns null (not [])', () => {
+  const content = '# Plan\n\n## Summary\n\nNo smoke test section here.';
+  assert.equal(extractSmokeTestSteps(content), null);
+});
+
+// extractSuccessMetrics (FR-1)
+
+test('extractSuccessMetrics: TS-1 — present returns {metric, target}[]', () => {
+  const content = '## Success Metrics\n- Parser extracts all 4 fields\n- Zero placeholder gate failures\n';
+  assert.deepEqual(extractSuccessMetrics(content), [
+    { metric: 'Parser extracts all 4 fields', target: 'See plan for details' },
+    { metric: 'Zero placeholder gate failures', target: 'See plan for details' },
+  ]);
+});
+
+test('extractSuccessMetrics: matches ## Metrics alias', () => {
+  const content = '## Metrics\n- Latency under 100ms\n';
+  assert.deepEqual(extractSuccessMetrics(content), [
+    { metric: 'Latency under 100ms', target: 'See plan for details' },
+  ]);
+});
+
+test('extractSuccessMetrics: TS-2 — absent section returns null (not [])', () => {
+  const content = '# Plan\n\n## Summary\n\nNo success metrics section here.';
+  assert.equal(extractSuccessMetrics(content), null);
+});
+
+// extractScope (FR-1)
+
+test('extractScope: present returns trimmed body string', () => {
+  const content = '## Scope\n\nModify plan-parser.js and leo-create-sd.js only.\n\n## Next\n\nOther.';
+  assert.equal(extractScope(content), 'Modify plan-parser.js and leo-create-sd.js only.');
+});
+
+test('extractScope: strips markdown emphasis', () => {
+  const content = '## In Scope\n\n**Bold** scope text.\n';
+  assert.equal(extractScope(content), 'Bold scope text.');
+});
+
+test('extractScope: absent section returns null', () => {
+  const content = '# Plan\n\n## Summary\n\nNo scope section here.';
+  assert.equal(extractScope(content), null);
+});
+
+// TS-3: each new extractor returns parsed value when present and null when absent (composite)
+
+test('TS-3: extractScope, extractKeyPrinciples, extractSmokeTestSteps each parse-when-present / null-when-absent', () => {
+  const present = '## Scope\n\nNarrow.\n\n## Key Principles\n- P1\n\n## Smoke Test Steps\n- S1\n';
+  assert.equal(extractScope(present), 'Narrow.');
+  assert.deepEqual(extractKeyPrinciples(present), ['P1']);
+  assert.equal(extractSmokeTestSteps(present).length, 1);
+
+  const absent = '# Plan\n\n## Summary\n\nNothing else.';
+  assert.equal(extractScope(absent), null);
+  assert.equal(extractKeyPrinciples(absent), null);
+  assert.equal(extractSmokeTestSteps(absent), null);
+});
+
+// parsePlanFile integration — new fields exposed
+
+test('parsePlanFile: exposes keyPrinciples, smokeTestSteps, successMetrics, planScope', () => {
+  const content = [
+    '# Plan',
+    '## Scope',
+    'Narrow scope.',
+    '## Key Principles',
+    '- Backward compatible',
+    '## Smoke Test Steps',
+    '- Run it',
+    '## Success Metrics',
+    '- It works',
+  ].join('\n\n');
+  const parsed = parsePlanFile(content);
+  assert.equal(parsed.planScope, 'Narrow scope.');
+  assert.deepEqual(parsed.keyPrinciples, ['Backward compatible']);
+  assert.equal(parsed.smokeTestSteps[0].instruction, 'Run it');
+  assert.equal(parsed.successMetrics[0].metric, 'It works');
+});
+
+test('parsePlanFile: new fields are null when sections absent', () => {
+  const parsed = parsePlanFile('# Plan\n\n## Summary\n\nNothing.');
+  assert.equal(parsed.planScope, null);
+  assert.equal(parsed.keyPrinciples, null);
+  assert.equal(parsed.smokeTestSteps, null);
+  assert.equal(parsed.successMetrics, null);
+});
+
+test('parsePlanFile: empty content default shape includes null new fields', () => {
+  const parsed = parsePlanFile('');
+  assert.equal(parsed.keyPrinciples, null);
+  assert.equal(parsed.smokeTestSteps, null);
+  assert.equal(parsed.successMetrics, null);
+  assert.equal(parsed.planScope, null);
+});
+
+// extractExplicitTargetApplication (FR-3)
+
+test('extractExplicitTargetApplication: TS-4 — front-matter-only plan resolves from front-matter', () => {
+  const content = '<!-- Type: feature, target_application: EHG -->\n\n# Plan\n\n## Summary\n\nBody.';
+  assert.equal(extractExplicitTargetApplication(content), 'EHG');
+});
+
+test('extractExplicitTargetApplication: front-matter multi-line comment resolves', () => {
+  const content = '<!--\nType: infrastructure\ntarget_application: EHG_Engineer\n-->\n# Plan';
+  assert.equal(extractExplicitTargetApplication(content), 'EHG_Engineer');
+});
+
+test('extractExplicitTargetApplication: TS-5 — both H2 header and front-matter resolve to the H2 value (precedence)', () => {
+  const content = '<!-- target_application: EHG -->\n\n# Plan\n\n## Target Application\n\nEHG_Engineer\n\n## Summary\n\nBody.';
+  assert.equal(extractExplicitTargetApplication(content), 'EHG_Engineer');
+});
+
+test('extractExplicitTargetApplication: H2-only plan unchanged (byte-identical legacy path)', () => {
+  const content = '# Plan\n\n## Target Application\n\nEHG_Engineer (Stage 0 venture engine)\n';
+  assert.equal(extractExplicitTargetApplication(content), 'EHG_Engineer');
+});
+
+test('extractExplicitTargetApplication: TS-6 — neither present returns null (default path applies)', () => {
+  const content = '# Plan\n\n## Summary\n\nNo target signal anywhere.';
+  assert.equal(extractExplicitTargetApplication(content), null);
+});
+
+test('extractExplicitTargetApplication: HTML comment without target_application key returns null', () => {
+  const content = '<!-- Type: feature, Priority: high -->\n\n# Plan\n\n## Summary\n\nBody.';
+  assert.equal(extractExplicitTargetApplication(content), null);
+});
+
+test('extractExplicitTargetApplication: front-matter is case-insensitive on the key', () => {
+  const content = '<!-- Target_Application: EHG -->\n# Plan';
+  assert.equal(extractExplicitTargetApplication(content), 'EHG');
 });
