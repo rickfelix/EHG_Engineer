@@ -1,0 +1,30 @@
+-- Migration: Default retrospectives.retrospective_type to NULL
+-- SD: SD-LEO-INFRA-DEFAULT-RETROSPECTIVES-RETROSPECTIVE-001 (CAPA for harness-backlog a558baf6)
+--
+-- Root cause: migration 20251210_retrospective_self_improvement_system.sql set
+--   retrospectives.retrospective_type DEFAULT 'SD_COMPLETION', but the PLAN-TO-LEAD
+--   RETROSPECTIVE_QUALITY_GATE (scripts/modules/handoff/retro-filters.js::getFilteredRetrospective)
+--   selects the SD-completion retro via: retro_type='SD_COMPLETION' AND retrospective_type IS NULL
+--   AND created_at > leadToPlanAcceptedAt. Any writer that OMITS retrospective_type received the
+--   'SD_COMPLETION' default and failed the gate (recurred twice 2026-05-28:
+--   VENTURE-LIFECYCLE-PIPELINE-001 + ADD-CMO-CHIEF-001, requiring a manual UPDATE workaround).
+--
+-- Fix: align the column default with the gate contract. Completion writers that omit the field now
+--   get NULL (which the gate accepts); handoff writers continue to set LEAD_TO_PLAN/PLAN_TO_EXEC
+--   explicitly and are unaffected.
+--
+-- Safety (verified by DATABASE sub-agent, evidence 1e95a781):
+--   * Forward-looking: existing rows are NOT backfilled (their SDs already passed the gate).
+--   * CHECK constraint retrospectives_retrospective_type_check already permits NULL.
+--   * Default-only: the trigger that historically copied retrospective_type into the NOT NULL
+--     protocol_improvement_queue.source_type is ORPHANED on the live DB (the live function hardcodes
+--     source_type='retrospective' and never reads retrospective_type). Proven empirically via a
+--     BEGIN/ROLLBACK insert of a NULL-retrospective_type retro with qualifying improvements (succeeded).
+--   * SET DEFAULT is an instant catalog change (no table rewrite / lock contention) — safe to apply
+--     while parallel sessions complete SDs.
+--   * Idempotent: re-running SET DEFAULT NULL is a no-op.
+--
+-- NOTE: re-applying 20251210 would re-attach the unsafe (retrospective_type-reading) trigger; that
+--   migration should be marked superseded re: the trigger (tracked as a follow-up, out of scope here).
+
+ALTER TABLE retrospectives ALTER COLUMN retrospective_type SET DEFAULT NULL;
