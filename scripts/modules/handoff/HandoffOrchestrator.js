@@ -340,14 +340,29 @@ export class HandoffOrchestrator {
         console.log('   [GatePolicy] Using hardcoded gate set (DB policy unavailable)');
       }
 
-      // Run ALL gates using batch validation (doesn't stop on first failure)
-      const result = await this.validationOrchestrator.validateGatesAll(filteredGates, {
+      // SD-FDBK-INFRA-PLAN-LEAD-PRECHECK-001: surface DB-only validation rules
+      // (dual-namespace gates like 3:subAgentOrchestration) in precheck, matching
+      // execute (BaseExecutor.js:316) and dryRunHandoff (HandoffOrchestrator.js:558),
+      // which both merge buildGatesFromRules. Without this, precheck silently omits
+      // any gate defined only in leo_validation_rules, so operators don't see a
+      // failure execute will enforce. Advisory-only: validateGatesAll runs in
+      // precheckMode (no writes; LLM gates skipped) and the execute path is unchanged.
+      const precheckValidationContext = {
         sdId,
+        sd_id: sd?.id || sdId,
         sd,
         options,
         precheckMode: true,
         supabase: this.supabase
-      });
+      };
+      const gatesWithRules = await this.validationOrchestrator.buildGatesFromRules(
+        filteredGates,
+        normalizedType,
+        precheckValidationContext
+      );
+
+      // Run ALL gates using batch validation (doesn't stop on first failure)
+      const result = await this.validationOrchestrator.validateGatesAll(gatesWithRules, precheckValidationContext);
 
       // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-080: Show gate scores and thresholds
       if (result.gateResults && Object.keys(result.gateResults).length > 0) {
