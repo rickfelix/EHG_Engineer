@@ -1,6 +1,6 @@
 # CronGenius Pilot — Pre-Venture-#2 Assessment & Readiness Scrub
 
-> **Purpose:** the first venture (CronGenius M1) is shipped; before onboarding ventures 2..N we scrub everything the pilot taught us and decide **what must be fixed/decided NOW vs. later.** This is the decision layer on top of the reference docs — it does not restate them.
+> **Purpose:** we shipped the first venture (CronGenius M1); before onboarding ventures 2..N we scrub everything the pilot taught us and decide **what to fix or decide NOW vs. later.** This is the decision layer on top of the reference docs — it does not restate them.
 >
 > **Inputs:** [Venture Pipeline Playbook](./venture-pipeline-playbook.md) (F1–F22, §3 fixed / §4 open), [Venture Data Architecture](./venture-data-architecture.md), the pilot journal (P-FAIL-1–6, O1–O6), and the harness backlog (`feedback` rows).
 >
@@ -30,7 +30,7 @@ These are the gaps that forced a workaround at **every** child this pilot. Shipp
 
 | # | Fix | Why now (cost if not) | Findings | Priority |
 |---|-----|----------------------|----------|----------|
-| **B1** | **DB-repo-aware gates** — make every completion gate resolve the target repo from `applications.local_path` instead of cwd | Retires an entire CLASS of false-positives in ONE SD. Today each is worked around separately at each handoff. Highest leverage item in the whole assessment. | F16, F17, F18, F19, F20 | **P0** |
+| **B1** | **DB-repo-aware gates** — make every completion gate resolve the target repo from `applications.local_path` instead of cwd | Retires an entire CLASS of false-positives in ONE SD. Today each one needs its own workaround at each handoff. Highest-impact item in the whole assessment. | F16, F17, F18, F19, F20 | **P0** |
 | **B2** | **Sub-agent venture repo resolution** — derive `repo_path` from target_application + add latest-row-per-agent filter to the gate | Every venture child's PLAN-TO-EXEC needs a manual forward-slash path + a row UPDATE today. SD already LEAD-approved, just unshipped. | F10, F11 | **P0/P1** |
 | **B3** | **create-orchestrator venture-awareness** — populate child fields from vision/arch (not skeletal), always extract `implementation_phases`, default `target_application` from venture, set per-child `scope_slice`/`inherited_from_parent` | LEAD has to enrich every auto-gen child + author phases + fix target_application + set the scope flag by hand. | F5, F2, F3, F17 (create-side) | **P1** |
 
@@ -52,17 +52,17 @@ These are the gaps that forced a workaround at **every** child this pilot. Shipp
 
 ## Bucket D — OPEN DESIGN QUESTIONS → formal brainstorm (decisions, not fixes)
 
-The venture data integration (Replit operational DB ↔ EHG Supabase portfolio view). **The architecture shape is decided (two-layer pull; see the data-architecture doc) — the CONTENTS and contract are not.**
+The venture data integration (Replit operational DB ↔ EHG Supabase portfolio view). **We have settled the architecture shape (two-layer pull; see the data-architecture doc) — but not the CONTENTS or the contract.**
 
 | # | Open question | Status |
 |---|---------------|--------|
 | **D1** | **What data actually crosses Replit → EHG?** Which KPIs/rollups the portfolio view needs — *explicitly undecided.* | **chairman-goal-driven; prime brainstorm topic** |
 | **D2** | The `/v1/metrics` contract — exact fields + versioning, standardized across ventures | open |
 | **D3** | Feed mechanism — EHG pulls on schedule (recommended) vs. ventures push | open (lean pull) |
-| **D4** | EHG-side storage — how portfolio KPIs are normalized/stored + surfaced on the chairman dashboard | open |
+| **D4** | EHG-side storage — how EHG normalizes/stores portfolio KPIs + surfaces them on the chairman dashboard | open |
 | **D5** | Read-key issuance/rotation for EHG's per-venture pulls | open |
 
-Plus the two build gaps from the data-architecture doc (these are *implementation* once D1/D2 are decided): **Layer 1** = CronGenius `DATABASE_URL` Postgres adapter (today ephemeral); **Layer 2** = EHG-side ingestion job.
+Plus the two build gaps from the data-architecture doc (these are *implementation* once we decide D1/D2): **Layer 1** = CronGenius `DATABASE_URL` Postgres adapter (today ephemeral); **Layer 2** = EHG-side ingestion job.
 
 > **D1 is the gating decision** — it's goal-first: *what questions does the chairman want to answer across the portfolio?* That drives D2 (the contract), which drives the Layer-1/Layer-2 build. So D1 should anchor the brainstorm.
 
@@ -72,7 +72,7 @@ Plus the two build gaps from the data-architecture doc (these are *implementatio
 
 1. **Brainstorm Bucket D** (formal process), anchored on **D1 (what data to bring over)** → produces the `/v1/metrics` contract (D2) + feed/storage decisions (D3/D4/D5).
 2. **Ship Bucket B** as a `[MODE: campaign]` sweep — **B1 (DB-repo-aware gates) first** (keystone), then B2, then B3.
-3. **Build the data layers** once D1/D2 are decided — Layer 1 (venture Postgres adapter, likely CronGenius M2) + Layer 2 (EHG ingestion).
+3. **Build the data layers** once we decide D1/D2 — Layer 1 (venture Postgres adapter, likely CronGenius M2) + Layer 2 (EHG ingestion).
 4. **Then onboard venture #2** using the playbook + the shipped fixes + the agreed data contract — it should run with minimal manual workarounds.
 
 *(B and D are independent and can run in parallel: B is harness engineering, D is product/architecture decision-making.)*
