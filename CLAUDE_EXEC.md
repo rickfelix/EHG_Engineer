@@ -3,7 +3,7 @@
 **Generated**: 2026-05-27 4:44:53 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
-**Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.7 guidance)
+**Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.

@@ -98,7 +98,7 @@ AUTO-PROCEED is ON by default. You continue through phase transitions, PRD creat
 
 If your reason for pausing is not on the five-point list above, KEEP WORKING. When in doubt: pick the highest-value option, state it in one sentence, and execute.
 
-> Why: Opus 4.7 interprets instructions literally — implicit "the user approved the SD at LEAD" inferences do not auto-extend across downstream phase boundaries unless enumerated. Confirmation-fishing is the most common AUTO-PROCEED failure mode. This section is canonical; any other doc that conflicts defers to the five-point list here.
+> Why: Opus 4.8 interprets instructions literally — implicit "the user approved the SD at LEAD" inferences do not auto-extend across downstream phase boundaries unless enumerated. Confirmation-fishing is the most common AUTO-PROCEED failure mode. This section is canonical; any other doc that conflicts defers to the five-point list here.
 
 ## Issue Resolution
 When you encounter ANY issue: **STOP. Do not retry blindly. Do not work around it.**
@@ -123,7 +123,7 @@ Sessions operate in one of two modes that govern how you treat harness bugs (LEO
 - Current SD is any other type → **product mode**
 - No SD claimed and user intent is ambiguous → ask the user once; otherwise default to **product mode**
 
-> Why: Opus 4.7 reads instructions literally and resists rationalizing around countable rules. Without a declared mode, implicit "is this harness work or product work" inference drifts, causing product sessions to get consumed by opportunistic meta-work. The mode declaration turns user intent into a literal switch — product sessions defer, campaign sessions fix inline, no judgment calls in between.
+> Why: Opus 4.8 reads instructions literally and resists rationalizing around countable rules. Without a declared mode, implicit "is this harness work or product work" inference drifts, causing product sessions to get consumed by opportunistic meta-work. The mode declaration turns user intent into a literal switch — product sessions defer, campaign sessions fix inline, no judgment calls in between.
 
 User may override at any point by stating \`[MODE: product]\` or \`[MODE: campaign]\` in the conversation. Most recent declaration wins. If mode is unclear at the start of substantive work, state the mode you've inferred in one sentence before proceeding (e.g., *"Treating this as [MODE: product] — current SD is SD-EHG-MARKETING-..."*).
 
@@ -404,7 +404,7 @@ function generateExec(data, fileMapping) {
 **Generated**: ${today} ${time}
 **Protocol**: LEO ${protocol.version}
 **Purpose**: EXEC agent implementation requirements and testing
-**Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.7 guidance)
+**Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.

@@ -322,7 +322,7 @@ function generateExecDigest(data, fileMapping, metadata) {
 
 **Protocol**: LEO ${protocol.version}
 **Purpose**: Implementation requirements and constraints (<10k chars)
-**Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.7 guidance)
+**Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
 
 ---
 
