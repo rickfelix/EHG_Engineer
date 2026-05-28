@@ -28,6 +28,7 @@
     "quality:aggregate:cron": "node scripts/cron/quality-findings-aggregator.mjs",
     "cascade:watch:cron": "node scripts/cron/cascade-watcher.mjs --once",
     "cascade:status": "node scripts/cron/cascade-status.mjs",
+    "cascade:snapshot:capture": "node scripts/test-helpers/capture-crongenius-snapshot.mjs",
     "backfill:pr-tracking": "node scripts/backfill-pr-tracking.js",
     "test-database": "node scripts/test-database.js",
     "new-sd": "node scripts/new-strategic-directive.js",
