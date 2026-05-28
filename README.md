@@ -47,6 +47,10 @@ node scripts/leo.js add-project
 # 3. Register: node scripts/leo-register-from-env.js
 ```
 
+### Vision-to-Orchestrator Auto-Cascade (SD-LEO-INFRA-AUTOMATE-STAGE-CASCADE-001)
+
+Once an L2 vision is chairman-approved, `npm run cascade:watch:cron` (one-shot, schedule externally) auto-creates the archplan + orchestrator SD + children. Run `npm run cascade:status` for observability (heartbeat age, unresolved refusals, remediation_command). Manual `archplan-command.mjs upsert` / `create-orchestrator-from-plan.js --auto-children` continue to work as fallback.
+
 ### Windows Setup
 
 For Windows development without WSL, use the PowerShell scripts:
