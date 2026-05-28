@@ -22,6 +22,78 @@ function filterOutCoordinators(rows) {
   return (rows || []).filter(w => w && w.metadata?.is_coordinator !== true);
 }
 
+// QF-20260528-581 (Bug B): filter out test/ghost sessions that consume the clean
+// NATO letter pool and churn real workers into overflow suffixes (Alpha-9 etc.).
+//
+// Mirrors the canonical coordinator "active worker" cohort used by the dashboard
+// and coaching loop:
+//   scripts/fleet-dashboard.cjs:150-153  — claude_sessions WHERE sd_key IS NOT NULL
+//   scripts/fleet-coaching.cjs:308-312   — claude_sessions WHERE sd_key IS NOT NULL
+// Those count a real worker as one that holds (or has held) an SD claim. A genuine
+// ghost (drain_test_*, test_execute_*, never-claimed) has sd_key=null AND is absent
+// from that cohort. We keep workers momentarily BETWEEN SDs (sd_key null) by also
+// accepting any session in `claimedSessionIds` (the dashboard cohort, passed in by
+// main()) or one that already carries a fleet_identity (only ever assigned by this
+// script to a real worker). claimed_at is NOT usable here: release_sd() nulls it
+// (database/migrations/...consolidate_sd_claims..., release_sd RPC), so a released
+// worker looks identical to a never-claimed ghost on that column alone.
+//
+// `claimedSessionIds` — Set of session_ids that currently hold an SD claim (kept
+// DB-free so this stays a pure, unit-testable function). Pass an empty Set to rely
+// on per-row signals (sd_key / fleet_identity) only.
+const GHOST_SESSION_ID_PREFIXES = ['drain_test_', 'test_execute_', 'test-session-', 'test_session_'];
+
+function isTestSessionId(sessionId) {
+  if (!sessionId || typeof sessionId !== 'string') return false;
+  return GHOST_SESSION_ID_PREFIXES.some(p => sessionId.startsWith(p));
+}
+
+function filterOutGhostSessions(rows, claimedSessionIds = new Set()) {
+  const claimed = claimedSessionIds instanceof Set ? claimedSessionIds : new Set(claimedSessionIds || []);
+  return (rows || []).filter(w => {
+    if (!w) return false;
+    // Genuine test/ghost session_ids never get a callsign, even if otherwise active.
+    if (isTestSessionId(w.session_id)) return false;
+    // Currently claiming an SD → real worker.
+    if (w.sd_key) return true;
+    // Between SDs but in the canonical claim cohort → real worker, momentarily idle.
+    if (claimed.has(w.session_id)) return true;
+    // Already assigned a fleet identity by this script → was a real worker.
+    if (w.metadata?.fleet_identity?.callsign) return true;
+    // Otherwise: never claimed, no identity → genuine ghost, drop it.
+    return false;
+  });
+}
+
+// QF-20260528-581 (Bug A): collision dedup for ALREADY-assigned workers.
+// After session_id rotation two assigned rows can share the SAME callsign (observed:
+// "Alpha" on two sessions). `assigned` arrives heartbeat-DESC (most recent first), so
+// the FIRST occurrence of a callsign is the most-recent heartbeat and is KEPT; later
+// duplicates are demoted for reassignment to the next free callsign.
+// Returns { kept: [...], demoted: [...] } — main() keeps `kept` as assigned and pushes
+// `demoted` into needsAssignment. Pure + DB-free for unit testing.
+function dedupeAssignedCallsigns(assigned) {
+  const seenCallsigns = new Set();
+  const kept = [];
+  const demoted = [];
+  for (const w of assigned || []) {
+    if (!w) continue;
+    const callsign = w.metadata?.fleet_identity?.callsign;
+    if (!callsign) {
+      // No callsign — not really "assigned"; treat as needing assignment.
+      demoted.push(w);
+      continue;
+    }
+    if (seenCallsigns.has(callsign)) {
+      demoted.push(w);
+    } else {
+      seenCallsigns.add(callsign);
+      kept.push(w);
+    }
+  }
+  return { kept, demoted };
+}
+
 const ANSI = {
   red: '\x1b[31m', blue: '\x1b[34m', green: '\x1b[32m', yellow: '\x1b[33m',
   purple: '\x1b[35m', orange: '\x1b[38;5;208m', pink: '\x1b[38;5;213m', cyan: '\x1b[36m',
@@ -73,7 +145,16 @@ async function main() {
     process.exit(1);
   }
 
-  const workers = filterOutCoordinators(rawWorkers);
+  const nonCoordinators = filterOutCoordinators(rawWorkers);
+
+  // QF-20260528-581 (Bug B): drop test/ghost sessions before they consume the NATO pool.
+  // claimedSessionIds = the canonical "currently claiming" cohort (mirrors the dashboard's
+  // claude_sessions WHERE sd_key IS NOT NULL). Built from the rows we already have — no
+  // extra DB round-trip. Workers between SDs are retained via fleet_identity (see fn doc).
+  const claimedSessionIds = new Set(
+    (rawWorkers || []).filter(w => w && w.sd_key).map(w => w.session_id)
+  );
+  const workers = filterOutGhostSessions(nonCoordinators, claimedSessionIds);
 
   if (!workers || workers.length === 0) {
     console.log('No active workers found.');
@@ -107,19 +188,32 @@ async function main() {
   }
 
   // Separate workers into already-assigned and new
-  const assigned = [];
+  const assignedRaw = [];
   const needsAssignment = [];
 
   for (const worker of uniqueWorkers) {
     const identity = worker.metadata?.fleet_identity;
     if (identity?.callsign && identity?.color && !forceReassign) {
-      assigned.push(worker);
+      assignedRaw.push(worker);
     } else {
       needsAssignment.push(worker);
     }
   }
 
-  // Collect already-used callsigns and colors
+  // QF-20260528-581 (Bug A): resolve duplicate callsigns within the assigned set
+  // (e.g. "Alpha" on two sessions after session_id rotation). Keep the most-recent
+  // heartbeat (assignedRaw is heartbeat-DESC → first occurrence wins); demote the
+  // losers into needsAssignment so they get the next free callsign.
+  const { kept: assigned, demoted } = dedupeAssignedCallsigns(assignedRaw);
+  for (const w of demoted) {
+    const dupCallsign = w.metadata?.fleet_identity?.callsign;
+    const dupCount = assignedRaw.filter(a => a.metadata?.fleet_identity?.callsign === dupCallsign).length;
+    console.log(`${ANSI.dim}↻ collision: ${dupCallsign} was on ${dupCount} sessions, reassigning ${w.session_id.substring(0, 12)}...${ANSI.reset}`);
+    needsAssignment.push(w);
+  }
+
+  // Collect already-used callsigns and colors — from the deduped `kept` set only,
+  // so a demoted duplicate's callsign/color is free for reassignment.
   const usedCallsigns = new Set(assigned.map(w => w.metadata.fleet_identity.callsign));
   const usedColors = new Set(assigned.map(w => w.metadata.fleet_identity.color));
 
@@ -259,7 +353,7 @@ async function main() {
   console.log('');
 }
 
-module.exports = { filterOutCoordinators };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns };
 
 if (require.main === module) {
   main().catch(err => {
