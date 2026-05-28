@@ -18,7 +18,38 @@
 import { getValidationRequirements } from '../../../../../../lib/utils/sd-type-validation.js';
 // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-044: Import centralized policy for advisory mode override
 import { getValidatorRequirement } from '../../../validation/sd-type-applicability-policy.js';
+// SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 (FR-3): WHITELIST-based timeout classifier
+import { buildWaitResult, buildFailResult, classifyTestRunnerExit } from '../../../../../../lib/handoff/wait-verdict.js';
 import { execSync } from 'child_process';
+
+/**
+ * FR-3: Resolve test-runner exit info for WAIT classification.
+ * Prefers executor-supplied ctx.testRunner = { exitCode, output|stderr|message };
+ * falls back to the stored TESTING result row's exit fields (metadata.exit_code /
+ * metadata.runner_output / details). Returns null when no runner info is available
+ * (→ caller keeps the unchanged verdict-based FAIL).
+ *
+ * @param {Object} ctx
+ * @param {Object} [testingRow] - The latest sub_agent_execution_results row.
+ * @returns {{ exitCode:(number|null), message:string }|null}
+ */
+function resolveTestRunnerExit(ctx, testingRow) {
+  const tr = ctx?.testRunner || ctx?.test_runner;
+  if (tr && (tr.exitCode !== undefined || tr.exit_code !== undefined || tr.output || tr.stderr || tr.message)) {
+    return {
+      exitCode: tr.exitCode ?? tr.exit_code ?? null,
+      message: String(tr.output || tr.stderr || tr.message || '')
+    };
+  }
+  const md = testingRow?.metadata || testingRow?.details;
+  if (md && (md.exit_code !== undefined || md.exitCode !== undefined || md.runner_output || md.output || md.stderr)) {
+    return {
+      exitCode: md.exit_code ?? md.exitCode ?? null,
+      message: String(md.runner_output || md.output || md.stderr || '')
+    };
+  }
+  return null;
+}
 
 /**
  * Detect code file changes in the current branch/working directory
@@ -66,6 +97,21 @@ function detectCodeChanges() {
 
 /**
  * Create the MANDATORY_TESTING_VALIDATION gate validator
+ *
+ * SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 (FR-3): a non-passing TESTING verdict is
+ * re-classified. An ENVIRONMENTAL test timeout returns WAIT (preserve retry
+ * budget; re-check later); a REAL test failure returns FAIL (unchanged).
+ *
+ * WAIT-detection WHITELIST (RISK-2 — the ONLY signals that yield WAIT):
+ *   - exit codes 124 (coreutils timeout), 137 (SIGKILL/OOM), 143 (SIGTERM)
+ *   - vitest `--reporter=json` duration timeout / "Test timed out in <N>ms"
+ *   - jest "Timeout - Async callback was not invoked"
+ *   - playwright "Test timeout of <N>ms exceeded"
+ * Everything else — assertion errors, AND user-thrown errors whose messages
+ * merely contain the word "timeout" (e.g. "connection timeout") — is a REAL
+ * failure → FAIL. We NEVER pattern-match arbitrary user error text for the word
+ * "timeout"; misclassifying a real failure as environmental would let bad code
+ * through, the worst outcome of this SD.
  *
  * @param {Object} supabase - Supabase client
  * @returns {Object} Gate configuration
@@ -129,7 +175,7 @@ export function createMandatoryTestingValidationGate(supabase) {
       const sdUuid = ctx.sd?.id || ctx.sdId;
       const { data: testingResults, error } = await supabase
         .from('sub_agent_execution_results')
-        .select('id, verdict, confidence, created_at')
+        .select('id, verdict, confidence, created_at, metadata')
         .eq('sd_id', sdUuid)
         .eq('sub_agent_code', 'TESTING')
         .order('created_at', { ascending: false })
@@ -197,14 +243,35 @@ export function createMandatoryTestingValidationGate(supabase) {
       console.log(`   📊 TESTING result found: ${result.verdict} (${result.confidence}% confidence)`);
 
       if (!['PASS', 'CONDITIONAL_PASS'].includes(result.verdict)) {
+        // FR-3: re-classify the non-passing verdict. ENVIRONMENTAL timeout → WAIT
+        // (preserve retry budget); everything else → FAIL (unchanged). WHITELIST
+        // only (RISK-2): see createMandatoryTestingValidationGate JSDoc.
+        const runnerExit = resolveTestRunnerExit(ctx, result);
+        if (runnerExit) {
+          const classification = classifyTestRunnerExit(runnerExit.exitCode, runnerExit.message);
+          if (classification === 'timeout') {
+            console.log(`   ⏳ WAIT: environmental test timeout (exit=${runnerExit.exitCode}) — not a real failure`);
+            return buildWaitResult({
+              score: 0,
+              max_score: 100,
+              wait_reason: `Environmental test timeout (exit code ${runnerExit.exitCode ?? 'n/a'}); re-running may succeed`,
+              details: {
+                reason: 'TEST_TIMEOUT',
+                verdict: result.verdict,
+                runner_exit_code: runnerExit.exitCode ?? null,
+                classification
+              },
+              remediation: 'Re-run the test suite — the timeout appears environmental (CI slowness / OOM-kill), not a code defect. If it persists past the wait ceiling it will surface as a real failure.'
+            });
+          }
+        }
         console.log(`   ❌ TESTING verdict ${result.verdict} - must pass`);
-        return {
-          passed: false,
+        return buildFailResult({
           score: 0,
           max_score: 100,
           issues: [`TESTING verdict ${result.verdict} - must be PASS or CONDITIONAL_PASS`],
-          warnings: []
-        };
+          details: { verdict: result.verdict }
+        });
       }
 
       // 9. Validate freshness (default 24h)

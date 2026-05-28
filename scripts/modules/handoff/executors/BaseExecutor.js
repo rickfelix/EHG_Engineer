@@ -306,6 +306,12 @@ export class BaseExecutor {
         gitContext  // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Cached git state (branch, diffFiles, gitRoot)
       };
 
+      // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5/TR-4: surface prior consecutive-wait
+      // accounting so the orchestrator's max-wait ceiling can escalate a perpetually
+      // WAITing gate to FAIL. Best-effort: read the most recent WAIT row's
+      // metadata.{wait_attempts,first_wait_at} for this SD + handoff type.
+      validationContext.waitState = await this._loadPriorWaitState(sd?.id || sdId);
+
       // Use database-driven gates when available, fall back to hardcoded
       const gates = await this.validationOrchestrator.buildGatesFromRules(
         policyFilteredGates,
@@ -373,6 +379,9 @@ export class BaseExecutor {
           waitVerdict: true,
           waitingGates: gateResults.waitingGates,
           waitReasons: gateResults.waitReasons,
+          // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5: carry the updated wait
+          // accounting so HandoffRecorder.recordWait persists it for the next attempt.
+          waitMetadata: gateResults.waitMetadata || null,
           message: gateResults.waitReasons.join('; ') || 'Handoff blocked — waiting on prerequisites',
           warnings: gateResults.warnings,
           gateResults: gateResults.gateResults,
@@ -591,6 +600,39 @@ export class BaseExecutor {
    */
   async getRequiredGates(_sd, _options) {
     throw new Error('Subclass must implement getRequiredGates()');
+  }
+
+  /**
+   * SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5/TR-4: load the prior consecutive-wait
+   * accounting for this SD + handoff type from the most recent WAIT row's metadata.
+   * Returns { wait_attempts, first_wait_at } (zeroed when none / on any error).
+   * Best-effort — a lookup failure must never block a handoff.
+   *
+   * @param {string} sdUuid
+   * @returns {Promise<{wait_attempts:number, first_wait_at:(string|null)}>}
+   */
+  async _loadPriorWaitState(sdUuid) {
+    const empty = { wait_attempts: 0, first_wait_at: null };
+    if (!sdUuid || !this.supabase) return empty;
+    try {
+      const { data, error } = await this.supabase
+        .from('sd_phase_handoffs')
+        .select('metadata, created_at')
+        .eq('sd_id', sdUuid)
+        .eq('handoff_type', this.handoffType)
+        .eq('status', 'blocked')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error || !data?.metadata?.wait) return empty;
+      const md = data.metadata;
+      return {
+        wait_attempts: Number(md.wait_attempts) || 0,
+        first_wait_at: md.first_wait_at || null
+      };
+    } catch {
+      return empty;
+    }
   }
 
   /**

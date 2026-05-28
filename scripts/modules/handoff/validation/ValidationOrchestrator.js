@@ -36,6 +36,16 @@ import { OIVGate, OIV_GATE_WEIGHT } from './oiv/index.js';
 // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Gate context preloader
 import { preloadGateContext, getGateNumberForRule } from './validator-registry/gate-context-preloader.js';
 
+// SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 (FR-5/TR-4): max-wait ceiling guard.
+// Escalates a perpetually-WAITing gate to FAIL after N consecutive waits OR a
+// wall-clock timeout, protecting ALL wait-returning gates (incl. PR #4021
+// prerequisite-check) from infinite WAIT loops.
+import { hasExceededMaxWait } from '../../../../lib/handoff/wait-verdict.js';
+
+// Max-wait ceiling constants (FR-5). N=10 consecutive waits; 24h wall-clock.
+const WAIT_MAX_ATTEMPTS = 10;
+const WAIT_MAX_WALL_CLOCK_MS = 24 * 60 * 60 * 1000;
+
 export class ValidationOrchestrator {
   constructor(supabase, options = {}) {
     if (!supabase) {
@@ -120,6 +130,27 @@ export class ValidationOrchestrator {
       console.log(`   [ValidationOrchestrator] Warning: SD_TYPE_THRESHOLD registry check failed: ${err.message}`);
       return { disabled: false, reason: null };
     }
+  }
+
+  /**
+   * SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5: resolve the prior consecutive-wait
+   * accounting for a gate. The executor persists { wait_attempts, first_wait_at }
+   * into sd_phase_handoffs.metadata on each WAIT and surfaces the prior values on
+   * context.waitState (optionally keyed per-gate via context.waitStateByGate).
+   *
+   * Returns a zeroed state when no prior wait is recorded (first wait). Kept
+   * synchronous + context-driven so unit tests need no live DB (TR-5).
+   *
+   * @param {object} context - Validation context.
+   * @param {string} gateName - Gate name (for per-gate keyed state).
+   * @returns {{ wait_attempts: number, first_wait_at: (string|null) }}
+   */
+  _resolveWaitState(context = {}, gateName = '') {
+    const perGate = context.waitStateByGate && context.waitStateByGate[gateName];
+    const raw = perGate || context.waitState || {};
+    const attempts = Number(raw.wait_attempts) || 0;
+    const firstWaitAt = raw.first_wait_at || null;
+    return { wait_attempts: attempts, first_wait_at: firstWaitAt };
   }
 
   /**
@@ -216,7 +247,11 @@ export class ValidationOrchestrator {
       // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-4/FR-5: WAIT verdict tracking
       waitVerdict: false,      // True if any required gate returned wait=true (not a failure)
       waitingGates: [],        // Gate names that returned wait=true
-      waitReasons: []          // Per-gate wait_reason strings
+      waitReasons: [],         // Per-gate wait_reason strings
+      // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5: wait-loop accounting. The
+      // executor persists these into sd_phase_handoffs.metadata so the NEXT
+      // attempt can detect when the wait ceiling has been exceeded.
+      waitMetadata: null       // { wait_attempts, first_wait_at } when waitVerdict=true
     };
 
     // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Pre-fetch shared gate data
@@ -313,17 +348,53 @@ export class ValidationOrchestrator {
           // failed-gate path so the executor can record blocked_wait status without
           // burning retry budget or triggering RCA.
           if (gateResult.wait === true) {
-            results.waitVerdict = true;
-            results.waitingGates.push(gate.name);
-            if (gateResult.wait_reason) {
-              results.waitReasons.push(`${gate.name}: ${gateResult.wait_reason}`);
+            // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 FR-5/TR-4: max-wait ceiling.
+            // Read prior consecutive-wait accounting (persisted by the executor in
+            // sd_phase_handoffs.metadata, surfaced on context.waitState). If the
+            // ceiling is already exceeded BEFORE this attempt, escalate WAIT → FAIL
+            // so a permanently-stuck race window surfaces as a real failure rather
+            // than looping forever. Applies to ALL wait gates incl. prerequisite-check.
+            const prior = this._resolveWaitState(context, gate.name);
+            const ceiling = hasExceededMaxWait({
+              wait_attempts: prior.wait_attempts,
+              first_wait_at: prior.first_wait_at,
+              maxAttempts: WAIT_MAX_ATTEMPTS,
+              maxWallClockMs: WAIT_MAX_WALL_CLOCK_MS
+            });
+
+            if (ceiling.exceeded) {
+              // Escalate to a real failure. NOT a wait anymore.
+              results.passed = false;
+              if (!results.failedGate) results.failedGate = gate.name;
+              const reasonMsg = ceiling.reason === 'WAIT_TIMEOUT_EXCEEDED'
+                ? `${gate.name}: WAIT_TIMEOUT_EXCEEDED — gate has been waiting >${Math.round(WAIT_MAX_WALL_CLOCK_MS / 3600000)}h (first wait ${prior.first_wait_at}); escalating to failure`
+                : `${gate.name}: WAIT_LIMIT_EXCEEDED — gate returned WAIT ${prior.wait_attempts}× (max ${WAIT_MAX_ATTEMPTS}); escalating to failure`;
+              results.issues.push(reasonMsg);
+              if (gateResult.wait_reason) {
+                results.issues.push(`${gate.name} underlying wait reason: ${gateResult.wait_reason}`);
+              }
+              console.log(`   ⛔ ${reasonMsg}`);
+              earlyExit = true;
+            } else {
+              results.waitVerdict = true;
+              results.waitingGates.push(gate.name);
+              if (gateResult.wait_reason) {
+                results.waitReasons.push(`${gate.name}: ${gateResult.wait_reason}`);
+              }
+              // FR-5: advance the wait accounting so the executor persists the new
+              // count + first-wait anchor (first wait stamps "now"; subsequent waits
+              // preserve the original anchor for the wall-clock guard).
+              results.waitMetadata = {
+                wait_attempts: prior.wait_attempts + 1,
+                first_wait_at: prior.first_wait_at || new Date().toISOString()
+              };
+              // Still mark not-passed so handoff doesn't advance, but DO NOT set failedGate
+              // (failedGate is a failure marker — wait is not a failure).
+              results.passed = false;
+              // Defensive: still copy warnings (which include the WAIT message) but skip issues
+              // since the gate already returned issues=[] for wait verdicts.
+              earlyExit = true;
             }
-            // Still mark not-passed so handoff doesn't advance, but DO NOT set failedGate
-            // (failedGate is a failure marker — wait is not a failure).
-            results.passed = false;
-            // Defensive: still copy warnings (which include the WAIT message) but skip issues
-            // since the gate already returned issues=[] for wait verdicts.
-            earlyExit = true;
           } else {
             results.passed = false;
             if (!results.failedGate) results.failedGate = gate.name;
