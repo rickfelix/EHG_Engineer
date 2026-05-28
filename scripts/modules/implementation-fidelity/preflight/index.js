@@ -117,8 +117,8 @@ async function checkAmbiguityResolution(sd_id, validation, supabase) {
 
     if (combinedDiff) {
       // FR-4 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): scan ADDED ('+') diff lines
-      // ONLY — excluding '+++' file headers — so a domain word ('ambiguous'/'unclear')
-      // present only in a removed/context line no longer false-positives AMBIGUITY_RESOLUTION.
+      // ONLY — excluding '+++' file headers — so a marker word present only in a removed
+      // or context line no longer false-positives this preflight check.
       // CRLF-safe (crongenius autocrlf=true). Multi-repo combinedDiff handled (concatenated).
       const diff = combinedDiff
         .split(/\r?\n/)
@@ -254,8 +254,8 @@ async function checkStubbedCode(sd_id, validation, supabase) {
 
     if (combinedDiff) {
       // FR-4 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): same added-lines-only fix as the
-      // ambiguity scan above — a commit REMOVING a stub ('throw not implemented', '// TODO:
-      // implement') must not false-positive on the removed line. Scan '+' added lines only.
+      // scan above — a commit that REMOVES a stub marker must not false-positive on the
+      // removed line. Scan '+' added lines only (exclude '+++' headers).
       const diff = combinedDiff
         .split(/\r?\n/)
         .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
