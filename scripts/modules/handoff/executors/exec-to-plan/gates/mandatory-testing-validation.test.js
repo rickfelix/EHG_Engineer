@@ -151,6 +151,93 @@ describe('MANDATORY_TESTING_VALIDATION gate', () => {
     const result = await gate.validator(ctx);
 
     expect(result.passed).toBe(false);
+    expect(result.wait).toBe(false);
     expect(result.issues[0]).toMatch(/TESTING verdict FAIL/);
+  });
+
+  // ─── FR-3: WAIT verdict for environmental test timeouts ────────────────────
+  // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001
+  describe('FR-3 WAIT branch (environmental test timeout)', () => {
+    const freshDate = () => new Date(Date.now() - 3600000).toISOString();
+    const withTestingRow = (row) => {
+      const chainable = (val) => {
+        const c = {
+          select: () => c, eq: () => c, order: () => c, limit: () => c,
+          single: () => Promise.resolve(val),
+          then: (fn) => Promise.resolve(val).then(fn),
+        };
+        return c;
+      };
+      mockFrom.mockReturnValue({ select: () => chainable({ data: [row], error: null }) });
+    };
+
+    it('exit code 124 (via ctx.testRunner) + non-pass verdict → WAIT', async () => {
+      withTestingRow({ id: 1, verdict: 'FAIL', confidence: 0, created_at: freshDate() });
+      const ctx = {
+        sd: createMockSD({ sd_type: 'feature', id: 'uuid-124' }),
+        testRunner: { exitCode: 124, output: '' },
+      };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(false);
+      expect(result.wait).toBe(true);
+      expect(result.details.reason).toBe('TEST_TIMEOUT');
+      expect(result.issues).toEqual([]);
+    });
+
+    it('playwright timeout marker (via stored row metadata) → WAIT', async () => {
+      withTestingRow({
+        id: 1, verdict: 'TIMEOUT', confidence: 0, created_at: freshDate(),
+        metadata: { exit_code: 1, runner_output: 'Test timeout of 30000ms exceeded' },
+      });
+      const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-pw' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(false);
+      expect(result.wait).toBe(true);
+      expect(result.details.classification).toBe('timeout');
+    });
+
+    it('exit 137 (SIGKILL/OOM) → WAIT', async () => {
+      withTestingRow({ id: 1, verdict: 'FAIL', confidence: 0, created_at: freshDate() });
+      const ctx = {
+        sd: createMockSD({ sd_type: 'feature', id: 'uuid-137' }),
+        testRunner: { exitCode: 137, output: '' },
+      };
+      const result = await gate.validator(ctx);
+      expect(result.wait).toBe(true);
+    });
+
+    // RISK-2 NEGATIVE CONTROL: user-thrown error containing "timeout" → FAIL, never WAIT
+    it('[RISK-2 negative control] user Error("connection timeout") → FAIL (not WAIT)', async () => {
+      withTestingRow({
+        id: 1, verdict: 'FAIL', confidence: 0, created_at: freshDate(),
+        metadata: { exit_code: 1, runner_output: 'Error: connection timeout at db.connect (db.js:10)' },
+      });
+      const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-userto' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(false);
+      expect(result.wait).toBe(false);
+      expect(result.issues[0]).toMatch(/TESTING verdict FAIL/);
+    });
+
+    // Assertion error → FAIL
+    it('assertion error in runner output → FAIL (not WAIT)', async () => {
+      withTestingRow({
+        id: 1, verdict: 'FAIL', confidence: 0, created_at: freshDate(),
+        metadata: { exit_code: 1, runner_output: 'AssertionError: expected 1 to equal 2' },
+      });
+      const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-assert' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(false);
+      expect(result.wait).toBe(false);
+    });
+
+    // Ambiguous (non-pass verdict, no runner exit info available) → FAIL (default)
+    it('non-pass verdict with NO runner info → FAIL (ambiguous defaults to FAIL)', async () => {
+      withTestingRow({ id: 1, verdict: 'FAIL', confidence: 0, created_at: freshDate() });
+      const ctx = { sd: createMockSD({ sd_type: 'feature', id: 'uuid-amb' }) };
+      const result = await gate.validator(ctx);
+      expect(result.passed).toBe(false);
+      expect(result.wait).toBe(false);
+    });
   });
 });
