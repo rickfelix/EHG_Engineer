@@ -308,7 +308,7 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     console.log('\n[B] Value Delivered');
     console.log('-'.repeat(60));
 
-    await validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, gateResults, validation, supabase, { sdType, gate2Required });
+    await validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, gateResults, validation, supabase, { sdType, gate2Required, sdUuid: handoffLookupId });
 
     // ===================================================================
     // SECTION C: Pattern Effectiveness (25 points)
@@ -511,13 +511,23 @@ async function validateProcessAdherence(sd_id, prdData, gateResults, validation,
  * Validate Value Delivered (Section B - 35 points - CRITICAL)
  * Phase-aware: LEAD wants to see ROI and business value
  */
-async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, gateResults, validation, _supabase, { sdType = 'feature', gate2Required = true } = {}) {
+async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, gateResults, validation, supabase, { sdType = 'feature', gate2Required = true, sdUuid = null } = {}) {
   let sectionScore = 0;
   const sectionDetails = {};
 
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Infrastructure SDs get higher defaults when data absent
   // Absence of gate data != poor performance; infrastructure SDs legitimately have fewer gates
   const isInfraSdType = !gate2Required; // infrastructure, documentation, fix, corrective
+
+  // Quick-fix QF-20260528-877: gate3 sub_agent_effectiveness telemetry is frequently absent/zero
+  // at gate4 time (execution_time often null/0 = falsy; details sub-object not reliably threaded
+  // into handoff metadata). When missing, fall back to sub_agent_execution_results like gate3 does
+  // so well-validated SDs are not capped at the 7/10 default. Monotonic: only RAISES B1/B2.
+  const gate3Telemetry = gateResults.gate3?.details?.sub_agent_effectiveness;
+  let evidence = null;
+  if (supabase && sdUuid && (!gate3Telemetry?.total_execution_time_ms || !gate3Telemetry?.substantial_recommendations)) {
+    evidence = await fetchSubAgentEvidence(sdUuid, supabase);
+  }
 
   // B1: Time efficiency (10 points)
   console.log('\n   [B1] Time Efficiency...');
@@ -541,6 +551,13 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
       validation.warnings.push(`[B1] Sub-agent execution took ${totalTimeMins} minutes`);
       console.log(`   ⚠️  Sub-agent execution: ${totalTimeMins} minutes (5/10)`);
     }
+  } else if (evidence?.rowCount > 0) {
+    // QF-20260528-877: evidence rows exist but timing was not recorded (execution_time null/0).
+    // The work was demonstrably done; do not penalize on unreliable timing data.
+    sectionScore += 10;
+    sectionDetails.b1_from_evidence = true;
+    sectionDetails.sub_agents_executed = evidence.rowCount;
+    console.log(`   ✅ ${evidence.rowCount} sub-agent evidence rows present - full credit (timing not recorded)`);
   } else {
     // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Higher default for infra SDs (data absent != poor)
     const defaultScore = isInfraSdType ? 8 : 7;
@@ -557,6 +574,13 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
     sectionScore += 10;
     sectionDetails.substantial_recommendations = true;
     console.log('   ✅ Sub-agents provided substantial recommendations');
+  } else if (evidence?.hasSubstantial) {
+    // QF-20260528-877: verify substantiality directly from evidence rows using the same
+    // >500-char threshold gate3 applies, when the threaded gate3 flag is absent.
+    sectionScore += 10;
+    sectionDetails.substantial_recommendations = true;
+    sectionDetails.b2_from_evidence = true;
+    console.log('   ✅ Sub-agent recommendations substantial (verified from evidence rows)');
   } else {
     // SD-LEARN-FIX-ADDRESS-PAT-AUTO-083: Higher default for infra SDs (data absent != poor)
     const defaultScore = isInfraSdType ? 8 : 7;
@@ -593,6 +617,27 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
   validation.gate_scores.value_delivered = scaledScore;
   validation.details.value_delivered = sectionDetails;
   console.log(`\n   Section B Score: ${scaledScore}/35 (CRITICAL - ROI focus)`);
+}
+
+/**
+ * QF-20260528-877: read sub-agent execution evidence directly (mirroring gate3
+ * sub-agent-effectiveness.js). Never throws — any error yields a zeroed result so Section B
+ * falls back to its existing defaults. Returns { rowCount, hasSubstantial }.
+ */
+async function fetchSubAgentEvidence(sdUuid, supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('sub_agent_execution_results')
+      .select('recommendations, detailed_analysis')
+      .eq('sd_id', sdUuid);
+    if (error || !data || data.length === 0) return { rowCount: 0, hasSubstantial: false };
+    const hasSubstantial = data.some(r =>
+      JSON.stringify({ recommendations: r.recommendations, detailed_analysis: r.detailed_analysis }).length > 500
+    );
+    return { rowCount: data.length, hasSubstantial };
+  } catch {
+    return { rowCount: 0, hasSubstantial: false };
+  }
 }
 
 /**
