@@ -49,7 +49,7 @@ import { formatRosterClaim } from './modules/sd-next/display/claim-formatters.js
 // internally by the policy for the transient / already-checked-out / etc.
 // patterns, so no behavior regresses for existing error shapes.
 import { classify as classifyWorktreeFailure } from '../lib/protocol-policies/worktree-failure-classification.js';
-import { classifyWorktreeOwnership } from '../lib/exec-context-guard.mjs';
+import { decideOwnConflictReattach } from '../lib/exec-context-guard.mjs';
 import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
 import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
 import {
@@ -1304,18 +1304,14 @@ async function main() {
       // expected worktree dir, this is a benign already_checked_out — the SD's
       // own worktree exists and the user can re-attach. Releasing the claim
       // would leak it (witnessed harness backlog 28a71037).
-      if (classified.code === 'already_checked_out') {
-        const conflictMatch = String(detail).match(/already used by worktree at ['"`]?([^'"`\n\r]+)['"`]?/i);
-        const conflictPath = conflictMatch ? conflictMatch[1].trim() : null;
+      {
         const expectedPath = worktreeInfo?.worktree?.path || worktreeInfo?.cwd || null;
-        if (conflictPath && expectedPath) {
-          const ownership = classifyWorktreeOwnership(conflictPath, expectedPath);
-          if (ownership.kind === 'own') {
-            console.error(`${colors.yellow}   ⚠  Recoverable: conflict path matches this SD's expected worktree dir.${colors.reset}`);
-            console.error(`${colors.cyan}   Recovery: cd "${ownership.expectedPath}"${colors.reset}`);
-            console.error(`${colors.dim}   Claim PRESERVED — re-run sd-start from inside the existing worktree.${colors.reset}`);
-            process.exit(2); // exit 2 = recoverable; do NOT release claim
-          }
+        const reattach = decideOwnConflictReattach(classified.code, detail, expectedPath);
+        if (reattach.reattach) {
+          console.error(`${colors.yellow}   ⚠  Recoverable: conflict path matches this SD's expected worktree dir.${colors.reset}`);
+          console.error(`${colors.cyan}   Recovery: cd "${reattach.expectedPath}"${colors.reset}`);
+          console.error(`${colors.dim}   Claim PRESERVED — re-run sd-start from inside the existing worktree.${colors.reset}`);
+          process.exit(2); // exit 2 = recoverable; do NOT release claim
         }
       }
 
@@ -1337,18 +1333,14 @@ async function main() {
     // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-4, AC-6/AC-7): own-vs-foreign
     // differentiation on the resolution-error path mirrors the creation-failure
     // path above — preserve the claim when the conflict is the SD's own worktree.
-    if (classified.code === 'already_checked_out') {
-      const conflictMatch = String(wtErr.message || '').match(/already used by worktree at ['"`]?([^'"`\n\r]+)['"`]?/i);
-      const conflictPath = conflictMatch ? conflictMatch[1].trim() : null;
+    {
       const expectedPath = wtErr?.expectedWorktreePath || wtErr?.path || null;
-      if (conflictPath && expectedPath) {
-        const ownership = classifyWorktreeOwnership(conflictPath, expectedPath);
-        if (ownership.kind === 'own') {
-          console.error(`${colors.yellow}   ⚠  Recoverable: conflict path matches this SD's expected worktree dir.${colors.reset}`);
-          console.error(`${colors.cyan}   Recovery: cd "${ownership.expectedPath}"${colors.reset}`);
-          console.error(`${colors.dim}   Claim PRESERVED — re-run sd-start from inside the existing worktree.${colors.reset}`);
-          process.exit(2);
-        }
+      const reattach = decideOwnConflictReattach(classified.code, wtErr.message, expectedPath);
+      if (reattach.reattach) {
+        console.error(`${colors.yellow}   ⚠  Recoverable: conflict path matches this SD's expected worktree dir.${colors.reset}`);
+        console.error(`${colors.cyan}   Recovery: cd "${reattach.expectedPath}"${colors.reset}`);
+        console.error(`${colors.dim}   Claim PRESERVED — re-run sd-start from inside the existing worktree.${colors.reset}`);
+        process.exit(2);
       }
     }
 
