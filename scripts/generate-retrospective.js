@@ -161,11 +161,11 @@ async function generateRetrospective(sdInput) {
     target_application: sd.target_application || 'EHG_engineer',
     project_name: sd.title,
     retro_type: 'SD_COMPLETION',
-    // QF-20260528-171: explicitly NULL so the SD_COMPLETION retro passes
-    // RETROSPECTIVE_QUALITY_GATE. The column defaults to 'SD_COMPLETION'
-    // (migration 20251210_retrospective_self_improvement_system.sql), but the
-    // gate requires retrospective_type IS NULL for completion retros — omitting
-    // the key lets the default through and silently fails the gate.
+    // QF-20260528-171 + SD-LEO-INFRA-DEFAULT-RETROSPECTIVES-RETROSPECTIVE-001: the
+    // RETROSPECTIVE_QUALITY_GATE selects the SD-completion retro via
+    // retro_type='SD_COMPLETION' AND retrospective_type IS NULL. The column default is now
+    // NULL (was 'SD_COMPLETION' in migration 20251210; realigned by the SD above), so
+    // omitting the key also yields NULL — this explicit null is kept as defense-in-depth.
     retrospective_type: null,
     title: `${sd.sd_key} Retrospective`,
     description: `Retrospective analysis for ${sd.title} - completed at ${sd.progress}% with ${sd.status} status`,
