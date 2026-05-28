@@ -33,6 +33,7 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { resolveSdInput } from './lib/sd-id-resolver.js';
 import { getFilteredRetrospective } from './modules/handoff/retro-filters.js';
+import { resolveCanonicalAppName } from '../lib/repo-paths.js';
 import dotenv from 'dotenv';
 // import fs from 'fs'; // Currently unused - available for file operations if needed
 
@@ -156,9 +157,15 @@ async function generateRetrospective(sdInput) {
 
   // Generate high-quality retrospective content
   // Note: quality_score will be auto-calculated by trigger based on content quality
+  // SD-LEO-INFRA-VENTURE-REPO-AWARE-001 (FR-3): canonicalize target_application via the
+  // existing registry resolver so the value matches a registered applications.name (e.g.
+  // a venture like 'CronGenius'), and so the null-fallback yields constraint-valid
+  // 'EHG_Engineer' (the prior literal 'EHG_engineer' was lowercase and would itself violate
+  // the registry-aware check_target_application validation).
+  const canonicalTargetApp = await resolveCanonicalAppName(sd.target_application, supabase);
   const retrospective = {
     sd_id: sdId,
-    target_application: sd.target_application || 'EHG_engineer',
+    target_application: canonicalTargetApp,
     project_name: sd.title,
     retro_type: 'SD_COMPLETION',
     // QF-20260528-171 + SD-LEO-INFRA-DEFAULT-RETROSPECTIVES-RETROSPECTIVE-001: the
