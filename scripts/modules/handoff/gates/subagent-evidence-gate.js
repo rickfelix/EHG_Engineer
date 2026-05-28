@@ -11,7 +11,19 @@
  *   - That gate: keyed on sd_type, required:false (advisory), no freshness
  *
  * Emergency bypass: set LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 (writes audit_log warning).
+ *
+ * SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 (FR-2): when no evidence row exists yet
+ * AND the phase started within RACE_WINDOW_SECONDS (the agent may be mid-write),
+ * return a WAIT verdict instead of FAIL so the orchestrator re-checks later
+ * without burning retry budget. Outside the window → FAIL (unchanged).
  */
+import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../../lib/handoff/wait-verdict.js';
+
+/**
+ * Race window (seconds) during which a missing evidence row is treated as a
+ * transient write-lag (WAIT) rather than a real absence (FAIL).
+ */
+const RACE_WINDOW_SECONDS = 30;
 
 /**
  * Required sub-agents per handoff type.
@@ -271,22 +283,38 @@ export async function validateSubagentEvidence(ctx, supabase) {
     };
   }
 
+  // FR-2: race-window WAIT. If the phase started within RACE_WINDOW_SECONDS the
+  // required agent(s) may still be writing their row(s) — return WAIT (not FAIL)
+  // so retry budget is preserved and the orchestrator re-checks later. The
+  // phase-start anchor is derived from the prior handoff's accepted_at (RISK-1:
+  // there is NO invoked_at column). A missing/epoch anchor is far in the past,
+  // so isWithinRaceWindow returns false → FAIL (safe default).
+  const sharedDetails = {
+    required,
+    present: [...present],
+    missing,
+    phase_started_at: phaseStartedAt.toISOString()
+  };
+
+  if (isWithinRaceWindow(phaseStartedAt, RACE_WINDOW_SECONDS)) {
+    console.log(`   ⏳ WAIT: evidence row(s) not yet written (within ${RACE_WINDOW_SECONDS}s race window): ${missing.join(', ')}`);
+    return buildWaitResult({
+      score: 0,
+      max_score: 100,
+      wait_reason: `Sub-agent evidence not yet written for ${missing.join(', ')} (phase started <${RACE_WINDOW_SECONDS}s ago; agent may be mid-write)`,
+      details: { reason: 'SUBAGENT_EVIDENCE_WRITE_LAG', race_window_seconds: RACE_WINDOW_SECONDS, ...sharedDetails },
+      remediation: `Re-check shortly; the required sub-agent(s) (${missing.join(', ')}) may still be writing to sub_agent_execution_results. If still missing after the race window, invoke them via the Task tool.`
+    });
+  }
+
   console.log(`   ❌ SUBAGENT_EVIDENCE_MISSING: ${missing.join(', ')}`);
-  return {
-    passed: false,
+  return buildFailResult({
     score: 0,
     max_score: 100,
     issues: [`SUBAGENT_EVIDENCE_MISSING: ${missing.join(', ')}`],
-    warnings: [],
-    details: {
-      reason: 'SUBAGENT_EVIDENCE_MISSING',
-      required,
-      present: [...present],
-      missing,
-      phase_started_at: phaseStartedAt.toISOString()
-    },
+    details: { reason: 'SUBAGENT_EVIDENCE_MISSING', ...sharedDetails },
     remediation: `Invoke the missing sub-agent(s) via Task tool for SD ${sdKey} before re-running the ${handoffType} handoff, OR set LEO_DISABLE_SUBAGENT_EVIDENCE_GATE=1 as an emergency bypass.`
-  };
+  });
 }
 
 /**

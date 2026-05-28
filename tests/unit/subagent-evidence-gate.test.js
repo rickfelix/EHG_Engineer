@@ -180,9 +180,11 @@ describe('validateSubagentEvidence', () => {
     expect(result.passed).toBe(true);
     expect(result.warnings[0]).toMatch(/BYPASSED/);
     expect(auditSpy).toHaveBeenCalledTimes(1);
+    // QF-20260509-AUDIT-LOG-SHAPE: canonical audit_log shape is event_type
+    // (NOT action — audit_log has no `action` column). Pin the current shape.
     expect(auditSpy).toHaveBeenCalledWith(expect.objectContaining({
       severity: 'warning',
-      action: 'gate_bypass',
+      event_type: 'gate_bypass',
       metadata: expect.objectContaining({ gate: 'GATE_SUBAGENT_EVIDENCE' })
     }));
   });
@@ -231,5 +233,59 @@ describe('validateSubagentEvidence', () => {
     const result = await validateSubagentEvidence(ctx, null);
     expect(result.passed).toBe(false);
     expect(result.details.reason).toBe('MISSING_CONTEXT');
+  });
+});
+
+// ─── FR-2: WAIT verdict on race-window write-lag ─────────────────────────────
+// SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001
+describe('validateSubagentEvidence — FR-2 WAIT branch', () => {
+  beforeEach(() => { delete process.env.LEO_DISABLE_SUBAGENT_EVIDENCE_GATE; });
+  afterEach(() => { delete process.env.LEO_DISABLE_SUBAGENT_EVIDENCE_GATE; });
+
+  // 5s elapsed → WAIT (phase started within the 30s race window; agent mid-write)
+  it('5s elapsed, missing evidence → WAIT (not FAIL)', async () => {
+    const phaseStart = new Date(Date.now() - 5_000).toISOString();
+    const supabase = makeSupabase({ phaseStart, evidenceRows: [] });
+    const ctx = { sd: makeSD(), handoffType: 'PLAN-TO-EXEC' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(false);
+    expect(result.wait).toBe(true);
+    expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_WRITE_LAG');
+    expect(result.wait_reason).toMatch(/TESTING/);
+    expect(result.issues).toEqual([]); // waits carry no issues
+  });
+
+  // 35s elapsed → FAIL (outside the 30s race window; unchanged behavior)
+  it('35s elapsed, missing evidence → FAIL (outside race window)', async () => {
+    const phaseStart = new Date(Date.now() - 35_000).toISOString();
+    const supabase = makeSupabase({ phaseStart, evidenceRows: [] });
+    const ctx = { sd: makeSD(), handoffType: 'PLAN-TO-EXEC' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(false);
+    expect(result.wait).toBe(false);
+    expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_MISSING');
+  });
+
+  // No prior handoff AND no SD created_at → epoch anchor → outside window → FAIL (safe default)
+  it('no prior handoff (epoch anchor), missing evidence → FAIL (safe default, not WAIT-forever)', async () => {
+    const supabase = makeSupabase({ phaseStart: null, sdCreatedAt: null, evidenceRows: [] });
+    const ctx = { sd: makeSD(), handoffType: 'PLAN-TO-EXEC' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(false);
+    expect(result.wait).toBe(false);
+    expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_MISSING');
+  });
+
+  // Evidence row present (even inside the race window) → PASS (unchanged)
+  it('evidence row present within race window → PASS (unchanged)', async () => {
+    const phaseStart = new Date(Date.now() - 5_000).toISOString();
+    const supabase = makeSupabase({
+      phaseStart,
+      evidenceRows: [{ sub_agent_code: 'TESTING', created_at: new Date().toISOString(), verdict: 'PASS' }]
+    });
+    const ctx = { sd: makeSD(), handoffType: 'PLAN-TO-EXEC' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(true);
+    expect(result.wait).toBeUndefined();
   });
 });
