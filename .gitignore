@@ -315,3 +315,6 @@ nul
 tests/e2e/ehg-app/.auth/
 tests/e2e/.auth/
 tests/uat/.auth/
+
+# SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-1 audit JSON intermediates (regenerable)
+/.audit-out/

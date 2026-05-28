@@ -20,6 +20,8 @@
 
 import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+// SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 Phase 5: canonical parent-detection helper.
+import { isParentOrchestratorSync } from '../../lib/handoff/parent-detection.js';
 
 dotenv.config();
 
@@ -104,7 +106,11 @@ function checkStructuralSignals(sd) {
   }
 
   // Check for explicit parent flag
-  if (sd.metadata?.is_parent === true || sd.metadata?.requires_children === true) {
+  // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 Phase 5: is_parent delegates to canonical
+  // helper (static import at top of file — checkStructuralSignals is sync);
+  // requires_children is decomposition-gate-specific (not part of generic parent
+  // detection) and intentionally preserved as a separate signal.
+  if (isParentOrchestratorSync(sd) || sd.metadata?.requires_children === true) {
     signals.hasExplicitParentFlag = true;
     signals.details.push('Explicitly flagged as parent/requires children');
   }

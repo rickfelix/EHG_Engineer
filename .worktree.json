@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001",
-  "createdAt": "2026-05-26T19:22:01.637Z",
+  "sdKey": "SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001",
+  "createdAt": "2026-05-27T23:43:32.951Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
