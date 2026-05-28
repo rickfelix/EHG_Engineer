@@ -247,11 +247,14 @@ async function processRequest(supabase, request) {
       ?? result?.brief?.prompt_version
       ?? null;
 
-    // Store success
+    // Store success. Backfill venture_id when the run synthesized a venture so the
+    // discovery <-> venture link is reliable (previously always null) — lets the UI
+    // "Recent Discoveries" link and dismiss-self-clean target the right venture.
     await updateStatus(supabase, request.id, {
       status: 'completed',
       result: { ...result, prompt_version: promptVersion },
       prompt_version: promptVersion,
+      venture_id: result?.record_type === 'venture' ? (result.record_id ?? null) : null,
       completed_at: new Date().toISOString(),
     });
 
