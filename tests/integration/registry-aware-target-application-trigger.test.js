@@ -16,11 +16,15 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 const HAS_DB = !!(process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL || process.env.SUPABASE_DB_URL);
 const SD = 'ad881b08-afc0-49ae-ac31-ba9b8c66d234';
 
-const COLS = `(sd_id, target_application, project_name, retro_type, title, description, conducted_date,
+// Fully static SQL — only $1 (sd_id) and $2 (target_application) are bound parameters;
+// every other column is a constant literal. No variable interpolation into the query string.
+const INSERT_SQL = `INSERT INTO retrospectives
+  (sd_id, target_application, project_name, retro_type, title, description, conducted_date,
    learning_category, quality_score, key_learnings, what_went_well, action_items,
-   what_needs_improvement, agents_involved, retrospective_type)`;
-const VALS = `($1,$2,'integration-test','SD_COMPLETION','x','x',now(),'PROCESS_IMPROVEMENT',85,
-   '[{"learning":"x"}]'::jsonb,'["x"]'::jsonb,'["x"]'::jsonb,'["x"]'::jsonb, ARRAY['LEAD'], NULL)`;
+   what_needs_improvement, agents_involved, retrospective_type)
+  VALUES ($1,$2,'integration-test','SD_COMPLETION','x','x',now(),'PROCESS_IMPROVEMENT',85,
+   '[{"learning":"x"}]'::jsonb,'["x"]'::jsonb,'["x"]'::jsonb,'["x"]'::jsonb, ARRAY['LEAD'], NULL)
+  RETURNING id`;
 
 describe.skipIf(!HAS_DB)('registry-aware target_application trigger (LIVE, rolled back)', () => {
   let client;
@@ -46,8 +50,7 @@ describe.skipIf(!HAS_DB)('registry-aware target_application trigger (LIVE, rolle
     }
   }
 
-  const insert = (app) =>
-    client.query(`INSERT INTO retrospectives ${COLS} VALUES ${VALS} RETURNING id`, [SD, app]);
+  const insert = (app) => client.query(INSERT_SQL, [SD, app]);
 
   it('INSERT: accepts a registered venture (CronGenius)', async () => {
     const r = await inTxn(() => insert('CronGenius'));
