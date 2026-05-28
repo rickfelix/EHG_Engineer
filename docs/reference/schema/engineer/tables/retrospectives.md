@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-28T12:05:07.057Z
-**Rows**: 6,432
+**Generated**: 2026-05-28T13:05:30.648Z
+**Rows**: 6,437
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -78,7 +78,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | content_embedding | `USER-DEFINED` | YES | - | OpenAI text-embedding-3-small vector (1536 dimensions) for semantic search. Generated from title + key_learnings + action_items. |
 | unnecessary_work_identified | `jsonb` | YES | `'[]'::jsonb` | Array of items that could have been deleted but were not. Used to improve future Q8 decisions. |
 | protocol_improvements | `jsonb` | YES | `'[]'::jsonb` | Array of LEO Protocol improvement suggestions. Each object: { category: string, improvement: string, evidence: string, impact: string, affected_phase: LEAD|PLAN|EXEC|null } |
-| retrospective_type | `text` | YES | `'SD_COMPLETION'::text` | Type of retrospective: LEAD_TO_PLAN (approval phase), PLAN_TO_EXEC (validation phase), SD_COMPLETION (full SD retrospective) |
+| retrospective_type | `text` | YES | - | Type of retrospective: LEAD_TO_PLAN (approval phase), PLAN_TO_EXEC (validation phase), SD_COMPLETION (full SD retrospective) |
 | audit_id | `uuid` | YES | - | - |
 | triangulation_divergence_insights | `jsonb` | YES | - | - |
 | verbatim_citations | `jsonb` | YES | - | - |
