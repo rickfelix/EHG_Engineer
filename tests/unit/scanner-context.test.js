@@ -103,11 +103,25 @@ describe('getCapabilityContextBlock', () => {
     expect(result.length).toBeLessThanOrEqual(2000);
   });
 
-  it('uses overhang format as default for unknown scanner type', async () => {
+  it('returns empty string for unmapped scanner type', async () => {
+    // SD-LEO-INFRA-ANCHOR-SIMPLE-VENTURE-001: unmapped scanner types no longer fall
+    // through to the formatForOverhang ledger. Capability anchoring is opt-in — only
+    // explicitly mapped types receive a block; everything else returns ''.
     const supabase = mockSupabase(SAMPLE_CAPABILITIES);
     const result = await getCapabilityContextBlock(supabase, 'unknown_scanner');
 
-    expect(result).toContain('Capability Ledger');
+    expect(result).toBe('');
+  });
+
+  it('returns empty string for simple_venture (not capability-anchored)', async () => {
+    // SD-LEO-INFRA-ANCHOR-SIMPLE-VENTURE-001: Simple Venture Finder must NOT receive the
+    // internal-strengths ledger; injecting it biased candidates toward cron/scheduling
+    // tooling (EHG's internal infra dominates the ledger). simple_venture is not a mapped
+    // scanner type, so getCapabilityContextBlock returns an empty block for it.
+    const supabase = mockSupabase(SAMPLE_CAPABILITIES);
+    const result = await getCapabilityContextBlock(supabase, 'simple_venture');
+
+    expect(result).toBe('');
   });
 
   it('produces different output for different scanner types', async () => {
