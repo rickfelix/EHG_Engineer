@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-28T20:56:08.695Z
+**Generated**: 2026-05-29T15:23:40.444Z
 **Rows**: 10
 **RLS**: Disabled
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (17 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -35,6 +35,8 @@
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | trust_tier | `character varying(20)` | **NO** | `'external'::character varying` | auto-merge eligibility: platform=unattended OK, trusted=vetted internal, external=human merge required (venture/3rd-party). SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 C2/VB-2. |
+| metrics_base_url | `text` | YES | - | Base URL of the venture's authenticated GET /v1/metrics endpoint (e.g. https://crongenius.<acct>.workers.dev). NULL => the daily telemetry pull skips this venture. |
+| metrics_api_key_ref | `text` | YES | - | D5: NAME of the env var / secret holding the venture read key (NOT the raw secret). The pull job resolves it at runtime via process.env[metrics_api_key_ref]. Rotation = update the secret value; this reference is unchanged. |
 
 ## Constraints
 
