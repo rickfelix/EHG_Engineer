@@ -38,7 +38,7 @@ function buildSupabaseMock({
 
   return {
     from: vi.fn((table) => {
-      if (table === 'lifecycle_stage_config') {
+      if (table === 'venture_stages') {
         return {
           select: vi.fn(() => buildEqChain({
             data: configError ? null : { metadata: { gates: stageConfig } },
@@ -198,12 +198,12 @@ describe('exit-gate-enforcer', () => {
       warnSpy.mockRestore();
     });
 
-    it('blocks with structured reason when lifecycle_stage_config read fails', async () => {
+    it('blocks with structured reason when venture_stages read fails', async () => {
       const { checkExitGates } = await importEnforcerWithFlag('on');
       const supabase = buildSupabaseMock({ configError: { message: 'simulated PG error' } });
       const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
       expect(result.allowed).toBe(false);
-      expect(result.blocked_by[0]).toMatch(/lifecycle_stage_config read failed/);
+      expect(result.blocked_by[0]).toMatch(/venture_stages read failed/);
       expect(result.blocked_by[0]).toMatch(/simulated PG error/);
     });
   });

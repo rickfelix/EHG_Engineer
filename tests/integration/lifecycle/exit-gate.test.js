@@ -19,7 +19,7 @@ const VENTURE_ID = '11111111-2222-3333-4444-555555555555';
 
 /**
  * Build a Supabase mock that responds to:
- *   - lifecycle_stage_config: returns { metadata: { gates: { exit: [...] } } }
+ *   - venture_stages: returns { metadata: { gates: { exit: [...] } } }
  *   - venture_artifacts: returns { id: 'art' } if buildArtifactPresent
  *   - ventures: returns ventureRow if both repo_url + deployment_url populated, else null
  *   - rpc('fn_advance_venture_stage'): returns { success: true } unless rpcError set
@@ -43,7 +43,7 @@ function buildSupabaseMock({
 
   return {
     from: vi.fn((table) => {
-      if (table === 'lifecycle_stage_config') {
+      if (table === 'venture_stages') {
         return {
           select: vi.fn(() => buildEqChain({
             data: { metadata: { gates: { exit: exitGates } } },

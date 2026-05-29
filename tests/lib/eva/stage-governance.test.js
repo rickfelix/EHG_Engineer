@@ -3,8 +3,9 @@
  *
  * BASELINE + canonical-truth tests for lib/eva/stage-governance.js.
  *
- * Asserts the canonical post-refactor behavior (sets derived from
- * lifecycle_stage_config.work_type). Module had zero existing coverage
+ * Asserts the canonical post-refactor behavior (sets derived from work_type).
+ * SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: the reader now reads the unified
+ * `venture_stages` superset in a SINGLE query. Module had zero existing coverage
  * before this SD — these tests establish that coverage AND verify the
  * refactor (FR-2) produces correct classifications.
  */
@@ -178,29 +179,24 @@ describe('stage-governance — cache behavior', () => {
     const mod = await import('../../../lib/eva/stage-governance.js');
     mod._resetCacheForTest();
     let callCount = 0;
-    // Module reads 2 tables per fresh fetch (stage_config + lifecycle_stage_config)
+    // SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: ONE venture_stages read per fresh fetch.
     const sb = {
-      from: (table) => ({
+      from: () => ({
         select: () => ({
           order: () => {
             callCount++;
-            return Promise.resolve({
-              data: table === 'lifecycle_stage_config'
-                ? STAGE_FIXTURE.map(s => ({ stage_number: s.stage_number, work_type: s.work_type }))
-                : STAGE_FIXTURE,
-              error: null,
-            });
+            return Promise.resolve({ data: STAGE_FIXTURE, error: null });
           },
         }),
       }),
       channel: () => ({ on: function () { return this; }, subscribe: function () { return this; }, unsubscribe: () => undefined }),
     };
     await mod.getStageGovernance(sb);
-    // After first call: 2 DB queries (stage_config + lifecycle_stage_config)
-    expect(callCount).toBe(2);
+    // After first call: 1 DB query (venture_stages)
+    expect(callCount).toBe(1);
     await mod.getStageGovernance(sb);
-    // Second call cached: still 2 (no additional queries)
-    expect(callCount).toBe(2);
+    // Second call cached: still 1 (no additional queries)
+    expect(callCount).toBe(1);
   });
 
   it('_resetCacheForTest forces fresh fetch on next call', async () => {
@@ -208,26 +204,21 @@ describe('stage-governance — cache behavior', () => {
     mod._resetCacheForTest();
     let callCount = 0;
     const sb = {
-      from: (table) => ({
+      from: () => ({
         select: () => ({
           order: () => {
             callCount++;
-            return Promise.resolve({
-              data: table === 'lifecycle_stage_config'
-                ? STAGE_FIXTURE.map(s => ({ stage_number: s.stage_number, work_type: s.work_type }))
-                : STAGE_FIXTURE,
-              error: null,
-            });
+            return Promise.resolve({ data: STAGE_FIXTURE, error: null });
           },
         }),
       }),
       channel: () => ({ on: function () { return this; }, subscribe: function () { return this; }, unsubscribe: () => undefined }),
     };
     await mod.getStageGovernance(sb);
-    expect(callCount).toBe(2);
+    expect(callCount).toBe(1);
     mod._resetCacheForTest();
     await mod.getStageGovernance(sb);
-    // Reset forces 2 more queries
-    expect(callCount).toBe(4);
+    // Reset forces 1 more query
+    expect(callCount).toBe(2);
   });
 });
