@@ -478,6 +478,21 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // Resolve patterns/improvements if this SD was created from /learn
     await resolveLearningItems(sd, this.supabase);
 
+    // SD-LEO-INFRA-ACTIVATE-CAPABILITY-SCORING-001 (FR-4): score the SD's freshly
+    // registered capabilities (maturity/extraction -> trigger recomputes plane1_score)
+    // and record reuse for capabilities reused from a prior SD. Reuse is recorded
+    // BEFORE scoring so the trigger sees the updated reuse_count.
+    // Fail-safe: non-blocking, never prevents SD completion.
+    try {
+      const { runCapabilityScoringOnCompletion } = await import('./hooks/capability-scoring-hook.js');
+      const capResult = await runCapabilityScoringOnCompletion(sd, this.supabase);
+      if (capResult.capabilities > 0) {
+        console.log(`   [capability-scoring] scored ${capResult.scored}, reused ${capResult.reused} of ${capResult.capabilities} capabilities${capResult.note ? ` (${capResult.note})` : ''}`);
+      }
+    } catch (capError) {
+      console.warn(`   ⚠️  Capability scoring hook failed (non-blocking): ${capError.message}`);
+    }
+
     // SD-LEO-INFRA-ENHANCE-LEARN-SESSION-001: Session retrospective - analyze rejections
     // Creates issue_patterns for gates with 2+ rejections (non-blocking)
     try {
