@@ -95,6 +95,25 @@ class GitCommitVerifier {
   }
 
   /**
+   * Execute a git command in a SPECIFIC directory (not this.effectiveCwd).
+   * Used only by the wrong-repo fallback in checkCommitsExist to search sibling platform repos.
+   * Kept distinct from gitCommand() so the same-repo invariant ("fallback never invoked") is
+   * directly assertable in tests. (SD-FDBK-INFRA-GATE5-GIT-COMMIT-001)
+   */
+  async gitCommandInDir(command, cwd) {
+    try {
+      const { stdout, stderr } = await execAsync(command, { cwd });
+      return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
+    } catch (error) {
+      return {
+        stdout: error.stdout?.trim() || '',
+        stderr: error.stderr?.trim() || error.message,
+        success: false
+      };
+    }
+  }
+
+  /**
    * Check if file is a root-level temp file that should be ignored
    * These are session artifacts that shouldn't block handoffs
    */
@@ -218,6 +237,39 @@ class GitCommitVerifier {
         if (commits.length > 0) {
           allCommits = [...new Set([...allCommits, ...commits])]; // Dedupe
           matchedTerm = matchedTerm || term;
+        }
+      }
+    }
+
+    // ── FR-2/FR-3 (SD-FDBK-INFRA-GATE5-GIT-COMMIT-001): strictly-more-permissive wrong-repo fallback ──
+    // `git log --all` is REPO-OBJECT-DB-scoped (not cwd/worktree-scoped): a commit anywhere in the
+    // resolved repo is already found from any cwd in it. So the cross-WORKTREE case never caused a
+    // "no commits" false-FAIL — and the dirty/branch/upstream worktree case is ALREADY handled by
+    // resolveWorktreeCwd (SD-LEO-INFRA-BRANCH-AWARE-PLAN-001) in verify(). Do NOT re-implement
+    // worktree-aware commit lookup here (RCA 4fb06962 confirmed that rewrite is unnecessary/shipped).
+    // The only residual false-positive is wrong-REPO resolution: determineTargetRepository can
+    // misroute appPath to the wrong platform repo when target_application is null/ambiguous, leaving
+    // the commit in the SIBLING repo's object DB, invisible here. Before blocking, search the other
+    // platform repo(s). Fail-open by construction — a same-repo SD finds its commits on the first
+    // pass and never reaches this; a genuinely commitless SD finds zero everywhere and still FAILs.
+    if (allCommits.length === 0) {
+      const siblingRepos = [EHG_ENGINEER_ROOT, EHG_ROOT].filter(
+        (repo) => path.resolve(repo) !== path.resolve(this.effectiveCwd) && fs.existsSync(repo)
+      );
+      for (const repo of siblingRepos) {
+        for (const term of searchTerms) {
+          const r = await this.gitCommandInDir(`git log --all --oneline --grep="${term}"`, repo);
+          if (r.success && r.stdout.trim()) {
+            const commits = r.stdout.split('\n').filter((line) => line.trim().length > 0);
+            if (commits.length > 0) {
+              allCommits = [...new Set([...allCommits, ...commits])];
+              matchedTerm = matchedTerm || term;
+            }
+          }
+        }
+        if (allCommits.length > 0) {
+          console.log(`   ↳ commits found in sibling platform repo (${repo}) via wrong-repo fallback (RCA 4fb06962)`);
+          break;
         }
       }
     }
