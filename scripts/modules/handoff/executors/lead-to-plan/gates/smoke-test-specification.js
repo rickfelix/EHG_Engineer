@@ -13,6 +13,7 @@
 
 import { isLightweightSDType, detectCodeProduction } from '../../../validation/sd-type-applicability-policy.js';
 import { safeTruncate } from '../../../../../../lib/utils/safe-truncate.js';
+import { isAllPlaceholderSmokeSteps } from '../../../smoke-test-defaults.js';
 
 /**
  * Validate smoke test specification
@@ -121,6 +122,13 @@ export async function validateSmokeTestSpecification(sd) {
 
   if (validSteps === 0) {
     issues.push('No valid smoke test steps (each must have instruction and expected_outcome)');
+  }
+
+  // QF-20260529-985: a code-producing SD reaching here must NOT pass on the generic
+  // auto-generated placeholder (buildDefaultSmokeTestSteps). Require a real LEAD Q9
+  // 30-second demo. (Lightweight / non-code SDs already returned above.)
+  if (isAllPlaceholderSmokeSteps(smokeTestSteps)) {
+    issues.push('Smoke test steps are the generic auto-generated placeholder — replace with a real 30-second demo (LEAD Q9): a concrete instruction + observable expected_outcome per step');
   }
 
   // Use GPT-5 Mini to validate smoke test is concrete (if available)

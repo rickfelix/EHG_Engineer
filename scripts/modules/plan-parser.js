@@ -479,19 +479,25 @@ export function extractKeyPrinciples(content) {
 export function extractSmokeTestSteps(content) {
   if (!content) return null;
 
-  const sectionPattern = /^##\s+(Smoke Test Steps|Smoke Tests|Smoke Test)\s*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
+  // QF-20260529-985: also accept the LEAD Q9-canonical "## Demo" / "## 30-second demo"
+  // heading (with optional trailing text, e.g. "## Demo (30-second...)") and numbered list
+  // items, so a Demo section maps to real smoke_test_steps instead of falling back to the
+  // generic placeholder (which the SMOKE_TEST_SPECIFICATION gate now rejects).
+  const sectionPattern = /^##\s+(?:Smoke Test Steps|Smoke Tests|Smoke Test|Demo|30[-\s]?second demo)\b[^\n]*\n\n?([\s\S]*?)(?=\n##|\n#\s|(?![\s\S]))/mi;
   const match = content.match(sectionPattern);
 
   if (!match) return null;
 
   const steps = [];
-  const sectionContent = match[2];
-  const bulletPattern = /^[-*]\s+(.+)$/gm;
+  const sectionContent = match[1];
+  const bulletPattern = /^(?:[-*]|\d+[.)])\s+(.+)$/gm;
   let bulletMatch;
   while ((bulletMatch = bulletPattern.exec(sectionContent)) !== null) {
+    // Strip a leading "Step N:" / ordinal prefix left over from numbered demo lists.
+    const instruction = bulletMatch[1].trim().replace(/^Step\s+\d+\s*[:.)-]\s*/i, '');
     steps.push({
       step_number: steps.length + 1,
-      instruction: bulletMatch[1].trim(),
+      instruction,
       expected_outcome: 'See plan for details'
     });
   }
