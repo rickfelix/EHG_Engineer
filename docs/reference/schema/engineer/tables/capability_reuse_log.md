@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-29T15:23:40.444Z
+**Generated**: 2026-05-29T16:45:28.300Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -36,6 +36,9 @@
 - `capability_reuse_log_capability_id_fkey`: capability_id → sd_capabilities(id)
 - `capability_reuse_log_reusing_sd_uuid_fkey`: reusing_sd_uuid → strategic_directives_v2(uuid_id)
 
+### Unique Constraints
+- `uq_capability_reuse_log_cap_sd`: UNIQUE (capability_id, reusing_sd_id)
+
 ### Check Constraints
 - `capability_reuse_log_reuse_type_check`: CHECK (((reuse_type)::text = ANY ((ARRAY['direct'::character varying, 'extended'::character varying, 'forked'::character varying, 'referenced'::character varying])::text[])))
 
@@ -52,6 +55,10 @@
 - `idx_capability_reuse_sd`
   ```sql
   CREATE INDEX idx_capability_reuse_sd ON public.capability_reuse_log USING btree (reusing_sd_id)
+  ```
+- `uq_capability_reuse_log_cap_sd`
+  ```sql
+  CREATE UNIQUE INDEX uq_capability_reuse_log_cap_sd ON public.capability_reuse_log USING btree (capability_id, reusing_sd_id)
   ```
 
 ## RLS Policies
