@@ -9,7 +9,7 @@
 
 The **F12 pattern** (from SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001): a migration changes a column's default to express an intent, but production code written *before* the migration hardcodes a different value at insert time, silently negating the new default. This sweep enumerates every `ALTER COLUMN ... SET DEFAULT` (the genuine F12-risk class — a default CHANGED on an existing table) and checks production writers for overrides.
 
-**Scope note (TR-2):** `CREATE TABLE ... DEFAULT` statements are treated as a summarized lower-risk class, NOT deep-audited. F12-shaped drift requires the default to change *after* writers already exist; CREATE-TABLE defaults are co-created with their writers, so an "override" there is the intended initial value. With 457 default-bearing migrations of 1015 total, exhaustive CREATE-TABLE auditing is low-ROI; the 8 `ALTER ... SET DEFAULT` statements (5 files) are the high-signal set and are audited line-by-line below.
+**Scope note (TR-2):** `CREATE TABLE ... DEFAULT` statements are treated as a summarized lower-risk class, NOT deep-audited. F12-shaped drift requires the default to change *after* writers already exist; CREATE-TABLE defaults are co-created with their writers, so an "override" there is the intended initial value. With 457 default-bearing migrations of 1015 total, exhaustive CREATE-TABLE auditing is low-ROI; the **4 executable `ALTER ... SET DEFAULT` columns** are the high-signal set and are audited line-by-line below. (A 5th migration, `20260423_sd_array_defaults_reconciliation.sql`, was initially miscounted as a `SET DEFAULT` — it actually executes **`DROP DEFAULT`** on the SD array columns; a dropped default has zero F12-drift surface and is noted out-of-class below.)
 
 ## Classification key
 
@@ -24,8 +24,8 @@ The **F12 pattern** (from SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001): a migration
 | `20260527_user_stories_status_default_draft.sql` | `user_stories.status` | `'draft'` | `lib/sub-agents/modules/stories/execute.js:300` → `allAcsBoilerplate(...) ? 'draft' : 'ready'`; `scripts/modules/user-stories-d6/stage-2{1,2,3}-stories.js` → `'draft'` (x9) | **(b)(i) intentional — F12 REMEDIATED** + (a) honors (d6 writers) |
 | `20260528_retrospective_type_default_null.sql` | `retrospectives.retrospective_type` | `NULL` | `scripts/generate-retrospective.js:176` → `null`; `…/exec-to-plan/retrospective.js:384` → `'EXEC_TO_PLAN'`; `…/lead-to-plan/retrospective.js:284` & `…/plan-to-exec/retrospective.js:193` → `retrospectiveType` (var) | **(a) honors** (completion retros) + **(b)(i) intentional** (handoff retros tag their type) |
 | `20260527_eva-support-decision-log-decision-kind-default.sql` | `eva_support_decision_log.decision_kind` | `'sd_recommendation'` | `lib/eva-support/sd-recommendation-emitter.js:210` → `'sd_recommendation'`; `lib/eva-support/sd-reader.js:88` → `'reader_disabled'`, `:127` → `'reader_error'` | **(a) honors** (emitter) + **(b)(i) intentional** (genuinely different event kinds) |
-| `20260423_sd_array_defaults_reconciliation.sql` | `strategic_directives_v2.{key_principles, success_metrics, success_criteria}` | `'[]'::jsonb` | `lib/eva/bridge/verification-sd-generator.js:44,61,101,103`; `lib/eva/create-orchestrator-from-plan.js:241,242,244,331,332`; `lib/discovery/blueprint-generator.js:139`; `lib/discovery/opportunity-discovery-service.js:369` → real arrays/values | **(b)(i) intentional** — `'[]'` is an empty-fallback; populating with real content is the intended behavior, not drift |
-| `20251206_vision_transition_001c_stage_constraints.sql` | `compliance_checks.total_stages` | `25` | *(none found in production)* | **(a) honors** — no production writer; the default fully governs |
+| `20251206_vision_transition_001c_stage_constraints.sql` | `compliance_checks.total_stages` | `25` (changed from 40) | *(none found in production)* | **(a) honors** — no production writer; the default fully governs |
+| `20260423_sd_array_defaults_reconciliation.sql` | `strategic_directives_v2.{key_principles, success_metrics, success_criteria}` | **`DROP DEFAULT`** (not SET) | n/a — see note | **OUT OF F12 SCOPE** — this migration *drops* the `'[]'::jsonb` defaults (the `SET DEFAULT` text is only in its commented rollback block). A dropped default has no F12-drift surface (there is no new default a writer could silently negate). The many writers that populate these columns with real arrays do so by design. |
 
 ## Detail on the F12 case (`user_stories.status`)
 
@@ -43,7 +43,7 @@ The historical hardcoded `status: 'ready'` (which negated the `'draft'` default 
 | Classification | Count | Notes |
 |----------------|:---:|-------|
 | (a) honors | 3 columns | user_stories.status (d6 writers), retrospective_type (completion), total_stages (no writers) |
-| (b)(i) intentional override | 4 columns | user_stories.status (F12 fix), retrospective_type (handoff tagging), decision_kind (event kinds), SD array cols (empty-fallback populated) |
+| (b)(i) intentional override | 3 columns | user_stories.status (F12 fix), retrospective_type (handoff tagging), decision_kind (event kinds) |
 | **(b)(ii) F12 drift-bug** | **0** | **None found** |
 | (c) ambiguous | 0 | handoff `retrospectiveType` var is contextually intentional |
 
