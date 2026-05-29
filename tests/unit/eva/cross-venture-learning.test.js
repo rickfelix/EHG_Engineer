@@ -201,7 +201,7 @@ describe('analyzeCrossVenturePatterns', () => {
         // Third call: proceed decisions for success patterns
         { data: [{ venture_id: 'v1', lifecycle_stage: 5, decision: 'proceed', health_score: 'green' }], error: null },
       ],
-      lifecycle_stage_config: {
+      venture_stages: {
         data: [
           { stage_number: 3, stage_name: 'Market Validation' },
           { stage_number: 5, stage_name: 'Profitability Forecast' },
@@ -233,7 +233,7 @@ describe('analyzeCrossVenturePatterns', () => {
           { data: [{ venture_id: 'v2', lifecycle_stage: 5 }], error: null },
           { data: [], error: null },
         ],
-        lifecycle_stage_config: {
+        venture_stages: {
           data: [{ stage_number: 5, stage_name: 'Profitability Forecast' }],
           error: null,
         },
@@ -287,7 +287,7 @@ describe('analyzeKillStageFrequency', () => {
           error: null,
         },
       ],
-      lifecycle_stage_config: {
+      venture_stages: {
         data: [
           { stage_number: 3, stage_name: 'Market Validation' },
           { stage_number: 5, stage_name: 'Profitability Forecast' },
@@ -313,7 +313,7 @@ describe('analyzeKillStageFrequency', () => {
         { data: [{ venture_id: 'v1', lifecycle_stage: 5 }], error: null },
         { data: [{ venture_id: 'v1', lifecycle_stage: 5 }], error: null },
       ],
-      lifecycle_stage_config: {
+      venture_stages: {
         data: [{ stage_number: 5, stage_name: 'Profitability Forecast' }],
         error: null,
       },
@@ -612,7 +612,7 @@ describe('output format', () => {
         { data: [], error: null },
         { data: [], error: null },
       ],
-      lifecycle_stage_config: { data: [], error: null },
+      venture_stages: { data: [], error: null },
       assumption_sets: { data: [], error: null },
       venture_artifacts: { data: [], error: null },
     });
@@ -637,7 +637,7 @@ describe('output format', () => {
         { data: [], error: null },
         { data: [], error: null },
       ],
-      lifecycle_stage_config: { data: [], error: null },
+      venture_stages: { data: [], error: null },
       assumption_sets: { data: [], error: null },
       venture_artifacts: { data: [], error: null },
     });

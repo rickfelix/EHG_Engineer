@@ -1,6 +1,10 @@
 /**
  * Tests for StageRegistry — A03 Stage Framework Extensibility
  * SD-MAN-ORCH-VISION-ARCHITECTURE-HARDENING-001-D
+ * SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: loadFromDatabase/loadFromDB now read
+ * the unified `venture_stages` superset in a SINGLE query (no second
+ * stage_config name-authority read), so the mocks represent venture_stages rows
+ * and stage_name is asserted to come straight from the row.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -94,19 +98,23 @@ describe('StageRegistry Core', () => {
   });
 });
 
-describe('StageRegistry — loadFromDatabase', () => {
-  it('loads stages from lifecycle_stage_config', async () => {
+describe('StageRegistry — loadFromDatabase (venture_stages)', () => {
+  it('loads stages from venture_stages in a single read', async () => {
     const registry = new StageRegistry();
     const mockData = [
       { stage_number: 1, stage_name: 'Draft Idea', phase_number: 1, phase_name: 'THE TRUTH', work_type: 'artifact_only', sd_required: false, advisory_enabled: false, depends_on: [], required_artifacts: ['truth_idea_brief'], metadata: {}, description: '' },
       { stage_number: 2, stage_name: 'Chairman Review', phase_number: 1, phase_name: 'THE TRUTH', work_type: 'decision_gate', sd_required: false, advisory_enabled: false, depends_on: [1], required_artifacts: [], metadata: {}, description: '' },
     ];
 
+    let fromCalls = 0;
     const supabase = {
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
-      })),
+      from: vi.fn(() => {
+        fromCalls++;
+        return {
+          select: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
+        };
+      }),
     };
 
     const result = await loadFromDatabase(registry, supabase);
@@ -115,6 +123,24 @@ describe('StageRegistry — loadFromDatabase', () => {
     expect(registry.has(1)).toBe(true);
     expect(registry.has(2)).toBe(true);
     expect(registry.isCacheValid()).toBe(true);
+    // SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: a single venture_stages read (no second stage_config read).
+    expect(fromCalls).toBe(1);
+    expect(supabase.from).toHaveBeenCalledWith('venture_stages');
+  });
+
+  it('stage_name comes straight from the venture_stages row (no name-authority override)', async () => {
+    const registry = new StageRegistry();
+    const mockData = [
+      { stage_number: 3, stage_name: 'Comprehensive Validation', phase_number: 1, phase_name: 'THE_TRUTH', work_type: 'decision_gate', sd_required: false, advisory_enabled: true, depends_on: [2], required_artifacts: [], metadata: {}, description: 'Deep validation' },
+    ];
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
+      })),
+    };
+    await loadFromDatabase(registry, supabase);
+    expect(registry.get(3).stage_name).toBe('Comprehensive Validation');
   });
 
   it('returns cached data within TTL', async () => {

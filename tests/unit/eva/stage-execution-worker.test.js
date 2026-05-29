@@ -125,30 +125,30 @@ describe('StageExecutionWorker', () => {
     supabase = createMockSupabase();
     logger = createMockLogger();
 
-    // SD-LEO-INFRA-VENTURE-GATE-UNIFICATION-001 FR-3: worker now reads gate definitions
-    // from stage_config (via lib/eva/stage-governance.js) and config from chairman_dashboard_config.
+    // SD-LEO-INFRA-VENTURE-GATE-UNIFICATION-001 FR-3: SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-B: worker now reads gate definitions
+    // from the unified venture_stages table (via lib/eva/stage-governance.js) and config from chairman_dashboard_config.
     // Register the V2 fixture + default config so gate-dependent tests work.
     _resetGovernanceCacheForTest();
-    supabase._setTableResponse('stage_config', {
+    supabase._setTableResponse('venture_stages', {
       ...supabase._chain,
       select: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({
         data: [
-          { stage_number: 3,  gate_type: 'kill',      review_mode: 'auto'   },
-          { stage_number: 5,  gate_type: 'kill',      review_mode: 'auto'   },
-          { stage_number: 7,  gate_type: 'none',      review_mode: 'review' },
-          { stage_number: 8,  gate_type: 'none',      review_mode: 'review' },
-          { stage_number: 9,  gate_type: 'none',      review_mode: 'review' },
-          { stage_number: 10, gate_type: 'promotion', review_mode: 'auto'   },
-          { stage_number: 11, gate_type: 'none',      review_mode: 'review' },
-          { stage_number: 13, gate_type: 'kill',      review_mode: 'auto'   },
-          { stage_number: 16, gate_type: 'promotion', review_mode: 'auto'   },
-          { stage_number: 17, gate_type: 'promotion', review_mode: 'auto'   },
-          { stage_number: 18, gate_type: 'promotion', review_mode: 'auto'   },
-          { stage_number: 19, gate_type: 'promotion', review_mode: 'auto'   },
-          { stage_number: 23, gate_type: 'kill',      review_mode: 'auto'   },
-          { stage_number: 24, gate_type: 'promotion', review_mode: 'auto'   },
-          { stage_number: 25, gate_type: 'promotion', review_mode: 'auto'   },
+          { stage_number: 3,  gate_type: 'kill',      review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 5,  gate_type: 'kill',      review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 7,  gate_type: 'none',      review_mode: 'review', work_type: 'artifact_only'  },
+          { stage_number: 8,  gate_type: 'none',      review_mode: 'review', work_type: 'artifact_only'  },
+          { stage_number: 9,  gate_type: 'none',      review_mode: 'review', work_type: 'artifact_only'  },
+          { stage_number: 10, gate_type: 'promotion', review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 11, gate_type: 'none',      review_mode: 'review', work_type: 'artifact_only'  },
+          { stage_number: 13, gate_type: 'kill',      review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 16, gate_type: 'promotion', review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 17, gate_type: 'promotion', review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 18, gate_type: 'promotion', review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 19, gate_type: 'promotion', review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 23, gate_type: 'kill',      review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 24, gate_type: 'promotion', review_mode: 'auto',   work_type: 'decision_gate' },
+          { stage_number: 25, gate_type: 'promotion', review_mode: 'auto',   work_type: 'decision_gate' },
         ],
         error: null,
       }),
