@@ -1,0 +1,7 @@
+# SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D
+# Pin the generated stage-config.js to LF so its on-disk form matches the
+# generator output (scripts/generate-stage-config.cjs emits LF) on every
+# platform. Without this, core.autocrlf=true rewrites it to CRLF on Windows
+# checkouts, making `npm run venture-stages:check` fail spuriously (this was
+# the pre-existing ~699-line "drift" Child D fixed).
+lib/proving-companion/stage-config.js eol=lf

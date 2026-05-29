@@ -1,0 +1,74 @@
+name: Venture Stages Drift Guard
+
+# SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D — venture_stages (DB) is the SSOT for
+# the 26-stage venture workflow. scripts/generate-stage-config.cjs emits two
+# artifacts FROM the DB:
+#   - lib/proving-companion/stage-config.js          (this repo)
+#   - ehg/src/config/venture-workflow.ts             (rickfelix/ehg, byte-parity)
+#
+# This guard regenerates both in-memory from venture_stages and byte-compares
+# them to the committed files (the venture-workflow.ts compare is banner-strip
+# tolerant), plus validates each component_path (^Stage<n>...\.tsx$) and its
+# on-disk existence in the checked-out ehg sibling. It runs on PRs/pushes that
+# touch the generator, the committed stage-config.js, or this workflow.
+#
+# ADVISORY: continue-on-error: true. Flip to blocking (remove that line + add
+# "Venture Stages Drift Guard" to required status checks) in a 1-line follow-up
+# once the false-positive rate is confirmed ~0. Modeled on
+# .github/workflows/design-prompts-cross-repo.yml + schema-drift-guard.yml.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/generate-stage-config.cjs'
+      - 'lib/proving-companion/stage-config.js'
+      - '.github/workflows/venture-stages-drift-guard.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/generate-stage-config.cjs'
+      - 'lib/proving-companion/stage-config.js'
+      - '.github/workflows/venture-stages-drift-guard.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true # ADVISORY; remove this line to make blocking
+    steps:
+      - name: Checkout EHG_Engineer
+        uses: actions/checkout@v4
+
+      - name: Checkout sibling EHG repo
+        uses: actions/checkout@v4
+        with:
+          repository: rickfelix/ehg
+          path: ehg-sibling
+          token: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install minimal deps
+        run: npm install --no-audit --no-fund @supabase/supabase-js dotenv
+
+      - name: Check venture_stages <-> artifacts drift
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Point the generator's ehg resolver at the checked-out sibling so the
+          # venture-workflow.ts byte-compare + on-disk component checks resolve.
+          EHG_APP_PATH: ${{ github.workspace }}/ehg-sibling
+        run: node scripts/generate-stage-config.cjs --check
+
+      - name: Note about advisory mode
+        if: failure()
+        run: |
+          echo "::warning ::venture_stages drifted from stage-config.js and/or ehg venture-workflow.ts. This gate is in advisory mode (continue-on-error). Regenerate with 'npm run venture-stages:generate' (in EHG_Engineer) and commit both artifacts. See SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D."

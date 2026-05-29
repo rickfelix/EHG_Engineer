@@ -39,6 +39,8 @@
     "list-apps": "node scripts/switch-context.js list",
     "encrypt-test": "node lib/security/encryption.cjs validate",
     "design-prompts:sync": "node scripts/design-prompts-sync.mjs",
+    "venture-stages:generate": "node scripts/generate-stage-config.cjs --write",
+    "venture-stages:check": "node scripts/generate-stage-config.cjs --check",
     "design-prompts:check": "node scripts/design-prompts-sync.mjs --check",
     "sync-github": "node scripts/sync-github.js",
     "sync-supabase": "node scripts/sync-supabase.js",
