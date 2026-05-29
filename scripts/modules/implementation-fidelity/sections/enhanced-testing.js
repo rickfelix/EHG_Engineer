@@ -12,6 +12,15 @@ import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../uti
 import { getSectionEnforcement } from '../sd-type-section-policy.js';
 
 /**
+ * Directories scanned for test files in [D1]. F21 (367cab56): the bare `tests/`
+ * root is scanned recursively (which subsumes tests/e2e, tests/integration,
+ * tests/unit) so backend/venture slices that place tests in `tests/` rather
+ * than `tests/unit` get their unit/integration coverage counted toward D1
+ * instead of a false "No E2E tests found" 0/20. Exported for unit testing.
+ */
+export const TEST_DIRS = ['tests', 'e2e', 'playwright/tests'];
+
+/**
  * Validate Enhanced Testing
  *
  * @param {string} sd_id - Strategic Directive ID
@@ -48,13 +57,7 @@ export async function validateEnhancedTesting(sd_id, designAnalysis, databaseAna
   try {
     const implementationRepos = await detectImplementationRepos(sd_id, supabase);
 
-    const testDirs = [
-      'tests/e2e',
-      'tests/integration',
-      'tests/unit',
-      'e2e',
-      'playwright/tests'
-    ];
+    const testDirs = TEST_DIRS;
 
     let testFiles = [];
     for (const repo of implementationRepos) {
