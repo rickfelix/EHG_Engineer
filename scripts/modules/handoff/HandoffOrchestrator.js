@@ -347,10 +347,26 @@ export class HandoffOrchestrator {
       // any gate defined only in leo_validation_rules, so operators don't see a
       // failure execute will enforce. Advisory-only: validateGatesAll runs in
       // precheckMode (no writes; LLM gates skipped) and the execute path is unchanged.
+      // QF-20260529-564: load the PRD so DB-rule gates that read context.prd (e.g.
+      // 1:prdQualityValidation) evaluate in precheck the way execute does
+      // (BaseExecutor.js:302). Without it, precheck false-fails "No PRD provided" for
+      // sd_types where that gate is enabled (e.g. feature). Non-fatal: precheck is advisory.
+      let precheckPrd = null;
+      try {
+        const bySdId = await this.supabase.from('product_requirements_v2').select('*').eq('sd_id', sd.id);
+        precheckPrd = bySdId?.data?.[0] || null;
+        if (!precheckPrd) {
+          const byDirective = await this.supabase.from('product_requirements_v2').select('*').eq('directive_id', sd.id);
+          precheckPrd = byDirective?.data?.[0] || null;
+        }
+      } catch (e) {
+        console.warn(`   [precheck] PRD load skipped: ${e.message}`);
+      }
       const precheckValidationContext = {
         sdId,
         sd_id: sd?.id || sdId,
         sd,
+        prd: precheckPrd,
         options,
         precheckMode: true,
         supabase: this.supabase

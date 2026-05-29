@@ -95,4 +95,30 @@ describe('HandoffOrchestrator.precheckHandoff applies gate policies', () => {
     expect(ctx.sd).toBe(childSd);
     expect(ctx.precheckMode).toBe(true);
   });
+
+  it('loads the PRD into the precheck context so prd-reading gates (e.g. 1:prdQualityValidation) evaluate (QF-20260529-564)', async () => {
+    applyGatePoliciesMock.mockResolvedValue({
+      filteredGates: [{ name: 'GATE_KEEP' }], resolutions: [], fallbackUsed: false
+    });
+    const prdRow = { id: 'PRD-X', sd_id: 'X', title: 'PRD', status: 'approved' };
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({ eq: vi.fn(async () => ({ data: [prdRow], error: null })) }))
+      }))
+    };
+    const orchestrator = new HandoffOrchestrator({
+      supabase,
+      sdRepo: { getById: vi.fn().mockResolvedValue(INFRA_SD) },
+      validationOrchestrator: {
+        validateGatesAll: validateGatesAllMock,
+        buildGatesFromRules: buildGatesFromRulesMock
+      },
+      executors: { 'PLAN-TO-LEAD': { getRequiredGates: vi.fn().mockResolvedValue([{ name: 'GATE_KEEP' }]) } }
+    });
+    await orchestrator.precheckHandoff('PLAN-TO-LEAD', 'X');
+
+    // The PRD must reach the gate context so context.prd-reading gates don't false-fail.
+    const ctx = validateGatesAllMock.mock.calls[0][1];
+    expect(ctx.prd).toEqual(prdRow);
+  });
 });
