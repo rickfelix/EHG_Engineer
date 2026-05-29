@@ -285,7 +285,7 @@ export function createSubAgentRepoResolutionGate(supabase) {
         const [viewResp, rawResp] = await Promise.all([
           supabase
             .from('v_sub_agent_repo_compliance')
-            .select('id, sd_id, sub_agent_code, phase, target_application, expected_repo_path, metadata_repo_path, metadata_repo_resolved, executed_from_cwd, compliance_status')
+            .select('id, created_at, sd_id, sub_agent_code, phase, target_application, expected_repo_path, metadata_repo_path, metadata_repo_resolved, executed_from_cwd, compliance_status')
             .in('sd_id', sdIds),
           supabase
             .from('sub_agent_execution_results')
@@ -333,6 +333,25 @@ export function createSubAgentRepoResolutionGate(supabase) {
 
       const blockingDetails = [];
       const conditionalDetails = [];
+
+      // FR-3 (SD-LEO-INFRA-VENTURE-SUBAGENT-RESOLUTION-001): classify only the LATEST row
+      // per (sub_agent_code, phase) so a corrected re-run cancels an earlier wrong-repo row
+      // (the prior all-rows scan kept failing on the stale row even after a green re-run).
+      // Recency = max created_at; id DESC tie-break for equal sub-ms inserts. ISO-UTC
+      // created_at strings compare lexicographically. Legacy-only and multi-phase groups
+      // are preserved (a legacy survivor still classifies LEGACY → full credit).
+      {
+        const latestByKey = new Map();
+        for (const vrow of viewRows) {
+          const key = `${vrow.sub_agent_code}::${vrow.phase}`;
+          const prev = latestByKey.get(key);
+          const newer = !prev
+            || (vrow.created_at || '') > (prev.created_at || '')
+            || ((vrow.created_at || '') === (prev.created_at || '') && String(vrow.id) > String(prev.id));
+          if (newer) latestByKey.set(key, vrow);
+        }
+        viewRows = [...latestByKey.values()];
+      }
 
       for (const vrow of viewRows) {
         const raw = rawById.get(vrow.id);
