@@ -750,8 +750,12 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
 
       // QF-20260509-552: --force-complete auto-confirms commit/push prompts
       // so --non-interactive flow does not wedge.
-      const shouldCommit = flags.forceComplete
-        ? (console.log(`   ⚠️  --force-complete: auto-confirm commit (reason="${flags.reason}")`), 'yes')
+      // QF-20260529-888: auto-confirm under --non-interactive too (the comment above
+      // assumed it's always paired with --force-complete — it isn't; a plain
+      // --non-interactive run otherwise wedges/rejects on this prompt).
+      const autoConfirmGit = flags.forceComplete || flags.nonInteractive;
+      const shouldCommit = autoConfirmGit
+        ? (console.log(`   ⚠️  ${flags.forceComplete ? '--force-complete' : '--non-interactive'}: auto-confirm commit (reason="${flags.reason || 'n/a'}")`), 'yes')
         : await prompt('   Commit these changes? (yes/no): ');
 
       if (shouldCommit.toLowerCase().startsWith('y')) {
@@ -767,8 +771,8 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
         commitSha = newCommitSha;
         console.log(`   ✅ Committed: ${newCommitSha.substring(0, 7)}\n`);
 
-        const shouldPush = flags.forceComplete
-          ? (console.log(`   ⚠️  --force-complete: auto-confirm push (reason="${flags.reason}")`), 'yes')
+        const shouldPush = autoConfirmGit
+          ? (console.log(`   ⚠️  ${flags.forceComplete ? '--force-complete' : '--non-interactive'}: auto-confirm push`), 'yes')
           : await prompt('   Push to remote? (yes/no): ');
 
         if (shouldPush.toLowerCase().startsWith('y')) {
@@ -853,9 +857,15 @@ export async function mergeToMain(testDir, qf, prUrl, prompt, flags = {}) {
     // QF-20260509-552: 7th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.
     // --force-complete auto-confirms the merge prompt so --non-interactive flow
     // does not wedge after validators were patched in QF-407 / SD-FDBK FR-2.
+    // QF-20260529-888: under plain --non-interactive (no --force-complete), SKIP the
+    // direct merge rather than prompting (which rejects). Auto-merging via `gh pr merge
+    // --merge` immediately is unsafe without a CI gate, so the safe default is to let
+    // `gh pr merge --auto` / CI handle it (or re-run with --force-complete to force).
     const shouldMerge = flags.forceComplete
       ? (console.log(`   ⚠️  --force-complete: auto-confirm merge (reason="${flags.reason}")`), 'yes')
-      : await prompt('   Merge to main now? (yes/no): ');
+      : flags.nonInteractive
+        ? (console.log('   ℹ️  --non-interactive: skipping direct merge (use `gh pr merge --auto` / CI, or re-run with --force-complete).'), 'no')
+        : await prompt('   Merge to main now? (yes/no): ');
 
     if (shouldMerge.toLowerCase().startsWith('y')) {
       console.log('\n   🔀 Merging to main...');
