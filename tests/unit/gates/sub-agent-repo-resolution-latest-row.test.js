@@ -94,4 +94,19 @@ describe('SUB_AGENT_REPO_RESOLUTION gate — F11 latest-row dedup', () => {
 
     expect(result.passed).toBe(true);
   });
+
+  it('does NOT collapse sibling SDs: same code+phase across different sd_id stay separate', async () => {
+    // collectSdScope() pulls the parent SD + all children into viewRows, so the dedup key
+    // includes sd_id. A later compliant CHILD-A row must NOT mask an earlier wrong-repo
+    // CHILD-B violation under a shared DESIGN::PLAN bucket — the gate must still FAIL.
+    const childA = { ...designRow('rA', '2026-05-27T12:00:00.000000+00:00', true), sd_id: 'child-A' };
+    const childB = { ...designRow('rB', '2026-05-27T10:00:00.000000+00:00', false), sd_id: 'child-B' };
+    const rawRows = [rawRow('rA', VENTURE), rawRow('rB', EHG)];
+    const supabase = buildSupabase({ viewRows: [childA, childB], rawRows, children: [{ id: 'child-A' }, { id: 'child-B' }] });
+    const gate = createSubAgentRepoResolutionGate(supabase);
+
+    const result = await gate.validator({ sd: makeSD({ id: 'parent-x' }) });
+
+    expect(result.passed).toBe(false); // child-B's violation must NOT be masked by child-A's compliant row
+  });
 });

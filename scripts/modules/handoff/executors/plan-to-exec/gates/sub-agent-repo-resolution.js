@@ -343,7 +343,10 @@ export function createSubAgentRepoResolutionGate(supabase) {
       {
         const latestByKey = new Map();
         for (const vrow of viewRows) {
-          const key = `${vrow.sub_agent_code}::${vrow.phase}`;
+          // Key MUST include sd_id: collectSdScope() pulls the parent SD + all child SDs
+          // into viewRows, so two sibling children running the same sub_agent_code+phase
+          // against their OWN repos must NOT collapse (that would mask a sibling violation).
+          const key = `${vrow.sd_id}::${vrow.sub_agent_code}::${vrow.phase}`;
           const prev = latestByKey.get(key);
           const newer = !prev
             || (vrow.created_at || '') > (prev.created_at || '')
