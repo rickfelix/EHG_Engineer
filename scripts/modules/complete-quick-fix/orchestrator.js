@@ -314,7 +314,10 @@ export async function completeQuickFix(qfId, options = {}) {
   // options.verificationNotes if provided; the prompt below only runs without
   // --non-interactive when no notes were supplied).
   let verificationNotes = options.verificationNotes;
-  if (!verificationNotes) {
+  // QF-20260529-888: actually honor the guard the comment above describes — under
+  // --non-interactive (or --force-complete) this optional prompt must NOT fire, else
+  // prompt() rejects and fails the whole completion. Absent notes default to null below.
+  if (!verificationNotes && !options.nonInteractive && !options.forceComplete) {
     verificationNotes = await prompt('\nVerification notes (optional): ');
   }
 
