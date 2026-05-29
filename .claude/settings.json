@@ -254,7 +254,7 @@
         ]
       },
       {
-        "matcher": "Task|Bash",
+        "matcher": "Task|Bash|Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
