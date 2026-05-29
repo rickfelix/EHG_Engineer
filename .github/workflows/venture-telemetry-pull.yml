@@ -1,0 +1,34 @@
+name: Venture Telemetry Daily Pull
+
+# SD-LEO-INFRA-VENTURE-TELEMETRY-PULL-001-C (Layer 2 consumer).
+# Daily one-way PULL of each active venture's authenticated GET /v1/metrics into the EHG
+# venture_telemetry rollup table. EHG never writes into a venture DB. Fails soft per venture.
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # daily 06:00 UTC
+  workflow_dispatch: {}
+
+# Avoid overlapping runs (the job is idempotent — upsert per application_id — but no need to stack).
+concurrency:
+  group: venture-telemetry-pull
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Per-venture read keys (D5): the NAME matches applications.metrics_api_key_ref.
+      # Add one line per venture as its endpoint is configured.
+      CRONGENIUS_METRICS_API_KEY: ${{ secrets.CRONGENIUS_METRICS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --ignore-scripts
+      - name: Pull venture telemetry
+        run: node scripts/venture-telemetry-pull.mjs
