@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 /**
- * generate-stage-config.js — Reads the venture-workflow.ts SSOT from the EHG app
- * repo and the lifecycle_stage_config DB table, then generates
- * lib/proving-companion/stage-config.js.
+ * generate-stage-config.cjs — venture_stages (DB) is the SINGLE SOURCE OF TRUTH.
+ *
+ * Reads the unified `venture_stages` table and EMITS two artifacts:
+ *   1. lib/proving-companion/stage-config.js          (EHG_Engineer consumers)
+ *   2. ehg/src/config/venture-workflow.ts             (generated, do-not-edit)
+ *
+ * This INVERTS the prior direction (which parsed venture-workflow.ts as SSOT).
+ * Children A/B/C made venture_stages the unified table that the backend reads;
+ * Child D (SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D) makes it authoritative for
+ * generation too. The app-only fields (gate_label, app_description,
+ * component_path) live on venture_stages as additive columns.
  *
  * Usage:
- *   node scripts/generate-stage-config.js           # dry-run (stdout)
- *   node scripts/generate-stage-config.js --write   # write to stage-config.js
- *   node scripts/generate-stage-config.js --check   # compare, exit 1 if different (CI)
+ *   node scripts/generate-stage-config.cjs           # dry-run (stage-config to stdout)
+ *   node scripts/generate-stage-config.cjs --write   # write BOTH artifacts
+ *   node scripts/generate-stage-config.cjs --check    # CI drift guard (byte-compare BOTH)
  *
- * SSOT sources:
- *   - App:  ehg/src/config/venture-workflow.ts  (stages, components, gates, chunks)
- *   - DB:   lifecycle_stage_config              (requiredArtifacts, workType, archPhases)
- *
- * Idempotent: running twice produces identical output.
+ * BYTE-PARITY: the generated venture-workflow.ts is byte-identical to the
+ * committed file except its leading generated banner. CRLF + UTF-8 preserved.
  */
 
 'use strict';
@@ -27,143 +32,67 @@ const { resolveRepoPath } = require('../lib/repo-paths.cjs');
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
-// Resolve app repo path: env var > registry > sibling directory > walk-up discovery
-const VENTURE_WORKFLOW_PATH = (() => {
+const STAGE_CONFIG_PATH = path.resolve(__dirname, '..', 'lib', 'proving-companion', 'stage-config.js');
+
+function resolveVentureWorkflowPath() {
   if (process.env.EHG_APP_PATH) {
     return path.resolve(process.env.EHG_APP_PATH, 'src', 'config', 'venture-workflow.ts');
   }
-  // Registry-based resolution
   const registryEhg = resolveRepoPath('ehg');
   if (registryEhg) {
-    const candidate = path.join(registryEhg, 'src', 'config', 'venture-workflow.ts');
-    if (fs.existsSync(candidate)) return candidate;
+    return path.join(registryEhg, 'src', 'config', 'venture-workflow.ts');
   }
-  // Walk up from script dir to find the _EHG parent containing both repos
+  // Walk up from script dir to find a sibling ehg repo
   let dir = __dirname;
   for (let i = 0; i < 5; i++) {
     dir = path.dirname(dir);
     const candidate = path.join(dir, 'ehg', 'src', 'config', 'venture-workflow.ts');
     if (fs.existsSync(candidate)) return candidate;
   }
-  // Fallback: registry path even if file doesn't exist yet
-  return path.resolve(registryEhg || path.resolve(__dirname, '..', '..', 'ehg'), 'src', 'config', 'venture-workflow.ts');
-})();
-const OUTPUT_PATH = path.resolve(
-  __dirname, '..', 'lib', 'proving-companion', 'stage-config.js'
-);
+  return path.resolve(__dirname, '..', '..', 'ehg', 'src', 'config', 'venture-workflow.ts');
+}
+const VENTURE_WORKFLOW_PATH = resolveVentureWorkflowPath();
 
 // ---------------------------------------------------------------------------
-// Parse flags
+// Flags
 // ---------------------------------------------------------------------------
 const args = process.argv.slice(2);
 const FLAG_WRITE = args.includes('--write');
 const FLAG_CHECK = args.includes('--check');
 
 // ---------------------------------------------------------------------------
-// venture-workflow.ts parser
+// DB loader — venture_stages (unified SSOT)
 // ---------------------------------------------------------------------------
-
-/**
- * Parse VENTURE_STAGES array from the TypeScript source.
- * We use a simple regex approach — the TS file has a predictable format
- * with one object literal per stage.
- *
- * Returns an array of { stageNumber, stageName, stageKey, componentPath, gateType, chunk }.
- */
-function parseVentureWorkflow(tsSource) {
-  const stages = [];
-
-  // Match each object literal inside the VENTURE_STAGES array.
-  // The array starts after "export const VENTURE_STAGES: VentureStage[] = ["
-  const arrayMatch = tsSource.match(
-    /export\s+const\s+VENTURE_STAGES\s*:\s*VentureStage\[\]\s*=\s*\[([\s\S]*?)\];/
-  );
-  if (!arrayMatch) {
-    throw new Error('Could not find VENTURE_STAGES array in venture-workflow.ts');
-  }
-
-  const arrayBody = arrayMatch[1];
-
-  // Match each { ... } block
-  const objectRegex = /\{([^{}]+)\}/g;
-  let m;
-  while ((m = objectRegex.exec(arrayBody)) !== null) {
-    const block = m[1];
-
-    const stageNumber = extractNumber(block, 'stageNumber');
-    const stageName = extractString(block, 'stageName');
-    const stageKey = extractString(block, 'stageKey');
-    const componentPath = extractString(block, 'componentPath');
-    const gateType = extractString(block, 'gateType');
-    const chunk = extractString(block, 'chunk');
-
-    if (stageNumber == null || !stageKey) {
-      continue; // skip non-stage objects (shouldn't happen)
-    }
-
-    stages.push({ stageNumber, stageName, stageKey, componentPath, gateType, chunk });
-  }
-
-  if (stages.length !== 26) {
-    throw new Error(
-      `Expected 26 stages from venture-workflow.ts, got ${stages.length}`
-    );
-  }
-
-  return stages;
-}
-
-function extractString(block, key) {
-  // Matches key: 'value' or key: "value"
-  const re = new RegExp(`${key}\\s*:\\s*['"]([^'"]+)['"]`);
-  const m = block.match(re);
-  return m ? m[1] : null;
-}
-
-function extractNumber(block, key) {
-  const re = new RegExp(`${key}\\s*:\\s*(\\d+)`);
-  const m = block.match(re);
-  return m ? parseInt(m[1], 10) : null;
-}
-
-// ---------------------------------------------------------------------------
-// DB loader — lifecycle_stage_config
-// ---------------------------------------------------------------------------
-
-async function loadDBConfig() {
+function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
-
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY / SUPABASE_KEY in environment'
-    );
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY / SUPABASE_KEY in environment');
   }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
-  const { data, error } = await supabase
-    .from('lifecycle_stage_config')
-    .select('stage_number, stage_name, work_type, required_artifacts, phase_name, metadata')
-    .order('stage_number', { ascending: true });
-
-  if (error) {
-    throw new Error(`Supabase query failed: ${error.message}`);
-  }
-
-  // Index by stage_number for O(1) lookup
-  const byStage = {};
-  for (const row of data) {
-    byStage[row.stage_number] = row;
-  }
-  return byStage;
+  return createClient(supabaseUrl, supabaseKey);
 }
 
-// SD-LEO-INFRA-RECONCILE-VENTURE-LIFECYCLE-001 / FR-6
-// Cross-table name-parity assertion. Fails when lifecycle_stage_config.stage_name
-// disagrees with stage_config.stage_name for any stage_number present in BOTH
-// tables. Pure I/O wrapper around a SQL JOIN — no business logic.
-// Exported (via _testHooks) so unit fixtures can drive it without spinning up CI.
+async function loadVentureStages(supabase) {
+  const { data, error } = await supabase
+    .from('venture_stages')
+    .select('stage_number, stage_name, stage_key, component_path, gate_type, gate_label, review_mode, chunk, description, app_description, work_type, required_artifacts, metadata')
+    .order('stage_number', { ascending: true });
+  if (error) throw new Error(`venture_stages query failed: ${error.message}`);
+  if (!data || data.length !== 26) {
+    throw new Error(`Expected 26 rows from venture_stages, got ${data ? data.length : 0}`);
+  }
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Backward-compat cross-table name-parity assertion
+// (SD-LEO-INFRA-RECONCILE-VENTURE-LIFECYCLE-001 / FR-6)
+// ---------------------------------------------------------------------------
+// The generator no longer READS the legacy stage_config / lifecycle_stage_config
+// tables (venture_stages is the SSOT). But those tables still exist, kept in
+// sync by Child A's triggers, and the FR-6 parity invariant + its unit test
+// remain valid. Retained here (exported via _testHooks) so that test keeps
+// passing without re-rolling its query. Pure I/O wrapper around a SQL join.
 async function assertCrossTableNameParity(supabase) {
   const [lifecycleRes, stageRes] = await Promise.all([
     supabase.from('lifecycle_stage_config').select('stage_number, stage_name').order('stage_number'),
@@ -178,8 +107,7 @@ async function assertCrossTableNameParity(supabase) {
   const divergences = [];
   for (const row of stageRes.data || []) {
     const lcName = lifecycleByStage.get(row.stage_number);
-    // INNER-join semantics: only flag when both rows exist. Stages present in only
-    // one table are out of scope for parity (different lifecycle vs config concerns).
+    // INNER-join semantics: only flag when both rows exist.
     if (lcName !== undefined && lcName !== row.stage_name) {
       divergences.push({
         stage_number: row.stage_number,
@@ -191,313 +119,369 @@ async function assertCrossTableNameParity(supabase) {
   return divergences;
 }
 
-// Expose for unit tests (FR-6 TS-1): allows fixture-driven verification.
+// Exposed for unit tests (FR-6 TS-1).
 module.exports._testHooks = { assertCrossTableNameParity };
 
 // ---------------------------------------------------------------------------
 // Mapping helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Map app gateType ('none' | 'kill' | 'promotion') to stage-config gateType.
- * 'none' -> null
- */
-function mapGateType(appGateType) {
-  if (appGateType === 'none') return null;
-  return appGateType; // 'kill' or 'promotion'
+// stageKey is reproduced from the snake_case DB key by hyphenating.
+function deriveStageKey(row) {
+  return row.stage_key.replace(/_/g, '-');
 }
 
-/**
- * Build the stage name for stage-config.
- * Uses the app stageName as the canonical name (SSOT).
- * Gate type is separate metadata — NOT embedded in the name.
- */
-function buildStageName(appStage, dbRow) {
-  return appStage.stageName;
+function mapGateType(gateType) {
+  if (gateType === 'none' || gateType == null) return null;
+  return gateType; // 'kill' | 'promotion'
 }
 
-/**
- * Derive filePatterns from componentPath.
- * Pattern: 'src/components/stages/<ComponentBase>*'
- */
-function deriveFilePatterns(componentPath) {
-  const base = componentPath.replace(/\.tsx$/, '');
-  return [`src/components/stages/${base}*`];
-}
-
-/**
- * Get requiredArtifacts from DB row, falling back to empty array.
- */
-function getRequiredArtifacts(dbRow) {
-  if (!dbRow) return [];
-  if (Array.isArray(dbRow.required_artifacts)) return dbRow.required_artifacts;
-  return [];
-}
-
-/**
- * Get workType from DB row. Falls back to 'artifact_only'.
- */
-function getWorkType(dbRow) {
-  if (!dbRow) return 'artifact_only';
-  return dbRow.work_type || 'artifact_only';
-}
-
-/**
- * Derive visionKeys from stageKey. Uses [stageKey] as the primary array.
- */
-function deriveVisionKeys(stageKey) {
-  return [stageKey];
-}
-
-/**
- * Derive archPhases from DB metadata or phase_name.
- * The DB metadata.arch_phases field is checked first.
- * Falls back to a chunk-to-archPhase mapping.
- */
 const CHUNK_TO_ARCH_PHASE = {
   THE_TRUTH: 'validation',
   THE_ENGINE: 'design',
   THE_IDENTITY: 'identity',
   THE_BLUEPRINT: 'build',
   THE_BUILD: 'execution',
-  THE_LAUNCH: 'launch'
+  THE_LAUNCH: 'launch',
 };
 
-function getArchPhases(dbRow, chunk) {
-  // Check DB metadata for explicit arch_phases
-  if (dbRow && dbRow.metadata && Array.isArray(dbRow.metadata.arch_phases)) {
-    return dbRow.metadata.arch_phases;
-  }
-  // Fall back to chunk-based mapping
-  const phase = CHUNK_TO_ARCH_PHASE[chunk] || 'unknown';
-  return [phase];
+function getArchPhases(row) {
+  if (row.metadata && Array.isArray(row.metadata.arch_phases)) return row.metadata.arch_phases;
+  return [CHUNK_TO_ARCH_PHASE[row.chunk] || 'unknown'];
+}
+
+function getRequiredArtifacts(row) {
+  return Array.isArray(row.required_artifacts) ? row.required_artifacts : [];
+}
+
+function getWorkType(row) {
+  return row.work_type || 'artifact_only';
+}
+
+function deriveFilePatterns(componentPath) {
+  const base = componentPath.replace(/\.tsx$/, '');
+  return [`src/components/stages/${base}*`];
 }
 
 // ---------------------------------------------------------------------------
-// Code generator
+// stage-config.js generator (EHG_Engineer consumers)
 // ---------------------------------------------------------------------------
-
-/**
- * Serialize a JS value for embedding in generated source.
- * Handles: null, strings, arrays of strings.
- */
 function jsLiteral(value) {
   if (value === null) return 'null';
   if (typeof value === 'string') return `'${value.replace(/'/g, "\\'")}'`;
   if (Array.isArray(value)) {
     if (value.length === 0) return '[]';
-    return `[${value.map(v => jsLiteral(v)).join(', ')}]`;
+    return `[${value.map((v) => jsLiteral(v)).join(', ')}]`;
   }
   return String(value);
 }
 
-function generateOutput(appStages, dbConfig) {
+function generateStageConfig(rows) {
   const lines = [];
-
-  lines.push(`/**`);
-  lines.push(` * Stage Config — maps stage numbers to file patterns, required artifacts,`);
-  lines.push(` * gate types, and vision keys for Plan Agent and Reality Agent consumption.`);
-  lines.push(` *`);
-  lines.push(` * SSOT sources:`);
-  lines.push(` *   - DB: lifecycle_stage_config (stage names, phases, work types, artifacts)`);
-  lines.push(` *   - App: venture-workflow.ts (component paths, gate types, chunks)`);
-  lines.push(` *`);
-  lines.push(` * GENERATED FILE — DO NOT HAND-EDIT.`);
-  lines.push(` * Regenerate via: node scripts/generate-stage-config.js --write`);
-  lines.push(` */`);
+  lines.push('/**');
+  lines.push(' * Stage Config — maps stage numbers to file patterns, required artifacts,');
+  lines.push(' * gate types, and vision keys for Plan Agent and Reality Agent consumption.');
+  lines.push(' *');
+  lines.push(' * SSOT: venture_stages (DB). App-only fields (component_path, gate_label,');
+  lines.push(' * app_description) live on venture_stages as additive columns.');
+  lines.push(' *');
+  lines.push(' * GENERATED FILE — DO NOT HAND-EDIT.');
+  lines.push(' * Regenerate via: node scripts/generate-stage-config.cjs --write');
+  lines.push(' */');
   lines.push('');
-  lines.push(`const STAGE_CONFIG = {`);
+  lines.push('const STAGE_CONFIG = {');
 
-  for (let i = 0; i < appStages.length; i++) {
-    const stage = appStages[i];
-    const dbRow = dbConfig[stage.stageNumber] || null;
-
-    const name = buildStageName(stage, dbRow);
-    const componentFile = stage.componentPath;
-    const filePatterns = deriveFilePatterns(stage.componentPath);
-    const requiredArtifacts = getRequiredArtifacts(dbRow);
-    const workType = getWorkType(dbRow);
-    const gateType = mapGateType(stage.gateType);
-    const phase = stage.chunk; // chunk maps directly to phase
-    const visionKeys = deriveVisionKeys(stage.stageKey);
-    const archPhases = getArchPhases(dbRow, stage.chunk);
-
-    lines.push(`  ${stage.stageNumber}: {`);
-    lines.push(`    name: ${jsLiteral(name)},`);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const componentFile = row.component_path;
+    lines.push(`  ${row.stage_number}: {`);
+    lines.push(`    name: ${jsLiteral(row.stage_name)},`);
     lines.push(`    componentFile: ${jsLiteral(componentFile)},`);
-    lines.push(`    filePatterns: ${jsLiteral(filePatterns)},`);
-    lines.push(`    requiredArtifacts: ${jsLiteral(requiredArtifacts)},`);
-    lines.push(`    workType: ${jsLiteral(workType)},`);
-    lines.push(`    gateType: ${jsLiteral(gateType)},`);
-    lines.push(`    phase: ${jsLiteral(phase)},`);
-    lines.push(`    visionKeys: ${jsLiteral(visionKeys)},`);
-    lines.push(`    archPhases: ${jsLiteral(archPhases)}`);
-
-    if (i < appStages.length - 1) {
-      lines.push(`  },`);
-    } else {
-      lines.push(`  }`);
-    }
+    lines.push(`    filePatterns: ${jsLiteral(deriveFilePatterns(componentFile))},`);
+    lines.push(`    requiredArtifacts: ${jsLiteral(getRequiredArtifacts(row))},`);
+    lines.push(`    workType: ${jsLiteral(getWorkType(row))},`);
+    lines.push(`    gateType: ${jsLiteral(mapGateType(row.gate_type))},`);
+    lines.push(`    phase: ${jsLiteral(row.chunk)},`);
+    lines.push(`    visionKeys: ${jsLiteral([deriveStageKey(row)])},`);
+    lines.push(`    archPhases: ${jsLiteral(getArchPhases(row))}`);
+    lines.push(i < rows.length - 1 ? '  },' : '  }');
   }
 
-  lines.push(`};`);
+  lines.push('};');
   lines.push('');
-
-  // Helper functions — identical to the existing stage-config.js API surface
-  lines.push(`/**`);
-  lines.push(` * Get config for a specific stage`);
-  lines.push(` * @param {number} stageNumber`);
-  lines.push(` * @returns {object} stage config`);
-  lines.push(` */`);
-  lines.push(`export function getStageConfig(stageNumber) {`);
-  lines.push(`  return STAGE_CONFIG[stageNumber] || null;`);
-  lines.push(`}`);
+  lines.push('/**');
+  lines.push(' * Get config for a specific stage');
+  lines.push(' * @param {number} stageNumber');
+  lines.push(' * @returns {object} stage config');
+  lines.push(' */');
+  lines.push('export function getStageConfig(stageNumber) {');
+  lines.push('  return STAGE_CONFIG[stageNumber] || null;');
+  lines.push('}');
   lines.push('');
-
-  lines.push(`/**`);
-  lines.push(` * Get configs for a range of stages`);
-  lines.push(` * @param {number} from`);
-  lines.push(` * @param {number} to`);
-  lines.push(` * @returns {object} map of stage number to config`);
-  lines.push(` */`);
-  lines.push(`export function getStageRange(from, to) {`);
-  lines.push(`  const result = {};`);
-  lines.push(`  for (let i = from; i <= to; i++) {`);
-  lines.push(`    if (STAGE_CONFIG[i]) {`);
-  lines.push(`      result[i] = STAGE_CONFIG[i];`);
-  lines.push(`    }`);
-  lines.push(`  }`);
-  lines.push(`  return result;`);
-  lines.push(`}`);
+  lines.push('/**');
+  lines.push(' * Get configs for a range of stages');
+  lines.push(' * @param {number} from');
+  lines.push(' * @param {number} to');
+  lines.push(' * @returns {object} map of stage number to config');
+  lines.push(' */');
+  lines.push('export function getStageRange(from, to) {');
+  lines.push('  const result = {};');
+  lines.push('  for (let i = from; i <= to; i++) {');
+  lines.push('    if (STAGE_CONFIG[i]) {');
+  lines.push('      result[i] = STAGE_CONFIG[i];');
+  lines.push('    }');
+  lines.push('  }');
+  lines.push('  return result;');
+  lines.push('}');
   lines.push('');
-
-  lines.push(`/**`);
-  lines.push(` * Gate stages — stages requiring chairman decision to advance.`);
-  lines.push(` * Kill gates: venture can be terminated.`);
-  lines.push(` * Promotion gates: venture elevated from simulation to production.`);
-  lines.push(` * @returns {number[]}`);
-  lines.push(` */`);
-  lines.push(`export function getGateStages() {`);
-  lines.push(`  return Object.entries(STAGE_CONFIG)`);
-  lines.push(`    .filter(([, c]) => c.gateType !== null)`);
-  lines.push(`    .map(([n]) => parseInt(n));`);
-  lines.push(`}`);
+  lines.push('/**');
+  lines.push(' * Gate stages — stages requiring chairman decision to advance.');
+  lines.push(' * Kill gates: venture can be terminated.');
+  lines.push(' * Promotion gates: venture elevated from simulation to production.');
+  lines.push(' * @returns {number[]}');
+  lines.push(' */');
+  lines.push('export function getGateStages() {');
+  lines.push('  return Object.entries(STAGE_CONFIG)');
+  lines.push('    .filter(([, c]) => c.gateType !== null)');
+  lines.push('    .map(([n]) => parseInt(n));');
+  lines.push('}');
   lines.push('');
-
-  lines.push(`/**`);
-  lines.push(` * Get kill gate stages only`);
-  lines.push(` * @returns {number[]}`);
-  lines.push(` */`);
-  lines.push(`export function getKillGateStages() {`);
-  lines.push(`  return Object.entries(STAGE_CONFIG)`);
-  lines.push(`    .filter(([, c]) => c.gateType === 'kill')`);
-  lines.push(`    .map(([n]) => parseInt(n));`);
-  lines.push(`}`);
+  lines.push('/**');
+  lines.push(' * Get kill gate stages only');
+  lines.push(' * @returns {number[]}');
+  lines.push(' */');
+  lines.push('export function getKillGateStages() {');
+  lines.push('  return Object.entries(STAGE_CONFIG)');
+  lines.push("    .filter(([, c]) => c.gateType === 'kill')");
+  lines.push('    .map(([n]) => parseInt(n));');
+  lines.push('}');
   lines.push('');
-
-  // Use CJS exports (not ESM)
-  lines.push(`export { STAGE_CONFIG };`);
+  lines.push('export { STAGE_CONFIG };');
   lines.push('');
-
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// venture-workflow.ts generator (ehg app — BYTE-PARITY contract)
+// ---------------------------------------------------------------------------
+
+// Byte-exact static scaffold captured from the committed venture-workflow.ts.
+// TYPE_BLOCK = GateType + WorkflowChunk + VentureStage interface + the
+//   `export const VENTURE_STAGES: VentureStage[] = [` opener (ends with CRLF).
+// HELPER_BLOCK = `// ===== HELPER FUNCTIONS =====` through the final helper +
+//   TOTAL_STAGES=26 (ends with CRLF). Preserved verbatim (the interface + all
+//   10 helper exports are unchanged — gate semantics / helper logic are the
+//   scope of Child E, explicitly out of scope here). Stored base64 to keep the
+//   CRLF + UTF-8 em-dash byte-exact without source-escaping hazards.
+const TYPE_BLOCK_B64 =
+  'ZXhwb3J0IHR5cGUgR2F0ZVR5cGUgPSAnbm9uZScgfCAna2lsbCcgfCAncHJvbW90aW9uJzsNCg0KLy8gQ2h1bmsvUGhhc2UgZ3JvdXBpbmdzIC0gVmlzaW9uIFYyIG5hbWluZw0KZXhwb3J0IHR5cGUgV29ya2Zsb3dDaHVuayA9DQogIHwgJ1RIRV9UUlVUSCcgLy8gU3RhZ2VzIDEtNTogVmFsaWRhdGlvbiAmIE1hcmtldCBSZWFsaXR5DQogIHwgJ1RIRV9FTkdJTkUnIC8vIFN0YWdlcyA2LTk6IEJ1c2luZXNzIE1vZGVsIEZvdW5kYXRpb24NCiAgfCAnVEhFX0lERU5USVRZJyAvLyBTdGFnZXMgMTAtMTI6IEJyYW5kICYgR28tdG8tTWFya2V0DQogIHwgJ1RIRV9CTFVFUFJJTlQnIC8vIFN0YWdlcyAxMy0xNzogVGVjaG5pY2FsIEFyY2hpdGVjdHVyZSArIEJsdWVwcmludCBSZXZpZXcNCiAgfCAnVEhFX0JVSUxEJyAvLyBTdGFnZXMgMTgtMjM6IEltcGxlbWVudGF0aW9uDQogIHwgJ1RIRV9MQVVOQ0gnOyAvLyBTdGFnZXMgMjQtMjY6IExhdW5jaCAmIEdvLUxpdmUNCg0KLy8gU3RhZ2UgbWV0YWRhdGEgaW50ZXJmYWNlDQpleHBvcnQgaW50ZXJmYWNlIFZlbnR1cmVTdGFnZSB7DQogIHN0YWdlTnVtYmVyOiBudW1iZXI7DQogIHN0YWdlTmFtZTogc3RyaW5nOw0KICBzdGFnZUtleTogc3RyaW5nOyAvLyBrZWJhYi1jYXNlIGlkZW50aWZpZXINCiAgY29tcG9uZW50UGF0aDogc3RyaW5nOyAvLyByZWxhdGl2ZSB0byAvc3JjL2NvbXBvbmVudHMvc3RhZ2VzLw0KICBnYXRlVHlwZTogR2F0ZVR5cGU7DQogIGdhdGVMYWJlbD86IHN0cmluZzsgLy8gSHVtYW4tcmVhZGFibGUgZ2F0ZSBkZXNjcmlwdGlvbg0KICByZXZpZXdNb2RlPzogJ2F1dG8nIHwgJ3JldmlldycgfCAnbWFudWFsJzsNCiAgY2h1bms6IFdvcmtmbG93Q2h1bms7DQogIGRlc2NyaXB0aW9uOiBzdHJpbmc7DQp9DQoNCi8qKg0KICogVkVOVFVSRV9TVEFHRVMgLSBDYW5vbmljYWwgMjYtc3RhZ2Ugd29ya2Zsb3cgKFZpc2lvbiBWMiArIEJsdWVwcmludCBSZXZpZXcpDQogKg0KICogS2lsbCBHYXRlcyAodmVudHVyZSB0ZXJtaW5hdGlvbiBwb2ludHMpOg0KICogLSBTdGFnZSAzOiBDb21wcmVoZW5zaXZlIFZhbGlkYXRpb24NCiAqIC0gU3RhZ2UgNTogUHJvZml0YWJpbGl0eSBGb3JlY2FzdGluZw0KICogLSBTdGFnZSAxMzogUHJvZHVjdCBSb2FkbWFwDQogKiAtIFN0YWdlIDI0OiBNYXJrZXRpbmcgUHJlcGFyYXRpb24NCiAqDQogKiBQcm9tb3Rpb24gR2F0ZXMgKHBoYXNlIGJvdW5kYXJ5IGNoZWNrcG9pbnRzKToNCiAqIC0gU3RhZ2UgMTA6IEN1c3RvbWVyICYgQnJhbmQgRm91bmRhdGlvbg0KICogLSBTdGFnZSAxNzogQmx1ZXByaW50IFJldmlldyAoTkVXIOKAlCBhZ2dyZWdhdGVzIHN0YWdlcyAxLTE2IHF1YWxpdHkpDQogKiAtIFN0YWdlIDE4OiBCdWlsZCBSZWFkaW5lc3MNCiAqIC0gU3RhZ2UgMjM6IFJlbGVhc2UgUmVhZGluZXNzDQogKiAtIFN0YWdlIDI1OiBMYXVuY2ggUmVhZGluZXNzDQogKi8NCmV4cG9ydCBjb25zdCBWRU5UVVJFX1NUQUdFUzogVmVudHVyZVN0YWdlW10gPSBbDQ==';
+const HELPER_BLOCK_B64 =
+  'Ly8gPT09PT09PT09PSBIRUxQRVIgRlVOQ1RJT05TID09PT09PT09PT0NCg0KLyoqDQogKiBHZXQgc3RhZ2UgYnkgc3RhZ2UgbnVtYmVyDQogKi8NCmV4cG9ydCBmdW5jdGlvbiBnZXRTdGFnZUJ5TnVtYmVyKHN0YWdlTnVtYmVyOiBudW1iZXIpOiBWZW50dXJlU3RhZ2UgfCB1bmRlZmluZWQgew0KICByZXR1cm4gVkVOVFVSRV9TVEFHRVMuZmluZCgocykgPT4gcy5zdGFnZU51bWJlciA9PT0gc3RhZ2VOdW1iZXIpOw0KfQ0KDQovKioNCiAqIEdldCBzdGFnZSBieSBzdGFnZSBrZXkNCiAqLw0KZXhwb3J0IGZ1bmN0aW9uIGdldFN0YWdlQnlLZXkoc3RhZ2VLZXk6IHN0cmluZyk6IFZlbnR1cmVTdGFnZSB8IHVuZGVmaW5lZCB7DQogIHJldHVybiBWRU5UVVJFX1NUQUdFUy5maW5kKChzKSA9PiBzLnN0YWdlS2V5ID09PSBzdGFnZUtleSk7DQp9DQoNCi8qKg0KICogR2V0IGFsbCBzdGFnZXMgaW4gYSBjaHVuaw0KICovDQpleHBvcnQgZnVuY3Rpb24gZ2V0U3RhZ2VzQnlDaHVuayhjaHVuazogV29ya2Zsb3dDaHVuayk6IFZlbnR1cmVTdGFnZVtdIHsNCiAgcmV0dXJuIFZFTlRVUkVfU1RBR0VTLmZpbHRlcigocykgPT4gcy5jaHVuayA9PT0gY2h1bmspOw0KfQ0KDQovKioNCiAqIEdldCBhbGwga2lsbCBnYXRlcw0KICovDQpleHBvcnQgZnVuY3Rpb24gZ2V0S2lsbEdhdGVzKCk6IFZlbnR1cmVTdGFnZVtdIHsNCiAgcmV0dXJuIFZFTlRVUkVfU1RBR0VTLmZpbHRlcigocykgPT4gcy5nYXRlVHlwZSA9PT0gJ2tpbGwnKTsNCn0NCg0KLyoqDQogKiBHZXQgYWxsIHByb21vdGlvbiBnYXRlcw0KICovDQpleHBvcnQgZnVuY3Rpb24gZ2V0UHJvbW90aW9uR2F0ZXMoKTogVmVudHVyZVN0YWdlW10gew0KICByZXR1cm4gVkVOVFVSRV9TVEFHRVMuZmlsdGVyKChzKSA9PiBzLmdhdGVUeXBlID09PSAncHJvbW90aW9uJyk7DQp9DQoNCi8qKg0KICogQ2hlY2sgaWYgYSBzdGFnZSBpcyBhIGtpbGwgZ2F0ZQ0KICovDQpleHBvcnQgZnVuY3Rpb24gaXNLaWxsR2F0ZShzdGFnZU51bWJlcjogbnVtYmVyKTogYm9vbGVhbiB7DQogIGNvbnN0IHN0YWdlID0gZ2V0U3RhZ2VCeU51bWJlcihzdGFnZU51bWJlcik7DQogIHJldHVybiBzdGFnZT8uZ2F0ZVR5cGUgPT09ICdraWxsJzsNCn0NCg0KLyoqDQogKiBDaGVjayBpZiBhIHN0YWdlIGlzIGEgcHJvbW90aW9uIGdhdGUNCiAqLw0KZXhwb3J0IGZ1bmN0aW9uIGlzUHJvbW90aW9uR2F0ZShzdGFnZU51bWJlcjogbnVtYmVyKTogYm9vbGVhbiB7DQogIGNvbnN0IHN0YWdlID0gZ2V0U3RhZ2VCeU51bWJlcihzdGFnZU51bWJlcik7DQogIHJldHVybiBzdGFnZT8uZ2F0ZVR5cGUgPT09ICdwcm9tb3Rpb24nOw0KfQ0KDQovKioNCiAqIFRvdGFsIG51bWJlciBvZiBzdGFnZXMgKGNvbnN0YW50KQ0KICovDQpleHBvcnQgY29uc3QgVE9UQUxfU1RBR0VTID0gMjY7DQoNCi8qKg0KICogR2V0IGFsbCBzdGFnZXMgd2l0aCByZXZpZXcgbW9kZSBlbmFibGVkLg0KICogVGhlc2Ugc3RhZ2VzIHBhdXNlIGZvciBjaGFpcm1hbiByZXZpZXcgYmVmb3JlIGF1dG8tYWR2YW5jaW5nLg0KICovDQpleHBvcnQgZnVuY3Rpb24gZ2V0UmV2aWV3TW9kZVN0YWdlcygpOiBWZW50dXJlU3RhZ2VbXSB7DQogIHJldHVybiBWRU5UVVJFX1NUQUdFUy5maWx0ZXIoKHMpID0+IHMucmV2aWV3TW9kZSA9PT0gJ3JldmlldycpOw0KfQ0KDQovKioNCiAqIEdldCBodW1hbi1yZWFkYWJsZSBzdGFnZSBuYW1lIGZvciBhIHN0YWdlIG51bWJlci4NCiAqIFRoaXMgaXMgdGhlIE9OTFkgZnVuY3Rpb24gdGhhdCBzaG91bGQgYmUgdXNlZCBmb3Igc3RhZ2UgbmFtZSBsb29rdXBzLg0KICogRG8gTk9UIGNyZWF0ZSBoYXJkY29kZWQgc3RhZ2UgbmFtZSBtYXBwaW5ncyBlbHNld2hlcmUuDQogKi8NCmV4cG9ydCBmdW5jdGlvbiBnZXRTdGFnZU5hbWVGb3JOdW1iZXIoc3RhZ2VOdW1iZXI6IG51bWJlcik6IHN0cmluZyB7DQogIGlmIChzdGFnZU51bWJlciA9PT0gMCkgcmV0dXJuICdJbmNlcHRpb24nOw0KICBjb25zdCBzdGFnZSA9IGdldFN0YWdlQnlOdW1iZXIoc3RhZ2VOdW1iZXIpOw0KICByZXR1cm4gc3RhZ2U/LnN0YWdlTmFtZSB8fCBgU3RhZ2UgJHtzdGFnZU51bWJlcn1gOw0KfQ0K';
+
+const TYPE_BLOCK = Buffer.from(TYPE_BLOCK_B64, 'base64').toString('utf8');
+const HELPER_BLOCK = Buffer.from(HELPER_BLOCK_B64, 'base64').toString('utf8');
+
+// Generated banner — the ONE allowed difference from the committed file.
+const GENERATED_BANNER = [
+  '/**',
+  ' * Venture Workflow Configuration - Single Source of Truth (SSOT) MIRROR',
+  ' *',
+  ' * GENERATED FILE — DO NOT HAND-EDIT.',
+  ' *',
+  ' * Source of truth: the `venture_stages` table (EHG_Engineer database).',
+  ' * Regenerate via (in EHG_Engineer): node scripts/generate-stage-config.cjs --write',
+  ' * Drift is enforced in CI by: npm run venture-stages:check',
+  ' *',
+  ' * Vision V2 defines exactly 26 stages with kill gates and promotion gates.',
+  ' * All components, routers, and workflows import from here.',
+  ' *',
+  ' * @see SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D',
+  ' */',
+].join('\r\n');
+
+// Per-stage preamble: exact comment/blank-line text emitted BEFORE the `{` of a
+// stage. Captured byte-for-byte from the committed file (section comments are
+// irregular and cannot be derived from row data). Each entry is the lines that
+// precede the stage object; CRLF is added by the line joiner.
+const STAGE_PREAMBLE = {
+  1: ['  // ========== THE_TRUTH (Stages 1-5) - Validation & Market Reality =========='],
+  6: ['', '  // ========== THE_ENGINE (Stages 6-9) - Business Model Foundation =========='],
+  11: ['', '  // ========== THE_IDENTITY (Stages 10-12) - Brand & Go-to-Market =========='],
+  13: ['', '  // ========== THE_BLUEPRINT (Stages 13-16) - Technical Architecture =========='],
+  16: ['', '  // Stage 16 continues THE_BLUEPRINT phase'],
+  17: ['  // Stage 17: Blueprint Review Gate — aggregates stages 1-16 quality'],
+  18: ['', '  // ========== THE_BUILD (Stages 18-23) - Implementation =========='],
+  24: ['', '  // ========== THE_LAUNCH (Stages 24-26) - Launch & Go-Live =========='],
+};
+
+// TS single-quote string literal (escapes backslash then single quote).
+function tsStr(value) {
+  return `'${String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+}
+
+// Render one stage object literal (array of lines, no trailing CRLF).
+function renderStageObject(row) {
+  const lines = [];
+  lines.push('  {');
+  lines.push(`    stageNumber: ${row.stage_number},`);
+  lines.push(`    stageName: ${tsStr(row.stage_name)},`);
+  lines.push(`    stageKey: ${tsStr(deriveStageKey(row))},`);
+  lines.push(`    componentPath: ${tsStr(row.component_path)},`);
+  lines.push(`    gateType: ${tsStr(row.gate_type)},`);
+  if (row.gate_label != null) {
+    lines.push(`    gateLabel: ${tsStr(row.gate_label)},`);
+  }
+  // reviewMode is emitted ONLY when not the 'auto' default (mirrors the app's
+  // omission of the default value in the committed file).
+  if (row.review_mode && row.review_mode !== 'auto') {
+    lines.push(`    reviewMode: ${tsStr(row.review_mode)},`);
+  }
+  lines.push(`    chunk: ${tsStr(row.chunk)},`);
+  lines.push(`    description: ${tsStr(row.app_description)},`);
+  lines.push('  },');
+  return lines;
+}
+
+function generateVentureWorkflow(rows) {
+  // Array body: preamble + object per stage.
+  const bodyLines = [];
+  for (const row of rows) {
+    const pre = STAGE_PREAMBLE[row.stage_number];
+    if (pre) bodyLines.push(...pre);
+    bodyLines.push(...renderStageObject(row));
+  }
+  const body = bodyLines.join('\r\n');
+
+  // Assemble byte-exact (proven via scaffold-reconstruction in EXEC):
+  //   banner \r\n TYPE_BLOCK \r\n body \r\n `];` \r\n (blank) \r\n HELPER_BLOCK
+  return (
+    GENERATED_BANNER +
+    '\r\n' +
+    TYPE_BLOCK +
+    '\n' +
+    body +
+    '\r\n' +
+    '];\r\n' +
+    '\r\n' +
+    HELPER_BLOCK
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Byte-parity helper: strip the leading generated banner (the `/** ... */`
+// block) from a venture-workflow.ts source, returning everything from the first
+// `export type GateType` line onward. Used to compare generated-vs-committed
+// while allowing the header to differ (the one sanctioned difference).
+// ---------------------------------------------------------------------------
+function stripLeadingBanner(src) {
+  const marker = 'export type GateType';
+  const idx = src.indexOf(marker);
+  if (idx === -1) return src; // no recognizable scaffold — compare whole
+  return src.slice(idx);
+}
+
+// ---------------------------------------------------------------------------
+// component_path validations (format + on-disk existence)
+// ---------------------------------------------------------------------------
+const COMPONENT_PATH_RE = /^Stage\d+.*\.tsx$/;
+
+function validateComponentPaths(rows) {
+  const errors = [];
+  const stagesDir = path.join(path.dirname(VENTURE_WORKFLOW_PATH), '..', 'components', 'stages');
+  for (const row of rows) {
+    const cp = row.component_path;
+    if (!cp) {
+      errors.push(`stage ${row.stage_number}: component_path is null`);
+      continue;
+    }
+    if (!COMPONENT_PATH_RE.test(cp)) {
+      errors.push(`stage ${row.stage_number}: component_path '${cp}' does not match ${COMPONENT_PATH_RE}`);
+      continue;
+    }
+    const onDisk = path.join(stagesDir, cp);
+    if (!fs.existsSync(onDisk)) {
+      errors.push(`stage ${row.stage_number}: component file not found on disk: ${onDisk}`);
+    }
+  }
+  return errors;
 }
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-
 async function main() {
-  // 1. Read and parse venture-workflow.ts
-  if (!fs.existsSync(VENTURE_WORKFLOW_PATH)) {
-    console.error(`ERROR: venture-workflow.ts not found at ${VENTURE_WORKFLOW_PATH}`);
-    console.error('Ensure the EHG app repo is cloned alongside this repo.');
-    process.exit(1);
-  }
+  const supabase = getSupabase();
+  const rows = await loadVentureStages(supabase);
+  console.error(`Loaded ${rows.length} rows from venture_stages (SSOT)`);
 
-  const tsSource = fs.readFileSync(VENTURE_WORKFLOW_PATH, 'utf8');
-  const appStages = parseVentureWorkflow(tsSource);
-  console.error(`Parsed ${appStages.length} stages from venture-workflow.ts`);
+  const stageConfigOut = generateStageConfig(rows);
+  const ventureWorkflowOut = generateVentureWorkflow(rows);
 
-  // 2. Load DB config
-  let dbConfig;
-  try {
-    dbConfig = await loadDBConfig();
-    const dbCount = Object.keys(dbConfig).length;
-    console.error(`Loaded ${dbCount} rows from lifecycle_stage_config`);
-  } catch (err) {
-    console.error(`WARNING: Could not load DB config: ${err.message}`);
-    console.error('Falling back to app-only generation (some fields will use defaults).');
-    dbConfig = {};
-  }
-
-  // 3. Generate output
-  const output = generateOutput(appStages, dbConfig);
-
-  // 4. Handle flags
   if (FLAG_CHECK) {
-    if (!fs.existsSync(OUTPUT_PATH)) {
-      console.error(`CHECK FAILED: ${OUTPUT_PATH} does not exist`);
-      process.exit(1);
-    }
-    const existing = fs.readFileSync(OUTPUT_PATH, 'utf8');
-    if (existing !== output) {
-      console.error('CHECK FAILED: stage-config.js is out of date');
-      console.error('Run: node scripts/generate-stage-config.cjs --write');
-      process.exit(1);
+    let failed = false;
+
+    // 1. stage-config.js byte-compare
+    if (!fs.existsSync(STAGE_CONFIG_PATH)) {
+      console.error(`CHECK FAILED: ${STAGE_CONFIG_PATH} does not exist`);
+      failed = true;
+    } else if (fs.readFileSync(STAGE_CONFIG_PATH, 'utf8') !== stageConfigOut) {
+      console.error('CHECK FAILED: stage-config.js is out of date vs venture_stages.');
+      console.error('  Run: node scripts/generate-stage-config.cjs --write');
+      failed = true;
+    } else {
+      console.error('CHECK OK: stage-config.js matches venture_stages.');
     }
 
-    // SD-LEO-INFRA-RECONCILE-VENTURE-LIFECYCLE-001 / FR-6: cross-table name parity.
-    // Reuses the existing DB connection. INNER-join semantics on stage_number;
-    // stages in only one table are out of scope. Re-fetching here (instead of
-    // sharing the loadDBConfig dbConfig variable) keeps the assertion's input
-    // narrow and explicit — the failure message names the divergent stage_number.
-    try {
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
-      if (supabaseUrl && supabaseKey) {
-        const supabase = createClient(supabaseUrl, supabaseKey);
-        const divergences = await assertCrossTableNameParity(supabase);
-        if (divergences.length > 0) {
-          console.error('CHECK FAILED: cross-table stage_name parity violations:');
-          for (const d of divergences) {
-            console.error(
-              `  stage_number=${d.stage_number}: lifecycle_stage_config='${d.lifecycle_stage_config_name}' vs stage_config='${d.stage_config_name}'`
-            );
-          }
-          console.error('');
-          console.error('Reconcile via: UPDATE lifecycle_stage_config SET stage_name = (SELECT stage_name FROM stage_config sc WHERE sc.stage_number = lifecycle_stage_config.stage_number)');
-          console.error('  WHERE stage_number IN (' + divergences.map((d) => d.stage_number).join(', ') + ') AND stage_name IS DISTINCT FROM (SELECT stage_name FROM stage_config sc WHERE sc.stage_number = lifecycle_stage_config.stage_number);');
-          process.exit(1);
-        }
+    // 2. venture-workflow.ts byte-compare (banner-stripped)
+    if (!fs.existsSync(VENTURE_WORKFLOW_PATH)) {
+      console.error(`CHECK FAILED: ${VENTURE_WORKFLOW_PATH} does not exist`);
+      failed = true;
+    } else {
+      const committed = fs.readFileSync(VENTURE_WORKFLOW_PATH, 'utf8');
+      if (stripLeadingBanner(committed) !== stripLeadingBanner(ventureWorkflowOut)) {
+        console.error('CHECK FAILED: venture-workflow.ts is out of date vs venture_stages (byte-parity broken).');
+        console.error('  Run (in EHG_Engineer): node scripts/generate-stage-config.cjs --write');
+        failed = true;
       } else {
-        console.error('CHECK NOTE: cross-table parity check skipped (no Supabase credentials)');
+        console.error('CHECK OK: venture-workflow.ts byte-parity holds (banner-stripped).');
       }
-    } catch (err) {
-      // Connectivity failure is FATAL for --check (we cannot prove parity blindly).
-      console.error(`CHECK FAILED: cross-table parity check errored: ${err.message}`);
-      process.exit(1);
     }
 
-    console.error('CHECK PASSED: stage-config.js is up to date AND cross-table names agree');
-    process.exit(0);
+    // 3. component_path format + on-disk existence
+    const cpErrors = validateComponentPaths(rows);
+    if (cpErrors.length) {
+      console.error('CHECK FAILED: component_path validation:');
+      for (const e of cpErrors) console.error('  - ' + e);
+      failed = true;
+    } else {
+      console.error('CHECK OK: all 26 component_path valid + exist on disk.');
+    }
+
+    if (failed) { process.exitCode = 1; return; }
+    console.error('CHECK PASSED: venture_stages, stage-config.js, and venture-workflow.ts are in sync.');
+    process.exitCode = 0;
+    return;
   }
 
   if (FLAG_WRITE) {
-    // Ensure output directory exists
-    const outputDir = path.dirname(OUTPUT_PATH);
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
-    fs.writeFileSync(OUTPUT_PATH, output, 'utf8');
-    console.error(`Wrote ${OUTPUT_PATH}`);
-    process.exit(0);
+    fs.mkdirSync(path.dirname(STAGE_CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(STAGE_CONFIG_PATH, stageConfigOut, 'utf8');
+    console.error(`Wrote ${STAGE_CONFIG_PATH}`);
+
+    fs.writeFileSync(VENTURE_WORKFLOW_PATH, ventureWorkflowOut, 'utf8');
+    console.error(`Wrote ${VENTURE_WORKFLOW_PATH}`);
+    process.exitCode = 0;
+    return;
   }
 
-  // Default: dry-run to stdout
-  process.stdout.write(output);
+  // Default: dry-run stage-config to stdout.
+  process.stdout.write(stageConfigOut);
 }
 
-main().catch(err => {
-  console.error(`FATAL: ${err.message}`);
-  process.exit(1);
-});
+// Only run when invoked directly (not when required for _testHooks).
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(`FATAL: ${err.message}`);
+    process.exitCode = 1;
+  });
+}
