@@ -44,9 +44,11 @@ describe('QF-20260511-122 orchestrator service-role key pins', () => {
     const src = read('scripts/modules/complete-quick-fix/orchestrator.js');
     const start = src.indexOf('export async function completeQuickFix');
     const body = src.slice(start, start + 2000);
-    // createClient(supabaseUrl, supabaseKey) must be present, and the key var must be the
-    // service-role-sourced one validated above.
-    expect(body).toMatch(/createClient\(\s*supabaseUrl\s*,\s*supabaseKey\s*\)/);
+    // createClient(supabaseUrl, supabaseKey, ...) must be present, and the key var must be the
+    // service-role-sourced one validated above. An optional 3rd options arg is allowed
+    // (QF-20260529-852 disables the auth refresh timer there); the pin only protects that
+    // supabaseKey remains the service-role-sourced 2nd argument.
+    expect(body).toMatch(/createClient\(\s*supabaseUrl\s*,\s*supabaseKey\s*[,)]/);
   });
 
   it('orchestrator error message names SUPABASE_SERVICE_ROLE_KEY when credentials missing', () => {

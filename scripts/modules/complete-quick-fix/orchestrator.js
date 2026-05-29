@@ -63,7 +63,14 @@ export async function completeQuickFix(qfId, options = {}) {
     process.exit(1);
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  // QF-20260529-852 (RCA c6a002d5): disable the auth background-refresh setInterval and
+  // session persistence on this short-lived service-role CLI client. Service-role keys do
+  // not expire, so there is nothing to refresh — and the default auto-refresh timer is the
+  // handle that kept the event loop alive after the completion write, hanging the process
+  // to the external ~2-min timeout. With it off, the loop drains naturally for a clean exit.
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
 
   // QF-20260511-258: Stale-branch guard for the post-merge feedback auto-resolver.
   // If origin/main has commits touching resolver paths that the worker's HEAD
