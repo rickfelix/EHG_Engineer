@@ -8,7 +8,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
-import { resolveRepoPath, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
+import { resolveRepoPath, resolveGitHubRepo, ENGINEER_ROOT } from '../../../../../lib/repo-paths.js';
 import { getTierForSD } from '../../../sd-type-checker.js';
 import { getFilteredRetrospective } from '../../retro-filters.js';
 
@@ -109,7 +109,19 @@ export function computeReposForSD(sd) {
       console.log(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} target_application=${sd.target_application} target_repos=NULL scanning=${JSON.stringify(result.map(r => r.githubRepo))}`);
       return result;
     }
-    // Venture-name or unknown — fall through to Tier 3
+    // SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001 (FR-3): a venture target_application
+    // resolves to its SINGLE venture repo instead of falling through to the Tier-3
+    // both-platform-repos scan. github_repo + local_path come from the registry mirror
+    // (applications.github_repo is NULL for ventures; registry is kept in lockstep by the
+    // provisioner write-through) via the SYNC resolvers — computeReposForSD is synchronous.
+    const ventureGithub = resolveGitHubRepo(sd.target_application);
+    const ventureLocal = resolveRepoPath(sd.target_application);
+    if (ventureGithub && ventureLocal) {
+      const result = [{ githubRepo: ventureGithub, localPath: ventureLocal }];
+      console.log(`[GATE_PR_MERGE_REPO_SCOPE] sd=${sdId} target_application=${sd.target_application} resolved=venture scanning=${JSON.stringify(result.map(r => r.githubRepo))}`);
+      return result;
+    }
+    // Venture github_repo/local_path unresolved — fall through to Tier 3
   }
 
   // Tier 3: legacy fallback — scan both repos with WARN

@@ -11,7 +11,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
-import { resolveRepoPath, ENGINEER_ROOT } from '../../../../lib/repo-paths.js';
+import { resolveRepoPath, ENGINEER_ROOT, isVentureRepo, resolveGateRepoContext } from '../../../../lib/repo-paths.js';
 // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Shared git context to eliminate redundant execSync calls
 import { SharedGitContext } from '../shared-git-context.js';
 
@@ -1136,6 +1136,34 @@ export class BaseExecutor {
     }
 
     return getRepoPath('EHG');
+  }
+
+  /**
+   * SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001 (FR-1): DB-first target-repo resolution.
+   *
+   * Async sibling of determineTargetRepository(). Platform SDs — and SDs with no/unknown
+   * target_application — resolve via the SYNC determineTargetRepository(): BYTE-IDENTICAL,
+   * no DB call (TR-4 platform invariant). ONLY a venture target_application takes the
+   * DB-first path (applications.local_path via resolveGateRepoContext). If the venture is
+   * unresolvable it falls back to the sync heuristic, so behavior is never WORSE than today.
+   *
+   * Call from async setup() and store on options._appPath; the sync determineTargetRepository
+   * stays the precheck/no-setup fallback (QF-20260520-358 pattern).
+   *
+   * @param {Object} sd - Strategic Directive record
+   * @returns {Promise<string>} resolved repository path
+   */
+  async resolveTargetRepository(sd) {
+    const targetApp = sd?.target_application;
+    if (targetApp && isVentureRepo(targetApp)) {
+      try {
+        const ctx = await resolveGateRepoContext(sd, this.supabase);
+        if (ctx.resolved && ctx.repoPath) return ctx.repoPath;
+      } catch (err) {
+        console.warn(`   ⚠️  DB-first repo resolution failed for "${targetApp}" — using sync fallback: ${err.message}`);
+      }
+    }
+    return this.determineTargetRepository(sd);
   }
 
   // ============ Plan Mode Integration (SD-PLAN-MODE-001) ============

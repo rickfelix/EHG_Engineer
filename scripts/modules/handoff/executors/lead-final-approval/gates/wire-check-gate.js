@@ -14,6 +14,7 @@ import { fileURLToPath } from 'url';
 import { buildCallGraph } from '../../../../../../lib/static-analysis/call-graph-builder.js';
 import { checkReachability } from '../../../../../../lib/static-analysis/reachability-checker.js';
 import { getMainRef } from '../../../shared-git-context.js';
+import { isVentureRepo } from '../../../../../../lib/repo-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -220,9 +221,28 @@ export function getScopedJsFiles(rootDir) {
 export function createWireCheckGate(_supabase) {
   return {
     name: GATE_NAME,
-    validator: async (_ctx) => {
+    validator: async (ctx) => {
       console.log('\n🔌 GATE: Wire Check (AST Call Graph)');
       console.log('-'.repeat(50));
+
+      // FR-5 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): this gate's entry points
+      // (knownEntries: scripts/handoff.js, server/index.js, ...) and lib/scripts/server
+      // file scope are EHG_Engineer-specific. A venture-targeted SD's new files live in a
+      // separate repo with a different structure, so an EHG_Engineer-rooted reachability scan
+      // would 100% false-positive "unreachable". Opt OUT (advisory pass) for ventures UNLESS
+      // the SD explicitly sets metadata.wiring_required=true. Platform SDs run unchanged.
+      const sd = ctx?.sd || {};
+      if (isVentureRepo(sd.target_application) && sd?.metadata?.wiring_required !== true) {
+        console.log(`   ⏭️  Venture SD (target_application=${sd.target_application}) — WIRE_CHECK opted out (EHG_Engineer-rooted reachability is not meaningful for a separate venture repo). Set metadata.wiring_required=true to force.`);
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`WIRE_CHECK_GATE skipped for venture target_application=${sd.target_application} (opt-out; set metadata.wiring_required=true to run)`],
+          details: { skipped: 'venture_opt_out', targetApp: sd.target_application },
+        };
+      }
 
       const rootDir = ROOT_DIR;
 

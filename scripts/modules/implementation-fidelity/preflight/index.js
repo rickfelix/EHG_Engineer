@@ -116,7 +116,14 @@ async function checkAmbiguityResolution(sd_id, validation, supabase) {
     }
 
     if (combinedDiff) {
-      const diff = combinedDiff;
+      // FR-4 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): scan ADDED ('+') diff lines
+      // ONLY — excluding '+++' file headers — so a marker word present only in a removed
+      // or context line no longer false-positives this preflight check.
+      // CRLF-safe (crongenius autocrlf=true). Multi-repo combinedDiff handled (concatenated).
+      const diff = combinedDiff
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+        .join('\n');
 
       // QF-20260527-303: tighten ambiguity patterns to avoid identifier-context
       // false positives. The prior /ambiguous/gi matched ESLint rule names like
@@ -246,7 +253,13 @@ async function checkStubbedCode(sd_id, validation, supabase) {
     }
 
     if (combinedDiff) {
-      const diff = combinedDiff;
+      // FR-4 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): same added-lines-only fix as the
+      // scan above — a commit that REMOVES a stub marker must not false-positive on the
+      // removed line. Scan '+' added lines only (exclude '+++' headers).
+      const diff = combinedDiff
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+        .join('\n');
 
       const stubbedCodePatterns = [
         /throw new Error\(['"]not implemented/gi,

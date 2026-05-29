@@ -18,9 +18,9 @@ import { pathToFileURL } from 'url';
 
 const execAsync = promisify(exec);
 
-async function gitCommand(command) {
+async function gitCommand(command, cwd) {
   try {
-    const { stdout, stderr } = await execAsync(command);
+    const { stdout, stderr } = await execAsync(command, cwd ? { cwd } : undefined);
     return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
   } catch (error) {
     return {
@@ -31,7 +31,10 @@ async function gitCommand(command) {
   }
 }
 
-async function checkGitState() {
+async function checkGitState(options = {}) {
+  // FR-2 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): run git in the resolved target repo
+  // for cross-repo/venture SDs. No cwd => process.cwd() (platform behavior byte-identical).
+  const cwd = options.cwd || options.repoPath || null;
   const result = {
     passed: true,
     issues: [],
@@ -50,12 +53,12 @@ async function checkGitState() {
   console.log('='.repeat(50));
 
   // 1. Get current branch
-  const branchResult = await gitCommand('git branch --show-current');
+  const branchResult = await gitCommand('git branch --show-current', cwd);
   result.details.currentBranch = branchResult.stdout || 'unknown';
   console.log(`   Branch: ${result.details.currentBranch}`);
 
   // 2. Check for uncommitted changes
-  const statusResult = await gitCommand('git status --porcelain');
+  const statusResult = await gitCommand('git status --porcelain', cwd);
   if (statusResult.stdout) {
     const lines = statusResult.stdout.split('\n').filter(Boolean);
     lines.forEach(line => {
@@ -130,7 +133,7 @@ async function checkGitState() {
   }
 
   // 3. Check for unpushed commits
-  const unpushedResult = await gitCommand('git log @{u}..HEAD --oneline 2>/dev/null');
+  const unpushedResult = await gitCommand('git log @{u}..HEAD --oneline 2>/dev/null', cwd);
   if (unpushedResult.success && unpushedResult.stdout) {
     const commits = unpushedResult.stdout.split('\n').filter(Boolean);
     result.details.unpushedCommits = commits.length;

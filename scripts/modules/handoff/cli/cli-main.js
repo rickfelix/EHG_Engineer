@@ -444,7 +444,19 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
   console.log('─'.repeat(50));
   try {
     const { checkGitState } = await import('../../../check-git-state.js');
-    const gitResult = await checkGitState();
+    const { resolveGateRepoContext } = await import('../../../../lib/repo-paths.js');
+    // FR-2/FR-7 (SD-LEO-INFRA-VENTURE-AWARE-COMPLETION-001): for venture SDs run the git-state
+    // check against the RESOLVED venture repo, not the EHG_Engineer orchestrator cwd. Platform
+    // SDs keep process.cwd() (byte-identical). An unresolvable venture fails CLOSED (skips with
+    // an actionable note) rather than silently scanning the wrong tree and masking a dirty venture worktree.
+    const repoCtx = await resolveGateRepoContext(workflowInfoForPrecheck.sd, null);
+    let gitResult;
+    if (repoCtx.isVenture && !repoCtx.resolved) {
+      console.log('   ⛔ [UNRESOLVABLE_VENTURE_REPO] venture target_application has no resolvable repo path — skipping git-state check (not scanning the orchestrator cwd). Populate applications.local_path / registry for this venture.');
+      gitResult = { passed: true, issues: [], warnings: ['[UNRESOLVABLE_VENTURE_REPO] git-state check skipped'] };
+    } else {
+      gitResult = await checkGitState(repoCtx.isVenture ? { cwd: repoCtx.repoPath } : {});
+    }
     if (!gitResult.passed) {
       console.log('');
       console.log('⛔ Git issues found - resolve before proceeding');

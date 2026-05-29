@@ -87,8 +87,8 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Lazy load validators
     await this._loadValidators();
 
-    // Determine target repository
-    const appPath = this.determineTargetRepository(sd);
+    // Determine target repository (FR-1: DB-first for ventures, sync platform path unchanged)
+    const appPath = await this.resolveTargetRepository(sd);
     console.log(`   Target repository: ${appPath}`);
     options._appPath = appPath;
     options._sd = sd;
