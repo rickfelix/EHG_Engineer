@@ -425,7 +425,8 @@ export async function completeQuickFix(qfId, options = {}) {
   }
 
   // Commit & Push (QF-20260509-552: forward {forceComplete,reason} flags)
-  commitSha = await commitAndPushChanges(testDir, qf, { commitSha, branchName }, actualLoc, filesChanged, finalPrUrl, testsPass, prompt, { forceComplete: options.forceComplete, reason: options.reason });
+  // QF-20260529-168: thread nonInteractive so git-operations' commit/push guards (QF-888) fire.
+  commitSha = await commitAndPushChanges(testDir, qf, { commitSha, branchName }, actualLoc, filesChanged, finalPrUrl, testsPass, prompt, { forceComplete: options.forceComplete, reason: options.reason, nonInteractive: options.nonInteractive });
 
   // Update record
   console.log('🔄 Updating quick-fix record...\n');
@@ -497,7 +498,8 @@ export async function completeQuickFix(qfId, options = {}) {
   displayCompletionSummary(qf, actualLoc, commitSha, branchName, finalPrUrl, filesChanged);
 
   // Merge to Main (QF-20260509-552: forward {forceComplete,reason} flags)
-  await mergeToMain(testDir, qf, finalPrUrl, prompt, { forceComplete: options.forceComplete, reason: options.reason });
+  // QF-20260529-168: thread nonInteractive so mergeToMain's skip-under-non-interactive guard (QF-888) fires.
+  await mergeToMain(testDir, qf, finalPrUrl, prompt, { forceComplete: options.forceComplete, reason: options.reason, nonInteractive: options.nonInteractive });
 
   // SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 FR-1: post-merge feedback auto-resolve.
   // Parse "Closes (feedback|harness backlog) <uuid>" footers from PR body and
