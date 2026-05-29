@@ -17,12 +17,17 @@ function mockSupabase(data = [], error = null) {
   };
 }
 
+// SD-LEO-INFRA-MATURITY-WEIGHTED-PORTFOLIO-001: getCapabilityContextBlock now sources the
+// portfolio-wide v_unified_capabilities view (scope-aware), not v_capability_ledger. That view
+// exposes name/capability_type/plane1_score/maturity_level/scope/source_key but NOT the ledger's
+// per-capability reuse_count or first_registered_at — so the democratization "reused Nx" annotation
+// and the nursery recency ordering degrade gracefully (the remap sets reuse_count=0, ts=null).
 const SAMPLE_CAPABILITIES = [
-  { capability_key: 'ai_image_classification', name: 'AI Image Classification', capability_type: 'ai_automation', plane1_score: 18.5, maturity_score: 4, reuse_count: 3, registered_by_sd: 'SD-IMG-001', first_registered_at: '2026-03-01T00:00:00Z' },
-  { capability_key: 'natural_language_processing', name: 'Natural Language Processing', capability_type: 'ai_automation', plane1_score: 16.2, maturity_score: 3, reuse_count: 5, registered_by_sd: 'SD-NLP-001', first_registered_at: '2026-03-02T00:00:00Z' },
-  { capability_key: 'supabase_integration', name: 'Supabase Integration', capability_type: 'infrastructure', plane1_score: 14.0, maturity_score: 5, reuse_count: 10, registered_by_sd: 'SD-INFRA-001', first_registered_at: '2026-02-15T00:00:00Z' },
-  { capability_key: 'payment_processing', name: 'Payment Processing', capability_type: 'integration', plane1_score: 12.0, maturity_score: 3, reuse_count: 2, registered_by_sd: 'SD-PAY-001', first_registered_at: '2026-02-20T00:00:00Z' },
-  { capability_key: 'automated_reporting', name: 'Automated Reporting', capability_type: 'application', plane1_score: 10.5, maturity_score: 2, reuse_count: 1, registered_by_sd: 'SD-RPT-001', first_registered_at: '2026-03-03T00:00:00Z' },
+  { name: 'AI Image Classification', capability_type: 'ai_automation', plane1_score: 18.5, maturity_level: 'stable', scope: 'platform', source_key: 'SD-IMG-001' },
+  { name: 'Natural Language Processing', capability_type: 'ai_automation', plane1_score: 16.2, maturity_level: 'beta', scope: 'platform', source_key: 'SD-NLP-001' },
+  { name: 'Supabase Integration', capability_type: 'infrastructure', plane1_score: 14.0, maturity_level: 'production', scope: 'platform', source_key: 'SD-INFRA-001' },
+  { name: 'Payment Processing', capability_type: 'integration', plane1_score: 12.0, maturity_level: 'beta', scope: 'application', source_key: 'SD-PAY-001' },
+  { name: 'Automated Reporting', capability_type: 'application', plane1_score: 10.5, maturity_level: 'experimental', scope: 'application', source_key: 'SD-RPT-001' },
 ];
 
 describe('getCapabilityContextBlock', () => {
@@ -53,12 +58,15 @@ describe('getCapabilityContextBlock', () => {
     expect(result).toContain('infrastructure');
   });
 
-  it('formats democratization_finder with reuse focus', async () => {
+  it('formats democratization_finder listing reusable capabilities', async () => {
     const supabase = mockSupabase(SAMPLE_CAPABILITIES);
     const result = await getCapabilityContextBlock(supabase, 'democratization_finder');
 
     expect(result).toContain('Reusable Capabilities');
-    expect(result).toContain('reused');
+    // Portfolio view does not surface per-capability reuse_count, so the "reused Nx" annotation
+    // is absent; the block still lists the capabilities by name.
+    expect(result).toContain('AI Image Classification');
+    expect(result).not.toContain('undefined');
   });
 
   it('formats capability_overhang with full detail table', async () => {
@@ -72,16 +80,16 @@ describe('getCapabilityContextBlock', () => {
     expect(result).toContain('AI Image Classification');
   });
 
-  it('formats nursery_reeval with recent capabilities', async () => {
+  it('formats nursery_reeval listing capabilities', async () => {
     const supabase = mockSupabase(SAMPLE_CAPABILITIES);
     const result = await getCapabilityContextBlock(supabase, 'nursery_reeval');
 
     expect(result).toContain('Recently Added');
     expect(result).toContain('added');
-    // Most recent should be first (2026-03-03)
-    const reportIdx = result.indexOf('Automated Reporting');
-    const nlpIdx = result.indexOf('Natural Language Processing');
-    expect(reportIdx).toBeLessThan(nlpIdx);
+    // Portfolio view has no per-capability registration timestamp, so recency ordering is not
+    // available (dates render as 'unknown'); the block still lists the capabilities.
+    expect(result).toContain('Natural Language Processing');
+    expect(result).not.toContain('undefined');
   });
 
   it('enforces 2000 character cap', async () => {
