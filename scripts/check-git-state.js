@@ -18,6 +18,17 @@ import { pathToFileURL } from 'url';
 
 const execAsync = promisify(exec);
 
+// QF-20260529-729 (backlog a23355c1): .worktree.json + .worktree-nm-mode are deliberately
+// TRACKED per-worktree metadata (see the .gitignore note) that worktree provisioning rewrites
+// for each worktree, so inside a worktree they ALWAYS appear "modified". That is git noise,
+// not real uncommitted work — it must not block a handoff (it tripped STEP 1 at every
+// LEAD-TO-PLAN handoff run from a worktree). Excluded from the blocking classification below;
+// this does NOT untrack them (honors the deliberate tracking decision).
+const PER_WORKTREE_METADATA = ['.worktree.json', '.worktree-nm-mode'];
+function isPerWorktreeMetadata(file) {
+  return PER_WORKTREE_METADATA.includes((file || '').trim());
+}
+
 async function gitCommand(command, cwd) {
   try {
     const { stdout, stderr } = await execAsync(command, cwd ? { cwd } : undefined);
@@ -64,6 +75,9 @@ async function checkGitState(options = {}) {
     lines.forEach(line => {
       const status = line.substring(0, 2);
       const file = line.substring(3);
+
+      // QF-20260529-729: skip per-worktree metadata noise — never blocks a handoff.
+      if (isPerWorktreeMetadata(file)) return;
 
       // Classify by status
       if (status[0] === '?' && status[1] === '?') {
@@ -189,7 +203,7 @@ async function checkGitState(options = {}) {
   return result;
 }
 
-export { checkGitState };
+export { checkGitState, isPerWorktreeMetadata, PER_WORKTREE_METADATA };
 
 // CLI execution — only when run directly (node scripts/check-git-state.js), NOT when
 // imported. Without this guard, importing the module (e.g. from the handoff precheck CLI
