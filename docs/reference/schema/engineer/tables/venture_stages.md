@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-29T18:52:09.206Z
+**Generated**: 2026-05-29T20:31:15.577Z
 **Rows**: 26
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (19 total)
+## Columns (21 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -37,6 +37,8 @@
 | component_path | `text` | YES | - | New app-only column. NULL until backfilled by Child D. |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| gate_label | `text` | YES | - | App-only: human-readable gate caption mirrored into ehg venture-workflow.ts gateLabel (9 gate stages). Backend does not read this. SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D. |
+| app_description | `text` | YES | - | App-only: frontend stage description mirrored into ehg venture-workflow.ts description. Distinct from venture_stages.description (the backend-read column). SD-LEO-INFRA-UNIFY-VENTURE-STAGE-001-D. |
 
 ## Constraints
 
