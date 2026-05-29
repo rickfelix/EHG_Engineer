@@ -48,6 +48,7 @@ export async function runCapabilityScoringOnCompletion(sd, supabase) {
       .from('sd_capabilities')
       .select('id')
       .eq('capability_key', cap.capability_key)
+      .eq('action', 'registered') // only a prior REGISTERED row counts as reuse (not deprecated/superseded)
       .neq('sd_id', sdKey)
       .limit(1)
       .maybeSingle();
