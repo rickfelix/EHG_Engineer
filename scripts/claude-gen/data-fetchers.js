@@ -53,7 +53,9 @@ export async function getSubAgents() {
   const { data, error } = await supabase
     .from('leo_sub_agents')
     .select('*')
-    .eq('is_active', true)
+    // QF-20260529-822: live column is `active` (not `is_active`); is_active silently
+    // warned + returned [], dropping every sub-agent from the generated CLAUDE.md.
+    .eq('active', true)
     .order('code');
 
   if (error) console.warn(`⚠️ Sub-agents: ${error.message}`);
