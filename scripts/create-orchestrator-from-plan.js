@@ -121,6 +121,15 @@ async function main() {
     || await resolveTargetApplication(supabase, visionDoc);
   console.log(`   🎯 Target application: ${targetApplication}`);
 
+  // F2 fail-loud (QF-20260528-224): --auto-children was requested but ZERO implementation_phases
+  // were extracted (neither sections.implementation_phases nor parsePhases yielded any). Refuse
+  // to silently ship a childless orchestrator — surface the extraction failure instead.
+  if (autoChildren && phases.length === 0) {
+    console.error('Error: --auto-children requested but ZERO implementation_phases were extracted from the vision/architecture plan.');
+    console.error('   Fix: ensure the architecture plan has sections.implementation_phases (or parseable "Phase N" content) before generating children.');
+    process.exit(1);
+  }
+
   // Generate traceable metrics
   const { visionMetrics, archMetrics } = await generateTraceableMetrics(supabase, visionKey, archKey);
   const allMetrics = [...visionMetrics, ...archMetrics];
