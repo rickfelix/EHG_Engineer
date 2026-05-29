@@ -4,6 +4,7 @@
 -- Phase:     PLAN -> EXEC preparation
 -- Date:      2026-05-29
 -- Author:    Database Agent (claude-sonnet-4-6)
+-- @approved-by: rickfelix@example.com
 -- Purpose:   Enrich v_unified_capabilities with `scope` + `plane1_score`
 --            trailing columns. No destructive changes; CREATE OR REPLACE safe.
 -- ============================================================================
@@ -86,13 +87,17 @@ END $$;
 --         as TRAILING columns (positions 9 and 10).
 --
 -- DESIGN DECISIONS:
---   scope:
+--   scope (3-way; SD-LEO-GEN-UNIFY US-002/FR-2 — mirrors resolveCapabilityScope in
+--          lib/capabilities/capability-taxonomy.js):
 --     - venture_capabilities arm: 'venture' (always venture-scoped by table purpose)
 --     - agent_skills arm:         'platform'
 --     - agent_registry arm:       'platform'
---     - sd_capabilities arm:      CASE WHEN sdv2.venture_id IS NOT NULL THEN 'venture'
---                                       ELSE 'platform' END
---                                  (currently all 206 rows = 'platform'; future-proof)
+--     - sd_capabilities arm:      venture_id present                -> 'venture'
+--                                 target_application = EHG_Engineer -> 'platform'
+--                                 other target_application          -> 'application'
+--                                 null target_application           -> 'platform'
+--                                  (current data: EHG_Engineer=37 -> platform,
+--                                   EHG=42 -> application, 0 with venture_id)
 --   plane1_score (numeric, nullable):
 --     - sd_capabilities arm:      sd_capabilities.plane1_score (all 206 rows populated)
 --     - venture_capabilities arm: venture_capabilities.revenue_leverage_score::numeric
@@ -179,10 +184,13 @@ SELECT
     END                                                     AS maturity_level,
     sc.sd_uuid                                             AS source_id,
     sc.sd_id                                               AS source_key,
-    -- NEW trailing columns: derive scope from strategic_directives_v2.venture_id
+    -- NEW trailing columns: derive 3-way scope from the originating SD.
+    -- Mirrors resolveCapabilityScope() in lib/capabilities/capability-taxonomy.js.
     CASE
         WHEN sdv2.venture_id IS NOT NULL THEN 'venture'::text
-        ELSE 'platform'::text
+        WHEN sdv2.target_application IS NULL THEN 'platform'::text
+        WHEN lower(sdv2.target_application) IN ('ehg_engineer', 'ehg-engineer') THEN 'platform'::text
+        ELSE 'application'::text
     END                                                     AS scope,
     sc.plane1_score                                        AS plane1_score
 FROM sd_capabilities sc
