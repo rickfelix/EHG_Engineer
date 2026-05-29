@@ -1,0 +1,93 @@
+# venture_stages Table
+
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
+**Database**: dedlbzhpgkmetvhbkyzq
+**Repository**: EHG_Engineer (this repository)
+**Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
+**Generated**: 2026-05-29T16:45:28.300Z
+**Rows**: 26
+**RLS**: Enabled (2 policies)
+
+⚠️ **This is a REFERENCE document** - Query database directly for validation
+
+⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in EHG_Engineer (this repository)
+
+---
+
+## Columns (19 total)
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| stage_number | `integer(32)` | **NO** | - | - |
+| stage_name | `text` | **NO** | - | - |
+| stage_key | `text` | **NO** | - | - |
+| description | `text` | YES | - | - |
+| phase_number | `integer(32)` | **NO** | - | - |
+| phase_name | `text` | **NO** | - | - |
+| chunk | `text` | **NO** | - | - |
+| gate_type | `text` | **NO** | `'none'::text` | - |
+| review_mode | `text` | **NO** | `'auto'::text` | - |
+| work_type | `text` | **NO** | - | - |
+| sd_required | `boolean` | **NO** | `false` | - |
+| sd_suffix | `text` | YES | - | - |
+| advisory_enabled | `boolean` | **NO** | `false` | - |
+| depends_on | `ARRAY` | **NO** | `'{}'::integer[]` | - |
+| required_artifacts | `ARRAY` | **NO** | `'{}'::text[]` | - |
+| metadata | `jsonb` | **NO** | `'{}'::jsonb` | - |
+| component_path | `text` | YES | - | New app-only column. NULL until backfilled by Child D. |
+| created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+
+## Constraints
+
+### Primary Key
+- `venture_stages_pkey`: PRIMARY KEY (stage_number)
+
+### Unique Constraints
+- `venture_stages_stage_key_key`: UNIQUE (stage_key)
+
+### Check Constraints
+- `venture_stages_canonical_rule_check`: CHECK (canonical_rule(work_type, gate_type))
+- `venture_stages_gate_type_check`: CHECK ((gate_type = ANY (ARRAY['none'::text, 'kill'::text, 'promotion'::text])))
+- `venture_stages_review_mode_check`: CHECK ((review_mode = ANY (ARRAY['auto'::text, 'review'::text, 'manual'::text])))
+- `venture_stages_work_type_check`: CHECK ((work_type = ANY (ARRAY['artifact_only'::text, 'automated_check'::text, 'decision_gate'::text, 'sd_required'::text])))
+
+## Indexes
+
+- `venture_stages_pkey`
+  ```sql
+  CREATE UNIQUE INDEX venture_stages_pkey ON public.venture_stages USING btree (stage_number)
+  ```
+- `venture_stages_stage_key_key`
+  ```sql
+  CREATE UNIQUE INDEX venture_stages_stage_key_key ON public.venture_stages USING btree (stage_key)
+  ```
+
+## RLS Policies
+
+### 1. deny_write_venture_stages (ALL)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `false`
+
+### 2. select_venture_stages (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+## Triggers
+
+### trg_venture_stages_audit
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_venture_stages_audit_trigger()`
+
+### trg_venture_stages_set_updated_at
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION set_updated_at()`
+
+---
+
+[← Back to Schema Overview](../database-schema-overview.md)

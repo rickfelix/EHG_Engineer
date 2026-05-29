@@ -1,0 +1,68 @@
+# venture_stages_audit Table
+
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
+**Database**: dedlbzhpgkmetvhbkyzq
+**Repository**: EHG_Engineer (this repository)
+**Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
+**Generated**: 2026-05-29T16:45:28.300Z
+**Rows**: 4
+**RLS**: Enabled (2 policies)
+
+⚠️ **This is a REFERENCE document** - Query database directly for validation
+
+⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in EHG_Engineer (this repository)
+
+---
+
+## Columns (7 total)
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | `uuid` | **NO** | `gen_random_uuid()` | - |
+| stage_number | `integer(32)` | **NO** | - | - |
+| changed_column | `text` | **NO** | - | - |
+| old_value | `text` | YES | - | - |
+| new_value | `text` | YES | - | - |
+| changed_by | `text` | **NO** | `CURRENT_USER` | - |
+| changed_at | `timestamp with time zone` | **NO** | `now()` | - |
+
+## Constraints
+
+### Primary Key
+- `venture_stages_audit_pkey`: PRIMARY KEY (id)
+
+## Indexes
+
+- `venture_stages_audit_pkey`
+  ```sql
+  CREATE UNIQUE INDEX venture_stages_audit_pkey ON public.venture_stages_audit USING btree (id)
+  ```
+
+## RLS Policies
+
+### 1. deny_write_venture_stages_audit (ALL)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `false`
+
+### 2. select_venture_stages_audit (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+## Triggers
+
+### trg_venture_stages_audit_immutable
+
+- **Timing**: BEFORE DELETE
+- **Action**: `EXECUTE FUNCTION fn_venture_stages_audit_immutable()`
+
+### trg_venture_stages_audit_immutable
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION fn_venture_stages_audit_immutable()`
+
+---
+
+[← Back to Schema Overview](../database-schema-overview.md)

@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-29T15:23:40.444Z
+**Generated**: 2026-05-29T16:45:28.300Z
 **Rows**: 26
 **RLS**: Enabled (2 policies)
 
@@ -68,6 +68,21 @@
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION fn_stage_config_audit_trigger()`
+
+### trg_stage_config_sync_venture_stages
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION tg_stage_config_sync_venture_stages()`
+
+### trg_stage_config_sync_venture_stages
+
+- **Timing**: AFTER DELETE
+- **Action**: `EXECUTE FUNCTION tg_stage_config_sync_venture_stages()`
+
+### trg_stage_config_sync_venture_stages
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION tg_stage_config_sync_venture_stages()`
 
 ---
 
