@@ -52,6 +52,26 @@ function getAliveMarkerSessionIds() {
   return alive;
 }
 
+// f4028ef8: unlink a worktree's node_modules junction/symlink BEFORE any
+// `git worktree remove --force`, so git cannot follow the link into the shared
+// main-repo node_modules and delete its contents. Best-effort + idempotent (no
+// link / already gone is a no-op). Mirrors preUnlinkWorktreeNodeModules +
+// _unlinkSymOrJunction (lib/worktree-manager.js); inlined to keep this hot CJS
+// SessionStart hook free of ESM dynamic imports.
+function unlinkNodeModulesJunction(wtPath) {
+  try {
+    const nm = path.join(wtPath, 'node_modules');
+    if (!fs.lstatSync(nm).isSymbolicLink()) return;
+    try {
+      fs.unlinkSync(nm);
+    } catch (err) {
+      // Windows: directory junctions sometimes need rmdir to drop the reparse point.
+      if (process.platform === 'win32' && (err.code === 'EPERM' || err.code === 'EISDIR')) fs.rmdirSync(nm);
+      else throw err;
+    }
+  } catch { /* no node_modules, not a link, or already gone — nothing to unlink */ }
+}
+
 // Configuration
 const STALENESS_WINDOW_S = parseInt(process.env.WORKTREE_STALENESS_WINDOW_S || '300', 10);
 const RECHECK_DELAY_MS = parseInt(process.env.WORKTREE_RECHECK_DELAY_MS || '1000', 10);
@@ -481,6 +501,10 @@ async function cleanupStaleConcurrentWorktrees(supabase) {
       });
     } catch { /* not locked or already unlocked */ }
 
+    // f4028ef8: pre-unlink the node_modules junction so the PRIMARY
+    // `git worktree remove --force` below (not just the rmSync fallback) cannot
+    // follow it into the shared main-repo node_modules and wipe it.
+    unlinkNodeModulesJunction(wtPath);
     try {
       gitViaPowerShell(`worktree remove --force "${wtPath}"`, {
         cwd: repoRoot, timeout: 5000
@@ -506,11 +530,7 @@ async function cleanupStaleConcurrentWorktrees(supabase) {
         let lastErr = null;
         for (let attempt = 0; attempt < CJS_RETRY_DELAYS_MS.length; attempt++) {
           try {
-            const nm = path.join(wtPath, 'node_modules');
-            try {
-              const lst = fs.lstatSync(nm);
-              if (lst.isSymbolicLink()) fs.unlinkSync(nm);
-            } catch { /* no junction or doesn't exist */ }
+            unlinkNodeModulesJunction(wtPath); // f4028ef8: DRY with the pre-unlink above
             fs.rmSync(wtPath, { recursive: true, force: true });
             rmOk = !fs.existsSync(wtPath);
             if (rmOk) break;
@@ -820,7 +840,7 @@ async function main() {
 // Test exports (used by scripts/hooks/__tests__/concurrent-session-worktree.test.js)
 // Gating `main()` behind `require.main === module` lets tests `require()` this
 // file without triggering the SessionStart side-effects.
-module.exports = { isWorktreeInUseBySession, getActiveDbClaims, cleanupStaleConcurrentWorktrees, checkBranchFreshness };
+module.exports = { isWorktreeInUseBySession, getActiveDbClaims, cleanupStaleConcurrentWorktrees, checkBranchFreshness, unlinkNodeModulesJunction };
 
 if (require.main === module) {
   // Run with timeout protection (hook has 5s timeout)

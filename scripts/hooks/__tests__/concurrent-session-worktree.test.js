@@ -234,6 +234,55 @@ describe('checkBranchFreshness (QF-20260511-228 — closes feedback acd4e5ab)', 
   });
 });
 
+describe('unlinkNodeModulesJunction (f4028ef8 — pre-unlink before git worktree remove)', () => {
+  let unlinkNodeModulesJunction;
+  beforeEach(() => { ({ unlinkNodeModulesJunction } = loadHookExports()); });
+
+  // Build a worktree whose node_modules is a link to a shared target
+  // (junction on Windows, symlink on POSIX) — the shape that bricks the shared
+  // store when git follows it during `worktree remove --force`.
+  function makeWtWithLinkedNm() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-nm-'));
+    const shared = path.join(root, 'shared_node_modules');
+    fs.mkdirSync(shared);
+    fs.writeFileSync(path.join(shared, 'sentinel.txt'), 'keep me');
+    const wt = path.join(root, 'wt');
+    fs.mkdirSync(wt);
+    const nm = path.join(wt, 'node_modules');
+    fs.symlinkSync(shared, nm, process.platform === 'win32' ? 'junction' : 'dir');
+    return { root, shared, wt, nm };
+  }
+
+  it('unlinks a node_modules junction and leaves the shared target intact', () => {
+    const { root, shared, wt, nm } = makeWtWithLinkedNm();
+    try {
+      unlinkNodeModulesJunction(wt);
+      expect(fs.existsSync(nm)).toBe(false);                                // link removed
+      expect(fs.existsSync(path.join(shared, 'sentinel.txt'))).toBe(true);  // target preserved
+    } finally { cleanupTemp(root); }
+  });
+
+  it('does NOT touch a real (isolated) node_modules directory', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-nm-'));
+    const nm = path.join(root, 'wt', 'node_modules');
+    fs.mkdirSync(nm, { recursive: true });
+    fs.writeFileSync(path.join(nm, 'pkg.txt'), 'real dep');
+    try {
+      unlinkNodeModulesJunction(path.join(root, 'wt'));
+      expect(fs.existsSync(path.join(nm, 'pkg.txt'))).toBe(true);           // real dir untouched
+    } finally { cleanupTemp(root); }
+  });
+
+  it('is a no-op when node_modules is absent (does not throw)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-nm-'));
+    const wt = path.join(root, 'wt');
+    fs.mkdirSync(wt);
+    try {
+      expect(() => unlinkNodeModulesJunction(wt)).not.toThrow();
+    } finally { cleanupTemp(root); }
+  });
+});
+
 // ─── Mock supabase client ───────────────────────────────────────────────────
 
 function mockSupabase({ sdRows = [], sdError = null, sessionRows = [] } = {}) {
