@@ -235,8 +235,11 @@ describe('stage-20-code-quality.js — persistAnalyzerFindings', () => {
 });
 
 describe('stage-20-code-quality.js — constant exports', () => {
-  it('CHECK_TYPES enumerates exactly the 4 documented checks', () => {
-    expect(CHECK_TYPES).toEqual(['npm_audit', 'secret_detection', 'lint', 'test_suite']);
+  it('CHECK_TYPES enumerates the 8 documented checks (SD-LEO-INFRA-STAGE-CODE-QUALITY-001 expanded 4->8)', () => {
+    expect(CHECK_TYPES).toEqual([
+      'npm_audit', 'secret_detection', 'lint', 'test_suite',
+      'unit_test', 'e2e_test', 'feedback_widget_present', 'error_capture_wired',
+    ]);
   });
 
   it('SEVERITY_LEVELS covers the 5 npm-audit-compatible levels', () => {
