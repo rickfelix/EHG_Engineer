@@ -18,7 +18,7 @@
  *   node scripts/verify-git-commit-status.js SD-XXX  # defaults to EHG_Engineer (the repo this script lives in)
  */
 
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -34,6 +34,7 @@ const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
 const EHG_ROOT = resolveRepoPath('ehg');
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 class GitCommitVerifier {
   // Default appPath is EHG_Engineer (the repo this script LIVES IN), not EHG.
@@ -83,7 +84,12 @@ class GitCommitVerifier {
    */
   async gitCommand(command) {
     try {
-      const { stdout, stderr } = await execAsync(command, { cwd: this.effectiveCwd });
+      // 513c5b48: an array command runs via execFile (no shell), so an interpolated
+      // SD --grep term cannot be shell-interpreted; a string command keeps the legacy
+      // shell path for all other callers. execFile also sidesteps cmd.exe quoting on Windows.
+      const { stdout, stderr } = Array.isArray(command)
+        ? await execFileAsync('git', command, { cwd: this.effectiveCwd })
+        : await execAsync(command, { cwd: this.effectiveCwd });
       return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
     } catch (error) {
       return {
@@ -102,7 +108,10 @@ class GitCommitVerifier {
    */
   async gitCommandInDir(command, cwd) {
     try {
-      const { stdout, stderr } = await execAsync(command, { cwd });
+      // 513c5b48: array command -> execFile (no shell); string keeps the legacy shell path.
+      const { stdout, stderr } = Array.isArray(command)
+        ? await execFileAsync('git', command, { cwd })
+        : await execAsync(command, { cwd });
       return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
     } catch (error) {
       return {
@@ -230,7 +239,7 @@ class GitCommitVerifier {
 
     // Search for each term
     for (const term of searchTerms) {
-      const result = await this.gitCommand(`git log --all --oneline --grep="${term}"`);
+      const result = await this.gitCommand(['log', '--all', '--oneline', `--grep=${term}`]);
 
       if (result.success && result.stdout.trim()) {
         const commits = result.stdout.split('\n').filter(line => line.trim().length > 0);
@@ -258,7 +267,7 @@ class GitCommitVerifier {
       );
       for (const repo of siblingRepos) {
         for (const term of searchTerms) {
-          const r = await this.gitCommandInDir(`git log --all --oneline --grep="${term}"`, repo);
+          const r = await this.gitCommandInDir(['log', '--all', '--oneline', `--grep=${term}`], repo);
           if (r.success && r.stdout.trim()) {
             const commits = r.stdout.split('\n').filter((line) => line.trim().length > 0);
             if (commits.length > 0) {
