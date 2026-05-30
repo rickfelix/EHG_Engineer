@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-30T15:15:25.411Z
-**Tables**: 703
+**Generated**: 2026-05-30T15:51:02.269Z
+**Tables**: 700
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (703)
+## All Tables (700)
 
 ### LEO Protocol
 
@@ -449,7 +449,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [learning_decisions](tables/learning_decisions.md)
 - [learning_inbox](tables/learning_inbox.md)
 - [learning_runs](tables/learning_runs.md)
-- [lifecycle_stage_config](tables/lifecycle_stage_config.md)
 - [llm_canary_metrics](tables/llm_canary_metrics.md)
 - [llm_canary_state](tables/llm_canary_state.md)
 - [llm_canary_transitions](tables/llm_canary_transitions.md)
@@ -606,8 +605,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [stage13_substage_states](tables/stage13_substage_states.md)
 - [stage13_valuations](tables/stage13_valuations.md)
 - [stage_artifact_requirements](tables/stage_artifact_requirements.md)
-- [stage_config](tables/stage_config.md)
-- [stage_config_audit](tables/stage_config_audit.md)
 - [stage_data_contracts](tables/stage_data_contracts.md)
 - [stage_events](tables/stage_events.md)
 - [stage_executions](tables/stage_executions.md)
