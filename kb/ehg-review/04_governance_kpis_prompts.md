@@ -602,7 +602,7 @@ Note: The Chairman is the ONLY human - all board members are AI agents
 ## Sources of Truth
 - **SDIP System**: Database tables directive_submissions, gate_tracking
 - **PRD Templates**: Database table prd_templates
-- **Stage KPIs**: `/mnt/c/Users/rickf/Dropbox/_EHG/_EHG/stage kpis.csv`
+- **Stage KPIs**: `/mnt/c/Users/rickf/Dropbox/_EHG/00_operating/kpis/stage kpis.csv`
 - **Pipeline Configuration**: CI/CD yaml files in repositories
 - **Dashboard Metrics**: Real-time from Supabase and monitoring systems
 - **Prompt Library**: Database table agent_prompts
