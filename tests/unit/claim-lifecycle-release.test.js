@@ -100,6 +100,17 @@ describe('FR-3: hasRecentClaimReleased READ-ONLY contract (AC-3.2)', () => {
     expect(src).not.toMatch(/\.eq\(['"]payload\.event_type/);
     expect(src).not.toMatch(/\.gte\(['"]payload\.event_type/);
   });
+
+  it('50615d1b: FR-3 inbox poll excludes sweep-originated releases', () => {
+    const src = readFileSync(HELPER_PATH, 'utf8');
+    const fnMatch = src.match(/export async function hasRecentClaimReleased[\s\S]*?^}/m);
+    expect(fnMatch).toBeTruthy();
+    const body = fnMatch[0];
+    // Sweep-emitted CLAIM_RELEASED (dead-holder reaping) must NOT keep the 5-min FR-3
+    // honor window alive — that livelocked re-claims of now-free SDs. Genuine peer/operator
+    // releases (and any null sender_type) are still honored.
+    expect(body).toMatch(/\.or\(['"]sender_type\.is\.null,sender_type\.neq\.sweep['"]\)/);
+  });
 });
 
 // ── AC-3.6: TTL_remaining formula via formatClaimReleasedAbort ────────────
