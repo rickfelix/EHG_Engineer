@@ -28,6 +28,7 @@ import { assertValidClaim, ClaimIdentityError } from '../lib/claim-validity-gate
 // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001: FR-3 inbox poll + FR-2 sd_key drift detector
 import { hasRecentClaimReleased, formatClaimReleasedAbort, detectSdKeyDrift } from '../lib/claim-lifecycle-release.mjs';
 import sessionIdentitySot from '../lib/session-identity-sot.js';
+import { findClaudeCodePid } from '../lib/terminal-identity.js';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 — pre-claim multi-signal evidence-of-life gate.
 // Wraps claimGuard's heartbeat/inactive auto-release to prevent hostile reclaim
@@ -905,6 +906,14 @@ async function main() {
     // legacy identity path can still succeed. Disagreements surface at claim gate.
     console.warn(`${colors.yellow}⚠ session-identity reconciliation error (non-blocking): ${reconcileErr.message}${colors.reset}`);
   }
+
+  // SD-FDBK-INFRA-HARNESS-F22-STALE-001: non-blocking WARN when the env
+  // CLAUDE_SESSION_ID differs from this Claude Code process’s ambient session
+  // (a stale/hardcoded id self-heals into a reaped ghost — re-derive before claiming).
+  try {
+    const _f22 = sessionIdentitySot.detectEnvAmbientMismatch({ ccPid: findClaudeCodePid() });
+    if (_f22) console.warn(`${colors.yellow}⚠  SESSION IDENTITY MISMATCH (F22): CLAUDE_SESSION_ID=${_f22.envId} but this process’s ambient session is ${_f22.ambientId}. You may be operating under a stale/hardcoded session id (reaped ghost) — re-derive: export CLAUDE_SESSION_ID=${_f22.ambientId}${colors.reset}`);
+  } catch { /* non-blocking */ }
 
   // 2a-pre. SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001 FR-3: honor recent CLAIM_RELEASED
   // inbox messages BEFORE attempting any claim write. If a peer session has emitted
