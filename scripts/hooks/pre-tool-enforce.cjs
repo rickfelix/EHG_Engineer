@@ -186,6 +186,46 @@ if (process.env.TEST_DUMP_RESOLVED === '1') {
   process.exit(0);
 }
 
+/**
+ * SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001 (FR-5/AC-6): detect whether THIS
+ * session is "stranded" — it holds an active SD claim whose provisioned worktree
+ * has been removed out from under it (reaped), leaving it operating on main.
+ *
+ * CONSERVATIVE by design: returns a strand descriptor ONLY on positive
+ * confirmation (a claim row whose worktree_path is set but no longer exists on
+ * disk). Missing creds, query failure, timeout, or no matching row → returns
+ * null, so the caller falls through to the unchanged hard block (fail-closed —
+ * the guard is never weakened for a session that genuinely chose to edit main).
+ *
+ * @param {string} sessionId
+ * @returns {Promise<{sd_key:string, worktree_path:string}|null>}
+ */
+async function detectStrandedClaim(sessionId) {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceKey || !sessionId) return null;
+    const fs = require('fs');
+    const url = supabaseUrl +
+      '/rest/v1/strategic_directives_v2?claiming_session_id=eq.' +
+      encodeURIComponent(sessionId) + '&select=sd_key,worktree_path';
+    const resp = await Promise.race([
+      fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500)),
+    ]);
+    if (!resp || !resp.ok) return null;
+    const rows = await resp.json();
+    for (const r of (Array.isArray(rows) ? rows : [])) {
+      if (r && r.worktree_path && !fs.existsSync(r.worktree_path)) {
+        return { sd_key: r.sd_key, worktree_path: r.worktree_path };
+      }
+    }
+    return null;
+  } catch {
+    return null; // any error → not confirmed → preserve the hard block
+  }
+}
+
 // --- WORKTREE CLAIM GUARD (PAT-CLMMULTI-001) ---
 // Regex to detect paths inside .worktrees/<SD-KEY>/
 const WORKTREE_PATH_RE = /[/\\]\.worktrees[/\\]([^/\\]+)/;
@@ -560,16 +600,39 @@ async function main() {
             branch = m ? m[1] : '';
           } catch { /* fail-open */ }
 
-          // (a) HARD BLOCK on main/master
+          // (a) HARD BLOCK on main/master — with FR-5 graceful strand recovery.
           if (branch === 'main' || branch === 'master') {
-            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'WORKTREE-HYGIENE-MAIN', 'Edit/Write blocked on main/master', 'block', { branch, gitRoot });
-            process.stderr.write(
-              `WORKTREE HYGIENE GUARD: Edit/Write blocked on '${branch}'.\n` +
-              `  Run \`npm run session:worktree\` to create an isolated branch off origin/main.\n` +
-              `  If intentional (e.g., one-off doc fix), set LEO_WORKTREE_GUARD=off and retry.\n` +
-              `  Why: edits on main bypass branch isolation and force stash gymnastics at /ship.\n`
-            );
-            await auditAndExit(auditPromise, 2);
+            // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001 (FR-5/AC-6): if THIS
+            // session holds an active claim whose provisioned worktree was reaped
+            // out from under it, it is stranded on main through no fault of its
+            // own — degrade to a WARNING so it can recover (write helpers, re-run
+            // sd-start) instead of being hard-locked into heredoc/bypass
+            // workarounds. The strand check runs ONLY here, on the already-
+            // exceptional main-branch edit path (the happy path — a feature branch
+            // inside a worktree — never reaches it), and degrades ONLY on positive
+            // confirmation; any uncertainty preserves the hard block.
+            // Flag-gated (FR-6): LEO_WORKTREE_STRAND_RECOVERY=off disables it.
+            const stranded = (process.env.LEO_WORKTREE_STRAND_RECOVERY !== 'off')
+              ? await detectStrandedClaim(_SESSION_ID)
+              : null;
+            if (stranded) {
+              auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'WORKTREE-HYGIENE-STRANDED', 'Stranded on main after worktree reaped — degraded to warn', 'warn', { branch, sd_key: stranded.sd_key, missing_worktree: stranded.worktree_path });
+              process.stderr.write(
+                `[worktree-hygiene] STRANDED-RECOVERY: your claimed worktree for ${stranded.sd_key} is gone\n` +
+                `  (${stranded.worktree_path}) — reaped out from under this session. Allowing this edit so\n` +
+                `  you can recover. Re-provision a fresh worktree with: node scripts/sd-start.js ${stranded.sd_key}\n`
+              );
+              // Fall through — do NOT block a session stranded through no fault of its own.
+            } else {
+              const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'WORKTREE-HYGIENE-MAIN', 'Edit/Write blocked on main/master', 'block', { branch, gitRoot });
+              process.stderr.write(
+                `WORKTREE HYGIENE GUARD: Edit/Write blocked on '${branch}'.\n` +
+                `  Run \`npm run session:worktree\` to create an isolated branch off origin/main.\n` +
+                `  If intentional (e.g., one-off doc fix), set LEO_WORKTREE_GUARD=off and retry.\n` +
+                `  Why: edits on main bypass branch isolation and force stash gymnastics at /ship.\n`
+              );
+              await auditAndExit(auditPromise, 2);
+            }
           }
 
           // (b) WARN-ONCE on inherited dirt + non-feature branch
