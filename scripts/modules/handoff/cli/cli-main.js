@@ -10,6 +10,8 @@
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { createHandoffSystem } from '../index.js';
 import dotenv from 'dotenv';
+import { findClaudeCodePid } from '../../../../lib/terminal-identity.js';
+import { detectEnvAmbientMismatch } from '../../../../lib/session-identity-sot.js';
 
 // AUTO-PROCEED continuation imports
 import { getNextReadyChild, getOrchestratorContext } from '../child-sd-selector.js';
@@ -420,6 +422,17 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
     return { success: false };
   }
 
+  // SD-FDBK-INFRA-HARNESS-F22-STALE-001: non-blocking WARN when CLAUDE_SESSION_ID != ambient (reaped ghost)
+  try {
+    const _f22 = detectEnvAmbientMismatch({ ccPid: findClaudeCodePid() });
+    if (_f22) {
+      console.warn('');
+      console.warn('⚠️  SESSION IDENTITY MISMATCH (F22): CLAUDE_SESSION_ID=' + _f22.envId + ' but this process ambient session is ' + _f22.ambientId + '.');
+      console.warn('   You may be operating under a stale/hardcoded session id (reaped ghost).');
+      console.warn('   Re-derive before continuing: export CLAUDE_SESSION_ID=' + _f22.ambientId);
+      console.warn('');
+    }
+  } catch { /* non-blocking */ }
   // SD-LEARN-FIX-ADDRESS-PAT-RETRO-001: Universal CLAUDE_SESSION_ID pre-flight check
   if (!process.env.CLAUDE_SESSION_ID) {
     console.warn('');
@@ -728,6 +741,17 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     }
   }
 
+  // SD-FDBK-INFRA-HARNESS-F22-STALE-001: non-blocking WARN when CLAUDE_SESSION_ID != ambient (reaped ghost)
+  try {
+    const _f22 = detectEnvAmbientMismatch({ ccPid: findClaudeCodePid() });
+    if (_f22) {
+      console.warn('');
+      console.warn('⚠️  SESSION IDENTITY MISMATCH (F22): CLAUDE_SESSION_ID=' + _f22.envId + ' but this process ambient session is ' + _f22.ambientId + '.');
+      console.warn('   You may be operating under a stale/hardcoded session id (reaped ghost).');
+      console.warn('   Re-derive before continuing: export CLAUDE_SESSION_ID=' + _f22.ambientId);
+      console.warn('');
+    }
+  } catch { /* non-blocking */ }
   // SD-LEARN-FIX-ADDRESS-PAT-RETRO-001: Universal CLAUDE_SESSION_ID pre-flight check
   if (!process.env.CLAUDE_SESSION_ID) {
     console.warn('');
