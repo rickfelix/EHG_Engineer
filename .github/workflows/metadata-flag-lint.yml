@@ -1,0 +1,39 @@
+name: Metadata Flag Lint
+
+# SD-LEO-INFRA-LINT-METADATA-ORPHAN-001
+# Classifies every metadata.is_* flag as HEALTHY / ORPHAN / PHANTOM / SCAFFOLDING-ONLY
+# and fails on any un-allow-listed ORPHAN/PHANTOM flag.
+#
+# ADVISORY-FIRST (FR-6): the lint step is `continue-on-error: true` so it CANNOT turn an
+# in-flight parallel-session PR red on day one. The report is always surfaced in the job
+# log. Flip to blocking (remove continue-on-error) once the team has lived with it and the
+# allow-list has settled — tracked as a follow-up.
+
+on:
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - 'database/migrations/**/*.sql'
+      - 'scripts/lint/metadata-flag-lint.mjs'
+      - 'scripts/lint/metadata-flag-allowlist.json'
+      - '.github/workflows/metadata-flag-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  metadata-flag-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Classify metadata.is_* flags (advisory)
+        continue-on-error: true
+        run: node scripts/lint/metadata-flag-lint.mjs
