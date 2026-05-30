@@ -172,7 +172,7 @@ async function main() {
   if (options.file) {
     filePath = options.file;
   } else {
-    filePath = '/mnt/c/Users/rickf/Dropbox/_EHG/_EHG/EHG Backlog for Claude.xlsx';
+    filePath = '/mnt/c/Users/rickf/Dropbox/_EHG/00_operating/backlog/EHG Backlog for Claude.xlsx';
   }
   
   if (!fs.existsSync(filePath)) {
