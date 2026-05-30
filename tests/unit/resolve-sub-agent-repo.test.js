@@ -20,6 +20,7 @@ import {
   applySubAgentRepoVerdict,
   getSubAgentCapability,
   clearRegistryCache,
+  toCanonicalRepoPath,
 } from '../../lib/sub-agents/resolve-repo.js';
 
 describe('resolveSubAgentRepo', () => {
@@ -159,5 +160,58 @@ describe('applySubAgentRepoVerdict', () => {
     applySubAgentRepoVerdict(results, resolution);
     expect(results.verdict).toBe('CONDITIONAL_PASS');
     expect(results.metadata.probe_exists).toBe(false);
+  });
+});
+
+describe('toCanonicalRepoPath (SD-LEO-INFRA-FIX-RESOLVESUBAGENTREPO-WINDOWS-001)', () => {
+  it('normalizes a Windows worktree backslash path to the forward-slash main root', () => {
+    const wt = 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-XYZ-001';
+    expect(toCanonicalRepoPath(wt)).toBe('C:/Users/rickf/Projects/_EHG/EHG_Engineer');
+  });
+
+  it('converts backslashes to forward slashes for a main-root path (no worktree segment)', () => {
+    expect(toCanonicalRepoPath('C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer'))
+      .toBe('C:/Users/rickf/Projects/_EHG/EHG_Engineer');
+  });
+
+  it('is a no-op (byte-identical) for an already-canonical POSIX main-root path', () => {
+    const p = 'C:/Users/rickf/Projects/_EHG/EHG_Engineer';
+    expect(toCanonicalRepoPath(p)).toBe(p);
+  });
+
+  it('trims a trailing slash', () => {
+    expect(toCanonicalRepoPath('/home/u/ehg/')).toBe('/home/u/ehg');
+  });
+
+  it('passes null/empty through unchanged', () => {
+    expect(toCanonicalRepoPath(null)).toBeNull();
+    expect(toCanonicalRepoPath('')).toBe('');
+  });
+});
+
+describe('applySubAgentRepoVerdict evidence canonicalization (SD-LEO-INFRA-FIX-RESOLVESUBAGENTREPO-WINDOWS-001)', () => {
+  it('writes a forward-slash main-root repo_path from a Windows worktree resolution, keeping executed_from_cwd RAW', () => {
+    const results = { verdict: 'PASS', confidence: 100, warnings: [] };
+    const resolution = {
+      repoPath: 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-XYZ-001',
+      repoResolved: true,
+      registrySource: 'registry',
+    };
+    applySubAgentRepoVerdict(results, resolution);
+    // Evidence path now byte-matches applications.local_path (view classifies 'compliant')
+    expect(results.metadata.repo_path).toBe('C:/Users/rickf/Projects/_EHG/EHG_Engineer');
+    // executed_from_cwd stays the raw runtime cwd so genuine cwd_leak detection is preserved
+    expect(results.metadata.executed_from_cwd).toBe(process.cwd());
+  });
+
+  it('does NOT coerce a genuinely-different repo path to a main root (equality contract not relaxed)', () => {
+    const results = { verdict: 'PASS', confidence: 100, warnings: [] };
+    const resolution = {
+      repoPath: 'C:\\Users\\rickf\\Projects\\_EHG\\some-other-venture',
+      repoResolved: true,
+      registrySource: 'db',
+    };
+    applySubAgentRepoVerdict(results, resolution);
+    expect(results.metadata.repo_path).toBe('C:/Users/rickf/Projects/_EHG/some-other-venture');
   });
 });
