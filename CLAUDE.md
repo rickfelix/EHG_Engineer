@@ -61,6 +61,9 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 10. **Friction signaling** — when you hit recurrence (gate 2× / RCA 2× / tool 3×), are about to bypass (`--no-verify` / 3rd-bypass-quota / mock-not-fix), see protocol-spec friction, recognize a harness bug, or match a memory trend, `/signal <type> "<body>"` to the active coordinator. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. See CLAUDE_CORE.md "Signaling friction to the coordinator". SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
 > Why: The /signal channel is documented only in CLAUDE_CORE.md, so workers loaded into a phase file (LEAD/PLAN/EXEC) without core never see when to send. Surfacing the trigger heuristic at every entry point makes the channel discoverable at the moment friction occurs, not 3+ workers and several recurrences later.
 
+11. **Sub-agent repo evidence** — sub-agents record their repo as `metadata.repo_path` + `executed_from_cwd`; there are NO top-level `repo_path`/`local_path` columns on `sub_agent_execution_results`. The canonical writer is `lib/sub-agents/resolve-repo.js` `applySubAgentRepoVerdict` — never hand-roll path columns. The `SUB_AGENT_REPO_RESOLUTION` gate compares `metadata->>repo_path` to `applications.local_path` via the `v_sub_agent_repo_compliance` view.
+> Why: Folklore in older prompts/memories said to store top-level `repo_path`/`local_path`; following it produces malformed evidence the gate cannot read. Code, gate, view and the results-table columns were all verified correct (bbe5451d / RCA 9d33b954 — PROTOCOL_PROCESS guidance-vs-columns drift), so this prologue line is the authoritative contract.
+
 ## AUTO-PROCEED Mode
 
 AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no confirmation prompts.
