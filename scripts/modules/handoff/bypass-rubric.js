@@ -65,7 +65,18 @@ export const ILLEGITIMATE_REASONS = [
   },
   {
     id: 'DONT_UNDERSTAND',
-    pattern: /\b(don.t\s*understand|unclear|confusing|don.t\s*know\s*why|no\s*idea)\b/i,
+    // SD-LEO-INFRA-TIGHTEN-BYPASS-RUBRIC-001: the bare /unclear|confusing/ alternatives
+    // over-matched legitimate domain vocabulary. During the CronGenius pilot a valid
+    // TOOLING_BUG reason noting that an error message "is unclear about which check
+    // failed" was wrongly REJECTED — because illegitimate rules are checked first, the
+    // bare /unclear/ short-circuited before the TOOLING_BUG legitimate rule could match.
+    // Tighten so unclear/confusing classify as illegitimate only when they describe the
+    // AUTHOR not understanding the gate's requirements/intent (proximity to a
+    // requirement/intent subject), not when they describe an artifact (error/output/
+    // message) being unclear. The self-referential phrases (don't understand / don't
+    // know why / no idea / I'm confused) stay always-illegitimate, preserving
+    // enforcement for the genuine bypass-because-confused abuse case.
+    pattern: /\b(don.?t\s*understand|don.?t\s*know\s*why|no\s*idea|i.?m\s*(so\s*)?confused)\b|\b(requirement|instruction|spec|criteria|rationale|intent|wording)s?\b[^.?!\n]{0,30}\b(unclear|confusing)\b|\b(unclear|confusing)\b[^.?!\n]{0,30}\b(requirement|instruction|spec|criteria|rationale|intent|what.?s\s*(being\s*)?asked)\b/i,
     description: 'Attempting to bypass due to not understanding the gate'
   },
   {
