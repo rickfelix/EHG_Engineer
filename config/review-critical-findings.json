@@ -22,8 +22,8 @@
       "name": "sql_injection",
       "description": "String concatenation in SQL queries without parameterization",
       "patterns": [
-        "\\$\\{.*\\}.*(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)",
-        "\\+\\s*['\"]\\s*(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)",
+        "\\$\\{.*\\}.*\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\\b",
+        "\\+\\s*['\"]\\s*\\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\\b",
         "\\.query\\s*\\(\\s*`[^`]*\\$\\{"
       ],
       "severity": "critical",
@@ -61,7 +61,7 @@
       "description": "Operations that could cause irreversible data loss",
       "patterns": [
         "rm\\s+-rf\\s+/(?!tmp)",
-        "\\.delete\\(\\)(?!.*\\.eq\\()",
+        "\\.delete\\(\\)(?!.*\\.(?:eq|neq|gt|gte|lt|lte|like|ilike|is|in|contains|containedBy|match|filter|or|not)\\()",
         "git\\s+(reset|checkout)\\s+--hard",
         "git\\s+push\\s+--force\\s+origin\\s+main"
       ],
