@@ -58,6 +58,10 @@ import { createClient } from '@supabase/supabase-js';
 
 import { listActiveWorktrees } from '../lib/worktree-quota.js';
 import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../lib/worktree-manager.js';
+// SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001: single-source reapability helpers.
+// These three used to be defined locally below; the canonical home is now
+// lib/worktree-reapability.js so every removal path shares one implementation.
+import { normalizePath, collectDirtyStatus, countUnpushedCommits } from '../lib/worktree-reapability.js';
 import {
   isZombieOnMain,
   isNested,
@@ -350,11 +354,8 @@ function runGh(args, opts = {}) {
 
 // ── Core logic ─────────────────────────────────────────────────────────
 
-function normalizePath(p) {
-  if (!p) return '';
-  try { return path.resolve(p).replace(/\\/g, '/').toLowerCase(); }
-  catch { return String(p).replace(/\\/g, '/').toLowerCase(); }
-}
+// normalizePath, collectDirtyStatus, countUnpushedCommits now imported from
+// ../lib/worktree-reapability.js (SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001).
 
 function readMetadata(wtPath) {
   for (const name of ['.worktree.json', '.ehg-session.json']) {
@@ -369,32 +370,6 @@ function readMetadata(wtPath) {
 
 function isCursorWorktree(wtPath) {
   return /\.cursor[\\/]/i.test(wtPath) || /cursor[\\/]worktrees/i.test(wtPath);
-}
-
-function collectDirtyStatus(wtPath) {
-  if (!fs.existsSync(wtPath)) {
-    return { dirtyCount: 0, untracked: [], exists: false };
-  }
-  try {
-    const res = runGit(['status', '--porcelain', '--untracked-files=all'], { cwd: wtPath });
-    if (res.code !== 0) return { dirtyCount: 0, untracked: [], exists: true };
-    const lines = (res.stdout || '').split('\n').filter(Boolean);
-    const untracked = [];
-    let dirty = 0;
-    for (const l of lines) {
-      dirty++;
-      if (l.startsWith('?? ')) untracked.push(l.slice(3).trim());
-    }
-    return { dirtyCount: dirty, untracked, exists: true };
-  } catch { return { dirtyCount: 0, untracked: [], exists: true }; }
-}
-
-function countUnpushedCommits(wtPath) {
-  try {
-    const res = runGit(['cherry', 'origin/main', 'HEAD'], { cwd: wtPath });
-    if (res.code !== 0) return 0;
-    return (res.stdout || '').split('\n').filter((l) => l.startsWith('+')).length;
-  } catch { return 0; }
 }
 
 async function classifyWorktree(wt, ctx) {
