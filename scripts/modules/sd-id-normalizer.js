@@ -101,7 +101,22 @@ export async function normalizeSDId(supabase, sdId) {
   }
   const trimmedId = sdId.trim();
   const format = detectIdFormat(trimmedId);
-  const { resolveSdInput } = await import('../lib/sd-id-resolver.js');
+  // b6256a28 (QF-20260529-533): fail-soft when scripts/lib/sd-id-resolver.js is
+  // absent (worktrees provisioned before that file existed). The dynamic import
+  // otherwise rejects with ERR_MODULE_NOT_FOUND in the LEAD-FINAL post-completion
+  // path — after the DB completion write — misleading the session and aborting
+  // /learn + parent rollup. Degrade to an inline id-or-key lookup.
+  let resolveSdInput;
+  try {
+    ({ resolveSdInput } = await import('../lib/sd-id-resolver.js'));
+  } catch (importErr) {
+    const code = importErr && importErr.code;
+    if (code === 'ERR_MODULE_NOT_FOUND' || /Cannot find (module|package)/i.test((importErr && importErr.message) || '')) {
+      console.warn(`[SD-ID-NORMALIZER] resolver module unavailable (${code || 'not found'}); inline fallback for "${trimmedId}"`);
+      return await _normalizeViaDirectQuery(supabase, trimmedId, format);
+    }
+    throw importErr;
+  }
   try {
     const { sdId: canonical } = await resolveSdInput(trimmedId, supabase);
     if (canonical !== trimmedId) {
@@ -117,6 +132,48 @@ export async function normalizeSDId(supabase, sdId) {
     } else {
       console.warn('[SD-ID-NORMALIZER] Resolver error:', err.message);
     }
+    return null;
+  }
+}
+
+/**
+ * b6256a28 (QF-20260529-533): inline fallback resolution used when
+ * scripts/lib/sd-id-resolver.js cannot be imported (stale worktree). Mirrors
+ * resolveSdInput's core OR-query but returns null on not-found/error to preserve
+ * normalizeSDId's legacy silent-zero contract. Exported for unit testing.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} trimmedId - already-trimmed identifier
+ * @param {string} format - precomputed detectIdFormat(trimmedId)
+ * @returns {Promise<string|null>} canonical id, or null on not-found/error
+ */
+export async function _normalizeViaDirectQuery(supabase, trimmedId, format) {
+  // Restrict the .or() filter to validated UUID/sd_key shapes (resolveSdInput
+  // gates the same way) so a malformed identifier can't perturb the PostgREST filter.
+  if (format !== 'uuid' && format !== 'sd_key') {
+    console.warn(`[SD-ID-NORMALIZER] Unrecognized identifier format (fallback): ${trimmedId}`);
+    return null;
+  }
+  try {
+    const { data, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key')
+      .or(`id.eq.${trimmedId},sd_key.eq.${trimmedId}`)
+      .maybeSingle();
+    if (error) {
+      console.error('[SD-ID-NORMALIZER] Fallback query error:', error.message);
+      return null;
+    }
+    if (!data) {
+      console.warn(`[SD-ID-NORMALIZER] SD not found (fallback) for identifier: ${trimmedId} (format: ${format})`);
+      return null;
+    }
+    if (data.id !== trimmedId) {
+      console.log(`[SD-ID-NORMALIZER] Normalized (fallback): "${trimmedId}" -> "${data.id}"`);
+    }
+    return data.id;
+  } catch (e) {
+    console.warn('[SD-ID-NORMALIZER] Fallback resolution failed:', e.message);
     return null;
   }
 }
