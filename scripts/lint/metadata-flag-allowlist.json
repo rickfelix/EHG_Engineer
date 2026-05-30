@@ -1,0 +1,60 @@
+{
+  "_doc": "Allow-list for metadata-flag-lint.mjs (SD-LEO-INFRA-LINT-METADATA-ORPHAN-001). Each entry suppresses the CI FAIL for one ORPHAN/PHANTOM metadata.is_* flag and REQUIRES a non-empty reason. The flag is still REPORTED with its classification; the allow-list only stops it from failing the build. Prefer resolving a flag (add a real reader / remove a dead writer) over adding an entry. The entries below baseline the pre-existing findings from the one-time audit SD-LEO-INFRA-AUDIT-METADATA-ORPHAN-001 so the lint can fail on NEW orphan/phantom flags. Most are intentional provenance/informational metadata (written for debugging/denormalization, never branched on) or defensive optional reads whose canonical source is a real column.",
+  "allow": [
+    {
+      "flag": "is_async",
+      "classification": "ORPHAN",
+      "reason": "Informational provenance on uat_test_cases.metadata (scripts/lib/test-registrar.js) recording whether a scanned test case is async. Stored for audit/debugging only; no code branches on it."
+    },
+    {
+      "flag": "is_fallback",
+      "classification": "ORPHAN",
+      "reason": "Provenance on stage-18 artifact rows (server/routes/stage18.js) marking sections produced by the fallback copy path. Informational; not consumed as a behavioral flag in EHG_Engineer."
+    },
+    {
+      "flag": "is_phase_boundary",
+      "classification": "ORPHAN",
+      "reason": "Provenance tag on correction-task metadata (lib/tasks/correction-manager.js) marking a 'wall' task as a phase boundary. Informational; no reader branches on it."
+    },
+    {
+      "flag": "is_sub_parent",
+      "classification": "ORPHAN",
+      "reason": "One-time historical seed written into an SD's metadata by migration 20251206_vision_transition_parent_orchestrator.sql. Superseded by parent-orchestrator sd_type detection; never read."
+    },
+    {
+      "flag": "is_synthetic",
+      "classification": "ORPHAN",
+      "reason": "Provenance on synthetic-venture metadata (lib/eva/pipeline-runner/pipeline-executor.js) marking pipeline-generated test ventures. Consumed by the EHG venture app, not by EHG_Engineer (cross-repo reader the static scan cannot see)."
+    },
+    {
+      "flag": "is_warning",
+      "classification": "ORPHAN",
+      "reason": "Provenance on eva_event_log metadata (lib/eva/routing-state-machine.js) duplicating the row's severity='warning'. Informational; the canonical signal is the severity column."
+    },
+    {
+      "flag": "is_working_on",
+      "classification": "ORPHAN",
+      "reason": "Denormalized copy of the strategic_directives_v2.is_working_on COLUMN into the inbox-item payload (lib/inbox/unified-inbox-builder.js) for the dashboard UI. The canonical reader uses the real column, not metadata."
+    },
+    {
+      "flag": "is_emergency_hotfix",
+      "classification": "PHANTOM",
+      "reason": "Defensive fallback read: scripts/modules/adaptive-threshold-calculator.js and src/services/CalibrationService.js read `sd.is_emergency_hotfix || sd.metadata?.is_emergency_hotfix`. The canonical source is the sd.is_emergency_hotfix column read on the same line; the metadata branch is a harmless optional fallback."
+    },
+    {
+      "flag": "is_production_deployment",
+      "classification": "PHANTOM",
+      "reason": "Defensive fallback read: adaptive-threshold-calculator.js and CalibrationService.js read `sd.is_production_deployment || sd.metadata?.is_production_deployment || category includes 'production'`. Canonical source is the column / category; the metadata branch is a harmless optional fallback."
+    },
+    {
+      "flag": "is_orchestrator",
+      "classification": "PHANTOM",
+      "reason": "Optional escape-hatch read in an OR-chain (lib/sd/type-detection.js, scripts/orchestrator-preflight.js): `sd.metadata?.is_orchestrator === true`. Canonical orchestrator signals are sd_type='orchestrator', metadata.is_parent (HEALTHY), and child-count; the metadata.is_orchestrator branch is a harmless legacy optional."
+    },
+    {
+      "flag": "is_test",
+      "classification": "PHANTOM",
+      "reason": "metadata.is_test=true is set on test-harness SD fixtures (test code is excluded from the production scan by design). The production reader (scripts/modules/sd-next/display/*) intentionally filters those test SDs out of the queue/recommendations (QF-20260512-300)."
+    }
+  ]
+}

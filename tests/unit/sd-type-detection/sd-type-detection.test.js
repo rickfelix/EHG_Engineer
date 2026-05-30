@@ -143,8 +143,12 @@ describe('isVenture / isVentureSync', () => {
     expect(isVenture({ sd_type: 'venture' })).toBe(true);
   });
 
-  it('returns true when metadata.is_venture === true', () => {
-    expect(isVenture({ metadata: { is_venture: true } })).toBe(true);
+  it('does NOT use metadata.is_venture (dead PHANTOM branch removed by SD-LEO-INFRA-LINT-METADATA-ORPHAN-001 / FR-5)', () => {
+    // metadata.is_venture had zero writers in EHG_Engineer and the shared ehg repo
+    // (audit SD-LEO-INFRA-AUDIT-METADATA-ORPHAN-001). The dead reader was removed;
+    // venture_id / sd_type='venture' remain the canonical signals.
+    expect(isVenture({ metadata: { is_venture: true } })).toBe(false);
+    expect(isVenture({ venture_id: 'v-1', metadata: { is_venture: true } })).toBe(true);
   });
 
   it('returns false when none of the venture signals are set', () => {
