@@ -1,0 +1,44 @@
+name: ALTER SET DEFAULT Override Lint
+
+# SD-LEO-INFRA-LINT-ALTER-SET-001
+# Detects "F12 drift": a migration changing a column default via
+# `ALTER COLUMN ... SET DEFAULT` while production code hardcodes a DIFFERENT
+# literal at insert time, silently negating the new default. Fails on any
+# un-allow-listed override; reports ambiguous (computed-value) writers without
+# failing. Codifies the completed audit SD-LEO-INFRA-AUDIT-MIGRATION-SET-001.
+#
+# ADVISORY-FIRST (FR-6): the lint step is `continue-on-error: true` so it CANNOT
+# turn an in-flight parallel-session PR red on day one. The report is always
+# surfaced in the job log. Flip to blocking (remove continue-on-error) once the
+# allow-list has settled — tracked as a follow-up.
+
+on:
+  pull_request:
+    paths:
+      # AC-5: migrations that could change a default ...
+      - 'database/migrations/**/*.sql'
+      # ... and the known writer paths (where inserts/upserts live) ...
+      - 'scripts/**/*.{js,mjs,cjs,ts}'
+      - 'lib/**/*.{js,mjs,cjs,ts}'
+      - 'server/**/*.{js,mjs,cjs,ts}'
+      - 'api/**/*.{js,mjs,cjs,ts}'
+      # ... and the lint itself.
+      - 'scripts/lint/alter-default-override-lint.mjs'
+      - 'scripts/lint/alter-default-override-allowlist.json'
+      - '.github/workflows/alter-default-override-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  alter-default-override-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect ALTER SET DEFAULT override drift (advisory)
+        continue-on-error: true
+        run: node scripts/lint/alter-default-override-lint.mjs

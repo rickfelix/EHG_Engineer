@@ -1,0 +1,17 @@
+{
+  "_doc": "Allow-list for alter-default-override-lint.mjs (SD-LEO-INFRA-LINT-ALTER-SET-001). Each entry suppresses the CI DRIFT failure for one in-class `table.column` whose production writers intentionally set a literal different from the migration's `ALTER COLUMN ... SET DEFAULT`, and REQUIRES a non-empty `reason`. The column is still REPORTED with its writer classification; the allow-list only stops it from failing the build. Prefer fixing the writer to honor the default over adding an entry. These entries baseline the documented intentional overrides from the completed one-time audit SD-LEO-INFRA-AUDIT-MIGRATION-SET-001 so the lint fails only on NEW (future) F12 drift.",
+  "allow": [
+    {
+      "column": "eva_support_decision_log.decision_kind",
+      "reason": "decision_kind is a discriminator, not a defaulted scalar. The migration default 'sd_recommendation' only covers the happy-path emit (lib/eva-support/sd-recommendation-emitter.js honors it); the reader legitimately writes other event kinds — 'reader_disabled', 'reader_error' (lib/eva-support/sd-reader.js) — via writeAuditRow(). These are intentional event-kind overrides, not drift. (Audit SD-LEO-INFRA-AUDIT-MIGRATION-SET-001.)"
+    },
+    {
+      "column": "retrospectives.retrospective_type",
+      "reason": "Default is NULL (generic retro). Handoff retrospectives intentionally tag the boundary — 'EXEC_TO_PLAN', 'PLAN_TO_EXEC', etc. (scripts/modules/handoff/executors/*/retrospective.js). The handoff-type writers pass a computed retrospectiveType (ambiguous, not drift); fixed-tag writers are intentional overrides, not drift. (Audit SD-LEO-INFRA-AUDIT-MIGRATION-SET-001.)"
+    },
+    {
+      "column": "user_stories.status",
+      "reason": "Default changed from 'ready' to 'draft' (boilerplate). Story-generation writers that set an explicit lifecycle status ('ready'/'passing'/etc.) do so intentionally to reflect real story state, not to negate the boilerplate default. (Audit SD-LEO-INFRA-AUDIT-MIGRATION-SET-001; original F12 already remediated.)"
+    }
+  ]
+}

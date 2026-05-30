@@ -58,6 +58,7 @@
     "protocol:lint:promote": "node scripts/protocol-lint/cli.mjs promote",
     "protocol:lint:review": "node scripts/protocol-lint/cli.mjs review",
     "lint:metadata-flags": "node scripts/lint/metadata-flag-lint.mjs",
+    "lint:alter-defaults": "node scripts/lint/alter-default-override-lint.mjs",
     "test:smoke": "vitest run tests/smoke.test.js",
     "test:session-tick": "node --test tests/unit/session-tick-heartbeat.test.mjs",
     "test:sd-key-generator-gate": "node --test tests/unit/sd-key-generator-coverage.test.mjs",
