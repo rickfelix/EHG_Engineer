@@ -103,9 +103,13 @@ export function shouldSkipAndContinue(context) {
 export async function markAsBlocked(supabase, sdId, blockingInfo) {
   try {
     // Get current SD to preserve existing metadata
+    // NOTE: updated_at MUST be selected — it backs the optimistic lock below
+    // (.eq('updated_at', currentSD.updated_at)). Omitting it sent eq.undefined to
+    // PostgREST -> "invalid input syntax for type timestamp: undefined" on every
+    // gate-failure block. (SD-LEO-INFRA-FIX-SKIP-CONTINUE-001)
     const { data: currentSD, error: fetchError } = await supabase
       .from('strategic_directives_v2')
-      .select('metadata, status')
+      .select('metadata, status, updated_at')
       .eq('id', sdId)
       .single();
 
