@@ -8,7 +8,7 @@
       "session_init",
       "common_commands"
     ],
-    "_removed_sections_note": "auto_proceed_mode, orchestrator_chaining, sd_continuation_truth_table, migration_execution_protocol_main, work_item_routing, skill_intent_detection, teams_protocol - moved to CORE/phase files, condensed summaries in router generator code"
+    "_removed_sections_note": "auto_proceed_mode, orchestrator_chaining, sd_continuation_truth_table, migration_execution_protocol, work_item_routing, skill_intent_detection, teams_protocol - moved to CORE/phase files, condensed summaries in router generator code"
   },
   "CLAUDE_CORE.md": {
     "description": "Essential context for ALL sessions (~11k tokens). Lean Core (2026-02-16).",

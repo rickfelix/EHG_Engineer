@@ -151,8 +151,8 @@ User may override at any point by stating \`[MODE: product]\` or \`[MODE: campai
 | 2 | 31-75 | Standard QF |
 | 3 | >75 | Full SD |
 
-Risk keywords (auth, migration, schema, feature) always force Tier 3.
-> Why: These change classes carry disproportionate blast radius — auth bugs cause security incidents, schema changes can corrupt data, and feature work needs full stakeholder visibility. Tier 3 ensures the gate pipeline (TESTING, SECURITY, GITHUB sub-agents) always runs for them.
+Risk keywords always force Tier 3 — **Type**: feature; **Security**: auth, authentication, authorization, rls, payments, credentials; **Schema**: migration, schema, alter/create/drop table. **Architecture-Plan Auto-Escalation (Always Tier 3)**: when an EVA architecture plan exists for the work item, triage auto-escalates — never reduce scope to fit QF tiers.
+> Why: These change classes carry disproportionate blast radius — security bugs cause incidents, schema changes can corrupt data, feature work needs full stakeholder visibility, and arch-plan scope inherently exceeds QF limits. Tier 3 ensures the gate pipeline (TESTING, SECURITY, GITHUB sub-agents) always runs for them.
 
 ${sessionInit ? formatSection(sessionInit) : ''}
 
