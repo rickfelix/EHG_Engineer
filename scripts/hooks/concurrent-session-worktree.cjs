@@ -469,6 +469,27 @@ async function cleanupStaleConcurrentWorktrees(supabase) {
           }
         } catch { /* status check failed — fall through to merge check */ }
 
+        // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001 (FR-3): skip if the branch
+        // has commits NOT yet on origin/main (unpushed work). The `branch --merged
+        // main` check below consults LOCAL main, so a branch merged into a stale
+        // local main but never pushed could otherwise be removed and lose commits.
+        // Mirrors the shared isReapable() unpushed dimension
+        // (lib/worktree-reapability.js); inlined because this hook is CommonJS and
+        // the predicate module is ESM.
+        try {
+          const ahead = gitViaPowerShell(`-C "${wtPath}" rev-list --count origin/main..HEAD`, {
+            cwd: repoRoot, timeout: 3000
+          }).toString().trim();
+          const unpushed = parseInt(ahead, 10);
+          if (Number.isFinite(unpushed) && unpushed > 0) {
+            logEvent('session.cleanup_skipped_unpushed', {
+              entry, reason: 'unpushed_commits', unpushed_count: unpushed
+            });
+            skipped++;
+            continue;
+          }
+        } catch { /* rev-list failed — fall through to merge check (skips on uncertainty) */ }
+
         // Check if branch is merged into main
         const merged = gitViaPowerShell(`branch --merged main`, {
           cwd: repoRoot, timeout: 3000

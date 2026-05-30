@@ -52,6 +52,8 @@ import { createClient } from '@supabase/supabase-js';
 import {
   safeRecursiveRmWithRetry,
 } from '../lib/worktree-manager.js';
+// SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001 (FR-3): shared reapability guard.
+import { isReapable } from '../lib/worktree-reapability.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -232,6 +234,18 @@ export async function processCleanupPendingQueue(supabase, opts = {}) {
           });
         }
       }
+      continue;
+    }
+
+    // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001 (FR-3): defense-in-depth — a
+    // worktree flagged for cleanup may have been re-claimed and gained
+    // uncommitted/unpushed work since the flag was set. Re-check the shared
+    // reapability predicate at the moment of removal; skip (leave cleanup_pending
+    // for a later sweep / the preserve-before-delete reaper) if no longer safe.
+    const reap = isReapable(row.worktree_path);
+    if (!reap.reapable) {
+      summary.skippedUnsafe = (summary.skippedUnsafe || 0) + 1;
+      log(`${tag} SKIPPED_UNSAFE: ${reap.reason} — leaving cleanup_pending for a later sweep`);
       continue;
     }
 
