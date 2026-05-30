@@ -109,7 +109,22 @@ function signatureFor(toolName, input, lastOutcome) {
   if (toolName === 'Edit' || toolName === 'Write' || toolName === 'MultiEdit') {
     const fp = typeof input.file_path === 'string' ? input.file_path : '';
     if (!fp) return null;
-    return `${toolName}:${fp}`;
+    // SD-FDBK-ENH-PRE-TOOL-ENFORCE-001: mix an edit-CONTENT digest so DISTINCT edits to the
+    // same file (a legit multi-part change) get DISTINCT signatures and do NOT accumulate as
+    // retries; only IDENTICAL re-attempts (same content - the true blind-retry signal) share a
+    // signature and trip the 3-strikes counter. Mirrors the Bash command+outcome admixture.
+    let contentKey = '';
+    if (toolName === 'Edit') {
+      const o = typeof input.old_string === 'string' ? input.old_string : '';
+      const n = typeof input.new_string === 'string' ? input.new_string : '';
+      contentKey = JSON.stringify([o, n]);
+    } else if (toolName === 'Write') {
+      contentKey = typeof input.content === 'string' ? input.content : '';
+    } else {
+      try { contentKey = JSON.stringify(input.edits || []); } catch { contentKey = ''; }
+    }
+    const cdig = crypto.createHash('sha256').update(contentKey).digest('hex').slice(0, 12);
+    return `${toolName}:${fp}:${cdig}`;
   }
   return null;
 }
