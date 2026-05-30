@@ -4,7 +4,7 @@
  *
  * SD-LEO-INFRA-REALITY-GATE-ARTIFACT-001 FR-7: CI pre-merge guard that asserts
  * every required artifact_type in public.gate_boundary_config maps to some
- * upstream stage's lifecycle_stage_config.required_artifacts.
+ * upstream stage's venture_stages.required_artifacts.
  *
  * Drift class this catches: someone adds a row to gate_boundary_config referencing
  * an artifact_type that no stage analyzer emits — the same class of bug that
@@ -92,7 +92,7 @@ async function main() {
     boundaries = boundaryRows || [];
 
     const { data: stageRows, error: stageErr } = await supabase
-      .from('lifecycle_stage_config')
+      .from('venture_stages')
       .select('stage_number, required_artifacts');
     if (stageErr) throw stageErr;
     stages = stageRows || [];

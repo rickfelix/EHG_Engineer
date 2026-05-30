@@ -2,8 +2,8 @@
 /**
  * SD-LEO-REFAC-GATE-DECISION-CREATION-001 FR-3 (original)
  * SD-LEO-REFAC-CANONICALIZE-STAGE-CONFIG-001 FR-1 (this revision):
- *   5-way switch derived from lifecycle_stage_config.work_type (canonical),
- *   not stage_config.gate_type (lossy mirror).
+ *   5-way switch derived from venture_stages.work_type (canonical),
+ *   not venture_stages.gate_type (lossy mirror).
  *
  * Canonical rule:
  *   - work_type='sd_required'     → SKIP (SD-driven, no chairman_decisions row)
@@ -61,10 +61,10 @@ export function deriveDecisionType(workType, gateType, reviewMode) {
 }
 
 async function main() {
-  // Read canonical (lifecycle_stage_config) AND auxiliary (stage_config) in parallel.
+  // Read canonical (venture_stages) AND auxiliary (venture_stages) in parallel.
   const [stageRes, lifecycleRes] = await Promise.all([
-    supabase.from('stage_config').select('stage_number,gate_type,review_mode'),
-    supabase.from('lifecycle_stage_config').select('stage_number,work_type'),
+    supabase.from('venture_stages').select('stage_number,gate_type,review_mode'),
+    supabase.from('venture_stages').select('stage_number,work_type'),
   ]);
   if (stageRes.error) throw stageRes.error;
   if (lifecycleRes.error) throw lifecycleRes.error;

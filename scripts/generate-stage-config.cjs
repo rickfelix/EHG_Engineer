@@ -84,43 +84,7 @@ async function loadVentureStages(supabase) {
   return data;
 }
 
-// ---------------------------------------------------------------------------
-// Backward-compat cross-table name-parity assertion
-// (SD-LEO-INFRA-RECONCILE-VENTURE-LIFECYCLE-001 / FR-6)
-// ---------------------------------------------------------------------------
-// The generator no longer READS the legacy stage_config / lifecycle_stage_config
-// tables (venture_stages is the SSOT). But those tables still exist, kept in
-// sync by Child A's triggers, and the FR-6 parity invariant + its unit test
-// remain valid. Retained here (exported via _testHooks) so that test keeps
-// passing without re-rolling its query. Pure I/O wrapper around a SQL join.
-async function assertCrossTableNameParity(supabase) {
-  const [lifecycleRes, stageRes] = await Promise.all([
-    supabase.from('lifecycle_stage_config').select('stage_number, stage_name').order('stage_number'),
-    supabase.from('stage_config').select('stage_number, stage_name').order('stage_number'),
-  ]);
-  if (lifecycleRes.error) throw new Error(`lifecycle_stage_config read failed: ${lifecycleRes.error.message}`);
-  if (stageRes.error) throw new Error(`stage_config read failed: ${stageRes.error.message}`);
 
-  const lifecycleByStage = new Map();
-  for (const row of lifecycleRes.data || []) lifecycleByStage.set(row.stage_number, row.stage_name);
-
-  const divergences = [];
-  for (const row of stageRes.data || []) {
-    const lcName = lifecycleByStage.get(row.stage_number);
-    // INNER-join semantics: only flag when both rows exist.
-    if (lcName !== undefined && lcName !== row.stage_name) {
-      divergences.push({
-        stage_number: row.stage_number,
-        lifecycle_stage_config_name: lcName,
-        stage_config_name: row.stage_name,
-      });
-    }
-  }
-  return divergences;
-}
-
-// Exposed for unit tests (FR-6 TS-1).
-module.exports._testHooks = { assertCrossTableNameParity };
 
 // ---------------------------------------------------------------------------
 // Mapping helpers
@@ -478,7 +442,7 @@ async function main() {
   process.stdout.write(stageConfigOut);
 }
 
-// Only run when invoked directly (not when required for _testHooks).
+// Only run when invoked directly (not when imported as a module).
 if (require.main === module) {
   main().catch((err) => {
     console.error(`FATAL: ${err.message}`);

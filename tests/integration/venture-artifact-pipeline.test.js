@@ -4,7 +4,7 @@
  *
  * Database-level integration test verifying:
  *   1. Venture creation via ventures table
- *   2. Artifact creation matching lifecycle_stage_config required_artifacts
+ *   2. Artifact creation matching venture_stages required_artifacts
  *   3. Stage advancement via current_lifecycle_stage update
  *   4. Artifact-stage mapping consistency
  *   5. Stage-zero queue request lifecycle
@@ -40,9 +40,9 @@ describe.skipIf(!HAS_REAL_DB)('Venture Artifact Pipeline E2E', () => {
   let stageConfig;
 
   beforeAll(async () => {
-    // Load lifecycle_stage_config for stages 1-3
+    // Load venture_stages for stages 1-3
     const { data, error } = await supabase
-      .from('lifecycle_stage_config')
+      .from('venture_stages')
       .select('stage_number, stage_name, required_artifacts, phase_name')
       .in('stage_number', [1, 2, 3])
       .order('stage_number');
@@ -108,7 +108,7 @@ describe.skipIf(!HAS_REAL_DB)('Venture Artifact Pipeline E2E', () => {
     expect(data.status).toBe('active');
   });
 
-  it('should create artifacts for stages 1-3 matching lifecycle_stage_config', async () => {
+  it('should create artifacts for stages 1-3 matching venture_stages', async () => {
     for (const stage of stageConfig) {
       const artifactType = stage.required_artifacts[0];
 
@@ -187,7 +187,7 @@ describe.skipIf(!HAS_REAL_DB)('Venture Artifact Pipeline E2E', () => {
     expect(error).toBeNull();
     expect(data).toHaveLength(3);
 
-    // Verify artifact types match lifecycle_stage_config
+    // Verify artifact types match venture_stages
     for (let i = 0; i < data.length; i++) {
       expect(data[i].lifecycle_stage).toBe(stageConfig[i].stage_number);
       expect(data[i].artifact_type).toBe(stageConfig[i].required_artifacts[0]);
@@ -598,7 +598,7 @@ describe('Orchestrator State Transitions', () => {
 describe('Lifecycle Stage Config Validation', () => {
   it('should have required_artifacts defined for stages 1-3', async () => {
     const { data, error } = await supabase
-      .from('lifecycle_stage_config')
+      .from('venture_stages')
       .select('stage_number, stage_name, required_artifacts, phase_name')
       .in('stage_number', [1, 2, 3])
       .order('stage_number');
@@ -621,7 +621,7 @@ describe('Lifecycle Stage Config Validation', () => {
 
   it('should have phase_name for all stages 1-3', async () => {
     const { data } = await supabase
-      .from('lifecycle_stage_config')
+      .from('venture_stages')
       .select('stage_number, phase_name')
       .in('stage_number', [1, 2, 3])
       .order('stage_number');
