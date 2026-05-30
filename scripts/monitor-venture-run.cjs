@@ -21,7 +21,7 @@ const VENTURE_NAME = process.env.VENTURE_NAME || (VENTURE_ID ? `venture ${VENTUR
 const STOP_AT_STAGE = parseInt(process.env.STOP_AT_STAGE || '17', 10);
 const POLL_MS = 30000;
 
-// Gate classification — sourced from lifecycle_stage_config (DB authoritative as of 2026-04-25)
+// Gate classification — sourced from venture_stages (DB authoritative as of 2026-04-25)
 // Decision gates require chairman_decision row before advance. PROMOTION = metadata.gate_type='promotion'.
 // S23 is named "Launch Readiness Kill Gate" but stored as decision_gate; flagged here for log clarity.
 const KILL_GATES = new Set([23]);
@@ -77,7 +77,7 @@ const DESIGN_ARTIFACT_TYPES = [
 ];
 
 // SD-LEO-REFAC-REFACTOR-MONITOR-EXPECTED-001: stage artifact expectations are now loaded
-// from lifecycle_stage_config.required_artifacts at startup (DB-authoritative).
+// from venture_stages.required_artifacts at startup (DB-authoritative).
 // expectedArtifactsByStage is populated by loadExpectedArtifactsByStage() before polling.
 let expectedArtifactsByStage = new Map();
 
@@ -116,11 +116,11 @@ function isWorkerSourceForStage(source, stage) {
 
 async function loadExpectedArtifactsByStage() {
   const { data, error } = await sb
-    .from('lifecycle_stage_config')
+    .from('venture_stages')
     .select('stage_number, required_artifacts');
   if (error) {
     throw new Error(
-      `Failed to load lifecycle_stage_config (DB-authoritative artifact taxonomy): ${error.message}`
+      `Failed to load venture_stages (DB-authoritative artifact taxonomy): ${error.message}`
     );
   }
   const map = new Map();
@@ -132,16 +132,16 @@ async function loadExpectedArtifactsByStage() {
 }
 
 // SD-LEO-REFAC-CANONICALIZE-STAGE-CONFIG-001 FR-3 / COND-18: drift detection.
-// Asserts SD_REQUIRED_STAGES value matches lifecycle_stage_config.work_type='sd_required'.
+// Asserts SD_REQUIRED_STAGES value matches venture_stages.work_type='sd_required'.
 // Throws on drift. Exported for unit testing + called at process startup.
 async function assertSdRequiredStagesMatchCanonical(sbClient = sb) {
   const { data, error } = await sbClient
-    .from('lifecycle_stage_config')
+    .from('venture_stages')
     .select('stage_number')
     .eq('work_type', 'sd_required')
     .order('stage_number');
   if (error) {
-    throw new Error(`SD_REQUIRED_STAGES drift check failed (cannot read lifecycle_stage_config): ${error.message}`);
+    throw new Error(`SD_REQUIRED_STAGES drift check failed (cannot read venture_stages): ${error.message}`);
   }
   const canonical = new Set((data || []).map((r) => r.stage_number));
   const missingFromLocal = [...canonical].filter((s) => !SD_REQUIRED_STAGES.has(s));
@@ -150,7 +150,7 @@ async function assertSdRequiredStagesMatchCanonical(sbClient = sb) {
     throw new Error(
       `SD_REQUIRED_STAGES drift detected. Local=${[...SD_REQUIRED_STAGES].sort()}, ` +
       `Canonical=${[...canonical].sort()}, missing=${missingFromLocal}, extra=${extraInLocal}. ` +
-      `Update SD_REQUIRED_STAGES in scripts/monitor-venture-run.cjs OR fix lifecycle_stage_config.`
+      `Update SD_REQUIRED_STAGES in scripts/monitor-venture-run.cjs OR fix venture_stages.`
     );
   }
   return true;
@@ -487,7 +487,7 @@ function validateStageArtifacts(stage, arts) {
 
 async function runDryRunValidate() {
   const map = await loadExpectedArtifactsByStage();
-  console.log('lifecycle_stage_config.required_artifacts (DB-authoritative):');
+  console.log('venture_stages.required_artifacts (DB-authoritative):');
   const stages = Array.from(map.keys()).sort((a, b) => a - b);
   for (const stage of stages) {
     const required = map.get(stage) || [];

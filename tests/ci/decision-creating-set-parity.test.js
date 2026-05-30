@@ -1,6 +1,6 @@
 // SD-LEO-REFAC-GATE-DECISION-CREATION-001 FR-5 TS-7
 // CI drift assertion: FALLBACK_DECISION_CREATING_STAGES must equal the
-// stage_config-derived predicate. Prevents future drift if stage_config
+// venture_stages-derived predicate. Prevents future drift if venture_stages
 // changes without a corresponding fallback Set update.
 
 import { describe, it, expect } from 'vitest';
@@ -10,13 +10,13 @@ import { FALLBACK_DECISION_CREATING_STAGES } from '../../lib/eva/chairman-decisi
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-describe('FALLBACK_DECISION_CREATING_STAGES parity with stage_config', () => {
+describe('FALLBACK_DECISION_CREATING_STAGES parity with venture_stages', () => {
   it.runIf(SUPABASE_URL && SUPABASE_KEY)(
     'fallback Set equals (gate_type IN kill/promotion) ∪ (review_mode=review)',
     async () => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
       const { data, error } = await supabase
-        .from('stage_config')
+        .from('venture_stages')
         .select('stage_number,gate_type,review_mode');
       if (error) throw error;
 
