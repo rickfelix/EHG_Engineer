@@ -1042,11 +1042,15 @@ async function main() {
         const HAS_WITH_LEASE = /--force-with-lease\b/.test(cmd);
         const envVarSet = process.env.LEO_FORCE_PUSH_OWN_BRANCH === 'allow';
 
-        // Resolve current branch (test seam: TEST_OVERRIDE_BRANCH)
+        // Resolve the branch the push WRITES (dbcd817c, QF-20260529-492): from the refspec
+        // destination, else the current branch in the push cwd — NOT the hook checkout (which
+        // is ~always main and false-blocked a topic-branch push from a worktree / via `git -C`).
+        // A protected destination in a multi-refspec push still wins. Test seam: TEST_OVERRIDE_BRANCH.
         let branch = process.env.TEST_OVERRIDE_BRANCH || '';
         if (!branch) {
           try {
-            branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+            const { forcePushTargetBranches, effectiveForcePushBranch } = require('./lib/force-push-branch.cjs');
+            branch = effectiveForcePushBranch(forcePushTargetBranches(cmd, input && input.cwd));
           } catch { branch = ''; }
         }
 
