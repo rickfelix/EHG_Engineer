@@ -75,7 +75,6 @@ import {
   displayBlockedStateBanner,
   isOrchestratorBlocked,
   displayTelemetryFindings,
-  displayQuickFixes,
   classifyQuickFixes,
   displayRoadmapAwareness,
   displayBrainstormPipelineAdvisory
@@ -231,7 +230,7 @@ export class SDNextSelector {
       this.displayFeedbackItems();
       this.displayHarnessBacklog();
       displayWorktreeIsolationReminder(this.activeSessions, this.currentSession);
-      if (qfSummaryNoBaseline.topStartableQF) {
+      if (qfSummaryNoBaseline?.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available` };
       }
       return { action: 'none', sd_id: null, reason: 'No active baseline found' };
@@ -251,7 +250,7 @@ export class SDNextSelector {
       this.displayFeedbackItems();
       this.displayHarnessBacklog();
       displayWorktreeIsolationReminder(this.activeSessions, this.currentSession);
-      if (qfSummaryExhausted.topStartableQF) {
+      if (qfSummaryExhausted?.topStartableQF) {
         return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available` };
       }
       return { action: 'none', sd_id: null, reason: 'Baseline exhausted - all items completed' };
