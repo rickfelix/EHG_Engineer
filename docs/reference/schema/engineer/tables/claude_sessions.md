@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-30T23:59:37.772Z
-**Rows**: 12,603
+**Generated**: 2026-05-31T00:56:47.498Z
+**Rows**: 12,605
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (45 total)
+## Columns (46 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -63,6 +63,7 @@
 | process_alive_at | `timestamp with time zone` | YES | - | Last tick from detached session-tick.cjs process. Authoritative liveness — if < 90s old, worker is alive. |
 | expected_silence_until | `timestamp with time zone` | YES | - | Worker-declared silent period (Bash timeout, Agent invocation). Sweep enforces 30-minute hard cap — values beyond that are IGNORED to prevent masking dead workers. |
 | loop_state | `text` | YES | `'unknown'::text` | - |
+| cleanup_pending | `timestamp with time zone` | YES | - | NULL = no filesystem cleanup pending. NOT NULL = orphan-worktree-reaper enqueued this released session for deferred worktree removal at the given timestamp (typically used as a CAS guard to coordinate concurrent reapers). Set when filesystem rm of worktree_path raised Windows EBUSY/ENOTEMPTY; cleared atomically by the reaper after a successful retry. See SD-LEO-INFRA-WORKTREE-CLEANUP-WINDOWS-001. |
 
 ## Constraints
 
@@ -91,6 +92,10 @@
 - `claude_sessions_session_id_key`
   ```sql
   CREATE UNIQUE INDEX claude_sessions_session_id_key ON public.claude_sessions USING btree (session_id)
+  ```
+- `idx_claude_sessions_cleanup_pending`
+  ```sql
+  CREATE INDEX idx_claude_sessions_cleanup_pending ON public.claude_sessions USING btree (cleanup_pending) WHERE (cleanup_pending IS NOT NULL)
   ```
 - `idx_claude_sessions_expected_silence`
   ```sql
