@@ -28,6 +28,25 @@ const {
   _resetDeprecationWarning
 } = await import('../../lib/worktree-manager.js');
 
+// QF-20260530-869: stateful git mock for createWorktree tests. Captures the
+// worktree path from `git worktree add` and echoes it back in
+// `git worktree list --porcelain` so verifyWorktreeRegisteredSync passes.
+function mockStatefulGit() {
+  const added = [];
+  execSync.mockImplementation((cmd) => {
+    if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
+    if (cmd.includes('worktree add')) {
+      const m = cmd.match(/"([^"]*\.worktrees[^"]*)"/);
+      if (m) added.push(m[1]);
+      return '';
+    }
+    if (cmd.includes('worktree list --porcelain')) {
+      return added.map((p) => `worktree ${p}`).join('\n') + '\n';
+    }
+    return '';
+  });
+}
+
 describe('Worktree Manager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -113,19 +132,13 @@ describe('Worktree Manager', () => {
 
   describe('createWorktree', () => {
     it('should use sdKey for worktree path', () => {
-      execSync.mockImplementation((cmd) => {
-        if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
-        if (cmd.includes('show-ref')) return '';
-        if (cmd.includes('ls-remote')) return '';
-        if (cmd.includes('worktree add')) return '';
-        return '';
-      });
+      mockStatefulGit();
 
       // Mock fs operations
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      fs.existsSync = vi.fn().mockImplementation((p) => String(p).replace(/\\/g, '/').endsWith('/.git'));
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -145,18 +158,12 @@ describe('Worktree Manager', () => {
     it('should map legacy session to sdKey with deprecation warning', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      execSync.mockImplementation((cmd) => {
-        if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
-        if (cmd.includes('show-ref')) return '';
-        if (cmd.includes('ls-remote')) return '';
-        if (cmd.includes('worktree add')) return '';
-        return '';
-      });
+      mockStatefulGit();
 
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      fs.existsSync = vi.fn().mockImplementation((p) => String(p).replace(/\\/g, '/').endsWith('/.git'));
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -177,18 +184,12 @@ describe('Worktree Manager', () => {
     it('should rate-limit deprecation warning to once per process', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      execSync.mockImplementation((cmd) => {
-        if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
-        if (cmd.includes('show-ref')) return '';
-        if (cmd.includes('ls-remote')) return '';
-        if (cmd.includes('worktree add')) return '';
-        return '';
-      });
+      mockStatefulGit();
 
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      fs.existsSync = vi.fn().mockImplementation((p) => String(p).replace(/\\/g, '/').endsWith('/.git'));
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -211,18 +212,12 @@ describe('Worktree Manager', () => {
     it('should prefer sdKey over session when both provided', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      execSync.mockImplementation((cmd) => {
-        if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
-        if (cmd.includes('show-ref')) return '';
-        if (cmd.includes('ls-remote')) return '';
-        if (cmd.includes('worktree add')) return '';
-        return '';
-      });
+      mockStatefulGit();
 
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      fs.existsSync = vi.fn().mockImplementation((p) => String(p).replace(/\\/g, '/').endsWith('/.git'));
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
