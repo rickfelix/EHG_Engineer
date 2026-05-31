@@ -75,7 +75,6 @@ import {
   displayBlockedStateBanner,
   isOrchestratorBlocked,
   displayTelemetryFindings,
-  displayQuickFixes,
   classifyQuickFixes,
   displayRoadmapAwareness,
   displayBrainstormPipelineAdvisory
