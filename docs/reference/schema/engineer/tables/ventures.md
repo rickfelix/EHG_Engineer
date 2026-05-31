@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-30T20:29:07.554Z
-**Rows**: 4
+**Generated**: 2026-05-30T23:59:37.772Z
+**Rows**: 6
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -276,6 +276,16 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION fn_sync_stage_work_on_advance()`
+
+### trg_tombstone_application_on_venture_delete
+
+- **Timing**: BEFORE DELETE
+- **Action**: `EXECUTE FUNCTION fn_tombstone_application_on_venture_retire()`
+
+### trg_tombstone_application_on_venture_kill
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_tombstone_application_on_venture_retire()`
 
 ### trg_validate_stage_column
 

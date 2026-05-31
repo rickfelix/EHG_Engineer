@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-30T20:29:07.554Z
+**Generated**: 2026-05-30T23:59:37.772Z
 **Rows**: 10
 **RLS**: Disabled
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (19 total)
+## Columns (22 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -37,6 +37,9 @@
 | trust_tier | `character varying(20)` | **NO** | `'external'::character varying` | auto-merge eligibility: platform=unattended OK, trusted=vetted internal, external=human merge required (venture/3rd-party). SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 C2/VB-2. |
 | metrics_base_url | `text` | YES | - | Base URL of the venture's authenticated GET /v1/metrics endpoint (e.g. https://crongenius.<acct>.workers.dev). NULL => the daily telemetry pull skips this venture. |
 | metrics_api_key_ref | `text` | YES | - | D5: NAME of the env var / secret holding the venture read key (NOT the raw secret). The pull job resolves it at runtime via process.env[metrics_api_key_ref]. Rotation = update the secret value; this reference is unchanged. |
+| deleted_at | `timestamp with time zone` | YES | - | SD-LEO-INFRA-VENTURE-LIFECYCLE-SOFT-001: reversible tombstone. NULL == live. Set when the linked venture is retired/deleted; clearing it restores the row. |
+| deleted_by | `text` | YES | - | - |
+| deletion_reason | `text` | YES | - | - |
 
 ## Constraints
 
@@ -63,11 +66,11 @@
   ```
 - `uq_applications_name_lower`
   ```sql
-  CREATE UNIQUE INDEX uq_applications_name_lower ON public.applications USING btree (lower((name)::text))
+  CREATE UNIQUE INDEX uq_applications_name_lower ON public.applications USING btree (lower((name)::text)) WHERE (deleted_at IS NULL)
   ```
 - `uq_applications_normalized_name`
   ```sql
-  CREATE UNIQUE INDEX uq_applications_normalized_name ON public.applications USING btree (normalized_name)
+  CREATE UNIQUE INDEX uq_applications_normalized_name ON public.applications USING btree (normalized_name) WHERE (deleted_at IS NULL)
   ```
 
 ## Triggers
