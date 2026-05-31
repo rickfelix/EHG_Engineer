@@ -197,8 +197,14 @@ describe('checkBranchFreshness (QF-20260511-228 — closes feedback acd4e5ab)', 
   let checkBranchFreshness;
   beforeEach(() => { ({ checkBranchFreshness } = loadHookExports()); });
 
-  it('returns null when branch is "main"', () => {
-    expect(checkBranchFreshness('main')).toBeNull();
+  it('no longer early-returns on "main" (QF-20260531-948: the defect that hid stale local main)', () => {
+    // 'main' used to early-return null, so a stale main was never warned. The guard now only
+    // skips empty/unknown branches; 'main' falls through to the fetch-first check.
+    const src = fs.readFileSync(HOOK_PATH, 'utf8');
+    const fnStart = src.indexOf('function checkBranchFreshness(');
+    const guard = src.slice(fnStart, fnStart + 200);
+    expect(guard).toMatch(/if \(!branch \|\| branch === 'unknown'\) return null;/);
+    expect(guard).not.toMatch(/branch === 'main'/);
   });
   it('returns null when branch is "unknown" (getBranch fallback)', () => {
     expect(checkBranchFreshness('unknown')).toBeNull();
@@ -209,28 +215,33 @@ describe('checkBranchFreshness (QF-20260511-228 — closes feedback acd4e5ab)', 
     expect(checkBranchFreshness(null)).toBeNull();
   });
 
-  it('static-guard: hook source contains the expected git rev-list and warning shape', () => {
+  it('static-guard: hook source fetches origin/main FIRST, then rev-list at threshold default 1', () => {
     const src = fs.readFileSync(HOOK_PATH, 'utf8');
-    // The function must use rev-list against origin/main (not e.g. main, not @{upstream})
+    // QF-20260531-948 defect #2: must fetch the origin/main ref BEFORE counting, else the count
+    // is vs a stale ref. Fail-open with a hard timeout so SessionStart is never blocked.
+    expect(src).toMatch(/git fetch --quiet --no-tags origin main/);
+    expect(src).toMatch(/timeout:\s*4000/);
+    // Counts against origin/main (not main, not @{upstream})
     expect(src).toMatch(/git rev-list --count HEAD\.\.origin\/main/);
-    // Threshold must be configurable via STALE_BRANCH_WARN_THRESHOLD env, default 10
+    // Threshold configurable via STALE_BRANCH_WARN_THRESHOLD, default now 1 (was 10 — defect #3)
     expect(src).toMatch(/STALE_BRANCH_WARN_THRESHOLD\b/);
-    expect(src).toMatch(/\|\|\s*['"]10['"]/);
+    expect(src).toMatch(/\|\|\s*['"]1['"]/);
     // Loud warning banner must be emitted
     expect(src).toMatch(/STALE BRANCH WARNING/);
     // Telemetry event name must match dotted convention used elsewhere
     expect(src).toMatch(/session\.stale_branch_warning/);
   });
 
-  it('static-guard: main() wires checkBranchFreshness after getBranch()', () => {
+  it('static-guard: main() runs checkBranchFreshness BEFORE the worktree + supabase bails', () => {
     const src = fs.readFileSync(HOOK_PATH, 'utf8');
-    // Anchor on `const mySessionId = getCurrentSessionId()` (unique to main())
-    // to skip the unrelated `const branch = getBranch()` inside detectWorkType().
-    const idx = src.indexOf('const mySessionId = getCurrentSessionId()');
-    expect(idx).toBeGreaterThan(0);
-    const slice = src.slice(idx, idx + 600);
-    expect(slice).toMatch(/const branch = getBranch\(\)/);
-    expect(slice).toMatch(/checkBranchFreshness\s*\(\s*branch\s*\)/);
+    // QF-20260531-948 defects #4/#5: the call must precede both bails so it fires on main and
+    // inside worktrees regardless of DB availability.
+    const callIdx = src.indexOf('checkBranchFreshness(getBranch())');
+    expect(callIdx).toBeGreaterThan(0);
+    const worktreeBailIdx = src.indexOf('if (isInsideWorktree()) {');
+    const supabaseBailIdx = src.indexOf('if (!supabase) {');
+    expect(worktreeBailIdx).toBeGreaterThan(callIdx);
+    expect(supabaseBailIdx).toBeGreaterThan(callIdx);
   });
 });
 
@@ -314,3 +325,32 @@ function chainableQuery(result) {
   };
   return chain;
 }
+
+// ─── QF-20260531-948: stale-main freshness repair ────────────────────────────
+// The decision (warn vs none) is extracted as a pure function so the threshold
+// behaviour is testable without mocking git. The key regression these guard:
+// the prior hook warned only when behind > 10, so the common "a few commits
+// behind origin/main" case (e.g. 6 behind, witnessed) passed SILENTLY and
+// already-shipped code read as "missing".
+describe('decideFreshnessAction (QF-20260531-948 stale-main repair)', () => {
+  let decideFreshnessAction;
+  beforeEach(() => { ({ decideFreshnessAction } = loadHookExports()); });
+
+  it('warns at the default threshold of 1 (1–9 behind used to pass silently)', () => {
+    expect(decideFreshnessAction(1, 1)).toBe('warn');
+    expect(decideFreshnessAction(6, 1)).toBe('warn'); // the exact case witnessed this session
+  });
+
+  it('does not warn when up to date', () => {
+    expect(decideFreshnessAction(0, 1)).toBe('none');
+  });
+
+  it('honors a custom higher threshold via STALE_BRANCH_WARN_THRESHOLD', () => {
+    expect(decideFreshnessAction(3, 5)).toBe('none');
+    expect(decideFreshnessAction(5, 5)).toBe('warn');
+  });
+
+  it('returns none for a non-finite count (git failure path)', () => {
+    expect(decideFreshnessAction(NaN, 1)).toBe('none');
+  });
+});
