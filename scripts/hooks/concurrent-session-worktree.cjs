@@ -137,32 +137,53 @@ function getBranch() {
 }
 
 /**
- * QF-20260511-228 (closes feedback acd4e5ab) — Stale-branch detection.
- * Warns when HEAD is significantly behind origin/main, preventing silent
- * regression of already-shipped fixes (4× witnessed: QF-442/QF-699/QF-818
- * + 12-commit-behind session that filed the feedback). Threshold via
- * STALE_BRANCH_WARN_THRESHOLD env (default 10).
+ * QF-20260511-228 (closes feedback acd4e5ab); repaired by QF-20260531-948 (RCA adb5530d).
+ * Detect a STALE local checkout (HEAD behind origin/main) so reads reflect what SHIPS, not a
+ * pre-merge snapshot. The original guard was silent in the common case: it (1) bailed on 'main'
+ * (the most damaging case), (2) never fetched — so it counted against a stale origin/main ref,
+ * (3) warned only when >10 behind (the wrong-conclusion damage starts at 1), and its call site
+ * sat behind the Supabase + worktree bails. Now: fetch-first (fail-open, hard timeout — never
+ * blocks SessionStart), runs on EVERY branch incl. main, and warns at >= threshold (default 1).
+ * (Auto fast-forward is deliberately deferred to an opt-in follow-up; `git merge --ff-only` is
+ * the suggested manual action, safe by construction.)
  */
+function decideFreshnessAction(behind, threshold) {
+  // Pure decision (no I/O) so the threshold/main behaviour is unit-testable without git mocks.
+  if (!Number.isFinite(behind) || behind < threshold) return 'none';
+  return 'warn';
+}
+
 function checkBranchFreshness(branch) {
-  if (!branch || branch === 'main' || branch === 'unknown') return null;
+  if (!branch || branch === 'unknown') return null;
+  // Refresh ONLY the origin/main ref (cheap, single-branch). Fail-open with a hard timeout so an
+  // offline/slow network never blocks SessionStart — WITHOUT this the count is vs a stale ref
+  // (defect #2), which is exactly how an already-shipped fix reads as "missing".
+  let fetched = false;
   try {
-    const out = execSync('git rev-list --count HEAD..origin/main', {
+    execSync('git fetch --quiet --no-tags origin main', {
+      encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], timeout: 4000
+    });
+    fetched = true;
+  } catch { /* offline/timeout — compare against the last-known origin/main ref */ }
+  try {
+    const behind = parseInt(execSync('git rev-list --count HEAD..origin/main', {
       encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore']
-    }).trim();
-    const behind = parseInt(out, 10);
+    }).trim(), 10);
     if (!Number.isFinite(behind)) return null;
-    const threshold = parseInt(process.env.STALE_BRANCH_WARN_THRESHOLD || '10', 10);
-    if (behind > threshold) {
+    const threshold = parseInt(process.env.STALE_BRANCH_WARN_THRESHOLD || '1', 10);
+    const warned = decideFreshnessAction(behind, threshold) === 'warn';
+    if (warned) {
       console.log('\n========================================');
-      console.log('  STALE BRANCH WARNING');
+      console.log('  STALE BRANCH WARNING — local reads may not reflect what ships');
       console.log('========================================');
-      console.log(`  Current branch: ${branch}`);
-      console.log(`  Behind origin/main by: ${behind} commit(s) (threshold ${threshold})`);
-      console.log(`  Suggestion: git pull origin main --ff-only  (or fresh worktree from main)`);
+      console.log(`  Branch: ${branch}  -  behind origin/main by ${behind} commit(s)`);
+      if (!fetched) console.log('  (offline: count is vs the last-known origin/main ref)');
+      console.log('  Sync first:  git fetch origin main && git merge --ff-only origin/main');
+      console.log('  or read what ships:  git show origin/main:<path>');
       console.log('========================================\n');
-      logEvent('session.stale_branch_warning', { branch, commits_behind_main: behind, threshold });
+      logEvent('session.stale_branch_warning', { branch, commits_behind_main: behind, threshold, fetched });
     }
-    return { behind, threshold, warned: behind > threshold };
+    return { behind, threshold, warned, fetched };
   } catch { return null; }
 }
 
@@ -667,6 +688,11 @@ async function main() {
   await cleanupStaleConcurrentWorktrees(supabase);
   pruneStaleLocalBranches();
 
+  // QF-20260531-948 (RCA adb5530d): stale-checkout warning runs BEFORE the worktree + Supabase
+  // bails below, so it fires on `main` and inside worktrees regardless of DB availability —
+  // the exact cases the prior placement (after both bails) silently skipped.
+  checkBranchFreshness(getBranch());
+
   // Skip if already inside a worktree — prevents nested worktree creation.
   // Must be checked BEFORE concurrent detection, not after.
   if (isInsideWorktree()) {
@@ -709,9 +735,6 @@ async function main() {
   const mySessionId = getCurrentSessionId();
   const codebase = getCodebase();
   const branch = getBranch();
-
-  // QF-20260511-228 (closes feedback acd4e5ab): warn when on a stale branch
-  checkBranchFreshness(branch);
 
   // FR-1: Check for concurrent sessions
   const concurrent = await findConcurrentSessions(supabase, mySessionId, codebase, branch);
@@ -861,7 +884,7 @@ async function main() {
 // Test exports (used by scripts/hooks/__tests__/concurrent-session-worktree.test.js)
 // Gating `main()` behind `require.main === module` lets tests `require()` this
 // file without triggering the SessionStart side-effects.
-module.exports = { isWorktreeInUseBySession, getActiveDbClaims, cleanupStaleConcurrentWorktrees, checkBranchFreshness, unlinkNodeModulesJunction };
+module.exports = { isWorktreeInUseBySession, getActiveDbClaims, cleanupStaleConcurrentWorktrees, checkBranchFreshness, decideFreshnessAction, unlinkNodeModulesJunction };
 
 if (require.main === module) {
   // Run with timeout protection (hook has 5s timeout)
