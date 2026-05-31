@@ -115,6 +115,17 @@ describe('Worktree Manager', () => {
     it('should use sdKey for worktree path', () => {
       execSync.mockImplementation((cmd) => {
         if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
+        // QF-20260530-566: satisfy verifyWorktreeRegisteredSync post-condition
+        // (SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001) — `git worktree list
+        // --porcelain` must report the newly-created worktree(s). Listing all
+        // fixture paths is harmless: verify only checks its own path is present.
+        if (cmd.includes('worktree list')) return [
+          'worktree /repo/.worktrees/SD-TEST-001',
+          'worktree /repo/.worktrees/session-legacy123',
+          'worktree /repo/.worktrees/session-call1',
+          'worktree /repo/.worktrees/session-call2',
+          'worktree /repo/.worktrees/SD-EXPLICIT'
+        ].join('\n') + '\n';
         if (cmd.includes('show-ref')) return '';
         if (cmd.includes('ls-remote')) return '';
         if (cmd.includes('worktree add')) return '';
@@ -125,7 +136,9 @@ describe('Worktree Manager', () => {
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      // QF-20260530-566: report the worktree dir absent (pre-creation) but its
+      // .git pointer present (post-creation) so the atomicity post-condition passes.
+      fs.existsSync = vi.fn((p) => String(p).replace(/\\/g, '/').endsWith('/.git'));
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -147,6 +160,17 @@ describe('Worktree Manager', () => {
 
       execSync.mockImplementation((cmd) => {
         if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
+        // QF-20260530-566: satisfy verifyWorktreeRegisteredSync post-condition
+        // (SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001) — `git worktree list
+        // --porcelain` must report the newly-created worktree(s). Listing all
+        // fixture paths is harmless: verify only checks its own path is present.
+        if (cmd.includes('worktree list')) return [
+          'worktree /repo/.worktrees/SD-TEST-001',
+          'worktree /repo/.worktrees/session-legacy123',
+          'worktree /repo/.worktrees/session-call1',
+          'worktree /repo/.worktrees/session-call2',
+          'worktree /repo/.worktrees/SD-EXPLICIT'
+        ].join('\n') + '\n';
         if (cmd.includes('show-ref')) return '';
         if (cmd.includes('ls-remote')) return '';
         if (cmd.includes('worktree add')) return '';
@@ -156,7 +180,9 @@ describe('Worktree Manager', () => {
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      // QF-20260530-566: report the worktree dir absent (pre-creation) but its
+      // .git pointer present (post-creation) so the atomicity post-condition passes.
+      fs.existsSync = vi.fn((p) => String(p).replace(/\\/g, '/').endsWith('/.git'));
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -179,6 +205,17 @@ describe('Worktree Manager', () => {
 
       execSync.mockImplementation((cmd) => {
         if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
+        // QF-20260530-566: satisfy verifyWorktreeRegisteredSync post-condition
+        // (SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001) — `git worktree list
+        // --porcelain` must report the newly-created worktree(s). Listing all
+        // fixture paths is harmless: verify only checks its own path is present.
+        if (cmd.includes('worktree list')) return [
+          'worktree /repo/.worktrees/SD-TEST-001',
+          'worktree /repo/.worktrees/session-legacy123',
+          'worktree /repo/.worktrees/session-call1',
+          'worktree /repo/.worktrees/session-call2',
+          'worktree /repo/.worktrees/SD-EXPLICIT'
+        ].join('\n') + '\n';
         if (cmd.includes('show-ref')) return '';
         if (cmd.includes('ls-remote')) return '';
         if (cmd.includes('worktree add')) return '';
@@ -188,7 +225,9 @@ describe('Worktree Manager', () => {
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      // QF-20260530-566: report the worktree dir absent (pre-creation) but its
+      // .git pointer present (post-creation) so the atomicity post-condition passes.
+      fs.existsSync = vi.fn((p) => String(p).replace(/\\/g, '/').endsWith('/.git'));
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -213,6 +252,17 @@ describe('Worktree Manager', () => {
 
       execSync.mockImplementation((cmd) => {
         if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
+        // QF-20260530-566: satisfy verifyWorktreeRegisteredSync post-condition
+        // (SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001) — `git worktree list
+        // --porcelain` must report the newly-created worktree(s). Listing all
+        // fixture paths is harmless: verify only checks its own path is present.
+        if (cmd.includes('worktree list')) return [
+          'worktree /repo/.worktrees/SD-TEST-001',
+          'worktree /repo/.worktrees/session-legacy123',
+          'worktree /repo/.worktrees/session-call1',
+          'worktree /repo/.worktrees/session-call2',
+          'worktree /repo/.worktrees/SD-EXPLICIT'
+        ].join('\n') + '\n';
         if (cmd.includes('show-ref')) return '';
         if (cmd.includes('ls-remote')) return '';
         if (cmd.includes('worktree add')) return '';
@@ -222,7 +272,9 @@ describe('Worktree Manager', () => {
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      // QF-20260530-566: report the worktree dir absent (pre-creation) but its
+      // .git pointer present (post-creation) so the atomicity post-condition passes.
+      fs.existsSync = vi.fn((p) => String(p).replace(/\\/g, '/').endsWith('/.git'));
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -385,7 +437,7 @@ describe('Worktree Manager', () => {
       const linkPath = path.join(wt, 'node_modules');
       try {
         fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
-      } catch (err) {
+      } catch {
         // Windows without admin / developer-mode can't create symlinks; skip
         fs.rmSync(target, { recursive: true, force: true });
         fs.rmSync(wt, { recursive: true, force: true });
@@ -465,7 +517,6 @@ describe('Worktree Manager', () => {
       expect(fs.readFileSync(path.join(dest, 'real.txt'), 'utf8')).toBe('real-content');
       // Critical assertion: target file MUST NOT have been copied through the junction
       const destNodeModules = path.join(dest, 'node_modules');
-      const bigSentinelInDest = path.join(destNodeModules, 'BIG_SENTINEL.txt');
       // Either the link was recreated (so reading the sentinel via the link is OK,
       // but the file at destNodeModules itself is a SYMLINK, not a regular file
       // containing the copied content) OR the link was skipped entirely.
