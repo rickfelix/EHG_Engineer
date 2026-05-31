@@ -40,18 +40,14 @@ import { loadState, dashboardState } from './state.js';
 import { initializeWebSocket, broadcastUpdate } from './websocket.js';
 
 // Import route modules
-import sdipRoutes from './routes/sdip.js';
 import backlogRoutes from './routes/backlog.js';
 import dashboardRoutes from './routes/dashboard.js';
 import feedbackRoutes from './routes/feedback.js';
-import discoveryRoutes from './routes/discovery.js';
-import calibrationRoutes from './routes/calibration.js';
 import testingCampaignRoutes from './routes/testing-campaign.js';
 import venturesRoutes from './routes/ventures.js';
 import v2ApiRoutes from './routes/v2-apis.js';
 import chairmanRoutes from './routes/chairman.js';
 import evaOperationsRoutes from './routes/eva-operations.js';
-import evaLaunchRoutes from './routes/eva-launch.js';
 import evaPipelineRoutes from './routes/eva-pipeline.js';
 import evaExitRoutes from './routes/eva-exit.js';
 import evaChatRoutes from './routes/eva-chat.js';
@@ -144,12 +140,8 @@ app.use(express.json());
 // SD-LEO-FIX-API-ROUTE-AUTH-001: Tightened auth — requireAuth for routes with mutation endpoints
 // optionalAuth: ONLY for truly read-only route modules
 // requireAuth: blocks unauthenticated access (any route with POST/PUT/PATCH/DELETE)
-app.use('/api/sdip', requireAuth, sdipRoutes);
 app.use('/api/backlog', optionalAuth, backlogRoutes);
 app.use('/api/feedback', requireAuth, feedbackRoutes);
-app.use('/api/discovery', requireAuth, discoveryRoutes);
-app.use('/api/blueprints', optionalAuth, discoveryRoutes);
-app.use('/api/calibration', requireAuth, calibrationRoutes);
 app.use('/api/testing/campaign', requireAuth, testingCampaignRoutes);
 app.use('/api/ventures', (req, res, next) => {
   // Master reset uses service-role client internally — auth at RPC level (chairman check)
@@ -160,7 +152,6 @@ app.use('/api/competitor-analysis', requireAuth, venturesRoutes);
 app.use('/api/v2', requireAuth, v2ApiRoutes);
 app.use('/api/chairman', requireAuth, createChairmanScopeGuard({ blocking: true }), chairmanRoutes);
 app.use('/api/eva/operations', requireAuth, evaOperationsRoutes);
-app.use('/api/eva/launch', requireAuth, evaLaunchRoutes);
 app.use('/api/eva/pipeline', requireAuth, evaPipelineRoutes);
 app.use('/api/eva/exit', requireAuth, evaExitRoutes);
 app.use('/api/eva/chat', requireAuth, evaChatRoutes);

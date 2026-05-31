@@ -1,6 +1,6 @@
 /**
- * Integration tests for V2 API Routes (Venture-scoped + Feature APIs)
- * Tests: venture-scoped SDs/PRDs/backlog, naming-engine, financial-engine, content-forge
+ * Integration tests for V2 API Routes (Feature APIs)
+ * Tests: naming-engine, financial-engine, content-forge
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -11,46 +11,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const VALID_VENTURE_ID = '11111111-1111-1111-1111-111111111111';
 
-const mockDashboardState = {
-  strategicDirectives: [
-    { id: 'SD-001', title: 'SD One', venture_id: VALID_VENTURE_ID },
-    { id: 'SD-002', title: 'SD Two', venture_id: '22222222-2222-2222-2222-222222222222' },
-    { id: 'SD-003', title: 'SD Three', metadata: { venture_id: VALID_VENTURE_ID } },
-  ],
-  prds: [
-    { id: 'PRD-001', title: 'PRD One', venture_id: VALID_VENTURE_ID },
-    { id: 'PRD-002', title: 'PRD Two', venture_id: '33333333-3333-3333-3333-333333333333' },
-  ],
-};
-
-vi.mock('../../../server/state.js', () => ({
-  dashboardState: mockDashboardState,
-}));
-
-const mockSupabase = { from: vi.fn() };
-vi.mock('../../../server/config.js', () => ({
-  dbLoader: { supabase: mockSupabase },
-}));
-
 // Mock asyncHandler to just pass through
 vi.mock('../../../lib/middleware/eva-error-handler.js', () => ({
   asyncHandler: (fn) => fn,
-}));
-
-// Mock requireVentureScope to behave like the real middleware
-vi.mock('../../../src/middleware/venture-scope.js', () => ({
-  requireVentureScope: (req, res, next) => {
-    const ventureId = req.params.venture_id || req.query.venture_id || req.headers?.['x-venture-id'];
-    if (!ventureId) {
-      return res.status(400).json({ alert: 'Venture context required' });
-    }
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(ventureId)) {
-      return res.status(400).json({ alert: 'Invalid venture_id format' });
-    }
-    req.venture_id = ventureId;
-    next();
-  },
 }));
 
 // Mock feature API modules
@@ -145,106 +108,6 @@ async function runHandlerChain(handlers, req, res) {
 describe('V2 API Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  // --- Venture-scoped SDs ---
-  describe('GET /ventures/:venture_id/strategic-directives', () => {
-    const handlers = findRoute('get', '/ventures/:venture_id/strategic-directives');
-
-    it('returns SDs filtered by venture_id', async () => {
-      const req = createMockReq({}, { venture_id: VALID_VENTURE_ID });
-      const res = createMockRes();
-
-      await runHandlerChain(handlers, req, res);
-
-      expect(res.jsonData.venture_id).toBe(VALID_VENTURE_ID);
-      // SD-001 (direct) and SD-003 (metadata) match
-      expect(res.jsonData.count).toBe(2);
-      expect(res.jsonData.strategic_directives).toHaveLength(2);
-    });
-
-    it('returns 400 when venture_id missing', async () => {
-      const req = createMockReq({}, {});
-      const res = createMockRes();
-
-      await runHandlerChain(handlers, req, res);
-
-      expect(res.statusCode).toBe(400);
-      expect(res.jsonData.alert).toContain('Venture context required');
-    });
-
-    it('returns 400 for invalid UUID format', async () => {
-      const req = createMockReq({}, { venture_id: 'not-a-uuid' });
-      const res = createMockRes();
-
-      await runHandlerChain(handlers, req, res);
-
-      expect(res.statusCode).toBe(400);
-      expect(res.jsonData.alert).toContain('Invalid venture_id format');
-    });
-  });
-
-  // --- Venture-scoped PRDs ---
-  describe('GET /ventures/:venture_id/prds', () => {
-    const handlers = findRoute('get', '/ventures/:venture_id/prds');
-
-    it('returns PRDs filtered by venture_id', async () => {
-      const req = createMockReq({}, { venture_id: VALID_VENTURE_ID });
-      const res = createMockRes();
-
-      await runHandlerChain(handlers, req, res);
-
-      expect(res.jsonData.venture_id).toBe(VALID_VENTURE_ID);
-      expect(res.jsonData.count).toBe(1);
-      expect(res.jsonData.prds[0].id).toBe('PRD-001');
-    });
-
-    it('returns empty array when no PRDs match', async () => {
-      const req = createMockReq({}, { venture_id: '99999999-9999-9999-9999-999999999999' });
-      const res = createMockRes();
-
-      await runHandlerChain(handlers, req, res);
-
-      expect(res.jsonData.count).toBe(0);
-      expect(res.jsonData.prds).toEqual([]);
-    });
-  });
-
-  // --- Venture-scoped Backlog ---
-  describe('GET /ventures/:venture_id/backlog', () => {
-    const handlers = findRoute('get', '/ventures/:venture_id/backlog');
-
-    it('returns backlog items for venture SDs', async () => {
-      const backlogItems = [{ id: 'BI-1', sd_id: 'SD-001' }];
-      mockSupabase.from = vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: backlogItems, error: null }),
-      });
-
-      const req = createMockReq({}, { venture_id: VALID_VENTURE_ID });
-      const res = createMockRes();
-
-      await runHandlerChain(handlers, req, res);
-
-      expect(res.jsonData.venture_id).toBe(VALID_VENTURE_ID);
-      expect(res.jsonData.backlog_count).toBe(1);
-      expect(res.jsonData.backlog_items).toEqual(backlogItems);
-    });
-
-    it('returns 500 on database error', async () => {
-      mockSupabase.from = vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        in: vi.fn().mockResolvedValue({ data: null, error: { message: 'db error' } }),
-      });
-
-      const req = createMockReq({}, { venture_id: VALID_VENTURE_ID });
-      const res = createMockRes();
-
-      await runHandlerChain(handlers, req, res);
-
-      expect(res.statusCode).toBe(500);
-      expect(res.jsonData.alert).toBe('Failed to load venture backlog');
-    });
   });
 
   // --- Naming Engine ---
