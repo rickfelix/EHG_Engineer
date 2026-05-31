@@ -93,6 +93,12 @@ const adapted = (canonical = [], skipped = []) => ({ canonical, skipped, hashes:
 describe('persistAnalyzerFindings — FR-B', () => {
   let supabase;
   beforeEach(() => {
+    // QF-20260530-155: these are persist-path unit tests. The FR-C sync-SD
+    // generator (writeFinding → maybeGenerateSdForFinding) has its own coverage
+    // and would otherwise fire on the high-severity fixture (TS-1), logging a
+    // 2nd `fr_c_sync_generator.error` audit_log against the persist-only mock.
+    // Disable it so audit_log assertions reflect only the persist summary.
+    process.env.LEO_FR_C_SYNC_GENERATION_ENABLED = 'false';
     supabase = makeMockSupabase();
   });
 
