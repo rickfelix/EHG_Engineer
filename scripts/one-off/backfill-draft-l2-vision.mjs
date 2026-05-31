@@ -24,7 +24,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-connection.js';
-import { seedDraftL2Vision } from '../lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js';
+import { seedDraftL2Vision } from '../../lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js';
 
 const APPLY = process.argv.includes('--apply');
 
