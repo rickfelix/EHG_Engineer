@@ -61,7 +61,11 @@ export async function getFilteredRetrospective(sdUuid, sdCreatedAt, supabase) {
     .select('*')
     .eq('sd_id', sdUuid)
     .eq('retro_type', 'SD_COMPLETION')
-    .is('retrospective_type', null)
+    // QF-20260530-670: accept retrospective_type IS NULL (canonical generate-retrospective.js)
+    // OR ='SD_COMPLETION' (retro-agent's ad-hoc inserts mistag it). Handoff-time retros tag this
+    // column with the PHASE (LEAD_TO_PLAN/PLAN_TO_EXEC/EXEC_TO_PLAN), never 'SD_COMPLETION', so
+    // they remain correctly excluded — this only admits genuine SD-completion retros.
+    .or('retrospective_type.is.null,retrospective_type.eq.SD_COMPLETION')
     .gt('created_at', leadToPlanAcceptedAt)
     .order('created_at', { ascending: false })
     .limit(1)
