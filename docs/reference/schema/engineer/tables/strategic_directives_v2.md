@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-31T01:03:56.712Z
-**Rows**: 3,350
+**Generated**: 2026-05-31T17:03:47.186Z
+**Rows**: 3,354
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -403,6 +403,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_business_value_gate()`
+
+### tr_enforce_no_claim_on_cancelled_sd
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_no_claim_on_cancelled_sd()`
 
 ### tr_notify_working_sd
 
