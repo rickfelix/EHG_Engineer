@@ -92,12 +92,22 @@ describe('adaptLegacyBatch idempotency', () => {
 });
 
 describe('LEGACY_CHECK_MAP', () => {
-  it('covers all 5 code-review categories', () => {
+  it('identity-maps every canonical category the analyzer can emit', () => {
+    // Stays in lockstep with the analyzer's emitted checks: 4 code-review + 2 QA
+    // + 2 Vision-Compliance (SD-LEO-INFRA-STAGE-CODE-QUALITY-001) + 4 DB/env-sourced
+    // UAT/capability categories (SD-LEO-INFRA-STAGE-ANALYZER-ADD-001).
     expect(LEGACY_CHECK_MAP).toEqual({
       npm_audit: 'npm_audit',
       secrets: 'secrets',
       lint: 'lint',
       test_suite: 'test_suite',
+      unit_test: 'unit_test',
+      e2e_test: 'e2e_test',
+      feedback_widget_present: 'feedback_widget_present',
+      error_capture_wired: 'error_capture_wired',
+      uat_test: 'uat_test',
+      bug_report: 'bug_report',
+      uat_signoff: 'uat_signoff',
       capability: 'capability',
     });
   });
