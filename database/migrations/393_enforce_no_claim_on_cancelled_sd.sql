@@ -49,7 +49,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS tr_enforce_no_claim_on_cancelled_sd ON strategic_directives_v2;
-CREATE TRIGGER tr_enforce_no_claim_on_cancelled_sd
+-- CREATE OR REPLACE TRIGGER (PG14+) makes this idempotent on re-apply without a
+-- separate DROP, and keeps the pre-merge migration-readiness probe happy when the
+-- object already exists (it was applied + live-verified during EXEC).
+CREATE OR REPLACE TRIGGER tr_enforce_no_claim_on_cancelled_sd
 BEFORE UPDATE ON strategic_directives_v2 FOR EACH ROW
 EXECUTE FUNCTION enforce_no_claim_on_cancelled_sd();
