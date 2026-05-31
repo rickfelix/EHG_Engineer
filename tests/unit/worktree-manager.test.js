@@ -112,20 +112,41 @@ describe('Worktree Manager', () => {
   });
 
   describe('createWorktree', () => {
-    it('should use sdKey for worktree path', () => {
-      execSync.mockImplementation((cmd) => {
-        if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
+
+    // QF-20260530-869: createWorktree now runs a verifyWorktreeRegisteredSync
+    // post-condition (SD-LEO-FIX-WORKTREE-CREATION-ATOMICITY-001) that shells out to
+    // `git worktree list --porcelain` and checks the new path is registered + has a
+    // .git pointer. These helpers make the createWorktree mocks satisfy it.
+    function makeWorktreeExecSyncMock() {
+      let addedPath = null;
+      return (cmd) => {
+        if (cmd === 'git rev-parse --show-toplevel') return '/repo';
         if (cmd.includes('show-ref')) return '';
         if (cmd.includes('ls-remote')) return '';
-        if (cmd.includes('worktree add')) return '';
+        if (cmd.includes('worktree add')) {
+          const m = cmd.match(/worktree add(?: -b "[^"]+")? "([^"]+)"/);
+          if (m) addedPath = m[1];
+          return '';
+        }
+        if (cmd.includes('worktree list --porcelain')) {
+          return addedPath ? 'worktree ' + addedPath : '';
+        }
         return '';
-      });
+      };
+    }
+    function mockWorktreeFsExists() {
+      // Only the .git pointer check is true; the pre-existing-worktree check stays
+      // false so createWorktree proceeds to create.
+      return vi.fn((p) => typeof p === 'string' && p.endsWith('.git'));
+    }
+    it('should use sdKey for worktree path', () => {
+      execSync.mockImplementation(makeWorktreeExecSyncMock());
 
       // Mock fs operations
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      fs.existsSync = mockWorktreeFsExists();
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -145,18 +166,12 @@ describe('Worktree Manager', () => {
     it('should map legacy session to sdKey with deprecation warning', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      execSync.mockImplementation((cmd) => {
-        if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
-        if (cmd.includes('show-ref')) return '';
-        if (cmd.includes('ls-remote')) return '';
-        if (cmd.includes('worktree add')) return '';
-        return '';
-      });
+      execSync.mockImplementation(makeWorktreeExecSyncMock());
 
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      fs.existsSync = mockWorktreeFsExists();
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -177,18 +192,12 @@ describe('Worktree Manager', () => {
     it('should rate-limit deprecation warning to once per process', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      execSync.mockImplementation((cmd) => {
-        if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
-        if (cmd.includes('show-ref')) return '';
-        if (cmd.includes('ls-remote')) return '';
-        if (cmd.includes('worktree add')) return '';
-        return '';
-      });
+      execSync.mockImplementation(makeWorktreeExecSyncMock());
 
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      fs.existsSync = mockWorktreeFsExists();
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
@@ -211,18 +220,12 @@ describe('Worktree Manager', () => {
     it('should prefer sdKey over session when both provided', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      execSync.mockImplementation((cmd) => {
-        if (cmd === 'git rev-parse --show-toplevel') return '/repo\n';
-        if (cmd.includes('show-ref')) return '';
-        if (cmd.includes('ls-remote')) return '';
-        if (cmd.includes('worktree add')) return '';
-        return '';
-      });
+      execSync.mockImplementation(makeWorktreeExecSyncMock());
 
       const origExists = fs.existsSync;
       const origMkdir = fs.mkdirSync;
       const origWrite = fs.writeFileSync;
-      fs.existsSync = vi.fn().mockReturnValue(false);
+      fs.existsSync = mockWorktreeFsExists();
       fs.mkdirSync = vi.fn();
       fs.writeFileSync = vi.fn();
 
