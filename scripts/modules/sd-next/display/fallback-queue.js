@@ -58,7 +58,13 @@ export async function showFallbackQueue(supabase, options = {}) {
 
   if (error || !sds || sds.length === 0) {
     console.log(`${colors.red}No prioritized SDs found. Run: npm run sd:baseline to create one.${colors.reset}`);
-    return;
+    // QF-20260530-548: still return a valid QF summary on the no-SD path.
+    // Callers deref `qfSummary.topStartableQF`; a bare `return` (undefined)
+    // crashes npm run sd:next / /leo next for every session with no baseline
+    // and no priority-matching SD. Classifying QFs here also lets a startable
+    // QF still route via AUTO_PROCEED_ACTION when zero SDs match.
+    const { summary: qfSummary } = classifyQuickFixes(openQuickFixes, qfTriageResults, sessionContext);
+    return qfSummary;
   }
 
   // Batch-load OKR alignment scores. Map shape: sd_uuid -> score (0-90).
