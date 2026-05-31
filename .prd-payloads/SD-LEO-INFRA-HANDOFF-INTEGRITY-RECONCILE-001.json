@@ -1,0 +1,132 @@
+{
+  "executive_summary": "The LEAD-TO-PLAN handoff is gated by TWO independent validation engines. Engine #1 is the gate chain in scripts/modules/handoff/executors/lead-to-plan/index.js::getRequiredGates() — the ONLY thing `handoff.js precheck` runs (via HandoffOrchestrator precheckValidationContext + validateGatesAll). Engine #2 is LeadToPlanVerifier (scripts/verify-l2p/index.js), invoked ONLY inside executeSpecific() at index.js:188-190 during `handoff.js execute`, AFTER the gate chain. The verifier applies blocking checks the gate chain does NOT: validateStrategicDirective completeness vs SD-type-aware effectiveMinScore, validateFeasibility, checkEnvironmentReadiness, and VALID_SD_STATUSES. Because precheck never runs the verifier, an SD can PASS precheck but FAIL execute — a handoff-integrity defect that wastes worker time (precheck green -> execute red -> confusing re-diagnosis). The SdMetricsSufficiencyGate (index.js:128) reconciled only the minimumMetrics check; the rest still diverge. FIX (additive, fleet-safe): add a NEW precheck-only gate that re-evaluates the verifier's PURE blocking checks side-effect-free so precheck PREDICTS execute. The gate runs ONLY when ctx.precheckMode===true (condition guard), so the execute path is byte-identical and no SD that passes execute today newly fails. Direct precedent: SD-FDBK-INFRA-PLAN-LEAD-PRECHECK-001 already surfaces execute-only checks in advisory precheckMode (HandoffOrchestrator.js:343-349). validation-agent confirmed: no duplicate active SD; the one sibling SD-PRIVACYPATROL-AI-FDBK-INFRA-UNIFY-LEAD-PLAN-001 (cancelled, administrative) proposed the INVERSE subtractive fix and is superseded by this safer additive approach.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Precheck predicts execute (verifier-parity at precheck)",
+      "description": "handoff.js precheck LEAD-TO-PLAN MUST evaluate the LeadToPlanVerifier's blocking checks (validateStrategicDirective completeness vs effectiveMinScore, validateFeasibility, checkEnvironmentReadiness, VALID_SD_STATUSES) and surface any failure as a precheck blocker, so precheck and execute report the same blocking verdict.",
+      "acceptance_criteria": [
+        "For an SD that fails the verifier's completeness/feasibility/status checks, precheck now reports the SAME blocking reason that execute would (previously precheck reported PASS)",
+        "For a fully-complete SD, precheck reports PASS and execute reports PASS (no false block introduced)",
+        "The parity gate reuses the verifier's OWN pure functions (validateStrategicDirective, validateFeasibility, checkEnvironmentReadiness) — not a reimplementation"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Execute path byte-identical (precheck-only gate)",
+      "description": "The reconciliation MUST NOT change the execute path. The new gate runs ONLY during precheck (ctx.precheckMode===true) and is SKIPPED during execute; the LeadToPlanVerifier remains the sole execute-time enforcer.",
+      "acceptance_criteria": [
+        "The new gate declares a condition that returns true only when ctx.precheckMode===true",
+        "During execute (validateGates, precheckMode absent) the gate is skipped — verified by a test asserting the gate.condition is false for an execute-style context",
+        "No new blocking condition is added at execute; existing LEAD-TO-PLAN execute behavior/tests remain green",
+        "The gate performs NO DB writes (no createHandoffExecution/updateSdStatusAfterHandoff/rejectHandoff); it never calls verifier.verifyHandoff()"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Parity correctness: orchestrator + threshold (the two validation-agent risks)",
+      "description": "The precheck parity check MUST match execute's verdict for the two known asymmetries: orchestrator auto-pass, and the SD-type-aware completeness threshold.",
+      "acceptance_criteria": [
+        "IR-1 (orchestrator): for sd_type==='orchestrator', the parity gate auto-passes at precheck (mirrors verifier _handleOrchestratorSd auto-pass) so orchestrators are NOT falsely blocked at precheck",
+        "IR-2 (threshold parity): the parity gate resolves effectiveMinScore via the SAME SD_TYPE_OVERRIDES path the verifier uses (verify-l2p/constants.js + index.js:105-109), so the completeness comparison matches execute exactly",
+        "A test covers an orchestrator SD passing precheck parity and a non-orchestrator marginal SD failing it"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "Add scripts/modules/handoff/executors/lead-to-plan/gates/verifier-parity.js exporting createVerifierParityGate(supabase). Validator: if sd_type==='orchestrator' -> pass; else run validateStrategicDirective(sd) (compare percentage to effectiveMinScore from SD_TYPE_OVERRIDES), validateFeasibility(sd), checkEnvironmentReadiness(supabase, sd, root), and VALID_SD_STATUSES membership; aggregate failures into issues[]; passed=false if any blocking check fails."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "Gate carries condition: (ctx) => ctx.precheckMode === true (precheck-only). Wire createVerifierParityGate into getRequiredGates() in lead-to-plan/index.js. Reuse imports from ../../../../verify-l2p/sd-validation.js, ../../../../verify-l2p/environment.js, and ../../../../verify-l2p/constants.js (SD_REQUIREMENTS, SD_TYPE_OVERRIDES, VALID_SD_STATUSES)."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "Tests use node:test + node:assert/strict. Add gates/verifier-parity.test.js with: marginal-SD-fails, complete-SD-passes, orchestrator-auto-pass, condition-false-at-execute, no-DB-writes (spy/mock supabase asserting only reads)."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "No migration, no schema change, no edit to verify-l2p/* or BaseExecutor execute path. Scope limited to the new gate file, its test, and the getRequiredGates() wiring line in lead-to-plan/index.js. Do NOT thread handoffType into contexts (separate deferred concern — see SD metadata)."
+    }
+  ],
+  "system_architecture": {
+    "overview": "precheck (HandoffOrchestrator.precheckHandoff -> validateGatesAll over the LEAD-TO-PLAN gate chain, precheckMode=true, no writes) currently runs ONLY engine #1. execute (BaseExecutor -> validateGates over the same chain, THEN executeSpecific -> LeadToPlanVerifier.verifyHandoff) runs engine #1 + engine #2. The new precheck-only verifier-parity gate replays engine #2's pure blocking checks during precheck so the two paths agree on the blocking verdict.",
+    "data_flow": "precheck: precheckValidationContext{precheckMode:true, sd, supabase} -> validateGatesAll -> [gate.condition(ctx)===true?] verifier-parity gate -> {validateStrategicDirective vs effectiveMinScore, validateFeasibility, checkEnvironmentReadiness, status} -> passed|issues. execute: validationContext{no precheckMode} -> gate skipped via condition -> verifier runs unchanged in executeSpecific.",
+    "contract": "No external contract change. Gate result shape {passed, score, max_score, issues, warnings, details} matches the existing gate framework. The verifier's pure functions keep their signatures.",
+    "consumers": [
+      "scripts/modules/handoff/HandoffOrchestrator.js (precheckHandoff -> validateGatesAll: runs the new gate)",
+      "scripts/modules/handoff/executors/lead-to-plan/index.js (getRequiredGates: registers the new gate)"
+    ],
+    "out_of_scope_files": [
+      "scripts/verify-l2p/index.js (verifier orchestration + DB writes — unchanged)",
+      "scripts/modules/handoff/executors/BaseExecutor.js (execute path — unchanged)",
+      "scripts/modules/handoff/gates/subagent-evidence-gate.js (inert-gate handoffType fix is a deferred high-blast-radius concern)"
+    ]
+  },
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Marginal SD (fails verifier completeness or feasibility) -> verifier-parity gate FAILS at precheck", "expected": "passed=false, issue names the failing verifier check" },
+    { "id": "TS-2", "scenario": "Fully-complete SD -> verifier-parity gate PASSES at precheck", "expected": "passed=true" },
+    { "id": "TS-3", "scenario": "sd_type==='orchestrator' -> verifier-parity gate auto-passes (IR-1 parity)", "expected": "passed=true without running the 3 pure checks" },
+    { "id": "TS-4", "scenario": "Execute-style context (precheckMode absent) -> gate.condition is false (gate skipped)", "expected": "condition(ctx)===false; gate does not run at execute" },
+    { "id": "TS-5", "scenario": "Gate runs with a mock supabase spy -> only read queries (.select/.limit), zero writes", "expected": "no insert/update/delete on the spy; verifyHandoff never invoked" },
+    { "id": "TS-6", "scenario": "Threshold parity (IR-2): infrastructure-type SD uses SD_TYPE_OVERRIDES effectiveMinScore, not the default", "expected": "completeness comparison matches verify-l2p effectiveMinScore" }
+  ],
+  "acceptance_criteria": [
+    "precheck reports the SAME blocking verdict as execute for a marginal SD (TS-1) and a complete SD (TS-2)",
+    "Execute path byte-identical: gate is precheck-only via condition (TS-4); no execute regressions",
+    "Gate is side-effect-free: no DB writes, never calls verifyHandoff (TS-5)",
+    "Orchestrator auto-pass parity (IR-1, TS-3) and threshold parity (IR-2, TS-6) hold",
+    "node:test suite for verifier-parity passes; existing lead-to-plan tests remain green",
+    "No files changed outside the new gate file, its test, and the getRequiredGates wiring; verify-l2p and execute path untouched"
+  ],
+  "risks": [
+    { "risk": "Adding parity at execute (not precheck-only) would change the execute rejection path/order", "mitigation": "Gate is strictly precheck-only via condition: ctx.precheckMode===true; execute skips it; TS-4 asserts this", "severity": "medium" },
+    { "risk": "False precheck blockers on orchestrators (verifier auto-passes them before the pure checks)", "mitigation": "IR-1 guard: sd_type==='orchestrator' -> auto-pass in the parity gate; TS-3", "severity": "medium" },
+    { "risk": "Threshold mismatch causes precheck/execute to disagree in the OTHER direction", "mitigation": "IR-2: reuse SD_TYPE_OVERRIDES/effectiveMinScore from verify-l2p/constants.js; TS-6", "severity": "low" },
+    { "risk": "Accidentally invoking verifier.verifyHandoff() (which writes DB rows) from precheck", "mitigation": "Import and call ONLY the pure functions (validateStrategicDirective/validateFeasibility/checkEnvironmentReadiness); TS-5 spy asserts zero writes", "severity": "high" }
+  ],
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Pick an SD missing required completeness (e.g., empty strategic_objectives) and run: node scripts/handoff.js precheck LEAD-TO-PLAN <SD>", "expected_outcome": "precheck now reports the completeness/feasibility blocker (previously PASS)" },
+    { "step_number": 2, "instruction": "Run: node scripts/handoff.js execute LEAD-TO-PLAN <SD> on the same incomplete SD", "expected_outcome": "execute fails with the SAME blocking reason precheck reported — verdicts agree" },
+    { "step_number": 3, "instruction": "On a fully-complete SD, run precheck then execute; also run node --test on the new verifier-parity test", "expected_outcome": "both report PASS; the test suite passes (parity, orchestrator, precheck-only, no-writes)" }
+  ],
+  "strategic_objectives": [
+    "Eliminate precheck/execute verdict divergence on the LEAD-TO-PLAN handoff",
+    "Make precheck a reliable predictor of execute without changing the execute hot path"
+  ],
+  "key_changes": [
+    { "change": "Add precheck-only createVerifierParityGate that replays the verifier's pure blocking checks; wire into getRequiredGates()", "type": "fix" },
+    { "change": "Add node:test coverage (parity, orchestrator auto-pass, precheck-only condition, no-DB-writes, threshold parity)", "type": "test" }
+  ],
+  "integration_operationalization": {
+    "consumers": "Internal LEO handoff tooling only. The new gate runs inside HandoffOrchestrator.precheckHandoff (validateGatesAll) for LEAD-TO-PLAN. Operator journey: a worker runs `node scripts/handoff.js precheck LEAD-TO-PLAN <SD>` before execute; with the fix, precheck surfaces the verifier-blocking conditions so the worker fixes them BEFORE running execute, instead of discovering them only when execute fails.",
+    "dependencies": [
+      { "name": "scripts/verify-l2p/sd-validation.js", "direction": "upstream", "failure_mode": "the gate imports validateStrategicDirective/validateFeasibility; signature change there would break the gate — pinned by reuse + tests" },
+      { "name": "scripts/verify-l2p/environment.js", "direction": "upstream", "failure_mode": "imports checkEnvironmentReadiness (read-only); pinned by reuse" },
+      { "name": "scripts/verify-l2p/constants.js", "direction": "upstream", "failure_mode": "imports SD_TYPE_OVERRIDES/effectiveMinScore/VALID_SD_STATUSES for threshold+status parity" },
+      { "name": "scripts/modules/handoff/HandoffOrchestrator.js", "direction": "downstream", "failure_mode": "runs the gate in precheck via validateGatesAll; respects gate.condition (ValidationOrchestrator.js:285)" }
+    ],
+    "data_contracts": "No DB schema change. In-process gate-result contract only: {passed, score, max_score, issues, warnings, details}. Verifier pure-function signatures unchanged.",
+    "runtime_config": "No new env vars or feature flags. Pure precheck-only gate; takes effect on merge for any process running handoff precheck.",
+    "observability_rollout": "Observability: precheck output (GATE SCORES block) lists the new parity gate verdict so operators see the predicted execute blockers. Rollout: single PR to main; no migration, no deploy sequencing. Rollback: git revert of the single commit fully restores prior precheck behavior (execute was never touched). Fleet-safe: execute byte-identical means active sessions are not retroactively affected; they pick up improved precheck only on rebase."
+  },
+  "implementation_approach": {
+    "steps": [
+      "Read lead-to-plan/index.js getRequiredGates, verify-l2p/index.js (verifyHandoff lines 102-156 for the blocking-check sequence + effectiveMinScore resolution 105-109), verify-l2p/sd-validation.js, verify-l2p/environment.js, verify-l2p/constants.js",
+      "Create gates/verifier-parity.js: createVerifierParityGate(supabase) -> { name:'GATE_VERIFIER_PARITY_PRECHECK', required:true, condition:(ctx)=>ctx.precheckMode===true, validator }",
+      "validator: orchestrator auto-pass; else run the 3 pure checks + status check with effectiveMinScore from SD_TYPE_OVERRIDES; aggregate issues",
+      "Wire createVerifierParityGate(this.supabase) into getRequiredGates()",
+      "Add gates/verifier-parity.test.js (node:test) covering TS-1..TS-6 with a mock supabase",
+      "Run node --test on the new test + the existing lead-to-plan gate tests; confirm precheck on a marginal SD now flags blockers and execute is unchanged"
+    ]
+  },
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-HANDOFF-INTEGRITY-RECONCILE-001",
+    "validation_agent_lead_evidence_id": "a4bfde58-efc2-4c5c-a101-e598d26de34f",
+    "design_note": "Precheck-only gate via condition: ctx.precheckMode===true keeps execute byte-identical (the verifier remains the sole execute enforcer). Do NOT add the parity check as an unconditional gate (would change execute rejection path/order).",
+    "deferred": "subagent-evidence gate is fleet-wide INERT (handoffType missing from precheck AND execute contexts). 'Fixing' it flips a dead gate to enforcing VALIDATION+Explore that nothing currently produces (0 Explore rows fleet-wide) -> breaks active sessions. DEFERRED to a coordinated quiet-window SD (recorded in SD metadata.deferred_concerns).",
+    "superseded_sd": "SD-PRIVACYPATROL-AI-FDBK-INFRA-UNIFY-LEAD-PLAN-001 (cancelled) proposed the inverse subtractive fix; this additive precheck-honesty approach is safer (execute unchanged)."
+  }
+}

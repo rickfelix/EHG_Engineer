@@ -36,7 +36,9 @@ import {
   // Marketing Schema Drift Gate (SD-EHG-MARKETING-DISTRIBUTION-INFRASTRUCTURE-ORCH-001-A)
   createMarketingSchemaDriftGate,
   // Grill Convergence Gate (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-C, Child C)
-  createGrillConvergenceGate
+  createGrillConvergenceGate,
+  // Verifier-Parity Gate (SD-LEO-INFRA-HANDOFF-INTEGRITY-RECONCILE-001) — precheck-only
+  createVerifierParityGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -176,6 +178,13 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Blocks LEAD-TO-PLAN when open_questions_for_plan_phase non-empty and no
     // fresh /grill artifact. Phase-1 warn by default; LEO_GRILL_HARD_FAIL=true → hard-fail.
     gates.push(createGrillConvergenceGate(this.supabase));
+
+    // Verifier-Parity Gate (SD-LEO-INFRA-HANDOFF-INTEGRITY-RECONCILE-001)
+    // PRECHECK-ONLY (condition: ctx.precheckMode===true): replays the
+    // LeadToPlanVerifier's pure blocking checks so precheck PREDICTS execute.
+    // Skipped at execute so the execute path stays byte-identical — the verifier
+    // (executeSpecific below) remains the sole execute-time enforcer.
+    gates.push(createVerifierParityGate(this.supabase));
 
     return gates;
   }

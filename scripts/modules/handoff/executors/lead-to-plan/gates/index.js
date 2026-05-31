@@ -101,3 +101,13 @@ export {
 // /grill convergence artifact. Phase-1 warn (default); phase-2 hard-fail via
 // LEO_GRILL_HARD_FAIL=true. Bypass quota: 3/SD, 10/day.
 export { createGrillConvergenceGate } from './grill-convergence.js';
+
+// Verifier-Parity Gate (SD-LEO-INFRA-HANDOFF-INTEGRITY-RECONCILE-001)
+// PRECHECK-ONLY: replays the LeadToPlanVerifier's pure blocking checks
+// (completeness/status/feasibility/environment) so precheck PREDICTS execute.
+// Skipped at execute (condition: ctx.precheckMode===true) → execute byte-identical.
+export {
+  evaluateVerifierParity,
+  resolveEffectiveMinScore,
+  createVerifierParityGate
+} from './verifier-parity.js';
