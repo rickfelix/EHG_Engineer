@@ -6,10 +6,7 @@
  */
 
 import { Router } from 'express';
-import { dbLoader } from '../config.js';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
-import { requireVentureScope } from '../../src/middleware/venture-scope.js';
-import { dashboardState } from '../state.js';
 
 // Import API modules
 import * as namingEngineAPI from '../../src/api/naming-engine/index.js';
@@ -17,75 +14,6 @@ import * as financialEngineAPI from '../../src/api/financial-engine/index.js';
 import * as contentForgeAPI from '../../src/api/content-forge/index.js';
 
 const router = Router();
-
-// =============================================================================
-// VENTURE-SCOPED ROUTES
-// =============================================================================
-
-/**
- * Venture-scoped strategic directives
- */
-router.get('/ventures/:venture_id/strategic-directives', requireVentureScope, asyncHandler(async (req, res) => {
-  const ventureId = req.venture_id;
-  const filteredSDs = dashboardState.strategicDirectives.filter(sd =>
-    sd.venture_id === ventureId || sd.metadata?.venture_id === ventureId
-  );
-
-  res.json({
-    venture_id: ventureId,
-    count: filteredSDs.length,
-    strategic_directives: filteredSDs
-  });
-}));
-
-/**
- * Venture-scoped PRDs
- */
-router.get('/ventures/:venture_id/prds', requireVentureScope, asyncHandler(async (req, res) => {
-  const ventureId = req.venture_id;
-  const filteredPRDs = dashboardState.prds.filter(prd =>
-    prd.venture_id === ventureId || prd.metadata?.venture_id === ventureId
-  );
-
-  res.json({
-    venture_id: ventureId,
-    count: filteredPRDs.length,
-    prds: filteredPRDs
-  });
-}));
-
-/**
- * Venture-scoped backlog
- */
-router.get('/ventures/:venture_id/backlog', requireVentureScope, asyncHandler(async (req, res) => {
-  const ventureId = req.venture_id;
-
-  // Get SDs for this venture
-  const ventureSDs = dashboardState.strategicDirectives.filter(sd =>
-    sd.venture_id === ventureId || sd.metadata?.venture_id === ventureId
-  );
-
-  // Get backlog items for those SDs
-  const sdIds = ventureSDs.map(sd => sd.id);
-  // Table strategic_backlog_items does not exist yet
-  const backlogItems = [];
-  const error = null;
-
-  if (error) {
-    return res.status(500).json({
-      alert: 'Failed to load venture backlog',
-      severity: 'MEDIUM',
-      category: 'DATABASE'
-    });
-  }
-
-  res.json({
-    venture_id: ventureId,
-    sd_count: ventureSDs.length,
-    backlog_count: backlogItems?.length || 0,
-    backlog_items: backlogItems || []
-  });
-}));
 
 // =============================================================================
 // SD-NAMING-ENGINE-001: Naming Engine API Routes

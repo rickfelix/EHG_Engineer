@@ -222,15 +222,10 @@ test.describe('DirectiveLab Workflow with Sub-Agents', () => {
           // Try to submit
           const submitButton = page.locator('button:has-text("Submit and Analyze")');
           if (await submitButton.count() > 0) {
-            // Listen for any errors
+            // Submission errors are detected via the DOM below (the dedicated
+            // /api/sdip submit route was retired; no response listener needed).
             let submissionError = null;
-            
-            page.on('response', response => {
-              if (!response.ok() && response.url().includes('/api/sdip')) {
-                submissionError = `API Error: ${response.status()} ${response.statusText()}`;
-              }
-            });
-            
+
             await submitButton.click();
             console.log('  ✅ Clicked submit button');
             
