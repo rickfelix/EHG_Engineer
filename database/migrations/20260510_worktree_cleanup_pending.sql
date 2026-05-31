@@ -5,6 +5,8 @@
 -- UUID: a6642ea8-33fe-40dc-814b-54245e41e4c8
 -- Phase: PLAN (database-agent design output)
 --
+-- @approved-by: rickfelix@example.com
+--
 -- Purpose:
 --   Add cleanup_pending TIMESTAMPTZ marker column to claude_sessions so the
 --   orphan-worktree-reaper can safely defer Windows-EBUSY-blocked filesystem
