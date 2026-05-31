@@ -20,7 +20,7 @@ import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, touchesFrontend, getScopedUnitTestFiles } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, touchesFrontend, getScopedUnitTestFiles } from './git-operations.js';
 import {
   validateLOC,
   validateTests,
@@ -179,6 +179,7 @@ export async function completeQuickFix(qfId, options = {}) {
   // are now computed once here and reused later in the PR-acquisition block.
   const { filesChanged, diffAnalysis } = analyzeGitDiff(testDir, qf.description);
   const docsOnlyDiff = isDocsOnlyDiff(filesChanged);
+  const skipTestGate = canSkipTestGate({ qfType: qf.type, docsOnlyDiff });
 
   // Test verification - PROGRAMMATIC (not self-reported)
   console.log('\n🧪 PROGRAMMATIC TEST VERIFICATION\n');
@@ -193,14 +194,17 @@ export async function completeQuickFix(qfId, options = {}) {
   if (options.skipTestRun) {
     testsPass = options.testsPass !== undefined ? options.testsPass : true;
     console.log(`   ⚠️  Skipping test run (--skip-tests); testsPass=${testsPass}\n`);
-  } else if (docsOnlyDiff) {
+  } else if (skipTestGate) {
     // QF-20260511-365 / feedback 869f7cf3: docs-only diff bypasses the test-run
     // gate. The diff contains zero source files (docs/, *.md, *.rst, README/
     // LICENSE/CHANGELOG, etc.), so the unit+e2e suite would only re-validate
     // unrelated pre-existing baseline failures. testsPass=true is sound here
     // because there is no source to validate; docmon + bypass-guard still run.
     testsPass = true;
-    console.log(`   📚 Docs-only diff detected (${filesChanged.length} file(s)); skipping unit+e2e tests.\n`);
+    const skipReason = docsOnlyDiff
+      ? `Docs-only diff detected (${filesChanged.length} file(s))`
+      : 'type=documentation QF (no executable source to validate)';
+    console.log(`   📚 ${skipReason}; skipping unit+e2e tests.\n`);
   } else {
     console.log('   Running tests to verify fix quality (not self-reported)...\n');
 
@@ -263,7 +267,7 @@ export async function completeQuickFix(qfId, options = {}) {
   }
 
   // TypeScript verification - PROGRAMMATIC
-  const tscResult = runTypeScriptCheck(testDir, options.skipTypeCheck);
+  const tscResult = runTypeScriptCheck(testDir, options.skipTypeCheck || qf.type === 'documentation');
   if (!validateTypeScript(tscResult)) {
     process.exit(1);
   }

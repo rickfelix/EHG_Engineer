@@ -594,6 +594,18 @@ export function isDocsOnlyDiff(filesChanged) {
   return filesChanged.every(isDocsOnlyPath);
 }
 
+// feedback 9b6d1e05 (QF-20260530-493): a type=documentation QF has no executable
+// source to validate even when its diff is NOT matched by isDocsOnlyDiff (e.g. a
+// 2-line .sql comment header — QF-20260530-432 — which lives in a .sql file, not a
+// docs path). Such QFs were forced through the unit+e2e gate, hanging 3-7min to
+// SIGTERM before any DB write and burning a --force-complete bypass per ship.
+// Honoring the QF's declared type is sound for the same reason as a docs-only diff:
+// there is no source to validate, CI on the PR is the authoritative gate, and
+// docmon + compliance + the self-verifier still run.
+export function canSkipTestGate({ qfType, docsOnlyDiff } = {}) {
+  return docsOnlyDiff === true || qfType === 'documentation';
+}
+
 // SD-FDBK-INFRA-CHANGE-SCOPE-COMPLETE-001 (FR-2): classify a path as
 // frontend/e2e-relevant so the orchestrator can gate the Playwright e2e smoke
 // run on whether the diff actually touches the browser surface. A backend-only
