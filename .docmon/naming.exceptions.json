@@ -57,6 +57,11 @@
       "pattern": "^LEO_.*\\.md$",
       "reason": "LEO Protocol version files",
       "example": "LEO_v4.3.3.md"
+    },
+    {
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*\\.skill\\.md$",
+      "reason": "Claude Code skill definition files (kebab-case base + .skill.md convention)",
+      "example": "eva-vision.skill.md, eva-archplan.skill.md"
     }
   ],
   "valid_pattern": {
