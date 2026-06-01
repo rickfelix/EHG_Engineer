@@ -1,0 +1,74 @@
+name: protected-unit-suites
+
+# Path-scoped BLOCKING vitest gates for verified-green unit-test directories.
+#
+# SD-LEO-INFRA-PATH-SCOPED-BLOCKING-001. Generalizes the path-scoped blocking
+# pattern already used by can-auto-advance-tests.yml and s19-design-prompts-tests.yml
+# into ONE matrix-driven workflow.
+#
+# WHY: the broad unit suite runs ADVISORY (test-coverage.yml uses continue-on-error),
+# gated only by a COUNT-BASED, suite-wide delta (scripts/compare-to-main-snapshot.mjs)
+# that cannot protect a specific freshly-greened directory from silently re-rotting
+# (44 stage-zero tests drifted red unnoticed -> SD-LEO-INFRA-REPAIR-STALE-STAGE-001, #4158).
+# Each matrix entry below hard-gates ONE directory: any failing test = red check.
+#
+# ADMISSION CRITERION: add a directory to matrix.suite ONLY after its tests are
+# verified green in CI across >=2 consecutive runs (NOT just one local run).
+# Adding a directory is a two-list edit:
+#   (1) one matrix.suite entry  { name, test_path },  AND
+#   (2) append that directory's production + test globs to on.pull_request.paths.
+# See docs/reference/protected-unit-suites.md (admission rule, how-to, tradeoffs,
+# and the list of deferred candidate directories).
+
+on:
+  pull_request:
+    paths:
+      # --- stage-zero (seed; 36 files, 553/0 as of PR #4158) ---
+      - 'lib/eva/stage-zero/**'          # production SUTs: a prod-only break must still trip the gate
+      - 'tests/unit/eva/stage-zero/**'   # the tests themselves
+      # self-validation: edits to this workflow re-run it (mirrors can-auto-advance L14 / s19 L20)
+      - '.github/workflows/protected-unit-suites.yml'
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  protected:
+    # Job/check name is the suite name -> the PR check reads "protected-unit-suites / stage-zero".
+    name: ${{ matrix.suite.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      # Don't cancel sibling suites if one fails — each protected directory reports independently.
+      fail-fast: false
+      matrix:
+        suite:
+          - name: stage-zero
+            test_path: tests/unit/eva/stage-zero/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run ${{ matrix.suite.name }} unit tests (BLOCKING)
+        # NO continue-on-error: a failing test fails the job (red check). That is the
+        # whole point — stricter and directory-scoped, unlike the count-based suite-wide ratchet.
+        env:
+          # Defensive: tests/setup.js falls back to https://test.invalid.local when
+          # SUPABASE_URL is unset, and any test that issues a real .from() call then
+          # hangs until vitest's 60s timeout force-kills the worker (exit 1 = false red)
+          # — see test-coverage.yml + SD-LEO-INFRA-VITEST-EXITS-61S-001. Passing the
+          # secrets gives any DB-touching test a real endpoint; hermetic (mocked) tests ignore them.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npx vitest run ${{ matrix.suite.test_path }}
