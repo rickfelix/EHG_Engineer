@@ -17,7 +17,6 @@ import {
 } from '../../../../lib/eva/stage-zero/profile-service.js';
 import {
   evaluateRealityGate,
-  BOUNDARY_CONFIG,
 } from '../../../../lib/eva/reality-gates.js';
 
 describe('LEGACY_GATE_THRESHOLDS', () => {
@@ -36,19 +35,26 @@ describe('LEGACY_GATE_THRESHOLDS', () => {
     }
   });
 
-  test('matches BOUNDARY_CONFIG values for shared boundaries', () => {
-    // LEGACY_GATE_THRESHOLDS covers boundaries 5->6, 9->10, 12->13, 17->18, 23->24
-    // BOUNDARY_CONFIG covers boundaries 5->6, 9->10, 12->13, 17->18, 23->24
-    // They share 5->6, 12->13, 17->18 with identical artifact types.
-    // 9->10 and last boundary differ (legacy has old artifact types, config was updated).
-    const sharedBoundaries = ['5->6', '12->13', '17->18'];
-    for (const boundary of sharedBoundaries) {
-      const config = BOUNDARY_CONFIG[boundary];
-      for (const artifact of config.required_artifacts) {
-        expect(LEGACY_GATE_THRESHOLDS[boundary][artifact.artifact_type])
-          .toBe(artifact.min_quality_score);
-      }
-    }
+  test('exposes the corrected gate_boundary_config artifact-type thresholds', () => {
+    // SD-LEO-INFRA-REALITY-GATE-ARTIFACT-001 FR-3: LEGACY_GATE_THRESHOLDS is now a
+    // synchronous fallback mirroring the corrected `gate_boundary_config` seeds. Its
+    // artifact_type keys are the canonical phase-prefixed types — intentionally distinct
+    // from the deprecated hardcoded BOUNDARY_CONFIG fallback in reality-gates.js (the two
+    // are independently sourced and no longer share artifact types per boundary).
+    expect(LEGACY_GATE_THRESHOLDS['5->6']).toEqual({
+      truth_idea_brief: 0.5,
+      truth_validation_decision: 0.6,
+      truth_financial_model: 0.6,
+    });
+    expect(LEGACY_GATE_THRESHOLDS['12->13']).toEqual({
+      engine_business_model_canvas: 0.7,
+      identity_persona_brand: 0.5,
+      identity_gtm_sales_strategy: 0.5,
+    });
+    expect(LEGACY_GATE_THRESHOLDS['17->18']).toEqual({
+      system_devils_advocate_review: 0.6,
+      blueprint_financial_projection: 0.5,
+    });
   });
 });
 
@@ -78,17 +84,24 @@ describe('resolveGateThreshold', () => {
   test('returns legacy default when profile has no override for artifact type', () => {
     const profile = {
       gate_thresholds: {
-        '5->6': { problem_statement: 0.4 },
+        '5->6': { truth_idea_brief: 0.4 },
       },
     };
 
-    const result = resolveGateThreshold(profile, '5->6', 'value_proposition');
+    // truth_validation_decision is a current 5->6 legacy key (0.6)
+    const result = resolveGateThreshold(profile, '5->6', 'truth_validation_decision');
     expect(result).toBe(0.6); // Legacy default
   });
 
-  test('returns legacy default when profile is null', () => {
+  test('returns 0.5 fallback when profile is null and artifact type is not in legacy boundary', () => {
+    // 'problem_statement' is no longer a 5->6 legacy key; falls through to the 0.5 floor.
     const result = resolveGateThreshold(null, '5->6', 'problem_statement');
-    expect(result).toBe(0.6); // Legacy default
+    expect(result).toBe(0.5); // SECURITY C4 fallback floor
+  });
+
+  test('returns legacy default for a current legacy artifact type when profile is null', () => {
+    const result = resolveGateThreshold(null, '5->6', 'truth_idea_brief');
+    expect(result).toBe(0.5); // Legacy default
   });
 
   test('returns legacy default when profile has empty gate_thresholds', () => {
@@ -125,14 +138,14 @@ describe('resolveAllGateThresholds', () => {
   test('merges profile overrides with legacy defaults', () => {
     const profile = {
       gate_thresholds: {
-        '5->6': { problem_statement: 0.4 },
+        '5->6': { truth_idea_brief: 0.4 },
       },
     };
 
     const result = resolveAllGateThresholds(profile, '5->6');
-    expect(result.problem_statement).toBe(0.4); // Profile override
-    expect(result.target_market_analysis).toBe(0.5); // Legacy default
-    expect(result.value_proposition).toBe(0.6); // Legacy default
+    expect(result.truth_idea_brief).toBe(0.4); // Profile override
+    expect(result.truth_validation_decision).toBe(0.6); // Legacy default
+    expect(result.truth_financial_model).toBe(0.6); // Legacy default
   });
 
   test('returns empty object for unknown boundary', () => {
@@ -176,13 +189,15 @@ describe('evaluateRealityGate with profileThresholds', () => {
   }
 
   test('uses profile threshold instead of BOUNDARY_CONFIG default', async () => {
+    // BOUNDARY_CONFIG[5->6] requires truth_problem_statement(0.6),
+    // truth_target_market_analysis(0.5), truth_value_proposition(0.6).
     const artifacts = [
-      { artifact_type: 'problem_statement', quality_score: 0.55, file_url: null, is_current: true },
-      { artifact_type: 'target_market_analysis', quality_score: 0.5, file_url: null, is_current: true },
-      { artifact_type: 'value_proposition', quality_score: 0.6, file_url: null, is_current: true },
+      { artifact_type: 'truth_problem_statement', quality_score: 0.55, file_url: null, is_current: true },
+      { artifact_type: 'truth_target_market_analysis', quality_score: 0.5, file_url: null, is_current: true },
+      { artifact_type: 'truth_value_proposition', quality_score: 0.6, file_url: null, is_current: true },
     ];
 
-    // Default threshold for problem_statement is 0.6, so 0.55 would fail
+    // Default threshold for truth_problem_statement is 0.6, so 0.55 would fail
     // But with profile override of 0.5, it should pass
     const result = await evaluateRealityGate({
       ventureId: 'test-uuid',
@@ -190,21 +205,23 @@ describe('evaluateRealityGate with profileThresholds', () => {
       toStage: 6,
       supabase: createMockSupabase(artifacts),
       logger: silentLogger,
-      profileThresholds: { problem_statement: 0.5 },
+      profileThresholds: { truth_problem_statement: 0.5 },
     });
 
     expect(result.status).toBe('PASS');
     expect(result.profile_thresholds_applied).toBe(true);
   });
 
-  test('fails when score below profile threshold even though above legacy', async () => {
+  test('blocks when score below profile threshold even though above default', async () => {
+    // BOUNDARY_CONFIG[12->13] requires engine_business_model_canvas(0.7),
+    // blueprint_technical_architecture(0.6), blueprint_project_plan(0.5).
     const artifacts = [
       { artifact_type: 'engine_business_model_canvas', quality_score: 0.75, file_url: null, is_current: true },
-      { artifact_type: 'technical_architecture', quality_score: 0.65, file_url: null, is_current: true },
-      { artifact_type: 'project_plan', quality_score: 0.5, file_url: null, is_current: true },
+      { artifact_type: 'blueprint_technical_architecture', quality_score: 0.65, file_url: null, is_current: true },
+      { artifact_type: 'blueprint_project_plan', quality_score: 0.5, file_url: null, is_current: true },
     ];
 
-    // Legacy threshold for business_model_canvas is 0.7 (would pass at 0.75)
+    // Default threshold for engine_business_model_canvas is 0.7 (would pass at 0.75)
     // Profile overrides to 0.8 (should fail at 0.75)
     const result = await evaluateRealityGate({
       ventureId: 'test-uuid',
@@ -215,7 +232,9 @@ describe('evaluateRealityGate with profileThresholds', () => {
       profileThresholds: { engine_business_model_canvas: 0.8 },
     });
 
-    expect(result.status).toBe('FAIL');
+    // SUT returns BLOCKED (not FAIL) when artifacts exist but a check fails —
+    // "Chairman decides venture fate" (reality-gates.js).
+    expect(result.status).toBe('BLOCKED');
     const failReason = result.reasons.find(r =>
       r.artifact_type === 'engine_business_model_canvas' &&
       r.code === 'QUALITY_SCORE_BELOW_THRESHOLD'
@@ -227,12 +246,12 @@ describe('evaluateRealityGate with profileThresholds', () => {
 
   test('uses BOUNDARY_CONFIG default when no profile thresholds provided', async () => {
     const artifacts = [
-      { artifact_type: 'problem_statement', quality_score: 0.55, file_url: null, is_current: true },
-      { artifact_type: 'target_market_analysis', quality_score: 0.5, file_url: null, is_current: true },
-      { artifact_type: 'value_proposition', quality_score: 0.6, file_url: null, is_current: true },
+      { artifact_type: 'truth_problem_statement', quality_score: 0.55, file_url: null, is_current: true },
+      { artifact_type: 'truth_target_market_analysis', quality_score: 0.5, file_url: null, is_current: true },
+      { artifact_type: 'truth_value_proposition', quality_score: 0.6, file_url: null, is_current: true },
     ];
 
-    // Without profile, problem_statement at 0.55 < 0.6 default should fail
+    // Without profile, truth_problem_statement at 0.55 < 0.6 default should block.
     const result = await evaluateRealityGate({
       ventureId: 'test-uuid',
       fromStage: 5,
@@ -241,18 +260,19 @@ describe('evaluateRealityGate with profileThresholds', () => {
       logger: silentLogger,
     });
 
-    expect(result.status).toBe('FAIL');
+    // SUT returns BLOCKED (not FAIL) when a required artifact is below its default.
+    expect(result.status).toBe('BLOCKED');
     expect(result.profile_thresholds_applied).toBeUndefined();
   });
 
   test('includes threshold_overrides in result when profile applied', async () => {
     const artifacts = [
-      { artifact_type: 'problem_statement', quality_score: 0.6, file_url: null, is_current: true },
-      { artifact_type: 'target_market_analysis', quality_score: 0.5, file_url: null, is_current: true },
-      { artifact_type: 'value_proposition', quality_score: 0.6, file_url: null, is_current: true },
+      { artifact_type: 'truth_problem_statement', quality_score: 0.6, file_url: null, is_current: true },
+      { artifact_type: 'truth_target_market_analysis', quality_score: 0.5, file_url: null, is_current: true },
+      { artifact_type: 'truth_value_proposition', quality_score: 0.6, file_url: null, is_current: true },
     ];
 
-    const overrides = { problem_statement: 0.5, value_proposition: 0.5 };
+    const overrides = { truth_problem_statement: 0.5, truth_value_proposition: 0.5 };
 
     const result = await evaluateRealityGate({
       ventureId: 'test-uuid',

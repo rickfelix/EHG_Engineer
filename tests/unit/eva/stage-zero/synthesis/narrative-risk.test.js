@@ -48,20 +48,14 @@ const validLLMResponse = {
 function createMockLLMClient(responseJson) {
   return {
     _model: 'test-model',
-    messages: {
-      create: vi.fn().mockResolvedValue({
-        content: [{ text: JSON.stringify(responseJson) }],
-      }),
-    },
+    complete: vi.fn().mockResolvedValue(JSON.stringify(responseJson)),
   };
 }
 
 function createFailingLLMClient(errorMessage) {
   return {
     _model: 'test-model',
-    messages: {
-      create: vi.fn().mockRejectedValue(new Error(errorMessage)),
-    },
+    complete: vi.fn().mockRejectedValue(new Error(errorMessage)),
   };
 }
 
@@ -119,11 +113,7 @@ describe('analyzeNarrativeRisk', () => {
   test('returns default result when LLM returns unparseable text', async () => {
     const client = {
       _model: 'test-model',
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          content: [{ text: 'I cannot analyze narrative risk in JSON format.' }],
-        }),
-      },
+      complete: vi.fn().mockResolvedValue('I cannot analyze narrative risk in JSON format.'),
     };
     const result = await analyzeNarrativeRisk(mockPathOutput, { llmClient: client, logger: silentLogger });
 

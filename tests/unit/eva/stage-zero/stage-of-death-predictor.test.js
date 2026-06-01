@@ -89,7 +89,7 @@ describe('stage-of-death-predictor', () => {
       expect(result).toHaveProperty('archetype', 'democratizer');
     });
 
-    it('death_stage is between 1 and 25', () => {
+    it('death_stage is between 1 and 26', () => {
       const result = predictStageOfDeath({
         archetype: 'democratizer',
         componentScores: WEAK_MOAT_SCORES,
@@ -98,7 +98,7 @@ describe('stage-of-death-predictor', () => {
       });
 
       expect(result.death_stage).toBeGreaterThanOrEqual(1);
-      expect(result.death_stage).toBeLessThanOrEqual(25);
+      expect(result.death_stage).toBeLessThanOrEqual(26);
     });
 
     it('probability is between 0 and 1', () => {
@@ -192,14 +192,15 @@ describe('stage-of-death-predictor', () => {
   });
 
   describe('buildMortalityCurve', () => {
-    it('returns 25 stage entries', () => {
+    it('returns one entry per stage (TOTAL_STAGES)', () => {
       const curve = buildMortalityCurve({
         archetypeData: ARCHETYPE_WITH_HISTORY,
         profileWeights: LEGACY_WEIGHTS,
         componentScores: STRONG_SCORES,
       });
 
-      expect(Object.keys(curve)).toHaveLength(25);
+      expect(TOTAL_STAGES).toBe(26);
+      expect(Object.keys(curve)).toHaveLength(TOTAL_STAGES);
     });
 
     it('all mortality rates are non-negative', () => {
@@ -237,7 +238,7 @@ describe('stage-of-death-predictor', () => {
       const stage12 = curve[12];
       const avgOther = Object.entries(curve)
         .filter(([s]) => s !== '5' && s !== '12')
-        .reduce((sum, [, v]) => sum + v, 0) / 23;
+        .reduce((sum, [, v]) => sum + v, 0) / 24;
 
       expect(stage5).toBeGreaterThan(avgOther);
       expect(stage12).toBeGreaterThan(avgOther);

@@ -12,21 +12,14 @@ import {
 function createMockLLMClient(responseJson) {
   return {
     _model: 'test-model',
-    messages: {
-      create: vi.fn().mockResolvedValue({
-        content: [{ text: JSON.stringify(responseJson) }],
-        usage: { input_tokens: 100, output_tokens: 200 },
-      }),
-    },
+    complete: vi.fn().mockResolvedValue(JSON.stringify(responseJson)),
   };
 }
 
 function createFailingLLMClient(errorMessage) {
   return {
     _model: 'test-model',
-    messages: {
-      create: vi.fn().mockRejectedValue(new Error(errorMessage)),
-    },
+    complete: vi.fn().mockRejectedValue(new Error(errorMessage)),
   };
 }
 
@@ -87,24 +80,19 @@ describe('evaluateDesignPotential', () => {
       llmClient: client,
     });
 
-    expect(client.messages.create).toHaveBeenCalledTimes(1);
-    const callArgs = client.messages.create.mock.calls[0][0];
-    expect(callArgs.model).toBe('test-model');
-    expect(callArgs.max_tokens).toBe(1500);
-    expect(callArgs.messages).toHaveLength(1);
-    expect(callArgs.messages[0].role).toBe('user');
-    expect(callArgs.messages[0].content).toContain('DesignFirst');
+    expect(client.complete).toHaveBeenCalledTimes(1);
+    const callArgs = client.complete.mock.calls[0];
+    // SUT calls: client.complete(systemPrompt, userPrompt, { max_tokens, timeout })
+    expect(callArgs[0]).toBe('');
+    expect(callArgs[1]).toContain('DesignFirst');
+    expect(callArgs[2].max_tokens).toBe(8192);
+    expect(callArgs[2].timeout).toBe(120000);
   });
 
   test('returns default result when LLM response is unparseable', async () => {
     const client = {
       _model: 'test-model',
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          content: [{ text: 'This is not JSON at all' }],
-          usage: { input_tokens: 50, output_tokens: 30 },
-        }),
-      },
+      complete: vi.fn().mockResolvedValue('This is not JSON at all'),
     };
 
     const result = await evaluateDesignPotential(mockPathOutput, {
@@ -259,15 +247,10 @@ describe('evaluateDesignPotential', () => {
     expect(result.design_opportunities).toEqual([]);
   });
 
-  test('handles empty content array from LLM', async () => {
+  test('handles empty content from LLM', async () => {
     const client = {
       _model: 'test-model',
-      messages: {
-        create: vi.fn().mockResolvedValue({
-          content: [],
-          usage: { input_tokens: 10, output_tokens: 0 },
-        }),
-      },
+      complete: vi.fn().mockResolvedValue(''),
     };
 
     const result = await evaluateDesignPotential(mockPathOutput, {

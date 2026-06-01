@@ -34,6 +34,6 @@ describe('archetype-mapping', () => {
   });
 
   it('maps experience_designer (the failing case) correctly', () => {
-    expect(toDbArchetype('experience_designer')).toBe('content');
+    expect(toDbArchetype('experience_designer')).toBe('media');
   });
 });
