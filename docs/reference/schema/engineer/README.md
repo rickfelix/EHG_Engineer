@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-05-31T17:03:47.186Z
-**Tables**: 700
+**Generated**: 2026-06-01T02:10:32.545Z
+**Tables**: 702
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (700)
+## All Tables (702)
 
 ### LEO Protocol
 
@@ -257,6 +257,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [chairman_preferences](tables/chairman_preferences.md)
 - [chairman_settings](tables/chairman_settings.md)
 - [channel_budgets](tables/channel_budgets.md)
+- [ci_snapshots](tables/ci_snapshots.md)
 - [circuit_breaker_blocks](tables/circuit_breaker_blocks.md)
 - [claude_code_releases](tables/claude_code_releases.md)
 - [claude_sessions](tables/claude_sessions.md)
@@ -267,6 +268,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [codebase_semantic_index](tables/codebase_semantic_index.md)
 - [companies](tables/companies.md)
 - [competitive_baselines](tables/competitive_baselines.md)
+- [competitor_intelligence](tables/competitor_intelligence.md)
 - [competitors](tables/competitors.md)
 - [compliance_alerts](tables/compliance_alerts.md)
 - [compliance_artifact_templates](tables/compliance_artifact_templates.md)
