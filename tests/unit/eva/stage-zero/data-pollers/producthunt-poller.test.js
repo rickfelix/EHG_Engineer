@@ -67,15 +67,22 @@ describe('pollProductHunt', () => {
       status: 401,
     });
 
+    // SUT wraps fetch in withRetry and aggregates per-topic errors: a 401 is
+    // detected (thrown as '401 Unauthorized', logged per attempt) but, once all
+    // retries are exhausted with no data collected, the aggregate result reports
+    // the generic 'No data collected from any topic' error.
+    const logger = { log: vi.fn(), warn: vi.fn() };
     const result = await pollProductHunt({
       supabase: createMockSupabase(),
-      logger: silentLogger,
+      logger,
       topics: ['ai'],
       apiToken: 'bad-token',
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('401 Unauthorized');
+    expect(result.error).toBe('No data collected from any topic');
+    // The specific HTTP failure is surfaced through the logger.
+    expect(logger.log.mock.calls.flat().some(arg => String(arg).includes('401 Unauthorized'))).toBe(true);
   });
 
   test('returns error on 429 rate limit', async () => {
@@ -85,14 +92,16 @@ describe('pollProductHunt', () => {
       headers: { get: () => '60' },
     });
 
+    const logger = { log: vi.fn(), warn: vi.fn() };
     const result = await pollProductHunt({
       supabase: createMockSupabase(),
-      logger: silentLogger,
+      logger,
       topics: ['ai'],
       apiToken: 'test-token',
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('429 Rate Limited');
+    expect(result.error).toBe('No data collected from any topic');
+    expect(logger.log.mock.calls.flat().some(arg => String(arg).includes('429 Rate Limited'))).toBe(true);
   });
 });

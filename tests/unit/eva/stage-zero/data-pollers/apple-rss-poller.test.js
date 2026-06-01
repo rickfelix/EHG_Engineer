@@ -82,10 +82,14 @@ describe('pollAppleRSS', () => {
 
   test('continues processing other categories when one fails', async () => {
     const mockSupabase = createMockSupabase();
-    let callCount = 0;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) return Promise.resolve({ ok: false, status: 503 });
+    // SUT wraps each category fetch in withRetry (up to 2 retries). Gate by the
+    // category id embedded in the URL so the failing category (6013) fails ALL of
+    // its attempts, while the second category (6015) succeeds — otherwise a retry
+    // of the "failing" category would succeed and inflate the count.
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (String(url).includes('/6013/')) {
+        return Promise.resolve({ ok: false, status: 503 });
+      }
       return Promise.resolve({ ok: true, json: () => Promise.resolve(sampleAppleResponse) });
     });
 

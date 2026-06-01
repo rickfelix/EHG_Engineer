@@ -24,10 +24,13 @@ import {
 
 const silentLogger = { log: vi.fn(), warn: vi.fn() };
 
+// SUT reads `blueprint.title` and the flat opportunity_blueprints columns
+// (problem_statement, solution_concept, target_market) via buildTemplateData —
+// not a nested `template_data` object. suggested_name resolves to blueprint.title.
 const sampleBlueprints = [
-  { id: 'bp-1', name: 'SaaS Template', category: 'saas', description: 'SaaS venture', template_data: { name: 'SaaS MVP', problem_statement: 'SaaS problem', solution: 'SaaS solution', target_market: 'B2B' }, is_active: true },
-  { id: 'bp-2', name: 'E-commerce Template', category: 'ecommerce', description: 'E-commerce venture', template_data: { name: 'Store', problem_statement: 'Commerce problem', solution: 'Store solution', target_market: 'Consumers' }, is_active: true },
-  { id: 'bp-3', name: 'SaaS Pro', category: 'saas', description: 'Advanced SaaS', template_data: { name: 'SaaS Pro', problem_statement: 'Advanced problem', solution: 'Pro solution', target_market: 'Enterprise' }, is_active: true },
+  { id: 'bp-1', title: 'SaaS MVP', category: 'saas', summary: 'SaaS venture', problem_statement: 'SaaS problem', solution_concept: 'SaaS solution', target_market: 'B2B', is_active: true },
+  { id: 'bp-2', title: 'Store', category: 'ecommerce', summary: 'E-commerce venture', problem_statement: 'Commerce problem', solution_concept: 'Store solution', target_market: 'Consumers', is_active: true },
+  { id: 'bp-3', title: 'SaaS Pro', category: 'saas', summary: 'Advanced SaaS', problem_statement: 'Advanced problem', solution_concept: 'Pro solution', target_market: 'Enterprise', is_active: true },
 ];
 
 function createMockSupabase(blueprints = sampleBlueprints) {

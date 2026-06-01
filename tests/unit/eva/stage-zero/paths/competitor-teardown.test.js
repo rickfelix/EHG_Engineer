@@ -207,6 +207,10 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
       differentiation_strategy: 'Automate the entire workflow with AI',
       delta_gate: { verdict: 'seedable', score: 0.7, threshold: 0.5, reason: 'defensible, seedable' },
       sanitization_status: 'passed',
+      // SD-LEO-INFRA-SURFACE-DIFFERENTIATION-BOARD-001 FR-1: the projection now also
+      // surfaces the board strategy's unique_advantages as opportunity cards. The
+      // seededBoard fixture has no unique_advantages, so this is an empty array.
+      differentiation_opportunities: [],
     });
     // canonical record ids still surfaced in metadata
     expect(result.metadata.canonical_ci_record_ids).toEqual(['ci-rec-1', 'ci-rec-2']);

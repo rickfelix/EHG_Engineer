@@ -99,7 +99,7 @@ beforeEach(() => {
 });
 
 describe('runSynthesis', () => {
-  test('runs all 12 synthesis components', async () => {
+  test('runs all 14 synthesis components', async () => {
     const result = await runSynthesis(validPathOutput, { logger: silentLogger });
 
     expect(crossReferenceIntellectualCapital).toHaveBeenCalledWith(validPathOutput, expect.anything());
@@ -115,8 +115,8 @@ describe('runSynthesis', () => {
     expect(analyzeNarrativeRisk).toHaveBeenCalledWith(validPathOutput, expect.anything());
     expect(analyzeTechTrajectory).toHaveBeenCalledWith(validPathOutput, expect.anything());
 
-    expect(result.metadata.synthesis.components_run).toBe(12);
-    expect(result.metadata.synthesis.components_total).toBe(12);
+    expect(result.metadata.synthesis.components_run).toBe(14);
+    expect(result.metadata.synthesis.components_total).toBe(14);
   });
 
   test('handles component failure gracefully', async () => {

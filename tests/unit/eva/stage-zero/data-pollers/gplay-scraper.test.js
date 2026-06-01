@@ -67,10 +67,14 @@ describe('pollGooglePlay', () => {
 
   test('continues processing when one category fails', async () => {
     const mockSupabase = createMockSupabase();
-    let callCount = 0;
-    mockList.mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) return Promise.reject(new Error('RequestError'));
+    // SUT wraps each gplay.list call in withRetry (up to 2 retries). Gate by the
+    // category argument so the failing category (EDUCATION) rejects on ALL of its
+    // attempts, while FINANCE succeeds — otherwise a retry of the "failing"
+    // category would succeed and inflate the count.
+    mockList.mockImplementation(({ category }) => {
+      if (category === 'EDUCATION') {
+        return Promise.reject(new Error('RequestError'));
+      }
       return Promise.resolve(sampleResults);
     });
 
