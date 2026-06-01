@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-01T02:10:32.545Z
-**Rows**: 22
+**Generated**: 2026-06-01T05:32:47.194Z
+**Rows**: 26
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -106,7 +106,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | orchestrator_lock_acquired_at | `timestamp with time zone` | YES | - | - |
 | growth_strategy | `USER-DEFINED` | YES | - | Portfolio growth strategy classification: cash_engine (proven revenue), capability_builder (reusable tech/business capabilities), moonshot (high risk/high ceiling) |
 | venture_type | `text` | YES | - | Classifies the venture by its primary technology focus: ui (frontend/design), backend (API/services), mixed (full-stack), or data (analytics/ML). NULL for unclassified ventures. Added by SD-LEO-INFRA-SRIP-WIREFRAME-GATING-001. |
-| autonomy_level | `text` | YES | `'L0'::text` | Venture autonomy level: L0=Manual, L1=Guided, L2=Supervised, L3=Autonomous, L4=Full Auto |
+| autonomy_level | `text` | YES | `'L2'::text` | Venture autonomy level: L0=Manual, L1=Guided, L2=Supervised, L3=Autonomous, L4=Full Auto |
 | target_platform | `text` | **NO** | `'both'::text` | Platform targeting: web (desktop only), mobile (mobile only), both (mobile-first + desktop) |
 | business_model_class | `text` | YES | - | Coarse business model classification used by GVOS Composer auto-classifier. Enum-constrained to prevent typo bypass of Artist-Expressive gating (SECURITY-003 from SD-GVOS-COMPOSER-SNAPSHOTLOCKED-REGISTRY-ORCH-001). NULL on existing rows; chairman fills per venture. |
 | build_model | `character varying(20)` | YES | - | SSOT venture build path at Stage 19: leo_bridge (LEO-SD bridge — orchestrator+child SDs) | seeded_repo (seed repo + Replit Agent + S20 gate) | NULL (arbiter default = seeded_repo until the venture EXEC loop ships). SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001. |

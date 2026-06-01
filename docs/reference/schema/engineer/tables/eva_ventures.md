@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-01T02:10:32.545Z
-**Rows**: 23
+**Generated**: 2026-06-01T05:32:47.194Z
+**Rows**: 27
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -36,7 +36,7 @@
 | orchestrator_state | `text` | YES | `'idle'::text` | Current execution state: idle, processing, blocked, failed |
 | orchestrator_lock_id | `uuid` | YES | - | UUID of the processing lock holder (null when idle) |
 | orchestrator_lock_acquired_at | `timestamp with time zone` | YES | - | When the processing lock was acquired |
-| autonomy_level | `USER-DEFINED` | **NO** | `'L0'::eva_autonomy_level` | EVA autonomy level: L0=Manual, L1=Assisted, L2=Partial, L3=Conditional, L4=Full |
+| autonomy_level | `USER-DEFINED` | **NO** | `'L2'::eva_autonomy_level` | EVA autonomy level: L0=Manual, L1=Assisted, L2=Partial, L3=Conditional, L4=Full |
 | current_lifecycle_stage | `integer(32)` | YES | `1` | - |
 
 ## Constraints
