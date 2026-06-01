@@ -1396,7 +1396,29 @@ Use the brainstorm discovery answers, team perspectives (Challenger, Visionary, 
 
 ### 9.5B: Register Vision in EVA (with Key Capture)
 
-Run the vision command with dimensions derived from the vision doc's success criteria and key sections:
+**FIRST — Deliberate chairman approval decision (MANDATORY, SD-LEO-FEAT-DELIBERATE-VISION-APPROVAL-001 / FR-2).**
+Registering a vision is NOT silently auto-approved. Before running the upsert, present the chairman with an explicit, clear choice. Summarize the vision (topic, problem statement, success criteria) and ask:
+
+```javascript
+{
+  "questions": [{
+    "question": "Approve this vision to start the build, or save it as a draft for later review?",
+    "header": "Vision Approval Decision",
+    "multiSelect": false,
+    "options": [
+      {"label": "Approve & start build", "description": "Marks the vision chairman_approved + active. The lifecycle-SD bridge can immediately generate build SDs for this venture."},
+      {"label": "Save as draft", "description": "Stores the vision as a draft (NOT approved). No build SDs are generated until you approve it later."}
+    ]
+  }]
+}
+```
+
+- If the chairman picks **"Approve & start build"** → pass `--approved`.
+- If the chairman picks **"Save as draft"** → pass `--draft`.
+
+The upsert command **requires** exactly one of `--approved` / `--draft` and will error if neither is given — there is no silent default. Do NOT guess; use the chairman's explicit selection.
+
+Run the vision command with dimensions derived from the vision doc's success criteria and key sections, threading the approval flag from the decision above (the example shows `--approved`; substitute `--draft` when the chairman chose to save a draft):
 
 ```bash
 node scripts/eva/vision-command.mjs upsert \
@@ -1404,10 +1426,11 @@ node scripts/eva/vision-command.mjs upsert \
   --level L2 \
   --content '<VISION_CONTENT_FROM_STEP_9.5A>' \
   --brainstorm-id <SESSION_ID> \
+  --approved \
   --dimensions '<JSON_ARRAY>'
 ```
 
-Substitute `<CONTEXT>` and `<NNN>` using the derivation + collision-scan rules below.
+Substitute `<CONTEXT>` and `<NNN>` using the derivation + collision-scan rules below. The `--brainstorm-id` also drives automatic venture linkage: when the brainstorm session names exactly one venture (and is not cross-venture), the vision's `venture_id` is set automatically at write time (FR-1).
 
 **IMPORTANT**: Use `--content` to pass the in-memory vision content directly. Do NOT use `--source` with a file path — that would create a markdown file, violating the DB-only policy.
 
