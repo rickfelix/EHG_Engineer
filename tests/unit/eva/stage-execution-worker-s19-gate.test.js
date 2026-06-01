@@ -31,6 +31,8 @@ vi.mock('../../../lib/eva/stage-governance.js', () => ({
 }));
 
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
+// SD-LEO-INFRA-HARDEN-S19-S20-001 (FR-1): the real shared decision now backs the entry gate.
+import { classifyBridgeOutcome, shouldHoldAtS19 } from '../../../lib/eva/bridge/s19-advance-decision.js';
 
 const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
 
@@ -187,33 +189,37 @@ describe('_blockS19LeoBridge (FR-2 block row)', () => {
 });
 
 /**
- * Gate discrimination logic (mirrors the NC-7 regex branch in the S19 entry gate).
- * The block decision is inline in the _processVenture loop; this characterization
- * test replicates the exact discriminator so a regression in the rule is caught.
+ * S19 entry-gate discrimination. SD-LEO-INFRA-HARDEN-S19-S20-001 (FR-1) replaced the inline
+ * `!created && errors.length===0` idempotency re-derivation (the schism root cause) with the shared
+ * classifyBridgeOutcome + shouldHoldAtS19 — exhaustively covered in
+ * tests/unit/eva/bridge/s19-advance-decision.test.js. This block re-characterizes the gate decision
+ * through the REAL shared functions (no inline copy), including the case the OLD rule got WRONG.
+ * chairman_override surfaces as _isLeoBridgeBuildComplete===true (honored upstream).
  */
-function gateDecision(bridge, advisory = {}) {
-  if (advisory.chairman_override === true) return 'proceed';
-  const errs = bridge.errors || [];
-  const errStr = JSON.stringify(errs);
-  const isIdempotent = !bridge.created && (!errs || errs.length === 0 || /already exists/i.test(errStr));
-  if (bridge.created || isIdempotent) return 'proceed';
-  return 'block';
+function gateDecision(bridge, { buildComplete = false, payloadCount = 1, chairmanOverride = false } = {}) {
+  const complete = chairmanOverride ? true : buildComplete;
+  const outcome = classifyBridgeOutcome(bridge, payloadCount);
+  return shouldHoldAtS19(outcome, complete) ? 'block' : 'proceed';
 }
 
-describe('S19 entry-gate discrimination (mirrors inline gate logic)', () => {
-  it('VENTURE_L2_VISION_MISSING → block + no advance', () => {
-    expect(gateDecision({ created: false, errors: ['Venture X: no L2 vision document found.'] })).toBe('block');
+describe('S19 entry-gate discrimination (real shared decision, FR-1)', () => {
+  it('VENTURE_L2_VISION_MISSING + incomplete → block', () => {
+    expect(gateDecision({ created: false, errors: ['Venture X: no L2 vision document found.'] }, { buildComplete: false })).toBe('block');
   });
-  it('errors empty (idempotency) → proceed', () => {
-    expect(gateDecision({ created: false, errors: [] })).toBe('proceed');
+  it('existing-orchestrator idempotency + complete tree → proceed', () => {
+    expect(gateDecision({ created: false, errors: [], orchestratorKey: 'SD-EXISTING' }, { buildComplete: true })).toBe('proceed');
   });
-  it('/already exists/ → proceed', () => {
-    expect(gateDecision({ created: false, errors: ['Orchestrator already exists for venture'] })).toBe('proceed');
+  it('created:true but tree still incomplete → HOLD (the completion invariant)', () => {
+    expect(gateDecision({ created: true, errors: [] }, { buildComplete: false })).toBe('block');
   });
-  it('created:true → proceed', () => {
-    expect(gateDecision({ created: true, errors: [] })).toBe('proceed');
+  it('SCHISM FIXED: created:false + empty errors + payloads present (zero_sds_failure) → block', () => {
+    // The OLD inline rule mis-read this as idempotent and PROCEEDED — the RCA 7610876f bug.
+    expect(gateDecision({ created: false, errors: [], orchestratorKey: null }, { buildComplete: false, payloadCount: 3 })).toBe('block');
   });
   it('chairman_override → proceed even on a real failure', () => {
-    expect(gateDecision({ created: false, errors: ['no L2 vision document found'] }, { chairman_override: true })).toBe('proceed');
+    expect(gateDecision({ created: false, errors: ['no L2 vision document found'] }, { chairmanOverride: true })).toBe('proceed');
+  });
+  it('noop_empty (0 payloads) + incomplete → proceed (infinite-hold guard)', () => {
+    expect(gateDecision({ created: false, errors: [] }, { buildComplete: false, payloadCount: 0 })).toBe('proceed');
   });
 });
