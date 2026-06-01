@@ -9,7 +9,7 @@
  * - Runs gap analysis for multiple competitors
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../../../../lib/llm/client-factory.js', () => ({
   getValidationClient: vi.fn(() => mockLlmClient),
@@ -161,6 +161,22 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
     strategy: { angle: 'Automate the entire workflow with AI' },
     sanitization_status: 'passed',
   };
+
+  // Hermetic env control (SD-LEO-INFRA-PATH-SCOPED-BLOCKING-001): persist is enabled
+  // by EITHER the `persistToCanonical` dep OR the CI_TEARDOWN_PERSIST env fallback
+  // (SUT competitor-teardown.js:71-72). The flag-ON cases below opt in via the dep, so
+  // clear the env fallback here — otherwise an ambient CI_TEARDOWN_PERSIST=true (e.g. a
+  // local .env after the capability was enabled) flips the flag-OFF case (TS-3) and the
+  // suite goes red only locally. This keeps the suite green regardless of flag state.
+  let savedTeardownFlag;
+  beforeEach(() => {
+    savedTeardownFlag = process.env.CI_TEARDOWN_PERSIST;
+    delete process.env.CI_TEARDOWN_PERSIST;
+  });
+  afterEach(() => {
+    if (savedTeardownFlag === undefined) delete process.env.CI_TEARDOWN_PERSIST;
+    else process.env.CI_TEARDOWN_PERSIST = savedTeardownFlag;
+  });
 
   test('TS-3: flag OFF — no persist, no board, no result_extras (no regression)', async () => {
     const persistSpy = vi.fn();
