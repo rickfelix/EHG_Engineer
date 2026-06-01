@@ -223,23 +223,28 @@ async function main() {
       console.log('    🤖 Extracting dimensions...');
       const dimensions = await extractDimensions(content);
 
-      const { error: insErr } = await supabase
-        .from('eva_vision_documents')
-        .upsert({
-          vision_key: visionKey,
-          level: 'L2',
-          content,
-          extracted_dimensions: dimensions,
-          version: 1,
-          status: 'draft',
-          chairman_approved: false,
-          source_brainstorm_id: session.id,
-          venture_id: session.metadata?.venture_id || null,
-          created_by: 'brainstorm-to-vision-pipeline',
-        }, { onConflict: 'vision_key' });
+      // SD-LEO-FEAT-DELIBERATE-VISION-APPROVAL-001 / FR-2: route through the
+      // single canonical upsert so approval semantics live in ONE place. This
+      // pipeline NEVER auto-approves — auto-created L2 visions are drafts until a
+      // chairman explicitly approves them. `approved: false` => status='draft',
+      // chairman_approved=false (preserving prior behavior, now non-divergent).
+      // FR-1: passing the brainstorm id also lets upsertVision resolve venture_id
+      // from a single-venture session at write time.
+      const { upsertVision } = await import('../../lib/eva/vision-upsert.js');
+      const { error: insErr } = await upsertVision({
+        supabase,
+        visionKey,
+        level: 'L2',
+        content,
+        dimensions,
+        brainstormId: session.id,
+        ventureId: session.metadata?.venture_id || null,
+        createdBy: 'brainstorm-to-vision-pipeline',
+        approved: false,
+      });
 
       if (insErr) { console.error(`    ❌ Insert failed: ${insErr.message}`); continue; }
-      console.log(`    ✅ L2 vision doc created (${dimensions?.length || 0} dimensions)`);
+      console.log(`    ✅ L2 vision doc created as DRAFT (not approved; ${dimensions?.length || 0} dimensions)`);
     }
 
     processed++;

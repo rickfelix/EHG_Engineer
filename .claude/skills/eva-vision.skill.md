@@ -150,35 +150,41 @@ If the weight sum is outside 0.9-1.1, display a warning:
 ⚠️  Dimension weights sum to <sum> — expected ~1.0. Adjust before approval.
 ```
 
-Then ask:
+Then ask (SD-LEO-FEAT-DELIBERATE-VISION-APPROVAL-001 / FR-2 — approval is a deliberate, explicit choice, never silent):
 
 ```javascript
 {
   "questions": [{
-    "question": "Review the extracted dimensions above. Approve to save to the database.",
-    "header": "Chairman Approval",
+    "question": "Review the extracted dimensions above. How should this vision be saved?",
+    "header": "Chairman Approval Decision",
     "multiSelect": false,
     "options": [
-      {"label": "Approve — Save to database", "description": "Upsert vision document with these dimensions"},
-      {"label": "Reject — Cancel", "description": "Do not save. No changes made."}
+      {"label": "Approve & start build", "description": "Save active + chairman_approved. Build SDs can be generated for this venture."},
+      {"label": "Save as draft", "description": "Save as a draft (NOT approved). Review later; no build SDs until approved."},
+      {"label": "Cancel", "description": "Do not save. No changes made."}
     ]
   }]
 }
 ```
 
-**Step 5: On Approve — upsert**
+**Step 5: On a save choice — upsert**
+
+The upsert command **requires** exactly one of `--approved` / `--draft`. Map the chairman's choice:
+- **"Approve & start build"** → `--approved`
+- **"Save as draft"** → `--draft`
 
 ```bash
 node scripts/eva/vision-command.mjs upsert \
   --vision-key <key> \
   --level <L1|L2> \
   --source <source-path> \
+  --approved \
   --dimensions '<dimensions-json>'
 ```
 
-Display the output confirming the stored document.
+(Substitute `--draft` for `--approved` when the chairman chose "Save as draft".) Display the output confirming the stored document and its approval state.
 
-**Step 6: On Reject**
+**Step 6: On Cancel**
 
 Output:
 ```

@@ -13,10 +13,14 @@
  *
  * Subcommands:
  *   extract --source <path>              Extract dimensions from source file (stdout JSON)
- *   upsert  --vision-key <key>           Upsert vision doc to DB after chairman approval
+ *   upsert  --vision-key <key>           Upsert vision doc to DB
  *           --level <L1|L2>
  *           --source <path>
- *           [--venture-id <id>]
+ *           (--approved | --draft)        REQUIRED: deliberate approval choice.
+ *                                         --approved => active + chairman_approved
+ *                                         --draft    => draft, not approved
+ *           [--venture-id <id>]           Explicit venture linkage
+ *           [--brainstorm-id <id>]        Source brainstorm (auto-links a single-venture session)
  *           [--dimensions <json>]
  *   addendum --vision-key <key>          Append addendum section to existing vision doc
  *            --section <text>
@@ -146,10 +150,25 @@ async function cmdExtract({ source, content: contentArg }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson, content: contentArg, stdin: stdinFlag }) {
+async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson, content: contentArg, stdin: stdinFlag, approved: approvedFlag, draft: draftFlag }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
   if (!level || !['L1', 'L2'].includes(level)) { console.error('--level must be L1 or L2'); process.exit(1); }
   if (!source && !sectionsJson && !contentArg && !stdinFlag) { console.error('--source, --sections, --content, or --stdin is required'); process.exit(1); }
+
+  // FR-2 (SD-LEO-FEAT-DELIBERATE-VISION-APPROVAL-001): approval must be a
+  // DELIBERATE, explicit chairman choice — never a silent default. Require
+  // exactly one of --approved / --draft so registering a vision is an explicit
+  // decision to either start the build (active + chairman_approved) or save a
+  // draft (draft + not approved).
+  if (approvedFlag && draftFlag) {
+    console.error('Pass only ONE of --approved or --draft, not both.');
+    process.exit(1);
+  }
+  if (!approvedFlag && !draftFlag) {
+    console.error('Approval decision required: pass --approved (active + chairman_approved) or --draft (saved as draft, not approved).');
+    process.exit(1);
+  }
+  const approved = Boolean(approvedFlag);
 
   // Read content from stdin when --stdin is set. Cross-platform alternative to
   // --content which hits OS CLI length limits (~8K on Windows) for large docs.
@@ -298,7 +317,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   const { upsertVision } = await import('../../lib/eva/vision-upsert.js');
   const { data, error } = await upsertVision({
     supabase, visionKey, level, content, sections, dimensions,
-    ventureId, brainstormId, createdBy: 'eva-vision-command',
+    ventureId, brainstormId, createdBy: 'eva-vision-command', approved,
   });
 
   if (error) { console.error('❌ Upsert failed:', error.message); process.exit(1); }
@@ -309,6 +328,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   console.log(`   Level:   ${data.level}`);
   console.log(`   Version: ${data.version}`);
   console.log(`   Status:  ${data.status}`);
+  console.log(`   Approval: ${approved ? 'APPROVED (chairman_approved=true, build can start)' : 'DRAFT (not approved — review then re-run with --approved to start build)'}`);
   if (dimensions) console.log(`   Dimensions: ${dimensions.length} extracted`);
   if (sections) console.log(`   Sections: ${renderSectionsSummary(sections)}`);
 }

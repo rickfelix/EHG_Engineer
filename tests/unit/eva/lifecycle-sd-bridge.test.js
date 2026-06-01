@@ -538,6 +538,99 @@ describe('LifecycleSDBridge', () => {
     });
   });
 
+  describe('FR-5 idempotent generation (SD-LEO-FEAT-DELIBERATE-VISION-APPROVAL-001)', () => {
+    // Mock that models the real strategic_directives_v2_sd_key_key unique
+    // constraint: the first INSERT of a given sd_key succeeds; any later INSERT
+    // of the same sd_key returns Postgres 23505. The pre-existing-orchestrator
+    // idempotency short-circuit (findExistingOrchestrator) is bypassed here by
+    // returning [] from the select-limit chain, so we exercise the INSERT-level
+    // sd_key idempotency directly.
+    function createKeyConstraintSupabase() {
+      const seenKeys = new Set();
+      const insertedRows = [];
+      const sb = {
+        from: vi.fn((table) => {
+          if (table === 'eva_vision_documents') {
+            const vc = {
+              select: vi.fn(() => vc),
+              eq: vi.fn(() => vc),
+              in: vi.fn(() => vc),
+              order: vi.fn(() => vc),
+              limit: vi.fn(() => vc),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1', content: 'x', updated_at: '2026-05-27' }, error: null }),
+            };
+            return vc;
+          }
+          if (table === 'strategic_directives_v2') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+              insert: vi.fn().mockImplementation((row) => {
+                if (seenKeys.has(row.sd_key)) {
+                  return Promise.resolve({
+                    data: null,
+                    error: { code: '23505', message: 'duplicate key value violates unique constraint "strategic_directives_v2_sd_key_key"' },
+                  });
+                }
+                seenKeys.add(row.sd_key);
+                insertedRows.push(row);
+                return Promise.resolve({ data: null, error: null });
+              }),
+              update: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
+          }
+          return { select: vi.fn().mockReturnThis(), insert: vi.fn().mockResolvedValue({ data: null, error: null }) };
+        }),
+        rpc: vi.fn().mockResolvedValue({ data: { cancelled_sds: 0, cancelled_prds: 0 }, error: null }),
+      };
+      return { sb, get insertedRows() { return insertedRows; } };
+    }
+
+    const sprintParams = {
+      stageOutput: {
+        sprint_name: 'Sprint Idem',
+        sprint_goal: 'Build',
+        sd_bridge_payloads: [
+          { title: 'Feature A', type: 'feature', description: 'D', scope: 'S' },
+          { title: 'Feature B', type: 'feature', description: 'D', scope: 'S' },
+        ],
+      },
+      ventureContext: { id: 'v1', name: 'Test' },
+      options: { generateGrandchildren: false, skipEnrichment: true },
+    };
+
+    it('second generation pass with identical sd_keys creates 0 new rows and does not error', async () => {
+      const { sb, insertedRows } = createKeyConstraintSupabase();
+
+      const first = await convertSprintToSDs(sprintParams, { supabase: sb, logger: silentLogger });
+      expect(first.created).toBe(true);
+      const rowsAfterFirst = insertedRows.length;
+      expect(rowsAfterFirst).toBeGreaterThan(0); // orchestrator + 2 children
+
+      // Second pass: same deterministic keys → every INSERT hits 23505 → reuse, no throw.
+      const second = await convertSprintToSDs(sprintParams, { supabase: sb, logger: silentLogger });
+
+      // No new rows inserted on the re-run.
+      expect(insertedRows.length).toBe(rowsAfterFirst);
+      // The run must not surface a hard failure (no rollback, no thrown error).
+      expect(second.errors).toEqual([]);
+      expect(sb.rpc).not.toHaveBeenCalled(); // rollback never triggered
+      // childKeys still reflect the full intended set on the reuse pass.
+      expect(second.childKeys.length).toBe(2);
+    });
+
+    it('does not roll back pre-existing rows when a later pass reuses keys', async () => {
+      const { sb } = createKeyConstraintSupabase();
+      await convertSprintToSDs(sprintParams, { supabase: sb, logger: silentLogger });
+      await convertSprintToSDs(sprintParams, { supabase: sb, logger: silentLogger });
+      // Neither pass should have attempted the rollback RPC.
+      expect(sb.rpc).not.toHaveBeenCalled();
+    });
+  });
+
   describe('buildBridgeArtifactRecord', () => {
     it('should build correct artifact for successful bridge', () => {
       const record = buildBridgeArtifactRecord('venture-1', 18, {
