@@ -1,3 +1,12 @@
+---
+Category: Database
+Status: Draft
+Version: 1.0.0
+Author: LEO Protocol
+Last Updated: 2026-05-31
+Tags: database, competitive-intelligence, design, spike
+---
+
 # Child A — Design Justification & Differentiation-Research Spike
 
 **SD:** SD-COMPETITIVE-INTELLIGENCE-ACROSS-THE-ORCH-001-A (data spine)
