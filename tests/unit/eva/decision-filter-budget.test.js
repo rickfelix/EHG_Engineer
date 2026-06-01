@@ -19,7 +19,11 @@ describe('Decision Filter Engine - budget_exceeded trigger', () => {
     expect(budgetIdx).toBeLessThan(techIdx);
   });
 
-  it('should fire HIGH trigger when over budget', () => {
+  // QF-20260601-345 (RCA a8c479493): over-budget is ADVISORY (MEDIUM), not HIGH. A HIGH trigger
+  // here maps to FILTER_ACTION.STOP, which breaks the worker venture loop BEFORE the zero-LLM-cost
+  // S19 SD bridge (convertSprintToSDs), so an over-budget leo_bridge venture with a ready sprint
+  // plan could never generate its build SDs (DataDistill 510177ba). Mirrors sibling Rule 1.
+  it('should fire MEDIUM (advisory) trigger when over budget — never HIGH (HIGH would STOP the S19 bridge)', () => {
     const result = evaluateDecision({
       budgetStatus: {
         is_over_budget: true,
@@ -31,11 +35,17 @@ describe('Decision Filter Engine - budget_exceeded trigger', () => {
 
     const budgetTrigger = result.triggers.find(t => t.type === 'budget_exceeded');
     expect(budgetTrigger).toBeTruthy();
-    expect(budgetTrigger.severity).toBe('HIGH');
+    expect(budgetTrigger.severity).toBe('MEDIUM');
     expect(budgetTrigger.details.tokensUsed).toBe(575000);
     expect(budgetTrigger.details.budgetLimit).toBe(500000);
-    expect(result.auto_proceed).toBe(false);
-    expect(result.recommendation).toBe('PRESENT_TO_CHAIRMAN');
+    expect(budgetTrigger.details.advisory).toBe(true);
+    expect(budgetTrigger.message).toContain('advisory');
+    // REGRESSION GUARD: over-budget alone must NOT emit ANY HIGH trigger — the orchestrator only
+    // maps to FILTER_ACTION.STOP when a HIGH trigger is present, so a HIGH here re-introduces the
+    // pipeline halt that blocked DataDistill's S19 bridge.
+    expect(result.triggers.every(t => t.severity !== 'HIGH')).toBe(true);
+    // MEDIUM still surfaces to the Chairman (informed) but does not hard-halt the pipeline.
+    expect(result.recommendation).toBe('PRESENT_TO_CHAIRMAN_WITH_MITIGATIONS');
   });
 
   it('should fire MEDIUM trigger at 80% usage', () => {
