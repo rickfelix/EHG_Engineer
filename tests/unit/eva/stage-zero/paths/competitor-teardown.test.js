@@ -203,6 +203,7 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
     expect(boardSpy.mock.calls[0][0]).toBe('ci-rec-1');
 
     expect(result.result_extras).toEqual({
+      competitor_intelligence_id: 'ci-rec-1', // primary record stamped for the venture link
       differentiation_strategy: 'Automate the entire workflow with AI',
       delta_gate: { verdict: 'seedable', score: 0.7, threshold: 0.5, reason: 'defensible, seedable' },
       sanitization_status: 'passed',
@@ -231,7 +232,10 @@ describe('executeCompetitorTeardown — differentiation board wiring (SD-LEO-INF
     expect(boardSpy).toHaveBeenCalledTimes(1);
     expect(result).not.toBeNull();
     expect(result.origin_type).toBe('competitor_teardown');
-    expect(result.result_extras).toBeUndefined(); // graceful degradation
+    // Graceful degradation: board-display fields absent, but the venture-link id is
+    // still stamped so confirm can link the record to the venture (Stage-4 lights up).
+    expect(result.result_extras).toEqual({ competitor_intelligence_id: 'ci-rec-1' });
+    expect(result.result_extras.delta_gate).toBeUndefined();
     expect(warnLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('differentiation board failed')
     );
