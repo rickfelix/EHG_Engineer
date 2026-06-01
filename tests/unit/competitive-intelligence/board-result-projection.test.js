@@ -10,6 +10,7 @@ import { describe, test, expect } from 'vitest';
 import {
   projectBoardResultToStageZero,
   mapSanitizationStatus,
+  mapUniqueAdvantagesToOpportunities,
 } from '../../../lib/competitive-intelligence/board-result-projection.js';
 
 describe('projectBoardResultToStageZero', () => {
@@ -31,6 +32,8 @@ describe('projectBoardResultToStageZero', () => {
         reason: 'defensible, seedable',
       },
       sanitization_status: 'passed',
+      // SURFACE-DIFFERENTIATION-BOARD-001: unique_advantages -> opportunity cards
+      differentiation_opportunities: [{ opportunity_name: 'a' }, { opportunity_name: 'b' }],
     });
   });
 
@@ -101,5 +104,34 @@ describe('mapSanitizationStatus', () => {
     expect(mapSanitizationStatus('passed')).toBe('passed');
     expect(mapSanitizationStatus('pending')).toBe('pending');
     expect(mapSanitizationStatus(undefined)).toBeUndefined();
+  });
+});
+
+describe('differentiation_opportunities mapping (SD-LEO-INFRA-SURFACE-DIFFERENTIATION-BOARD-001 / FR-1)', () => {
+  test('projection maps strategy.unique_advantages -> differentiation_opportunities [{opportunity_name}]', () => {
+    const board = {
+      gate: { seedable: true, delta: 0.7, threshold: 0.5, reason: 'ok' },
+      strategy: { angle: 'x', unique_advantages: ['24/7 automation', 'no headcount'] },
+      sanitization_status: 'passed',
+    };
+    expect(projectBoardResultToStageZero(board).differentiation_opportunities).toEqual([
+      { opportunity_name: '24/7 automation' },
+      { opportunity_name: 'no headcount' },
+    ]);
+  });
+
+  test('projection yields an empty opportunities array when the board produced no advantages', () => {
+    const board = { gate: { seedable: true, delta: 0.6, threshold: 0.5 }, strategy: { angle: 'x' } };
+    expect(projectBoardResultToStageZero(board).differentiation_opportunities).toEqual([]);
+  });
+
+  test('mapUniqueAdvantagesToOpportunities: maps, drops empties, tolerates non-array / non-object', () => {
+    expect(mapUniqueAdvantagesToOpportunities({ unique_advantages: ['a', '', '  ', 'b'] })).toEqual([
+      { opportunity_name: 'a' },
+      { opportunity_name: 'b' },
+    ]);
+    expect(mapUniqueAdvantagesToOpportunities({ unique_advantages: 'not-an-array' })).toEqual([]);
+    expect(mapUniqueAdvantagesToOpportunities('bare string')).toEqual([]);
+    expect(mapUniqueAdvantagesToOpportunities(undefined)).toEqual([]);
   });
 });
