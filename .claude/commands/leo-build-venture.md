@@ -61,6 +61,17 @@ Repeat:
    (LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL, with all sub-agent
    evidence — the child runs the normal protocol). It MUST NOT touch the venture stage or any
    chairman/vision row. Increment `attemptsByLeaf[nextLeaf]` and `leavesDriven`.
+
+   **Context-aware driving (SD-LEO-INFRA-CONTEXT-AWARE-DEPENDENCY-001, FR-2):** when
+   `DEPENDENCY_ORDERED_EXECUTION` is on (default), the lib selects leaves in build-order (a leaf is
+   only driven once its in-tree dependencies are terminal) and hands `driveLeaf` a
+   `ctx.dependencyContext = { completed: [{ sd_key, title }], context_entries: [...] }` — the leaf's
+   already-COMPLETED sibling dependencies plus the non-SD manifest entries (existing-module paths,
+   shared primitives, prerequisites) from its `dependencies` column. **Inject this into the
+   `orchestrator-child-agent` prompt** so the leaf is built WITH knowledge of what its dependencies
+   produced (e.g. "this SD consumes the typed DAL delivered by completed sibling `<sd_key>` — reuse
+   it, do not re-derive"). It is purely informational grounding — it never relaxes the never-advance
+   or chairman/vision constraints.
 4. **Verify** — re-query the SD's status. If it reached `completed`, continue the loop (the next
    introspection will surface the next leaf; child-orchestrators bubble-complete automatically). If
    it did not, loop again (the same leaf will be re-selected until its attempt cap, then HOLD per
