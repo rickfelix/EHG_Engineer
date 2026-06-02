@@ -128,6 +128,32 @@ export function buildConnectionString(projectKey, password) {
 }
 
 /**
+ * Strip any `sslmode` query param from a Postgres connection string.
+ *
+ * Externally-supplied connection strings (notably the repo's DATABASE_URL secret)
+ * carry `?sslmode=require`, which pg-connection-string promotes to verify-full and
+ * which OVERRIDES the explicit `ssl: getSSLConfig()` object we pass to pg below —
+ * yielding SELF_SIGNED_CERT_IN_CHAIN on hosts whose trust store lacks the self-signed
+ * Supabase Root 2021 CA (e.g. CI runners). Removing it lets getSSLConfig()'s committed-CA
+ * strict verification govern. SSL is STILL enforced via the ssl object, so this does NOT
+ * weaken TLS (same reason buildConnectionString deliberately never adds sslmode). No-op
+ * for strings without sslmode (returned verbatim, no URL re-normalization).
+ * @param {string} connStr
+ * @returns {string}
+ */
+export function stripSslmode(connStr) {
+  if (!connStr) return connStr;
+  try {
+    const u = new URL(connStr);
+    if (!u.searchParams.has('sslmode')) return connStr;
+    u.searchParams.delete('sslmode');
+    return u.toString();
+  } catch {
+    return connStr; // not a parseable URL — leave as-is; the ssl object still governs
+  }
+}
+
+/**
  * Create a connected PostgreSQL client
  * @param {string} projectKey - 'ehg' or 'engineer'
  * @param {Object} options - Connection options
@@ -153,7 +179,7 @@ export async function createDatabaseClient(projectKey = 'ehg', options = {}) {
     );
   }
 
-  const connStr = options.connectionString || buildConnectionString(projectKey, password);
+  const connStr = stripSslmode(options.connectionString || buildConnectionString(projectKey, password));
 
   const client = new Client({
     connectionString: connStr,
