@@ -39,10 +39,12 @@ function log(msg = '') { if (!JSON_MODE) console.log(msg); }
 
 async function main() {
   // 'engineer' matches scripts/apply-migration.js (the same consolidated instance the
-  // remediation migration targeted). connectionString (SUPABASE_POOLER_URL) wins in CI;
-  // locally it falls back to building from SUPABASE_DB_PASSWORD.
+  // remediation migration targeted). In CI the connectionString comes from DATABASE_URL
+  // (SUPABASE_POOLER_URL is not a configured secret in this repo — DATABASE_URL is the
+  // canonical fallback, same as scripts/check-migration-readiness.mjs). Locally, with
+  // neither set, createDatabaseClient builds the string from SUPABASE_DB_PASSWORD.
   const client = await createDatabaseClient('engineer', {
-    connectionString: process.env.SUPABASE_POOLER_URL,
+    connectionString: process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL,
   });
 
   let result;
@@ -71,6 +73,16 @@ async function main() {
       WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relrowsecurity = false
       ORDER BY 1`);
 
+    // (4) function_search_path_mutable — SECURITY DEFINER functions without a pinned
+    // search_path. WARN-class in Supabase's linter, but the SECURITY DEFINER subset is a
+    // real privilege-escalation surface (CVE-2018-1058 class), so the sentinel enforces it.
+    const secdefFns = await client.query(`
+      SELECT p.proname AS name
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.prokind = 'f' AND p.prosecdef
+        AND NOT EXISTS (SELECT 1 FROM unnest(COALESCE(p.proconfig, '{}')) x WHERE x LIKE 'search_path=%')
+      ORDER BY 1`);
+
     // Prevention liveness: is the view event trigger present + enabled? ('D' = disabled)
     const trig = await client.query(
       `SELECT evtenabled FROM pg_event_trigger WHERE evtname = 'leo_enforce_view_security_invoker'`);
@@ -79,13 +91,15 @@ async function main() {
       securityDefinerViews: views.rows.map(r => r.name),
       rlsDisabled: tables.rows.map(r => r.name).filter(n => !EXEMPTED_TABLES.has(n)),
       sensitiveExposed: sensitive.rows.map(r => r.name).filter(n => !EXEMPTED_TABLES.has(n)),
+      securityDefinerMutableFns: secdefFns.rows.map(r => r.name),
       triggerEnabled: trig.rows.length === 1 && trig.rows[0].evtenabled !== 'D',
     };
   } finally {
     await client.end();
   }
 
-  const findings = result.securityDefinerViews.length + result.rlsDisabled.length + result.sensitiveExposed.length;
+  const findings = result.securityDefinerViews.length + result.rlsDisabled.length
+    + result.sensitiveExposed.length + result.securityDefinerMutableFns.length;
   const clean = findings === 0 && result.triggerEnabled;
 
   log('');
@@ -95,10 +109,12 @@ async function main() {
   log(`  security_definer_view (views w/o security_invoker): ${result.securityDefinerViews.length}`);
   log(`  rls_disabled_in_public (tables w/o RLS):            ${result.rlsDisabled.length}`);
   log(`  sensitive_columns_exposed (session_id, no RLS):     ${result.sensitiveExposed.length}`);
+  log(`  function_search_path_mutable (SECURITY DEFINER fn): ${result.securityDefinerMutableFns.length}`);
   log(`  view-invoker event trigger enabled:                 ${result.triggerEnabled}`);
   log('  ' + '-'.repeat(40));
   if (result.securityDefinerViews.length) log('  Views:  ' + result.securityDefinerViews.join(', '));
   if (result.rlsDisabled.length) log('  Tables: ' + result.rlsDisabled.join(', '));
+  if (result.securityDefinerMutableFns.length) log('  Functions: ' + result.securityDefinerMutableFns.join(', '));
   if (!result.triggerEnabled) log('  ⚠ PREVENTION GAP: view-invoker event trigger missing/disabled!');
   log(clean ? '  ✓ CLEAN' : '  ✗ FINDINGS PRESENT');
   log('='.repeat(60));

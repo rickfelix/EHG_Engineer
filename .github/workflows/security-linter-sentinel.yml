@@ -54,6 +54,7 @@ jobs:
       - name: Run sentinel (capture report)
         env:
           SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           node scripts/sentinels/audit-security-linter.mjs --json > security-linter-report.json
           echo "--- Human-readable summary ---"
@@ -71,4 +72,5 @@ jobs:
         if: ${{ github.event_name == 'schedule' || github.event.inputs.strict == 'true' }}
         env:
           SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: node scripts/sentinels/audit-security-linter.mjs --strict
