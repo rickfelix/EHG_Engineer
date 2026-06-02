@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-02T12:54:44.216Z
+**Generated**: 2026-06-02T14:45:30.261Z
 **Rows**: 26
 **RLS**: Enabled (2 policies)
 
@@ -28,8 +28,8 @@
 | gate_type | `text` | **NO** | `'none'::text` | - |
 | review_mode | `text` | **NO** | `'auto'::text` | - |
 | work_type | `text` | **NO** | - | - |
-| sd_required | `boolean` | **NO** | `false` | - |
-| sd_suffix | `text` | YES | - | - |
+| sd_required | `boolean` | **NO** | `false` | TRUE means a per-venture Strategic Directive is generated for this stage. This is genuinely true ONLY for S19=BUILD (the lifecycle-sd-bridge build tree). The column is VESTIGIAL/INFORMATIONAL: no runtime code branches on this boolean — all behavioral classification keys off work_type instead (work_type='sd_required' is the authoritative signal; the monitor's SD_REQUIRED guard and assertSdRequiredStagesMatchCanonical read work_type, not this boolean). Historically loosely coupled (S14/S15 are work_type='artifact_only' yet were sd_required=true). SD-LEO-INFRA-CONFIG-HONESTY-RECONCILE-001. |
+| sd_suffix | `text` | YES | - | Vestigial naming label (e.g. BRAND/MARKETING/BUILD) intended as an SD-key suffix. Has NO runtime reader — get_sd_required_stages() exposes it but is never called from application code. Informational/historical only. SD-LEO-INFRA-CONFIG-HONESTY-RECONCILE-001. |
 | advisory_enabled | `boolean` | **NO** | `false` | - |
 | depends_on | `ARRAY` | **NO** | `'{}'::integer[]` | - |
 | required_artifacts | `ARRAY` | **NO** | `'{}'::text[]` | - |
