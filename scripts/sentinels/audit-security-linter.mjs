@@ -43,22 +43,12 @@ async function main() {
   // (SUPABASE_POOLER_URL is not a configured secret in this repo — DATABASE_URL is the
   // canonical fallback, same as scripts/check-migration-readiness.mjs). Locally, with
   // neither set, createDatabaseClient builds the string from SUPABASE_DB_PASSWORD.
-  //
-  // Strip any `sslmode` param: the repo's DATABASE_URL carries `?sslmode=require`, which
-  // pg-connection-string promotes to verify-full and which overrides the lib's explicit
-  // ssl:{ca} (the committed Supabase root CA), causing SELF_SIGNED_CERT_IN_CHAIN on the
-  // runner. Removing it lets getSSLConfig()'s strict CA verification govern (no TLS bypass,
-  // so the ssl-bypass-lint gate stays satisfied). Verified: with sslmode -> error, without
-  // -> OK.
-  let connectionString = process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL;
-  if (connectionString) {
-    try {
-      const u = new URL(connectionString);
-      u.searchParams.delete('sslmode');
-      connectionString = u.toString();
-    } catch { /* not a parseable URL — leave as-is, lib will handle/throw */ }
-  }
-  const client = await createDatabaseClient('engineer', { connectionString });
+  // createDatabaseClient strips any `?sslmode=require` so the committed-CA TLS config
+  // governs (else SELF_SIGNED_CERT_IN_CHAIN on the runner) — see stripSslmode in
+  // scripts/lib/supabase-connection.js.
+  const client = await createDatabaseClient('engineer', {
+    connectionString: process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL,
+  });
 
   let result;
   try {
