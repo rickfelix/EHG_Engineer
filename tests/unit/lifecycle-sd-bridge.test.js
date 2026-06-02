@@ -16,6 +16,7 @@ const { TYPE_MAP, findExistingOrchestrator } = _internal;
 vi.mock('../../scripts/modules/sd-key-generator.js', () => ({
   generateSDKey: vi.fn().mockResolvedValue('SD-ACME-LEO-ORCH-SPRINT-001'),
   generateChildKey: vi.fn((parentKey, index) => `${parentKey}-${index}`),
+  generateGrandchildKey: vi.fn((parentChildKey, j) => `${parentChildKey}-${j}`),
   normalizeVenturePrefix: vi.fn(name => name.toUpperCase().replace(/\s+/g, '-')),
   keyExists: vi.fn().mockResolvedValue(false),
   SD_SOURCES: { LEO: 'LEO' },
@@ -58,6 +59,8 @@ function createMockSupabase({ insertError = null, selectData = [], selectError =
         select: mockSelect,
       };
     }),
+    // rollbackCreatedRecords() calls supabase.rpc('fn_rollback_sd_hierarchy', …)
+    rpc: vi.fn().mockResolvedValue({ data: { rolled_back: true }, error: null }),
   };
 }
 
@@ -124,7 +127,7 @@ describe('convertSprintToSDs', () => {
     const ventureContext = { id: 'venture-uuid-123', name: 'Acme Labs' };
 
     const result = await convertSprintToSDs(
-      { stageOutput, ventureContext },
+      { stageOutput, ventureContext, options: { skipEnrichment: true, generateGrandchildren: false } },
       { supabase: mockSupabase, logger: mockLogger },
     );
 
@@ -218,43 +221,64 @@ describe('convertSprintToSDs', () => {
     expect(result.errors[0]).toContain('Unique constraint');
   });
 
-  it('handles child creation failure gracefully', async () => {
+  it('atomically rolls back the whole tree when a child fails', async () => {
+    // SD-LEO-INFRA-COMPLETE-LEO-BRIDGE-001: child creation is no longer partial.
+    // Any child failure throws, rollbackCreatedRecords() cancels the created rows
+    // (fn_rollback_sd_hierarchy RPC first), and the result is created:false with no
+    // surviving childKeys. Enrichment + grandchildren are out of scope for this test.
     let insertCallCount = 0;
     const partialFailSupabase = {
-      from: vi.fn().mockReturnValue({
-        insert: vi.fn().mockImplementation(() => {
-          insertCallCount++;
-          if (insertCallCount === 1) return Promise.resolve({ error: null }); // Orchestrator succeeds
-          if (insertCallCount === 2) return Promise.resolve({ error: null }); // Child A succeeds
-          return Promise.resolve({ error: { message: 'Child B failed' } }); // Child B fails
-        }),
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
+      from: vi.fn((table) => {
+        // assertVentureVisionReady() runs first — return a chairman-approved L2 so the
+        // vision gate passes and the child-failure path is actually exercised.
+        if (table === 'eva_vision_documents') {
+          const vc = {
+            select: vi.fn(() => vc),
+            eq: vi.fn(() => vc),
+            in: vi.fn(() => vc),
+            order: vi.fn(() => vc),
+            limit: vi.fn(() => vc),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { vision_key: 'VISION-TEST-L2-001', version: 'v1' }, error: null }),
+          };
+          return vc;
+        }
+        return {
+          insert: vi.fn().mockImplementation(() => {
+            insertCallCount++;
+            if (insertCallCount === 1) return Promise.resolve({ error: null }); // Orchestrator succeeds
+            if (insertCallCount === 2) return Promise.resolve({ error: null }); // Child A succeeds
+            return Promise.resolve({ error: { message: 'Child B failed' } }); // Child B fails
+          }),
+          select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                eq: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                }),
               }),
             }),
           }),
-        }),
+        };
       }),
+      rpc: vi.fn().mockResolvedValue({ data: { rolled_back: true }, error: null }),
     };
 
     const stageOutput = createStageOutput(2);
     const ventureContext = { id: 'v-1', name: 'Test' };
 
     const result = await convertSprintToSDs(
-      { stageOutput, ventureContext },
+      { stageOutput, ventureContext, options: { skipEnrichment: true, generateGrandchildren: false } },
       { supabase: partialFailSupabase, logger: mockLogger },
     );
 
-    expect(result.created).toBe(true);
-    expect(result.childKeys).toHaveLength(1); // Only A succeeded
-    expect(result.errors).toHaveLength(1); // B failed
+    expect(result.created).toBe(false);
+    expect(result.childKeys).toHaveLength(0); // atomic rollback — nothing survives
+    expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toContain('Child B failed');
+    expect(partialFailSupabase.rpc).toHaveBeenCalledWith('fn_rollback_sd_hierarchy', expect.any(Object));
   });
 
-  it('handles missing venture context gracefully', async () => {
+  it('refuses generation when venture context has no resolved id', async () => {
     const stageOutput = createStageOutput(1);
 
     const result = await convertSprintToSDs(
@@ -262,9 +286,12 @@ describe('convertSprintToSDs', () => {
       { supabase: mockSupabase, logger: mockLogger },
     );
 
-    // Should still create SDs without venture prefix
-    expect(result.created).toBe(true);
-    expect(result.orchestratorKey).toBeTruthy();
+    // SD-LEO-INFRA-UNIFY-VENTURE-NON-001 / Child C: the bridge now REFUSES to
+    // generate an orchestrator without a resolved venture row — assertVentureVisionReady
+    // throws VENTURE_ID_MISSING — instead of silently creating venture-less SDs.
+    expect(result.created).toBe(false);
+    expect(result.orchestratorKey).toBeNull();
+    expect(result.errors.join(' ')).toContain('resolved venture row');
   });
 
   it('maps sprint item types correctly', async () => {
@@ -279,7 +306,7 @@ describe('convertSprintToSDs', () => {
     };
 
     const result = await convertSprintToSDs(
-      { stageOutput, ventureContext: { id: 'v-1', name: 'Test' } },
+      { stageOutput, ventureContext: { id: 'v-1', name: 'Test' }, options: { skipEnrichment: true, generateGrandchildren: false } },
       { supabase: mockSupabase, logger: mockLogger },
     );
 
