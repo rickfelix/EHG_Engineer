@@ -1,0 +1,74 @@
+# Weekly Supabase security-linter sentinel.
+#
+# Detection backstop for the SECURITY rules remediated in
+# database/migrations/20260602_fix_security_definer_views_and_rls_recurrence.sql:
+#   security_definer_view, rls_disabled_in_public, sensitive_columns_exposed.
+#
+# Real-time prevention is the DB event trigger `leo_enforce_view_security_invoker`
+# (views) + hardened security_audit_events_create_partition() (partitions). This
+# scheduled run is the defense-in-depth detector: it goes RED if the trigger is
+# dropped/disabled or a new public table ships without RLS.
+#
+# Runs scripts/sentinels/audit-security-linter.mjs against the consolidated DB via
+# the SUPABASE_POOLER_URL secret (the script reads pg_catalog, which PostgREST does
+# not expose, so it uses a direct pg connection).
+
+name: security-linter-sentinel
+
+on:
+  schedule:
+    - cron: '0 14 * * 1'  # Mondays 14:00 UTC
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: 'Exit non-zero if any findings (default true)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-linter-sentinel
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run sentinel (capture report)
+        env:
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+        run: |
+          node scripts/sentinels/audit-security-linter.mjs --json > security-linter-report.json
+          echo "--- Human-readable summary ---"
+          node scripts/sentinels/audit-security-linter.mjs
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-linter-report-${{ github.run_id }}
+          path: security-linter-report.json
+          retention-days: 90
+
+      - name: Enforce (strict)
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.strict == 'true' }}
+        env:
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+        run: node scripts/sentinels/audit-security-linter.mjs --strict
