@@ -68,14 +68,10 @@ CONTRIBUTING.md @rickfelix
 /lib/eva/stage-templates/index.js @rickfelix
 /tests/unit/eva/stage-templates/index.test.js @rickfelix
 
-# Stage 17 cross-repo contract gate per SD-LEO-INFRA-STAGE17-CROSS-REPO-001.
-# Any change to these paths must also touch docs/architecture/stage17-contracts.md
-# (paired-update enforced by .github/workflows/stage17-contract-smoke.yml).
-# Reviewer verifies the contract still matches.
+# Stage 17 design libs. The /api/stage17 routes + the cross-repo contract apparatus
+# (audit script, smoke workflow, contract doc) were removed by
+# SD-LEO-REFAC-VERIFY-GVOS-SUPERSESSION-001 — the GVOS composer is the live path.
 /lib/eva/stage-17/ @rickfelix
-/server/routes/stage17.js @rickfelix
-/docs/architecture/stage17-contracts.md @rickfelix
-/scripts/audit-stage17-urls.mjs @rickfelix
 # Audit-trail integrity (SD-WRITERCONSUMER-ASYMMETRY-...-001-A FR-A-12 + COND-RISK-02).
 # Files that govern bypass auditing: any change MUST be reviewed for parity preservation.
 /scripts/ci/audit-log-parity-check.mjs @rickfelix
