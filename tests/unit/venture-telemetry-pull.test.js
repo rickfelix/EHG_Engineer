@@ -112,6 +112,21 @@ describe('buildOkRow — persists ONLY the validated KPI subset (no verbatim pas
     expect(JSON.stringify(row)).not.toContain('secret_email');
     expect(JSON.stringify(row)).not.toContain('leak@x.com');
   });
+
+  it('drops TOP-LEVEL junk/PII keys (allowlist-by-construction, not blocklist)', () => {
+    const payload = { ...VALID_PAYLOAD, pii_dump: { ssn: '123-45-6789' }, api_key: 'sk-leak', customer_records: [{ email: 'a@b.com' }] };
+    const row = buildOkRow(APP, payload, { httpStatus: 200, sourceUrl: 'u' }, NOW);
+    const blob = JSON.stringify(row);
+    expect(blob).not.toContain('pii_dump');
+    expect(blob).not.toContain('api_key');
+    expect(blob).not.toContain('sk-leak');
+    expect(blob).not.toContain('customer_records');
+    // raw_payload is rebuilt from a FIXED named field set — only recognized contract keys + kpis.
+    expect(Object.keys(row.raw_payload).sort()).toEqual([
+      'avg_confidence', 'by_mode', 'by_model', 'by_verdict', 'contract_version',
+      'dry_run_count', 'generated_at', 'kpis', 'since', 'total', 'window_days',
+    ]);
+  });
 });
 
 describe('deriveVenturePortfolio — maps KPIs onto EXISTING ventures columns (no parallel fields)', () => {
