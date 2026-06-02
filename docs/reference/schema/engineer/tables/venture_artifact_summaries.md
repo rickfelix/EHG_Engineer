@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-01T05:32:47.194Z
-**Rows**: 34
-**RLS**: Disabled
+**Generated**: 2026-06-02T12:13:54.400Z
+**Rows**: 79
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -65,6 +65,14 @@
   ```sql
   CREATE UNIQUE INDEX venture_artifact_summaries_venture_id_artifact_id_key ON public.venture_artifact_summaries USING btree (venture_id, artifact_id)
   ```
+
+## RLS Policies
+
+### 1. service_role_full_access (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 
