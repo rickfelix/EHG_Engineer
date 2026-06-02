@@ -374,7 +374,10 @@ describe('wire-check-gate server-route scope (SD-FDBK-ENH-WIRE-CHECK-GATE-001)',
     const files = getScopedJsFiles(REPO_ROOT);
     expect(Array.isArray(files)).toBe(true);
     expect(files.some((f) => f.endsWith('/server/index.js'))).toBe(true);
-    expect(files.some((f) => f.endsWith('/server/routes/stage17.js'))).toBe(true);
+    // Intent: server route modules are in scope. Assert on the routes dir rather than a
+    // specific file so the test isn't brittle to any single route's removal
+    // (the original stage17.js witness was deleted by SD-LEO-REFAC-VERIFY-GVOS-SUPERSESSION-001).
+    expect(files.some((f) => f.includes('/server/routes/') && f.endsWith('.js'))).toBe(true);
   });
 
   // FR-002 (live repo): server/index.js is a discovered entry point
