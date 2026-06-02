@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-01T05:32:47.194Z
+**Generated**: 2026-06-02T12:13:54.400Z
 **Rows**: 2
-**RLS**: Disabled
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -54,6 +54,14 @@
   ```sql
   CREATE UNIQUE INDEX deep_research_budget_pkey ON public.deep_research_budget USING btree (id)
   ```
+
+## RLS Policies
+
+### 1. service_role_full_access (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 
