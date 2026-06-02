@@ -175,6 +175,7 @@
     "chairman:seed": "node scripts/chairman-seed-data.js",
     "security:audit": "node scripts/security-audit-dashboard.js",
     "security:rls": "node scripts/audit-rls-policies.js",
+    "security:linter": "node scripts/sentinels/audit-security-linter.mjs",
     "eva:dlq:replay": "node scripts/eva-dlq-replay.js",
     "eva:constitution": "node scripts/eva/constitution-command.mjs",
     "eva:constitution:view": "node scripts/eva/constitution-command.mjs view",
