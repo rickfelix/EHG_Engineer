@@ -6,6 +6,8 @@ import {
   persistResult,
   main,
   EXPECTED_CONTRACT_MAJOR,
+  validateKpis,
+  deriveVenturePortfolio,
 } from '../../scripts/venture-telemetry-pull.mjs';
 
 const NOW = new Date('2026-05-29T06:00:00.000Z');
@@ -58,8 +60,68 @@ describe('buildOkRow', () => {
     expect(row.total).toBe(42);
     expect(row.by_verdict).toEqual({ valid: 30, invalid: 8, not_applicable: 4 });
     expect(row.contract_version).toBe('1.0');
-    expect(row.raw_payload).toEqual(VALID_PAYLOAD);
+    // FR-2: raw_payload is no longer the verbatim payload — it is a SANITIZED snapshot of
+    // recognized contract fields + the validated KPI subset (here no kpis block -> {}).
+    expect(row.raw_payload).toEqual({
+      contract_version: '1.0', window_days: 7, since: VALID_PAYLOAD.since,
+      generated_at: VALID_PAYLOAD.generated_at, total: 42,
+      by_verdict: { valid: 30, invalid: 8, not_applicable: 4 },
+      by_mode: { nl_to_cron: 40, cron_to_nl: 2 }, by_model: { 'deterministic-v1': 42 },
+      avg_confidence: 0.91, dry_run_count: 3, kpis: {},
+    });
+    expect(row.kpis).toEqual({});
     expect(row.pulled_at).toBe(NOW.toISOString());
+  });
+});
+
+// SD-LEO-INFRA-PORTFOLIO-PRODUCT-KPI-001 (FR-1/FR-2): product-KPI allowlist + data-minimization.
+describe('validateKpis — allowlist + type/range, drops everything else', () => {
+  it('keeps allowlisted, type/range-valid aggregates', () => {
+    const { kpis, dropped } = validateKpis({ signups: 120, active_users: 80, revenue: 4200.5, usage_volume: 1e6, health: 0.98, churn: 0.03 });
+    expect(kpis).toEqual({ signups: 120, active_users: 80, revenue: 4200.5, usage_volume: 1e6, health: 0.98, churn: 0.03 });
+    expect(dropped).toEqual([]);
+  });
+
+  it('drops unknown / non-allowlisted keys (e.g. PII, raw rows)', () => {
+    const { kpis, dropped } = validateKpis({ signups: 10, email: 'a@b.com', rows: [{ id: 1 }], customer_name: 'Acme' });
+    expect(kpis).toEqual({ signups: 10 });
+    expect(dropped.sort()).toEqual(['customer_name', 'email', 'rows']);
+  });
+
+  it('drops malformed values that fail type/range assertions', () => {
+    const { kpis, dropped } = validateKpis({ signups: 'lots', churn: 1.7, revenue: -5, active_users: 3.5, health: { nested: true } });
+    expect(kpis).toEqual({}); // signups non-int, churn>1, revenue<0, active_users non-int, health non-number
+    expect(dropped.sort()).toEqual(['active_users', 'churn', 'health', 'revenue', 'signups']);
+  });
+
+  it('returns empty for a missing / non-object kpis block (never throws)', () => {
+    expect(validateKpis(undefined)).toEqual({ kpis: {}, dropped: [] });
+    expect(validateKpis(null)).toEqual({ kpis: {}, dropped: [] });
+    expect(validateKpis([1, 2, 3])).toEqual({ kpis: {}, dropped: [] });
+    expect(validateKpis('nope')).toEqual({ kpis: {}, dropped: [] });
+  });
+});
+
+describe('buildOkRow — persists ONLY the validated KPI subset (no verbatim passthrough)', () => {
+  it('stores allowlisted KPIs and drops an injected raw/PII field', () => {
+    const payload = { ...VALID_PAYLOAD, kpis: { signups: 50, revenue: 999, churn: 0.1, secret_email: 'leak@x.com' } };
+    const row = buildOkRow(APP, payload, { httpStatus: 200, sourceUrl: 'u' }, NOW);
+    expect(row.kpis).toEqual({ signups: 50, revenue: 999, churn: 0.1 }); // secret_email dropped
+    expect(row.raw_payload.kpis).toEqual({ signups: 50, revenue: 999, churn: 0.1 });
+    // The injected raw/PII field never appears anywhere in the persisted row.
+    expect(JSON.stringify(row)).not.toContain('secret_email');
+    expect(JSON.stringify(row)).not.toContain('leak@x.com');
+  });
+});
+
+describe('deriveVenturePortfolio — maps KPIs onto EXISTING ventures columns (no parallel fields)', () => {
+  it('derives health_score / projected_revenue / risk_score from KPIs', () => {
+    expect(deriveVenturePortfolio({ health: 0.95, revenue: 1000, churn: 0.2, signups: 5 }))
+      .toEqual({ health_score: 0.95, projected_revenue: 1000, risk_score: 0.2 });
+  });
+  it('returns only derivable columns (omits absent KPIs)', () => {
+    expect(deriveVenturePortfolio({ signups: 5 })).toEqual({});
+    expect(deriveVenturePortfolio()).toEqual({});
   });
 });
 
