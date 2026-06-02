@@ -57,7 +57,7 @@ vi.mock('fs/promises', () => ({
   readFile: async () => { throw new Error('no registry (test fixture)'); },
 }));
 
-const { detectImplementationRepos, EHG_ROOT, EHG_ENGINEER_ROOT } = await import(
+const { detectImplementationRepos, clearImplementationReposCache, EHG_ROOT, EHG_ENGINEER_ROOT } = await import(
   '../../../scripts/modules/implementation-fidelity/utils/repo-detection.js'
 );
 
@@ -77,6 +77,7 @@ function makeSupabase() {
 
 describe('GATE2 cross-repo worktree resolution (SD-FDBK-ENH-GATE2-IMPLEMENTATION-FIDELITY-002)', () => {
   beforeEach(() => {
+    clearImplementationReposCache(); // QF-20260602-767: reset the per-sd_id memo so cases reusing an sd_id see fresh detection
     h.worktreeReturn = null;
     h.resolveCalls = [];
     h.foundSet = new Set();
