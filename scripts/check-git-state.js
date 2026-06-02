@@ -32,10 +32,15 @@ function isPerWorktreeMetadata(file) {
 async function gitCommand(command, cwd) {
   try {
     const { stdout, stderr } = await execAsync(command, cwd ? { cwd } : undefined);
-    return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
+    // trimEnd() — NOT trim(): leading whitespace is SIGNIFICANT for `git status
+    // --porcelain` (its first line begins with the 2-char status code, e.g.
+    // " M .worktree.json"). A bare .trim() strips the first line's leading space,
+    // shifting the parse (status " M"→"M ", file ".worktree.json"→"worktree.json")
+    // so per-worktree metadata misses the skip-list and wrongly blocks the handoff.
+    return { stdout: stdout.trimEnd(), stderr: stderr.trim(), success: true };
   } catch (error) {
     return {
-      stdout: error.stdout?.trim() || '',
+      stdout: error.stdout?.trimEnd() || '',
       stderr: error.stderr?.trim() || error.message,
       success: false
     };
