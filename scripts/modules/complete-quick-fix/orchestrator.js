@@ -165,7 +165,9 @@ export async function completeQuickFix(qfId, options = {}) {
   const locValid = await validateLOC(actualSourceLoc, actualTestLoc, qfId, supabase, prompt, {
     forceComplete: options.forceComplete,
     reason: options.reason,
-    overCapReason: options.overCapReason
+    overCapReason: options.overCapReason,
+    // SD-FDBK-ENH-COMPLETE-QUICK-FIX-002: thread pure-deletion LOC so the cap is net-aware
+    sourceDeletionLoc
   });
   if (!locValid) {
     process.exit(1);
@@ -363,7 +365,10 @@ export async function completeQuickFix(qfId, options = {}) {
     testCoverage,
     // SD-FDBK-ENH-SOURCE-LOC-CAP-001: thread the LOC-only bypass to verifyLOCConstraint
     // (Check 1) so a single --over-cap-reason clears BOTH enforcement points together.
-    overCapReason: options.overCapReason
+    overCapReason: options.overCapReason,
+    // SD-FDBK-ENH-COMPLETE-QUICK-FIX-002: thread pure-deletion LOC so verifyLOCConstraint
+    // caps on net source LOC, matching validateLOC (avoids the dual-hard-gate half-fix).
+    sourceDeletionLoc
   };
 
   // QF-20260524-309 (a38f6b06): prefer the testDir (QF worktree) copy of the self-verifier

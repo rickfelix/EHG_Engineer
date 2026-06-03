@@ -13,6 +13,26 @@ import { execSync } from 'child_process';
 export const QF_HARD_LOC_CAP = 75;
 
 /**
+ * Compute NET source LOC for the QF cap decision: raw source LOC minus LOC from
+ * PURE whole-file deletions (`sourceDeletionLoc`, which countLocBySplit accrues ONLY
+ * for source files with added=0). Dead-code removal is not new source surface and
+ * should not consume the 75-cap budget.
+ *
+ * SD-FDBK-ENH-COMPLETE-QUICK-FIX-002: single source of the net-LOC math, shared by
+ * validateLOC (here), verifyLOCConstraint (lib/quickfix-self-verifier.js), and the
+ * compliance rubric (lib/quickfix-compliance-rubric.js). Discounts PURE whole-file
+ * deletions ONLY — a modify (add+delete) keeps its full count, so this is NOT
+ * "net additions". Mirrors the formula introduced by QF-20260509-407.
+ *
+ * @param {number} sourceLoc - raw source LOC (added + deleted across source files)
+ * @param {number} [sourceDeletionLoc] - LOC from pure whole-file source deletions
+ * @returns {number} net source LOC for the cap comparison
+ */
+export function computeNetSourceLoc(sourceLoc, sourceDeletionLoc) {
+  return Math.max(0, (sourceLoc ?? 0) - (sourceDeletionLoc ?? 0));
+}
+
+/**
  * Validate source-LOC constraint against the QF hard cap (CLAUDE.md routing).
  *
  * SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001:
@@ -26,7 +46,7 @@ export const QF_HARD_LOC_CAP = 75;
  * @param {string} qfId - Quick-fix ID
  * @param {object} supabase - Supabase client
  * @param {Function} prompt - Prompt function for user input
- * @param {object} flags - { forceComplete?: bool, reason?: string, nonInteractive?: bool }
+ * @param {object} flags - { forceComplete?: bool, reason?: string, overCapReason?: string, sourceDeletionLoc?: number, nonInteractive?: bool }
  * @returns {Promise<boolean>} True if validation passed, false if should exit
  */
 export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, flags = {}) {
@@ -36,20 +56,26 @@ export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, fl
     return true;
   }
 
+  // SD-FDBK-ENH-COMPLETE-QUICK-FIX-002: cap on NET source LOC (raw minus pure whole-file
+  // deletions) via the shared helper, so a dead-code-removal QF is not force-escalated.
+  // Computed ONCE here so the --over-cap-reason guard and the cap check use the same value.
+  const netSourceLoc = computeNetSourceLoc(sourceLoc, flags.sourceDeletionLoc);
+  const deletionLoc = sourceLoc - netSourceLoc; // pure-deletion source LOC excluded from cap
+
   // SD-FDBK-ENH-SOURCE-LOC-CAP-001: --over-cap-reason bypasses ONLY the source-LOC cap
   // (audit trail in verification_notes). Unlike --force-complete it does NOT touch the
   // failing-tests, compliance, or self-verification (scope-creep) gates.
-  if (flags.overCapReason && sourceLoc > QF_HARD_LOC_CAP) {
-    console.log(`\n⚠️  --over-cap-reason: source-LOC cap bypassed (source=${sourceLoc}, test=${testLoc}, cap=${QF_HARD_LOC_CAP}, reason="${flags.overCapReason}")`);
+  if (flags.overCapReason && netSourceLoc > QF_HARD_LOC_CAP) {
+    console.log(`\n⚠️  --over-cap-reason: source-LOC cap bypassed (net source=${netSourceLoc}, test=${testLoc}, cap=${QF_HARD_LOC_CAP}, reason="${flags.overCapReason}")`);
     return true;
   }
 
-  if (sourceLoc <= QF_HARD_LOC_CAP) {
+  if (netSourceLoc <= QF_HARD_LOC_CAP) {
     return true;
   }
 
   console.log('\n❌ CANNOT COMPLETE - SOURCE LOC EXCEEDS LIMIT\n');
-  console.log(`   Source LOC: ${sourceLoc}`);
+  console.log(`   Net source LOC: ${netSourceLoc}${deletionLoc > 0 ? ` (raw ${sourceLoc} − ${deletionLoc} pure-deletion, excluded)` : ''}`);
   console.log(`   Test LOC:   ${testLoc} (excluded from cap)`);
   console.log(`   Limit:      ${QF_HARD_LOC_CAP}\n`);
   console.log('⚠️  This issue must be escalated to a full Strategic Directive.\n');
@@ -64,7 +90,7 @@ export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, fl
       .from('quick_fixes')
       .update({
         status: 'escalated',
-        escalation_reason: `Actual source LOC (${sourceLoc}) exceeds ${QF_HARD_LOC_CAP} line hard cap (test LOC: ${testLoc})`,
+        escalation_reason: `Net source LOC (${netSourceLoc}) exceeds ${QF_HARD_LOC_CAP} line hard cap (raw source: ${sourceLoc}, test LOC: ${testLoc})`,
         actual_source_loc: sourceLoc,
         actual_test_loc: testLoc
       })
