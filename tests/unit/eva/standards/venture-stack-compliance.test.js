@@ -80,6 +80,59 @@ describe('venture-stack-compliance — required / missing (advisory) + unscannab
   });
 });
 
+describe('gate-precision — false-positive fixes from the DataDistill day-1 findings', () => {
+  // Grounded in the EXACT live DataDistill artifact text the gate first false-fired on.
+  it('does NOT flag the correct SaaS copy "there is no CLI product" (bare-no negation)', () => {
+    const r = scanTextForStackCompliance([
+      'This is the hosted SaaS dashboard the MVP delivers — there is no CLI product. Authentication uses Clerk.',
+    ]);
+    expect(r.compliant).toBe(true);
+    expect(r.violations.length).toBe(0);
+  });
+
+  it('does NOT flag a corrective task that QUOTES the residual CLI framing to remove it', () => {
+    const r = scanTextForStackCompliance([
+      'Rewrite the existing marketing site copy from the residual command-line framing ("npm install datadistill", "datadistill run") to the approved SaaS framing.',
+    ]);
+    expect(r.compliant).toBe(true);
+    expect(r.violations.length).toBe(0);
+  });
+
+  it('STILL flags positive CLI adoption — the new cues do not suppress a true positive', () => {
+    // The real identity_brand_name elevator pitch (pre-reconciliation).
+    const r = scanTextForStackCompliance([
+      'DataDistill is a command-line tool that intelligently reduces dataset size by removing statistical redundancy.',
+    ]);
+    expect(r.compliant).toBe(false);
+    expect(r.violations.some((v) => v.id === 'cli_as_product')).toBe(true);
+  });
+
+  it("' no ' is space-bounded — a word like 'casino' must not act as a negation", () => {
+    const r = scanTextForStackCompliance(['The casino CLI tool runs nightly batch jobs.']);
+    expect(r.violations.some((v) => v.id === 'cli_as_product')).toBe(true);
+  });
+
+  it('skips adversarial-critique artifact types but still scans the spec artifacts', () => {
+    const artifacts = [
+      // truth_ai_critique: argues a CLI is hard to monetise — must be SKIPPED, not flagged.
+      { artifact_type: 'truth_ai_critique', content: 'A standalone CLI tool is very difficult to charge for.' },
+      // a real spec artifact, compliant.
+      { artifact_type: 'blueprint_technical_architecture', content: 'Hosted SaaS dashboard. Auth uses Clerk. DATABASE_URL is Replit Postgres.' },
+    ];
+    const r = scanArtifactsForStackCompliance(artifacts);
+    expect(r.compliant).toBe(true);
+    expect(r.violations.length).toBe(0);
+  });
+
+  it('the SAME CLI text in a NON-excluded artifact type IS flagged (exclusion is type-scoped, not blanket)', () => {
+    const r = scanArtifactsForStackCompliance([
+      { artifact_type: 'identity_brand_name', content: 'DataDistill is a command-line tool for engineers.' },
+    ]);
+    expect(r.compliant).toBe(false);
+    expect(r.violations.some((v) => v.id === 'cli_as_product')).toBe(true);
+  });
+});
+
 describe('policy-consistency — the structured policy agrees with the canonical writers', () => {
   const claudeMd = buildClaudeMd({ name: 'Test Venture' });
   const buildTasks = buildBuildTasks({ name: 'Test Venture' });
