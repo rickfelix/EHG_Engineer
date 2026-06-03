@@ -1,3 +1,12 @@
+---
+Category: Database
+Status: Approved
+Version: 1.0.0
+Author: EHG Engineering
+Last Updated: 2026-06-03
+Tags: [security, supabase, database-linter, rls, migration]
+---
+
 # Supabase database-linter remediation — 2026-06-03
 
 Closes the residual Supabase **SECURITY** linter warnings on the platform DB
