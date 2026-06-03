@@ -23,6 +23,7 @@ tags: [guide, auto-generated]
 - [Orchestrator SD Structure](#orchestrator-sd-structure)
 - [Child SD Structure](#child-sd-structure)
 - [Bridge Artifact Record](#bridge-artifact-record)
+- [Pre-Build Panel Enrichment Rail](#pre-build-panel-enrichment-rail)
 - [Integration Points](#integration-points)
   - [Upstream: Eva Orchestrator](#upstream-eva-orchestrator)
   - [Downstream: LEO Protocol](#downstream-leo-protocol)
@@ -38,11 +39,11 @@ tags: [guide, auto-generated]
 ---
 Category: Architecture
 Status: Approved
-Version: 1.0.0
+Version: 1.1.0
 Author: DOCMON Sub-Agent
-Last Updated: 2026-02-08
-Tags: [cli-venture-lifecycle, eva, orchestrator]
-Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001]
+Last Updated: 2026-06-03
+Tags: [cli-venture-lifecycle, eva, orchestrator, pre-build-rail]
+Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-PRE-BUILD-SUB-001]
 ---
 
 # 06 - Lifecycle-to-SD Bridge
@@ -59,8 +60,9 @@ LEAD-PLAN-EXEC workflow.
 Without this bridge, venture stage outputs would remain as artifacts with no
 mechanism to drive actual implementation work through LEO.
 
-**Module**: `lib/eva/lifecycle-sd-bridge.js` (284 lines)
-**Related SD**: SD-LEO-FEAT-LIFECYCLE-SD-BRIDGE-001
+**Module**: `lib/eva/lifecycle-sd-bridge.js` (orchestrator + children + grandchild/leaf factory)
+**Pre-build leaf rail**: `lib/eva/bridge/*.js` — see [Pre-Build Panel Enrichment Rail](#pre-build-panel-enrichment-rail)
+**Related SD**: SD-LEO-FEAT-LIFECYCLE-SD-BRIDGE-001, SD-LEO-INFRA-PRE-BUILD-SUB-001
 
 ---
 
@@ -448,11 +450,92 @@ resources are committed.
 
 ---
 
+## Pre-Build Panel Enrichment Rail
+
+**Related SD**: SD-LEO-INFRA-PRE-BUILD-SUB-001 · **Root cause**: RCA-LEO-BRIDGE-DECOMP-001
+**Modules**: `lib/eva/bridge/*.js` (12 modules) · **Seam**: `computeLeafContent()` in `lib/eva/bridge/leaf-content.js`
+**Flag**: `PREBUILD_PANEL_ENRICHMENT` (default **OFF**)
+
+### The Problem This Solves
+
+The bridge described above creates an orchestrator and its **children**. When a child is
+itself decomposed, the bridge's leaf factory (`createGrandchildren` in
+`lib/eva/lifecycle-sd-bridge.js`) historically stamped each grandchild (leaf) with a
+**complexity-blind static template** — e.g. `"REST endpoints, request handling, validation
+for X"` — and did **not** route the leaf through the 32-agent LEO sub-agent PLAN rail that
+human-driven SDs pass through. The decomposition was *edges-intelligent, middle-blind*: the
+orchestrator and children carried real venture context, but the leaves degraded to scaffolding.
+
+This is why an autonomously-built venture (e.g. DataDistill) shipped only a landing-page +
+auth scaffold instead of its actual engine — the leaf that should have specified the
+SCAN/WALK/DIST engine was a template stub, so EXEC built the stub.
+
+### The Fix: a Single Decision Seam
+
+`createGrandchildren` now derives each leaf's `description`/`scope` from one function:
+
+```
+computeLeafContent({ layer, childPayload, leafKey, ventureContext })
+```
+
+- **Flag OFF (default)** → returns the legacy template verbatim (`templateLeafContent`).
+  Behavior is **byte-identical** to before this SD; the rail is fully inert.
+- **Flag ON _and_ `ventureContext` supplies a panel driver** → runs the leaf through the
+  ordered sub-agent panel (`enrichLeafViaPanel`) and returns enriched content grounded in
+  prior-stage venture artifacts (S0–S18).
+- **Fail-closed**: if a *required* panel agent cannot deliver, the leaf is `status:'held'`
+  and `computeLeafContent` **throws `PREBUILD_PANEL_HELD`** rather than emitting a stub —
+  the core behavior the RCA demands (a missing specification halts the build; it never
+  silently degrades to a template).
+
+The panel runs via an **injected driver** (`driver`), mirroring the existing
+`venture-build-consumer` `driveLeaf` seam: the lib owns the bounded, fail-closed control
+loop (headlessly unit-testable), and the live session injects the LLM-backed sub-agents.
+
+### Module Map (6 units, 12 modules)
+
+| Unit | Module | Responsibility |
+|------|--------|----------------|
+| U1 Select | `agent-panel-manifest.js` | `PANEL_AGENTS`, per-venture `selectAgentManifest`, `orderPanelDAG` (Kahn topo-sort: architecture→schema→ui→tests; security/compliance cross-cut; acceptance last) |
+| U1 Select | `venture-criteria-resolver.js` | `deriveVentureCriteria` — maps S0–18 artifact signals → panel-selection criteria |
+| U1 Enrich | `leaf-panel-enrichment.js` | `enrichLeafViaPanel` — bounded, **fail-closed** panel runner via injected driver |
+| U1 Seam | `leaf-content.js` | `computeLeafContent` / `templateLeafContent` / `isPrebuildPanelEnrichmentEnabled` (the flag gate + bridge seam) |
+| U2 Compliance | `venture-stack-agent.js` | Deterministic venture-stack conformance (reuses `venture-stack-policy` SSOT); **HOLDS** on forbidden tech |
+| U3 Verify | `verification-verdict.js` | `verifySection` — N independent refuters, majority-refute kills a section (fail-closed) |
+| U3 Verify | `completeness-critic.js` | `assessCompleteness` — flags capabilities not covered by any enriched section |
+| U4 Sequence | `build-sequencer.js` | `computeBuildSequence` — Kahn order + parallel waves + cycle detection |
+| U4 Contract | `interface-contracts.js` | `checkContractConsistency` / `checkTreeContracts` — produced-vs-consumed interface match across the SD tree |
+| U5 Gate | `leaf-gate.js` | `evaluateLeafReadiness` → `SUBAGENT_EVIDENCE_MISSING` until required agents + verification present |
+| U5 Hygiene | `regeneration-hygiene.js` | `planRegeneration` — idempotent re-runs; never resurrects `cancelled`/`completed` leaves |
+| U6 Persist | `capability-persistence.js` | `toCapabilityRecord` / `findReusable` — persists each dimension's output to `sd_capabilities` so ventures compound capability |
+
+### Current Status (as of this SD)
+
+The rail is **landed but inert** — `PREBUILD_PANEL_ENRICHMENT` is OFF and no live driver is
+wired into the venture-build flow yet, so production decomposition is unchanged. Enabling it
+is gated on follow-on work:
+
+1. Wire a live Task-based panel / refute / judge driver into the venture-build consumer.
+2. Flip `PREBUILD_PANEL_ENRICHMENT` for a controlled pilot (DataDistill engine-D).
+3. Compose the 6 units end-to-end (generate → verify → sequence → gate → persist).
+4. Add a PLAN-VERIFY integration smoke over the DB-reading / live-driver seams.
+
+A pilot run of the panel against real DataDistill S14 artifacts (via the `database-agent`)
+produced a full engine schema — users/connections/jobs/runs plus SCAN/WALK/DIST state tables
+— where the legacy template emitted only `"REST endpoints"`, and even caught an artifact
+drift (an `api_key_hash` field that Clerk-owned auth makes redundant). That validates the
+seam; the follow-ons make it the default path.
+
+---
+
 ## Related Components
 
 | Component | Relationship |
 |-----------|-------------|
 | Eva Orchestrator | Calls bridge at Stage 18 completion |
+| Pre-Build Panel Rail (`lib/eva/bridge/`) | Enriches leaf SDs via the sub-agent panel before EXEC (flag-gated) |
+| `venture-stack-policy` SSOT | Compliance source of truth reused by `venture-stack-agent.js` |
+| `sd_capabilities` | Persists per-dimension panel output so ventures compound capability |
 | SD Key Generator | Generates LEO-standard SD keys |
 | `strategic_directives_v2` | Target table for created SDs |
 | `venture_artifacts` | Stores bridge artifact record |
