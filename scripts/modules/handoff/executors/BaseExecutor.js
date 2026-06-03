@@ -867,6 +867,19 @@ export class BaseExecutor {
 
     const claimId = sd.sd_key || sdId;
 
+    // Step 0: SD-FDBK-ENH-CLAIM-WORKING-GOES-001 (Approach B) — re-acquire
+    // is_working_on for a self-owned, sweep-released claim BEFORE the rest of
+    // the claim flow. During long parallel sub-agent runs the heartbeat goes
+    // stale, the sweep flips active->stale->released and clears the SD's
+    // is_working_on, and the sync trigger's SET branch won't re-fire (no
+    // claude_sessions sd_key NULL->non-NULL transition for an already-active
+    // row). Without this, Step 1's activeClaim early-return refreshes only the
+    // heartbeat and the handoff INSERT trips trg_enforce_is_working_on_handoffs.
+    // Fail-closed (CAS), self-ownership-gated, default-ON
+    // (CLAIM_REACQUIRE_SELF_LIVE), strict no-op on the healthy path, and wrapped
+    // so any failure degrades to today's hard-fail behavior.
+    await this._reacquireSelfLiveClaimIfReleased(sdId, sd, claimId);
+
     // Step 1: Check if a valid claim already exists (from sd:start or parent conversation).
     // SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001: sd_claims dropped — claude_sessions is the
     // single source of truth. Active claims are sessions with sd_id set and status='active'.
@@ -956,6 +969,47 @@ export class BaseExecutor {
 
     // Show duration estimate (non-blocking)
     await this._showDurationEstimate(sd);
+  }
+
+  /**
+   * SD-FDBK-ENH-CLAIM-WORKING-GOES-001 (Approach B): re-acquire is_working_on
+   * for a self-owned, sweep-released claim at the handoff chokepoint.
+   *
+   * Thin BaseExecutor seam over the testable, DB-agnostic core in
+   * lib/claim/reacquire-self-live.mjs. Binds resolveOwnSession +
+   * checkPreClaimEvidence to this.supabase and supplies process.cwd(). Never
+   * throws — any failure degrades to today's behavior (the rest of
+   * _claimSDForSession runs unchanged and the handoff hard-fails as before if
+   * the claim cannot be legitimately re-acquired).
+   *
+   * @param {string} sdId
+   * @param {object} sd - SD record (for sd_key + cheap is_working_on pre-filter)
+   * @param {string} claimId - resolved sd_key/id
+   */
+  async _reacquireSelfLiveClaimIfReleased(sdId, sd, claimId) {
+    try {
+      const { reacquireSelfLiveClaim } = await import('../../../../lib/claim/reacquire-self-live.mjs');
+      const { resolveOwnSession } = await import('../../../../lib/resolve-own-session.js');
+      const { checkPreClaimEvidence } = await import('../../claim-health/triangulate.js');
+
+      const result = await reacquireSelfLiveClaim(this.supabase, {
+        sd: { ...sd, sd_key: sd?.sd_key || claimId },
+        resolveSession: () => resolveOwnSession(this.supabase, {
+          select: 'session_id, sd_key, status, heartbeat_at',
+          warnOnFallback: false
+        }),
+        checkPreClaimEvidence,
+        cwd: process.cwd()
+      });
+
+      if (result?.reacquired) {
+        console.log(`   [Claim] ♻️  Re-acquired sweep-released claim for ${result.sessionId ? result.sessionId.slice(0, 8) : 'self'} on ${claimId} (via ${result.via})`);
+      }
+    } catch (e) {
+      // Non-fatal — degrade to today's behavior. The downstream claim flow and
+      // the DB enforce-trigger remain the safety net.
+      console.debug('[BaseExecutor] reacquire-self-live suppressed:', e?.message || e);
+    }
   }
 
   /**
