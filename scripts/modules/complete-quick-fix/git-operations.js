@@ -530,16 +530,36 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
     // far origin/main has advanced during the QF lifecycle. Two-dot syntax
     // (origin/main..HEAD) was producing false-positive scope-creep warnings
     // when parallel sessions merged unrelated work to main mid-flight.
-    const files = execSync('git diff origin/main...HEAD --name-only', { encoding: 'utf-8', cwd: testDir })
+    let files = execSync('git diff origin/main...HEAD --name-only', { encoding: 'utf-8', cwd: testDir })
       .trim()
       .split('\n')
       .filter(f => f);
+
+    // QF-20260603-778: when the QF changes are not yet committed, the 3-dot diff
+    // against origin/main is empty (HEAD == origin/main) and filesChanged would be
+    // []. partitionDirtyByScope then treats every dirty file as unrelated, so
+    // commitAndPushChanges no-ops (nothing committed → no branch commits → --auto-pr
+    // can't open a PR). Fall back to the working tree (tracked changes vs HEAD +
+    // untracked) so scope/test-coverage checks and the auto-PR body see real files.
+    let diffRange = 'origin/main...HEAD';
+    if (files.length === 0) {
+      const tracked = execSync('git diff HEAD --name-only', { encoding: 'utf-8', cwd: testDir })
+        .trim().split('\n').filter(f => f);
+      const untracked = execSync('git ls-files --others --exclude-standard', { encoding: 'utf-8', cwd: testDir })
+        .trim().split('\n').filter(f => f);
+      const working = [...new Set([...tracked, ...untracked])];
+      if (working.length > 0) {
+        files = working;
+        diffRange = 'HEAD';
+        console.log('   ℹ️  No committed diff vs origin/main; using working-tree changes (uncommitted QF).');
+      }
+    }
     filesChanged = files;
 
     console.log(`   Files Changed: ${filesChanged.length}`);
     filesChanged.forEach(file => console.log(`      - ${file}`));
 
-    const diffStat = execSync('git diff origin/main...HEAD --stat', { encoding: 'utf-8', cwd: testDir });
+    const diffStat = execSync(`git diff ${diffRange} --stat`, { encoding: 'utf-8', cwd: testDir });
     const insertions = diffStat.match(/(\d+) insertion/);
     const deletions = diffStat.match(/(\d+) deletion/);
 

@@ -2,8 +2,15 @@
 //
 // QF-20260509-407 wired --auto-pr in cli.js but the orchestrator code path
 // still prompted for PR URL BEFORE checking options.autoPr — flag was
-// unreachable under --non-interactive. This test pins the post-hoist branch
-// order so the same regression cannot re-ship.
+// unreachable under --non-interactive. QF-779 made the flag reachable.
+//
+// QF-20260603-778 SUPERSEDES the QF-779 *ordering*: QF-779 created the PR
+// BEFORE commitAndPushChanges, so `gh pr create` ran against an unpushed/
+// commit-less branch (and wedged on the PR-URL prompt when it failed). The
+// corrected order keeps the same spirit (auto-pr reachable under
+// --non-interactive) but DEFERS createAutoPR until AFTER the branch is
+// committed+pushed, and SKIPS the PR-URL prompt entirely under --auto-pr.
+// These assertions pin the corrected order so neither regression re-ships.
 //
 // 13th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 — closes the
 // "writer ships flag, consumer not patched" defect class for this module.
@@ -18,9 +25,9 @@ const REPO_ROOT = resolve(__dirname, '../../..');
 const ORCHESTRATOR = resolve(REPO_ROOT, 'scripts/modules/complete-quick-fix/orchestrator.js');
 const GIT_OPS = resolve(REPO_ROOT, 'scripts/modules/complete-quick-fix/git-operations.js');
 
-// ── A1: orchestrator autoPr branch order (post-hoist) ──────────────────
+// ── A1: orchestrator autoPr branch order (QF-778 corrected) ────────────
 
-describe('QF-20260509-779 A1: orchestrator autoPr branch fires BEFORE the PR-URL prompt', () => {
+describe('QF-20260603-778 A1: --auto-pr defers PR creation until AFTER commit+push', () => {
   const src = readFileSync(ORCHESTRATOR, 'utf8');
 
   it('analyzeGitDiff is called BEFORE the PR-URL prompt (so filesChanged is available for createAutoPR)', () => {
@@ -31,27 +38,30 @@ describe('QF-20260509-779 A1: orchestrator autoPr branch fires BEFORE the PR-URL
     expect(analyzeIdx).toBeLessThan(promptIdx);
   });
 
-  it('autoPr branch (createAutoPR call) appears BEFORE the PR-URL prompt', () => {
-    const autoPrIdx = src.indexOf('options.autoPr');
+  it('the PR-URL prompt is SKIPPED under --auto-pr (gated by !options.autoPr)', () => {
+    // Corrected shape: `if (!prUrl && !options.autoPr) { prompt(...) }`
+    expect(src).toMatch(/if \(!prUrl && !options\.autoPr\)[\s\S]*?GitHub PR URL/);
+  });
+
+  it('createAutoPR is DEFERRED until AFTER commitAndPushChanges (branch is pushed first)', () => {
+    const pushIdx = src.indexOf('await commitAndPushChanges(');
     const createAutoPrIdx = src.indexOf('await createAutoPR(');
-    const promptIdx = src.indexOf("'\\nGitHub PR URL (required): '");
-    expect(autoPrIdx).toBeLessThan(promptIdx);
-    expect(createAutoPrIdx).toBeLessThan(promptIdx);
+    expect(pushIdx).toBeGreaterThan(0);
+    expect(createAutoPrIdx).toBeGreaterThan(0);
+    expect(createAutoPrIdx).toBeGreaterThan(pushIdx);
   });
 
-  it('PR-URL prompt is gated by `if (!prUrl)` AFTER the autoPr branch sets prUrl', () => {
-    // The post-hoist shape: `if (!prUrl && options.autoPr) { ... } if (!prUrl) { prompt ... }`
-    expect(src).toMatch(/if \(!prUrl && options\.autoPr\)[\s\S]*?if \(!prUrl\)[\s\S]*?GitHub PR URL/);
+  it('the deferred-PR branch is guarded by deferAutoPr (auto-pr stays reachable under --non-interactive)', () => {
+    expect(src).toMatch(/const deferAutoPr = !prUrl && options\.autoPr/);
+    expect(src).toMatch(/if \(deferAutoPr && !prUrl\)/);
   });
 
-  it('NO duplicate autoPr block remains after the PR-acquisition section', () => {
-    // Old shape was `if (options.autoPr && !prUrl) { finalPrUrl = await createAutoPR(...) }`
-    // after the PR prompt block. Pin that the duplicate does not return.
-    const matches = src.match(/options\.autoPr/g) || [];
-    expect(matches.length).toBeLessThanOrEqual(2); // 1 in the new branch, 0 elsewhere (allow 2 max for comments)
+  it('exactly one createAutoPR call site remains (no duplicate pre-push block)', () => {
+    const matches = src.match(/await createAutoPR\(/g) || [];
+    expect(matches.length).toBe(1);
   });
 
-  it('createAutoPR is called with filesChanged (proves analyzeGitDiff hoist is wired through)', () => {
+  it('createAutoPR is called with filesChanged (proves analyzeGitDiff result is wired through)', () => {
     expect(src).toMatch(/await createAutoPR\(\s*qfId,\s*qf,\s*filesChanged/);
   });
 });
@@ -84,6 +94,18 @@ describe('QF-20260509-779 B1: analyzeGitDiff fetches origin/main BEFORE computin
     // Look backwards for `try {`
     const beforeFetch = fnSlice.slice(0, fetchIdx);
     expect(beforeFetch).toMatch(/try\s*\{[^}]*$/s);
+  });
+
+  // QF-20260603-778 FIX-B: working-tree fallback when the 3-dot diff is empty.
+  it('falls back to the working tree when origin/main...HEAD yields no files (uncommitted QF)', () => {
+    const analyzeFnStart = src.indexOf('export function analyzeGitDiff');
+    const fnSlice = src.slice(analyzeFnStart);
+    // Empty 3-dot diff (HEAD == origin/main) → use tracked-vs-HEAD + untracked
+    // so filesChanged is populated; otherwise partitionDirtyByScope strands every
+    // dirty file as "unrelated" and commitAndPushChanges no-ops.
+    expect(fnSlice).toMatch(/if \(files\.length === 0\)/);
+    expect(fnSlice).toMatch(/git diff HEAD --name-only/);
+    expect(fnSlice).toMatch(/git ls-files --others --exclude-standard/);
   });
 });
 
