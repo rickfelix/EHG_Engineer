@@ -8,11 +8,11 @@
  *
  * Checks:
  *   1. Project structure matches convention
- *   2. Required dependencies present at correct versions
+ *   2. Required dependencies present at correct versions (Replit-native: NO @supabase/supabase-js, NO react-router-dom)
  *   3. Tailwind config extends @ehg/tailwind-preset
  *   4. ESLint config extends @ehg/lint-config
  *   5. Design tokens package installed
- *   6. Supabase config present
+ *   6. No supabase/ directory (Replit-native — ventures use Replit Postgres, not Supabase)
  *   7. TypeScript strict mode enabled
  *
  * Exit codes:
@@ -44,15 +44,18 @@ const REQUIRED_FILES = [
   'tailwind.config.ts',
 ];
 
-const REQUIRED_DEPS = {
-  react: '^18.',
-  'react-dom': '^18.',
-  'react-router-dom': '^6.',
+// SD-LEO-INFRA-VENTURE-STACK-STANDARDS-001 (FR-4): reconciled to the canonical venture stack.
+// REMOVED @supabase/supabase-js (forbidden — ventures use Replit Postgres) and react-router-dom
+// (canonical = TanStack Start router). react/react-dom accept ^18 OR ^19 (canonical DEFAULT_STACK is
+// React 19; ^18 retained so existing ventures are not falsely failed). A version value may be a single
+// prefix string OR an array of acceptable prefixes. Exported for the FR-4 reconcile test.
+export const REQUIRED_DEPS = {
+  react: ['^18.', '^19.'],
+  'react-dom': ['^18.', '^19.'],
   '@tanstack/react-query': '^5.',
   zustand: '^5.',
   'react-hook-form': '^7.',
   zod: '^3.',
-  '@supabase/supabase-js': '^2.',
   tailwindcss: '^3.',
   typescript: '^5.',
 };
@@ -93,12 +96,13 @@ function run(projectPath) {
     const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
 
     for (const [dep, versionPattern] of Object.entries(REQUIRED_DEPS)) {
+      const patterns = Array.isArray(versionPattern) ? versionPattern : [versionPattern];
       const installed = allDeps[dep];
-      const pass = installed && installed.startsWith(versionPattern);
+      const pass = !!installed && patterns.some((p) => installed.startsWith(p));
       results.push(check(
         `dep:${dep}`,
         pass,
-        installed ? `${installed} (expected ${versionPattern}*)` : 'not installed'
+        installed ? `${installed} (expected ${patterns.join(' or ')}*)` : 'not installed'
       ));
     }
 
@@ -129,10 +133,11 @@ function run(projectPath) {
     }
   }
 
-  // 6. Supabase config
+  // 6. Replit-native: a supabase/ directory is FORBIDDEN (ventures use Replit Postgres, not Supabase).
+  // SD-LEO-INFRA-VENTURE-STACK-STANDARDS-001 (FR-4): reconciled from "require supabase/" to "forbid supabase/".
   const supaDir = join(absPath, 'supabase');
   const hasSupabase = existsSync(supaDir) && statSync(supaDir).isDirectory();
-  results.push(check('config:supabase', hasSupabase, hasSupabase ? 'supabase/ directory present' : 'supabase/ directory missing'));
+  results.push(check('stack:no-supabase-dir', !hasSupabase, hasSupabase ? 'supabase/ present (FORBIDDEN — ventures use Replit Postgres)' : 'no supabase/ dir (Replit-native)'));
 
   // === SECURITY CHECKS (SD-LEO-INFRA-VENTURE-DEVWORKFLOW-AWARENESS-001-D) ===
 
