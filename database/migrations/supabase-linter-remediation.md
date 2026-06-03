@@ -43,7 +43,19 @@ with **no relation members**, so the move is a clean metadata relocation — exi
 type/operator references resolve via `search_path` at query time, so the migration
 adds `extensions` to the API roles' path *before* moving. Still:
 
-- Apply it **in a maintenance window, after testing on a Supabase DB branch.**
+- **Apply as `supabase_admin` (or a superuser) — e.g. the Supabase Dashboard SQL
+  Editor.** vector/ltree/pg_trgm are owned by **`supabase_admin`, NOT `postgres`**
+  (re-verified read-only 2026-06-03), so the normal pooler `postgres` role **cannot**
+  `ALTER EXTENSION … SET SCHEMA`. The migration's **step-0 ownership precheck aborts
+  cleanly — before any change** — if run by a role that can't, with a message telling
+  you to use `supabase_admin`.
+- The role-`search_path` change, the move, and the verification run in **one atomic
+  DO block**, so a failed move can never leave the API roles' `search_path` changed
+  without the move having happened (`_rollback.sql` is hardened the same way).
+- Apply it **in a maintenance window, after testing on a Supabase DB branch**, and
+  **recycle the connection pooler** afterward — `ALTER ROLE … SET search_path` only
+  affects new connections, so pooled sessions opened before the move keep the old
+  path until recycled.
 - Afterwards, verify embedding queries (`<->`/`<=>`/`::vector`), `pg_trgm`
   similarity/`%`, and `ltree` operators, plus that new index creation works.
 - Apply **after** 01–04 are validated. Keep it as its own deploy step.
