@@ -27,7 +27,9 @@
 --       Deriving this dynamically auto-protects future policy usage too.
 --   (2) EXPLICIT auth primitives (defense-in-depth): the set above plus
 --       fn_user_has_company_access (a sibling helper not currently in a policy).
--- Everything NOT in the allowlist is revoked from BOTH anon and authenticated.
+-- Everything NOT in the allowlist is revoked from anon, authenticated, AND PUBLIC
+-- (anon/authenticated inherit the PUBLIC grant, so revoking only the named roles
+--  leaves the function callable — PUBLIC must be revoked too).
 --
 -- The allowlisted functions (~6) intentionally remain authenticated-executable and
 -- will still appear in the linter — that is correct-by-design (revoking them breaks
@@ -74,12 +76,16 @@ BEGIN
       AND pg_get_userbyid(p.proowner) = current_user      -- only what we own
       AND NOT (p.proname = ANY(v_allow))                  -- skip allowlisted
   LOOP
-    EXECUTE format('REVOKE EXECUTE ON FUNCTION public.%I(%s) FROM anon, authenticated',
+    -- Revoke from PUBLIC too: anon/authenticated inherit the PUBLIC pseudo-role, so
+    -- revoking only the named roles leaves the function callable via its PUBLIC grant
+    -- (verified 2026-06-03: 95 of these functions carried `=X/postgres` = a PUBLIC
+    -- EXECUTE grant, so name-only revoke was a no-op for them).
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION public.%I(%s) FROM anon, authenticated, PUBLIC',
                    r.proname, r.args);
     v_count := v_count + 1;
   END LOOP;
 
-  RAISE NOTICE 'C COMPLETE: revoked anon/authenticated EXECUTE on % SECURITY DEFINER function(s).', v_count;
+  RAISE NOTICE 'C COMPLETE: revoked anon/authenticated/PUBLIC EXECUTE on % SECURITY DEFINER function(s).', v_count;
 END
 $revoke$;
 
@@ -101,15 +107,17 @@ BEGIN
     'fn_is_chairman','fn_is_service_role','fn_user_has_company_access',
     'fn_user_has_venture_access','is_leo_admin','check_feedback_rate_limit'];
 
+  -- Use has_function_privilege (NOT aclexplode of the direct ACL): it resolves
+  -- EXECUTE inherited via the PUBLIC pseudo-role. The prior direct-ACL check was a
+  -- FALSE-GREEN — it passed while 95 non-allowlisted functions stayed anon-callable
+  -- through their PUBLIC grant.
   SELECT count(*), string_agg(DISTINCT p.proname, ', ')
     INTO v_bad, v_detail
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-  CROSS JOIN LATERAL aclexplode(p.proacl) a
-  JOIN pg_roles ro ON ro.oid = a.grantee
   WHERE n.nspname='public' AND p.prokind='f' AND p.prosecdef
-    AND a.privilege_type='EXECUTE'
-    AND ro.rolname IN ('anon','authenticated')
-    AND NOT (p.proname = ANY(v_allow));
+    AND NOT (p.proname = ANY(v_allow))
+    AND (has_function_privilege('anon',          p.oid, 'EXECUTE')
+      OR has_function_privilege('authenticated', p.oid, 'EXECUTE'));
 
   IF v_bad > 0 THEN
     RAISE EXCEPTION 'C NOT cleared: % non-allowlisted SECDEF function(s) still executable by anon/authenticated: %', v_bad, v_detail;
