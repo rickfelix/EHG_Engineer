@@ -594,6 +594,21 @@ export function isDocsOnlyDiff(filesChanged) {
   return filesChanged.every(isDocsOnlyPath);
 }
 
+// SD-FDBK-ENH-CREATE-QUICK-FIX-001 (FR-3): completion-time compensating control for the
+// documentation Tier-2-floor routing carve-out. At ROUTING time work-item-router optimistically
+// honours the self-reported type==='documentation' (no diff exists yet) and relaxes risk-keyword
+// escalation to a Tier-2 floor. At COMPLETION the diff DOES exist, so reconcile: a
+// documentation-typed QF whose changed files include a non-docs (source) path is a MISLABEL.
+// Surfacing it lets the orchestrator + self-verifier prevent a code change from silently
+// completing as "documentation" and bypassing the LEAD + SECURITY/GITHUB gates the floor skipped.
+// Reuses isDocsOnlyPath so docs-vs-source classification stays single-sourced.
+export function reconcileDeclaredTypeVsFiles({ qfType, filesChanged } = {}) {
+  if (qfType !== 'documentation') return { mismatch: false, nonDocsFiles: [] };
+  if (!Array.isArray(filesChanged) || filesChanged.length === 0) return { mismatch: false, nonDocsFiles: [] };
+  const nonDocsFiles = filesChanged.filter(f => !isDocsOnlyPath(f));
+  return { mismatch: nonDocsFiles.length > 0, nonDocsFiles };
+}
+
 // feedback 9b6d1e05 (QF-20260530-493): a type=documentation QF has no executable
 // source to validate even when its diff is NOT matched by isDocsOnlyDiff (e.g. a
 // 2-line .sql comment header — QF-20260530-432 — which lives in a .sql file, not a
@@ -901,7 +916,7 @@ export async function mergeToMain(testDir, qf, prUrl, prompt, flags = {}) {
             const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
             const stateOut = execSync(`gh pr view ${prNumber} --json state`, { encoding: 'utf-8', cwd: testDir }).trim();
             if (stateOut.includes('"MERGED"')) {
-              console.log(`   ✅ PR merged via GitHub (post-merge cleanup may have failed; non-critical)\n`);
+              console.log('   ✅ PR merged via GitHub (post-merge cleanup may have failed; non-critical)\n');
               return;
             }
           } catch { /* unable to verify — fall through */ }
