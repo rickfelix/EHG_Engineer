@@ -605,6 +605,29 @@ console.log('Hook disabled');
 LEO_SKIP_HOOKS=1 claude-code
 ```
 
+## Companion Stop Hook: Post-Completion Tail Enforcement
+
+**Component**: `scripts/hooks/post-completion-tail-enforcement.cjs`
+**SD**: SD-LEO-INFRA-AUTO-ENFORCE-POST-001
+**Purpose**: A separate, independently-registered Stop hook (4th entry in the same `.claude/settings.json` `Stop` chain) that nudges the session to run the canonical post-completion tail (`/document` → `/heal` → `/learn`) when an SD completed via the raw `handoff.js execute LEAD-FINAL-APPROVAL` path without running it. The tail otherwise only runs inside the `/leo complete` skill flow, so the raw path silently dropped it.
+
+**Producer**: the LEAD-FINAL-APPROVAL executor populator `scripts/modules/handoff/executors/lead-final-approval/hooks/post-completion-tail-populator.js` records the ceremony steps the SD type requires — via `getPostCompletionRequirementsFromSD` (single source of truth) — into `.claude/post-completion-pending.json` (gitignored). For `feature`→`[document, heal, learn]`; `infrastructure`→`[document]`; `orchestrator`→none.
+
+**Behavior contract** (distinct from the sub-agent enforcement hook above):
+- **Reminder-first, NEVER blocks**: always `exit 0`, only writes a `stderr` system reminder. It NEVER returns `decision: block` — it cannot trap a session in a stop-loop.
+- **Cheap no-op**: exits immediately with no DB query and no transcript read when `.claude/post-completion-pending.json` is absent (the common case).
+- **Evidence-clearing**: removes a step once evidence appears — a `learning_runs` row for `/learn`; a `/document`, `/heal`, or `/leo complete` Skill invocation in the transcript for the others. Deletes the file when all steps are satisfied.
+- **Multi-session-safe**: acts only on the session whose `session_id` stamped the file; honors AUTO-PROCEED state (no nudge when OFF); 6h stale-file safety drain.
+
+**Registration** (independent entry, gets the payload fresh on stdin):
+```json
+{ "type": "command", "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/post-completion-tail-enforcement.cjs", "timeout": 10 }
+```
+
+**Test overrides** (hermetic unit tests): `POST_COMPLETION_TEST_ROOT` redirects the `.claude/` anchor; `POST_COMPLETION_SKIP_DB=1` skips the `learning_runs` query. Tests: `scripts/hooks/__tests__/post-completion-tail-enforcement.test.js`, `auto-proceed-pause-lint-post-completion.test.js`.
+
+**Companion regex**: `scripts/hooks/auto-proceed-pause-lint.cjs` now also flags post-completion confirmation-fishing ("say the word if you want me to run /document and /learn") so the asking itself is caught, not just the dropped tail. The canonical rule (the tail is a CONTINUATION step, never a pause point) lives in CLAUDE.md's "NOT pause triggers" list (generated from `scripts/modules/claude-md-generator/file-generators.js`).
+
 ## Related Documentation
 
 - **Design Document**: `docs/drafts/stop-hook-subagent-enforcement-draft.md`
@@ -617,6 +640,7 @@ LEO_SKIP_HOOKS=1 claude-code
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.4 | 2026-06-03 | Documented companion Stop hook `post-completion-tail-enforcement.cjs` (SD-LEO-INFRA-AUTO-ENFORCE-POST-001, PR #4201) - reminder-first post-completion tail enforcement + populator + pause-lint regex |
 | 2.3 | 2026-01-30 | Added cross-session AUTO-PROCEED continuation (SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001, PR #694) - Exit code 3 signaling, continuation state, external loop runner |
 | 2.2 | 2026-01-29 | Added troubleshooting for post-completion validator false positive (PR #685) |
 | 1.0 | 2026-01-21 | Initial operational runbook for SD-LEO-INFRA-STOP-HOOK-SUB-001 |
