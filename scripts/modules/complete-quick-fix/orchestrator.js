@@ -315,20 +315,21 @@ export async function completeQuickFix(qfId, options = {}) {
   // PR verification
   let prUrl = options.prUrl;
 
-  // QF-20260509-779: if --auto-pr is set and no --pr-url provided, create the
-  // PR FIRST so the subsequent prompt doesn't fire under --non-interactive.
-  if (!prUrl && options.autoPr) {
-    console.log('🤖 --auto-pr: creating PR via gh before PR-URL prompt');
-    const created = await createAutoPR(qfId, qf, filesChanged, actualLoc, testsPass, uatVerified, options.verificationNotes);
-    if (created) prUrl = created;
-  }
+  // QF-20260603-778: --auto-pr defers PR creation until AFTER commit+push below.
+  // createAutoPR runs `gh pr create`, which requires the branch to already have
+  // pushed commits; firing it here (before commitAndPushChanges) opened the PR
+  // against an unpushed/commit-less branch and then wedged on the PR-URL prompt
+  // under --non-interactive. Only the PR-creation side effect moves — the commit
+  // still happens after verification (this is NOT the commit-before-verify reorder).
+  const deferAutoPr = !prUrl && options.autoPr;
 
-  if (!prUrl) {
+  if (!prUrl && !options.autoPr) {
     const prInput = await prompt('\nGitHub PR URL (required): ');
     prUrl = prInput.trim();
   }
 
-  if (!validatePR(prUrl, qfId, qf.title)) {
+  // When the PR will be auto-created post-push, there is no URL to validate yet.
+  if (!deferAutoPr && !validatePR(prUrl, qfId, qf.title)) {
     process.exit(1);
   }
 
@@ -455,6 +456,22 @@ export async function completeQuickFix(qfId, options = {}) {
   // Commit & Push (QF-20260509-552: forward {forceComplete,reason} flags)
   // QF-20260529-168: thread nonInteractive so git-operations' commit/push guards (QF-888) fire.
   commitSha = await commitAndPushChanges(testDir, qf, { commitSha, branchName }, actualLoc, filesChanged, finalPrUrl, testsPass, prompt, { forceComplete: options.forceComplete, reason: options.reason, nonInteractive: options.nonInteractive });
+
+  // QF-20260603-778: with the branch now committed+pushed, create the deferred
+  // --auto-pr PR (gh pr create requires the pushed branch). finalPrUrl flows into
+  // the record update, completion summary, and merge below. If creation fails,
+  // exit loudly rather than recording an empty pr_url.
+  if (deferAutoPr && !prUrl) {
+    console.log('🤖 --auto-pr: creating PR via gh (post-push)');
+    const created = await createAutoPR(qfId, qf, filesChanged, actualLoc, testsPass, uatVerified, verificationNotes);
+    if (created) {
+      prUrl = created;
+      finalPrUrl = created;
+    }
+    if (!validatePR(prUrl, qfId, qf.title)) {
+      process.exit(1);
+    }
+  }
 
   // Update record
   console.log('🔄 Updating quick-fix record...\n');
