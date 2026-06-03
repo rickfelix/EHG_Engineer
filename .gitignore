@@ -294,6 +294,14 @@ src/client/dist/
 .claude/fleet-dashboard-state.json
 .claude/worktree-reaper-state.json
 .claude/retry-state-*.json.tmp-*
+
+# Cross-session scratch droppings — QF-20260603-141 (only patterns with ZERO tracked-file conflicts)
+# .claude/last-outcome-*.json: per-session Stop-hook outcome snapshots, never committed (0 tracked)
+# .prd-payloads/_*: underscore-prefixed add-prd working files (committed payloads are SD-*.json, preserved; 0 tracked _-files)
+# NOTE: scripts/one-off/_* and .rca/_* are deliberately NOT ignored — 175 and 6 such files are already
+# tracked, so committing _-prefixed scripts there is established practice; ignoring would silently block it.
+.claude/last-outcome-*.json
+.prd-payloads/_*
 .claude-code-config.json
 .claude-status-line
 .leo-status.json
