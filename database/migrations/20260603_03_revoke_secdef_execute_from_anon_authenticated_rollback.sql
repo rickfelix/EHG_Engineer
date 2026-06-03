@@ -1,7 +1,9 @@
 -- @approved-by: rickfelix@example.com
 -- =============================================================================
 -- ROLLBACK C. Restore the Supabase default: GRANT EXECUTE on every public
--- SECURITY DEFINER function to anon, authenticated. Idempotent.
+-- SECURITY DEFINER function to anon, authenticated, PUBLIC. Idempotent.
+-- (The default EXECUTE grant was to PUBLIC, which anon/authenticated inherit; the
+--  forward migration revoked PUBLIC, so the rollback must re-GRANT it to fully undo.)
 -- =============================================================================
 DO $rb$
 DECLARE
@@ -14,9 +16,9 @@ BEGIN
     WHERE n.nspname = 'public' AND p.prokind = 'f' AND p.prosecdef
       AND pg_get_userbyid(p.proowner) = current_user
   LOOP
-    EXECUTE format('GRANT EXECUTE ON FUNCTION public.%I(%s) TO anon, authenticated', r.proname, r.args);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION public.%I(%s) TO anon, authenticated, PUBLIC', r.proname, r.args);
     v_count := v_count + 1;
   END LOOP;
-  RAISE NOTICE 'ROLLBACK C: re-granted anon/authenticated EXECUTE on % function(s).', v_count;
+  RAISE NOTICE 'ROLLBACK C: re-granted anon/authenticated/PUBLIC EXECUTE on % function(s).', v_count;
 END
 $rb$;
