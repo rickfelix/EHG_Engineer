@@ -27,8 +27,14 @@ const POLL_MS = 30000;
 const KILL_GATES = new Set([23]);
 const PROMOTION_GATES = new Set([17]);
 const BLOCKING_GATES = new Set([3, 5, 13, 16, 17, 23, 24]);
-// Stages that need an SD/human input (work_type=sd_required) — auto-advance is unsafe
-const SD_REQUIRED_STAGES = new Set([10, 18, 19]);
+// Stages that need an SD/human input (work_type=sd_required) — auto-advance is unsafe.
+// SD-LEO-INFRA-CONFIG-HONESTY-RECONCILE-001: only S19 (BUILD) genuinely creates a per-venture
+// SD tree (via lifecycle-sd-bridge). S10 (Customer & Brand Foundation) and S18 (Marketing Copy
+// Studio) produce their artifacts INLINE (identity_persona_brand / marketing_*) — no SD is ever
+// created for them — so they were reclassified venture_stages.work_type 'sd_required' -> 'artifact_only'
+// and dropped here. MUST stay in sync with venture_stages.work_type='sd_required' (asserted at startup
+// by assertSdRequiredStagesMatchCanonical).
+const SD_REQUIRED_STAGES = new Set([19]);
 
 const STAGE_NAMES = {
    0:'Stage Zero',

@@ -65,6 +65,9 @@ function eligibleTables(extra = {}) {
     eva_vision_documents: [{ venture_id: VID, level: 'L2', status: 'active', chairman_approved: true, vision_key: 'V-1' }],
     strategic_directives_v2: [],
     system_events: [],
+    // SD-LEO-INFRA-VENTURE-STACK-STANDARDS-001: a COMPLIANT is_current artifact so the new fail-closed
+    // stack gate (read before the drive loop) passes for the default eligible venture.
+    venture_artifacts: [{ venture_id: VID, is_current: true, artifact_type: 'blueprint_technical_architecture', content: 'Auth via Clerk (@clerk/tanstack-react-start). Data on Replit Postgres via DATABASE_URL.', artifact_data: null }],
     ...extra,
   };
 }
@@ -304,5 +307,40 @@ describe('TS-11 — observability emission (payload column, no event_data)', () 
     expect(events.every((e) => 'payload' in e && !('event_data' in e))).toBe(true);
     expect(events.some((e) => e.event_type === 'LEO_BUILD_CONSUMED')).toBe(true);
     expect(events.some((e) => e.event_type === 'LEO_BUILD_LEAF_DRIVEN')).toBe(true);
+  });
+});
+
+describe('FR-3 (stack gate) — fail-closed venture-stack compliance HOLD at S19', () => {
+  it('HOLDS a venture whose is_current artifacts positively specify a forbidden stack (Replit Auth)', async () => {
+    const tables = eligibleTables({
+      strategic_directives_v2: nestedTree({ children: 1, grandkidsEach: 1 }),
+      venture_artifacts: [{ venture_id: VID, is_current: true, artifact_type: 'blueprint_sprint_plan', content: 'Auth strategy: Replit Auth signs users in.', artifact_data: null }],
+    });
+    const sb = new MockSB(tables);
+    const res = await runConsume({ supabase: sb, ventureId: VID, driveLeaf: makeDriveLeaf(tables), bounds: { maxLeaves: 100, wallClockMs: 1e9, maxAttemptsPerLeaf: 2 } });
+    expect(res.skipped).toBe(true);
+    expect(res.reason).toBe('stack_noncompliant');
+    expect(res.drivenLeaves.length).toBe(0); // never entered the drive loop
+    const stageWrites = sb.updates.filter((u) => 'current_lifecycle_stage' in (u.payload || {}));
+    expect(stageWrites.length).toBe(0); // never advanced
+    expect(res.stackCompliance.violations.some((v) => v.id === 'replit_auth')).toBe(true);
+  });
+
+  it('HOLDS a venture with zero is_current artifacts (unscannable → fail-closed)', async () => {
+    const tables = eligibleTables({ strategic_directives_v2: nestedTree({ children: 1, grandkidsEach: 1 }), venture_artifacts: [] });
+    const sb = new MockSB(tables);
+    const res = await runConsume({ supabase: sb, ventureId: VID, driveLeaf: makeDriveLeaf(tables) });
+    expect(res.skipped).toBe(true);
+    expect(res.reason).toBe('stack_noncompliant');
+    expect(res.stackCompliance.unscannable).toBe(true);
+  });
+
+  it('PROCEEDS for a Clerk + Replit-Postgres compliant venture (no over-block)', async () => {
+    const tables = eligibleTables({ strategic_directives_v2: nestedTree({ children: 1, grandkidsEach: 2 }) });
+    const sb = new MockSB(tables);
+    const res = await runConsume({ supabase: sb, ventureId: VID, driveLeaf: makeDriveLeaf(tables), bounds: { maxLeaves: 100, wallClockMs: 1e9, maxAttemptsPerLeaf: 2 } });
+    expect(res.skipped).toBe(false);
+    expect(res.completed).toBe(true);
+    expect(res.drivenLeaves.length).toBe(2);
   });
 });

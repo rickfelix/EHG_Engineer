@@ -44,7 +44,9 @@ describe('multi-session-claim-gate ambiguous handling', () => {
 
     // Verify old ALLOW pattern is removed
     const ambiguousIdx = source.indexOf("sameConvo === 'ambiguous'");
-    const ambiguousBlock = source.substring(ambiguousIdx, ambiguousIdx + 500);
+    // Window widened: QF-20260404-512 inserted a PID-liveness block between
+    // `sameConvo === 'ambiguous'` and the DENY-on-ambiguity comment.
+    const ambiguousBlock = source.substring(ambiguousIdx, ambiguousIdx + 1500);
     expect(ambiguousBlock).not.toContain('treating as same conversation');
     expect(ambiguousBlock).toContain('DENY-on-ambiguity');
   });
@@ -59,12 +61,16 @@ describe('claim-guard TTL configuration', () => {
     expect(source).toContain('chairman_dashboard_config');
   });
 
-  it('should call fetchClaimTTL at start of claimGuard', async () => {
+  it('should resolve the claim TTL (which fetches config) inside claimGuard', async () => {
     const source = (await import('fs')).readFileSync('lib/claim-guard.mjs', 'utf8');
+    // SD-LEO-INFRA-SESSION-CLAIM-LIFECYCLE-001 moved the TTL fetch out of claimGuard
+    // into resolveClaimTtlSeconds(), which calls fetchClaimTTL() internally.
     const claimGuardStart = source.indexOf('export async function claimGuard');
-    const fetchCall = source.indexOf('await fetchClaimTTL()', claimGuardStart);
-    expect(fetchCall).toBeGreaterThan(claimGuardStart);
-    expect(fetchCall - claimGuardStart).toBeLessThan(400); // Within first 400 chars of function
+    const resolveCall = source.indexOf('await resolveClaimTtlSeconds(', claimGuardStart);
+    expect(resolveCall).toBeGreaterThan(claimGuardStart);
+    const resolveFnStart = source.indexOf('export async function resolveClaimTtlSeconds');
+    const fetchInResolve = source.indexOf('await fetchClaimTTL()', resolveFnStart);
+    expect(fetchInResolve).toBeGreaterThan(resolveFnStart);
   });
 });
 

@@ -47,7 +47,7 @@ const ROW = {
     {
       title: 'Add cross-repo URL audit',
       pr: 'rickfelix/EHG_Engineer SD-LEO-INFRA-STAGE17-CROSS-REPO-001',
-      description: 'Ship scripts/audit-stage17-urls.mjs + .github/workflows/stage17-contract-smoke.yml so backend route changes are validated against frontend URL strings at PR time'
+      description: 'Shipped a cross-repo URL audit + PR-time smoke workflow validating backend route changes against frontend URL strings (later removed 2026-06-02 by SD-LEO-REFAC-VERIFY-GVOS-SUPERSESSION-001 once the GVOS composer superseded the /api/stage17 surface)'
     },
     {
       title: 'Use metadata.screenId discriminator on multi-row artifact reads',
@@ -76,8 +76,8 @@ const ROW = {
       String.raw`/\.maybeSingle\(\)/`,
       String.raw`/EXPECTED_VARIANTS_PER_SCREEN\s*=\s*\d+/`
     ],
-    related_contract_doc: 'docs/architecture/stage17-contracts.md',
-    related_audit_script: 'scripts/audit-stage17-urls.mjs',
+    related_contract_doc: '(removed 2026-06-02 by SD-LEO-REFAC-VERIFY-GVOS-SUPERSESSION-001 — was the stage17 contract doc)',
+    related_audit_script: '(removed 2026-06-02 by SD-LEO-REFAC-VERIFY-GVOS-SUPERSESSION-001 — was the stage17 URL audit script)',
     fingerprint: DEDUP_FINGERPRINT,
     auto_captured: false,
     classification: 'cross_repo_drift'

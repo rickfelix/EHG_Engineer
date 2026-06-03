@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-02T12:13:54.400Z
-**Tables**: 702
+**Generated**: 2026-06-02T17:33:34.523Z
+**Tables**: 698
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (702)
+## All Tables (698)
 
 ### LEO Protocol
 
@@ -148,8 +148,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ### Handoffs & Phases
 
-- [backup_leo_sub_agent_handoffs](tables/backup_leo_sub_agent_handoffs.md)
-- [backup_leo_subagent_handoffs](tables/backup_leo_subagent_handoffs.md)
 - [exec_handoff_preparations](tables/exec_handoff_preparations.md)
 - [handoff_audit_log](tables/handoff_audit_log.md)
 - [handoff_validation_rules](tables/handoff_validation_rules.md)
@@ -220,8 +218,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [auto_apply_allowlist](tables/auto_apply_allowlist.md)
 - [auto_apply_denylist](tables/auto_apply_denylist.md)
 - [backlog_item_completion](tables/backlog_item_completion.md)
-- [backup_leo_feature_flag_audit](tables/backup_leo_feature_flag_audit.md)
-- [backup_leo_feature_flag_audit_log](tables/backup_leo_feature_flag_audit_log.md)
 - [batch_operation_log](tables/batch_operation_log.md)
 - [blueprint_board_submissions](tables/blueprint_board_submissions.md)
 - [blueprint_quality_assessments](tables/blueprint_quality_assessments.md)

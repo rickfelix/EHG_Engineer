@@ -62,7 +62,12 @@ export async function resolveReposForSD(sd_id, supabase) {
 
   // 3. If target_application set, return only that app's path
   if (targetApp) {
-    const match = activeApps.find(a => a.name === targetApp || a.id === targetApp);
+    // QF-20260602-767 (R2 / RCA 4460c80b): case-INSENSITIVE match. Registry names are lowercase
+    // (e.g. "ehg", "datadistill") but target_application is often title-cased (e.g. "EHG"); a
+    // strict === miss falls through to scanning ALL active repos (~9x the git spawns). Only
+    // narrows WHEN a match exists — a blank/unregistered target_application still falls through.
+    const targetAppLc = String(targetApp).toLowerCase();
+    const match = activeApps.find(a => a.name?.toLowerCase() === targetAppLc || a.id?.toLowerCase() === targetAppLc);
     if (match && match.local_path) {
       const resolved = path.resolve(match.local_path);
       console.log(`   📋 Registry resolved ${targetApp} → ${resolved}`);
@@ -97,14 +102,45 @@ export async function resolveReposForSD(sd_id, supabase) {
 }
 
 /**
+ * Per-sd_id memoization of detectImplementationRepos (QF-20260602-767 / RCA 4460c80b).
+ * GATE2_IMPLEMENTATION_FIDELITY calls detectImplementationRepos ~11x per run with identical
+ * (sd_id, supabase); each call spawns N git subprocesses (~16s) → >600s SIGTERM for sd_type=feature
+ * SDs. Caching the in-flight Promise collapses 11→1 and dedupes concurrent callers. Keyed by sd_id:
+ * within a handoff run, cwd + the SD's repos are constant, so results are byte-identical (the gate
+ * still scores the same). Cleared via clearImplementationReposCache() for long-lived processes.
+ */
+const implementationReposCache = new Map();
+
+/** Clear the per-sd_id implementation-repos cache (mirrors clearSearchTermsCache). */
+export function clearImplementationReposCache() {
+  implementationReposCache.clear();
+}
+
+/**
  * Detect ALL repositories containing implementation for this SD.
  * Returns an array of repo root paths where SD artifacts were found.
+ * Memoized per sd_id (see implementationReposCache above).
  *
  * @param {string} sd_id - Strategic Directive ID
  * @param {Object} supabase - Supabase client
  * @returns {Promise<string[]>} - Array of repo root paths with SD artifacts
  */
-export async function detectImplementationRepos(sd_id, supabase) {
+// NOTE: deliberately NOT async — returns the cached Promise object directly so repeated calls for
+// the same sd_id share one in-flight computation (true single-flight). An async wrapper would mint
+// a new Promise per call, defeating identity-based dedupe.
+export function detectImplementationRepos(sd_id, supabase) {
+  if (implementationReposCache.has(sd_id)) {
+    return implementationReposCache.get(sd_id);
+  }
+  const promise = _detectImplementationReposUncached(sd_id, supabase);
+  // Evict on rejection so a transient failure can't poison later calls (the impl catches its own
+  // errors + falls back to cwd today, but this keeps the cache safe if that ever changes).
+  promise.catch(() => implementationReposCache.delete(sd_id));
+  implementationReposCache.set(sd_id, promise);
+  return promise;
+}
+
+async function _detectImplementationReposUncached(sd_id, supabase) {
   const searchTerms = await getSDSearchTerms(sd_id, supabase);
 
   // PAT-WORKTREE-LIFECYCLE-001: If running inside a worktree for this SD, include cwd first

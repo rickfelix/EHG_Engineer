@@ -25,6 +25,52 @@ export function isContractCompatible(version) {
   return typeof version === 'string' && version.split('.')[0] === EXPECTED_CONTRACT_MAJOR;
 }
 
+/**
+ * Product-KPI allowlist (SD-LEO-INFRA-PORTFOLIO-PRODUCT-KPI-001, FR-1/FR-2).
+ * AGGREGATES ONLY — never PII, raw rows, or identifiers. Each entry is a pure type/range
+ * validator. This object is the SINGLE SOURCE OF TRUTH for what may cross the venture→platform
+ * boundary; adding a field requires a data-minimization sign-off (FR-5).
+ */
+export const KPI_ALLOWLIST = {
+  signups:      (v) => Number.isInteger(v) && v >= 0,
+  active_users: (v) => Number.isInteger(v) && v >= 0,
+  revenue:      (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0,
+  usage_volume: (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0,
+  health:       (v) => typeof v === 'number' && v >= 0 && v <= 1, // health/uptime ratio 0..1
+  churn:        (v) => typeof v === 'number' && v >= 0 && v <= 1, // 0..1
+};
+
+/**
+ * Extract ONLY allowlisted, type/range-valid KPI fields from a payload's `kpis` block.
+ * Pure; NEVER throws. Unknown keys and malformed values are DROPPED (data-minimization) —
+ * this is the code mechanism that REPLACES the old verbatim raw_payload passthrough.
+ * Returns { kpis: <validated subset>, dropped: <rejected keys, for the ingest note> }.
+ */
+export function validateKpis(rawKpis) {
+  const kpis = {};
+  const dropped = [];
+  if (rawKpis && typeof rawKpis === 'object' && !Array.isArray(rawKpis)) {
+    for (const [key, val] of Object.entries(rawKpis)) {
+      const ok = Object.prototype.hasOwnProperty.call(KPI_ALLOWLIST, key) && KPI_ALLOWLIST[key](val);
+      if (ok) kpis[key] = val; else dropped.push(key);
+    }
+  }
+  return { kpis, dropped };
+}
+
+/**
+ * Map validated KPIs onto the EXISTING ventures portfolio columns (FR-4) — does NOT introduce
+ * parallel fields. Pure; returns only the columns it can derive (caller decides whether/where to
+ * persist). health -> health_score; revenue -> projected_revenue; churn -> risk_score.
+ */
+export function deriveVenturePortfolio(kpis = {}) {
+  const out = {};
+  if (typeof kpis.health === 'number') out.health_score = kpis.health;
+  if (typeof kpis.revenue === 'number') out.projected_revenue = kpis.revenue;
+  if (typeof kpis.churn === 'number') out.risk_score = kpis.churn;
+  return out;
+}
+
 /** Ingest-metadata subset — what we write on EVERY outcome (never clobbers metric columns). */
 function ingestMeta(app, { ingest_status, ingest_note = null, httpStatus = null, sourceUrl = null }, now) {
   return {
@@ -41,19 +87,29 @@ function ingestMeta(app, { ingest_status, ingest_note = null, httpStatus = null,
 
 /** Full upsert row for a SUCCESSFUL pull (metric columns + metadata). Pure. */
 export function buildOkRow(app, payload, { httpStatus, sourceUrl }, now = new Date()) {
+  const { kpis } = validateKpis(payload.kpis);
+  const contract_version = payload.contract_version ?? null;
+  const window_days = payload.window_days ?? null;
+  const since = payload.since ?? null;
+  const generated_at = payload.generated_at ?? null;
+  const total = payload.total ?? 0;
+  const by_verdict = payload.by_verdict ?? {};
+  const by_mode = payload.by_mode ?? {};
+  const by_model = payload.by_model ?? {};
+  const avg_confidence = payload.avg_confidence ?? null;
+  const dry_run_count = payload.dry_run_count ?? null;
   return {
     ...ingestMeta(app, { ingest_status: 'ok', httpStatus, sourceUrl }, now),
-    contract_version: payload.contract_version ?? null,
-    window_days: payload.window_days ?? null,
-    since: payload.since ?? null,
-    generated_at: payload.generated_at ?? null,
-    total: payload.total ?? 0,
-    by_verdict: payload.by_verdict ?? {},
-    by_mode: payload.by_mode ?? {},
-    by_model: payload.by_model ?? {},
-    avg_confidence: payload.avg_confidence ?? null,
-    dry_run_count: payload.dry_run_count ?? null,
-    raw_payload: payload,
+    contract_version, window_days, since, generated_at, total,
+    by_verdict, by_mode, by_model, avg_confidence, dry_run_count,
+    kpis, // validated, allowlisted aggregate KPIs only (FR-2)
+    // SD-LEO-INFRA-PORTFOLIO-PRODUCT-KPI-001 (FR-2): the verbatim full-payload passthrough is
+    // GONE. raw_payload now holds a SANITIZED snapshot of recognized contract fields + the
+    // validated KPI subset ONLY — arbitrary/unknown keys never reach platform-controlled storage.
+    raw_payload: {
+      contract_version, window_days, since, generated_at, total,
+      by_verdict, by_mode, by_model, avg_confidence, dry_run_count, kpis,
+    },
   };
 }
 

@@ -14,6 +14,10 @@ import {
 // Helper: mock Supabase that returns active session data
 function createMockSupabase(sessions = []) {
   return {
+    // validateMultiSessionClaim first calls rpc('release_same_conversation_claims').
+    // It must resolve so the SUT skips the claude_sessions fallback (whose 3-deep
+    // .eq() chain this mock doesn't provide), otherwise the gate fails open (score 80).
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
@@ -27,6 +31,7 @@ function createMockSupabase(sessions = []) {
 // Helper: mock Supabase that returns a DB error
 function createErrorSupabase(message = 'Connection refused') {
   return {
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({

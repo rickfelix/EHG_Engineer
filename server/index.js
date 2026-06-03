@@ -50,9 +50,7 @@ import chairmanRoutes from './routes/chairman.js';
 import evaOperationsRoutes from './routes/eva-operations.js';
 import evaPipelineRoutes from './routes/eva-pipeline.js';
 import evaExitRoutes from './routes/eva-exit.js';
-import evaChatRoutes from './routes/eva-chat.js';
 import evaEconomicLensRoutes from './routes/eva-economic-lens.js';
-import stage17Routes from './routes/stage17.js';
 import stage18Routes from './routes/stage18.js';
 import stage19Routes from './routes/stage19.js';
 import stage24Routes from './routes/stage24.js';
@@ -154,10 +152,9 @@ app.use('/api/chairman', requireAuth, createChairmanScopeGuard({ blocking: true 
 app.use('/api/eva/operations', requireAuth, evaOperationsRoutes);
 app.use('/api/eva/pipeline', requireAuth, evaPipelineRoutes);
 app.use('/api/eva/exit', requireAuth, evaExitRoutes);
-app.use('/api/eva/chat', requireAuth, evaChatRoutes);
 app.use('/api/eva/economic-lens', requireAuth, evaEconomicLensRoutes);
-// Stage 17 Design Refinement
-app.use('/api/stage17', requireAuth, stage17Routes);
+// Stage 17: /api/stage17 routes removed by SD-LEO-REFAC-VERIFY-GVOS-SUPERSESSION-001
+// (zero-caller, superseded by the GVOS composer + stage-execution pipeline).
 // Stage 18 Marketing Copy Studio
 app.use('/api/stage18', requireAuth, stage18Routes);
 // Stage 19 Replit Workflow Prompts

@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-02T12:13:54.400Z
+**Generated**: 2026-06-02T17:33:34.523Z
 **Rows**: 7
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (21 total)
+## Columns (22 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -39,6 +39,7 @@
 | pulled_at | `timestamp with time zone` | **NO** | `now()` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| kpis | `jsonb` | **NO** | `'{}'::jsonb` | SD-LEO-INFRA-PORTFOLIO-PRODUCT-KPI-001: validated, allowlisted product-KPI aggregates (signups/active_users/revenue/usage_volume/health/churn) extracted from /v1/metrics. Populated ONLY via scripts/venture-telemetry-pull.mjs validateKpis() — unknown/malformed keys are DROPPED before persistence. Aggregates only; never PII/raw rows. Feeds ventures portfolio columns via deriveVenturePortfolio(). |
 
 ## Constraints
 
@@ -76,9 +77,9 @@
 
 ## RLS Policies
 
-### 1. venture_telemetry_read (SELECT)
+### 1. venture_telemetry_read_authenticated (SELECT)
 
-- **Roles**: {anon,authenticated}
+- **Roles**: {authenticated}
 - **Using**: `true`
 
 ### 2. venture_telemetry_service_all (ALL)
