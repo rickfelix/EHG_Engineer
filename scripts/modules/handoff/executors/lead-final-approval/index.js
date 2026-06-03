@@ -539,6 +539,23 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // Fail-safe: non-blocking, never prevents SD completion.
     await runProgrammaticRetrospective(sd);
 
+    // SD-LEO-INFRA-AUTO-ENFORCE-POST-001 (FR-001): record the post-completion
+    // ceremony tail (/document, /heal, /learn) this SD type requires into
+    // .claude/post-completion-pending.json, so the Stop hook
+    // (scripts/hooks/post-completion-tail-enforcement.cjs) can nudge the session
+    // to run whatever was not run on the raw handoff path (the tail otherwise
+    // only runs inside the /leo complete skill flow). Single source of truth:
+    // getPostCompletionRequirementsFromSD. Fail-safe: never blocks completion.
+    try {
+      const { runPostCompletionTailPopulator } = await import('./hooks/post-completion-tail-populator.js');
+      const tailResult = await runPostCompletionTailPopulator(sd, this.supabase);
+      if (tailResult.written) {
+        console.log(`   [post-completion-tail] recorded pending tail: ${tailResult.pending.map(s => '/' + s).join(', ')}`);
+      }
+    } catch (tailError) {
+      console.warn(`   ⚠️  Post-completion tail populator failed (non-blocking): ${tailError.message}`);
+    }
+
     // SD-MAN-INFRA-WIRE-HEAL-VISION-002: Auto-trigger /heal vision on orchestrator or vision-linked SD completion.
     // Checks trigger predicates (orchestrator done, vision_key present) and cooldown before running.
     // Fail-safe: non-blocking, never prevents SD completion.
