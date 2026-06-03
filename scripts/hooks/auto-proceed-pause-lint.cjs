@@ -19,6 +19,12 @@ const fs = require('fs');
 
 const FORBIDDEN = /(want me to (continue|proceed)|pause here|warrants confirmation|good stopping point|substantial[^.]{0,80}(confirm|pause|proceed)|continue.*or pause)/i;
 
+// SD-LEO-INFRA-AUTO-ENFORCE-POST-001 (FR-003): post-completion confirmation-fishing.
+// Catches "I didn't run /document and /learn — say the word if you want them" style
+// asking that the generic FORBIDDEN regex above misses. Tuned to NOT match benign
+// reports like "I ran /document and /learn".
+const FORBIDDEN_POST_COMPLETION = /(say the word|let me know if you(?:'?d| would)?\s+(?:want|like)|(?:did|do|does|have|has)\s*n['o]?t\s+(?:yet\s+)?run[^.\n]{0,60}(?:document|learn|heal|tail)|want(?:\s+me)?\s+to\s+run\s+(?:them|\/?document|\/?learn|the\s+tail)|if you want(?:\s+me)?(?:\s+to)?(?:\s+run)?\s+(?:them|\/?document|\/?learn))/i;
+
 function readStdin() {
   try {
     return fs.readFileSync(0, 'utf8');
@@ -65,12 +71,18 @@ function main() {
   const text = getLastAssistantText(payload.transcript_path);
   if (!text) { process.exit(0); }
   const m = text.match(FORBIDDEN);
-  if (!m) { process.exit(0); }
+  const mPost = text.match(FORBIDDEN_POST_COMPLETION);
+  if (!m && !mPost) { process.exit(0); }
   if (!autoProceedOn()) { process.exit(0); }
 
+  const hit = (m && m[0]) || (mPost && mPost[0]);
+  const context = mPost
+    ? `Post-completion /document, /heal, and /learn are CONTINUATION steps, NOT pause points — run them now without asking ("say the word if you want them" IS the anti-pattern; /leo complete sequences the full tail). `
+    : `Phase boundaries, scope size, and "substantial work" are NOT pause points. `;
+
   process.stderr.write(
-    `[auto-proceed-pause-lint] PROTOCOL VIOLATION DETECTED: assistant suggested pausing/confirmation ("${m[0]}") while AUTO-PROCEED is ON. ` +
-    `Phase boundaries, scope size, and "substantial work" are NOT pause points. ` +
+    `[auto-proceed-pause-lint] PROTOCOL VIOLATION DETECTED: assistant suggested pausing/confirmation ("${hit}") while AUTO-PROCEED is ON. ` +
+    context +
     `Per CLAUDE.md AUTO-PROCEED Mode, only these stop: orchestrator completion, blocking errors, test failures (2 retries), merge conflicts, all children blocked. ` +
     `Continue working without asking.\n`
   );

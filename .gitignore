@@ -282,6 +282,7 @@ src/client/dist/
 .claude/unified-session-state.json
 .claude/auto-proceed-state.json
 .claude/continuation-state.json
+.claude/post-completion-pending.json
 .claude/status-line/
 .claude/plans/
 .claude/projects/
