@@ -371,15 +371,19 @@ async function generateComprehensiveRetrospective(sdId) {
   console.log(`SD: ${sd.sd_key} - ${sd.title}`);
   console.log(`Status: ${sd.status}, Progress: ${sd.progress}%`);
 
-  // Check if retrospective already exists
+  // Check if an SD_COMPLETION retrospective already exists.
+  // Scope the dedup to retro_type so typed rows (e.g. a LEAD_TO_PLAN handoff
+  // retro) coexist and don't block the SD_COMPLETION retro that the
+  // PLAN-TO-LEAD RETROSPECTIVE_QUALITY gate requires.
   const { data: existing } = await supabase
     .from('retrospectives')
     .select('id')
     .eq('sd_id', sdId)
+    .eq('retro_type', 'SD_COMPLETION')
     .limit(1);
 
   if (existing && existing.length > 0) {
-    console.log(`\n⚠️  Retrospective already exists (ID: ${existing[0].id})`);
+    console.log(`\n⚠️  SD_COMPLETION retrospective already exists (ID: ${existing[0].id})`);
     console.log('Use enhance-retrospective-sd-<key>.js to update existing retrospectives');
     return {
       success: true,
