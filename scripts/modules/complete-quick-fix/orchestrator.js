@@ -20,7 +20,7 @@ import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, touchesFrontend, getScopedUnitTestFiles } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles } from './git-operations.js';
 import {
   validateLOC,
   validateTests,
@@ -182,6 +182,22 @@ export async function completeQuickFix(qfId, options = {}) {
   const { filesChanged, diffAnalysis } = analyzeGitDiff(testDir, qf.description);
   const docsOnlyDiff = isDocsOnlyDiff(filesChanged);
   const skipTestGate = canSkipTestGate({ qfType: qf.type, docsOnlyDiff });
+
+  // SD-FDBK-ENH-CREATE-QUICK-FIX-001 (FR-3): reconcile the declared type against the REAL diff.
+  // The work-item-router documentation Tier-2 floor relaxes risk-keyword escalation at routing
+  // time by trusting type==='documentation' (no diff exists yet). Here the diff DOES exist, so a
+  // documentation-typed QF that touches non-docs source files is a mislabel — surface it
+  // NON-SILENTLY and feed it to the self-verifier so the code change cannot silently complete as
+  // "documentation" and bypass the LEAD + SECURITY/GITHUB review the floor skipped.
+  const typeFileMismatch = reconcileDeclaredTypeVsFiles({ qfType: qf.type, filesChanged });
+  if (typeFileMismatch.mismatch) {
+    console.log('\n🚨 TYPE/FILE MISMATCH — documentation QF touches non-docs source files');
+    console.log('   Declared type: documentation, but the diff includes source file(s):');
+    typeFileMismatch.nonDocsFiles.forEach(f => console.log(`      - ${f}`));
+    console.log('   A documentation QF that changes code can bypass LEAD + SECURITY/GITHUB review');
+    console.log('   (it was routed under the documentation Tier-2 floor). Self-verifier confidence');
+    console.log('   will be reduced — re-classify the QF type or split out the code change.\n');
+  }
 
   // Test verification - PROGRAMMATIC (not self-reported)
   console.log('\n🧪 PROGRAMMATIC TEST VERIFICATION\n');
@@ -368,7 +384,10 @@ export async function completeQuickFix(qfId, options = {}) {
     overCapReason: options.overCapReason,
     // SD-FDBK-ENH-COMPLETE-QUICK-FIX-002: thread pure-deletion LOC so verifyLOCConstraint
     // caps on net source LOC, matching validateLOC (avoids the dual-hard-gate half-fix).
-    sourceDeletionLoc
+    sourceDeletionLoc,
+    // SD-FDBK-ENH-CREATE-QUICK-FIX-001 (FR-3): documentation type-vs-filepath mismatch signal
+    // so the self-verifier penalizes confidence + records a blocker for a mislabeled doc QF.
+    typeFileMismatch
   };
 
   // QF-20260524-309 (a38f6b06): prefer the testDir (QF worktree) copy of the self-verifier
