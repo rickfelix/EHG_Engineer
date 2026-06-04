@@ -259,6 +259,17 @@ try {
 | Git lock file present | Creation fails | Remove `.git/worktrees/<sdKey>/locked` |
 | Worktree path doesn't exist | Cleanup skipped (idempotent) | No action needed |
 | Uncommitted changes at cleanup | Cleanup aborts with `dirty_worktree` | Commit or `/ship` first, then re-run or use `--force` for manual cleanup |
+| Branch deleted mid-lifecycle by `--delete-branch` | Worktree orphaned (dir remains, dropped from `git worktree list`) | **Auto-recovered** — see Orphaned-Worktree Recovery below |
+
+### Orphaned-Worktree Recovery (SD-FDBK-INFRA-WORKTREE-AUTO-REMOVED-001)
+
+When `gh pr merge --delete-branch` deletes `feat/<SD-KEY>` while its worktree is still active (e.g. a PR auto-merges between PLAN-TO-LEAD and LEAD-FINAL-APPROVAL), git deregisters the worktree: the directory remains on disk but drops out of `git worktree list`. Two layers now handle this:
+
+**FR-1 — handoff re-exec recovery (`scripts/handoff.js`).** Running any handoff from an orphaned-worktree cwd previously crashed with `ERR_MODULE_NOT_FOUND` (the dangling `node_modules` junction breaks bare-import resolution) and the in-body `STALE_CWD` guard could only `exit(1)`. handoff.js now runs a builtin-only preflight (`lib/handoff-reexec.mjs` `planHandoffReexec`) *before* its heavy imports — which are now dynamic — and, on detecting an orphaned cwd, **re-executes the main repo's `scripts/handoff.js` from the main root** via `spawnSync`. `process.chdir()` cannot fix this (ESM resolves the static-import graph, including `node_modules`, before any module-body statement runs), so re-exec is required. An `LEO_HANDOFF_REEXEC` env sentinel is the loop-guard; recovery only fires for a verified main repo root, otherwise the original loud failure is preserved.
+
+**FR-2 — post-merge orphan cleanup (`scripts/modules/shipping/post-merge-worktree-cleanup.js`).** `cleanupOrphanFromMergeOutput()` consumes the `detectOrphanWorktreeFromMerge` detector (`lib/exec-context-guard.mjs`) on merge stdout, maps the deleted branch to its worktree dir, and routes it through the claim-aware `cleanupWorktreeByPath` (archive-on-live-claim / archive-on-unpushed, else clean remove). Callable via `node scripts/modules/shipping/post-merge-worktree-cleanup.js --merge-output -` (stdin) or `--merge-output "<text>"`.
+
+> Tip (dogfooding): when shipping an SD that is itself about worktree lifecycle, enable auto-merge with `--squash` but **without** `--delete-branch` so the active worktree survives the remaining handoffs; clean it up after LEAD-FINAL-APPROVAL.
 
 ## User-Facing Changes
 
