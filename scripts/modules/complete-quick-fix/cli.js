@@ -83,6 +83,9 @@ export function parseArguments(args) {
       'verification-notes': { type: 'string' },
       'force-complete':     { type: 'boolean' },
       'reason':             { type: 'string' },
+      // QF-20260604-479: explicit override to complete a QF with an EMPTY branch diff
+      // (false-completion guard). The ONLY way past the guard; NOT bypassable by --force-complete.
+      'allow-empty-diff':   { type: 'boolean' },
       // SD-FDBK-ENH-SOURCE-LOC-CAP-001: bypass ONLY the source-LOC cap (not tests/compliance/self-verify)
       'over-cap-reason':    { type: 'string' },
       'non-interactive':    { type: 'boolean' },
@@ -186,7 +189,10 @@ export function parseArguments(args) {
     // (so audit trails stay unified). When set without --reason, the FORCE_COMPLETE
     // check above would not trigger; we require --reason explicitly here too.
     allowStaleBranch:       values['allow-stale-branch'] || false,
-    allowStaleBranchReason: values['allow-stale-branch'] ? values['reason'] : undefined
+    allowStaleBranchReason: values['allow-stale-branch'] ? values['reason'] : undefined,
+    // QF-20260604-479: empty-diff guard override + its audit reason (shares --reason)
+    allowEmptyDiff:         values['allow-empty-diff'] || false,
+    allowEmptyDiffReason:   values['allow-empty-diff'] ? values['reason'] : undefined
   };
 
   return { qfId, options };

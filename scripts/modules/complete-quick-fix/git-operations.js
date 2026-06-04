@@ -596,6 +596,20 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
   return { filesChanged, diffAnalysis };
 }
 
+/**
+ * QF-20260604-479 / PAT-QF-EMPTY-DIFF-FALSE-COMPLETION-001.
+ * True when a QF's committed branch diff vs base is empty — no changed files AND no net LOC.
+ * Such a QF has no implementation, so completing it false-completes (every compliance
+ * criterion is vacuously satisfied by "no change" → score 100) and merges an empty PR.
+ * @param {string[]} filesChanged - committed diff vs base (from analyzeGitDiff)
+ * @param {number} actualLoc - net LOC changed
+ * @returns {boolean}
+ */
+export function isEmptyDiff(filesChanged, actualLoc) {
+  const noFiles = !Array.isArray(filesChanged) || filesChanged.length === 0;
+  return noFiles && (Number(actualLoc) || 0) === 0;
+}
+
 // QF-20260511-365 / feedback 869f7cf3: classify a path as docs-only so the
 // orchestrator can skip the unit+e2e test run for docs-only QFs (the gate
 // otherwise re-surfaces pre-existing baseline failures unrelated to the QF,
