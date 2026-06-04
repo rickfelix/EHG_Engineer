@@ -62,6 +62,31 @@ describe('flag ON + driver — panel enrichment', () => {
   });
 });
 
+describe('HOLD observability (SD-LEO-INFRA-WIRE-PRE-BUILD-002 FR-6 / TS-6b)', () => {
+  const heldDriver = { async runAgent({ agent }) { return agent.code === 'DATABASE' ? { ok: false, error: 'no' } : { ok: true, section: 'x' }; } };
+
+  it('emits onHold({event, leafKey, heldOn, ventureId}) BEFORE the throw propagates', async () => {
+    process.env.PREBUILD_PANEL_ENRICHMENT = '1';
+    const events = [];
+    const onHold = async (e) => { events.push(e); };
+    await expect(computeLeafContent({
+      layer: LAYER, childPayload: CHILD, leafKey: 'LEAF-1',
+      ventureContext: { panelDriver: heldDriver, panelArtifactTypes: ['blueprint_data_model'], panelCriteriaOpts: { dataSensitive: true }, ventureId: 'v1', onHold },
+    })).rejects.toThrow(/PREBUILD_PANEL_HELD/);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ event: 'PREBUILD_PANEL_HELD', leafKey: 'LEAF-1', heldOn: 'DATABASE', ventureId: 'v1' });
+  });
+
+  it('a failing onHold is best-effort — it NEVER swallows the fail-closed throw', async () => {
+    process.env.PREBUILD_PANEL_ENRICHMENT = '1';
+    const onHold = async () => { throw new Error('emit failed'); };
+    await expect(computeLeafContent({
+      layer: LAYER, childPayload: CHILD, leafKey: 'LEAF-2',
+      ventureContext: { panelDriver: heldDriver, panelArtifactTypes: ['blueprint_data_model'], panelCriteriaOpts: { dataSensitive: true }, onHold },
+    })).rejects.toThrow(/PREBUILD_PANEL_HELD/);
+  });
+});
+
 describe('helpers', () => {
   it('templateLeafContent matches the legacy strings exactly', () => {
     expect(templateLeafContent(LAYER, CHILD)).toEqual({ description: TEMPLATE_DESC, scope: TEMPLATE_SCOPE });
