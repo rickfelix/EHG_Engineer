@@ -42,3 +42,8 @@ export { createCrossSdFileOverlapTemporalGate } from './cross-sd-file-overlap-te
 // Validates every sub_agent_execution_results row for this SD ran against the
 // correct repo (closes the 8-locus cwd-default leak from PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001)
 export { createSubAgentRepoResolutionGate, REASON_CODES as SUB_AGENT_REPO_REASON_CODES } from './sub-agent-repo-resolution.js';
+
+// Venture-Leaf Evidence Gate (SD-LEO-INFRA-WIRE-PRE-BUILD-001 FR-2)
+// Blocks a hollow/non-compliant venture-build leaf at PLAN->EXEC when it lacks
+// fresh VENTURE_STACK evidence. No-op for non-venture (e.g. EHG_Engineer) SDs.
+export { createVentureLeafGate } from './venture-leaf-gate.js';
