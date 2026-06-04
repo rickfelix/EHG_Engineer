@@ -10,8 +10,13 @@
  *   plus: non-STALE_CWD error re-thrown, getRepoRoot-throws, mainRoot===cwd guard.
  */
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { planHandoffReexec } from '../../lib/handoff-reexec.mjs';
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const handoffSrc = fs.readFileSync(path.join(REPO_ROOT, 'scripts', 'handoff.js'), 'utf8');
 
 const MAIN = path.resolve('/repo/EHG_Engineer');
 const WT = path.resolve('/repo/EHG_Engineer/.worktrees/SD-X');
@@ -100,5 +105,35 @@ describe('planHandoffReexec (FR-1 re-exec recovery)', () => {
     }));
     expect(plan.reexec).toBe(false);
     expect(plan.reason).toBe('no_valid_main_root');
+  });
+});
+
+// Static-source pins for the handoff.js GLUE — the crux of FR-1. The planner
+// logic is fully tested above, but a regression that re-statically-imports the
+// heavy (node_modules-backed) graph BEFORE the preflight would silently defeat
+// re-exec recovery at module-RESOLUTION time and pass every behavioural test.
+// These pins guard exactly that failure mode.
+describe('handoff.js FR-1 glue (static-source pins)', () => {
+  it('imports the pure planner from lib/handoff-reexec.mjs', () => {
+    expect(handoffSrc).toMatch(/import\s*\{\s*planHandoffReexec\s*\}\s*from\s*['"]\.\.\/lib\/handoff-reexec\.mjs['"]/);
+  });
+
+  it('imports the heavy CLI graph DYNAMICALLY, never as a top-level static import', () => {
+    // A static `import { main } from './modules/handoff/cli/index.js'` resolves
+    // node_modules before the preflight runs → defeats FR-1 in an orphaned worktree.
+    expect(handoffSrc).not.toMatch(/^\s*import\s+\{\s*main\s*\}\s+from\s+['"]\.\/modules\/handoff\/cli\/index\.js['"]/m);
+    expect(handoffSrc).toMatch(/await import\(\s*['"]\.\/modules\/handoff\/cli\/index\.js['"]\s*\)/);
+  });
+
+  it('defers claimGuard + startHeartbeat to dynamic imports too (whole heavy graph deferred)', () => {
+    expect(handoffSrc).not.toMatch(/^\s*import\s+\{\s*claimGuard\s*\}\s+from/m);
+    expect(handoffSrc).not.toMatch(/^\s*import\s+\{\s*startHeartbeat\s*\}\s+from/m);
+    expect(handoffSrc).toMatch(/await import\(\s*['"]\.\.\/lib\/claim-guard\.mjs['"]\s*\)/);
+  });
+
+  it('calls the planner and spawns the child with the LEO_HANDOFF_REEXEC loop-guard sentinel', () => {
+    expect(handoffSrc).toMatch(/planHandoffReexec\(/);
+    expect(handoffSrc).toMatch(/spawnSync\(/);
+    expect(handoffSrc).toMatch(/LEO_HANDOFF_REEXEC/);
   });
 });
