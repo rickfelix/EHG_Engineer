@@ -8,7 +8,7 @@
  * non-compliant (fresh FAIL verdict) block.
  */
 import { describe, it, expect } from 'vitest';
-import { evaluateLeafReadinessLive, isVentureBuildLeaf } from '../../../lib/eva/bridge/leaf-gate-live.js';
+import { evaluateLeafReadinessLive, isVentureBuildLeaf, resolveLeafEnforce, parseEnforceAllowList } from '../../../lib/eva/bridge/leaf-gate-live.js';
 
 const PHASE_START = new Date('2026-06-04T00:00:00Z');
 const FRESH = '2026-06-04T01:00:00Z'; // after phase start
@@ -48,6 +48,39 @@ describe('isVentureBuildLeaf (R5 structural detector)', () => {
   });
   it('false for the top orchestrator (NOT keyed on !parent_sd_id)', () => {
     expect(isVentureBuildLeaf(topOrchestrator)).toBe(false);
+  });
+});
+
+describe('resolveLeafEnforce — pilot-scoped enforce (SD-LEO-INFRA-WIRE-PRE-BUILD-002 FR-5 / TS-3)', () => {
+  const OFF = {}; // global VENTURE_LEAF_GATE_ENFORCE unset (default-OFF)
+  it('TS-3c: false for a non-enrolled venture leaf with global OFF and no metadata flag', () => {
+    expect(resolveLeafEnforce(ventureLeaf, OFF, [])).toBe(false);
+  });
+  it('TS-3c: false for an EHG_Engineer SD even if (accidentally) in the allow-list-less env', () => {
+    expect(resolveLeafEnforce(ehgInfra, OFF, [])).toBe(false);
+  });
+  it('TS-3b: true when the leaf sd_key is in the allow-list (global STILL OFF)', () => {
+    expect(resolveLeafEnforce(ventureLeaf, OFF, ['SD-DD-SPRINT-002-C1'])).toBe(true);
+  });
+  it('TS-3b: true when the leaf carries metadata.venture_leaf_gate_enforce===true (global OFF)', () => {
+    const enrolled = { ...ventureLeaf, metadata: { ...ventureLeaf.metadata, venture_leaf_gate_enforce: true } };
+    expect(resolveLeafEnforce(enrolled, OFF, [])).toBe(true);
+  });
+  it('TS-3a: true when the global switch is ON (env), regardless of allow-list', () => {
+    expect(resolveLeafEnforce(ventureLeaf, { VENTURE_LEAF_GATE_ENFORCE: '1' }, [])).toBe(true);
+  });
+  it('parseEnforceAllowList parses a CSV env var, trimming + dropping blanks', () => {
+    expect(parseEnforceAllowList({ VENTURE_LEAF_GATE_ENFORCE_SD_KEYS: ' SD-A , ,SD-B ' })).toEqual(['SD-A', 'SD-B']);
+    expect(parseEnforceAllowList({})).toEqual([]);
+  });
+  it('end-to-end: an enrolled leaf ENFORCES while a non-enrolled leaf OBSERVES (global OFF)', async () => {
+    const allow = ['SD-DD-SPRINT-002-C1'];
+    const enrolled = await evaluateLeafReadinessLive({ sd: ventureLeaf, supabase: fakeSupabase([]), phaseStartedAt: PHASE_START, enforce: resolveLeafEnforce(ventureLeaf, OFF, allow) });
+    expect(enrolled.passed).toBe(false); // enrolled -> enforce -> blocked on missing evidence
+    const other = { ...ventureLeaf, id: 'leaf-2', sd_key: 'SD-DD-SPRINT-002-C2' };
+    const observed = await evaluateLeafReadinessLive({ sd: other, supabase: fakeSupabase([]), phaseStartedAt: PHASE_START, enforce: resolveLeafEnforce(other, OFF, allow) });
+    expect(observed.passed).toBe(true); // non-enrolled -> observe
+    expect(observed.details.would_block).toBe(true);
   });
 });
 
