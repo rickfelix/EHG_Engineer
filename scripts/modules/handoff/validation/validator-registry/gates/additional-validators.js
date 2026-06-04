@@ -7,6 +7,10 @@ import { validateRetrospectiveQuality } from '../../../../sd-quality-validation.
 import { shouldSkipCodeValidation } from '../../../../../../lib/utils/sd-type-validation.js';
 // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy for intelligent sub-agent requirements
 import { isLightweightSDType } from '../../sd-type-applicability-policy.js';
+// SD-DATADISTILL venture build: make targetApplicationValidation venture-aware
+// (mirror the executor-level TARGET_APPLICATION_VALIDATION gate). The prior
+// hardcoded 2-app allowlist rejected every venture target_application.
+import { resolveRepoPath } from '../../../../../../lib/repo-paths.js';
 
 /**
  * Register additional validators
@@ -48,12 +52,19 @@ export function registerAdditionalValidators(registry) {
       return { passed: true, score: 100, max_score: 100, warnings: ['No target application specified, will use default'] };
     }
 
-    if (!validTargets.includes(target)) {
+    // Venture-aware: accept any target_application that resolves to a registered
+    // venture in the applications registry (parity with the executor-level
+    // TARGET_APPLICATION_VALIDATION gate). resolveRepoPath() matches via
+    // normalizeAppName, so "datadistill"/"DataDistill" both resolve.
+    let resolvesAsVenture = false;
+    try { resolvesAsVenture = !!resolveRepoPath(target); } catch { resolvesAsVenture = false; }
+
+    if (!validTargets.includes(target) && !resolvesAsVenture) {
       return {
         passed: false,
         score: 0,
         max_score: 100,
-        issues: [`Invalid target application: ${target}. Valid: ${validTargets.join(', ')}`]
+        issues: [`Invalid target application: ${target}. Valid: ${validTargets.join(', ')} or a registered venture application`]
       };
     }
 
