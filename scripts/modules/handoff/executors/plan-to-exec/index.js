@@ -36,7 +36,9 @@ import {
   // Cross-SD File-Overlap Temporal Gate (SD-LEO-INFRA-CROSS-FILE-OVERLAP-001 FR-2a)
   createCrossSdFileOverlapTemporalGate,
   // Sub-Agent Repo Resolution Gate (SD-LEO-INFRA-FLEET-WIDE-SUB-001 FR-3)
-  createSubAgentRepoResolutionGate
+  createSubAgentRepoResolutionGate,
+  // Venture-Leaf Evidence Gate (SD-LEO-INFRA-WIRE-PRE-BUILD-001 FR-2)
+  createVentureLeafGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -147,6 +149,13 @@ export class PlanToExecExecutor extends BaseExecutor {
     // existence are then validated for correct repo_path. Applies to parent-
     // orchestrator, orchestrator-child, and standalone paths.
     gates.push(createSubAgentRepoResolutionGate(this.supabase));
+
+    // Venture-Leaf Evidence Gate (SD-LEO-INFRA-WIRE-PRE-BUILD-001 FR-2)
+    // Common path (before the parent-orchestrator branch): self-skips for parent
+    // orchestrators and every non-venture SD, so it only acts on venture-build
+    // LEAVES (descendants of a leo_bridge orchestrator). Observe-mode by default
+    // (VENTURE_LEAF_GATE_ENFORCE) until the FR-3 evidence driver is wired.
+    gates.push(createVentureLeafGate(this.supabase));
 
     // Parent orchestrators get simplified gates
     if (parentOrchestrator) {
