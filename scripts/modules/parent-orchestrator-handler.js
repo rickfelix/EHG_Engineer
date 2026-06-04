@@ -78,11 +78,15 @@ export class ParentOrchestratorHandler {
       children: children || [],
       childrenCount: children?.length || 0,
       completedCount: (children || []).filter(c => c.status === 'completed').length,
-      // Include detection details for debugging
+      // Include detection details for debugging.
+      // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 moved the 3-signal merge into the
+      // isOrchestrator() helper (line ~59), removing the local hasIsParentFlag/
+      // isOrchestratorType/hasChildren vars. Recompute from data in scope so the debug
+      // field stays meaningful without a ReferenceError (QF-20260604-273).
       detectionMethod: {
-        hasIsParentFlag,
-        isOrchestratorType,
-        hasChildren
+        hasIsParentFlag: sd?.metadata?.is_parent === true,
+        isOrchestratorType: sd?.sd_type === 'orchestrator',
+        hasChildren: (children?.length || 0) > 0
       }
     };
   }
