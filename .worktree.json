@@ -1,7 +1,9 @@
 {
-  "sdKey": "SD-LEO-FEAT-CHAIRMAN-VENTURE-DELETE-001",
-  "expectedBranch": "feat/SD-LEO-FEAT-CHAIRMAN-VENTURE-DELETE-001",
-  "createdAt": "2026-05-28T10:21:34.811Z",
-  "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
-  "baseRef": "origin/main"
+  "sdKey": "QF-20260604-273",
+  "workType": "QF",
+  "workKey": "QF-20260604-273",
+  "expectedBranch": "qf/QF-20260604-273",
+  "createdAt": "2026-06-04T10:53:56.382Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
