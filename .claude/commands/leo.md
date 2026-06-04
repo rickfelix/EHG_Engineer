@@ -398,7 +398,17 @@ Run the post-completion sequence for the current working SD.
    ```
    Invoke the `learn` skill using Skill tool.
 
-   **Step 5: Next**
+   **Step 5: Capture Completion Flags**
+   ```
+   🚩 Running completion-flags capture...
+   ```
+   Answer the FR-6 reflective interrogation — **"Are there any gaps we failed to close?"** (incidental findings, harness friction, deferred/descoped items, data discrepancies noticed, anything surprising or worked around) — then capture each finding to its durable channel:
+   ```bash
+   node scripts/capture-completion-flags.js --sd <SD-KEY> --flags '<json-array>' --reflection '{"asked":true,"checklist_items":<n>,"gaps_found":<n>}'
+   ```
+   Emit the printed **Completion Flags** block (item | type | routed-to | id) as the LAST section of the completion message; "0 flags" is shown explicitly (never silently omitted). A no-findings SD still writes a witness record. The post-completion Stop hook (`post-completion-validator.js`) reminds if this record is missing. SD-LEO-INFRA-COMPLETION-FLAGS-DURABLE-001.
+
+   **Step 6: Next**
    ```
    📋 Showing next SD in queue...
    ```
@@ -415,6 +425,7 @@ Run the post-completion sequence for the current working SD.
    - /ship - Changes committed and PR created
    - /heal sd - Codebase verified against SD promises
    - /learn - Patterns captured
+   - capture-completion-flags - Incidental findings flagged to a durable channel (Completion Flags block emitted)
    - sd:next - Queue displayed
    ```
 
