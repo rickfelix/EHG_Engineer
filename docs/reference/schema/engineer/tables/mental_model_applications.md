@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 770
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -75,23 +75,12 @@
 
 ## RLS Policies
 
-### 1. mental_model_applications_anon_insert (INSERT)
-
-- **Roles**: {anon}
-- **With Check**: `true`
-
-### 2. mental_model_applications_anon_select (SELECT)
+### 1. mental_model_applications_anon_select (SELECT)
 
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 3. mental_model_applications_anon_update (UPDATE)
-
-- **Roles**: {anon}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 4. mental_model_applications_service_all (ALL)
+### 2. mental_model_applications_service_all (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

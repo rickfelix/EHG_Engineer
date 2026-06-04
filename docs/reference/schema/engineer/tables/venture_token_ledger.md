@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
-**Rows**: 1,410
-**RLS**: Enabled (4 policies)
+**Generated**: 2026-06-04T00:30:18.307Z
+**Rows**: 1,416
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -81,18 +81,7 @@
 
 ## RLS Policies
 
-### 1. Allow update for authenticated (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 2. System can insert token records (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 3. Users can view token ledger for accessible ventures (SELECT)
+### 1. Users can view token ledger for accessible ventures (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(venture_id IN ( SELECT ventures.id
@@ -101,7 +90,7 @@
            FROM profiles
           WHERE (profiles.id = auth.uid())))))`
 
-### 4. venture_token_ledger_delete (DELETE)
+### 2. venture_token_ledger_delete (DELETE)
 
 - **Roles**: {service_role}
 - **Using**: `true`

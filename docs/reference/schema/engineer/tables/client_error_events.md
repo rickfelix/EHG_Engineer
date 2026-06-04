@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -95,12 +95,7 @@
 - **Using**: `true`
 - **With Check**: `true`
 
-### 2. ins_anon_authenticated_client_error_events (INSERT)
-
-- **Roles**: {anon,authenticated}
-- **With Check**: `true`
-
-### 3. sel_chairman_scoped_client_error_events (SELECT)
+### 2. sel_chairman_scoped_client_error_events (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `(chairman_user_id = auth.uid())`

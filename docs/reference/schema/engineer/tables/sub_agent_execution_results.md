@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
-**Rows**: 25,133
-**RLS**: Enabled (4 policies)
+**Generated**: 2026-06-04T00:30:18.307Z
+**Rows**: 25,162
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -137,24 +137,14 @@
 
 ## RLS Policies
 
-### 1. Allow insert to service role (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. Allow read access to all users (SELECT)
+### 1. Allow read access to all users (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 3. Allow service_role to delete sub_agent_execution_results (DELETE)
+### 2. Allow service_role to delete sub_agent_execution_results (DELETE)
 
 - **Roles**: {service_role}
-- **Using**: `true`
-
-### 4. Allow update to service role (UPDATE)
-
-- **Roles**: {public}
 - **Using**: `true`
 
 ## Triggers

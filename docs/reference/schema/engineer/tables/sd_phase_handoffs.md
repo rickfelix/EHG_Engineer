@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
-**Rows**: 23,395
-**RLS**: Enabled (11 policies)
+**Generated**: 2026-06-04T00:30:18.307Z
+**Rows**: 23,414
+**RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -121,60 +121,33 @@
 
 ## RLS Policies
 
-### 1. Allow anon insert sd_phase_handoffs (INSERT)
-
-- **Roles**: {anon}
-- **With Check**: `true`
-
-### 2. Allow anon read sd_phase_handoffs (SELECT)
+### 1. Allow anon read sd_phase_handoffs (SELECT)
 
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 3. Allow anon update sd_phase_handoffs (UPDATE)
-
-- **Roles**: {anon}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 4. Allow authenticated delete sd_phase_handoffs (DELETE)
+### 2. Allow authenticated read sd_phase_handoffs (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 5. Allow authenticated insert sd_phase_handoffs (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 6. Allow authenticated read sd_phase_handoffs (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 7. Allow authenticated update sd_phase_handoffs (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 8. Allow service role all sd_phase_handoffs (ALL)
+### 3. Allow service role all sd_phase_handoffs (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 9. venture_insert_sd_phase_handoffs (INSERT)
+### 4. venture_insert_sd_phase_handoffs (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
 
-### 10. venture_select_sd_phase_handoffs (SELECT)
+### 5. venture_select_sd_phase_handoffs (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
 
-### 11. venture_update_sd_phase_handoffs (UPDATE)
+### 6. venture_update_sd_phase_handoffs (UPDATE)
 
 - **Roles**: {authenticated}
 - **Using**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`

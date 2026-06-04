@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -71,11 +71,10 @@
 - **Roles**: {public}
 - **Using**: `true`
 
-### 2. venture_templates_write (ALL)
+### 2. venture_templates_write (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
-- **With Check**: `true`
 
 ## Triggers
 

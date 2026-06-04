@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
-**Rows**: 14,715
-**RLS**: Enabled (3 policies)
+**Generated**: 2026-06-04T00:30:18.307Z
+**Rows**: 14,738
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -103,18 +103,13 @@
 
 ## RLS Policies
 
-### 1. Anon can insert artifacts (INSERT)
-
-- **Roles**: {anon}
-- **With Check**: `true`
-
-### 2. Service role full access to agent_artifacts (ALL)
+### 1. Service role full access to agent_artifacts (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 3. Users can read artifacts (SELECT)
+### 2. Users can read artifacts (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

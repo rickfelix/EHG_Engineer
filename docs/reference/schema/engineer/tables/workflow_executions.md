@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
-**Rows**: 4,704
-**RLS**: Enabled (3 policies)
+**Generated**: 2026-06-04T00:30:18.307Z
+**Rows**: 4,717
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -46,17 +46,12 @@
 
 ## RLS Policies
 
-### 1. authenticated_insert_workflow_executions (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 2. authenticated_select_workflow_executions (SELECT)
+### 1. authenticated_select_workflow_executions (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 3. service_role_all_workflow_executions (ALL)
+### 2. service_role_all_workflow_executions (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

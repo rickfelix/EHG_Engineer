@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 60
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -82,27 +82,10 @@
 
 ## RLS Policies
 
-### 1. Allow human decision updates (UPDATE)
+### 1. Allow read access to judge verdicts (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
-- **With Check**: `((verdict_type = ( SELECT judge_verdicts_1.verdict_type
-   FROM judge_verdicts judge_verdicts_1
-  WHERE (judge_verdicts_1.id = judge_verdicts_1.id))) AND (detailed_rationale = ( SELECT judge_verdicts_1.detailed_rationale
-   FROM judge_verdicts judge_verdicts_1
-  WHERE (judge_verdicts_1.id = judge_verdicts_1.id))) AND (confidence_score = ( SELECT judge_verdicts_1.confidence_score
-   FROM judge_verdicts judge_verdicts_1
-  WHERE (judge_verdicts_1.id = judge_verdicts_1.id))))`
-
-### 2. Allow read access to judge verdicts (SELECT)
-
-- **Roles**: {public}
-- **Using**: `true`
-
-### 3. Allow service role to insert verdicts (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
 
 ---
 

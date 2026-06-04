@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 31
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -99,23 +99,12 @@
 
 ## RLS Policies
 
-### 1. insert_aegis_violations (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. limited_update_aegis_violations (UPDATE)
-
-- **Roles**: {public}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 3. no_delete_aegis_violations (DELETE)
+### 1. no_delete_aegis_violations (DELETE)
 
 - **Roles**: {public}
 - **Using**: `false`
 
-### 4. select_aegis_violations (SELECT)
+### 2. select_aegis_violations (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`

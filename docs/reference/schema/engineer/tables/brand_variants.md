@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -45,22 +45,12 @@
 
 ## RLS Policies
 
-### 1. brand_variants_anon_insert (INSERT)
-
-- **Roles**: {anon}
-- **With Check**: `true`
-
-### 2. brand_variants_anon_select (SELECT)
+### 1. brand_variants_anon_select (SELECT)
 
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 3. brand_variants_insert_policy (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 4. brand_variants_select_policy (SELECT)
+### 2. brand_variants_select_policy (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

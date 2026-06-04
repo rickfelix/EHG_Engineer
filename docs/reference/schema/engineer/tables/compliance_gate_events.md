@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -67,12 +67,7 @@
 
 ## RLS Policies
 
-### 1. Compliance gate events insertable by functions (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 2. Compliance gate events viewable by venture owner (SELECT)
+### 1. Compliance gate events viewable by venture owner (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `(EXISTS ( SELECT 1
