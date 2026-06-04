@@ -63,7 +63,28 @@ const ALLOWLIST = new Set([
   // Category B — release/status writes (branch not relevant to state transition)
   'lib/commands/claim-command.js',
   'lib/context/unified-state-manager.js',
+
+  // ── QF-20260604-088: re-arm after ALLOWLIST drift (RCA PAT-LINT-STATIC-PINNING-DRIFT-001,
+  //    issue_patterns 3914509b). Each verified to write NO current_branch column (benign drift). ──
+  // Category B — metadata / status / telemetry / worktree-state writes (current_branch N/A)
+  'lib/coordinator/resolve.cjs',                  // metadata-only merge patch
+  'lib/fleet-lock-hash.mjs',                      // released_reason on lock fracture (release write)
+  'lib/lifecycle/worktree-state-writer.mjs',      // worktree_path/worktree_branch (NOT current_branch)
+  'lib/worktree-manager.js',                      // cleanup_pending marker
+  'scripts/cancel-sd.js',                         // release transition (status/sd_key/worktree nulls)
+  'scripts/cleanup-pending-sweep.mjs',            // clears cleanup_pending flag
+  'scripts/lib/sessions/loop-state-tracker.cjs',  // loop_state telemetry counter
+  // Category C — archived one-time / non-interactive probe
+  'scripts/one-off/backfill-stale-worktree-state.mjs',  // one-time worktree-state backfill
+  'scripts/smoke/verify-claim-col-preservation.mjs',    // smoke probe (sd_key CAS), not runtime
 ]);
+
+// QF-20260604-088: archived one-off evidence / migration-plan scripts under
+// scripts/one-off/_* are kept for audit only and never run interactively. Their
+// claude_sessions matches (real CAS writes or example payloads embedded in PRD
+// strings) are not live source. The leading underscore is the repo's archived-
+// one-off convention — exclude these from the guard rather than allowlisting each.
+const ARCHIVED_ONE_OFF_RE = /^scripts\/one-off\/_/;
 
 // Roots to scan (source code only — skip node_modules, tests, build output)
 const SCAN_ROOTS = ['lib', 'scripts'];
@@ -106,6 +127,7 @@ describe('LINT-SESSION-WRITER-001: no raw claude_sessions.update outside helper'
       for (const file of walk(rootPath)) {
         const relative = path.relative(repoRoot, file).split(path.sep).join('/');
         if (ALLOWLIST.has(relative)) continue;
+        if (ARCHIVED_ONE_OFF_RE.test(relative)) continue; // QF-20260604-088
         let content;
         try {
           content = fs.readFileSync(file, 'utf8');
