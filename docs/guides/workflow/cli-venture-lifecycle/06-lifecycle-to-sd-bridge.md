@@ -39,11 +39,11 @@ tags: [guide, auto-generated]
 ---
 Category: Architecture
 Status: Approved
-Version: 1.1.0
+Version: 1.2.0
 Author: DOCMON Sub-Agent
-Last Updated: 2026-06-03
+Last Updated: 2026-06-04
 Tags: [cli-venture-lifecycle, eva, orchestrator, pre-build-rail]
-Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-PRE-BUILD-SUB-001]
+Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001, SD-LEO-INFRA-PRE-BUILD-SUB-001, SD-LEO-INFRA-WIRE-PRE-BUILD-001, SD-LEO-INFRA-WIRE-PRE-BUILD-002]
 ---
 
 # 06 - Lifecycle-to-SD Bridge
@@ -509,15 +509,36 @@ loop (headlessly unit-testable), and the live session injects the LLM-backed sub
 | U5 Hygiene | `regeneration-hygiene.js` | `planRegeneration` — idempotent re-runs; never resurrects `cancelled`/`completed` leaves |
 | U6 Persist | `capability-persistence.js` | `toCapabilityRecord` / `findReusable` — persists each dimension's output to `sd_capabilities` so ventures compound capability |
 
-### Current Status (as of this SD)
+### Current Status
 
-The rail is **landed but inert** — `PREBUILD_PANEL_ENRICHMENT` is OFF and no live driver is
-wired into the venture-build flow yet, so production decomposition is unchanged. Enabling it
-is gated on follow-on work:
+**Foundation — SD-LEO-INFRA-PRE-BUILD-SUB-001**: landed the 12 modules above as a
+tested-but-inert foundation (`PREBUILD_PANEL_ENRICHMENT` OFF, no live driver).
 
-1. Wire a live Task-based panel / refute / judge driver into the venture-build consumer.
-2. Flip `PREBUILD_PANEL_ENRICHMENT` for a controlled pilot (DataDistill engine-D).
-3. Compose the 6 units end-to-end (generate → verify → sequence → gate → persist).
+**Phase A — SD-LEO-INFRA-WIRE-PRE-BUILD-001 (first live wiring)**:
+
+- **VENTURE_STACK is now a first-class sub-agent** — registered in `leo_sub_agents`
+  (`lib/sub-agents/venture_stack.js`, deterministic; filename is **underscore** to match the
+  executor's `code.toLowerCase()` dynamic-load convention). `execute-subagent.js --code
+  VENTURE_STACK` runs the U2 compliance dimension and writes `sub_agent_execution_results` evidence.
+- **The U5 leaf gate is wired into the live PLAN→EXEC handoff** — `lib/eva/bridge/leaf-gate-live.js`
+  plus a plan-to-exec gate detect a venture-build leaf (descendant of a leo_bridge orchestrator,
+  *not* `!parent_sd_id`) and check for **fresh** (`max(created_at, updated_at) ≥ phase-start`),
+  compliant VENTURE_STACK evidence. **Default-OFF enforcement via `VENTURE_LEAF_GATE_ENFORCE`**:
+  observe/warn by default (logs a WOULD-BLOCK warning) so venture builds don't stall before the
+  driver exists; set `=1` to block a hollow/non-compliant leaf with `SUBAGENT_EVIDENCE_MISSING`.
+  Non-venture (e.g. EHG_Engineer) SDs are a hard no-op — including ones that legitimately mention
+  Supabase (the EHG stack the venture policy forbids).
+
+**Deferred — SD-LEO-INFRA-WIRE-PRE-BUILD-002 (the live enrichment driver)**:
+
+1. Wire the live Task / client-factory panel / refute / judge driver into the venture-build
+   consumer (a `--enrich-leaf` CLI), and inject it as the `computeLeafContent` driver.
+2. Compose the 6 units end-to-end (generate → verify → sequence → gate → persist) and persist
+   each dimension to `sd_capabilities`.
+3. Flip `PREBUILD_PANEL_ENRICHMENT` **and** `VENTURE_LEAF_GATE_ENFORCE` for a controlled pilot on
+   the **next venture build**. (The originally-named "DataDistill engine-D" target is gone:
+   DataDistill shipped as `SPRINT-2026-SAAS-001`, and its leo_bridge factory-duplicate trees —
+   including `SPRINT-2026-002` — were cancelled.)
 4. Add a PLAN-VERIFY integration smoke over the DB-reading / live-driver seams.
 
 A pilot run of the panel against real DataDistill S14 artifacts (via the `database-agent`)
