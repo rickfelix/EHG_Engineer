@@ -8,6 +8,7 @@ import { readdir } from 'fs/promises';
 import path from 'path';
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
 import { getSectionEnforcement } from '../sd-type-section-policy.js';
+import { classifyBackendLeaf, isEhgEngineerTarget } from './backend-leaf-detection.js';
 
 /**
  * Validate Data Flow Alignment
@@ -52,7 +53,7 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
   // EHG_Engineer is a backend-only repo (CLI, scripts, tooling) - never has form/UI integration
   {
     const targetApp = validation.details.target_application || null;
-    if (targetApp === 'EHG_Engineer') {
+    if (isEhgEngineerTarget(targetApp)) {
       console.log('   ✅ EHG_Engineer target application (backend-only) - Section C not applicable (25/25)');
       validation.score += 25;
       validation.gate_scores.data_flow_alignment = 25;
@@ -69,7 +70,7 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
   try {
     const { resolveSdInputOrNull } = await import('../../../lib/sd-id-resolver.js');
     const { sd: sdResolved } = await resolveSdInputOrNull(sd_id, supabase);
-    let sd = sdResolved ? { sd_type: sdResolved.sd_type, scope: sdResolved.scope } : null;
+    let sd = sdResolved ? { sd_type: sdResolved.sd_type, scope: sdResolved.scope, title: sdResolved.title } : null;
     // Legacy 2-step fallback removed: resolver handles both UUID and sd_key forms via single .or() query.
 
     // Extract scope text for analysis
@@ -150,6 +151,24 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
           skipped: true,
           reason: 'EHG frontend lib-level feature with no DB/forms/UI by design (PAT-GATE2-LIBFEATURE-001)'
         };
+        return;
+      }
+    }
+
+    // SD-FDBK-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 (PAT-GATE2-BACKEND-ONLY-001 broadened):
+    // LAST exemption — existing exemptions (incl. PAT-GATE2-LIBFEATURE-001 above) keep
+    // precedence. Symmetric with Section A. Covers cross-repo BACKEND venture leaves (e.g.
+    // DataDistill D1 distillation engine — "engine/worker" scope, target=datadistill) and
+    // infrastructure/bugfix backend leaves whose scope/title miss the narrow keyword set
+    // above. Fence is !hasUISurface, so venture UI leaves (F1 dashboard, G1 widget) stay
+    // enforced. Pure/sync — the enclosing try/catch falls through to normal scoring on error.
+    {
+      const leaf = classifyBackendLeaf(sd?.sd_type, scopeToCheck, sd?.title);
+      if (leaf.exempt) {
+        console.log(`   ✅ Backend leaf (${leaf.reason}) - Section C not applicable (25/25) [SD-FDBK-FIX-GATE2-IMPLEMENTATION-FIDELITY-001]`);
+        validation.score += 25;
+        validation.gate_scores.data_flow_alignment = 25;
+        validation.details.data_flow_alignment = { skipped: true, reason: `Backend leaf - ${leaf.reason}` };
         return;
       }
     }

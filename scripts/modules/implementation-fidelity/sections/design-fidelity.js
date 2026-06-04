@@ -7,6 +7,7 @@
 
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
 import { getSectionEnforcement } from '../sd-type-section-policy.js';
+import { classifyBackendLeaf, isEhgEngineerTarget } from './backend-leaf-detection.js';
 
 /**
  * Validate Design Implementation Fidelity
@@ -50,7 +51,7 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
   // EHG_Engineer is a backend-only repo (CLI, scripts, tooling) - never has UI components
   {
     const targetApp = validation.details.target_application || null;
-    if (targetApp === 'EHG_Engineer') {
+    if (isEhgEngineerTarget(targetApp)) {
       console.log('   ✅ EHG_Engineer target application (backend-only) - Section A not applicable (25/25)');
       validation.score += 25;
       validation.gate_scores.design_fidelity = 25;
@@ -152,6 +153,24 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
           skipped: true,
           reason: 'EHG frontend lib-level feature with no DB/forms/UI by design (PAT-GATE2-LIBFEATURE-001)'
         };
+        return;
+      }
+    }
+
+    // SD-FDBK-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 (PAT-GATE2-BACKEND-ONLY-001 broadened):
+    // LAST exemption — existing exemptions (incl. PAT-GATE2-LIBFEATURE-001 above) keep
+    // precedence. Covers cross-repo BACKEND venture leaves (e.g. DataDistill D1 distillation
+    // engine — "engine/worker" scope, target=datadistill) and bugfix backend leaves whose
+    // scope/title miss the narrow keyword set above. Fence is !hasUISurface, so venture UI
+    // leaves (F1 dashboard, G1 widget) stay enforced. classifyBackendLeaf is pure/sync — the
+    // enclosing try/catch still falls through to normal scoring on a resolver error.
+    {
+      const leaf = classifyBackendLeaf(sd?.sd_type, scopeToCheck, sd?.title);
+      if (leaf.exempt) {
+        console.log(`   ✅ Backend leaf (${leaf.reason}) - Section A not applicable (25/25) [SD-FDBK-FIX-GATE2-IMPLEMENTATION-FIDELITY-001]`);
+        validation.score += 25;
+        validation.gate_scores.design_fidelity = 25;
+        validation.details.design_fidelity = { skipped: true, reason: `Backend leaf - ${leaf.reason}` };
         return;
       }
     }
