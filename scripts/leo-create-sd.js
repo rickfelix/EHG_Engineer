@@ -48,9 +48,10 @@ import { runTriageGate } from './modules/triage-gate.js';
 import { evaluateVisionReadiness, formatRubricResult } from './modules/vision-readiness-rubric.js';
 import { scoreSD } from './eva/vision-scorer.js';
 import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
-// SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 (FR-5): canonical no-venture sd_type set — used to
-// guard the applications auto-register so engineering/governance work never mints a spurious venture.
-import { LEGITIMATE_NO_VENTURE_SD_TYPES } from '../lib/eva/bridge/sd-router.js';
+// SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 (FR-5) + SD-FDBK-INFRA-KEY-GENERATOR-LEAKS-001:
+// shared no-venture classifier — guards the applications auto-register AND the venture-prefix
+// resolver so engineering/governance work never inherits a spurious venture prefix.
+import { isLegitimateNoVenture } from '../lib/eva/bridge/sd-router.js';
 import { validateSDFields } from './modules/validate-sd-fields.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001: path-based target detector
@@ -213,8 +214,45 @@ export async function enrichFromVisionArch(visionKey, archKey, sb) {
   };
 }
 
-async function resolveVenturePrefix(cliVenture = null) {
-  // 1. CLI flag (highest priority)
+/**
+ * Non-throwing alias→canonical normalizer for the venture-suppression decision ONLY.
+ * SD-FDBK-INFRA-KEY-GENERATOR-LEAKS-001: must NOT route through mapToDbType/assertValidSdType
+ * (those throw on non-canonical input such as 'governance'); classifying for a cosmetic prefix
+ * must never throw. Unknown input is returned lowercased so an unmapped type simply fails the
+ * no-venture membership check (default 'stamp' behavior preserved).
+ * @param {string|null} rawType
+ * @returns {string} canonical-ish type for the membership check (never throws)
+ */
+function normalizeTypeForVentureCheck(rawType) {
+  if (!rawType || typeof rawType !== 'string') return '';
+  const t = rawType.trim().toLowerCase();
+  const alias = {
+    infra: 'infrastructure',
+    doc: 'documentation',
+    docs: 'documentation',
+    qa: 'infrastructure',
+    testing: 'infrastructure',
+    gov: 'governance'
+  };
+  return alias[t] || t;
+}
+
+/**
+ * Resolve the venture prefix for an SD key.
+ *
+ * SD-FDBK-INFRA-KEY-GENERATOR-LEAKS-001: sd_type-aware. Legitimate-no-venture types
+ * (infrastructure/governance/leo/documentation/refactor + metadata.engineering_only) must NEVER
+ * inherit an AMBIENT venture (the VENTURE env var OR the active session's active_venture_id).
+ * Only an explicit per-invocation --venture flag stamps a prefix on such SDs. Genuine venture
+ * types and unknown types are unaffected (env → session → null, exactly as before).
+ *
+ * @param {string|null} cliVenture - explicit --venture flag value (highest priority, ALL types)
+ * @param {string|null} sdType - the SD type (raw alias accepted; normalized internally)
+ * @param {object} [deps] - test seam: { getActiveVenture } overrides the live session lookup
+ * @returns {Promise<string|null>} normalized venture prefix or null
+ */
+export async function resolveVenturePrefix(cliVenture = null, sdType = null, deps = {}) {
+  // 1. CLI flag (highest priority — explicit intent wins for ALL types, including no-venture)
   if (cliVenture) {
     const prefix = normalizeVenturePrefix(cliVenture);
     if (prefix) {
@@ -223,7 +261,17 @@ async function resolveVenturePrefix(cliVenture = null) {
     }
   }
 
-  // 2. Environment variable
+  // SD-FDBK-INFRA-KEY-GENERATOR-LEAKS-001: suppress AMBIENT venture (env + session) for
+  // legitimate-no-venture SD types. Classification uses a non-throwing normalize, then the
+  // shared isLegitimateNoVenture helper (no metadata at resolve time → sd_type-only check).
+  // Gating BOTH ambient sources is load-bearing: leaving step 2 (env) ungated leaks in CI/cron.
+  const canonicalType = normalizeTypeForVentureCheck(sdType);
+  if (isLegitimateNoVenture(canonicalType)) {
+    console.log(`   🚫 [VENTURE-SUPPRESS] sd_type=${sdType ?? '(none)'} is no-venture — ambient venture prefix suppressed (use --venture to override)`);
+    return null;
+  }
+
+  // 2. Environment variable (ambient)
   const envVenture = process.env.VENTURE;
   if (envVenture) {
     const prefix = normalizeVenturePrefix(envVenture);
@@ -233,10 +281,14 @@ async function resolveVenturePrefix(cliVenture = null) {
     }
   }
 
-  // 3. Active session context
+  // 3. Active session context (ambient)
   try {
-    const vcm = new VentureContextManager({ supabaseClient: supabase });
-    const venture = await vcm.getActiveVenture();
+    const getActiveVenture = deps.getActiveVenture
+      || (async () => {
+        const vcm = new VentureContextManager({ supabaseClient: supabase });
+        return vcm.getActiveVenture();
+      });
+    const venture = await getActiveVenture();
     if (venture) {
       const prefix = normalizeVenturePrefix(venture.name);
       if (prefix) {
@@ -290,7 +342,7 @@ async function createFromUAT(testId) {
   } catch { /* non-fatal */ }
 
   // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
-  const venturePrefix = await resolveVenturePrefix();
+  const venturePrefix = await resolveVenturePrefix(null, type);
 
   // Generate key
   const sdKey = await generateSDKey({
@@ -339,7 +391,7 @@ async function createFromLearn(patternId) {
   const type = pattern.lesson_type === 'bug' ? 'fix' : 'enhancement';
 
   // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
-  const venturePrefix = await resolveVenturePrefix();
+  const venturePrefix = await resolveVenturePrefix(null, type);
 
   // Generate key
   const sdKey = await generateSDKey({
@@ -438,7 +490,7 @@ async function createFromFeedback(feedbackId, options = {}) {
   } catch { /* non-fatal */ }
 
   // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
-  const venturePrefix = await resolveVenturePrefix();
+  const venturePrefix = await resolveVenturePrefix(null, type);
 
   // Generate key
   const sdKey = await generateSDKey({
@@ -522,7 +574,7 @@ async function createFromQF(qfId) {
   // Map QF severity → SD priority (1:1 enum overlap).
   const priority = ['critical', 'high', 'medium', 'low'].includes(qf.severity) ? qf.severity : 'medium';
 
-  const venturePrefix = await resolveVenturePrefix();
+  const venturePrefix = await resolveVenturePrefix(null, type);
   const sdKey = await generateSDKey({ source: 'LEO', type, title: qf.title, venturePrefix });
 
   const sd = await createSD({
@@ -840,7 +892,7 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
   // Step 5: Generate SD key
   // Protocol files (CLAUDE_CORE.md, CLAUDE_LEAD.md) must be read before SD creation
   // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
-  const venturePrefix = await resolveVenturePrefix();
+  const venturePrefix = await resolveVenturePrefix(null, parsed.type);
 
   const sdKey = await generateSDKey({
     source: 'LEO',
@@ -1795,19 +1847,19 @@ async function createSD(options) {
     if (appName) {
       const PLATFORM_REPOS = new Set(['ehg', 'ehg_engineer']);
       const isPlatform = PLATFORM_REPOS.has(String(appName).toLowerCase());
-      // FR-5 NO-VENTURE GUARD (mirrors lib/eva/bridge/sd-router.js isLegitimateNoVenture):
+      // FR-5 NO-VENTURE GUARD (uses the shared lib/eva/bridge/sd-router.js isLegitimateNoVenture
+      // helper — SD-FDBK-INFRA-KEY-GENERATOR-LEAKS-001 replaced the inline re-implementation):
       // engineering/governance LEO work (sd_type in LEGITIMATE_NO_VENTURE_SD_TYPES, or
       // metadata.engineering_only=true) must NOT mint a NEW 'venture' registry entry. Such an SD
       // legitimately targets a platform repo (default EHG_Engineer); a NON-platform target on it
       // is a misroute, so we skip registration (surfaced loudly) rather than polluting the registry
       // with a phantom venture the deferred fail-closed trigger would then accept.
-      const isNoVentureWork = LEGITIMATE_NO_VENTURE_SD_TYPES.has(sdData.sd_type)
-        || sdData.metadata?.engineering_only === true;
+      const isNoVentureWork = isLegitimateNoVenture(sdData.sd_type, sdData.metadata);
       if (!isPlatform && isNoVentureWork) {
         console.warn(
           `   ⚠️  Skipping applications auto-register: engineering SD (sd_type=${sdData.sd_type}) has a `
           + `non-platform target_application '${appName}'. Engineering/governance work should target a `
-          + `platform repo (EHG/EHG_Engineer) — refusing to mint a phantom venture (FR-5 no-venture guard).`
+          + 'platform repo (EHG/EHG_Engineer) — refusing to mint a phantom venture (FR-5 no-venture guard).'
         );
       } else {
         const { data: existing } = await supabase
@@ -2384,7 +2436,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // Check for --venture flag in args
       const ventureArgIdx = args.indexOf('--venture');
       const cliVenture = ventureArgIdx !== -1 ? args[ventureArgIdx + 1] : null;
-      const venturePrefix = await resolveVenturePrefix(cliVenture);
+      const venturePrefix = await resolveVenturePrefix(cliVenture, type);
 
       // Parse --vision-key and --arch-key flags (SD-MAN-INFRA-AUTOMATE-BRAINSTORM-PIPELINE-002)
       const visionKeyIdx = args.indexOf('--vision-key');
