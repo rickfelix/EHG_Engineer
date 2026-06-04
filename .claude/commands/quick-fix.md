@@ -97,7 +97,7 @@ If qualified for quick-fix:
 
 2. **Create branch:**
    ```bash
-   git checkout -b quick-fix/QF-YYYYMMDD-NNN
+   git checkout -b qf/QF-YYYYMMDD-NNN
    ```
 
 3. **Implement fix:**

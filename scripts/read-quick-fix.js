@@ -177,7 +177,7 @@ async function readQuickFix(qfId, options = {}) {
   if (qf.status === 'open') {
     console.log('📍 NEXT STEPS\n');
     console.log(`   1. Classify:       node scripts/classify-quick-fix.js ${qfId}`);
-    console.log(`   2. Create branch:  git checkout -b quick-fix/${qfId}`);
+    console.log(`   2. Create branch:  git checkout -b qf/${qfId}`);
     console.log('   3. Implement fix:  (≤50 LOC, single file preferred)');
     console.log('   4. Restart server: pkill -f "npm run dev" && npm run dev');
     console.log('   5. Run tests:      npm run test:unit && npm run test:e2e');

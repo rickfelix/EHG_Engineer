@@ -20,6 +20,8 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { analyzePatterns, createPatternRetrospective } from '../lib/utils/quickfix-rca-integration.js';
+// SD-LEO-INFRA-SESSION-AWARE-AUTO-001 (FR-2): session-aware QF adoption.
+import { claimQuickFix } from '../lib/quick-fix-claim.mjs';
 
 dotenv.config();
 
@@ -217,10 +219,34 @@ async function classifyQuickFix(qfId, options = {}) {
 
   // Final verdict
   if (qualifies) {
+    // SD-LEO-INFRA-SESSION-AWARE-AUTO-001 (FR-2): claim the QF for THIS session
+    // before emitting implementation guidance. /quick-fix and /leo <QF-id> run
+    // this script early; previously nothing claimed the QF here, so two parallel
+    // sessions could both adopt the same quick-fix. Fail-closed CAS via the
+    // shared helper closes that race at the actual adopt entrypoint.
+    // Gate on session id presence exactly like create-quick-fix.js — a
+    // non-session invocation (no CLAUDE_SESSION_ID) must never crash classify.
+    const sessionId = process.env.CLAUDE_SESSION_ID;
+    if (!sessionId) {
+      console.log('ℹ️  No CLAUDE_SESSION_ID — skipping QF claim (non-session invocation).\n');
+    } else {
+      const { claimed, holder } = await claimQuickFix(supabase, qfId, sessionId);
+      if (!claimed) {
+        const holderShort = holder ? String(holder).slice(0, 8) : 'another session';
+        console.log('\n🛑 BLOCKED — QF ALREADY CLAIMED\n');
+        console.log(`   QF ${qfId} is already claimed by session ${holderShort}.`);
+        console.log('   Pick different work — run /leo next.\n');
+        // Non-zero, distinct from the exit(1) error path, so the skill can act
+        // on "foreign claim" without proceeding to implementation guidance.
+        process.exit(2);
+      }
+      console.log(`\n🔒 Claimed QF ${qfId} for session ${String(sessionId).slice(0, 8)}\n`);
+    }
+
     console.log('\n✅ QUALIFIES FOR QUICK-FIX WORKFLOW\n');
     console.log('📍 Next steps:');
     console.log(`   1. Read details: node scripts/read-quick-fix.js ${qfId}`);
-    console.log(`   2. Create branch: git checkout -b quick-fix/${qfId}`);
+    console.log(`   2. Create branch: git checkout -b qf/${qfId}`);
     console.log(`   3. Implement fix (≤${CLASSIFICATION_RULES.maxLoc} LOC)`);
     console.log('   4. Run tests: npm run test:unit && npm run test:e2e');
     console.log(`   5. Complete: node scripts/complete-quick-fix.js ${qfId}\n`);
