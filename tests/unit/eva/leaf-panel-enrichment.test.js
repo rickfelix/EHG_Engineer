@@ -3,7 +3,7 @@
  * SD-LEO-INFRA-PRE-BUILD-SUB-001 — Unit 1 (FR-001 enrichment rail core)
  */
 import { describe, it, expect } from 'vitest';
-import { enrichLeafViaPanel, assembleEnrichedDescription, defaultRequiredCodes } from '../../../lib/eva/bridge/leaf-panel-enrichment.js';
+import { enrichLeafViaPanel, assembleEnrichedDescription, defaultRequiredCodes, isUsableResult } from '../../../lib/eva/bridge/leaf-panel-enrichment.js';
 
 const LEAF = { sd_key: 'SD-X-D1', title: 'Distillation Engine Worker', layer: 'api' };
 // DataDistill-like: touches data (data_model), so DATABASE is required.
@@ -16,11 +16,13 @@ const OPTS = { dataSensitive: true, archetype: 'algorithm-core' };
  * @param {Set<string>} [cfg.failAlways] - agent codes that always fail
  * @param {Set<string>} [cfg.failFirst] - agent codes that fail attempt 1, pass attempt 2
  * @param {Set<string>} [cfg.throwOn] - agent codes whose runAgent throws
+ * @param {Set<string>} [cfg.emptySection] - agent codes that return { ok:true, section:'' } (TS-2b)
  */
 function makeDriver(cfg = {}) {
   const failAlways = cfg.failAlways || new Set();
   const failFirst = cfg.failFirst || new Set();
   const throwOn = cfg.throwOn || new Set();
+  const emptySection = cfg.emptySection || new Set();
   const calls = [];
   const attempts = new Map();
   return {
@@ -31,6 +33,7 @@ function makeDriver(cfg = {}) {
       attempts.set(agent.code, n);
       if (throwOn.has(agent.code)) throw new Error(`boom:${agent.code}`);
       if (failAlways.has(agent.code)) return { ok: false, error: 'fail' };
+      if (emptySection.has(agent.code)) return { ok: true, section: '   ' }; // ok but whitespace-only
       if (failFirst.has(agent.code) && n === 1) return { ok: false, error: 'transient' };
       return { ok: true, section: `${agent.code} section for ${leaf.title}` };
     },
@@ -86,6 +89,34 @@ describe('enrichLeafViaPanel — fail-closed', () => {
     expect(r.manifest).toContain('PRICING'); // it was selected...
     expect(r.status).toBe('enriched'); // ...but its failure did not hold the leaf
     expect(r.sections.some((s) => s.code === 'PRICING')).toBe(false); // and it was skipped
+  });
+});
+
+describe('enrichLeafViaPanel — empty-section HOLD (SD-LEO-INFRA-WIRE-PRE-BUILD-002 TR-2 / TS-2b)', () => {
+  it('HOLDS when a REQUIRED agent (DATABASE) returns ok:true with an empty/whitespace section', async () => {
+    const driver = makeDriver({ emptySection: new Set(['DATABASE']) });
+    const r = await enrichLeafViaPanel({ leaf: LEAF, artifactTypes: ARTIFACT_TYPES, criteriaOpts: OPTS, driver, options: { maxAttemptsPerAgent: 1 } });
+    expect(r.status).toBe('held');
+    expect(r.heldOn).toBe('DATABASE');
+    expect(r.enrichedDescription).toBeNull();
+    // the empty section must NOT have been stamped as a real section
+    expect(r.sections.some((s) => s.code === 'DATABASE')).toBe(false);
+  });
+
+  it('SKIPS an OPTIONAL agent (PRICING) that returns an empty section but still enriches', async () => {
+    const driver = makeDriver({ emptySection: new Set(['PRICING']) });
+    const r = await enrichLeafViaPanel({ leaf: LEAF, artifactTypes: ARTIFACT_TYPES, criteriaOpts: OPTS, driver, options: { maxAttemptsPerAgent: 1 } });
+    expect(r.status).toBe('enriched');
+    expect(r.sections.some((s) => s.code === 'PRICING')).toBe(false);
+  });
+
+  it('isUsableResult: ok:true requires a non-empty trimmed section', () => {
+    expect(isUsableResult({ ok: true, section: 'x' })).toBe(true);
+    expect(isUsableResult({ ok: true, section: '' })).toBe(false);
+    expect(isUsableResult({ ok: true, section: '   ' })).toBe(false);
+    expect(isUsableResult({ ok: true })).toBe(false);
+    expect(isUsableResult({ ok: false, section: 'x' })).toBe(false);
+    expect(isUsableResult(null)).toBe(false);
   });
 });
 
