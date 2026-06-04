@@ -4,28 +4,34 @@
 -- =============================================================================
 -- !!! APPLY SEPARATELY, IN A MAINTENANCE WINDOW, AFTER TESTING ON A SUPABASE DB
 -- !!! BRANCH. Verify vector / pg_trgm / ltree queries AND index creation work
--- !!! afterwards. This is the riskiest migration in this set — keep it last.
+-- !!! afterwards, and RECYCLE THE CONNECTION POOLER — the role-search_path change
+-- !!! below only affects NEW connections, so pooled sessions opened before the move
+-- !!! keep the old path (and could fail on UNQUALIFIED ext refs) until recycled.
+-- !!! This is the riskiest migration in this set — keep it last.
 --
--- !!! APPLY AS `supabase_admin` (the extension owner) OR A SUPERUSER — e.g. via the
--- !!! Supabase Dashboard SQL Editor. The `postgres` pooler role used by the normal
--- !!! migration runner is NOT the extension owner and is NOT a superuser, so
--- !!! `ALTER EXTENSION ... SET SCHEMA` fails with "must be owner of extension".
--- !!! Verified 2026-06-03: vector/ltree/pg_trgm are owned by `supabase_admin`, not
--- !!! `postgres`. The ownership precheck (step 0 below) ABORTS cleanly — before ANY
--- !!! change — if the current role cannot ALTER the extensions.
+-- APPLY-ROLE: the running role must be able to ALTER these extensions. On Supabase
+-- the `postgres` role CAN (verified 2026-06-04) — it has effective ALTER capability
+-- via membership in `supabase_privileged_role` + `rolbypassrls`, EVEN THOUGH it is
+-- NOT a member of `supabase_admin` and `pg_has_role(current_user,'supabase_admin',
+-- 'MEMBER')` returns false. That membership test is NOT a reliable proxy for
+-- ALTER-EXTENSION capability, so this migration does NOT precheck it. Instead the
+-- move's own `ALTER EXTENSION` IS the capability test (step 3): if the role truly
+-- lacks privilege it raises insufficient_privilege and the whole atomic block aborts
+-- with guidance — no partial state. The Supabase Dashboard SQL Editor also runs as
+-- `postgres`, so either the Dashboard or the pooler works.
 --
 -- Supabase linter `extension_in_public`: vector / pg_trgm / ltree are installed in
 -- `public` (the Supabase default). Recommended remediation is to relocate them to a
 -- dedicated `extensions` schema so they are not part of the exposed API surface.
 --
--- LIVE-VERIFIED PRECONDITIONS (all green, re-verified read-only 2026-06-03):
+-- LIVE-VERIFIED PRECONDITIONS (all green, re-verified 2026-06-03/04):
 --   * All three are extrelocatable = true.
 --   * None has any RELATION member (no tables/indexes owned BY the extension), so
 --     `ALTER EXTENSION ... SET SCHEMA` is a clean metadata move. Dependent objects
 --     in OTHER tables — `vector`-typed columns, GIN/GiST trgm indexes, ltree cols —
 --     reference the type/opclass by OID and KEEP WORKING after the move.
 --   * The `extensions` schema already exists (holds pgcrypto/pgjwt etc.).
---   * Owner = `supabase_admin` (NOT postgres) — see apply-role note above.
+--   * Owner = `supabase_admin`, but the `postgres` role has effective ALTER rights.
 --
 -- WHY search_path MUST be updated FIRST: unqualified references resolved at QUERY
 -- time — the `vector` type in `::vector` casts, the `<->`/`<=>` operators, `%` and
@@ -42,35 +48,6 @@
 -- search_path changed without the move having happened. This holds whether or not
 -- the migration runner wraps the file in an outer transaction.
 -- =============================================================================
-
--- 0. Ownership precheck — FAIL FAST before any change if the current role cannot
---    ALTER these extensions. pg_has_role(current_user, owner, 'MEMBER') is true for
---    the owner, members of the owner role, AND superusers.
-DO $precheck$
-DECLARE
-  r     RECORD;
-  v_bad TEXT := '';
-BEGIN
-  FOR r IN
-    SELECT x.extname, o.rolname AS owner
-    FROM pg_extension x
-    JOIN pg_namespace n ON n.oid = x.extnamespace
-    JOIN pg_roles o     ON o.oid = x.extowner
-    WHERE x.extname IN ('vector','ltree','pg_trgm') AND n.nspname = 'public'
-  LOOP
-    IF NOT pg_has_role(current_user, r.owner, 'MEMBER') THEN
-      v_bad := v_bad || format(' %s(owner=%s)', r.extname, r.owner);
-    END IF;
-  END LOOP;
-
-  IF v_bad <> '' THEN
-    RAISE EXCEPTION
-      'E ABORTED (no changes made): role "%" cannot ALTER EXTENSION — it must own the extension, be a member of the owner role, or be a superuser. Blocked:%. Apply migration 05 as supabase_admin via the Supabase Dashboard SQL Editor — NOT the postgres pooler.',
-      current_user, v_bad;
-  END IF;
-  RAISE NOTICE 'E precheck OK: role % can ALTER the target extensions.', current_user;
-END
-$precheck$;
 
 -- 1. Ensure target schema + usage grants (idempotent).
 CREATE SCHEMA IF NOT EXISTS extensions;
@@ -94,17 +71,26 @@ BEGIN
   EXECUTE 'ALTER ROLE service_role  SET search_path TO "$user", public, extensions';
 
   -- 3. Relocate the three extensions (guarded so each is a no-op if already moved).
-  FOREACH e IN ARRAY ARRAY['vector','ltree','pg_trgm'] LOOP
-    IF EXISTS (
-      SELECT 1 FROM pg_extension x JOIN pg_namespace n ON n.oid = x.extnamespace
-      WHERE x.extname = e AND n.nspname = 'public'
-    ) THEN
-      EXECUTE format('ALTER EXTENSION %I SET SCHEMA extensions', e);
-      RAISE NOTICE 'E: moved extension % from public -> extensions', e;
-    ELSE
-      RAISE NOTICE 'E: extension % not in public (already moved or absent) — skipped', e;
-    END IF;
-  END LOOP;
+  --    The ALTER EXTENSION is itself the capability test (we do NOT precheck
+  --    pg_has_role — it is a false-negative for `postgres` on Supabase, which CAN
+  --    ALTER these). If the running role genuinely lacks privilege, the ALTER raises
+  --    insufficient_privilege, which we convert to a clear abort; because this is the
+  --    same atomic DO block, the step-2 search_path change rolls back with it.
+  BEGIN
+    FOREACH e IN ARRAY ARRAY['vector','ltree','pg_trgm'] LOOP
+      IF EXISTS (
+        SELECT 1 FROM pg_extension x JOIN pg_namespace n ON n.oid = x.extnamespace
+        WHERE x.extname = e AND n.nspname = 'public'
+      ) THEN
+        EXECUTE format('ALTER EXTENSION %I SET SCHEMA extensions', e);
+        RAISE NOTICE 'E: moved extension % from public -> extensions', e;
+      ELSE
+        RAISE NOTICE 'E: extension % not in public (already moved or absent) — skipped', e;
+      END IF;
+    END LOOP;
+  EXCEPTION WHEN insufficient_privilege THEN
+    RAISE EXCEPTION 'E ABORTED (no changes persisted): role "%" lacks privilege to ALTER EXTENSION. Apply as a role with ALTER-EXTENSION rights — on Supabase the `postgres` role (Dashboard SQL Editor or pooler) works; supabase_admin membership is NOT required.', current_user;
+  END;
 
   -- 4. Verification (same atomic block): none of the three remain in `public`.
   SELECT count(*), string_agg(x.extname, ', ')
