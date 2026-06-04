@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../../../lib/worktree-manager.js';
+import { detectOrphanWorktreeFromMerge } from '../../../lib/exec-context-guard.mjs';
 
 // Quick-fix QF-20260211-111: Post-merge worktree cleanup for /ship
 // FR-5: Added --sdKey support for external callers (SD-LEO-INFRA-UNIFIED-WORKTREE-LIFECYCLE-001)
@@ -337,33 +338,88 @@ async function cleanupBySDKey(sdKey, options = {}) {
   }
 }
 
+/**
+ * SD-FDBK-INFRA-WORKTREE-AUTO-REMOVED-001 (FR-2): wire the previously-dead
+ * detectOrphanWorktreeFromMerge detector to a real consumer. Given the stdout
+ * of a `gh pr merge --delete-branch` (or gh-merge-safe.mjs) run, detect the
+ * deleted branch, map it to its worktree dir, and route that orphaned worktree
+ * through the claim-aware cleanupWorktreeByPath (archive-on-live-claim /
+ * archive-on-unpushed / else clean remove). Resolves the writer/consumer
+ * asymmetry (PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001): the detector was
+ * shipped by SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 FR-5 but never consumed.
+ *
+ * @param {string} mergeOutput - stdout/stderr from the merge command
+ * @param {object} [options] - forwarded to cleanupWorktreeByPath (supabase,
+ *   heartbeatThresholdMs); options.mainRepoPath overrides repo-root resolution.
+ * @returns {Promise<object>} cleanup result annotated with {branch, candidate, source}
+ */
+async function cleanupOrphanFromMergeOutput(mergeOutput, options = {}) {
+  const { detected, branch } = detectOrphanWorktreeFromMerge(mergeOutput);
+  if (!detected || !branch) {
+    return { cleaned: false, reason: 'no_orphan_detected' };
+  }
+
+  // Resolve the main repo root (strip any /.worktrees/<key> suffix so this works
+  // whether invoked from the main repo or a sibling worktree).
+  let mainRepoPath = options.mainRepoPath || null;
+  if (!mainRepoPath) {
+    try {
+      const top = gitExec('git rev-parse --show-toplevel').replace(/\\/g, '/');
+      const idx = top.indexOf('/.worktrees/');
+      mainRepoPath = idx === -1 ? top : top.slice(0, idx);
+    } catch {
+      return { cleaned: false, reason: 'cannot_resolve_main_repo', branch };
+    }
+  }
+
+  // Map branch -> worktree dir (mirrors hasActiveClaimOnBranch candidate logic).
+  const base = _branchToBasename(branch) || String(branch).replace(/^refs\/heads\//, '');
+  if (!base) return { cleaned: false, reason: 'cannot_map_branch_to_worktree', branch };
+  const worktreesDir = path.join(mainRepoPath, '.worktrees');
+  const candidate = /^QF-/.test(base)
+    ? path.join(worktreesDir, 'qf', base)
+    : path.join(worktreesDir, base);
+
+  if (!fs.existsSync(candidate)) {
+    // Branch was deleted but no orphaned worktree dir remains — nothing to clean.
+    return { cleaned: false, reason: 'orphan_worktree_not_present', branch, candidate };
+  }
+
+  const result = await cleanupWorktreeByPath(candidate, options);
+  return { ...result, branch, candidate, source: 'merge_output_detector' };
+}
+
 // CLI entry point
 const _e = process.argv[1] || '', isMain = _e && (import.meta.url === `file://${_e}` ||
   import.meta.url === `file:///${_e.replace(/\\/g, '/')}`);
 
 if (isMain) {
-  // Parse --sdKey argument
+  // Parse --sdKey / --merge-output arguments
   const args = process.argv.slice(2);
   let sdKey = null;
+  let mergeOutputArg = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--sdKey' && args[i + 1]) { sdKey = args[++i]; }
+    else if (args[i] === '--merge-output' && args[i + 1]) { mergeOutputArg = args[++i]; }
   }
 
-  if (sdKey) {
+  const emit = (p) => p.then(result => {
+    process.stdout.write(JSON.stringify(result));
+  }).catch(err => {
+    process.stdout.write(JSON.stringify({ cleaned: false, reason: 'error', error: err.message }));
+  });
+
+  if (mergeOutputArg !== null) {
+    // FR-2: detect-orphan-from-merge mode. '-' reads stdin; otherwise literal.
+    const mergeOutput = mergeOutputArg === '-' ? fs.readFileSync(0, 'utf8') : mergeOutputArg;
+    emit(cleanupOrphanFromMergeOutput(mergeOutput));
+  } else if (sdKey) {
     // FR-5: External caller mode - resolve worktree from DB/scan and clean up
-    cleanupBySDKey(sdKey).then(result => {
-      process.stdout.write(JSON.stringify(result));
-    }).catch(err => {
-      process.stdout.write(JSON.stringify({ cleaned: false, reason: 'error', error: err.message }));
-    });
+    emit(cleanupBySDKey(sdKey));
   } else {
     // Original mode - clean up current worktree (if running inside one)
-    cleanupCurrentWorktree().then(result => {
-      process.stdout.write(JSON.stringify(result));
-    }).catch(err => {
-      process.stdout.write(JSON.stringify({ cleaned: false, reason: 'error', error: err.message }));
-    });
+    emit(cleanupCurrentWorktree());
   }
 }
 
-export { isInsideWorktree, getWorktreeMetadata, getMainRepoPath, cleanupCurrentWorktree, cleanupBySDKey, cleanupWorktreeByPath, hasUnpushedCommits, archiveWorktree, hasActiveClaimOnBranch };
+export { isInsideWorktree, getWorktreeMetadata, getMainRepoPath, cleanupCurrentWorktree, cleanupBySDKey, cleanupWorktreeByPath, hasUnpushedCommits, archiveWorktree, hasActiveClaimOnBranch, cleanupOrphanFromMergeOutput };

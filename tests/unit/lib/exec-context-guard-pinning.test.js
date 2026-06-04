@@ -170,22 +170,17 @@ describe('SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 — static guard pinning (FR-6, A
       expect(allConsumerSrc).toMatch(/assertSweepHandoffGate/);
       // decideOwnConflictReattach → sd-start (wraps classifyWorktreeOwnership internally)
       expect(allConsumerSrc).toMatch(/decideOwnConflictReattach/);
-      // detectOrphanWorktreeFromMerge — pure utility, may be consumed by post-merge-worktree-cleanup.js
-      // OR live as a documented utility for future use. Test passes when it's defined in the module
-      // even if no consumer wires it yet (canary surfaces the asymmetry as INFO, not failure).
+      // detectOrphanWorktreeFromMerge → post-merge-worktree-cleanup.js
+      // SD-FDBK-INFRA-WORKTREE-AUTO-REMOVED-001 (FR-2): the detector is now WIRED
+      // into post-merge-worktree-cleanup.js (cleanupOrphanFromMergeOutput), which
+      // routes the orphaned worktree through the claim-aware cleanupWorktreeByPath.
+      // Canary PROMOTED from informational to a hard assertion: it fails if the
+      // wiring is ever removed (writer/consumer asymmetry regression guard,
+      // PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001).
       const orphanRef = allConsumerSrc.includes('detectOrphanWorktreeFromMerge') ||
                         readScript('scripts/modules/shipping/post-merge-worktree-cleanup.js')
                           .includes('detectOrphanWorktreeFromMerge');
-      // Canary: log if not yet consumed but don't fail (FR-5 documents this as available utility)
-      // When a future SD wires it, this assertion will trip and the test must be updated to expect=true.
-      if (!orphanRef) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          '[CANARY] detectOrphanWorktreeFromMerge is exported but not yet wired to a consumer. ' +
-          'See PRD FR-5 for the planned post-merge-worktree-cleanup.js integration path.'
-        );
-      }
-      expect(true).toBe(true); // canary is informational
+      expect(orphanRef).toBe(true);
     });
   });
 });

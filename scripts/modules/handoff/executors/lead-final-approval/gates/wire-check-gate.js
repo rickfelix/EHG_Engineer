@@ -88,7 +88,18 @@ export const KNOWN_DYNAMIC_PATTERNS = [
   /(^|\/)lib\/eva-support\//,
   // scripts/eva-support/ — the dispatcher.js + 6 sub-flow handlers. Same reasoning:
   // slash-command-loaded, no static reachability from current entry-point set.
-  /(^|\/)scripts\/eva-support\//
+  /(^|\/)scripts\/eva-support\//,
+  // lib/sub-agents/ — automated sub-agent modules. The sub-agent executor loads
+  // these via a NON-LITERAL dynamic import (`../sub-agents/${code.toLowerCase()}.js`
+  // at lib/sub-agent-executor/executor.js), where the specifier is computed from the
+  // sub-agent code at runtime. Non-literal dynamic imports emit a CAUTION and create
+  // no call-graph edge (static AST cannot resolve the specifier), so every newly
+  // registered sub-agent module appears unreachable to WIRE_CHECK. Same architectural
+  // shape as the eva-support exemption. Reachability is instead guaranteed by the
+  // executor's load convention + the filename-convention regression guard.
+  // QF-20260604-533 / feedback a38cc604 (SD-LEO-INFRA-WIRE-PRE-BUILD-001 had to
+  // `git reset --hard origin/main` post-squash to work around this false-positive).
+  /(^|\/)lib\/sub-agents\//
 ];
 
 /**
@@ -281,7 +292,7 @@ export function createWireCheckGate(_supabase) {
           max_score: 100,
           issues: [
             `WIRE_CHECK_GATE could not compute git diff against ${mainRef}: ${message}`,
-            `Required:true gate cannot validate without diff input. Investigate git availability or ref resolution.`,
+            'Required:true gate cannot validate without diff input. Investigate git availability or ref resolution.',
           ],
           warnings: refWarnings,
           details: { mainRef, refSource: refResult.source, error: message },
