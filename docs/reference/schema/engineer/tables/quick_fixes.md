@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 453
 **RLS**: Enabled (2 policies)
 
@@ -121,17 +121,15 @@
 
 ## RLS Policies
 
-### 1. Allow all operations for anon users (ALL)
+### 1. Allow all operations for anon users (SELECT)
 
 - **Roles**: {anon}
 - **Using**: `true`
-- **With Check**: `true`
 
-### 2. Allow all operations for authenticated users (ALL)
+### 2. Allow all operations for authenticated users (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
-- **With Check**: `true`
 
 ## Triggers
 

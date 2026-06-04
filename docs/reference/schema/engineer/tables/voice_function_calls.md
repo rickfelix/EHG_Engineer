@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -53,18 +53,13 @@
 
 ## RLS Policies
 
-### 1. Allow authenticated users to insert voice_function_calls (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 2. Allow service_role to manage voice_function_calls (ALL)
+### 1. Allow service_role to manage voice_function_calls (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 3. Users can view own function calls (SELECT)
+### 2. Users can view own function calls (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(EXISTS ( SELECT 1

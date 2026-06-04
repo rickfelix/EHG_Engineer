@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 4
-**RLS**: Enabled (6 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -53,33 +53,22 @@
 
 ## RLS Policies
 
-### 1. Anon users can create uat_runs (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. Anon users can update uat_runs (UPDATE)
-
-- **Roles**: {public}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 3. Anon users can view all uat_runs (SELECT)
+### 1. Anon users can view all uat_runs (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 4. uat_runs_auth_read (SELECT)
+### 2. uat_runs_auth_read (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(auth.role() = 'authenticated'::text)`
 
-### 5. uat_runs_chairman_read (SELECT)
+### 3. uat_runs_chairman_read (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(((auth.jwt() ->> 'role'::text) = 'chairman'::text) OR ((auth.jwt() ->> 'email'::text) ~~ '%@chairman%'::text))`
 
-### 6. uat_runs_service_all (ALL)
+### 4. uat_runs_service_all (ALL)
 
 - **Roles**: {public}
 - **Using**: `(((auth.jwt() ->> 'role'::text) = 'service_role'::text) OR (CURRENT_USER = 'service_role'::name))`

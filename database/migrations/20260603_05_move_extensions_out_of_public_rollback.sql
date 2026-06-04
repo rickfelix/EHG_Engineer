@@ -5,38 +5,17 @@
 -- search_path override before migration E; postgres was never modified).
 -- Move FIRST (while extensions is still on the path), then reset the path.
 --
--- !!! APPLY AS `supabase_admin` (the extension owner) OR A SUPERUSER — same as the
--- !!! forward migration. The `postgres` pooler role cannot ALTER EXTENSION. The
--- !!! ownership precheck (step 0) aborts cleanly (no changes) if it cannot.
+-- APPLY-ROLE: same as the forward migration — the running role must be able to ALTER
+-- these extensions. On Supabase the `postgres` role CAN (effective ALTER via
+-- supabase_privileged_role + rolbypassrls, despite NOT being a supabase_admin member;
+-- `pg_has_role(...,'supabase_admin','MEMBER')` is a false-negative, so we do not
+-- precheck it). The move-back's own `ALTER EXTENSION` is the capability test — if the
+-- role lacks privilege it raises insufficient_privilege and the atomic block aborts
+-- with no change. The Supabase Dashboard SQL Editor also runs as `postgres`.
 --
 -- ATOMICITY: the move-back and the search_path RESET run inside ONE DO block, so a
 -- failed move-back can never leave the search_path reset (or vice versa).
 -- =============================================================================
-
--- 0. Ownership precheck — fail fast (no changes) if current role cannot ALTER.
-DO $precheck$
-DECLARE
-  r     RECORD;
-  v_bad TEXT := '';
-BEGIN
-  FOR r IN
-    SELECT x.extname, o.rolname AS owner
-    FROM pg_extension x JOIN pg_roles o ON o.oid = x.extowner
-    WHERE x.extname IN ('vector','ltree','pg_trgm')
-  LOOP
-    IF NOT pg_has_role(current_user, r.owner, 'MEMBER') THEN
-      v_bad := v_bad || format(' %s(owner=%s)', r.extname, r.owner);
-    END IF;
-  END LOOP;
-
-  IF v_bad <> '' THEN
-    RAISE EXCEPTION
-      'ROLLBACK E ABORTED (no changes made): role "%" cannot ALTER EXTENSION — must own it, be a member of the owner role, or be a superuser. Blocked:%. Apply as supabase_admin via the Supabase Dashboard SQL Editor — NOT the postgres pooler.',
-      current_user, v_bad;
-  END IF;
-  RAISE NOTICE 'ROLLBACK E precheck OK: role % can ALTER the target extensions.', current_user;
-END
-$precheck$;
 
 -- ATOMIC: move back to public FIRST (while `extensions` is still on the path), then
 -- reset the API-role search_paths — all-or-nothing in one DO block.
@@ -44,15 +23,22 @@ DO $apply$
 DECLARE
   e TEXT;
 BEGIN
-  FOREACH e IN ARRAY ARRAY['vector','ltree','pg_trgm'] LOOP
-    IF EXISTS (
-      SELECT 1 FROM pg_extension x JOIN pg_namespace n ON n.oid = x.extnamespace
-      WHERE x.extname = e AND n.nspname = 'extensions'
-    ) THEN
-      EXECUTE format('ALTER EXTENSION %I SET SCHEMA public', e);
-      RAISE NOTICE 'ROLLBACK E: moved extension % extensions -> public', e;
-    END IF;
-  END LOOP;
+  -- The ALTER EXTENSION is the capability test (we do NOT precheck pg_has_role — it
+  -- is a false-negative for `postgres` on Supabase). A privilege failure aborts the
+  -- whole atomic block, so the search_path RESET below never runs on a failed move.
+  BEGIN
+    FOREACH e IN ARRAY ARRAY['vector','ltree','pg_trgm'] LOOP
+      IF EXISTS (
+        SELECT 1 FROM pg_extension x JOIN pg_namespace n ON n.oid = x.extnamespace
+        WHERE x.extname = e AND n.nspname = 'extensions'
+      ) THEN
+        EXECUTE format('ALTER EXTENSION %I SET SCHEMA public', e);
+        RAISE NOTICE 'ROLLBACK E: moved extension % extensions -> public', e;
+      END IF;
+    END LOOP;
+  EXCEPTION WHEN insufficient_privilege THEN
+    RAISE EXCEPTION 'ROLLBACK E ABORTED (no changes persisted): role "%" lacks privilege to ALTER EXTENSION. Apply as a role with ALTER-EXTENSION rights — on Supabase the `postgres` role (Dashboard SQL Editor or pooler) works; supabase_admin membership is NOT required.', current_user;
+  END;
 
   -- Restore prior role search_paths (these three roles had no override originally).
   -- RESET removes only the search_path setting; preserves other per-role settings.

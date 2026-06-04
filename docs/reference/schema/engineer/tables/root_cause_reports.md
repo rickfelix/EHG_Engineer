@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 1,124
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -127,23 +127,12 @@
 
 ## RLS Policies
 
-### 1. public_insert_root_cause_reports (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. public_select_root_cause_reports (SELECT)
+### 1. public_select_root_cause_reports (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 3. public_update_root_cause_reports (UPDATE)
-
-- **Roles**: {public}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 4. service_role_all_root_cause_reports (ALL)
+### 2. service_role_all_root_cause_reports (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

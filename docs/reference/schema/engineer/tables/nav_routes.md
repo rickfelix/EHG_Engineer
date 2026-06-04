@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 46
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -83,26 +83,10 @@
 
 ## RLS Policies
 
-### 1. Allow authenticated users to delete nav_routes (DELETE)
+### 1. Allow authenticated users to read nav_routes (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
-
-### 2. Allow authenticated users to insert nav_routes (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 3. Allow authenticated users to read nav_routes (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 4. Allow authenticated users to update nav_routes (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
 
 ## Triggers
 

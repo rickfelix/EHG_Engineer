@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
-**Rows**: 78
+**Generated**: 2026-06-04T00:30:18.307Z
+**Rows**: 80
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -90,11 +90,10 @@
 
 ## RLS Policies
 
-### 1. venture_briefs_service_all (ALL)
+### 1. venture_briefs_service_all (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
-- **With Check**: `true`
 
 ---
 

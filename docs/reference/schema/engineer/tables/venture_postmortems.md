@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -75,23 +75,18 @@
 
 ## RLS Policies
 
-### 1. Authenticated users can create postmortems (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 2. Authenticated users can update draft postmortems (UPDATE)
+### 1. Authenticated users can update draft postmortems (UPDATE)
 
 - **Roles**: {authenticated}
 - **Using**: `((status)::text = ANY ((ARRAY['draft'::character varying, 'in_review'::character varying])::text[]))`
 - **With Check**: `((status)::text = ANY ((ARRAY['draft'::character varying, 'in_review'::character varying])::text[]))`
 
-### 3. Authenticated users can view postmortems (SELECT)
+### 2. Authenticated users can view postmortems (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 4. Service role can manage all postmortems (ALL)
+### 3. Service role can manage all postmortems (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

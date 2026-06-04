@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 4
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -68,26 +68,21 @@
 
 ## RLS Policies
 
-### 1. Allow delete for authenticated (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. financial_models_company_insert (INSERT)
+### 1. financial_models_company_insert (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `(company_id IN ( SELECT user_company_access.company_id
    FROM user_company_access
   WHERE ((user_company_access.user_id = auth.uid()) AND (user_company_access.is_active = true) AND (user_company_access.role = ANY (ARRAY['owner'::text, 'admin'::text, 'editor'::text])))))`
 
-### 3. financial_models_company_isolation (SELECT)
+### 2. financial_models_company_isolation (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(company_id IN ( SELECT user_company_access.company_id
    FROM user_company_access
   WHERE ((user_company_access.user_id = auth.uid()) AND (user_company_access.is_active = true))))`
 
-### 4. financial_models_company_update (UPDATE)
+### 3. financial_models_company_update (UPDATE)
 
 - **Roles**: {public}
 - **Using**: `(company_id IN ( SELECT user_company_access.company_id

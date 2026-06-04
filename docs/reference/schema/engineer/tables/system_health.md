@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 1
-**RLS**: Enabled (6 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -47,31 +47,15 @@
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 2. Allow authenticated users to insert system_health (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 3. Allow authenticated users to read system_health (SELECT)
+### 2. Allow authenticated users to read system_health (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 4. Allow service role to update system_health (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 5. Allow service_role to delete system_health (DELETE)
+### 3. Allow service_role to delete system_health (DELETE)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-
-### 6. insert_system_health_policy (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
 
 ---
 

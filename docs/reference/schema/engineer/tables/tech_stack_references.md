@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
-**RLS**: Enabled (6 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -65,36 +65,15 @@
 
 ## RLS Policies
 
-### 1. Allow anon users to delete tech_stack_references (DELETE)
+### 1. Allow anon users to select tech_stack_references (SELECT)
 
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 2. Allow anon users to insert tech_stack_references (INSERT)
-
-- **Roles**: {anon}
-- **With Check**: `true`
-
-### 3. Allow anon users to select tech_stack_references (SELECT)
-
-- **Roles**: {anon}
-- **Using**: `true`
-
-### 4. Allow anon users to update tech_stack_references (UPDATE)
-
-- **Roles**: {anon}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 5. Allow authenticated users to read tech_stack_references (SELECT)
+### 2. Allow authenticated users to read tech_stack_references (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
-
-### 6. insert_tech_stack_references_policy (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
 
 ---
 
