@@ -189,8 +189,8 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
     const retrospective = {
       sd_id: sd?.id || sdId,
       project_name: sd.title,
-      retro_type: 'SD_COMPLETION', // Use valid enum value
-      retrospective_type: retrospectiveType, // Store actual handoff type here
+      retro_type: 'HANDOFF', // SD-LEO-INFRA-NORMALIZE-HANDOFF-RETROSPECTIVE-001: handoff retros are NOT SD-completion retros
+      retrospective_type: retrospectiveType, // Store actual handoff phase here (PLAN_TO_EXEC)
       title: `${retrospectiveType} Handoff Retrospective: ${sd.title}`,
       description: `Retrospective for ${retrospectiveType} handoff of ${sd.sd_key}`,
       conducted_date: new Date().toISOString(),

@@ -380,7 +380,7 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
     const retrospective = {
       sd_id: sd?.id || sdId,
       project_name: sd.title,
-      retro_type: 'SD_COMPLETION',
+      retro_type: 'HANDOFF', // SD-LEO-INFRA-NORMALIZE-HANDOFF-RETROSPECTIVE-001: handoff retros are NOT SD-completion retros
       retrospective_type: 'EXEC_TO_PLAN',
       title: `EXEC Phase Retrospective: ${sd.title}`,
       description: `Implementation retrospective for EXEC-TO-PLAN handoff of ${sd.sd_key}`,
