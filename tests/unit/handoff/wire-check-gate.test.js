@@ -163,6 +163,32 @@ describe('EXCLUSION_PATTERNS (FR-1)', () => {
       expect(isExcludedFromWireCheck('lib/eva/vision-governance-service.js')).toBe(false);
     });
   });
+
+  // QF-20260604-533 / feedback a38cc604: lib/sub-agents/ modules are loaded ONLY via
+  // the sub-agent executor's NON-LITERAL dynamic import (`../sub-agents/${code.toLowerCase()}.js`),
+  // which static AST cannot resolve, so every newly-registered sub-agent appears unreachable.
+  describe('KNOWN_DYNAMIC_PATTERNS — lib/sub-agents dynamic-load tree (a38cc604)', () => {
+    it('excludes lib/sub-agents/** modules', () => {
+      expect(isExcludedFromWireCheck('lib/sub-agents/venture_stack.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/sub-agents/docmon.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/sub-agents/github.js')).toBe(true);
+      expect(isExcludedFromWireCheck('lib/sub-agents/design.js')).toBe(true);
+    });
+
+    it('does NOT over-match lookalike paths (boundary-safe)', () => {
+      // hyphenated boundary: a trailing-suffix dir must not match
+      expect(isExcludedFromWireCheck('lib/sub-agents-foo/x.js')).toBe(false);
+      // underscore variant is a different path and must not match the hyphenated pattern
+      expect(isExcludedFromWireCheck('lib/sub_agents/x.js')).toBe(false);
+      expect(isExcludedFromWireCheck('scripts/sub-agents/x.js')).toBe(false);
+    });
+
+    it('does NOT exempt the executor itself or unrelated lib/agents files', () => {
+      // the executor that performs the dynamic import lives outside lib/sub-agents/
+      expect(isExcludedFromWireCheck('lib/sub-agent-executor/executor.js')).toBe(false);
+      expect(isExcludedFromWireCheck('lib/agents/auto-selector.js')).toBe(false);
+    });
+  });
 });
 
 describe('call-graph-builder barrel re-export resolution (FR-2 AC-1)', () => {
@@ -184,9 +210,9 @@ describe('call-graph-builder barrel re-export resolution (FR-2 AC-1)', () => {
   }
 
   it('resolves export * from re-exports transitively (barrel pattern)', () => {
-    const entry = writeFile('entry.js', `import './index.js';\n`);
-    const index = writeFile('index.js', `export * from './foo.js';\n`);
-    const foo = writeFile('foo.js', `export const x = 1;\n`);
+    const entry = writeFile('entry.js', 'import \'./index.js\';\n');
+    const index = writeFile('index.js', 'export * from \'./foo.js\';\n');
+    const foo = writeFile('foo.js', 'export const x = 1;\n');
     const { graph } = buildCallGraph([entry, index, foo], tmpDir);
     const { reachable, unreachable } = checkReachability(graph, [entry], [foo]);
     expect(reachable.has(foo)).toBe(true);
@@ -194,9 +220,9 @@ describe('call-graph-builder barrel re-export resolution (FR-2 AC-1)', () => {
   });
 
   it('resolves export { named } from re-exports', () => {
-    const entry = writeFile('entry.js', `import './index.js';\n`);
-    const index = writeFile('index.js', `export { bar } from './bar.js';\n`);
-    const bar = writeFile('bar.js', `export const bar = 1;\n`);
+    const entry = writeFile('entry.js', 'import \'./index.js\';\n');
+    const index = writeFile('index.js', 'export { bar } from \'./bar.js\';\n');
+    const bar = writeFile('bar.js', 'export const bar = 1;\n');
     const { graph } = buildCallGraph([entry, index, bar], tmpDir);
     const { reachable } = checkReachability(graph, [entry], [bar]);
     expect(reachable.has(bar)).toBe(true);
@@ -222,15 +248,15 @@ describe('call-graph-builder dynamic import resolution (FR-2 AC-3)', () => {
   }
 
   it('resolves string-literal dynamic import() as an edge', () => {
-    const entry = writeFile('entry.js', `async function load() { await import('./handler.js'); }\nload();\n`);
-    const handler = writeFile('handler.js', `export default () => 1;\n`);
+    const entry = writeFile('entry.js', 'async function load() { await import(\'./handler.js\'); }\nload();\n');
+    const handler = writeFile('handler.js', 'export default () => 1;\n');
     const { graph } = buildCallGraph([entry, handler], tmpDir);
     const { reachable } = checkReachability(graph, [entry], [handler]);
     expect(reachable.has(handler)).toBe(true);
   });
 
   it('emits a CAUTION warning for non-literal dynamic imports, does not crash', () => {
-    const entry = writeFile('entry.js', `async function load(name) { await import(name); }\nload('x');\n`);
+    const entry = writeFile('entry.js', 'async function load(name) { await import(name); }\nload(\'x\');\n');
     const { warnings } = buildCallGraph([entry], tmpDir);
     expect(warnings.some(w => w.includes('non-literal dynamic import'))).toBe(true);
   });
@@ -255,8 +281,8 @@ describe('call-graph-builder negative control (FR-6 AC-3)', () => {
   }
 
   it('genuinely unreachable orphan file stays unreachable', () => {
-    const entry = writeFile('entry.js', `console.log('hi');\n`);
-    const orphan = writeFile('orphan.js', `export const x = 1;\n`);
+    const entry = writeFile('entry.js', 'console.log(\'hi\');\n');
+    const orphan = writeFile('orphan.js', 'export const x = 1;\n');
     const { graph } = buildCallGraph([entry, orphan], tmpDir);
     const { reachable, unreachable } = checkReachability(graph, [entry], [orphan]);
     expect(reachable.has(orphan)).toBe(false);
