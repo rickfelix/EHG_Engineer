@@ -9,7 +9,7 @@
 -- the canonical policy SSOT (lib/eva/standards/venture-stack-policy.js) + the
 -- negation-aware scanner, so it runs headlessly and is fully unit-testable.
 --
--- Implementation: lib/sub-agents/venture-stack.js (wraps runVentureStackAgent).
+-- Implementation: lib/sub-agents/venture_stack.js (wraps runVentureStackAgent).
 -- code is an open enum (UNIQUE, no CHECK) — no schema change required.
 
 BEGIN;
@@ -22,7 +22,7 @@ VALUES (
   'Deterministic compliance checker for venture-build leaves: ensures the leaf PRD positively specifies the EHG venture stack (Clerk, Replit Postgres, Replit hosting) and contains no forbidden tech (Supabase, Replit-Auth, CLI-as-product). Reuses lib/eva/standards/venture-stack-policy.js (SSOT) + the negation-aware scanner; runs headlessly. FAIL (blocking) on forbidden tech present; missing REQUIRED tech is advisory.',
   'automatic',
   80,
-  'lib/sub-agents/venture-stack.js',
+  'lib/sub-agents/venture_stack.js',
   NULL,
   true,
   jsonb_build_object(
@@ -54,7 +54,7 @@ BEGIN
   SELECT COUNT(*) INTO agent_count FROM leo_sub_agents WHERE code = 'VENTURE_STACK' AND active = true;
   RAISE NOTICE '============================================================';
   RAISE NOTICE 'VENTURE_STACK Sub-Agent registered (active rows: %)', agent_count;
-  RAISE NOTICE 'Implementation: lib/sub-agents/venture-stack.js (deterministic)';
+  RAISE NOTICE 'Implementation: lib/sub-agents/venture_stack.js (deterministic)';
   RAISE NOTICE 'Priority: 80 | activation: automatic | SD-LEO-INFRA-WIRE-PRE-BUILD-001';
   RAISE NOTICE '============================================================';
 END $$;

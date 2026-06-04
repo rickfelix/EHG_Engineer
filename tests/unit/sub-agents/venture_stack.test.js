@@ -9,7 +9,7 @@
  * is injected (options.supabase) so this is a PURE unit test (no DB, no network).
  */
 import { describe, it, expect } from 'vitest';
-import { execute } from '../../../lib/sub-agents/venture-stack.js';
+import { execute } from '../../../lib/sub-agents/venture_stack.js';
 
 // Minimal supabase double: .from(...).select(...).eq(...).single() -> { data, error }
 function fakeSupabase(data, error = null) {
@@ -47,5 +47,16 @@ describe('VENTURE_STACK sub-agent wrapper (FR-1)', () => {
     expect(r.verdict).toBe('FAIL');
     expect(r.confidence_score).toBe(0);
     expect(r.summary).toMatch(/error/i);
+  });
+
+  // Regression guard (consumer contract, not a brittle direct-path import):
+  // the canonical executor loads modules via `../sub-agents/${code.toLowerCase()}.js`.
+  // 'VENTURE_STACK'.toLowerCase() === 'venture_stack' (underscore). If the file is
+  // ever renamed to a hyphen, the executor silently degrades to MANUAL_REQUIRED and
+  // never runs execute() — so derive the path from the CODE exactly as the executor does.
+  it('is loadable by the executor naming convention (code.toLowerCase())', async () => {
+    const code = 'VENTURE_STACK';
+    const mod = await import(`../../../lib/sub-agents/${code.toLowerCase()}.js`);
+    expect(typeof mod.execute).toBe('function');
   });
 });
