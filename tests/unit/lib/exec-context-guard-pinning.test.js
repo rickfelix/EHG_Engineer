@@ -99,9 +99,14 @@ describe('SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 — static guard pinning (FR-6, A
   describe('sd-start.js (FR-4) — own-vs-foreign worktree differentiation', () => {
     const src = readScript('scripts/sd-start.js');
 
-    it('imports classifyWorktreeOwnership from lib/exec-context-guard.mjs', () => {
+    // QF-20260604-088 repin: SD-FDBK-INFRA-START-NON-INTERACTIVE-001 (FR-1, 2026-05-28)
+    // extracted the duplicated own-conflict re-attach logic into the pure
+    // decideOwnConflictReattach(), which now wraps classifyWorktreeOwnership +
+    // the already_checked_out gate internally. sd-start.js wires that wrapper,
+    // so the pin follows the wiring to its current name (stays fail-closed).
+    it('imports decideOwnConflictReattach from lib/exec-context-guard.mjs', () => {
       expect(src).toMatch(
-        /import\s*\{\s*classifyWorktreeOwnership\s*\}\s*from\s*['"`].*exec-context-guard\.mjs['"`]/
+        /import\s*\{\s*decideOwnConflictReattach\s*\}\s*from\s*['"`].*exec-context-guard\.mjs['"`]/
       );
     });
 
@@ -114,23 +119,24 @@ describe('SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 — static guard pinning (FR-6, A
       );
     });
 
-    it('Site #1 — creation-failure path: applies classifyWorktreeOwnership when code=already_checked_out and exits 2 (recoverable) on own', () => {
+    // QF-20260604-088 repin: the `already_checked_out` code-gate is now encapsulated
+    // inside decideOwnConflictReattach() (guard module), so it no longer appears as a
+    // literal at the wiring site — pin the wrapper call + recoverable exit instead.
+    it('Site #1 — creation-failure path: calls decideOwnConflictReattach and exits 2 (recoverable, claim preserved) on own', () => {
       // Find the block where releaseClaimOnWorktreeFailure('creation') is called
       const idx = src.indexOf("releaseClaimOnWorktreeFailure('creation')");
       expect(idx).toBeGreaterThan(-1);
       const block = src.slice(Math.max(0, idx - 2000), idx);
-      expect(block).toMatch(/already_checked_out/);
-      expect(block).toMatch(/classifyWorktreeOwnership/);
+      expect(block).toMatch(/decideOwnConflictReattach/);
       expect(block).toMatch(/process\.exit\(2\)/);
       expect(block).toMatch(/Claim PRESERVED/);
     });
 
-    it('Site #2 — resolution-error path: applies classifyWorktreeOwnership when code=already_checked_out and exits 2 (recoverable) on own', () => {
+    it('Site #2 — resolution-error path: calls decideOwnConflictReattach and exits 2 (recoverable) on own', () => {
       const idx = src.indexOf("releaseClaimOnWorktreeFailure('resolution')");
       expect(idx).toBeGreaterThan(-1);
       const block = src.slice(Math.max(0, idx - 2000), idx);
-      expect(block).toMatch(/already_checked_out/);
-      expect(block).toMatch(/classifyWorktreeOwnership/);
+      expect(block).toMatch(/decideOwnConflictReattach/);
       expect(block).toMatch(/process\.exit\(2\)/);
     });
   });
@@ -139,7 +145,9 @@ describe('SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 — static guard pinning (FR-6, A
     it('all 4 named exports of lib/exec-context-guard.mjs are referenced by at least one wiring script', () => {
       // Read the module's exports
       const modSrc = readScript('lib/exec-context-guard.mjs');
-      const exports = ['assertCwdValid', 'assertSweepHandoffGate', 'classifyWorktreeOwnership', 'detectOrphanWorktreeFromMerge'];
+      // QF-20260604-088: classifyWorktreeOwnership is now an internal helper wrapped by
+      // decideOwnConflictReattach (the export sd-start.js actually wires) — pin the wrapper.
+      const exports = ['assertCwdValid', 'assertSweepHandoffGate', 'decideOwnConflictReattach', 'detectOrphanWorktreeFromMerge'];
       for (const name of exports) {
         // Match: `export function`, `export async function`, `export class`,
         // `export const`, OR `name` listed inside a brace-grouped re-export.
@@ -160,8 +168,8 @@ describe('SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 — static guard pinning (FR-6, A
       expect(allConsumerSrc).toMatch(/assertCwdValid/);
       // assertSweepHandoffGate → stale-session-sweep
       expect(allConsumerSrc).toMatch(/assertSweepHandoffGate/);
-      // classifyWorktreeOwnership → sd-start
-      expect(allConsumerSrc).toMatch(/classifyWorktreeOwnership/);
+      // decideOwnConflictReattach → sd-start (wraps classifyWorktreeOwnership internally)
+      expect(allConsumerSrc).toMatch(/decideOwnConflictReattach/);
       // detectOrphanWorktreeFromMerge — pure utility, may be consumed by post-merge-worktree-cleanup.js
       // OR live as a documented utility for future use. Test passes when it's defined in the module
       // even if no consumer wires it yet (canary surfaces the asymmetry as INFO, not failure).
