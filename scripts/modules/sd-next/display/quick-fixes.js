@@ -6,10 +6,21 @@
 
 import { colors } from '../colors.js';
 import { analyzeClaimRelationship } from '../claim-analysis.js';
+import { getStaleThresholdSeconds } from '../../../../lib/claim/stale-threshold.js';
 
 const MAX_DISPLAY = 10;
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+
+// SD-LEO-INFRA-SESSION-AWARE-AUTO-001 (FR-4): liveness-boundary parity with the
+// sweep. scripts/stale-session-sweep.cjs clearStaleQfClaims() uses
+// STALE_THRESHOLD_SECONDS * 3 (= 900s by default) as the "holder is definitely
+// dead" bar before it nulls quick_fixes.claiming_session_id. We MUST use the
+// SAME boundary here: a QF whose holder heartbeat is older than this (or whose
+// holder row is gone) is NOT live, so it must NOT be permanently held out of
+// topStartableQF — the sweep will free it, and meanwhile it is adoptable.
+// Computed from the shared threshold so the two stay in lockstep.
+const QF_HOLDER_LIVE_SECONDS = getStaleThresholdSeconds() * 3;
 
 // QF-20260525-522: freshness/supersession gate. AUTO-PROCEED must NOT auto-route
 // to a QF that may have been resolved by a *different* SD (one with no PR of its
@@ -51,25 +62,63 @@ export function classifyQuickFixes(quickFixes, triageResults = new Map(), sessio
     let claimBadge = '';
     let isClaimedByOther = false;
 
+    // SD-LEO-INFRA-SESSION-AWARE-AUTO-001 (FR-3): the live-QF-holder signal is
+    // quick_fixes.claiming_session_id (NOT claude_sessions.sd_key — that column
+    // never holds QF ids). claimedSDs is keyed by SD-key and will never contain
+    // a QF id, so this reduces to qf.claiming_session_id; kept as a fallback for
+    // forward-compat only.
     const claimingSessionId = qf.claiming_session_id || claimedSDs.get(qf.id);
     if (claimingSessionId && currentSession) {
       if (claimingSessionId === currentSession.session_id) {
         claimBadge = `${colors.green}YOURS${colors.reset} `;
       } else {
-        isClaimedByOther = true;
         const claimingSession = activeSessions.find(s => s.session_id === claimingSessionId);
-        if (claimingSession) {
+        // SD-LEO-INFRA-SESSION-AWARE-AUTO-001 (FR-4): a claim only excludes a QF
+        // from auto-start while its holder is LIVE. We protect to the SAME 900s
+        // boundary the sweep (clearStaleQfClaims) uses before it nulls the claim,
+        // measured against the holder's real heartbeat (heartbeat_age_seconds),
+        // NOT the view's is_alive/computed_status (the two-threshold model puts
+        // the display-stale line at 600s — see lib/claim/stale-threshold.js).
+        //   - holder row missing  ⇒ NOT live (released/gone) ⇒ adoptable.
+        //   - heartbeat > 900s    ⇒ NOT live (sweep will null it) ⇒ adoptable.
+        //   - heartbeat <= 900s   ⇒ live ⇒ protect/exclude.
+        // NOTE: activeSessions is sourced from v_active_sessions filtered at the
+        // 600s display-stale boundary, so a holder in the 600–900s band is absent
+        // here and treated as not-live — i.e. we free a QF no LATER than the
+        // sweep, occasionally slightly earlier. That is adoptability-conservative
+        // and harmless: the fail-closed CAS at the adopt entrypoint (FR-2) is the
+        // authoritative race guard, so an early-freed QF still cannot be
+        // double-adopted. A precise 600–900s read would require the data loader
+        // to surface display-stale holders too; intentionally out of scope here.
+        const holderAgeSec = claimingSession?.heartbeat_age_seconds;
+        const holderLive =
+          !!claimingSession &&
+          Number.isFinite(holderAgeSec) &&
+          holderAgeSec <= QF_HOLDER_LIVE_SECONDS;
+
+        if (!holderLive) {
+          // Stale/dead/absent holder — the sweep will null this claim. Surface a
+          // STALE badge but leave isClaimedByOther=false so topStartableQF can
+          // pick it up (FR-4: a stale claim must not permanently exclude).
+          claimBadge = `${colors.yellow}STALE${colors.reset} `;
+        } else {
+          isClaimedByOther = true;
           const analysis = analyzeClaimRelationship({ claimingSessionId, claimingSession, currentSession });
           if (analysis.relationship === 'same_conversation') {
             claimBadge = `${colors.green}${analysis.displayLabel}${colors.reset} `;
+            isClaimedByOther = false;
+          } else if (analysis.canAutoRelease) {
+            // analyzeClaimRelationship flagged this holder as safe-to-release
+            // (stale_inactive / stale_dead). Even within the 900s window, an
+            // explicitly released/dead-PID holder is not live work — keep it
+            // adoptable rather than blocking auto-start.
+            claimBadge = `${colors.yellow}${analysis.displayLabel}${colors.reset} `;
             isClaimedByOther = false;
           } else {
             claimBadge = analysis.relationship.startsWith('stale')
               ? `${colors.yellow}${analysis.displayLabel}${colors.reset} `
               : `${colors.yellow}CLAIMED${colors.reset} `;
           }
-        } else {
-          claimBadge = `${colors.yellow}CLAIMED${colors.reset} `;
         }
       }
     }

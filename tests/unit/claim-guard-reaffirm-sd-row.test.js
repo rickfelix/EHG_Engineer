@@ -8,6 +8,13 @@
  *
  * Static-pin pattern: read source via fs, assert the helper + 3 invocations
  * appear in expected positions. Mocking-independent.
+ *
+ * SD-LEO-INFRA-SESSION-AWARE-AUTO-001 (FR-1b): the QF branch of
+ * reaffirmClaimColumns no longer touches the quick_fixes table inline — it
+ * delegates to the shared fail-closed CAS helper claimQuickFix so a reaffirm
+ * cannot clobber a DIFFERENT live holder's claim. The QF-table write contract
+ * itself is pinned by tests/unit/qf-claim-cas.test.js; this file pins that the
+ * branch routes through the helper and that no inline NON-CAS update returns.
  */
 import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -33,12 +40,22 @@ describe('claim-guard: reaffirmClaimColumns (QF-20260511-016)', () => {
     expect(fnBody).toMatch(/is_working_on:\s*true/);
   });
 
-  test('helper writes claiming_session_id for QFs', () => {
+  test('helper claims QFs via the shared fail-closed CAS (SD-LEO-INFRA-SESSION-AWARE-AUTO-001 FR-1b)', () => {
+    // FR-1b moved the QF write-path out of an inline NON-CAS
+    // `.from('quick_fixes').update(...)` and into the shared fail-closed CAS
+    // helper claimQuickFix (lib/quick-fix-claim.mjs), so a reaffirm can no
+    // longer clobber a DIFFERENT live holder's claim. The QF branch is still
+    // gated on the QF- prefix; the actual quick_fixes table write now lives in
+    // the CAS helper (pinned separately by qf-claim-cas.test.js). Pin the new
+    // contract: the QF branch delegates to claimQuickFix rather than touching
+    // the table inline.
     const fnStart = src.indexOf('async function reaffirmClaimColumns');
     const fnEnd = src.indexOf('\n}\n', fnStart);
     const fnBody = src.slice(fnStart, fnEnd);
-    expect(fnBody).toMatch(/quick_fixes/);
     expect(fnBody).toMatch(/sdKey\.startsWith\('QF-'\)/);
+    expect(fnBody).toMatch(/claimQuickFix\(supabase,\s*sdKey,\s*sessionId\)/);
+    // The non-CAS inline update on quick_fixes must NOT be reintroduced.
+    expect(fnBody).not.toMatch(/from\(\s*['"]quick_fixes['"]\s*\)\s*[\s\S]{0,80}update\(/);
   });
 
   test('Case 1 (already_owned) calls reaffirmClaimColumns before return', () => {
