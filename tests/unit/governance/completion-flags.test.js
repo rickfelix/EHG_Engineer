@@ -63,7 +63,7 @@ function buildEmitSupabase({ existingByHash = {} } = {}) {
   };
 
   const supabase = {
-    from: vi.fn((table) => ({
+    from: vi.fn((_table) => ({
       select: vi.fn(() => makeDedupChain()),
       insert: vi.fn((row) => {
         rows.push(row);
@@ -366,7 +366,7 @@ describe('TS-6 reflection completeness gates the validator warning', () => {
 // ---------------------------------------------------------------------------
 describe('TS-7 emitFeedback additive status param (backward-compat)', () => {
   function buildInsertCaptureSupabase() {
-    const insert = vi.fn((row) => ({
+    const insert = vi.fn((_row) => ({
       select: vi.fn(() => ({ single: vi.fn(async () => ({ data: { id: 'fb-1' }, error: null })) })),
     }));
     const dedupSelect = vi.fn(() => ({
