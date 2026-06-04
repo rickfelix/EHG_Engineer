@@ -289,13 +289,22 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
     if (partialReadDetails) {
       const SUFFICIENT_READ_THRESHOLD = 30; // lines — covers directives + phase-specific intro
 
-      if (partialReadDetails.limit >= SUFFICIENT_READ_THRESHOLD) {
+      // QF-20260604-749 / feedback 00c22448: a Read with an offset but no limit
+      // (limit=null/undefined) reads to EOF — the tail-completing chunk of a full read —
+      // so it covers all remaining content. `null >= SUFFICIENT_READ_THRESHOLD` is false,
+      // so without treating read-to-EOF as sufficient it falls through to the BLOCK path
+      // (score 0, requiresConfirmation) despite full coverage. Additive-permissive:
+      // can only un-block, never newly-block.
+      const readToEof = partialReadDetails.limit === null || partialReadDetails.limit === undefined;
+
+      if (readToEof || partialReadDetails.limit >= SUFFICIENT_READ_THRESHOLD) {
+        const coverageDesc = readToEof ? 'read-to-EOF, no line cap' : `>=${SUFFICIENT_READ_THRESHOLD} lines`;
         console.log(`   ℹ️  Partial read detected for ${requiredFile} (limit=${partialReadDetails.limit})`);
-        console.log(`   ✅ Read covers sufficient content (>=${SUFFICIENT_READ_THRESHOLD} lines) — auto-passing`);
+        console.log(`   ✅ Read covers sufficient content (${coverageDesc}) — auto-passing`);
 
         emitStructuredLog({
           event: 'PROTOCOL_FILE_READ_GATE',
-          status: 'PASS_SUFFICIENT_PARTIAL',
+          status: readToEof ? 'PASS_READ_TO_EOF' : 'PASS_SUFFICIENT_PARTIAL',
           handoff_type: handoffType,
           required_file: requiredFile,
           partial_read_limit: partialReadDetails.limit,
@@ -309,7 +318,7 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
           score: 90,
           max_score: 100,
           issues: [],
-          warnings: [`Partial read of ${requiredFile} (${partialReadDetails.limit} lines) accepted as sufficient`]
+          warnings: [`Partial read of ${requiredFile} (${readToEof ? 'read-to-EOF' : partialReadDetails.limit + ' lines'}) accepted as sufficient`]
         };
       }
 

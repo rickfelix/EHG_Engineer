@@ -313,6 +313,61 @@ describe('Protocol File Read Gate - Partial Read Handling', () => {
     });
   });
 
+  // QF-20260604-749 / feedback 00c22448: a Read with an offset but no limit (limit=null)
+  // is a read-to-EOF — the tail-completing chunk of a full read. Before the fix,
+  // `null >= SUFFICIENT_READ_THRESHOLD` was false, so it fell through to the BLOCK path
+  // (score 0, requiresConfirmation) despite full coverage.
+  describe('Read-to-EOF (limit=null) auto-passes (QF-20260604-749)', () => {
+    it('should auto-pass at score 90 when the recorded partial read has limit=null', async () => {
+      writeSessionState({
+        protocolFilesRead: ['CLAUDE_EXEC.md'],
+        protocolFileReadStatus: {
+          'CLAUDE_EXEC.md': {
+            readCount: 1,
+            lastReadAt: '2026-01-30T10:00:00.000Z',
+            lastReadWasPartial: true,
+            lastPartialRead: {
+              limit: null, // read-to-EOF: offset set, no line cap applied
+              offset: 400,
+              readAt: '2026-01-30T10:00:00.000Z'
+            }
+          }
+        }
+      });
+
+      const result = await validateProtocolFileRead('PLAN-TO-EXEC', {});
+
+      expect(result.pass).toBe(true);
+      expect(result.score).toBe(90);
+      // read-to-EOF must NOT fall through to the confirmation/BLOCK path
+      expect(result.requiresConfirmation).not.toBe(true);
+      expect(result.warnings.some(w => w.includes('read-to-EOF'))).toBe(true);
+    });
+
+    it('should still BLOCK a genuinely short partial read (limit < threshold) — fix is additive-only', async () => {
+      writeSessionState({
+        protocolFilesRead: ['CLAUDE_EXEC.md'],
+        protocolFileReadStatus: {
+          'CLAUDE_EXEC.md': {
+            readCount: 1,
+            lastReadAt: '2026-01-30T10:00:00.000Z',
+            lastReadWasPartial: true,
+            lastPartialRead: {
+              limit: 20, // below SUFFICIENT_READ_THRESHOLD — must remain blocked
+              offset: 0,
+              readAt: '2026-01-30T10:00:00.000Z'
+            }
+          }
+        }
+      });
+
+      const result = await validateProtocolFileRead('PLAN-TO-EXEC', {});
+
+      expect(result.pass).toBe(false);
+      expect(result.requiresConfirmation).toBe(true);
+    });
+  });
+
   describe('TS-6: Backward compatibility', () => {
     it('should handle session state missing new fields without crashing', async () => {
       writeSessionState({
