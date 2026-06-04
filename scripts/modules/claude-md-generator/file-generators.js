@@ -95,7 +95,7 @@ AUTO-PROCEED is ON by default. You continue through phase transitions, PRD creat
 - Any "warrants confirmation" / "want me to continue?" rationalization
 - Numbered menu presentations at decision points
 - Intent to provide a "status checkpoint" after a successful handoff
-- Post-completion /document, /heal, /learn after an SD reaches LEAD-FINAL-APPROVAL — these are CONTINUATION steps, never pause points; "I didn't run them — say the word if you want them" is confirmation-fishing. Run the tail (or drive completion via /leo complete, which sequences /document → /heal → /learn automatically). Enforced by the post-completion-tail-enforcement Stop hook (SD-LEO-INFRA-AUTO-ENFORCE-POST-001).
+- Post-completion /document, /heal, /learn, and **completion-flags capture** after an SD reaches LEAD-FINAL-APPROVAL — these are CONTINUATION steps, never pause points; "I didn't run them — say the word if you want them" is confirmation-fishing. Run the tail (or drive completion via /leo complete, which sequences /document → /heal → /learn → capture-completion-flags automatically). Before emitting the Completion Flags block, answer the reflective interrogation "Are there any gaps we failed to close?" and route each finding via scripts/capture-completion-flags.js (incidental findings → durable feedback channel; "0 flags" shown explicitly). Enforced by the post-completion-tail-enforcement Stop hook (SD-LEO-INFRA-AUTO-ENFORCE-POST-001) + the completion-flags witness check in post-completion-validator.js (SD-LEO-INFRA-COMPLETION-FLAGS-DURABLE-001).
 
 If your reason for pausing is not on the five-point list above, KEEP WORKING. When in doubt: pick the highest-value option, state it in one sentence, and execute.
 

@@ -12,6 +12,52 @@
  */
 
 import { execSync } from 'child_process';
+import { COMPLETION_FLAG } from '../../../lib/governance/completion-flag-keys.js';
+
+/**
+ * SD-LEO-INFRA-COMPLETION-FLAGS-DURABLE-001 / FR-4 + TR-6.
+ *
+ * Reminder-first witness check: every completed SD should have a durable
+ * "completion flags" record (written by scripts/capture-completion-flags.js) proving the
+ * end-of-SD incidental-findings reflection ran. This runs for ALL completed SD types
+ * (NOT gated by isCodeProducing) and only ever appends to `missingRecommended` — it must
+ * NEVER cause process.exit(2). The query uses the SAME frozen metadata-key contract the
+ * writer uses, so writer/consumer keys cannot drift.
+ *
+ * Returns a WARN string to push into missingRecommended, or null when a valid record exists.
+ * MUST NOT throw — any error resolves to null (no warning, no block).
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} sdKey - The SD key
+ * @returns {Promise<string|null>}
+ * @private
+ */
+async function _checkCompletionFlagsWitness(supabase, sdKey) {
+  try {
+    const { data: flagRecords, error } = await supabase
+      .from('feedback')
+      .select('id, metadata')
+      .eq('metadata->>' + COMPLETION_FLAG.ORIGIN_KEY, COMPLETION_FLAG.ORIGIN_VALUE)
+      .eq('metadata->>' + COMPLETION_FLAG.SOURCE_SD_KEY, sdKey);
+
+    if (error) return null; // fail-soft: never block on a query error
+
+    const records = flagRecords || [];
+    if (records.length === 0) {
+      return `completion-flags record missing for ${sdKey}; run scripts/capture-completion-flags.js`;
+    }
+
+    // A record is "complete" when its reflection carries a numeric checklist_items count.
+    const hasComplete = records.some(r => typeof r?.metadata?.reflection?.checklist_items === 'number');
+    if (!hasComplete) {
+      return `completion-flags record incomplete for ${sdKey}; run scripts/capture-completion-flags.js`;
+    }
+
+    return null;
+  } catch {
+    return null; // fail-soft
+  }
+}
 
 /**
  * Validate that post-completion commands were executed for a completed SD.
@@ -110,6 +156,16 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     }
   }
 
+  // SD-LEO-INFRA-COMPLETION-FLAGS-DURABLE-001 / FR-4 + TR-6: completion-flags witness check.
+  // Deliberately OUTSIDE the isCodeProducing branch — every completed SD (regardless of type,
+  // including orchestrators and non-code SDs) should carry the durable completion-flags record.
+  // Reminder-first: this only ever appends to missingRecommended (never missingRequired), so it
+  // can never trigger the process.exit(2) BLOCK path below.
+  const completionFlagsWarn = await _checkCompletionFlagsWitness(supabase, sdKey);
+  if (completionFlagsWarn) {
+    missingRecommended.push('COMPLETION_FLAGS');
+  }
+
   // Output results
   if (missingRequired.length > 0) {
     console.error(`\n⚠️  Post-Completion Validation for ${sdKey}`);
@@ -149,6 +205,9 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     }
     if (missingRecommended.includes('DOCUMENT')) {
       console.error('   Consider running /document to update documentation');
+    }
+    if (missingRecommended.includes('COMPLETION_FLAGS')) {
+      console.error(`   ${completionFlagsWarn}`);
     }
     console.error('   (Not blocking - these improve continuous improvement)');
   } else {
