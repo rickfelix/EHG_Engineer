@@ -35,6 +35,89 @@ const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/h
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
 
+// SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
+// Reuse the INTENT payload key contract owned by the WRITER (worker-signal.cjs) so the
+// sweep reader and the broadcast writer cannot drift (pinned end-to-end by TS-WC-1).
+const { INTENT_PAYLOAD_KEYS } = require('./worker-signal.cjs');
+const DECONFLICTION_ENABLED = process.env.CROSS_SESSION_DECONFLICTION === 'true';
+// INTENT rows are read within a claim-TTL-aligned window — deliberately NOT the
+// signal-router 60-min WINDOW_MIN (a tree-cancel intent stays relevant for the life
+// of the claim). Default 24h matches the INTENT expires_at the writer stamps.
+const INTENT_WINDOW_MIN = Number(process.env.CROSS_SESSION_INTENT_WINDOW_MIN) || 24 * 60;
+
+/**
+ * Pure, side-effect-free collision detector (exported for TS-WC-1 / TS-FR2).
+ * Given the already-classified live sessions and a set of INTENT rows, returns one
+ * collision record per (intent × colliding live session) where the intent's target
+ * overlaps a DIFFERENT live session's claimed SD, current branch, or files.
+ *
+ * Keys are read from INTENT_PAYLOAD_KEYS — the same contract the writer emits.
+ * ADDITIVE: this does not touch dup-claim (bySD) or WORKTREE_CONFLICT (branchSessions).
+ * Idempotent: a pure function of its inputs, so repeated sweeps yield identical records.
+ */
+function detectCrossSessionCollisions(classified, intents) {
+  const K = INTENT_PAYLOAD_KEYS;
+  const live = (classified || []).filter(s => s && (s.status === 'ACTIVE' || s.status === 'ALIVE_NO_HEARTBEAT' || s.status === 'ALIVE_SOURCE_SIDE'));
+  const collisions = [];
+
+  for (const intent of (intents || [])) {
+    const p = (intent && intent.payload) || {};
+    const action = p[K.action];
+    if (!action) continue; // not an INTENT row
+    const targetSd = p[K.sdKey] || null;
+    const targetTree = p[K.tree] || null;
+    const targetFiles = Array.isArray(p[K.files]) ? p[K.files] : [];
+    const senderSession = intent.sender_session || p[K.callsign] || null;
+
+    for (const s of live) {
+      // Never flag a session colliding with its own broadcast.
+      if (senderSession && s.session_id === senderSession) continue;
+
+      const reasons = [];
+      if (targetSd && s.sd_key && s.sd_key === targetSd) reasons.push('sd_key');
+      if (targetTree && s.current_branch && s.current_branch === targetTree) reasons.push('branch');
+      // File overlap: only fires when a live session exposes a file list (forward-compatible —
+      // sessions carry no per-file column today, so this stays inert until one is added).
+      const sessionFiles = Array.isArray(s.files) ? s.files
+        : Array.isArray(s.target_files) ? s.target_files : [];
+      if (targetFiles.length && sessionFiles.length) {
+        const overlap = targetFiles.filter(f => sessionFiles.includes(f));
+        if (overlap.length) reasons.push('files:' + overlap.join('|'));
+      }
+
+      if (reasons.length) {
+        collisions.push({
+          intent_id: intent.id || null,
+          intent_action: action,
+          sender_session: senderSession,
+          target_sd_key: targetSd,
+          target_tree: targetTree,
+          collided_with_session: s.session_id,
+          collided_with_sd_key: s.sd_key || null,
+          collided_with_branch: s.current_branch || null,
+          reasons
+        });
+      }
+    }
+  }
+  return collisions;
+}
+
+/**
+ * Read recent INTENT rows (payload->>intent_action IS NOT NULL) within the claim-TTL
+ * window. Exported so the collision detector can be exercised against a mocked client.
+ */
+async function loadRecentIntents(sb, windowMin = INTENT_WINDOW_MIN) {
+  const cutoff = new Date(Date.now() - windowMin * 60_000).toISOString();
+  const { data, error } = await sb
+    .from('session_coordination')
+    .select('id, sender_session, target_session, payload, body, created_at')
+    .gte('created_at', cutoff)
+    .not('payload->>' + INTENT_PAYLOAD_KEYS.action, 'is', null);
+  if (error) return { rows: [], error };
+  return { rows: data || [], error: null };
+}
+
 // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-005): MC gating constants.
 // Feature-flag MC consultation at sweep independently from dashboard so that
 // roll-out can be staged (dashboard first → sweep later after calibration).
@@ -428,11 +511,18 @@ async function main() {
   const actions = [];
   const warnings = [];
   const conflictEvicted = [];
+  // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: collected INTENT collisions,
+  // surfaced as a real return value from main() (not console-only).
+  const collisionsDetected = [];
 
   // 1. Get all sessions with SD claims
   const { data: sessions, error: sessErr } = await supabase
     .from('v_active_sessions')
-    .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id')
+    // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: include current_branch so the
+    // branchSessions map (and the new INTENT collision reader) see real branch data. The
+    // column already exists on v_active_sessions; it was simply not selected before, which
+    // also left the pre-existing WORKTREE_CONFLICT branch check (L~1046) effectively inert.
+    .select('session_id, sd_key, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track, is_virtual, parent_session_id, terminal_id, current_branch')
     .not('sd_key', 'is', null)
     .order('heartbeat_age_seconds', { ascending: true });
 
@@ -1054,6 +1144,40 @@ async function main() {
     }
   }
 
+  // 4a-2. SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
+  // ADDITIVE to the dup-claim (step 3) and WORKTREE_CONFLICT (4a) logic above — those are
+  // unchanged. This reads broadcast INTENT rows (payload.intent_action) and flags when a
+  // destructive intent (e.g. cancel-tree) targets an SD/branch/files a DIFFERENT live
+  // session is actively holding. Runs AFTER classification so it can use classified[].
+  // Surfaces collisions as a real return value (sweepResult.collisions) AND prominent
+  // stdout — never a silently-swallowed console-only warning. Gated by DECONFLICTION_ENABLED.
+  if (DECONFLICTION_ENABLED) {
+    try {
+      const { rows: intentRows, error: intentErr } = await loadRecentIntents(supabase, INTENT_WINDOW_MIN);
+      if (intentErr) {
+        console.log('INTENT_COLLISION: load error=' + (intentErr.message || 'unknown'));
+      } else {
+        const found = detectCrossSessionCollisions(classified, intentRows);
+        collisionsDetected.push(...found);
+        if (found.length > 0) {
+          console.log('');
+          console.log('!!! CROSS-SESSION INTENT COLLISION(S): ' + found.length + ' !!!');
+          for (const c of found) {
+            const line = 'INTENT_COLLISION: ' + c.intent_action +
+              ' from ' + (c.sender_session || '?') +
+              ' targets ' + (c.target_sd_key || c.target_tree || '?') +
+              ' — collides with live session ' + c.collided_with_session +
+              ' (' + c.reasons.join(', ') + ')';
+            console.log('  ' + line);
+            warnings.push(line);
+          }
+        }
+      }
+    } catch (collErr) {
+      console.log('INTENT_COLLISION: ' + (collErr && collErr.message ? collErr.message : 'unknown'));
+    }
+  }
+
   // 4b. Struggling worker detection (SD-MAN-INFRA-WORKER-WORKTREE-SELF-001)
   // Flag workers with repeated handoff failures
   for (const s of classified.filter(c => c.status === 'ACTIVE' && (c.handoff_fail_count || 0) > 3)) {
@@ -1654,9 +1778,22 @@ async function main() {
   }
 
   console.log('=== SWEEP COMPLETE ===');
+
+  // FR-2: hand collisions back as a real return value (callers/tests can inspect).
+  return { actions, warnings, collisions: collisionsDetected };
 }
 
-main().catch(err => {
-  console.error('SWEEP FATAL:', err.message);
-  process.exit(1);
-});
+// SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: guard auto-run so the pure
+// collision functions can be imported by unit tests without main() hitting the DB.
+if (require.main === module) {
+  main().catch(err => {
+    console.error('SWEEP FATAL:', err.message);
+    process.exit(1);
+  });
+}
+
+// FR-2 exports — pure collision detector + intent loader (unit-testable in isolation).
+module.exports.detectCrossSessionCollisions = detectCrossSessionCollisions;
+module.exports.loadRecentIntents = loadRecentIntents;
+module.exports.INTENT_WINDOW_MIN = INTENT_WINDOW_MIN;
+module.exports.INTENT_PAYLOAD_KEYS = INTENT_PAYLOAD_KEYS;

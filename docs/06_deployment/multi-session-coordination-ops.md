@@ -3,7 +3,7 @@ category: deployment
 status: draft
 version: 1.0.0
 author: auto-fixer
-last_updated: 2026-02-28
+last_updated: 2026-06-04
 tags: [deployment, auto-generated]
 ---
 # Multi-Session Coordination Operational Runbook
@@ -1345,10 +1345,60 @@ SELECT prosrc FROM pg_proc WHERE proname = 'create_or_replace_session';
 - **SD Start**: `scripts/sd-start.js` (conflict blocking)
 - **Concurrent Hook**: `scripts/hooks/concurrent-session-worktree.cjs` (staleness alignment)
 
+## Cross-Session De-confliction Protocol (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001)
+
+**Status**: shipped behind a default-OFF flag — **inert until enabled**.
+
+### Problem it solves
+
+On 2026-06-04 two parallel worker sessions made opposite decisions on the same tree
+(`SPRINT-2026-002`) within ~20 minutes with zero cross-session visibility — one cancelled
+all of its child SDs as a duplicate, the other retargeted a pilot onto it — and they only
+reconciled because a human hand-relayed status. A high-value coordinator signal was even
+auto-marked `read_at` but never `acknowledged_at`, so it got no reply. This protocol closes
+that gap so the fleet self-de-conflicts without a human relay.
+
+### Feature flag
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `CROSS_SESSION_DECONFLICTION` | unset / `false` (OFF) | When OFF, FR-1 INTENT emission and FR-2 collision detection are no-ops; coordination behaves exactly as before. Set to `true` to enable. |
+| `CROSS_SESSION_INTENT_WINDOW_MIN` | `1440` (24h) | Window the sweep reads INTENT rows over (claim-TTL aligned, deliberately not the 60-min signal-router window). |
+
+> **Enable only when the fleet is quiet** (`npm run session:check-concurrency` shows `[ISOLATED]`).
+> This touches live coordination machinery; per chairman direction it is piloted in a quiet window.
+
+### The four extensions
+
+| FR | File | What it does |
+|----|------|--------------|
+| FR-1 | `scripts/worker-signal.cjs` | New `intent <action>` subcommand broadcasts a typed INTENT **before** a destructive/cross-cutting action. `node scripts/worker-signal.cjs intent cancel-tree --sd <key> --tree <branch> --files a,b`. Actions: `cancel-tree`, `retarget-pilot`, `claim-shared-infra`. |
+| FR-2 | `scripts/stale-session-sweep.cjs` | The sweep flags a **collision** when a broadcast INTENT targets an SD / branch / files a *different* live session is holding. Surfaced in sweep output + `main()` return `{ collisions }`. Additive — existing dup-claim and WORKTREE_CONFLICT checks are unchanged. |
+| FR-3 | `scripts/fleet-coaching.cjs` | `sendDeconflictionReply()` answers a specific worker signal (and can broadcast destructive actions), **and stamps `acknowledged_at` on the answered signal** so it no longer shows unacked forever. |
+| FR-4 | `lib/coordinator/signal-router.cjs` | `ackAndRouteLoneSignal()` acks + routes a lone `severity>=medium` signal to the coordinator **without** waiting for 3-signal aggregation. `route != promote`: it never creates a `harness_backlog` row, and `shouldPromote()` is unchanged. |
+
+### Enum-safety contract (important for maintainers)
+
+`session_coordination.message_type` is a **strict Postgres enum** (`coordination_message_type`)
+and the coordination inserts are fire-and-forget (`.catch` swallow). A novel `message_type`
+throws `22P02` **silently**. Therefore all messages reuse existing enum values
+(`INFO` for INTENTs, `COACHING` for de-confliction replies) and discriminate via the payload
+(`payload.intent_action`, `payload.deconfliction`). **Do not add a new `message_type` without
+an `ALTER TYPE ... ADD VALUE` migration applied first** (and a `22P02` negative test).
+
+The INTENT writer/reader key contract is a single frozen object (`INTENT_PAYLOAD_KEYS` in
+`worker-signal.cjs`, `require()`d by the sweep) so the two sides cannot drift.
+
+### Rollback
+
+Flip `CROSS_SESSION_DECONFLICTION` to `false` (instant inert) or `git revert` PR #4222 —
+there is no migration to undo.
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 5.1.0 | 2026-06-04 | Added Cross-Session De-confliction Protocol behind default-OFF flag `CROSS_SESSION_DECONFLICTION` (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001): FR-1 typed INTENT broadcast, FR-2 sweep collision detection, FR-3 targeted de-confliction reply + `acknowledged_at` stamp, FR-4 lone-signal ack+route. Enum-safe (reuses INFO/COACHING), migration-free. PR #4222. |
 | 5.0.0 | 2026-02-18 | **Breaking**: Dropped sd_claims table (SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001). All claim state now in claude_sessions exclusively. Fixed isSameConversation() for UUID vs port-based terminal_id. v_active_sessions rebuilt without sd_claims JOIN. Manual release is now single-table. |
 | 4.1.0 | 2026-02-13 | Added session creation heartbeat guard (prevents hijacking active sessions), Added sd_claims lifecycle-aware unique constraint (superseded by v5.0.0) |
 | 4.0.0 | 2026-02-11 | Added ship process safety (SD-LEO-FIX-MULTI-SESSION-SHIP-001) |
@@ -1360,4 +1410,4 @@ SELECT prosrc FROM pg_proc WHERE proname = 'create_or_replace_session';
 ---
 
 *Part of LEO Protocol v4.3.3 - Multi-Session Coordination & Lifecycle Management*
-*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001, SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001, SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018, SD-LEO-FIX-MULTI-SESSION-SHIP-001, QF-20260213-620*
+*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001, SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001, SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018, SD-LEO-FIX-MULTI-SESSION-SHIP-001, SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001, QF-20260213-620*

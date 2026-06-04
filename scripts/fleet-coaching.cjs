@@ -22,7 +22,18 @@
 
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
-const supabase = createSupabaseServiceClient();
+// SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-3 — targeted DECONFLICTION reply.
+// Default-OFF feature flag. When OFF, sendDeconflictionReply is a no-op so existing
+// coaching behavior is byte-unchanged in production.
+const DECONFLICTION_ENABLED = process.env.CROSS_SESSION_DECONFLICTION === 'true';
+
+// Lazily create the service client so this module can be imported (for unit-testing
+// the exported reply logic with an injected client) without requiring DB env vars.
+let supabase = null;
+function getClient() {
+  if (!supabase) supabase = createSupabaseServiceClient();
+  return supabase;
+}
 
 // Worker median lifespan is ~9 minutes. Cooldowns must be shorter than that
 // to have any chance of a second message reaching the same worker.
@@ -84,6 +95,95 @@ async function sendCoaching(sessionId, coachingType, subject, body, extraPayload
     });
 
   return !error;
+}
+
+// --- FR-3: DECONFLICTION reply (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001) ---
+
+// Distinct cooldown namespace so deconfliction replies never collide with the
+// normal coaching_type cooldowns (and a per-signal suffix so each origin signal
+// gets its own dedup key — one reply per signal per cooldown window, no spam).
+function deconflictionCoachingType(replyToSignalId) {
+  return 'deconfliction:' + (replyToSignalId || 'broadcast');
+}
+
+/**
+ * Send a targeted DECONFLICTION reply to a worker AND stamp acknowledged_at on the
+ * original signal row. ENUM-SAFE: message_type='COACHING' (an existing enum value;
+ * deliberately NOT 'INFO', so the coordination-inbox L440 amCoordinator defer — which
+ * only swallows INFO+signal_type — does NOT eat this reply). Discriminated by
+ * payload.deconfliction=true (+ optional payload.broadcast=true for a destructive-action
+ * fan-out to all live workers).
+ *
+ * The acknowledged_at stamp on reply_to_signal_id closes the origin-incident root cause:
+ * signals were marked read_at but never acknowledged_at, so they showed unacked forever.
+ *
+ * Client is injected (not the module global) so this is unit-testable in isolation.
+ * Returns { sent, acknowledged, skipped, error }.
+ */
+async function sendDeconflictionReply(client, {
+  targetSession,
+  replyToSignalId,
+  subject,
+  body,
+  broadcast = false,
+  extraPayload = {},
+  cooldownOverride
+} = {}) {
+  if (!DECONFLICTION_ENABLED) {
+    return { sent: false, acknowledged: false, skipped: true, reason: 'flag_off', error: null };
+  }
+  if (!client) return { sent: false, acknowledged: false, skipped: true, reason: 'no_client', error: new Error('client required') };
+  if (!targetSession) return { sent: false, acknowledged: false, skipped: true, reason: 'no_target', error: new Error('targetSession required') };
+
+  const coachingType = deconflictionCoachingType(replyToSignalId);
+
+  // Distinct-key cooldown check (mirrors wasRecentlySentPrecise but on the injected client).
+  const cooldown = cooldownOverride || COOLDOWN_MINUTES;
+  const cutoff = new Date(Date.now() - cooldown * 60 * 1000).toISOString();
+  const { data: recent } = await client
+    .from('session_coordination')
+    .select('id, payload')
+    .eq('target_session', targetSession)
+    .eq('message_type', 'COACHING')
+    .gte('created_at', cutoff)
+    .limit(20);
+  const onCooldown = (recent || []).some(m => m.payload?.coaching_type === coachingType);
+
+  let acknowledged = false;
+  // Stamp acknowledged_at on the ORIGINAL signal even if the reply itself is on cooldown —
+  // acking the origin is the root-cause fix and must be idempotent / not gated by spam control.
+  if (replyToSignalId) {
+    const { error: ackErr } = await client
+      .from('session_coordination')
+      .update({ acknowledged_at: new Date().toISOString() })
+      .eq('id', replyToSignalId);
+    acknowledged = !ackErr;
+  }
+
+  if (onCooldown) {
+    return { sent: false, acknowledged, skipped: true, reason: 'cooldown', error: null };
+  }
+
+  const expiresAt = new Date(Date.now() + EXPIRE_MINUTES * 60 * 1000).toISOString();
+  const { error: insErr } = await client
+    .from('session_coordination')
+    .insert({
+      target_session: targetSession,
+      message_type: 'COACHING',
+      subject: subject || '[DECONFLICTION] coordination notice',
+      body: body || null,
+      payload: {
+        coaching_type: coachingType,
+        deconfliction: true,
+        reply_to_signal_id: replyToSignalId || null,
+        broadcast: !!broadcast,
+        ...extraPayload
+      },
+      sender_type: 'coaching',
+      expires_at: expiresAt
+    });
+
+  return { sent: !insErr, acknowledged, skipped: false, reason: insErr ? 'insert_error' : 'ok', error: insErr || null };
 }
 
 // --- Coaching Evaluators ---
@@ -298,6 +398,7 @@ function evaluateLeoProtocolCompliance(session, sdDetails) {
 // --- Main ---
 
 async function main() {
+  getClient(); // initialize module-level supabase for the helper functions below
   const now = new Date();
   const sent = [];
   const skipped = [];
@@ -477,7 +578,18 @@ async function main() {
   console.log('=== COACHING COMPLETE ===');
 }
 
-main().catch(err => {
-  console.error('COACHING FATAL:', err.message);
-  process.exit(1);
-});
+// SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-3: guard auto-run so the exported
+// reply logic is importable by unit tests without main() touching the DB.
+if (require.main === module) {
+  main().catch(err => {
+    console.error('COACHING FATAL:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  // FR-3 (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001)
+  sendDeconflictionReply,
+  deconflictionCoachingType,
+  DECONFLICTION_ENABLED
+};

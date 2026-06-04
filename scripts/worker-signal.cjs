@@ -23,6 +23,54 @@ const SIGNAL_TYPES = ['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
 const BODY_HARD_CAP = 4096;
 
+// SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-1 — typed INTENT broadcast.
+// Default-OFF feature flag. When OFF, the `intent` subcommand refuses to write so
+// the existing signal path is byte-unchanged in production.
+const DECONFLICTION_ENABLED = process.env.CROSS_SESSION_DECONFLICTION === 'true';
+
+// THE discriminator the FR-2 sweep reader keys on (payload->>intent_action). An
+// INTENT row carries message_type='INFO' (an existing enum value — no ALTER TYPE)
+// and is distinguished from FR-3a worker signals purely by the PRESENCE of
+// payload.intent_action and the ABSENCE of payload.signal_type. signal_type MUST
+// stay absent or signal-router.loadRecentSignals would scoop it into aggregation.
+const INTENT_ACTIONS = ['cancel-tree', 'retarget-pilot', 'claim-shared-infra'];
+
+// Single source of truth for the INTENT payload key names. worker-signal.cjs WRITES
+// these and stale-session-sweep.cjs READS these; both reference this contract so the
+// writer and reader cannot drift (pinned end-to-end by TS-WC-1).
+const INTENT_PAYLOAD_KEYS = Object.freeze({
+  action: 'intent_action',
+  sdKey: 'target_sd_key',
+  tree: 'target_tree',
+  files: 'target_files',
+  callsign: 'sender_callsign',
+  repo: 'repo'
+});
+
+/**
+ * Build the INTENT payload written to session_coordination.payload. Pure + exported
+ * so TS-WC-1 can pin the exact keys the writer emits against the keys the sweep reads.
+ * Applies redact() to free-text fields (body + each target file path).
+ * NEVER includes payload.signal_type (FR-1 contract).
+ */
+function buildIntentPayload({ action, targetSdKey, targetTree, targetFiles, senderCallsign, repo, body }) {
+  const K = INTENT_PAYLOAD_KEYS;
+  const files = Array.isArray(targetFiles)
+    ? targetFiles.map(f => redact(String(f)).slice(0, 500)).filter(Boolean)
+    : [];
+  const payload = {
+    [K.action]: action,
+    [K.sdKey]: targetSdKey || null,
+    [K.tree]: targetTree || null,
+    [K.files]: files,
+    [K.callsign]: senderCallsign || null,
+    [K.repo]: repo || null
+  };
+  if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
+  // INVARIANT: payload.signal_type must be ABSENT on INTENT rows.
+  return payload;
+}
+
 const REDACTION_PATTERNS = [
   // AWS access key id
   { re: /AKIA[0-9A-Z]{16}/g, label: 'AWS_KEY' },
@@ -90,8 +138,110 @@ Severity heuristic:
 `);
 }
 
+// SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-1 — INTENT broadcast handler.
+// Usage: node scripts/worker-signal.cjs intent <action> --sd <key> --tree <branch> --files <a,b,c>
+// Writes ONE session_coordination row (message_type='INFO' + payload.intent_action).
+async function intentMain(flags, positional) {
+  if (!DECONFLICTION_ENABLED) {
+    console.error('ERROR: intent broadcast is gated by CROSS_SESSION_DECONFLICTION=true (currently OFF — no-op).');
+    process.exit(3);
+  }
+
+  const action = positional[1];
+  if (!action || !INTENT_ACTIONS.includes(action)) {
+    console.error('ERROR: intent requires <action> ∈ ' + INTENT_ACTIONS.join(' | '));
+    console.error('Usage: node scripts/worker-signal.cjs intent <action> --sd <key> --tree <branch> --files <a,b,c>');
+    process.exit(2);
+  }
+
+  const sessionId = process.env.CLAUDE_SESSION_ID;
+  if (!sessionId) {
+    console.error('ERROR: CLAUDE_SESSION_ID env var required (set by SessionStart hook).');
+    process.exit(1);
+  }
+
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.error('ERROR: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required.');
+    process.exit(1);
+  }
+  const supabase = createClient(url, key);
+
+  // Snapshot sender callsign + claimed sd_key (sd_key is the default --sd target).
+  let senderCallsign = null;
+  let claimedSdKey = null;
+  try {
+    const { data: senderRow } = await supabase
+      .from('claude_sessions')
+      .select('metadata, sd_key')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    if (senderRow) {
+      senderCallsign = senderRow.metadata?.fleet_identity?.callsign || null;
+      claimedSdKey = senderRow.sd_key || null;
+    }
+  } catch { /* best-effort */ }
+
+  const targetSdKey = (typeof flags.sd === 'string' ? flags.sd : null) || claimedSdKey;
+  const targetTree = (typeof flags.tree === 'string' ? flags.tree : null);
+  const targetFiles = (typeof flags.files === 'string' && flags.files.length)
+    ? flags.files.split(',').map(f => f.trim()).filter(Boolean)
+    : [];
+  const rawBody = typeof flags.note === 'string' ? flags.note : '';
+
+  const payload = buildIntentPayload({
+    action,
+    targetSdKey,
+    targetTree,
+    targetFiles,
+    senderCallsign,
+    repo: process.cwd(),
+    body: rawBody
+  });
+
+  // Align INTENT expiry to the claim TTL window used by the signal path (+24h).
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+  const subjBody = payload.body || '';
+  const subject = `[INTENT:${action.toUpperCase()}] ${(targetSdKey || targetTree || '')} ${subjBody.slice(0, 60)}`.trim();
+
+  const { data: inserted, error } = await supabase
+    .from('session_coordination')
+    .insert({
+      sender_session: sessionId,
+      sender_type: 'worker',
+      // INFO is an existing coordination_message_type enum value — no new type, no ALTER.
+      // FR-2 disambiguates INTENT from FR-3a signals via payload.intent_action.
+      target_session: 'broadcast-coordinator',
+      message_type: 'INFO',
+      subject,
+      body: payload.body || null,
+      payload,
+      expires_at: expiresAt
+    })
+    .select('id, created_at')
+    .single();
+
+  if (error) {
+    console.error('ERROR: failed to insert intent:', error.message);
+    process.exit(1);
+  }
+
+  console.log('✓ Intent broadcast');
+  console.log('  intent_id:', inserted.id);
+  console.log('  intent_action:', action);
+  console.log('  target_sd_key:', targetSdKey || '(none)');
+  console.log('  target_tree:', targetTree || '(none)');
+  console.log('  target_files:', payload[INTENT_PAYLOAD_KEYS.files].length ? payload[INTENT_PAYLOAD_KEYS.files].join(', ') : '(none)');
+}
+
 async function main() {
   const { flags, positional } = parseArgs(process.argv);
+
+  // FR-1: route the `intent` subcommand before the legacy signal path.
+  if (positional[0] === 'intent') {
+    return intentMain(flags, positional);
+  }
 
   if (flags.help || positional.length < 2) {
     printHelp();
@@ -198,7 +348,11 @@ async function main() {
 }
 
 // Export internals for unit testing.
-module.exports = { redact, parseArgs, REDACTION_PATTERNS, SIGNAL_TYPES, SEVERITIES, BODY_HARD_CAP };
+module.exports = {
+  redact, parseArgs, REDACTION_PATTERNS, SIGNAL_TYPES, SEVERITIES, BODY_HARD_CAP,
+  // FR-1 (SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001)
+  INTENT_ACTIONS, INTENT_PAYLOAD_KEYS, buildIntentPayload, DECONFLICTION_ENABLED
+};
 
 if (require.main === module) {
   main().catch(err => {
