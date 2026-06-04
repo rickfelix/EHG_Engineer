@@ -11,6 +11,11 @@
   },
   "default_supports_cross_repo": true,
   "sub_agents": {
+    "VENTURE_STACK": {
+      "supports_cross_repo": true,
+      "probe_path": null,
+      "notes": "Deterministic venture-stack compliance checker (SD-LEO-INFRA-WIRE-PRE-BUILD-001). Reads the leaf SD's own text via the venture-stack-policy SSOT — no repo scan — so cross-repo is irrelevant (probe_path null)."
+    },
     "DESIGN": {
       "supports_cross_repo": true,
       "probe_path": "src/components",
