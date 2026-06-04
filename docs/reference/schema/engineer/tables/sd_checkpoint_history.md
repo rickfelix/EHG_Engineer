@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 2,967
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -59,12 +59,7 @@
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 2. authenticated_insert_sd_checkpoint_history (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 3. authenticated_select_sd_checkpoint_history (SELECT)
+### 2. authenticated_select_sd_checkpoint_history (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

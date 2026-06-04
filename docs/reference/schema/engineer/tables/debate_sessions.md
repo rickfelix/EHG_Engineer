@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 86
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -76,21 +76,10 @@
 
 ## RLS Policies
 
-### 1. Allow authenticated to insert debate sessions (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. Allow read access to debate sessions (SELECT)
+### 1. Allow read access to debate sessions (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
-
-### 3. Allow service role to update debate sessions (UPDATE)
-
-- **Roles**: {public}
-- **Using**: `true`
-- **With Check**: `true`
 
 ## Triggers
 

@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 59
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -54,22 +54,7 @@
 
 ## RLS Policies
 
-### 1. eva_youtube_config_delete (DELETE)
-
-- **Roles**: {public}
-- **Using**: `true`
-
-### 2. eva_youtube_config_insert (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 3. eva_youtube_config_select (SELECT)
-
-- **Roles**: {public}
-- **Using**: `true`
-
-### 4. eva_youtube_config_update (UPDATE)
+### 1. eva_youtube_config_select (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`

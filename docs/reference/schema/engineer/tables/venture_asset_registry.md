@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -58,17 +58,12 @@
 
 ## RLS Policies
 
-### 1. asset_registry_insert_authenticated (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 2. asset_registry_select_authenticated (SELECT)
+### 1. asset_registry_select_authenticated (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 3. asset_registry_service_role (ALL)
+### 2. asset_registry_service_role (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

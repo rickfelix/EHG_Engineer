@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
-**RLS**: Enabled (5 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -63,30 +63,14 @@
 
 ## RLS Policies
 
-### 1. genesis_deployments_delete (DELETE)
+### 1. genesis_deployments_select (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. genesis_deployments_insert (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 3. genesis_deployments_select (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 4. genesis_deployments_service_role (ALL)
+### 2. genesis_deployments_service_role (ALL)
 
 - **Roles**: {service_role}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 5. genesis_deployments_update (UPDATE)
-
-- **Roles**: {authenticated}
 - **Using**: `true`
 - **With Check**: `true`
 

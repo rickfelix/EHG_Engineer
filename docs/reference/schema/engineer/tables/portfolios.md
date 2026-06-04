@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 8
-**RLS**: Enabled (5 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -57,30 +57,25 @@
 
 ## RLS Policies
 
-### 1. Allow authenticated users to insert portfolios (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 2. Allow service_role to manage portfolios (ALL)
+### 1. Allow service_role to manage portfolios (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 3. Company access portfolios (ALL)
+### 2. Company access portfolios (ALL)
 
 - **Roles**: {authenticated}
 - **Using**: `(company_id IN ( SELECT user_company_access.company_id
    FROM user_company_access
   WHERE (user_company_access.user_id = auth.uid())))`
 
-### 4. anon_select_portfolios (SELECT)
+### 3. anon_select_portfolios (SELECT)
 
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 5. authenticated_select_portfolios (SELECT)
+### 4. authenticated_select_portfolios (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

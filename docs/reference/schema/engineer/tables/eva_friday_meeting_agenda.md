@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-03T21:50:16.531Z
+**Generated**: 2026-06-04T00:30:18.307Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -55,13 +55,7 @@
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. Authenticated can update eva_friday_meeting_agenda (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 3. Service role can manage eva_friday_meeting_agenda (ALL)
+### 2. Service role can manage eva_friday_meeting_agenda (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
