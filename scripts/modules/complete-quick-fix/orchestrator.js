@@ -20,7 +20,7 @@ import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff } from './git-operations.js';
 import {
   validateLOC,
   validateTests,
@@ -182,6 +182,25 @@ export async function completeQuickFix(qfId, options = {}) {
   const { filesChanged, diffAnalysis } = analyzeGitDiff(testDir, qf.description);
   const docsOnlyDiff = isDocsOnlyDiff(filesChanged);
   const skipTestGate = canSkipTestGate({ qfType: qf.type, docsOnlyDiff });
+
+  // QF-20260604-479 (PAT-QF-EMPTY-DIFF-FALSE-COMPLETION-001): terminal empty-diff guard.
+  // A committed branch diff vs origin/main of 0 files / 0 LOC means the implementation never
+  // landed (never committed, or lost to a parallel-session working-tree clobber — CLAUDE.md #8).
+  // Every compliance criterion is vacuously satisfied by "no change" (error_resolved passes on an
+  // EMPTY console-error list; loc/scope/targeted all pass at 0), so the QF would false-complete at
+  // score 100 and merge an EMPTY PR (witnessed: QF-20260604-749 / PR #4238). Refuse unless
+  // --allow-empty-diff is explicit; NOT bypassable by --force-complete / --non-interactive / --auto-pr.
+  if (isEmptyDiff(filesChanged, actualLoc)) {
+    if (options.allowEmptyDiff) {
+      console.log(`\n⚠️  --allow-empty-diff: proceeding on EMPTY branch diff (reason="${options.allowEmptyDiffReason || 'n/a'}")\n`);
+    } else {
+      console.error(`\n❌ EMPTY DIFF — refusing to complete ${qfId}: branch diff vs origin/main is 0 files / 0 LOC.`);
+      console.error('   Commit your fix to the branch (the diff is computed from committed changes vs');
+      console.error('   origin/main), or pass --allow-empty-diff --reason "<why>" for a genuine revert/no-op.');
+      console.error('   NOT bypassable by --force-complete / --non-interactive / --auto-pr.\n');
+      process.exit(1);
+    }
+  }
 
   // SD-FDBK-ENH-CREATE-QUICK-FIX-001 (FR-3): reconcile the declared type against the REAL diff.
   // The work-item-router documentation Tier-2 floor relaxes risk-keyword escalation at routing
