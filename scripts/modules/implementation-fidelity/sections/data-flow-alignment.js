@@ -352,7 +352,7 @@ async function detectDatabaseScope(sd_id, supabase) {
     const hasQueries = dbSignal.test(gitDiff);
 
     return { hasMigrations, hasQueries };
-  } catch (error) {
+  } catch (_error) {
     // Conservative: on detection failure do NOT grant the N/A pass.
     return { hasMigrations: true, hasQueries: true, detection_error: true };
   }
