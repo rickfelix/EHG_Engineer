@@ -22,6 +22,7 @@ tags: [guide, auto-generated]
   - [Why JSONB Metadata Lookup?](#why-jsonb-metadata-lookup)
 - [Orchestrator SD Structure](#orchestrator-sd-structure)
 - [Child SD Structure](#child-sd-structure)
+- [Vision-Grounded Enrichment](#vision-grounded-enrichment)
 - [Bridge Artifact Record](#bridge-artifact-record)
 - [Pre-Build Panel Enrichment Rail](#pre-build-panel-enrichment-rail)
 - [Integration Points](#integration-points)
@@ -306,6 +307,37 @@ Each child SD maps a single sprint item to an SD row:
 | `created_by` | `lifecycle-sd-bridge` |
 | `metadata.sprint_item_index` | Array index of the item |
 | `metadata.dependencies` | payload.dependencies array |
+
+---
+
+## Vision-Grounded Enrichment
+
+Before child SDs are written, the bridge enriches each thin sprint-item
+description with upstream context via the two-pass enrichment pipeline
+(`lib/eva/artifact-enrichment-pipeline.js`). Pass 1 summarizes the venture's
+S0–S18 `venture_artifacts`; Pass 2 generates an enriched description per child SD.
+
+**Grounding precedence (SD-FDBK-INFRA-VENTURE-BUILD-ENRICHMENT-001)**: the
+enrichment prompt is grounded **first** in the active chairman-approved L2 vision
+and architecture plan — not the accumulated stage artifacts. The bridge assembles
+this grounding via `buildVisionGrounding()`, which reuses the L2 vision row already
+fetched by `assertVentureVisionReady()` (its `extracted_dimensions` are the
+load-bearing signal) and resolves the architecture plan by `plan_key` then
+`vision_key` linkage. The prompt instructs the model to **prefer the
+Vision/Architecture over the S0–S18 stage artifacts on any conflict**, so a
+superseded choice carried in a stale artifact (e.g. an old tech stack) cannot
+re-contaminate child SD descriptions after a chairman re-vision.
+
+The grounding fetch is **fail-soft**: the L2 vision is already guaranteed present
+by `assertVentureVisionReady()`, and a transient architecture-plan read error
+falls back to vision-only grounding rather than aborting the build. When no
+grounding is available the prompt is byte-identical to the pre-grounding behavior,
+keeping `reEnrichExistingSDs()` and other callers unchanged.
+
+This is the **prevention** half of vision-vs-artifact reconciliation; it
+complements the **detection** half (the dormant vision-drift gate,
+`lib/eva/bridge/vision-drift-gate.js`, which holds the build when drift is
+detected). See also [08 - Constraint Drift Detection](./08-constraint-drift-detection.md).
 
 ---
 
