@@ -4,17 +4,20 @@
  * Both PLAN-TO-LEAD (retrospective-quality.js) and LEAD-FINAL-APPROVAL
  * (createRetrospectiveExistsGate) must enforce the same invariants:
  *   1. Existence: at least one retrospective row for the SD
- *   2. Type: retro_type = 'SD_COMPLETION' (excludes SPRINT/INCIDENT/AUDIT)
- *   3. Not a handoff-time retro: retrospective_type IS NULL (handoff-time
- *      retros tag this column with LEAD_TO_PLAN / PLAN_TO_EXEC / etc.)
+ *   2. Type: retro_type = 'SD_COMPLETION' (excludes SPRINT/INCIDENT/AUDIT/HANDOFF)
+ *   3. Not a handoff-time retro: retrospective_type IS NULL (defense in depth)
  *   4. Freshness: created_at > the SD's LEAD-TO-PLAN acceptance timestamp
- *      (defense in depth — catches any handoff-type retros missed by #3)
+ *      (defense in depth)
  *
- * Handoff-time retrospectives are written with retro_type='SD_COMPLETION'
- * but also set retrospective_type to the handoff phase (see
- * scripts/modules/handoff/executors/lead-to-plan/retrospective.js line 283-284),
- * so retro_type alone does not distinguish them from true SD-completion retros.
- * The retrospective_type and timestamp filters are both required.
+ * SD-LEO-INFRA-NORMALIZE-HANDOFF-RETROSPECTIVE-001: handoff-time retrospectives
+ * are now written with retro_type='HANDOFF' (the 3 handoff retro writers), so the
+ * retro_type='SD_COMPLETION' filter (#2) excludes them on its own — that is the
+ * primary mechanism. The retrospective_type (#3) and timestamp (#4) filters are
+ * retained as defense-in-depth: they still exclude any legacy rows from before the
+ * backfill that a manual writer might leave tagged with a handoff phase under
+ * retro_type='SD_COMPLETION'. (Previously handoff retros shared
+ * retro_type='SD_COMPLETION', so retro_type alone could NOT distinguish them and
+ * #3/#4 were load-bearing — see git history pre-NORMALIZE-HANDOFF.)
  */
 
 /**
