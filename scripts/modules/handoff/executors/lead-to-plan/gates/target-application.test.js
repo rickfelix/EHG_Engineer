@@ -184,6 +184,89 @@ describe('validateTargetApplication', () => {
   });
 });
 
+// SD-FDBK-FIX-TARGET-APPLICATION-VOCABULARY-001: corroboration-gated flip + C4 token drop.
+// The flip of an already-set target_application now requires a CODE-PATH signal that AGREES
+// with the prose-inferred target; otherwise it preserves + WARNs. And 'backend'/'venture'
+// are removed from ehgPatterns (they false-signalled EHG for backend SDs).
+describe('corroboration-gated target_application flip (SD-FDBK-FIX-TARGET-APPLICATION-VOCABULARY-001)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('C1: PRESERVES a set target when prose infers a mismatch but NO code-path signal corroborates', async () => {
+    // EHG_Engineer target; scope carries genuine EHG vocabulary (infers EHG, high) but NO
+    // code path (no src/components, scripts/, CLAUDE.md, etc.) → pathSignal=null → preserve.
+    const sd = createMockSD({
+      target_application: 'EHG_Engineer',
+      scope: 'Rework the react frontend ui component user interface rendering rules',
+      title: 'Rework rendering rules',
+    });
+    delete sd.key_changes; // ensure no path corroboration from key_changes
+    const supabase = createMockSupabase();
+
+    const result = await validateTargetApplication(sd, supabase);
+
+    expect(result.pass).toBe(true);
+    expect(result.score).toBe(100); // 100 (preserved), NOT 80 (corrected)
+    expect(result.warnings.some(w => w.includes('preserved') && w.toLowerCase().includes('no corroborating'))).toBe(true);
+    expect(result.warnings.some(w => w.toLowerCase().includes('corrected'))).toBe(false);
+  });
+
+  it('C1: still FLIPS when the code-path signal AGREES with the inferred target (corroborated)', async () => {
+    // Same EHG-inferring prose, but key_changes reference an EHG app path → pathSignal=EHG
+    // agrees with inferred EHG → flip proceeds (score 80, corrected, "code-path corroborated").
+    const sd = createMockSD({
+      target_application: 'EHG_Engineer',
+      scope: 'Rework the react frontend ui component user interface rendering rules',
+      title: 'Rework rendering rules',
+      key_changes: [{ type: 'feature', change: 'src/components/widgets/Renderer.tsx' }],
+    });
+    const supabase = createMockSupabase();
+
+    const result = await validateTargetApplication(sd, supabase);
+
+    expect(result.pass).toBe(true);
+    expect(result.score).toBe(80);
+    expect(result.warnings.some(w => w.includes('corrected') && w.includes('corroborated'))).toBe(true);
+  });
+
+  it('C4: a scope whose ONLY EHG signal was "backend"/"venture" no longer infers EHG (no flip)', async () => {
+    // Post-C4, ehgPatterns has neither token → no EHG inference; the set EHG_Engineer target
+    // is validated as-is (score 100, no "corrected" warning).
+    const sd = createMockSD({
+      target_application: 'EHG_Engineer',
+      scope: 'Backend venture pipeline worker queue distillation engine',
+      title: 'Backend venture engine worker',
+    });
+    delete sd.key_changes;
+    const supabase = createMockSupabase();
+
+    const result = await validateTargetApplication(sd, supabase);
+
+    expect(result.pass).toBe(true);
+    expect(result.score).toBe(100);
+    expect(result.warnings ? result.warnings.some(w => w.toLowerCase().includes('corrected')) : false).toBe(false);
+  });
+
+  it('C4: genuine EHG SDs still infer EHG via the 10 retained tokens', async () => {
+    // No backend/venture, but react+frontend+ui component+user interface → still EHG.
+    const sd = createMockSD({
+      target_application: 'EHG',
+      scope: 'Add a react frontend ui component and user interface for the dashboard',
+      title: 'Dashboard UI',
+    });
+    const supabase = createMockSupabase();
+
+    const result = await validateTargetApplication(sd, supabase);
+
+    expect(result.pass).toBe(true);
+    expect(result.score).toBe(100); // matches set EHG target, no flip needed
+  });
+
+  // Fail-safe note: C1 wraps detectPathSignalFromSd in try/catch and treats a throw as null
+  // (→ preserve). detectPathSignalFromSd is provably null-returning on malformed input (see the
+  // detectFromKeyChanges null-safety tests + detectPathSignalFromSd's guards), so the catch is
+  // belt-and-suspenders; the null-path PRESERVE test above exercises the same preserve branch.
+});
+
 // SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001
 describe('detectFromKeyChanges', () => {
   it('returns "EHG" for all-frontend paths', () => {

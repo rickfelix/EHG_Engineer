@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-04T16:54:13.112Z
-**Rows**: 7,421
+**Generated**: 2026-06-04T23:57:47.825Z
+**Rows**: 7,521
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -123,8 +123,8 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `retrospectives_context_efficiency_rating_check`: CHECK (((context_efficiency_rating >= 0) AND (context_efficiency_rating <= 100)))
 - `retrospectives_generated_by_check`: CHECK ((generated_by = ANY (ARRAY['MANUAL'::text, 'SUB_AGENT'::text, 'TRIGGER'::text, 'SCHEDULED'::text])))
 - `retrospectives_quality_score_check`: CHECK (((quality_score IS NULL) OR ((quality_score >= 0) AND (quality_score <= 100))))
-- `retrospectives_retro_type_check`: CHECK ((retro_type = ANY (ARRAY['SPRINT'::text, 'SD_COMPLETION'::text, 'INCIDENT'::text, 'MILESTONE'::text, 'WEEKLY'::text, 'MONTHLY'::text, 'ARCHITECTURE_DECISION'::text, 'RELEASE'::text, 'AUDIT'::text])))
-- `retrospectives_retrospective_type_check`: CHECK ((retrospective_type = ANY (ARRAY['LEAD_TO_PLAN'::text, 'PLAN_TO_EXEC'::text, 'SD_COMPLETION'::text])))
+- `retrospectives_retro_type_check`: CHECK ((retro_type = ANY (ARRAY['SPRINT'::text, 'SD_COMPLETION'::text, 'INCIDENT'::text, 'MILESTONE'::text, 'WEEKLY'::text, 'MONTHLY'::text, 'ARCHITECTURE_DECISION'::text, 'RELEASE'::text, 'AUDIT'::text, 'HANDOFF'::text])))
+- `retrospectives_retrospective_type_check`: CHECK ((retrospective_type = ANY (ARRAY['LEAD_TO_PLAN'::text, 'PLAN_TO_EXEC'::text, 'EXEC_TO_PLAN'::text, 'SD_COMPLETION'::text])))
 - `retrospectives_risk_accuracy_score_check`: CHECK (((risk_accuracy_score >= 0) AND (risk_accuracy_score <= 100)))
 - `retrospectives_status_check`: CHECK ((status = ANY (ARRAY['DRAFT'::text, 'PUBLISHED'::text, 'ARCHIVED'::text])))
 - `retrospectives_team_satisfaction_check`: CHECK (((team_satisfaction >= 1) AND (team_satisfaction <= 10)))
