@@ -340,6 +340,22 @@ async function insertDeliveredRowIfRequested(supabase, sessionId, msg) {
   }
 }
 
+// SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-6 (P0-1 mitigation): a coordinator reply
+// row (payload.kind='coordinator_reply') targeting this worker must be left UNREAD
+// for the worker's awaitCoordinatorReply() poll to consume — otherwise this
+// PostToolUse hook marks it read_at first and the await never sees it. Mirror of
+// the FR-3a coordinator-skip in the message loop. DEFAULT-OFF: inert unless
+// COORDINATOR_TWOWAY_V2='on' (and such rows only exist when the round-trip is used),
+// so flag-OFF inbox behavior is byte-identical (GG-2). Read the flag inside the
+// function body (GG-1). Exported for unit testing.
+function shouldSkipCoordinatorReply(msg) {
+  if (process.env.COORDINATOR_TWOWAY_V2 !== 'on') return false;
+  return !!msg
+    && msg.message_type === 'INFO'
+    && !!msg.payload
+    && msg.payload.kind === 'coordinator_reply';
+}
+
 // QF-20260504-007: Claude Code passes hook payload as JSON on stdin per its
 // PostToolUse protocol. The session_id field is the only reliable identifier of
 // the calling session — env vars (CLAUDE_SESSION_ID) are NOT propagated to hook
@@ -438,6 +454,11 @@ async function main() {
     for (const msg of messages) {
       // QF-20260508-988: defer worker FR-3a signals to /coordinator inbox.
       if (amCoordinator && msg.message_type === 'INFO' && msg.payload && msg.payload.signal_type) {
+        continue;
+      }
+      // SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-6 (P0-1): leave coordinator-reply
+      // rows for the worker's awaitCoordinatorReply() to consume (default-OFF).
+      if (shouldSkipCoordinatorReply(msg)) {
         continue;
       }
       const typeLabel = {
@@ -573,5 +594,7 @@ module.exports = {
   getThrottleFile,
   getHeartbeatFile,
   // SD-LEO-INFRA-COORDINATOR-WORKER-DELIVERED-001 — exposed for unit tests
-  insertDeliveredRowIfRequested
+  insertDeliveredRowIfRequested,
+  // SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-6 — exposed for unit tests
+  shouldSkipCoordinatorReply
 };
