@@ -1,6 +1,6 @@
 -- SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 (epic #4)
 -- Coordination Observability: durable, structured store for fleet-coordination
--- anomaly events emitted by the read-only detectors (lib/coordinator/detectors.js).
+-- anomaly events emitted by the read-only detectors (lib/coordinator/detectors.cjs).
 --
 -- ADDITIVE ONLY. No existing table is altered. The detectors that write here are
 -- DEFAULT-OFF behind COORD_DETECTORS_V2, so this table stays empty until the flag
