@@ -288,7 +288,18 @@ async function checkCommitMessages(prNumber) {
  * @param {string} prNumber - PR number
  */
 function spawnLearningCapture(prNumber) {
+  const fs = require('fs');
   const captureScript = path.join(PROJECT_DIR, 'scripts', 'auto-learning-capture.js');
+
+  // QF-20260604-729 fail-safe: the capture engine was archived to scripts/archive/one-time/
+  // by a bulk-archive sweep without updating this spawn target. Because the spawn below uses
+  // stdio:'ignore'+detached+unref(), a missing engine yields a swallowed MODULE_NOT_FOUND while
+  // the "AUTO-LEARNING CAPTURE TRIGGERED" banner still prints — a silent false success. If the
+  // engine is absent, skip honestly (warn, no banner, no spawn). RCA acde2541 / PAT-HOOK-ARCHIVE-ORPHAN-001.
+  if (!fs.existsSync(captureScript)) {
+    log('warn', 'capture_engine_missing', { pr: prNumber, script: captureScript, action: 'skip_no_capture' });
+    return;
+  }
 
   log('info', 'spawning_capture_engine', { pr: prNumber, script: captureScript });
 
