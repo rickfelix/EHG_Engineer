@@ -1701,6 +1701,25 @@ async function main() {
     console.log('SIGNAL ROUTER: ' + (routerErr && routerErr.message ? routerErr.message : 'unknown'));
   }
 
+  // SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 (epic #4) — coordination
+  // anomaly detectors. DEFAULT-OFF behind COORD_DETECTORS_V2. READ-ONLY over claim
+  // state + fail-open: a failure here never aborts the sweep. Logs a structured
+  // coordination_events row per match (consumed later by epic #3). Fully inert
+  // (zero reads/writes) when the flag is off.
+  try {
+    const coordEvents = require('../lib/coordinator/coordination-events.cjs');
+    if (coordEvents.coordDetectorsEnabled()) {
+      const coordInputs = await coordEvents.gatherDetectorInputs(supabase, {});
+      const coordMatches = await coordEvents.runAndLogDetectors(supabase, coordInputs);
+      for (const m of coordMatches) {
+        console.log('  COORD_DETECTOR: ' + m.event_type + ' [' + m.severity + '] ' + m.reason + (m.logged ? '' : ' (event-log-failed)'));
+      }
+      if (coordMatches.length > 0) console.log('COORD_DETECTORS: ' + coordMatches.length + ' anomaly event(s) flagged');
+    }
+  } catch (coordDetErr) {
+    console.log('COORD_DETECTORS: ' + (coordDetErr && coordDetErr.message ? coordDetErr.message : 'unknown'));
+  }
+
   // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
   // For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
   // status is 'completed' AND payload.notification_sent is not yet true, look up
