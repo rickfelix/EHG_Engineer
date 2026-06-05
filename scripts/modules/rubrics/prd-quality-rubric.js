@@ -519,8 +519,12 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
           }
 
           // Legacy format (steps, expected_result)
-          if (scenario.steps && scenario.steps.length > 0) {
+          // Quick-fix QF-20260604-457: guard with Array.isArray — a string `steps`
+          // passes the .length>0 check but has no .join, crashing the validator.
+          if (Array.isArray(scenario.steps) && scenario.steps.length > 0) {
             details.push(`Steps: ${scenario.steps.join('; ')}`);
+          } else if (typeof scenario.steps === 'string' && scenario.steps.trim()) {
+            details.push(`Steps: ${scenario.steps}`);
           }
           if (scenario.expected_result) {
             details.push(`Expected: ${scenario.expected_result}`);
