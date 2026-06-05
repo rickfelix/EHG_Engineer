@@ -323,6 +323,16 @@ async function createQuickFix(options = {}) {
           await supabase.from('quick_fixes').delete().eq('id', qfId);
           process.exit(1);
         }
+        // SD-FDBK-INFRA-MAKE-FEEDBACK-BASED-001 FR-2 / security review d618f9be: the daily
+        // quota keys on created_by=creatorSessionId. A null session makes the quota query
+        // (.eq('created_by', null) -> NULL=NULL) count 0 forever -> unbounded overrides.
+        // Fail-CLOSED: the override cannot be rate-limited without an actor id.
+        if (!creatorSessionId) {
+          console.error('\n❌ [FORCE_CLAIM_REQUIRES_SESSION] --force-claim requires CLAUDE_SESSION_ID so the daily quota can be enforced.');
+          if (claimed.length > 0) await releasePreclaim({ supabase, quickFixId: qfId });
+          await supabase.from('quick_fixes').delete().eq('id', qfId);
+          process.exit(1);
+        }
         const QUOTA = parseInt(process.env.LEO_FORCE_CLAIM_DAILY_QUOTA || '3', 10);
         const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
         // SD-FDBK-INFRA-MAKE-FEEDBACK-BASED-001 FR-2: audit_log has no category/session_id
