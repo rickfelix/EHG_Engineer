@@ -327,3 +327,7 @@ tests/uat/.auth/
 
 # SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-1 audit JSON intermediates (regenerable)
 /.audit-out/
+
+# LEO LLM cost-check runtime artifacts (regenerable; never commit)
+scripts/ops/llm-cost-check.log
+scripts/ops/LLM-COST-ALERT.txt
