@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-05T02:23:39.037Z
-**Rows**: 3,483
+**Generated**: 2026-06-05T17:13:18.804Z
+**Rows**: 3,492
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -598,6 +598,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION trg_require_cancellation_reason()`
+
+### trg_reset_patterns_on_sd_cancel
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION trg_fn_reset_patterns_on_sd_cancel()`
 
 ### trg_sd_creation_source_advisory
 

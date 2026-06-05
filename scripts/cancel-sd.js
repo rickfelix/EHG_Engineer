@@ -95,6 +95,19 @@ async function cancelSD(sd, reason) {
   // causing PGRST204 "Could not find the 'cancelled_at' column" schema-cache
   // error on first canonical use. updated_at is trigger-managed; cancellation
   // timestamp is recoverable from updated_at WHERE status='cancelled'.
+  // SD-LEO-INFRA-CLOSE-ISSUE-PATTERN-001 (FR-2): report the closure-loop reset that the
+  // trg_reset_patterns_on_sd_cancel trigger performs on this cancel. Read-only count;
+  // the trigger does the actual issue_patterns reset (assigned -> active).
+  let assignedPatternCount = 0;
+  try {
+    const { count } = await supabase
+      .from('issue_patterns')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'assigned')
+      .in('assigned_sd_id', [sd.id, sd.sd_key].filter(Boolean));
+    assignedPatternCount = count || 0;
+  } catch { /* non-fatal: reporting only */ }
+
   const updates = {
     status: 'cancelled',
     current_phase: 'CANCELLED',
@@ -127,7 +140,7 @@ async function cancelSD(sd, reason) {
       entity_id: sd.sd_key || sd.id,
       old_value: { status: sd.status, current_phase: sd.current_phase, is_working_on: sd.is_working_on },
       new_value: { status: 'cancelled', current_phase: 'CANCELLED' },
-      metadata: { reason, prior_claiming_session: claimedSessionId || null, source: 'cancel-sd.js' },
+      metadata: { reason, prior_claiming_session: claimedSessionId || null, source: 'cancel-sd.js', assigned_patterns_reset: assignedPatternCount },
       severity: 'warning',
       created_by: 'cancel-sd.js',
     });
@@ -135,6 +148,11 @@ async function cancelSD(sd, reason) {
     console.warn(`⚠️  audit_log write for ${sd.sd_key} failed (non-fatal):`, auditErr.message);
   } else {
     console.log(`✓ audit_log: sd_cancelled recorded for ${sd.sd_key}`);
+  }
+
+  // SD-LEO-INFRA-CLOSE-ISSUE-PATTERN-001 (FR-2): surface the closure-loop reset.
+  if (assignedPatternCount > 0) {
+    console.log(`✓ closure-loop: ${assignedPatternCount} assigned issue_pattern(s) reset to active by trg_reset_patterns_on_sd_cancel`);
   }
 
   // Release the holder's claude_sessions row, if any.

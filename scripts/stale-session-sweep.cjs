@@ -34,6 +34,7 @@ const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/h
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
+const _coordEventsModule = require('../lib/coordinator/coordination-events.cjs'); // SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 (epic #4) — top-level require so WIRE_CHECK reaches detectors.cjs
 
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
 // Reuse the INTENT payload key contract owned by the WRITER (worker-signal.cjs) so the
@@ -1699,6 +1700,25 @@ async function main() {
     }
   } catch (routerErr) {
     console.log('SIGNAL ROUTER: ' + (routerErr && routerErr.message ? routerErr.message : 'unknown'));
+  }
+
+  // SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 (epic #4) — coordination
+  // anomaly detectors. DEFAULT-OFF behind COORD_DETECTORS_V2. READ-ONLY over claim
+  // state + fail-open: a failure here never aborts the sweep. Logs a structured
+  // coordination_events row per match (consumed later by epic #3). Fully inert
+  // (zero reads/writes) when the flag is off.
+  try {
+    const coordEvents = _coordEventsModule;
+    if (coordEvents.coordDetectorsEnabled()) {
+      const coordInputs = await coordEvents.gatherDetectorInputs(supabase, {});
+      const coordMatches = await coordEvents.runAndLogDetectors(supabase, coordInputs);
+      for (const m of coordMatches) {
+        console.log('  COORD_DETECTOR: ' + m.event_type + ' [' + m.severity + '] ' + m.reason + (m.logged ? '' : ' (event-log-failed)'));
+      }
+      if (coordMatches.length > 0) console.log('COORD_DETECTORS: ' + coordMatches.length + ' anomaly event(s) flagged');
+    }
+  } catch (coordDetErr) {
+    console.log('COORD_DETECTORS: ' + (coordDetErr && coordDetErr.message ? coordDetErr.message : 'unknown'));
   }
 
   // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
