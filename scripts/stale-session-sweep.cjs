@@ -34,6 +34,7 @@ const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/h
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
+const _coordEventsModule = require('../lib/coordinator/coordination-events.cjs'); // SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 (epic #4) — top-level require so WIRE_CHECK reaches detectors.cjs
 
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
 // Reuse the INTENT payload key contract owned by the WRITER (worker-signal.cjs) so the
@@ -1707,7 +1708,7 @@ async function main() {
   // coordination_events row per match (consumed later by epic #3). Fully inert
   // (zero reads/writes) when the flag is off.
   try {
-    const coordEvents = require('../lib/coordinator/coordination-events.cjs');
+    const coordEvents = _coordEventsModule;
     if (coordEvents.coordDetectorsEnabled()) {
       const coordInputs = await coordEvents.gatherDetectorInputs(supabase, {});
       const coordMatches = await coordEvents.runAndLogDetectors(supabase, coordInputs);
