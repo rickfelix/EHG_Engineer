@@ -24,7 +24,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { routeWorkItem } from '../lib/utils/work-item-router.js';
 import { getRepoPaths, ENGINEER_ROOT } from '../lib/repo-paths.js';
-import { preclaimFeedbackRows, resolveFeedbackIds } from '../lib/feedback/preclaim-feedback-rows.js';
+import { preclaimFeedbackRows, resolveFeedbackIds, findFeedbackRefConflicts } from '../lib/feedback/preclaim-feedback-rows.js';
 import { releasePreclaim } from '../lib/feedback/release-preclaim.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
@@ -211,6 +211,27 @@ async function createQuickFix(options = {}) {
       }
     }
   } else {
+    // SD-FDBK-INFRA-MAKE-FEEDBACK-BASED-001 FR-1: even without --feedback-id, a QF whose
+    // text references a feedback UUID already claimed by an open/in_progress QF is a silent
+    // sibling spawn (the QF-723/729/006 class off feedback 1b4cee40). Resolve referenced
+    // UUIDs and hard-block (override via --allow-duplicate). Fail-OPEN — a DB error in the
+    // scan must NEVER brick QF creation on this shared hot path.
+    const refScan = await findFeedbackRefConflicts({ supabase, text: [title, description, steps].filter(Boolean).join('\n') });
+    if (refScan.failedOpen) {
+      console.warn(`\n⚠️  [DEDUP_SCAN_DEGRADED] feedback-reference dedup scan failed-open (${refScan.error || 'unknown'}); proceeding without it.`);
+    } else if (refScan.conflicts.length > 0) {
+      console.error(`\n❌ [DUPLICATE_QF] this QF's text references feedback already claimed by ${refScan.conflicts.length} open QF(s):`);
+      for (const qf of refScan.conflicts) {
+        console.error(`     ${qf.id} (${qf.status}): ${(qf.title || '').slice(0, 80)}`);
+      }
+      console.error(`   referenced feedback: ${refScan.uuids.map(u => u.slice(0, 8)).join(', ')} (pass --feedback-id for atomic pre-claim)`);
+      if (!options.allowDuplicate) {
+        console.error('   Inspect: node scripts/read-quick-fix.js <id>');
+        console.error('   Override (audited): --allow-duplicate "<reason>"');
+        process.exit(1);
+      }
+      console.warn(`\n⚠️  [ALLOW_DUPLICATE] proceeding anyway: ${options.allowDuplicate}`);
+    }
     const prefix = (title || '').toLowerCase().slice(0, 40);
     if (prefix.length >= 10) {
       const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -304,12 +325,22 @@ async function createQuickFix(options = {}) {
         }
         const QUOTA = parseInt(process.env.LEO_FORCE_CLAIM_DAILY_QUOTA || '3', 10);
         const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-        const { data: bypassRows } = await supabase
+        // SD-FDBK-INFRA-MAKE-FEEDBACK-BASED-001 FR-2: audit_log has no category/session_id
+        // columns — query the canonical shape (event_type/created_by). G6: this auth-class
+        // quota check FAILS-CLOSED on a query error so it can never silently revert to the
+        // unbounded behavior it had while the columns were wrong.
+        const { data: bypassRows, error: quotaErr } = await supabase
           .from('audit_log')
           .select('id')
-          .eq('category', 'force_claim_override')
-          .eq('session_id', creatorSessionId)
+          .eq('event_type', 'force_claim_override')
+          .eq('created_by', creatorSessionId)
           .gte('created_at', since);
+        if (quotaErr) {
+          console.error(`\n❌ [FORCE_CLAIM_QUOTA_CHECK_FAILED] cannot verify daily quota (${quotaErr.message}); blocking override (fail-closed).`);
+          if (claimed.length > 0) await releasePreclaim({ supabase, quickFixId: qfId });
+          await supabase.from('quick_fixes').delete().eq('id', qfId);
+          process.exit(1);
+        }
         const used = (bypassRows || []).length;
         if (used >= QUOTA) {
           console.error(`\n❌ [FORCE_CLAIM_QUOTA_EXHAUSTED] ${used}/${QUOTA} used in last 24h for session ${(creatorSessionId||'?').slice(0,8)}`);
@@ -325,13 +356,16 @@ async function createQuickFix(options = {}) {
           const newMeta = { ...(cur?.metadata || {}), qf_claim_state: 'pending', qf_claim_at: claimedAt, qf_claim_forced: true };
           await supabase.from('feedback').update({ quick_fix_id: qfId, session_id: creatorSessionId, metadata: newMeta }).eq('id', id);
         }
-        await supabase.from('audit_log').insert({
-          category: 'force_claim_override',
-          session_id: creatorSessionId,
+        // FR-2: canonical audit_log shape (mirrors cancel-sd.js / bypass-handler.js); error is CHECKED.
+        const { error: forceAuditErr } = await supabase.from('audit_log').insert({
+          event_type: 'force_claim_override',
+          entity_type: 'quick_fix',
+          entity_id: qfId,
+          created_by: creatorSessionId,
           severity: 'warning',
-          message: `force-claim override on ${conflictIds.length} feedback row(s) for QF ${qfId}: ${options.forceClaimReason}`,
-          metadata: { qf_id: qfId, feedback_ids: conflictIds, reason: options.forceClaimReason, quota_used: used + 1, quota_max: QUOTA },
+          metadata: { qf_id: qfId, session_id: creatorSessionId, feedback_ids: conflictIds, reason: options.forceClaimReason, quota_used: used + 1, quota_max: QUOTA, message: `force-claim override on ${conflictIds.length} feedback row(s) for QF ${qfId}: ${options.forceClaimReason}` },
         });
+        if (forceAuditErr) console.warn(`⚠️  [AUDIT_WRITE_FAILED] force_claim_override audit row not persisted (non-fatal): ${forceAuditErr.message}`);
         console.log(`\n⚠️  [FORCE_CLAIM] Override applied to ${conflictIds.length} row(s) (quota ${used + 1}/${QUOTA}). Audit_log row emitted.`);
       } else {
         if (claimed.length > 0) {
@@ -346,13 +380,16 @@ async function createQuickFix(options = {}) {
       }
     }
     console.log(`\n✓ Pre-claimed ${claimed.length + (options.forceClaim ? conflicts.length : 0)} feedback row(s) for ${qfId}`);
-    await supabase.from('audit_log').insert({
-      category: 'feedback_qf_preclaim',
-      session_id: creatorSessionId,
+    // FR-2: canonical audit_log shape; error is CHECKED (was silently failing on category/session_id/message).
+    const { error: preclaimAuditErr } = await supabase.from('audit_log').insert({
+      event_type: 'feedback_qf_preclaim',
+      entity_type: 'quick_fix',
+      entity_id: qfId,
+      created_by: creatorSessionId,
       severity: 'info',
-      message: `Pre-claimed ${claimed.length} feedback row(s) for QF ${qfId}`,
-      metadata: { qf_id: qfId, feedback_ids: resolvedIds, claimed: claimed.map(c=>c.id), forced: options.forceClaim ? conflicts.map(c=>c.id) : [] },
+      metadata: { qf_id: qfId, session_id: creatorSessionId, feedback_ids: resolvedIds, claimed: claimed.map(c=>c.id), forced: options.forceClaim ? conflicts.map(c=>c.id) : [], message: `Pre-claimed ${claimed.length} feedback row(s) for QF ${qfId}` },
     });
+    if (preclaimAuditErr) console.warn(`⚠️  [AUDIT_WRITE_FAILED] feedback_qf_preclaim audit row not persisted (non-fatal): ${preclaimAuditErr.message}`);
   }
 
   // QF-20260526-106: the quick_fixes row was inserted ABOVE (before pre-claim).
