@@ -34,7 +34,7 @@ async function main() {
   const [patternsResult, alertsResult, retrosResult] = await Promise.all([
     supabase
       .from('issue_patterns')
-      .select('pattern_id, category, severity, issue_summary, occurrence_count, status, trend, created_at, updated_at, proven_solutions, last_seen_sd_id')
+      .select('pattern_id, category, severity, issue_summary, occurrence_count, status, trend, created_at, updated_at, proven_solutions, last_seen_sd_id, data_quality_status')
       .order('occurrence_count', { ascending: false })
       .limit(100),
     supabase
@@ -53,8 +53,15 @@ async function main() {
   const alerts = alertsResult.data || [];
   const retros = retrosResult.data || [];
 
+  // SD-LEO-INFRA-SUPPRESS-PROVIDER-TEST-001: split provider/test-stub noise
+  // (data_quality_status='noise') out of the real signal. JS filter keeps NULL
+  // rows — `!== 'noise'` is true for null/undefined — so real patterns stay.
+  const noisePatterns = patterns.filter(p => p.data_quality_status === 'noise');
+  const signalPatterns = patterns.filter(p => p.data_quality_status !== 'noise');
+
   if (jsonOutput) {
-    process.stdout.write(JSON.stringify({ patterns, alerts, retros }, null, 2) + '\n');
+    // patterns = real signal only; noise surfaced separately for transparency.
+    process.stdout.write(JSON.stringify({ patterns: signalPatterns, noise_patterns: noisePatterns, alerts, retros }, null, 2) + '\n');
     return;
   }
 
@@ -68,13 +75,19 @@ async function main() {
   lines.push('');
 
   // Section 1: Issue Patterns
-  const activePatterns = patterns.filter(p => p.status !== 'resolved');
-  const resolvedPatterns = patterns.filter(p => p.status === 'resolved');
+  // SD-LEO-INFRA-SUPPRESS-PROVIDER-TEST-001: signalPatterns already excludes
+  // provider/test-stub noise (computed above, shared with the JSON path).
+  const activePatterns = signalPatterns.filter(p => p.status !== 'resolved');
+  const resolvedPatterns = signalPatterns.filter(p => p.status === 'resolved');
 
   lines.push('-'.repeat(60));
   lines.push('  ISSUE PATTERNS');
   lines.push('-'.repeat(60));
-  lines.push(`  Active: ${activePatterns.length}  |  Resolved: ${resolvedPatterns.length}  |  Total: ${patterns.length}`);
+  lines.push(`  Active: ${activePatterns.length}  |  Resolved: ${resolvedPatterns.length}  |  Total: ${patterns.length - noisePatterns.length}`);
+  if (noisePatterns.length > 0) {
+    const noiseOcc = noisePatterns.reduce((sum, p) => sum + (p.occurrence_count || 0), 0);
+    lines.push(`  Noise excluded: ${noisePatterns.length} pattern(s), ${noiseOcc} occurrence(s) (provider quota / test-stub)`);
+  }
   lines.push('');
 
   if (activePatterns.length === 0) {
