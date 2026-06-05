@@ -226,6 +226,30 @@ async function detectStrandedClaim(sessionId) {
   }
 }
 
+// PAT-CLMMULTI-002: resolve THIS session's claimed sd_key from the DB (session-scoped
+// via claiming_session_id; mirrors detectStrandedClaim's query/1.5s-timeout/fail-open).
+// Returns null on missing creds / no claim / failure / timeout - caller fail-opens.
+async function resolveSessionClaimedSdKey(sessionId) {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceKey || !sessionId) return null;
+    const url = supabaseUrl +
+      '/rest/v1/strategic_directives_v2?claiming_session_id=eq.' +
+      encodeURIComponent(sessionId) + '&select=sd_key&limit=1';
+    const resp = await Promise.race([
+      fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500)),
+    ]);
+    if (!resp || !resp.ok) return null;
+    const rows = await resp.json();
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    return row && row.sd_key ? row.sd_key : null;
+  } catch {
+    return null;
+  }
+}
+
 // --- WORKTREE CLAIM GUARD (PAT-CLMMULTI-001) ---
 // Regex to detect paths inside .worktrees/<SD-KEY>/
 const WORKTREE_PATH_RE = /[/\\]\.worktrees[/\\]([^/\\]+)/;
@@ -687,37 +711,35 @@ async function main() {
     }
   }
 
-  // --- ENFORCEMENT 4: Worktree Claim Guard (PAT-CLMMULTI-001) ---
-  // Blocks Edit/Write to worktree files when this session is working on a
-  // DIFFERENT SD. Prevents cross-worktree edits from parallel sessions.
-  // Uses local state file (no DB call) for speed. Fail-open on errors.
+  // --- ENFORCEMENT 4: Worktree Claim Guard (PAT-CLMMULTI-001 / PAT-CLMMULTI-002) ---
+  // PAT-CLMMULTI-002: the prior version compared the SHARED last-writer-wins
+  // unified-session-state.json (state.sd.id, a UUID) to the worktree SD-KEY and
+  // false-blocked the rightful owner. Now DB-corroborate THIS session's sd_key
+  // (session-scoped); block only on positive mismatch; fail-open; LEO_CLAIM_GUARD=off disables.
   if (TOOL_NAME === 'Edit' || TOOL_NAME === 'Write') {
-    const filePath = input.file_path || '';
-    const match = filePath.match(WORKTREE_PATH_RE);
-    if (match) {
-      const worktreeSdKey = match[1];
-      try {
-        const fs = require('fs');
-        const path = require('path');
-        const stateFile = path.resolve(__dirname, '../../.claude/unified-session-state.json');
-        if (fs.existsSync(stateFile)) {
-          const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-          const claimedSd = state.sd?.id;
-          if (claimedSd && claimedSd !== worktreeSdKey) {
-            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'PAT-CLMMULTI-001', 'Worktree claim guard', 'block', { worktreeSdKey, claimedSd });
+    if (process.env.LEO_CLAIM_GUARD !== 'off') {
+      const filePath = input.file_path || '';
+      const match = filePath.match(WORKTREE_PATH_RE);
+      // match[1] is the first .worktrees/ segment; "qf" is the container, not an sd_key.
+      if (match && match[1] !== 'qf') {
+        const worktreeSdKey = match[1];
+        try {
+          const claimedSdKey = await resolveSessionClaimedSdKey(_SESSION_ID);
+          if (claimedSdKey && claimedSdKey !== worktreeSdKey) {
+            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'PAT-CLMMULTI-002', 'Worktree claim guard (DB-corroborated)', 'block', { worktreeSdKey, claimedSdKey });
             process.stderr.write(
-              `CLAIM GUARD (PAT-CLMMULTI-001): Edit/Write blocked.\n` +
-              `  Target worktree: ${worktreeSdKey}\n` +
-              `  Your claimed SD: ${claimedSd}\n` +
-              `  You are editing files for a different SD than you have claimed.\n` +
-              `  Switch to the correct worktree or release your claim.\n`
+              `CLAIM GUARD (PAT-CLMMULTI-002): Edit/Write blocked.\n` +
+              `  Target worktree SD: ${worktreeSdKey}\n` +
+              `  Your DB-confirmed claim: ${claimedSdKey}\n` +
+              `  You are editing a worktree for an SD you do not hold.\n` +
+              `  Switch to your worktree, release your claim, or set LEO_CLAIM_GUARD=off.\n`
             );
             await auditAndExit(auditPromise, 2);
           }
+          // claimedSdKey null (no claim / missing creds / timeout) or equal => fail-open
+        } catch {
+          // Fail-open: never block legitimate work on a guard error.
         }
-        // No state file = no claim info = fail-open
-      } catch {
-        // Fail-open: file read errors don't block edits
       }
     }
   }
