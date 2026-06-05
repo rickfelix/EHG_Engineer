@@ -144,8 +144,13 @@ export async function validateTargetApplication(sd, supabase) {
   ];
 
   // Patterns that indicate EHG (main application)
+  // SD-FDBK-FIX-TARGET-APPLICATION-VOCABULARY-001 (C4): dropped 'backend' and 'venture' —
+  // category words that false-signal EHG. EHG_Engineer is itself almost entirely backend,
+  // and 'venture' pervades its venture-build / orchestrator infra SDs, so these two tokens
+  // prose-flipped backend EHG_Engineer SDs to EHG (3rd+ recurrence). The 10 genuine EHG
+  // signals below still route real frontend SDs to EHG.
   const ehgPatterns = [
-    'stage', 'venture', 'ui component', 'react', 'frontend', 'backend',
+    'stage', 'ui component', 'react', 'frontend',
     'api endpoint', 'database table', 'rls policy', 'user interface',
     'supabase function', 'edge function'
   ];
@@ -228,30 +233,48 @@ export async function validateTargetApplication(sd, supabase) {
       };
     }
 
-    // SD-LEO-INFRA-CODE-PATH-AWARE-001: code-path-aware suppression. When the
-    // flip would downgrade EHG_Engineer->EHG but the SD's key_changes/scope
-    // reference EHG_Engineer code paths (only, or mixed cross-repo), the
-    // deliverables live in EHG_Engineer regardless of marketing/UI scope
-    // vocabulary — do NOT auto-correct to EHG (this is the defect class that
-    // mislabeled SD-SURFACEAWARE B/C/E and SD-ACTIVATE). A clean EHG-only path
-    // signal (no EHG_Engineer paths) still flips through the block below.
-    if (currentTarget === 'EHG_Engineer' && inferredTarget === 'EHG') {
-      const pathSignal = detectPathSignalFromSd(sd);
-      if (pathSignal === 'EHG_Engineer' || pathSignal === 'mixed') {
-        console.log(`\n   ℹ️  Code-path signal (${pathSignal}) overrides scope-vocabulary inference; preserving target_application=EHG_Engineer.`);
-        return {
-          pass: true,
-          score: 100,
-          issues: [],
-          warnings: [`target_application=EHG_Engineer preserved: deliverables reference EHG_Engineer code paths (code-path signal=${pathSignal}); scope-vocabulary inferred EHG was suppressed (SD-LEO-INFRA-CODE-PATH-AWARE-001)`]
-        };
-      }
+    // SD-FDBK-FIX-TARGET-APPLICATION-VOCABULARY-001 (C1): generalizes
+    // SD-LEO-INFRA-CODE-PATH-AWARE-001 from the EHG_Engineer->EHG special case to
+    // BOTH directions. A high-confidence PROSE mismatch must NOT silently flip an
+    // already-set target_application unless a non-prose CODE-PATH signal AGREES with
+    // the inferred target. The prior block only suppressed EHG_Engineer->EHG when a
+    // path signal existed; the residual gap (witnessed 3rd+ time: backend SDs whose
+    // scope vocabulary inferred EHG with NO path signal) flipped on prose alone.
+    // Now: pathSignal must equal inferredTarget to flip; otherwise PRESERVE + loud
+    // operator WARN (no DB write). 'mixed' agrees only with EHG_Engineer (deliverables
+    // touch EHG_Engineer code → keep it), matching the prior suppression semantics.
+    // Fail-safe: detectPathSignalFromSd never throws on malformed input, but wrap it
+    // anyway — on any error treat as null (no corroboration → preserve), since an
+    // auto-flip is a silent DB mutation and preserving a set value is the reversible,
+    // operator-visible direction.
+    let pathSignal = null;
+    try {
+      pathSignal = detectPathSignalFromSd(sd);
+    } catch (_e) {
+      pathSignal = null;
+    }
+    const pathAgrees =
+      pathSignal === inferredTarget ||
+      (pathSignal === 'mixed' && inferredTarget === 'EHG_Engineer');
+
+    if (!pathAgrees) {
+      console.log('\n   ℹ️  Inferred-target mismatch NOT auto-corrected — no corroborating code-path signal.');
+      console.log(`      Current (preserved): ${currentTarget}`);
+      console.log(`      Inferred from scope-vocabulary (skipped): ${inferredTarget}`);
+      console.log(`      Code-path signal: ${pathSignal || 'none'}`);
+      console.log('      ⚠️  If this target is wrong, set it explicitly — scope vocabulary alone no longer flips a set target.');
+      return {
+        pass: true,
+        score: 100,
+        issues: [],
+        warnings: [`target_application=${currentTarget} preserved: scope-vocabulary inferred ${inferredTarget} but no corroborating code-path signal (path=${pathSignal || 'none'}); not auto-flipped (SD-FDBK-FIX-TARGET-APPLICATION-VOCABULARY-001)`]
+      };
     }
 
-    // Target set but doesn't match inferred with high confidence - warn and offer correction
-    console.log('\n   ⚠️  MISMATCH DETECTED');
+    // Corroborated mismatch: the code-path signal agrees with the inferred target — flip.
+    console.log('\n   ⚠️  MISMATCH DETECTED (code-path corroborated)');
     console.log(`   Current: ${currentTarget}`);
-    console.log(`   Inferred: ${inferredTarget} (high confidence)`);
+    console.log(`   Inferred: ${inferredTarget} (high confidence, path signal=${pathSignal})`);
     console.log(`   Auto-correcting to: ${inferredTarget}`);
 
     const { error } = await supabase
@@ -273,7 +296,7 @@ export async function validateTargetApplication(sd, supabase) {
       pass: true,
       score: 80,
       issues: [],
-      warnings: [`target_application corrected from ${currentTarget} to ${inferredTarget}`]
+      warnings: [`target_application corrected from ${currentTarget} to ${inferredTarget} (code-path corroborated, signal=${pathSignal})`]
     };
   }
 
