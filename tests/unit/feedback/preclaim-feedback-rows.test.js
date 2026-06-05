@@ -5,7 +5,7 @@
  * Mocks the Supabase client surface used by the helpers.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { preclaimFeedbackRows, resolveFeedbackIds } from '../../../lib/feedback/preclaim-feedback-rows.js';
+import { preclaimFeedbackRows, resolveFeedbackIds, extractFeedbackUuids, findFeedbackRefConflicts } from '../../../lib/feedback/preclaim-feedback-rows.js';
 import { releasePreclaim } from '../../../lib/feedback/release-preclaim.js';
 
 /**
@@ -18,8 +18,10 @@ function buildStub(script) {
     select: [...(script.select || [])],
     update: [...(script.update || [])],
     insert: [...(script.insert || [])],
+    rpc: [...(script.rpc || [])],
   };
   return {
+    rpc(_name, _params) { return Promise.resolve(queues.rpc.shift() || { data: [], error: null }); },
     from(_table) {
       const state = { op: null, filters: [] };
       const builder = {
@@ -29,6 +31,7 @@ function buildStub(script) {
         in(_col, _vals) { state.filters.push(['in', _col, _vals]); return builder; },
         eq(_col, _val) { state.filters.push(['eq', _col, _val]); return builder; },
         is(_col, _val) { state.filters.push(['is', _col, _val]); return builder; },
+        not(_col, _op, _val) { state.filters.push(['not', _col, _op, _val]); return builder; },
         ilike(_col, _pat) { state.filters.push(['ilike', _col, _pat]); return builder; },
         limit(_n) { return Promise.resolve(queues.select.shift() || { data: [], error: null }); },
         maybeSingle() { return Promise.resolve(queues.select.shift() || { data: null, error: null }); },
@@ -52,21 +55,21 @@ describe('resolveFeedbackIds', () => {
     expect(ids).toEqual(['9a9292c8-e904-487e-a44a-5f38c8f4b746']);
   });
 
-  it('resolves a short prefix via ilike lookup', async () => {
+  it('resolves a short prefix via exec_sql id::text cast (FR-3; .ilike on a uuid column would throw)', async () => {
     const supabase = buildStub({
-      select: [{ data: [{ id: '9a9292c8-e904-487e-a44a-5f38c8f4b746' }], error: null }],
+      rpc: [{ data: [{ result: [{ id: '9a9292c8-e904-487e-a44a-5f38c8f4b746' }] }], error: null }],
     });
     const ids = await resolveFeedbackIds(supabase, '9a9292c8');
     expect(ids).toEqual(['9a9292c8-e904-487e-a44a-5f38c8f4b746']);
   });
 
   it('throws FEEDBACK_ID_NOT_FOUND on no match', async () => {
-    const supabase = buildStub({ select: [{ data: [], error: null }] });
+    const supabase = buildStub({ rpc: [{ data: [{ result: [] }], error: null }] });
     await expect(resolveFeedbackIds(supabase, 'deadbeef')).rejects.toMatchObject({ code: 'FEEDBACK_ID_NOT_FOUND' });
   });
 
   it('throws FEEDBACK_ID_AMBIGUOUS on multi-match', async () => {
-    const supabase = buildStub({ select: [{ data: [{ id: 'a'.repeat(36) }, { id: 'b'.repeat(36) }], error: null }] });
+    const supabase = buildStub({ rpc: [{ data: [{ result: [{ id: 'a'.repeat(36) }, { id: 'b'.repeat(36) }] }], error: null }] });
     await expect(resolveFeedbackIds(supabase, 'abcd')).rejects.toMatchObject({ code: 'FEEDBACK_ID_AMBIGUOUS' });
   });
 
@@ -138,5 +141,64 @@ describe('releasePreclaim', () => {
   it('throws when quickFixId is missing', async () => {
     const supabase = buildStub({});
     await expect(releasePreclaim({ supabase, quickFixId: null })).rejects.toMatchObject({ code: 'RELEASE_PRECLAIM_NO_QF_ID' });
+  });
+});
+
+describe('extractFeedbackUuids (SD-FDBK-INFRA-MAKE-FEEDBACK-BASED-001 FR-1)', () => {
+  it('extracts and de-dupes full UUIDs from text', () => {
+    const u = '1b4cee40-fbec-415f-8a8f-94c4dfa2d31a';
+    expect(extractFeedbackUuids(`see feedback ${u} and again ${u}`)).toEqual([u]);
+  });
+
+  it('returns [] when no UUID is present or input is empty/null', () => {
+    expect(extractFeedbackUuids('no uuid here')).toEqual([]);
+    expect(extractFeedbackUuids('')).toEqual([]);
+    expect(extractFeedbackUuids(null)).toEqual([]);
+  });
+
+  it('caps at 5 distinct UUIDs (bounded scan, G7)', () => {
+    const text = Array.from({ length: 8 }, (_, i) => `${i}0000000-0000-4000-8000-000000000000`).join(' ');
+    expect(extractFeedbackUuids(text)).toHaveLength(5);
+  });
+});
+
+describe('findFeedbackRefConflicts (SD-FDBK-INFRA-MAKE-FEEDBACK-BASED-001 FR-1)', () => {
+  const U = '1b4cee40-fbec-415f-8a8f-94c4dfa2d31a';
+
+  it('returns no conflicts when text has no feedback UUID', async () => {
+    const r = await findFeedbackRefConflicts({ supabase: buildStub({}), text: 'plain text, no refs' });
+    expect(r).toEqual({ uuids: [], conflicts: [], failedOpen: false });
+  });
+
+  it('flags a conflict when a referenced feedback is claimed by an open QF', async () => {
+    const supabase = buildStub({
+      select: [
+        { data: [{ id: U, quick_fix_id: 'QF-OPEN' }], error: null }, // feedback linked to a QF
+        { data: [{ id: 'QF-OPEN', status: 'open', title: 'rival fix' }], error: null }, // rival is open
+      ],
+    });
+    const r = await findFeedbackRefConflicts({ supabase, text: `fixes ${U}` });
+    expect(r.uuids).toEqual([U]);
+    expect(r.failedOpen).toBe(false);
+    expect(r.conflicts).toHaveLength(1);
+    expect(r.conflicts[0]).toMatchObject({ id: 'QF-OPEN', status: 'open' });
+  });
+
+  it('does not flag when the referenced feedback has no claiming QF', async () => {
+    const supabase = buildStub({
+      select: [{ data: [], error: null }], // no feedback row with quick_fix_id set
+    });
+    const r = await findFeedbackRefConflicts({ supabase, text: `mentions ${U}` });
+    expect(r.conflicts).toEqual([]);
+    expect(r.failedOpen).toBe(false);
+  });
+
+  it('FAILS-OPEN (never bricks creation) when a DB read errors (G4)', async () => {
+    const supabase = buildStub({
+      select: [{ data: null, error: { message: 'boom' } }],
+    });
+    const r = await findFeedbackRefConflicts({ supabase, text: `fixes ${U}` });
+    expect(r.failedOpen).toBe(true);
+    expect(r.conflicts).toEqual([]);
   });
 });
