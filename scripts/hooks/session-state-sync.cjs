@@ -25,8 +25,7 @@ const os = require('os');
 let supabase = null;
 try {
   const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
- });
-    supabase = createSupabaseServiceClient();
+  supabase = createSupabaseServiceClient();
 } catch {
   // Supabase not available - skip validation
 }
