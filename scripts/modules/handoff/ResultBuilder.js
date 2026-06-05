@@ -48,7 +48,11 @@ export class ResultBuilder {
    * @returns {object} Gate failure response
    */
   static gateFailure(gateName, gateResult, remediation = null) {
-    const issues = gateResult.issues || [];
+    // QF-20260605-024: gateResult.issues may be objects ({ code, message, ... }); map each to a
+    // readable string so the joined failure message is not "[object Object]" (PAT-HF-PLANTOEXEC-82e31435).
+    const issues = (gateResult.issues || []).map((i) =>
+      typeof i === 'string' ? i : ((i && i.message) || (i && i.code) || JSON.stringify(i))
+    );
     return this.rejected(
       `${gateName}_FAILED`,
       `${gateName} validation failed - ${issues.join('; ') || 'Check details'}`,
