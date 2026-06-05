@@ -1,4 +1,13 @@
 -- ============================================================================
+-- @approved-by: codestreetlabs@gmail.com
+-- SD-LEO-INFRA-ATOMIC-FLEET-WORK-001 — RE-ISSUE of SD-FDBK-INFRA-CLAIM-SWEEP-LIVENESS-001 FR-2.
+-- The original 20260604_cleanup_stale_sessions_respect_inflight_agent.sql was COMMITTED
+-- but NEVER APPLIED to prod (root cause of the swept-twice bug: writer shipped, consumer
+-- migration never deployed). This re-issue carries identical SQL + the @approved-by header
+-- required by apply-migration.js --prod-deploy. It is COMMITTED-NOT-DEPLOYED BY DESIGN
+-- (operator deferred the prod-deploy to a fresh session; deploy tracked in harness_backlog
+-- feedback 50326859). Set the @approved-by email to match the deployer's git config user.email.
+-- ============================================================================
 -- SD-FDBK-INFRA-CLAIM-SWEEP-LIVENESS-001  (FR-2)
 -- Make cleanup_stale_sessions() HONOR an in-flight session's expected_silence_until
 -- so an actively-running (mid-long-Task/sub-agent) session is not STALE-released
@@ -29,7 +38,12 @@
 --     and silently roll back into a CLAIM_FIX churn loop.
 --
 -- Idempotent: CREATE OR REPLACE FUNCTION + flag seed with ON CONFLICT DO NOTHING.
--- This is a files-only migration; do NOT apply by hand — check-readiness CI applies it.
+-- DEPLOY (NOT auto-applied — nothing in CI applies migrations; the prior "check-readiness
+-- CI applies it" claim was FALSE and is why 20260604 sat unapplied): issue a token with
+--   node scripts/apply-migration.js --issue-token
+-- then  MIGRATION_APPLY_TOKEN=<tok> node scripts/apply-migration.js \
+--   database/migrations/20260605_atomic_lease_sweep_respect_inflight.sql --prod-deploy
+-- After deploy, enable protection: set chairman_dashboard_config.metadata.sweep_respect_inflight_agent=true.
 -- ============================================================================
 
 -- 1) Seed the default-OFF flag into the existing default config row.
