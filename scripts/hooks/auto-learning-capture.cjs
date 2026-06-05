@@ -288,12 +288,24 @@ async function checkCommitMessages(prNumber) {
  * @param {string} prNumber - PR number
  */
 function spawnLearningCapture(prNumber) {
+  const fs = require('fs');
+  const cp = require('child_process');
   const captureScript = path.join(PROJECT_DIR, 'scripts', 'auto-learning-capture.js');
+
+  // QF-20260604-006: the engine is spawned detached with stdio:'ignore', so if the
+  // script is missing (e.g. archived/moved) the failure is INVISIBLE — the hook looks
+  // like it fired but no learning is ever captured. Surface the dormancy and skip the
+  // silent broken spawn instead of launching a node process that immediately dies.
+  if (!fs.existsSync(captureScript)) {
+    log('warn', 'capture_engine_missing', { pr: prNumber, script: captureScript });
+    console.log(`[auto-learning-capture] Engine missing (${captureScript}) — skipped, no capture. Restore the engine or retire this hook.`);
+    return;
+  }
 
   log('info', 'spawning_capture_engine', { pr: prNumber, script: captureScript });
 
   // Spawn as detached process so it doesn't block the hook
-  const child = spawn('node', [captureScript, '--pr', prNumber], {
+  const child = cp.spawn('node', [captureScript, '--pr', prNumber], {
     cwd: PROJECT_DIR,
     stdio: 'ignore',
     detached: true,
@@ -427,4 +439,10 @@ function main() {
   }, 15000);
 }
 
-main();
+// QF-20260604-006: only run on direct invocation so the hook can be unit-tested
+// (require()'d) without main() consuming stdin / arming the 15s timer.
+if (require.main === module) {
+  main();
+}
+
+module.exports = { spawnLearningCapture };

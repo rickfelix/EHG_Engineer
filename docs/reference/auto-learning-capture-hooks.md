@@ -390,7 +390,12 @@ const retrospective = {
   })),
 
   action_items: [],
-  status: 'PUBLISHED',
+
+  // Insert as DRAFT — do NOT client-set status:'PUBLISHED'. The
+  // auto_validate_retrospective_quality trigger recomputes quality_score from
+  // content and the publish-gate REJECTS a thin PUBLISHED insert. quality_score
+  // here is only a placeholder to satisfy trigger ordering; it is overwritten.
+  status: 'DRAFT',
   quality_score: 70,
 
   generated_by: 'AUTO_HOOK',
@@ -409,7 +414,19 @@ const retrospective = {
   }
 };
 
-await supabase.from('retrospectives').insert(retrospective);
+// Insert DRAFT, read back the trigger-computed score, then promote to PUBLISHED
+// only if it clears the publish floor (mirror generate-retrospective.js).
+const { data: inserted } = await supabase
+  .from('retrospectives')
+  .insert(retrospective)
+  .select('id, quality_score')
+  .single();
+
+if (inserted && inserted.quality_score >= 70) {
+  await supabase.from('retrospectives')
+    .update({ status: 'PUBLISHED' })
+    .eq('id', inserted.id);
+}
 ```
 
 ### Issue Pattern Creation
