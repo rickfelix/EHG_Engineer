@@ -103,11 +103,6 @@
           },
           {
             "type": "command",
-            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/auto-learning-capture.cjs",
-            "timeout": 20
-          },
-          {
-            "type": "command",
             "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/post-ship-enforcement.cjs",
             "timeout": 3
           }

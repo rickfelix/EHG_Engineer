@@ -1,12 +1,24 @@
 ---
 category: reference
-status: draft
+status: retired
 version: 1.0.0
 author: auto-fixer
-last_updated: 2026-02-28
-tags: [reference, auto-generated]
+last_updated: 2026-06-04
+tags: [reference, auto-generated, retired]
 ---
 # Auto-Learning Capture Hooks & Patterns
+
+> **⚠️ RETIRED (2026-06-04, QF-20260604-723).** The auto-learning-capture mechanism is
+> **no longer wired**. Its inserter (`scripts/auto-learning-capture.js`) was archived to
+> `scripts/archive/one-time/` ~2026-04-23, leaving the PostToolUse hook spawning a missing
+> script (silent `ENOENT`) while printing a false "learning captured" banner on every non-SD
+> merge. The hook registration was removed from `.claude/settings.json` and
+> `scripts/hooks/auto-learning-capture.cjs` was archived alongside its inserter. DB footprint
+> was zero (`retro_type=NON_SD_CAPTURE`: 0 rows; `generated_by=AUTO_HOOK`: 0 rows) with no live
+> consumers. This document is retained for historical reference only — **do not restore the
+> snippet below as-is** (see the inline anti-pattern note). A correct restore must insert
+> `status:'DRAFT'` and let `auto_validate_retrospective_quality` compute/promote the score
+> (mirror `generate-retrospective.js`), per SD-FDBK-ENH-COMPLETION-HEAL-LEARNING-001.
 
 
 ## Table of Contents
@@ -390,6 +402,11 @@ const retrospective = {
   })),
 
   action_items: [],
+  // ⚠️ RETIRED ANTI-PATTERN — do NOT restore as-is. Client-set status:'PUBLISHED' +
+  // quality_score:70 bypasses the publish-floor: a thin retro is published without the
+  // gate recomputing its score. A restored inserter MUST set status:'DRAFT' and let the
+  // auto_validate_retrospective_quality trigger compute the score, promoting to PUBLISHED
+  // only when it clears >=70 (mirror scripts/archive/one-time/generate-retrospective.js).
   status: 'PUBLISHED',
   quality_score: 70,
 
