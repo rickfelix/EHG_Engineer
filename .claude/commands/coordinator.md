@@ -250,6 +250,20 @@ Behavior:
 
 Display the script output directly to the user.
 
+#### Worker request -> coordinator reply round-trip (SD-LEO-INFRA-COMPLETE-TWO-WAY-001, DEFAULT-OFF):
+
+Completes the two-way channel: a worker can ask a question and block until the coordinator's correlated reply arrives (or a timeout), instead of fire-and-forget signalling. **Gated by `COORDINATOR_TWOWAY_V2=on`** (unset/`off` = no-op; the channel behaves exactly as before). No DB migration — correlation rides in `session_coordination.payload` (`message_type` stays `INFO`).
+
+```bash
+# Worker side: send a request and await the coordinator's reply (prints correlation_id)
+node scripts/worker-signal.cjs request "<question>" [--timeout <ms>]
+
+# Coordinator side: reply to a specific worker's request by correlation id
+node scripts/coordinator-reply.cjs --to <worker_session_id> --correlation <id> "<reply body>"
+```
+
+Mechanics: the request row carries `payload.correlation_id` + `expects_reply` (no `signal_type`, so it is NOT scooped by the FR-3a signal inbox or signal-router). The reply carries `payload.kind='coordinator_reply'` + `reply_to=<correlation_id>` and targets the specific worker (never `broadcast-coordinator`). The worker's inbox hook leaves `coordinator_reply` rows unread (`shouldSkipCoordinatorReply`) so the worker's `awaitCoordinatorReply()` poll consumes them. Resolution itself becomes DB-canonical with deterministic single-coordinator election when the same flag is on (`lib/coordinator/resolve.cjs`).
+
 #### For `help`:
 
 Display:
