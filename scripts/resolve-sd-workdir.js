@@ -208,7 +208,7 @@ function verifyWorktreeRegistered(worktreePath, repoRoot) {
         if (!fs.existsSync(path.join(worktreePath, '.git'))) {
           throw new Error(
             `git worktree add reported success but ${worktreePath} has no .git pointer file. ` +
-            `Remediation: rm -rf "${worktreePath}" && git worktree prune`
+            `Remediation: npm run worktree:remove "${worktreePath}" (safe pre-unlink; not raw rm -rf, which guts shared node_modules)`
           );
         }
         return true;
@@ -224,7 +224,7 @@ function verifyWorktreeRegistered(worktreePath, repoRoot) {
 
   const err = new Error(
     `git worktree add reported success but ${worktreePath} is not registered in git worktree list. ` +
-    `Remediation: rm -rf "${worktreePath}" && git worktree prune\n` +
+    `Remediation: npm run worktree:remove "${worktreePath}" (safe pre-unlink; not raw rm -rf, which guts shared node_modules)\n` +
     `Listed paths (${lastListed.length}):\n  - ${lastListed.join('\n  - ')}`
   );
   err.errorCode = 'WORKTREE_POST_CONDITION_FAILED';
@@ -260,7 +260,7 @@ function createWorktree(sdKey, repoRoot, opts = {}) {
     }
     const err = new Error(
       `Path ${worktreePath} exists but is not a registered worktree. ` +
-      `Remove it with: rm -rf "${worktreePath}" && git worktree prune`
+      `Remove it with: npm run worktree:remove "${worktreePath}" (safe pre-unlink; not raw rm -rf, which guts shared node_modules)`
     );
     err.errorCode = 'WORKTREE_PRE_CONDITION_FAILED';
     throw err;

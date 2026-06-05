@@ -340,6 +340,7 @@
     "session:info": "node scripts/claude-session-coordinator.mjs info",
     "session:worktree": "node scripts/session-worktree.js",
     "session:check-concurrency": "node scripts/session-check-concurrency.js",
+    "worktree:remove": "node scripts/safe-worktree-remove.mjs",
     "worktree:reap": "node scripts/worktree-reaper.mjs",
     "worktree:reap:execute": "node scripts/worktree-reaper.mjs --execute",
     "worktree:reap:full": "node scripts/worktree-reaper.mjs --execute --stage2 --yes",
