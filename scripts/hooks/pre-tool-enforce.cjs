@@ -1192,7 +1192,7 @@ async function main() {
         computeExpectedEndMs,
         classifyActivityKind,
       } = require('./lib/tool-timeout.cjs');
-      const { writeTelemetry } = require('./lib/session-telemetry-writer.cjs');
+      const { writeTelemetry, writeTelemetryAwait } = require('./lib/session-telemetry-writer.cjs');
 
       const silenceMs = computeExpectedSilenceMs(TOOL_NAME, input);
       const endMs = computeExpectedEndMs(TOOL_NAME, input);
@@ -1213,7 +1213,21 @@ async function main() {
       }
       if (kind) patch.last_activity_kind = kind;
 
-      writeTelemetry(_sessId, patch);
+      // SD-FDBK-INFRA-CLAIM-SWEEP-LIVENESS-001 FR-1 (default-OFF flag SWEEP_RESPECT_INFLIGHT_AGENT):
+      // On a long Task/Agent dispatch, AWAIT the telemetry write so expected_silence_until
+      // actually persists before the ALLOW-path process.exit(0) below. Otherwise the
+      // fire-and-forget PATCH is killed mid-flight (the smoking gun: expected_silence_until
+      // stays NULL during a 15-19min sub-agent run) and the stale-session-sweep /
+      // cleanup_stale_sessions STALE_UNKNOWN-release the session mid-run. Scoped to
+      // Task/Agent only (not every tool) to bound per-call latency; fail-open. Default OFF
+      // => byte-identical fire-and-forget behaviour (no exit-timing change for any tool).
+      const _respectInflight = process.env.SWEEP_RESPECT_INFLIGHT_AGENT === '1'
+        || process.env.SWEEP_RESPECT_INFLIGHT_AGENT === 'true';
+      if (_respectInflight && silenceMs !== null && (TOOL_NAME === 'Task' || TOOL_NAME === 'Agent')) {
+        try { await writeTelemetryAwait(_sessId, patch); } catch { /* fail-open: never block enforcement */ }
+      } else {
+        writeTelemetry(_sessId, patch);
+      }
     }
   } catch (telErr) {
     // Never block on telemetry errors. Debug-only log.
