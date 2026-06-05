@@ -368,6 +368,17 @@ const LEARNING_WORTHY_PATHS = {
 
 ### Retrospective Creation
 
+> ⚠️ **ARCHIVED / INACTIVE (QF-20260604-729).** The capture engine that ran this insert was moved to
+> `scripts/archive/one-time/auto-learning-capture.js` by a bulk-archive sweep. The live hook
+> (`scripts/hooks/auto-learning-capture.cjs`) now fail-safes when the engine is absent, so **no
+> retrospective is currently written** for non-SD merges. The snippet below is retained for historical
+> reference only (see RCA acde2541 / `PAT-HOOK-ARCHIVE-ORPHAN-001`).
+>
+> ⚠️ **Known anti-pattern — do NOT copy as-is if resurrecting.** `status: 'PUBLISHED'` + a client-set
+> `quality_score: 70` is overwritten/rejected by the `auto_validate_retrospective_quality` trigger, which
+> recomputes the score from content and enforces the ≥70 publish floor. Use the insert-DRAFT-then-promote
+> pattern (`generate-retrospective.js`); see QF-20260604-797 (#4236) and SD-FDBK-ENH-COMPLETION-HEAL-LEARNING-001.
+
 ```javascript
 const retrospective = {
   title: `Auto-Captured: ${prTitle}`,
