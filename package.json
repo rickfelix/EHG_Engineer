@@ -291,6 +291,7 @@
     "sd:cancel": "node scripts/cancel-sd.js",
     "signal": "node scripts/worker-signal.cjs",
     "coordinator:reply": "node scripts/coordinator-reply.cjs",
+    "coordinator:teardown": "node scripts/coordinator-teardown.cjs",
     "sd:start": "node scripts/sd-start.js",
     "sd:drain": "node scripts/sd-drain.mjs",
     "sd:recover": "node scripts/sd-recover.js",

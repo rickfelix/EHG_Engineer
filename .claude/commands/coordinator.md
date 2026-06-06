@@ -229,7 +229,29 @@ const { clearActiveCoordinator } = require('./lib/coordinator/resolve.cjs');
 "
 ```
 
-Removes `.claude/active-coordinator.json` and clears `claude_sessions.metadata.is_coordinator` for this session. Subsequent worker `/signal` invocations will fall back to `target_session=broadcast-coordinator` until a new coordinator runs `/coordinator start`. Cron loops created by `/coordinator start` continue running independently.
+Removes `.claude/active-coordinator.json` and clears `claude_sessions.metadata.is_coordinator` for this session. Subsequent worker `/signal` invocations will fall back to `target_session=broadcast-coordinator` until a new coordinator runs `/coordinator start`.
+
+> ⚠️ **Self-reversing stop (legacy / flag-OFF behavior):** the command above clears the pointer but leaves the cron loops running. The **inbox loop re-asserts the pointer every ~2 min** (it calls `setActiveCoordinator`), so on the next tick the stop is silently undone. This is the known footgun behind "NEVER run /coordinator stop".
+
+**Teardown safety — `COORD_TEARDOWN_SAFETY_V2` (default-OFF), SD-LEO-INFRA-COORDINATOR-CRON-TEARDOWN-001:**
+When `COORD_TEARDOWN_SAFETY_V2=on`, perform a CONSISTENT teardown instead — crons FIRST, pointer SECOND:
+1. Run **`CronList`** (harness tool) to get all active cron jobs + their ids.
+2. Identify coordinator-owned jobs — any whose command contains `stale-session-sweep.cjs`, `fleet-dashboard.cjs` (covers both `all`/dashboard and `inbox`), or `assign-fleet-identities.cjs` (plus the email loop). Programmatic helper: `selectCoordinatorCronJobs(cronListJobs)` in `lib/coordinator/teardown-coordinator.cjs`.
+3. **`CronDelete`** each of those job ids — ALL of them, BEFORE step 4 (deleting the inbox loop is what prevents the re-assert).
+4. THEN clear the pointer (session-scoped + fail-open; refuses to clear a pointer this session does not own unless `force:true`):
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const { clearCoordinatorPointer } = require('./lib/coordinator/teardown-coordinator.cjs');
+   (async () => {
+     const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+     const r = await clearCoordinatorPointer(sb, { sessionId: process.env.CLAUDE_SESSION_ID });
+     console.log(JSON.stringify(r, null, 2));
+   })();
+   "
+   ```
+   With the flag unset/off this helper is a no-op and the legacy `clearActiveCoordinator` command above remains the path (byte-identical behavior).
 
 #### For `revive [callsign]` or `revive-all` (SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001):
 
@@ -354,10 +376,24 @@ Fill in the dynamic values from the dashboard output:
 This banner signals the fleet has finished all work. Display it once per dashboard cycle where the queue is empty; do not repeat if already shown in the same coordinator session.
 
 **After displaying the banner**, tear down the coordinator:
-1. Cancel both cron loops using `CronDelete` (sweep and dashboard jobs)
+
+**Default / flag-OFF (legacy):**
+1. Cancel the sweep and dashboard cron loops using `CronDelete`.
 2. Confirm to the user:
    ```
    Coordinator shut down. Sweep and dashboard loops cancelled — no more work to monitor.
+   ```
+
+> ⚠️ The legacy path above is **asymmetric**: it cancels only sweep+dashboard (leaving identity/inbox/email orphaned) and never clears the coordinator pointer — so `getActiveCoordinatorId` still resolves a dead coordinator and the orphaned inbox loop re-asserts the pointer.
+
+**`COORD_TEARDOWN_SAFETY_V2=on` (SD-LEO-INFRA-COORDINATOR-CRON-TEARDOWN-001) — consistent teardown:**
+Use the SAME contract as `/coordinator stop` so both paths converge (crons FIRST, pointer SECOND):
+1. `CronList` → identify ALL coordinator-owned jobs (`selectCoordinatorCronJobs` in `lib/coordinator/teardown-coordinator.cjs` — matches sweep/dashboard/identity/inbox; plus the email loop).
+2. `CronDelete` every one of them (not just sweep+dashboard).
+3. Clear the pointer via `clearCoordinatorPointer(sb, { sessionId: process.env.CLAUDE_SESSION_ID })` (session-scoped, fail-open) — see the `/coordinator stop` section for the exact snippet.
+4. Confirm:
+   ```
+   Coordinator shut down. All coordinator cron loops cancelled and pointer cleared — fleet idle.
    ```
 
 ---
