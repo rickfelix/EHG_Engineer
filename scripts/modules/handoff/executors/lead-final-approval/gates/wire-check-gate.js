@@ -99,7 +99,16 @@ export const KNOWN_DYNAMIC_PATTERNS = [
   // executor's load convention + the filename-convention regression guard.
   // QF-20260604-533 / feedback a38cc604 (SD-LEO-INFRA-WIRE-PRE-BUILD-001 had to
   // `git reset --hard origin/main` post-squash to work around this false-positive).
-  /(^|\/)lib\/sub-agents\//
+  /(^|\/)lib\/sub-agents\//,
+  // scripts/hooks/ — Claude Code lifecycle hooks (PreToolUse / PostToolUse / Stop /
+  // SessionStart / UserPromptSubmit / PreCompact) registered in `.claude/settings.json`
+  // and spawned as subprocesses by the harness. The runtime entry point is settings.json,
+  // NOT a JS require/import, so static AST cannot trace reachability — every newly added
+  // hook appears unreachable to WIRE_CHECK. Same architectural shape as the eva-support /
+  // sub-agents exemptions (config-registered, not require-reachable).
+  // SD-FDBK-ENH-FLEET-WORKER-ATTRITION-001 (stop-loop-wakeup-reminder.cjs was the first new
+  // hook to hit this false-positive at LEAD-FINAL).
+  /(^|\/)scripts\/hooks\//
 ];
 
 /**
