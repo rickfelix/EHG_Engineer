@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { verifyMetric, verifyAllMetrics } from '../scripts/lib/metric-auto-verifier.js';
+import { verifyMetric, verifyAllMetrics, classifyMetric, resolveDiffBase } from '../scripts/lib/metric-auto-verifier.js';
 
 const REPO_ROOT = process.cwd();
 
@@ -148,6 +148,60 @@ describe('Metric Auto-Verifier — Expanded Matchers', () => {
       ], REPO_ROOT);
 
       expect(overallScore).toBeGreaterThanOrEqual(70);
+    });
+  });
+});
+
+// SD-FDBK-ENH-SUCCESS-METRICS-GATE-001: matcher precision + stable diff base
+describe('Metric Auto-Verifier — matcher precision (SD-FDBK-ENH-SUCCESS-METRICS-GATE-001)', () => {
+  describe('FR-1: LOC substring no longer false-matches', () => {
+    it("does NOT route 'Local cache hit rate' to verifyLinesOfCode", () => {
+      expect(classifyMetric('Local cache hit rate')).not.toBe('linesOfCode');
+    });
+    it("does NOT route 'allocation overhead' or 'protocol coverage gap' to verifyLinesOfCode", () => {
+      expect(classifyMetric('allocation overhead')).not.toBe('linesOfCode');
+      expect(classifyMetric('protocol handoff gap')).not.toBe('linesOfCode');
+    });
+    it("STILL routes genuine LOC metrics ('230 LOC', 'Lines of code added') to verifyLinesOfCode", () => {
+      expect(classifyMetric('230 LOC')).toBe('linesOfCode');
+      expect(classifyMetric('Lines of code added')).toBe('linesOfCode');
+      expect(classifyMetric('insertions')).toBe('linesOfCode');
+    });
+    it("verifyMetric('Local cache hit rate') yields no git-insertions mismatch", () => {
+      const r = verifyMetric({ metric: 'Local cache hit rate', actual: '95%', target: '90%' }, REPO_ROOT);
+      // routed to a target/self_reported path, never a verifyLinesOfCode 'insertions' mismatch
+      expect(r.status).not.toBe('mismatch');
+      expect(String(r.issue || '')).not.toMatch(/insertions/i);
+    });
+  });
+
+  describe('FR-2: digits+test inside a token no longer false-matches', () => {
+    it("does NOT route 'S17 test artifacts captured' to verifyTestCount", () => {
+      expect(classifyMetric('S17 test artifacts captured')).not.toBe('testCount');
+    });
+    it("does NOT route '1 test environment provisioned' to verifyTestCount", () => {
+      expect(classifyMetric('1 test environment provisioned')).not.toBe('testCount');
+    });
+    it("STILL routes a genuine test count ('42 tests') to verifyTestCount", () => {
+      expect(classifyMetric('42 tests')).toBe('testCount');
+    });
+    it("STILL routes 'Unit test pass rate' to verifyTestPassRate (not testCount)", () => {
+      expect(classifyMetric('Unit test pass rate')).toBe('testPassRate');
+    });
+  });
+
+  describe('FR-3: resolveDiffBase prefers a current base over a stale local main', () => {
+    it("returns 'origin/main' when it resolves", () => {
+      const run = (ref) => { if (ref !== 'origin/main') throw new Error('absent'); };
+      expect(resolveDiffBase('/repo', run)).toBe('origin/main');
+    });
+    it("falls back to 'main' when origin/main is absent", () => {
+      const run = (ref) => { if (ref === 'origin/main') throw new Error('absent'); /* main ok */ };
+      expect(resolveDiffBase('/repo', run)).toBe('main');
+    });
+    it("falls back to 'main' (last resort) when no ref resolves — never throws", () => {
+      const run = () => { throw new Error('absent'); };
+      expect(resolveDiffBase('/repo', run)).toBe('main');
     });
   });
 });
