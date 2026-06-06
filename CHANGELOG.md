@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-06](#2026-06-06)
+  - [Bugfix](#bugfix)
 - [2026-01-29](#2026-01-29)
   - [Bugfix](#bugfix)
 - [2026-01-26](#2026-01-26)
@@ -30,6 +32,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-06
+
+### Bugfix
+- **Windows session-identity split** - PR #4283 (SD-FDBK-ENH-SESSION-IDENTITY-SPLIT-001)
+  - **Issue**: One Claude Code conversation could create two `claude_sessions` rows (born seconds apart), inflating fleet worker counts and confusing claim ownership (canonical row's `sd_key` → NULL).
+  - **Root Cause**: In the `CLAUDE_SESSION_ID`-unset window, `lib/terminal-identity.js` `getTerminalId()` adopted the newest-mtime / process-scan marker, which on a shared SSE port could be a sibling conversation's UUID.
+  - **Fix**: Ancestry-verify marker/PID resolution (reuse `_scanMarkersByAncestry`/`_getAncestorPids`), never cache an unverified UUID, fall through to the per-PID unique fallback. Priority-1 (env set) unchanged. +6 unit tests; existing terminal-identity suites green.
 
 ## 2026-01-29
 
