@@ -30,20 +30,44 @@ import { execSync } from 'child_process';
  * Patterns for matching metric types to verification strategies.
  * Order matters — first match wins.
  */
+// SD-FDBK-ENH-SUCCESS-METRICS-GATE-001: the LOC and test-count matchers were loose
+// substring matches that mis-routed innocuous metrics to the git-diff verifiers:
+//   - /LOC/i matched 'Local'/'block'/'allocation'  -> verifyLinesOfCode false-mismatch
+//   - /(\d+)\s*tests?/i matched '17 test' inside 's17 test' / '1 test environment'
+// Both LOC tokens are now \b-bounded and the test-count matcher requires a
+// word-boundaried number + whitespace + plural 'tests' so adjective/substring uses
+// ('1 test environment', 's17 test') fall through to the safe verifyTargetComparison.
+// Each matcher carries a `name` so classifyMetric() can expose routing for unit tests.
 const METRIC_MATCHERS = [
-  { pattern: /test.*(pass|rate|passing)/i, verifier: verifyTestPassRate },
-  { pattern: /coverage\s*%?/i, verifier: verifyCoverage },
-  { pattern: /files?\s*(created|added|new)/i, verifier: verifyFilesCreated },
-  { pattern: /(lines?\s*(of\s*code|added)|LOC|insertions?)/i, verifier: verifyLinesOfCode },
-  { pattern: /(\d+)\s*tests?/i, verifier: verifyTestCount },
+  { name: 'testPassRate', pattern: /test.*(pass|rate|passing)/i, verifier: verifyTestPassRate },
+  { name: 'coverage', pattern: /coverage\s*%?/i, verifier: verifyCoverage },
+  { name: 'filesCreated', pattern: /files?\s*(created|added|new)/i, verifier: verifyFilesCreated },
+  { name: 'linesOfCode', pattern: /(lines?\s*(of\s*code|added)|\bLOC\b|insertions?)/i, verifier: verifyLinesOfCode },
+  { name: 'testCount', pattern: /\b\d+\s+tests\b/i, verifier: verifyTestCount },
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-082: Expanded matchers for common SD metrics
-  { pattern: /(occurrence|recurrence)\s*(rate|count)?/i, verifier: verifyTargetComparison },
-  { pattern: /(system|subsystem)\s*(count|reduction|consolidat)/i, verifier: verifyTargetComparison },
-  { pattern: /\b(gate|handoff|validation)\s*(score|pass|threshold)/i, verifier: verifyTargetComparison },
-  { pattern: /(complet|progress|implementation).*(rate|percentage|%)/i, verifier: verifyTargetComparison },
-  { pattern: /(redundan|reduc|eliminat|remov)\w*.*(code|LOC|schedul|logic)/i, verifier: verifyTargetComparison },
-  { pattern: /(manual|human)\s*(intervention|patch|update)/i, verifier: verifyTargetComparison },
+  { name: 'occurrence', pattern: /(occurrence|recurrence)\s*(rate|count)?/i, verifier: verifyTargetComparison },
+  { name: 'systemCount', pattern: /(system|subsystem)\s*(count|reduction|consolidat)/i, verifier: verifyTargetComparison },
+  { name: 'gateScore', pattern: /\b(gate|handoff|validation)\s*(score|pass|threshold)/i, verifier: verifyTargetComparison },
+  { name: 'completion', pattern: /(complet|progress|implementation).*(rate|percentage|%)/i, verifier: verifyTargetComparison },
+  { name: 'reduction', pattern: /(redundan|reduc|eliminat|remov)\w*.*(code|\bLOC\b|schedul|logic)/i, verifier: verifyTargetComparison },
+  { name: 'manual', pattern: /(manual|human)\s*(intervention|patch|update)/i, verifier: verifyTargetComparison },
 ];
+
+/**
+ * SD-FDBK-ENH-SUCCESS-METRICS-GATE-001: pure routing classifier — returns the NAME of the
+ * matcher that a metric name routes to (first-match-wins), or 'self_reported' when none match.
+ * Exported so the routing fix is unit-testable without invoking git. verifyMetric uses the same
+ * METRIC_MATCHERS array, so this is an exact mirror of the dispatch decision.
+ * @param {string} metricName
+ * @returns {string} matcher name or 'self_reported'
+ */
+export function classifyMetric(metricName) {
+  const name = String(metricName || '');
+  for (const m of METRIC_MATCHERS) {
+    if (m.pattern.test(name)) return m.name;
+  }
+  return 'self_reported';
+}
 
 /**
  * Verify a single metric independently.
@@ -281,9 +305,29 @@ function getCoveragePercent(repoRoot) {
   }
 }
 
+/**
+ * SD-FDBK-ENH-SUCCESS-METRICS-GATE-001: resolve a STABLE diff base ref. A worktree's local
+ * `main` pointer routinely lags origin/main, so `main...HEAD` measured the whole backlog of
+ * commits since stale-main and inflated insertions/files — false-failing correctly-reported
+ * LOC/files metrics. Prefer origin/main (current after the last fetch), then local main.
+ * `run(ref)` verifies a ref exists (throws when absent); injectable for deterministic unit tests.
+ * Returns the first resolvable ref; falls back to 'main' (a later diff failure degrades to null → self_reported).
+ * @param {string} repoRoot
+ * @param {(ref: string) => void} [run] - ref verifier; default uses `git rev-parse --verify`
+ * @returns {string} base ref ('origin/main' | 'main')
+ */
+export function resolveDiffBase(repoRoot, run) {
+  const verify = run || ((ref) => execSync(`git rev-parse --verify --quiet ${ref}`, { cwd: repoRoot, stdio: 'pipe' }));
+  for (const ref of ['origin/main', 'main']) {
+    try { verify(ref); return ref; } catch { /* try next ref */ }
+  }
+  return 'main';
+}
+
 function getGitFilesCreated(repoRoot) {
   try {
-    const output = execSync('git diff --diff-filter=A --name-only main...HEAD', {
+    const base = resolveDiffBase(repoRoot);
+    const output = execSync(`git diff --diff-filter=A --name-only ${base}...HEAD`, {
       cwd: repoRoot, encoding: 'utf8', timeout: 10000, stdio: 'pipe'
     });
     return output.split('\n').filter(Boolean).length;
@@ -294,7 +338,8 @@ function getGitFilesCreated(repoRoot) {
 
 function getGitInsertions(repoRoot) {
   try {
-    const output = execSync('git diff --stat main...HEAD', {
+    const base = resolveDiffBase(repoRoot);
+    const output = execSync(`git diff --stat ${base}...HEAD`, {
       cwd: repoRoot, encoding: 'utf8', timeout: 10000, stdio: 'pipe'
     });
     const match = output.match(/(\d+)\s+insertions?\(/);
