@@ -40,6 +40,7 @@ const FIXTURE = {
 let supabase;
 let cliVentureId;
 let frontendVentureId;
+let driftVentureId; // SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001: hoisted so afterAll can clean it even if the drift assertion fails before the inline delete
 
 beforeAll(async () => {
   supabase = getSupabaseClient();
@@ -73,6 +74,7 @@ beforeAll(async () => {
       discovery_strategy: FIXTURE.discovery_strategy,
       current_lifecycle_stage: 17,
       status: 'active',
+      is_demo: true, // SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001: flag fixture so it never surfaces in the Ventures route
       metadata: {
         stage_zero: {
           solution: FIXTURE.solution,
@@ -111,6 +113,7 @@ beforeAll(async () => {
       discovery_strategy: FIXTURE.discovery_strategy,
       current_lifecycle_stage: 17,
       status: 'active',
+      is_demo: true, // SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001: flag fixture so it never surfaces in the Ventures route
       metadata: { problem_statement: FIXTURE.problem_statement },
     })
     .select('id')
@@ -123,7 +126,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!supabase) return;
   // Clean up test ventures and related records
-  const ids = [cliVentureId, frontendVentureId].filter(Boolean);
+  const ids = [cliVentureId, frontendVentureId, driftVentureId].filter(Boolean);
   if (ids.length === 0) return;
 
   await supabase.from('chairman_decisions').delete().in('venture_id', ids);
@@ -249,10 +252,13 @@ describe('S17 Parity: CLI vs Frontend venture state', () => {
         portfolio_synergy_score: FIXTURE.portfolio_synergy_score,
         current_lifecycle_stage: 17,
         status: 'active',
+        is_demo: true, // SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001: flag drift fixture too
         metadata: {},
       })
       .select('id')
       .single();
+
+    driftVentureId = driftVenture.id; // capture for afterAll safety-net cleanup
 
     const { data: cliData } = await supabase
       .from('ventures')
