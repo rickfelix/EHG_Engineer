@@ -165,3 +165,21 @@ No spawn-execution layer consumes `worker_spawn_requests` on this host, so reviv
 - **Alert:** on a match, ONE de-duped `session_coordination` row (`message_type=INFO`, `payload.kind=inert_worker_alert`, `target_session=broadcast-coordinator`, 24h expiry) carries the paste-able fleet-worker `/loop` startup prompt — the only path that restores capacity today. De-dup skips while an unacknowledged, unexpired alert exists.
 - **Scope:** detection + operator surfacing only. Building the spawn-execution daemon remains out of scope (see above).
 
+## Idle-Gap Stall Prevention — always arm a ScheduleWakeup
+
+**SD**: `SD-FDBK-ENH-FLEET-WORKER-ATTRITION-001` (attrition cause #4)
+
+Revival (above) is the *cure* for an exited worker. The idle-gap stall is the *cause* of the most common silent exit: an autonomous `/loop` only re-fires on a `ScheduleWakeup` tick (or a human message), so a worker that **ends a turn at an idle/decision point without arming a `ScheduleWakeup` goes silent indefinitely** — it still shows `claude_sessions.loop_state='active'` (phantom-active) but never wakes, and its idle worktree is then reaped by the claim-sweep. The most common trigger is emitting a bare `/compact` and stopping (a worker cannot self-invoke `/compact`, so this just ends the turn with no wakeup armed).
+
+### The mandate (worker-loop guidance)
+- **Arm a `ScheduleWakeup` at the END of EVERY iteration** — short delay when work is in-flight, ~20min when idle — **not only** in the no-workable-SD branch. The canonical paste-able wake-prompt (`FLEET_WORKER_STARTUP_PROMPT` in `lib/coordinator/coordination-events.cjs`) states this.
+- **Never emit a bare `/compact` and stop.** If context is heavy, the harness auto-summarizes (just continue) or invoke the `/context-compact` skill and keep going.
+- **To END the loop on purpose**, set `claude_sessions.loop_state='exited'` for your session, then stop. That is the legitimate, non-stall exit.
+
+### Enforcement hook (default-OFF)
+`scripts/hooks/stop-loop-wakeup-reminder.cjs` (Stop hook, gated by `LEO_LOOP_WAKEUP_REMINDER`, default off) detects a `/loop` worker ending a turn with `loop_state='active'` (no wakeup armed) and **blocks the stop once** with a reminder to arm a `ScheduleWakeup` or set `loop_state='exited'`.
+
+- **State signal:** relies on `loop_state` (`loop-state-tracker.cjs`) — `awaiting_tick` means a wakeup IS armed (no reminder); `active` means mid-iteration with none armed (reminder fires); `exited`/null are never reminded.
+- **Anti-infinite-loop:** never blocks when `stop_hook_active` is already true (the worker saw the reminder once and chose to stop) — it yields on the second pass.
+- **Fail-open:** any error, unresolvable session, or DB-unavailable condition allows the stop (the hook never traps a worker). Default-OFF means the wiring is a runtime no-op until an operator sets the flag.
+
