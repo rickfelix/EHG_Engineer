@@ -38,6 +38,11 @@ export { createCrossChildIntegrationGate } from './cross-child-integration-gate.
 // Wiring Validation (SD-LEO-WIRING-VERIFICATION-FRAMEWORK-ORCH-001-D)
 export { createWiringValidationGate } from './wiring-validation.js';
 
+// Advisory wire-reachability check (SD-FDBK-ENH-WIRE-CHECK-GATE-002)
+// Non-blocking early twin of the LEAD-FINAL WIRE_CHECK_GATE — surfaces unwired
+// new CLIs at EXEC-TO-PLAN so they are fixed before the blocking final gate.
+export { createWireCheckAdvisoryGate } from './wire-check-advisory.js';
+
 // UI Interactivity Check (SD-MAN-INFRA-LEO-GATE-IMPROVEMENTS-001)
 export { createUiInteractivityCheckGate } from './ui-interactivity-check.js';
 
