@@ -317,7 +317,29 @@ async function loadSdKeySets(supabase) {
   // quick_fixes.id holds the QF string key (e.g., 'QF-20260417-029') directly.
   try { for (const k of await paginate('quick_fixes', 'id')) qfMap.add(k); }
   catch { /* ignore */ }
-  return { sdMap, qfMap };
+
+  // SD-FDBK-ENH-WORKTREE-REAPER-MJS-001: sd_keys of SDs still being ACTIVELY worked. The
+  // shipped-stale reaper must never git-remove a live SD's worktree: a freshly sd-start-created
+  // branch has no commits yet so it reads as patch-equivalent-to-main (shipped-stale), and a
+  // heartbeat-stale claim-guard false-negative (Task/Agent sub-agents emit no heartbeat) would
+  // otherwise let the reaper remove an in-flight worktree mid-build. Best-effort: on error the
+  // set is empty and the claim-guard remains the primary defense (no over-reap, no crash).
+  const activeSdSet = new Set();
+  try {
+    const pageSize = 1000;
+    for (let start = 0; start < 20000; start += pageSize) {
+      const { data, error } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, status')
+        .in('status', ['draft', 'active', 'in_progress'])
+        .range(start, start + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      for (const r of data) if (r.sd_key) activeSdSet.add(r.sd_key);
+      if (data.length < pageSize) break;
+    }
+  } catch { /* best-effort */ }
+
+  return { sdMap, qfMap, activeSdSet };
 }
 
 // ── Git / Gh runners ───────────────────────────────────────────────────
@@ -397,7 +419,21 @@ async function classifyWorktree(wt, ctx) {
   } catch (e) {
     shipped = { matched: false, reason: 'error', evidence: { error: String(e?.message || e) } };
   }
-  if (shipped.matched) { categories.push('shipped-stale'); reasons['shipped-stale'] = shipped; }
+  if (shipped.matched) {
+    // SD-FDBK-ENH-WORKTREE-REAPER-MJS-001: never reap a LIVE SD's worktree as shipped-stale.
+    // The worktree dir basename is the sd_key (.worktrees/<sd_key>); if that SD is still being
+    // actively worked (draft/active/in_progress), suppress shipped-stale so the cron cannot
+    // git-remove an in-flight, not-yet-committed worktree. Legitimate cleanup of completed/
+    // cancelled SDs' worktrees is unchanged (they are not in activeSdSet). This is a SECOND
+    // defense atop the heartbeat claim-guard — either alone now protects an active worktree.
+    const sdKey = path.basename(wt.path);
+    if (ctx.activeSdSet && ctx.activeSdSet.has(sdKey)) {
+      reasons['shipped-stale-suppressed'] = { ...shipped, suppressed: true, reason: 'active-sd-protected', sd_key: sdKey };
+    } else {
+      categories.push('shipped-stale');
+      reasons['shipped-stale'] = shipped;
+    }
+  }
 
   let idle = { matched: false, reason: 'skipped', evidence: {} };
   try {
@@ -620,13 +656,13 @@ export async function main(argv = process.argv) {
   }
 
   // Load reference data (best-effort — reaper is useful even with empty maps).
-  const [claimMap, { sdMap, qfMap }] = await Promise.all([
+  const [claimMap, { sdMap, qfMap, activeSdSet }] = await Promise.all([
     loadClaimMap(supabase),
     loadSdKeySets(supabase),
   ]);
 
   const idleThresholdMs = opts.days * 24 * 60 * 60 * 1000;
-  const ctx = { repoRoot, claimMap, sdMap, qfMap, idleThresholdMs };
+  const ctx = { repoRoot, claimMap, sdMap, qfMap, activeSdSet, idleThresholdMs };
 
   const header = humanTableHeader();
   const now = Date.now();
