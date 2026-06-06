@@ -27,6 +27,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   analyzeStage20CodeQuality,
   persistAnalyzerFindings,
+  normalizeRepoUrl,
+  isSafeRepoUrl,
   CHECK_TYPES,
   SEVERITY_LEVELS,
   VERDICT_OPTIONS,
@@ -134,33 +136,35 @@ describe('stage-20-code-quality.js — analyzer resolution path (no-clone)', () 
     expect(tablesQueried.indexOf('venture_resources')).toBeLessThan(tablesQueried.indexOf('ventures'));
   });
 
-  it('(c) does NOT query ventures table when venture_resources returns a row (short-circuits at primary)', async () => {
-    // Seed venture_resources with a non-clone-friendly URL so the analyzer
-    // gets past resolution but cloneRepo refuses (isSafeRepoUrl rejects
-    // strings without the github.com host); we then verify the resolver
-    // stopped at the primary path. The clone failure produces a deterministic
-    // FAIL with 'Failed to clone repo' — which proves we NEVER fell through
-    // to the ventures or stage19Data fallback.
+  it('(c) continues to the ventures fallback when venture_resources holds an INVALID resource_identifier (SD-FDBK-FIX-STAGE-REPOURL-RESOLUTION-001)', async () => {
+    // SD-FDBK-FIX-STAGE-REPOURL-RESOLUTION-001 changed resolution from "first
+    // truthy candidate" to "first VALID candidate". An invalid primary (a
+    // non-github-host string) no longer short-circuits — the resolver now
+    // queries the ventures fallback so a malformed venture_resources row cannot
+    // shadow a valid ventures.repo_url. (This test previously asserted the OLD
+    // short-circuit behavior, which was the bug.) All candidates here are
+    // invalid, so cloneRepo refuses before any network call — pure unit test.
     const supabase = makeSupabaseMock({
       venture_resources: { resource_identifier: 'not-a-github-url' },
-      ventures: { repo_url: 'https://github.com/should-not-reach/this' },
+      ventures: { repo_url: 'also-not-a-github-url' },
     });
     const result = await analyzeStage20CodeQuality({
-      stage19Data: { github_repo: 'https://github.com/should-not-reach/either' },
+      stage19Data: { github_repo: 'still-not-a-github-url' },
       ventureName: 'V3',
       ventureId: '00000000-0000-0000-0000-000000000004',
       supabase,
       logger: silentLogger,
     });
-    // The analyzer used the primary URL — we know because cloneRepo refused
-    // it (isSafeRepoUrl) and produced a FAIL with the original bad URL.
+    // No valid candidate anywhere -> terminal fallback to the first raw
+    // candidate -> cloneRepo refuses it -> deterministic FAIL (no network).
     expect(result.verdict).toBe('FAIL');
     expect(result.findings[0].title).toContain('not-a-github-url');
-    // ventures must NOT have been queried.
+    // The ventures fallback WAS consulted — proves the resolver no longer
+    // short-circuits on an invalid primary (the core of the resolution fix).
     const tablesQueried = supabase.__calls
       .filter(c => c.op === 'from')
       .map(c => c.table);
-    expect(tablesQueried).not.toContain('ventures');
+    expect(tablesQueried).toContain('ventures');
   });
 
   it('(c) uses stage19Data.github_repo as tertiary fallback when supabase yields no row', async () => {
@@ -251,5 +255,90 @@ describe('stage-20-code-quality.js — constant exports', () => {
     // missing-precondition state distinct from the 3 normal verdicts
     // (PASS/FAIL/WARN). buildNoRepoReport returns it directly.
     expect(VERDICT_OPTIONS).toEqual(['PASS', 'FAIL', 'WARN']);
+  });
+});
+
+// SD-FDBK-FIX-STAGE-REPOURL-RESOLUTION-001 — repo URL resolution fix.
+// Background: venture-provisioner.js writes venture_resources.resource_identifier
+// as an `owner/repo` shorthand (full URL only in resource metadata). The old
+// resolver returned the first *truthy* candidate as-is, so the shorthand failed
+// isSafeRepoUrl and S20 hard-FAILed even when a valid ventures.repo_url existed.
+describe('normalizeRepoUrl — owner/repo shorthand normalization (FR-1)', () => {
+  it('normalizes a bare owner/repo shorthand to a full GitHub HTTPS URL', () => {
+    expect(normalizeRepoUrl('rickfelix/datadistill')).toBe('https://github.com/rickfelix/datadistill');
+  });
+
+  it('normalizes owner/repo.git shorthand (dot is allowed in the repo segment)', () => {
+    expect(normalizeRepoUrl('rickfelix/datadistill.git')).toBe('https://github.com/rickfelix/datadistill.git');
+  });
+
+  it('leaves an already-full HTTPS URL unchanged', () => {
+    expect(normalizeRepoUrl('https://github.com/rickfelix/datadistill.git'))
+      .toBe('https://github.com/rickfelix/datadistill.git');
+  });
+
+  it('does NOT normalize a string with shell metacharacters (no single owner/repo shape)', () => {
+    const evil = 'rickfelix/data; rm -rf /';
+    expect(normalizeRepoUrl(evil)).toBe(evil);
+  });
+
+  it('does NOT normalize a single token with no slash', () => {
+    expect(normalizeRepoUrl('justonetoken')).toBe('justonetoken');
+  });
+
+  it('does NOT normalize a 3-segment path (only a single owner/repo qualifies)', () => {
+    expect(normalizeRepoUrl('owner/repo/extra')).toBe('owner/repo/extra');
+  });
+
+  it('returns non-string input unchanged', () => {
+    expect(normalizeRepoUrl(null)).toBeNull();
+    expect(normalizeRepoUrl(undefined)).toBeUndefined();
+  });
+});
+
+describe('normalizeRepoUrl + isSafeRepoUrl composition — injection guard preserved (FR-3)', () => {
+  it('a shorthand becomes a URL that passes the strict GitHub-HTTPS guard', () => {
+    expect(isSafeRepoUrl(normalizeRepoUrl('rickfelix/datadistill'))).toBe(true);
+  });
+
+  it('shell-metacharacter candidates never pass the guard after normalization', () => {
+    expect(isSafeRepoUrl(normalizeRepoUrl('rickfelix/data; rm -rf /'))).toBe(false);
+    expect(isSafeRepoUrl(normalizeRepoUrl('rickfelix/data`whoami`'))).toBe(false);
+  });
+
+  it('a non-github host is not coerced into validity', () => {
+    expect(isSafeRepoUrl(normalizeRepoUrl('https://evil.example.com/a/b'))).toBe(false);
+  });
+
+  it('an already-valid full GitHub URL still passes', () => {
+    expect(isSafeRepoUrl(normalizeRepoUrl('https://github.com/rickfelix/datadistill'))).toBe(true);
+  });
+});
+
+describe('analyzer resolution — skip invalid candidate and continue (FR-2)', () => {
+  it('queries ventures.repo_url even when venture_resources holds an INVALID resource_identifier', async () => {
+    // OLD behavior: a truthy-but-invalid resource_identifier short-circuited
+    // resolution (ventures was never queried) and S20 hard-FAILed. NEW behavior:
+    // an invalid primary does not satisfy isSafeRepoUrl, so the ventures fallback
+    // IS queried. Both candidates here are invalid, so no real git clone runs
+    // (isSafeRepoUrl rejects before execAsync) — keeping this a pure unit test.
+    const supabase = makeSupabaseMock({
+      venture_resources: { resource_identifier: 'not a valid url at all' },
+      ventures: { repo_url: 'also-not-valid' },
+    });
+    const result = await analyzeStage20CodeQuality({
+      stage19Data: null,
+      ventureName: 'ShadowVenture',
+      ventureId: '00000000-0000-0000-0000-000000000002',
+      supabase,
+      logger: silentLogger,
+    });
+    // The ventures table WAS consulted — proves resolution continued past the
+    // invalid primary instead of shadowing a potential valid fallback.
+    expect(supabase.__calls.some((c) => c.table === 'ventures')).toBe(true);
+    // Terminal behavior preserved: invalid-only candidates -> clone refused -> FAIL
+    // (not silently downgraded to the no-repo advisory).
+    expect(result.verdict).toBe('FAIL');
+    expect(result.repo_url).toBe('not a valid url at all');
   });
 });
