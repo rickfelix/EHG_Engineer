@@ -8,6 +8,8 @@ import { dirname, resolve } from 'path';
 import {
   runConsume, computeWorkableLeaves, isTreeComplete, fetchDescendants,
   ventureEligibility, maybeIdleNudge, tryAdvisoryLock, finalizeConsume, TERMINAL, NON_TERMINAL,
+  // SD-LEO-FIX-STAGE-BUILD-CONSOLIDATE-001
+  consolidateGeneratedTests, detectPackageManager, enumerateChildWorktrees,
 } from '../../../../lib/eva/bridge/venture-build-consumer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -342,5 +344,174 @@ describe('FR-3 (stack gate) — fail-closed venture-stack compliance HOLD at S19
     expect(res.skipped).toBe(false);
     expect(res.completed).toBe(true);
     expect(res.drivenLeaves.length).toBe(2);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-LEO-FIX-STAGE-BUILD-CONSOLIDATE-001 — generated-test consolidation (TS-1..TS-6 + extras).
+// In-memory fs + git mock so the consolidation logic runs with NO real filesystem or git.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Minimal in-memory fs honoring only what the consolidation helpers call. Paths are
+// POSIX-normalized so node path.join's backslashes (Windows) resolve consistently.
+function makeMemFs(initial = {}) {
+  const norm = (p) => (String(p).replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/+$/, '') || '/');
+  const files = new Map();
+  const dirs = new Set(['/']);
+  const addAncestors = (n) => { const parts = n.split('/'); let cur = ''; for (let i = 1; i < parts.length - 1; i++) { cur += '/' + parts[i]; dirs.add(cur); } };
+  for (const [k, v] of Object.entries(initial)) { const nk = norm(k); files.set(nk, v); addAncestors(nk); }
+  return {
+    existsSync(p) { const n = norm(p); return files.has(n) || dirs.has(n) || [...files.keys()].some((k) => k.startsWith(n + '/')); },
+    readFileSync(p) { const n = norm(p); if (!files.has(n)) throw new Error('ENOENT ' + n); return files.get(n); },
+    writeFileSync(p, data) { const n = norm(p); files.set(n, data); addAncestors(n); },
+    mkdirSync(p) { const n = norm(p); dirs.add(n); addAncestors(n); },
+    readdirSync(p) {
+      const n = norm(p);
+      const children = new Map(); // name -> isDir
+      const consider = (full) => {
+        if (full === n || !full.startsWith(n + '/')) return;
+        const rest = full.slice(n.length + 1);
+        const name = rest.split('/')[0];
+        const childIsDir = rest.includes('/');
+        if (!children.has(name) || childIsDir) children.set(name, childIsDir || children.get(name) || false);
+      };
+      for (const k of files.keys()) consider(k);
+      for (const d of dirs) consider(d);
+      return [...children.entries()].map(([name, d]) => ({ name, isDirectory: () => d }));
+    },
+  };
+}
+
+function makeGitMock({ staged = '', failOn = null, worktreeOut = '' } = {}) {
+  const calls = [];
+  const git = (args, opts) => {
+    calls.push({ args, opts });
+    if (failOn && args[0] === failOn) throw new Error(`git ${failOn} failed`);
+    if (args[0] === 'worktree') return worktreeOut;
+    if (args[0] === 'diff') return staged;
+    return '';
+  };
+  git.calls = calls;
+  return git;
+}
+
+describe('consolidateGeneratedTests — SD-LEO-FIX-STAGE-BUILD-CONSOLIDATE-001', () => {
+  it('TS-1 copies generated tests from child worktrees into the venture test dir', async () => {
+    const fs = makeMemFs({
+      '/v/package.json': JSON.stringify({ scripts: { test: 'vitest run' } }),
+      '/v/.git/HEAD': 'ref',
+      '/wt/a/tests/auth.test.js': 'A',
+      '/wt/b/tests/landing-copy.test.js': 'B',
+    });
+    const git = makeGitMock({ staged: 'tests/auth.test.js\ntests/landing-copy.test.js' });
+    const res = await consolidateGeneratedTests({ ventureRepoPath: '/v', childWorktreePaths: ['/wt/a', '/wt/b'], fs, git, logger: { log() {} } });
+    expect(res.tests_consolidated).toBe(2);
+    expect(fs.existsSync('/v/tests/auth.test.js')).toBe(true);
+    expect(fs.existsSync('/v/tests/landing-copy.test.js')).toBe(true);
+  });
+
+  it('TS-2 wires a runnable test script when absent and detects npm', async () => {
+    const fs = makeMemFs({
+      '/v/package.json': JSON.stringify({ scripts: { dev: 'vite', build: 'vite build' } }),
+      '/v/package-lock.json': '{}',
+      '/v/.git/HEAD': 'ref',
+    });
+    const git = makeGitMock({ staged: 'package.json' });
+    const res = await consolidateGeneratedTests({ ventureRepoPath: '/v', childWorktreePaths: [], fs, git, logger: { log() {} } });
+    expect(res.test_script_wired).toBe(true);
+    expect(res.package_manager).toBe('npm');
+    const pkg = JSON.parse(fs.readFileSync('/v/package.json'));
+    expect(pkg.scripts.test).toBeTruthy();
+    expect(pkg.scripts.dev).toBe('vite'); // existing scripts preserved
+  });
+
+  it('TS-3 never clobbers an existing test script', async () => {
+    const fs = makeMemFs({
+      '/v/package.json': JSON.stringify({ scripts: { test: 'vitest run --coverage' } }),
+      '/v/.git/HEAD': 'ref',
+    });
+    const git = makeGitMock({ staged: '' });
+    const res = await consolidateGeneratedTests({ ventureRepoPath: '/v', childWorktreePaths: [], fs, git, logger: { log() {} } });
+    expect(res.test_script_wired).toBe(false);
+    const pkg = JSON.parse(fs.readFileSync('/v/package.json'));
+    expect(pkg.scripts.test).toBe('vitest run --coverage');
+    expect(git.calls.some((c) => c.args[0] === 'commit')).toBe(false); // no copy + no wire → no commit
+  });
+
+  it('TS-4 detectPackageManager honors lockfiles + packageManager field with npm default', () => {
+    expect(detectPackageManager('/r', { fs: makeMemFs({ '/r/bun.lockb': '' }) })).toBe('bun');
+    expect(detectPackageManager('/r', { fs: makeMemFs({ '/r/pnpm-lock.yaml': '' }) })).toBe('pnpm');
+    expect(detectPackageManager('/r', { fs: makeMemFs({ '/r/yarn.lock': '' }) })).toBe('yarn');
+    expect(detectPackageManager('/r', { fs: makeMemFs({}) })).toBe('npm');
+    const field = makeMemFs({ '/r/package.json': JSON.stringify({ packageManager: 'pnpm@9.1.0' }), '/r/package-lock.json': '' });
+    expect(detectPackageManager('/r', { fs: field })).toBe('pnpm'); // field beats lockfile
+  });
+
+  it('TS-5 is a no-op (no copy, no commit, no error) when there are no new tests', async () => {
+    const fs = makeMemFs({
+      '/v/package.json': JSON.stringify({ scripts: { test: 'vitest run' } }),
+      '/v/tests/existing.test.js': 'X',     // already consolidated
+      '/wt/a/tests/existing.test.js': 'X',   // same rel path → dest exists → skip
+      '/v/.git/HEAD': 'ref',
+    });
+    const git = makeGitMock({ staged: '' });
+    const res = await consolidateGeneratedTests({ ventureRepoPath: '/v', childWorktreePaths: ['/wt/a'], fs, git, logger: { log() {} } });
+    expect(res.tests_consolidated).toBe(0);
+    expect(res.test_script_wired).toBe(false);
+    expect(git.calls.some((c) => c.args[0] === 'commit')).toBe(false);
+  });
+
+  it('TS-6 finalizeConsume returns complete even when consolidation throws (best-effort)', async () => {
+    const tree = nestedTree({ children: 1, grandkidsEach: 2 });
+    tree.forEach((r) => { if (r.id !== 'orch-top') r.status = 'completed'; });
+    const sb = new MockSB(eligibleTables({ strategic_directives_v2: tree }));
+    const errors = [];
+    const logger = { log() {}, warn() {}, error(m) { errors.push(m); } };
+    const r = await finalizeConsume({
+      supabase: sb, ventureId: VID, logger,
+      deps: {
+        resolveVentureRepoPath: async () => '/fake/venture',
+        enumerateChildWorktrees: () => [],
+        consolidateGeneratedTests: async () => { throw new Error('git boom'); },
+      },
+    });
+    expect(r.complete).toBe(true);
+    expect(r.consumed).toBe(true);
+    expect(errors.some((m) => /git boom/.test(m))).toBe(true);
+  });
+
+  it('de-duplicates the same relative test path across worktrees (copied once, first wins)', async () => {
+    const fs = makeMemFs({
+      '/v/package.json': JSON.stringify({ scripts: { test: 'vitest run' } }),
+      '/v/.git/HEAD': 'ref',
+      '/wt/a/tests/dup.test.js': 'A',
+      '/wt/b/tests/dup.test.js': 'B',
+    });
+    const git = makeGitMock({ staged: 'tests/dup.test.js' });
+    const res = await consolidateGeneratedTests({ ventureRepoPath: '/v', childWorktreePaths: ['/wt/a', '/wt/b'], fs, git, logger: { log() {} } });
+    expect(res.tests_consolidated).toBe(1);
+    expect(fs.readFileSync('/v/tests/dup.test.js')).toBe('A');
+  });
+
+  it('git add is path-scoped to the test dir + package.json (never -A or .)', async () => {
+    const fs = makeMemFs({ '/v/package.json': JSON.stringify({ scripts: {} }), '/v/.git/HEAD': 'ref', '/wt/a/tests/x.test.js': 'X' });
+    const git = makeGitMock({ staged: 'tests/x.test.js\npackage.json' });
+    await consolidateGeneratedTests({ ventureRepoPath: '/v', childWorktreePaths: ['/wt/a'], fs, git, logger: { log() {} } });
+    const addCall = git.calls.find((c) => c.args[0] === 'add');
+    expect(addCall).toBeTruthy();
+    expect(addCall.args).toContain('package.json');
+    expect(addCall.args).toContain('tests');
+    expect(addCall.args).not.toContain('-A');
+    expect(addCall.args).not.toContain('.');
+  });
+
+  it('enumerateChildWorktrees parses porcelain output and excludes the main worktree', () => {
+    const out = [
+      'worktree /v', 'HEAD abc', 'branch refs/heads/main', '',
+      'worktree /v/.worktrees/SD-CHILD-A', 'HEAD def', '',
+      'worktree /v/.worktrees/SD-CHILD-B', 'HEAD ghi', '',
+    ].join('\n');
+    const paths = enumerateChildWorktrees('/v', { git: () => out });
+    expect(paths).toEqual(['/v/.worktrees/SD-CHILD-A', '/v/.worktrees/SD-CHILD-B']);
   });
 });
