@@ -41,14 +41,14 @@ function isCompactionThresholdV2Enabled(env) {
 // hard-depends on the hook being loadable.
 let _readCoordFile = null;
 try {
-  _readCoordFile = require('../hooks/session-role-orient.cjs').readCoordFile;
+  _readCoordFile = require('../scripts/hooks/session-role-orient.cjs').readCoordFile;
 } catch (_) { _readCoordFile = null; }
 
 function defaultReadCoordFile() {
   if (typeof _readCoordFile === 'function') return _readCoordFile();
   // Inline fallback — mirrors session-role-orient.cjs readCoordFile (single source of file format).
   try {
-    const fp = path.resolve(__dirname, '../../.claude/active-coordinator.json');
+    const fp = path.resolve(__dirname, 'active-coordinator.json');
     return fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, 'utf8')) : null;
   } catch (_) { return null; }
 }

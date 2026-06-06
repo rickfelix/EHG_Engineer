@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 
 const require = createRequire(import.meta.url);
-const MOD_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../scripts/lib/compaction-thresholds.cjs');
+const MOD_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.claude/compaction-thresholds.cjs');
 const ct = require(MOD_PATH);
 
 describe('compaction-thresholds: flag parser (isCompactionThresholdV2Enabled)', () => {

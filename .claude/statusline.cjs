@@ -105,7 +105,7 @@ const percentUsed = Math.min(100, Math.floor(contextUsed * 100 / usableContext))
 let thresholds = { warning: WARNING_THRESHOLD, critical: CRITICAL_THRESHOLD, emergency: EMERGENCY_THRESHOLD };
 let sessionRole = 'unknown';
 try {
-  const ct = require('../scripts/lib/compaction-thresholds.cjs');
+  const ct = require('./compaction-thresholds.cjs');
   const flagOn = ct.isCompactionThresholdV2Enabled(process.env);
   sessionRole = ct.detectRoleFromFile(process.env.CLAUDE_SESSION_ID || sessionId);
   thresholds = ct.selectThresholds(sessionRole, flagOn);
