@@ -1721,6 +1721,22 @@ async function main() {
     console.log('COORD_DETECTORS: ' + (coordDetErr && coordDetErr.message ? coordDetErr.message : 'unknown'));
   }
 
+  // SD-LEO-INFRA-SURFACE-INERT-WORKER-001 — surface INERT worker-revival to the
+  // operator. DEFAULT-OFF behind SURFACE_INERT_WORKER_V1, READ-ONLY over
+  // worker_spawn_requests, fail-open. Emits ONE de-duped operator alert (carrying
+  // a paste-able fleet-worker /loop prompt) when pending spawn requests age past
+  // threshold with no spawn-executor consuming them. Fully inert when flag off.
+  try {
+    const inert = await _coordEventsModule.runInertWorkerSurfacing(supabase, {});
+    if (inert && inert.matched) {
+      const a = inert.alert || {};
+      const tail = a.skipped ? ' (alert deduped)' : a.ok ? ' - operator alert emitted' : ' (alert emit failed)';
+      console.log('  INERT_WORKER: ' + inert.aged_count + ' aged unconsumed spawn request(s)' + tail);
+    }
+  } catch (inertErr) {
+    console.log('INERT_WORKER: ' + (inertErr && inertErr.message ? inertErr.message : 'unknown'));
+  }
+
   // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4d — SIGNAL_RESOLVED notification.
   // For each contributing signal where payload.routed_to_sd_key is non-null AND the SD
   // status is 'completed' AND payload.notification_sent is not yet true, look up
