@@ -398,6 +398,14 @@ WHERE session_id = 'session_abc123';
    WHERE sd_key = 'SD-XXX-001';
    ```
 
+### Issue: Duplicate claude_sessions rows for one conversation (session-identity split)
+
+**Symptom**: Two `claude_sessions` rows appear for a single Claude Code conversation (born seconds apart); fleet worker counts look inflated and claim ownership is ambiguous. The canonical row's `sd_key` may go NULL after the claim/worktree migrate to the second row.
+
+**Explanation** (Windows): When `CLAUDE_SESSION_ID` is unset in a subprocess (it did not inherit `CLAUDE_ENV_FILE`, or a pre-export race) and the process-ancestry tree-walk fails, `lib/terminal-identity.js` `getTerminalId()` historically adopted the newest-mtime `pid-*.json` marker or a process-scan PID's marker. On a shared `CLAUDE_CODE_SSE_PORT` that marker could belong to a SIBLING conversation, so `session-manager.getOrCreateSession()` created a second row keyed to the foreign UUID.
+
+**Resolution** (SD-FDBK-ENH-SESSION-IDENTITY-SPLIT-001, 2026-06-06): `getTerminalId()` is now ancestry-safe in the `CLAUDE_SESSION_ID`-unset window — it only adopts a marker/PID whose owning PID is an ancestor of the current process (via `_scanMarkersByAncestry`/`_getAncestorPids`), never caches an unverified UUID, and falls through to the per-PID unique fallback (`win-fallback-{port}-{pid}-{uuid8}`) on no match. When `CLAUDE_SESSION_ID` is set (the normal case), Priority-1 returns it unchanged. Already-orphaned duplicate rows are not auto-reaped — release them with the Manual Claim Release procedure above if needed.
+
 ## Performance Impact
 
 ### Database Overhead
