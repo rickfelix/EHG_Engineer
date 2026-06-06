@@ -232,6 +232,55 @@ function verifyWorktreeRegistered(worktreePath, repoRoot) {
 }
 
 /**
+ * SD-FDBK-ENH-START-LEAVES-LOCKED-001: recover an orphan/locked worktree husk.
+ *
+ * When .worktrees/<SD> exists but git no longer tracks it as a registered
+ * worktree (e.g. a reaper removed the registration but a process cwd-handle left
+ * the empty dir locked so rmdir/Remove-Item fail "in use"), refusing leaves the
+ * SD permanently unclaimable. Two recoverable cases:
+ *   1. Stale registration — `git worktree prune` re-validates without touching the dir.
+ *   2. Locked husk — `git worktree add --force` WRITES into the dir (writes succeed
+ *      even when delete is blocked), re-registering + repopulating it.
+ * Returns a result object on success, or null if recovery is not possible (caller
+ * then throws with remediation). Mirrors the add logic in createWorktree().
+ */
+function recoverOrphanWorktree(sdKey, worktreePath, repoRoot, worktreesDir, opts = {}) {
+  // Case 1: stale admin registration — prune may re-validate the existing dir.
+  try { execSync('git worktree prune', { cwd: repoRoot, stdio: 'pipe' }); } catch { /* best-effort */ }
+  if (isValidWorktree(worktreePath)) {
+    return { path: worktreePath, branch: getWorktreeBranch(worktreePath) || `feat/${sdKey}`, created: false, recovered: 'prune' };
+  }
+
+  // Case 2: locked husk — adopt/repopulate it with --force (tolerates the existing dir).
+  const branch = `feat/${sdKey}`;
+  const branchExists = (() => {
+    try { execSync(`git show-ref --verify --quiet refs/heads/${branch}`, { cwd: repoRoot, stdio: 'pipe' }); return true; }
+    catch { return false; }
+  })();
+  let lockPath;
+  try {
+    lockPath = acquireWorktreeLock(sdKey, process.env.CLAUDE_SESSION_ID || 'unknown', worktreesDir);
+    if (branchExists) {
+      execSync(`git worktree add --force "${worktreePath}" "${branch}"`, { cwd: repoRoot, stdio: 'pipe' });
+    } else {
+      const baseRef = resolveWorktreeBaseRef();
+      fetchBaseRef(repoRoot, baseRef);
+      execSync(`git worktree add --force -b "${branch}" "${worktreePath}" "${baseRef}"`, { cwd: repoRoot, stdio: 'pipe' });
+    }
+  } catch (e) {
+    emitLog({ event: 'worktree.recover_failed', sdKey, worktreePath, error: e.message });
+    return null;
+  } finally {
+    if (lockPath) releaseLock(lockPath);
+  }
+  if (!isValidWorktree(worktreePath)) return null;
+  const essentials = ensureWorktreeEssentials(worktreePath, repoRoot, { activeSessionCount: opts.activeSessionCount });
+  if (!essentials.ok) emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'recovered-orphan', errors: essentials.errors });
+  emitLog({ event: 'worktree.recovered', sdKey, worktreePath, branch });
+  return { path: worktreePath, branch, created: true, recovered: 'force-add' };
+}
+
+/**
  * Create a new worktree for the SD
  */
 function createWorktree(sdKey, repoRoot, opts = {}) {
@@ -258,9 +307,17 @@ function createWorktree(sdKey, repoRoot, opts = {}) {
       }
       return { path: worktreePath, branch: existingBranch || `feat/${sdKey}`, created: false };
     }
+    // SD-FDBK-ENH-START-LEAVES-LOCKED-001: before refusing on an orphan husk
+    // (dir exists, unregistered — often a reaper-removed registration whose dir is
+    // locked by a process cwd-handle, so rm/rename fail "in use"), attempt
+    // self-recovery so the SD does not become permanently unclaimable.
+    const recovered = recoverOrphanWorktree(sdKey, worktreePath, repoRoot, worktreesDir, opts);
+    if (recovered) return recovered;
     const err = new Error(
-      `Path ${worktreePath} exists but is not a registered worktree. ` +
-      `Remove it with: npm run worktree:remove "${worktreePath}" (safe pre-unlink; not raw rm -rf, which guts shared node_modules)`
+      `Path ${worktreePath} exists but is not a registered worktree, and self-recovery ` +
+      `(git worktree prune + git worktree add --force) failed — the dir may be locked by ` +
+      `another process' cwd handle. Remove it with: npm run worktree:remove "${worktreePath}" ` +
+      `(safe pre-unlink; not raw rm -rf, which guts shared node_modules), or end the holding process and retry.`
     );
     err.errorCode = 'WORKTREE_PRE_CONDITION_FAILED';
     throw err;
