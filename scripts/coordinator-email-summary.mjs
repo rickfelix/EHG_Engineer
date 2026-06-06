@@ -60,6 +60,22 @@ const lastRank = typeof snap.lastOverallRank === 'number' ? snap.lastOverallRank
 const trendArrow = curRank > lastRank ? '↑' : curRank < lastRank ? '↓' : '→';
 const trendWord = curRank > lastRank ? 'trending better' : curRank < lastRank ? 'trending worse' : 'holding steady';
 
+// ── pending operator questions: worker questions the coordinator could NOT resolve and escalated to the human ──
+//    (written as feedback rows category='operator_question' status='new'; cleared to 'resolved' once answered)
+const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const { data: qRows } = await db.from('feedback')
+  .select('title,description,created_at,metadata')
+  .eq('category', 'operator_question').eq('status', 'new')
+  .order('created_at', { ascending: true }).limit(10);
+const questions = qRows || [];
+const qN = questions.length;
+const qLabel = (q) => {
+  const m = q.metadata || {};
+  const who = m.worker || (m.sender_session ? String(m.sender_session).slice(0, 8) : 'worker');
+  const sd = m.sd_key ? ` on ${m.sd_key}` : '';
+  return { text: String(q.description || q.title || '').replace(/\s+/g, ' ').trim(), who, sd };
+};
+
 // ── render ──
 const dot = { red: '🔴', yellow: '🟡', green: '🟢' }[overall];
 const word = { red: 'RED', yellow: 'YELLOW', green: 'GREEN' }[overall];
@@ -71,17 +87,20 @@ const meaning = workable === 0 ? 'idle — no open work'
 
 const when = new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
 const gauge = expectedActive === 0 ? '0 active — no work' : `${builders} of ${expectedActive} expected active`;
-const subject = expectedActive === 0
+const qFlag = qN ? `❓${qN} · ` : '';
+const subject = qFlag + (expectedActive === 0
   ? `Fleet ${dot} ${word} ${trendArrow} · idle (no work)`
-  : `Fleet ${dot} ${word} ${trendArrow} · ${builders}/${expectedActive} working`;
+  : `Fleet ${dot} ${word} ${trendArrow} · ${builders}/${expectedActive} working`);
+const qHtml = qN ? `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fff8e1;border-left:4px solid #f5a623;border-radius:3px"><b>❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input</b><br>${questions.map(q => { const l = qLabel(q); return `• ${esc(l.text)} <span style="color:#999;font-size:13px">— ${esc(l.who)}${esc(l.sd)}</span>`; }).join('<br>')}</p>` : '';
 const html = `<p style="font-size:17px;margin:0 0 10px"><b>${dot} ${word}</b> — ${meaning} <span style="color:#777;font-size:14px">(${trendWord} ${trendArrow})</span></p>
-<p style="font-size:14px;margin:0 0 6px"><b>Active workers:</b> ${gauge}${workable ? ` · ${workable} item${workable > 1 ? 's' : ''} in play` : ''}</p>
+${qHtml}<p style="font-size:14px;margin:0 0 6px"><b>Active workers:</b> ${gauge}${workable ? ` · ${workable} item${workable > 1 ? 's' : ''} in play` : ''}</p>
 <p style="font-size:11px;color:#999;margin:14px 0 0">${when} ET</p>`;
-const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\nActive workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\n\n${when} ET`;
+const qText = qN ? `❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input:\n${questions.map(q => { const l = qLabel(q); return `  • ${l.text} — ${l.who}${l.sd}`; }).join('\n')}\n\n` : '';
+const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\n\n${when} ET`;
 
 if (DRY_RUN) {
   console.log('=== [DRY RUN] no email sent ===\nSUBJECT: ' + subject + '\n---\n' + text + '\n---');
-  console.log(`overall=${overall} builders=${builders} expectedActive=${expectedActive} workable=${workable} (inProg=${inProgress} queued=${queuedN}) live=${live.length} shortBy=${shortBy}`);
+  console.log(`overall=${overall} builders=${builders} expectedActive=${expectedActive} workable=${workable} (inProg=${inProgress} queued=${queuedN}) live=${live.length} shortBy=${shortBy} questions=${qN}`);
 } else {
   const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'Fleet Coordinator <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
