@@ -204,6 +204,11 @@
             "type": "command",
             "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/post-completion-tail-enforcement.cjs",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/stop-loop-wakeup-reminder.cjs",
+            "timeout": 10
           }
         ]
       }
