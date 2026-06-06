@@ -292,7 +292,9 @@ async function loadClaimMap(supabase, { heartbeatThresholdMs = 2 * 60 * 60 * 100
 async function loadSdKeySets(supabase) {
   const sdMap = new Set();
   const qfMap = new Set();
-  if (!supabase) return { sdMap, qfMap };
+  // SD-FDBK-ENH-WORKTREE-REAPER-MJS-001: always return activeSdSet (empty when no supabase)
+  // so callers/ctx never see it undefined.
+  if (!supabase) return { sdMap, qfMap, activeSdSet: new Set() };
 
   // Supabase defaults to 1000 rows per select even with .limit(5000). Paginate
   // explicitly with .range() to ensure the full set is loaded — otherwise
