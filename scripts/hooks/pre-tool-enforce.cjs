@@ -1235,17 +1235,23 @@ async function main() {
       }
       if (kind) patch.last_activity_kind = kind;
 
-      // SD-FDBK-INFRA-CLAIM-SWEEP-LIVENESS-001 FR-1 (default-OFF flag SWEEP_RESPECT_INFLIGHT_AGENT):
-      // On a long Task/Agent dispatch, AWAIT the telemetry write so expected_silence_until
-      // actually persists before the ALLOW-path process.exit(0) below. Otherwise the
-      // fire-and-forget PATCH is killed mid-flight (the smoking gun: expected_silence_until
-      // stays NULL during a 15-19min sub-agent run) and the stale-session-sweep /
-      // cleanup_stale_sessions STALE_UNKNOWN-release the session mid-run. Scoped to
-      // Task/Agent only (not every tool) to bound per-call latency; fail-open. Default OFF
-      // => byte-identical fire-and-forget behaviour (no exit-timing change for any tool).
-      const _respectInflight = process.env.SWEEP_RESPECT_INFLIGHT_AGENT === '1'
-        || process.env.SWEEP_RESPECT_INFLIGHT_AGENT === 'true';
-      if (_respectInflight && silenceMs !== null && (TOOL_NAME === 'Task' || TOOL_NAME === 'Agent')) {
+      // SD-FDBK-INFRA-CLAIM-SWEEP-LIVENESS-001 FR-1: on a long Task/Agent dispatch, AWAIT
+      // the telemetry write so expected_silence_until actually persists before the ALLOW-path
+      // process.exit(0) below. Otherwise the fire-and-forget PATCH is killed mid-flight
+      // (the smoking gun: expected_silence_until stays NULL during a 15-19min sub-agent run)
+      // and the stale-session-sweep / cleanup_stale_sessions STALE-release the session mid-run.
+      //
+      // SD-FDBK-ENH-CLAIM-SWEEP-REAPS-001: the original opt-IN env gate (SWEEP_RESPECT_INFLIGHT_AGENT=1)
+      // is NOT deployed in pre-deploy worker settings, so the writer never fired and ACTIVE
+      // in-flight claims were still reaped (worker ec3f9fbd swept mid-PLAN). The CONSUMER side
+      // (chairman_dashboard_config.sweep_respect_inflight_agent) is now live=true and the feature
+      // is proven, so complete the writer side: AWAIT by DEFAULT for Task/Agent dispatches
+      // (opt-OUT via SWEEP_RESPECT_INFLIGHT_AGENT=0/false). Scoped to Task/Agent only — they are
+      // already long operations, so the single awaited PATCH adds negligible latency. Fail-open
+      // preserved; non-Task/Agent tools keep byte-identical fire-and-forget behaviour.
+      const _respectInflightDisabled = process.env.SWEEP_RESPECT_INFLIGHT_AGENT === '0'
+        || process.env.SWEEP_RESPECT_INFLIGHT_AGENT === 'false';
+      if (!_respectInflightDisabled && silenceMs !== null && (TOOL_NAME === 'Task' || TOOL_NAME === 'Agent')) {
         try { await writeTelemetryAwait(_sessId, patch); } catch { /* fail-open: never block enforcement */ }
       } else {
         writeTelemetry(_sessId, patch);
