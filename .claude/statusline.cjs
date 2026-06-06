@@ -98,11 +98,24 @@ const contextUsed = inputTokens + outputTokens + cacheCreation + cacheRead;
 const usableContext = Math.max(1, Math.floor(contextSize * AUTOCOMPACT_PCT / 100));
 const percentUsed = Math.min(100, Math.floor(contextUsed * 100 / usableContext));
 
+// Role-aware advisory thresholds (SD-LEO-INFRA-COORDINATOR-CRON-LIFECYCLE-001).
+// DEFAULT-OFF behind COORD_COMPACTION_THRESHOLD_V2 — when off, every role uses the
+// inline globals below (93/97), so behavior is unchanged. The status line must never
+// crash, so a module-load failure silently falls back to the inline globals.
+let thresholds = { warning: WARNING_THRESHOLD, critical: CRITICAL_THRESHOLD, emergency: EMERGENCY_THRESHOLD };
+let sessionRole = 'unknown';
+try {
+  const ct = require('../scripts/lib/compaction-thresholds.cjs');
+  const flagOn = ct.isCompactionThresholdV2Enabled(process.env);
+  sessionRole = ct.detectRoleFromFile(process.env.CLAUDE_SESSION_ID || sessionId);
+  thresholds = ct.selectThresholds(sessionRole, flagOn);
+} catch (_) { /* intentionally silent: keep inline global thresholds, never crash the status line */ }
+
 // Status level (shifted: old-red→yellow, old-yellow→hidden)
 let status = 'HEALTHY';
 let icon = '';
-if (percentUsed >= EMERGENCY_THRESHOLD) { status = 'EMERGENCY'; icon = ' !'; }
-else if (percentUsed >= CRITICAL_THRESHOLD) { status = 'CRITICAL'; icon = ' *'; }
+if (percentUsed >= thresholds.emergency) { status = 'EMERGENCY'; icon = ' !'; }
+else if (percentUsed >= thresholds.critical) { status = 'CRITICAL'; icon = ' *'; }
 
 // Progress bar
 const BAR_WIDTH = 20;
@@ -110,8 +123,8 @@ const filled = Math.floor(percentUsed * BAR_WIDTH / 100);
 const empty = BAR_WIDTH - filled;
 const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
 let barColor = GREEN;
-if (percentUsed >= EMERGENCY_THRESHOLD) barColor = RED;
-else if (percentUsed >= CRITICAL_THRESHOLD) barColor = YELLOW;
+if (percentUsed >= thresholds.emergency) barColor = RED;
+else if (percentUsed >= thresholds.critical) barColor = YELLOW;
 
 // Git info
 let gitBranch = '';
@@ -261,6 +274,7 @@ try {
     last_input_tokens: totalInputTokens,
     last_active_epoch: nowEpoch,
     session_id: sessionId,
+    role: sessionRole,
     activity_state: activityState,
     hook_triggered: false
   };
