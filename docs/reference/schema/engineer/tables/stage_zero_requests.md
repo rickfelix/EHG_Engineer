@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-06T13:14:43.010Z
+**Generated**: 2026-06-06T14:21:39.225Z
 **Rows**: 4
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (17 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -35,6 +35,7 @@
 | error_details | `jsonb` | YES | - | - |
 | priority | `smallint(16)` | **NO** | `0` | - |
 | metadata | `jsonb` | **NO** | `'{}'::jsonb` | - |
+| processing_attempts | `integer(32)` | **NO** | `0` | Number of times this request has been (re-)claimed for processing. Incremented by the Stage-0 queue processor stale-claim sweep when a request is re-queued without having produced a venture; at STAGE_ZERO_MAX_ATTEMPTS the request is failed-terminal rather than looped. SD-LEO-FIX-FIX-STAGE-QUEUE-001. |
 
 ## Constraints
 
