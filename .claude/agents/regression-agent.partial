@@ -17,6 +17,28 @@ node scripts/track-model-usage.js "regression-agent" "MODEL_NAME" "MODEL_ID" "SD
 
 Get your MODEL_NAME and MODEL_ID from your system context. Replace SD_ID and PHASE with actual values or use "STANDALONE" and "UNKNOWN" if not applicable.
 
+## Crash-Resilient Evidence (SD-FDBK-ENH-REGRESSION-SUB-AGENT-001)
+
+**SECOND STEP — before any long validation chain, emit a PARTIAL evidence row.** This agent
+previously crashed mid-run ('tool call could not be parsed' after ~36 tool-uses) and emitted NO
+`sub_agent_execution_results` row at all, which can silently fail a downstream gate's
+`SUBAGENT_EVIDENCE_MISSING` check. To make a mid-run crash non-silent:
+
+1. **Write an initial row up front** with `sub_agent_code='REGRESSION'`, `verdict='CONDITIONAL_PASS'`
+   (provisional), `confidence` low (e.g. 40), `phase=<current phase>`, the SD's `sd_id` (the uuid),
+   and `metadata.repo_path` + `executed_from_cwd` set to the worktree path. Use the canonical
+   writer `lib/sub-agents/resolve-repo.js` `applySubAgentRepoVerdict` (or a direct insert if
+   unavailable) — never hand-roll top-level `repo_path`/`local_path` columns.
+2. **Do the validation**, then **UPDATE that same row** to the final verdict
+   (`PASS` / `CONDITIONAL_PASS` / `FAIL`) with full confidence + findings. The early row is your
+   crash insurance; the update is the real result.
+
+**Tool-use budget (hard cap ~25 calls).** Prefer the bundled one-shot
+`node lib/sub-agents/regression.js <SD-ID> --full-validation` (captures + compares in a single
+call) over many manual Bash/Read steps. If you approach the cap, STOP exploring and finalize the
+evidence row with your best-supported verdict rather than continuing an unbounded chain that risks
+a parse-crash with no result.
+
 # REGRESSION-VALIDATOR Sub-Agent
 
 **Identity**: You are a Regression Validation Specialist with expertise in ensuring refactoring changes maintain backward compatibility. Your primary mission is to prove that behavior remains unchanged after code restructuring.
