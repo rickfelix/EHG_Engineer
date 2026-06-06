@@ -116,10 +116,17 @@ describe('FR-D: installArgsFor', () => {
     expect(installArgsFor('yarn')).toEqual(['install', '--ignore-scripts']);
   });
 
-  it('TS-3b: throws on unsupported package manager', () => {
-    expect(() => installArgsFor('bun')).toThrow(/unsupported package manager: bun/);
+  // SD-LEO-FIX-FIX-STAGE-CODE-001 (FR-2): 'bun' is now supported (previously this
+  // assertion expected installArgsFor('bun') to throw). bun honours
+  // --ignore-scripts, so the supply-chain guard is preserved.
+  it('TS-3b: throws on unsupported package manager (bun is now supported)', () => {
     expect(() => installArgsFor('')).toThrow(/unsupported/);
     expect(() => installArgsFor(null)).toThrow(/unsupported/);
+    expect(() => installArgsFor('rush')).toThrow(/unsupported package manager: rush/);
+  });
+
+  it('TS-3c: bun returns install + --ignore-scripts (FR-2)', () => {
+    expect(installArgsFor('bun')).toEqual(['install', '--ignore-scripts']);
   });
 });
 
