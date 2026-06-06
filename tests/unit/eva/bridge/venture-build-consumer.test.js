@@ -9,8 +9,9 @@ import {
   runConsume, computeWorkableLeaves, isTreeComplete, fetchDescendants,
   ventureEligibility, maybeIdleNudge, tryAdvisoryLock, finalizeConsume, TERMINAL, NON_TERMINAL,
   // SD-LEO-FIX-STAGE-BUILD-CONSOLIDATE-001
-  consolidateGeneratedTests, detectPackageManager, enumerateChildWorktrees,
+  consolidateGeneratedTests, detectPackageManager, enumerateChildWorktrees, resolveVentureRepoPath,
 } from '../../../../lib/eva/bridge/venture-build-consumer.js';
+import { ENGINEER_ROOT } from '../../../../lib/repo-paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LIB_PATH = resolve(__dirname, '../../../../lib/eva/bridge/venture-build-consumer.js');
@@ -513,5 +514,41 @@ describe('consolidateGeneratedTests — SD-LEO-FIX-STAGE-BUILD-CONSOLIDATE-001',
     ].join('\n');
     const paths = enumerateChildWorktrees('/v', { git: () => out });
     expect(paths).toEqual(['/v/.worktrees/SD-CHILD-A', '/v/.worktrees/SD-CHILD-B']);
+  });
+});
+
+describe('resolveVentureRepoPath — SD-LEO-FIX-STAGE-BUILD-CONSOLIDATE-001 (safety guards)', () => {
+  it('resolves a venture to its DB-registered local path when the clone exists', async () => {
+    const ventureRepo = resolve('/repos/datadistill');             // OS-correct absolute path
+    const fs = makeMemFs({ [ventureRepo.replace(/\\/g, '/') + '/.git/HEAD']: 'ref' });
+    const sb = new MockSB({
+      ventures: [{ id: 'v9', name: 'DataDistill' }],
+      applications: [{ name: 'DataDistill', local_path: ventureRepo, status: 'active', deleted_at: null }],
+    });
+    expect(await resolveVentureRepoPath(sb, 'v9', { fs })).toBe(ventureRepo);
+  });
+
+  it('returns null for a platform-repo name (never EHG_Engineer / ehg)', async () => {
+    const sb = new MockSB({ ventures: [{ id: 'vEng', name: 'EHG_Engineer' }] });
+    expect(await resolveVentureRepoPath(sb, 'vEng', { fs: makeMemFs({}) })).toBe(null);
+  });
+
+  it('HARD-GUARD: returns null even if the DB resolves a venture to the EHG_Engineer root', async () => {
+    // a misconfigured applications row pointing a venture at THIS repo must never be committed into.
+    const sb = new MockSB({
+      ventures: [{ id: 'vx', name: 'SomeVenture' }],
+      applications: [{ name: 'SomeVenture', local_path: ENGINEER_ROOT, status: 'active', deleted_at: null }],
+    });
+    const fs = makeMemFs({ [ENGINEER_ROOT.replace(/\\/g, '/') + '/.git/HEAD']: 'ref' });
+    expect(await resolveVentureRepoPath(sb, 'vx', { fs })).toBe(null);
+  });
+
+  it('returns null when the resolved clone has no .git (absent/uncloned)', async () => {
+    const ventureRepo = resolve('/repos/notcloned');
+    const sb = new MockSB({
+      ventures: [{ id: 'v9', name: 'NotCloned' }],
+      applications: [{ name: 'NotCloned', local_path: ventureRepo, status: 'active', deleted_at: null }],
+    });
+    expect(await resolveVentureRepoPath(sb, 'v9', { fs: makeMemFs({}) })).toBe(null);
   });
 });
