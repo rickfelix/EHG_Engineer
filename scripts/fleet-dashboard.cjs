@@ -1132,6 +1132,78 @@ async function printInbox() {
   console.log('');
 }
 
+// ── Section: Feedback work-store (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001) ──
+// READ-ONLY / additive: surfaces the feedback table (untriaged feedback + harness
+// backlog) on the coordinator single-pane view so pending feedback work is never
+// missed alongside the worker-signal inbox (printInbox) and the SD queue
+// (printAvailable). Display only — performs NO routing, lifecycle, sweep,
+// coordinator-election, or read_at mutation. Explicit columns + row limit on every
+// query so the 500+ row feedback table cannot flood the dashboard.
+async function printFeedback(d, deps = {}) {
+  const sb = (deps && deps.supabase) || supabase; // injectable for tests; defaults to module client
+  console.log('FEEDBACK');
+  console.log('─'.repeat(72));
+
+  // Untriaged feedback: pending rows not yet actioned, excluding harness backlog
+  // (surfaced as its own subsection below) to keep the two views disjoint.
+  const { data: untriaged, error: uErr } = await sb
+    .from('feedback')
+    .select('id, priority, category, title, status, created_at')
+    .not('status', 'in', '(resolved,cancelled,closed)')
+    .neq('category', 'harness_backlog')
+    .order('created_at', { ascending: false })
+    .limit(15);
+
+  // Harness backlog: deferred harness-hardening work captured during product sessions.
+  const { data: backlog, error: bErr } = await sb
+    .from('feedback')
+    .select('id, title, status, created_at')
+    .eq('category', 'harness_backlog')
+    .neq('status', 'resolved')
+    .order('created_at', { ascending: false })
+    .limit(15);
+
+  // Graceful degradation: a failed query prints a short notice and returns without
+  // throwing, so the overall /coordinator all render never crashes (mirrors printInbox).
+  if (uErr || bErr) {
+    console.log('  (feedback query failed: ' + (uErr || bErr).message + ')');
+    console.log('');
+    return;
+  }
+
+  const uRows = untriaged || [];
+  const bRows = backlog || [];
+
+  if (uRows.length === 0 && bRows.length === 0) {
+    console.log('  (no pending feedback or harness backlog)');
+    console.log('');
+    return;
+  }
+
+  const now = Date.now();
+  const ageOf = (ts) => ts ? Math.max(0, Math.round((now - Date.parse(ts)) / 3600000)) + 'h' : '?';
+
+  console.log('  Untriaged feedback (' + uRows.length + ')');
+  if (uRows.length === 0) {
+    console.log('    (none)');
+  } else {
+    for (const f of uRows) {
+      console.log('    ' + pad(f.priority || '—', 5) + pad(f.category || '-', 18) + pad(ageOf(f.created_at), 6) + (f.title || '').substring(0, 38));
+    }
+  }
+
+  console.log('  Harness backlog (' + bRows.length + ')');
+  if (bRows.length === 0) {
+    console.log('    (none)');
+  } else {
+    for (const b of bRows) {
+      console.log('    ' + pad(ageOf(b.created_at), 6) + (b.title || '').substring(0, 52));
+    }
+  }
+
+  console.log('');
+}
+
 // ── Main ──
 
 async function main() {
@@ -1156,6 +1228,7 @@ async function main() {
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
     inbox:         async () => await printInbox(),
+    feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     all:           async () => {
       // Team banner appears at top of /coordinator all when active teams exist (otherwise no-op)
@@ -1168,6 +1241,7 @@ async function main() {
       printRevivalPending(d); // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
       printCoordination(d);
       await printInbox(); // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a
+      await printFeedback(d); // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001 — feedback work-store
       await printCoaching(d);
       printHealth(d);
       printQA(d);
@@ -1179,7 +1253,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, feedback, team, all');
     process.exit(1);
   }
 
@@ -1201,7 +1275,14 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error('DASHBOARD ERROR:', err.message);
-  process.exit(1);
-});
+// Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
+module.exports = { printFeedback };
+
+// Only run the CLI when invoked directly, so requiring this module in a test does
+// not execute main() against the live database.
+if (require.main === module) {
+  main().catch(err => {
+    console.error('DASHBOARD ERROR:', err.message);
+    process.exit(1);
+  });
+}
