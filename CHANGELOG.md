@@ -40,6 +40,10 @@
   - **Issue**: One Claude Code conversation could create two `claude_sessions` rows (born seconds apart), inflating fleet worker counts and confusing claim ownership (canonical row's `sd_key` → NULL).
   - **Root Cause**: In the `CLAUDE_SESSION_ID`-unset window, `lib/terminal-identity.js` `getTerminalId()` adopted the newest-mtime / process-scan marker, which on a shared SSE port could be a sibling conversation's UUID.
   - **Fix**: Ancestry-verify marker/PID resolution (reuse `_scanMarkersByAncestry`/`_getAncestorPids`), never cache an unverified UUID, fall through to the per-PID unique fallback. Priority-1 (env set) unchanged. +6 unit tests; existing terminal-identity suites green.
+- **Stage-20 Code Quality Gate refused to clone valid venture repos** - PR #4289 (SD-FDBK-FIX-STAGE-REPOURL-RESOLUTION-001)
+  - **Issue**: Ventures with a complete build were permanently blocked at Stage-20 ("Refused to clone: repoUrl failed strict GitHub-URL validation") despite having a valid repo (live: DataDistill).
+  - **Root Cause**: Two defects in `lib/eva/stage-templates/analysis-steps/stage-20-code-quality.js` — (1) repo-URL resolution took the first *truthy* candidate, so an `owner/repo` shorthand written by `venture-provisioner.js` shadowed the valid `ventures.repo_url` fallback; (2) `isSafeRepoUrl`'s metacharacter guard used `\n\r` mistakenly written as `\\n\\r` (matching the literal characters backslash/n/r), rejecting any URL containing the letters n or r.
+  - **Fix**: Add `normalizeRepoUrl()` (strict `owner/repo` → `https://github.com/owner/repo`); resolve to the first *valid* candidate (skip-invalid-and-continue); correct the regex to true newline/CR. Anti-shell-injection guard preserved (`SAFE_REPO_URL_RE` allowlist + `\s`; verified by 41 adversarial cases). +11 unit tests; 88/88 stage-20 + code-quality tests green, 0 regressions.
 
 ## 2026-01-29
 
