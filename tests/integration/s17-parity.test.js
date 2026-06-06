@@ -165,19 +165,28 @@ describe('S17 Parity: CLI vs Frontend venture state', () => {
       lifecycle_stage: 17,
       status: 'approved',
       decision: 'proceed',
+      // SD-FDBK-ENH-S17-PARITY-TEST-001: decision_type is NOT NULL with no default;
+      // omitting it made BOTH inserts fail silently (23502), surfacing later as a
+      // misleading null-row assertion. 'stage_gate' matches the producer contract
+      // (lib/eva/chairman-decision-watcher.js) for an S17 doc-generation gate.
+      decision_type: 'stage_gate',
       summary: 'S17: Doc generation gate approved',
     };
 
-    await supabase.from('chairman_decisions').insert({
+    // Surface insert errors at the insert site (was silently discarded → null-row failures).
+    const { error: cliDecErr } = await supabase.from('chairman_decisions').insert({
       ...decisionBase,
       venture_id: cliVentureId,
       brief_data: { source: 'cli', problem_statement: FIXTURE.problem_statement },
     });
-    await supabase.from('chairman_decisions').insert({
+    expect(cliDecErr, `CLI chairman_decisions insert failed: ${cliDecErr?.message}`).toBeNull();
+
+    const { error: feDecErr } = await supabase.from('chairman_decisions').insert({
       ...decisionBase,
       venture_id: frontendVentureId,
       brief_data: { source: 'frontend', problem_statement: FIXTURE.problem_statement },
     });
+    expect(feDecErr, `Frontend chairman_decisions insert failed: ${feDecErr?.message}`).toBeNull();
 
     const { data: cliDec } = await supabase
       .from('chairman_decisions')
