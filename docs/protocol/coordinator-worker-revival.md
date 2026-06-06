@@ -155,3 +155,13 @@ FROM worker_spawn_requests
 WHERE status='pending' AND expires_at > NOW()
 ORDER BY requested_at ASC;
 ```
+
+## Inert on this host (surfaced via sweep detector)
+
+No spawn-execution layer consumes `worker_spawn_requests` on this host, so revival is **inert**: `/coordinator revive` files requests that are never fulfilled (`fulfilled_at` stays NULL). SD-LEO-INFRA-SURFACE-INERT-WORKER-001 adds a READ-ONLY detector to the stale-session sweep that surfaces this instead of letting requests pile up silently.
+
+- **Flag (default-OFF):** `SURFACE_INERT_WORKER_V1=true` enables the detector. Inert (zero reads/writes) when unset.
+- **Threshold:** `INERT_WORKER_AGE_MIN` (default 360) — minimum `requested_at` age (minutes) before a pending, unfulfilled request is flagged. Expired-but-still-pending rows count.
+- **Alert:** on a match, ONE de-duped `session_coordination` row (`message_type=INFO`, `payload.kind=inert_worker_alert`, `target_session=broadcast-coordinator`, 24h expiry) carries the paste-able fleet-worker `/loop` startup prompt — the only path that restores capacity today. De-dup skips while an unacknowledged, unexpired alert exists.
+- **Scope:** detection + operator surfacing only. Building the spawn-execution daemon remains out of scope (see above).
+
