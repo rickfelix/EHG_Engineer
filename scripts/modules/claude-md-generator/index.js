@@ -33,7 +33,8 @@ import {
   generateCore,
   generateLead,
   generatePlan,
-  generateExec
+  generateExec,
+  generateAdam
 } from './file-generators.js';
 
 import {
@@ -41,7 +42,8 @@ import {
   generateCoreDigest,
   generateLeadDigest,
   generatePlanDigest,
-  generateExecDigest
+  generateExecDigest,
+  generateAdamDigest
 } from './digest-generators.js';
 
 /**
@@ -209,6 +211,8 @@ class CLAUDEMDGeneratorV3 {
       this.generateFile('CLAUDE_LEAD.md', data, (d) => generateLead(d, this.fileMapping), 'full');
       this.generateFile('CLAUDE_PLAN.md', data, (d) => generatePlan(d, this.fileMapping), 'full');
       this.generateFile('CLAUDE_EXEC.md', data, (d) => generateExec(d, this.fileMapping), 'full');
+      // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-C: Adam role contract (database-first)
+      this.generateFile('CLAUDE_ADAM.md', data, (d) => generateAdam(d, this.fileMapping), 'full');
 
       // Calculate FULL totals
       const fullFiles = Object.entries(this.manifest.files).filter(([_, f]) => f.type === 'full');
@@ -231,6 +235,9 @@ class CLAUDEMDGeneratorV3 {
           (d) => generatePlanDigest(d, this.digestMapping, digestMetadata), 'digest');
         this.generateFile('CLAUDE_EXEC_DIGEST.md', data,
           (d) => generateExecDigest(d, this.digestMapping, digestMetadata), 'digest');
+        // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-C: Adam role contract digest
+        this.generateFile('CLAUDE_ADAM_DIGEST.md', data,
+          (d) => generateAdamDigest(d, this.digestMapping, digestMetadata), 'digest');
 
         // Calculate DIGEST totals
         const digestFiles = Object.entries(this.manifest.files).filter(([_, f]) => f.type === 'digest');

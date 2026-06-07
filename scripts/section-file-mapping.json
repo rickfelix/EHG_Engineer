@@ -164,6 +164,12 @@
     ],
     "_removed_sections_note": "mandatory_phase_transitions_exec (duplicate of CORE mandatory_phase_transitions), migration_execution_delegation (duplicate of CORE migration_execution_protocol), workflow (was listed twice — removed duplicate). RCA mandate removed from generator — already in router."
   },
+  "CLAUDE_ADAM.md": {
+    "description": "Adam role contract (~2-3k chars) — Chairman-attached advisory/analysis role. Loaded by the /adam skill exactly as workers load CLAUDE_CORE.",
+    "sections": [
+      "adam_role_contract"
+    ]
+  },
   "SHARED": {
     "description": "Sections that appear in multiple files or are general reference",
     "sections": [

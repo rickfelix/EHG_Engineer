@@ -428,11 +428,49 @@ ${scriptsSection}
 `;
 }
 
+/**
+ * Generate CLAUDE_ADAM.md — Adam role contract (database-first)
+ * Mirrors the phase-file generators: composes the sections listed under
+ * 'CLAUDE_ADAM.md' in section-file-mapping.json from leo_protocol_sections.
+ * @param {Object} data - All data from database
+ * @param {Object} fileMapping - Section to file mapping
+ * @returns {string} Generated markdown content
+ */
+function generateAdam(data, fileMapping) {
+  const { protocol } = data;
+  const sections = protocol.sections;
+  const { today, time } = getMetadata(protocol);
+
+  const adamSections = getSectionsByMapping(sections, 'CLAUDE_ADAM.md', fileMapping);
+  const adamContent = adamSections.map(s => formatSection(s)).join('\n\n');
+
+  return `# CLAUDE_ADAM.md - Adam Role Contract
+
+**Generated**: ${today} ${time}
+**Protocol**: LEO ${protocol.version}
+**Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
+**Load when**: Running /adam, or orienting an operator-attached advisory session
+
+> Adam is a first-class LEO role parallel to the coordinator and the worker. For the LEAD→PLAN→EXEC workflow itself, see CLAUDE_CORE.md and the phase files.
+
+---
+
+${adamContent}
+
+---
+
+*Generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
+`;
+}
+
 export {
   getSectionsByMapping,
   generateRouter,
   generateCore,
   generateLead,
   generatePlan,
-  generateExec
+  generateExec,
+  generateAdam
 };
