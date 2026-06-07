@@ -35,6 +35,9 @@ const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/h
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
 const _coordEventsModule = require('../lib/coordinator/coordination-events.cjs'); // SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 (epic #4) — top-level require so WIRE_CHECK reaches detectors.cjs
+// SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001 — top-level require so WIRE_CHECK reaches the
+// pending-question timer (auto-proceed on a stale, non-critical, unanswered operator question).
+const _pendingQuestionTimer = require('../lib/coordinator/pending-question-timer.cjs');
 
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
 // Reuse the INTENT payload key contract owned by the WRITER (worker-signal.cjs) so the
@@ -1811,6 +1814,30 @@ async function main() {
     }
   } catch (resolvedErr) {
     console.log('SIGNAL_RESOLVED: ' + (resolvedErr && resolvedErr.message ? resolvedErr.message : 'unknown'));
+  }
+
+  // SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001 — pending-question timer /
+  // default-proceed. For an OPEN operator_question (category='operator_question',
+  // status='new') that is NON-CRITICAL and unanswered past the timeout, auto-
+  // proceed on the coordinator's recommended option and mark it resolved with an
+  // auto_proceeded marker + audit note (FR-001, idempotent). Every still-open
+  // question is re-surfaced each tick (FR-002 — the existing email path renders
+  // status='new' rows; this just reports the live count). CRITICAL-category
+  // questions NEVER auto-proceed (FR-003). DEFAULT-OFF behind
+  // COORD_QUESTION_AUTO_PROCEED_V1; READ-ONLY + fail-open when the flag is off
+  // (aged non-critical questions resurface instead of auto-proceeding).
+  try {
+    const pq = await _pendingQuestionTimer.planAndApplyPendingQuestions(supabase, {});
+    const stillOpen = pq.resurfaced + pq.hardWaited; // open questions kept visible this tick
+    if (pq.autoProceeded > 0 || stillOpen > 0) {
+      console.log(
+        '  PENDING_QUESTION: auto-proceeded=' + pq.autoProceeded +
+        ' resurfaced=' + pq.resurfaced + ' hard-wait=' + pq.hardWaited +
+        ' skipped=' + pq.skipped + (pq.enabled ? '' : ' (auto-proceed flag OFF)')
+      );
+    }
+  } catch (pqErr) {
+    console.log('PENDING_QUESTION: ' + (pqErr && pqErr.message ? pqErr.message : 'unknown'));
   }
 
   console.log('=== SWEEP COMPLETE ===');
