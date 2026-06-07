@@ -38,6 +38,9 @@ const _coordEventsModule = require('../lib/coordinator/coordination-events.cjs')
 // SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001 — top-level require so WIRE_CHECK reaches the
 // pending-question timer (auto-proceed on a stale, non-critical, unanswered operator question).
 const _pendingQuestionTimer = require('../lib/coordinator/pending-question-timer.cjs');
+// SD-LEO-INFRA-ADAM-COORDINATOR-ACTION-001 — top-level require so WIRE_CHECK reaches the
+// Adam->coordinator action-required two-stage ACK + wake/SLA escalation timer.
+const _adamActionAck = require('../lib/coordinator/adam-action-ack.cjs');
 
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
 // Reuse the INTENT payload key contract owned by the WRITER (worker-signal.cjs) so the
@@ -1838,6 +1841,31 @@ async function main() {
     }
   } catch (pqErr) {
     console.log('PENDING_QUESTION: ' + (pqErr && pqErr.message ? pqErr.message : 'unknown'));
+  }
+
+  // SD-LEO-INFRA-ADAM-COORDINATOR-ACTION-001 — Adam->coordinator action-required
+  // two-stage ACK + wake/SLA escalation. The sweep-set read_at marks an action
+  // handoff DELIVERED (transport), NOT actioned; an action-required handoff stays
+  // pending-action until the coordinator agent records a genuine second-stage ACK
+  // (payload.actioned_at). When such a handoff is DELIVERED but un-actioned past
+  // the SLA, emit a wake/action-required alert targeting the coordinator so the
+  // parked coordinator is woken into an active cycle (FR-002), and stamp
+  // payload.escalated_at on the original row so escalation is idempotent (no spam).
+  // Informational (unflagged) rows are never tracked (FR-003). DEFAULT-OFF behind
+  // COORD_ADAM_ACTION_ACK_V1; READ-ONLY + fail-open when the flag is off (aged
+  // un-actioned handoffs stay 'pending' instead of escalating). SLA configurable
+  // via COORD_ADAM_ACTION_SLA_MIN.
+  try {
+    const aa = await _adamActionAck.planAndApplyAdamActionAcks(supabase, {});
+    if (aa.escalated > 0 || aa.pending > 0 || aa.done > 0) {
+      console.log(
+        '  ADAM_ACTION_ACK: escalated=' + aa.escalated +
+        ' pending=' + aa.pending + ' done=' + aa.done +
+        (aa.enabled ? '' : ' (escalation flag OFF)')
+      );
+    }
+  } catch (aaErr) {
+    console.log('ADAM_ACTION_ACK: ' + (aaErr && aaErr.message ? aaErr.message : 'unknown'));
   }
 
   console.log('=== SWEEP COMPLETE ===');
