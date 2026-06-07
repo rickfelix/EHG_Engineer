@@ -339,6 +339,40 @@ ${fullLoadInstr}
 `;
 }
 
+/**
+ * Generate CLAUDE_ADAM_DIGEST.md file
+ * @param {Object} data - All data from database
+ * @param {Object} fileMapping - Section to file mapping (digest version)
+ * @param {Object} metadata - Generation metadata
+ * @returns {string} Generated CLAUDE_ADAM_DIGEST.md content
+ */
+function generateAdamDigest(data, fileMapping, metadata) {
+  const { protocol } = data;
+  const sections = protocol.sections;
+
+  const adamSections = getSectionsByMapping(sections, 'CLAUDE_ADAM_DIGEST.md', fileMapping);
+  const adamContent = adamSections.map(s => formatSectionCompact(s)).join('\n\n');
+
+  const header = generateDigestHeader('CLAUDE_ADAM_DIGEST.md', metadata);
+  const fullLoadInstr = generateFullLoadInstructions('CLAUDE_ADAM.md');
+
+  return `${header}# CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
+
+**Protocol**: LEO ${protocol.version}
+**Purpose**: Adam role contract essentials — Chairman-attached advisory/analysis session (<3k chars)
+
+${fullLoadInstr}
+
+---
+
+${adamContent}
+
+---
+*Adam is NOT a worker and NOT the coordinator. Full contract in CLAUDE_ADAM.md.*
+*Protocol: ${protocol.version}*
+`;
+}
+
 export {
   getSectionsByMapping,
   formatSectionCompact,
@@ -348,5 +382,6 @@ export {
   generateCoreDigest,
   generateLeadDigest,
   generatePlanDigest,
-  generateExecDigest
+  generateExecDigest,
+  generateAdamDigest
 };

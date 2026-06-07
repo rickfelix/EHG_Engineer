@@ -58,5 +58,11 @@
       "negative_constraints_exec"
     ],
     "_removed_sections_note": "exec_retrospective_anti_patterns (reference, escalate for retro writing), mandatory_phase_transitions_exec (duplicate of CORE), migration_execution_delegation (duplicate of CORE). ESCALATE TO FULL FILE WHEN: writing retrospectives, debugging migration failures."
+  },
+  "CLAUDE_ADAM_DIGEST.md": {
+    "description": "Adam role contract essentials (~2-3k chars) - Chairman-attached advisory/analysis role, boundaries, identity tag.",
+    "sections": [
+      "adam_role_contract"
+    ]
   }
 }
