@@ -8,8 +8,12 @@
 // feedback-coordinator-delegate-and-keep-workers-busy.
 
 import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { countActiveWorktrees, MAX_WORKTREE_COUNT } from '../lib/worktree-quota.js';
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
 const t = Date.now();
@@ -23,14 +27,14 @@ const backlog = hb || [];
 const high = backlog.filter(r => ['high', 'critical'].includes((r.severity || '').toLowerCase()));
 
 // (2) SD queue
-const { data: sd } = await db.from('strategic_directives_v2').select('sd_key,status,current_phase,claiming_session_id').not('status', 'in', termList);
+const { data: sd } = await db.from('strategic_directives_v2').select('sd_key,status,current_phase,claiming_session_id,updated_at,dependencies').not('status', 'in', termList);
 const sds = sd || [];
 const unclaimed = sds.filter(s => !s.claiming_session_id);
 const claimed = sds.length - unclaimed.length;
 const stuck = unclaimed.filter(s => s.status === 'in_progress');
 
 // workers
-const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key').order('heartbeat_at', { ascending: false }).limit(60);
+const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state').order('heartbeat_at', { ascending: false }).limit(60);
 const live = (sessRaw || []).filter(s => s.session_id !== me && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < 900000);
 const builders = live.filter(s => s.sd_key).length;
 const liveIdle = live.filter(s => !s.sd_key).length;
@@ -55,3 +59,78 @@ console.log('  SOURCE BACKLOG? : ' + (starving
   : 'no — ' + (backlog.length === 0 ? 'backlog empty'
     : liveIdle === 0 ? 'no idle workers to feed'
     : 'queue has surplus (' + unclaimed.length + ' unclaimed ≥ ' + capacity + ' capacity) → worker-bound, wake workers instead')));
+
+// ─────────────────────────────────────────────────────────────────────────
+// SRE CHARTER GAUGES (SD-MAN-INFRA-CODIFY-SRE-STYLE-001)
+// Read-only, fail-open. Surfaces resource-pool / liveness / flow / dependency
+// signals so the coordinator can act BEFORE silent exhaustion stalls the line.
+const DAY = 86400000;
+const ageStr = (ms) => ms >= DAY ? (ms / DAY).toFixed(1) + 'd' : Math.round(ms / 3600000) + 'h';
+
+// (a) RESOURCE-POOL — worktree pool utilization (own finite pools; reclaim before exhaustion)
+let wtLine;
+try {
+  const wt = countActiveWorktrees(repoRoot);
+  const pct = Math.round((wt / MAX_WORKTREE_COUNT) * 100);
+  const flag = wt >= MAX_WORKTREE_COUNT ? ' ⛔ SATURATED — reclaim before dispatch stalls'
+    : pct >= 85 ? ' ⚠ near cap' : '';
+  wtLine = wt + '/' + MAX_WORKTREE_COUNT + ' (' + pct + '%)' + flag;
+} catch (e) { wtLine = 'unavailable (' + e.message + ')'; }
+
+// (b) FLOW — stuck-SD aging (non-terminal SDs by time in current phase)
+let agingLine, agingTop = [];
+try {
+  const aged = sds.filter(s => s.updated_at)
+    .map(s => ({ k: s.sd_key, ph: s.current_phase || '-', age: Math.max(0, t - new Date(s.updated_at).getTime()) }))
+    .sort((a, b) => b.age - a.age);
+  agingTop = aged.slice(0, 3);
+  agingLine = aged.filter(s => s.age >= DAY).length + ' SD(s) >1d in-phase (of ' + sds.length + ' non-terminal)';
+} catch (e) { agingLine = 'unavailable (' + e.message + ')'; }
+
+// (c) FLOW — idle-with-work workers (live-idle while claimable work exists → wake/assign)
+const idleWithWork = (liveIdle > 0 && unclaimed.length > 0) ? liveIdle : 0;
+const idleWorkLine = idleWithWork > 0
+  ? idleWithWork + ' live-idle worker(s) while ' + unclaimed.length + ' SD(s) unclaimed ⚠ wake/assign them'
+  : 'none (' + liveIdle + ' idle, ' + unclaimed.length + ' unclaimed)';
+
+// (d) LIVENESS — loop_state distribution across live workers (self-sustaining loops?)
+let loopLine;
+try {
+  const dist = { active: 0, awaiting_tick: 0, exited: 0, null: 0, other: 0 };
+  for (const s of live) {
+    const ls = s.loop_state;
+    if (ls == null) dist.null++; else if (ls in dist) dist[ls]++; else dist.other++;
+  }
+  loopLine = 'active=' + dist.active + ' awaiting_tick=' + dist.awaiting_tick + ' exited=' + dist.exited + ' null=' + dist.null + (dist.other ? ' other=' + dist.other : '');
+} catch (e) { loopLine = 'unavailable (' + e.message + ')'; }
+
+// (e) DEPENDENCY / CRITICAL-PATH — blocked vs ready, plus stale-blocked anomalies
+let depLine, depStale = [];
+try {
+  const depOf = (s) => Array.isArray(s.dependencies) ? s.dependencies.map(d => d && (d.sd_id || d.sd_key || d)).filter(Boolean) : [];
+  const depKeys = [...new Set(sds.flatMap(depOf))];
+  const statusByKey = {};
+  if (depKeys.length) {
+    const { data: depRows } = await db.from('strategic_directives_v2').select('sd_key,status').in('sd_key', depKeys);
+    for (const r of (depRows || [])) statusByKey[r.sd_key] = r.status;
+  }
+  const isTerminal = (st) => TERMINAL.includes(st); // unknown/missing dep also counts as unmet
+  let blocked = 0, ready = 0;
+  for (const s of sds) {
+    const deps = depOf(s);
+    if (!deps.length) continue;
+    if (deps.some(k => !isTerminal(statusByKey[k]))) { blocked++; continue; }
+    ready++; // all deps terminal/satisfied
+    if (!s.claiming_session_id && s.updated_at && (t - new Date(s.updated_at).getTime()) >= DAY) depStale.push(s.sd_key);
+  }
+  depLine = blocked + ' blocked (unmet deps) | ' + ready + ' dep-satisfied | ' + depStale.length + ' stale-blocked (deps done, idle >1d)';
+} catch (e) { depLine = 'unavailable (' + e.message + ')'; }
+
+console.log('  ── SRE GAUGES ─────────────────────────────────────────');
+console.log('  RESOURCE-POOL   : worktrees ' + wtLine);
+console.log('  FLOW (aging)    : ' + agingLine);
+for (const a of agingTop) console.log('      ' + a.k + '  [' + a.ph + ']  ' + ageStr(a.age));
+console.log('  FLOW (idle/work): ' + idleWorkLine);
+console.log('  LIVENESS (loop) : ' + loopLine + '  (live workers)');
+console.log('  DEPENDENCY      : ' + depLine);
+for (const k of depStale.slice(0, 5)) console.log('      stale-blocked: ' + k);
