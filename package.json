@@ -346,6 +346,8 @@
     "session:worktree": "node scripts/session-worktree.js",
     "session:check-concurrency": "node scripts/session-check-concurrency.js",
     "session:park": "node scripts/park-worker.cjs",
+    "registry:backfill-pending": "node scripts/backfill-pending-enablement-registry.mjs",
+    "coord:email-summary": "node scripts/coordinator-email-summary.mjs",
     "worktree:remove": "node scripts/safe-worktree-remove.mjs",
     "worktree:reap": "node scripts/worktree-reaper.mjs",
     "worktree:reap:execute": "node scripts/worktree-reaper.mjs --execute",
