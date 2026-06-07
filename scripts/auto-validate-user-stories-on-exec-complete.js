@@ -36,11 +36,30 @@ async function autoValidateUserStories(sdId, sbClient) {
 
   console.log(`🔍 Checking user stories for ${sdId}...`);
 
+  // SD-FDBK-INFRA-COMPLETION-FLAG-HARNESS-001: the EXEC-TO-PLAN gate passes ctx.sd.id (the UUID),
+  // but the CLI path (process.argv[2]) may pass an sd_key. user_stories.sd_id stores the UUID, so
+  // resolve an sd_key form to the UUID first — otherwise the queries below match nothing and no
+  // stories are ever auto-validated.
+  const isUuid = typeof sdId === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+  let resolvedSdId = sdId;
+  if (sdId && !isUuid) {
+    const { data: sdRow } = await supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('sd_key', sdId)
+      .maybeSingle();
+    if (sdRow?.id) {
+      resolvedSdId = sdRow.id;
+      console.log(`   ↳ resolved sd_key ${sdId} → ${resolvedSdId}`);
+    }
+  }
+
   // 1. Get all user stories for this SD
   const { data: stories, error: storiesError } = await supabase
     .from('user_stories')
     .select('id, title, status, validation_status')
-    .eq('sd_id', sdId);
+    .eq('sd_id', resolvedSdId);
 
   if (storiesError) {
     console.error('❌ Error fetching user stories:', storiesError.message);
@@ -56,7 +75,7 @@ async function autoValidateUserStories(sdId, sbClient) {
   const { data: deliverables, error: delError } = await supabase
     .from('sd_scope_deliverables')
     .select('deliverable_name, completion_status')
-    .eq('sd_id', sdId);
+    .eq('sd_id', resolvedSdId);
 
   if (delError) {
     console.error('❌ Error fetching deliverables:', delError.message);
@@ -71,20 +90,23 @@ async function autoValidateUserStories(sdId, sbClient) {
     return { validated: false, message: 'Deliverables incomplete' };
   }
 
-  // 2b. Promote status='ready' -> 'completed' (deliverables prove the work landed)
-  const readyStories = stories.filter(s => s.status === 'ready');
-  if (readyStories.length > 0) {
-    console.log(`📈 Promoting ${readyStories.length} ready stories to completed (deliverables done)...`);
+  // 2b. Promote status IN ('ready','draft') -> 'completed' (deliverables prove the work landed).
+  // SD-FDBK-INFRA-COMPLETION-FLAG-HARNESS-001: PLAN / add-prd-to-database create user stories as
+  // status='draft'. Promoting only 'ready' left those draft stories untouched, so they failed
+  // USER_STORY_COVERAGE at EXEC-TO-PLAN and had to be hand-completed every SD. Include 'draft'.
+  const promotableStories = stories.filter(s => s.status === 'ready' || s.status === 'draft');
+  if (promotableStories.length > 0) {
+    console.log(`📈 Promoting ${promotableStories.length} ready/draft stories to completed (deliverables done)...`);
     const { error: promoteError } = await supabase
       .from('user_stories')
       .update({ status: 'completed' })
-      .eq('sd_id', sdId)
-      .eq('status', 'ready');
+      .eq('sd_id', resolvedSdId)
+      .in('status', ['ready', 'draft']);
     if (promoteError) {
-      console.error('❌ Error promoting ready->completed:', promoteError.message);
+      console.error('❌ Error promoting ready/draft->completed:', promoteError.message);
       return { validated: false, error: promoteError.message };
     }
-    readyStories.forEach(s => { s.status = 'completed'; });
+    promotableStories.forEach(s => { s.status = 'completed'; });
   }
 
   // 3. Auto-validate completed user stories (must be both completed AND pending validation)
@@ -108,7 +130,7 @@ async function autoValidateUserStories(sdId, sbClient) {
   const { data: updated, error: updateError } = await supabase
     .from('user_stories')
     .update({ validation_status: 'validated' })
-    .eq('sd_id', sdId)
+    .eq('sd_id', resolvedSdId)
     .eq('status', 'completed')
     .eq('validation_status', 'pending')
     .select('id, title, status');
