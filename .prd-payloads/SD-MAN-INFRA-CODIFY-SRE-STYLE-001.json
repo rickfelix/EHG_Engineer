@@ -1,0 +1,137 @@
+{
+  "executive_summary": "Operating a fleet of AI agents needs SRE-style supervisor duties humans do not self-perform, because agents fail SILENTLY on resource exhaustion and go quiet rather than escalating. This PRD codifies four standing coordinator responsibilities — resource-pool management, liveness supervision, flow + silent-failure detection, and dependency watching — into the two canonical coordinator documents, and surfaces the corresponding gauges in scripts/coordinator-audit.mjs. The code substrate already exists (stale-session-sweep.cjs liveness/WIP/struggling detection, lib/worktree-quota.js pool counting); the gap is a named SRE charter tying the scattered behaviors together plus audit gauges for pool utilization, stuck-SD aging, idle-with-work workers, loop_state distribution, and dependency/critical-path. Scope is docs + a few read-only gauges; it does NOT re-implement sweep detection or the worktree watchdog mechanics (SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001). It is the ongoing-operations counterpart to the startup ritual (SD-LEO-INFRA-COORDINATOR-STARTUP-ONBOARDING-001) and self-sustaining loops (SD-LEO-INFRA-FLEET-WAKE-UNDER-001).",
+  "system_architecture": {
+    "overview": "Documentation-first change to two canonical coordinator charter docs plus additive read-only gauges in the coordinator-audit CLI. No schema changes, no new tables, no changes to the live sweep.",
+    "canonical_docs": [".claude/commands/coordinator.md", "docs/protocol/fleet-coordinator-and-worker-behavior.md"],
+    "gauge_surface": "scripts/coordinator-audit.mjs (read-only Supabase + git/worktree introspection)",
+    "data_sources": "lib/worktree-quota.js (countActiveWorktrees, MAX_WORKTREE_COUNT); claude_sessions (heartbeat_at, loop_state, sd_key, status); strategic_directives_v2 (status, current_phase, updated_at, dependencies, claiming_session_id)",
+    "reuse": "Cites existing implementing mechanisms in stale-session-sweep.cjs (ALIVE_NO_HEARTBEAT/DEAD classification, LOOP_STATE_EXITED, WIP_GUARD, WORKER_STRUGGLING handoff_fail_count>3, dead-letter CLAIM_RELEASED) rather than duplicating them."
+  },
+  "functional_requirements": [
+    {
+      "id": "FR-001",
+      "title": "Add the four-duty SRE charter section to coordinator.md",
+      "description": "Add a 'Coordinator standing responsibilities (SRE charter)' section to .claude/commands/coordinator.md enumerating all four standing duties: (a) resource-pool management (own worktrees / claim-locks / CI / rate-limits as finite pools and reclaim BEFORE exhaustion hard-stops the line), (b) liveness supervision (heartbeat + loop_state monitoring distinguishing working / idle-alive / dead, auto-recovery, self-sustaining loops), (c) flow + silent-failure detection (cycle-time / stuck-aging, WIP limits, incognito / repeated-gate-fail / dead-letter detection and intervention), (d) dependency watching (track the SD dependency graph + critical path, blocked vs unblocked-and-claimable, detect stale-blocked anomalies). Each duty states its definition, the rationale (agents fail silently on exhaustion, fall asleep when their loop is not self-rescheduling, and do not escalate so the coordinator pulls the andon cord on their behalf), and which existing mechanism implements it (stale-session-sweep.cjs, lib/worktree-quota.js, dependency resolver).",
+      "acceptance_criteria": [
+        "grep for 'standing responsibilities (SRE charter)' in .claude/commands/coordinator.md returns the new section header.",
+        "All four duties are present, each with a definition, a rationale, and a named implementing mechanism.",
+        "The section does NOT re-document the sweep detection algorithm itself — it references stale-session-sweep.cjs."
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "Mirror the SRE charter into fleet-coordinator-and-worker-behavior.md with deploy-verification practice",
+      "description": "Add the identical four-duty 'Coordinator standing responsibilities (SRE charter)' section to docs/protocol/fleet-coordinator-and-worker-behavior.md so both canonical docs carry it. Also document the SYNC -> RESTART -> CANARY-VERIFY deploy-verification practice (merged + git-synced != RUNNING: on any worker-code refresh the coordinator must sync the checkout to origin/main, restart the long-lived worker process, and canary-verify at runtime before declaring a deploy-gap closed) and a complementary-not-overlapping note clarifying this SD is the ongoing-operations charter while SD-LEO-INFRA-COORDINATOR-STARTUP-ONBOARDING-001 is the one-time startup ritual and SD-LEO-INFRA-FLEET-WAKE-UNDER-001 covers self-sustaining loop-wake.",
+      "acceptance_criteria": [
+        "grep for 'SRE charter' in docs/protocol/fleet-coordinator-and-worker-behavior.md returns the section with all four duties.",
+        "The SYNC -> RESTART -> CANARY-VERIFY deploy-verification practice is documented.",
+        "The relationship to STARTUP-ONBOARDING-001 and FLEET-WAKE-UNDER-001 is stated as complementary, no duplication."
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "Surface resource-pool and flow gauges in coordinator-audit.mjs",
+      "description": "Extend scripts/coordinator-audit.mjs to print gauges it does not already show: worktree pool utilization (countActiveWorktrees(repoRoot) / MAX_WORKTREE_COUNT from lib/worktree-quota.js, e.g. 'Worktrees: N/20'), stuck-SD aging (non-terminal strategic_directives_v2 rows by time-in-phase using current_phase + updated_at), and idle-with-work workers (claude_sessions that are live-idle while unclaimed workable SDs exist). Gauges are read-only and must fail-open (a query error prints a warning, not a crash).",
+      "acceptance_criteria": [
+        "Running node scripts/coordinator-audit.mjs prints a worktree pool utilization gauge sourced from lib/worktree-quota.js.",
+        "The audit prints a stuck-SD aging gauge and an idle-with-work-workers gauge.",
+        "A simulated query error in a gauge prints a warning and the audit still completes (fail-open)."
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Surface liveness and dependency/critical-path gauges in coordinator-audit.mjs",
+      "description": "Extend scripts/coordinator-audit.mjs with a loop_state distribution gauge (count of claude_sessions by loop_state: active / awaiting_tick / exited / null) and a dependency / critical-path gauge over strategic_directives_v2.dependencies (blocked-count = SDs with unmet deps, ready-count = unblocked-and-claimable, and stale-blocked detections = a child shown BLOCKED while its dependency is already completed). These satisfy the liveness-supervision and dependency-watching duties' observability. Read-only and fail-open.",
+      "acceptance_criteria": [
+        "The audit prints a loop_state distribution gauge with the four buckets.",
+        "The audit prints a dependency gauge with blocked-count, ready-count, and stale-blocked detections.",
+        "Stale-blocked detection flags at least the case of a dependency marked completed while the dependent SD is still treated as blocked."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-001",
+      "title": "Reuse existing pool/liveness helpers; no duplication",
+      "description": "FR-003/FR-004 gauges import countActiveWorktrees and MAX_WORKTREE_COUNT from lib/worktree-quota.js and read claude_sessions / strategic_directives_v2 directly; they MUST NOT re-implement the stale-session-sweep.cjs liveness, WIP, or struggling-worker detection. The charter docs reference those mechanisms by name."
+    },
+    {
+      "id": "TR-002",
+      "title": "Read-only, fail-open gauges",
+      "description": "All new gauges are read-only (no writes, no DDL). Each gauge wraps its query in try/catch and degrades to a one-line warning on error so coordinator-audit.mjs never crashes a coordinator pass."
+    },
+    {
+      "id": "TR-003",
+      "title": "Doc parity across both canonical files",
+      "description": "The SRE charter section text must be substantively identical in .claude/commands/coordinator.md and docs/protocol/fleet-coordinator-and-worker-behavior.md (per operator canonical-doc requirement) so the two charters cannot drift."
+    }
+  ],
+  "implementation_approach": {
+    "steps": [
+      "Author the four-duty SRE charter section once, insert into .claude/commands/coordinator.md (FR-001).",
+      "Insert the same section + deploy-verification practice + relationship note into docs/protocol/fleet-coordinator-and-worker-behavior.md (FR-002).",
+      "Add the resource-pool, stuck-SD-aging, and idle-with-work gauges to coordinator-audit.mjs (FR-003).",
+      "Add the loop_state and dependency/critical-path gauges to coordinator-audit.mjs (FR-004).",
+      "Run node scripts/coordinator-audit.mjs to confirm all gauges render; run the smoke_test_steps."
+    ],
+    "out_of_scope": "Re-building stale-session-sweep detection; the worktree watchdog mechanics (SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001); any schema or migration change."
+  },
+  "integration_operationalization": {
+    "consumers": "Coordinators (and any operator) reading the SRE charter in the two canonical docs, and anyone running node scripts/coordinator-audit.mjs to see the new gauges.",
+    "dependencies": "lib/worktree-quota.js (countActiveWorktrees, MAX_WORKTREE_COUNT); claude_sessions (heartbeat_at, loop_state, sd_key, status); strategic_directives_v2 (status, current_phase, updated_at, dependencies, claiming_session_id). References existing stale-session-sweep.cjs mechanisms without modifying them.",
+    "data_contracts": "Gauges are read-only reads of existing columns; no new tables, columns, or write paths. Worktree count contract comes from lib/worktree-quota.js exports.",
+    "runtime_config": "No new env or config. Docs take effect on merge; gauges render the next time coordinator-audit.mjs runs.",
+    "observability_rollout": "The gauges themselves are the observability deliverable (pool utilization, stuck-SD aging, idle-with-work workers, loop_state distribution, dependency/critical-path) surfaced in one coordinator audit pass. Rollout is immediate on merge; rollback is a git revert of the single PR with no data impact (pure docs + additive read-only gauges)."
+  },
+  "acceptance_criteria": [
+    "Both canonical docs contain an identical four-duty 'Coordinator standing responsibilities (SRE charter)' section (resource-pool management, liveness supervision, flow + silent-failure detection, dependency watching).",
+    "fleet-coordinator-and-worker-behavior.md additionally documents the SYNC -> RESTART -> CANARY-VERIFY deploy-verification practice and the complementary relationship to STARTUP-ONBOARDING-001 and FLEET-WAKE-UNDER-001.",
+    "node scripts/coordinator-audit.mjs prints five new gauges: worktree pool utilization, stuck-SD aging, idle-with-work workers, loop_state distribution, and dependency/critical-path.",
+    "No existing coordinator-audit.mjs output is removed and no existing tests break (zero regressions).",
+    "No stale-session-sweep detection logic is duplicated; charter references existing mechanisms."
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-001",
+      "title": "SRE charter present in both canonical docs",
+      "type": "doc-assertion",
+      "scenario": "grep both .claude/commands/coordinator.md and docs/protocol/fleet-coordinator-and-worker-behavior.md for the SRE charter header and the four duty names.",
+      "expected": "Both files return the header and all four duties; deploy-verification practice present in the protocol doc."
+    },
+    {
+      "id": "TS-002",
+      "title": "coordinator-audit prints all five gauges",
+      "type": "integration",
+      "scenario": "Run node scripts/coordinator-audit.mjs against the live DB.",
+      "expected": "Output includes worktree pool utilization (N/20), stuck-SD aging, idle-with-work workers, loop_state distribution, and dependency/critical-path gauges."
+    },
+    {
+      "id": "TS-003",
+      "title": "Gauges fail open",
+      "type": "unit",
+      "scenario": "Force a query/helper error inside one gauge.",
+      "expected": "A one-line warning is printed and coordinator-audit.mjs still completes for the remaining gauges."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Charter docs drift between the two canonical files over time.",
+      "mitigation": "TR-003 requires substantively identical text; the smoke test greps both files for the same four duties."
+    },
+    {
+      "risk": "A gauge query is slow or errors against the live DB and disrupts a coordinator pass.",
+      "mitigation": "TR-002 read-only + fail-open: each gauge is try/catch wrapped and degrades to a warning."
+    },
+    {
+      "risk": "Perceived overlap with the in-flight worktree watchdog and startup-onboarding SDs.",
+      "mitigation": "Scope is docs + read-only gauges only; FR-002 documents the complementary boundaries explicitly; watchdog mechanics remain out of scope."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-MAN-INFRA-CODIFY-SRE-STYLE-001",
+    "target_application": "EHG_Engineer",
+    "target_files": [".claude/commands/coordinator.md", "docs/protocol/fleet-coordinator-and-worker-behavior.md", "scripts/coordinator-audit.mjs"],
+    "created_via": "worker b0e6e89d PLAN phase",
+    "related_sds": ["SD-LEO-INFRA-COORDINATOR-STARTUP-ONBOARDING-001", "SD-LEO-INFRA-FLEET-WAKE-UNDER-001", "SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001"]
+  }
+}
