@@ -33,6 +33,25 @@ const ACK_RE = /comms.?check ack|read you/i;
   if (!me) { console.log('[COMMS-CHECK] no CLAUDE_SESSION_ID — cannot identify coordinator'); return; }
   const since = new Date(t - LIVE).toISOString();
   const { data: liveRows } = await db.from('claude_sessions').select('session_id,sd_key,heartbeat_at,metadata').gte('heartbeat_at', since);
+
+  // SD-LEO-INFRA-ADD-PART-MUTUAL-001 — this session runs comms-check AS the coordinator.
+  // Reactive RESPONDER self-heal: reply to any pending self-ID discovery handshake (and
+  // re-register the is_coordinator flag), and if NO live session currently holds the flag
+  // (the 2026-06-07 post-restart gap), announce + self-register so flag-only coordinator
+  // discovery is healed. DEFAULT-OFF behind COORD_SELF_ID_V1; fully inert + fail-open.
+  try {
+    const selfId = createRequire(import.meta.url)('../lib/coordinator/self-id-handshake.cjs');
+    if (selfId.selfIdEnabled(process.env)) {
+      const anyFlagged = (liveRows || []).some(w => (w.metadata || {}).is_coordinator);
+      if (!anyFlagged) {
+        const a = await selfId.announceSelfId(db, { selfSessionId: me, isCoordinator: true });
+        if (a.registered) console.log('  [SELF_ID] is_coordinator flag was empty — announced + self-registered ' + String(me).slice(0, 8));
+      }
+      const r = await selfId.planAndApplySelfIdHandshake(db, { selfSessionId: me, selfRole: 'coordinator', selfIsCoordinator: true });
+      if (r.replied || r.registered) console.log('  [SELF_ID] answered discovery handshake(s): replied=' + r.replied + ' registered=' + r.registered);
+    }
+  } catch (e) { console.log('  [SELF_ID] handshake skipped (non-fatal): ' + (e && e.message ? e.message : e)); }
+
   let workers = (liveRows || []).filter(w => !(w.metadata || {}).is_coordinator && w.session_id !== me);
   if (TARGET) workers = workers.filter(w => String(w.session_id).startsWith(TARGET));
   if (!workers.length) { console.log('[COMMS-CHECK] no live workers to check'); return; }
