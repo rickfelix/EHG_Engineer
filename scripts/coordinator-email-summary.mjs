@@ -107,8 +107,15 @@ const qLabel = (q) => {
 const { count: completedNow } = await db.from('strategic_directives_v2')
   .select('sd_key', { count: 'exact', head: true }).eq('status', 'completed');
 const shippedSince = (typeof snap.completedCount === 'number') ? Math.max(0, (completedNow || 0) - snap.completedCount) : 0;
-const recentSeen = (sessRaw || []).filter(s => isFleetWorker(s) && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < 45 * 60000);
-const incognito = Math.max(0, recentSeen.length - liveWorkers);   // seen in last 45m but quiet >15m = went incognito (needs a wake re-paste)
+// QF-20260607-608: a worker the operator PROVISIONED must never silently age out of this email.
+//   The old 45-min recentSeen ceiling let a quiet worker vanish with no trace (operator saw a
+//   ~45m worker about to disappear). Use a wide window (PROVISIONED_WINDOW, default 8h) so a
+//   parked/quiet provisioned worker keeps showing as "incognito" until it's genuinely gone, and
+//   report TOTAL provisioned headcount (= live + incognito), not just live.
+const PROVISIONED_WINDOW = parseInt(process.env.COORD_PROVISIONED_WINDOW_MIN || '480', 10) * 60000;
+const recentSeen = (sessRaw || []).filter(s => isFleetWorker(s) && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < PROVISIONED_WINDOW);
+const incognito = Math.max(0, recentSeen.length - liveWorkers);   // provisioned but quiet >15m = incognito (needs a wake re-paste)
+const totalWorkers = liveWorkers + incognito;                     // TRUE provisioned headcount the operator stood up
 
 // ── render ──
 const dot = { red: '🔴', yellow: '🟡', green: '🟢' }[overall];
@@ -122,13 +129,17 @@ const meaning = workable === 0 ? 'idle — no open work'
   : (remaining > 0 ? `keeping up — ${assigned} building, ${remaining} queued` : `all work assigned — ${assigned} building`);
 
 const when = new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
-// QF-20260607-608: surface napping (healthy loop) separately from parked (attention signal).
+// QF-20260607-608: lead with TOTAL provisioned headcount (live + incognito), then the live breakdown.
+//   napping (healthy loop) is surfaced separately from parked (attention signal).
+const headcount = totalWorkers === 0 ? 'no workers provisioned'
+  : `${totalWorkers} worker${totalWorkers > 1 ? 's' : ''}: ${liveWorkers} live${incognito ? ` · ${incognito} incognito` : ''}`;
 const idleGauge = `${parked ? ` · ${parked} parked` : ''}${napping ? ` · ${napping} napping` : ''}`;
-const gauge = liveWorkers === 0 ? 'no live workers' : `${assigned} building · ${remaining} queued${idleGauge}${incognito ? ` · ${incognito} incognito` : ''}`;
+const gauge = totalWorkers === 0 ? 'no workers provisioned' : `${headcount} — ${assigned} building · ${remaining} queued${idleGauge}`;
 const flag = (incognito ? '🔔 ' : '') + (qN ? `❓${qN} · ` : '');
+const subjHead = totalWorkers > 0 ? ` · ${totalWorkers}w (${liveWorkers}live${incognito ? `/${incognito}incog` : ''})` : '';
 const subject = flag + (workable === 0
-  ? `Fleet ${dot} ${word} ${trendArrow} · idle (no work)`
-  : `Fleet ${dot} ${word} ${trendArrow} · ${assigned} bld · ${remaining} queued${parked ? ` · ${parked} parked` : ''}${napping ? ` · ${napping} napping` : ''}${incognito ? ` · ${incognito} incog` : ''}`);
+  ? `Fleet ${dot} ${word} ${trendArrow}${subjHead} · idle (no work)`
+  : `Fleet ${dot} ${word} ${trendArrow}${subjHead} · ${assigned} bld · ${remaining} queued${parked ? ` · ${parked} parked` : ''}${napping ? ` · ${napping} napping` : ''}`);
 const qHtml = qN ? `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fff8e1;border-left:4px solid #f5a623;border-radius:3px"><b>❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input</b><br>${questions.map(q => { const l = qLabel(q); return `• ${esc(l.text)} <span style="color:#999;font-size:13px">— ${esc(l.who)}${esc(l.sd)}</span>`; }).join('<br>')}</p>` : '';
 const liveHtml = incognito ? `<p style="font-size:14px;margin:0 0 8px;padding:8px 10px;background:#fdecea;border-left:4px solid #d9534f;border-radius:3px"><b>🔔 Needs you:</b> ${incognito} worker${incognito > 1 ? 's' : ''} went incognito — a wake-prompt re-paste (or a relaunch for an orphaned-identity window) refills the fleet.</p>` : '';
 const html = `<p style="font-size:17px;margin:0 0 10px"><b>${dot} ${word}</b> — ${meaning} <span style="color:#777;font-size:14px">(${trendWord} ${trendArrow})</span></p>
@@ -141,7 +152,7 @@ const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qT
 
 if (DRY_RUN) {
   console.log('=== [DRY RUN] no email sent ===\nSUBJECT: ' + subject + '\n---\n' + text + '\n---');
-  console.log(`overall=${overall} assigned=${assigned} idle=${idleWorkers} napping=${napping} parked=${parked} remaining=${remaining} liveWorkers=${liveWorkers} workable=${workable} builderKeys=${builderKeys.size} shortBy=${shortBy} questions=${qN} incognito=${incognito} shipped=${shippedSince}`);
+  console.log(`overall=${overall} totalWorkers=${totalWorkers} liveWorkers=${liveWorkers} incognito=${incognito} assigned=${assigned} idle=${idleWorkers} napping=${napping} parked=${parked} remaining=${remaining} workable=${workable} builderKeys=${builderKeys.size} shortBy=${shortBy} questions=${qN} shipped=${shippedSince}`);
 } else {
   const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'Fleet Coordinator <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
