@@ -161,23 +161,35 @@ node scripts/fleet-dashboard.cjs all
 ```
 Display the output.
 
-**Step 4: Set up automated cron loops using CronCreate**
+**Step 4: Coordinator onboarding check (surface role + verify the six-loop set)**
+```bash
+node scripts/coordinator-startup-check.mjs
+```
+This (a) surfaces the durable coordinator role context and prints a roles/responsibilities summary (MANAGER-not-IC, keep-workers-busy=KPI, recurring 3-source audit, teardown discipline), and (b) emits the canonical set of **six** standard cron loops, each with a ready CronCreate spec. It is fail-open (warns, exits 0). `CronList`/`CronCreate` are HARNESS tools (not Node-callable), so the helper EMITS the spec — YOU compare it against `CronList` and arm only the loops not already present. To get an explicit armed|MISSING verdict, re-run with the prompts already in CronList: `node scripts/coordinator-startup-check.mjs --armed "<prompt1>,<prompt2>,…"`.
 
-Create three recurring cron jobs:
+**Step 5: Set up automated cron loops using CronCreate**
+
+Arm all **six** standard loops (idempotent — skip any already in `CronList`):
 1. **Sweep every 5 minutes**: `cron: "*/5 * * * *"`, `prompt: "node scripts/stale-session-sweep.cjs"`, `recurring: true`
 2. **Dashboard every 5 minutes (offset by 2 min)**: `cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"`, `prompt: "node scripts/fleet-dashboard.cjs all"`, `recurring: true`
 3. **Identity refresh every 5 minutes (offset by 4 min)**: `cron: "4,9,14,19,24,29,34,39,44,49,54,59 * * * *"`, `prompt: "node scripts/assign-fleet-identities.cjs"`, `recurring: true`
+4. **Inbox every 2 minutes**: `cron: "*/2 * * * *"`, `prompt: "node scripts/fleet-dashboard.cjs inbox"`, `recurring: true` — surfaces unread worker `/signal` traffic (also re-asserts the coordinator pointer).
+5. **Coordinator 3-source audit every 15 minutes**: `cron: "*/15 * * * *"`, `prompt: "node scripts/coordinator-audit.mjs"`, `recurring: true` — SD queue / harness backlog / inbox, with the source-vs-wake decision.
+6. **Executive email summary every 30 minutes (default-on)**: `cron: "*/30 * * * *"`, `prompt: "node scripts/coordinator-email-summary.mjs"`, `recurring: true` — operator is usually away; this is the fleet-health gauge + question escalation.
 
 The identity refresh loop detects new workers that joined since the last assignment and gives them a color/callsign. Existing assignments are preserved (the script reads current metadata and only assigns to workers without an identity).
 
-**Step 5: Confirm setup**
+**Step 6: Confirm setup**
 
 Display:
 ```
-Coordinator initialized.
+Coordinator initialized (role context surfaced; six standard loops armed).
   Sweep loop: every 5 minutes (auto-releases dead claims, resolves conflicts, QA fixes)
   Dashboard loop: every 5 minutes (offset 2min from sweep)
   Identity loop: every 5 minutes (offset 4min — assigns colors/callsigns to new workers)
+  Inbox loop: every 2 minutes (surfaces worker /signal traffic; re-asserts the coordinator pointer)
+  Audit loop: every 15 minutes (3-source audit: SD queue / harness backlog / inbox)
+  Executive email: every 30 minutes (default-on fleet-health gauge + question escalation)
   All loops auto-expire after 3 days or when this session exits.
 
   Fleet is now running on autopilot. You will see sweep and dashboard output automatically.
