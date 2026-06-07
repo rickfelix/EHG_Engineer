@@ -34,7 +34,7 @@ CONTEXT — you are part of a fleet:
 ANNOUNCE: On loop start, /signal feedback "online — entering autonomous loop" so the coordinator's single pane of glass shows you live.
 
 Each iteration:
-1. COORDINATOR CHECK-IN FIRST. Poll your coordination inbox: `node scripts/fleet-dashboard.cjs inbox`. Then, before pulling from the open queue: (a) work any WORK_ASSIGNMENT / routing message the coordinator sent you; (b) ACK any comms-check in one line — `/signal feedback "comms-check ack — read you"`; (c) action any coordinator coaching/reply. An unread coordinator->worker message is a SILENT BREAK — never skip this step.
+1. COORDINATOR CHECK-IN FIRST — and check in AS A LOOP STEP, never a hand-rolled poll. Run `/checkin` (or `node scripts/fleet-dashboard.cjs inbox`) to poll your coordination inbox THIS iteration. Then, before pulling from the open queue: (a) work any WORK_ASSIGNMENT / routing message the coordinator sent you; (b) ACK any comms-check in one line — `/signal feedback "comms-check ack — read you"`; (c) action any coordinator coaching/reply. An unread coordinator->worker message is a SILENT BREAK — never skip this step. NEVER hand-roll a bounded `Bash` poll loop (`while sleep …`) to wait for an assignment: bounded Bash polls overshoot the 120000ms default Bash timeout and die with exit-143. Polling the inbox once per `/loop` pass + the step-6 `ScheduleWakeup` cadence IS the re-poll mechanism — let the loop re-fire you, do not block a Bash call waiting.
 2. Run `npm run sd:next`. Claim the highest-priority WORKABLE SD not already claimed (READY > EXEC > PLANNING > DRAFT) with `node scripts/sd-start.js <SD-KEY>` (creates your worktree).
 3. Drive it through LEAD -> PLAN -> EXEC -> PLAN_VERIFICATION -> LEAD_FINAL via `node scripts/handoff.js execute <PHASE> <SD-KEY>` and `node scripts/add-prd-to-database.js`. Invoke the required sub-agents (Task tool) BEFORE each handoff so fresh sub_agent_execution_results evidence exists, or the gate blocks with SUBAGENT_EVIDENCE_MISSING.
 4. Re-affirm your claim (re-run `sd-start.js` — idempotent) after any long sub-agent run and right before each handoff.
@@ -54,3 +54,12 @@ step that actually *polls* the coordination inbox and ACKs comms-checks each ite
 so coordinator→worker messages could go unread (a silent break). Also added: an **online
 announce** on loop start and an **offline/FLEET-RETRO announce** on loop stop, so the
 coordinator's single-pane-of-glass reflects the worker entering and leaving the loop.
+
+**SD-LEO-INFRA-FLEET-WAKE-UNDER-001** clarified step 1: a worker told to "check in" must do
+so **as a `/loop` step** (`/checkin` once per pass), **never** by hand-rolling a bounded
+`Bash` poll loop — those overshoot the 120000ms default Bash timeout and die with exit-143
+(the exact failure an RCA worker hit, 2026-06-07). The `/loop` + step-6 `ScheduleWakeup`
+cadence is the re-poll mechanism. The `/checkin` skill (`.claude/commands/checkin.md`) was
+also made explicitly self-sustaining: every check-in turn re-arms a `ScheduleWakeup` and
+re-runs the cycle, so a one-shot check-in can no longer leave a worker idle-forever with a
+non-empty queue.

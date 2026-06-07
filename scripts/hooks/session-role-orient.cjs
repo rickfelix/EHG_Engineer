@@ -21,7 +21,8 @@ const workerLines = (callsign, coordShort) => [
   `[ROLE] WORKER (${callsign ? `callsign: ${callsign}` : 'no callsign'}) under coordinator session=${coordShort}.`,
   '[ROLE] /signal <type> "<body>" when ANY: recurrence (gate 2×, RCA 2×, tool 3×) | about to bypass | spec/PRD friction | harness-bug recognized | memory-trend match.',
   '[ROLE] Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. Severity --low|medium|high|critical (critical bypasses 3× threshold).',
-  '[ROLE] Coordinator check-in EVERY /loop iteration: FIRST poll your inbox (node scripts/fleet-dashboard.cjs inbox) — work any WORK_ASSIGNMENT/routing before the open queue, ACK any comms-check in one line (/signal feedback "comms-check ack"). An unread coordinator→worker message is a silent break. Announce /signal feedback "online" on loop start, FLEET-RETRO on loop stop. Full directive: docs/protocol/fleet-worker-loop-directive.md.'
+  '[ROLE] Coordinator check-in EVERY /loop iteration: FIRST run /checkin (or poll node scripts/fleet-dashboard.cjs inbox) — check in AS A LOOP STEP, NEVER a hand-rolled bounded Bash poll (those overshoot the 120000ms Bash timeout and exit-143). Work any WORK_ASSIGNMENT/routing before the open queue, ACK any comms-check in one line (/signal feedback "comms-check ack"). An unread coordinator→worker message is a silent break. Announce /signal feedback "online" on loop start, FLEET-RETRO on loop stop.',
+  '[ROLE] NEVER just stop; ALWAYS ScheduleWakeup at the END of every pass (~900s/15min when you have or can pull work, ~1200s/20min when idle) so the loop re-fires. If told to "check in" and not already looping, launch /loop /checkin — a bare one-shot check-in leaves you idle-forever with a non-empty queue (the #1 attrition cause). Full directive: docs/protocol/fleet-worker-loop-directive.md.'
 ];
 
 function readCoordFile() {

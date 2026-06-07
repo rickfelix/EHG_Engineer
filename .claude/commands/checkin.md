@@ -1,15 +1,41 @@
 <!-- reasoning_effort: low -->
 
 ---
-description: "Check in with the active coordinator: one deterministic handshake that resolves to claim / self-claim / idle. Use when a worker session starts, finishes an SD, or is told to 'check in'. Per SD-LEO-INFRA-WORKER-CHECKIN-HANDSHAKE-001."
+description: "Check in with the active coordinator: one deterministic handshake that resolves to claim / self-claim / idle, THEN re-loops. Use when a worker session starts, finishes an SD, or is told to 'check in'. Per SD-LEO-INFRA-WORKER-CHECKIN-HANDSHAKE-001 + SD-LEO-INFRA-FLEET-WAKE-UNDER-001."
 ---
 
-# /checkin — Deterministic worker check-in handshake
+# /checkin — Deterministic worker check-in handshake (self-sustaining)
 
 The worker-PULL counterpart to coordinator-PUSH. One verb that ALWAYS resolves to a single action and **never** waits on a human. Use it when:
 - a worker session starts and needs work,
 - a worker finishes an SD and needs the next one,
 - the operator says "check in with the coordinator".
+
+## ⚠️ Check-in is a `/loop` STEP, never a one-shot
+
+`/checkin` is **not a terminal handshake** — it is one iteration of a self-sustaining loop.
+A coordinator **cannot** fire an idle worker's next turn; only the worker's own
+`ScheduleWakeup` (or a human) re-invokes it. So the worker is solely responsible for
+re-arming itself, every single turn.
+
+**THE INVARIANT — never just stop; always `ScheduleWakeup`:** every `/checkin` turn must
+END by arming a `ScheduleWakeup` and re-running the check-in/claim cycle. **Never end a
+turn in a way that leaves you idle-forever while the queue is non-empty.** Use
+`ScheduleWakeup(~900s ≈ 15min)` when you have or can pull work (promptly grab the next SD),
+`ScheduleWakeup(~1200s ≈ 20min)` when idle. A turn that ends without a `ScheduleWakeup`
+armed is a SILENT incognito exit — the #1 confirmed fleet-attrition cause.
+
+**Preferred form:** run `/checkin` *under* `/loop` (`/loop /checkin`, or the canonical
+fleet-worker directive in `docs/protocol/fleet-worker-loop-directive.md`, which leads with
+`/loop` and polls the inbox as step 1). `/loop` self-paces the re-fire so you cannot fall
+asleep after one pass. If you are NOT already under `/loop` when told to "check in", launch
+it: `/loop /checkin` — do not run a single bare `/checkin` that terminates.
+
+**Anti-pattern (do NOT do this):** hand-rolling a bounded `Bash` poll loop
+(`while sleep …`) to wait for an assignment. Bounded Bash polls overshoot the 120000ms
+default Bash timeout and die with **exit-143**; the `/loop` + `ScheduleWakeup` cadence is
+the correct re-poll mechanism. Poll the inbox as a `/loop` step, then arm a wakeup — never
+block a Bash call waiting.
 
 ## Run it
 
@@ -23,15 +49,25 @@ The CLI prints **one JSON object** describing the resolved action. It does the w
 
 ## Act on the result (NEVER stop to ask the human)
 
-| `action` | What the CLI did | What you do next |
-|----------|------------------|------------------|
-| `resume` | You already claim `sd` | Run `node scripts/sd-start.js <sd>` to (re)attach the worktree, then continue that SD. |
-| `claimed_assignment` | Claimed the coordinator's assigned `sd` via `claim_sd` | Run `node scripts/sd-start.js <sd>`, load phase context, build it. |
-| `self_claimed` | No assignment, so claimed the top of `sd:next` (`sd`) | Run `node scripts/sd-start.js <sd>`, load phase context, build it. |
-| `idle` | Nothing claimable right now | Call `ScheduleWakeup(delaySeconds=recommended_wakeup_seconds)` and proceed — do **not** wait on a human. On the next wake, run `/checkin` again. |
-| `error` | `CLAUDE_SESSION_ID` missing or DB unavailable | Report the `error` field; do not loop blindly. |
+| `action` | What the CLI did | What you do next | Then |
+|----------|------------------|------------------|------|
+| `resume` | You already claim `sd` | Run `node scripts/sd-start.js <sd>` to (re)attach the worktree, then continue that SD. | On completion, re-run `/checkin`. |
+| `claimed_assignment` | Claimed the coordinator's assigned `sd` via `claim_sd` | Run `node scripts/sd-start.js <sd>`, load phase context, build it. | On completion, re-run `/checkin`. |
+| `self_claimed` | No assignment, so claimed the top of `sd:next` (`sd`) | Run `node scripts/sd-start.js <sd>`, load phase context, build it. | On completion, re-run `/checkin`. |
+| `idle` | Nothing claimable right now | Call `ScheduleWakeup(delaySeconds=recommended_wakeup_seconds)` (~1200s) and proceed — do **not** wait on a human. | On the next wake, re-run `/checkin`. |
+| `error` | `CLAUDE_SESSION_ID` missing or DB unavailable | Report the `error` field; do not loop blindly. | Fix the cause, then re-run `/checkin`. |
 
 This is an autonomous-fleet contract: a `/loop` worker must keep moving. Decide from the JSON, act, and proceed. Never end a check-in by asking the operator what to do (no human watches the loop window).
+
+**The cycle never terminates on its own.** For `resume` / `claimed_assignment` /
+`self_claimed`: build the SD through completion, then **re-run `/checkin`** to pull the next
+one — if you instead just stop after finishing the SD, the loop never fires again and you go
+incognito with a non-empty queue. For `idle`: you MUST have armed a
+`ScheduleWakeup(~1200s)` before ending the turn. **Under `/loop` the re-fire is automatic
+(step 1 polls the inbox / runs the check-in cycle each pass); the table above is what you do
+inside each pass.** Running `/checkin` bare (not under `/loop`)? Then arm the `ScheduleWakeup`
+yourself at the end of EVERY action above (~900s when you have/can-pull work, ~1200s when
+idle) so the cycle re-fires. Never just stop.
 
 ## Two-way (optional)
 
