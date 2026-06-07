@@ -13,7 +13,8 @@ const {
   filterOutCoordinators,
   filterOutGhostSessions,
   isTestSessionId,
-  dedupeAssignedCallsigns
+  dedupeAssignedCallsigns,
+  reserveParkedIdentities
 } = require('../../scripts/assign-fleet-identities.cjs');
 
 describe('filterOutCoordinators (QF-20260508-648)', () => {
@@ -216,5 +217,73 @@ describe('dedupeAssignedCallsigns (QF-20260528-581 / Bug A)', () => {
     const { kept, demoted } = dedupeAssignedCallsigns([null, mk('s1', 'Alpha'), undefined]);
     expect(kept.map(w => w.session_id)).toEqual(['s1']);
     expect(demoted).toEqual([]);
+  });
+});
+
+// SD-FDBK-ENH-COORDINATOR-TOOLING-DELTA-001: reserve callsigns/colors of recently-seen but
+// out-of-active-view (parked) sessions so a new worker can't steal a parked worker's callsign
+// — which made callsigns FLAP (Charlie->Echo->Delta->Charlie) when the parked worker returned.
+describe('reserveParkedIdentities (SD-FDBK-ENH-COORDINATOR-TOOLING-DELTA-001)', () => {
+  const sess = (id, callsign, color = 'blue') => ({
+    session_id: id,
+    metadata: { fleet_identity: { callsign, color } }
+  });
+
+  it('reserves a parked (non-active) session\'s callsign AND color', () => {
+    const usedCallsigns = new Set();
+    const usedColors = new Set();
+    const recent = [sess('parked-1', 'Foxtrot', 'orange')];
+    reserveParkedIdentities(usedCallsigns, usedColors, recent, new Set());
+    expect(usedCallsigns.has('Foxtrot')).toBe(true);
+    expect(usedColors.has('orange')).toBe(true);
+  });
+
+  it('does NOT re-reserve an ACTIVE session (already covered by the assigned set)', () => {
+    const usedCallsigns = new Set();
+    const usedColors = new Set();
+    const recent = [sess('active-1', 'Bravo', 'red')];
+    reserveParkedIdentities(usedCallsigns, usedColors, recent, new Set(['active-1']));
+    expect(usedCallsigns.has('Bravo')).toBe(false);
+    expect(usedColors.has('red')).toBe(false);
+  });
+
+  it('the FLAP fix: a parked callsign stays reserved so a new worker never reuses it', () => {
+    // Pool order mirrors the NATO list; simulate nextAvailable skipping reserved entries.
+    const pool = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'];
+    const usedCallsigns = new Set(['Alpha', 'Bravo']); // currently-active assigned workers
+    const usedColors = new Set();
+    // Charlie is parked (heartbeat stale, dropped from the 5-min active-view) but recently seen.
+    reserveParkedIdentities(usedCallsigns, usedColors, [sess('parked-charlie', 'Charlie')], new Set());
+    const nextFree = pool.find(c => !usedCallsigns.has(c));
+    expect(nextFree).toBe('Delta'); // NOT Charlie — the parked worker keeps it, no flap
+  });
+
+  it('ignores sessions without a fleet_identity / callsign', () => {
+    const usedCallsigns = new Set();
+    const usedColors = new Set();
+    const recent = [
+      { session_id: 's-no-meta' },
+      { session_id: 's-empty-meta', metadata: {} },
+      { session_id: 's-empty-identity', metadata: { fleet_identity: {} } }
+    ];
+    reserveParkedIdentities(usedCallsigns, usedColors, recent, new Set());
+    expect(usedCallsigns.size).toBe(0);
+    expect(usedColors.size).toBe(0);
+  });
+
+  it('handles null/undefined recentSessions and null entries without throwing', () => {
+    const a = new Set(), b = new Set();
+    expect(() => reserveParkedIdentities(a, b, null, new Set())).not.toThrow();
+    expect(() => reserveParkedIdentities(a, b, undefined, new Set())).not.toThrow();
+    expect(() => reserveParkedIdentities(a, b, [null, undefined], new Set())).not.toThrow();
+    expect(a.size).toBe(0);
+  });
+
+  it('preserves callsigns already in the used-set (additive, non-destructive)', () => {
+    const usedCallsigns = new Set(['Alpha']);
+    const usedColors = new Set(['red']);
+    reserveParkedIdentities(usedCallsigns, usedColors, [sess('p', 'Golf', 'green')], new Set());
+    expect([...usedCallsigns].sort()).toEqual(['Alpha', 'Golf']);
+    expect([...usedColors].sort()).toEqual(['green', 'red']);
   });
 });

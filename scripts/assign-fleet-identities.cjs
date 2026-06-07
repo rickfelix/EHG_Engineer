@@ -94,6 +94,23 @@ function dedupeAssignedCallsigns(assigned) {
   return { kept, demoted };
 }
 
+// SD-FDBK-ENH-COORDINATOR-TOOLING-DELTA-001: reserve callsigns/colors held by recently-seen,
+// non-terminated sessions that are temporarily OUT of the 5-min active-view (parked between SDs
+// or briefly stale-heartbeat). Without this, the reap cycle dropping a parked worker frees its
+// callsign for a NEW worker; when the parked worker returns it collides and gets re-assigned a
+// different callsign — making callsigns FLAP (e.g. Charlie->Echo->Delta->Charlie). Mutates and
+// returns the used-sets so identity is idempotent per session_id (a session keeps its callsign
+// until terminated). Pure + DB-free for unit testing.
+function reserveParkedIdentities(usedCallsigns, usedColors, recentSessions, activeSessionIds) {
+  for (const s of recentSessions || []) {
+    if (!s || activeSessionIds.has(s.session_id)) continue; // active sessions are already reserved
+    const id = s.metadata?.fleet_identity;
+    if (id?.callsign) usedCallsigns.add(id.callsign);
+    if (id?.color) usedColors.add(id.color);
+  }
+  return { usedCallsigns, usedColors };
+}
+
 const ANSI = {
   red: '\x1b[31m', blue: '\x1b[34m', green: '\x1b[32m', yellow: '\x1b[33m',
   purple: '\x1b[35m', orange: '\x1b[38;5;208m', pink: '\x1b[38;5;213m', cyan: '\x1b[36m',
@@ -216,6 +233,21 @@ async function main() {
   // so a demoted duplicate's callsign/color is free for reassignment.
   const usedCallsigns = new Set(assigned.map(w => w.metadata.fleet_identity.callsign));
   const usedColors = new Set(assigned.map(w => w.metadata.fleet_identity.color));
+
+  // SD-FDBK-ENH-COORDINATOR-TOOLING-DELTA-001: also reserve callsigns/colors of recently-seen,
+  // non-terminated sessions that are temporarily OUT of the 5-min active-view (parked between SDs
+  // or briefly stale-heartbeat after the reap), so a new worker never steals a parked worker's
+  // callsign and cause it to flap when it returns. 60-min window keeps the NATO pool from being
+  // permanently consumed by long-dead (but un-terminated) sessions; the reaper marks truly dead
+  // sessions 'terminated', which frees their callsign here.
+  const reserveWindow = new Date(Date.now() - 60 * 60_000).toISOString();
+  const { data: recentSessions } = await supabase
+    .from('claude_sessions')
+    .select('session_id, metadata')
+    .neq('status', 'terminated')
+    .gte('heartbeat_at', reserveWindow);
+  const activeSessionIds = new Set(uniqueWorkers.map(w => w.session_id));
+  reserveParkedIdentities(usedCallsigns, usedColors, recentSessions, activeSessionIds);
 
   // Find next available callsign and color for new workers
   function nextAvailable(pool, usedSet) {
@@ -353,7 +385,7 @@ async function main() {
   console.log('');
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities };
 
 if (require.main === module) {
   main().catch(err => {
