@@ -11,6 +11,7 @@ import {
   selectAgedPending,
   renderAgedPendingText,
   renderAgedPendingHtml,
+  fetchAgedPendingFlags,
 } from '../lib/pending-enablement-registry.js';
 
 const NOW = Date.parse('2026-06-07T00:00:00Z');
@@ -96,5 +97,27 @@ describe('renderers', () => {
     const out = renderAgedPendingHtml([evil], { now: NOW });
     expect(out).toContain('&lt;script&gt;');
     expect(out).not.toContain('<script>');
+  });
+  it('html escapes flag_key, target and enablement_criteria too', () => {
+    const evil = {
+      ...agedPending, flag_key: '<b>k</b>', target: '<i>t</i>', enablement_criteria: '<u>c</u>',
+    };
+    const out = renderAgedPendingHtml([evil], { now: NOW });
+    expect(out).toContain('&lt;b&gt;k&lt;/b&gt;');
+    expect(out).toContain('&lt;i&gt;t&lt;/i&gt;');
+    expect(out).toContain('&lt;u&gt;c&lt;/u&gt;');
+  });
+});
+
+describe('fetchAgedPendingFlags fail-open', () => {
+  it('returns [] when the db client throws (registry must never break the email)', async () => {
+    const throwingDb = { from() { throw new Error('db down'); } };
+    await expect(fetchAgedPendingFlags(throwingDb, { now: NOW })).resolves.toEqual([]);
+  });
+  it('returns [] when the query reports an error', async () => {
+    const errorDb = {
+      from: () => ({ select: () => ({ eq: () => ({ in: () => ({ not: () => ({ data: null, error: { message: 'boom' } }) }) }) }) }),
+    };
+    await expect(fetchAgedPendingFlags(errorDb, { now: NOW })).resolves.toEqual([]);
   });
 });
