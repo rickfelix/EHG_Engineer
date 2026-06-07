@@ -11,6 +11,10 @@
 //
 // Env: COORD_ESCALATE_QUESTION (required), COORD_ESCALATE_WORKER, COORD_ESCALATE_SD,
 //      COORD_ESCALATE_SESSION (worker session_id), COORD_ESCALATE_URGENT=1 (also send an immediate email).
+//      COORD_ESCALATE_RECOMMENDED (the coordinator's recommended default option — enables the
+//        pending-question timer to auto-proceed if the operator is away; SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001),
+//      COORD_ESCALATE_CATEGORY (question category, e.g. budget_exceed/security_concern — a CRITICAL
+//        category hard-waits and is NEVER auto-proceeded).
 // See memory feedback-worker-never-askuserquestion-route-via-coordinator + docs/protocol/fleet-coordinator-and-worker-behavior.md.
 
 import 'dotenv/config';
@@ -22,6 +26,11 @@ const worker = process.env.COORD_ESCALATE_WORKER || 'a worker';
 const sd = process.env.COORD_ESCALATE_SD || '';
 const session = process.env.COORD_ESCALATE_SESSION || '';
 const q = process.env.COORD_ESCALATE_QUESTION;
+// SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001: persist the coordinator's recommended default + the
+// question category so the pending-question timer (stale-session-sweep tick) can auto-proceed a stale,
+// non-critical, unanswered question on the recommendation (and hard-wait critical ones).
+const recommended = (process.env.COORD_ESCALATE_RECOMMENDED || '').trim() || null;
+const questionCategory = (process.env.COORD_ESCALATE_CATEGORY || '').trim() || null;
 if (!q) { console.log('NO_QUESTION — set COORD_ESCALATE_QUESTION'); process.exit(0); }
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -36,7 +45,7 @@ if (dup && dup.length) {
     type: 'issue', source_application: 'EHG_Engineer', source_type: 'auto_capture',
     category: 'operator_question', status: 'new', severity: 'medium',
     title: 'Worker question — ' + worker, description: q,
-    metadata: { worker, sd_key: sd || null, sender_session: session || null, escalated_at: new Date().toISOString() }
+    metadata: { worker, sd_key: sd || null, sender_session: session || null, escalated_at: new Date().toISOString(), recommended_option: recommended, question_category: questionCategory }
   }).select('id');
   if (error) { console.log('ESCALATE_ERR ' + error.message); process.exit(1); }
   console.log('ESCALATED id=' + (data && data[0] && data[0].id) + ' — will appear (❓) in the next executive email');
