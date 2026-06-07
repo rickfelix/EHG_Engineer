@@ -16,6 +16,10 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { createRequire } from 'module';
+// SD-LEO-INFRA-COORDINATOR-DISPATCH-TARGET-001: route coordinator dispatch through
+// the validated guard (refuses non-full-UUID / dead targets before insert).
+const { insertCoordinationRow } = createRequire(import.meta.url)('../lib/coordinator/dispatch.cjs');
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
@@ -58,7 +62,7 @@ const ACK_RE = /comms.?check ack|read you/i;
       console.log('  ⚠ NO-ACK   ' + String(wid).slice(0, 8) + '  (' + cs + ')  ping ' + age + 'm unacked' + (lastPing.read_at ? ' (read, no reply)' : ' (never read → worker not polling inbox)') + ' — re-send + fix prompt');
     }
     const body = '📡 COMMS CHECK (radio check) from coordinator ' + String(me).slice(0, 8) + '. Confirm the two-way link: reply ONCE with  /signal feedback "comms-check ack — read you"  then continue your work. One-line ack only.';
-    await db.from('session_coordination').insert({ sender_session: me, target_session: wid, message_type: 'COACHING', subject: 'COMMS CHECK', payload: { body, kind: 'comms_check', sent_at: new Date().toISOString() }, created_at: new Date().toISOString() });
+    await insertCoordinationRow(db, { sender_session: me, target_session: wid, message_type: 'COACHING', subject: 'COMMS CHECK', payload: { body, kind: 'comms_check', sent_at: new Date().toISOString() }, created_at: new Date().toISOString() });
     if (!lastPing) console.log('  📨 SENT     ' + String(wid).slice(0, 8) + '  (' + cs + ')  comms-check ping — awaiting ack');
   }
   console.log('[ACTION] ✓=link good · ⏳=wait a tick · ⚠=worker not reading inbox (add an inbox-poll + ack step to its loop prompt).');

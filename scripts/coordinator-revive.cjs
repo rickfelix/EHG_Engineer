@@ -16,6 +16,10 @@
 
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
+// SD-LEO-INFRA-COORDINATOR-DISPATCH-TARGET-001: validated dispatch guard
+// (the SPAWN_REQUEST broadcast below uses the 'broadcast' sentinel, which the
+// guard short-circuits — exercising the sentinel-allowlist path).
+const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 
 const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel'];
 
@@ -70,7 +74,7 @@ async function reviveOne(supabase, callsign, requestedBySessionId) {
 
   // Broadcast SPAWN_REQUEST on session_coordination (best-effort — broadcast failure
   // does NOT undo the row insert; the row is the canonical contract surface).
-  await supabase.from('session_coordination').insert({
+  await insertCoordinationRow(supabase, {
     target_session: 'broadcast',
     message_type: 'SPAWN_REQUEST',
     subject: `Spawn request: ${callsign}`,
@@ -78,6 +82,8 @@ async function reviveOne(supabase, callsign, requestedBySessionId) {
     payload: { callsign, request_id: data.id, expires_at: data.expires_at }
   }).then(({ error: bcErr }) => {
     if (bcErr) console.warn(`  [warn] broadcast emit failed: ${bcErr.message} (row still inserted)`);
+  }).catch((gErr) => {
+    console.warn(`  [warn] broadcast guard refused: ${gErr.message} (worker_spawn_requests row still inserted)`);
   });
 
   return { inserted: true, alreadyPending: false, error: null, row: data };
