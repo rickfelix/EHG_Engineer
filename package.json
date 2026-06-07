@@ -294,6 +294,7 @@
     "sd:unpark": "node scripts/sd-park.js unpark",
     "signal": "node scripts/worker-signal.cjs",
     "checkin": "node scripts/worker-checkin.cjs",
+    "adam:register": "node scripts/adam-register.cjs",
     "coordinator:reply": "node scripts/coordinator-reply.cjs",
     "coordinator:teardown": "node scripts/coordinator-teardown.cjs",
     "sd:start": "node scripts/sd-start.js",
