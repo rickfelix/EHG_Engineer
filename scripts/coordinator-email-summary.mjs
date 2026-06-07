@@ -15,6 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { readFileSync, writeFileSync } from 'fs';
+import { fetchAgedPendingFlags, renderAgedPendingHtml, renderAgedPendingText } from '../lib/pending-enablement-registry.js';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
@@ -83,6 +84,13 @@ const qLabel = (q) => {
   return { text: String(q.description || q.title || '').replace(/\s+/g, ' ').trim(), who, sd };
 };
 
+// ── pending-enablement registry: default-OFF rollouts aged past the review threshold ──
+//    (SD-LEO-INFRA-POLICY-GATED-AUTO-001A) — fail-open: a registry hiccup must never break the email.
+const pending = await fetchAgedPendingFlags(db, { now: t });
+const pN = pending.length;
+const pendingHtml = renderAgedPendingHtml(pending, { now: t });
+const pendingText = renderAgedPendingText(pending, { now: t });
+
 // ── render ──
 const dot = { red: '🔴', yellow: '🟡', green: '🟢' }[overall];
 const word = { red: 'RED', yellow: 'YELLOW', green: 'GREEN' }[overall];
@@ -96,19 +104,20 @@ const meaning = workable === 0 ? 'idle — no open work'
 const when = new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
 const gauge = liveWorkers === 0 ? 'no live workers' : `${assigned} building · ${remaining} queued${idleWorkers ? ` · ${idleWorkers} idle` : ''}`;
 const qFlag = qN ? `❓${qN} · ` : '';
-const subject = qFlag + (workable === 0
+const pFlag = pN ? `⏳${pN} · ` : '';
+const subject = qFlag + pFlag + (workable === 0
   ? `Fleet ${dot} ${word} ${trendArrow} · idle (no work)`
   : `Fleet ${dot} ${word} ${trendArrow} · ${assigned} bld · ${remaining} queued${idleWorkers ? ` · ${idleWorkers} idle` : ''}`);
 const qHtml = qN ? `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fff8e1;border-left:4px solid #f5a623;border-radius:3px"><b>❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input</b><br>${questions.map(q => { const l = qLabel(q); return `• ${esc(l.text)} <span style="color:#999;font-size:13px">— ${esc(l.who)}${esc(l.sd)}</span>`; }).join('<br>')}</p>` : '';
 const html = `<p style="font-size:17px;margin:0 0 10px"><b>${dot} ${word}</b> — ${meaning} <span style="color:#777;font-size:14px">(${trendWord} ${trendArrow})</span></p>
-${qHtml}<p style="font-size:14px;margin:0 0 6px"><b>Active workers:</b> ${gauge}${workable ? ` · ${workable} item${workable > 1 ? 's' : ''} in play` : ''}</p>
+${qHtml}${pendingHtml}<p style="font-size:14px;margin:0 0 6px"><b>Active workers:</b> ${gauge}${workable ? ` · ${workable} item${workable > 1 ? 's' : ''} in play` : ''}</p>
 <p style="font-size:11px;color:#999;margin:14px 0 0">${when} ET</p>`;
 const qText = qN ? `❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input:\n${questions.map(q => { const l = qLabel(q); return `  • ${l.text} — ${l.who}${l.sd}`; }).join('\n')}\n\n` : '';
-const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\n\n${when} ET`;
+const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}${pendingText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\n\n${when} ET`;
 
 if (DRY_RUN) {
   console.log('=== [DRY RUN] no email sent ===\nSUBJECT: ' + subject + '\n---\n' + text + '\n---');
-  console.log(`overall=${overall} assigned=${assigned} idle=${idleWorkers} remaining=${remaining} liveWorkers=${liveWorkers} workable=${workable} builderKeys=${builderKeys.size} shortBy=${shortBy} questions=${qN}`);
+  console.log(`overall=${overall} assigned=${assigned} idle=${idleWorkers} remaining=${remaining} liveWorkers=${liveWorkers} workable=${workable} builderKeys=${builderKeys.size} shortBy=${shortBy} questions=${qN} pending=${pN}`);
 } else {
   const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'Fleet Coordinator <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
