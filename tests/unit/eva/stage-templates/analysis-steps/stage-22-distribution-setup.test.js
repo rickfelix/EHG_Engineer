@@ -24,11 +24,13 @@ import {
   validateEntryPreconditions,
   validateChannelCoverage,
   splitArtifacts,
+  normalizeUpstreamParams,
   CHANNELS,
   REQUIRED_UPSTREAM,
   FEATURE_FLAG_KEY,
 } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-22-distribution-setup.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
+import { CROSS_STAGE_DEPS } from '../../../../../lib/eva/contracts/stage-contracts.js';
 
 // Helper — full happy-path LLM response (all 6 channels, 3 active).
 function makeLLMResponse(overrides = {}) {
@@ -348,5 +350,120 @@ describe('analyzeStage22Distribution — integration (FR-1/3/4)', () => {
     const out = await analyzeStage22Distribution(params);
     expect(out._canonical_pair).toBeDefined();
     expect(out._flag_enabled).toBe(false); // defaults OFF when no supabase
+  });
+});
+
+// SD-LEO-FIX-FIX-POST-BUILD-001 — the worker upstream-loading fix.
+// The generic worker (fetchUpstreamArtifacts) keys upstream data as stage{N}Data
+// merged-by-stage with a __byType sub-map keyed by artifact_type. Before this fix
+// (a) CROSS_STAGE_DEPS[22] omitted source stages 7/10/12 so stage7Data/stage10Data/
+// stage12Data never arrived, and (b) the per-artifact-type S21 keys were never derived.
+describe('SD-LEO-FIX-FIX-POST-BUILD-001 — worker upstream-loading fix', () => {
+  // Shape the loader actually produces: stage{N}Data with a __byType sub-map.
+  function makeWorkerShapeUpstream({ includeS21 = true } = {}) {
+    const upstream = {
+      stage7Data:  { tier: 'pro', __byType: { engine_pricing_model: { tier: 'pro' } } },
+      stage10Data: { name: 'Pragmatic Priya', __byType: { identity_persona_brand: { name: 'Pragmatic Priya' } } },
+      stage12Data: { strategy: 'PLG', __byType: { identity_gtm_sales_strategy: { strategy: 'PLG' } } },
+      stage18Data: { copy: 'tagline', __byType: { content_marketing_copy: { copy: 'tagline' } } },
+    };
+    if (includeS21) {
+      upstream.stage21Data = {
+        // merged top-level (one type wins) + lossless __byType for both visual types
+        url: 'social',
+        __byType: {
+          visual_social_graphics:    { social_url: 'https://cdn/social.png' },
+          visual_device_screenshots: { screenshot_url: 'https://cdn/shot.png' },
+        },
+      };
+    }
+    return upstream;
+  }
+
+  describe('FR-1 — CROSS_STAGE_DEPS[22] alignment', () => {
+    it('includes the producer-required source stages 7, 10 and 12', () => {
+      for (const stage of [7, 10, 12]) {
+        expect(CROSS_STAGE_DEPS[22]).toContain(stage);
+      }
+    });
+
+    it('retains the build-phase context stages 17-21 (additive change only)', () => {
+      for (const stage of [17, 18, 19, 20, 21]) {
+        expect(CROSS_STAGE_DEPS[22]).toContain(stage);
+      }
+    });
+
+    it('every REQUIRED_UPSTREAM source_stage is present in CROSS_STAGE_DEPS[22]', () => {
+      const deps = new Set(CROSS_STAGE_DEPS[22]);
+      for (const req of REQUIRED_UPSTREAM) {
+        expect(deps.has(req.source_stage)).toBe(true);
+      }
+    });
+  });
+
+  describe('FR-2 — normalizeUpstreamParams (per-artifact-type S21 key derivation)', () => {
+    it('derives stage21SocialData / stage21ScreenshotData from stage21Data.__byType', () => {
+      const out = normalizeUpstreamParams(makeWorkerShapeUpstream());
+      expect(out.stage21SocialData).toEqual({ social_url: 'https://cdn/social.png' });
+      expect(out.stage21ScreenshotData).toEqual({ screenshot_url: 'https://cdn/shot.png' });
+    });
+
+    it('leaves already-populated stage{N}Data keys untouched (stage7/10/12)', () => {
+      const input = makeWorkerShapeUpstream();
+      const out = normalizeUpstreamParams(input);
+      expect(out.stage7Data).toBe(input.stage7Data);
+      expect(out.stage10Data).toBe(input.stage10Data);
+      expect(out.stage12Data).toBe(input.stage12Data);
+    });
+
+    it('is pure — does not mutate the input params', () => {
+      const input = makeWorkerShapeUpstream();
+      normalizeUpstreamParams(input);
+      expect(input.stage21SocialData).toBeUndefined();
+      expect(input.stage21ScreenshotData).toBeUndefined();
+    });
+
+    it('tolerates absent stage21Data / missing __byType without throwing', () => {
+      expect(() => normalizeUpstreamParams({})).not.toThrow();
+      expect(() => normalizeUpstreamParams({ stage21Data: {} })).not.toThrow();
+      expect(() => normalizeUpstreamParams(null)).not.toThrow();
+    });
+  });
+
+  describe('FR-3 — producer runs / skips correctly on worker-loader shape', () => {
+    it('RUNS (preconditions ok) when all five upstream artifacts arrive in worker shape', () => {
+      const normalized = normalizeUpstreamParams(makeWorkerShapeUpstream());
+      const result = validateEntryPreconditions(normalized);
+      expect(result.ok).toBe(true);
+      expect(result.missing).toEqual([]);
+    });
+
+    it('does NOT skip end-to-end for a fully-built venture (worker shape)', async () => {
+      setupMockLLM(makeLLMResponse());
+      const { sb, inserted } = makeFakeSupabase({ flagEnabled: false });
+      const out = await analyzeStage22Distribution({
+        ...makeWorkerShapeUpstream(),
+        ventureName: 'DataDistill',
+        ventureId: 'venture-datadistill',
+        supabase: sb,
+        logger: { info: () => {}, warn: () => {} },
+      });
+      expect(out._skip).toBeUndefined();
+      expect(inserted.find(i => i.payload.artifact_type === 'distribution_channel_config')).toBeDefined();
+    });
+
+    it('gracefully skips on absent S21 visuals — but NO LONGER falsely reports S7/S10/S12 missing', () => {
+      const normalized = normalizeUpstreamParams(makeWorkerShapeUpstream({ includeS21: false }));
+      const result = validateEntryPreconditions(normalized);
+      expect(result.ok).toBe(false);
+      const missingTypes = result.missing.map(m => m.artifact_type);
+      // The genuinely-absent S21 visuals are still reported...
+      expect(missingTypes).toContain('visual_social_graphics');
+      expect(missingTypes).toContain('visual_device_screenshots');
+      // ...but the false-negative on S7/S10/S12 is fixed.
+      expect(missingTypes).not.toContain('engine_pricing_model');
+      expect(missingTypes).not.toContain('identity_persona_brand');
+      expect(missingTypes).not.toContain('identity_gtm_sales_strategy');
+    });
   });
 });
