@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-07T01:06:02.576Z
-**Rows**: 6
+**Generated**: 2026-06-07T05:10:57.225Z
+**Rows**: 10
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (14 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -32,6 +32,11 @@
 | is_temporary | `boolean` | **NO** | `false` | Whether this flag is temporary and should expire |
 | expiry_at | `timestamp with time zone` | YES | - | Expiration timestamp for temporary flags |
 | row_version | `integer(32)` | **NO** | `1` | Version number for optimistic locking |
+| gates_what | `text` | YES | - | Pending-Enablement Registry: human-readable description of WHAT this flag guards (the behaviour/code path that is OFF while is_enabled=false). Populated by default-OFF rollouts that self-register. See SD-LEO-INFRA-POLICY-GATED-AUTO-001A. |
+| enablement_criteria | `text` | YES | - | Pending-Enablement Registry: the conditions that must hold before this default-OFF flag is enabled (e.g. "consumer migration deployed; 24h soak with no errors"). Read by the exec-email aged-pending surfacer. See SD-LEO-INFRA-POLICY-GATED-AUTO-001A. |
+| rolled_out_at | `timestamp with time zone` | YES | - | Pending-Enablement Registry: timestamp when the default-OFF rollout that introduced this flag shipped. NULL = not a self-registered pending rollout. pending := is_enabled=false AND rolled_out_at IS NOT NULL AND lifecycle_state IN (draft,disabled). Aged-pending = now() - rolled_out_at exceeds threshold. See SD-LEO-INFRA-POLICY-GATED-AUTO-001A. |
+| last_reviewed_at | `timestamp with time zone` | YES | - | Pending-Enablement Registry: timestamp of the last operator review of this pending flag. NULL = never reviewed since rollout. The aged-pending surfacer uses COALESCE(last_reviewed_at, rolled_out_at) as the staleness anchor. See SD-LEO-INFRA-POLICY-GATED-AUTO-001A. |
+| target | `text` | YES | - | Pending-Enablement Registry: target application / scope this flag applies to (e.g. "EHG_Engineer", "EHG"). NULL = unscoped / global. See SD-LEO-INFRA-POLICY-GATED-AUTO-001A. |
 
 ## Constraints
 
