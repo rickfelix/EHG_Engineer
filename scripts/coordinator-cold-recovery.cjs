@@ -55,14 +55,17 @@ async function detectOrphans(supabase, inflight, { nowMs, ttlMs }) {
   for (const sd of inflight) {
     let sessionRow = null;
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('claude_sessions')
         .select('session_id, heartbeat_at, status')
         .eq('session_id', sd.claiming_session_id)
         .maybeSingle();
-      sessionRow = data || null;
+      // Conservative on UNREADABLE state (R-1): a transient query error must NOT be
+      // read as "dead" — never reap a possibly-live claim. Skip and re-evaluate next run.
+      if (error) continue;
+      sessionRow = data || null; // null === the session row is genuinely ABSENT === orphaned
     } catch (_) {
-      sessionRow = null; // unreadable session => treat as orphaned (fail-open toward recovery)
+      continue; // same conservative skip on a thrown query error
     }
     if (isSessionStale(sessionRow, nowMs, ttlMs)) orphans.push(sd);
   }

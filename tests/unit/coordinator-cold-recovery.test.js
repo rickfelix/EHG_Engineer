@@ -27,6 +27,9 @@ function makeSupabase(store) {
       };
     }
     if (table === 'claude_sessions') {
+      if (store.sessionErrors && store.sessionErrors.includes(filters.session_id)) {
+        return { data: null, error: { message: 'transient query failure' } };
+      }
       return { data: store.sessions[filters.session_id] || null, error: null };
     }
     if (table === 'session_coordination') {
@@ -101,6 +104,13 @@ describe('detectOrphans (TS-2)', () => {
     ];
     const orphans = await detectOrphans(makeSupabase(store), inflight, { nowMs: NOW, ttlMs: 15 * 60 * 1000 });
     expect(orphans.map((o) => o.sd_key)).toEqual(['SD-DEAD']);
+  });
+
+  it('does NOT flag a claim whose session query errors (conservative skip, R-1)', async () => {
+    const store = { sds: [], sessions: {}, sessionErrors: ['flaky'] };
+    const inflight = [{ id: '1', sd_key: 'SD-FLAKY', claiming_session_id: 'flaky', current_phase: 'EXEC' }];
+    const orphans = await detectOrphans(makeSupabase(store), inflight, { nowMs: NOW, ttlMs: 15 * 60 * 1000 });
+    expect(orphans).toHaveLength(0); // transient error must never reap a possibly-live claim
   });
 });
 
