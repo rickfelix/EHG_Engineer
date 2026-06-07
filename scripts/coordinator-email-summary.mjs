@@ -15,7 +15,6 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { readFileSync, writeFileSync } from 'fs';
-import { fetchAgedPendingFlags, renderAgedPendingHtml, renderAgedPendingText } from '../lib/pending-enablement-registry.js';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
@@ -84,12 +83,12 @@ const qLabel = (q) => {
   return { text: String(q.description || q.title || '').replace(/\s+/g, ' ').trim(), who, sd };
 };
 
-// ── pending-enablement registry: default-OFF rollouts aged past the review threshold ──
-//    (SD-LEO-INFRA-POLICY-GATED-AUTO-001A) — fail-open: a registry hiccup must never break the email.
-const pending = await fetchAgedPendingFlags(db, { now: t });
-const pN = pending.length;
-const pendingHtml = renderAgedPendingHtml(pending, { now: t });
-const pendingText = renderAgedPendingText(pending, { now: t });
+// ── progress + liveness the operator kept asking about (push it via the email, don't make them query) ──
+const { count: completedNow } = await db.from('strategic_directives_v2')
+  .select('sd_key', { count: 'exact', head: true }).eq('status', 'completed');
+const shippedSince = (typeof snap.completedCount === 'number') ? Math.max(0, (completedNow || 0) - snap.completedCount) : 0;
+const recentSeen = (sessRaw || []).filter(s => s.session_id !== me && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < 45 * 60000);
+const incognito = Math.max(0, recentSeen.length - liveWorkers);   // seen in last 45m but quiet >15m = went incognito (needs a wake re-paste)
 
 // ── render ──
 const dot = { red: '🔴', yellow: '🟡', green: '🟢' }[overall];
@@ -102,25 +101,27 @@ const meaning = workable === 0 ? 'idle — no open work'
   : (remaining > 0 ? `keeping up — ${assigned} building, ${remaining} queued` : `all work assigned — ${assigned} building`);
 
 const when = new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
-const gauge = liveWorkers === 0 ? 'no live workers' : `${assigned} building · ${remaining} queued${idleWorkers ? ` · ${idleWorkers} idle` : ''}`;
-const qFlag = qN ? `❓${qN} · ` : '';
-const pFlag = pN ? `⏳${pN} · ` : '';
-const subject = qFlag + pFlag + (workable === 0
+const gauge = liveWorkers === 0 ? 'no live workers' : `${assigned} building · ${remaining} queued${idleWorkers ? ` · ${idleWorkers} idle` : ''}${incognito ? ` · ${incognito} incognito` : ''}`;
+const flag = (incognito ? '🔔 ' : '') + (qN ? `❓${qN} · ` : '');
+const subject = flag + (workable === 0
   ? `Fleet ${dot} ${word} ${trendArrow} · idle (no work)`
-  : `Fleet ${dot} ${word} ${trendArrow} · ${assigned} bld · ${remaining} queued${idleWorkers ? ` · ${idleWorkers} idle` : ''}`);
+  : `Fleet ${dot} ${word} ${trendArrow} · ${assigned} bld · ${remaining} queued${idleWorkers ? ` · ${idleWorkers} idle` : ''}${incognito ? ` · ${incognito} incog` : ''}`);
 const qHtml = qN ? `<p style="font-size:15px;margin:0 0 10px;padding:10px 12px;background:#fff8e1;border-left:4px solid #f5a623;border-radius:3px"><b>❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input</b><br>${questions.map(q => { const l = qLabel(q); return `• ${esc(l.text)} <span style="color:#999;font-size:13px">— ${esc(l.who)}${esc(l.sd)}</span>`; }).join('<br>')}</p>` : '';
+const liveHtml = incognito ? `<p style="font-size:14px;margin:0 0 8px;padding:8px 10px;background:#fdecea;border-left:4px solid #d9534f;border-radius:3px"><b>🔔 Needs you:</b> ${incognito} worker${incognito > 1 ? 's' : ''} went incognito — a wake-prompt re-paste (or a relaunch for an orphaned-identity window) refills the fleet.</p>` : '';
 const html = `<p style="font-size:17px;margin:0 0 10px"><b>${dot} ${word}</b> — ${meaning} <span style="color:#777;font-size:14px">(${trendWord} ${trendArrow})</span></p>
-${qHtml}${pendingHtml}<p style="font-size:14px;margin:0 0 6px"><b>Active workers:</b> ${gauge}${workable ? ` · ${workable} item${workable > 1 ? 's' : ''} in play` : ''}</p>
+${qHtml}${liveHtml}<p style="font-size:14px;margin:0 0 6px"><b>Active workers:</b> ${gauge}${workable ? ` · ${workable} item${workable > 1 ? 's' : ''} in play` : ''}</p>
+<p style="font-size:13px;color:#777;margin:0 0 6px">📦 Since last email: <b>+${shippedSince}</b> shipped</p>
 <p style="font-size:11px;color:#999;margin:14px 0 0">${when} ET</p>`;
 const qText = qN ? `❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input:\n${questions.map(q => { const l = qLabel(q); return `  • ${l.text} — ${l.who}${l.sd}`; }).join('\n')}\n\n` : '';
-const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}${pendingText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\n\n${when} ET`;
+const liveText = incognito ? `🔔 Needs you: ${incognito} worker${incognito > 1 ? 's' : ''} went incognito — a wake re-paste/relaunch refills the fleet.\n\n` : '';
+const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}${liveText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\nSince last email: +${shippedSince} shipped\n\n${when} ET`;
 
 if (DRY_RUN) {
   console.log('=== [DRY RUN] no email sent ===\nSUBJECT: ' + subject + '\n---\n' + text + '\n---');
-  console.log(`overall=${overall} assigned=${assigned} idle=${idleWorkers} remaining=${remaining} liveWorkers=${liveWorkers} workable=${workable} builderKeys=${builderKeys.size} shortBy=${shortBy} questions=${qN} pending=${pN}`);
+  console.log(`overall=${overall} assigned=${assigned} idle=${idleWorkers} remaining=${remaining} liveWorkers=${liveWorkers} workable=${workable} builderKeys=${builderKeys.size} shortBy=${shortBy} questions=${qN} incognito=${incognito} shipped=${shippedSince}`);
 } else {
   const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'Fleet Coordinator <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
   console.log('EMAIL', JSON.stringify(r));
-  try { writeFileSync(SNAP, JSON.stringify({ ts: t, lastOverallRank: curRank })); } catch { /* best effort */ }
+  try { writeFileSync(SNAP, JSON.stringify({ ts: t, lastOverallRank: curRank, completedCount: completedNow })); } catch { /* best effort */ }
 }
