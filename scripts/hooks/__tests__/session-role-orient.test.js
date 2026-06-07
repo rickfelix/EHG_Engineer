@@ -228,4 +228,13 @@ describe('static-pin: [ROLE] block content', () => {
     expect(lines).toMatch(/stuck \| need-sweep \| prd-ambiguous \| gate-bug \| spec-conflict \| harness-bug \| feedback \| other/);
     expect(lines).toMatch(/--low\|medium\|high\|critical/);
   });
+
+  it('WORKER block surfaces the per-iteration coordinator check-in (poll inbox + ACK comms-check)', () => {
+    const lines = workerLines('Bravo', 'abc12345').join('\n');
+    expect(lines).toMatch(/check-in EVERY \/loop iteration/);
+    expect(lines).toMatch(/fleet-dashboard\.cjs inbox/);
+    expect(lines).toMatch(/WORK_ASSIGNMENT/);
+    expect(lines).toMatch(/comms-check ack/);
+    expect(lines).toMatch(/fleet-worker-loop-directive\.md/);
+  });
 });
