@@ -34,11 +34,19 @@ const workable = workableKeys.length;
 
 // ── live workers + the SDs they ACTUALLY hold. claude_sessions.sd_key is the reliable build signal;
 //    SDv2.claiming_session_id drifts to NULL after a claim-sweep even while the worker keeps building. ──
-const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,metadata').order('heartbeat_at', { ascending: false }).limit(60);
-// QF-20260607-608: a TRUE worker is a live fleet session — never the coordinator (me), never Adam,
-// never any non_fleet role. Adam (metadata.role='adam', non_fleet=true) and future non-fleet roles
-// must NOT inflate the worker count the operator reads off this email.
-const isFleetWorker = (s) => s.session_id !== me && s.metadata?.role !== 'adam' && !s.metadata?.non_fleet;
+const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,status,claimed_at,worktree_path,continuous_sds_completed,metadata').order('heartbeat_at', { ascending: false }).limit(60);
+// QF-20260607-608: identify a GENUINE worker the same way fleet-dashboard.cjs does, so the email
+// and the dashboard never disagree (the email was showing "9 workers" vs the dashboard's ~6 because
+// it counted every session heartbeating <15m regardless of status or whether it ever claimed):
+//   1. exclude the coordinator (me), Adam, and any non_fleet role (Adam = metadata.role='adam', non_fleet=true);
+//   2. exclude non-live statuses — dashboard QA treats only status in ('active','idle') as a real worker
+//      (released/exited/stale are ghosts still warm in the table);
+//   3. ghost-filter — only a session that has EVER held a claim (current sd_key, or claimed_at /
+//      worktree_path / continuous_sds_completed history) is a worker; drops transient/churning sessions
+//      that registered but never claimed.
+const everClaimed = (s) => !!(s.sd_key || s.claimed_at || s.worktree_path || (s.continuous_sds_completed > 0));
+const isFleetWorker = (s) => s.session_id !== me && s.metadata?.role !== 'adam' && !s.metadata?.non_fleet
+  && ['active', 'idle'].includes(s.status) && everClaimed(s);
 const live = (sessRaw || []).filter(s => isFleetWorker(s) && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < 900000);
 const builderKeys = new Set(live.filter(s => s.sd_key).map(s => s.sd_key));
 const liveWorkers = live.length;
