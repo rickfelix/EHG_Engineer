@@ -295,6 +295,7 @@
     "signal": "node scripts/worker-signal.cjs",
     "checkin": "node scripts/worker-checkin.cjs",
     "adam:register": "node scripts/adam-register.cjs",
+    "adam:advisory": "node scripts/adam-advisory.cjs",
     "coordinator:reply": "node scripts/coordinator-reply.cjs",
     "coordinator:startup-check": "node scripts/coordinator-startup-check.mjs",
     "coordinator:teardown": "node scripts/coordinator-teardown.cjs",

@@ -1132,6 +1132,74 @@ async function printInbox() {
   console.log('');
 }
 
+// ── Section: Adam advisory inbox (SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B) ──
+// Surfaces Adam advisories (payload.kind=adam_advisory) in a SEPARATE section from
+// the worker-friction inbox (printInbox). Adam advisories deliberately omit
+// payload.signal_type, so printInbox's signal_type-NOT-NULL filter never shows them;
+// this section is their dedicated render. The per-session coordination-inbox drainer
+// skips adam_advisory so rows survive to be surfaced here.
+async function printAdamInbox() {
+  const getActiveCoordinatorId = _getActiveCoordinatorIdForInbox;
+
+  console.log('ADAM ADVISORY INBOX');
+  console.log('─'.repeat(72));
+
+  const coordinatorId = await getActiveCoordinatorId(supabase);
+  if (!coordinatorId) {
+    console.log('  (no active coordinator detected — run /coordinator start first)');
+    console.log('');
+    return;
+  }
+
+  const { data: advisories, error } = await supabase
+    .from('session_coordination')
+    .select('id, sender_session, sender_type, subject, body, payload, created_at')
+    .eq('target_session', coordinatorId)
+    .eq('payload->>kind', 'adam_advisory')
+    .is('read_at', null)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.log('  (adam inbox query failed: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+
+  if (!advisories || advisories.length === 0) {
+    console.log('  (no unread Adam advisories)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + advisories.length + ' unread advisory(ies)');
+  console.log('');
+  console.log('  ' + pad('Callsign', 12) + pad('Reply?', 8) + pad('Age', 8) + 'Body');
+  console.log('  ' + '─'.repeat(68));
+
+  const ids = [];
+  for (const a of advisories) {
+    const callsign = a.payload?.sender_callsign || '(none)';
+    const wantsReply = a.payload?.expects_reply ? 'yes' : '-';
+    const ageMin = Math.floor((Date.now() - new Date(a.created_at).getTime()) / 60_000);
+    const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
+    const bodyPreview = (a.body || a.payload?.body || '').replace(/\n/g, ' ').substring(0, 32);
+    console.log('  ' + pad(callsign, 12) + pad(wantsReply, 8) + pad(ageStr, 8) + bodyPreview);
+    ids.push(a.id);
+  }
+
+  // Mark surfaced advisories read so they don't re-surface. A coordinator reply
+  // (coordinator-reply.cjs) is keyed by correlation_id, independent of read_at.
+  if (ids.length > 0) {
+    await supabase
+      .from('session_coordination')
+      .update({ read_at: new Date().toISOString() })
+      .in('id', ids);
+  }
+
+  console.log('');
+}
+
 // ── Section: Feedback work-store (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001) ──
 // READ-ONLY / additive: surfaces the feedback table (untriaged feedback + harness
 // backlog) on the coordinator single-pane view so pending feedback work is never
@@ -1228,6 +1296,7 @@ async function main() {
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
     inbox:         async () => await printInbox(),
+    adam:          async () => await printAdamInbox(), // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     all:           async () => {
@@ -1241,6 +1310,7 @@ async function main() {
       printRevivalPending(d); // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
       printCoordination(d);
       await printInbox(); // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a
+      await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
       await printFeedback(d); // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001 — feedback work-store
       await printCoaching(d);
       printHealth(d);
@@ -1253,7 +1323,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, feedback, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, adam, feedback, team, all');
     process.exit(1);
   }
 

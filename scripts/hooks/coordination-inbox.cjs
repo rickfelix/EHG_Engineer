@@ -456,6 +456,13 @@ async function main() {
       if (amCoordinator && msg.message_type === 'INFO' && msg.payload && msg.payload.signal_type) {
         continue;
       }
+      // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B: defer Adam advisories to the
+      // coordinator's dedicated inbox section (fleet-dashboard printAdamInbox).
+      // Leave them UNREAD so that section surfaces them instead of this per-session
+      // drainer marking them read_at first (same hazard as the FR-3a signal skip).
+      if (amCoordinator && msg.message_type === 'INFO' && msg.payload && msg.payload.kind === 'adam_advisory') {
+        continue;
+      }
       // SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-6 (P0-1): leave coordinator-reply
       // rows for the worker's awaitCoordinatorReply() to consume (default-OFF).
       if (shouldSkipCoordinatorReply(msg)) {
