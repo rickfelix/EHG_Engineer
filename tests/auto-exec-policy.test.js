@@ -54,6 +54,13 @@ describe('checkPathOverlap (FM-D, file side)', () => {
   it('blocks a path INSIDE a guardrail dir', () => expect(checkPathOverlap('.claude/settings.json/nested').blocked).toBe(true));
   it('blocks a parent of a guardrail path', () => expect(checkPathOverlap('.claude').blocked).toBe(true));
   it('allows an unrelated target', () => expect(checkPathOverlap('src/components/Foo.tsx').blocked).toBe(false));
+  it('blocks a guardrail path that is a SUFFIX of an absolute/prefixed target', () => {
+    expect(checkPathOverlap('C:/proj/.claude/settings.json').blocked).toBe(true);
+    expect(checkPathOverlap('repo/leo_feature_flags').blocked).toBe(true);
+  });
+  it('does NOT false-positive on a non-boundary substring', () => {
+    expect(checkPathOverlap('my_leo_feature_flags_archive').blocked).toBe(false);
+  });
   it('normalizes backslashes and ./ prefix', () => expect(checkPathOverlap('.\\.claude\\settings.json').blocked).toBe(true));
   it('blocks empty target (default-safe)', () => expect(checkPathOverlap('').blocked).toBe(true));
   it('respects a custom guardrail set', () => {
