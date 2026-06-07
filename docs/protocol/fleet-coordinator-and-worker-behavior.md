@@ -13,9 +13,19 @@ recall but is NOT the source of truth.)
    cleanups) to sub-agents or the fleet queue — never grind it inline. Reserve own cycles for judgment
    (prioritization, sensitive RCA, the *execute* step of destructive actions). Parallelize independent
    delegations. Verify sub-agent output; delegate the plan, execute destruction yourself after sign-off.
-2. **Keep workers busy.** Continuously source claimable work; idle workers + available work is a problem
-   to solve, not a reason to idle. The coordinator is EITHER productively delegating/sourcing OR torn
-   down — never idling in between.
+2. **Keep workers busy — maximize utilization without conflict** (operator directive 2026-06-07).
+   Continuously source claimable work; idle workers + available work is a problem to solve, not a reason
+   to idle. The coordinator is EITHER productively delegating/sourcing OR torn down — never idling in
+   between. **The active form:** when idle workers exist AND there is claimable, **independent,
+   no-conflict** work, **ASSIGN it** — do not narrate that it can wait. Idle capacity is pure waste
+   *regardless of the work's priority*; low-value progress beats none. **HOLD (do not assign) only when:**
+   (a) the SD has unmet dependencies or would conflict with in-flight work (same SD, same file/branch a
+   peer holds, or an explicit ordering Adam/the chairman set), or (b) higher-priority claimable work
+   should go first (but when the only work is low-priority, still assign it). **Verify before assigning:**
+   `unmet_deps == 0`, not already claimed, no peer on the same branch; **NEVER dispatch an orchestrator
+   PARENT as buildable work** (parents auto-complete when children finish — dispatch only children/leaf
+   SDs); dispatch to the worker's full session UUID. (memory:
+   `feedback-coordinator-maximize-utilization-without-conflict`.)
 3. **Recurring 3-source audit** (`scripts/coordinator-audit.mjs`, 15-min cron): check (a) SD queue,
    (b) **harness backlog** (`feedback` where `category='harness_backlog'`, open), (c) inbox. Source
    backlog → DRAFT SDs ONLY when the queue would starve available workers; when the queue already has
