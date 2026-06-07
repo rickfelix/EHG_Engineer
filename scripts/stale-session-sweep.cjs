@@ -41,6 +41,9 @@ const _pendingQuestionTimer = require('../lib/coordinator/pending-question-timer
 // SD-LEO-INFRA-ADAM-COORDINATOR-ACTION-001 — top-level require so WIRE_CHECK reaches the
 // Adam->coordinator action-required two-stage ACK + wake/SLA escalation timer.
 const _adamActionAck = require('../lib/coordinator/adam-action-ack.cjs');
+// SD-LEO-INFRA-ADD-PART-MUTUAL-001 — top-level require so WIRE_CHECK reaches the 3-part
+// mutual self-ID handshake (coordinator discovery that doesn't depend solely on the flag).
+const _selfIdHandshake = require('../lib/coordinator/self-id-handshake.cjs');
 
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2 — INTENT collision detection.
 // Reuse the INTENT payload key contract owned by the WRITER (worker-signal.cjs) so the
@@ -1866,6 +1869,30 @@ async function main() {
     }
   } catch (aaErr) {
     console.log('ADAM_ACTION_ACK: ' + (aaErr && aaErr.message ? aaErr.message : 'unknown'));
+  }
+
+  // SD-LEO-INFRA-ADD-PART-MUTUAL-001 — 3-part mutual self-ID handshake housekeeping.
+  // The reactive RESPONDER self-heal (a coordinator replying + re-registering its
+  // is_coordinator flag) runs in COORDINATOR context (coordinator-comms-check.mjs); the
+  // sweep is not a session, so it runs the handshake tick as a non-coordinator (selfRole
+  // 'sweep', selfIsCoordinator=false) — driving only the INITIATOR-confirm / idempotency
+  // housekeeping and giving WIRE_CHECK a reachable entry point. DEFAULT-OFF behind
+  // COORD_SELF_ID_V1; fully inert (zero writes) when the flag is off; fail-open.
+  try {
+    const sid = await _selfIdHandshake.planAndApplySelfIdHandshake(supabase, {
+      selfSessionId: 'sweep',
+      selfRole: 'sweep',
+      selfIsCoordinator: false,
+    });
+    if (sid.replied > 0 || sid.confirmed > 0 || sid.registered > 0) {
+      console.log(
+        '  SELF_ID_HANDSHAKE: replied=' + sid.replied +
+        ' confirmed=' + sid.confirmed + ' registered=' + sid.registered +
+        (sid.enabled ? '' : ' (flag OFF)'),
+      );
+    }
+  } catch (sidErr) {
+    console.log('SELF_ID_HANDSHAKE: ' + (sidErr && sidErr.message ? sidErr.message : 'unknown'));
   }
 
   console.log('=== SWEEP COMPLETE ===');
