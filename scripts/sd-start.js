@@ -62,10 +62,88 @@ import {
 // SD-LEO-INFRA-SD-CREATION-TOOLING-001 Phase 4: cross-check scope vs target_application
 import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-validation/target-application-crosscheck.js';
 import { shouldShowVenturePipelinePointer, VENTURE_PIPELINE_POINTER } from '../lib/leo/venture-pipeline-pointer.js';
+// SD-FDBK-INFRA-DEPENDENCY-BLOCKS-ADVISORY-001: enforce declared dependencies at claim time.
+import { evaluateDependencyGate, formatDependencyRefusal } from '../lib/sd-start/dependency-gate.mjs';
 
 dotenv.config();
 
 const supabase = createSupabaseServiceClient();
+
+// SD-FDBK-INFRA-DEPENDENCY-BLOCKS-ADVISORY-001: pre-claim DEPENDENCY gate.
+// Dependency BLOCKS were advisory-only (computed by the sweep/dashboard but never
+// enforced), so workers repeatedly claimed dependency-blocked child SDs. This
+// resolves the effective SD's declared dependencies (strategic_directives_v2.
+// dependencies JSONB) and REFUSES the claim when any is not 'completed'. --force
+// warns and proceeds; any resolution error fails OPEN so a transient DB issue can
+// never block every claim. Pure decision logic lives in lib/sd-start/dependency-gate.mjs.
+async function enforceDependencyGate(sd, effectiveId) {
+  let resolved;
+  try {
+    // dependencies is not fetched by getSDDetails — read it for the effective SD.
+    const { data: row, error: depErr } = await supabase
+      .from('strategic_directives_v2')
+      .select('dependencies')
+      .eq('id', sd.id)
+      .maybeSingle();
+    if (depErr) throw depErr;
+
+    const deps = Array.isArray(row?.dependencies) ? row.dependencies : [];
+    const refs = deps
+      .map(d => (d && typeof d === 'object' ? d.sd_id : d))
+      .filter(v => typeof v === 'string' && v.length > 0);
+    if (refs.length === 0) return; // no declared dependencies — nothing to enforce
+
+    // Resolve each ref (sd_key OR uuid) to its current status in one query.
+    const { data: depRows, error: resErr } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status')
+      .or(`sd_key.in.(${refs.join(',')}),id.in.(${refs.join(',')})`);
+    if (resErr) throw resErr;
+
+    const byRef = new Map();
+    for (const r of depRows || []) {
+      if (r.sd_key) byRef.set(r.sd_key, r.status);
+      if (r.id) byRef.set(r.id, r.status);
+    }
+    resolved = refs.map(ref => ({ sd_id: ref, status: byRef.has(ref) ? byRef.get(ref) : null }));
+  } catch (err) {
+    // Fail-open: a transient DB/resolution error must never block every claim.
+    console.warn(`${colors.dim}(dependency gate skipped — resolution error, fail-open: ${err.message})${colors.reset}`);
+    return;
+  }
+
+  const force = process.argv.includes('--force');
+  const result = evaluateDependencyGate(resolved, { force });
+
+  if (result.verdict === 'refuse') {
+    console.log(`\n${colors.red}${colors.bold}🚫 Unmet dependencies — claim refused for ${effectiveId}${colors.reset}`);
+    console.log(`${colors.red}${formatDependencyRefusal(result.blocking, result.unresolved)}${colors.reset}`);
+    console.log(`   ${colors.dim}Wait for the dependencies to reach 'completed', or pass --force to override (warn + proceed).${colors.reset}`);
+    try {
+      await supabase.from('audit_log').insert({
+        event_type: 'DEPENDENCY_GATE_REFUSED',
+        entity_type: 'strategic_directive',
+        entity_id: sd.id,
+        metadata: {
+          sd_key: effectiveId,
+          blocking: result.blocking,
+          unresolved: result.unresolved,
+          operator_session_id: process.env.CLAUDE_SESSION_ID || null,
+        },
+        severity: 'info',
+      });
+    } catch (auditErr) {
+      console.warn(`${colors.dim}(audit-log refusal record failed non-blocking: ${auditErr.message})${colors.reset}`);
+    }
+    process.exit(1);
+  }
+
+  if (result.warn && (result.blocking.length || result.unresolved.length)) {
+    const why = force && result.blocking.length ? '--force override' : 'unresolved reference(s)';
+    console.log(`\n${colors.yellow}⚠️  Proceeding despite unmet dependencies (${why}) for ${effectiveId}:${colors.reset}`);
+    console.log(`${colors.yellow}${formatDependencyRefusal(result.blocking, result.unresolved)}${colors.reset}`);
+  }
+}
 
 const MAX_FALLBACK_ATTEMPTS = 3;
 
@@ -820,6 +898,11 @@ async function main() {
       } // close else (route-to-leaf)
     }
   }
+
+  // 1.6. SD-FDBK-INFRA-DEPENDENCY-BLOCKS-ADVISORY-001: pre-claim dependency gate.
+  // Enforces the SD's declared dependencies (refuses the claim when a declared
+  // dependency SD is not yet 'completed'; --force overrides; fail-open on error).
+  await enforceDependencyGate(sd, effectiveId);
 
   // 1.7. Day-28 blocking age gate (FR-001: SD-MAN-GEN-CORRECTIVE-VISION-GAP-007-03)
   // Block SDs older than threshold (default 28 days). Chairman override via --force.
