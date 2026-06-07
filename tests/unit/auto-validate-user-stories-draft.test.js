@@ -89,3 +89,44 @@ test('a UUID is used directly (no sd_key resolution lookup)', async () => {
   await autoValidateUserStories('33333333-3333-3333-3333-333333333333', client);
   assert.equal(recorded.resolvedByKey, null, 'a UUID must not trigger an sd_key resolution lookup');
 });
+
+// SD-FDBK-INFRA-COMPLETION-FLAG-HARNESS-001 FR-3: regression + edge coverage (>=6 cases total).
+
+test('ready stories still promoted+validated (no regression for the original path)', async () => {
+  const stories = [{ id: 's1', title: 'Story 1', status: 'ready', validation_status: 'pending' }];
+  const { client, recorded } = makeClient({
+    uuid: '44444444-4444-4444-4444-444444444444',
+    stories,
+    deliverables: [{ deliverable_name: 'd', completion_status: 'completed' }],
+  });
+  const res = await autoValidateUserStories('44444444-4444-4444-4444-444444444444', client);
+  assert.deepEqual(recorded.promoteStatusIn, ['ready', 'draft'], 'ready stories still promoted via the widened set');
+  assert.equal(recorded.validateCalled, true);
+  assert.equal(res.validated, true);
+});
+
+test('deliverables incomplete short-circuits with no promotion or validation', async () => {
+  const stories = [{ id: 's1', title: 'Story 1', status: 'draft', validation_status: 'pending' }];
+  const { client, recorded } = makeClient({
+    uuid: '55555555-5555-5555-5555-555555555555',
+    stories,
+    deliverables: [{ deliverable_name: 'd', completion_status: 'pending' }],
+  });
+  const res = await autoValidateUserStories('55555555-5555-5555-5555-555555555555', client);
+  assert.equal(res.validated, false, 'incomplete deliverables must not validate');
+  assert.equal(res.message, 'Deliverables incomplete');
+  assert.equal(recorded.promoteStatusIn, null, 'no promotion when deliverables are incomplete');
+  assert.equal(recorded.validateCalled, false, 'no validation when deliverables are incomplete');
+});
+
+test('no user stories returns the {validated:true,count:0} contract (infra/docs SDs)', async () => {
+  const { client, recorded } = makeClient({
+    uuid: '66666666-6666-6666-6666-666666666666',
+    stories: [],
+    deliverables: [{ deliverable_name: 'd', completion_status: 'completed' }],
+  });
+  const res = await autoValidateUserStories('66666666-6666-6666-6666-666666666666', client);
+  assert.equal(res.validated, true, 'no stories is an acceptable pass for infra/docs SDs');
+  assert.equal(res.count, 0);
+  assert.equal(recorded.promoteStatusIn, null, 'nothing to promote when there are no stories');
+});
