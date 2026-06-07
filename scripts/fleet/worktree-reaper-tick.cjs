@@ -20,11 +20,17 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const DEFAULT_CADENCE = 12; // every 12th sweep ≈ 1 hour at 5-min intervals
 const STATE_RELATIVE = path.join('.claude', 'worktree-reaper-state.json');
 const STATE_SCHEMA_VERSION = 1;
+
+// SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (FR-002): pool-utilization watchdog.
+// Mirrors lib/worktree-quota.js::MAX_WORKTREE_COUNT (kept in sync; the .cjs tick
+// cannot `require` the ESM quota module, so the cap is duplicated as a constant).
+const MAX_WORKTREE_COUNT = 20;
+const DEFAULT_POOL_THRESHOLD = 0.8;
 
 function readState(statePath) {
   // SD-FDBK-INFRA-WORKTREE-REAPER-RELIABILITY-001: last_pid/last_spawn_at are additive
@@ -86,6 +92,67 @@ function resolveExecuteMode() {
   return { execute: false, stage2: false };
 }
 
+// ── Pool-utilization watchdog (SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001) ──
+
+/**
+ * Resolve the watchdog threshold from WORKTREE_POOL_THRESHOLD (a fraction in
+ * (0,1]); falls back to DEFAULT_POOL_THRESHOLD on absent/invalid input.
+ */
+function resolvePoolThreshold() {
+  const raw = (process.env.WORKTREE_POOL_THRESHOLD || '').trim();
+  if (!raw) return DEFAULT_POOL_THRESHOLD;
+  const n = parseFloat(raw);
+  if (Number.isFinite(n) && n > 0 && n <= 1) return n;
+  return DEFAULT_POOL_THRESHOLD;
+}
+
+/**
+ * Count git-registered worktrees (excluding the main checkout) for repoRoot.
+ * Duplicates lib/worktree-quota.js::countActiveWorktrees because this CJS tick
+ * cannot import the ESM module. Returns null on any git failure (watchdog then
+ * no-ops rather than acting on a bad count).
+ */
+function countActiveWorktrees(repoRoot, runner = spawnSync) {
+  let res;
+  try {
+    res = runner('git', ['worktree', 'list', '--porcelain'], {
+      cwd: repoRoot, encoding: 'utf8', windowsHide: true,
+    });
+  } catch { return null; }
+  if (!res || res.status !== 0 || typeof res.stdout !== 'string') return null;
+  const normRoot = path.resolve(repoRoot).replace(/\\/g, '/');
+  let count = 0;
+  let current = null;
+  let bare = false;
+  const flush = () => {
+    if (current) {
+      const p = path.resolve(current).replace(/\\/g, '/');
+      if (!bare && p !== normRoot) count++;
+    }
+    current = null; bare = false;
+  };
+  for (const line of res.stdout.split('\n')) {
+    if (line.startsWith('worktree ')) { flush(); current = line.slice('worktree '.length).trim(); }
+    else if (line === 'bare') { bare = true; }
+  }
+  flush();
+  return count;
+}
+
+/**
+ * Pure watchdog decision: given used/cap/threshold, decide whether Stage-0
+ * reclaim should fire. Returns { triggered, used, cap, utilization, percent,
+ * threshold }. Stays pure (no I/O) so it is trivially unit-testable.
+ */
+function poolWatchdogDecision({ used, cap = MAX_WORKTREE_COUNT, threshold = DEFAULT_POOL_THRESHOLD }) {
+  const safeCap = cap > 0 ? cap : MAX_WORKTREE_COUNT;
+  const utilization = (Number.isFinite(used) ? used : 0) / safeCap;
+  return {
+    triggered: Number.isFinite(used) && utilization >= threshold,
+    used, cap: safeCap, utilization, percent: Math.round(utilization * 100), threshold,
+  };
+}
+
 /**
  * Tick the counter and invoke the reaper when due.
  * Returns the post-invocation state for caller visibility.
@@ -140,7 +207,28 @@ function tick(opts = {}) {
   if (execute) args.push('--execute');
   if (stage2) args.push('--stage2', '--yes');
 
-  logger(`WORKTREE REAPER TICK: sweep=${state.sweep_counter} cadence=${cadence} execute=${execute} stage2=${stage2}`);
+  // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (FR-002): pool-utilization watchdog.
+  // When the pool is at/above threshold, proactively run Stage-0 (terminal-SD
+  // reclaim) so the fleet never silently stalls at the 20/20 cap. Stage-0 is
+  // age-agnostic but still claim-guarded + activeSdSet-guarded inside the reaper,
+  // and idempotent (a second tick over the same state reclaims nothing new).
+  // Disable with WORKTREE_POOL_WATCHDOG=off. Forcing --execute here is intentional:
+  // a watchdog that only dry-runs cannot relieve the cap.
+  const watchdogEnabled = !['false', '0', 'off', 'no'].includes(
+    (process.env.WORKTREE_POOL_WATCHDOG || '').trim().toLowerCase(),
+  );
+  let watchdog = null;
+  if (watchdogEnabled) {
+    const used = countActiveWorktrees(repoRoot);
+    watchdog = poolWatchdogDecision({ used, cap: MAX_WORKTREE_COUNT, threshold: resolvePoolThreshold() });
+    if (watchdog.triggered) {
+      if (!args.includes('--stage0')) args.push('--stage0');
+      if (!args.includes('--execute')) args.push('--execute');
+      logger(`WORKTREE POOL WATCHDOG: ${watchdog.used}/${watchdog.cap} (${watchdog.percent}%) ≥ ${Math.round(watchdog.threshold * 100)}% → Stage-0 reclaim armed`);
+    }
+  }
+
+  logger(`WORKTREE REAPER TICK: sweep=${state.sweep_counter} cadence=${cadence} execute=${execute || (watchdog && watchdog.triggered)} stage2=${stage2}${watchdog && watchdog.triggered ? ' stage0=true' : ''}`);
 
   // SD-FDBK-INFRA-WORKTREE-REAPER-RELIABILITY-001: run the reaper OUT-OF-BAND.
   // Previously this blocked the sweep on a synchronous spawnSync (timeout 5 min).
@@ -186,7 +274,7 @@ function tick(opts = {}) {
   }
   writeState(statePath, state);
 
-  return { invoked: result === 'spawned', counter: state.sweep_counter, cadence, result, pid, enabled: true };
+  return { invoked: result === 'spawned', counter: state.sweep_counter, cadence, result, pid, enabled: true, watchdog };
 }
 
 module.exports = {
@@ -196,6 +284,11 @@ module.exports = {
   isEnabled,
   isPidAlive,
   resolveExecuteMode,
+  resolvePoolThreshold,
+  countActiveWorktrees,
+  poolWatchdogDecision,
   DEFAULT_CADENCE,
+  DEFAULT_POOL_THRESHOLD,
+  MAX_WORKTREE_COUNT,
   STATE_RELATIVE,
 };
