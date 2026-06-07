@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-07T05:50:35.873Z
+**Generated**: 2026-06-07T06:32:46.140Z
 **Rows**: 0
-**RLS**: Enabled (0 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -39,6 +39,13 @@
   ```sql
   CREATE UNIQUE INDEX leo_auto_exec_policy_pkey ON public.leo_auto_exec_policy USING btree (action_class)
   ```
+
+## RLS Policies
+
+### 1. engine_ro_select_leo_auto_exec_policy (SELECT)
+
+- **Roles**: {leo_engine_ro}
+- **Using**: `true`
 
 ---
 
