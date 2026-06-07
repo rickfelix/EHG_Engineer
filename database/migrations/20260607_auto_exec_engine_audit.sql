@@ -80,9 +80,12 @@ $$;
 COMMENT ON FUNCTION public.leo_auto_exec_audit_append_only() IS
   'Append-only guard for leo_auto_exec_audit: raises on any UPDATE/DELETE. SD-LEO-INFRA-POLICY-GATED-AUTO-001C.';
 
+-- CREATE OR REPLACE (PG14+) is idempotent against an already-applied trigger and
+-- satisfies the pre-merge migration-readiness probe (R5: CREATE-without-OR-REPLACE
+-- on an existing object is CONFLICTING). DROP IF EXISTS kept as belt-and-suspenders.
 DROP TRIGGER IF EXISTS trg_leo_auto_exec_audit_append_only
   ON public.leo_auto_exec_audit;
-CREATE TRIGGER trg_leo_auto_exec_audit_append_only
+CREATE OR REPLACE TRIGGER trg_leo_auto_exec_audit_append_only
   BEFORE UPDATE OR DELETE ON public.leo_auto_exec_audit
   FOR EACH ROW
   EXECUTE FUNCTION public.leo_auto_exec_audit_append_only();
