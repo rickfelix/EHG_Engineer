@@ -56,7 +56,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createClient } from '@supabase/supabase-js';
 
-import { listActiveWorktrees } from '../lib/worktree-quota.js';
+import { listActiveWorktrees, countActiveWorktrees, MAX_WORKTREE_COUNT } from '../lib/worktree-quota.js';
 import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../lib/worktree-manager.js';
 // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001: single-source reapability helpers.
 // These three used to be defined locally below; the canonical home is now
@@ -72,6 +72,14 @@ import {
 
 const SCHEMA_VERSION = '1.0';
 const DEFAULT_IDLE_DAYS = 7;
+
+// SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001: terminal SD statuses whose worktrees
+// are pure cleanup. A worktree whose basename sd_key resolves to one of these is
+// reclaimable regardless of the 7-day idle gate (Stage-0, age-agnostic) — but ONLY
+// when it has no active claim and is NOT in activeSdSet.
+const TERMINAL_SD_STATUSES = ['completed', 'cancelled', 'archived'];
+// Pool-utilization threshold at/above which the watchdog proactively runs Stage-0.
+const DEFAULT_POOL_THRESHOLD = 0.8;
 const PRESERVE_EXEMPT_RE = /^(tmp-|scratch-|\.claude[\\/]|\.workflow-patterns|\.worktree\.json$|\.ehg-session\.json$)/;
 
 // ── CLI parsing ────────────────────────────────────────────────────────
@@ -80,12 +88,14 @@ function parseArgs(argv) {
   const args = argv.slice(2);
   const opts = {
     execute: args.includes('--execute') || args.includes('-e'),
+    stage0: args.includes('--stage0'),
     stage2: args.includes('--stage2'),
     yes: args.includes('--yes'),
     verbose: args.includes('--verbose') || args.includes('-v'),
     phantomOnly: args.includes('--phantom-only'),
     help: args.includes('--help') || args.includes('-h'),
     days: DEFAULT_IDLE_DAYS,
+    threshold: DEFAULT_POOL_THRESHOLD,
     preserveRoot: null,
     repo: null,
   };
@@ -93,6 +103,11 @@ function parseArgs(argv) {
   if (daysIdx !== -1 && args[daysIdx + 1]) {
     const n = parseInt(args[daysIdx + 1], 10);
     if (Number.isFinite(n) && n > 0) opts.days = n;
+  }
+  const thrIdx = args.findIndex((a) => a === '--threshold');
+  if (thrIdx !== -1 && args[thrIdx + 1]) {
+    const n = parseFloat(args[thrIdx + 1]);
+    if (Number.isFinite(n) && n > 0 && n <= 1) opts.threshold = n;
   }
   const prIdx = args.findIndex((a) => a === '--preserve-root');
   if (prIdx !== -1 && args[prIdx + 1]) {
@@ -113,7 +128,11 @@ Usage:
 
 Options:
   --execute, -e         Remove Stage 1 worktrees (default: dry-run)
+  --stage0              Stage-0 mode: also reclaim worktrees whose SD is TERMINAL
+                        (completed/cancelled/archived) regardless of idle age.
+                        Combine with --execute to actually remove them.
   --execute --stage2    Also remove Stage 2 worktrees (zombie/orphan/idle)
+  --threshold <0..1>    Pool-utilization threshold for the watchdog (default: ${DEFAULT_POOL_THRESHOLD})
   --yes                 Skip interactive confirmation for Stage 2
   --days <n>            Idle threshold in days (default: ${DEFAULT_IDLE_DAYS})
   --preserve-root <p>   Override preserve destination root (default: scratch/preserved-from-*)
@@ -124,6 +143,8 @@ Options:
   --help, -h            Show this help
 
 Stages:
+  Stage 0 (terminal-SD): worktree sd_key resolves to completed/cancelled/archived
+                         SD — reclaimed age-agnostically (opt-in via --stage0).
   Stage 1 (auto-safe):  AC2 nested, AC4 shipped-stale
   Stage 2 (reviewed):   AC1 zombie-on-main, AC3 orphan-SD, AC5 idle
 
@@ -294,7 +315,9 @@ async function loadSdKeySets(supabase) {
   const qfMap = new Set();
   // SD-FDBK-ENH-WORKTREE-REAPER-MJS-001: always return activeSdSet (empty when no supabase)
   // so callers/ctx never see it undefined.
-  if (!supabase) return { sdMap, qfMap, activeSdSet: new Set() };
+  // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001: also return terminalSdSet (sd_keys whose
+  // status IN completed/cancelled/archived) so Stage-0 can reclaim them age-agnostically.
+  if (!supabase) return { sdMap, qfMap, activeSdSet: new Set(), terminalSdSet: new Set() };
 
   // Supabase defaults to 1000 rows per select even with .limit(5000). Paginate
   // explicitly with .range() to ensure the full set is loaded — otherwise
@@ -341,7 +364,26 @@ async function loadSdKeySets(supabase) {
     }
   } catch { /* best-effort */ }
 
-  return { sdMap, qfMap, activeSdSet };
+  // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001: sd_keys of SDs in a TERMINAL state
+  // (completed/cancelled/archived). Their worktrees are pure cleanup and Stage-0 may
+  // reclaim them regardless of idle age. Best-effort: empty on error → Stage-0 simply
+  // finds nothing to reclaim (no over-reap).
+  const terminalSdSet = new Set();
+  try {
+    const pageSize = 1000;
+    for (let start = 0; start < 20000; start += pageSize) {
+      const { data, error } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, status')
+        .in('status', TERMINAL_SD_STATUSES)
+        .range(start, start + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      for (const r of data) if (r.sd_key) terminalSdSet.add(r.sd_key);
+      if (data.length < pageSize) break;
+    }
+  } catch { /* best-effort */ }
+
+  return { sdMap, qfMap, activeSdSet, terminalSdSet };
 }
 
 // ── Git / Gh runners ───────────────────────────────────────────────────
@@ -471,6 +513,145 @@ function shipStatus(reasons) {
       : 'absorbed_no_pr';
   }
   return 'not_on_main';
+}
+
+// ── Stage-0 terminal-SD reclaim (SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001) ──
+
+/**
+ * Pure Stage-0 classifier for a single worktree. A worktree is a Stage-0
+ * reclaim candidate when its basename sd_key resolves to a TERMINAL SD status
+ * (completed/cancelled/archived) AND it is not protected. This is age-agnostic:
+ * it intentionally ignores the 7-day idle gate (the whole point of the
+ * watchdog is to reclaim terminal-SD worktrees fast at high utilization).
+ *
+ * ALL existing guards are preserved here, in priority order:
+ *   1. active claim (v_active_sessions) → ALWAYS keep
+ *   2. activeSdSet (draft/active/in_progress) → ALWAYS keep (suppresses even
+ *      a stale terminal-status row; never reap a still-worked SD)
+ *   3. terminalSdSet membership → reclaim
+ *
+ * Pure + dependency-injected: takes the worktree, the claim map, and the two
+ * SD-status sets. No git, no DB, no fs. The injected `statusResolver` (optional)
+ * lets tests supply a function instead of sets; when present it wins.
+ *
+ * @param {{ path: string, branch?: string }} wt
+ * @param {{
+ *   claimMap?: Map<string, object>,
+ *   activeSdSet?: Set<string>,
+ *   terminalSdSet?: Set<string>,
+ *   statusResolver?: (sdKey: string) => ('terminal'|'active'|'unknown')
+ * }} ctx
+ * @returns {{ reclaim: boolean, reason: string, sd_key: string }}
+ */
+export function classifyStage0(wt, ctx = {}) {
+  const sdKey = path.basename(wt.path || '');
+
+  // Guard 1: active claim protection (AC8) — never touch a live-claimed worktree.
+  const claim = ctx.claimMap?.get(normalizePath(wt.path));
+  if (claim) {
+    return { reclaim: false, reason: 'active_claim_protected', sd_key: sdKey };
+  }
+
+  // Guard 2: activeSdSet (draft/active/in_progress) — never reap a still-worked SD,
+  // even if a stale terminal row exists for the same key.
+  if (ctx.activeSdSet && ctx.activeSdSet.has(sdKey)) {
+    return { reclaim: false, reason: 'active_sd_protected', sd_key: sdKey };
+  }
+
+  // Resolve terminal status. statusResolver (if injected) is authoritative.
+  let isTerminal;
+  if (typeof ctx.statusResolver === 'function') {
+    const verdict = ctx.statusResolver(sdKey);
+    if (verdict === 'active') {
+      return { reclaim: false, reason: 'active_sd_protected', sd_key: sdKey };
+    }
+    isTerminal = verdict === 'terminal';
+  } else {
+    isTerminal = !!(ctx.terminalSdSet && ctx.terminalSdSet.has(sdKey));
+  }
+
+  if (isTerminal) {
+    return { reclaim: true, reason: 'terminal_sd_reclaim', sd_key: sdKey };
+  }
+  return { reclaim: false, reason: 'not_terminal_sd', sd_key: sdKey };
+}
+
+/**
+ * Pure selection over an injected worktree listing. Returns the subset of
+ * worktrees that Stage-0 would reclaim, each tagged with its classification.
+ * No I/O — callers pass in the already-enumerated worktrees, claim map, and
+ * status sets. This is the unit the watchdog and the CLI both drive.
+ *
+ * @param {Array<{ path: string, branch?: string }>} worktrees
+ * @param {object} ctx - same shape as classifyStage0's ctx
+ * @returns {Array<{ path: string, branch?: string, sd_key: string, reason: string }>}
+ */
+export function selectStage0Reclaim(worktrees, ctx = {}) {
+  const out = [];
+  for (const wt of worktrees || []) {
+    if (isCursorWorktree(wt.path)) continue; // inherit cursor-protection convention
+    const v = classifyStage0(wt, ctx);
+    if (v.reclaim) out.push({ path: wt.path, branch: wt.branch, sd_key: v.sd_key, reason: v.reason });
+  }
+  return out;
+}
+
+/**
+ * Compute pool utilization as a fraction in [0,1].
+ *
+ * @param {number} used - active worktree count
+ * @param {number} [cap=MAX_WORKTREE_COUNT]
+ * @returns {{ used: number, cap: number, utilization: number, percent: number }}
+ */
+export function computePoolUtilization(used, cap = MAX_WORKTREE_COUNT) {
+  const safeCap = cap > 0 ? cap : MAX_WORKTREE_COUNT;
+  const utilization = used / safeCap;
+  return { used, cap: safeCap, utilization, percent: Math.round(utilization * 100) };
+}
+
+/**
+ * Pool watchdog (FR-002). Computes utilization from the injected used/cap and,
+ * when at/above the threshold, selects the Stage-0 reclaim set. PURE by default:
+ * it does NOT remove anything — it returns the decision + candidate list so the
+ * caller (the tick / CLI) performs the claim-guarded, preserve-before-delete
+ * removal through the existing removeWorktree path. Idempotent: a second call on
+ * the same state returns the same (or empty, once reclaimed) candidate set.
+ *
+ * An optional `reclaim` callback may be supplied to actually act on the
+ * candidates (used by the tick); it is invoked only when triggered.
+ *
+ * @param {{
+ *   worktrees: Array<{path:string, branch?:string}>,
+ *   used?: number,
+ *   cap?: number,
+ *   threshold?: number,
+ *   claimMap?: Map<string, object>,
+ *   activeSdSet?: Set<string>,
+ *   terminalSdSet?: Set<string>,
+ *   statusResolver?: Function,
+ *   reclaim?: (candidates: Array) => any
+ * }} ctx
+ * @returns {{ triggered: boolean, used: number, cap: number, utilization: number,
+ *             percent: number, threshold: number, candidates: Array, acted: boolean }}
+ */
+export function poolWatchdog(ctx = {}) {
+  const worktrees = ctx.worktrees || [];
+  const cap = ctx.cap > 0 ? ctx.cap : MAX_WORKTREE_COUNT;
+  const used = Number.isFinite(ctx.used) ? ctx.used : worktrees.length;
+  const threshold = Number.isFinite(ctx.threshold) && ctx.threshold > 0 ? ctx.threshold : DEFAULT_POOL_THRESHOLD;
+  const { utilization, percent } = computePoolUtilization(used, cap);
+  const triggered = utilization >= threshold;
+
+  let candidates = [];
+  let acted = false;
+  if (triggered) {
+    candidates = selectStage0Reclaim(worktrees, ctx);
+    if (typeof ctx.reclaim === 'function' && candidates.length > 0) {
+      ctx.reclaim(candidates);
+      acted = true;
+    }
+  }
+  return { triggered, used, cap, utilization, percent, threshold, candidates, acted };
 }
 
 // ── Preserve-before-delete ─────────────────────────────────────────────
@@ -658,19 +839,19 @@ export async function main(argv = process.argv) {
   }
 
   // Load reference data (best-effort — reaper is useful even with empty maps).
-  const [claimMap, { sdMap, qfMap, activeSdSet }] = await Promise.all([
+  const [claimMap, { sdMap, qfMap, activeSdSet, terminalSdSet }] = await Promise.all([
     loadClaimMap(supabase),
     loadSdKeySets(supabase),
   ]);
 
   const idleThresholdMs = opts.days * 24 * 60 * 60 * 1000;
-  const ctx = { repoRoot, claimMap, sdMap, qfMap, activeSdSet, idleThresholdMs };
+  const ctx = { repoRoot, claimMap, sdMap, qfMap, activeSdSet, terminalSdSet, idleThresholdMs };
 
   const header = humanTableHeader();
   const now = Date.now();
   const records = [];
 
-  console.log(`\n🔍 WORKTREE REAPER — ${opts.execute ? 'EXECUTE' : 'DRY-RUN'} mode`);
+  console.log(`\n🔍 WORKTREE REAPER — ${opts.execute ? 'EXECUTE' : 'DRY-RUN'} mode${opts.stage0 ? ' (+Stage-0 terminal-SD)' : ''}`);
   console.log('═'.repeat(header.length));
   console.log(`   Repo root: ${repoRoot}`);
   console.log(`   Worktrees scanned: ${allWorktrees.length}`);
@@ -742,6 +923,23 @@ export async function main(argv = process.argv) {
     verdict = staged.verdict;
     reasonText = categories[0] || 'no_match';
 
+    // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (FR-001): opt-in Stage-0.
+    // When --stage0 is set and a worktree's SD is TERMINAL (completed/cancelled/
+    // archived), reclaim it age-agnostically — even if no other category matched.
+    // All earlier guards still hold: active-claimed worktrees never reach here
+    // (early continue above), and classifyStage0 re-checks activeSdSet so a
+    // still-worked SD is never reaped.
+    if (opts.stage0 && stage == null) {
+      const s0 = classifyStage0(wtInput, ctx);
+      if (s0.reclaim) {
+        stage = 0;
+        verdict = 'stage0_remove';
+        reasonText = s0.reason;
+        categories = [...categories, 'terminal-sd'];
+        reasons = { ...reasons, 'terminal-sd': { matched: true, reason: s0.reason, sd_key: s0.sd_key } };
+      }
+    }
+
     const rec = buildRecord({
       schema_version: SCHEMA_VERSION, wt: wtInput, categories, verdict,
       reason: reasonText, claim_status: 'absent', dirtyCount: dirty.dirtyCount,
@@ -754,16 +952,18 @@ export async function main(argv = process.argv) {
   }
 
   // Collect removal candidates.
+  const stage0 = records.filter((r) => r._stage === 0);
   const stage1 = records.filter((r) => r._stage === 1);
   const stage2 = records.filter((r) => r._stage === 2);
 
   console.log('─'.repeat(header.length));
+  if (opts.stage0) console.log(`Stage 0 (terminal-SD):     ${stage0.length}`);
   console.log(`Stage 1 (auto-safe):       ${stage1.length}`);
   console.log(`Stage 2 (analyzed):        ${stage2.length}`);
-  console.log(`Kept (including active):   ${records.length - stage1.length - stage2.length}`);
+  console.log(`Kept (including active):   ${records.length - stage0.length - stage1.length - stage2.length}`);
 
   if (!opts.execute) {
-    console.log('\n(Dry-run — no changes made. Pass --execute to remove Stage 1, or --execute --stage2 for all.)');
+    console.log('\n(Dry-run — no changes made. Pass --execute to remove Stage 1, --stage0 for terminal-SD, or --execute --stage2 for all.)');
     return 0;
   }
 
@@ -772,8 +972,10 @@ export async function main(argv = process.argv) {
     return 3;
   }
 
-  // Stage 1 removals (unconditional with --execute).
-  const removeList = [...stage1];
+  // Stage 0 (terminal-SD) + Stage 1 removals (unconditional with --execute).
+  // Stage-0 is auto-safe: the SD is already terminal and the active-claim /
+  // activeSdSet guards have both been applied during classification.
+  const removeList = [...stage0, ...stage1];
 
   // Stage 2 removals (only with --execute --stage2).
   if (opts.stage2 && stage2.length > 0) {

@@ -21,6 +21,14 @@ const OPEN = ['new', 'in_progress', 'open', 'triaged', 'snoozed'];
 const TERMINAL = ['completed', 'cancelled', 'archived', 'deferred'];
 const termList = '(' + TERMINAL.join(',') + ')';
 
+// SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001 (FR-003): pool-utilization threshold.
+// Mirror the watchdog default (0.8) so the audit warns at the same point the
+// watchdog acts. Override with WORKTREE_POOL_THRESHOLD.
+const POOL_THRESHOLD = (() => {
+  const n = parseFloat((process.env.WORKTREE_POOL_THRESHOLD || '').trim());
+  return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.8;
+})();
+
 // (1) harness backlog
 const { data: hb } = await db.from('feedback').select('id,title,status,severity,created_at').eq('category', 'harness_backlog').in('status', OPEN).order('created_at', { ascending: false });
 const backlog = hb || [];
@@ -43,6 +51,15 @@ const liveIdle = live.filter(s => !s.sd_key).length;
 const { data: sig } = await db.from('session_coordination').select('id').eq('target_session', me).is('read_at', null).not('payload->>signal_type', 'is', null);
 const unread = (sig || []).length;
 
+// (4) worktree pool utilization — silent 20/20 cap stalls the whole fleet.
+// countActiveWorktrees never throws (returns [] on git failure → 0).
+let poolUsed = 0;
+let poolCap = MAX_WORKTREE_COUNT;
+try { poolUsed = countActiveWorktrees(process.cwd()); } catch { poolUsed = 0; }
+const poolUtil = poolCap > 0 ? poolUsed / poolCap : 0;
+const poolPct = Math.round(poolUtil * 100);
+const poolWarn = poolUtil >= POOL_THRESHOLD;
+
 // sourcing decision: feed the fleet only if there is idle capacity AND the queue can't fill it
 const capacity = builders + liveIdle;
 const starving = backlog.length > 0 && liveIdle > 0 && unclaimed.length < capacity;
@@ -53,6 +70,8 @@ console.log('  HARNESS BACKLOG : ' + backlog.length + ' open (' + high.length + 
 for (const r of backlog.slice(0, 10)) console.log('      [' + r.status + '/' + (r.severity || '-') + '] ' + String(r.title || '').slice(0, 78));
 console.log('  SD QUEUE        : ' + sds.length + ' non-terminal | ' + claimed + ' claimed | ' + unclaimed.length + ' unclaimed | ' + stuck.length + ' stuck(in_progress,unclaimed)');
 console.log('  WORKERS         : ' + builders + ' building, ' + liveIdle + ' live-idle');
+console.log('  WORKTREE POOL   : ' + poolUsed + '/' + poolCap + ' (' + poolPct + '%)' +
+  (poolWarn ? '  ⚠️  WARNING ≥' + Math.round(POOL_THRESHOLD * 100) + '% — run worktree reaper Stage-0 (terminal-SD reclaim) to avoid a 20/20 cap stall' : ''));
 console.log('  INBOX           : ' + unread + ' unread signals');
 console.log('  SOURCE BACKLOG? : ' + (starving
   ? 'YES — source ' + toSource + ' high-priority backlog item(s) into DRAFT SDs (idle capacity + thin queue)'
