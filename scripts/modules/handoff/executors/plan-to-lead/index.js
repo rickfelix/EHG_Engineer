@@ -49,7 +49,8 @@ import {
   createScopeAuditGate,
   createChildScopeCoverageGate,
   // Vision Fidelity Gate (SD-LEO-INFRA-VISION-FIDELITY-GATE-001 FR-2)
-  createVisionFidelityGate
+  createVisionFidelityGate,
+  createCrossRepoStageConfigDriftGate
 } from './gates/index.js';
 // Note: requiresTraceabilityGates is re-exported via 'export * from ./gates/index.js'
 
@@ -338,6 +339,13 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
     gates.push(createScopeAuditGate(this.supabase));
     gates.push(createChildScopeCoverageGate(this.supabase));
+
+    // Cross-Repo Stage-Config Drift (SD-FDBK-INFRA-SYSTEMIC-CROSS-REPO-001)
+    // Runs generate-stage-config.cjs --check + a sibling-uncommitted probe so the
+    // venture_stages SSOT -> ehg/src/config/venture-workflow.ts drift is VISIBLE to LEO before
+    // LEAD-FINAL. Scoped-block (only this SD's real drift), WARN on unrelated pre-existing
+    // drift, fail-open on execution error (DB down / sibling repo absent / git error).
+    gates.push(createCrossRepoStageConfigDriftGate(this.supabase));
 
     // DB Content Parity — runs before /learn (SD-LEO-INFRA-CODE-CONTENT-PARITY-001)
     gates.push(createDbContentParityGate());
