@@ -20,10 +20,14 @@ describe('QF-20260508-988: coordination-inbox FR-3a deferral guard', () => {
     expect(guardIdx).toBeLessThan(loopIdx);
   });
 
-  it('skips FR-3a signals (INFO + payload.signal_type) when this session IS the coordinator', () => {
-    expect(src).toMatch(
-      /amCoordinator\s*&&\s*msg\.message_type\s*===\s*'INFO'\s*&&\s*msg\.payload\s*&&\s*msg\.payload\.signal_type/
-    );
+  it('skips FR-3a signals (INFO + payload.signal_type) for EVERY session (SD-LEO-FIX-FIX-COORDINATION-INBOX-001: no longer coordinator-gated — Adam/workers must not drain coordinator-exclusive rows)', () => {
+    // The FR-3a skip moved into the pure classifyInboxMessage; assert the behavior, not a regex.
+    const { createRequire } = require('node:module');
+    const req = createRequire(__filename);
+    const { classifyInboxMessage } = req('../../scripts/hooks/coordination-inbox.cjs');
+    const sig = { message_type: 'INFO', payload: { signal_type: 'stuck' } };
+    expect(classifyInboxMessage(sig, { amAdam: false })).toEqual({ skip: true });
+    expect(classifyInboxMessage(sig, { amAdam: true })).toEqual({ skip: true });
   });
 
   it('fail-open: catch swallows resolve.cjs require errors so worker sessions still drain', () => {
