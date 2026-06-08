@@ -26,10 +26,26 @@ const TARGET_WORKERS = parseInt(process.env.COORD_TARGET_WORKERS || '6', 10);
 const TERMINAL = ['completed', 'cancelled', 'archived', 'deferred'];
 const termList = '(' + TERMINAL.join(',') + ')';
 
-// ── all workable SDs (non-terminal) ──
+// ── all CLAIMABLE workable SDs ──
+// SD-FDBK-FIX-FIX-COORDINATOR-EMAIL-001 (follow-up to QF-20260607-608): a non-terminal SD only
+// "needs a worker" when it is genuinely CLAIMABLE. Exclude sd_type=orchestrator PARENTS (they
+// auto-complete on their children — no worker builds them directly) and dependency-BLOCKED
+// children (any dependency not yet terminal). Counting those in `remaining` over-stated the
+// work-relative RAG (false-RED on a healthy surplus belt with transient parks). The claimable
+// predicate is the shared single source (lib/coordinator/claimable-work.cjs) whose dependency
+// resolution mirrors coordinator-audit.mjs, so email and audit cannot drift.
+const claimMod = await import(pathToFileURL(resolve('lib/coordinator/claimable-work.cjs')).href);
+const { isClaimableSd, dependencyKeys } = claimMod.default ?? claimMod;
 const { data: workRows } = await db.from('strategic_directives_v2')
-  .select('sd_key').not('status', 'in', termList);
-const workableKeys = (workRows || []).map(r => r.sd_key).filter(Boolean);
+  .select('sd_key,sd_type,dependencies').not('status', 'in', termList);
+// resolve the status of every referenced dependency in one query (mirrors coordinator-audit.mjs).
+const depKeys = dependencyKeys(workRows || []);
+const depStatus = {};
+if (depKeys.length) {
+  const { data: depRows } = await db.from('strategic_directives_v2').select('sd_key,status').in('sd_key', depKeys);
+  for (const r of (depRows || [])) depStatus[r.sd_key] = r.status;
+}
+const workableKeys = (workRows || []).filter(s => isClaimableSd(s, depStatus)).map(r => r.sd_key).filter(Boolean);
 const workable = workableKeys.length;
 
 // ── live workers + the SDs they ACTUALLY hold. claude_sessions.sd_key is the reliable build signal;
