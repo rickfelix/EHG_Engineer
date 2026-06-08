@@ -87,12 +87,24 @@ function stateFilePath(sessionId) {
  *        Without it, returns the legacy command-only signature (back-compat).
  * @returns {string|null}
  */
+/**
+ * SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001: canonical Bash command hash, shared by
+ * signatureFor() and the succeeding-poll exemption in recordAndCount() so the
+ * command_sha written by post-tool-rca-outcome.cjs compares equal to the current
+ * command's hash.
+ * @param {string} cmd
+ * @returns {string} sha256(cmd) first 16 hex chars
+ */
+function bashCmdHash(cmd) {
+  return crypto.createHash('sha256').update(cmd).digest('hex').slice(0, 16);
+}
+
 function signatureFor(toolName, input, lastOutcome) {
   if (!toolName || !input) return null;
   if (toolName === 'Bash') {
     const cmd = typeof input.command === 'string' ? input.command : '';
     if (!cmd) return null;
-    const hash = crypto.createHash('sha256').update(cmd).digest('hex').slice(0, 16);
+    const hash = bashCmdHash(cmd);
     // Outcome admixture (back-compat: missing/malformed lastOutcome → command-only signature).
     if (
       lastOutcome &&
@@ -316,6 +328,26 @@ async function recordAndCount(sessionId, sdKey, toolName, toolInput, opts = {}) 
     return { attempts: 0, signature, rcaResetApplied: false };
   }
 
+  // SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001: a blind retry is, by definition, re-running
+  // a FAILED command. If the immediately-prior invocation of THIS SAME command exited 0,
+  // this is a succeeding poll (e.g. a recurring monitor cron), not a retry — do not
+  // accumulate toward the 3-strikes guard. COMMAND-SCOPED: lastOutcome.command_sha must
+  // match the current command's hash, so an interleaved success of a DIFFERENT command
+  // can never exempt a genuine failure loop. STRICT: only exit_code 0/'0' exempts;
+  // null/undefined/non-zero codes still accumulate. FAIL-OPEN/back-compat: a legacy
+  // lastOutcome without command_sha (or a non-Bash tool) never exempts.
+  if (toolName === 'Bash') {
+    const lo = opts.lastOutcome;
+    const cmd = typeof (toolInput && toolInput.command) === 'string' ? toolInput.command : '';
+    if (
+      lo && typeof lo === 'object' && cmd &&
+      lo.command_sha === bashCmdHash(cmd) &&
+      (lo.exit_code === 0 || lo.exit_code === '0')
+    ) {
+      return { attempts: 0, signature, rcaResetApplied: false };
+    }
+  }
+
   const now = typeof opts.now === 'number' ? opts.now : Date.now();
   const rcaCheck = opts.rcaCheck || fetchRcaInvocationSince;
 
@@ -353,6 +385,7 @@ module.exports = {
   pruneStale,
   stateFilePath,
   isExempt,
+  bashCmdHash,
   RETRY_WINDOW_MS,
   UUID_REGEX,
   // Test-only export for cache reset between test cases

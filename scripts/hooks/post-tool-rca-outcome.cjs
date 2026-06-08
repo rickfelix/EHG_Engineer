@@ -130,10 +130,26 @@ function digestStderr(stderr) {
     // Skip writes that would yield no signal (no exit code AND no stderr).
     if (exitCode === null && !stderrSha) return;
 
+    // SD-FDBK-FIX-RCA-TIERED-ENFORCEMENT-001: capture command_sha so the next PreToolUse
+    // can scope the succeeding-poll exemption to the SAME command (recordAndCount compares
+    // it to bashCmdHash(currentCommand) = sha256(cmd).slice(0,16)). Best-effort; left empty
+    // when the command is unavailable (an empty value never matches a real hash → no false
+    // exemption, preserving fail-open/back-compat).
+    const command =
+      payload.tool_input && typeof payload.tool_input.command === 'string'
+        ? payload.tool_input.command
+        : typeof resp.command === 'string'
+          ? resp.command
+          : '';
+    const commandSha = command
+      ? crypto.createHash('sha256').update(command).digest('hex').slice(0, 16)
+      : '';
+
     const outcome = {
       tool_name: toolName,
       exit_code: exitCode,
       stderr_sha: stderrSha,
+      command_sha: commandSha,
       captured_at: new Date().toISOString(),
     };
 
