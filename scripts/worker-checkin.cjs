@@ -300,6 +300,50 @@ async function selfClaimDraftSd(sb, sessionId, base) {
   return null;
 }
 
+// SD-FDBK-FIX-RECURRING-2ND-OCCURRENCE-001: recover SDs STRANDED at pending_approval/LEAD_FINAL
+// with the claim cleared. RECURRING bug (2nd occurrence): a worker reaches LEAD_FINAL (PLAN-TO-LEAD
+// accepted, gates passed, retro exists, PR usually merged) then RELEASES its claim and goes idle
+// WITHOUT running the final LEAD-FINAL-APPROVAL handoff. The SD is then one step from shipped but
+// un-completable: self-claim skips pending_approval (only draft/active), and a coordinator running
+// `handoff.js execute LEAD-FINAL-APPROVAL` from main with the claim cleared FAILS the claim-validity
+// worktree-isolation gate (lib/claim-validity-gate.js: claiming_session_id must match + cwd in the
+// worktree). The ONLY reliable unblock today is a human window-pasting `sd-start` in a worker. This
+// tier AUTOMATES that: re-claim the stranded SD so a worker re-attaches the worktree (sd-start) and
+// runs LEAD-FINAL-APPROVAL with a VALID matching claim — the gate then passes. Idempotent (a re-strand
+// is simply re-recovered next checkin). Highest self-claim priority: finishing a near-shipped SD beats
+// starting new work. Fail-open; returns a resume_final result or null.
+const STRANDED_CANDIDATE_LIMIT = 5;
+// Only recover SDs that have been parked a while, so we never race a worker mid-finalize (the brief
+// window between a transition and the next handoff). A genuinely stranded SD sits indefinitely.
+const STRANDED_MIN_AGE_MS = 5 * 60 * 1000;
+
+async function recoverStrandedFinal(sb, sessionId, base) {
+  try {
+    const cutoffIso = new Date(Date.now() - STRANDED_MIN_AGE_MS).toISOString();
+    const { data: stranded } = await sb
+      .from('strategic_directives_v2')
+      .select('sd_key, status, current_phase, updated_at')
+      .eq('status', 'pending_approval')
+      .eq('current_phase', 'LEAD_FINAL')
+      .is('claiming_session_id', null)
+      .lt('updated_at', cutoffIso)            // parked > STRANDED_MIN_AGE_MS — not a mid-finalize race
+      .order('updated_at', { ascending: true }) // oldest stranded first
+      .limit(STRANDED_CANDIDATE_LIMIT);
+    for (const sd of (stranded || [])) {
+      const claimed = await tryClaim(sb, sd.sd_key, sessionId);
+      if (claimed.ok) {
+        return {
+          ...base,
+          action: 'resume_final',
+          sd: sd.sd_key,
+          message: `Recovered stranded SD ${sd.sd_key} (was pending_approval/LEAD_FINAL with claim cleared — one handoff from shipped). Re-attach + finish: node scripts/sd-start.js ${sd.sd_key}, then node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key}. If PR_MERGE_VERIFICATION blocks, merge the PR first (gh pr merge), then re-run.`,
+        };
+      }
+    }
+  } catch { /* fail-open -> caller continues to normal self-claim */ }
+  return null;
+}
+
 /**
  * Dedup guard: should this SD candidate be SKIPPED by self-claim because it is already
  * being built? v_sd_next_candidates only filters completed/cancelled/deferred and
@@ -383,6 +427,13 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
     }
   }
 
+  // 5.7 SD-FDBK-FIX-RECURRING-2ND-OCCURRENCE-001: recover a STRANDED pending_approval/LEAD_FINAL SD
+  //      (claim cleared, one handoff from shipped) BEFORE self-claiming new work — finishing a
+  //      near-shipped SD beats starting fresh. Re-claiming lets a worker run LEAD-FINAL-APPROVAL with
+  //      a valid matching claim (passing the claim-validity gate the coordinator-from-main path fails).
+  const recovered = await recoverStrandedFinal(sb, sessionId, base);
+  if (recovered) return recovered;
+
   // 5.5 SD-FDBK-INFRA-AUTO-MAINTAIN-EXECUTION-001: ensure an active execution baseline exists
   //      BEFORE reading v_sd_next_candidates. With zero active baseline the view returns 0 rows
   //      and self-claim silently idles with a full queue. Fail-open: a failure here degrades to
@@ -447,7 +498,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, isSdInFlight, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, isSdInFlight, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {

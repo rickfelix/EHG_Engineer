@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
+const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
 
 describe('FR-2: extractSdFromAssignment', () => {
   it('prefers payload.sd_key', () => {
@@ -35,6 +35,7 @@ function makeStub(cfg) {
       eq(k, v) { state.filters[k] = v; return chain; },
       in(k, v) { state.filters[k] = v; return chain; },
       neq(k, v) { state.filters['neq_' + k] = v; return chain; },
+      lt(k, v) { state.filters['lt_' + k] = v; return chain; },
       gte() { return chain; },
       is() { return chain; },
       order() { return chain; },
@@ -62,6 +63,16 @@ function makeStub(cfg) {
       }
       if (table === 'v_sd_next_candidates') return Promise.resolve({ data: cfg.candidates || [], error: null });
       if (table === 'strategic_directives_v2') {
+        // recoverStrandedFinal listing: .eq('status','pending_approval') sets a STRING filter
+        // (the draft tier uses .in('status', [...]) -> an ARRAY). Distinguish on that to return
+        // the stranded fixture; honor the .lt('updated_at', cutoff) staleness guard if provided.
+        if (state.filters.status === 'pending_approval') {
+          let rows = cfg.stranded || [];
+          if (state.filters.lt_updated_at !== undefined) {
+            rows = rows.filter((r) => !r.updated_at || r.updated_at < state.filters.lt_updated_at);
+          }
+          return Promise.resolve({ data: rows, error: null });
+        }
         // un-baselined-draft self-claim listing; honor the server-side `.neq('sd_type', …)` filter
         // so the orchestrator-parent exclusion is genuinely exercised by the stub.
         let rows = cfg.drafts || [];
@@ -544,5 +555,79 @@ describe('FIX-DEDUP: runCheckin skips in-flight SDs in BOTH self-claim tiers', (
     const r = await runCheckin(sb, 'me', noCoord);
     expect(r.action).toBe('self_claimed');
     expect(r.sd).toBe('SD-DRAFT-FREE-002');
+  });
+});
+
+// SD-FDBK-FIX-RECURRING-2ND-OCCURRENCE-001: recover SDs stranded at pending_approval/LEAD_FINAL with
+// the claim cleared. Re-claiming lets a worker run LEAD-FINAL-APPROVAL with a valid matching claim,
+// passing the claim-validity gate the coordinator-from-main path fails. Runs BEFORE self-claiming new
+// work (finishing a near-shipped SD beats starting fresh).
+describe('FIX-RECURRING-2ND: recover stranded pending_approval/LEAD_FINAL SDs', () => {
+  const sess = { session: { metadata: { callsign: 'Bravo' }, sd_key: null }, messages: [] };
+  const old = '2020-01-01T00:00:00Z'; // safely older than the staleness cutoff
+  const strand = (sd_key, over = {}) => ({ sd_key, status: 'pending_approval', current_phase: 'LEAD_FINAL', updated_at: old, ...over });
+
+  it('recovers a stranded LEAD_FINAL SD with action=resume_final and finish instructions', async () => {
+    const sb = makeStub({ ...sess, stranded: [strand('SD-STRANDED-001')], candidates: [], claimResults: { 'SD-STRANDED-001': true } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_final');
+    expect(r.sd).toBe('SD-STRANDED-001');
+    expect(r.message).toMatch(/LEAD-FINAL-APPROVAL SD-STRANDED-001/);
+    expect(r.message).toMatch(/sd-start\.js SD-STRANDED-001/);
+  });
+
+  it('recovery WINS over self-claiming new baselined work (step 5.7 before step 6)', async () => {
+    const sb = makeStub({
+      ...sess,
+      stranded: [strand('SD-STRANDED-001')],
+      candidates: [{ sd_id: 'SD-NEWWORK-001', track: 'A' }],
+      drafts: [{ sd_key: 'SD-DRAFT-001', status: 'draft', sd_type: 'feature', priority: 'critical', created_at: '2026-01-01T00:00:00Z', dependencies: [] }],
+      claimResults: { 'SD-STRANDED-001': true, 'SD-NEWWORK-001': true, 'SD-DRAFT-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_final');
+    expect(r.sd).toBe('SD-STRANDED-001');
+  });
+
+  it('falls through to self-claim when no SD is stranded', async () => {
+    const sb = makeStub({
+      ...sess,
+      stranded: [],
+      candidates: [{ sd_id: 'SD-NEWWORK-001', track: 'A' }],
+      sdRows: { 'SD-NEWWORK-001': { current_phase: 'LEAD', sd_type: 'bugfix', dependencies: [] } }, // baselinedCandidateEligible lookup
+      claimResults: { 'SD-NEWWORK-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-NEWWORK-001');
+  });
+
+  it('falls through when the only stranded SD loses the claim race (peer recovered it)', async () => {
+    const sb = makeStub({ ...sess, stranded: [strand('SD-CONTESTED-001')], candidates: [], claimResults: { 'SD-CONTESTED-001': false } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle'); // no stranded claimable + no other work
+    expect(r.ok).toBe(true);
+  });
+
+  it('claims the OLDEST stranded SD first (returned updated_at-ascending)', async () => {
+    const sb = makeStub({
+      ...sess,
+      stranded: [strand('SD-OLDEST-001', { updated_at: '2020-01-01T00:00:00Z' }), strand('SD-NEWER-002', { updated_at: '2020-06-01T00:00:00Z' })],
+      candidates: [],
+      claimResults: { 'SD-OLDEST-001': true, 'SD-NEWER-002': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_final');
+    expect(r.sd).toBe('SD-OLDEST-001');
+  });
+
+  it('recoverStrandedFinal returns null (not throw) on a query error — fail-open', async () => {
+    const throwingSb = {
+      from: () => ({
+        select: () => ({ eq: () => ({ eq: () => ({ is: () => ({ lt: () => ({ order: () => ({ limit: () => Promise.reject(new Error('db down')) }) }) }) }) }) }),
+      }),
+    };
+    const r = await recoverStrandedFinal(throwingSb, 'sess-1', { ok: true });
+    expect(r).toBeNull();
   });
 });
