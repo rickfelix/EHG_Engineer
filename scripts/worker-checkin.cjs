@@ -216,9 +216,14 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
 
   const base = { ok: true, callsign, coordinator: coordinatorId, roll_call_id: rollCall.id, two_way: process.env.COORDINATOR_TWOWAY_V2 === 'on' };
 
-  // 4. already working -> resume
+  // 4. already working -> resume. A self-claimed quick-fix lands in claude_sessions.sd_key
+  // too (claim_sd writes it for QF-% ids), so a QF claim must resume into the /quick-fix
+  // workflow — NOT sd-start, which is SD-only (QFs have no worktree / LEAD-PLAN-EXEC).
   if (mySd) {
-    return { ...base, action: 'resume', sd: mySd, message: `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).` };
+    const isQf = /^QF-/.test(mySd);
+    return { ...base, action: 'resume', sd: mySd, message: isQf
+      ? `Already claiming quick-fix ${mySd}; resume it: node scripts/read-quick-fix.js ${mySd}, then run the /quick-fix workflow (do NOT run sd-start.js for a QF).`
+      : `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).` };
   }
 
   // 5. pending WORK_ASSIGNMENT -> claim via claim_sd RPC

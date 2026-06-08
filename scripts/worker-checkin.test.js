@@ -94,6 +94,17 @@ describe('FR-2: runCheckin deterministic resolution', () => {
     expect(r.callsign).toBe('Alpha');
   });
 
+  it('resume on a self-claimed QF routes to /quick-fix, NOT sd-start', async () => {
+    const sb = makeStub({ session: { metadata: {}, sd_key: 'QF-20260607-583' } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume');
+    expect(r.sd).toBe('QF-20260607-583');
+    expect(r.message).toMatch(/quick-fix/i);
+    expect(r.message).toMatch(/read-quick-fix\.js QF-20260607-583/);
+    // must NOT use the SD-resume phrasing (which tells the worker to sd-start/re-attach a worktree)
+    expect(r.message).not.toMatch(/re\)?attach the worktree/i);
+  });
+
   it('claims a pending WORK_ASSIGNMENT via claim_sd', async () => {
     const sb = makeStub({
       session: { metadata: {}, sd_key: null },
