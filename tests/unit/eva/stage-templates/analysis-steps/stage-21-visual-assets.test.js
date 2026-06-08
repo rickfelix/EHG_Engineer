@@ -68,6 +68,9 @@ function makeFakeSupabase({ flagEnabled = false } = {}) {
       const builder = {
         select() { return builder; },
         eq(col, val) { ctx.filters[col] = val; return builder; },
+        // persistSkipMarker terminates its existing-row lookup with `.select('id')…​.limit(1)`;
+        // returning an empty array routes it down the INSERT branch (no prior current marker).
+        limit() { return Promise.resolve({ data: [], error: null }); },
         maybeSingle() {
           if (table === 'leo_feature_flags' && ctx.filters.flag_key === FEATURE_FLAG_KEY) {
             return Promise.resolve({ data: { is_enabled: flagEnabled }, error: null });
@@ -94,17 +97,23 @@ function makeFakeSupabase({ flagEnabled = false } = {}) {
   return { sb, inserted, updated };
 }
 
+// Current S21 contract (SD-LEO-FIX-FIX-STAGE-VISUAL-001 / commit f9c6544b): the analyzer
+// reads S11 brand identity from stage11Data (visualIdentity / logoSpec / brandExpression) and
+// S17 approved designs from a non-empty stage17Data — NOT the old granular per-artifact keys
+// (stage11ColorData/…) which nothing populated and made S21 false-skip every deployed venture.
 const VALID_UPSTREAM = {
-  stage11ColorData: { palette: ['#fff', '#000'] },
-  stage11TypographyData: { heading: 'Inter', body: 'Inter' },
-  stage11LogoData: { primaryColor: '#0a0a0a', svgPrompt: 'lock' },
+  stage11Data: {
+    visualIdentity: { palette: ['#fff', '#000'], heading: 'Inter', body: 'Inter' },
+    logoSpec: { primaryColor: '#0a0a0a', svgPrompt: 'lock' },
+    brandExpression: { tone: 'confident' },
+  },
   stage17Data: { archetypes: ['hero', 'feature_grid'] },
   deploymentUrl: 'https://example.app/',
 };
 
 describe('stage-21-visual-assets — pure helpers (FR-1/FR-4)', () => {
   describe('validateEntryPreconditions (FR-4)', () => {
-    it('passes when all 4 upstream artifacts + deployment_url present', () => {
+    it('passes when all upstream artifacts (S11 identity + S17 designs) + deployment_url present', () => {
       const result = validateEntryPreconditions(VALID_UPSTREAM);
       expect(result.ok).toBe(true);
       expect(result.missing).toEqual([]);
@@ -124,10 +133,10 @@ describe('stage-21-visual-assets — pure helpers (FR-1/FR-4)', () => {
       expect(result.missing).toContainEqual({ artifact_type: 'venture_resources.deployment_url', source_stage: 19 });
     });
 
-    it('treats empty-object data as missing', () => {
-      const result = validateEntryPreconditions({ ...VALID_UPSTREAM, stage11ColorData: {} });
+    it('treats empty-object S11 data as missing', () => {
+      const result = validateEntryPreconditions({ ...VALID_UPSTREAM, stage11Data: {} });
       expect(result.ok).toBe(false);
-      expect(result.missing[0].artifact_type).toBe('visual_color_palette');
+      expect(result.missing[0].artifact_type).toBe('identity_visual');
     });
 
     it('treats empty-string deploymentUrl as missing', () => {
@@ -192,8 +201,8 @@ describe('stage-21-visual-assets — orchestration', () => {
 
   it.each([
     ['NO_DEPLOYMENT_URL',         { deploymentUrl: null },         'venture_resources.deployment_url'],
-    ['NO_S11_VISUAL_IDENTITY',    { stage11ColorData: {} },        'visual_color_palette'],
-    ['NO_S17_APPROVED_DESIGNS',   { stage17Data: null },           's17_archetypes'],
+    ['NO_S11_VISUAL_IDENTITY',    { stage11Data: {} },             'identity_visual'],
+    ['NO_S17_APPROVED_DESIGNS',   { stage17Data: null },           's17_designs'],
   ])('FR-4 — emits visual_assets_skipped with skip_reason=%s when %j', async (expectedReason, override, expectedMissingType) => {
     const { sb, inserted } = makeFakeSupabase({ flagEnabled: false });
     const params = {
@@ -340,10 +349,12 @@ describe('stage-21-visual-assets — import canary (vi.mock guard)', () => {
     expect(FEATURE_FLAG_KEY).toBe('LEO_S21_REQUIRED_ARTIFACTS_GATE');
   });
 
-  it('REQUIRED_UPSTREAM lists exactly 4 entries (3 S11 + 1 S17)', () => {
-    expect(REQUIRED_UPSTREAM.length).toBe(4);
+  it('REQUIRED_UPSTREAM lists exactly 2 entries (S11 identity + S17 designs)', () => {
+    expect(REQUIRED_UPSTREAM.length).toBe(2);
     const sources = new Set(REQUIRED_UPSTREAM.map(r => r.source_stage));
     expect(sources).toEqual(new Set([11, 17]));
+    const types = new Set(REQUIRED_UPSTREAM.map(r => r.artifact_type));
+    expect(types).toEqual(new Set(['identity_visual', 's17_designs']));
   });
 
   it('SOCIAL_SIZES lists 5 entries with 4 marked required', () => {
