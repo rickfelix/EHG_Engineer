@@ -14,6 +14,7 @@ import { getFilteredRetrospective } from '../../retro-filters.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
+import { classifyFrDelivery, projectGateResult, isFrTraceabilityEnforced } from '../../gates/fr-delivery-classifier.js';
 
 // Pipeline Flow Verifier (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-5)
 import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../../../lib/pipeline-flow-verifier.js';
@@ -938,50 +939,38 @@ export function createFRDeliveryVerificationGate(supabase, prdRepo) {
         return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No FRs defined in PRD'] };
       }
 
-      console.log(`   📋 Checking ${frs.length} functional requirements...`);
+      console.log(`   📋 Checking ${frs.length} functional requirements (per-FR mapping)...`);
 
-      // Evidence sources: completed user stories + accepted handoffs
-      const { data: stories } = await supabase
-        .from('user_stories')
-        .select('id, title, status')
-        .eq('sd_id', ctx.sd.id);
-
-      const completedStories = (stories || []).filter(s =>
-        s.status === 'completed' || s.status === 'done' || s.status === 'validated'
-      );
-
-      const { data: handoffs } = await supabase
-        .from('sd_phase_handoffs')
-        .select('handoff_type, status')
-        .eq('sd_id', ctx.sd.id)
-        .eq('status', 'accepted');
-
-      const hasExecHandoff = (handoffs || []).some(h => h.handoff_type === 'PLAN-TO-LEAD');
-
-      const frResults = [];
-      for (const fr of frs) {
-        const frId = fr.id || `FR-${frs.indexOf(fr) + 1}`;
-        const evidenced = completedStories.length > 0 || hasExecHandoff;
-        frResults.push({ id: frId, description: safeTruncate(fr.description || '', 80), evidenced });
-        console.log(`   ${evidenced ? '✅' : '❌'} ${frId}: ${safeTruncate(fr.description || '', 60)}`);
+      // SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001: real per-FR classification (validated story
+      // REFERENCING the FR id, or approver-gated descope) — NOT the prior any-completed-story
+      // proxy that marked every FR delivered if any story existed. Enforcement is gated by
+      // LEO_FR_TRACEABILITY_ENFORCE (default OFF = warn-only) so this strict path cannot brick
+      // the ~every in-flight SD whose stories do not yet reference FR ids.
+      const classification = await classifyFrDelivery(supabase, {
+        sdId: ctx.sd.id,
+        sdMetadata: ctx.sd.metadata || {},
+        functionalRequirements: frs,
+        requesterSessionId: ctx.sessionId || ctx.session_id || null,
+      });
+      for (const f of classification.frs) {
+        const mark = f.status === 'delivered' ? '✅' : f.status === 'descoped' ? '🔵' : '❌';
+        console.log(`   ${mark} ${f.id} [${f.status}]: ${safeTruncate(f.description || '', 56)}`);
       }
-
-      const evidencedCount = frResults.filter(r => r.evidenced).length;
-      const coveragePct = Math.round((evidencedCount / frs.length) * 100);
-      console.log(`\n   📊 FR Coverage: ${evidencedCount}/${frs.length} (${coveragePct}%)`);
-
-      if (coveragePct < 100) {
-        const missing = frResults.filter(r => !r.evidenced);
-        return {
-          passed: false, score: coveragePct, max_score: 100,
-          issues: [`FR delivery coverage ${coveragePct}% — ${missing.length} FR(s) lack evidence`, ...missing.map(m => `  Missing: ${m.id}`)],
-          warnings: [], details: { frResults, coveragePct }
-        };
+      const enforced = isFrTraceabilityEnforced();
+      console.log(`\n   📊 FR delivery: ${classification.delivered} delivered, ${classification.descoped} descoped, ${classification.undelivered} undelivered (enforce=${enforced ? 'ON' : 'OFF/warn-only'})`);
+      const result = projectGateResult(classification, { enforced, gateName: 'FR_DELIVERY_VERIFICATION' });
+      if (!result.passed) {
+        console.log(`   ❌ FR delivery FAILED — ${classification.undelivered}/${classification.total} undelivered`);
+      } else if (result.warnings.length) {
+        console.log('   ⚠️  FR delivery passed (warn-only) with undelivered FRs');
+      } else {
+        console.log('   ✅ All FRs delivered or approver-descoped');
       }
-
-      console.log('   ✅ All FRs have delivery evidence');
-      return { passed: true, score: 100, max_score: 100, issues: [], warnings: [], details: { frResults, coveragePct: 100 } };
+      return result;
     },
+    // `required` is decided dynamically inside the validator result (projectGateResult sets it
+    // from the enforcement flag). Keep the static flag true so the orchestrator consults the
+    // result; the OFF path returns required:false to stay warn-only.
     required: true
   };
 }
