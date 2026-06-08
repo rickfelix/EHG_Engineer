@@ -56,6 +56,10 @@
   - **Issue**: The `venture_stages_audit` trigger (`fn_venture_stages_audit_trigger`) audited every business column of `venture_stages` except `gate_label` — a chairman-gate-control column set by the S21 creative_handoff / S22 spend_approval gate work (those migrations UPDATE `review_mode` AND `gate_label` together). `gate_type` and `review_mode` were already audited, so chairman gate-label decisions were silently unaudited.
   - **Root Cause**: `gate_label` was added after the audit trigger was authored and was never added to its per-column change checks.
   - **Fix**: Function-only idempotent migration (`CREATE OR REPLACE fn_venture_stages_audit_trigger` with the existing 16-column body plus a per-column `gate_label IS DISTINCT FROM` check). No schema change (`old_value`/`new_value` are already TEXT) and no trigger re-creation. Applied live (MIGRATION_APPLY_PROD_PASS) and verified behaviorally (a stage-17 `gate_label` change now writes a `venture_stages_audit` row); +1 CI-gated live-DB regression test.
+- **EHG app stage config stale after the stage 21↔22 swap** (cross-repo: ehg PR #691) - SD-FDBK-FIX-FOLLOW-001-CLOSE-002
+  - **Issue**: The EHG_Engineer `venture_stages` SSOT was resequenced (stage 21 = Distribution Setup, stage 22 = Visual Assets) and the migrations merged, but the generated EHG-app file `ehg/src/config/venture-workflow.ts` on ehg `main` was still pre-swap — a cross-repo config drift. (0 ventures at stage 21/22, so no live runtime impact.)
+  - **Root Cause**: The EHG-side generated artifact was never regenerated + landed after the EHG_Engineer-side swap.
+  - **Fix**: Regenerated `venture-workflow.ts` from the SSOT via `npm run venture-stages:generate` and merged ehg PR #691 to ehg main — stage 21 → Distribution Setup (`spend_approval`, review), stage 22 → Visual Assets (`creative_handoff`, review). No `.tsx` renames (componentPath remap + filename-based lazy import). Verified: `venture-stages:check` CHECK PASSED, `tsc --noEmit` clean.
 
 ## 2026-06-06
 
