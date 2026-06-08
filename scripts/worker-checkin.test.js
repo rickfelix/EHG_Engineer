@@ -157,6 +157,15 @@ describe('QF self-claim: isAutoStartableQF predicate (FR-2)', () => {
     const old = freshQF('QF-1', { created_at: new Date(Date.now() - (STALE_QF_DAYS + 1) * DAY).toISOString() });
     expect(isAutoStartableQF(old, Date.now())).toBe(false);
   });
+  it('rejects a persisted Tier-3 QF (routing_tier>=3 -> full SD, not auto-QF)', () => {
+    expect(isAutoStartableQF(freshQF('QF-1', { routing_tier: 3 }), Date.now())).toBe(false);
+    expect(isAutoStartableQF(freshQF('QF-1', { routing_tier: 1 }), Date.now())).toBe(true);
+  });
+  it('rejects a risk-keyword title (untriaged Tier-3 drift), accepts a benign one', () => {
+    expect(isAutoStartableQF(freshQF('QF-1', { title: 'Fix the auth token migration' }), Date.now())).toBe(false);
+    expect(isAutoStartableQF(freshQF('QF-1', { title: 'rotate payment credentials' }), Date.now())).toBe(false);
+    expect(isAutoStartableQF(freshQF('QF-1', { title: 'Tidy a docs typo' }), Date.now())).toBe(true);
+  });
   it('rejects a QF with a missing/invalid created_at', () => {
     expect(isAutoStartableQF(freshQF('QF-1', { created_at: null }), Date.now())).toBe(false);
     expect(isAutoStartableQF(null, Date.now())).toBe(false);
@@ -198,6 +207,15 @@ describe('QF self-claim: runCheckin QF tier (FR-1/3/4/6)', () => {
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('self_claimed_qf');
     expect(r.qf).toBe('QF-FREE');
+  });
+
+  it('skips a persisted Tier-3 / risk-keyword QF and idles (re-triage parity)', async () => {
+    const sb = makeStub({ ...base, candidates: [], quickFixes: [
+      freshQF('QF-T3', { routing_tier: 3 }),
+      freshQF('QF-RISK', { title: 'rotate database credentials' }),
+    ] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
   });
 
   it('fails open to idle when the quick_fixes query throws (SD/idle contract intact)', async () => {

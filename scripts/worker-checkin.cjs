@@ -34,6 +34,12 @@ const DEFAULT_IDLE_WAKEUP_SECONDS = 1200;    // ~20m, matches the fleet idle cad
 const SELF_CLAIM_CANDIDATE_LIMIT = 5;
 const QF_CANDIDATE_LIMIT = 25;               // open quick_fixes to consider for self-claim
 const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify-first freshness boundary (shared with sd-next display)
+// Tier-3 risk keywords (CLAUDE.md Work Item Routing). Auto-self-claim is for small,
+// low-risk QFs only. The sd-next display path excludes _escalate via a LIVE re-triage
+// (runTriageGate, ESM); a .cjs can't run that pipeline, so we approximate parity with the
+// PERSISTED routing_tier PLUS this keyword scan — holding risk-bearing QFs for the
+// triage/human path. SD-LEO-INFRA-MAKE-OPEN-QFS-001 (SECURITY re-triage-parity advisory).
+const TIER3_RISK_RE = /\b(auth|authentication|authorization|rls|payments?|credentials?|migration|schema|alter\s+table|create\s+table|drop\s+table)\b/i;
 
 const SD_KEY_RE = /SD-[A-Z0-9]+(?:-[A-Z0-9]+)+/;
 
@@ -145,6 +151,8 @@ async function ackMessage(sb, id) {
 function isAutoStartableQF(qf, nowMs) {
   if (!qf || qf.status !== 'open') return false;
   if (qf.pr_url || qf.commit_sha) return false;        // already in PR/commit (verify-first / merge-race guard)
+  if (qf.routing_tier != null && Number(qf.routing_tier) >= 3) return false;  // persisted Tier-3 -> full SD, not auto-QF
+  if (TIER3_RISK_RE.test(qf.title || '')) return false;                        // risk-keyword drift -> hold for triage/human
   const created = qf.created_at ? Date.parse(qf.created_at) : NaN;
   if (!Number.isFinite(created)) return false;
   const ageDays = (nowMs - created) / (24 * 60 * 60 * 1000);
@@ -165,7 +173,7 @@ async function selfClaimQuickFix(sb, sessionId, base) {
   try {
     const { data: qfs } = await sb
       .from('quick_fixes')
-      .select('id, status, pr_url, commit_sha, created_at')
+      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title')
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)
