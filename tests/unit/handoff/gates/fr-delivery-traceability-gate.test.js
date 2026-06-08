@@ -4,15 +4,23 @@
 import { describe, it, expect } from 'vitest';
 import { createFrDeliveryTraceabilityGate } from '../../../../scripts/modules/handoff/gates/fr-delivery-traceability-gate.js';
 
-// supabase stub: no children, FRs from PRD, stories from user_stories
+// supabase stub: no children, FRs from PRD (keyed on directive_id == PRD_KEY to catch the
+// UUID-vs-sd_key lookup bug), stories from user_stories.
+const PRD_KEY = 'SD-FR-001'; // the sd_key; PRD.directive_id stores this, NOT the UUID
 function stub({ children = [], frs = [], stories = [] } = {}) {
   return {
     from(table) {
+      const state = { filters: {} };
       const chain = {
         select() { return chain; },
-        eq() { return chain; },
+        eq(k, v) { state.filters[k] = v; return chain; },
         maybeSingle() {
-          if (table === 'product_requirements_v2') return Promise.resolve({ data: { functional_requirements: frs }, error: null });
+          if (table === 'product_requirements_v2') {
+            // Only resolve FRs when the lookup keyed on the sd_key (directive_id), proving the
+            // gate passed directiveId=sd_key rather than the UUID.
+            const data = state.filters.directive_id === PRD_KEY ? { functional_requirements: frs } : null;
+            return Promise.resolve({ data, error: null });
+          }
           return Promise.resolve({ data: null, error: null });
         },
         then(res) {
@@ -26,7 +34,7 @@ function stub({ children = [], frs = [], stories = [] } = {}) {
   };
 }
 
-const ctx = { sd: { id: 'sd-1', metadata: {} } };
+const ctx = { sd: { id: 'sd-uuid-1', sd_key: PRD_KEY, metadata: {} } };
 
 describe('FR-3: createFrDeliveryTraceabilityGate', () => {
   it('has the expected gate shape', () => {

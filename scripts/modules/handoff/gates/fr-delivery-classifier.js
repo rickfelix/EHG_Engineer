@@ -45,7 +45,6 @@ export function frReferencesId(story, frId) {
   push(story.user_want);
   push(story.acceptance_criteria);
   push(story.technical_notes);
-  push(story.description);
   return fields.some((f) => re.test(f));
 }
 
@@ -73,20 +72,25 @@ export function descopeFor(sdMetadata, frId, requesterSessionId = null) {
  * @returns {Promise<{frs: Array<{id,description,status:'delivered'|'descoped'|'undelivered',evidence}>,
  *   total:number, delivered:number, descoped:number, undelivered:number}>}
  */
-export async function classifyFrDelivery(supabase, { sdId, sdMetadata = {}, functionalRequirements = null, requesterSessionId = null } = {}) {
+export async function classifyFrDelivery(supabase, { sdId, directiveId = null, sdMetadata = {}, functionalRequirements = null, requesterSessionId = null } = {}) {
   let frs = functionalRequirements;
   if (!Array.isArray(frs)) {
+    // product_requirements_v2.directive_id stores the SD KEY (e.g. SD-FOO-001), not the UUID.
+    // Callers that only have the UUID must pass directiveId=sd_key; fall back to sdId otherwise.
+    const lookupKey = directiveId || sdId;
     const { data: prd } = await supabase
       .from('product_requirements_v2')
       .select('functional_requirements')
-      .eq('directive_id', sdId)
+      .eq('directive_id', lookupKey)
       .maybeSingle();
     frs = (prd && prd.functional_requirements) || [];
   }
 
+  // NOTE: user_stories has NO `description` column — selecting it errors the whole query
+  // (data -> null -> every FR wrongly flagged undelivered). Stick to real columns.
   const { data: stories } = await supabase
     .from('user_stories')
-    .select('id, title, user_want, acceptance_criteria, technical_notes, description, status, validation_status')
+    .select('id, title, user_want, acceptance_criteria, technical_notes, status, validation_status')
     .eq('sd_id', sdId);
   const validated = (stories || []).filter(isValidatedStory);
 

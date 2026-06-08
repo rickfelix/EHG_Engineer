@@ -29,6 +29,9 @@ export function createFrDeliveryTraceabilityGate(supabase) {
 
       const classification = await classifyFrDelivery(supabase, {
         sdId: sd.id,
+        // product_requirements_v2.directive_id stores the sd_key, not the UUID — pass it so
+        // the PRD/FR lookup resolves at this boundary (UUID-only would vacuously find 0 FRs).
+        directiveId: sd.sd_key || sd.id,
         sdMetadata: sd.metadata || {},
         requesterSessionId: ctx.sessionId || ctx.session_id || null,
       });
