@@ -17,6 +17,7 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import readline from 'readline';
+import { addItemCore } from '../lib/sd-baseline/build-item.js';
 
 dotenv.config();
 
@@ -57,6 +58,9 @@ class SDBaselineManager {
         break;
       case 'rebaseline':
         await this.rebaseline();
+        break;
+      case 'add-item':
+        await this.addItem(this.args[0], this.parseAddFlags());
         break;
       default:
         this.showHelp();
@@ -458,6 +462,40 @@ class SDBaselineManager {
     return Math.round((completedCount / deps.length) * 100) / 100;
   }
 
+  // Parse `add-item <sd_key> [--track A|B|C|STANDALONE] [--rank N]` flags from this.args.
+  parseAddFlags() {
+    const a = this.args;
+    const opts = {};
+    for (let i = 1; i < a.length; i++) {
+      const arg = a[i];
+      if (arg === '--track') opts.track = a[++i];
+      else if (arg.startsWith('--track=')) opts.track = arg.slice('--track='.length);
+      else if (arg === '--rank') opts.rank = a[++i];
+      else if (arg.startsWith('--rank=')) opts.rank = arg.slice('--rank='.length);
+    }
+    return opts;
+  }
+
+  // Append a single sourced SD to the ACTIVE baseline (incremental, no rebaseline,
+  // no LEAD gate). Thin wrapper over the injectable, network-free addItemCore.
+  // SD-FDBK-INFRA-FLOW-IMPEDIMENT-COORDINATOR-001.
+  async addItem(sdKey, opts = {}) {
+    const c = colors;
+    await addItemCore({
+      supabase,
+      sdKey,
+      opts,
+      calcHealth: (deps) => this.calculateDependencyHealthScore(deps),
+      log: (msg) => {
+        // colorize by leading keyword for parity with the rest of the CLI
+        if (/^Added /.test(msg)) console.log(`${c.green}${msg}${c.reset}`);
+        else if (/already in the active baseline|No active baseline/.test(msg)) console.log(`${c.yellow}${msg}${c.reset}`);
+        else if (/^(Error|Refusing|SD not found|Invalid|sequence_rank collision|Usage)/.test(msg)) console.log(`${c.red}${msg}${c.reset}`);
+        else console.log(msg);
+      },
+    });
+  }
+
   showHelp() {
     console.log(`
 ${colors.bold}SD Baseline Management${colors.reset}
@@ -468,6 +506,7 @@ ${colors.cyan}Commands:${colors.reset}
   list       List all baselines
   activate   Activate a specific baseline (requires LEAD approval)
   rebaseline Create new baseline, superseding the current one
+  add-item   Append ONE sourced SD to the active baseline (coordinator; no rebaseline/LEAD gate)
 
 ${colors.cyan}Usage:${colors.reset}
   npm run sd:baseline              View active baseline
@@ -475,6 +514,7 @@ ${colors.cyan}Usage:${colors.reset}
   npm run sd:baseline list         List all baselines
   npm run sd:baseline activate <id> Activate a baseline
   npm run sd:baseline rebaseline   Create a rebaseline
+  npm run sd:baseline add-item <sd_key> [--track A] [--rank N]  Append one SD to the active baseline
 
 ${colors.cyan}Notes:${colors.reset}
   - Only one baseline can be active at a time
