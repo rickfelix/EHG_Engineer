@@ -232,6 +232,33 @@ async function draftDepsSatisfied(sb, sd) {
 }
 
 /**
+ * SD-FDBK-FIX-WORKER-SELF-CLAIM-001: gate a baselined v_sd_next_candidates row (step 6) before
+ * self-claiming it. The view surfaces deps_satisfied=false rows AND orchestrator PARENTS, and the
+ * self-claim loop called claim_sd WITHOUT filtering on either (claim_sd enforces neither — it is
+ * advisory-only). Result after the baseline populated 2026-06-07: a worker self-claimed a blocked
+ * child (depends_on an in-flight SD on the same write-surface) and another self-claimed an
+ * orchestrator PARENT (parents auto-complete on their children — must never be worker-claimed).
+ * Re-check sd_type + dependencies against strategic_directives_v2 — the SAME guard step 6.25 already
+ * applies — because v_sd_next_candidates.deps_satisfied is BROKEN for object-shaped deps (see
+ * draftDepsSatisfied). Conservative: any uncertainty -> skip the candidate (false), never claim.
+ * `sdKey` is the v_sd_next_candidates.sd_id column, which holds the sd_KEY string (bi.sd_id=sd.sd_key).
+ */
+async function baselinedCandidateEligible(sb, sdKey) {
+  try {
+    const { data } = await sb
+      .from('strategic_directives_v2')
+      .select('sd_type, dependencies')
+      .eq('sd_key', sdKey)
+      .maybeSingle();
+    if (!data) return false;                            // can't verify -> don't claim
+    if (data.sd_type === 'orchestrator') return false;  // never claim an orchestrator parent
+    return await draftDepsSatisfied(sb, data);          // every referenced dep must be completed
+  } catch {
+    return false; // conservative: skip this candidate on a query error (fall through to the next)
+  }
+}
+
+/**
  * Self-claim tier for claimable UN-BASELINED draft SDs. v_sd_next_candidates is built from
  * sd_baseline_items, so a newly-created DRAFT SD that isn't baselined yet is INVISIBLE to step 6
  * — and draft is the normal LEAD starting state, so the bulk of the belt was structurally
@@ -369,6 +396,9 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
       .select('sd_id, track, status, priority')
       .limit(SELF_CLAIM_CANDIDATE_LIMIT);
     for (const c of (cands || [])) {
+      // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: skip dependency-blocked SDs and orchestrator PARENTS
+      // (the view surfaces both; claim_sd enforces neither). Mirrors the step-6.25 guard.
+      if (!(await baselinedCandidateEligible(sb, c.sd_id))) continue;
       if (await isSdInFlight(sb, c.sd_id, sessionId)) continue;  // dedup: skip SDs already started or live-foreign-held
       const claimed = await tryClaim(sb, c.sd_id, sessionId, c.track);
       if (claimed.ok) {
@@ -417,7 +447,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, isSdInFlight, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, isSdInFlight, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
