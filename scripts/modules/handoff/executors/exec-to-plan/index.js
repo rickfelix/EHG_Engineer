@@ -47,6 +47,10 @@ import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.
 // Scope Completion Verification Gate (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
 import { createScopeCompletionGate } from '../../gates/scope-completion-gate.js';
 
+// FR Delivery Traceability Gate (SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001) — real per-FR
+// delivery, default-OFF warn-only via LEO_FR_TRACEABILITY_ENFORCE.
+import { createFrDeliveryTraceabilityGate } from '../../gates/fr-delivery-traceability-gate.js';
+
 // Parent Orchestrator Detection (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-1, FR-2)
 import { isParentOrchestrator as isParentOrchestratorAsync } from '../../../../../lib/handoff/parent-detection.js';
 import { getParentOrchestratorExecToPlanGates } from './parent-orchestrator.js';
@@ -263,6 +267,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
       // Scope Completion Verification (applies to children too)
       gates.push(createScopeCompletionGate());
 
+      // FR Delivery Traceability — orchestrator children were the most exposed boundary
+      // (proxy-only gate set); the incident SD 001-A was a child. SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001.
+      gates.push(createFrDeliveryTraceabilityGate(this.supabase));
+
       return gates;
     }
 
@@ -349,6 +357,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Scope Completion Verification (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
     // Verifies arch plan deliverables exist in codebase before marking EXEC complete
     gates.push(createScopeCompletionGate());
+
+    // FR Delivery Traceability (SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001) — real per-FR delivery
+    // at the completion boundary for normal SDs too; default-OFF warn-only.
+    gates.push(createFrDeliveryTraceabilityGate(this.supabase));
 
     return gates;
   }
