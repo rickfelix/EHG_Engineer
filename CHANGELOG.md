@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-08](#2026-06-08)
+  - [Bugfix](#bugfix)
 - [2026-06-06](#2026-06-06)
   - [Bugfix](#bugfix)
 - [2026-01-29](#2026-01-29)
@@ -32,6 +34,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-08
+
+### Bugfix
+- **complete-quick-fix hung for autonomous fleet workers** - PR #4377 (SD-FDBK-FIX-COMPLETE-QUICK-FIX-001)
+  - **Issue**: `scripts/complete-quick-fix.js` blocked indefinitely when invoked by autonomous `/loop` fleet workers or CI — three operator prompts (compliance-loop auto-refinement, `validateLOC` over-cap escalate) were guarded only for `--force-complete`, and the shared `prompt()` helper had no fail-fast path when stdin reached EOF with no answer.
+  - **Root Cause**: Under the Bash tool / cron / CI, `process.stdin.isTTY` is `undefined` (not `false`), so readline reached EOF with the answer callback never firing while supabase/heartbeat timers kept the event loop alive — an indefinite hang. The two flag-guarded prompts were a writer/consumer asymmetry (`--force-complete` guarded, `--non-interactive` sibling missed; PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY).
+  - **Fix**: `cli.js` `prompt()` now rejects fast on the readline `'close'` event when unanswered (an `answered` guard), so a forgotten `--non-interactive` fails loud instead of hanging; piped input still resolves. `compliance-loop.js` refinement guard widened to `(forceComplete || nonInteractive)`; `verification.js` `validateLOC` returns false (fail-loud) under `--non-interactive`; `orchestrator.js` threads `nonInteractive` into both call sites so the guards aren't dead code. +4 regression tests; 214/214 complete-quick-fix tests pass (20 files), 0 regressions.
 
 ## 2026-06-06
 
