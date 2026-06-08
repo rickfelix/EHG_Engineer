@@ -198,6 +198,80 @@ async function selfClaimQuickFix(sb, sessionId, base) {
   return null;
 }
 
+// SD-FDBK-FEAT-WORKER-CHECKIN-SELF-001: un-baselined-draft self-claim tier.
+const DRAFT_CANDIDATE_LIMIT = 10;
+const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+
+/**
+ * Are ALL of this SD's dependencies satisfied (each referenced SD completed)?
+ * The `dependencies` array is heterogeneously shaped across the fleet: plain text
+ * ("SD-X needs Y"), {sd_id:"SD-X"}, {sd_key:"SD-X"}, {sd_key:"none"} sentinel, and free-form
+ * {type,status,dependency} notes with NO SD ref. Each element resolves to a referenced sd_key;
+ * elements with no SD ref (or the "none" sentinel) are non-blocking. We re-implement this here
+ * because v_sd_next_candidates.deps_satisfied is BROKEN for object-shaped deps (it text-compares
+ * the whole JSON object, never matching a completed key). Conservative on error: returns false.
+ */
+async function draftDepsSatisfied(sb, sd) {
+  const deps = Array.isArray(sd.dependencies) ? sd.dependencies : [];
+  const refKeys = [];
+  for (const e of deps) {
+    let k = null;
+    if (typeof e === 'string') k = e.split(/\s/)[0];
+    else if (e && typeof e === 'object') k = e.sd_id || e.sd_key || null;
+    if (!k || k === 'none' || k === 'None') continue; // no SD ref / sentinel -> non-blocking
+    refKeys.push(k);
+  }
+  if (!refKeys.length) return true;
+  try {
+    const { data } = await sb.from('strategic_directives_v2').select('sd_key, status').in('sd_key', refKeys);
+    const statusByKey = Object.fromEntries((data || []).map((r) => [r.sd_key, r.status]));
+    return refKeys.every((k) => statusByKey[k] === 'completed');
+  } catch {
+    return false; // conservative: don't claim a maybe-blocked SD on a query error
+  }
+}
+
+/**
+ * Self-claim tier for claimable UN-BASELINED draft SDs. v_sd_next_candidates is built from
+ * sd_baseline_items, so a newly-created DRAFT SD that isn't baselined yet is INVISIBLE to step 6
+ * — and draft is the normal LEAD starting state, so the bulk of the belt was structurally
+ * unclaimable (every /checkin returned "nothing claimable" with a loaded queue). Sits strictly
+ * BELOW the baselined SD loop (step 6) and ABOVE the QF tier (step 6.5), so baselined/prioritized
+ * SDs still win and SD work still beats QFs. Excludes orchestrator PARENTS (auto-complete on
+ * children — never dispatch) and dependency-blocked SDs. Reuses tryClaim()/claim_sd (the
+ * race/liveness arbiter). Returns a self_claimed result or null. Never throws (fail-open).
+ * SD-FDBK-FEAT-WORKER-CHECKIN-SELF-001.
+ */
+async function selfClaimDraftSd(sb, sessionId, base) {
+  try {
+    const { data: drafts } = await sb
+      .from('strategic_directives_v2')
+      .select('sd_key, status, sd_type, priority, created_at, dependencies')
+      .in('status', ['draft', 'active'])
+      .is('claiming_session_id', null)
+      .neq('sd_type', 'orchestrator')
+      .order('created_at', { ascending: true })
+      .limit(DRAFT_CANDIDATE_LIMIT);
+    // priority-first; oldest-first within a priority (stable sort preserves the created_at order).
+    const ordered = (drafts || []).slice().sort(
+      (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9)
+    );
+    for (const d of ordered) {
+      if (!(await draftDepsSatisfied(sb, d))) continue; // skip dependency-blocked
+      const claimed = await tryClaim(sb, d.sd_key, sessionId);
+      if (claimed.ok) {
+        return {
+          ...base,
+          action: 'self_claimed',
+          sd: d.sd_key,
+          message: `Self-claimed ${d.sd_key} (un-baselined draft) from the SD belt. Run: node scripts/sd-start.js ${d.sd_key}`,
+        };
+      }
+    }
+  } catch { /* fail-open -> caller continues to QF/idle */ }
+  return null;
+}
+
 async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId } = {}) {
   // 1. resolve coordinator (fail-open to null -> broadcast)
   let coordinatorId = null;
@@ -267,6 +341,13 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
     }
   } catch { /* fail-open */ }
 
+  // 6.25 self-claim a claimable UN-BASELINED draft SD. v_sd_next_candidates is built from
+  // sd_baseline_items, so newly-created draft SDs (the normal LEAD starting state) are invisible
+  // to step 6 — this tier reads them directly from strategic_directives_v2, dep-checks them, and
+  // claims one. Strictly BELOW baselined candidates and ABOVE QFs/idle. SD-FDBK-FEAT-WORKER-CHECKIN-SELF-001.
+  const draftClaimed = await selfClaimDraftSd(sb, sessionId, base);
+  if (draftClaimed) return draftClaimed;
+
   // 6.5 self-claim an open quick_fix. v_sd_next_candidates is SD-only, so open
   // QFs are sourced here — strictly BELOW SD candidates and ABOVE idle, so a
   // worker pulls an open QF instead of idling, but SD work always wins.
@@ -300,7 +381,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
