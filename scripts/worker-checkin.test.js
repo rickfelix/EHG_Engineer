@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
+const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
 
 describe('FR-2: extractSdFromAssignment', () => {
   it('prefers payload.sd_key', () => {
@@ -145,6 +145,12 @@ describe('FR-2: runCheckin deterministic resolution', () => {
       session: { metadata: {}, sd_key: null },
       messages: [],
       candidates: [{ sd_id: 'SD-TOP-001', track: 'A' }, { sd_id: 'SD-NEXT-002', track: 'B' }],
+      // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: step 6 now validates each candidate's sd_type +
+      // dependencies (and current_phase via isSdInFlight) against strategic_directives_v2.
+      sdRows: {
+        'SD-TOP-001': { current_phase: 'LEAD', sd_type: 'bugfix', dependencies: [] },
+        'SD-NEXT-002': { current_phase: 'LEAD', sd_type: 'feature', dependencies: [] },
+      },
       claimResults: { 'SD-TOP-001': true },
     });
     const r = await runCheckin(sb, 'sess-1', noCoord);
@@ -157,6 +163,10 @@ describe('FR-2: runCheckin deterministic resolution', () => {
       session: { metadata: {}, sd_key: null },
       messages: [],
       candidates: [{ sd_id: 'SD-TOP-001', track: 'A' }, { sd_id: 'SD-NEXT-002', track: 'B' }],
+      sdRows: {
+        'SD-TOP-001': { current_phase: 'LEAD', sd_type: 'bugfix', dependencies: [] },
+        'SD-NEXT-002': { current_phase: 'LEAD', sd_type: 'feature', dependencies: [] },
+      },
       claimResults: { 'SD-TOP-001': false, 'SD-NEXT-002': true },
     });
     const r = await runCheckin(sb, 'sess-1', noCoord);
@@ -170,6 +180,75 @@ describe('FR-2: runCheckin deterministic resolution', () => {
     expect(r.action).toBe('idle');
     expect(r.recommended_wakeup_seconds).toBe(DEFAULT_IDLE_WAKEUP_SECONDS);
     expect(r.ok).toBe(true);
+  });
+});
+
+// SD-FDBK-FIX-WORKER-SELF-CLAIM-001: step-6 self_claim must NOT grab orchestrator PARENTS or
+// dependency-blocked SDs from v_sd_next_candidates (the view surfaces both; claim_sd enforces
+// neither). baselinedCandidateEligible re-checks sd_type + dependencies, mirroring step 6.25.
+describe('SD-FDBK-FIX-WORKER-SELF-CLAIM-001: baselinedCandidateEligible gates step-6 candidates', () => {
+  it('rejects an orchestrator parent (auto-completes on children — never worker-claim)', async () => {
+    const sb = makeStub({ sdRows: { 'SD-ORCH-001': { sd_type: 'orchestrator', dependencies: [] } } });
+    expect(await baselinedCandidateEligible(sb, 'SD-ORCH-001')).toBe(false);
+  });
+
+  it('rejects a dependency-blocked SD (a referenced dep is not completed)', async () => {
+    const sb = makeStub({
+      sdRows: { 'SD-CHILD-001': { sd_type: 'feature', dependencies: [{ sd_id: 'SD-PARENT-999' }] } },
+      depRows: [{ sd_key: 'SD-PARENT-999', status: 'in_progress' }],
+    });
+    expect(await baselinedCandidateEligible(sb, 'SD-CHILD-001')).toBe(false);
+  });
+
+  it('accepts a non-orchestrator SD with all deps completed', async () => {
+    const sb = makeStub({
+      sdRows: { 'SD-OK-002': { sd_type: 'feature', dependencies: [{ sd_id: 'SD-DONE-001' }] } },
+      depRows: [{ sd_key: 'SD-DONE-001', status: 'completed' }],
+    });
+    expect(await baselinedCandidateEligible(sb, 'SD-OK-002')).toBe(true);
+  });
+
+  it('accepts a non-orchestrator SD with no dependencies', async () => {
+    const sb = makeStub({ sdRows: { 'SD-OK-001': { sd_type: 'bugfix', dependencies: [] } } });
+    expect(await baselinedCandidateEligible(sb, 'SD-OK-001')).toBe(true);
+  });
+
+  it('conservatively rejects an SD that cannot be verified (row missing)', async () => {
+    const sb = makeStub({ sdRows: {} });
+    expect(await baselinedCandidateEligible(sb, 'SD-GONE-001')).toBe(false);
+  });
+
+  it('runCheckin SKIPS an orchestrator candidate and self-claims the next eligible one (even though claim_sd would accept the parent)', async () => {
+    const sb = makeStub({
+      session: { metadata: {}, sd_key: null },
+      messages: [],
+      candidates: [{ sd_id: 'SD-ORCH-001', track: 'A' }, { sd_id: 'SD-GOOD-002', track: 'B' }],
+      sdRows: {
+        'SD-ORCH-001': { current_phase: 'LEAD', sd_type: 'orchestrator', dependencies: [] },
+        'SD-GOOD-002': { current_phase: 'LEAD', sd_type: 'bugfix', dependencies: [] },
+      },
+      claimResults: { 'SD-ORCH-001': true, 'SD-GOOD-002': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-GOOD-002'); // the orchestrator parent was skipped BEFORE tryClaim
+  });
+
+  it('runCheckin SKIPS a dependency-blocked candidate and self-claims the clear one', async () => {
+    const sb = makeStub({
+      session: { metadata: {}, sd_key: null },
+      messages: [],
+      candidates: [{ sd_id: 'SD-BLOCKED-001', track: 'A' }, { sd_id: 'SD-CLEAR-002', track: 'B' }],
+      sdRows: {
+        'SD-BLOCKED-001': { current_phase: 'LEAD', sd_type: 'feature', dependencies: [{ sd_id: 'SD-DEP-999' }] },
+        'SD-CLEAR-002': { current_phase: 'LEAD', sd_type: 'bugfix', dependencies: [] },
+      },
+      depRows: [{ sd_key: 'SD-DEP-999', status: 'in_progress' }],
+      claimResults: { 'SD-BLOCKED-001': true, 'SD-CLEAR-002': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-CLEAR-002'); // the dep-blocked child was skipped
   });
 });
 
@@ -221,7 +300,7 @@ describe('QF self-claim: runCheckin QF tier (FR-1/3/4/6)', () => {
   });
 
   it('ALWAYS prefers a claimable SD over a QF (QF tier never reached)', async () => {
-    const sb = makeStub({ ...base, candidates: [{ sd_id: 'SD-TOP-001', track: 'A' }], quickFixes: [freshQF('QF-20260601-001')], claimResults: { 'SD-TOP-001': true, 'QF-20260601-001': true } });
+    const sb = makeStub({ ...base, candidates: [{ sd_id: 'SD-TOP-001', track: 'A' }], sdRows: { 'SD-TOP-001': { current_phase: 'LEAD', sd_type: 'bugfix', dependencies: [] } }, quickFixes: [freshQF('QF-20260601-001')], claimResults: { 'SD-TOP-001': true, 'QF-20260601-001': true } });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('self_claimed');
     expect(r.sd).toBe('SD-TOP-001');
@@ -288,6 +367,9 @@ describe('SELF-001: un-baselined draft self-claim tier', () => {
     const sb = makeStub({
       ...sess,
       candidates: [{ sd_id: 'SD-VIEW-001', track: 'A' }],
+      // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: step 6 now validates the candidate (eligible: not an
+      // orchestrator, no unmet deps, current_phase=LEAD so isSdInFlight passes).
+      sdRows: { 'SD-VIEW-001': { current_phase: 'LEAD', sd_type: 'feature', dependencies: [] } },
       drafts: [draft('SD-DRAFT-001', { priority: 'critical' })],
       claimResults: { 'SD-VIEW-001': true, 'SD-DRAFT-001': true },
     });
