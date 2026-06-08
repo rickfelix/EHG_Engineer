@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-const { extractSdFromAssignment, runCheckin, DEFAULT_IDLE_WAKEUP_SECONDS } = require('./worker-checkin.cjs');
+const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
 
 describe('FR-2: extractSdFromAssignment', () => {
   it('prefers payload.sd_key', () => {
@@ -54,6 +54,10 @@ function makeStub(cfg) {
         return Promise.resolve({ data: cfg.messages || [], error: null });
       }
       if (table === 'v_sd_next_candidates') return Promise.resolve({ data: cfg.candidates || [], error: null });
+      if (table === 'quick_fixes') {
+        if (cfg.quickFixesThrow) return Promise.reject(new Error('quick_fixes query failed'));
+        return Promise.resolve({ data: cfg.quickFixes || [], error: null });
+      }
       return Promise.resolve({ data: [], error: null });
     }
     function resolveDefault() {
@@ -131,5 +135,81 @@ describe('FR-2: runCheckin deterministic resolution', () => {
     expect(r.action).toBe('idle');
     expect(r.recommended_wakeup_seconds).toBe(DEFAULT_IDLE_WAKEUP_SECONDS);
     expect(r.ok).toBe(true);
+  });
+});
+
+// SD-LEO-INFRA-MAKE-OPEN-QFS-001: open quick_fixes are self-claimable below the SD tier.
+const DAY = 24 * 60 * 60 * 1000;
+const freshQF = (id, over = {}) => ({ id, status: 'open', pr_url: null, commit_sha: null, created_at: new Date(Date.now() - 1 * DAY).toISOString(), ...over });
+
+describe('QF self-claim: isAutoStartableQF predicate (FR-2)', () => {
+  it('accepts an open, fresh, no-pr/commit QF', () => {
+    expect(isAutoStartableQF(freshQF('QF-1'), Date.now())).toBe(true);
+  });
+  it('rejects a non-open QF', () => {
+    expect(isAutoStartableQF(freshQF('QF-1', { status: 'in_progress' }), Date.now())).toBe(false);
+  });
+  it('rejects a QF that already has a pr_url or commit_sha (verify-first / merge-race guard)', () => {
+    expect(isAutoStartableQF(freshQF('QF-1', { pr_url: 'http://x' }), Date.now())).toBe(false);
+    expect(isAutoStartableQF(freshQF('QF-1', { commit_sha: 'abc123' }), Date.now())).toBe(false);
+  });
+  it('rejects a stale QF older than STALE_QF_DAYS', () => {
+    const old = freshQF('QF-1', { created_at: new Date(Date.now() - (STALE_QF_DAYS + 1) * DAY).toISOString() });
+    expect(isAutoStartableQF(old, Date.now())).toBe(false);
+  });
+  it('rejects a QF with a missing/invalid created_at', () => {
+    expect(isAutoStartableQF(freshQF('QF-1', { created_at: null }), Date.now())).toBe(false);
+    expect(isAutoStartableQF(null, Date.now())).toBe(false);
+  });
+});
+
+describe('QF self-claim: runCheckin QF tier (FR-1/3/4/6)', () => {
+  const base = { session: { metadata: {}, sd_key: null }, messages: [] };
+
+  it('self-claims an open fresh QF when no SD is claimable, routing to the /quick-fix workflow', async () => {
+    const sb = makeStub({ ...base, candidates: [], quickFixes: [freshQF('QF-20260601-001')], claimResults: { 'QF-20260601-001': true } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed_qf');
+    expect(r.qf).toBe('QF-20260601-001');
+    expect(r.message).toMatch(/read-quick-fix\.js/);
+    expect(r.message).toMatch(/complete-quick-fix\.js/);
+    expect(r.message).toMatch(/Do NOT run sd-start\.js/i);  // explicit guard: never route a QF into sd-start
+  });
+
+  it('ALWAYS prefers a claimable SD over a QF (QF tier never reached)', async () => {
+    const sb = makeStub({ ...base, candidates: [{ sd_id: 'SD-TOP-001', track: 'A' }], quickFixes: [freshQF('QF-20260601-001')], claimResults: { 'SD-TOP-001': true, 'QF-20260601-001': true } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-TOP-001');
+    expect(r.qf).toBeUndefined();
+  });
+
+  it('skips stale and pr/commit QFs, then idles', async () => {
+    const sb = makeStub({ ...base, candidates: [], quickFixes: [
+      freshQF('QF-OLD', { created_at: new Date(Date.now() - (STALE_QF_DAYS + 2) * DAY).toISOString() }),
+      freshQF('QF-HASPR', { pr_url: 'http://pr' }),
+    ] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
+  });
+
+  it('skips a foreign-held QF (claim_sd refuses) to the next claimable QF', async () => {
+    const sb = makeStub({ ...base, candidates: [], quickFixes: [freshQF('QF-HELD'), freshQF('QF-FREE')], claimResults: { 'QF-HELD': false, 'QF-FREE': true } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed_qf');
+    expect(r.qf).toBe('QF-FREE');
+  });
+
+  it('fails open to idle when the quick_fixes query throws (SD/idle contract intact)', async () => {
+    const sb = makeStub({ ...base, candidates: [], quickFixesThrow: true });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
+    expect(r.ok).toBe(true);
+  });
+
+  it('claims the first eligible QF in the returned (created_at ascending) order', async () => {
+    const sb = makeStub({ ...base, candidates: [], quickFixes: [freshQF('QF-OLDEST'), freshQF('QF-NEWER')], claimResults: { 'QF-OLDEST': true, 'QF-NEWER': true } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.qf).toBe('QF-OLDEST');
   });
 });
