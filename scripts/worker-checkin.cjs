@@ -258,6 +258,7 @@ async function selfClaimDraftSd(sb, sessionId, base) {
     );
     for (const d of ordered) {
       if (!(await draftDepsSatisfied(sb, d))) continue; // skip dependency-blocked
+      if (await isSdInFlight(sb, d.sd_key, sessionId)) continue; // dedup: skip SDs already started or live-foreign-held
       const claimed = await tryClaim(sb, d.sd_key, sessionId);
       if (claimed.ok) {
         return {
@@ -270,6 +271,40 @@ async function selfClaimDraftSd(sb, sessionId, base) {
     }
   } catch { /* fail-open -> caller continues to QF/idle */ }
   return null;
+}
+
+/**
+ * Dedup guard: should this SD candidate be SKIPPED by self-claim because it is already
+ * being built? v_sd_next_candidates only filters completed/cancelled/deferred and
+ * selfClaimDraftSd only filters claiming_session_id IS NULL, so both can surface an SD
+ * another session is mid-build on; claim_sd's 900s guard misses long-build heartbeat
+ * lapses (auto_stale_takeover). Returns true to SKIP when the SD is (a) past LEAD
+ * (started — current_phase != 'LEAD'; phase only advances on an ACCEPTED handoff, so this
+ * avoids the rejected-first-handoff false positive that raw handoff-row presence has) OR
+ * (b) held by a LIVE foreign session (v_active_sessions.is_alive — a generous liveness
+ * signal that covers heartbeat gaps beyond claim_sd's 900s backstop). Fails OPEN (any
+ * error -> false -> never blocks self_claim). SD-FDBK-FIX-SELF-CLAIM-DEDUP-001.
+ */
+async function isSdInFlight(sb, sdKey, mySessionId) {
+  try {
+    // (a) already started past the initial LEAD draft
+    const { data: sd } = await sb
+      .from('strategic_directives_v2')
+      .select('current_phase')
+      .eq('sd_key', sdKey)
+      .maybeSingle();
+    if (sd && sd.current_phase && sd.current_phase !== 'LEAD') return true;
+    // (b) a live foreign session already holds it
+    const { data: live } = await sb
+      .from('v_active_sessions')
+      .select('session_id')
+      .eq('sd_key', sdKey)
+      .neq('session_id', mySessionId)
+      .eq('is_alive', true)
+      .limit(1);
+    if (live && live.length) return true;
+  } catch { /* fail-open: never block self_claim on a guard error */ }
+  return false;
 }
 
 async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId } = {}) {
@@ -334,6 +369,7 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
       .select('sd_id, track, status, priority')
       .limit(SELF_CLAIM_CANDIDATE_LIMIT);
     for (const c of (cands || [])) {
+      if (await isSdInFlight(sb, c.sd_id, sessionId)) continue;  // dedup: skip SDs already started or live-foreign-held
       const claimed = await tryClaim(sb, c.sd_id, sessionId, c.track);
       if (claimed.ok) {
         return { ...base, action: 'self_claimed', sd: c.sd_id, track: c.track, message: `Self-claimed ${c.sd_id} from sd:next. Run: node scripts/sd-start.js ${c.sd_id}` };
@@ -381,7 +417,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, isSdInFlight, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
