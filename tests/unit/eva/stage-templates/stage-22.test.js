@@ -1,32 +1,35 @@
 import { describe, it, expect } from 'vitest';
 import stage22 from '../../../../lib/eva/stage-templates/stage-22.js';
 
-describe('stage-22.js — Distribution Setup (stub)', () => {
+// SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A 21<->22 swap (strategy drives creative):
+// stage_number 22 now executes Visual Assets (was Distribution Setup). The engine
+// dispatches by stage_number -> fixed stage-NN.js, so stage-22.js is the load-bearing
+// binding for what stage 22 runs.
+describe('stage-22.js — Visual Assets (stub)', () => {
   it('has correct id, slug, title, version', () => {
     expect(stage22.id).toBe('stage-22');
-    expect(stage22.slug).toBe('distribution-setup');
-    expect(stage22.title).toBe('Distribution Setup');
+    expect(stage22.slug).toBe('visual-assets');
+    expect(stage22.title).toBe('Visual Assets');
     expect(stage22.version).toBe('3.0.0');
   });
 
   it('has expected defaultData shape', () => {
     expect(stage22.defaultData).toMatchObject({
-      channels: [],
-      email_sequences: [],
-      budget_allocation: {},
-      total_channels: 0,
-      active_channels: 0,
+      device_screenshots: [],
+      social_graphics: [],
+      video_storyboard: [],
+      total_assets: 0,
     });
   });
 
   it('validate() always returns valid for any input', () => {
     expect(stage22.validate({})).toEqual({ valid: true, errors: [] });
     expect(stage22.validate(null)).toEqual({ valid: true, errors: [] });
-    expect(stage22.validate({ channels: [{ channel: 'email' }] })).toEqual({ valid: true, errors: [] });
+    expect(stage22.validate({ device_screenshots: [{ device: 'iPhone' }] })).toEqual({ valid: true, errors: [] });
   });
 
   it('computeDerived() returns data unchanged', () => {
-    const data = { channels: [], email_sequences: [], budget_allocation: {} };
+    const data = { device_screenshots: [], social_graphics: [], total_assets: 0 };
     expect(stage22.computeDerived(data)).toEqual(data);
   });
 
@@ -39,8 +42,8 @@ describe('stage-22.js — Distribution Setup (stub)', () => {
   });
 
   it('has schema with expected fields', () => {
-    expect(stage22.schema.channels).toBeDefined();
-    expect(stage22.schema.email_sequences).toBeDefined();
-    expect(stage22.schema.budget_allocation).toBeDefined();
+    expect(stage22.schema.device_screenshots).toBeDefined();
+    expect(stage22.schema.social_graphics).toBeDefined();
+    expect(stage22.schema.video_storyboard).toBeDefined();
   });
 });

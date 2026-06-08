@@ -1,13 +1,15 @@
 // Tests for SD-LEO-FEAT-CONVERT-STAGE-VISUAL-001
-// S21 creative_handoff gate: FR-1/2 (decision-creating), FR-4 (visual_final_assets writer).
+// S22 creative_handoff gate (post SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A swap):
+// Visual Assets is now stage_number 22 (was 21). creative_handoff is the gate_label.
+// FR-1/2 (decision-creating), FR-4 (visual_final_assets writer).
 
 import { describe, it, expect, vi } from 'vitest';
 import { persistVisualFinalAssets } from '../../../../lib/eva/stage-templates/analysis-steps/stage-21-visual-assets.js';
 import { FALLBACK_DECISION_CREATING_STAGES } from '../../../../lib/eva/chairman-decision-watcher.js';
 
-describe('FR-1/2: S21 is in the decision-creating fallback set', () => {
-  it('FALLBACK_DECISION_CREATING_STAGES includes 21 (S21 now creates a chairman decision)', () => {
-    expect(FALLBACK_DECISION_CREATING_STAGES.has(21)).toBe(true);
+describe('FR-1/2: S22 (Visual Assets) is in the decision-creating fallback set', () => {
+  it('FALLBACK_DECISION_CREATING_STAGES includes 22 (S22 now creates a chairman creative_handoff decision)', () => {
+    expect(FALLBACK_DECISION_CREATING_STAGES.has(22)).toBe(true);
   });
 });
 
@@ -28,7 +30,8 @@ describe('FR-4: persistVisualFinalAssets writer', () => {
     const r = await persistVisualFinalAssets(sb, 'ven-1', { title: 'My finals', urls: ['a.png'] });
     expect(r.persisted).toBe(true);
     expect(calls.inserted.artifact_type).toBe('visual_final_assets');
-    expect(calls.inserted.lifecycle_stage).toBe(21);
+    // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: Visual Assets is now lifecycle_stage 22
+    expect(calls.inserted.lifecycle_stage).toBe(22);
     expect(calls.inserted.venture_id).toBe('ven-1');
     expect(calls.inserted.title).toBe('My finals');      // NOT NULL satisfied
     expect(calls.inserted.is_current).toBe(true);
