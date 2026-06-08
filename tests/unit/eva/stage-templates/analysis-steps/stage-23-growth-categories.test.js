@@ -82,6 +82,24 @@ describe('FR-006 golden: default-OFF parity', () => {
       expect(r.checklist.find((c) => c.category === cat)).toBeUndefined();
     }
     expect(r.total_categories).toBe(REQUIRED_CATEGORIES.length + 3); // 3 advisory (analytics/monitoring/legal)
+    // Byte-identical parity on the count-derived fields the baseline computes: the growth
+    // categories must NOT change advisory_count or the readiness_pct denominator (total=6).
+    // With all 3 REQUIRED passing + 3 ADVISORY, effectivePass=6 over total=6 => 100%.
+    expect(r.advisory_count).toBe(3);
+    expect(r.readiness_pct).toBe(100);
+  });
+
+  it('default-OFF readiness_pct denominator is the baseline (6), not inflated by growth categories', async () => {
+    // Regression guard for review finding [5]: an earlier design added the growth categories
+    // as ADVISORY when the flag was OFF, which inflated total_categories to 8 and changed
+    // readiness_pct. With 2 of 3 REQUIRED passing + 3 ADVISORY and flag OFF, the denominator
+    // must stay 6 (=> round(5/6*100)=83), proving the growth categories do not touch the math.
+    const supabase = makeSupabase({ flagEnabled: false, presentTypes: BASE_PRESENT });
+    const r = await analyzeStage23LaunchReadiness({
+      ...PASSING_PARAMS, stage22Data: { active_channels: 0 }, supabase, // distribution_channels now pending
+    });
+    expect(r.total_categories).toBe(6);
+    expect(r.readiness_pct).toBe(83); // (2 required pass + 3 advisory)/6 — baseline denominator
   });
 
   it('deploy-order safety: flag OFF + no pre-launch playbook still yields READY (in-flight not blocked)', async () => {
