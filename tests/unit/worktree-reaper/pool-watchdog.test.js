@@ -36,6 +36,13 @@ const WT = (sdKey, branch) => ({
   branch: branch || `feat/${sdKey}`,
 });
 
+// SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001: QF worktrees live at .worktrees/qf/<qf_id>;
+// path.basename(path) is the qf_id (starts with 'QF-').
+const WT_QF = (qfId, branch) => ({
+  path: path.join('/repo', '.worktrees', 'qf', qfId),
+  branch: branch || `qf/${qfId}`,
+});
+
 describe('classifyStage0 — terminal-SD reclaim (FR-001)', () => {
   test('(a) reaps a COMPLETED SD worktree regardless of age (age-agnostic)', () => {
     const wt = WT('SD-DONE-001');
@@ -103,6 +110,78 @@ describe('classifyStage0 — terminal-SD reclaim (FR-001)', () => {
     });
     expect(v.reclaim).toBe(false);
     expect(v.reason).toBe('not_terminal_sd');
+  });
+});
+
+describe('classifyStage0 — quick_fixes status-aware reaping (SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001)', () => {
+  test('reclaims a COMPLETED QF worktree age-agnostically (terminalQfSet)', () => {
+    const wt = WT_QF('QF-20260423-821');
+    const v = classifyStage0(wt, {
+      claimMap: new Map(),
+      activeQfSet: new Set(),
+      terminalQfSet: new Set(['QF-20260423-821']),
+    });
+    expect(v.reclaim).toBe(true);
+    expect(v.reason).toBe('terminal_qf_reclaim');
+    expect(v.sd_key).toBe('QF-20260423-821');
+  });
+
+  test('reclaims a CANCELLED QF worktree (terminalQfSet)', () => {
+    const wt = WT_QF('QF-20260423-822');
+    const v = classifyStage0(wt, {
+      claimMap: new Map(),
+      activeQfSet: new Set(),
+      terminalQfSet: new Set(['QF-20260423-822']),
+    });
+    expect(v.reclaim).toBe(true);
+    expect(v.reason).toBe('terminal_qf_reclaim');
+  });
+
+  test('PRESERVES an open/in_progress QF worktree (activeQfSet guard) even with a stale terminal row', () => {
+    const wt = WT_QF('QF-20260423-823');
+    const v = classifyStage0(wt, {
+      claimMap: new Map(),
+      activeQfSet: new Set(['QF-20260423-823']),
+      terminalQfSet: new Set(['QF-20260423-823']),
+    });
+    expect(v.reclaim).toBe(false);
+    expect(v.reason).toBe('active_qf_protected');
+  });
+
+  test('PRESERVES a live-claimed QF worktree (claim guard wins over terminal)', () => {
+    const wt = WT_QF('QF-20260423-824');
+    const claimMap = new Map([[claimKey(wt.path), { sd_key: 'QF-20260423-824', session_id: 's1' }]]);
+    const v = classifyStage0(wt, {
+      claimMap,
+      activeQfSet: new Set(),
+      terminalQfSet: new Set(['QF-20260423-824']),
+    });
+    expect(v.reclaim).toBe(false);
+    expect(v.reason).toBe('active_claim_protected');
+  });
+
+  test('ESCALATED QF (in neither set) is NOT reclaimed → not_terminal_qf', () => {
+    const wt = WT_QF('QF-20260423-825');
+    const v = classifyStage0(wt, {
+      claimMap: new Map(),
+      activeQfSet: new Set(),
+      terminalQfSet: new Set(),
+    });
+    expect(v.reclaim).toBe(false);
+    expect(v.reason).toBe('not_terminal_qf');
+  });
+
+  test('REGRESSION: SD worktrees still resolve via the SD sets; QF-set noise is ignored for SDs', () => {
+    const wt = WT('SD-DONE-009');
+    const v = classifyStage0(wt, {
+      claimMap: new Map(),
+      activeSdSet: new Set(),
+      terminalSdSet: new Set(['SD-DONE-009']),
+      activeQfSet: new Set(['SD-DONE-009']),
+      terminalQfSet: new Set(),
+    });
+    expect(v.reclaim).toBe(true);
+    expect(v.reason).toBe('terminal_sd_reclaim');
   });
 });
 
