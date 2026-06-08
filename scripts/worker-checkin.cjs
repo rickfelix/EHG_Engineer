@@ -27,6 +27,7 @@
 
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const ws = require('../lib/fleet/worker-status.cjs');
+const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cjs');
 
 const ROLL_CALL_TTL_MS = 60 * 60 * 1000;     // availability row lives 1h
 const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (idempotency)
@@ -58,7 +59,8 @@ function extractSdFromAssignment(msg) {
 async function resolveTrack(sb, sdKey, fallback) {
   if (fallback) return fallback;
   try {
-    const { data } = await sb.from('sd_baseline_items').select('track').eq('sd_key', sdKey).maybeSingle();
+    // SD-FDBK-INFRA-AUTO-MAINTAIN-EXECUTION-001: column is sd_id (holds the sd_key string), NOT sd_key.
+    const { data } = await sb.from('sd_baseline_items').select('track').eq('sd_id', sdKey).maybeSingle();
     return (data && data.track) || 'STANDALONE';
   } catch {
     return 'STANDALONE';
@@ -176,6 +178,12 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
       base.assignment_claim_error = claimed.error;
     }
   }
+
+  // 5.5 SD-FDBK-INFRA-AUTO-MAINTAIN-EXECUTION-001: ensure an active execution baseline exists
+  //      BEFORE reading v_sd_next_candidates. With zero active baseline the view returns 0 rows
+  //      and self-claim silently idles with a full queue. Fail-open: a failure here degrades to
+  //      today's behavior (read returns [] -> idle), never an error action.
+  try { await ensureActiveBaseline(sb); } catch { /* fail-open: never block the checkin */ }
 
   // 6. self-claim top of sd:next (v_sd_next_candidates is baseline-ranked)
   try {
