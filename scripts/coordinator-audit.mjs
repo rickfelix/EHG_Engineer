@@ -13,11 +13,16 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { countActiveWorktrees, MAX_WORKTREE_COUNT } from '../lib/worktree-quota.js';
 import { liveFleetWorkers } from '../lib/fleet/genuine-worker.mjs';
+import { getDbNowMs } from '../lib/fleet/db-clock.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
-const t = Date.now();
+// SD-FDBK-INFRA-NODE-CLOCK-SKEW-001: use the DB server clock (not the node clock) as the
+// age reference so node-clock skew can't make all workers/SDs read as stale. Every
+// downstream age calc (liveFleetWorkers nowMs, SD aging, dep-stale aging) consumes `t`.
+// Fail-open: getDbNowMs returns the node clock if the DB read fails (no worse than before).
+const t = await getDbNowMs(db);
 const OPEN = ['new', 'in_progress', 'open', 'triaged', 'snoozed'];
 const TERMINAL = ['completed', 'cancelled', 'archived', 'deferred'];
 const termList = '(' + TERMINAL.join(',') + ')';
