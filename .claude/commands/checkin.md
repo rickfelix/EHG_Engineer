@@ -54,6 +54,7 @@ The CLI prints **one JSON object** describing the resolved action. It does the w
 | `resume` | You already claim `sd` | Run `node scripts/sd-start.js <sd>` to (re)attach the worktree, then continue that SD. | On completion, re-run `/checkin`. |
 | `claimed_assignment` | Claimed the coordinator's assigned `sd` via `claim_sd` | Run `node scripts/sd-start.js <sd>`, load phase context, build it. | On completion, re-run `/checkin`. |
 | `self_claimed` | No assignment, so claimed the top of `sd:next` (`sd`) | Run `node scripts/sd-start.js <sd>`, load phase context, build it. | On completion, re-run `/checkin`. |
+| `self_claimed_qf` | No claimable SD, so self-claimed an open quick-fix (`qf`) from the open-QF queue | Run `node scripts/read-quick-fix.js <qf>`, then the `/quick-fix` workflow (implement ≤50 LOC on branch `qf/<qf>`, run tests, then `node scripts/complete-quick-fix.js <qf>`) — **NOT** `sd-start.js` (it only knows `strategic_directives_v2` and would exit "SD not found" for a QF id). | On completion, re-run `/checkin`. |
 | `idle` | Nothing claimable right now | Call `ScheduleWakeup(delaySeconds=recommended_wakeup_seconds)` (~1200s) and proceed — do **not** wait on a human. | On the next wake, re-run `/checkin`. |
 | `error` | `CLAUDE_SESSION_ID` missing or DB unavailable | Report the `error` field; do not loop blindly. | Fix the cause, then re-run `/checkin`. |
 
@@ -62,7 +63,9 @@ This is an autonomous-fleet contract: a `/loop` worker must keep moving. Decide 
 **The cycle never terminates on its own.** For `resume` / `claimed_assignment` /
 `self_claimed`: build the SD through completion, then **re-run `/checkin`** to pull the next
 one — if you instead just stop after finishing the SD, the loop never fires again and you go
-incognito with a non-empty queue. For `idle`: you MUST have armed a
+incognito with a non-empty queue. For `self_claimed_qf`: work the quick-fix through the
+`/quick-fix` workflow to completion (`complete-quick-fix.js`), then **re-run `/checkin`** —
+same rule, just `read-quick-fix.js` instead of `sd-start.js`. For `idle`: you MUST have armed a
 `ScheduleWakeup(~1200s)` before ending the turn. **Under `/loop` the re-fire is automatic
 (step 1 polls the inbox / runs the check-in cycle each pass); the table above is what you do
 inside each pass.** Running `/checkin` bare (not under `/loop`)? Then arm the `ScheduleWakeup`

@@ -33,6 +33,14 @@ const ROLL_CALL_TTL_MS = 60 * 60 * 1000;     // availability row lives 1h
 const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (idempotency)
 const DEFAULT_IDLE_WAKEUP_SECONDS = 1200;    // ~20m, matches the fleet idle cadence
 const SELF_CLAIM_CANDIDATE_LIMIT = 5;
+const QF_CANDIDATE_LIMIT = 25;               // open quick_fixes to consider for self-claim
+const STALE_QF_DAYS = Number(process.env.SD_NEXT_QF_STALE_DAYS) || 3;  // verify-first freshness boundary (shared with sd-next display)
+// Tier-3 risk keywords (CLAUDE.md Work Item Routing). Auto-self-claim is for small,
+// low-risk QFs only. The sd-next display path excludes _escalate via a LIVE re-triage
+// (runTriageGate, ESM); a .cjs can't run that pipeline, so we approximate parity with the
+// PERSISTED routing_tier PLUS this keyword scan — holding risk-bearing QFs for the
+// triage/human path. SD-LEO-INFRA-MAKE-OPEN-QFS-001 (SECURITY re-triage-parity advisory).
+const TIER3_RISK_RE = /\b(auth|authentication|authorization|rls|payments?|credentials?|migration|schema|alter\s+table|create\s+table|drop\s+table)\b/i;
 
 const SD_KEY_RE = /SD-[A-Z0-9]+(?:-[A-Z0-9]+)+/;
 
@@ -135,6 +143,61 @@ async function ackMessage(sb, id) {
  * id so it is unit-testable without env/network. Returns the resolution object
  * (the same object printed as JSON by the CLI). NEVER throws, NEVER reads stdin.
  */
+/**
+ * Pure predicate: is this quick_fixes row safe to AUTO-start via the worker
+ * self-claim path? Mirrors (inverts) the verify-first gate in
+ * scripts/modules/sd-next/display/quick-fixes.js. Re-implemented INLINE because
+ * worker-checkin.cjs is CommonJS and that module is ESM (package.json
+ * type:module), so it cannot be require()d here. SD-LEO-INFRA-MAKE-OPEN-QFS-001.
+ */
+function isAutoStartableQF(qf, nowMs) {
+  if (!qf || qf.status !== 'open') return false;
+  if (qf.pr_url || qf.commit_sha) return false;        // already in PR/commit (verify-first / merge-race guard)
+  if (qf.routing_tier != null && Number(qf.routing_tier) >= 3) return false;  // persisted Tier-3 -> full SD, not auto-QF
+  if (TIER3_RISK_RE.test(qf.title || '')) return false;                        // risk-keyword drift -> hold for triage/human
+  const created = qf.created_at ? Date.parse(qf.created_at) : NaN;
+  if (!Number.isFinite(created)) return false;
+  const ageDays = (nowMs - created) / (24 * 60 * 60 * 1000);
+  return ageDays < STALE_QF_DAYS;                       // exclude stale/verify-first QFs
+}
+
+/**
+ * Self-claim tier for open quick_fixes — sourced ONLY here because
+ * v_sd_next_candidates is SD-only. Sits strictly BELOW the SD self-claim loop
+ * and ABOVE the idle return, so SD work is always preferred. Reuses the
+ * already-QF-aware claim_sd RPC via tryClaim() (no new RPC/schema); claim_sd is
+ * the authoritative race/liveness arbiter (it refuses a live foreign holder ->
+ * tryClaim ok:false -> we skip to the next QF). Returns a self_claimed_qf result
+ * or null (caller then falls through to idle). Never throws (fail-open).
+ * SD-LEO-INFRA-MAKE-OPEN-QFS-001.
+ */
+async function selfClaimQuickFix(sb, sessionId, base) {
+  try {
+    const { data: qfs } = await sb
+      .from('quick_fixes')
+      .select('id, status, pr_url, commit_sha, created_at, routing_tier, title')
+      .eq('status', 'open')
+      .is('pr_url', null)
+      .is('commit_sha', null)
+      .order('created_at', { ascending: true })
+      .limit(QF_CANDIDATE_LIMIT);
+    const nowMs = Date.now();
+    for (const qf of (qfs || [])) {
+      if (!isAutoStartableQF(qf, nowMs)) continue;
+      const claimed = await tryClaim(sb, qf.id, sessionId);
+      if (claimed.ok) {
+        return {
+          ...base,
+          action: 'self_claimed_qf',
+          qf: qf.id,
+          message: `Self-claimed quick-fix ${qf.id} from the open-QF queue. Load it: node scripts/read-quick-fix.js ${qf.id} — then run the /quick-fix workflow (implement <=50 LOC on branch qf/${qf.id}, run tests, then node scripts/complete-quick-fix.js ${qf.id}). Do NOT run sd-start.js for a QF. On completion, re-run /checkin.`,
+        };
+      }
+    }
+  } catch { /* fail-open -> caller returns idle */ }
+  return null;
+}
+
 async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId } = {}) {
   // 1. resolve coordinator (fail-open to null -> broadcast)
   let coordinatorId = null;
@@ -155,9 +218,14 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
 
   const base = { ok: true, callsign, coordinator: coordinatorId, roll_call_id: rollCall.id, two_way: process.env.COORDINATOR_TWOWAY_V2 === 'on' };
 
-  // 4. already working -> resume
+  // 4. already working -> resume. A self-claimed quick-fix lands in claude_sessions.sd_key
+  // too (claim_sd writes it for QF-% ids), so a QF claim must resume into the /quick-fix
+  // workflow — NOT sd-start, which is SD-only (QFs have no worktree / LEAD-PLAN-EXEC).
   if (mySd) {
-    return { ...base, action: 'resume', sd: mySd, message: `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).` };
+    const isQf = /^QF-/.test(mySd);
+    return { ...base, action: 'resume', sd: mySd, message: isQf
+      ? `Already claiming quick-fix ${mySd}; resume it: node scripts/read-quick-fix.js ${mySd}, then run the /quick-fix workflow (do NOT run sd-start.js for a QF).`
+      : `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).` };
   }
 
   // 5. pending WORK_ASSIGNMENT -> claim via claim_sd RPC
@@ -199,6 +267,13 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
     }
   } catch { /* fail-open */ }
 
+  // 6.5 self-claim an open quick_fix. v_sd_next_candidates is SD-only, so open
+  // QFs are sourced here — strictly BELOW SD candidates and ABOVE idle, so a
+  // worker pulls an open QF instead of idling, but SD work always wins.
+  // SD-LEO-INFRA-MAKE-OPEN-QFS-001.
+  const qfClaimed = await selfClaimQuickFix(sb, sessionId, base);
+  if (qfClaimed) return qfClaimed;
+
   // 7. idle -> recommend a wakeup (ScheduleWakeup is a HARNESS tool, not Node-callable)
   return {
     ...base,
@@ -225,7 +300,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
