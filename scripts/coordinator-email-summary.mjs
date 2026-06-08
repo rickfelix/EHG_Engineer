@@ -15,6 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { readFileSync, writeFileSync } from 'fs';
+import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
@@ -60,10 +61,10 @@ const { data: sessRaw } = await db.from('claude_sessions').select('session_id,he
 //   3. ghost-filter — only a session that has EVER held a claim (current sd_key, or claimed_at /
 //      worktree_path / continuous_sds_completed history) is a worker; drops transient/churning sessions
 //      that registered but never claimed.
-const everClaimed = (s) => !!(s.sd_key || s.claimed_at || s.worktree_path || (s.continuous_sds_completed > 0));
-const isFleetWorker = (s) => s.session_id !== me && s.metadata?.role !== 'adam' && !s.metadata?.non_fleet
-  && ['active', 'idle'].includes(s.status) && everClaimed(s);
-const live = (sessRaw || []).filter(s => isFleetWorker(s) && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < 900000);
+// SD-FDBK-FIX-COORDINATOR-AUDIT-MJS-001: the genuine-worker predicate now lives in
+// lib/fleet/genuine-worker.mjs (shared verbatim with coordinator-audit.mjs) so the email
+// and the audit can never disagree on the worker count.
+const live = liveFleetWorkers(sessRaw, me, t);
 const builderKeys = new Set(live.filter(s => s.sd_key).map(s => s.sd_key));
 const liveWorkers = live.length;
 const builders = live.filter(s => s.sd_key).length;
@@ -137,7 +138,7 @@ const shippedSince = (typeof snap.completedCount === 'number') ? Math.max(0, (co
 //   parked/quiet provisioned worker keeps showing as "incognito" until it's genuinely gone, and
 //   report TOTAL provisioned headcount (= live + incognito), not just live.
 const PROVISIONED_WINDOW = parseInt(process.env.COORD_PROVISIONED_WINDOW_MIN || '480', 10) * 60000;
-const recentSeen = (sessRaw || []).filter(s => isFleetWorker(s) && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < PROVISIONED_WINDOW);
+const recentSeen = (sessRaw || []).filter(s => isFleetWorker(s, me) && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < PROVISIONED_WINDOW);
 const incognito = Math.max(0, recentSeen.length - liveWorkers);   // provisioned but quiet >15m = incognito (needs a wake re-paste)
 const totalWorkers = liveWorkers + incognito;                     // TRUE provisioned headcount the operator stood up
 
