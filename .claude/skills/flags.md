@@ -30,6 +30,7 @@ Parse `$ARGUMENTS` to determine the subcommand:
 - `list --state <state>` → Filter by lifecycle state
 - `list --owner <id>` → Filter by owner
 - `list --expired` → Show only expired flags
+- `stale` → Show the stale-flag governance report (never-reviewed / past-expiry / disabled-aging / enabled-never-rolled-out, each with a graduate|kill|extend|review recommendation)
 - `show <key>` → Show flag details
 - `enable <key> --reason <text>` → Enable a flag
 - `disable <key> --reason <text>` → Disable a flag (emergency, no approval)
@@ -49,6 +50,16 @@ ARGUMENTS: $ARGUMENTS
 Determine which subcommand to execute based on the arguments provided above.
 
 ### Step 2: Execute Subcommand
+
+#### If `stale`:
+
+Show the stale-flag governance report (read-only; does NOT stamp last_reviewed_at — that is the scheduled `flag-governance-review.mjs` job's responsibility). Run the backing script and display its output verbatim:
+
+```bash
+node scripts/flags-stale.mjs
+```
+
+The report lists every stale flag with a graduate | kill | extend | review recommendation, or an explicit "0 stale flags" line when the registry is clean. To run the full governance review (which also stamps last_reviewed_at and emits an operator digest), use `node scripts/flag-governance-review.mjs --force` instead.
 
 #### If no args or `list`:
 
