@@ -23,12 +23,13 @@ vi.mock('../../../lib/worktree-reaper/detectors.js', () => ({
 
 import { classifyWorktree, stageForCategories, loadSdKeySets } from '../../../scripts/worktree-reaper.mjs';
 
-const baseCtx = (activeSdSet) => ({
+const baseCtx = (activeSdSet, activeQfSet) => ({
   repoRoot: '/repo',
   claimMap: new Map(),
   sdMap: new Set(),
   qfMap: new Set(),
   activeSdSet,
+  activeQfSet,
   idleThresholdMs: 7 * 24 * 60 * 60 * 1000,
 });
 
@@ -56,15 +57,40 @@ describe('active-SD shipped-stale guard (classifyWorktree)', () => {
     expect(categories).toContain('shipped-stale');
     expect(stageForCategories(categories).verdict).toBe('stage1_remove');
   });
+
+  // SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001: QF worktrees (.worktrees/qf/<qf_id>) carry the qf_id as
+  // their basename and are never in activeSdSet — they must be protected status-aware via activeQfSet.
+  test('SUPPRESSES shipped-stale for an OPEN/in_progress QF worktree (activeQfSet) -> kept', async () => {
+    const wt = { path: '/repo/.worktrees/qf/QF-20260423-901', branch: 'qf/QF-20260423-901' };
+    const { categories, reasons } = await classifyWorktree(wt, baseCtx(new Set(), new Set(['QF-20260423-901'])));
+    expect(categories).not.toContain('shipped-stale');
+    expect(reasons['shipped-stale-suppressed']).toBeDefined();
+    expect(reasons['shipped-stale-suppressed'].reason).toBe('active-qf-protected');
+    expect(reasons['shipped-stale-suppressed'].sd_key).toBe('QF-20260423-901');
+    expect(stageForCategories(categories).verdict).toBe('keep');
+  });
+
+  test('STILL flags shipped-stale for a completed/cancelled QF worktree (not in activeQfSet)', async () => {
+    const wt = { path: '/repo/.worktrees/qf/QF-20260423-902', branch: 'qf/QF-20260423-902' };
+    const { categories } = await classifyWorktree(wt, baseCtx(new Set(), new Set(['QF-20260423-901'])));
+    expect(categories).toContain('shipped-stale');
+    expect(stageForCategories(categories).verdict).toBe('stage1_remove');
+  });
+
+  test('empty activeQfSet does not suppress a QF worktree (claim-guard remains primary)', async () => {
+    const wt = { path: '/repo/.worktrees/qf/QF-20260423-903', branch: 'qf/QF-20260423-903' };
+    const { categories } = await classifyWorktree(wt, baseCtx(new Set(), undefined));
+    expect(categories).toContain('shipped-stale');
+  });
 });
 
 describe('loadSdKeySets returns activeSdSet', () => {
-  function mockSupabase({ sdKeys = [], qfIds = [], activeRows = [] }) {
+  function mockSupabase({ sdKeys = [], qfIds = [], activeRows = [], qfRows = [] }) {
     return {
       from: vi.fn((table) => {
-        const builder = { _table: table, _inStatus: false };
+        const builder = { _table: table, _inStatus: false, _statuses: null };
         builder.select = vi.fn(() => builder);
-        builder.in = vi.fn(() => { builder._inStatus = true; return builder; });
+        builder.in = vi.fn((_col, vals) => { builder._inStatus = true; builder._statuses = vals; return builder; });
         builder.range = vi.fn(async (start) => {
           if (start > 0) return { data: [], error: null };
           if (table === 'strategic_directives_v2') {
@@ -72,7 +98,13 @@ describe('loadSdKeySets returns activeSdSet', () => {
               ? { data: activeRows, error: null }
               : { data: sdKeys.map((k) => ({ sd_key: k })), error: null };
           }
-          if (table === 'quick_fixes') return { data: qfIds.map((id) => ({ id })), error: null };
+          if (table === 'quick_fixes') {
+            if (builder._inStatus) {
+              const want = new Set(builder._statuses || []);
+              return { data: qfRows.filter((r) => want.has(r.status)), error: null };
+            }
+            return { data: qfIds.map((id) => ({ id })), error: null };
+          }
           return { data: [], error: null };
         });
         return builder;
@@ -98,5 +130,36 @@ describe('loadSdKeySets returns activeSdSet', () => {
     const { activeSdSet } = await loadSdKeySets(null);
     expect(activeSdSet instanceof Set).toBe(true);
     expect(activeSdSet.size).toBe(0);
+  });
+
+  // SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001
+  test('builds activeQfSet (open/in_progress) and terminalQfSet (completed/cancelled), excluding escalated', async () => {
+    const supabase = mockSupabase({
+      qfIds: ['QF-1', 'QF-2', 'QF-3', 'QF-4', 'QF-5'],
+      qfRows: [
+        { id: 'QF-1', status: 'open' },
+        { id: 'QF-2', status: 'in_progress' },
+        { id: 'QF-3', status: 'completed' },
+        { id: 'QF-4', status: 'cancelled' },
+        { id: 'QF-5', status: 'escalated' },
+      ],
+    });
+    const { qfMap, activeQfSet, terminalQfSet } = await loadSdKeySets(supabase);
+    expect(qfMap.has('QF-1')).toBe(true); // existence map unchanged
+    expect(activeQfSet.has('QF-1')).toBe(true);
+    expect(activeQfSet.has('QF-2')).toBe(true);
+    expect(terminalQfSet.has('QF-3')).toBe(true);
+    expect(terminalQfSet.has('QF-4')).toBe(true);
+    // 'escalated' is in NEITHER set (work moved to an SD) → normal claim/age handling
+    expect(activeQfSet.has('QF-5')).toBe(false);
+    expect(terminalQfSet.has('QF-5')).toBe(false);
+  });
+
+  test('activeQfSet/terminalQfSet are empty Sets (no crash) when supabase is absent', async () => {
+    const { activeQfSet, terminalQfSet } = await loadSdKeySets(null);
+    expect(activeQfSet instanceof Set).toBe(true);
+    expect(terminalQfSet instanceof Set).toBe(true);
+    expect(activeQfSet.size).toBe(0);
+    expect(terminalQfSet.size).toBe(0);
   });
 });

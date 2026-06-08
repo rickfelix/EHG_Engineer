@@ -78,6 +78,16 @@ const DEFAULT_IDLE_DAYS = 7;
 // reclaimable regardless of the 7-day idle gate (Stage-0, age-agnostic) — but ONLY
 // when it has no active claim and is NOT in activeSdSet.
 const TERMINAL_SD_STATUSES = ['completed', 'cancelled', 'archived'];
+// SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001: status sets for quick_fixes, parallel to the SD sets.
+// QF worktrees live at .worktrees/qf/<qf_id>; their basename (the qf_id) starts with 'QF-' and is
+// NEVER present in activeSdSet/terminalSdSet (those hold sd_keys only). Without these sets a QF
+// worktree was reaped by mere EXISTENCE: an open/in_progress QF could be flagged shipped-stale and
+// auto-removed under --execute (data loss of unpushed work). ACTIVE_QF protects open/in_progress
+// QFs (mirrors activeSdSet); TERMINAL_QF lets Stage-0 reclaim completed/cancelled QFs age-agnostically
+// (mirrors terminalSdSet). 'escalated' is intentionally in NEITHER set (the work moved to an SD), so
+// such a worktree falls through to the normal claim/age handling.
+const ACTIVE_QF_STATUSES = ['open', 'in_progress'];
+const TERMINAL_QF_STATUSES = ['completed', 'cancelled'];
 // Pool-utilization threshold at/above which the watchdog proactively runs Stage-0.
 const DEFAULT_POOL_THRESHOLD = 0.8;
 const PRESERVE_EXEMPT_RE = /^(tmp-|scratch-|\.claude[\\/]|\.workflow-patterns|\.worktree\.json$|\.ehg-session\.json$)/;
@@ -317,7 +327,7 @@ async function loadSdKeySets(supabase) {
   // so callers/ctx never see it undefined.
   // SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001: also return terminalSdSet (sd_keys whose
   // status IN completed/cancelled/archived) so Stage-0 can reclaim them age-agnostically.
-  if (!supabase) return { sdMap, qfMap, activeSdSet: new Set(), terminalSdSet: new Set() };
+  if (!supabase) return { sdMap, qfMap, activeSdSet: new Set(), terminalSdSet: new Set(), activeQfSet: new Set(), terminalQfSet: new Set() };
 
   // Supabase defaults to 1000 rows per select even with .limit(5000). Paginate
   // explicitly with .range() to ensure the full set is loaded — otherwise
@@ -383,7 +393,31 @@ async function loadSdKeySets(supabase) {
     }
   } catch { /* best-effort */ }
 
-  return { sdMap, qfMap, activeSdSet, terminalSdSet };
+  // SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001: QF status sets, loaded parallel to the SD sets so QF
+  // worktree reaping is STATUS-AWARE (not by mere existence). quick_fixes.id holds the QF string
+  // key. Best-effort: empty on error → the claim-guard remains the primary defense (no over-reap,
+  // no crash).
+  const activeQfSet = new Set();
+  const terminalQfSet = new Set();
+  async function loadQfStatusSet(statuses, target) {
+    try {
+      const pageSize = 1000;
+      for (let start = 0; start < 20000; start += pageSize) {
+        const { data, error } = await supabase
+          .from('quick_fixes')
+          .select('id, status')
+          .in('status', statuses)
+          .range(start, start + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        for (const r of data) if (r.id) target.add(r.id);
+        if (data.length < pageSize) break;
+      }
+    } catch { /* best-effort */ }
+  }
+  await loadQfStatusSet(ACTIVE_QF_STATUSES, activeQfSet);
+  await loadQfStatusSet(TERMINAL_QF_STATUSES, terminalQfSet);
+
+  return { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet };
 }
 
 // ── Git / Gh runners ───────────────────────────────────────────────────
@@ -471,8 +505,15 @@ async function classifyWorktree(wt, ctx) {
     // cancelled SDs' worktrees is unchanged (they are not in activeSdSet). This is a SECOND
     // defense atop the heartbeat claim-guard — either alone now protects an active worktree.
     const sdKey = path.basename(wt.path);
-    if (ctx.activeSdSet && ctx.activeSdSet.has(sdKey)) {
-      reasons['shipped-stale-suppressed'] = { ...shipped, suppressed: true, reason: 'active-sd-protected', sd_key: sdKey };
+    // SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001: QF worktrees (.worktrees/qf/<qf_id>) carry the qf_id
+    // as their basename and are NEVER in activeSdSet, so without a QF-aware check an open/in_progress
+    // quick-fix worktree would be git-removed as shipped-stale (data loss). Protect via activeQfSet.
+    const isQf = sdKey.startsWith('QF-');
+    const activeProtected = isQf
+      ? (ctx.activeQfSet && ctx.activeQfSet.has(sdKey))
+      : (ctx.activeSdSet && ctx.activeSdSet.has(sdKey));
+    if (activeProtected) {
+      reasons['shipped-stale-suppressed'] = { ...shipped, suppressed: true, reason: isQf ? 'active-qf-protected' : 'active-sd-protected', sd_key: sdKey };
     } else {
       categories.push('shipped-stale');
       reasons['shipped-stale'] = shipped;
@@ -552,9 +593,17 @@ export function classifyStage0(wt, ctx = {}) {
     return { reclaim: false, reason: 'active_claim_protected', sd_key: sdKey };
   }
 
-  // Guard 2: activeSdSet (draft/active/in_progress) — never reap a still-worked SD,
-  // even if a stale terminal row exists for the same key.
-  if (ctx.activeSdSet && ctx.activeSdSet.has(sdKey)) {
+  // Guard 2: active item (SD: draft/active/in_progress; QF: open/in_progress) — never reap a
+  // still-worked item, even if a stale terminal row exists for the same key.
+  // SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001: QF worktrees carry the qf_id (starts with 'QF-') as
+  // their basename and are never in the SD sets, so they get their own status-aware guard +
+  // terminal-reclaim resolution parallel to the SD path.
+  const isQf = sdKey.startsWith('QF-');
+  if (isQf) {
+    if (ctx.activeQfSet && ctx.activeQfSet.has(sdKey)) {
+      return { reclaim: false, reason: 'active_qf_protected', sd_key: sdKey };
+    }
+  } else if (ctx.activeSdSet && ctx.activeSdSet.has(sdKey)) {
     return { reclaim: false, reason: 'active_sd_protected', sd_key: sdKey };
   }
 
@@ -563,17 +612,19 @@ export function classifyStage0(wt, ctx = {}) {
   if (typeof ctx.statusResolver === 'function') {
     const verdict = ctx.statusResolver(sdKey);
     if (verdict === 'active') {
-      return { reclaim: false, reason: 'active_sd_protected', sd_key: sdKey };
+      return { reclaim: false, reason: isQf ? 'active_qf_protected' : 'active_sd_protected', sd_key: sdKey };
     }
     isTerminal = verdict === 'terminal';
+  } else if (isQf) {
+    isTerminal = !!(ctx.terminalQfSet && ctx.terminalQfSet.has(sdKey));
   } else {
     isTerminal = !!(ctx.terminalSdSet && ctx.terminalSdSet.has(sdKey));
   }
 
   if (isTerminal) {
-    return { reclaim: true, reason: 'terminal_sd_reclaim', sd_key: sdKey };
+    return { reclaim: true, reason: isQf ? 'terminal_qf_reclaim' : 'terminal_sd_reclaim', sd_key: sdKey };
   }
-  return { reclaim: false, reason: 'not_terminal_sd', sd_key: sdKey };
+  return { reclaim: false, reason: isQf ? 'not_terminal_qf' : 'not_terminal_sd', sd_key: sdKey };
 }
 
 /**
@@ -839,13 +890,13 @@ export async function main(argv = process.argv) {
   }
 
   // Load reference data (best-effort — reaper is useful even with empty maps).
-  const [claimMap, { sdMap, qfMap, activeSdSet, terminalSdSet }] = await Promise.all([
+  const [claimMap, { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet }] = await Promise.all([
     loadClaimMap(supabase),
     loadSdKeySets(supabase),
   ]);
 
   const idleThresholdMs = opts.days * 24 * 60 * 60 * 1000;
-  const ctx = { repoRoot, claimMap, sdMap, qfMap, activeSdSet, terminalSdSet, idleThresholdMs };
+  const ctx = { repoRoot, claimMap, sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, idleThresholdMs };
 
   const header = humanTableHeader();
   const now = Date.now();
