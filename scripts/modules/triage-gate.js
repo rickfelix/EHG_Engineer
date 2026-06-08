@@ -68,7 +68,7 @@ export function isHardGateSource(source) {
  * @param {string} archKey - Architecture plan key (e.g., ARCH-SKILL-AB-TEST-001)
  * @returns {Promise<number|null>} Estimated LOC from arch plan, or null
  */
-async function lookupArchPlanLOC(archKey) {
+export async function lookupArchPlanLOC(archKey) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key || !archKey) return null;
@@ -77,18 +77,21 @@ async function lookupArchPlanLOC(archKey) {
     const sb = createClient(url, key);
     const { data } = await sb
       .from('eva_architecture_plans')
-      .select('plan_content')
+      // SD-LEO-FIX-FIX-TRIAGE-GATE-001: the column is `content` (markdown text), NOT
+      // `plan_content` (which does not exist) — the old name silently returned no row,
+      // making the arch-plan LOC auto-escalation a permanent no-op.
+      .select('content')
       .eq('plan_key', archKey)
       .order('version', { ascending: false })
       .limit(1)
       .single();
 
-    if (!data?.plan_content) return null;
+    if (!data?.content) return null;
 
     // Look for LOC estimate in plan content
-    const content = typeof data.plan_content === 'string'
-      ? data.plan_content
-      : JSON.stringify(data.plan_content);
+    const content = typeof data.content === 'string'
+      ? data.content
+      : JSON.stringify(data.content);
 
     const locMatch = content.match(/estimated[_\s-]*loc[:\s]*(\d+)/i)
       || content.match(/(\d+)\s*(?:lines?\s*of\s*code|LOC)/i);
