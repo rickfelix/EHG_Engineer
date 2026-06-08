@@ -1,6 +1,8 @@
 // Tests for SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-B
-// S22 spend_approval gate: FR-2 (decision-creating fallback parity), FR-4 (drafted
-// distribution artifacts persist with a NOT-NULL title + accepted artifact_type).
+// S21 spend_approval gate (post SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A swap):
+// Distribution Setup is now stage_number 21 (was 22). spend_approval is the gate_label.
+// FR-2 (decision-creating fallback parity), FR-4 (drafted distribution artifacts persist
+// with a NOT-NULL title + accepted artifact_type at lifecycle_stage 21).
 
 import { describe, it, expect } from 'vitest';
 import {
@@ -9,13 +11,13 @@ import {
 } from '../../../../lib/eva/stage-templates/analysis-steps/stage-22-distribution-setup.js';
 import { FALLBACK_DECISION_CREATING_STAGES } from '../../../../lib/eva/chairman-decision-watcher.js';
 
-describe('FR-2: S22 is in the decision-creating fallback set', () => {
-  it('FALLBACK_DECISION_CREATING_STAGES includes 22 (S22 now creates a chairman decision)', () => {
-    expect(FALLBACK_DECISION_CREATING_STAGES.has(22)).toBe(true);
+describe('FR-2: S21 (Distribution) is in the decision-creating fallback set', () => {
+  it('FALLBACK_DECISION_CREATING_STAGES includes 21 (S21 now creates a chairman spend_approval decision)', () => {
+    expect(FALLBACK_DECISION_CREATING_STAGES.has(21)).toBe(true);
   });
 
-  it('still includes 21 (S22 change must not disturb the S21 gate)', () => {
-    expect(FALLBACK_DECISION_CREATING_STAGES.has(21)).toBe(true);
+  it('still includes 22 (S21 change must not disturb the S22 creative_handoff gate)', () => {
+    expect(FALLBACK_DECISION_CREATING_STAGES.has(22)).toBe(true);
   });
 });
 
@@ -49,7 +51,8 @@ describe('FR-4: persistCanonicalPair writes titled, allow-listed distribution ar
     for (const ins of calls.inserts) {
       expect(typeof ins.title).toBe('string');
       expect(ins.title.length).toBeGreaterThan(0);   // NOT NULL satisfied
-      expect(ins.lifecycle_stage).toBe(22);
+      // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: Distribution is now lifecycle_stage 21
+      expect(ins.lifecycle_stage).toBe(21);
       expect(ins.venture_id).toBe('ven-1');
       expect(ins.is_current).toBe(true);
     }
@@ -75,14 +78,15 @@ describe('FR-4: persistCanonicalPair writes titled, allow-listed distribution ar
 });
 
 describe('FR-4: persistSkipMarker writes a titled distribution_skip_marker', () => {
-  it('inserts artifact_type=distribution_skip_marker WITH a title (NOT NULL) at lifecycle_stage 22', async () => {
+  it('inserts artifact_type=distribution_skip_marker WITH a title (NOT NULL) at lifecycle_stage 21', async () => {
+    // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: Distribution is now lifecycle_stage 21
     const { sb, calls } = stub();
     const r = await persistSkipMarker(sb, 'ven-3', [{ artifact_type: 'engine_pricing_model', source_stage: 7 }], silent);
     expect(r.persisted).toBe(true);
     expect(calls.inserts).toHaveLength(1);
     expect(calls.inserts[0].artifact_type).toBe('distribution_skip_marker');
     expect(calls.inserts[0].title).toBe('Distribution skipped');
-    expect(calls.inserts[0].lifecycle_stage).toBe(22);
+    expect(calls.inserts[0].lifecycle_stage).toBe(21);
   });
 
   it('fails open (no throw) without supabase/ventureId', async () => {

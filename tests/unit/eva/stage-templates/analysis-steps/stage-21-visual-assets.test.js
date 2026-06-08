@@ -215,7 +215,9 @@ describe('stage-21-visual-assets — orchestration', () => {
     expect(skipInsert).toBeDefined();
     expect(skipInsert.payload.artifact_data.skip_reason).toBe(expectedReason);
     expect(skipInsert.payload.artifact_data.missing_preconditions).toContain(expectedMissingType);
-    expect(skipInsert.payload.lifecycle_stage).toBe(21);
+    // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A 21<->22 swap: Visual Assets now runs at
+    // stage_number 22, so its venture_artifacts persist at lifecycle_stage 22.
+    expect(skipInsert.payload.lifecycle_stage).toBe(22);
     expect(skipInsert.payload.is_current).toBe(true);
 
     // No canonical artifacts emitted on skip path.

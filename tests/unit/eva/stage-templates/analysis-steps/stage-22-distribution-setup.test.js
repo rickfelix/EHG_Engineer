@@ -118,18 +118,21 @@ function makeFakeSupabase({ flagEnabled = false, captureWrites = [] } = {}) {
   return { sb, inserted, updated };
 }
 
+// SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A (FR-003, option-ii): Distribution is now stage 21
+// and Visual Assets is stage 22. Distribution's REQUIRED_UPSTREAM is only 3 entries
+// (pricing/7, persona/10, GTM/12) — the former visual_social_graphics and
+// visual_device_screenshots (source_stage:21) were removed because Distribution now runs
+// BEFORE Visual (they were a forward-dependency contradiction).
 const VALID_UPSTREAM = {
   stage7Data: { pricing: { tier: 'pro' } },
   stage10Data: { persona: { name: 'Pragmatic Priya' } },
   stage12Data: { gtm: { strategy: 'PLG' } },
-  stage21SocialData: { social: { url: 'x' } },
-  stage21ScreenshotData: { screenshots: { url: 'y' } },
   stage18Data: { copy: 'tagline' },
 };
 
 describe('stage-22-distribution-setup — pure helpers (FR-1/3/4)', () => {
   describe('validateEntryPreconditions (FR-3)', () => {
-    it('passes when all 5 upstream artifacts present', () => {
+    it('passes when all 3 upstream artifacts present (pricing/7, persona/10, GTM/12)', () => {
       const result = validateEntryPreconditions(VALID_UPSTREAM);
       expect(result.ok).toBe(true);
       expect(result.missing).toEqual([]);
@@ -228,11 +231,14 @@ describe('analyzeStage22Distribution — integration (FR-1/3/4)', () => {
     vi.clearAllMocks();
   });
 
-  it('FR-3 — emits SKIP marker when visual_social_graphics absent', async () => {
+  it('FR-3 — emits SKIP marker when engine_pricing_model (stage7) absent', async () => {
+    // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: Distribution no longer requires Visual
+    // artifacts (they were a forward-dep contradiction). Verify that a genuinely
+    // required precondition (stage7/pricing) causes a SKIP.
     const { sb, inserted } = makeFakeSupabase({ flagEnabled: false });
     const params = {
       ...VALID_UPSTREAM,
-      stage21SocialData: null, // missing
+      stage7Data: null, // genuinely required upstream absent
       ventureName: 'TestVenture',
       ventureId: 'venture-uuid-1',
       supabase: sb,
@@ -241,12 +247,12 @@ describe('analyzeStage22Distribution — integration (FR-1/3/4)', () => {
     const out = await analyzeStage22Distribution(params);
 
     expect(out._skip).toBe(true);
-    expect(out.precondition_missing.find(m => m.artifact_type === 'visual_social_graphics')).toBeDefined();
+    expect(out.precondition_missing.find(m => m.artifact_type === 'engine_pricing_model')).toBeDefined();
     expect(out.channels).toEqual([]);
     // SKIP marker persisted
     const skipInsert = inserted.find(i => i.payload.artifact_type === 'distribution_skip_marker');
     expect(skipInsert).toBeDefined();
-    expect(skipInsert.payload.artifact_data.precondition_missing).toContain('visual_social_graphics');
+    expect(skipInsert.payload.artifact_data.precondition_missing).toContain('engine_pricing_model');
     // Canonical pair NOT emitted
     expect(inserted.find(i => i.payload.artifact_type === 'distribution_channel_config')).toBeUndefined();
     expect(inserted.find(i => i.payload.artifact_type === 'distribution_ad_copy')).toBeUndefined();
@@ -380,21 +386,25 @@ describe('SD-LEO-FIX-FIX-POST-BUILD-001 — worker upstream-loading fix', () => 
     return upstream;
   }
 
-  describe('FR-1 — CROSS_STAGE_DEPS[22] alignment', () => {
+  // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: Distribution is now stage_number 21
+  // (not 22). CROSS_STAGE_DEPS[21] covers its deps; CROSS_STAGE_DEPS[22] is Visual Assets.
+  describe('FR-1 — CROSS_STAGE_DEPS[21] alignment (Distribution is now stage 21)', () => {
     it('includes the producer-required source stages 7, 10 and 12', () => {
       for (const stage of [7, 10, 12]) {
-        expect(CROSS_STAGE_DEPS[22]).toContain(stage);
+        expect(CROSS_STAGE_DEPS[21]).toContain(stage);
       }
     });
 
-    it('retains the build-phase context stages 17-21 (additive change only)', () => {
-      for (const stage of [17, 18, 19, 20, 21]) {
-        expect(CROSS_STAGE_DEPS[22]).toContain(stage);
+    it('retains the build-phase context stages 17-20 (additive change only, stage 21 is self)', () => {
+      // Distribution is stage 21, so CROSS_STAGE_DEPS[21] includes 17-20 as context;
+      // 21 itself is not a dependency of itself.
+      for (const stage of [17, 18, 19, 20]) {
+        expect(CROSS_STAGE_DEPS[21]).toContain(stage);
       }
     });
 
-    it('every REQUIRED_UPSTREAM source_stage is present in CROSS_STAGE_DEPS[22]', () => {
-      const deps = new Set(CROSS_STAGE_DEPS[22]);
+    it('every REQUIRED_UPSTREAM source_stage is present in CROSS_STAGE_DEPS[21]', () => {
+      const deps = new Set(CROSS_STAGE_DEPS[21]);
       for (const req of REQUIRED_UPSTREAM) {
         expect(deps.has(req.source_stage)).toBe(true);
       }
@@ -402,10 +412,15 @@ describe('SD-LEO-FIX-FIX-POST-BUILD-001 — worker upstream-loading fix', () => 
   });
 
   describe('FR-2 — normalizeUpstreamParams (per-artifact-type S21 key derivation)', () => {
-    it('derives stage21SocialData / stage21ScreenshotData from stage21Data.__byType', () => {
+    it('does NOT derive stage21SocialData / stage21ScreenshotData (visual removed from REQUIRED_UPSTREAM)', () => {
+      // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: visual_social_graphics and
+      // visual_device_screenshots were removed from REQUIRED_UPSTREAM (forward-dep fix).
+      // normalizeUpstreamParams iterates REQUIRED_UPSTREAM generically; since those
+      // artifact_types are gone, neither key is produced even when stage21Data.__byType
+      // contains the visual entries.
       const out = normalizeUpstreamParams(makeWorkerShapeUpstream());
-      expect(out.stage21SocialData).toEqual({ social_url: 'https://cdn/social.png' });
-      expect(out.stage21ScreenshotData).toEqual({ screenshot_url: 'https://cdn/shot.png' });
+      expect(out.stage21SocialData).toBeUndefined();
+      expect(out.stage21ScreenshotData).toBeUndefined();
     });
 
     it('leaves already-populated stage{N}Data keys untouched (stage7/10/12)', () => {
@@ -431,7 +446,7 @@ describe('SD-LEO-FIX-FIX-POST-BUILD-001 — worker upstream-loading fix', () => 
   });
 
   describe('FR-3 — producer runs / skips correctly on worker-loader shape', () => {
-    it('RUNS (preconditions ok) when all five upstream artifacts arrive in worker shape', () => {
+    it('RUNS (preconditions ok) when all three required upstream artifacts (7/10/12) arrive in worker shape', () => {
       const normalized = normalizeUpstreamParams(makeWorkerShapeUpstream());
       const result = validateEntryPreconditions(normalized);
       expect(result.ok).toBe(true);
@@ -452,15 +467,20 @@ describe('SD-LEO-FIX-FIX-POST-BUILD-001 — worker upstream-loading fix', () => 
       expect(inserted.find(i => i.payload.artifact_type === 'distribution_channel_config')).toBeDefined();
     });
 
-    it('gracefully skips on absent S21 visuals — but NO LONGER falsely reports S7/S10/S12 missing', () => {
+    it('passes preconditions when S21 visual data absent — Distribution no longer requires Visual upstream', () => {
+      // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-A: visual_social_graphics and
+      // visual_device_screenshots removed from REQUIRED_UPSTREAM (forward-dep fix).
+      // Distribution runs BEFORE Visual Assets, so requiring Visual was a contradiction.
+      // With S7/S10/S12 present and no stage21 visual data, preconditions are OK.
       const normalized = normalizeUpstreamParams(makeWorkerShapeUpstream({ includeS21: false }));
       const result = validateEntryPreconditions(normalized);
-      expect(result.ok).toBe(false);
+      expect(result.ok).toBe(true);
+      expect(result.missing).toEqual([]);
+      // Visual artifact_types are not in the missing list (not required at all)
       const missingTypes = result.missing.map(m => m.artifact_type);
-      // The genuinely-absent S21 visuals are still reported...
-      expect(missingTypes).toContain('visual_social_graphics');
-      expect(missingTypes).toContain('visual_device_screenshots');
-      // ...but the false-negative on S7/S10/S12 is fixed.
+      expect(missingTypes).not.toContain('visual_social_graphics');
+      expect(missingTypes).not.toContain('visual_device_screenshots');
+      // S7/S10/S12 not falsely reported missing either
       expect(missingTypes).not.toContain('engine_pricing_model');
       expect(missingTypes).not.toContain('identity_persona_brand');
       expect(missingTypes).not.toContain('identity_gtm_sales_strategy');
