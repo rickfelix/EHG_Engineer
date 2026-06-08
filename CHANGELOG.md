@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-06-08](#2026-06-08)
+  - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
 - [2026-06-06](#2026-06-06)
   - [Bugfix](#bugfix)
@@ -36,6 +37,11 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-06-08
+
+### Infrastructure
+- **Coordinators can make a sourced SD self-claimable without a rebaseline** - PR #4383 (SD-FDBK-INFRA-FLOW-IMPEDIMENT-COORDINATOR-001)
+  - **Issue**: `v_sd_next_candidates` (the self-claim queue read by worker `/checkin` step 6, `sd:next`, and coordinator dispatch) is driven only by the singleton active execution baseline. Both populate paths filter on non-null `sequence_rank`, so a freshly-sourced draft never entered the baseline — a coordinator doing conveyor-belt sourcing couldn't make it a first-class candidate without a full LEAD-approval-gated rebaseline.
+  - **Fix**: Add `npm run sd:baseline:add-item <sd_key> [--track] [--rank]` (and the `add-item` subcommand on `scripts/sd-baseline.js`) that APPENDS one SD to the active baseline's `sd_baseline_items` — incremental, no rebaseline, no LEAD gate. The SD then surfaces in `v_sd_next_candidates` at `readiness_priority 3` and is self-claimable. Writes `sd_id = sd.sd_key` (the view JOIN key, never the UUID); idempotent on re-add; bounded retry on `sequence_rank` collisions. Pure helpers extracted to `lib/sd-baseline/build-item.js`; 26 network-free unit tests; live activation chain verified then cleaned up net-zero. No schema/view/worker-checkin change.
 
 ### Bugfix
 - **complete-quick-fix hung for autonomous fleet workers** - PR #4377 (SD-FDBK-FIX-COMPLETE-QUICK-FIX-001)

@@ -269,6 +269,11 @@ The `sd:next` command provides an intelligent SD queue with **claim-aware status
 npm run sd:baseline          # Show baseline
 npm run sd:baseline:create   # Create baseline
 npm run sd:baseline:view     # View baseline
+npm run sd:baseline:add-item <sd_key> [--track A|B|C|STANDALONE] [--rank N]
+                             # Append ONE sourced SD to the active baseline
+                             # (coordinator; incremental, no rebaseline / LEAD gate).
+                             # Makes the SD self-claimable via worker /checkin
+                             # (surfaces in v_sd_next_candidates at readiness_priority 3).
 ```
 
 ### Session Management
