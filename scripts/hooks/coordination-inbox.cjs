@@ -78,6 +78,42 @@ const CHECK_INTERVAL_MS = parseInt(process.env.COORDINATION_CHECK_INTERVAL_MS, 1
 const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 
+// SD-LEO-FIX-FIX-COORDINATION-INBOX-001: pure, per-message inbox decision.
+// Returns { skip, markRead, markAck }. The bug this fixes: this PostToolUse hook (fires on
+// every tool call in every session) stamped read_at on poll for actionable rows AND only
+// skipped coordinator-exclusive rows when amCoordinator===true — so a non-coordinator session
+// (Adam, or a misrouted worker) DRAINED read_at before the agent processed the body, and the
+// Adam inbox monitor (which gates on read_at IS NULL) then reported UNREAD:0, hiding coordinator
+// directives fleet-wide. Rules:
+//   - read_at = "agent PROCESSED" (set later by worker-checkin ackMessage on genuine claim, or
+//     by an Adam read); acknowledged_at = "received". A poll must NOT pre-stamp read_at for
+//     anything still needing action — leave it NULL so the row re-surfaces (the existing
+//     read_at IS NULL SELECT) until actioned.
+// Pure + synchronous; no DB calls (amCoordinator/amAdam/twoWayOn/isIdle resolved once by caller).
+function classifyInboxMessage(msg, opts = {}) {
+  const { isIdle = false, twoWayOn = false, amAdam = false } = opts;
+  const p = (msg && msg.payload) || {};
+  const isInfo = msg && msg.message_type === 'INFO';
+  // Coordinator-exclusive INFO rows — SKIP for EVERY session (the coordinator surfaces them via
+  // fleet-dashboard printInbox/printAdamInbox; non-coordinator sessions must not drain them).
+  // Previously these three skips were gated on amCoordinator===true (the root bug).
+  if (isInfo && p.signal_type) return { skip: true };                 // FR-3a worker signal
+  if (isInfo && p.kind === 'adam_advisory') return { skip: true };    // Adam advisory -> coordinator inbox
+  if (twoWayOn && isInfo && p.kind === 'coordinator_reply') return { skip: true }; // awaitCoordinatorReply consumes it
+  // Adam session: do NOT auto-drain a coordinator-originated INFO directive — leave read_at NULL
+  // so the Adam inbox monitor (read_at IS NULL) keeps surfacing it until Adam acts on it.
+  if (amAdam && isInfo && (msg.sender_type === 'orchestrator' || msg.sender_type === 'coordinator')) {
+    return { skip: false, markRead: false, markAck: false };
+  }
+  // Actionable idle rows — surface but do NOT mark read/ack on poll; re-surface until the agent
+  // genuinely actions them (worker-checkin ackMessage stamps both on claim).
+  if (isIdle && ACTIONABLE_TYPES.includes(msg && msg.message_type)) {
+    return { skip: false, markRead: false, markAck: false };
+  }
+  // Default — a pure notification with no follow-up action; drain on display (legacy behavior).
+  return { skip: false, markRead: true, markAck: true };
+}
+
 function shouldCheck(sessionId) {
   const file = getThrottleFile(sessionId);
   if (!file) return true;
@@ -412,16 +448,20 @@ async function main() {
     checkFrictionThresholds(sessionId);
   } catch { /* fail silently — friction nudge is best-effort */ }
 
-  // Check if this session is idle (no SD claimed)
+  // Check if this session is idle (no SD claimed) + whether it is the Adam advisory session.
+  // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: select metadata too (same query, no extra round-trip)
+  // so the inbox classifier can avoid draining coordinator directives in an Adam session.
   let isIdle = false;
+  let amAdam = false;
   try {
     const { data: sessionData } = await supabase
       .from('claude_sessions')
-      .select('sd_key')
+      .select('sd_key, metadata')
       .eq('session_id', sessionId)
       .single();
-    isIdle = !sessionData?.sd_id;
-  } catch { /* assume not idle if query fails */ }
+    isIdle = !sessionData?.sd_id; // NOTE: pre-existing bug — column is sd_key, so this is ~always true (flagged, out of scope)
+    amAdam = sessionData?.metadata?.role === 'adam';
+  } catch { /* assume not idle / not adam if query fails */ }
 
   // Read unread coordination messages for this session
   const { data: messages, error: tableErr } = await supabase
@@ -450,22 +490,15 @@ async function main() {
   }
 
   if (!tableErr && messages && messages.length > 0) {
+    // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: resolve the two-way flag once for the pure classifier.
+    const twoWayOn = process.env.COORDINATOR_TWOWAY_V2 === 'on';
     // Output each message
     for (const msg of messages) {
-      // QF-20260508-988: defer worker FR-3a signals to /coordinator inbox.
-      if (amCoordinator && msg.message_type === 'INFO' && msg.payload && msg.payload.signal_type) {
-        continue;
-      }
-      // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B: defer Adam advisories to the
-      // coordinator's dedicated inbox section (fleet-dashboard printAdamInbox).
-      // Leave them UNREAD so that section surfaces them instead of this per-session
-      // drainer marking them read_at first (same hazard as the FR-3a signal skip).
-      if (amCoordinator && msg.message_type === 'INFO' && msg.payload && msg.payload.kind === 'adam_advisory') {
-        continue;
-      }
-      // SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-6 (P0-1): leave coordinator-reply
-      // rows for the worker's awaitCoordinatorReply() to consume (default-OFF).
-      if (shouldSkipCoordinatorReply(msg)) {
+      // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: single pure decision replaces the three inline
+      // skip guards (which were wrongly gated on amCoordinator, letting Adam/workers drain
+      // coordinator-exclusive rows) and the read_at/ack stamping below.
+      const verdict = classifyInboxMessage(msg, { isIdle, twoWayOn, amAdam });
+      if (verdict.skip) {
         continue;
       }
       const typeLabel = {
@@ -513,15 +546,19 @@ async function main() {
         emittedDirective = true;
       }
 
-      // Mark as read; only acknowledge if not an actionable idle message
-      const isActionable = isIdle && ACTIONABLE_TYPES.includes(msg.message_type);
-      await supabase
-        .from('session_coordination')
-        .update({
-          read_at: new Date().toISOString(),
-          acknowledged_at: isActionable ? null : new Date().toISOString()
-        })
-        .eq('id', msg.id);
+      // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: stamp ONLY what the verdict says. Actionable rows
+      // and coordinator-directives-to-Adam keep read_at NULL (re-surface until genuinely actioned);
+      // pure notifications still drain (read_at + acknowledged_at) on display. Skip the UPDATE
+      // entirely when neither flag is set so read_at/acknowledged_at stay NULL.
+      const upd = {};
+      if (verdict.markRead) upd.read_at = new Date().toISOString();
+      if (verdict.markAck) upd.acknowledged_at = new Date().toISOString();
+      if (Object.keys(upd).length > 0) {
+        await supabase
+          .from('session_coordination')
+          .update(upd)
+          .eq('id', msg.id);
+      }
 
       // SD-LEO-INFRA-COORDINATOR-WORKER-DELIVERED-001 — DELIVERED-layer.
       // Best-effort, idempotent. See insertDeliveredRowIfRequested() doc.
@@ -603,5 +640,7 @@ module.exports = {
   // SD-LEO-INFRA-COORDINATOR-WORKER-DELIVERED-001 — exposed for unit tests
   insertDeliveredRowIfRequested,
   // SD-LEO-INFRA-COMPLETE-TWO-WAY-001 / FR-6 — exposed for unit tests
-  shouldSkipCoordinatorReply
+  shouldSkipCoordinatorReply,
+  // SD-LEO-FIX-FIX-COORDINATION-INBOX-001 — exposed for unit tests
+  classifyInboxMessage
 };
