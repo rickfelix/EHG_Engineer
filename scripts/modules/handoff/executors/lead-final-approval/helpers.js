@@ -430,7 +430,11 @@ export async function releaseSessionClaim(sd, supabase) {
     try {
       const { resolveOwnSession } = await import('../../../../../lib/resolve-own-session.js');
       const resolved = await resolveOwnSession(supabase, {
-        select: 'session_id, sd_id, status',
+        // SD-FDBK-FIX-STALE-CLAIM-AFTER-001: claude_sessions has NO sd_id column
+        // (verified live: "column claude_sessions.sd_id does not exist"). The claim
+        // column is sd_key; selecting sd_id made this query error → session null →
+        // release never fired → the claim stayed stale after completion.
+        select: 'session_id, sd_key, status',
         warnOnFallback: false
       });
       if (resolved.data && resolved.source !== 'heartbeat_fallback') {
@@ -453,10 +457,16 @@ export async function releaseSessionClaim(sd, supabase) {
 
     const claimId = sd.sd_key || sd.id;
 
-    if (session.sd_id === claimId) {
+    // SD-FDBK-FIX-STALE-CLAIM-AFTER-001: compare sd_key (the real claim column),
+    // not the non-existent sd_id; otherwise the guard was always false and the
+    // release below never ran.
+    if (session.sd_key === claimId) {
       const { error } = await supabase.rpc('release_sd', {
         p_session_id: session.session_id,
-        p_release_reason: 'completed'
+        // SD-FDBK-FIX-STALE-CLAIM-AFTER-001: the live release_sd signature is
+        // (p_session_id, p_reason); p_release_reason caused PGRST202 ("function not
+        // found"), so even a reached guard would have silently failed to release.
+        p_reason: 'completed'
       });
 
       if (error) {
