@@ -81,6 +81,12 @@ export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, fl
   console.log('⚠️  This issue must be escalated to a full Strategic Directive.\n');
   console.log('   To bypass with audit trail: --force-complete --reason "<text>"\n');
 
+  // SD-FDBK-FIX-COMPLETE-QUICK-FIX-001: under --non-interactive, don't wedge on the escalate prompt.
+  // An over-cap QF must fail LOUD (pass --force-complete --reason to bypass) rather than hang.
+  if (flags.nonInteractive) {
+    console.log('   --non-interactive: refusing to auto-escalate. Pass --force-complete --reason "<text>" to bypass the LOC cap.\n');
+    return false;
+  }
   const escalate = await prompt('Auto-escalate to SD? (yes/no): ');
 
   if (escalate.toLowerCase().startsWith('y')) {

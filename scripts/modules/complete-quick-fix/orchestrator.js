@@ -167,7 +167,9 @@ export async function completeQuickFix(qfId, options = {}) {
     reason: options.reason,
     overCapReason: options.overCapReason,
     // SD-FDBK-ENH-COMPLETE-QUICK-FIX-002: thread pure-deletion LOC so the cap is net-aware
-    sourceDeletionLoc
+    sourceDeletionLoc,
+    // SD-FDBK-FIX-COMPLETE-QUICK-FIX-001: thread non-interactive so the escalate prompt fails-fast
+    nonInteractive: options.nonInteractive
   });
   if (!locValid) {
     process.exit(1);
@@ -458,7 +460,9 @@ export async function completeQuickFix(qfId, options = {}) {
   // asymmetry; sibling miss in QF-20260509-552).
   const { complianceResults } = await runComplianceWithRefinement(qfId, qf, complianceContext, prompt, {
     forceComplete: options.forceComplete,
-    reason: options.reason
+    reason: options.reason,
+    // SD-FDBK-FIX-COMPLETE-QUICK-FIX-001: thread non-interactive so the refinement prompt auto-skips
+    nonInteractive: options.nonInteractive
   });
   // QF-20260508-407: forward {forceComplete, reason} so validateCompliance can
   // short-circuit the WARN-verdict prompt under --non-interactive (sibling parity
