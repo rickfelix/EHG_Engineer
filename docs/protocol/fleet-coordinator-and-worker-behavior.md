@@ -26,6 +26,16 @@ recall but is NOT the source of truth.)
    PARENT as buildable work** (parents auto-complete when children finish — dispatch only children/leaf
    SDs); dispatch to the worker's full session UUID. (memory:
    `feedback-coordinator-maximize-utilization-without-conflict`.)
+   **Mental model — the conveyor belt (operator analogy 2026-06-07):** run the line so it never empties.
+   (1) **PARSE the belt** — inventory all claimable + in-flight work (open SDs by status/phase/claim, open
+   QFs, orchestrator children), classifying each *conflict-free* vs *blocked by SAME-WRITE-SURFACE* (same
+   files/rows/branch a peer holds), NOT just the formal `dependencies` field; (2) **SOURCE** more belt-able
+   work from the harness backlog (filtering out ~80% completion-flag / fleet_retro / coordinator_review
+   noise), open feedback, retro follow-ups, and decomposable parent stages — promote via `sd-create
+   --from-feedback`, delegated to a sub-agent (DOC-001: workers can't create SDs), grouping same-file items
+   into ONE SD and deferring items that share a write-surface with in-flight work; (3) keep the belt at
+   **SURPLUS** so a self-claiming worker never finds it empty (idle worker + sourceable work = failure).
+   (codified in the `/coordinator start` section of `.claude/commands/coordinator.md`; QF-20260607-720.)
 3. **Recurring 3-source audit** (`scripts/coordinator-audit.mjs`, 15-min cron): check (a) SD queue,
    (b) **harness backlog** (`feedback` where `category='harness_backlog'`, open), (c) inbox. Source
    backlog → DRAFT SDs ONLY when the queue would starve available workers; when the queue already has
