@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { countActiveWorktrees, MAX_WORKTREE_COUNT } from '../lib/worktree-quota.js';
+import { liveFleetWorkers } from '../lib/fleet/genuine-worker.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -41,9 +42,12 @@ const unclaimed = sds.filter(s => !s.claiming_session_id);
 const claimed = sds.length - unclaimed.length;
 const stuck = unclaimed.filter(s => s.status === 'in_progress');
 
-// workers
-const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state').order('heartbeat_at', { ascending: false }).limit(60);
-const live = (sessRaw || []).filter(s => s.session_id !== me && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < 900000);
+// workers — SD-FDBK-FIX-COORDINATOR-AUDIT-MJS-001: count GENUINE workers via the shared
+// predicate (same one coordinator-email-summary.mjs uses, mirroring the dashboard) so the
+// audit's FLOW/LIVENESS gauges stop over-counting Adam / non_fleet / released / never-claimed
+// (ghost) sessions. Previously this only excluded `me` and any heartbeat <15m.
+const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,status,metadata,claimed_at,worktree_path,continuous_sds_completed').order('heartbeat_at', { ascending: false }).limit(60);
+const live = liveFleetWorkers(sessRaw, me, t);
 const builders = live.filter(s => s.sd_key).length;
 const liveIdle = live.filter(s => !s.sd_key).length;
 
