@@ -12,6 +12,7 @@ tags: [guide, auto-generated]
 ## Table of Contents
 
 - [Overview](#overview)
+- [Governance Automation](#governance-automation-sd-leo-infra-activate-feature-flag-001)
 - [Database Tables](#database-tables)
 - [Available Feature Flags](#available-feature-flags)
   - [Phase 1 Quality Layer Flags](#phase-1-quality-layer-flags)
@@ -40,6 +41,26 @@ The feature flag system provides:
 - **Gradual Rollout**: Percentage-based rollout with user targeting
 - **Kill Switch (CONST-009)**: Emergency global disable for all feature flags
 - **Audit Trail**: Complete history of all flag changes
+
+## Governance Automation (SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001)
+
+The registry is kept **active**, not inert, by three mechanisms:
+
+- **Env-var feature flags MUST be registered.** A feature flag read directly from `process.env`
+  (e.g. `COORD_ADAM_REVIEW_V1`, `COORD_REVIEW_EVERY`) bypasses the registry, so it is never
+  reviewed and can be silently forgotten. Every env-var feature flag MUST be enrolled in
+  `leo_feature_flags` (use `node scripts/enroll-env-var-feature-flags.mjs`) **and** listed in
+  `scripts/lint/process-env-feature-flag-allowlist.json` with a reason. Runtime reads may stay
+  on `process.env`; enrollment governs them.
+- **CI lint** — `node scripts/lint/process-env-feature-flag-lint.mjs` (workflow
+  `.github/workflows/process-env-feature-flag-lint.yml`, advisory-first) detects feature-flag-shaped
+  `process.env` reads (names ending `_V<n>`/`_ENABLED`/`_FLAG`/`_TOGGLE`/`_REVIEW_EVERY`, or compared
+  to `'on'`/`'off'`) that are not governed. New ungoverned flags surface against the captured baseline.
+- **Scheduled review** — `node scripts/flag-governance-review.mjs` (a daily standard cron loop in
+  `coordinator-startup-check.mjs`, gated default-OFF behind `FLAG_GOVERNANCE_REVIEW_V1`) stamps
+  `last_reviewed_at` and emits a stale-flag digest (never-reviewed / past-expiry / disabled-aging /
+  enabled-but-never-rolled-out, each with a graduate|kill|extend|review recommendation). Operators can
+  pull the same report on demand with `/flags stale` (read-only) or `node scripts/flags-stale.mjs`.
 
 ## Database Tables
 

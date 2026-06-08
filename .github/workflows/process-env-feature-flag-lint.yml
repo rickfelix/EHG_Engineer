@@ -1,0 +1,38 @@
+name: Process-env Feature-Flag Lint
+
+# SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-4)
+# Detects process.env FEATURE-FLAG reads (names ending _V<n>/_ENABLED/_FLAG/_TOGGLE/
+# _REVIEW_EVERY, or compared to 'on'/'off') that are not governed — i.e. not registered in
+# leo_feature_flags and not listed in scripts/lint/process-env-feature-flag-allowlist.json.
+#
+# ADVISORY-FIRST: the lint step is `continue-on-error: true` so it CANNOT turn an in-flight
+# PR red on day one (a baseline allowlist captures the pre-existing flags). The report is
+# always surfaced in the job log. Flip to blocking (run with --enforce and drop
+# continue-on-error) once the baseline has settled and pre-existing flags are triaged.
+
+on:
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/*.ts'
+      - 'scripts/lint/process-env-feature-flag-lint.mjs'
+      - 'scripts/lint/process-env-feature-flag-allowlist.json'
+      - '.github/workflows/process-env-feature-flag-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  process-env-feature-flag-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect ungoverned process.env feature flags (advisory)
+        continue-on-error: true
+        run: node scripts/lint/process-env-feature-flag-lint.mjs

@@ -13,10 +13,11 @@ import {
   ROLE_CONTEXT_DOC,
 } from '../../scripts/coordinator-startup-check.mjs';
 
-test('STANDARD_LOOPS has exactly six standard loops with the expected keys', () => {
-  assert.equal(STANDARD_LOOPS.length, 6);
+test('STANDARD_LOOPS has the expected standard loops with the expected keys', () => {
+  // SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5) added the daily flag-review loop.
+  assert.equal(STANDARD_LOOPS.length, 7);
   const keys = STANDARD_LOOPS.map((l) => l.key);
-  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'email']);
+  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'email', 'flag-review']);
 });
 
 test('every loop carries a non-empty label, script, cron, and CronCreate prompt', () => {
@@ -82,8 +83,8 @@ test('loopStatus marks armed|MISSING|unverified, distinguishing inbox vs dashboa
 test('renderLoops emits CronCreate spec for missing/unverified loops', () => {
   const none = parseArmedSet([], {});
   const out = renderLoops(none);
-  assert.match(out, /STANDARD CRON LOOPS \(six\)/);
-  // All six prompts emitted as CronCreate specs when nothing is armed
+  assert.match(out, /STANDARD CRON LOOPS \(7\)/);
+  // All prompts emitted as CronCreate specs when nothing is armed
   for (const loop of STANDARD_LOOPS) {
     assert.ok(out.includes(loop.prompt), `expected CronCreate prompt for ${loop.key}`);
   }
@@ -94,7 +95,7 @@ test('renderLoops reports all-armed cleanly when every loop is armed', () => {
   const allPrompts = STANDARD_LOOPS.map((l) => l.prompt).join(',');
   const armed = parseArmedSet(['--armed', allPrompts], {});
   const out = renderLoops(armed);
-  assert.match(out, /All six standard loops armed/);
+  assert.match(out, /All 7 standard loops armed/);
 });
 
 test('buildReport combines responsibilities + loop sections', () => {

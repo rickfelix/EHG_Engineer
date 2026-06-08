@@ -37,7 +37,8 @@ export const RESPONSIBILITIES = [
   'You CANNOT start a worker\'s execution — only /loop or a human paste in the worker window can. To restore a thinned fleet, hand the operator the wake-up prompt.',
 ];
 
-// ── Canonical SIX standard cron loops (FR-2). The three existing intervals match coordinator.md Step 4. ──
+// ── Canonical standard cron loops (FR-2). The three original intervals match coordinator.md Step 4.
+// SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5) added the daily flag-governance review loop. ──
 export const STANDARD_LOOPS = [
   { key: 'sweep',       label: 'Stale-session sweep',  script: 'stale-session-sweep.cjs',   cron: '*/5 * * * *',
     prompt: 'node scripts/stale-session-sweep.cjs' },
@@ -51,6 +52,10 @@ export const STANDARD_LOOPS = [
     prompt: 'node scripts/coordinator-audit.mjs' },
   { key: 'email',       label: 'Executive email summary (default-on)', script: 'coordinator-email-summary.mjs', cron: '*/30 * * * *',
     prompt: 'node scripts/coordinator-email-summary.mjs' },
+  // SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5): daily feature-flag governance review.
+  // Gated default-OFF behind leo_feature_flags FLAG_GOVERNANCE_REVIEW_V1 → cheap no-op until enabled.
+  { key: 'flag-review', label: 'Feature-flag governance review', script: 'flag-governance-review.mjs', cron: '0 9 * * *',
+    prompt: 'node scripts/flag-governance-review.mjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
@@ -101,10 +106,10 @@ export function renderResponsibilities(repoRoot = REPO_ROOT) {
   return lines.join('\n');
 }
 
-// Render the six-loop status + CronCreate specs for missing/unverified loops (FR-2).
+// Render the standard-loop status + CronCreate specs for missing/unverified loops (FR-2).
 export function renderLoops(armed) {
   const lines = [];
-  lines.push('═══ STANDARD CRON LOOPS (six) — verify all armed ═══');
+  lines.push(`═══ STANDARD CRON LOOPS (${STANDARD_LOOPS.length}) — verify all armed ═══`);
   if (!armed.provided) {
     lines.push('  (no --armed set supplied — run CronList and re-invoke with --armed "<script1>,<script2>,…" to get armed|MISSING; emitting full spec below)');
   }
@@ -118,7 +123,7 @@ export function renderLoops(armed) {
   }
   lines.push('');
   if (toArm.length === 0 && armed.provided) {
-    lines.push('  ✅ All six standard loops armed. Nothing to arm.');
+    lines.push(`  ✅ All ${STANDARD_LOOPS.length} standard loops armed. Nothing to arm.`);
   } else {
     lines.push(`  → Arm the ${armed.provided ? toArm.length + ' missing' : 'not-yet-armed'} loop(s) via CronCreate (idempotent — skip any already in CronList):`);
     for (const loop of toArm) {
