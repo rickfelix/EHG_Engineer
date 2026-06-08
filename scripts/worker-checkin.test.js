@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
+const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
 
 describe('FR-2: extractSdFromAssignment', () => {
   it('prefers payload.sd_key', () => {
@@ -47,6 +47,11 @@ function makeStub(cfg) {
       if (table === 'claude_sessions') return Promise.resolve({ data: cfg.session || null, error: null });
       if (table === 'sd_baseline_items') return Promise.resolve({ data: { track: 'STANDALONE' }, error: null });
       if (table === 'session_coordination' && state.op === 'insert') return Promise.resolve({ data: { id: 'rollcall-new' }, error: null });
+      // isSdInFlight (a): SELECT current_phase ... WHERE sd_key=? .maybeSingle()
+      if (table === 'strategic_directives_v2') {
+        if (cfg.inFlightThrow) return Promise.reject(new Error('isSdInFlight query failed'));
+        return Promise.resolve({ data: (cfg.sdRows && cfg.sdRows[state.filters.sd_key]) || null, error: null });
+      }
       return Promise.resolve({ data: null, error: null });
     }
     function resolveList() {
@@ -66,6 +71,14 @@ function makeStub(cfg) {
       if (table === 'quick_fixes') {
         if (cfg.quickFixesThrow) return Promise.reject(new Error('quick_fixes query failed'));
         return Promise.resolve({ data: cfg.quickFixes || [], error: null });
+      }
+      // isSdInFlight (b): live foreign session on this sd_key (eq sd_key, neq session_id, eq is_alive=true)
+      if (table === 'v_active_sessions') {
+        const rows = (cfg.activeSessions || []).filter((r) =>
+          r.sd_key === state.filters.sd_key &&
+          r.session_id !== state.filters.neq_session_id &&
+          r.is_alive === true);
+        return Promise.resolve({ data: rows, error: null });
       }
       return Promise.resolve({ data: [], error: null });
     }
@@ -392,5 +405,62 @@ describe('SELF-001: draftDepsSatisfied dependency-shape handling', () => {
     const sb = makeStub({ depRows: [] }); // no SD rows; should still be satisfied
     const deps = [{ sd_key: 'none' }, { sd_key: 'None' }, { type: 'note', status: 'pending', dependency: 'design review' }];
     expect(await draftDepsSatisfied(sb, { dependencies: deps })).toBe(true);
+  });
+});
+
+// SD-FDBK-FIX-SELF-CLAIM-DEDUP-001: self_claim must not duplicate an in-flight SD.
+describe('FIX-DEDUP: isSdInFlight predicate', () => {
+  it('true when the SD is past LEAD (started — phase only advances on an accepted handoff)', async () => {
+    const sb = makeStub({ sdRows: { 'SD-X-001': { current_phase: 'EXEC' } } });
+    expect(await isSdInFlight(sb, 'SD-X-001', 'me')).toBe(true);
+  });
+  it('false for a fresh LEAD draft with no live foreign session', async () => {
+    const sb = makeStub({ sdRows: { 'SD-X-001': { current_phase: 'LEAD' } }, activeSessions: [] });
+    expect(await isSdInFlight(sb, 'SD-X-001', 'me')).toBe(false);
+  });
+  it('false when current_phase=LEAD even though a first handoff was rejected (uses phase, not raw handoff presence)', async () => {
+    const sb = makeStub({ sdRows: { 'SD-X-001': { current_phase: 'LEAD' } } });
+    expect(await isSdInFlight(sb, 'SD-X-001', 'me')).toBe(false);
+  });
+  it('true when a LIVE foreign session already holds the SD', async () => {
+    const sb = makeStub({ sdRows: { 'SD-X-001': { current_phase: 'LEAD' } }, activeSessions: [{ sd_key: 'SD-X-001', session_id: 'other', is_alive: true }] });
+    expect(await isSdInFlight(sb, 'SD-X-001', 'me')).toBe(true);
+  });
+  it('false when only MY OWN session is live on it (not a foreign holder)', async () => {
+    const sb = makeStub({ sdRows: { 'SD-X-001': { current_phase: 'LEAD' } }, activeSessions: [{ sd_key: 'SD-X-001', session_id: 'me', is_alive: true }] });
+    expect(await isSdInFlight(sb, 'SD-X-001', 'me')).toBe(false);
+  });
+  it('false (fail-open) when the guard query throws', async () => {
+    const sb = makeStub({ inFlightThrow: true });
+    expect(await isSdInFlight(sb, 'SD-X-001', 'me')).toBe(false);
+  });
+});
+
+describe('FIX-DEDUP: runCheckin skips in-flight SDs in BOTH self-claim tiers', () => {
+  const base = { session: { metadata: {}, sd_key: null }, messages: [] };
+  it('step 6 (v_sd_next_candidates): skips a past-LEAD candidate and claims the next fresh one', async () => {
+    const sb = makeStub({ ...base,
+      candidates: [{ sd_id: 'SD-INFLIGHT-001', track: 'A' }, { sd_id: 'SD-FRESH-002', track: 'B' }],
+      sdRows: { 'SD-INFLIGHT-001': { current_phase: 'EXEC' }, 'SD-FRESH-002': { current_phase: 'LEAD' } },
+      claimResults: { 'SD-INFLIGHT-001': true, 'SD-FRESH-002': true },
+    });
+    const r = await runCheckin(sb, 'me', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-FRESH-002'); // the claimable-but-in-flight top candidate was skipped
+  });
+  it('selfClaimDraftSd: skips a live-foreign-held draft and claims the next free one', async () => {
+    const sb = makeStub({ ...base,
+      candidates: [],
+      drafts: [
+        { sd_key: 'SD-DRAFT-LIVE-001', status: 'draft', sd_type: 'feature', priority: 'high', dependencies: [] },
+        { sd_key: 'SD-DRAFT-FREE-002', status: 'draft', sd_type: 'feature', priority: 'high', dependencies: [] },
+      ],
+      sdRows: { 'SD-DRAFT-LIVE-001': { current_phase: 'LEAD' }, 'SD-DRAFT-FREE-002': { current_phase: 'LEAD' } },
+      activeSessions: [{ sd_key: 'SD-DRAFT-LIVE-001', session_id: 'other', is_alive: true }],
+      claimResults: { 'SD-DRAFT-LIVE-001': true, 'SD-DRAFT-FREE-002': true },
+    });
+    const r = await runCheckin(sb, 'me', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-DRAFT-FREE-002');
   });
 });
