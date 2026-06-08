@@ -65,3 +65,39 @@ test('QF-20260424-001: tickInterval is NOT unref\'d so the daemon stays alive', 
     'tickInterval.unref()/.unref?.() reintroduces the daemon-exits-early bug'
   );
 });
+
+// ── SD-FDBK-FIX-PARKED-LOOP-WORKER-001: survive CC parent-PID rotation ──
+// A parked /loop worker's pinned CC_PARENT_PID rotates across /clear, reconnect,
+// or compaction. The tick must re-discover a live CC parent before concluding the
+// session is dead, otherwise it releases the row + exits and the still-live worker
+// loses its heartbeat and is swept as stale mid-loop.
+
+test('PARKED-LOOP FR-1: parentPid is reassignable (let) so a re-discovered PID can be adopted', () => {
+  assert.match(tickSrc, /let\s+parentPid\s*=/);
+  assert.doesNotMatch(tickSrc, /const\s+parentPid\s*=/);
+});
+
+test('PARKED-LOOP FR-1: rediscoverParentPid() exists and correlates by SSE port (capture-session-id Method 2)', () => {
+  assert.match(tickSrc, /function\s+rediscoverParentPid\s*\(/);
+  assert.match(tickSrc, /CLAUDE_CODE_SSE_PORT/);
+});
+
+test('PARKED-LOOP FR-1: parent-liveness poll re-discovers and adopts a live CC parent before exiting', () => {
+  assert.match(tickSrc, /rediscoverParentPid\(\)/);
+  assert.match(tickSrc, /parentPid\s*=\s*rediscovered/);
+});
+
+test('PARKED-LOOP FR-2: exit is debounced by MAX_PARENT_MISSES consecutive discovery misses', () => {
+  assert.match(tickSrc, /const\s+MAX_PARENT_MISSES\s*=\s*2\b/);
+  assert.match(tickSrc, /parentMissCount\s*\+=\s*1/);
+  assert.match(tickSrc, /parentMissCount\s*>=\s*MAX_PARENT_MISSES/);
+});
+
+test('PARKED-LOOP FR-2: a successful re-discovery resets the miss counter (no false exit)', () => {
+  assert.match(tickSrc, /parentMissCount\s*=\s*0/);
+});
+
+test('PARKED-LOOP TR-2: released-row stop semantics preserved (re-discovery must not resurrect a released row)', () => {
+  assert.match(tickSrc, /status=eq\.active/);
+  assert.match(tickSrc, /Content-Range/);
+});
