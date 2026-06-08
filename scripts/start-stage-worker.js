@@ -35,6 +35,7 @@ dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 import { writeFileSync, unlinkSync } from 'fs';
 import { resolve, dirname } from 'path';
+import { isDotfileBasename } from './lib/watch-ignore.mjs';
 import { fileURLToPath } from 'url';
 import { fork } from 'child_process';
 import chokidar from 'chokidar';
@@ -190,7 +191,10 @@ function runSupervisor() {
     const watchPaths = buildWatchPaths(projectRoot);
 
     const watcher = chokidar.watch(watchPaths, {
-      ignored: /(^|[/\\])\../, // dotfiles
+      // SD-FDBK-FIX-STAGE-WORKER-SUPERVISOR-001: ignore dotfiles by BASENAME only. The prior
+      // regex /(^|[/\\])\../ matched a dotted segment ANYWHERE in the path, so a '.worktrees'
+      // ancestor (running from a git worktree) silently excluded the ENTIRE watch tree.
+      ignored: isDotfileBasename,
       ignoreInitial: true,
       awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
     });
