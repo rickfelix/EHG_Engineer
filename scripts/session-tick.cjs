@@ -26,6 +26,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // SD-FDBK-ENH-SESSIONSTART-HOOK-CAPTURE-001 (FR-7): self-load .env so SUPABASE_* reads at
 // lines further below resolve regardless of parent shell. Detached tick subprocess does NOT
@@ -36,6 +37,14 @@ const TICK_MS = 30 * 1000;
 const PARENT_POLL_MS = 5 * 1000;
 const HTTP_TIMEOUT_MS = 3000;
 
+// SD-FDBK-FIX-PARKED-LOOP-WORKER-001: survive CC parent-PID rotation. When the pinned
+// CC_PARENT_PID dies, re-discover a live Claude Code parent (by SSE-port scan) before
+// concluding the session is dead. Require MAX_PARENT_MISSES consecutive failed discoveries
+// to debounce a transient process-scan miss.
+const PARENT_REDISCOVER_TIMEOUT_MS = 3000;
+const MAX_PARENT_MISSES = 2;
+let parentMissCount = 0;
+
 // SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-4): early-exit telemetry threshold + sinks.
 // If cleanupAndExit fires within EARLY_EXIT_THRESHOLD_MS of process start, emit a
 // structured tick.early_exit event so operators can detect ancestor-discovery regressions.
@@ -45,7 +54,7 @@ const startedAt = Date.now();
 const earlyExitNdjsonPath = path.resolve(__dirname, '../.claude/pids/spawn-errors.log');
 
 const sessionId = process.env.CLAUDE_SESSION_ID || '';
-const parentPid = Number(process.env.CC_PARENT_PID) || 0;
+let parentPid = Number(process.env.CC_PARENT_PID) || 0;
 
 if (!sessionId) {
   // No session → nothing to tick. Exit quietly.
@@ -94,6 +103,36 @@ function parentAlive() {
     if (err && err.code === 'EPERM') return true; // exists but no permission
     return false;
   }
+}
+
+// SD-FDBK-FIX-PARKED-LOOP-WORKER-001: re-discover a live Claude Code parent PID by scanning
+// for a node.exe/claude.exe whose command line contains this session's SSE port. The SSE port
+// is stable across CC PID rotation (/clear, reconnect, compaction), so it correlates a live CC
+// process to THIS session without relying on ancestry — a detached tick has no CC ancestor to
+// walk. Mirrors capture-session-id.cjs findClaudeCodePid() Method 2. Built-ins only
+// (child_process + PowerShell), Windows-only. Returns a live PID (number) or 0.
+function rediscoverParentPid() {
+  if (process.platform !== 'win32') return 0;
+  const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
+  if (!ssePort || !/^\d+$/.test(String(ssePort))) return 0;
+  try {
+    const script = [
+      'Get-CimInstance Win32_Process -Filter "Name=\'node.exe\' OR Name=\'claude.exe\'" -ErrorAction SilentlyContinue |',
+      `  Where-Object { $_.ProcessId -ne ${process.pid} -and $_.CommandLine -match '${ssePort}' } |`,
+      '  ForEach-Object { $_.ProcessId } |',
+      '  Select-Object -First 1',
+    ].join('\n');
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    const raw = execSync(`powershell -NoProfile -EncodedCommand ${encoded}`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: PARENT_REDISCOVER_TIMEOUT_MS,
+    }).trim();
+    if (raw && /^\d+$/.test(raw)) return Number(raw);
+  } catch {
+    // discovery failure → treat as a miss; the caller debounces with MAX_PARENT_MISSES
+  }
+  return 0;
 }
 
 // ── Telemetry write ──────────────────────────────────────────────────────────
@@ -322,7 +361,19 @@ const tickInterval = setInterval(() => { tickOnce(); }, TICK_MS);
 // Schedule parent liveness checks. Unref is intentional here — the parent
 // poll never holds the loop alive on its own; tickInterval does.
 const parentInterval = setInterval(() => {
-  if (!parentAlive()) {
+  if (parentAlive()) { parentMissCount = 0; return; }
+  // SD-FDBK-FIX-PARKED-LOOP-WORKER-001: the pinned CC parent PID is gone, but the CC session
+  // may still be alive under a rotated PID (/clear, reconnect, compaction). Re-discover a live
+  // CC parent before concluding the session is dead, so a parked worker keeps its heartbeat.
+  const rediscovered = rediscoverParentPid();
+  if (rediscovered) {
+    parentPid = rediscovered; // adopt the live PID; keep ticking
+    parentMissCount = 0;
+    return;
+  }
+  // No live CC parent found this pass — debounce a transient process-scan miss before exiting.
+  parentMissCount += 1;
+  if (parentMissCount >= MAX_PARENT_MISSES) {
     clearInterval(tickInterval);
     clearInterval(parentInterval);
     cleanupAndExit(0);
