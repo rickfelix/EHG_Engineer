@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
+const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
 
 describe('FR-2: extractSdFromAssignment', () => {
   it('prefers payload.sd_key', () => {
@@ -33,6 +33,8 @@ function makeStub(cfg) {
       insert(p) { state.op = 'insert'; state.payload = p; return chain; },
       update(p) { state.op = 'update'; state.payload = p; return chain; },
       eq(k, v) { state.filters[k] = v; return chain; },
+      in(k, v) { state.filters[k] = v; return chain; },
+      neq(k, v) { state.filters['neq_' + k] = v; return chain; },
       gte() { return chain; },
       is() { return chain; },
       order() { return chain; },
@@ -54,6 +56,13 @@ function makeStub(cfg) {
         return Promise.resolve({ data: cfg.messages || [], error: null });
       }
       if (table === 'v_sd_next_candidates') return Promise.resolve({ data: cfg.candidates || [], error: null });
+      if (table === 'strategic_directives_v2') {
+        // un-baselined-draft self-claim listing; honor the server-side `.neq('sd_type', …)` filter
+        // so the orchestrator-parent exclusion is genuinely exercised by the stub.
+        let rows = cfg.drafts || [];
+        if (state.filters.neq_sd_type !== undefined) rows = rows.filter((r) => r.sd_type !== state.filters.neq_sd_type);
+        return Promise.resolve({ data: rows, error: null });
+      }
       if (table === 'quick_fixes') {
         if (cfg.quickFixesThrow) return Promise.reject(new Error('quick_fixes query failed'));
         return Promise.resolve({ data: cfg.quickFixes || [], error: null });
@@ -66,6 +75,8 @@ function makeStub(cfg) {
         return { data: cfg.messages || [], error: null };
       }
       if (table === 'session_coordination' && state.op === 'update') return { data: null, error: null };
+      // draftDepsSatisfied dep-check: SELECT sd_key,status WHERE sd_key IN (refKeys), awaited directly.
+      if (table === 'strategic_directives_v2') return { data: cfg.depRows || [], error: null };
       return { data: null, error: null };
     }
     return chain;
@@ -240,5 +251,146 @@ describe('QF self-claim: runCheckin QF tier (FR-1/3/4/6)', () => {
     const sb = makeStub({ ...base, candidates: [], quickFixes: [freshQF('QF-OLDEST'), freshQF('QF-NEWER')], claimResults: { 'QF-OLDEST': true, 'QF-NEWER': true } });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.qf).toBe('QF-OLDEST');
+  });
+});
+
+// SD-FDBK-FEAT-WORKER-CHECKIN-SELF-001: un-baselined draft SDs are self-claimable between the
+// baselined view loop (step 6) and the QF tier (step 6.5). v_sd_next_candidates is built from
+// sd_baseline_items, so newly-created draft SDs are invisible to step 6; this tier reads them
+// directly from strategic_directives_v2, dep-checks them, and claims one.
+describe('SELF-001: un-baselined draft self-claim tier', () => {
+  const sess = { session: { metadata: { callsign: 'Bravo' }, sd_key: null }, messages: [] };
+  const draft = (sd_key, over = {}) => ({ sd_key, status: 'draft', sd_type: 'feature', priority: 'medium', created_at: '2026-01-01T00:00:00Z', dependencies: [], ...over });
+
+  it('self-claims an un-baselined draft when the baselined view is empty', async () => {
+    const sb = makeStub({ ...sess, candidates: [], drafts: [draft('SD-DRAFT-001')], depRows: [], claimResults: { 'SD-DRAFT-001': true } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-DRAFT-001');
+    expect(r.message).toMatch(/un-baselined draft/i);
+    expect(r.message).toMatch(/sd-start\.js SD-DRAFT-001/);
+  });
+
+  it('a baselined view candidate WINS over an un-baselined draft (step 6 before 6.25)', async () => {
+    const sb = makeStub({
+      ...sess,
+      candidates: [{ sd_id: 'SD-VIEW-001', track: 'A' }],
+      drafts: [draft('SD-DRAFT-001', { priority: 'critical' })],
+      claimResults: { 'SD-VIEW-001': true, 'SD-DRAFT-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-VIEW-001');
+  });
+
+  it('a draft self-claim beats the QF tier (6.25 before 6.5)', async () => {
+    const sb = makeStub({
+      ...sess,
+      candidates: [],
+      drafts: [draft('SD-DRAFT-001')],
+      quickFixes: [freshQF('QF-X')],
+      claimResults: { 'SD-DRAFT-001': true, 'QF-X': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-DRAFT-001');
+  });
+
+  it('orchestrator PARENTS are never offered (server-side neq filter), even at higher priority', async () => {
+    const sb = makeStub({
+      ...sess,
+      candidates: [],
+      drafts: [
+        draft('SD-PARENT-001', { sd_type: 'orchestrator', priority: 'critical', created_at: '2026-01-01T00:00:00Z' }),
+        draft('SD-CHILD-FEAT-002', { sd_type: 'feature', priority: 'low', created_at: '2026-01-02T00:00:00Z' }),
+      ],
+      claimResults: { 'SD-PARENT-001': true, 'SD-CHILD-FEAT-002': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-CHILD-FEAT-002');
+  });
+
+  it('claims a higher-priority draft first (critical before high), regardless of created_at', async () => {
+    const sb = makeStub({
+      ...sess,
+      candidates: [],
+      // query returns created_at-ascending; the JS priority sort must promote the critical one.
+      drafts: [
+        draft('SD-HIGH-001', { priority: 'high', created_at: '2026-01-01T00:00:00Z' }),
+        draft('SD-CRIT-002', { priority: 'critical', created_at: '2026-01-02T00:00:00Z' }),
+      ],
+      claimResults: { 'SD-HIGH-001': true, 'SD-CRIT-002': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-CRIT-002');
+  });
+
+  it('skips a dependency-blocked draft and claims the next satisfiable one', async () => {
+    const sb = makeStub({
+      ...sess,
+      candidates: [],
+      drafts: [
+        draft('SD-BLOCKED-001', { priority: 'high', created_at: '2026-01-01T00:00:00Z', dependencies: [{ sd_id: 'SD-DEP-X' }] }),
+        draft('SD-FREE-002', { priority: 'high', created_at: '2026-01-02T00:00:00Z', dependencies: [] }),
+      ],
+      depRows: [{ sd_key: 'SD-DEP-X', status: 'in_progress' }], // NOT completed -> blocks SD-BLOCKED-001
+      claimResults: { 'SD-BLOCKED-001': true, 'SD-FREE-002': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-FREE-002');
+  });
+
+  it('claims a draft whose dependency IS completed', async () => {
+    const sb = makeStub({
+      ...sess,
+      candidates: [],
+      drafts: [draft('SD-DEP-OK-001', { dependencies: [{ sd_id: 'SD-DONE-X' }] })],
+      depRows: [{ sd_key: 'SD-DONE-X', status: 'completed' }],
+      claimResults: { 'SD-DEP-OK-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-DEP-OK-001');
+  });
+
+  it('falls through to idle when no draft is claimable (all races lost)', async () => {
+    const sb = makeStub({
+      ...sess,
+      candidates: [],
+      drafts: [draft('SD-CONTESTED-001')],
+      depRows: [],
+      claimResults: { 'SD-CONTESTED-001': false }, // a peer won the claim race
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe('SELF-001: draftDepsSatisfied dependency-shape handling', () => {
+  it('treats an empty dependency list as satisfied (no query)', async () => {
+    const sb = makeStub({ depRows: [] });
+    expect(await draftDepsSatisfied(sb, { dependencies: [] })).toBe(true);
+    expect(await draftDepsSatisfied(sb, {})).toBe(true); // missing/null dependencies
+  });
+
+  it('resolves text, {sd_id}, and {sd_key} dep shapes and requires ALL completed', async () => {
+    const sb = makeStub({ depRows: [{ sd_key: 'SD-TEXT-001', status: 'completed' }, { sd_key: 'SD-OBJ-002', status: 'completed' }, { sd_key: 'SD-KEY-003', status: 'completed' }] });
+    const deps = ['SD-TEXT-001 needs the API', { sd_id: 'SD-OBJ-002' }, { sd_key: 'SD-KEY-003' }];
+    expect(await draftDepsSatisfied(sb, { dependencies: deps })).toBe(true);
+  });
+
+  it('returns false when ANY referenced dep is not completed', async () => {
+    const sb = makeStub({ depRows: [{ sd_key: 'SD-A-001', status: 'completed' }, { sd_key: 'SD-B-002', status: 'in_progress' }] });
+    expect(await draftDepsSatisfied(sb, { dependencies: [{ sd_id: 'SD-A-001' }, { sd_id: 'SD-B-002' }] })).toBe(false);
+  });
+
+  it('ignores the "none" sentinel and free-form non-SD notes (non-blocking)', async () => {
+    const sb = makeStub({ depRows: [] }); // no SD rows; should still be satisfied
+    const deps = [{ sd_key: 'none' }, { sd_key: 'None' }, { type: 'note', status: 'pending', dependency: 'design review' }];
+    expect(await draftDepsSatisfied(sb, { dependencies: deps })).toBe(true);
   });
 });
