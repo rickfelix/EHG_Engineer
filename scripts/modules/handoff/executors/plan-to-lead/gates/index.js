@@ -39,3 +39,9 @@ export { createVisionFidelityGate } from './vision-fidelity.js';
 // Reuses the EXEC-TO-PLAN gate creator — readEnforcementMode + Pocock
 // /diagnose Phase-1 discipline applies to RCA results emitted in either phase.
 export { createRcaFeedbackLoopGate } from '../../exec-to-plan/gates/rca-feedback-loop-gate.js';
+
+// Cross-Repo Stage-Config Drift (SD-FDBK-INFRA-SYSTEMIC-CROSS-REPO-001)
+// Makes the venture_stages SSOT -> sibling ehg venture-workflow.ts byte-parity drift VISIBLE
+// to LEO at PLAN-TO-LEAD. Scoped-block (only a stage-config-relevant SD's real drift),
+// WARN on unrelated pre-existing drift, fail-open on execution error.
+export { createCrossRepoStageConfigDriftGate } from './cross-repo-stage-config-drift.js';
