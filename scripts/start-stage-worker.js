@@ -38,6 +38,8 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { fork } from 'child_process';
 import chokidar from 'chokidar';
+// SD-FDBK-FIX-STAGE-TEMPLATE-FIXES-001: pure watch-set composition (unit-tested).
+import { buildWatchPaths } from './lib/stage-worker-watch.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -181,11 +183,11 @@ function runSupervisor() {
   let restartDebounce = null;
   if (process.env.STAGE_WORKER_WATCH !== 'false') {
     const projectRoot = resolve(__dirname, '..');
-    const watchPaths = [
-      resolve(projectRoot, 'lib/eva/stage-execution-worker.js'),
-      resolve(projectRoot, 'lib/eva/bridge'),
-      resolve(projectRoot, 'lib/eva/artifact-persistence-service.js'),
-    ];
+    // SD-FDBK-FIX-STAGE-TEMPLATE-FIXES-001: watch the whole lib/eva runtime root (subsumes the
+    // prior stage-execution-worker.js + bridge/ + artifact-persistence-service.js) so a synced
+    // fix to ANY worker-runtime source — stage templates plus the utils/contracts/quality-findings/
+    // config/orchestrator deps they import — triggers a respawn that reloads via a fresh fork().
+    const watchPaths = buildWatchPaths(projectRoot);
 
     const watcher = chokidar.watch(watchPaths, {
       ignored: /(^|[/\\])\../, // dotfiles
@@ -193,9 +195,11 @@ function runSupervisor() {
       awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
     });
 
-    watcher.on('change', (path) => {
+    // Shared debounced reload, reused for change/add/unlink so a multi-file git sync yields a
+    // single respawn and reload-restarts bypass the circuit breaker.
+    const scheduleReload = (event) => (path) => {
       if (shuttingDown) return;
-      console.log(`[supervisor] File changed: ${path}`);
+      console.log(`[supervisor] File ${event}: ${path}`);
       // Debounce: batch multiple saves (e.g. git merges touching many files)
       if (restartDebounce) clearTimeout(restartDebounce);
       restartDebounce = setTimeout(() => {
@@ -206,10 +210,16 @@ function runSupervisor() {
         child.kill('SIGTERM');
         // supervisor's child.on('exit') will spawn a new one
       }, 1000);
-    });
+    };
+
+    // 'add'/'unlink' (not just 'change') so newly added or deleted stage templates also reload —
+    // stage-templates/index.js auto-discovers stage-NN.js via readdirSync at process start.
+    watcher.on('change', scheduleReload('changed'));
+    watcher.on('add', scheduleReload('added'));
+    watcher.on('unlink', scheduleReload('removed'));
 
     watcher.on('ready', () => {
-      console.log('[supervisor] File watcher active — auto-restart on code changes in lib/eva/');
+      console.log('[supervisor] File watcher active — auto-restart on lib/eva code changes (change/add/unlink)');
     });
 
     watcher.on('error', (err) => {
