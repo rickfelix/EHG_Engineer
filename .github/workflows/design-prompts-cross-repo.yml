@@ -38,7 +38,14 @@ jobs:
       - name: Checkout EHG_Engineer
         uses: actions/checkout@v4
 
+      # SD-FDBK-FIX-DRIFT-CHECK-FAILS-001: rickfelix/ehg is PRIVATE; the default
+      # GITHUB_TOKEN cannot cross-access it, so this 404s whenever GH_TOKEN_CROSS_REPO
+      # is absent. continue-on-error + an id turn that 404 into a clean skip (not a
+      # confusing red step); the compare below is guarded on this step's outcome so it
+      # still runs unchanged whenever the cross-repo token IS configured.
       - name: Checkout sibling EHG repo
+        id: sibling_checkout
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: rickfelix/ehg
@@ -46,12 +53,19 @@ jobs:
           token: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.GITHUB_TOKEN }}
           fetch-depth: 1
 
+      - name: Sibling repo unreachable (advisory skip)
+        if: steps.sibling_checkout.outcome != 'success'
+        run: |
+          echo "::warning ::Could not check out the sibling rickfelix/ehg repo (private; needs the GH_TOKEN_CROSS_REPO secret). Skipping the S17/S19 design-prompts cross-repo comparison. Set GH_TOKEN_CROSS_REPO to enable it. SD-FDBK-FIX-DRIFT-CHECK-FAILS-001."
+
       - name: Setup Node
+        if: steps.sibling_checkout.outcome == 'success'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Compare shared design-prompts checksum across repos
+        if: steps.sibling_checkout.outcome == 'success'
         run: node scripts/design-prompts-cross-repo-check.mjs ehg-sibling/src/components/stage17/gvos/shared-design-prompts.json
 
       - name: Note about advisory mode
