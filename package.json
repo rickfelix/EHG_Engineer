@@ -306,6 +306,7 @@
     "coordinator:startup-check": "node scripts/coordinator-startup-check.mjs",
     "test:cold-recovery": "vitest run tests/unit/coordinator-cold-recovery.test.js --project unit",
     "coordinator:teardown": "node scripts/coordinator-teardown.cjs",
+    "coordinator:self-review": "node scripts/coordinator-self-review.mjs",
     "sd:start": "node scripts/sd-start.js",
     "sd:drain": "node scripts/sd-drain.mjs",
     "sd:recover": "node scripts/sd-recover.js",

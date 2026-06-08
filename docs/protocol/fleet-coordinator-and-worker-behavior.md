@@ -1,5 +1,14 @@
 # Fleet Coordinator & Worker Behavior (durable protocol)
 
+## Metadata
+
+- **Category**: Protocol
+- **Status**: Approved
+- **Version**: 1.1.0
+- **Last Updated**: 2026-06-08
+- **Tags**: fleet, coordinator, worker, cron, self-review, adam
+- **Author**: SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001
+
 Memory-independent source of truth for how the LEO fleet **coordinator** and its **worker** sessions
 behave. It exists so these behaviors survive even if an agent's personal auto-memory is lost, or a
 different agent/machine runs the fleet. Enforced by `.claude/commands/coordinator.md` (the
@@ -99,6 +108,14 @@ The fleet continuously improves how the coordinator and workers collaborate — 
 - **Capture + synthesize (coordinator):** `scripts/coordinator-fleet-retro.mjs` (recurring cron) captures FLEET-RETRO signals into the durable `feedback` table (`category='fleet_retro'`) so they survive the coordination-message sweep and ACCUMULATE, then prints a synthesis.
 - **Adjust (coordinator):** cluster the retros (what-worked / friction / suggestions) and ADJUST — update the wake-up prompt or coordinator behavior, file a harness SD for recurring friction, and surface a digest to the operator when a clear pattern emerges.
 - Distinct from `/learn` (which retros the SD WORK → `issue_patterns` / `retrospectives`); this retros the FLEET PROCESS. The two are complementary.
+
+### Work-triggered tri-party coordinator self-review (`coordinator-self-review.mjs`)
+
+Separate from the FLEET-RETRO capture above, the coordinator runs a **performance self-review** that is **work-triggered, not wall-clock** (operator 2026-06-06: cadence should track work volume, not a clock). It is the **7th** canonical standard cron loop (armed by `scripts/coordinator-startup-check.mjs`; `cron */5`, a cheap poller). SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001.
+- **Capture (every tick):** harvests any worker `COORDINATOR-FEEDBACK` and Adam `ADAM-COORD-FEEDBACK` responses (cheap, always runs).
+- **Solicit + synthesize (when due):** once the completed-SD delta reaches `COORD_REVIEW_EVERY` (default 8), it solicits fresh candid critique from the live fleet — **tri-party**: coordinator ↔ workers, and coordinator ↔ **Adam** (the bidirectional lane, gated by `COORD_ADAM_REVIEW_V1`, now `on` in `.claude/settings.json`; FR-4/FR-5 of the Adam role formalization). Then it synthesizes and resets the counter in `.coord-review-last.json`.
+- **No-op below threshold** so it is safe to leave armed through idle stretches; the coordinator tears down during genuine idle so nothing runs while nothing happens.
+- **Stuck-counter guard:** the `*/15` audit (`coordinator-audit.mjs`) prints a **REVIEW HEALTH** gauge (via `lib/fleet/review-health.mjs`) that flags **STUCK** when the completed-SD delta is ≥ 2× the threshold with no fire — the signature of the self-review cron not being armed (the dormancy this SD fixed: the counter had frozen at delta 45 vs threshold 8).
 
 ## Known attrition root causes (live-confirmed 2026-06-06, from revival diagnostics)
 

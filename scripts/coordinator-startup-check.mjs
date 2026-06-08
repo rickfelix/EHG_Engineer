@@ -3,12 +3,12 @@
 //
 // On `/coordinator start` this helper:
 //   (FR-1) surfaces the DURABLE coordinator role context + prints a roles/responsibilities summary,
-//   (FR-2) reports armed|MISSING status for ALL SIX standard cron loops and emits the exact
+//   (FR-2) reports armed|MISSING status for ALL standard cron loops and emits the exact
 //          CronCreate spec for any missing loop, and
 //   (FR-4) is FAIL-OPEN — a missing role-context doc or any hiccup warns but never blocks startup.
 //
 // DESIGN CONSTRAINT: CronList/CronCreate are HARNESS tools, NOT Node-callable. This helper therefore
-// EMITS the canonical six-loop spec; the agent running /coordinator start compares it against CronList
+// EMITS the canonical standard-loop spec; the agent running /coordinator start compares it against CronList
 // and arms only the missing loops (idempotent). To compute armed|MISSING the agent passes the currently
 // -armed cron script basenames via --armed "a.cjs,b.mjs" (or COORD_ARMED_CRONS env, comma-separated).
 // With no armed-set provided, every loop is reported as "unverified" and its CronCreate spec is emitted.
@@ -38,7 +38,9 @@ export const RESPONSIBILITIES = [
 ];
 
 // ── Canonical standard cron loops (FR-2). The three original intervals match coordinator.md Step 4.
-// SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5) added the daily flag-governance review loop. ──
+// SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5) added the daily flag-governance review loop.
+// SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001 added the work-triggered tri-party self-review loop so a
+// coordinator restart re-arms it instead of leaving it dormant (its state file had silently frozen). ──
 export const STANDARD_LOOPS = [
   { key: 'sweep',       label: 'Stale-session sweep',  script: 'stale-session-sweep.cjs',   cron: '*/5 * * * *',
     prompt: 'node scripts/stale-session-sweep.cjs' },
@@ -56,6 +58,10 @@ export const STANDARD_LOOPS = [
   // Gated default-OFF behind leo_feature_flags FLAG_GOVERNANCE_REVIEW_V1 → cheap no-op until enabled.
   { key: 'flag-review', label: 'Feature-flag governance review', script: 'flag-governance-review.mjs', cron: '0 9 * * *',
     prompt: 'node scripts/flag-governance-review.mjs' },
+  // Work-triggered tri-party self-review: cheap poller (no-op below COORD_REVIEW_EVERY completed-SD delta),
+  // fires the coordinator<->workers<->Adam review only when due. SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001.
+  { key: 'self-review', label: 'Coordinator self-review (work-triggered tri-party)', script: 'coordinator-self-review.mjs', cron: '*/5 * * * *',
+    prompt: 'node scripts/coordinator-self-review.mjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
