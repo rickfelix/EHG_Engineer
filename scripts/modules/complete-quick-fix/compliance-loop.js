@@ -92,8 +92,11 @@ export async function runComplianceWithRefinement(qfId, qf, context, prompt, fla
       // 9th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001 (sibling miss
       // in QF-20260509-552 which patched validateTests + git-operations.js
       // prompts but not this one).
-      const refineChoice = flags.forceComplete
-        ? (console.log('\n   --force-complete set — auto-skipping refinement.\n'), 'skip')
+      // SD-FDBK-FIX-COMPLETE-QUICK-FIX-001: --non-interactive must auto-skip too (sibling parity
+      // with --force-complete; PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY — this site was guarded for
+      // --force-complete only, so a plain --non-interactive run still rejected here).
+      const refineChoice = (flags.forceComplete || flags.nonInteractive)
+        ? (console.log('\n   --force-complete/--non-interactive set — auto-skipping refinement.\n'), 'skip')
         : await prompt('\n   Attempt auto-refinement? (yes/no/skip): ');
 
       if (refineChoice.toLowerCase() === 'skip') {

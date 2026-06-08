@@ -39,7 +39,7 @@ export function prompt(question) {
   if (_nonInteractiveMode) {
     return Promise.reject(new Error(
       `[NON_INTERACTIVE] Refusing to prompt under --non-interactive mode. Question was: ${question.trim()}. ` +
-      `Pass the value explicitly via CLI flag (e.g., --uat-verified yes, --verification-notes "...", --force-complete --reason "...").`
+      `Pass the value explicitly via CLI flag (e.g., --uat-verified yes, --verification-notes "...", --actual-loc <N>, --force-complete --reason "...").`
     ));
   }
 
@@ -48,10 +48,26 @@ export function prompt(question) {
     output: process.stdout
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let answered = false;
     rl.question(question, (answer) => {
+      answered = true;
       rl.close();
       resolve(answer);
+    });
+    // SD-FDBK-FIX-COMPLETE-QUICK-FIX-001: a caller who FORGOT --non-interactive used to HANG forever
+    // here — under the Bash tool / cron / CI, process.stdin.isTTY is `undefined` (not false), so an
+    // isTTY check is unreliable; instead readline reaches EOF immediately and `close` fires with the
+    // answer callback never invoked, while supabase/heartbeat timers keep the event loop alive
+    // (indefinite hang → the 2-min Bash timeout). Reject fast on EOF-without-answer. PIPED input
+    // (e.g. `printf 'no\n' | ...`) still resolves normally because the answer callback fires first.
+    rl.on('close', () => {
+      if (!answered) {
+        reject(new Error(
+          `[NON_INTERACTIVE] stdin closed with no answer to: ${question.trim()}. ` +
+          `Pass the value via a CLI flag (--uat-verified yes / --actual-loc <N> / --non-interactive / --force-complete --reason "..."), or pipe an answer.`
+        ));
+      }
     });
   });
 }
