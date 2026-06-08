@@ -15,6 +15,8 @@ import { countActiveWorktrees, MAX_WORKTREE_COUNT } from '../lib/worktree-quota.
 import { liveFleetWorkers } from '../lib/fleet/genuine-worker.mjs';
 import { getDbNowMs } from '../lib/fleet/db-clock.mjs';
 import { sourceableBacklog } from './lib/sourceable-backlog.mjs';
+import { readFileSync } from 'node:fs';
+import { computeReviewHealth } from '../lib/fleet/review-health.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -168,3 +170,19 @@ console.log('  FLOW (idle/work): ' + idleWorkLine);
 console.log('  LIVENESS (loop) : ' + loopLine + '  (live workers)');
 console.log('  DEPENDENCY      : ' + depLine);
 for (const k of depStale.slice(0, 5)) console.log('      stale-blocked: ' + k);
+
+// REVIEW HEALTH — stuck-counter gauge for the work-triggered self-review.
+// Visible alert when the self-review cron is NOT armed (state file frozen while completed SDs grow).
+// SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001.
+let reviewLine;
+try {
+  const { count: completedNow } = await db.from('strategic_directives_v2').select('sd_key', { count: 'exact', head: true }).eq('status', 'completed');
+  let lastReviewCount = null;
+  try {
+    const st = JSON.parse(readFileSync(path.resolve(repoRoot, '.coord-review-last.json'), 'utf8'));
+    if (typeof st.lastReviewCompletedCount === 'number') lastReviewCount = st.lastReviewCompletedCount;
+  } catch { /* no state file yet — computeReviewHealth treats null as uninitialized */ }
+  const threshold = parseInt(process.env.COORD_REVIEW_EVERY || '8', 10);
+  reviewLine = computeReviewHealth({ completedCount: completedNow || 0, lastReviewCount, threshold }).line;
+} catch (e) { reviewLine = 'unavailable (' + e.message + ')'; }
+console.log('  REVIEW HEALTH   : ' + reviewLine);

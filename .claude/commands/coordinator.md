@@ -183,21 +183,23 @@ node scripts/fleet-dashboard.cjs all
 ```
 Display the output.
 
-**Step 4: Coordinator onboarding check (surface role + verify the six-loop set)**
+**Step 4: Coordinator onboarding check (surface role + verify the eight-loop set)**
 ```bash
 node scripts/coordinator-startup-check.mjs
 ```
-This (a) surfaces the durable coordinator role context and prints a roles/responsibilities summary (MANAGER-not-IC, keep-workers-busy=KPI, recurring 3-source audit, teardown discipline), and (b) emits the canonical set of **six** standard cron loops, each with a ready CronCreate spec. It is fail-open (warns, exits 0). `CronList`/`CronCreate` are HARNESS tools (not Node-callable), so the helper EMITS the spec — YOU compare it against `CronList` and arm only the loops not already present. To get an explicit armed|MISSING verdict, re-run with the prompts already in CronList: `node scripts/coordinator-startup-check.mjs --armed "<prompt1>,<prompt2>,…"`.
+This (a) surfaces the durable coordinator role context and prints a roles/responsibilities summary (MANAGER-not-IC, keep-workers-busy=KPI, recurring 3-source audit, teardown discipline), and (b) emits the canonical set of **eight** standard cron loops, each with a ready CronCreate spec. It is fail-open (warns, exits 0). `CronList`/`CronCreate` are HARNESS tools (not Node-callable), so the helper EMITS the spec — YOU compare it against `CronList` and arm only the loops not already present. To get an explicit armed|MISSING verdict, re-run with the prompts already in CronList: `node scripts/coordinator-startup-check.mjs --armed "<prompt1>,<prompt2>,…"`.
 
 **Step 5: Set up automated cron loops using CronCreate**
 
-Arm all **six** standard loops (idempotent — skip any already in `CronList`):
+Arm all **eight** standard loops (idempotent — skip any already in `CronList`):
 1. **Sweep every 5 minutes**: `cron: "*/5 * * * *"`, `prompt: "node scripts/stale-session-sweep.cjs"`, `recurring: true`
 2. **Dashboard every 5 minutes (offset by 2 min)**: `cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"`, `prompt: "node scripts/fleet-dashboard.cjs all"`, `recurring: true`
 3. **Identity refresh every 5 minutes (offset by 4 min)**: `cron: "4,9,14,19,24,29,34,39,44,49,54,59 * * * *"`, `prompt: "node scripts/assign-fleet-identities.cjs"`, `recurring: true`
 4. **Inbox every 2 minutes**: `cron: "*/2 * * * *"`, `prompt: "node scripts/fleet-dashboard.cjs inbox"`, `recurring: true` — surfaces unread worker `/signal` traffic (also re-asserts the coordinator pointer).
 5. **Coordinator 3-source audit every 15 minutes**: `cron: "*/15 * * * *"`, `prompt: "node scripts/coordinator-audit.mjs"`, `recurring: true` — SD queue / harness backlog / inbox, with the source-vs-wake decision.
 6. **Executive email summary every 30 minutes (default-on)**: `cron: "*/30 * * * *"`, `prompt: "node scripts/coordinator-email-summary.mjs"`, `recurring: true` — operator is usually away; this is the fleet-health gauge + question escalation.
+7. **Feature-flag governance review daily at 09:00**: `cron: "0 9 * * *"`, `prompt: "node scripts/flag-governance-review.mjs"`, `recurring: true` — gated default-OFF behind `leo_feature_flags FLAG_GOVERNANCE_REVIEW_V1` (cheap no-op until enabled). SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001.
+8. **Coordinator self-review every 5 minutes (work-triggered, cheap poller)**: `cron: "*/5 * * * *"`, `prompt: "node scripts/coordinator-self-review.mjs"`, `recurring: true` — captures any worker `COORDINATOR-FEEDBACK` / Adam `ADAM-COORD-FEEDBACK` responses every tick; SOLICITS fresh tri-party (coordinator↔workers↔Adam) critique only when the completed-SD delta reaches `COORD_REVIEW_EVERY` (default 8). No-op below threshold, so it is safe to leave armed. The Adam bidirectional lane is gated by `COORD_ADAM_REVIEW_V1` (now `on` in `.claude/settings.json`). The `*/15` audit surfaces a **REVIEW HEALTH** gauge that flags a STUCK counter if this loop ever stops firing.
 
 The identity refresh loop detects new workers that joined since the last assignment and gives them a color/callsign. Existing assignments are preserved (the script reads current metadata and only assigns to workers without an identity).
 
@@ -205,13 +207,14 @@ The identity refresh loop detects new workers that joined since the last assignm
 
 Display:
 ```
-Coordinator initialized (role context surfaced; six standard loops armed).
+Coordinator initialized (role context surfaced; eight standard loops armed).
   Sweep loop: every 5 minutes (auto-releases dead claims, resolves conflicts, QA fixes)
   Dashboard loop: every 5 minutes (offset 2min from sweep)
   Identity loop: every 5 minutes (offset 4min — assigns colors/callsigns to new workers)
   Inbox loop: every 2 minutes (surfaces worker /signal traffic; re-asserts the coordinator pointer)
-  Audit loop: every 15 minutes (3-source audit: SD queue / harness backlog / inbox)
+  Audit loop: every 15 minutes (3-source audit: SD queue / harness backlog / inbox; REVIEW HEALTH gauge)
   Executive email: every 30 minutes (default-on fleet-health gauge + question escalation)
+  Self-review loop: every 5 minutes (work-triggered tri-party review; no-op below COORD_REVIEW_EVERY)
   All loops auto-expire after 3 days or when this session exits.
 
   Fleet is now running on autopilot. You will see sweep and dashboard output automatically.
@@ -719,3 +722,12 @@ If a worker session crashes mid-write, its file claims auto-release after 10 min
 ### Emergency disable
 
 Set `FILE_CLAIM_ENFORCED=off` in `.env` and restart the session to disable ENFORCEMENT 14 entirely. The coordinator should be notified — disabling the file-claim layer reverts to the pre-2026-05-09 lucky-convergence behavior where peer sessions can silently overwrite each other's work-in-progress.
+
+## Metadata
+
+- **Category**: Protocol
+- **Status**: Approved
+- **Version**: 1.0.0
+- **Last Updated**: 2026-06-08
+- **Tags**: fleet, coordinator, cron, self-review, standard-loops
+- **Author**: SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001

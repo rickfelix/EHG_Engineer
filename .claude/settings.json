@@ -2,7 +2,8 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "SWEEP_RESPECT_INFLIGHT_AGENT": "1",
-    "COORDINATOR_TWOWAY_V2": "on"
+    "COORDINATOR_TWOWAY_V2": "on",
+    "COORD_ADAM_REVIEW_V1": "on"
   },
   "statusLine": {
     "type": "command",
