@@ -26,6 +26,9 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
+// SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
+// worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
+const { evaluateDispatchEligibility } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001 (FR-3): single shared definition of which
 // classified session statuses count as "currently holding the SD claim" — used
 // by BOTH the available-to-claim filter and the worker-render filter below so
@@ -1365,22 +1368,59 @@ async function main() {
       continue;
     }
 
-    // Fix broken claim: session thinks it owns SD but SD doesn't know
-    if (sd.claiming_session_id !== s.session_id) {
-      await supabase
-        .from('strategic_directives_v2')
-        .update({ claiming_session_id: s.session_id, is_working_on: true })
-        .eq('sd_key', s.sd_key)
-        .select();
-      actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_key + ' → ' + s.session_id.substring(0, 20));
-    } else if (!sd.is_working_on) {
-      // Fix incomplete claim: claiming_session_id matches but is_working_on is false
-      await supabase
-        .from('strategic_directives_v2')
-        .update({ is_working_on: true })
-        .eq('sd_key', s.sd_key)
-        .select();
-      actions.push('CLAIM_FIX: set is_working_on=true on ' + s.sd_key);
+    // Fix broken/incomplete claim — but FIRST gate on dispatch-eligibility.
+    // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: the worker self_claim path refuses orchestrator
+    // PARENTS + dep-blocked SDs (SD-FDBK-FIX-WORKER-SELF-CLAIM-001); CLAIM_FIX did not, so it
+    // re-affirmed a stale sd_key pointing at an orchestrator parent onto the worker (observed live:
+    // SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001). Reuse the SHARED predicate. Tri-state:
+    //   confirmed-ineligible -> bilateral clear (like the terminal-status path above);
+    //   query error           -> no-op this cycle (NEVER clear a legit claim on a transient error);
+    //   eligible              -> existing re-assert (unchanged).
+    const needsClaimFix = sd.claiming_session_id !== s.session_id || !sd.is_working_on;
+    if (needsClaimFix) {
+      let verdict;
+      try {
+        verdict = await evaluateDispatchEligibility(supabase, s.sd_key);
+      } catch (eligErr) {
+        warnings.push('CLAIM_FIX: eligibility check errored for ' + s.sd_key + ' — skipped this cycle (' + eligErr.message + ')');
+        continue;
+      }
+      if (!verdict.eligible) {
+        // Orchestrator parent / dep-blocked / not-found: never re-affirm onto a worker. Clear the
+        // session's stale sd_key (bilateral release), mirroring the terminal-status clear above.
+        await supabase
+          .from('claude_sessions')
+          .update({
+            sd_key: null,
+            status: s.status === 'ACTIVE' ? 'idle' : 'released',
+            released_at: now.toISOString(),
+            released_reason: 'SWEEP_SD_INELIGIBLE_CLAIM_FIX',
+            worktree_path: null,
+            worktree_branch: null,
+            current_branch: null,
+          })
+          .eq('session_id', s.session_id)
+          .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
+        actions.push('CLAIM_FIX: cleared stale sd_key on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' ineligible: ' + verdict.reason + ')');
+        continue;
+      }
+      // Eligible -> existing re-assert behavior (unchanged).
+      if (sd.claiming_session_id !== s.session_id) {
+        await supabase
+          .from('strategic_directives_v2')
+          .update({ claiming_session_id: s.session_id, is_working_on: true })
+          .eq('sd_key', s.sd_key)
+          .select();
+        actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_key + ' → ' + s.session_id.substring(0, 20));
+      } else if (!sd.is_working_on) {
+        // Fix incomplete claim: claiming_session_id matches but is_working_on is false
+        await supabase
+          .from('strategic_directives_v2')
+          .update({ is_working_on: true })
+          .eq('sd_key', s.sd_key)
+          .select();
+        actions.push('CLAIM_FIX: set is_working_on=true on ' + s.sd_key);
+      }
     }
   }
 
