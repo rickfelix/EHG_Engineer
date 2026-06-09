@@ -21,7 +21,6 @@
  */
 const path = require('path');
 const fs = require('fs');
-const { pathToFileURL } = require('url');
 const { spawnSync } = require('child_process');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -89,9 +88,10 @@ function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = n
   };
 }
 
-async function esm(rel) {
-  return import(pathToFileURL(path.join(__dirname, rel)).href);
-}
+// NOTE: lib/adam/* and lib/eva/* are ESM; this CommonJS CLI loads them via
+// dynamic import() with STRING-LITERAL relative specifiers — both Windows-safe
+// at runtime and traceable by the WIRE_CHECK static call-graph (a computed
+// specifier would create no edge and false-positive the libs as unreachable).
 
 /** Fetch open SD dedup keys (read-only). Defensive: returns an empty Set on any error. */
 async function fetchOpenSdKeys(supabase) {
@@ -107,9 +107,9 @@ async function fetchOpenSdKeys(supabase) {
 }
 
 async function runBriefing(scope, supabase, liveVentureCount) {
-  const { briefHarness } = await esm('../lib/adam/briefings/harness.js');
-  const { briefPlatform } = await esm('../lib/adam/briefings/platform.js');
-  const { briefVenture } = await esm('../lib/adam/briefings/venture.js');
+  const { briefHarness } = await import('../lib/adam/briefings/harness.js');
+  const { briefPlatform } = await import('../lib/adam/briefings/platform.js');
+  const { briefVenture } = await import('../lib/adam/briefings/venture.js');
   if (scope.scope_key === 'harness') return briefHarness(supabase);
   if (scope.scope_key === 'platform') return briefPlatform(supabase, { liveVentureCount });
   return briefVenture(supabase, scope.venture_id);
@@ -143,7 +143,7 @@ async function main() {
     const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
     const supabase = createSupabaseServiceClient('engineer');
 
-    const { enumerateScopes, resolveScopeArg, countLiveVentures } = await esm('../lib/adam/scope-registry.js');
+    const { enumerateScopes, resolveScopeArg, countLiveVentures } = await import('../lib/adam/scope-registry.js');
     const scopes = await enumerateScopes(supabase);
     const liveVentureCount = countLiveVentures(scopes);
     const scope = resolveScopeArg(scopes, scopeArg, tick);
@@ -161,8 +161,8 @@ async function main() {
     }
 
     // mode === 'scan'
-    const { selectAdvisory, formatAdvisoryBody } = await esm('../lib/adam/rationale-bar.js');
-    const { applyLivenessGuard } = await esm('../lib/adam/liveness-guard.js');
+    const { selectAdvisory, formatAdvisoryBody } = await import('../lib/adam/rationale-bar.js');
+    const { applyLivenessGuard } = await import('../lib/adam/liveness-guard.js');
 
     const guarded = applyLivenessGuard(briefing.candidates || [], liveVentureCount);
     const openSdKeys = await fetchOpenSdKeys(supabase);
