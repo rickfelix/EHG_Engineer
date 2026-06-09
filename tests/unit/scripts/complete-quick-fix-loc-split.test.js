@@ -67,11 +67,36 @@ describe('SD-FDBK-INFRA-FIX-COMPLETION-LIFECYCLE-001 — countLocBySplit', () =>
     expect(r.test).toBe(0);
   });
 
+  it('SD-LEO-FIX-COMPLETE-QUICK-FIX-002: classifies .md and docs/ paths as docs, EXCLUDED from source', () => {
+    execSyncMock.mockReturnValue('20\t5\tlib/foo.js\n120\t7\tdocs/protocol/README.md\n10\t0\tdocs/guides/x.txt');
+    const r = countLocBySplit('/fake/repo');
+    expect(r.source).toBe(25);   // only lib/foo.js counts toward the source cap
+    expect(r.docs).toBe(137);    // 127 (docs/protocol/README.md) + 10 (docs/guides/x.txt)
+    expect(r.test).toBe(0);
+    expect(r.total).toBe(162);
+  });
+
+  it('SD-LEO-FIX-COMPLETE-QUICK-FIX-002: a docs-only QF reports source=0 (no false LOC-cap block)', () => {
+    // The exact repro: QF-20260609-874 committed a 127-line docs/protocol/README.md.
+    execSyncMock.mockReturnValue('127\t0\tdocs/protocol/README.md');
+    const r = countLocBySplit('/fake/repo');
+    expect(r.source).toBe(0);
+    expect(r.docs).toBe(127);
+  });
+
+  it('SD-LEO-FIX-COMPLETE-QUICK-FIX-002: README.md / CHANGELOG.md (root .md) are docs, not source', () => {
+    execSyncMock.mockReturnValue('40\t0\tREADME.md\n12\t3\tCHANGELOG.md\n5\t1\tlib/bar.js');
+    const r = countLocBySplit('/fake/repo');
+    expect(r.source).toBe(6);    // only lib/bar.js
+    expect(r.docs).toBe(55);     // 40 + 15
+  });
+
   it('returns zeros on empty git output (e.g. no commits past base)', () => {
     execSyncMock.mockReturnValue('');
     const r = countLocBySplit('/fake/repo');
     // QF-20260509-407: signature extended with sourceDeletionLoc.
-    expect(r).toEqual({ source: 0, test: 0, total: 0, sourceDeletionLoc: 0 });
+    // SD-LEO-FIX-COMPLETE-QUICK-FIX-002: signature extended with docs (docs excluded from source cap).
+    expect(r).toEqual({ source: 0, test: 0, docs: 0, total: 0, sourceDeletionLoc: 0 });
   });
 
   it('honors custom baseRef (QF-20260511-205: 3-dot symmetric diff)', () => {

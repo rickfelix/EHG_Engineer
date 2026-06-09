@@ -85,6 +85,17 @@ export function partitionDirtyByScope(dirtyFiles, scopedFiles) {
 const TEST_FILE_PATTERN = /(\.test\.|\.spec\.|\b__tests__\b|\btests\/|\be2e\/|\bplaywright\b)/i;
 
 /**
+ * Documentation-file path heuristic (SD-LEO-FIX-COMPLETE-QUICK-FIX-002). Matches:
+ *   - `.md` / `.mdx` / `.markdown` files anywhere (README.md, CHANGELOG.md, docs/*.md)
+ *   - any file under a `docs/` directory
+ * Doc lines are excluded from the source-LOC cap the same way test files are, so a
+ * documentation-type QF that commits a pre-authored draft (e.g. a 127-line docs/README.md)
+ * is not falsely forced to `--force-complete` by the 75-source-LOC hard cap. Checked AFTER
+ * TEST_FILE_PATTERN so test-file classification is unchanged.
+ */
+const DOC_FILE_PATTERN = /(\.mdx?$|\.markdown$|\bdocs\/)/i;
+
+/**
  * Walk `git diff --numstat <baseRef>...HEAD` and return source/test/total LOC
  * counts split by path pattern, plus pure-deletion-file LOC for tier classification.
  *
@@ -111,7 +122,7 @@ const TEST_FILE_PATTERN = /(\.test\.|\.spec\.|\b__tests__\b|\btests\/|\be2e\/|\b
  * @returns {{source: number, test: number, total: number, sourceDeletionLoc: number}} Split LOC counts
  */
 export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEAD') {
-  const result = { source: 0, test: 0, total: 0, sourceDeletionLoc: 0 };
+  const result = { source: 0, test: 0, docs: 0, total: 0, sourceDeletionLoc: 0 };
   let numstat = '';
   let effectiveRange = `${baseRef}...${headRef}`;
   try {
@@ -189,6 +200,10 @@ export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEA
     const isTest = TEST_FILE_PATTERN.test(filepath);
     if (isTest) {
       result.test += loc;
+    } else if (DOC_FILE_PATTERN.test(filepath)) {
+      // SD-LEO-FIX-COMPLETE-QUICK-FIX-002: documentation lines do not count toward the
+      // source-LOC cap (same treatment as test files); bucketed separately, not in `source`.
+      result.docs += loc;
     } else {
       result.source += loc;
       if (deletedPaths.has(filepath)) {
@@ -214,12 +229,14 @@ export function countLocBySplit(testDir, baseRef = 'origin/main', headRef = 'HEA
  * @returns {{source:number, test:number, total:number}}
  */
 export function countLocByPrFiles(files) {
-  const result = { source: 0, test: 0, total: 0 };
+  const result = { source: 0, test: 0, docs: 0, total: 0 };
   for (const f of files || []) {
     const filepath = f?.path || '';
     if (!filepath) continue;
     const loc = (Number(f.additions) || 0) + (Number(f.deletions) || 0);
+    // SD-LEO-FIX-COMPLETE-QUICK-FIX-002: docs excluded from source-LOC cap (mirrors test exclusion).
     if (TEST_FILE_PATTERN.test(filepath)) result.test += loc;
+    else if (DOC_FILE_PATTERN.test(filepath)) result.docs += loc;
     else result.source += loc;
     result.total += loc;
   }
