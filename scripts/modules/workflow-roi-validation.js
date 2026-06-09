@@ -215,6 +215,30 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
         }
       }
     }
+    // SD-LEO-INFRA-HARDEN-LEO-HANDOFF-001 FR-1: deterministic precheck == execute.
+    // gate3 (PLAN-TO-LEAD Traceability) is computed fresh during the IN-FLIGHT PLAN-TO-LEAD
+    // handoff and only persisted once that handoff is ACCEPTED. The executor wrapper passes the
+    // fresh gate3 via ctx (-> gateDataSources.gate3='direct'); the validator-registry/preloader
+    // path does NOT, and the canonical self-fetch above only finds gate3 on an ALREADY-accepted
+    // PLAN-TO-LEAD (which does not exist on the first execute) -> gate3='none' -> _estimated=true.
+    // That divergence made the SAME SD score ~89 via one path and ~69 via the other (flaky block).
+    // When gate3 is still unresolved, compute it once here so BOTH paths score identically. This
+    // can only RAISE an under-scored result up to the real gate3 value (it never invents a pass:
+    // a genuinely-failing traceability still returns a low gate3). validateGate3PlanToLead does
+    // not import this module, so there is no recursion.
+    if (!gateResults.gate3) {
+      try {
+        const { validateGate3PlanToLead } = await import('./traceability-validation.js');
+        const freshGate3 = await validateGate3PlanToLead(handoffLookupId, supabase, gateResults.gate2 || null, options);
+        if (freshGate3) {
+          gateResults.gate3 = freshGate3;
+          gateDataSources.gate3 = 'computed';
+        }
+      } catch (err) {
+        console.warn(`   ⚠️  [Gate4] fresh gate3 compute skipped (${err.message}) — falling back to estimated`);
+      }
+    }
+
     // Store for Section D access and audit trail
     validation._acceptedHandoffs = acceptedHandoffs;
     validation._gateDataSources = gateDataSources;
