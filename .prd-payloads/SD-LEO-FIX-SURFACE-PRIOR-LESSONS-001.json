@@ -1,0 +1,88 @@
+{
+  "title": "Surface prior lessons at handoff precheck — close the learning-loop consumption gap",
+  "status": "draft",
+  "executive_summary": "The learning loop captures lessons (failure-pattern-capture.js) but never surfaces them to autonomous /loop workers. scripts/phase-preflight.js has searchIssuePatterns (L489) + searchRetrospectives (L516) but they are UNEXPORTED and only run in a MANUAL pre-handoff preflight workers skip; HandoffOrchestrator.precheckHandoff never surfaces them. Fix: extract the two retrieval fns into a NEW side-effect-free, dependency-injected ESM lib (lib/learning/surface-prior-lessons.js), re-point phase-preflight.js at it (behavior-preserving), and add an ADVISORY, FAIL-OPEN, DEFAULT-ON prior-lessons step to precheckHandoff so prior patterns/retrospectives reach the next worker at phase transition. The step is wrapped so any error is swallowed and NEVER blocks or alters the handoff verdict.",
+  "exploration_summary": "phase-preflight.js: searchIssuePatterns uses kb.search (kb=IssueKnowledgeBase), searchRetrospectives uses supabase; both unexported, manual-only. issue-knowledge-base.js exports IssueKnowledgeBase with async search(query,options). HandoffOrchestrator.precheckHandoff (L243) loads sd via sdRepo.getById (L266), has this.supabase, and already uses fail-open try/catch (executor.setup, L304-311) — the model for the advisory step. handoff.js precheck (run by autonomous workers) delegates here, so surfacing at precheck reaches them.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Side-effect-free, DI'd retrieval lib",
+      "description": "New ESM lib/learning/surface-prior-lessons.js exporting searchIssuePatterns(kb, sdCategory, phaseStrategy), searchRetrospectives(supabase, sdCategory, phaseStrategy, limit), surfacePriorLessons({kb, supabase, sdCategory, phaseStrategy, limit}) -> {patterns, retrospectives}, and a pure formatPriorLessons(patterns, retrospectives) -> string. No module-level singletons; clients injected; no console inside (pure data + format).",
+      "acceptance_criteria": [
+        "All functions accept their client(s) as parameters and contain no top-level I/O.",
+        "surfacePriorLessons returns {patterns, retrospectives}; formatPriorLessons returns a printable advisory string.",
+        "Unit-testable with mock kb/supabase."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "phase-preflight.js re-points to the lib (behavior-preserving)",
+      "description": "phase-preflight.js imports searchIssuePatterns/searchRetrospectives from the lib (passing its kb/supabase) and removes the local definitions. Its preflight output is unchanged.",
+      "acceptance_criteria": [
+        "phase-preflight.js no longer defines the two fns locally; imports them from the lib.",
+        "Preflight output for a sample SD is unchanged."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Advisory, fail-open, default-on surfacing step in precheckHandoff",
+      "description": "In HandoffOrchestrator.precheckHandoff, after the sd is loaded, call surfacePriorLessons (with a kb instance + this.supabase, the sd's category, and the phase strategy) inside its OWN try/catch and print the formatted advisory block. Default-on; disabled by an env flag (e.g. LEO_SURFACE_LESSONS=off). The step never throws, never changes the returned verdict, and never adds gates/issues.",
+      "acceptance_criteria": [
+        "A handoff precheck prints a prior-lessons advisory block.",
+        "An injected client failure is swallowed/logged; the precheck verdict and issue list are byte-identical to without the step.",
+        "Setting the disable env flag skips the block; the precheck still completes."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "ESM + DI", "description": "lib is ESM (matches phase-preflight.js + issue-knowledge-base.js). Clients (kb, supabase) are parameters, not imported singletons, so tests inject mocks and the orchestrator passes its own this.supabase + a new IssueKnowledgeBase()." },
+    { "id": "TR-2", "title": "Never-block wrapper", "description": "The precheck step is wrapped in try/catch that logs a one-line warning on failure and returns control immediately; it sits outside the gate-evaluation result path so it cannot mutate passedGates/failedGates/issues/success." },
+    { "id": "TR-3", "title": "Phase-strategy resolution", "description": "Resolve the phaseStrategy (categories) for the handoff's target phase the same way phase-preflight.js does (reuse the strategy map; export it from the lib or a shared const) so categories are consistent between manual preflight and the precheck surfacing." }
+  ],
+  "system_architecture": {
+    "affected_objects": ["new lib/learning/surface-prior-lessons.js", "scripts/phase-preflight.js (import refactor)", "scripts/modules/handoff/HandoffOrchestrator.js precheckHandoff (advisory step)"],
+    "security_note": "Read-only retrieval (issue_patterns + retrospectives); no writes, no new tables, no auth change. Advisory output only.",
+    "out_of_scope": ["capture side (failure-pattern-capture.js)", "changing kb.search semantics", "gating/scoring handoffs on lessons", "new tables", "surfacing in execute (precheck is sufficient and lower-risk)"]
+  },
+  "test_scenarios": [
+    {"id": "TS-1", "name": "lib returns data with mock clients", "given": "mock kb.search + supabase returning rows", "when": "surfacePriorLessons is called", "then": "returns {patterns, retrospectives} sorted/sliced as before"},
+    {"id": "TS-2", "name": "formatPriorLessons is pure", "given": "patterns + retrospectives arrays", "when": "formatPriorLessons is called", "then": "returns a printable string; no I/O"},
+    {"id": "TS-3", "name": "never-block on failure", "given": "a kb/supabase that throws", "when": "the precheck advisory step runs", "then": "the error is swallowed; no throw; verdict unchanged"},
+    {"id": "TS-4", "name": "phase-preflight behavior preserved", "given": "the import refactor", "when": "phase-preflight retrieval runs", "then": "same patterns/retrospectives as before"},
+    {"id": "TS-5", "name": "env-disable", "given": "LEO_SURFACE_LESSONS=off", "when": "precheck runs", "then": "advisory block skipped; precheck completes"}
+  ],
+  "acceptance_criteria": [
+    "lib/learning/surface-prior-lessons.js exists (DI'd, side-effect-free) and is unit-tested.",
+    "phase-preflight.js imports it; behavior unchanged.",
+    "Handoff precheck surfaces a prior-lessons advisory block for autonomous workers.",
+    "The advisory step never blocks/alters the handoff verdict (injected-failure test passes)."
+  ],
+  "risks": [
+    {"risk": "The advisory step throws and breaks the handoff precheck (the whole fleet's path)", "mitigation": "Wrapped in its own try/catch that swallows+logs; sits outside the verdict path; never mutates result. TS-3 asserts verdict unchanged on injected failure. This is the SD's core invariant.", "impact": "high", "likelihood": "low"},
+    {"risk": "Behavior drift in phase-preflight after extraction", "mitigation": "Behavior-preserving import; the lib functions are byte-equivalent logic; TS-4 + a phase-preflight smoke compare.", "impact": "medium", "likelihood": "low"},
+    {"risk": "Extra DB/kb latency on every precheck", "mitigation": "Bounded queries (top-5 patterns, recent-20 retrospectives) already used by preflight; advisory + env-disableable; runs once per precheck.", "impact": "low", "likelihood": "medium"},
+    {"risk": "Noise — surfaced lessons irrelevant to the SD", "mitigation": "Reuses the existing relevance scoring (category match + quality + recency); top-N slice; advisory only (worker can ignore).", "impact": "low", "likelihood": "medium"}
+  ],
+  "implementation_approach": {
+    "summary": "Extract retrieval into a DI'd ESM lib, re-point phase-preflight.js, add a fail-open advisory step to precheckHandoff, unit-test the lib + the never-block invariant.",
+    "steps": [
+      "Create lib/learning/surface-prior-lessons.js (searchIssuePatterns/searchRetrospectives/surfacePriorLessons/formatPriorLessons + the phase-strategy map), DI clients",
+      "Re-point phase-preflight.js imports; delete local defs; confirm output unchanged",
+      "Add the advisory try/catch step in HandoffOrchestrator.precheckHandoff after sd load (default-on, env-disableable, never throws/alters verdict)",
+      "Unit tests: lib retrieval with mocks (TS-1/2/4), never-block (TS-3), env-disable (TS-5)",
+      "Run a live handoff precheck to confirm the advisory block prints and the verdict is normal"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": ["autonomous /loop workers running handoff precheck", "phase-preflight.js (manual preflight)", "any future caller of the shared retrieval lib"],
+    "dependencies": ["lib/learning/issue-knowledge-base.js (kb)", "supabase (issue_patterns + retrospectives, read-only)", "HandoffOrchestrator.precheckHandoff"],
+    "data_contracts": {"surfacePriorLessons": "({kb,supabase,sdCategory,phaseStrategy,limit}) -> {patterns:Array, retrospectives:Array}; advisory only; no writes"},
+    "runtime_config": {"enable_flag": "default-on; LEO_SURFACE_LESSONS=off disables the precheck advisory step", "feature_flag": "env-only"},
+    "observability_rollout": {"post_apply_check": "handoff precheck prints the prior-lessons advisory block; injected-failure unit test green; phase-preflight output unchanged", "rollback": "revert the 3 file changes (advisory step + import refactor + new lib); no data/schema to undo"}
+  },
+  "metadata": {
+    "root_cause": "Retrieval fns unexported + manual-only; HandoffOrchestrator never surfaces lessons → autonomous workers never see prior patterns/retrospectives.",
+    "invariant": "advisory / fail-open / never-block — handoff verdict must be unchanged",
+    "insertion_point": "HandoffOrchestrator.precheckHandoff after sd load (this.supabase available; fail-open precedent at executor.setup)"
+  }
+}

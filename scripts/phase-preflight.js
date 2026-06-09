@@ -16,6 +16,9 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
+// SD-LEO-FIX-SURFACE-PRIOR-LESSONS-001: retrieval logic extracted to a shared, DI'd lib so the
+// handoff precheck (which autonomous /loop workers run) can surface the same prior lessons.
+import { PHASE_STRATEGIES, searchIssuePatterns, searchRetrospectives } from '../lib/learning/surface-prior-lessons.js';
 import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
 import { validateDecompositionGate } from './modules/decomposition-gate.js';
 import { startHeartbeat } from '../lib/heartbeat-manager.mjs';
@@ -37,29 +40,8 @@ const supabase = createSupabaseServiceClient();
 
 const kb = new IssueKnowledgeBase();
 
-/**
- * Phase-specific search strategies
- */
-const PHASE_STRATEGIES = {
-  EXEC: {
-    name: 'Implementation',
-    categories: ['database', 'testing', 'build', 'code_structure', 'performance', 'security'],
-    retrospective_focus: ['what_needs_improvement', 'failure_patterns', 'key_learnings'],
-    context: 'You are about to start implementation. These patterns show common issues encountered during coding.'
-  },
-  PLAN: {
-    name: 'Planning & Design',
-    categories: ['protocol', 'testing', 'over_engineering', 'code_structure'],
-    retrospective_focus: ['success_patterns', 'key_learnings', 'what_went_well'],
-    context: 'You are creating a PRD. These patterns show proven approaches and pitfalls to avoid in design.'
-  },
-  LEAD: {
-    name: 'Strategic Approval',
-    categories: ['over_engineering', 'protocol', 'general'],
-    retrospective_focus: ['failure_patterns', 'what_needs_improvement', 'business_value_delivered'],
-    context: 'You are evaluating an SD. These patterns show strategic issues and over-engineering risks.'
-  }
-};
+// PHASE_STRATEGIES is imported from lib/learning/surface-prior-lessons.js
+// (SD-LEO-FIX-SURFACE-PRIOR-LESSONS-001 — single source shared with the handoff precheck).
 
 /**
  * SD-LEO-GEMINI-001: Discovery Gate (US-001)
@@ -483,67 +465,9 @@ function displayChildWorkflowGuidance(sd, parent, _currentPhase) {
   console.log('\n' + '─'.repeat(60));
 }
 
-/**
- * Search issue patterns relevant to phase and SD category
- */
-async function searchIssuePatterns(sdCategory, phaseStrategy) {
-  const results = [];
-
-  for (const category of phaseStrategy.categories) {
-    const patterns = await kb.search(sdCategory, {
-      category,
-      limit: 3,
-      minSuccessRate: 0
-    });
-
-    results.push(...patterns);
-  }
-
-  // De-duplicate by pattern_id
-  const uniquePatterns = Array.from(
-    new Map(results.map(p => [p.pattern_id, p])).values()
-  );
-
-  // Sort by overall score
-  uniquePatterns.sort((a, b) => b.overall_score - a.overall_score);
-
-  return uniquePatterns.slice(0, 5); // Top 5 patterns
-}
-
-/**
- * Search retrospectives relevant to SD category
- */
-async function searchRetrospectives(sdCategory, phaseStrategy, limit = 3) {
-  const { data: retrospectives, error } = await supabase
-    .from('retrospectives')
-    .select('*')
-    .eq('status', 'PUBLISHED')
-    .gte('quality_score', 70)
-    .order('conducted_date', { ascending: false })
-    .limit(20); // Get recent 20 to filter
-
-  if (error || !retrospectives) {
-    console.log('  ℹ️  No retrospectives found');
-    return [];
-  }
-
-  // Calculate relevance based on category match and quality
-  const scored = retrospectives.map(retro => {
-    const categoryMatch = retro.learning_category?.toLowerCase().includes(sdCategory.toLowerCase()) ? 1.0 : 0.3;
-    const qualityScore = retro.quality_score / 100;
-    const recency = new Date(retro.conducted_date) > new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) ? 1.0 : 0.5;
-
-    return {
-      ...retro,
-      relevance_score: categoryMatch * 0.5 + qualityScore * 0.3 + recency * 0.2
-    };
-  });
-
-  // Sort by relevance
-  scored.sort((a, b) => b.relevance_score - a.relevance_score);
-
-  return scored.slice(0, limit);
-}
+// searchIssuePatterns / searchRetrospectives are imported from
+// lib/learning/surface-prior-lessons.js (SD-LEO-FIX-SURFACE-PRIOR-LESSONS-001). They now take
+// the injected client as their first arg (kb / supabase) — see the call sites below.
 
 /**
  * Format and display results
@@ -779,11 +703,11 @@ async function main() {
       }
     }
 
-    // Search issue patterns
-    const patterns = await searchIssuePatterns(sd.category || sd.title, strategy);
+    // Search issue patterns (kb injected — SD-LEO-FIX-SURFACE-PRIOR-LESSONS-001)
+    const patterns = await searchIssuePatterns(kb, sd.category || sd.title, strategy);
 
-    // Search retrospectives
-    const retrospectives = await searchRetrospectives(sd.category || sd.title, strategy);
+    // Search retrospectives (supabase injected)
+    const retrospectives = await searchRetrospectives(supabase, sd.category || sd.title, strategy);
 
     // Display results
     displayResults(sd, phase, strategy, patterns, retrospectives);
