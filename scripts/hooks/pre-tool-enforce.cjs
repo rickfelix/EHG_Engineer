@@ -146,9 +146,19 @@ async function auditAndExit(auditPromise, code, timeoutMs) {
     auditPromise,
     new Promise(resolve => setTimeout(resolve, ms))
   ]).catch(() => { /* audit never blocks enforcement */ });
-  // Tear down undici's keep-alive socket pool BEFORE process.exit. Without
-  // this, Windows libuv asserts on src\win\async.c:76 when process.exit races
-  // with in-flight HTTP socket cleanup, surfacing as STATUS_STACK_BUFFER_OVERRUN.
+  await drainUndiciPool();
+  process.exit(code);
+}
+
+/**
+ * Tear down undici's keep-alive socket pool BEFORE process.exit. Without this,
+ * Windows libuv asserts on src\win\async.c:76 (`!(handle->flags &
+ * UV_HANDLE_CLOSING)`) when process.exit races with an in-flight HTTP socket's
+ * async-handle cleanup, surfacing as STATUS_STACK_BUFFER_OVERRUN (0xC0000409).
+ * EVERY exit that follows a fetch() in this hook must drain first — not just the
+ * block paths. Fail-open: undici unavailable means there is no pool to drain.
+ */
+async function drainUndiciPool() {
   try {
     const undici = require('undici');
     if (undici && typeof undici.getGlobalDispatcher === 'function') {
@@ -161,7 +171,6 @@ async function auditAndExit(auditPromise, code, timeoutMs) {
       }
     }
   } catch { /* fail-open: undici unavailable means no pool to drain */ }
-  process.exit(code);
 }
 
 // Derive session ID once at module load time. QF-20260504-932: stdin payload
@@ -247,6 +256,37 @@ async function resolveSessionClaimedSdKey(sessionId) {
     return row && row.sd_key ? row.sd_key : null;
   } catch {
     return null;
+  }
+}
+
+// SD-FDBK-ENH-ENFORCEMENT-IDEA-OPERATOR-001: resolve THIS session's claude_sessions.metadata
+// (mirrors resolveSessionClaimedSdKey: REST + 1.5s timeout + fail-open → null on any error).
+// Used only by the AskUserQuestion guard, so the lookup happens at most once per
+// AskUserQuestion call (a rare tool), never on the hot path of other tools.
+const { isBlockableWorker, ASKUSER_DENY_MESSAGE } = require('./askuser-worker-policy.cjs');
+async function resolveSessionMetadata(sessionId) {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceKey || !sessionId || sessionId === 'unknown') return null;
+    const url = supabaseUrl +
+      '/rest/v1/claude_sessions?session_id=eq.' +
+      encodeURIComponent(sessionId) + '&select=metadata&limit=1';
+    // clearTimeout in finally: when fetch wins the race, the timeout promise would
+    // otherwise stay pending and reject at 1500ms with NO handler → an unhandled
+    // rejection that crashes node on the fall-through (non-block) path. Clearing the
+    // timer makes the helper safe whether it blocks or exempts the caller.
+    let _timer;
+    const resp = await Promise.race([
+      fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } }),
+      new Promise((_, reject) => { _timer = setTimeout(() => reject(new Error('timeout')), 1500); }),
+    ]).finally(() => clearTimeout(_timer));
+    if (!resp || !resp.ok) return null;
+    const rows = await resp.json();
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    return row && row.metadata && typeof row.metadata === 'object' ? row.metadata : null;
+  } catch {
+    return null; // fail-open: a resolution error must NEVER block a tool call
   }
 }
 
@@ -452,6 +492,35 @@ async function main() {
     input = JSON.parse(TOOL_INPUT_RAW);
   } catch {
     // Not JSON or empty - nothing to enforce
+    process.exit(0);
+  }
+
+  // --- ENFORCEMENT 12: Block AskUserQuestion in autonomous fleet-worker sessions ---
+  // SD-FDBK-ENH-ENFORCEMENT-IDEA-OPERATOR-001: AskUserQuestion pauses the /loop forever
+  // waiting for an absent human, stalling the SD + holding a worker slot. Workers must
+  // escalate via /signal (options + recommendation + default-proceed) instead. Detection is
+  // POSITIVE (only a confirmed fleet worker is blocked — has a fleet callsign and is not
+  // coordinator/Adam/non_fleet); operator/chairman/coordinator/Adam and any unresolved
+  // session are EXEMPT. The metadata lookup runs ONLY for this (rare) tool, and fail-OPEN
+  // (any resolution error → meta=null → not blockable) so it can never wedge a tool call.
+  if (TOOL_NAME === 'AskUserQuestion') {
+    const meta = await resolveSessionMetadata(_SESSION_ID);
+    if (isBlockableWorker(meta)) {
+      const auditPromise = auditPermissionDecision(
+        _SESSION_ID, TOOL_NAME, 'ENF-NO-ASKUSER-WORKER',
+        'AskUserQuestion blocked for autonomous fleet worker', 'block',
+        { callsign: (meta.fleet_identity && meta.fleet_identity.callsign) || meta.callsign || null }
+      );
+      process.stderr.write(ASKUSER_DENY_MESSAGE + '\n');
+      await auditAndExit(auditPromise, 2, 800);
+    }
+    // EXEMPT (coordinator/Adam/operator/unresolved): allow. No other enforcement
+    // applies to AskUserQuestion, so exit now — but drain undici FIRST. The
+    // resolveSessionMetadata fetch above leaves a keep-alive socket whose libuv
+    // async-handle is still closing; a raw process.exit here races it and trips
+    // src\win\async.c:76 → STATUS_STACK_BUFFER_OVERRUN (verified: bare exit/fall-
+    // through both crashed exempt sessions; draining the pool fixes it).
+    await drainUndiciPool();
     process.exit(0);
   }
 
