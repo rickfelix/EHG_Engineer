@@ -334,6 +334,30 @@ async function isSdInFlight(sb, sdKey, mySessionId) {
   return false;
 }
 
+/**
+ * FR-2 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): CAS-guarded clear of a stale claim that
+ * points at a terminal/parked SD. Mirrors lib/claim-validity-gate.js:351-355. Two writes, each
+ * guarded by THIS session_id so it can NEVER clobber a peer that legitimately took over:
+ *   (1) claude_sessions — co-null sd_key + worktree_path + worktree_branch TOGETHER
+ *       (the ck_claude_sessions_worktree_state_consistency constraint rejects a partial clear);
+ *   (2) strategic_directives_v2 — clear is_working_on / active_session_id / claiming_session_id.
+ * Never throws (fail-open): a failure just leaves the stale pointer, and self-claim still proceeds.
+ */
+async function selfHealStaleClaim(sb, sessionId, sdKey) {
+  try {
+    await sb.from('claude_sessions')
+      .update({ sd_key: null, worktree_path: null, worktree_branch: null })
+      .eq('session_id', sessionId)
+      .eq('sd_key', sdKey); // CAS: only while this session still points at this SD
+  } catch { /* fail-open */ }
+  try {
+    await sb.from('strategic_directives_v2')
+      .update({ is_working_on: false, active_session_id: null, claiming_session_id: null })
+      .eq('sd_key', sdKey)
+      .eq('claiming_session_id', sessionId); // CAS: only while the SD is still ours
+  } catch { /* fail-open */ }
+}
+
 async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId } = {}) {
   // 1. resolve coordinator (fail-open to null -> broadcast)
   let coordinatorId = null;
@@ -359,9 +383,28 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
   // workflow — NOT sd-start, which is SD-only (QFs have no worktree / LEAD-PLAN-EXEC).
   if (mySd) {
     const isQf = /^QF-/.test(mySd);
-    return { ...base, action: 'resume', sd: mySd, message: isQf
-      ? `Already claiming quick-fix ${mySd}; resume it: node scripts/read-quick-fix.js ${mySd}, then run the /quick-fix workflow (do NOT run sd-start.js for a QF).`
-      : `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).` };
+    // FR-2 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): a stale claude_sessions.sd_key pointing at
+    // a TERMINAL/parked SD (completed/cancelled/deferred) would loop action=resume forever. Before
+    // resuming, verify the SD is still resumable; if terminal, self-heal (CAS-guarded to THIS session)
+    // and fall through to self-claim. pending_approval is NOT terminal — it resumes (to run
+    // LEAD-FINAL-APPROVAL) and recoverStrandedFinal (step 5.7) owns the cleared-claim variant.
+    // Fail-open: any query error preserves today's resume.
+    let staleTerminal = false;
+    if (!isQf) {
+      try {
+        const { data: sdRow } = await sb.from('strategic_directives_v2').select('status').eq('sd_key', mySd).maybeSingle();
+        if (sdRow && ['completed', 'cancelled', 'deferred'].includes(sdRow.status)) staleTerminal = true;
+      } catch { /* fail-open: leave staleTerminal false -> resume preserved */ }
+    }
+    if (staleTerminal) {
+      await selfHealStaleClaim(sb, sessionId, mySd);
+      base.self_healed_stale_claim = mySd;
+      mySd = null; // fall through to assignment / self-claim below
+    } else {
+      return { ...base, action: 'resume', sd: mySd, message: isQf
+        ? `Already claiming quick-fix ${mySd}; resume it: node scripts/read-quick-fix.js ${mySd}, then run the /quick-fix workflow (do NOT run sd-start.js for a QF).`
+        : `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).` };
+    }
   }
 
   // 5. pending WORK_ASSIGNMENT -> claim via claim_sd RPC
@@ -471,7 +514,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, isSdInFlight, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, isSdInFlight, selfHealStaleClaim, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
