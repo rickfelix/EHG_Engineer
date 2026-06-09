@@ -12,6 +12,8 @@ import {
   detectReplyStarvation,
   detectStuckWorker,
   detectClaimHalfWrite,
+  detectLoopExpiry,
+  detectStalledLoop,
   runDetectors,
 } from '../../../lib/coordinator/detectors.cjs';
 import {
@@ -104,6 +106,57 @@ describe('detectClaimHalfWrite', () => {
   });
 });
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const daysAgo = (d) => new Date(NOW - d * DAY_MS).toISOString();
+
+describe('detectLoopExpiry', () => {
+  it('matches a loop session older than the warn threshold (active or awaiting_tick)', () => {
+    const sessions = [
+      { session_id: 'old-active', loop_state: 'active', created_at: daysAgo(7) },
+      { session_id: 'old-parked', loop_state: 'awaiting_tick', created_at: daysAgo(6.5) },
+    ];
+    const r = detectLoopExpiry({ sessions, now: NOW });
+    expect(r.matched).toBe(true);
+    expect(r.evidence.expiring_count).toBe(2);
+    expect(r.evidence.samples[0].session_id).toBe('old-active');
+  });
+  it('does not match young loops, non-loop states, or unknown created_at (fail-open)', () => {
+    const sessions = [
+      { session_id: 'young', loop_state: 'active', created_at: daysAgo(2) },        // within lifetime
+      { session_id: 'exited', loop_state: 'exited', created_at: daysAgo(30) },       // not a live loop
+      { session_id: 'no-anchor', loop_state: 'active', created_at: null },           // unknown start → skip
+    ];
+    expect(detectLoopExpiry({ sessions, now: NOW }).matched).toBe(false);
+  });
+  it('is env-tunable via opts.warnMs', () => {
+    const sessions = [{ session_id: 'mid', loop_state: 'active', created_at: daysAgo(3) }];
+    expect(detectLoopExpiry({ sessions, now: NOW }).matched).toBe(false);                  // default 6d → no
+    expect(detectLoopExpiry({ sessions, now: NOW }, { warnMs: 2 * DAY_MS }).matched).toBe(true); // 2d → yes
+  });
+});
+
+describe('detectStalledLoop', () => {
+  const stalled = { session_id: 'w1', loop_state: 'active', sd_key: null, heartbeat_at: minsAgo(2), expected_silence_until: null };
+  it('matches a live active loop holding no claim while work waits', () => {
+    const r = detectStalledLoop({ sessions: [stalled], unclaimedItems: 3, now: NOW });
+    expect(r.matched).toBe(true);
+    expect(r.evidence.stalled_count).toBe(1);
+    expect(r.evidence.samples[0].session_id).toBe('w1');
+  });
+  it('does not match when there is no unclaimed work', () => {
+    expect(detectStalledLoop({ sessions: [stalled], unclaimedItems: 0, now: NOW }).matched).toBe(false);
+  });
+  it('excludes claimed, parked (awaiting_tick / future silence), and stale-heartbeat sessions', () => {
+    const sessions = [
+      { ...stalled, session_id: 'has-claim', sd_key: 'SD-X' },                                   // holds a claim
+      { ...stalled, session_id: 'parked', loop_state: 'awaiting_tick' },                          // parked, not 'active'
+      { ...stalled, session_id: 'silenced', expected_silence_until: new Date(NOW + 60_000).toISOString() }, // future silence window
+      { ...stalled, session_id: 'stale', heartbeat_at: minsAgo(30) },                             // not fresh → looks dead
+    ];
+    expect(detectStalledLoop({ sessions, unclaimedItems: 5, now: NOW }).matched).toBe(false);
+  });
+});
+
 describe('runDetectors', () => {
   it('returns only matched detectors with event_type + severity', () => {
     const data = {
@@ -114,6 +167,18 @@ describe('runDetectors', () => {
     const matches = runDetectors(data, { now: NOW });
     expect(matches.map((m) => m.event_type)).toEqual(['SPLIT_BRAIN']);
     expect(matches[0].severity).toBe('critical');
+  });
+  it('surfaces LOOP_EXPIRY_WARNING + STALLED_LOOP (both severity warning) when conditions hold', () => {
+    const data = {
+      coordinatorCount: 0, idleWorkers: 0, unclaimedItems: 2,
+      signals: [], claims: [], sdClaims: [],
+      sessions: [
+        { session_id: 'old', loop_state: 'active', created_at: daysAgo(7), sd_key: null, heartbeat_at: minsAgo(1), expected_silence_until: null },
+      ],
+    };
+    const byType = Object.fromEntries(runDetectors(data, { now: NOW }).map((m) => [m.event_type, m]));
+    expect(byType.LOOP_EXPIRY_WARNING?.severity).toBe('warning');
+    expect(byType.STALLED_LOOP?.severity).toBe('warning');
   });
 });
 
@@ -126,6 +191,11 @@ describe('coordDetectorsEnabled', () => {
   it('resolveThresholds honors env overrides with safe defaults', () => {
     expect(resolveThresholds({}).replyStarvationMs).toBe(1800 * 1000);
     expect(resolveThresholds({ COORD_REPLY_STARVATION_T_SEC: '60' }).replyStarvationMs).toBe(60 * 1000);
+    // SD-LEO-INFRA-LOOP-LIVENESS-DETECTORS-001 thresholds: 6-day warn + 10-min freshness defaults, env-tunable.
+    expect(resolveThresholds({}).loopExpiryWarnMs).toBe(8640 * 60 * 1000);
+    expect(resolveThresholds({}).stalledLoopFreshMs).toBe(10 * 60 * 1000);
+    expect(resolveThresholds({ COORD_LOOP_EXPIRY_WARN_MIN: '120' }).loopExpiryWarnMs).toBe(120 * 60 * 1000);
+    expect(resolveThresholds({ COORD_STALLED_LOOP_FRESH_MIN: '5' }).stalledLoopFreshMs).toBe(5 * 60 * 1000);
   });
 });
 

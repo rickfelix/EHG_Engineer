@@ -17,6 +17,8 @@ import { getDbNowMs } from '../lib/fleet/db-clock.mjs';
 import { sourceableBacklog } from './lib/sourceable-backlog.mjs';
 import { readFileSync } from 'node:fs';
 import { computeReviewHealth } from '../lib/fleet/review-health.mjs';
+// SD-LEO-INFRA-LOOP-LIVENESS-DETECTORS-001: reuse the pure detectors as the single source for the gauges.
+import { detectLoopExpiry, detectStalledLoop } from '../lib/coordinator/detectors.cjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -59,7 +61,8 @@ const stuck = unclaimed.filter(s => s.status === 'in_progress');
 // predicate (same one coordinator-email-summary.mjs uses, mirroring the dashboard) so the
 // audit's FLOW/LIVENESS gauges stop over-counting Adam / non_fleet / released / never-claimed
 // (ghost) sessions. Previously this only excluded `me` and any heartbeat <15m.
-const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,status,metadata,claimed_at,worktree_path,continuous_sds_completed').order('heartbeat_at', { ascending: false }).limit(60);
+// SD-LEO-INFRA-LOOP-LIVENESS-DETECTORS-001: + created_at, expected_silence_until for the loop-liveness gauges.
+const { data: sessRaw } = await db.from('claude_sessions').select('session_id,heartbeat_at,sd_key,loop_state,status,metadata,claimed_at,worktree_path,continuous_sds_completed,created_at,expected_silence_until').order('heartbeat_at', { ascending: false }).limit(60);
 const live = liveFleetWorkers(sessRaw, me, t);
 const builders = live.filter(s => s.sd_key).length;
 const liveIdle = live.filter(s => !s.sd_key).length;
@@ -140,6 +143,22 @@ try {
   loopLine = 'active=' + dist.active + ' awaiting_tick=' + dist.awaiting_tick + ' exited=' + dist.exited + ' null=' + dist.null + (dist.other ? ' other=' + dist.other : '');
 } catch (e) { loopLine = 'unavailable (' + e.message + ')'; }
 
+// (d2) LIVENESS — loop-liveness detectors (SD-LEO-INFRA-LOOP-LIVENESS-DETECTORS-001).
+// Reuse the pure detectors (single source) over the live workers; fail-open per gauge.
+let loopExpiryLine, stalledLoopLine;
+try {
+  const exp = detectLoopExpiry({ sessions: live, now: t });
+  loopExpiryLine = exp.matched
+    ? exp.evidence.expiring_count + ' loop(s) near the 7d hard-expiry ⚠ re-launch (oldest ' + ageStr(exp.evidence.max_age_ms) + ')'
+    : 'none (all live loops within lifetime)';
+} catch (e) { loopExpiryLine = 'unavailable (' + e.message + ')'; }
+try {
+  const st = detectStalledLoop({ sessions: live, unclaimedItems: unclaimed.length, now: t });
+  stalledLoopLine = st.matched
+    ? st.evidence.stalled_count + ' live loop(s) parked w/o claim while ' + unclaimed.length + ' unclaimed ⚠ re-paste wake prompt'
+    : 'none (' + unclaimed.length + ' unclaimed)';
+} catch (e) { stalledLoopLine = 'unavailable (' + e.message + ')'; }
+
 // (e) DEPENDENCY / CRITICAL-PATH — blocked vs ready, plus stale-blocked anomalies
 let depLine, depStale = [];
 try {
@@ -168,6 +187,8 @@ console.log('  FLOW (aging)    : ' + agingLine);
 for (const a of agingTop) console.log('      ' + a.k + '  [' + a.ph + ']  ' + ageStr(a.age));
 console.log('  FLOW (idle/work): ' + idleWorkLine);
 console.log('  LIVENESS (loop) : ' + loopLine + '  (live workers)');
+console.log('  LIVENESS (expiry): ' + loopExpiryLine);
+console.log('  LIVENESS (stall): ' + stalledLoopLine);
 console.log('  DEPENDENCY      : ' + depLine);
 for (const k of depStale.slice(0, 5)) console.log('      stale-blocked: ' + k);
 
