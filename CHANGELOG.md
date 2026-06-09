@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-09](#2026-06-09)
+  - [Infrastructure](#infrastructure)
 - [2026-06-08](#2026-06-08)
   - [Security](#security)
   - [Infrastructure](#infrastructure)
@@ -36,6 +38,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-09
+
+### Infrastructure
+- **Hardened LEO PLAN-TO-LEAD gate reliability — GATE4_WORKFLOW_ROI determinism + story_test_mappings query fix** - PR #4410 (SD-LEO-INFRA-HARDEN-LEO-HANDOFF-001)
+  - **Issue**: Two PLAN-TO-LEAD handoff-gate bugs Alpha verified live while shipping SD-LEO-GEN-ENABLE-RLS-SERVICE-001 (PR #4401). (1) `GATE4_WORKFLOW_ROI` was non-deterministic: PRECHECK reported PASS (~89%, threshold 70%) but EXECUTE consistently FAILED (~69%) for the SAME SD (reproduced 4×), flaky-blocking validated work (SECURITY 97 / TESTING 95 / retro 89). (2) `acceptance-criteria-validation` scored the 70 "no test mapping" default for every user story regardless of real coverage.
+  - **Root Cause**: (1) gate3 (PLAN-TO-LEAD Traceability) is computed fresh during the in-flight handoff and only persisted once that handoff is ACCEPTED. The executor wrapper passed it via ctx (`gateDataSources.gate3='direct'`) but the validator-registry/preloader path did not, and the canonical self-fetch only finds gate3 on an already-accepted PLAN-TO-LEAD (absent on first execute) → `gate3='none'` → `_estimated=true` → the same SD scored ~89 via one path and ~69 via the other. (2) The gate queried `story_test_mappings` by a non-existent `story_id` column — the real FK is `user_story_id` — so the IN-filter always returned zero rows and every validated story collapsed to the default.
+  - **Fix**: (1) `validateGate4LeadFinal` (`scripts/modules/workflow-roi-validation.js`) computes gate3 fresh via a dynamic import of `validateGate3PlanToLead` when it is unresolved, so PRECHECK and EXECUTE score identically. It can only RAISE an under-scored result (never invents a pass — a genuinely-failing traceability still returns a low gate3) and there is no recursion (`traceability-validation` does not import this module). (2) `acceptance-criteria-validation.js` queries `story_test_mappings` by the real `user_story_id` FK (confirmed against the live schema: columns are `id, user_story_id, test_result_id, …`; `story_id` does not exist). +6 regression tests (`tests/unit/harden-leo-handoff-gate.test.js`), all passing; both premises verified live before the verifying session drove the handoffs.
 
 ## 2026-06-08
 
