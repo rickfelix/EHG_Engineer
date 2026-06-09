@@ -11,7 +11,7 @@ import { execSync } from 'child_process';
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { normalizeSDId } from '../../sd-id-normalizer.js';
 import { createTaskHydrator } from '../../../../lib/tasks/index.js';
-import { validateBypassReason } from '../bypass-rubric.js';
+import { validateBypassReason, extractBypassedGate } from '../bypass-rubric.js';
 import { resolveAutoProceed } from '../auto-proceed-resolver.js';
 
 /**
@@ -138,6 +138,16 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
     return { success: false };
   }
 
+  // SD-LEO-INFRA-GATE-FALSE-POSITIVE-001: attribute the bypass to the NAMED gate
+  // it targeted (derived from the reason) so the self-improvement loop can surface
+  // chronically false-positive named gates. Pure + non-throwing; degrades to null.
+  let bypassedGate = null;
+  try {
+    bypassedGate = extractBypassedGate(bypassReason);
+  } catch (_e) {
+    bypassedGate = null; // never block a bypass on attribution
+  }
+
   // Log bypass to validation_audit_log
   const correlationId = `bypass-${Date.now()}`;
   const { error: logError } = await supabase
@@ -153,6 +163,7 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
         original_sd_id: sdId,
         canonical_sd_id: canonicalSdId,
         bypass_reason: bypassReason,
+        bypassed_gate: bypassedGate,
         rubric_category: rubricResult.category,
         rubric_matched_rule: rubricResult.matchedRule,
         sd_bypasses_today: (sdBypasses?.length || 0) + 1,

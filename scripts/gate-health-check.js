@@ -26,6 +26,8 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as _uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import fs from 'fs';
+// SD-LEO-INFRA-GATE-FALSE-POSITIVE-001: pure aggregation for the named-gate bypass leaderboard
+import { tallyBypassedGates } from './modules/handoff/bypass-rubric.js';
 
 dotenv.config();
 
@@ -386,6 +388,55 @@ async function recordFailurePattern(gateAlert) {
 }
 
 /**
+ * SD-LEO-INFRA-GATE-FALSE-POSITIVE-001: 30-day NAMED-gate false-positive leaderboard.
+ *
+ * Counts --bypass-validation rows (validation_audit_log, failure_category='bypass')
+ * over the last 30 days grouped by metadata.bypassed_gate. Report-only — surfaces
+ * which NAMED gates are most-bypassed (likely false positives) so the self-improvement
+ * loop is no longer blind to them (numeric gates are already covered by GATE_TO_CATEGORY).
+ *
+ * @returns {Promise<{ ranked: Array<{gate:string,count:number}>, unattributed:number, total:number }>}
+ */
+async function getNamedGateBypassLeaderboard() {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('validation_audit_log')
+    .select('metadata')
+    .eq('failure_category', 'bypass')
+    .gte('created_at', since)
+    .limit(5000);
+
+  if (error) {
+    console.log('  ℹ️  Bypass leaderboard unavailable:', error.message);
+    return { ranked: [], unattributed: 0, total: 0 };
+  }
+
+  // Pure aggregation extracted to bypass-rubric.js (unit-tested independently).
+  return tallyBypassedGates(data || []);
+}
+
+/**
+ * Print the 30-day named-gate false-positive leaderboard.
+ */
+function printBypassLeaderboard(lb) {
+  console.log('\n🏆 30-Day Named-Gate False-Positive Leaderboard (bypasses)');
+  if (!lb || lb.total === 0) {
+    console.log('   ✅ No bypasses recorded in the last 30 days.');
+    return;
+  }
+  if (lb.ranked.length === 0) {
+    console.log(`   ${lb.total} bypass(es) recorded, but none attributed to a named gate (metadata.bypassed_gate null).`);
+    return;
+  }
+  lb.ranked.forEach((r, i) => {
+    console.log(`   ${i + 1}. ${r.gate} — ${r.count} bypass${r.count === 1 ? '' : 'es'}`);
+  });
+  if (lb.unattributed > 0) {
+    console.log(`   (+${lb.unattributed} unattributed bypass${lb.unattributed === 1 ? '' : 'es'} — reason named no known gate)`);
+  }
+}
+
+/**
  * Generate summary report
  */
 function generateReport(alerts, drops, createdSDs) {
@@ -445,6 +496,11 @@ async function main() {
   // Get alerts
   const alerts = await getGateAlerts();
   const drops = await checkWeekOverWeekDrops();
+
+  // SD-LEO-INFRA-GATE-FALSE-POSITIVE-001: surface the 30-day named-gate bypass
+  // leaderboard on every run (named gates are invisible to the numeric alert path).
+  const bypassLeaderboard = await getNamedGateBypassLeaderboard();
+  printBypassLeaderboard(bypassLeaderboard);
 
   // Combine alerts and drops
   const allIssues = [...alerts];

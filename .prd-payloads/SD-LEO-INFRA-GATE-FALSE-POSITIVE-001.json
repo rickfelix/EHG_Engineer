@@ -1,0 +1,99 @@
+{
+  "title": "Make the gate pipeline self-correcting for NAMED gates — record metadata.bypassed_gate + 30-day false-positive leaderboard",
+  "status": "draft",
+  "executive_summary": "The gate pipeline (the harness verification oracle) cannot self-correct on NAMED semantic gates. Two verified defects: (1) scripts/modules/handoff/cli/execution-helpers.js checkBypassRateLimits() writes every --bypass-validation row to validation_audit_log as validator_name='handoff_bypass' with metadata.bypassed_gate ABSENT — the specific gate that false-positive-blocked the handoff is unrecorded; (2) scripts/gate-health-check.js GATE_TO_CATEGORY (63-70) maps only numeric gates (0/2A/2B/2C/2D/3), so it is structurally blind to named gates such as CROSS_REPO_STAGE_CONFIG_DRIFT, GATE4_WORKFLOW_ROI, WIRE_CHECK_GATE. Fix: derive the named gate from the bypass reason (regex UPPERCASE_SNAKE tokens intersected with the known-gate set, plus an optional explicit override; null when unidentifiable) and write it to metadata.bypassed_gate; and add a 30-day named-gate false-positive leaderboard to gate-health-check.js (group bypass rows by metadata.bypassed_gate, most-bypassed first). Report-only, forward-only, additive jsonb key (no schema migration).",
+  "exploration_summary": "Single bypass write-site (execution-helpers.js checkBypassRateLimits) only receives the free-text reason; bypass rows already store rubric_category/rubric_matched_rule, so adding metadata.bypassed_gate is localized. bypass-rubric.js (CONST-015) already classifies reasons (TOOLING_BUG = gate false-positive), and such reasons typically NAME the gate → regex extraction viable. gate-health-check.js reads v_gate_health_metrics/gate_health_history and is numeric-gate-only; the leaderboard is a new function querying validation_audit_log (failure_category=bypass) grouped by metadata->>bypassed_gate over 30 days. Known-gate set derived from distinct validation_audit_log.validator_name (non-bypass rows) ∪ a static fallback list.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Record metadata.bypassed_gate on the bypass audit row",
+      "description": "In execution-helpers.js checkBypassRateLimits(), derive the named gate from bypassReason — regex-extract UPPERCASE_SNAKE tokens, intersect with the known-gate set, pick the (longest) match; honor an optional explicit override (e.g. a [gate:NAME] marker in the reason). Write the result (or null) to metadata.bypassed_gate on the inserted validation_audit_log row.",
+      "acceptance_criteria": [
+        "A bypass whose reason names a known gate writes metadata.bypassed_gate=<GATE_NAME>.",
+        "A bypass whose reason names no recognizable gate writes metadata.bypassed_gate=null without error.",
+        "An explicit override marker takes precedence over regex extraction."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "30-day named-gate false-positive leaderboard",
+      "description": "Add a function in gate-health-check.js that selects validation_audit_log rows with failure_category='bypass' and created_at within the last 30 days, groups by metadata->>'bypassed_gate' (excluding null), counts, and prints a leaderboard ranked most-bypassed-first. Surfaced in the normal gate-health-check.js run output.",
+      "acceptance_criteria": [
+        "Running gate-health-check.js prints a 30-day named-gate bypass leaderboard.",
+        "Gates are ranked by bypass count descending; null/unidentified bypasses are excluded from the ranking (optionally shown as an aggregate)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Preserve existing behavior",
+      "description": "Numeric-gate GATE_TO_CATEGORY mapping, bypass rate limits, and the CONST-015 rubric are unchanged. The leaderboard is report-only (does not auto-create remediation SDs in this SD).",
+      "acceptance_criteria": [
+        "Existing gate-health-check.js numeric mapping + remediation logic still function.",
+        "Bypass rate-limit and rubric behavior unchanged."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Pure gate-name extractor",
+      "description": "A pure, unit-testable function extractBypassedGate(reason, knownGates, override?) → gateName|null. Regex /\\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\\b/g, intersect with knownGates, longest match wins; override short-circuits. No DB access in the pure function."
+    },
+    {
+      "id": "TR-2",
+      "title": "Known-gate set provider",
+      "description": "Derive knownGates from distinct validation_audit_log.validator_name (gates that have actually run) unioned with a small static fallback list of current named gates. Used to validate extracted tokens so arbitrary uppercase words are not mistaken for gates."
+    },
+    {
+      "id": "TR-3",
+      "title": "Leaderboard query",
+      "description": "Aggregate validation_audit_log WHERE failure_category='bypass' AND created_at >= now()-30d, GROUP BY metadata->>'bypassed_gate'. Done client-side over a bounded fetch (or via RPC if one exists). No new table; additive read."
+    }
+  ],
+  "system_architecture": {
+    "affected_objects": ["scripts/modules/handoff/cli/execution-helpers.js (bypass write-site)", "scripts/gate-health-check.js (new leaderboard fn)", "validation_audit_log.metadata.bypassed_gate (additive jsonb key)"],
+    "security_note": "No auth/RLS change; validation_audit_log writes already happen via the service-role CLI path. Additive metadata only.",
+    "out_of_scope": ["bypass rate-limit / CONST-015 rubric changes", "auto-creating remediation SDs from the leaderboard", "historical backfill of bypassed_gate on pre-existing rows", "schema migration (none needed)"]
+  },
+  "test_scenarios": [
+    {"id": "TS-1", "name": "gate extracted from reason", "given": "a bypass reason naming CROSS_REPO_STAGE_CONFIG_DRIFT", "when": "extractBypassedGate runs", "then": "returns 'CROSS_REPO_STAGE_CONFIG_DRIFT'"},
+    {"id": "TS-2", "name": "no gate → null", "given": "a reason naming no known gate", "when": "extractBypassedGate runs", "then": "returns null (no throw)"},
+    {"id": "TS-3", "name": "override precedence", "given": "a reason with an explicit [gate:GATE4_WORKFLOW_ROI] override and a different regex token", "when": "extractBypassedGate runs", "then": "returns the override"},
+    {"id": "TS-4", "name": "non-gate uppercase not matched", "given": "a reason with uppercase non-gate tokens (e.g. TODO, WIP)", "when": "extractBypassedGate runs against knownGates", "then": "returns null (token not in known-gate set)"},
+    {"id": "TS-5", "name": "leaderboard aggregation", "given": "several bypass rows with metadata.bypassed_gate", "when": "the leaderboard fn aggregates 30 days", "then": "gates are ranked by count desc; nulls excluded from ranking"}
+  ],
+  "acceptance_criteria": [
+    "metadata.bypassed_gate populated on new gate-named bypass rows; null (no error) otherwise.",
+    "gate-health-check.js emits a 30-day named-gate false-positive leaderboard.",
+    "Numeric-gate mapping, rate limits, and rubric behavior unchanged.",
+    "Pure extractor + leaderboard aggregation covered by unit tests."
+  ],
+  "risks": [
+    {"risk": "False gate attribution (regex matches a non-gate uppercase token)", "mitigation": "Intersect extracted tokens with the known-gate set (distinct validator_name ∪ static fallback); unknown tokens → null. Unit-tested (TS-4).", "impact": "low", "likelihood": "medium"},
+    {"risk": "Reason does not name the gate → null attribution reduces leaderboard signal", "mitigation": "Graceful null is acceptable (report-only); optional explicit override lets operators attribute precisely. Forward-only; signal accrues as bypasses occur.", "impact": "low", "likelihood": "medium"},
+    {"risk": "Leaderboard query cost grows with audit-log size", "mitigation": "Bounded to 30-day window + failure_category='bypass' index path; client-side aggregation over a capped fetch.", "impact": "low", "likelihood": "low"},
+    {"risk": "Regression in the bypass write path (handoffs depend on it)", "mitigation": "Change is additive (one metadata key); extractor is pure and try/wrapped so a failure degrades to bypassed_gate=null and never blocks the bypass. Existing handoff-system tests rerun.", "impact": "medium", "likelihood": "low"}
+  ],
+  "implementation_approach": {
+    "summary": "Add a pure extractBypassedGate() + known-gate provider, wire it into checkBypassRateLimits()'s metadata, and add a 30-day named-gate leaderboard fn to gate-health-check.js. Additive metadata key, report-only, no migration.",
+    "steps": [
+      "Add pure extractBypassedGate(reason, knownGates, override) with unit tests",
+      "Add known-gate provider (distinct validator_name ∪ static fallback)",
+      "Wire metadata.bypassed_gate into checkBypassRateLimits() (try-wrapped, degrades to null)",
+      "Add 30-day named-gate leaderboard fn to gate-health-check.js + print in run output",
+      "Unit tests for extractor + leaderboard aggregation; rerun handoff-system tests"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": ["LEO coordinator / harness maintainers reviewing gate-health-check.js output", "future auto-remediation (out of scope here) that would read the leaderboard"],
+    "dependencies": ["validation_audit_log (bypass rows)", "bypass-rubric.js (reason classification, unchanged)", "scripts/gate-health-check.js run cadence"],
+    "data_contracts": {"bypassed_gate": "validation_audit_log.metadata.bypassed_gate: string (named gate) | null; additive, no schema change"},
+    "runtime_config": {"window_days": 30, "feature_flag": "none — additive metadata + report-only output"},
+    "observability_rollout": {"post_apply_check": "a gate-named --bypass writes metadata.bypassed_gate; gate-health-check.js prints the 30-day leaderboard", "rollback": "revert the two file changes; bypassed_gate key simply stops being written (no data migration to undo)"}
+  },
+  "metadata": {
+    "root_cause": "Bypass audit rows omit bypassed_gate and the health check maps only numeric gates → named-gate false positives are invisible to the self-improvement loop.",
+    "verified_sites": "execution-helpers.js:151-160 (no bypassed_gate); gate-health-check.js:63-70 (numeric-only)",
+    "approach": "derive bypassed_gate from reason (regex ∩ known-gate set) + optional override; report-only 30-day leaderboard"
+  }
+}
