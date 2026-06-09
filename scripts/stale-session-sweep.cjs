@@ -720,7 +720,9 @@ async function main() {
   const claimedSdKeys = [...new Set(classified.map(s => s.sd_key).filter(Boolean))];
   const { data: claimedSdStatus } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, status, completion_date')
+    // FR-3 (SD-LEO-FIX-STALE-SESSION-SWEEP-001): claiming_session_id lets the cross-signal guard
+    // distinguish a genuinely-held SD from one whose claim was already cleared (zombie-tick case).
+    .select('sd_key, status, completion_date, claiming_session_id')
     .in('sd_key', claimedSdKeys);
 
   const sdStatusMap = {};
@@ -775,8 +777,42 @@ async function main() {
     }
   }
 
-  // 3c. QA — detect sessions claiming SDs that don't exist
-  const orphanedClaims = classified.filter(s => !sdStatusMap[s.sd_key]);
+  // 3c. QA — detect sessions claiming SDs that don't exist.
+  // FR-2 (SD-LEO-FIX-STALE-SESSION-SWEEP-001): a QF-claiming session carries sd_key='QF-...'
+  // (written by claim_sd), which is NEVER in strategic_directives_v2 → the filter below would
+  // mis-classify EVERY live QF claim as SWEEP_ORPHANED_CLAIM (witnessed QF-564/255/703/666). Build
+  // a quick_fixes existence set + a claim-age map (claude_sessions.claimed_at proxy) so a QF-shaped
+  // claim is HELD when the QF exists OR was claimed within the grace window. Fail-open: a failed
+  // existence query leaves the set empty → fresh (<grace) claims stay HELD, only old/unknown-age
+  // claims are released (the QF row is untouched and remains re-claimable).
+  const QF_CLAIM_GRACE_SECONDS = Number(process.env.QF_CLAIM_GRACE_SECONDS) || 60;
+  const qfClaimedKeys = claimedSdKeys.filter(k => /^QF-/.test(k));
+  const qfExistsSet = new Set();
+  const qfClaimAgeBySession = new Map();
+  if (qfClaimedKeys.length > 0) {
+    // R11: do NOT select (id,status,claiming_session_id) — stale-sweep-qf211 pins exactly one
+    // SELECT of that exact tuple. Use 'id' only.
+    try {
+      const { data: qfRows } = await supabase.from('quick_fixes').select('id').in('id', qfClaimedKeys);
+      (qfRows || []).forEach(q => qfExistsSet.add(q.id));
+    } catch { /* fail-open: empty set → grace window still protects fresh claims */ }
+    try {
+      const qfSessionIds = classified.filter(s => /^QF-/.test(s.sd_key || '')).map(s => s.session_id).filter(Boolean);
+      if (qfSessionIds.length > 0) {
+        const { data: csRows } = await supabase.from('claude_sessions').select('session_id, claimed_at').in('session_id', qfSessionIds);
+        (csRows || []).forEach(r => qfClaimAgeBySession.set(r.session_id, r.claimed_at ? (now.getTime() - Date.parse(r.claimed_at)) / 1000 : Infinity));
+      }
+    } catch { /* fail-open */ }
+  }
+  // HELD (not orphaned) iff the QF exists OR was claimed within the grace window (read-after-write
+  // race on a freshly-INSERTed QF). Unknown claim age → Infinity → released only if QF truly absent.
+  const isHeldQfClaim = (s) => {
+    if (!/^QF-/.test(s.sd_key || '')) return false;
+    if (qfExistsSet.has(s.sd_key)) return true;
+    const ageSec = qfClaimAgeBySession.has(s.session_id) ? qfClaimAgeBySession.get(s.session_id) : Infinity;
+    return ageSec < QF_CLAIM_GRACE_SECONDS;
+  };
+  const orphanedClaims = classified.filter(s => !sdStatusMap[s.sd_key] && !isHeldQfClaim(s));
   for (const s of orphanedClaims) {
     const targetStatus = s.status === 'ACTIVE' ? 'idle' : 'released';
     // SD-LEO-INFRA-SESSION-LIFECYCLE-CLEANUP-001 (FR-2): Clear dirty fields on claim release
@@ -1078,7 +1114,14 @@ async function main() {
     // release predicate, but this misses cross-shell processes whose CC conversation rotated
     // session_id while the worktree is still warm. Defer to triangulate's multi-signal check
     // for the SD this session claimed; if evidence-of-life present, HOLD (do not release).
-    if (s.sd_key) {
+    // FR-3 (SD-LEO-FIX-STALE-SESSION-SWEEP-001): a zombie process_tick from a dead session can make
+    // checkPreClaimEvidence report evidence-of-life on an SD that has NO live holder. Trust the
+    // cross-signal HOLD only when the SD is actually claimed: if its claiming_session_id IS NULL
+    // (no holder — SAFE), skip the gate so the deferred/unclaimed SD can be reclaimed. status alone
+    // (e.g. 'deferred') is NOT sufficient — a parked-but-ALIVE worker is deferred + still claimed.
+    const sdMetaForGate = sdStatusMap[s.sd_key];
+    const sdUnclaimed = !!sdMetaForGate && sdMetaForGate.claiming_session_id == null;
+    if (s.sd_key && !sdUnclaimed) {
       try {
         // Lazy import — keep CJS sweep file independent of ESM triangulate at module load
         const { checkPreClaimEvidence } = await import('./modules/claim-health/triangulate.js');
@@ -1473,6 +1516,46 @@ async function main() {
       await supabase.from('session_coordination').delete().in('id', batch);
     }
     actions.push('CLEANUP: deleted ' + allDeadMsgIds.length + ' unread coordination messages targeting dead/gone sessions');
+  }
+
+  // FR-1 (SD-LEO-FIX-STALE-SESSION-SWEEP-001): drain WORK_ASSIGNMENT rows whose target SD/QF has
+  // gone terminal — they otherwise re-fire on every worker tick. STAMP read_at (the drain marker;
+  // preserves audit + the row's expires_at), NOT a hard-DELETE. Only drain rows older than one
+  // sweep interval (assignment-age floor) so a transient terminal read can't drop a mid-transition
+  // in-flight assignment. Terminal sets BRANCH by target shape: SD → {completed,cancelled,deferred};
+  // QF → {completed,cancelled,escalated} (escalated is QF-only; deferred is SD-only). Fail-open.
+  try {
+    const SWEEP_INTERVAL_MS = 5 * 60_000;
+    const assignAgeCutoff = new Date(nowMs - SWEEP_INTERVAL_MS).toISOString();
+    const { data: openAssignments } = await supabase
+      .from('session_coordination')
+      .select('id, target_sd, created_at')
+      .eq('message_type', 'WORK_ASSIGNMENT')
+      .is('read_at', null)
+      .not('target_sd', 'is', null)
+      .lt('created_at', assignAgeCutoff);
+    const assignTargets = [...new Set((openAssignments || []).map(a => a.target_sd).filter(Boolean))];
+    const sdAssignTargets = assignTargets.filter(k => !/^QF-/.test(k));
+    const qfAssignTargets = assignTargets.filter(k => /^QF-/.test(k));
+    const terminalTargetSet = new Set();
+    if (sdAssignTargets.length > 0) {
+      const { data: sdRows } = await supabase.from('strategic_directives_v2').select('sd_key, status').in('sd_key', sdAssignTargets);
+      (sdRows || []).forEach(r => { if (['completed', 'cancelled', 'deferred'].includes(r.status)) terminalTargetSet.add(r.sd_key); });
+    }
+    if (qfAssignTargets.length > 0) {
+      const { data: qfRows2 } = await supabase.from('quick_fixes').select('id, status').in('id', qfAssignTargets);
+      (qfRows2 || []).forEach(r => { if (['completed', 'cancelled', 'escalated'].includes(r.status)) terminalTargetSet.add(r.id); });
+    }
+    const drainIds = (openAssignments || []).filter(a => terminalTargetSet.has(a.target_sd)).map(a => a.id);
+    for (let i = 0; i < drainIds.length; i += 50) {
+      const batch = drainIds.slice(i, i + 50);
+      await supabase.from('session_coordination').update({ read_at: now.toISOString() }).in('id', batch);
+    }
+    if (drainIds.length > 0) {
+      actions.push('CLEANUP: drained ' + drainIds.length + ' WORK_ASSIGNMENT row(s) targeting terminal SD/QF (read_at stamped)');
+    }
+  } catch (e) {
+    warnings.push('WORK_ASSIGNMENT_TERMINAL_DRAIN: skipped due to error: ' + (e && e.message ? e.message : e));
   }
 
   for (const s of activeSessions) {
