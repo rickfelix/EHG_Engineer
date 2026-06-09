@@ -1,0 +1,111 @@
+{
+  "title": "GRANT EXECUTE on rescan_stage_20(uuid) to authenticated — fix Stage 20 rescan 42501 in the EHG Chairman Dashboard",
+  "status": "draft",
+  "executive_summary": "The EHG Chairman Dashboard Stage 20 rescan button (ehg/src ReplitStatusPanel.tsx:66, Stage20BuildExecution.tsx:396) calls the Postgres RPC rescan_stage_20(uuid) as the logged-in `authenticated` role and gets Postgres 42501 (permission denied for function). Verified against the live DB: rescan_stage_20 is SECURITY DEFINER, owner=postgres, with proacl {postgres=X, service_role=X} — PUBLIC EXECUTE was revoked by a prior security sweep and `authenticated` was never re-granted (service_role-only callers like scripts/rescan-stage20.js work, hiding the gap from backend tooling). This is the identical bug class fixed by the shipped SD-LEO-FIX-AUDIT-RESTORE-EXECUTE-001 (18 RPCs restored), which missed this one function. Fix: a forward migration granting EXECUTE to `authenticated` (only — not anon), a matching rollback REVOKE, and adding rescan_stage_20 to the existing recurrence guard's FALLBACK_RPCS so CI catches future drift on it. The function is SECURITY DEFINER; the GRANT only permits the call — internal logic remains the effect boundary.",
+  "exploration_summary": "rescan_stage_20(uuid): live proacl={postgres=X,service_role=X}; authenticated and anon both absent (root cause of 42501). Only one rescan_stage* function exists (no siblings to sweep). Sibling shipped SD-LEO-FIX-AUDIT-RESTORE-EXECUTE-001 restored 18 RPCs with the same GRANT-to-authenticated pattern (migration 20260606_restore_rpc_execute_grants.sql) but did not include rescan_stage_20. Its recurrence guard scripts/audit-rpc-execute-grants.mjs greps ehg/src or falls back to FALLBACK_RPCS (which omits rescan_stage_20) — the omission is why CI never flagged this. CREATE OR REPLACE preserves grants, so the latest definer (20260530_rescan_stage20_reason.sql) did not cause the loss; an explicit REVOKE PUBLIC sweep did.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Grant authenticated EXECUTE on rescan_stage_20(uuid)",
+      "description": "A forward migration grants EXECUTE on public.rescan_stage_20(uuid) to the authenticated role, overload-safe via pg_proc::regprocedure (modeled on 20260606_restore_rpc_execute_grants.sql). Idempotent.",
+      "acceptance_criteria": [
+        "After the migration, has_function_privilege('authenticated', 'public.rescan_stage_20(uuid)', 'EXECUTE') = true.",
+        "The migration RAISEs/aborts if no matching function is found (audit-drift guard)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Do not grant anon",
+      "description": "anon is NOT granted EXECUTE. The function mutates ventures / venture_stage_work / strategic_directives_v2 / chairman_decisions and auto-advances stages; it must remain logged-in-only. The EHG UI calls it as authenticated.",
+      "acceptance_criteria": [
+        "has_function_privilege('anon', 'public.rescan_stage_20(uuid)', 'EXECUTE') remains false."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Reversibility",
+      "description": "A rollback migration REVOKEs EXECUTE on public.rescan_stage_20(uuid) from authenticated, restoring the prior {postgres, service_role} ACL.",
+      "acceptance_criteria": [
+        "Applying the rollback returns has_function_privilege('authenticated', ...) to false."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Close the recurrence-guard gap",
+      "description": "Add 'rescan_stage_20' to FALLBACK_RPCS in scripts/audit-rpc-execute-grants.mjs so the guard checks it even when the ehg app source is not checked out (CI). This is the exact omission that let the bug slip past the guard.",
+      "acceptance_criteria": [
+        "FALLBACK_RPCS includes 'rescan_stage_20'.",
+        "Running the guard against the live DB (post-migration) exits 0; it would have exited 1 before the migration."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Overload-safe GRANT migration",
+      "description": "database/migrations/<date>_grant_execute_rescan_stage_20.sql: @approved-by header (git user.email) + a DO block that iterates pg_proc::regprocedure for proname='rescan_stage_20' in public and EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated', sig); RAISE EXCEPTION if 0 matched. Mirror 20260606_restore_rpc_execute_grants.sql."
+    },
+    {
+      "id": "TR-2",
+      "title": "Rollback migration",
+      "description": "A paired *_rollback.sql that REVOKEs EXECUTE ... FROM authenticated for the same signature(s)."
+    },
+    {
+      "id": "TR-3",
+      "title": "Apply via audited path",
+      "description": "Apply the forward migration with scripts/apply-migration.js --prod-deploy (--issue-token + @approved-by header added BEFORE token issuance, sha-bound) + advisory lock. Re-verify has_function_privilege post-apply."
+    },
+    {
+      "id": "TR-4",
+      "title": "Recurrence guard update",
+      "description": "Add 'rescan_stage_20' to FALLBACK_RPCS (scripts/audit-rpc-execute-grants.mjs). The guard then serves as the regression test for this fix."
+    }
+  ],
+  "system_architecture": {
+    "affected_objects": ["EXECUTE privilege (authenticated role) on public.rescan_stage_20(uuid)", "scripts/audit-rpc-execute-grants.mjs FALLBACK_RPCS list"],
+    "security_note": "rescan_stage_20 is SECURITY DEFINER (owner postgres). The GRANT is a callability gate, not the security boundary. anon withheld. NOTE: the function has no internal fn_is_chairman() guard, so any authenticated user can rescan/advance any venture's Stage 20 — this is a pre-existing defense-in-depth gap tracked as a SEPARATE follow-up SD; restoring the grant returns behavior to its pre-sweep design.",
+    "out_of_scope": ["granting anon", "adding an internal chairman authz guard to the function (separate follow-up)", "changing the function body", "other RPCs (none of the other rescan_stage_NN functions exist)"]
+  },
+  "test_scenarios": [
+    {"id": "TS-1", "name": "authenticated grant restored", "given": "the forward migration applied", "when": "querying has_function_privilege('authenticated','public.rescan_stage_20(uuid)','EXECUTE')", "then": "returns true"},
+    {"id": "TS-2", "name": "anon not granted", "given": "post-migration", "when": "checking has_function_privilege('anon','public.rescan_stage_20(uuid)','EXECUTE')", "then": "remains false"},
+    {"id": "TS-3", "name": "recurrence guard passes for rescan_stage_20", "given": "rescan_stage_20 added to FALLBACK_RPCS and the grant applied", "when": "running scripts/audit-rpc-execute-grants.mjs", "then": "exits 0 and lists rescan_stage_20 as granted; pre-migration it would exit 1"},
+    {"id": "TS-4", "name": "rollback reverses", "given": "the rollback migration", "when": "applied", "then": "has_function_privilege('authenticated', ...) returns to false"},
+    {"id": "TS-5", "name": "Stage 20 rescan no longer 42501", "given": "the authenticated role", "when": "calling rescan_stage_20(<venture_id>)", "then": "no 42501 / permission-denied (function executes and returns its success JSON)"}
+  ],
+  "acceptance_criteria": [
+    "authenticated has EXECUTE on rescan_stage_20(uuid) after the migration; anon does not.",
+    "rescan_stage_20 is in FALLBACK_RPCS and the recurrence guard exits 0 post-migration.",
+    "A rollback migration exists and reverses the grant.",
+    "Migration applied via apply-migration.js --prod-deploy and verified live."
+  ],
+  "risks": [
+    {"risk": "Over-permitting: any authenticated user can rescan/advance any venture's Stage 20 (no internal chairman guard)", "mitigation": "This restores pre-sweep behavior, not a new privilege; the function was PUBLIC-executable by design before the sweep. The defense-in-depth chairman guard is tracked as a SEPARATE follow-up SD so this fix stays minimal and unblocks the dashboard now. anon stays withheld.", "impact": "medium", "likelihood": "medium"},
+    {"risk": "Granting the wrong signature / overload", "mitigation": "Use pg_proc::regprocedure to grant every public overload of rescan_stage_20 (only one exists: (uuid)); verify has_function_privilege per signature post-apply.", "impact": "low", "likelihood": "low"},
+    {"risk": "Grant dropped again by a future CREATE OR REPLACE / re-sweep", "mitigation": "rescan_stage_20 added to the recurrence guard's FALLBACK_RPCS so CI catches a future drop; re-assert-after-replace convention documented in the guard.", "impact": "medium", "likelihood": "low"},
+    {"risk": "Live prod-deploy of a migration", "mitigation": "Single-statement GRANT, idempotent, reversible (rollback migration). Apply via audited apply-migration.js --prod-deploy (issue-token + sha-bound @approved-by + advisory lock); dry-run first.", "impact": "low", "likelihood": "low"}
+  ],
+  "implementation_approach": {
+    "summary": "One forward migration GRANTing EXECUTE on rescan_stage_20(uuid) to authenticated (overload-safe DO block), a paired rollback REVOKE, and adding rescan_stage_20 to the recurrence guard's FALLBACK_RPCS. Apply forward via apply-migration --prod-deploy; verify grants and run the guard.",
+    "steps": [
+      "Author forward migration (DO block over pg_proc::regprocedure, @approved-by header) modeled on 20260606_restore_rpc_execute_grants.sql",
+      "Author rollback migration (REVOKE)",
+      "Add 'rescan_stage_20' to FALLBACK_RPCS in scripts/audit-rpc-execute-grants.mjs",
+      "Apply forward migration --prod-deploy and verify has_function_privilege('authenticated', ...) = true, anon = false",
+      "Run scripts/audit-rpc-execute-grants.mjs — expect exit 0 with rescan_stage_20 covered"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": ["EHG app (ehg/src) — ReplitStatusPanel.tsx:66 and Stage20BuildExecution.tsx:396 Stage 20 rescan button", "authenticated Chairman users on Stage 20 venture pages"],
+    "dependencies": ["public.rescan_stage_20(uuid) (SECURITY DEFINER)", "authenticated / anon Supabase roles", "scripts/apply-migration.js audited path", "scripts/audit-rpc-execute-grants.mjs recurrence guard"],
+    "data_contracts": {"grant": "EXECUTE ON FUNCTION public.rescan_stage_20(uuid) TO authenticated; function body and return shape unchanged"},
+    "runtime_config": {"approver": "codestreetlabs@gmail.com", "feature_flag": "none — grant restoration"},
+    "observability_rollout": {"post_apply_check": "has_function_privilege('authenticated','public.rescan_stage_20(uuid)','EXECUTE')=true; anon=false; guard exits 0", "rollback": "REVOKE EXECUTE ON FUNCTION public.rescan_stage_20(uuid) FROM authenticated (returns to pre-migration 42501 state); non-destructive"}
+  },
+  "metadata": {
+    "root_cause": "Prior security sweep REVOKEd PUBLIC EXECUTE on the SECURITY DEFINER rescan_stage_20 and granted only service_role; authenticated never re-granted -> EHG app (authenticated) gets 42501.",
+    "live_db_proacl_before": "{postgres=X/postgres,service_role=X/postgres}",
+    "sibling_sd": "SD-LEO-FIX-AUDIT-RESTORE-EXECUTE-001 (same bug class, missed this function)",
+    "followup": "Defense-in-depth: add internal fn_is_chairman() authz guard to rescan_stage_20 (separate SD)"
+  }
+}
