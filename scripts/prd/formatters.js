@@ -190,7 +190,9 @@ ${llmContent.technical_requirements.map(req => {
     const arch = llmContent.system_architecture;
     const archLines = ['## System Architecture'];
     if (arch.overview) archLines.push(`\n### Overview\n${arch.overview}`);
-    if (arch.components && arch.components.length > 0) {
+    // SD-LEO-INFRA-HARDEN-ADD-PRD-001: guard with Array.isArray — a string .components has a
+    // truthy .length but no .forEach (the downstream crash the shape-check now also blocks).
+    if (Array.isArray(arch.components) && arch.components.length > 0) {
       archLines.push('\n### Components');
       arch.components.forEach(comp => {
         archLines.push(`\n#### ${comp.name}`);
@@ -199,7 +201,7 @@ ${llmContent.technical_requirements.map(req => {
       });
     }
     if (arch.data_flow) archLines.push(`\n### Data Flow\n${arch.data_flow}`);
-    if (arch.integration_points && arch.integration_points.length > 0) {
+    if (Array.isArray(arch.integration_points) && arch.integration_points.length > 0) {
       archLines.push('\n### Integration Points');
       arch.integration_points.forEach(point => archLines.push(`- ${point}`));
     }
