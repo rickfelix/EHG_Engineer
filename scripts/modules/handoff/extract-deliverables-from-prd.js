@@ -14,6 +14,24 @@
  * - Enables bi-directional sync between stories and deliverables
  */
 
+// SD-LEO-INFRA-SIZE-TIER-AWARE-001: tier-aware deliverable seeding. The PRD exec_checklist is a
+// fixed 6-item definition-of-done; for a small/fast SD (a 2-file bugfix) the size-irrelevant
+// items ("Development environment setup", "Integration tests completed") stay 'pending' and sink
+// the SCOPE_AUDIT coverage (4/6=67% < 80%), forcing every fast SD to manually flip them. Drop
+// those size-irrelevant items for small SD types so the seeded denominator matches the actual
+// scope. Fail-open: an unknown/large type keeps the full checklist (no behavior change for
+// feature/infrastructure SDs).
+export const SMALL_SD_TYPES = new Set(['fix', 'bugfix', 'hotfix', 'documentation']);
+export const SIZE_IRRELEVANT_DELIVERABLES = new Set([
+  'Development environment setup',
+  'Integration tests completed',
+]);
+
+export function filterChecklistForTier(checklist, sdType) {
+  if (!Array.isArray(checklist) || !SMALL_SD_TYPES.has(sdType)) return checklist;
+  return checklist.filter((item) => !SIZE_IRRELEVANT_DELIVERABLES.has(((item && item.text) || '').trim()));
+}
+
 /**
  * Extract deliverables from PRD and populate sd_scope_deliverables table
  *
@@ -66,11 +84,19 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
       userStories.forEach(s => storyKeyToId.set(s.story_key, s.id));
     }
 
+    // SD-LEO-INFRA-SIZE-TIER-AWARE-001: drop size-irrelevant boilerplate for small SD types.
+    let sdTypeForTier = null;
+    try {
+      const { data: sdRow } = await supabase.from('strategic_directives_v2').select('sd_type').eq('id', sdId).single();
+      sdTypeForTier = sdRow?.sd_type ?? null;
+    } catch { /* fail-open: no SD type -> full checklist (no filtering) */ }
+    const execChecklist = filterChecklistForTier(prd.exec_checklist, sdTypeForTier);
+
     // PRIORITY: Extract from exec_checklist with user_story_ids (SD-DELIVERABLES-V2-001 Phase 2)
-    if (prd.exec_checklist && Array.isArray(prd.exec_checklist)) {
+    if (execChecklist && Array.isArray(execChecklist)) {
       let linkedCount = 0;
 
-      prd.exec_checklist.forEach((item, index) => {
+      execChecklist.forEach((item, index) => {
         // Resolve user_story_id from user_story_ids array
         let userStoryId = null;
         if (item.user_story_ids && Array.isArray(item.user_story_ids) && item.user_story_ids.length > 0) {
