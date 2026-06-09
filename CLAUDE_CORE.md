@@ -1241,7 +1241,7 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
 
 4. **NEVER Compress Away**:
    - The `.claude/session-state.md` reference
-   - The `.claude/compaction-snapshot.md` reference
+   - The `.claude/unified-session-state.json` reference
    - Active PRD requirements
    - User's explicit instructions from this session
 
@@ -1252,7 +1252,7 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
    - Historical handoff details (older than current phase)
 
 **After compaction, IMMEDIATELY read:**
-- `.claude/compaction-snapshot.md` (git state)
+- `.claude/unified-session-state.json` (git state)
 - `.claude/session-state.md` (work state)
 
 **Session Restoration Protocol**: If you notice context seems sparse or you're missing critical details, proactively ask: "I may have lost context during compaction. Let me check .claude/session-state.md for current work state."
