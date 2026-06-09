@@ -255,3 +255,108 @@ export function validateAndClassifyBypass(reason, options = {}) {
 
   return result;
 }
+
+/**
+ * SD-LEO-INFRA-GATE-FALSE-POSITIVE-001: Known NAMED semantic gates.
+ *
+ * Static fallback list used to validate gate tokens extracted from a bypass
+ * reason. Numeric gates (0/2A/2B/2C/2D/3) are intentionally EXCLUDED — they are
+ * already mapped by gate-health-check.js GATE_TO_CATEGORY. A caller may extend
+ * this at runtime (e.g. with distinct validation_audit_log.validator_name values),
+ * but the bypass write-path uses the static list to stay fast and I/O-free.
+ */
+export const KNOWN_NAMED_GATES = [
+  'CROSS_REPO_STAGE_CONFIG_DRIFT',
+  'GATE4_WORKFLOW_ROI',
+  'WIRE_CHECK_GATE',
+  'WIRE_CHECK_ADVISORY',
+  'USER_STORY_COVERAGE',
+  'GATE_VISION_SCORE',
+  'VISION_FIDELITY_GATE',
+  'SUB_AGENT_REPO_RESOLUTION',
+  'RETROSPECTIVE_QUALITY_GATE',
+  'SCOPE_AUDIT',
+  'SMOKE_TEST_SPECIFICATION',
+  'GATE_SD_METRICS_SUFFICIENCY',
+  'GATE_PLACEHOLDER_CONTENT_DETECTION',
+  'DB_CONTENT_PARITY',
+  'MANDATORY_TESTING_VALIDATION',
+  'GATE_INTEGRATION_CONTRACT'
+];
+
+// UPPERCASE_SNAKE tokens (≥1 underscore) — gate-name shaped. Numeric gate codes
+// (0/2A/3 …) are deliberately not matched.
+const GATE_TOKEN_RE = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
+// Explicit operator override: `[gate:NAME]` anywhere in the reason.
+const GATE_OVERRIDE_RE = /\[gate:\s*([A-Za-z][A-Za-z0-9_]+)\s*\]/i;
+
+/**
+ * SD-LEO-INFRA-GATE-FALSE-POSITIVE-001: Extract the NAMED semantic gate a bypass
+ * targeted, from its free-text reason. PURE (no I/O); never throws.
+ *
+ * Resolution order:
+ *   1. Explicit `[gate:NAME]` override marker (validated against the known set,
+ *      but an unknown explicit name is still trusted — operator intent wins).
+ *   2. UPPERCASE_SNAKE tokens in the reason intersected with the known-gate set;
+ *      the longest match wins (favours the most specific gate name).
+ *   3. null — unidentifiable. Callers MUST treat null as non-fatal and never
+ *      block the bypass on it.
+ *
+ * @param {string} reason - bypass reason text
+ * @param {string[]} [extraGates=[]] - additional known gate names to recognize
+ * @returns {string|null} the named gate, or null
+ */
+export function extractBypassedGate(reason, extraGates = []) {
+  if (!reason || typeof reason !== 'string') return null;
+  const known = new Set(
+    [...KNOWN_NAMED_GATES, ...(Array.isArray(extraGates) ? extraGates : [])]
+      .filter((g) => typeof g === 'string' && g.length > 0)
+  );
+
+  // 1. Explicit override marker
+  const ov = reason.match(GATE_OVERRIDE_RE);
+  if (ov) {
+    const upper = ov[1].toUpperCase();
+    for (const g of known) {
+      if (g.toUpperCase() === upper) return g;
+    }
+    return ov[1]; // explicit but unknown — trust the operator
+  }
+
+  // 2. Regex tokens ∩ known-gate set; longest match wins
+  const matches = (reason.match(GATE_TOKEN_RE) || []).filter((t) => known.has(t));
+  if (matches.length > 0) {
+    return matches.sort((a, b) => b.length - a.length)[0];
+  }
+
+  // 3. Unidentifiable
+  return null;
+}
+
+/**
+ * SD-LEO-INFRA-GATE-FALSE-POSITIVE-001: tally bypass audit rows by named gate.
+ * PURE (no I/O) so the leaderboard aggregation is unit-testable independently of
+ * the DB fetch in gate-health-check.js.
+ *
+ * @param {Array<{metadata?: {bypassed_gate?: string|null}}>} rows - bypass audit rows
+ * @returns {{ ranked: Array<{gate:string,count:number}>, unattributed:number, total:number }}
+ *   ranked: named gates by descending bypass count; unattributed: rows with null/absent
+ *   bypassed_gate; total: rows considered.
+ */
+export function tallyBypassedGates(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const counts = new Map();
+  let unattributed = 0;
+  for (const row of list) {
+    const gate = row && row.metadata ? row.metadata.bypassed_gate : null;
+    if (gate && typeof gate === 'string') {
+      counts.set(gate, (counts.get(gate) || 0) + 1);
+    } else {
+      unattributed += 1;
+    }
+  }
+  const ranked = [...counts.entries()]
+    .map(([gate, count]) => ({ gate, count }))
+    .sort((a, b) => b.count - a.count);
+  return { ranked, unattributed, total: list.length };
+}
