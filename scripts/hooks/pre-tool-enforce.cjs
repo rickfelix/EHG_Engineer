@@ -374,6 +374,31 @@ function extractTableName(command) {
 }
 
 /**
+ * QF-20260609-547: split a command into per-`.from('table')` segments so column checks are scoped
+ * to the NEAREST preceding `.from()`. Previously a compound `node -e` touching two tables attributed
+ * every extracted column to ONE table → cross-table false blocks (e.g. user_stories columns blamed
+ * on product_requirements_v2). Falls back to extractTableName (rpc / other Supabase patterns) when no
+ * `.from()` is present, preserving the prior single-table behavior.
+ * @param {string} command
+ * @returns {Array<{table: string, text: string}>}
+ */
+function extractTableSegments(command) {
+  const fromRe = /\.from\(\s*['"`](\w+)['"`]\s*\)/g;
+  const matches = [...command.matchAll(fromRe)];
+  if (matches.length === 0) {
+    const t = extractTableName(command);
+    return t ? [{ table: t, text: command }] : [];
+  }
+  const segments = [];
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index;
+    const end = i + 1 < matches.length ? matches[i + 1].index : command.length;
+    segments.push({ table: matches[i][1], text: command.slice(start, end) });
+  }
+  return segments;
+}
+
+/**
  * Extract column names from a Bash command (best-effort).
  * Detects columns from Supabase client method patterns.
  * @param {string} command
@@ -383,6 +408,28 @@ function extractTableName(command) {
 // a small shared, unit-tested module (this hook runs main() at load, so it cannot be required
 // from a test — the pure coercion logic is extracted to be testable).
 const { coerceLiteral } = require(path.resolve(__dirname, 'lib', 'coerce-literal.cjs'));
+
+// QF-20260609-547: helpers for TOP-LEVEL-ONLY key extraction from a mutation object, so a
+// jsonb-array/nested column value's inner keys are never mistaken for table columns.
+function balancedBody(s, openIdx) {
+  // Substring between the brace at openIdx and its matching close (exclusive); to end-of-string
+  // if unbalanced (truncated command) — best-effort, advisory hook.
+  if (openIdx < 0 || s[openIdx] !== '{') return '';
+  let depth = 0;
+  for (let i = openIdx; i < s.length; i++) {
+    const c = s[i];
+    if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) return s.slice(openIdx + 1, i); }
+  }
+  return s.slice(openIdx + 1);
+}
+function stripNestedGroups(body) {
+  // Collapse innermost {..}/[..] groups to a scalar placeholder, repeatedly, so only top-level
+  // `key: value` pairs remain — prevents descent into nested objects/arrays (e.g. jsonb columns).
+  let prev;
+  do { prev = body; body = body.replace(/\{[^{}]*\}/g, 'null').replace(/\[[^\[\]]*\]/g, 'null'); } while (body !== prev);
+  return body;
+}
 
 function extractParams(command) {
   const params = {};
@@ -424,9 +471,15 @@ function extractParams(command) {
   // Non-literal values stay 'unknown' (the schema-preflight type-check-skip sentinel; the
   // unknown-column check still runs). Quoted-string alternative is first so values containing
   // commas/colons are captured whole before the [^,]+ fallback.
-  const mutationPattern = /\.(?:insert|update|upsert)\(\s*\{([^}]+)\}/g;
-  while ((match = mutationPattern.exec(command)) !== null) {
-    const objectBody = match[1];
+  // QF-20260609-547: the prior `\{([^}]+)\}` + flat kvPattern descended into nested objects/arrays
+  // (e.g. a jsonb-array column like `success_metrics: [{ metric, target, acceptance }]`) and stamped
+  // the INNER keys as columns of the table → false unknown-column BLOCK on valid commands. Now: grab
+  // the BALANCED top-level object body, strip nested {..}/[..] groups to a scalar, then read only
+  // top-level keys.
+  const mutHeadPattern = /\.(?:insert|update|upsert)\(\s*\{/g;
+  while ((match = mutHeadPattern.exec(command)) !== null) {
+    const openIdx = command.indexOf('{', match.index);
+    const objectBody = stripNestedGroups(balancedBody(command, openIdx));
     const kvPattern = /(\w+)\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`|true|false|-?\d+(?:\.\d+)?|[^,]+)/g;
     let kvMatch;
     while ((kvMatch = kvPattern.exec(objectBody)) !== null) {
@@ -446,40 +499,43 @@ function extractParams(command) {
  * @returns {Promise<void>}
  */
 async function validateBeforeExecution(command) {
-  const tableName = extractTableName(command);
-  if (!tableName) return; // No Supabase pattern detected
+  // QF-20260609-547: validate each `.from()` segment against ITS OWN table + columns (scoped),
+  // instead of attributing every column in the command to a single table.
+  const segments = extractTableSegments(command);
+  if (segments.length === 0) return; // No Supabase pattern detected
 
   const tier = getEnforcementTier(command);
   if (tier === 'skip') return;
 
-  const params = extractParams(command);
-  if (Object.keys(params).length === 0) return; // No extractable params
-
   try {
     const { validateOperation } = require(path.resolve(__dirname, '..', '..', 'lib', 'schema-preflight.cjs'));
-    const result = await validateOperation(tableName, 'query', params);
+    for (const seg of segments) {
+      const params = extractParams(seg.text);
+      if (Object.keys(params).length === 0) continue; // No extractable params for this table
+      const result = await validateOperation(seg.table, 'query', params);
 
-    if (!result.valid) {
-      if (tier === 'blocking') {
-        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SCHEMA_PREFLIGHT', 'Schema pre-flight validation failed', 'block', { tableName, errors: result.errors });
-        process.stderr.write(
-          `SCHEMA VALIDATION FAILED (blocking):\n` +
-          `  Table: ${tableName}\n` +
-          `  Errors: ${result.errors.join('; ')}\n` +
-          `  Fix the column names or types before running this command.\n`
-        );
-        await auditAndExit(auditPromise, 2);
-      } else {
-        // Advisory: warn but allow
-        auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SCHEMA_PREFLIGHT_ADVISORY', 'Schema pre-flight validation warning', 'warn', { tableName, errors: result.errors });
-        console.log(
-          `[schema-preflight] WARNING: ${result.errors.join('; ')} (table: ${tableName})`
-        );
+      if (!result.valid) {
+        if (tier === 'blocking') {
+          const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SCHEMA_PREFLIGHT', 'Schema pre-flight validation failed', 'block', { tableName: seg.table, errors: result.errors });
+          process.stderr.write(
+            `SCHEMA VALIDATION FAILED (blocking):\n` +
+            `  Table: ${seg.table}\n` +
+            `  Errors: ${result.errors.join('; ')}\n` +
+            `  Fix the column names or types before running this command.\n`
+          );
+          await auditAndExit(auditPromise, 2);
+        } else {
+          // Advisory: warn but allow
+          auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'SCHEMA_PREFLIGHT_ADVISORY', 'Schema pre-flight validation warning', 'warn', { tableName: seg.table, errors: result.errors });
+          console.log(
+            `[schema-preflight] WARNING: ${result.errors.join('; ')} (table: ${seg.table})`
+          );
+        }
       }
-    }
 
-    if (result.warnings.length > 0) {
-      console.log(`[schema-preflight] ${result.warnings.join('; ')}`);
+      if (result.warnings.length > 0) {
+        console.log(`[schema-preflight] ${result.warnings.join('; ')}`);
+      }
     }
   } catch {
     // Fail-open: validation errors never block execution
