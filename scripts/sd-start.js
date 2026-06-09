@@ -257,15 +257,25 @@ function getPhaseContextFile(phase) {
  * @returns {{ valid: boolean, lastHandoff: Object|null, message: string, recoveryOptions: string[] }}
  */
 async function verifyHandoffIntegrity(sdUuid) {
+  // QF-20260609-564: sd_phase_handoffs is keyed by sd_id (the SD UUID). The prior query
+  // filtered the wrong (non-existent) text-key column, so every call hit the error path and
+  // silently returned valid:true, disabling resume-integrity verification entirely (the
+  // accepted/rejected/missing-handoff checks below never ran). Correct pattern matches
+  // sd-start.js:~1465 and sd-recover.js:53.
   const { data: handoffs, error } = await supabase
     .from('sd_phase_handoffs')
-    .select('id, sd_key, from_phase, to_phase, status, created_at, rejection_reason, resolved_at')
-    .eq('sd_key', sdUuid)
+    .select('id, from_phase, to_phase, status, created_at, rejection_reason, resolved_at')
+    .eq('sd_id', sdUuid)
     .order('created_at', { ascending: false })
     .limit(1);
 
   if (error) {
-    return { valid: true, lastHandoff: null, message: 'Could not query handoffs (proceeding)', recoveryOptions: [] };
+    // QF-20260609-564: surface the error instead of silently swallowing it. Stay fail-open
+    // (the consumer hard-exits on valid:false without --force, so a transient DB hiccup must
+    // not block resume), but log loudly so a real/persistent query error can never hide again
+    // the way the dead-column bug did.
+    console.warn(`⚠️  verifyHandoffIntegrity: handoff query failed (${error.code || 'error'}: ${error.message}) — proceeding without integrity check`);
+    return { valid: true, lastHandoff: null, message: `Could not query handoffs: ${error.message} (proceeding)`, recoveryOptions: [] };
   }
 
   if (!handoffs || handoffs.length === 0) {
@@ -1789,7 +1799,7 @@ async function main() {
     const { data: handoffRows } = await supabase
       .from('sd_phase_handoffs')
       .select('id', { count: 'exact', head: false })
-      .eq('sd_key', sd.id);
+      .eq('sd_id', sd.id); // QF-20260609-564: keyed by sd_id (UUID), not the non-existent text-key column (the >=3-handoffs warning never fired)
     const handoffCount = handoffRows?.length || 0;
     if (handoffCount >= 3) {
       console.log(`\n${colors.yellow}⚠️  PRIOR WORK WARNING: This SD has ${handoffCount} prior handoffs.${colors.reset}`);
