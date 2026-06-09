@@ -36,8 +36,8 @@ describe('countLocByPrFiles (1becd80a: PR-file-list source/test split)', () => {
   });
 
   it('is robust to empty / undefined / missing fields', () => {
-    expect(countLocByPrFiles([])).toEqual({ source: 0, test: 0, total: 0 });
-    expect(countLocByPrFiles(undefined)).toEqual({ source: 0, test: 0, total: 0 });
-    expect(countLocByPrFiles([{ path: '' }, { additions: 5 }])).toEqual({ source: 0, test: 0, total: 0 });
+    expect(countLocByPrFiles([])).toEqual({ source: 0, test: 0, docs: 0, total: 0 });
+    expect(countLocByPrFiles(undefined)).toEqual({ source: 0, test: 0, docs: 0, total: 0 });
+    expect(countLocByPrFiles([{ path: '' }, { additions: 5 }])).toEqual({ source: 0, test: 0, docs: 0, total: 0 });
   });
 });

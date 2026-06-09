@@ -47,7 +47,7 @@ describe('QF-20260511-741 — countLocBySplit empty 3-dot fallback', () => {
 
     const r = countLocBySplit('/fake/repo', 'origin/main', 'HEAD');
 
-    expect(r).toEqual({ source: 0, test: 0, total: 0, sourceDeletionLoc: 0 });
+    expect(r).toEqual({ source: 0, test: 0, docs: 0, total: 0, sourceDeletionLoc: 0 });
     expect(execSyncMock).toHaveBeenCalledTimes(1);
   });
 
@@ -69,7 +69,7 @@ describe('QF-20260511-741 — countLocBySplit empty 3-dot fallback', () => {
 
     const r = countLocBySplit('/fake/repo', 'origin/main', 'sha000');
 
-    expect(r).toEqual({ source: 0, test: 0, total: 0, sourceDeletionLoc: 0 });
+    expect(r).toEqual({ source: 0, test: 0, docs: 0, total: 0, sourceDeletionLoc: 0 });
   });
 
   it('uses 3-dot range when it returns non-empty (regression: no unnecessary fallback)', () => {
