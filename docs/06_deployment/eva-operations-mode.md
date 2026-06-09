@@ -19,7 +19,7 @@ Tags: eva, operations, background-workers, post-pipeline
 
 ## Overview
 
-Operations Mode is the post-pipeline phase of the EVA venture lifecycle. It activates automatically when a venture completes Stage 25 (Launch Execution), the terminus of the 25-stage evaluation-build-launch pipeline. At that point the venture's `pipeline_mode` column transitions from `'launch'` to `'operations'` and six background workers take over ongoing venture management.
+Operations Mode is the post-pipeline phase of the EVA venture lifecycle. It activates when a venture completes the terminal stage (Stage 26, Growth Playbook) of the staged pipeline and its exit-gates pass. At that point `processLifecycleTerminal()` (`lib/eva/stage-execution-engine.js`) transitions the venture's `pipeline_mode` column from `'building'` to `'operations'` (guarded and idempotent — see the Pipeline Mode Lifecycle section) and six background workers take over ongoing venture management.
 
 Operations Mode replaces the staged gate-driven evaluation model with a continuous, cadence-driven service layer. Workers run on fixed schedules managed by the EVA Master Scheduler. Unlike pipeline stages, there is no exit gate — a venture stays in Operations Mode until it is explicitly parked (`'parked'`) or killed (`'killed'`).
 
@@ -68,11 +68,11 @@ The `pipeline_mode` column on the `ventures` table controls which phase of the E
 | `evaluation` | Stages 0–17 (Evaluation) | Venture is created and enters Stage 0 |
 | `build` | Stages 18–22 (Build) | Venture passes Stage 17 promotion gate |
 | `launch` | Stages 23–25 (Launch) | Venture passes Stage 22 release gate |
-| `operations` | Post-pipeline Operations | Stage 25 (Launch Execution) completes |
+| `operations` | Post-pipeline Operations | Terminal stage (Stage 26, Growth Playbook) completes with exit-gates passed |
 | `parked` | Suspended | Manual operator action |
 | `killed` | Terminated | Manual operator action or kill-gate failure |
 
-**Transition rule**: only Stage 25's completion handler writes `pipeline_mode = 'operations'`. No other path should set this value directly.
+**Transition rule**: the `building → operations` transition is written by `processLifecycleTerminal()` in `lib/eva/stage-execution-engine.js` when the terminal stage (Stage 26) completes and exit-gates pass. It is guarded (transitions only from `'building'`/null, so a venture already in a later mode is never demoted) and idempotent. No other path should set `'operations'` directly. (SD-LEO-FEAT-POST-BUILD-LIFECYCLE-001-C FR-1)
 
 **Parked vs. killed**:
 - `parked` — workers stop running for this venture; the venture can be un-parked.
