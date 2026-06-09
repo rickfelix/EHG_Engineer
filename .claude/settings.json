@@ -5,7 +5,8 @@
     "COORDINATOR_TWOWAY_V2": "on",
     "COORD_ADAM_REVIEW_V1": "on",
     "COORD_ADAM_ACTION_ACK_V1": "on",
-    "COORD_QUESTION_AUTO_PROCEED_V1": "on"
+    "COORD_QUESTION_AUTO_PROCEED_V1": "on",
+    "LEO_LOOP_WAKEUP_REMINDER": "on"
   },
   "statusLine": {
     "type": "command",

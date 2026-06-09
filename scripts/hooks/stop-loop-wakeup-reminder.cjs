@@ -21,6 +21,15 @@
  *     the reminder once and chose to stop) — respects the worker, prevents a block loop.
  *   - Escape: loop_state='exited' (or any non-'active' state) → never blocks.
  *   - Fail-open: any error / no session / DB-unavailable → allow stop (exit 0), never throws.
+ *
+ * STATUS (QF-20260609-308): ENABLED fleet-wide via .claude/settings.json env
+ * (LEO_LOOP_WAKEUP_REMINDER=on). Verified safe for interactive operator sessions: loop_state
+ * only ever becomes 'active' via session-register.cjs's CONDITIONAL update
+ * (`UPDATE ... SET loop_state='active' WHERE loop_state='awaiting_tick'`), and 'awaiting_tick' is
+ * only set by post-tool-loop-state.cjs AFTER a /loop worker arms a ScheduleWakeup. An interactive
+ * (non-/loop) session never arms a wakeup → never 'awaiting_tick' → never 'active' → this hook can
+ * NEVER block an operator's turn-end. It fires only for a /loop worker that ended a turn still
+ * 'active' (no wakeup armed) — exactly the attrition case it guards.
  */
 
 const { LOOP_STATE_ACTIVE } = require('../lib/sessions/loop-state-tracker.cjs');
