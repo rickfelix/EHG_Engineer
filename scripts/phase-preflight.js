@@ -16,6 +16,7 @@
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
+import { searchIssuePatterns, searchRetrospectives } from '../lib/learning/prior-lessons.js';
 import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
 import { validateDecompositionGate } from './modules/decomposition-gate.js';
 import { startHeartbeat } from '../lib/heartbeat-manager.mjs';
@@ -483,67 +484,10 @@ function displayChildWorkflowGuidance(sd, parent, _currentPhase) {
   console.log('\n' + '─'.repeat(60));
 }
 
-/**
- * Search issue patterns relevant to phase and SD category
- */
-async function searchIssuePatterns(sdCategory, phaseStrategy) {
-  const results = [];
-
-  for (const category of phaseStrategy.categories) {
-    const patterns = await kb.search(sdCategory, {
-      category,
-      limit: 3,
-      minSuccessRate: 0
-    });
-
-    results.push(...patterns);
-  }
-
-  // De-duplicate by pattern_id
-  const uniquePatterns = Array.from(
-    new Map(results.map(p => [p.pattern_id, p])).values()
-  );
-
-  // Sort by overall score
-  uniquePatterns.sort((a, b) => b.overall_score - a.overall_score);
-
-  return uniquePatterns.slice(0, 5); // Top 5 patterns
-}
-
-/**
- * Search retrospectives relevant to SD category
- */
-async function searchRetrospectives(sdCategory, phaseStrategy, limit = 3) {
-  const { data: retrospectives, error } = await supabase
-    .from('retrospectives')
-    .select('*')
-    .eq('status', 'PUBLISHED')
-    .gte('quality_score', 70)
-    .order('conducted_date', { ascending: false })
-    .limit(20); // Get recent 20 to filter
-
-  if (error || !retrospectives) {
-    console.log('  ℹ️  No retrospectives found');
-    return [];
-  }
-
-  // Calculate relevance based on category match and quality
-  const scored = retrospectives.map(retro => {
-    const categoryMatch = retro.learning_category?.toLowerCase().includes(sdCategory.toLowerCase()) ? 1.0 : 0.3;
-    const qualityScore = retro.quality_score / 100;
-    const recency = new Date(retro.conducted_date) > new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) ? 1.0 : 0.5;
-
-    return {
-      ...retro,
-      relevance_score: categoryMatch * 0.5 + qualityScore * 0.3 + recency * 0.2
-    };
-  });
-
-  // Sort by relevance
-  scored.sort((a, b) => b.relevance_score - a.relevance_score);
-
-  return scored.slice(0, limit);
-}
+// QF-20260609-457: searchIssuePatterns + searchRetrospectives were extracted to
+// ../lib/learning/prior-lessons.js (side-effect-free) so the enforced handoff precheck can reuse
+// them to surface prior lessons to the next worker. Imported above; the lib signatures take an
+// injected kb / supabase (this CLI passes its module-level instances at the callsites below).
 
 /**
  * Format and display results
@@ -780,10 +724,10 @@ async function main() {
     }
 
     // Search issue patterns
-    const patterns = await searchIssuePatterns(sd.category || sd.title, strategy);
+    const patterns = await searchIssuePatterns(kb, sd.category || sd.title, strategy.categories);
 
     // Search retrospectives
-    const retrospectives = await searchRetrospectives(sd.category || sd.title, strategy);
+    const retrospectives = await searchRetrospectives(supabase, sd.category || sd.title);
 
     // Display results
     displayResults(sd, phase, strategy, patterns, retrospectives);

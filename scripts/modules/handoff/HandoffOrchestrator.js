@@ -23,6 +23,7 @@ import {
 } from './auto-proceed-resolver.js';
 import { captureHandoffGate } from '../../../lib/flywheel/capture.js';
 import { runPrerequisitePreflight } from './pre-checks/prerequisite-preflight.js';
+import { surfacePriorLessons } from '../../../lib/learning/prior-lessons.js';
 
 /**
  * QF-20260525-378: fold a FAILED prerequisite preflight into a precheck verdict
@@ -285,6 +286,19 @@ export class HandoffOrchestrator {
         console.log('');
         console.log('   Continuing with full gate check to find additional issues...');
         console.log('');
+      }
+
+      // QF-20260609-457: advisory, fail-open, default-on — surface prior lessons (issue_patterns
+      // + retrospectives) at the phase transition so the next worker sees relevant history. NEVER
+      // blocks the handoff (own try/catch; surfacePriorLessons also fails each half to []). Disable
+      // with LEO_SURFACE_PRIOR_LESSONS=off. NOTE: precheck-path only — `handoff.js execute`-only
+      // autonomous workers still miss it (signalled to the coordinator as a follow-up).
+      if (process.env.LEO_SURFACE_PRIOR_LESSONS !== 'off') {
+        try {
+          await surfacePriorLessons(this.supabase, sd);
+        } catch (e) {
+          console.warn(`   [precheck] prior-lessons advisory skipped: ${e.message}`);
+        }
       }
 
       // Get executor and gates
