@@ -303,6 +303,8 @@
     "adam:register": "node scripts/adam-register.cjs",
     "adam:advisory": "node scripts/adam-advisory.cjs",
     "adam:retro": "node scripts/adam-retro.cjs",
+    "adam:scan": "node scripts/adam-opportunity-scan.cjs --scan",
+    "adam:briefing": "node scripts/adam-opportunity-scan.cjs --briefing",
     "coordinator:cold-recovery": "node scripts/coordinator-cold-recovery.cjs",
     "coordinator:reply": "node scripts/coordinator-reply.cjs",
     "coordinator:startup-check": "node scripts/coordinator-startup-check.mjs",
