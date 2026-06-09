@@ -15,6 +15,8 @@ The fleet coordination system manages multiple parallel Claude Code sessions ("w
 
 ## Architecture
 
+> **Note:** The coordinator runs **eight** standard cron loops (`STANDARD_LOOPS` in `scripts/coordinator-startup-check.mjs`). The diagram below shows three representative 5-minute loops; see **Cron loops** under *Coordinator Workflow* for the full set (incl. the 2-min inbox, the 15-min 3-source audit, the 30-min executive email, and the daily feature-flag review).
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     COORDINATOR SESSION                       │
@@ -155,10 +157,15 @@ When `/coordinator start` runs:
 1. **Sweep** — `stale-session-sweep.cjs` cleans dead claims, resolves conflicts
 2. **Identity assignment** — `assign-fleet-identities.cjs` assigns colors/callsigns
 3. **Dashboard** — `fleet-dashboard.cjs all` shows full fleet status
-4. **Cron loops** — three recurring jobs:
-   - Sweep every 5 min
-   - Dashboard every 5 min (offset +2 min)
-   - Identity refresh every 5 min (offset +4 min)
+4. **Cron loops** — the coordinator runs **eight** standard loops (`STANDARD_LOOPS` in `scripts/coordinator-startup-check.mjs`):
+   - Stale-session sweep — every 5 min
+   - Fleet dashboard — every 5 min (offset +2 min)
+   - Fleet identity refresh — every 5 min (offset +4 min)
+   - Coordinator inbox — every 2 min
+   - Coordinator 3-source audit — every 15 min
+   - Executive email summary — every 30 min
+   - Feature-flag governance review — daily at 09:00 (default-OFF)
+   - Coordinator self-review (work-triggered tri-party) — every 5 min
 
 ## Worker Heartbeat Protocol
 
