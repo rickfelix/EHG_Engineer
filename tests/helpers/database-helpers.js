@@ -183,6 +183,22 @@ export async function createTestPRD(directiveId, data = {}) {
 export async function deleteTestDirective(directiveId) {
   const supabase = getSupabaseClient();
 
+  // SD-LEO-INFRA-BULK-PURGE-LIVE-001 FR-2: the fn_sync_sd_to_baseline trigger writes a
+  // sd_baseline_items row (sd_id = NEW.sd_key today, or NEW.id on legacy paths) when an SD is
+  // inserted, and sd_baseline_items has NO FK / ON DELETE CASCADE — so deleting only the SD leaks
+  // a dead baseline orphan (the leak this SD eliminates). Delete the baseline row(s) FIRST, keyed
+  // by BOTH the SD id and its sd_key so the current sd_key-write and the legacy id-write are both
+  // covered. Best-effort (test cleanup): a lookup miss falls back to deleting by id only.
+  let sdKey = null;
+  try {
+    const { data } = await supabase.from('strategic_directives_v2').select('sd_key').eq('id', directiveId).maybeSingle();
+    sdKey = data?.sd_key || null;
+  } catch { /* best-effort */ }
+  const baselineKeys = [directiveId, sdKey].filter(Boolean);
+  if (baselineKeys.length > 0) {
+    await supabase.from('sd_baseline_items').delete().in('sd_id', baselineKeys);
+  }
+
   // Delete in order (respecting foreign key constraints)
   // Table 'deliverables' does not exist — skip
   await supabase.from('user_stories').delete().eq('strategic_directive_id', directiveId);
