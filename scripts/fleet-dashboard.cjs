@@ -1231,11 +1231,11 @@ async function printFeedback(d, deps = {}) {
   // Harness backlog: deferred harness-hardening work captured during product sessions.
   const { data: backlog, error: bErr } = await sb
     .from('feedback')
-    .select('id, title, status, created_at')
+    .select('id, title, status, created_at, metadata')
     .eq('category', 'harness_backlog')
     .neq('status', 'resolved')
     .order('created_at', { ascending: false })
-    .limit(15);
+    .limit(100); // QF-20260609-703: fetch wider, then de-noise via sourceableBacklog before the 15-row display
 
   // Graceful degradation: a failed query prints a short notice and returns without
   // throwing, so the overall /coordinator all render never crashes (mirrors printInbox).
@@ -1246,7 +1246,10 @@ async function printFeedback(d, deps = {}) {
   }
 
   const uRows = untriaged || [];
-  const bRows = backlog || [];
+  // QF-20260609-703: drop completion-flag / fleet-retro / coordinator-review AUTO-CAPTURE closure
+  // artifacts (~90% of harness_backlog) so the dashboard shows genuine sourceable work only.
+  const { sourceableBacklog } = await import('./lib/sourceable-backlog.mjs');
+  const bRows = sourceableBacklog(backlog || []);
 
   if (uRows.length === 0 && bRows.length === 0) {
     console.log('  (no pending feedback or harness backlog)');
@@ -1270,7 +1273,7 @@ async function printFeedback(d, deps = {}) {
   if (bRows.length === 0) {
     console.log('    (none)');
   } else {
-    for (const b of bRows) {
+    for (const b of bRows.slice(0, 15)) {
       console.log('    ' + pad(ageOf(b.created_at), 6) + (b.title || '').substring(0, 52));
     }
   }

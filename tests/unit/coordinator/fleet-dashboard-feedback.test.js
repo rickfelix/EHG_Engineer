@@ -72,6 +72,25 @@ describe('printFeedback — populated', () => {
   });
 });
 
+describe('printFeedback — harness-backlog de-noise (QF-20260609-703)', () => {
+  test('drops completion-flag / fleet-retro auto-captures, keeps genuine items', async () => {
+    const sb = mockSupabase({
+      untriaged: [],
+      backlog: [
+        { id: 'g1', title: 'Genuine harness gap to source', status: 'new', created_at: hoursAgo(1), metadata: {} },
+        { id: 'a1', title: 'Completion flag (harness) — SD-X', status: 'new', created_at: hoursAgo(2), metadata: { flag_class: 'harness' } },
+        { id: 'a2', title: 'Fleet retro 2026-06-09 — coordinator', status: 'new', created_at: hoursAgo(3), metadata: {} },
+      ],
+    });
+    await printFeedback({}, { supabase: sb });
+    const out = output();
+    expect(out).toContain('Harness backlog (1)');        // only the genuine item survives the filter
+    expect(out).toContain('Genuine harness gap to source');
+    expect(out).not.toContain('Completion flag (harness)'); // dropped via metadata.flag_class
+    expect(out).not.toContain('Fleet retro');                // dropped via title fallback
+  });
+});
+
 describe('printFeedback — empty state', () => {
   test('prints explicit no-pending line when both queries return zero rows', async () => {
     const sb = mockSupabase({ untriaged: [], backlog: [] });
