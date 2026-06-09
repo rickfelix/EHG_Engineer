@@ -4,11 +4,14 @@
  * Persist Session State Hook
  * SD-CLAUDE-CODE-2.1.0-LEO-001 - Phase 2 Hook Infrastructure
  *
- * PostToolUse hook that persists session state as a checkpoint after each
- * tool execution. This enables crash recovery by providing restore points.
+ * PostToolUse hook that persists session state as a LOCAL checkpoint file
+ * ($HOME/.claude-checkpoints) after each tool execution. This is a single-machine
+ * restore aid for re-attaching after a local restart on the SAME host — NOT a
+ * distributed crash-recovery system. The authoritative cross-session/cross-machine
+ * source of truth is the DB (claude_sessions); these files are a convenience cache.
  *
  * Hook Type: PostToolUse (after every tool)
- * Purpose: Session state persistence for crash recovery
+ * Purpose: Single-machine local-checkpoint restore aid (DB is authoritative)
  * User Story: SD-CLAUDE-CODE-2-1-0-LEO-001:US-003
  */
 

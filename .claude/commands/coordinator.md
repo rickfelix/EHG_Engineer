@@ -215,7 +215,7 @@ Coordinator initialized (role context surfaced; eight standard loops armed).
   Audit loop: every 15 minutes (3-source audit: SD queue / harness backlog / inbox; REVIEW HEALTH gauge)
   Executive email: every 30 minutes (default-on fleet-health gauge + question escalation)
   Self-review loop: every 5 minutes (work-triggered tri-party review; no-op below COORD_REVIEW_EVERY)
-  All loops auto-expire after 3 days or when this session exits.
+  All loops auto-expire after 7 days (CronCreate's recurring-job limit) or when this session exits — re-arm weekly to keep the fleet supervised.
 
   Fleet is now running on autopilot. You will see sweep and dashboard output automatically.
   Use /coordinator help to see all subcommands.
@@ -352,7 +352,7 @@ Getting Started:
   1. Runs an initial sweep to clean fleet state
   2. Shows the full dashboard
   3. Sets up automated 5-min cron loops for sweep and dashboard
-  The cron loops are session-scoped (auto-expire after 3 days or session exit).
+  The cron loops are session-scoped (auto-expire after 7 days — CronCreate's recurring-job limit — or session exit; re-arm weekly).
 
 Automated QA Fixes (run every sweep):
   - STUCK_100: SDs at 100%/pending_approval auto-completed
