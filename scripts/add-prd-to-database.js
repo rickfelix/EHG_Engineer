@@ -172,6 +172,19 @@ export function validateContentPayloadShape(payload) {
   expectObject('system_architecture');
   expectObject('implementation_approach');
 
+  // SD-LEO-INFRA-HARDEN-ADD-PRD-001: recurse into system_architecture.components — a string/object
+  // value passes expectObject('system_architecture') but then crashes downstream at
+  // scripts/prd/formatters.js (arch.components.forEach is not a function). Assert it's an array when present.
+  if (
+    payload.system_architecture &&
+    typeof payload.system_architecture === 'object' &&
+    !Array.isArray(payload.system_architecture) &&
+    'components' in payload.system_architecture &&
+    !Array.isArray(payload.system_architecture.components)
+  ) {
+    errors.push(`.system_architecture.components: expected array, got ${typeOf(payload.system_architecture.components)}`);
+  }
+
   if (errors.length > 0) {
     const e = new Error(`--content: SHAPE_VIOLATIONS (${errors.length}):\n  - ${errors.join('\n  - ')}`);
     e.code = 'CONTENT_SHAPE_VIOLATION';
@@ -208,6 +221,14 @@ if (isMainModule(import.meta.url)) {
   if (heartbeatActive) {
     startHeartbeat(process.env.CLAUDE_SESSION_ID, { ownershipMode: 'cooperative' });
   }
+
+  // SD-LEO-INFRA-HARDEN-ADD-PRD-001: EPIPE-tolerant stdout/stderr. This CLI emits ~180KB before the
+  // async DB insert; piping it through `head`/`grep` closes the read end, and the next console.log
+  // would raise an unhandled 'error' (EPIPE) that crashes the process BEFORE persistence on POSIX/CI
+  // (Windows git-bash masks it). Swallow EPIPE on both streams so a closed pipe never aborts the run.
+  const ignoreEpipe = (err) => { if (!err || err.code === 'EPIPE') return; throw err; };
+  process.stdout.on('error', ignoreEpipe);
+  process.stderr.on('error', ignoreEpipe);
 
   const argv = process.argv.slice(2);
   if (argv.length < 1) {
