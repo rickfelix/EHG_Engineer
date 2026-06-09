@@ -62,6 +62,12 @@ export const STANDARD_LOOPS = [
   // fires the coordinator<->workers<->Adam review only when due. SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001.
   { key: 'self-review', label: 'Coordinator self-review (work-triggered tri-party)', script: 'coordinator-self-review.mjs', cron: '*/5 * * * *',
     prompt: 'node scripts/coordinator-self-review.mjs' },
+  // SD-LEO-INFRA-ENABLE-WIRE-AUTOMATIC-001 (FR-2a): restore the worker fleet-retro to a schedule
+  // (it had drifted to manual — last ran ~2.5d ago). Re-arms the existing, idempotent capture/
+  // synthesis script (reuses the feedback/issue_patterns pipeline; dedups on metadata.retro_key).
+  // Cheap read+insert; */30 captures session_coordination FLEET-RETRO signals before they are swept.
+  { key: 'fleet-retro',  label: 'Worker fleet-retro (periodic capture/synthesis)', script: 'coordinator-fleet-retro.mjs', cron: '*/30 * * * *',
+    prompt: 'node scripts/coordinator-fleet-retro.mjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
