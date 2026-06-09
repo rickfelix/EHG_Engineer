@@ -87,7 +87,7 @@ function shouldSkipFile(filename) {
 /**
  * Parse YAML frontmatter from markdown content
  */
-function parseFrontmatter(content) {
+export function parseFrontmatter(content) {
   // Check for YAML frontmatter (--- ... ---)
   const yamlMatch = content.match(/^---\n([\s\S]*?)\n---/);
   if (yamlMatch) {
@@ -124,7 +124,11 @@ function parseFrontmatter(content) {
   }
 
   // Check for markdown metadata section (## Metadata)
-  const mdMatch = content.match(/##\s*Metadata\s*\n([\s\S]*?)(?=\n##|\n---|\Z)/i);
+  // QF-20260609-811: terminate the Metadata section at the next `## `, a `---`, or
+  // end-of-input. The prior `\Z` was a literal "Z" in JS regex (not an end anchor), so any
+  // field value containing a Z (e.g. `Category: CANONICALIZE`) truncated the section there
+  // and all later fields were falsely reported MISSING. `$` (no `m` flag) is the real EOI anchor.
+  const mdMatch = content.match(/##\s*Metadata\s*\n([\s\S]*?)(?=\n##|\n---|$)/i);
   if (mdMatch) {
     const section = mdMatch[1];
     const metadata = {};
@@ -374,7 +378,10 @@ async function main() {
   process.exit(report.summary.invalid > 0 ? EXIT_CODES.VALIDATION_FAILED : EXIT_CODES.PASS);
 }
 
-main().catch(error => {
-  console.error(`Runtime error: ${error.message}`);
-  process.exit(EXIT_CODES.RUNTIME_ERROR);
-});
+// QF-20260609-811: only run the CLI when invoked directly, not when imported (e.g. by tests).
+if (process.argv[1] === __filename) {
+  main().catch(error => {
+    console.error(`Runtime error: ${error.message}`);
+    process.exit(EXIT_CODES.RUNTIME_ERROR);
+  });
+}
