@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-06-08](#2026-06-08)
+  - [Security](#security)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
 - [2026-06-06](#2026-06-06)
@@ -37,6 +38,12 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-06-08
+
+### Security
+- **Closed public anon-key read exposure on `companies` (Phase 1)** - PR #4421 (SD-LEO-GEN-SCOPE-ANON-KEY-001)
+  - **Issue**: `public.companies` carried a `FOR SELECT TO anon USING (true)` RLS policy. Because the Supabase anon key ships in the EHG app's browser bundle, anyone holding that key could read all ~1,303 company rows directly via PostgREST — a public data-exposure on a governance table.
+  - **Fix**: Migration drops the anon-role public SELECT policy on `companies` (idempotent `DROP POLICY IF EXISTS`, reversible). Verified safe before applying: the EHG app reads `companies` only inside `ProtectedRoute` (authenticated JWT → role=authenticated), and EHG_Engineer reads via the service-role client (bypasses RLS) — so no live anon-role reader exists and no EHG-app change is required. Applied to prod via the 3-factor `apply-migration` guard (flag + single-use token + `@approved-by` matching git identity) under chairman approval relayed by the coordinator. **Verified live: anon `companies` SELECT 1,303 → 0 rows; service-role still 1,303.**
+  - **Out of scope (Phase 2, follow-up SD)**: the `strategic_directives_v2` anon policy is intentionally retained — the LEO Realtime dashboard (`src/services/realtime-dashboard.js`) still subscribes via the anon key and Realtime `postgres_changes` delivery requires the subscribing role to hold RLS SELECT. Dropping it before that consumer is migrated would silently stop change events (the policy already churned 3× for this reason). Deferred to a separate SD gated on the dashboard migration + canary.
 
 ### Infrastructure
 - **Fixed the root cause of the dead worker self_claim queue (`v_sd_next_candidates` returned ~0 rows fleet-wide)** - PR #4413 + #4415 (SD-LEO-INFRA-FIX-NEXT-CANDIDATES-001)
