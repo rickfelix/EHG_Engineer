@@ -61,6 +61,7 @@
     "lint:metadata-flags": "node scripts/lint/metadata-flag-lint.mjs",
     "lint:env-flags": "node scripts/lint/process-env-feature-flag-lint.mjs",
     "lint:alter-defaults": "node scripts/lint/alter-default-override-lint.mjs",
+    "lint:venture-artifacts": "node scripts/lint/venture-artifacts-write-lint.mjs",
     "flags:review": "node scripts/flag-governance-review.mjs",
     "flags:stale": "node scripts/flags-stale.mjs",
     "flags:enroll": "node scripts/enroll-env-var-feature-flags.mjs",
