@@ -14,6 +14,7 @@ import {
   detectClaimHalfWrite,
   detectLoopExpiry,
   detectStalledLoop,
+  detectEvaSchedulerStale,
   runDetectors,
 } from '../../../lib/coordinator/detectors.cjs';
 import {
@@ -157,6 +158,40 @@ describe('detectStalledLoop', () => {
   });
 });
 
+describe('detectEvaSchedulerStale', () => {
+  const fresh = { id: 1, instance_id: 'eva-1', last_poll_at: minsAgo(1), status: 'running' };
+  it('is quiet when the scheduler polled within the window (accepts a single row)', () => {
+    const r = detectEvaSchedulerStale({ heartbeat: fresh, now: NOW });
+    expect(r.matched).toBe(false);
+    expect(r.reason).toBe('eva_scheduler_polling_within_window');
+  });
+  it('fires when last_poll_at is older than the threshold', () => {
+    const aged = { id: 1, instance_id: 'eva-1', last_poll_at: minsAgo(45), status: 'running' };
+    const r = detectEvaSchedulerStale({ heartbeat: aged, now: NOW });
+    expect(r.matched).toBe(true);
+    expect(r.reason).toBe('eva_scheduler_heartbeat_stale');
+    expect(r.evidence.stale_count).toBe(1);
+    expect(r.evidence.samples[0].instance_id).toBe('eva-1');
+  });
+  it('IGNORES the status="running" lie — a crashed scheduler freezes status but stops polling', () => {
+    // The whole point: status reads "running" yet last_poll_at is 2h stale → MUST fire.
+    const lying = { id: 1, instance_id: 'eva-1', last_poll_at: minsAgo(120), status: 'running' };
+    const r = detectEvaSchedulerStale({ heartbeat: lying, now: NOW });
+    expect(r.matched).toBe(true);
+    expect(r.evidence.samples[0].reported_status).toBe('running'); // captured for the operator, not trusted
+  });
+  it('fail-open: no heartbeat row, or an unparseable last_poll_at, never flags', () => {
+    expect(detectEvaSchedulerStale({ heartbeat: null, now: NOW }).matched).toBe(false);
+    expect(detectEvaSchedulerStale({ heartbeat: [], now: NOW }).matched).toBe(false);
+    expect(detectEvaSchedulerStale({ heartbeat: { id: 1, last_poll_at: null }, now: NOW }).matched).toBe(false);
+  });
+  it('accepts an array of rows and is env-tunable via opts.staleMs', () => {
+    const rows = [{ id: 1, instance_id: 'eva-1', last_poll_at: minsAgo(8), status: 'running' }];
+    expect(detectEvaSchedulerStale({ heartbeat: rows, now: NOW }).matched).toBe(false);                       // default 15m → no
+    expect(detectEvaSchedulerStale({ heartbeat: rows, now: NOW }, { staleMs: 5 * 60 * 1000 }).matched).toBe(true); // 5m → yes
+  });
+});
+
 describe('runDetectors', () => {
   it('returns only matched detectors with event_type + severity', () => {
     const data = {
@@ -180,6 +215,16 @@ describe('runDetectors', () => {
     expect(byType.LOOP_EXPIRY_WARNING?.severity).toBe('warning');
     expect(byType.STALLED_LOOP?.severity).toBe('warning');
   });
+  it('surfaces EVA_SCHEDULER_STALE (severity warning) when the heartbeat is dark', () => {
+    const data = {
+      coordinatorCount: 0, idleWorkers: 0, unclaimedItems: 0,
+      signals: [], claims: [], sdClaims: [], sessions: [],
+      evaSchedulerHeartbeat: { id: 1, instance_id: 'eva-1', last_poll_at: daysAgo(2), status: 'running' },
+    };
+    const byType = Object.fromEntries(runDetectors(data, { now: NOW }).map((m) => [m.event_type, m]));
+    expect(byType.EVA_SCHEDULER_STALE?.severity).toBe('warning');
+    expect(byType.EVA_SCHEDULER_STALE?.reason).toBe('eva_scheduler_heartbeat_stale');
+  });
 });
 
 describe('coordDetectorsEnabled', () => {
@@ -196,6 +241,9 @@ describe('coordDetectorsEnabled', () => {
     expect(resolveThresholds({}).stalledLoopFreshMs).toBe(10 * 60 * 1000);
     expect(resolveThresholds({ COORD_LOOP_EXPIRY_WARN_MIN: '120' }).loopExpiryWarnMs).toBe(120 * 60 * 1000);
     expect(resolveThresholds({ COORD_STALLED_LOOP_FRESH_MIN: '5' }).stalledLoopFreshMs).toBe(5 * 60 * 1000);
+    // SD-LEO-INFRA-REVIVE-EVA-HEARTBEAT-ALARM-001: 15-min EVA scheduler staleness default, env-tunable.
+    expect(resolveThresholds({}).evaSchedulerStaleMs).toBe(15 * 60 * 1000);
+    expect(resolveThresholds({ COORD_EVA_SCHEDULER_STALE_MIN: '30' }).evaSchedulerStaleMs).toBe(30 * 60 * 1000);
   });
 });
 

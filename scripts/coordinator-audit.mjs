@@ -18,7 +18,8 @@ import { sourceableBacklog } from './lib/sourceable-backlog.mjs';
 import { readFileSync } from 'node:fs';
 import { computeReviewHealth } from '../lib/fleet/review-health.mjs';
 // SD-LEO-INFRA-LOOP-LIVENESS-DETECTORS-001: reuse the pure detectors as the single source for the gauges.
-import { detectLoopExpiry, detectStalledLoop } from '../lib/coordinator/detectors.cjs';
+// SD-LEO-INFRA-REVIVE-EVA-HEARTBEAT-ALARM-001: + the EVA scheduler staleness detector.
+import { detectLoopExpiry, detectStalledLoop, detectEvaSchedulerStale } from '../lib/coordinator/detectors.cjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -159,6 +160,18 @@ try {
     : 'none (' + unclaimed.length + ' unclaimed)';
 } catch (e) { stalledLoopLine = 'unavailable (' + e.message + ')'; }
 
+// (d3) LIVENESS — EVA dispatch scheduler heartbeat (SD-LEO-INFRA-REVIVE-EVA-HEARTBEAT-ALARM-001).
+// Reuse the pure detector; keyed on last_poll_at AGE, ignoring the status column (it freezes
+// 'running' when the process dies). Fail-open per gauge.
+let evaSchedulerLine;
+try {
+  const { data: hb } = await db.from('eva_scheduler_heartbeat').select('id, instance_id, last_poll_at, status');
+  const ev = detectEvaSchedulerStale({ heartbeat: hb, now: t });
+  evaSchedulerLine = ev.matched
+    ? ev.evidence.stale_count + ' scheduler instance(s) DARK ⚠ last poll ' + ageStr(ev.evidence.max_age_ms) + ' ago — restart (status may falsely read "running")'
+    : ((hb && hb.length) ? 'polling (within ' + Math.round((Number(process.env.COORD_EVA_SCHEDULER_STALE_MIN) || 15)) + 'm window)' : 'no heartbeat row (scheduler not deployed)');
+} catch (e) { evaSchedulerLine = 'unavailable (' + e.message + ')'; }
+
 // (e) DEPENDENCY / CRITICAL-PATH — blocked vs ready, plus stale-blocked anomalies
 let depLine, depStale = [];
 try {
@@ -189,6 +202,7 @@ console.log('  FLOW (idle/work): ' + idleWorkLine);
 console.log('  LIVENESS (loop) : ' + loopLine + '  (live workers)');
 console.log('  LIVENESS (expiry): ' + loopExpiryLine);
 console.log('  LIVENESS (stall): ' + stalledLoopLine);
+console.log('  LIVENESS (eva)  : ' + evaSchedulerLine);
 console.log('  DEPENDENCY      : ' + depLine);
 for (const k of depStale.slice(0, 5)) console.log('      stale-blocked: ' + k);
 
