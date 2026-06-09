@@ -31,6 +31,7 @@ const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'
 // by BOTH the available-to-claim filter and the worker-render filter below so
 // they cannot drift. Absorbs QF-20260526-577.
 const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/holding-statuses.cjs');
+const { SILENCE_HARD_CAP_MS } = require('../lib/fleet/silence-cap.cjs'); // FR-4: shared writer<=reader cap
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3b — top-level require so wire-check
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
@@ -570,8 +571,9 @@ async function main() {
   //
   // All signals honor a 30-minute hard cap — a worker cannot declare silence
   // beyond that window, preventing a misconfigured hook from masking a dead
-  // worker.
-  const SILENCE_HARD_CAP_MS = 30 * 60 * 1000;
+  // worker. FR-4 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): this READER cap and the
+  // park-worker WRITER cap now derive from one shared constant (lib/fleet/silence-cap.cjs),
+  // so the writer can no longer arm a window the reader silently ignores.
   const TICK_ALIVE_WINDOW_MS = 90 * 1000;
   const telemetryMap = new Map();
   try {
@@ -760,7 +762,10 @@ async function main() {
       // Also clear claiming_session_id on the SD to break the churn loop
       await supabase
         .from('strategic_directives_v2')
-        .update({ claiming_session_id: null, is_working_on: false })
+        // FR-1 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): co-clear active_session_id with
+        // claiming_session_id at every SD release so it cannot dangle (the sync_is_working_on_with_session
+        // trigger covers session-row flips, but the SD-only updates below do not trip it).
+        .update({ claiming_session_id: null, active_session_id: null, is_working_on: false })
         .eq('sd_key', s.sd_key);
       await resetSdPhaseOnRelease(s.sd_key, releasedReason);
       actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — ' + s.sd_key + ' already ' + (sdTerminalStatus || 'completed'));
@@ -836,6 +841,7 @@ async function main() {
         .update({
           status: 'completed',
           claiming_session_id: null,
+          active_session_id: null, // FR-1: co-clear (no claude_sessions flip here → trigger won't fire)
           is_working_on: false
         })
         .eq('sd_key', sd.sd_key)
@@ -858,6 +864,7 @@ async function main() {
           current_phase: 'LEAD',
           progress_percentage: 0,
           claiming_session_id: null,
+          active_session_id: null, // FR-1: co-clear (SD-only update → trigger won't fire)
           is_working_on: false
         })
         .eq('sd_key', sd.sd_key);
@@ -881,7 +888,10 @@ async function main() {
   for (const sd of (terminalWithClaims || [])) {
     const { error } = await supabase
       .from('strategic_directives_v2')
-      .update({ claiming_session_id: null, is_working_on: false })
+      // FR-1: THE genuine dangle — this FIX#2 path clears a terminal SD's claim with NO
+      // claude_sessions change, so the sync_is_working_on_with_session trigger never fires and
+      // active_session_id stayed stale. Co-clear it here (and select active_session_id above).
+      .update({ claiming_session_id: null, active_session_id: null, is_working_on: false })
       .eq('sd_key', sd.sd_key)
       .select();
 
@@ -1115,10 +1125,11 @@ async function main() {
       if (s.sd_key) {
         await resetSdPhaseOnRelease(s.sd_key, releaseReason);
         // Clear claiming_session_id on the SD so the next worker can claim it
-        // without hitting foreign_claim in the claim validity gate.
+        // without hitting foreign_claim in the claim validity gate. FR-1: co-clear
+        // active_session_id (CAS-guarded by claiming_session_id=this session).
         await supabase
           .from('strategic_directives_v2')
-          .update({ claiming_session_id: null, is_working_on: false })
+          .update({ claiming_session_id: null, active_session_id: null, is_working_on: false })
           .eq('claiming_session_id', s.session_id);
       }
       // SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 (FR-5): SIBLING RELEASE SITE 1/4 —

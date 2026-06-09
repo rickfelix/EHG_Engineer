@@ -25,11 +25,19 @@
 
 try { require('dotenv').config(); } catch { /* dotenv optional — env may already be injected */ }
 
+const { SILENCE_HARD_CAP_MIN } = require('../lib/fleet/silence-cap.cjs');
+
 const DEFAULT_MINUTES = 20;
 const BUFFER_MIN = 5;
 // Hard cap so a worker that parks and then genuinely dies is still reaped within a
 // bounded window (fail toward eventual reaping, not indefinite protection).
-const HARD_CAP_MIN = Math.max(1, parseInt(process.env.PARK_HARD_CAP_MIN, 10) || 60);
+// FR-4 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): the writer cap MUST be <= the sweep READER
+// cap (SILENCE_HARD_CAP_MIN) — a window the reader silently ignores (>cap) is no protection at all.
+// Clamp to the shared cap so an env override can only LOWER it, never exceed the reader.
+const HARD_CAP_MIN = Math.min(
+  SILENCE_HARD_CAP_MIN,
+  Math.max(1, parseInt(process.env.PARK_HARD_CAP_MIN, 10) || SILENCE_HARD_CAP_MIN)
+);
 
 function parseArgs(argv) {
   const out = { minutes: null, wakeEta: null };

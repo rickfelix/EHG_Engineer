@@ -23,6 +23,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { NON_RESUMABLE_STATUSES, NON_RESUMABLE_IN_LIST } from '../lib/leo/non-resumable-status.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -346,7 +347,10 @@ async function getNextParentSD(_afterSdId = null) {
     .eq('is_active', true)
     .single();
 
-  if (workingOn && workingOn.status !== 'completed') {
+  // FR-3 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): a parked/terminal SD still flagged
+  // is_working_on must NOT be resumed into fresh EXEC. Excludes completed/cancelled/deferred AND
+  // pending_approval (awaits LEAD-FINAL, not EXEC) via the shared constant so all three gates agree.
+  if (workingOn && !NON_RESUMABLE_STATUSES.includes(workingOn.status)) {
     return workingOn;
   }
 
@@ -375,7 +379,7 @@ async function getNextParentSD(_afterSdId = null) {
     `)
     .eq('baseline_id', baseline.id)
     .eq('is_ready', true)
-    .not('strategic_directives_v2.status', 'in', '("completed","cancelled")')
+    .not('strategic_directives_v2.status', 'in', NON_RESUMABLE_IN_LIST)
     .order('sequence_rank')
     .limit(1)
     .single();
@@ -389,7 +393,7 @@ async function getNextParentSD(_afterSdId = null) {
     .from('strategic_directives_v2')
     .select('id, sd_key, title, status, current_phase, parent_sd_id')
     .eq('is_active', true)
-    .not('status', 'in', '("completed","cancelled","deferred")')
+    .not('status', 'in', NON_RESUMABLE_IN_LIST)
     .is('parent_sd_id', null) // Top-level only
     .order('sequence_rank', { nullsFirst: false })
     .limit(1)
