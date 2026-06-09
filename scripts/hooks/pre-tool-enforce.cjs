@@ -1326,6 +1326,32 @@ async function main() {
         }
       }
     }
+
+    // --- ENFORCEMENT 16: --no-verify / --no-gpg-sign Bypass Gate (QF-20260609-774) ---
+    // `git push --force` is gated by ENF-15, but --no-verify / --no-gpg-sign had NO programmatic
+    // block — a single flag skips the local pre-commit secret scan (Supabase JWT / OpenAI /
+    // Resend / Gemini key detection) and the CLAUDE.md-edit protection → data-leak exposure.
+    // Block by default; ONE audited override LEO_ALLOW_NO_VERIFY="<reason>" (single env var whose
+    // non-empty VALUE is the reason, mirroring EMERGENCY_PUSH). Decision logic + the operative-
+    // command regex live in lib/no-verify-guard.cjs (unit-tested); this owns audit + exit. Fail-open.
+    try {
+      const { decideNoVerify } = require('./lib/no-verify-guard.cjs');
+      const d = decideNoVerify(cmd, process.env);
+      if (d.matched) {
+        const meta = { flag: d.flag, decision_path: d.reason, override_reason: d.overrideReason };
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-16', 'no-verify/no-gpg-sign bypass gate: blocks pre-commit secret-scan / commit-signing bypass unless LEO_ALLOW_NO_VERIFY="<reason>"', d.outcome, meta);
+        if (d.outcome === 'block') {
+          process.stderr.write(`[ENF-16] BLOCKED --${d.flag} bypasses the pre-commit secret scan (Supabase/OpenAI/Resend/Gemini key detection) + CLAUDE.md-edit protection. Override: LEO_ALLOW_NO_VERIFY="<ticket: reason>" <your git command>\n`);
+          await auditAndExit(auditPromise, 2);
+        }
+        // override path: fire-and-forget audit (don't await); fall through
+      }
+    } catch (noVerifyErr) {
+      // Fail-open: any internal error in ENF-16 must NOT block tool execution.
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        process.stderr.write(`[pre-tool-enforce] ENF-16 errored (fail-open): ${noVerifyErr.message}\n`);
+      }
+    }
   }
 
   // --- ENFORCEMENT 10: Source-Side Telemetry Writer (SD-LEO-INFRA-WORKER-SOURCE-SIDE-001) ---
