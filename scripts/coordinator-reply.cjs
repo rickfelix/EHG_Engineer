@@ -18,6 +18,7 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const { isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
+const { isFullUuid } = require('../lib/coordinator/dispatch.cjs');
 const { redact, BODY_HARD_CAP } = require('./worker-signal.cjs');
 
 // Default reply lifetime — comfortably exceeds the worker await window (30s) plus margin.
@@ -63,7 +64,7 @@ function parseArgs(argv) {
   const positional = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === '--to' || a === '--correlation' || a === '--ttl') {
+    if (a === '--to' || a === '--correlation' || a === '--ttl' || a === '--advisory') {
       flags[a.slice(2)] = args[++i];
     } else if (a.startsWith('--')) {
       flags[a.slice(2)] = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : true;
@@ -81,12 +82,14 @@ async function main() {
   }
 
   const { flags, positional } = parseArgs(process.argv);
-  const workerSession = typeof flags.to === 'string' ? flags.to : null;
-  const correlationId = typeof flags.correlation === 'string' ? flags.correlation : null;
+  let workerSession = typeof flags.to === 'string' ? flags.to : null;
+  let correlationId = typeof flags.correlation === 'string' ? flags.correlation : null;
+  const advisoryId = typeof flags.advisory === 'string' ? flags.advisory : null;
   const body = positional.join(' ').trim();
 
-  if (!workerSession || !correlationId || !body) {
+  if ((!advisoryId && (!workerSession || !correlationId)) || !body) {
     console.error('Usage: node scripts/coordinator-reply.cjs --to <worker_session_id> --correlation <id> "<reply body>"');
+    console.error('   or: node scripts/coordinator-reply.cjs --advisory <adam_advisory_id> "<reply body>"   (auto-resolves the Adam target + correlation_id)');
     process.exit(2);
   }
 
@@ -103,6 +106,30 @@ async function main() {
     process.exit(1);
   }
   const supabase = createClient(url, key);
+
+  // FR-3 (SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001): reply-by-advisory. Auto-resolve
+  // the Adam target session + correlation_id from the original advisory row, so the
+  // coordinator answers a fire-and-forget advisory through the canonical reply path —
+  // no hand-rolled insert, no invented payload.kind.
+  if (advisoryId) {
+    const { data: adv, error: advErr } = await supabase
+      .from('session_coordination')
+      .select('sender_session, payload')
+      .eq('id', advisoryId)
+      .maybeSingle();
+    if (advErr) { console.error('ERROR: advisory lookup failed:', advErr.message); process.exit(1); }
+    if (!adv) { console.error('ERROR: advisory not found:', advisoryId); process.exit(1); }
+    workerSession = adv.sender_session;
+    correlationId = (adv.payload && adv.payload.correlation_id) || correlationId;
+    if (!correlationId) {
+      console.error(`ERROR: advisory ${advisoryId} carries no payload.correlation_id (not replyable — re-send via the updated adam-advisory.cjs).`);
+      process.exit(1);
+    }
+    if (!isFullUuid(workerSession)) {
+      console.error(`ERROR: advisory ${advisoryId} sender_session is not a full UUID: ${JSON.stringify(workerSession)}`);
+      process.exit(1);
+    }
+  }
 
   const ttlMs = Number(flags.ttl) > 0 ? Number(flags.ttl) : REPLY_DEFAULT_TTL_MS;
   const { data, error } = await sendCoordinatorReply(supabase, {

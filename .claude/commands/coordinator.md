@@ -684,6 +684,26 @@ When the user mentions any of these phrases, suggest `/coordinator`:
 
 ---
 
+## Adam advisory lane (read + reply)
+
+Adam advisories are `session_coordination` `INFO` rows (`payload.kind=adam_advisory`), **retired
+ONLY by `payload.actioned_at`** (`read_at` = delivered, not actioned). The coordinator-startup
+ritual prints this summary; the canonical doc is `docs/protocol/coordinator-adam-comms.md`.
+
+Selector: `payload->>kind='adam_advisory' AND payload->>actioned_at IS NULL AND target_session IN (<coordinatorId>,'broadcast-coordinator')`.
+
+| Verb | Command |
+|------|---------|
+| Peek (read-only, stamps nothing) | `node scripts/read-adam-advisories.cjs` |
+| Ack [+ reply] (retires it) | `node scripts/coordinator-ack-adam.cjs --advisory <id> [--reply "<body>"]` |
+| Reply by advisory | `node scripts/coordinator-reply.cjs --advisory <id> "<body>"` |
+| Inbox render (stamps read_at only) | `node scripts/fleet-dashboard.cjs inbox` |
+
+A peek/render NEVER retires an advisory — only `coordinator-ack-adam.cjs --advisory` does. The
+`--reply`/reply legs need `COORDINATOR_TWOWAY_V2=on`.
+
+---
+
 ## Same-SD Parallel Worker Assignment (FR-4)
 
 Added 2026-05-09 by SD-LEO-INFRA-CROSS-HOST-CONCURRENT-001 to address parallel-write contention between 2+ worker sessions holding the same SD claim concurrently.

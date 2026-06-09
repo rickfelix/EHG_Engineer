@@ -1156,7 +1156,11 @@ async function printAdamInbox() {
     .select('id, sender_session, sender_type, subject, body, payload, created_at')
     .eq('target_session', coordinatorId)
     .eq('payload->>kind', 'adam_advisory')
-    .is('read_at', null)
+    // SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001 FR-1: re-surface gate is payload.actioned_at
+    // IS NULL (not read_at), mirroring the two-stage ACK in lib/coordinator/adam-action-ack.cjs.
+    // A parked-cron render stamps read_at (DELIVERED) but NEVER actioned_at, so an unactioned
+    // advisory keeps re-surfacing until the coordinator runs coordinator-ack-adam.cjs --advisory.
+    .is('payload->>actioned_at', null)
     .order('created_at', { ascending: false })
     .limit(20);
 
@@ -1172,7 +1176,7 @@ async function printAdamInbox() {
     return;
   }
 
-  console.log('  ' + advisories.length + ' unread advisory(ies)');
+  console.log('  ' + advisories.length + ' unactioned advisory(ies)');
   console.log('');
   console.log('  ' + pad('Callsign', 12) + pad('Reply?', 8) + pad('Age', 8) + 'Body');
   console.log('  ' + '─'.repeat(68));
@@ -1188,8 +1192,10 @@ async function printAdamInbox() {
     ids.push(a.id);
   }
 
-  // Mark surfaced advisories read so they don't re-surface. A coordinator reply
-  // (coordinator-reply.cjs) is keyed by correlation_id, independent of read_at.
+  // FR-1: stamp read_at = DELIVERED (transport-level "the coordinator saw it on a render"),
+  // but NEVER actioned_at — the advisory is retired ONLY by coordinator-ack-adam.cjs. So a
+  // parked-cron render can no longer silently hide an unactioned advisory; it re-surfaces
+  // (gate above is payload.actioned_at IS NULL) until the coordinator explicitly acks it.
   if (ids.length > 0) {
     await supabase
       .from('session_coordination')

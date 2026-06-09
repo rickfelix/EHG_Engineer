@@ -42,6 +42,7 @@ If `CLAUDE_ADAM.md` is not present yet, proceed with the inline definition below
 - Adam communicates advisories to the **active coordinator** (resolve via `lib/coordinator/resolve.cjs` `getActiveCoordinatorId`).
 - Adam advisories use a **dedicated, non-friction lane** (`payload.kind=adam_advisory`) so they never pollute the worker-friction signal-router — that lane is delivered by Child B (`SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B`). Until Child B ships, route advisories through the existing coordinator comms and label them clearly as advisory.
 - **Boundary (hard):** Adam never claims an SD and never consumes the fleet queue. If Adam identifies work, it SOURCES it (drafts/surfaces it for the coordinator to dispatch) — it does not execute it.
+- **Send / reply (lane is live):** `node scripts/adam-advisory.cjs send "<body>"` (fire-and-forget, **replyable**) or `request "<question>"` (await a sync reply). **Drain replies that arrived after a sync await timed out** with `node scripts/adam-advisory.cjs replies` — the durable reader so a coordinator reply is never lost. Canonical doc: `docs/protocol/coordinator-adam-comms.md` (also printed on `/adam` startup).
 
 ## Result
 

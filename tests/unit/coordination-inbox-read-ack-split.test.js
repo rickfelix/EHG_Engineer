@@ -36,6 +36,16 @@ describe('classifyInboxMessage', () => {
     expect(classifyInboxMessage(msg, { twoWayOn: true })).toEqual({ skip: true });
   });
 
+  // SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001 FR-4: an ADAM session must NOT skip a
+  // coordinator_reply — it surfaces UNREAD (read_at left NULL) so adam-advisory.cjs's
+  // durable `replies` reader recovers a reply that arrived after a sync await timed out.
+  // Workers (non-Adam) are unchanged — their own awaitCoordinatorReply consumes it.
+  it('FR-4: ADAM does NOT skip coordinator_reply (surfaces UNREAD for the durable reader); workers still skip', () => {
+    const reply = { message_type: 'INFO', payload: { kind: 'coordinator_reply' }, sender_type: 'coordinator' };
+    expect(classifyInboxMessage(reply, { twoWayOn: true, amAdam: false })).toEqual({ skip: true });
+    expect(classifyInboxMessage(reply, { twoWayOn: true, amAdam: true })).toEqual({ skip: false, markRead: false, markAck: false });
+  });
+
   it('an Adam-targeted coordinator INFO directive stays UNREAD (surfaced for the read_at-IS-NULL monitor)', () => {
     const v = classifyInboxMessage(
       { message_type: 'INFO', payload: {}, sender_type: 'coordinator' },
