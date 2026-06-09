@@ -273,6 +273,32 @@ export class HandoffOrchestrator {
         };
       }
 
+      // SD-LEO-FIX-SURFACE-PRIOR-LESSONS-001: advisory, fail-open prior-lessons surfacing.
+      // Autonomous /loop workers run precheck but skip the MANUAL phase-preflight step, so captured
+      // lessons (issue patterns + retrospectives) never reached them. Surface them here at the phase
+      // transition. ADVISORY ONLY — wrapped so any error (DB down, kb miss) is swallowed: it never
+      // throws, never adds gates/issues, and NEVER changes the precheck verdict. Default-on;
+      // LEO_SURFACE_LESSONS=off disables it.
+      if (process.env.LEO_SURFACE_LESSONS !== 'off') {
+        try {
+          const { surfacePriorLessons, formatPriorLessons, resolvePhaseStrategy } =
+            await import('../../../lib/learning/surface-prior-lessons.js');
+          const { IssueKnowledgeBase } = await import('../../../lib/learning/issue-knowledge-base.js');
+          const { patterns, retrospectives } = await surfacePriorLessons({
+            kb: new IssueKnowledgeBase(),
+            supabase: this.supabase,
+            sdCategory: sd.category || sd.title || sdId,
+            phaseStrategy: resolvePhaseStrategy(normalizedType),
+            limit: 3
+          });
+          console.log('');
+          console.log(formatPriorLessons(patterns, retrospectives));
+          console.log('');
+        } catch (e) {
+          console.warn(`   [precheck] prior-lessons surfacing skipped (advisory, non-blocking): ${e.message}`);
+        }
+      }
+
       // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-078: Run quick preflight first
       const preflight = await runPrerequisitePreflight(this.supabase, normalizedType, sdId);
       if (!preflight.passed) {
