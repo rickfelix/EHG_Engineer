@@ -63,3 +63,7 @@ cadence is the re-poll mechanism. The `/checkin` skill (`.claude/commands/checki
 also made explicitly self-sustaining: every check-in turn re-arms a `ScheduleWakeup` and
 re-runs the cycle, so a one-shot check-in can no longer leave a worker idle-forever with a
 non-empty queue.
+
+---
+### Related documentation
+- [The LEO Harness](./README.md) — canonical overview tying the roles, channels, loop model, and failure modes together.

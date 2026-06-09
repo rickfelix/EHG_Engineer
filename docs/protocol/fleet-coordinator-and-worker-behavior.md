@@ -151,3 +151,7 @@ Before relying on the worker<->coordinator channel (especially overnight / unatt
 - **coordinator → worker** is proven by `scripts/coordinator-comms-check.mjs`: it sends a `comms_check` COACHING ping; the worker reads its inbox and replies `/signal feedback "comms-check ack — read you"`. **No ack within the timeout ⇒ the worker loop is NOT polling its inbox (a silent break)** — fix its prompt.
 
 Run it at `/coordinator start` (after identity assignment) and any time you need to TRUST signal delivery. **Worker rule:** poll your coordination inbox **as a `/loop` step each iteration** (`/checkin`, or `node scripts/fleet-dashboard.cjs inbox` / worker-inbox) — never a hand-rolled bounded Bash poll (overshoots the 120000ms Bash timeout → exit-143) — ACK a comms check in one line, then continue and `ScheduleWakeup` so the next iteration re-fires.
+
+---
+### Related documentation
+- [The LEO Harness](./README.md) — canonical overview tying the roles, channels, loop model, and failure modes together.

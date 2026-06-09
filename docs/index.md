@@ -160,6 +160,7 @@ If you're reading this as part of codebase ingestion:
 
 | Document | Purpose |
 |----------|---------|
+| [LEO Harness Overview](protocol/README.md) | What the harness is — roles, channels, loop model, failure modes (canonical index) |
 | LEO Stack README | Server management |
 | CLAUDE Generation README | Auto-generation guide |
 
