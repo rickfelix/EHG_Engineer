@@ -130,6 +130,13 @@ class SDBaselineManager {
     // Create baseline items
     const items = [];
     for (const sd of sds) {
+      // sd_id MUST be sd_key (the v_sd_next_candidates JOIN key) — never the UUID.
+      // SD-LEO-INFRA-FIX-NEXT-CANDIDATES-001: skip an SD missing sd_key rather than
+      // falling back to sd.id (a UUID is a silent view drop; there is no FK).
+      if (!sd.sd_key) {
+        console.log(`${colors.yellow}Skipping SD ${sd.id}: missing sd_key (cannot key sd_baseline_items).${colors.reset}`);
+        continue;
+      }
       const track = sd.metadata?.execution_track || 'UNASSIGNED';
       const trackKey = track === 'Infrastructure' || track === 'Safety' ? 'A' :
                        track === 'Feature' ? 'B' :
@@ -146,7 +153,7 @@ class SDBaselineManager {
 
       items.push({
         baseline_id: baseline.id,
-        sd_id: sd.sd_key || sd.id,
+        sd_id: sd.sd_key,
         sequence_rank: sd.sequence_rank,
         track: trackKey,
         track_name: trackName,
@@ -167,8 +174,8 @@ class SDBaselineManager {
     }
 
     // Create initial actuals records
-    const actuals = sds.map(sd => ({
-      sd_id: sd.sd_key || sd.id,
+    const actuals = sds.filter(sd => sd.sd_key).map(sd => ({
+      sd_id: sd.sd_key,
       baseline_id: baseline.id,
       status: sd.progress_percentage > 0 ? 'in_progress' : 'not_started'
     }));
@@ -397,6 +404,12 @@ class SDBaselineManager {
     if (sds && sds.length > 0) {
       const items = [];
       for (const sd of sds) {
+        // sd_id MUST be sd_key (the v_sd_next_candidates JOIN key) — never the UUID.
+        // SD-LEO-INFRA-FIX-NEXT-CANDIDATES-001: skip SDs missing sd_key.
+        if (!sd.sd_key) {
+          console.log(`${colors.yellow}Skipping SD ${sd.id}: missing sd_key.${colors.reset}`);
+          continue;
+        }
         const track = sd.metadata?.execution_track || 'UNASSIGNED';
         const trackKey = track === 'Infrastructure' || track === 'Safety' ? 'A' :
                          track === 'Feature' ? 'B' :
@@ -406,7 +419,7 @@ class SDBaselineManager {
 
         items.push({
           baseline_id: newBaseline.id,
-          sd_id: sd.sd_key || sd.id,
+          sd_id: sd.sd_key,
           sequence_rank: sd.sequence_rank,
           track: trackKey,
           track_name: trackKey === 'A' ? 'Infrastructure/Safety' :
