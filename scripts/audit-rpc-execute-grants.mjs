@@ -44,7 +44,7 @@ const FALLBACK_RPCS = [
   'fn_is_chairman', 'get_conversation_messages', 'get_daily_briefing',
   'get_eva_conversations', 'get_gate_decision_status', 'kill_venture',
   'log_stage_advance_override', 'park_venture_decision', 'record_eva_failure',
-  'record_eva_success', 'reject_chairman_decision', 'reset_eva_circuit',
+  'record_eva_success', 'reject_chairman_decision', 'rescan_stage_20', 'reset_eva_circuit',
   'set_stage_override', 'set_global_auto_proceed',
 ];
 
