@@ -8,7 +8,8 @@ import {
   computeStaleFlags,
   formatDigest,
   DISABLED_AGING_DAYS,
-  ENABLED_UNROLLED_DAYS
+  ENABLED_UNROLLED_DAYS,
+  STALE_PENDING_OFF_DAYS
 } from '../../lib/feature-flags/governance-review.js';
 
 const NOW = new Date('2026-06-08T00:00:00Z').getTime();
@@ -53,6 +54,33 @@ describe('classifyFlag', () => {
 
   it('does not flag a freshly enabled un-rolled flag (within grace window)', () => {
     expect(classifyFlag({ flag_key: 'NEW', lifecycle_state: 'enabled', is_enabled: true, last_reviewed_at: daysAgo(1), rolled_out_at: null, created_at: daysAgo(1) }, NOW)).toBeNull();
+  });
+
+  // SD-LEO-INFRA-MAKE-FEATURE-FLAGS-001: stale-off-pending (the forgotten-switch escalation).
+  it('flags a forgotten shipped-OFF draft flag (rolled out, still off, past window) as stale-off-pending → enable', () => {
+    const c = classifyFlag({ flag_key: 'FORGOTTEN', lifecycle_state: 'draft', is_enabled: false, last_reviewed_at: daysAgo(1), rolled_out_at: daysAgo(STALE_PENDING_OFF_DAYS + 2) }, NOW);
+    expect(c.reasons).toContain('stale-off-pending');
+    expect(c.recommendation).toBe('enable');
+  });
+
+  it('does NOT flag a shipped-OFF draft flag still within the staleness window', () => {
+    expect(classifyFlag({ flag_key: 'FRESH_OFF', lifecycle_state: 'draft', is_enabled: false, last_reviewed_at: daysAgo(1), rolled_out_at: daysAgo(STALE_PENDING_OFF_DAYS - 2) }, NOW)).toBeNull();
+  });
+
+  it('does NOT flag a never-rolled-out (rolled_out_at=null) draft-off flag as stale-off (no ship signal)', () => {
+    expect(classifyFlag({ flag_key: 'NEVER_SHIPPED', lifecycle_state: 'draft', is_enabled: false, last_reviewed_at: daysAgo(1), rolled_out_at: null }, NOW)).toBeNull();
+  });
+
+  it('stale-off ENABLE takes precedence over a co-occurring never-reviewed', () => {
+    const c = classifyFlag({ flag_key: 'BOTH', lifecycle_state: 'draft', is_enabled: false, last_reviewed_at: null, rolled_out_at: daysAgo(STALE_PENDING_OFF_DAYS + 5) }, NOW);
+    expect(c.reasons).toEqual(expect.arrayContaining(['never-reviewed', 'stale-off-pending']));
+    expect(c.recommendation).toBe('enable');
+  });
+
+  it('a deliberately disabled (not draft) aging OFF flag stays KILL, not stale-off (a decision, not a forgotten switch)', () => {
+    const c = classifyFlag({ flag_key: 'KILLED', lifecycle_state: 'disabled', is_enabled: false, last_reviewed_at: daysAgo(1), rolled_out_at: daysAgo(STALE_PENDING_OFF_DAYS + 5), created_at: daysAgo(DISABLED_AGING_DAYS + 5) }, NOW);
+    expect(c.reasons).not.toContain('stale-off-pending');
+    expect(c.recommendation).toBe('kill');
   });
 });
 
