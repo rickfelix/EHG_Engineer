@@ -52,8 +52,12 @@ export const STANDARD_LOOPS = [
     prompt: 'node scripts/fleet-dashboard.cjs inbox' },
   { key: 'audit',       label: 'Coordinator 3-source audit', script: 'coordinator-audit.mjs', cron: '*/15 * * * *',
     prompt: 'node scripts/coordinator-audit.mjs' },
-  { key: 'email',       label: 'Executive email summary (default-on)', script: 'coordinator-email-summary.mjs', cron: '*/30 * * * *',
-    prompt: 'node scripts/coordinator-email-summary.mjs' },
+  // QF-20260609-024 (chairman 2026-06-09): the chairman scheduled channel is the Adam exec summary,
+  // NOT the raw coordinator fleet card — one Adam email on a ~30min timer (skip-if-unchanged). The
+  // coordinator card script stays as a dependency (adam-exec-summary reuses it in dry-run); only its
+  // standalone cron retires.
+  { key: 'email',       label: 'Chairman exec email (Adam, default-on)', script: 'adam-exec-summary.mjs', cron: '*/30 * * * *',
+    prompt: 'node scripts/adam-exec-summary.mjs' },
   // SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5): daily feature-flag governance review.
   // Gated default-OFF behind leo_feature_flags FLAG_GOVERNANCE_REVIEW_V1 → cheap no-op until enabled.
   { key: 'flag-review', label: 'Feature-flag governance review', script: 'flag-governance-review.mjs', cron: '0 9 * * *',
