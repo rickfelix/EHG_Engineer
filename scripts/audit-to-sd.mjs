@@ -16,6 +16,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+// QF-20260609-943: score auto-generated audit SDs at conception (leo-create-sd guards its CLI behind isMainModule, so this import is side-effect-free).
+import { scoreSDAtConception } from './leo-create-sd.js';
 
 // Load environment variables
 dotenv.config();
@@ -322,6 +324,20 @@ async function generateSDs(filePath, options = {}) {
     } else {
       result.sdsGenerated += (data?.length || 0);
       console.log(`  Created SD batch ${Math.floor(i / batchSize) + 1}: ${data?.length || 0} SDs`);
+
+      // QF-20260609-943: route each created SD through scoreSDAtConception so SD-AUDIT-* rows get an
+      // eva_vision_scores row (they set metadata.auto_generated=true, which exempts them from
+      // GATE_VISION_SCORE and would otherwise mask the missing score). Mirrors leo-create-sd.js;
+      // non-blocking — a scoring failure must never fail audit-SD generation.
+      const createdIds = new Set((data || []).map((row) => row.id));
+      for (const sd of batch) {
+        if (createdIds.size > 0 && !createdIds.has(sd.id)) continue; // only score rows that inserted
+        try {
+          await scoreSDAtConception(sd.id, sd.title, sd.description, supabase);
+        } catch (scoreErr) {
+          result.errors.push(`Vision scoring skipped for ${sd.id}: ${scoreErr.message}`);
+        }
+      }
     }
   }
 
