@@ -140,6 +140,12 @@ export async function cleanup(testRunId) {
   // uat_test_results: id is a UUID (not testRunId-prefixed), so we clean by
   // error_message which always contains testRunId.
   const strategies = [
+    // SD-LEO-INFRA-BULK-PURGE-LIVE-001 FR-2: the fn_sync_sd_to_baseline trigger writes a
+    // sd_baseline_items row (sd_id = the testRunId-prefixed sd_key, or id on legacy paths) when these
+    // fixtures insert an SD, and sd_baseline_items has NO FK / ON DELETE CASCADE — so it must be
+    // cleaned explicitly or it leaks a dead baseline orphan. Delete it FIRST, keyed by the
+    // testRunId-prefixed sd_id (covers both the sd_key-write and the id-write).
+    { name: 'sd_baseline_items', col: 'sd_id', filter: `${testRunId}%` },
     { name: 'strategic_directives_v2', col: 'sd_key', filter: `${testRunId}%` },
     { name: 'strategic_directives_v2', col: 'id', filter: `${testRunId}%` },
     { name: 'strategic_directives_v2', col: 'title', filter: `${testRunId}%` },

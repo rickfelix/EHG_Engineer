@@ -211,6 +211,12 @@ describe.skipIf(!HAS_REAL_DB)('sd.completed Handler (Return Path)', () => {
       .eq('venture_id', testVentureId)
       .eq('lifecycle_stage', 19);
 
+    // SD-LEO-INFRA-BULK-PURGE-LIVE-001 FR-2: fn_sync_sd_to_baseline writes a sd_baseline_items row keyed
+    // by NEW.sd_key when an active baseline exists, and sd_baseline_items has NO FK / ON DELETE CASCADE —
+    // so deleting only the SD leaks a dead baseline orphan. Every fixture sd_key is `SD-${PREFIX}-...`, so
+    // one prefix-scoped delete cleans the parent + all children (incl. replaceChild re-inserts) FIRST.
+    await supabase.from('sd_baseline_items').delete().ilike('sd_id', `SD-${PREFIX}-%`);
+
     // Delete children first (FK on parent_sd_id)
     for (const uuid of childSdUuids) {
       await supabase.from('strategic_directives_v2').delete().eq('id', uuid);
