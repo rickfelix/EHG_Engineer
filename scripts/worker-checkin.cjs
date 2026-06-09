@@ -417,13 +417,30 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
   if (assignment) {
     const sdKey = extractSdFromAssignment(assignment);
     if (sdKey) {
-      const claimed = await tryClaim(sb, sdKey, sessionId);
-      if (claimed.ok) {
+      // SD-LEO-FIX-CLAIM-RPC-TERMINAL-001: purge a STALE assignment whose target SD reached a
+      // terminal status (completed/cancelled/deferred) AFTER the assignment was created — the
+      // in_progress->terminal race. claim_sd now refuses terminal claims, but a never-ACKed
+      // assignment would re-fire every tick (the "retried on every tick" symptom), so ACK it
+      // here and fall through to self-claim. Fail-open: a query error skips the purge and lets
+      // the normal claim path (now guarded by the RPC) handle it.
+      let terminalStatus = null;
+      try {
+        const { data: tgt } = await sb.from('strategic_directives_v2')
+          .select('status').eq('sd_key', sdKey).maybeSingle();
+        if (tgt && ['completed', 'cancelled', 'deferred'].includes(tgt.status)) terminalStatus = tgt.status;
+      } catch { /* fail-open: leave terminalStatus null, attempt the claim below */ }
+      if (terminalStatus) {
         await ackMessage(sb, assignment.id);
-        return { ...base, action: 'claimed_assignment', sd: sdKey, message: `Claimed assigned ${sdKey} via claim_sd. Run: node scripts/sd-start.js ${sdKey}` };
+        base.stale_assignment_purged = { sd: sdKey, status: terminalStatus };
+      } else {
+        const claimed = await tryClaim(sb, sdKey, sessionId);
+        if (claimed.ok) {
+          await ackMessage(sb, assignment.id);
+          return { ...base, action: 'claimed_assignment', sd: sdKey, message: `Claimed assigned ${sdKey} via claim_sd. Run: node scripts/sd-start.js ${sdKey}` };
+        }
+        // could not claim the assigned SD -> fall through to self-claim
+        base.assignment_claim_error = claimed.error;
       }
-      // could not claim the assigned SD -> fall through to self-claim
-      base.assignment_claim_error = claimed.error;
     }
   }
 
