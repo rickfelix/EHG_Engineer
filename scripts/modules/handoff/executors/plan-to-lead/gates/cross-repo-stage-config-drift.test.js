@@ -8,8 +8,29 @@ import {
   classifyCheckOutput,
   decideVerdict,
   isStageConfigRelevant,
+  classifyMigrationBody,
   createCrossRepoStageConfigDriftGate,
 } from './cross-repo-stage-config-drift.js';
+
+// A realistic audit-trigger-only migration (mirrors SD-FDBK-FIX-GOVERNANCE-GAP-VENTURE-001):
+// its ONLY bare `venture_stages` reference is the trigger's `ON venture_stages`; everything
+// else is `venture_stages_audit` / `fn_venture_stages_audit_trigger` (substrings, not the table).
+const AUDIT_ONLY_MIGRATION = `
+CREATE OR REPLACE FUNCTION fn_venture_stages_audit_trigger()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO venture_stages_audit (column_name, old_value, new_value)
+  VALUES ('gate_label', OLD.gate_label, NEW.gate_label);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tr_venture_stages_audit
+  AFTER UPDATE ON venture_stages
+  FOR EACH ROW EXECUTE FUNCTION fn_venture_stages_audit_trigger();
+
+COMMENT ON FUNCTION fn_venture_stages_audit_trigger() IS 'audits venture_stages gate_label changes';
+`;
 
 describe('classifyCheckOutput', () => {
   it('exit 0 → in sync (no drift, no error)', () => {
@@ -79,6 +100,57 @@ describe('isStageConfigRelevant', () => {
   it('a migration read that throws is swallowed (not relevant on its own)', () => {
     const read = () => { throw new Error('ENOENT'); };
     expect(isStageConfigRelevant(['database/migrations/20260601_z.sql'], read)).toBe(false);
+  });
+
+  // SD-FDBK-ENH-CROSS-REPO-STAGE-001: precision — audit-trigger-only migrations are NOT relevant.
+  it('an audit-trigger-only migration → NOT relevant (false-positive fixed)', () => {
+    const read = (f) => (f.endsWith('20260608_audit.sql') ? AUDIT_ONLY_MIGRATION : null);
+    expect(isStageConfigRelevant(['database/migrations/20260608_audit.sql'], read)).toBe(false);
+  });
+  it('a migration that UPDATEs venture_stages config → relevant', () => {
+    const read = () => "UPDATE venture_stages SET gate_label = 'manual' WHERE stage_number = 21;";
+    expect(isStageConfigRelevant(['database/migrations/20260608_cfg.sql'], read)).toBe(true);
+  });
+  it('a migration referencing venture_stages in an unrecognized shape → relevant (fail-safe) + WARN', () => {
+    const read = () => 'SELECT count(*) FROM venture_stages;';
+    const warnings = [];
+    expect(isStageConfigRelevant(['database/migrations/20260608_amb.sql'], read, warnings)).toBe(true);
+    expect(warnings.length).toBe(1);
+    expect(warnings[0]).toMatch(/fail-safe/i);
+  });
+});
+
+describe('classifyMigrationBody', () => {
+  it('audit/trigger/function/comment-only → audit_only', () => {
+    expect(classifyMigrationBody(AUDIT_ONLY_MIGRATION)).toBe('audit_only');
+  });
+  it('UPDATE / INSERT / DELETE on venture_stages → config', () => {
+    expect(classifyMigrationBody("UPDATE venture_stages SET gate_label='x';")).toBe('config');
+    expect(classifyMigrationBody("INSERT INTO venture_stages (stage_number) VALUES (27);")).toBe('config');
+    expect(classifyMigrationBody('DELETE FROM venture_stages WHERE stage_number = 99;')).toBe('config');
+  });
+  it('ALTER / CREATE / DROP TABLE venture_stages → config', () => {
+    expect(classifyMigrationBody('ALTER TABLE venture_stages ADD COLUMN foo text;')).toBe('config');
+    expect(classifyMigrationBody('ALTER TABLE public.venture_stages DROP COLUMN foo;')).toBe('config');
+    expect(classifyMigrationBody('DROP TABLE IF EXISTS venture_stages;')).toBe('config');
+  });
+  it('no bare venture_stages reference (only venture_stages_audit) → none', () => {
+    const body = "INSERT INTO venture_stages_audit (column_name) VALUES ('gate_label');";
+    expect(classifyMigrationBody(body)).toBe('none');
+  });
+  it('venture_stages referenced in an unrecognized statement → ambiguous', () => {
+    expect(classifyMigrationBody('SELECT * FROM venture_stages WHERE stage_number = 1;')).toBe('ambiguous');
+  });
+  it('config DML wins even when an audit trigger is also present (mixed)', () => {
+    const mixed = AUDIT_ONLY_MIGRATION + "\nUPDATE venture_stages SET gate_label='auto' WHERE stage_number = 22;";
+    expect(classifyMigrationBody(mixed)).toBe('config');
+  });
+  it('a comment mentioning venture_stages does not make it relevant', () => {
+    expect(classifyMigrationBody('-- touch up venture_stages docs\nALTER TABLE other ADD COLUMN x int;')).toBe('none');
+  });
+  it('empty / non-string → none', () => {
+    expect(classifyMigrationBody('')).toBe('none');
+    expect(classifyMigrationBody(null)).toBe('none');
   });
 });
 
