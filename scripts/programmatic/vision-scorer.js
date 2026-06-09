@@ -16,8 +16,9 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
 import { parseArgs } from 'node:util';
 import { runProgrammaticTask } from '../../lib/programmatic/tool-loop.js';
-import { createSupabaseTool, createSupabaseUpsertTool } from '../../lib/programmatic/tools/supabase-tool.js';
+import { createSupabaseTool } from '../../lib/programmatic/tools/supabase-tool.js';
 import { createOllamaTool } from '../../lib/programmatic/tools/ollama-tool.js';
+import { extractScoreJson, buildVisionScoreRow } from '../../lib/programmatic/vision-score-row.js';
 
 const { values: args } = parseArgs({
   options: {
@@ -29,6 +30,13 @@ const { values: args } = parseArgs({
 const sdId = args['sd-id'];
 const dryRun = args['dry-run'];
 
+// QF-20260609-493: resolve the EHG portfolio vision/arch by KEY. eva_vision_documents has
+// NO is_active column, so the old `WHERE is_active = true LIMIT 1` matched nothing (or a
+// random venture vision) — a second reason the score never persisted. Default to the L1
+// portfolio docs; honour the same env overrides the LEAD-TO-PLAN vision gate uses.
+const VISION_KEY = process.env.LEO_VISION_KEY_OVERRIDE || 'VISION-EHG-L1-001';
+const ARCH_KEY = process.env.LEO_ARCH_KEY_OVERRIDE || 'ARCH-EHG-L1-001';
+
 if (!sdId) {
   console.error('Usage: node scripts/programmatic/vision-scorer.js --sd-id SD-XXX-001 [--dry-run]');
   process.exit(1);
@@ -38,7 +46,9 @@ const supabase = createSupabaseServiceClient();
 
 const tools = [
   createSupabaseTool(supabase),
-  createSupabaseUpsertTool(supabase),
+  // QF-20260609-493: NO upsert tool — the model scores only; the caller persists the row in
+  // JS (buildVisionScoreRow) so the model's final message is reliably the score JSON (the
+  // upsert tool round-trip is what made the Gemini fallback drop the JSON → "No JSON found").
   // SD-FDBK-FIX-VISION-SCORER-DETERMINISM-001 (FR-4): pin sampling on the LIVE
   // programmatic scoring path (seed matches the cloud-path VISION_SCORE_SEED=1729).
   createOllamaTool({ temperature: 0, seed: 1729 }),
@@ -51,7 +61,7 @@ const SYSTEM_PROMPT = `You are an EVA vision alignment scorer. Your task is to:
 4. Build a scoring prompt from the SD and dimensions
 5. Call call_local_llm with the scoring system prompt and built prompt
 6. Parse the score JSON from the response
-7. Persist the score using supabase_upsert on eva_vision_scores
+7. Do NOT call any upsert/persist tool — the caller persists the score row
 8. Output ONLY the final JSON: {"total_score": N, "action": "...", "dimension_scores": {...}}
 
 The score JSON from the LLM must have: total_score (0-100), action (one of: proceed, minor_sd, corrective_sd, block), dimension_scores (object).
@@ -72,32 +82,59 @@ const USER_PROMPT = `Score SD "${sdId}" against the EVA vision.
 
 Steps:
 1. Query strategic_directives_v2 WHERE sd_key = '${sdId}', select: title, description, strategic_objectives, key_changes, sd_type
-2. Query eva_vision_documents WHERE is_active = true, select: id, extracted_dimensions, vision_key, limit 1
-3. Query eva_architecture_plans WHERE is_active = true, select: id, extracted_dimensions, limit 1
+2. Query eva_vision_documents WHERE vision_key = '${VISION_KEY}', select: id, extracted_dimensions, vision_key, limit 1
+3. Query eva_architecture_plans WHERE plan_key = '${ARCH_KEY}', select: id, extracted_dimensions, limit 1
 4. Build scoring prompt using SD data + vision/arch dimensions
 5. Call call_local_llm with the EVA scoring rubric system prompt and your built prompt
 6. Parse JSON from the response (strip markdown fences if present)
-7. If dry_run flag detected, do NOT call supabase_upsert — just return the score
-8. Otherwise, upsert into eva_vision_scores: { sd_id: '${sdId}', total_score, dimension_scores, threshold_action: action, scoring_method: 'programmatic-ollama', created_by: 'vision-scorer-programmatic' }
-9. Output final JSON
+7. Do NOT call any upsert/persist tool — the caller persists the score row. Just return the score.
+8. Output ONLY the final score JSON`;
 
-${dryRun ? 'DRY RUN MODE: Skip the supabase_upsert call. Add dry_run: true to output.' : ''}`;
+// QF-20260609-493: score-only model + JS persist. Retry on an empty/non-JSON final
+// message (flaky Gemini fallback), then write the row ourselves — never silent-empty.
+const MAX_SCORE_ATTEMPTS = 3;
 
 try {
-  const result = await runProgrammaticTask(USER_PROMPT, tools, {
-    systemPrompt: SYSTEM_PROMPT,
-    dryRun,
-  });
-
-  // Extract JSON from result
-  const jsonMatch = result.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    console.error('No JSON found in scorer output:', result.substring(0, 200));
-    process.exit(1);
+  let scoreData = null;
+  let lastPreview = '';
+  for (let attempt = 1; attempt <= MAX_SCORE_ATTEMPTS; attempt++) {
+    const result = await runProgrammaticTask(USER_PROMPT, tools, { systemPrompt: SYSTEM_PROMPT, dryRun });
+    const parsed = extractScoreJson(result);
+    if (parsed && typeof parsed.total_score === 'number') { scoreData = parsed; break; }
+    lastPreview = (result || '').substring(0, 200);
+    if (attempt < MAX_SCORE_ATTEMPTS) await new Promise((r) => setTimeout(r, 1000 * attempt));
   }
 
-  const scoreData = JSON.parse(jsonMatch[0]);
-  if (dryRun) scoreData.dry_run = true;
+  // Fail LOUDLY (non-zero exit + structured error) so the caller can tell a scorer outage
+  // apart from a legitimate low score — never silent-empty (the old "No JSON found" bug).
+  if (!scoreData) {
+    console.error(JSON.stringify({
+      error: 'SCORER_NO_JSON', sd_id: sdId, attempts: MAX_SCORE_ATTEMPTS,
+      message: `vision-scorer produced no parseable score after ${MAX_SCORE_ATTEMPTS} attempts; no row written.`,
+      last_output_preview: lastPreview,
+    }));
+    process.exit(2);
+  }
+
+  if (dryRun) {
+    scoreData.dry_run = true;
+  } else {
+    const { data: vis } = await supabase.from('eva_vision_documents').select('id').eq('vision_key', VISION_KEY).limit(1);
+    const visionId = vis?.[0]?.id;
+    if (!visionId) {
+      console.error(JSON.stringify({ error: 'SCORER_NO_ACTIVE_VISION', sd_id: sdId, vision_key: VISION_KEY,
+        message: `Vision document '${VISION_KEY}' not found; cannot persist vision score.` }));
+      process.exit(3);
+    }
+    const { data: arch } = await supabase.from('eva_architecture_plans').select('id').eq('plan_key', ARCH_KEY).limit(1);
+    const { error: insErr } = await supabase
+      .from('eva_vision_scores')
+      .insert(buildVisionScoreRow({ scoreData, visionId, archPlanId: arch?.[0]?.id, sdId }));
+    if (insErr) {
+      console.error(JSON.stringify({ error: 'SCORER_PERSIST_FAILED', sd_id: sdId, message: insErr.message }));
+      process.exit(4);
+    }
+  }
 
   console.log(JSON.stringify(scoreData));
   process.exit(0);
