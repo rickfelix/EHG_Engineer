@@ -28,6 +28,9 @@
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const ws = require('../lib/fleet/worker-status.cjs');
 const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cjs');
+// SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
+// scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
+const { draftDepsSatisfied, baselinedCandidateEligible } = require('../lib/fleet/claim-eligibility.cjs');
 
 const ROLL_CALL_TTL_MS = 60 * 60 * 1000;     // availability row lives 1h
 const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (idempotency)
@@ -202,61 +205,14 @@ async function selfClaimQuickFix(sb, sessionId, base) {
 const DRAFT_CANDIDATE_LIMIT = 10;
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 
-/**
- * Are ALL of this SD's dependencies satisfied (each referenced SD completed)?
- * The `dependencies` array is heterogeneously shaped across the fleet: plain text
- * ("SD-X needs Y"), {sd_id:"SD-X"}, {sd_key:"SD-X"}, {sd_key:"none"} sentinel, and free-form
- * {type,status,dependency} notes with NO SD ref. Each element resolves to a referenced sd_key;
- * elements with no SD ref (or the "none" sentinel) are non-blocking. We re-implement this here
- * because v_sd_next_candidates.deps_satisfied is BROKEN for object-shaped deps (it text-compares
- * the whole JSON object, never matching a completed key). Conservative on error: returns false.
- */
-async function draftDepsSatisfied(sb, sd) {
-  const deps = Array.isArray(sd.dependencies) ? sd.dependencies : [];
-  const refKeys = [];
-  for (const e of deps) {
-    let k = null;
-    if (typeof e === 'string') k = e.split(/\s/)[0];
-    else if (e && typeof e === 'object') k = e.sd_id || e.sd_key || null;
-    if (!k || k === 'none' || k === 'None') continue; // no SD ref / sentinel -> non-blocking
-    refKeys.push(k);
-  }
-  if (!refKeys.length) return true;
-  try {
-    const { data } = await sb.from('strategic_directives_v2').select('sd_key, status').in('sd_key', refKeys);
-    const statusByKey = Object.fromEntries((data || []).map((r) => [r.sd_key, r.status]));
-    return refKeys.every((k) => statusByKey[k] === 'completed');
-  } catch {
-    return false; // conservative: don't claim a maybe-blocked SD on a query error
-  }
-}
-
-/**
- * SD-FDBK-FIX-WORKER-SELF-CLAIM-001: gate a baselined v_sd_next_candidates row (step 6) before
- * self-claiming it. The view surfaces deps_satisfied=false rows AND orchestrator PARENTS, and the
- * self-claim loop called claim_sd WITHOUT filtering on either (claim_sd enforces neither — it is
- * advisory-only). Result after the baseline populated 2026-06-07: a worker self-claimed a blocked
- * child (depends_on an in-flight SD on the same write-surface) and another self-claimed an
- * orchestrator PARENT (parents auto-complete on their children — must never be worker-claimed).
- * Re-check sd_type + dependencies against strategic_directives_v2 — the SAME guard step 6.25 already
- * applies — because v_sd_next_candidates.deps_satisfied is BROKEN for object-shaped deps (see
- * draftDepsSatisfied). Conservative: any uncertainty -> skip the candidate (false), never claim.
- * `sdKey` is the v_sd_next_candidates.sd_id column, which holds the sd_KEY string (bi.sd_id=sd.sd_key).
- */
-async function baselinedCandidateEligible(sb, sdKey) {
-  try {
-    const { data } = await sb
-      .from('strategic_directives_v2')
-      .select('sd_type, dependencies')
-      .eq('sd_key', sdKey)
-      .maybeSingle();
-    if (!data) return false;                            // can't verify -> don't claim
-    if (data.sd_type === 'orchestrator') return false;  // never claim an orchestrator parent
-    return await draftDepsSatisfied(sb, data);          // every referenced dep must be completed
-  } catch {
-    return false; // conservative: skip this candidate on a query error (fall through to the next)
-  }
-}
+// SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: draftDepsSatisfied + baselinedCandidateEligible were
+// EXTRACTED to ../lib/fleet/claim-eligibility.cjs (required above) so the worker-PULL self_claim path
+// (here) and the coordinator/sweep-PUSH CLAIM_FIX path (scripts/stale-session-sweep.cjs) share ONE
+// eligibility predicate. CLAIM_FIX previously lacked the orchestrator-parent + dep-blocked guard the
+// self_claim path had (SD-FDBK-FIX-WORKER-SELF-CLAIM-001) — a PAT-WRITER-CONSUMER-ASYMMETRY that let
+// coordinator-push route an orchestrator PARENT onto a worker. Self_claim behavior here is unchanged:
+// baselinedCandidateEligible(sb, sdKey) still returns false for orchestrator parents, dep-blocked SDs,
+// not-found, and on any query error (conservative skip).
 
 /**
  * Self-claim tier for claimable UN-BASELINED draft SDs. v_sd_next_candidates is built from
