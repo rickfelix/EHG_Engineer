@@ -42,9 +42,66 @@ export const SSOT_INPUT_FILES = [
   'src/config/venture-workflow.ts', // if the sibling artifact is edited from within this repo's tree
 ];
 
-/** A changed migration is relevant only if its body references the venture_stages SSOT table. */
+/** A changed migration is relevant only if its body mutates the venture_stages SSOT config. */
 const MIGRATION_DIR = 'database/migrations/';
-const VENTURE_STAGES_RE = /venture_stages/i;
+// Word-boundary match for the BARE table name. `\b...\b` deliberately does NOT match
+// substrings like `venture_stages_audit` or `fn_venture_stages_audit_trigger` (the `_`
+// after `stages` is a word char → no boundary), which is the crux of the old false
+// positive (the blanket /venture_stages/i matched those audit identifiers).
+const VENTURE_STAGES_RE = /\bventure_stages\b/i;
+
+// Genuine stage-CONFIG mutations on the bare venture_stages table: row DML or table DDL.
+// Any of these → the generated ehg venture-workflow.ts could change → stage-config-relevant.
+const STAGE_CONFIG_MUTATION_RE = new RegExp(
+  String.raw`\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?|` +
+    String.raw`ALTER\s+TABLE(?:\s+IF\s+EXISTS)?(?:\s+ONLY)?|` +
+    String.raw`CREATE\s+(?:TEMP(?:ORARY)?\s+)?TABLE(?:\s+IF\s+NOT\s+EXISTS)?|` +
+    String.raw`DROP\s+TABLE(?:\s+IF\s+EXISTS)?)\s+` +
+    String.raw`(?:ONLY\s+)?(?:[\w"]+\.)?"?venture_stages"?\b`,
+  'i',
+);
+
+/** Strip SQL line (`--`) and block (slash-star) comments. */
+function stripSqlComments(sql) {
+  return String(sql)
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n\r]*/g, ' ');
+}
+
+/**
+ * Remove the SQL constructs whose only legitimate venture_stages reference is the
+ * audit/trigger surface — they cannot change stage CONFIG that the generated
+ * venture-workflow.ts reads:
+ *  - dollar-quoted bodies ($$...$$ / $tag$...$tag$) — function bodies
+ *  - CREATE TRIGGER ... (carries `ON venture_stages`)
+ *  - COMMENT ON ...   (carries `ON ... venture_stages`)
+ */
+function removeAuditDdl(sql) {
+  let out = String(sql).replace(/\$([A-Za-z_]\w*)?\$[\s\S]*?\$\1\$/g, ' ');
+  out = out.replace(/\bCREATE\s+(?:CONSTRAINT\s+)?TRIGGER\b[\s\S]*?;/gi, ' ');
+  out = out.replace(/\bDROP\s+TRIGGER\b[\s\S]*?;/gi, ' ');
+  out = out.replace(/\bCOMMENT\s+ON\b[\s\S]*?;/gi, ' ');
+  return out;
+}
+
+/**
+ * Classify a migration body by its venture_stages relationship. Pure + exported.
+ * @returns {'config'|'audit_only'|'ambiguous'|'none'}
+ *  - 'config'     : mutates stage rows/columns (INSERT/UPDATE/DELETE/ALTER/CREATE/DROP/TRUNCATE) → relevant
+ *  - 'audit_only' : references the bare table ONLY inside trigger/function/comment DDL → NOT relevant
+ *  - 'ambiguous'  : references the bare table in an unrecognized shape → relevant (fail-safe) + WARN
+ *  - 'none'       : no bare venture_stages reference at all (e.g. only venture_stages_audit) → NOT relevant
+ */
+export function classifyMigrationBody(body) {
+  if (!body || typeof body !== 'string') return 'none';
+  const sql = stripSqlComments(body);
+  if (!VENTURE_STAGES_RE.test(sql)) return 'none';
+  if (STAGE_CONFIG_MUTATION_RE.test(sql)) return 'config';
+  // No config mutation detected: strip audit/trigger/function/comment DDL and see whether
+  // any bare venture_stages reference survives.
+  const residual = removeAuditDdl(sql);
+  return VENTURE_STAGES_RE.test(residual) ? 'ambiguous' : 'audit_only';
+}
 
 /**
  * Classify the exit/output of `generate-stage-config.cjs --check` into drift vs execution-error.
@@ -149,10 +206,15 @@ function defaultSiblingUncommitted(siblingRepo) {
 
 /**
  * Determine whether the SD's changed files touch stage-config SSOT inputs.
- * relevant if: a known SSOT input file changed, OR a changed migration body references
- * venture_stages. readMigration(rel) returns the file body (or null). Pure-ish + exported.
+ * relevant if: a known SSOT input file changed, OR a changed migration body MUTATES
+ * the venture_stages config (row DML or table DDL), OR a migration references the bare
+ * table in an unrecognized shape (ambiguous → fail-safe relevant). A migration whose
+ * only venture_stages references live inside trigger/function/comment DDL is NOT relevant.
+ *
+ * readMigration(rel) returns the file body (or null). Pure-ish + exported. An optional
+ * `warnings` array collects fail-safe notes (ambiguous bodies) so the gate can surface them.
  */
-export function isStageConfigRelevant(changedFiles, readMigration) {
+export function isStageConfigRelevant(changedFiles, readMigration, warnings) {
   const files = (changedFiles || []).map((f) => f.replace(/\\/g, '/'));
   for (const f of files) {
     if (SSOT_INPUT_FILES.some((s) => f === s || f.endsWith('/' + s))) return true;
@@ -161,7 +223,20 @@ export function isStageConfigRelevant(changedFiles, readMigration) {
     if (f.startsWith(MIGRATION_DIR) && /\.sql$/i.test(f)) {
       let body = null;
       try { body = readMigration(f); } catch { body = null; }
-      if (body && VENTURE_STAGES_RE.test(body)) return true;
+      if (!body) continue;
+      const cls = classifyMigrationBody(body);
+      if (cls === 'config') return true;
+      if (cls === 'ambiguous') {
+        if (Array.isArray(warnings)) {
+          warnings.push(
+            `${f}: references venture_stages in an unrecognized statement shape — treated as ` +
+            `stage-config-relevant (fail-safe). If this migration does not change stage config, ` +
+            `make its venture_stages references trigger/function/comment-only.`,
+          );
+        }
+        return true;
+      }
+      // 'audit_only' / 'none' → not relevant; keep scanning other migrations.
     }
   }
   return false;
@@ -189,9 +264,10 @@ export function createCrossRepoStageConfigDriftGate(supabase, deps = {}) {
 
       // 1) Relevance — fail-safe to RELEVANT if detection errors.
       let relevant;
+      const relevanceWarnings = [];
       try {
         const files = changedFiles(rootDir);
-        relevant = isStageConfigRelevant(files, readMig);
+        relevant = isStageConfigRelevant(files, readMig, relevanceWarnings);
       } catch {
         relevant = true; // must-fix #1: a detection error must not downgrade BLOCK -> WARN
       }
@@ -235,7 +311,10 @@ export function createCrossRepoStageConfigDriftGate(supabase, deps = {}) {
         score: verdict.passed ? 100 : 0,
         max_score: 100,
         issues: isBlock ? [`${GATE_NAME}: ${verdict.reason}`] : [],
-        warnings: verdict.passed && verdict.outcome !== 'PASS' ? [`${GATE_NAME} (${verdict.outcome}): ${verdict.reason}`] : [],
+        warnings: [
+          ...(verdict.passed && verdict.outcome !== 'PASS' ? [`${GATE_NAME} (${verdict.outcome}): ${verdict.reason}`] : []),
+          ...relevanceWarnings.map((w) => `${GATE_NAME} (relevance fail-safe): ${w}`),
+        ],
         details,
         ...(isBlock ? { remediation: BLOCK_REMEDIATION } : {}),
       };
