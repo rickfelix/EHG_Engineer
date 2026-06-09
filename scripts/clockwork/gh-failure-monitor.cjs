@@ -27,9 +27,13 @@ function mapSeverity(workflowName) {
   return 'medium';
 }
 
-function computeErrorHash(workflowName, runId) {
+// QF-20260609-255: key the dedup hash on workflowName + headBranch (NOT runId). runId
+// (run.databaseId) is unique per run, so the old hash never matched across distinct failed
+// runs of the same workflow/branch — every re-failure inserted a new feedback row (962 dup
+// rows; LEO-Bypass alone = 305) and burned a fresh LLM triage call each time.
+function computeErrorHash(workflowName, headBranch) {
   return crypto.createHash('sha256')
-    .update(`${workflowName}:${runId}`)
+    .update(`${workflowName}:${headBranch}`)
     .digest('hex');
 }
 
@@ -61,8 +65,19 @@ async function insertFailures(supabase, failures, repo) {
   let updated = 0;
 
   for (const run of failures) {
-    const errorHash = computeErrorHash(run.name, run.databaseId);
+    const errorHash = computeErrorHash(run.name, run.headBranch);
     const title = sanitizeInput(`${run.name} failed on ${run.headBranch}`);
+    // QF-20260609-255: latest-run metadata reused on BOTH the dedup-update and the insert,
+    // so a deduped row always reflects the most recent run_id/run_url, not the first sighting.
+    const metadata = {
+      run_id: run.databaseId,
+      run_url: run.url,
+      workflow_name: sanitizeInput(run.name),
+      branch: sanitizeInput(run.headBranch),
+      repo,
+      conclusion: run.conclusion,
+      gh_created_at: run.createdAt
+    };
 
     // Check for existing entry (dedup)
     const { data: existing } = await supabase
@@ -78,7 +93,8 @@ async function insertFailures(supabase, failures, repo) {
         .update({
           occurrence_count: (existing[0].occurrence_count || 1) + 1,
           last_seen: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          metadata
         })
         .eq('id', existing[0].id);
       updated++;
@@ -97,15 +113,7 @@ async function insertFailures(supabase, failures, repo) {
           severity: mapSeverity(run.name),
           category: 'ci_failure',
           status: 'new',
-          metadata: {
-            run_id: run.databaseId,
-            run_url: run.url,
-            workflow_name: sanitizeInput(run.name),
-            branch: sanitizeInput(run.headBranch),
-            repo,
-            conclusion: run.conclusion,
-            gh_created_at: run.createdAt
-          },
+          metadata,
           first_seen: new Date().toISOString(),
           last_seen: new Date().toISOString()
         });
@@ -192,9 +200,14 @@ async function main() {
   console.log('[Clockwork:GH-Monitor] Done.');
 }
 
-main().catch(err => {
-  console.error('[Clockwork:GH-Monitor] Fatal error:', err.message);
-  process.exit(1);
-});
+// QF-20260609-255: only auto-run when invoked directly (the clockwork cron runs
+// `node gh-failure-monitor.cjs`). Guarding lets the exported helpers be required by tests
+// without triggering a live GH fetch + DB writes on import.
+if (require.main === module) {
+  main().catch(err => {
+    console.error('[Clockwork:GH-Monitor] Fatal error:', err.message);
+    process.exit(1);
+  });
+}
 
 module.exports = { mapSeverity, computeErrorHash, sanitizeInput, fetchFailedRuns };
