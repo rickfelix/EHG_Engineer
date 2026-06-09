@@ -51,24 +51,31 @@ slow poll never trips a false revive.
 Multiple watchers (overlapping cron ticks, multiple hosts) **never** spawn more than
 one daemon:
 
-- **MF1 — atomic single-winner claim.** The revive is gated by a conditional UPDATE
-  of the singleton row: `UPDATE eva_scheduler_heartbeat SET instance_id=<token>,
-  last_poll_at=now() WHERE id=1 AND (last_poll_at IS NULL OR last_poll_at <
-  now()-STALE)`. PostgreSQL row-locks serialize concurrent updaters; the first sets
-  `last_poll_at=now()` (fresh), so every later watcher's predicate no longer matches and
-  affects **0 rows**. Only the watcher that matched exactly one row spawns. No advisory
-  lock / pg pooler required — the conditional singleton UPDATE is itself the atomic gate.
-  The claim stamps only `instance_id` + `last_poll_at`; it does **not** write `status`
-  (that column carries a `CHECK (running|stopping|stopped)` and is owned by the daemon's
-  heartbeat — the daemon sets `running` on start).
-- **MF2 — confirm takeover.** After spawning, the watcher polls the heartbeat (up to
-  8s) until `instance_id` moves off its supervisor token — the daemon stamps its own
-  `scheduler-<hex>` on start. Confirmed → exit 0; timed out → exit 1 (the claim set
-  `last_poll_at=now`, so the next tick waits one stale window before re-revival).
-- **MF4 — creds guard + detached spawn.** SUPABASE creds are asserted **before** any
-  spawn so a misconfigured host fails fast (exit 2) instead of forking a
-  credential-less crash-loop. The daemon is spawned `detached`, `unref`'d, with
-  `windowsHide` and `stdio: 'ignore'` so it outlives the one-shot watcher cross-platform.
+- **MF1 — atomic single-winner claim.** After the age-gate flags the heartbeat stale, the
+  revive is gated by a compare-and-swap on `instance_id`:
+  `UPDATE eva_scheduler_heartbeat SET instance_id=<token> WHERE id=1 AND
+  instance_id=<observed>`. PostgreSQL row-locks serialize concurrent watchers; the first
+  swaps the observed instance to its token, so every later watcher's CAS predicate no longer
+  matches and affects **0 rows**. On a **fresh deployment** (empty table) the claim instead
+  `INSERT`s the singleton (`status='stopped'`) — the primary key rejects the loser, so the
+  single-winner property holds there too. No advisory lock / pg pooler required. The claim
+  writes **only** `instance_id` — never `status` (that column carries a
+  `CHECK (running|stopping|stopped)` and is owned by the daemon, which sets `running` on
+  start), and never `last_poll_at` (see MF2).
+- **MF2 — confirm takeover, no false-"alive" mask.** Because the claim does **not** bump
+  `last_poll_at`, a failed spawn/confirm leaves the row stale so the **very next tick retries
+  immediately** (no 5-minute mask). After spawning, the watcher polls the heartbeat (up to
+  8s) until `instance_id` becomes a value that is **neither** the supervisor token **nor**
+  the pre-claim (observed) instance — the daemon stamps a fresh `scheduler-<hex>` on start.
+  Excluding the observed instance means a hung-but-alive **old** daemon that merely re-stamps
+  its original id does not falsely confirm. Confirmed → exit 0; timed out or the child exited
+  early → exit 1.
+- **MF4 — creds guard + observable detached spawn.** SUPABASE creds are asserted **before**
+  any spawn so a misconfigured host fails fast (exit 2) instead of forking a credential-less
+  crash-loop. The daemon is spawned `detached`, `unref`'d, with `windowsHide`, and its
+  stdout/stderr are redirected to `logs/eva-scheduler-daemon.log` (not discarded) with an
+  `exit` listener, so a startup crash is captured and reported instead of surfacing only as
+  an opaque confirm timeout.
 
 ## Environment
 
@@ -84,9 +91,13 @@ one daemon:
   age and instance.
 - **Manual revive**: `npm run eva:scheduler:watch:cron` (safe to run anytime — no-op if
   the daemon is alive; single-winner if a peer is also reviving).
-- **Dry run**: `node scripts/cron/eva-scheduler-watcher.mjs --dry-run` detects staleness
-  and performs the atomic claim but **skips the spawn** (note: a dry run still writes the
-  `reviving` claim to the heartbeat, briefly masking staleness for one stale window).
-- **Persistent exit 1**: the daemon is being spawned but never stamps its instance —
-  check the host can run `node scripts/eva-scheduler.js start` (env, dependencies) and
-  that `EVA_SCHEDULER_ENABLED` is not `false`.
+- **Dry run**: `node scripts/cron/eva-scheduler-watcher.mjs --dry-run` reports whether it
+  *would* revive — fully **read-only**, it mutates nothing (no claim, no spawn).
+- **Persistent exit 1**: the daemon is being spawned but never stamps a fresh instance —
+  read `logs/eva-scheduler-daemon.log` for the startup error, confirm the host can run
+  `node scripts/eva-scheduler.js start` (env, dependencies), and that `EVA_SCHEDULER_ENABLED`
+  is not `false`.
+- **Known follow-up**: the watcher prevents *concurrent watchers* from double-spawning, but
+  it cannot prevent a hung-but-alive **old daemon** from coexisting with a freshly spawned one
+  (the daemon has no cross-process start lock). True duplicate prevention requires the daemon
+  itself to take a `pg_advisory_lock` on start — tracked as a separate hardening item.

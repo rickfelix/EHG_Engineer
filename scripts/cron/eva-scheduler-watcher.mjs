@@ -14,20 +14,27 @@
  * across any number of concurrent watchers.
  *
  * Single-instance guarantee (the hard requirement):
- *   MF1 — Atomic single-winner claim. The revive is gated by a CONDITIONAL update of
- *         the singleton heartbeat row: only the watcher whose UPDATE ... WHERE id=1 AND
- *         (last_poll_at IS NULL OR last_poll_at < now()-STALE) matches a row proceeds.
- *         PostgreSQL row-locks serialize concurrent updaters; the first sets
- *         last_poll_at=now() (fresh), so every later watcher's predicate no longer
- *         matches and returns 0 rows. Exactly one watcher spawns. No pg pooler/advisory
- *         lock required — the conditional singleton UPDATE is itself the atomic gate.
- *   MF2 — Confirm takeover. After spawning, poll the heartbeat until instance_id moves
- *         away from our supervisor token (the daemon stamps its own scheduler-<hex> on
- *         start). Confirmed → exit 0; timed-out → exit 1 (next tick retries — the claim
- *         set last_poll_at=now so we wait one STALE window before re-revival).
- *   MF4 — Creds guard + detached spawn. Assert SUPABASE creds BEFORE spawning so we
- *         never fork a credential-less crash-loop; spawn detached/unref'd with
- *         windowsHide so the daemon outlives this one-shot process cross-platform.
+ *   MF1 — Atomic single-winner claim via compare-and-swap on instance_id. After the
+ *         age-gate flags the heartbeat stale, the revive is gated by
+ *         `UPDATE ... SET instance_id=<token> WHERE id=1 AND instance_id=<observed>`:
+ *         PostgreSQL row-locks serialize concurrent watchers; the first swaps the
+ *         observed instance to its token, so every later watcher's CAS predicate no
+ *         longer matches and affects 0 rows. Exactly one watcher spawns. On a FRESH
+ *         deployment (empty table) the claim instead INSERTs the singleton — the PK
+ *         rejects the loser, preserving the single-winner property. The CAS deliberately
+ *         does NOT write last_poll_at, so a failed spawn/confirm leaves the row stale and
+ *         the very next tick retries immediately (no 5-minute false-"alive" mask).
+ *   MF2 — Confirm takeover. After spawning, poll the heartbeat until instance_id becomes
+ *         a value that is NEITHER our supervisor token NOR the pre-claim (observed)
+ *         instance — the daemon stamps a fresh scheduler-<hex> on start. Excluding the
+ *         observed instance means a hung-but-alive OLD daemon that merely re-stamps its
+ *         original id does not falsely confirm. Confirmed → exit 0; timed-out (or the
+ *         child exited early) → exit 1 (next tick retries; the claim left the row stale).
+ *   MF4 — Creds guard + observable detached spawn. Assert SUPABASE creds BEFORE spawning
+ *         so we never fork a credential-less crash-loop; spawn detached/unref'd with
+ *         windowsHide, redirecting the daemon's stdout/stderr to logs/eva-scheduler-daemon.log
+ *         (not /dev/null) and registering an 'exit' listener so an immediate startup crash
+ *         is captured and reported instead of surfacing only as an opaque timeout.
  *
  * Exit codes:
  *   0 — healthy (scheduler alive, revive confirmed, claim lost to a peer, dry-run, or disabled)
@@ -36,7 +43,7 @@
  *
  * Usage:
  *   node scripts/cron/eva-scheduler-watcher.mjs --once      # one pass (canonical cron)
- *   node scripts/cron/eva-scheduler-watcher.mjs --dry-run   # detect + claim, skip spawn
+ *   node scripts/cron/eva-scheduler-watcher.mjs --dry-run   # report intent, NO mutation
  *
  * Env:
  *   EVA_SCHEDULER_STALE_MS   staleness threshold in ms (default 300000 = 5min)
@@ -44,6 +51,7 @@
  *   SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (required to spawn)
  */
 import 'dotenv/config';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { randomUUID } from 'crypto';
@@ -118,54 +126,82 @@ export async function schedulerLiveness(supabase, { now = Date.now, staleMs = DE
 }
 
 /**
- * MF1 — atomic single-winner claim. Conditional UPDATE of the singleton row that only
- * matches when the heartbeat is stale (or has never polled). Returns won=true ONLY for
- * the single watcher whose update affected the row; concurrent watchers get won=false
- * because the winner's last_poll_at=now() invalidates their staleness predicate.
- *
- * The claim ONLY stamps instance_id (the single-winner marker that MF2 watches) and
- * last_poll_at (the freshness that serializes concurrent claimers). It deliberately does
- * NOT touch `status`: that column carries a CHECK (running|stopping|stopped) and is owned
- * by the daemon's own heartbeat — a bogus 'reviving' value would make every claim fail the
- * constraint in production (caught by live dogfooding; the daemon sets 'running' on start).
+ * MF1 — atomic single-winner claim.
+ *   • Existing (stale) row → compare-and-swap on instance_id: only the watcher whose
+ *     observed instance still matches wins; the winner's swap invalidates every peer's
+ *     predicate. Does NOT touch last_poll_at (leaving it stale enables immediate retry
+ *     after a failed spawn — no false-"alive" window).
+ *   • Missing row (fresh deploy) → INSERT the singleton; the PK rejects concurrent losers.
+ * The claim never writes `status` (CHECK running|stopping|stopped; the daemon owns it and
+ * sets 'running' on start — a bogus value would fail the constraint on every revive).
  */
-export async function claimRevival(supabase, { token, nowIso, staleThresholdIso }) {
-  const { data, error } = await supabase
-    .from('eva_scheduler_heartbeat')
-    .update({ instance_id: token, last_poll_at: nowIso })
-    .eq('id', 1)
-    .or(`last_poll_at.is.null,last_poll_at.lt.${staleThresholdIso}`)
-    .select();
+export async function claimRevival(supabase, { token, observedInstanceId, rowExists }) {
+  if (!rowExists) {
+    const { data, error } = await supabase
+      .from('eva_scheduler_heartbeat')
+      .insert({ id: 1, instance_id: token, status: 'stopped' })
+      .select();
+    if (error) {
+      const dup = error.code === '23505' || /duplicate key|unique/i.test(error.message || '');
+      return { won: false, error: dup ? null : error, rows: [], bootstrap: true };
+    }
+    return { won: (data || []).length === 1, rows: data || [], bootstrap: true };
+  }
+  let q = supabase.from('eva_scheduler_heartbeat').update({ instance_id: token }).eq('id', 1);
+  q = observedInstanceId == null ? q.is('instance_id', null) : q.eq('instance_id', observedInstanceId);
+  const { data, error } = await q.select();
   if (error) return { won: false, error, rows: [] };
   return { won: (data || []).length === 1, rows: data || [] };
 }
 
 /**
- * MF2 — confirm the spawned daemon took over by watching instance_id move off our token.
+ * MF2 — confirm the spawned daemon took over: instance_id becomes a value that is neither
+ * our token NOR any excluded (pre-claim / zombie) instance. Early-returns if the child
+ * process exited during the window (startup crash) so the failure is reported, not masked.
  */
 export async function confirmRevival(supabase, {
   token,
+  excludeInstances = [],
   timeoutMs = CONFIRM_TIMEOUT_MS,
   intervalMs = CONFIRM_INTERVAL_MS,
   sleep = defaultSleep,
   now = Date.now,
+  getChildExit,
 } = {}) {
+  const exclude = new Set([token, ...excludeInstances].filter((x) => x != null));
   const deadline = now() + timeoutMs;
   let instanceId = token;
   let status = null;
   while (now() < deadline) {
     await sleep(intervalMs);
+    const childExit = getChildExit ? getChildExit() : null;
+    if (childExit && childExit.exited) {
+      return { confirmed: false, instanceId, status, childExitCode: childExit.code };
+    }
     const { data } = await supabase
       .from('eva_scheduler_heartbeat')
       .select('instance_id, status')
       .eq('id', 1)
       .maybeSingle();
     if (data) { instanceId = data.instance_id; status = data.status; }
-    if (data && data.instance_id && data.instance_id !== token) {
+    if (data && data.instance_id && !exclude.has(data.instance_id)) {
       return { confirmed: true, instanceId: data.instance_id, status: data.status };
     }
   }
   return { confirmed: false, instanceId, status };
+}
+
+/** Open an append handle for the daemon's stdout/stderr so startup output is diagnosable. */
+function openDaemonLog(repoRoot, logger, tag) {
+  try {
+    const dir = path.join(repoRoot, 'logs');
+    fs.mkdirSync(dir, { recursive: true });
+    const fd = fs.openSync(path.join(dir, 'eva-scheduler-daemon.log'), 'a');
+    return ['ignore', fd, fd];
+  } catch (err) {
+    logger.warn?.(`${tag} daemon log unavailable (${err.message}); stdio=ignore`);
+    return 'ignore';
+  }
 }
 
 export async function main(argv = process.argv, deps = {}) {
@@ -203,6 +239,7 @@ export async function main(argv = process.argv, deps = {}) {
     logger.log?.(`${tag} scheduler alive (age ${Math.round(live.ageMs / 1000)}s, instance ${live.row?.instance_id}) — no action`);
     return { exitCode: 0, action: 'alive', ageMs: live.ageMs };
   }
+  const observedInstanceId = live.row?.instance_id ?? null;
   logger.log?.(`${tag} scheduler STALE/ABSENT (${live.exists ? 'age ' + Math.round(live.ageMs / 1000) + 's' : 'no heartbeat row'}, threshold ${staleMs / 1000}s) — attempting revive`);
 
   // 2. MF4 — creds guard BEFORE any spawn.
@@ -212,11 +249,16 @@ export async function main(argv = process.argv, deps = {}) {
     return { exitCode: 2, action: 'missing_creds' };
   }
 
-  // 3. MF1 — atomic single-winner claim.
   const token = deps.token || `supervisor-${randomUUID().slice(0, 8)}`;
-  const nowIso = new Date(now()).toISOString();
-  const staleThresholdIso = new Date(now() - staleMs).toISOString();
-  const claim = await claimRevival(supabase, { token, nowIso, staleThresholdIso });
+
+  // Dry run is fully read-only — report intent, mutate nothing.
+  if (args.dryRun) {
+    logger.log?.(`${tag} DRY RUN — scheduler is ${live.exists ? 'stale' : 'absent'}; would claim + spawn eva-scheduler start (no mutation)`);
+    return { exitCode: 0, action: 'dry_run', token };
+  }
+
+  // 3. MF1 — atomic single-winner claim (CAS on existing row, INSERT on fresh deploy).
+  const claim = await claimRevival(supabase, { token, observedInstanceId, rowExists: live.exists });
   if (claim.error) {
     logger.error?.(`${tag} revive claim failed: ${claim.error.message}`);
     return { exitCode: 1, action: 'claim_error' };
@@ -225,25 +267,23 @@ export async function main(argv = process.argv, deps = {}) {
     logger.log?.(`${tag} another supervisor won the revive claim — standing down`);
     return { exitCode: 0, action: 'claim_lost' };
   }
-  logger.log?.(`${tag} won revive claim (token ${token})`);
+  logger.log?.(`${tag} won revive claim (token ${token}${claim.bootstrap ? ', bootstrapped singleton' : ''})`);
 
-  if (args.dryRun) {
-    logger.log?.(`${tag} DRY RUN — would spawn eva-scheduler start; skipping spawn`);
-    return { exitCode: 0, action: 'dry_run', token };
-  }
-
-  // 4. MF4 — spawn the detached daemon from the MAIN repo root (worktree-safe).
+  // 4. MF4 — spawn the detached daemon from the MAIN repo root, with diagnosable stdio.
   const repoRoot = deps.repoRoot || getRepoRoot();
   const scriptPath = path.join(repoRoot, 'scripts', 'eva-scheduler.js');
+  const stdio = deps.stdio !== undefined ? deps.stdio : openDaemonLog(repoRoot, logger, tag);
+  const childExit = { exited: false, code: null };
   let child;
   try {
     child = spawnFn(process.execPath, [scriptPath, 'start'], {
       cwd: repoRoot,
       env: { ...env },
       detached: true,
-      stdio: 'ignore',
+      stdio,
       windowsHide: true,
     });
+    child?.on?.('exit', (code) => { childExit.exited = true; childExit.code = code; logger.warn?.(`${tag} spawned daemon exited early (code ${code}) — see logs/eva-scheduler-daemon.log`); });
     child?.unref?.();
   } catch (err) {
     logger.error?.(`${tag} spawn failed: ${err.message}`);
@@ -251,14 +291,21 @@ export async function main(argv = process.argv, deps = {}) {
   }
   logger.log?.(`${tag} spawned eva-scheduler (pid ${child?.pid ?? 'n/a'}); confirming takeover...`);
 
-  // 5. MF2 — confirm the daemon stamped its own instance_id over our token.
-  const confirm = await confirmRevival(supabase, { token, sleep, now });
+  // 5. MF2 — confirm the daemon stamped a fresh instance_id (≠ token AND ≠ observed/zombie).
+  const confirm = await confirmRevival(supabase, {
+    token,
+    excludeInstances: [observedInstanceId],
+    sleep,
+    now,
+    getChildExit: () => childExit,
+  });
   if (confirm.confirmed) {
     logger.log?.(`${tag} revive CONFIRMED — scheduler instance ${confirm.instanceId} status=${confirm.status}`);
     return { exitCode: 0, action: 'revived', token, instanceId: confirm.instanceId, pid: child?.pid };
   }
-  logger.warn?.(`${tag} revive UNCONFIRMED within ${CONFIRM_TIMEOUT_MS / 1000}s (instance still ${confirm.instanceId}); next tick retries`);
-  return { exitCode: 1, action: 'unconfirmed', token };
+  const why = confirm.childExitCode != null ? `daemon exited code ${confirm.childExitCode}` : `instance still ${confirm.instanceId}`;
+  logger.warn?.(`${tag} revive UNCONFIRMED within ${CONFIRM_TIMEOUT_MS / 1000}s (${why}); next tick retries`);
+  return { exitCode: 1, action: 'unconfirmed', token, childExitCode: confirm.childExitCode ?? null };
 }
 
 // Canonical "run directly?" check (mirrors scripts/check-git-state.js:218). The `&&`
