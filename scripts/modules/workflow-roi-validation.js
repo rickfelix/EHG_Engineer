@@ -61,12 +61,32 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched SD when available
     const sdLookup = options.prefetched?.sd || (await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, sd_type')
+      .select('id, sd_key, sd_type, metadata')
       .or(`sd_key.eq.${sd_id},id.eq.${sd_id}`)
       .single()).data;
     if (sdLookup) {
       prdLookupId = sdLookup.sd_key || sd_id;
       handoffLookupId = sdLookup.id || sd_id;
+    }
+
+    // ── GEN-class auto-generated SD exemption (SD-LEO-INFRA-FIX-GEN-CLASS-001) ──
+    // GEN-class auto-generated standalone SDs (audit-to-sd / feedback generators set
+    // metadata.auto_generated=true) have no venture workflow to score for ROI — the SAME
+    // root cause that already exempts them from GATE_VISION_SCORE (lead-to-plan/gates/
+    // vision-score.js checks `sd.metadata?.auto_generated`). Without a mirror here, a
+    // security/governance-type GEN SD (not in the gate2-skip list below) scores 0 and is
+    // doomed on a SECOND content-based gate — the gate-family gap the coordinator observed
+    // (vision cleared via the existing exemption, then GATE4_WORKFLOW_ROI rejected score=0).
+    // This is a systemic policy carve-out for a class that legitimately has no workflow-ROI
+    // content — the same pattern as the corrective/orchestrator/auto_generated vision exempts
+    // — NOT a --bypass band-aid.
+    if (sdLookup?.metadata?.auto_generated) {
+      console.log('   ⏭️  GEN-class auto-generated SD detected — exempt from workflow-ROI scoring');
+      console.log('   ✅ No venture workflow to score (mirrors the GATE_VISION_SCORE auto_generated exemption)');
+      validation.score = 100;
+      validation.details.gen_class_exempt = true;
+      validation.warnings.push('GEN-class auto-generated SD: workflow-ROI scoring exempted (no venture workflow; same basis as the GATE_VISION_SCORE auto_generated exemption)');
+      return validation;
     }
 
     // SD-LEARN-FIX-ADDRESS-PAT-AUTO-035: Determine if EXEC-TO-PLAN (gate2) is required for this SD type
