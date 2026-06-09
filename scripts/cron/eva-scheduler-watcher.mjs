@@ -45,7 +45,7 @@
  */
 import 'dotenv/config';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { randomUUID } from 'crypto';
 import { spawn as realSpawn } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
@@ -122,11 +122,17 @@ export async function schedulerLiveness(supabase, { now = Date.now, staleMs = DE
  * matches when the heartbeat is stale (or has never polled). Returns won=true ONLY for
  * the single watcher whose update affected the row; concurrent watchers get won=false
  * because the winner's last_poll_at=now() invalidates their staleness predicate.
+ *
+ * The claim ONLY stamps instance_id (the single-winner marker that MF2 watches) and
+ * last_poll_at (the freshness that serializes concurrent claimers). It deliberately does
+ * NOT touch `status`: that column carries a CHECK (running|stopping|stopped) and is owned
+ * by the daemon's own heartbeat — a bogus 'reviving' value would make every claim fail the
+ * constraint in production (caught by live dogfooding; the daemon sets 'running' on start).
  */
 export async function claimRevival(supabase, { token, nowIso, staleThresholdIso }) {
   const { data, error } = await supabase
     .from('eva_scheduler_heartbeat')
-    .update({ instance_id: token, status: 'reviving', last_poll_at: nowIso })
+    .update({ instance_id: token, last_poll_at: nowIso })
     .eq('id', 1)
     .or(`last_poll_at.is.null,last_poll_at.lt.${staleThresholdIso}`)
     .select();
@@ -255,13 +261,10 @@ export async function main(argv = process.argv, deps = {}) {
   return { exitCode: 1, action: 'unconfirmed', token };
 }
 
-const isMain = (() => {
-  try {
-    const here = new URL(import.meta.url).pathname;
-    const argv = process.argv[1] ? process.argv[1].replace(/\\/g, '/') : '';
-    return here.endsWith(argv) || argv.endsWith(here);
-  } catch { return false; }
-})();
+// Canonical "run directly?" check (mirrors scripts/check-git-state.js:218). The `&&`
+// short-circuits when argv[1] is undefined (node -e / REPL / import), so importing this
+// module — e.g. for an ad-hoc liveness probe — never auto-runs main() against the DB.
+const isMain = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isMain) {
   main().then(({ exitCode }) => process.exit(exitCode))

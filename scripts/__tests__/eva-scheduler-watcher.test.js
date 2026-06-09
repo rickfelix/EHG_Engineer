@@ -57,6 +57,13 @@ function makeHeartbeatDB(initial, opts = {}) {
         if (isUpdate) {
           calls.updates++;
           if (opts.claimError) return Promise.resolve({ data: null, error: { message: 'claim boom' } });
+          // Enforce the REAL eva_scheduler_heartbeat_status_check (running|stopping|stopped).
+          // This is the regression guard for the prod bug live-dogfooding caught: a claim that
+          // sets status='reviving' violates the constraint and can NEVER succeed in production.
+          const ALLOWED_STATUS = ['running', 'stopping', 'stopped'];
+          if (patch && patch.status != null && !ALLOWED_STATUS.includes(patch.status)) {
+            return Promise.resolve({ data: null, error: { message: 'new row violates check constraint "eva_scheduler_heartbeat_status_check"' } });
+          }
           let matched = false;
           if (state.row && evalOr(orStr, state.row)) { Object.assign(state.row, patch); matched = true; }
           return Promise.resolve({ data: matched ? [{ ...state.row }] : [], error: null });
@@ -134,12 +141,13 @@ describe('schedulerLiveness', () => {
 });
 
 describe('claimRevival (MF1 atomic single-winner)', () => {
-  it('wins on a stale row and applies the reviving patch', async () => {
+  it('wins on a stale row, stamps instance_id+last_poll_at, leaves status untouched (constraint-safe)', async () => {
     const db = makeHeartbeatDB(staleRow());
     const r = await claimRevival(db, { token: 'supervisor-t1', nowIso: new Date(FIXED).toISOString(), staleThresholdIso: new Date(FIXED - 300_000).toISOString() });
     expect(r.won).toBe(true);
     expect(db._state.row.instance_id).toBe('supervisor-t1');
-    expect(db._state.row.status).toBe('reviving');
+    expect(db._state.row.last_poll_at).toBe(new Date(FIXED).toISOString());
+    expect(db._state.row.status).toBe('running'); // NOT changed → never trips the status CHECK
   });
   it('loses when row is already fresh (predicate no longer matches)', async () => {
     const db = makeHeartbeatDB(freshRow());
@@ -208,7 +216,8 @@ describe('main — integration', () => {
     const r = await main(['node', 'w', '--dry-run'], base(db, { spawn }));
     expect(r).toMatchObject({ exitCode: 0, action: 'dry_run' });
     expect(db._calls.updates).toBe(1);
-    expect(db._state.row.status).toBe('reviving');
+    expect(db._state.row.instance_id).toBe('supervisor-fixedtok'); // claim applied
+    expect(db._state.row.status).toBe('running');                 // status untouched (constraint-safe)
     expect(spawn).not.toHaveBeenCalled();
   });
 

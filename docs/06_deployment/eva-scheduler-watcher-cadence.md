@@ -53,12 +53,14 @@ one daemon:
 
 - **MF1 — atomic single-winner claim.** The revive is gated by a conditional UPDATE
   of the singleton row: `UPDATE eva_scheduler_heartbeat SET instance_id=<token>,
-  status='reviving', last_poll_at=now() WHERE id=1 AND (last_poll_at IS NULL OR
-  last_poll_at < now()-STALE)`. PostgreSQL row-locks serialize concurrent updaters;
-  the first sets `last_poll_at=now()` (fresh), so every later watcher's predicate no
-  longer matches and affects **0 rows**. Only the watcher that matched exactly one row
-  spawns. No advisory lock / pg pooler required — the conditional singleton UPDATE is
-  itself the atomic gate.
+  last_poll_at=now() WHERE id=1 AND (last_poll_at IS NULL OR last_poll_at <
+  now()-STALE)`. PostgreSQL row-locks serialize concurrent updaters; the first sets
+  `last_poll_at=now()` (fresh), so every later watcher's predicate no longer matches and
+  affects **0 rows**. Only the watcher that matched exactly one row spawns. No advisory
+  lock / pg pooler required — the conditional singleton UPDATE is itself the atomic gate.
+  The claim stamps only `instance_id` + `last_poll_at`; it does **not** write `status`
+  (that column carries a `CHECK (running|stopping|stopped)` and is owned by the daemon's
+  heartbeat — the daemon sets `running` on start).
 - **MF2 — confirm takeover.** After spawning, the watcher polls the heartbeat (up to
   8s) until `instance_id` moves off its supervisor token — the daemon stamps its own
   `scheduler-<hex>` on start. Confirmed → exit 0; timed out → exit 1 (the claim set
