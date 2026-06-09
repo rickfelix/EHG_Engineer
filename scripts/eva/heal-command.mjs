@@ -687,6 +687,7 @@ async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
     .single();
 
   const insertedIds = [];
+  const persistFailures = []; // QF-20260609-660: SDs whose score failed to persist — must NOT yield HEAL_STATUS=PASS
 
   for (const sdScore of parsed.sd_scores) {
     const dimensionScores = {};
@@ -697,6 +698,15 @@ async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
         reasoning: dim.reasoning,
         source: 'sd-heal',
       };
+    }
+
+    // QF-20260609-660: a null / non-finite aggregate would violate the eva_vision_scores
+    // total_score NOT NULL constraint and silently drop the row — record it as a persist
+    // failure so the verdict can never report PASS while writing nothing.
+    if (typeof sdScore.total_score !== 'number' || !Number.isFinite(sdScore.total_score)) {
+      persistFailures.push({ sdKey: sdScore.sd_key, reason: `invalid total_score (${sdScore.total_score})` });
+      console.error(`Skipping ${sdScore.sd_key}: invalid total_score (${sdScore.total_score}) — not persisted`);
+      continue;
     }
 
     // SD-WRITERCONSUMER-ASYMMETRY-DETECTION-SCOPECOMPLETION-ORCH-001-0 / FR-C0-5
@@ -743,6 +753,7 @@ async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
 
     if (error) {
       console.error(`Failed to persist score for ${sdScore.sd_key}: ${error.message}`);
+      persistFailures.push({ sdKey: sdScore.sd_key, reason: error.message }); // QF-20260609-660
       continue;
     }
 
@@ -763,6 +774,17 @@ async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
   console.log('\n\u2500\u2500\u2500 SD Heal Summary \u2500\u2500\u2500');
   console.log(`  Overall: ${parsed.overall_score}/100`);
   console.log(`  SDs scored: ${insertedIds.length}`);
+
+  // QF-20260609-660: if any SD's score FAILED to persist (e.g. a null/invalid total_score
+  // violating the eva_vision_scores NOT NULL constraint), the verdict must NOT be PASS — a
+  // heal gate that reports PASS while writing nothing silently loses learning data.
+  if (persistFailures.length > 0) {
+    console.log(`\n  ⚠️  ${persistFailures.length} SD score(s) FAILED to persist:`);
+    for (const f of persistFailures) console.log(`    ${f.sdKey}: ${f.reason}`);
+    console.log(`\nHEAL_STATUS=PERSIST_FAILED`);
+    console.log(`HEAL_PERSIST_FAILED=${persistFailures.map(f => f.sdKey).join(',')}`);
+    return;
+  }
 
   const needsCorrection = insertedIds.filter(s => s.action !== 'accept');
   if (needsCorrection.length > 0) {
