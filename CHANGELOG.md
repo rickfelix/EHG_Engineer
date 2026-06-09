@@ -64,6 +64,10 @@
   - **Issue**: The EHG_Engineer `venture_stages` SSOT was resequenced (stage 21 = Distribution Setup, stage 22 = Visual Assets) and the migrations merged, but the generated EHG-app file `ehg/src/config/venture-workflow.ts` on ehg `main` was still pre-swap — a cross-repo config drift. (0 ventures at stage 21/22, so no live runtime impact.)
   - **Root Cause**: The EHG-side generated artifact was never regenerated + landed after the EHG_Engineer-side swap.
   - **Fix**: Regenerated `venture-workflow.ts` from the SSOT via `npm run venture-stages:generate` and merged ehg PR #691 to ehg main — stage 21 → Distribution Setup (`spend_approval`, review), stage 22 → Visual Assets (`creative_handoff`, review). No `.tsx` renames (componentPath remap + filename-based lazy import). Verified: `venture-stages:check` CHECK PASSED, `tsc --noEmit` clean.
+- **`claim_sd` optimistically self-claimed non-existent ids** - PR #4414 (SD-FDBK-FIX-CLAIM-RPC-VALIDATE-001)
+  - **Issue**: The fleet `claim_sd` RPC was optimistic — calling it with a non-existent id (e.g. `SD-FAKE-PROBE-000` or `QF-00000000-000`) returned `{success:true}` and wrote `claude_sessions.sd_key`, silently self-claiming a phantom. A typo/stale id self-claimed a non-existent SD (this caused a real stale-assignment re-claim of an already-completed SD).
+  - **Root Cause**: `claim_sd` never validated that `p_sd_id` resolved to a backing row before claiming.
+  - **Fix**: An existence guard at the top of `claim_sd`, reusing its own resolution keys — SDs via `IF NOT FOUND` after the existing `FOR UPDATE SELECT … WHERE sd_key = p_sd_id`, QFs via `NOT EXISTS (SELECT 1 FROM quick_fixes WHERE id = p_sd_id)` — returning `{success:false, error:'sd_not_found'}`. The full `claim_sd` body (takeover/QF/cross-table/worktree/audit logic) is preserved verbatim via `CREATE OR REPLACE`; the live deployed body was confirmed byte-identical to the migration plus only the +19 guard lines. +1 live-DB test; existing `claim-sd-cross-table` suite green (6/6).
 
 ## 2026-06-06
 
