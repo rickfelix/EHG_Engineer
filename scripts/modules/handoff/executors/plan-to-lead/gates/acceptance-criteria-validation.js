@@ -77,14 +77,18 @@ export function createAcceptanceCriteriaValidationGate(supabase) {
         };
       }
 
-      // Check for test mappings
+      // Check for test mappings.
+      // SD-LEO-INFRA-HARDEN-LEO-HANDOFF-001 FR-2: story_test_mappings keys user stories via
+      // `user_story_id` (FK -> user_stories.id). The prior query used a non-existent `story_id`
+      // column, so the IN-filter always returned zero rows and EVERY validated story scored the
+      // 70 "no test mapping" default regardless of real coverage. Use the real FK column.
       const storyIds = stories.map(s => s.id);
       const { data: testMappings } = await supabase
         .from('story_test_mappings')
-        .select('story_id')
-        .in('story_id', storyIds);
+        .select('user_story_id')
+        .in('user_story_id', storyIds);
 
-      const storiesWithTests = new Set((testMappings || []).map(m => m.story_id));
+      const storiesWithTests = new Set((testMappings || []).map(m => m.user_story_id));
 
       // Score each story
       const storyScores = [];
