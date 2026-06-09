@@ -35,6 +35,20 @@ describe('countLocByPrFiles (1becd80a: PR-file-list source/test split)', () => {
     expect(r.total).toBe(30);
   });
 
+  it('SD-LEO-FIX-COMPLETE-QUICK-FIX-002: routes .md / docs/ PR files to docs, EXCLUDED from source', () => {
+    const files = [
+      { path: 'docs/protocol/README.md', additions: 120, deletions: 7 }, // docs
+      { path: 'CHANGELOG.md', additions: 8, deletions: 0 },              // docs
+      { path: 'lib/d.js', additions: 6, deletions: 4 },                  // source
+      { path: 'src/a.spec.ts', additions: 5, deletions: 0 },            // test
+    ];
+    const r = countLocByPrFiles(files);
+    expect(r.docs).toBe(135);   // 127 + 8
+    expect(r.source).toBe(10);  // only lib/d.js — docs excluded from the cap
+    expect(r.test).toBe(5);
+    expect(r.total).toBe(150);
+  });
+
   it('is robust to empty / undefined / missing fields', () => {
     expect(countLocByPrFiles([])).toEqual({ source: 0, test: 0, docs: 0, total: 0 });
     expect(countLocByPrFiles(undefined)).toEqual({ source: 0, test: 0, docs: 0, total: 0 });
