@@ -175,12 +175,41 @@ const qText = qN ? `❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : '
 const liveText = incognito ? `🔔 Needs you: ${incognito} worker${incognito > 1 ? 's' : ''} went incognito — a wake re-paste/relaunch refills the fleet.\n\n` : '';
 const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}${liveText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\nSince last email: +${shippedSince} shipped\n\n${when} ET`;
 
+// QF-20260609-738: skip-if-unchanged + max-staleness heartbeat. The */30 cron used to
+// send EVERY run even when nothing material changed (the chairman is usually away), so the
+// inbox filled with identical "all green" mail and a genuine change was easy to miss. Send
+// only when a material signal changed vs the LAST SENT email, OR when the last send is older
+// than the heartbeat ceiling — so prolonged silence means a dead cron, not a quiet fleet.
+// Material signals: overall RAG rank, incognito count, parked count, open-question count, and
+// any new ships since last email. Default-on; set COORD_EMAIL_ALWAYS_SEND=1 to restore
+// send-every-run. Heartbeat window: COORD_EMAIL_HEARTBEAT_MIN (default 360 = 6h).
+const SKIP_UNCHANGED = !process.env.COORD_EMAIL_ALWAYS_SEND;
+const HEARTBEAT_MS = parseInt(process.env.COORD_EMAIL_HEARTBEAT_MIN || '360', 10) * 60000;
+const prevTs = typeof snap.ts === 'number' ? snap.ts : 0;
+const numOr = (v) => (typeof v === 'number' ? v : null);
+const materialChanged =
+  curRank !== numOr(snap.lastOverallRank) ||
+  incognito !== numOr(snap.incognito) ||
+  parked !== numOr(snap.parked) ||
+  qN !== numOr(snap.qN) ||
+  shippedSince > 0;
+const staleHeartbeat = !prevTs || (t - prevTs) >= HEARTBEAT_MS;
+const shouldSend = !SKIP_UNCHANGED || materialChanged || staleHeartbeat;
+const sendReason = !SKIP_UNCHANGED ? 'always-send' : materialChanged ? 'material-change' : staleHeartbeat ? 'heartbeat' : 'unchanged-skip';
+// Extended snapshot persists the material signals so the next run can diff against the
+// last SENT state (was only {ts,lastOverallRank,completedCount}).
+const nextSnap = JSON.stringify({ ts: t, lastOverallRank: curRank, completedCount: completedNow, incognito, parked, qN });
+
 if (DRY_RUN) {
   console.log('=== [DRY RUN] no email sent ===\nSUBJECT: ' + subject + '\n---\n' + text + '\n---');
-  console.log(`overall=${overall} totalWorkers=${totalWorkers} liveWorkers=${liveWorkers} incognito=${incognito} assigned=${assigned} idle=${idleWorkers} napping=${napping} parked=${parked} remaining=${remaining} workable=${workable} builderKeys=${builderKeys.size} shortBy=${shortBy} questions=${qN} shipped=${shippedSince}`);
+  console.log(`shouldSend=${shouldSend} reason=${sendReason} overall=${overall} totalWorkers=${totalWorkers} liveWorkers=${liveWorkers} incognito=${incognito} assigned=${assigned} idle=${idleWorkers} napping=${napping} parked=${parked} remaining=${remaining} workable=${workable} builderKeys=${builderKeys.size} shortBy=${shortBy} questions=${qN} shipped=${shippedSince}`);
+} else if (!shouldSend) {
+  // Unchanged within the heartbeat window — skip the send and PRESERVE the snapshot so the
+  // diff/heartbeat keep measuring against the last actually-sent email.
+  console.log(`SKIP_EMAIL unchanged — no material change since last send and within heartbeat window (last send ${prevTs ? Math.round((t - prevTs) / 60000) + 'm ago' : 'never'}).`);
 } else {
   const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'Fleet Coordinator <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
-  console.log('EMAIL', JSON.stringify(r));
-  try { writeFileSync(SNAP, JSON.stringify({ ts: t, lastOverallRank: curRank, completedCount: completedNow })); } catch { /* best effort */ }
+  console.log('EMAIL', JSON.stringify(r), 'reason=' + sendReason);
+  try { writeFileSync(SNAP, nextSnap); } catch { /* best effort */ }
 }
