@@ -39,6 +39,65 @@ export function truncateGoalSummary(text, limit = 300) {
   return truncated;
 }
 
+// SD-LEO-INFRA-SIZE-TIER-AWARE-001: the PRD exec_checklist seeds sd_scope_deliverables (via
+// extract-deliverables-from-prd at PLAN-TO-EXEC). A FIXED 6-item list put fast/small SDs at
+// 4/6 = 67% under the 80% SCOPE_AUDIT gate at PLAN-TO-LEAD, because items like "Development
+// environment setup" / "Integration tests completed" / a separate "Documentation updated"
+// deliverable simply do not apply to a focused 2-file bugfix — they sit `pending` and drag the
+// denominator. Size/tier-aware seeding makes the denominator match the actual work so a fast SD
+// that completes its real deliverables clears the gate without manual flip-the-boilerplate tax.
+const FULL_EXEC_CHECKLIST = [
+  'Development environment setup',
+  'Core functionality implemented',
+  'Unit tests written',
+  'Integration tests completed',
+  'Code review completed',
+  'Documentation updated',
+];
+// Fast/small SD types (bugfix/fix — where escalated QFs land) deliver a focused change: only the
+// genuinely-applicable subset is seeded.
+const FAST_EXEC_CHECKLIST = [
+  'Core functionality implemented',
+  'Unit tests written',
+  'Code review completed',
+];
+const FAST_SD_TYPES = new Set(['bugfix', 'fix']);
+
+/**
+ * Build the tier-aware PRD exec_checklist (deliverable denominator) for an SD type.
+ * Fast types (bugfix/fix) get the focused 3-item subset; everything else gets the full 6.
+ * Unknown/empty type falls back to the full list (no regression).
+ * @param {string} sdType
+ * @returns {Array<{text:string, checked:boolean}>}
+ */
+export function buildExecChecklist(sdType) {
+  const items = FAST_SD_TYPES.has(String(sdType || '').toLowerCase())
+    ? FAST_EXEC_CHECKLIST
+    : FULL_EXEC_CHECKLIST;
+  return items.map((text) => ({ text, checked: false }));
+}
+
+/**
+ * Resolve the SD's sd_type (best-effort) and build the tier-aware exec_checklist.
+ * Fail-safe: any lookup error degrades to the full checklist (current behavior).
+ * @param {Object} supabase
+ * @param {string} sdIdValue - SD primary key (UUID) or sd_key
+ * @returns {Promise<Array<{text:string, checked:boolean}>>}
+ */
+export async function resolveExecChecklist(supabase, sdIdValue) {
+  let sdType = null;
+  try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(sdIdValue || ''));
+    const { data } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_type')
+      .eq(isUuid ? 'id' : 'sd_key', sdIdValue)
+      .maybeSingle();
+    sdType = data?.sd_type || null;
+  } catch { /* fail-safe: fall through to full checklist */ }
+  return buildExecChecklist(sdType);
+}
+
 /**
  * Create initial PRD entry in database
  * @param {Object} supabase - Supabase client
@@ -105,14 +164,7 @@ export async function createPRDEntry(supabase, prdId, sdId, sdIdValue, prdTitle,
         { text: 'Timeline and milestones set', checked: false },
         { text: 'Risk assessment completed', checked: false }
       ],
-      exec_checklist: [
-        { text: 'Development environment setup', checked: false },
-        { text: 'Core functionality implemented', checked: false },
-        { text: 'Unit tests written', checked: false },
-        { text: 'Integration tests completed', checked: false },
-        { text: 'Code review completed', checked: false },
-        { text: 'Documentation updated', checked: false }
-      ],
+      exec_checklist: await resolveExecChecklist(supabase, sdIdValue),
       validation_checklist: [
         { text: 'All acceptance criteria met', checked: false },
         { text: 'Performance requirements validated', checked: false },
@@ -325,14 +377,7 @@ export async function createPRDWithValidatedContent(
       phase: 'planning',
       created_by: 'PLAN',
       plan_checklist: planChecklist,
-      exec_checklist: [
-        { text: 'Development environment setup', checked: false },
-        { text: 'Core functionality implemented', checked: false },
-        { text: 'Unit tests written', checked: false },
-        { text: 'Integration tests completed', checked: false },
-        { text: 'Code review completed', checked: false },
-        { text: 'Documentation updated', checked: false }
-      ],
+      exec_checklist: await resolveExecChecklist(supabase, sdIdValue),
       validation_checklist: [
         { text: 'All acceptance criteria met', checked: false },
         { text: 'Performance requirements validated', checked: false },
