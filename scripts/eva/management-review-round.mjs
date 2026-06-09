@@ -14,6 +14,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { buildOkrSnapshot } from '../../lib/eva/okr-progress.mjs'; // FR-2: value-derived OKR progress
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -53,7 +54,7 @@ async function managementReviewHandler(_options = {}) {
   const freshnessChecks = await Promise.all([
     checkFreshness('strategic_directives_v2'),
     checkFreshness('sd_execution_baselines', 'created_at'),
-    checkFreshness('okr_key_results'),
+    checkFreshness('key_results'), // FR-1: the real table (okr_key_results never existed)
     checkFreshness('ventures'),
   ]);
 
@@ -99,26 +100,35 @@ async function managementReviewHandler(_options = {}) {
   const completed = statusCounts['completed'] || 0;
   const inProgress = (statusCounts['in_progress'] || 0) + (statusCounts['active'] || 0);
 
-  // OKR tables (okr_objectives, okr_key_results) do not exist yet
-  const objectives = [];
+  // FR-1 (SD-LEO-INFRA-MAKE-EHG-ENGINEER-001): read the REAL OKR tables (objectives / key_results),
+  // reusing the proven friday-meeting.mjs query shape. The okr_objectives / okr_key_results tables
+  // named by the old hardcode never existed. Fail-open: a query error leaves the snapshot empty,
+  // never crashes the cadence round.
+  let objectives = [];
   const keyResults = [];
+  try {
+    const { data: objs } = await supabase
+      .from('objectives')
+      .select('id, code, title, period')
+      .eq('is_active', true)
+      .order('sequence');
+    objectives = objs || [];
+    for (const obj of objectives) {
+      const { data: krs } = await supabase
+        .from('key_results')
+        .select('id, objective_id, code, title, baseline_value, current_value, target_value, unit, direction, status')
+        .eq('objective_id', obj.id)
+        .eq('is_active', true)
+        .order('sequence');
+      if (krs) keyResults.push(...krs);
+    }
+  } catch {
+    /* fail-open: empty OKR snapshot, never crash the round */
+  }
 
-  const okrSnapshot = (objectives || []).map(obj => {
-    const krs = (keyResults || []).filter(kr => kr.objective_id === obj.id);
-    const avgProgress = krs.length > 0
-      ? Math.round(krs.reduce((sum, kr) => sum + (kr.progress || 0), 0) / krs.length)
-      : 0;
-    return {
-      objective: obj.title,
-      objectiveProgress: obj.progress || 0,
-      keyResults: krs.map(kr => ({
-        title: kr.title,
-        status: kr.status,
-        progress: kr.progress || 0,
-      })),
-      avgKRProgress: avgProgress,
-    };
-  });
+  // FR-2: derive progress from values (current/target/baseline honoring direction). There is NO
+  // .progress column — reading it (as before) yielded 0% for everything.
+  const okrSnapshot = buildOkrSnapshot(objectives, keyResults);
 
   // --- Gather venture data ---
   const { data: ventures } = await supabase

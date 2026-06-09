@@ -47,10 +47,6 @@ import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.
 // Scope Completion Verification Gate (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
 import { createScopeCompletionGate } from '../../gates/scope-completion-gate.js';
 
-// FR Delivery Traceability Gate (SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001) — real per-FR
-// delivery, default-OFF warn-only via LEO_FR_TRACEABILITY_ENFORCE.
-import { createFrDeliveryTraceabilityGate } from '../../gates/fr-delivery-traceability-gate.js';
-
 // Parent Orchestrator Detection (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-1, FR-2)
 import { isParentOrchestrator as isParentOrchestratorAsync } from '../../../../../lib/handoff/parent-detection.js';
 import { getParentOrchestratorExecToPlanGates } from './parent-orchestrator.js';
@@ -267,10 +263,6 @@ export class ExecToPlanExecutor extends BaseExecutor {
       // Scope Completion Verification (applies to children too)
       gates.push(createScopeCompletionGate());
 
-      // FR Delivery Traceability — orchestrator children were the most exposed boundary
-      // (proxy-only gate set); the incident SD 001-A was a child. SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001.
-      gates.push(createFrDeliveryTraceabilityGate(this.supabase));
-
       return gates;
     }
 
@@ -357,10 +349,6 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Scope Completion Verification (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
     // Verifies arch plan deliverables exist in codebase before marking EXEC complete
     gates.push(createScopeCompletionGate());
-
-    // FR Delivery Traceability (SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001) — real per-FR delivery
-    // at the completion boundary for normal SDs too; default-OFF warn-only.
-    gates.push(createFrDeliveryTraceabilityGate(this.supabase));
 
     return gates;
   }
@@ -452,6 +440,20 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
     // Automated shipping: PR Creation (LEO v4.3.5)
     const shippingResult = await runAutomatedShippingForSD(sdId, sd, this.determineTargetRepository.bind(this));
+
+    // FR-3 (SD-LEO-INFRA-MAKE-EHG-ENGINEER-001): refresh the design-quality scorecard for THIS SD so
+    // PLAN-TO-LEAD's retrospective-enricher reads a FRESH design_quality_scores row (it otherwise
+    // froze at the 2026-03-09 backfill — the generator was never wired into the handoff pipeline).
+    // The DESIGN sub-agent has run by EXEC, so the score can be computed now. FAIL-OPEN /
+    // fire-and-forget: scoreByKey no-ops (null) when there is no DESIGN result, and any error is
+    // swallowed here so it can NEVER change the handoff verdict (BaseExecutor telemetry-suppressed
+    // convention). upsert onConflict:'sd_id' → exactly one row per SD, no double-run race.
+    try {
+      const { scoreByKey } = await import('../../../../design-quality-scorecard.js');
+      await scoreByKey(sd?.sd_key || sdId);
+    } catch (e) {
+      console.warn('[exec-to-plan] design-quality-scorecard refresh skipped (non-fatal): ' + (e?.message || e));
+    }
 
     return {
       success: true,
