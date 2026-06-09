@@ -4,13 +4,16 @@
  * Recover Session State Script
  * SD-CLAUDE-CODE-2.1.0-LEO-001 - Phase 2 Hook Infrastructure
  *
- * Recovery script that restores session state from the most recent checkpoint
- * after a crash or unexpected termination. Target: recovery within 60 seconds.
+ * Restores session state from the most recent LOCAL checkpoint file
+ * ($HOME/.claude-checkpoints) after a restart on the SAME host. This is a
+ * single-machine restore aid — NOT distributed crash recovery; the authoritative
+ * cross-session/cross-machine state lives in the DB (claude_sessions). Use this only
+ * to re-attach quickly after a local restart; for true session identity/state, query the DB.
  *
  * Can be invoked manually or as a PreToolUse (once) hook for session init.
  *
  * Hook Type: Manual or PreToolUse (once: true) on new session
- * Purpose: Crash recovery from checkpoints
+ * Purpose: Single-machine local-checkpoint restore aid (DB is authoritative)
  * User Story: SD-CLAUDE-CODE-2-1-0-LEO-001:US-003
  */
 
