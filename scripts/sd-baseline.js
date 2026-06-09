@@ -18,6 +18,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import readline from 'readline';
 import { addItemCore } from '../lib/sd-baseline/build-item.js';
+import { resolveDepRef } from '../lib/sd-baseline/deps-resolve.js';
 
 dotenv.config();
 
@@ -454,25 +455,31 @@ class SDBaselineManager {
 
     if (deps.length === 0) return 1.0;
 
+    // SD-LEO-INFRA-FIX-NEXT-CANDIDATES-001: resolve each dependency element with
+    // the shared resolver (string token / object {sd_key|sd_id|orchestrator}),
+    // matching v_sd_next_candidates.deps_satisfied. The old `dep.sd_id || dep`
+    // returned the whole object for {sd_key}/{orchestrator} deps → never matched.
+    // 'none' and unresolvable refs are no-dependencies: excluded from the score.
     let completedCount = 0;
+    let realDeps = 0;
     for (const dep of deps) {
-      const depId = typeof dep === 'string' ?
-        dep.match(/^(SD-[A-Z0-9-]+)/)?.[1] || dep :
-        dep.sd_id || dep;
+      const depId = resolveDepRef(dep);
+      if (!depId || String(depId).toLowerCase() === 'none') continue;
+      realDeps++;
 
-      // Note: legacy_id was deprecated - using sd_key instead
       const { data: sd } = await supabase
         .from('strategic_directives_v2')
         .select('status')
         .eq('sd_key', depId)
-        .single();
+        .maybeSingle();
 
       if (sd && sd.status === 'completed') {
         completedCount++;
       }
     }
 
-    return Math.round((completedCount / deps.length) * 100) / 100;
+    if (realDeps === 0) return 1.0;
+    return Math.round((completedCount / realDeps) * 100) / 100;
   }
 
   // Parse `add-item <sd_key> [--track A|B|C|STANDALONE] [--rank N]` flags from this.args.
