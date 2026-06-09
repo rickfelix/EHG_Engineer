@@ -75,6 +75,20 @@ async function registerAdam(supabase, sessionId) {
   return { ok: true, action: 'tagged', session_id: sessionId, role: ADAM_ROLE, non_fleet: true, message: 'Session tagged role=adam, non_fleet=true (excluded from fleet accounting).' };
 }
 
+// FR-7 (SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001): the consume-reply mirror printed on
+// /adam startup so Adam discovers the durable reply path without reverse-engineering the
+// channel. Mirrors the coordinator-side renderAdamLane() in coordinator-startup-check.mjs.
+// Printed to STDERR so the stdout JSON contract stays pure. Pure + exported for tests.
+function adamReplyMirror() {
+  return [
+    '═══ ADAM ↔ COORDINATOR COMMS (consume-reply path) ═══',
+    '  • SEND advisory (fire-and-forget, replyable):  node scripts/adam-advisory.cjs send "<body>"',
+    '  • REQUEST (await a sync reply):  node scripts/adam-advisory.cjs request "<question>" [--timeout <ms>]',
+    '  • DRAIN replies that arrived after a timeout:  node scripts/adam-advisory.cjs replies',
+    '  (canonical doc: docs/protocol/coordinator-adam-comms.md)',
+  ].join('\n');
+}
+
 async function main() {
   const sessionId = process.env.CLAUDE_SESSION_ID;
   let supabase;
@@ -86,10 +100,11 @@ async function main() {
   }
   const result = await registerAdam(supabase, sessionId);
   console.log(JSON.stringify(result, null, 2));
+  console.error(adamReplyMirror());
   process.exit(result.ok ? 0 : 1);
 }
 
-module.exports = { computeAdamTag, registerAdam, ADAM_ROLE };
+module.exports = { computeAdamTag, registerAdam, adamReplyMirror, ADAM_ROLE };
 
 if (require.main === module) {
   main().catch(err => {

@@ -112,6 +112,24 @@ export function renderResponsibilities(repoRoot = REPO_ROOT) {
   return lines.join('\n');
 }
 
+// Canonical doc for the Adam<->coordinator comms lane (FR-7, SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001).
+export const ADAM_COMMS_DOC = 'docs/protocol/coordinator-adam-comms.md';
+
+// Render the Adam advisory lane summary (FR-7): the coordinator's read + reply path, so the
+// channel is discoverable on startup without reverse-engineering. Fail-open: never throws.
+export function renderAdamLane() {
+  return [
+    '═══ ADAM ADVISORY LANE (read + reply) ═══',
+    '  Adam advisories are session_coordination INFO rows (payload.kind=adam_advisory),',
+    '  RETIRED ONLY by payload.actioned_at (read_at = delivered, NOT actioned).',
+    '  • PEEK (read-only, stamps nothing):  node scripts/read-adam-advisories.cjs',
+    '  • ACK [+ reply]:  node scripts/coordinator-ack-adam.cjs --advisory <id> [--reply "<body>"]',
+    '  • REPLY by advisory:  node scripts/coordinator-reply.cjs --advisory <id> "<body>"',
+    '  • Inbox render also lists them: node scripts/fleet-dashboard.cjs inbox',
+    `  (canonical doc: ${ADAM_COMMS_DOC})`,
+  ].join('\n');
+}
+
 // Render the standard-loop status + CronCreate specs for missing/unverified loops (FR-2).
 export function renderLoops(armed) {
   const lines = [];
@@ -141,7 +159,7 @@ export function renderLoops(armed) {
 
 export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
   const armed = parseArmedSet(argv, env);
-  return [renderResponsibilities(repoRoot), '', renderLoops(armed)].join('\n');
+  return [renderResponsibilities(repoRoot), '', renderAdamLane(), '', renderLoops(armed)].join('\n');
 }
 
 // ── Main (fail-open: always exit 0) ──

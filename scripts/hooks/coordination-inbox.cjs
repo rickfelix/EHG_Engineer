@@ -99,7 +99,11 @@ function classifyInboxMessage(msg, opts = {}) {
   // Previously these three skips were gated on amCoordinator===true (the root bug).
   if (isInfo && p.signal_type) return { skip: true };                 // FR-3a worker signal
   if (isInfo && p.kind === 'adam_advisory') return { skip: true };    // Adam advisory -> coordinator inbox
-  if (twoWayOn && isInfo && p.kind === 'coordinator_reply') return { skip: true }; // awaitCoordinatorReply consumes it
+  // A worker's awaitCoordinatorReply consumes its own coordinator_reply, so workers skip it.
+  // SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001 FR-4: an ADAM session must NOT skip — it falls
+  // through to the :105 carve-out below (surfaces, read_at left NULL) so a reply arriving after
+  // a sync await times out is recovered by adam-advisory.cjs's durable `replies` reader.
+  if (twoWayOn && isInfo && p.kind === 'coordinator_reply' && !amAdam) return { skip: true };
   // Adam session: do NOT auto-drain a coordinator-originated INFO directive — leave read_at NULL
   // so the Adam inbox monitor (read_at IS NULL) keeps surfacing it until Adam acts on it.
   if (amAdam && isInfo && (msg.sender_type === 'orchestrator' || msg.sender_type === 'coordinator')) {

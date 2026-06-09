@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-const { buildAdvisoryPayload } = require('./adam-advisory.cjs');
+const { buildAdvisoryPayload, drainReplies } = require('./adam-advisory.cjs');
 const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
 
 describe('FR-2: PAYLOAD_KINDS registry', () => {
@@ -29,10 +29,27 @@ describe('buildAdvisoryPayload', () => {
     expect(p.expects_reply).toBeUndefined();
   });
 
-  it('adds correlation_id + expects_reply in request mode', () => {
+  // SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001 FR-3 (R2 decoupling): correlation_id makes an
+  // advisory REPLYABLE and is carried whenever present; expects_reply is the DISTINCT
+  // "awaiting a sync reply" intent, set ONLY in request mode. Conflating them made every
+  // fire-and-forget send falsely advertise Reply?=yes in printAdamInbox.
+  it('FR-3: send-mode carries correlation_id (replyable) but NOT expects_reply', () => {
     const p = buildAdvisoryPayload({ body: 'q?', senderCallsign: 'Adam', repo: '/r', correlationId: 'corr-9' });
+    expect(p.correlation_id).toBe('corr-9');
+    expect(p.expects_reply).toBeUndefined();
+    expect(p.signal_type).toBeUndefined();
+  });
+
+  it('FR-3: request-mode sets BOTH correlation_id and expects_reply', () => {
+    const p = buildAdvisoryPayload({ body: 'q?', senderCallsign: 'Adam', repo: '/r', correlationId: 'corr-9', expectsReply: true });
     expect(p.correlation_id).toBe('corr-9');
     expect(p.expects_reply).toBe(true);
     expect(p.signal_type).toBeUndefined(); // still no signal_type even in request mode
+  });
+});
+
+describe('FR-4: durable reply reader export', () => {
+  it('exports drainReplies for the persistent coordinator_reply reader', () => {
+    expect(typeof drainReplies).toBe('function');
   });
 });
