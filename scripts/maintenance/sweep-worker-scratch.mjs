@@ -63,7 +63,7 @@ const NEVER_DELETE_BASENAMES = new Set([
   '.adam-scan-ledger.json', 'docmon-report.json',
 ]);
 
-const ROOT_SCRATCH_RE = /^_.+\.(mjs|cjs)$/;        // root-level ad-hoc probe scripts
+const ROOT_SCRATCH_RE = /^_.+\.(mjs|cjs|json|diff|txt|sh|sql)$/; // root-level ad-hoc scratch
 const MONITOR_PID_RE = /^\.monitor-.+\.pid$/;      // stale monitor PID files (scoped; NOT *.pid)
 const BACKUP_DIR_MATCHERS = [
   (name) => /^handoff-backup-\d+$/.test(name),     // under .claude/

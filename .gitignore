@@ -341,9 +341,15 @@ scripts/ops/LLM-COST-ALERT.txt
 # `npm run sweep:scratch` (+ the SessionStart hook) prunes them from disk. Every pattern
 # below was verified to have ZERO collisions with tracked files (forensics 2026-06-09).
 
-# Root-level ad-hoc probe scripts (root-anchored; tracked test _*.mjs live in subdirs).
+# Root-level ad-hoc scratch (root-anchored; verified 0 tracked root _* of any extension).
+# Workers dump probe scripts (.mjs/.cjs) and payload/diff scratch (.json/.diff/...) here.
 /_*.mjs
 /_*.cjs
+/_*.json
+/_*.diff
+/_*.txt
+/_*.sh
+/_*.sql
 
 # .claude/ scratch probes + ad-hoc dumps (underscore-prefixed). 0 tracked .claude/_*.
 .claude/_*
