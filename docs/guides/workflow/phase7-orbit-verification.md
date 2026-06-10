@@ -37,7 +37,7 @@ Phase 7 "The Orbit" represents the continuous post-Stage-25 lifecycle for ventur
   - MarketExpansionAnalysis structure
 
 ### 2. Post-MVP Expansion SOP
-- **Location**: `docs/workflow/sop/33-post-mvp-expansion.md`
+- **Location**: `docs/guides/workflow/sop/33-post-mvp-expansion.md`
 - **Status**: Complete
 - **Substages**:
   - 33.1 Feature Planning
@@ -59,7 +59,7 @@ Phase 7 "The Orbit" represents the continuous post-Stage-25 lifecycle for ventur
   - Mandatory exit evaluations at Stages 5, 10, 15, 20
 
 ### 5. Market Feedback Pipeline
-- **Location**: `docs/workflow/sop/32-customer-success-retention-engineering.md`
+- **Location**: `docs/guides/workflow/sop/32-customer-success-retention-engineering.md`
 - **Status**: Complete
 - **Inputs**:
   - Customer health scores

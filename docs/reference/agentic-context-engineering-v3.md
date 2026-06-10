@@ -331,7 +331,7 @@ return {
 
 ### Required Migrations (Applied)
 
-1. **`20251211_create_sd_agentic_context_v3.sql`**
+1. **`20251211_agent_task_contracts.sql`**
    - Creates `agent_task_contracts` table
    - Creates `agent_artifacts` table
    - Creates RPC functions for contract operations
@@ -349,11 +349,11 @@ return {
 ### Integration Test Script
 
 ```bash
-# Run basic tests (1-3)
-node scripts/test-task-contracts.js
+# Run basic tests (1-3) — script now archived
+node scripts/archive/one-time/test-task-contracts.js
 
 # Run with full sub-agent test (4)
-node scripts/test-task-contracts.js --with-subagent
+node scripts/archive/one-time/test-task-contracts.js --with-subagent
 ```
 
 ### Test Coverage

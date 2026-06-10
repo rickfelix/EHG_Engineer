@@ -365,10 +365,10 @@ The LEO Self-Improvement System is a comprehensive infrastructure for continuous
 
 | Sub-stage | Module | What It Does |
 |-----------|--------|--------------|
-| Sanitization | `sanitizer.js` | Redacts PII (emails, SSNs, API keys), detects injection patterns |
-| Quality Scoring | `quality-scorer.js` | Scores 0-100 across 5 dimensions |
-| Quarantine | `quarantine-engine.js` | Isolates high-risk items |
-| Audit Logging | `audit-logger.js` | Comprehensive processing trail |
+| Sanitization | `lib/quality/sanitizer.js` | Redacts PII (emails, SSNs, API keys), detects injection patterns |
+| Quality Scoring | `lib/quality/quality-scorer.js` | Scores 0-100 across 5 dimensions |
+| Quarantine | `lib/quality/quarantine-engine.js` | Isolates high-risk items |
+| Audit Logging | `lib/quality/audit-logger.js` | Comprehensive processing trail |
 
 **Quality Score Dimensions**:
 - **Clarity**: Word count, capitalization, structure
@@ -390,7 +390,7 @@ The LEO Self-Improvement System is a comprehensive infrastructure for continuous
 
 **Purpose**: Convert feedback into structured proposals
 
-**Key Module**: `lib/data-plane/workers/FeedbackToProposalWorker.js`
+**Key Module**: `lib/data-plane/workers/feedback-to-proposal.js` (exports `FeedbackToProposalWorker`)
 
 **What Gets Extracted**:
 - Title → proposal title
@@ -410,7 +410,7 @@ The LEO Self-Improvement System is a comprehensive infrastructure for continuous
 
 **Purpose**: Assign priority scores and queue placement
 
-**Key Module**: `lib/data-plane/workers/PrioritizationWorker.js`
+**Key Module**: `lib/data-plane/workers/prioritization.js` (exports the prioritization worker)
 
 **Scoring Factors**:
 - Feedback priority (P0-P4)

@@ -69,7 +69,7 @@ tags: [guide, auto-generated]
 
 **Deliverables**:
 - ✅ Added `npm run db:agent-metrics` command to package.json
-- ✅ Created `docs/migration-agent-metrics.md` (comprehensive migration guide)
+- ✅ Created `docs/reference/migration-agent-metrics.md` (comprehensive migration guide)
 - ✅ Documented 3 migration options (npm, manual, Supabase dashboard)
 - ✅ Added verification steps and troubleshooting
 
@@ -90,7 +90,7 @@ npm run db:agent-metrics
 - ✅ `lib/agents/database-sub-agent-observable.cjs` (150 LOC)
 - ✅ `lib/agents/testing-sub-agent-observable.cjs` (140 LOC)
 - ✅ `lib/agents/validation-sub-agent-observable.cjs` (145 LOC)
-- ✅ `lib/agents/INTEGRATION-GUIDE.md` (comprehensive integration docs)
+- ✅ `docs/guides/agents-integration-guide.md` (comprehensive integration docs; moved from `lib/agents/INTEGRATION-GUIDE.md`)
 
 **Features**:
 - Non-intrusive wrapper pattern (original agents unchanged)
@@ -118,9 +118,9 @@ npm run agent:metrics
 ### 3. Documentation Created ✅
 
 **Files Created**:
-1. `docs/migration-agent-metrics.md` - Migration guide (200 LOC)
-2. `lib/agents/INTEGRATION-GUIDE.md` - Integration patterns (400 LOC)
-3. `docs/quick-wins-week1-progress.md` - This file
+1. `docs/reference/migration-agent-metrics.md` - Migration guide (200 LOC)
+2. `docs/guides/agents-integration-guide.md` - Integration patterns (400 LOC; moved from `lib/agents/INTEGRATION-GUIDE.md`)
+3. `docs/guides/quick-wins-week1-progress.md` - This file
 
 **Total Documentation**: ~600 lines
 
@@ -379,9 +379,9 @@ npm test -- tests/unit/scripts/cli.test.js tests/unit/agents/observability.test.
 - tests/unit/agents/observability.test.js (420 LOC, 25 tests)
 
 **Documentation** (3 files, ~600 LOC):
-- docs/migration-agent-metrics.md (200 LOC)
-- lib/agents/INTEGRATION-GUIDE.md (400 LOC)
-- docs/quick-wins-week1-progress.md (this file)
+- docs/reference/migration-agent-metrics.md (200 LOC)
+- docs/guides/agents-integration-guide.md (400 LOC; moved from lib/agents/INTEGRATION-GUIDE.md)
+- docs/guides/quick-wins-week1-progress.md (this file)
 
 **Total**: 9 files, ~1,940 LOC, 42 unit tests
 

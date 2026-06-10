@@ -122,7 +122,7 @@ This directory contains operating dossiers for each of the 25 stages in the EHG 
 
 ## Vision Alignment
 
-**Canonical Source**: `docs/plans/eva-platform-architecture.md` (Vision v4.7, Section 5)
+**Canonical Source**: `docs/plans/archived/eva-platform-architecture.md` (Vision v4.7, Section 5; document now archived)
 **Last Aligned**: 2026-02-14
 **Phase Model**: 6-phase (THE TRUTH, THE ENGINE, THE IDENTITY, THE BLUEPRINT, THE BUILD LOOP, LAUNCH & LEARN)
 

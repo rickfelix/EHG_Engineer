@@ -166,7 +166,7 @@ CHECK (
 
 ### 4. Data Healing Script
 
-**File**: `scripts/heal-empty-success-metrics.js`
+**File**: `scripts/archive/one-time/heal-empty-success-metrics.js` (one-time healing script, since archived)
 
 - GPT-powered intelligent metric generation
 - Gathers full SD context (title, description, scope, type, parent, PRD)
@@ -176,13 +176,13 @@ CHECK (
 
 ```bash
 # Dry run to preview changes
-node scripts/heal-empty-success-metrics.js --dry-run
+node scripts/archive/one-time/heal-empty-success-metrics.js --dry-run
 
 # Heal first 5 SDs
-node scripts/heal-empty-success-metrics.js --limit 5
+node scripts/archive/one-time/heal-empty-success-metrics.js --limit 5
 
 # Heal all SDs with empty metrics
-node scripts/heal-empty-success-metrics.js
+node scripts/archive/one-time/heal-empty-success-metrics.js
 ```
 
 ## Prevention Strategy
@@ -289,7 +289,7 @@ INSERT INTO strategic_directives_v2 (sd_key, success_metrics) VALUES ('TEST-3', 
 - **RCA Document**: docs/reference/rca-auto-proceed-empty-metrics-2026-01-30.md
 - **Implementation PR**: https://github.com/rickfelix/EHG_Engineer/pull/688
 - **Migration**: database/migrations/20260130_add_success_metrics_constraint.sql
-- **Data Healing Script**: scripts/heal-empty-success-metrics.js
+- **Data Healing Script**: scripts/archive/one-time/heal-empty-success-metrics.js (archived)
 
 ## Version History
 

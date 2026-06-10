@@ -252,7 +252,7 @@ OVERALL:                          ███████████████�
 - `.claude/skills/inbox.md` - /inbox skill
 - `.claude/skills/feedback.md` - /feedback alias
 
-### EHG Repository (Frontend)
+### EHG Repository (Frontend — paths in the EHG app repo, not EHG_Engineer)
 - `src/pages/quality/QualityInboxPage.tsx`
 - `src/pages/quality/QualityBacklogPage.tsx`
 - `src/pages/quality/QualityPatternsPage.tsx`

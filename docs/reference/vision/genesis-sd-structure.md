@@ -1455,7 +1455,7 @@ than build new.`,
 Use the following script to insert SDs into the database:
 
 ```bash
-node scripts/create-genesis-v31-sds.js
+node scripts/archive/one-time/create-genesis-v31-sds.js
 ```
 
 This script reads this document's structure and inserts all SDs with proper:
@@ -1468,7 +1468,7 @@ This script reads this document's structure and inserts all SDs with proper:
 
 ## Next Steps
 
-1. Run `node scripts/create-genesis-v31-sds.js` to insert all SDs
+1. Run `node scripts/archive/one-time/create-genesis-v31-sds.js` to insert all SDs
 2. Run `node scripts/validate-child-sd-completeness.js SD-GENESIS-V31-PARENT` to verify
 3. Begin execution with SD-GENESIS-V31-MASON-P1 (Dec 29)
 4. Follow LEAD→PLAN→EXEC for each SD

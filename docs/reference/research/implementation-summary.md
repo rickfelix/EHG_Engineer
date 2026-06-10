@@ -88,7 +88,7 @@ We've completed a comprehensive research effort that includes:
    - Complexity: LOW (mostly configuration changes)
 
 4. **NEW: Haiku Quick Reference**
-   - Location: `/docs/research/HAIKU-QUICK-REFERENCE.md`
+   - Location: `/docs/research/HAIKU-QUICK-REFERENCE.md` *(retired — no longer in the tree)*
    - Purpose: Quick cheat sheet for Chairman during SD execution
 
 5. **Technical Specifications JSON**
@@ -193,7 +193,7 @@ Benefit: Full budget utilization, higher capacity, same quality
 - Explain budget zones + escalation rules
 
 **Task 5** (10 mins): Create quick reference card
-- Build `docs/HAIKU-QUICK-REFERENCE.md`
+- Build `docs/HAIKU-QUICK-REFERENCE.md` *(retired — no longer in the tree)*
 - Quick commands for Chairman
 - Decision trees for escalation
 - Never-break rules
@@ -354,7 +354,7 @@ After first 2-3 SDs, measure:
 ### New Research Files
 - ✅ `/docs/research/haiku-first-strategy.md` (11 sections, 350+ lines)
 - ✅ `/docs/research/phase-0-mvp-implementation.md` (6 tasks, 80 mins implementation)
-- ✅ `/docs/research/HAIKU-QUICK-REFERENCE.md` (cheat sheet for Chairman)
+- ✅ `/docs/research/HAIKU-QUICK-REFERENCE.md` *(retired)* (cheat sheet for Chairman)
 - ✅ `/docs/research/implementation-summary.md` (this file)
 
 ### Updated Research Files
@@ -366,7 +366,7 @@ After first 2-3 SDs, measure:
 - `/scripts/token-logger.js` (Task 2)
 - `/scripts/show-budget-status.js` (Task 3)
 - `/CLAUDE.md` (Task 4)
-- `/docs/HAIKU-QUICK-REFERENCE.md` (Task 5)
+- `/docs/HAIKU-QUICK-REFERENCE.md` *(retired)* (Task 5)
 - `/.gitignore` (Task 6)
 
 ---
@@ -399,7 +399,7 @@ After first 2-3 SDs, measure:
 Refer to:
 - **Model assignments**: `haiku-first-strategy.md` Section 2
 - **Implementation details**: `phase-0-mvp-implementation.md`
-- **Quick commands**: `HAIKU-QUICK-REFERENCE.md`
+- **Quick commands**: `HAIKU-QUICK-REFERENCE.md` *(retired — no longer in the tree)*
 - **Original research**: `dynamic-model-allocation-research.md`
 
 ---

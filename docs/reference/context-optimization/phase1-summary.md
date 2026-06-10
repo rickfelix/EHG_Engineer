@@ -237,7 +237,7 @@ All changes are reversible:
    - Review token-heavy sections
 
 2. **Monthly Audit**
-   - Run `node scripts/audit-protocol-token-usage.js`
+   - Run `node scripts/audit-protocol-token-usage.js` (retired — script no longer in the repo)
    - Identify new optimization opportunities
    - Update documentation
 
@@ -250,8 +250,8 @@ All changes are reversible:
 
 ## Files Created
 
-- ✅ `scripts/audit-protocol-token-usage.js` - Audit script
-- ✅ `scripts/check-leo-tables.js` - Database schema checker
+- ✅ `scripts/audit-protocol-token-usage.js` - Audit script (since retired)
+- ✅ `scripts/check-leo-tables.js` - Database schema checker (since archived to `scripts/archive/one-time/check-leo-tables.js`)
 - ✅ `docs/reference/context-optimization/` - Documentation directory
 - ✅ `docs/reference/context-optimization/phase1-summary.md` - This file
 

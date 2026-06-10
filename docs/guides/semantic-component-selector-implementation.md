@@ -130,7 +130,7 @@ Successfully implemented **Option 3: Explainable Component Recommendations** fro
 
 | File | Purpose | Size | Status |
 |------|---------|------|--------|
-| `scripts/seed-component-registry.js` | Populate component registry with embeddings | 304 LOC | ✅ Created |
+| `scripts/archive/one-time/seed-component-registry.js` | Populate component registry with embeddings | 304 LOC | ✅ Created |
 | `scripts/run-migration.js` | Migration helper (provides instructions) | 93 LOC | ✅ Created |
 | `scripts/add-prd-to-database.js` | PRD creation with component recommendations | 293 LOC | ✅ Enhanced |
 
@@ -145,8 +145,8 @@ Successfully implemented **Option 3: Explainable Component Recommendations** fro
 | File | Purpose | Size | Status |
 |------|---------|------|--------|
 | `docs/reference/exec-component-recommendations-guide.md` | EXEC agent usage guide | 700 LOC | ✅ Created |
-| `docs/SEMANTIC_COMPONENT_SELECTOR_DEPLOYMENT.md` | Deployment and maintenance guide | 600 LOC | ✅ Created |
-| `SEMANTIC_COMPONENT_SELECTOR_IMPLEMENTATION.md` | This summary | 400 LOC | ✅ Created |
+| `docs/summaries/implementations/semantic-component-selector-deployment.md` | Deployment and maintenance guide | 600 LOC | ✅ Created |
+| `docs/guides/semantic-component-selector-implementation.md` | This summary | 400 LOC | ✅ Created |
 
 ---
 
@@ -748,8 +748,8 @@ Successfully implemented a comprehensive **Semantic Component Selector with Expl
 
 **Documentation**:
 - EXEC Guide: `docs/reference/exec-component-recommendations-guide.md`
-- Deployment Guide: `docs/SEMANTIC_COMPONENT_SELECTOR_DEPLOYMENT.md`
-- This Summary: `SEMANTIC_COMPONENT_SELECTOR_IMPLEMENTATION.md`
+- Deployment Guide: `docs/summaries/implementations/semantic-component-selector-deployment.md`
+- This Summary: `docs/guides/semantic-component-selector-implementation.md`
 
 ---
 

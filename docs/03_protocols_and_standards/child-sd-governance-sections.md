@@ -137,6 +137,8 @@ await supabase
 
 Once the other Claude Code instance finishes with the CLAUDE MD files:
 
+> Note: `scripts/add-protocol-section.js` is retired — insert the sections directly into the `leo_protocol_sections` table, then regenerate. Commands below preserved for historical context.
+
 ```bash
 node scripts/add-protocol-section.js \
   --target-file CLAUDE_PLAN \

@@ -370,7 +370,7 @@ cat lib/sub-agent-executor.js | grep -A 100 "PHASE_MODEL_OVERRIDES"
 ## References
 
 - **Architecture**: `lib/sub-agent-executor.js` (PHASE_MODEL_OVERRIDES, lines 25-104)
-- **Research**: `docs/research/simplified-approach-summary.md`
+- **Research**: `docs/reference/research/simplified-approach-summary.md`
 - **LEO Protocol**: `CLAUDE_CORE.md`, `CLAUDE_LEAD.md`, `CLAUDE_PLAN.md`
 - **Token Logging**: `scripts/token-logger.js`, `scripts/show-budget-status.js`
 

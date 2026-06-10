@@ -281,7 +281,7 @@ Based on EHG's natal capacity and cosmic timing:
 | **Ventures Initiated** (Stages 1-10) | 8-12 | High |
 | **Ventures Developed** (Stages 11-28) | 5-8 | High |
 | **Ventures Launched** (Stages 29-34) | 3-5 | Medium |
-| **Portfolio Active** (Stage 40) | 2-4 | Medium |
+| **Portfolio Active** (Stage 40 — retired 40-stage workflow) | 2-4 | Medium |
 
 **Rationale**: Jupiter's transit through Cancer (2026) creates one major expansion window. The subsequent Saturn structures (2027-2028) favor quality over quantity. EHG's Cancerian nature prefers fewer, well-nurtured ventures over volume.
 
@@ -330,7 +330,7 @@ Based on transit analysis:
 
 The 7th house Pluto (both charts) indicates that venture autonomy will be achieved through **transformative partnership**:
 
-- Ventures reaching Stage 29+ will likely do so through strategic partnerships, not solo scaling
+- Ventures reaching Stage 29+ (retired 40-stage workflow numbering) will likely do so through strategic partnerships, not solo scaling
 - Expect acquisition interest, joint ventures, or platform partnerships as the mechanism for autonomy
 - The "graduation" from EHG oversight happens when a venture finds its transformative partner
 
@@ -544,7 +544,7 @@ The Chairman's Mars at 29° Aries provides a "cosmic override" — when direct, 
 | **Ventures at Stages 12-20** | Q2 2026 | Jupiter conjunct EHG Sun | High |
 | **Master Orchestrator** | Q3 2026 | Jupiter-Saturn sextile | High |
 | **Cross-Venture Synergy** | Q3-Q4 2026 | Mars in Gemini energizes 12th | Medium-High |
-| **First MVP (Stage 29-31)** | Q4 2026 | Saturn direct, launch window | High |
+| **First MVP (Stage 29-31 — retired 40-stage workflow)** | Q4 2026 | Saturn direct, launch window | High |
 
 **Assessment**: The EVA evolution timeline is **cosmically supported**. Each milestone falls within favorable transit windows. Q2 2026 (Jupiter conjunct Sun) is the make-or-break period — if EVA evolution is not on track by May 2026, recalibration is needed.
 
@@ -552,7 +552,7 @@ The Chairman's Mars at 29° Aries provides a "cosmic override" — when direct, 
 
 | Milestone | Best Window | Backup Window |
 |-----------|-------------|---------------|
-| **First Venture Stage 40** | Q4 2027 | Q2 2028 |
+| **First Venture Stage 40 (retired 40-stage workflow)** | Q4 2027 | Q2 2028 |
 | **Second MVP Launch** | May-Jun 2027 | Nov-Dec 2027 |
 | **Third Venture Intake** | Q2 2026 | Q2 2027 |
 | **Partnership Deal Close** | Q3 2027 | Q4 2028 (transformed) |

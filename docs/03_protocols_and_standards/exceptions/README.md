@@ -37,7 +37,7 @@ exceptions/
 
 **Example Filenames**:
 - `stage-04-compliance-exception.md` (Stage 4 exception)
-- `stage-38-compliance-exception.md` (Stage 38 exception)
+- `stage-23-compliance-exception.md` (Stage 23 exception)
 
 ### 2. Timeline Exceptions
 **Naming**: `stage-XX-timeline-exception.md`

@@ -105,13 +105,13 @@ Ensure the "Age" calculation in JS (`inbox.md:70`) handles edge cases correctly,
 | FR-007 | My Focus Context | `lib/quality/focus-filter.js` | COMPLETE |
 
 ### Discrepancies
-FR-002: The value/effort matrix calculation for enhancements is mentioned in the prompt but `priority-calculator.js` primarily focuses on severity-to-priority mapping. It has placeholders but might need more specific logic for value_estimate and effort_estimate to drive priority P0-P3 mapping for enhancements.
+FR-002: The value/effort matrix calculation for enhancements is mentioned in the prompt but `lib/quality/priority-calculator.js` primarily focuses on severity-to-priority mapping. It has placeholders but might need more specific logic for value_estimate and effort_estimate to drive priority P0-P3 mapping for enhancements.
 
 ### Retrospective Status
 PUBLISHED (score: 70).
 
 ### Recommendations
-Enhance `priority-calculator.js` to explicitly map value_estimate * effort_estimate combinations to Priority levels (e.g., High Value + Small Effort = P1).
+Enhance `lib/quality/priority-calculator.js` to explicitly map value_estimate * effort_estimate combinations to Priority levels (e.g., High Value + Small Effort = P1).
 
 ---
 
@@ -132,7 +132,7 @@ Enhance `priority-calculator.js` to explicitly map value_estimate * effort_estim
 | FR-008 | POST /api/feedback | - | MISSING |
 
 ### Discrepancies
-**CRITICAL**: The database status says "completed", but no files exist in `pages/quality/` or `pages/api/` (specifically `feedback.ts`) to implement these features. The project seems to be currently CLI-only despite the PRD requiring a Web UI.
+**CRITICAL**: The database status says "completed", but no files exist in `pages/quality/` or `pages/api/` (specifically `feedback.ts`) to implement these features. The project seems to be currently CLI-only despite the PRD requiring a Web UI. *(Analysis snapshot — the quality pages have since shipped in the EHG app repo under `src/pages/quality/`.)*
 
 ### Retrospective Status
 PUBLISHED (score: 85). This is a major false positive. A score of 85 suggests high quality, but the code is non-existent.

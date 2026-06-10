@@ -201,6 +201,8 @@ The lifecycle organizes its stages (see the venture_stages SSOT) into 6 phases, 
 
 ### Stage Templates (25 files, ~80-230 lines each)
 
+All stage template files below live under `lib/eva/stage-templates/`.
+
 | Phase | Files | Total Lines |
 |-------|-------|-------------|
 | Truth (1-5) | `stage-01.js` to `stage-05.js` | ~577 |

@@ -723,7 +723,7 @@ New Issue → Risk Router → Estimate complexity
               /quick-fix   Full SD
 ```
 
-**Implementation** (`lib/quality/risk-router.js`):
+**Implementation** (`lib/uat/risk-router.js`):
 ```javascript
 async function routeToResolution(feedbackId) {
   const feedback = await loadFeedback(feedbackId);
@@ -994,8 +994,8 @@ ORDER BY date DESC;
 
 ### Related Documentation
 
-- User Guide: `../vision/quality-lifecycle-system.md`
-- Vision: `docs/vision/quality-lifecycle-system.md`
+- User Guide: `../../reference/vision/quality-lifecycle-system.md`
+- Vision: `docs/reference/vision/quality-lifecycle-system.md`
 - Database Schema: `docs/reference/schema/engineer/tables/feedback.md`
 
 ---

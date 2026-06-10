@@ -519,8 +519,8 @@ node lib/keyword-intent-scorer.js "the query that should have triggered"
 
 ## Related Documentation
 
-- **Sub-Agent Orchestration:** `docs/leo/sub-agents/orchestration-guide.md`
-- **Task Tool:** `docs/reference/task-tool-guide.md`
+- **Sub-Agent Orchestration:** `docs/leo/sub-agents/sub-agent-system.md`
+- **Task Tool:** `docs/leo/sub-agents/native-invocation.md`
 - **CLAUDE.md Router:** `CLAUDE.md`
 - **Keyword Definitions:** `lib/keyword-intent-scorer.js`
 

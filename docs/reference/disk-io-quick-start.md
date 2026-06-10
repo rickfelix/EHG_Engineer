@@ -23,9 +23,9 @@ Your Supabase database has **excellent performance (97.66% cache hit ratio)** bu
 
 ### Immediate Actions (15 minutes)
 
-1. **Run diagnostics script** (already done):
+1. **Run diagnostics script** (already done; script since archived):
    ```bash
-   node scripts/diagnose-disk-io-performance.js
+   node scripts/archive/one-time/diagnose-disk-io-performance.js
    ```
 
 2. **Open Supabase SQL Editor** and run:
@@ -78,8 +78,8 @@ Run `/mnt/c/_EHG/EHG_Engineer/scripts/monitor-database-health.sql` in Supabase S
 
 | File | Purpose |
 |------|---------|
-| `DISK_IO_OPTIMIZATION_REPORT.md` | Full diagnostic report with analysis |
-| `scripts/diagnose-disk-io-performance.js` | Node.js diagnostic tool (reusable) |
+| `DISK_IO_OPTIMIZATION_REPORT.md` (retired) | Full diagnostic report with analysis |
+| `scripts/archive/one-time/diagnose-disk-io-performance.js` | Node.js diagnostic tool (archived) |
 | `scripts/optimize-disk-io-immediate.sql` | Immediate fixes (run today) |
 | `scripts/optimize-disk-io-phase2.sql` | Advanced fixes (run next week) |
 | `scripts/monitor-database-health.sql` | Weekly monitoring queries |

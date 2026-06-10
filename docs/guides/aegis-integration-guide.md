@@ -258,7 +258,7 @@ USE_AEGIS_COMPLIANCE=true
 **Pattern**:
 
 ```javascript
-// OLD (adapter)
+// OLD (adapter) — legacy path, retired from the tree
 import { ConstitutionValidator } from '@/lib/governance/protocol-constitution';
 const validator = new ConstitutionValidator(supabase);
 await validator.validate(improvement);
@@ -285,12 +285,12 @@ grep -r "four-oaths-validator" --include="*.ts" --include="*.js"
 
 2. **Plan migration sprints**
 
-3. **Remove legacy validators**:
+3. **Remove legacy validators** (already done — these legacy paths no longer exist in the tree):
 
 ```bash
 # After all migrations complete
-rm lib/governance/protocol-constitution/ConstitutionValidator.js
-rm lib/governance/four-oaths/FourOathsValidator.js
+rm lib/governance/protocol-constitution/ConstitutionValidator.js   # (retired)
+rm lib/governance/four-oaths/FourOathsValidator.js                 # (retired)
 # ... etc
 ```
 

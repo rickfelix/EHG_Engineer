@@ -526,6 +526,8 @@ loop (headlessly unit-testable), and the live session injects the LLM-backed sub
 
 ### Module Map (6 units, 12 modules)
 
+All module files below live under `lib/eva/bridge/`.
+
 | Unit | Module | Responsibility |
 |------|--------|----------------|
 | U1 Select | `agent-panel-manifest.js` | `PANEL_AGENTS`, per-venture `selectAgentManifest`, `orderPanelDAG` (Kahn topo-sort: architecture→schema→ui→tests; security/compliance cross-cut; acceptance last) |

@@ -630,11 +630,11 @@ LEO_SKIP_HOOKS=1 claude-code
 
 ## Related Documentation
 
-- **Design Document**: `docs/drafts/stop-hook-subagent-enforcement-draft.md`
-- **Triangulation Synthesis**: `docs/research/triangulation-stop-hook-synthesis.md`
+- **Design Document**: `docs/drafts/stop-hook-subagent-enforcement-draft.md` (retired — superseded by the protocol amendment below)
+- **Triangulation Synthesis**: `docs/reference/research/triangulation-stop-hook-synthesis.md`
 - **Protocol Amendment**: `docs/03_protocols_and_standards/leo-v4.3-subagent-enforcement.md`
 - **Hook Reference**: `docs/reference/claude-code-hooks.md` (general hook documentation)
-- **Sub-Agent Guide**: `docs/reference/sub-agent-execution.md`
+- **Sub-Agent Guide**: `docs/leo/sub-agents/sub-agent-system.md`
 
 ## Version History
 

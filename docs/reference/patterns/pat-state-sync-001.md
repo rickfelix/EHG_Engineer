@@ -32,7 +32,7 @@ Missing state synchronization checkpoint when transitioning between orchestrator
    - Added `initializeFromDb()` for session start
    - Added `validateState()` for reconciliation
 
-2. Created `scripts/validate-session-state.js` for manual validation
+2. Created `scripts/validate-session-state.js` for manual validation (since archived to `scripts/archive/one-time/`)
 
 3. Created `scripts/hooks/session-state-sync.cjs` hook for automatic sync on session start
 
@@ -116,7 +116,7 @@ The `claude_sessions.metadata` field now includes:
 ## Related Files
 
 - `scripts/modules/handoff/auto-proceed-state.js` - Core module
-- `scripts/validate-session-state.js` - Manual validation
+- `scripts/archive/one-time/validate-session-state.js` - Manual validation (archived)
 - `scripts/hooks/session-state-sync.cjs` - Session start hook
 - `lib/session-manager.mjs` - Session management
 

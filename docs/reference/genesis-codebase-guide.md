@@ -81,4 +81,4 @@ tags: [reference, auto-generated]
 
 ## Full Documentation
 
-See: `docs/architecture/genesis-implementation-guide.md`
+See: `docs/01_architecture/genesis-implementation-guide.md`

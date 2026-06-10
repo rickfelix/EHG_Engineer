@@ -381,7 +381,7 @@ LEAD-FINAL-APPROVAL (100%)
 
 **File**: `scripts/modules/handoff/cli/cli-main.js`
 
-**Function**: `getNextInWorkflow(currentHandoff, sdType)` - **ALL HANDOFFS ARE TERMINAL**
+**Function**: `getNextInWorkflow(currentHandoff, sdType)` - **ALL HANDOFFS ARE TERMINAL** *(the stub shown below has since been removed from `cli-main.js` entirely; terminal-handoff behavior is now structural)*
 
 ```javascript
 /**
@@ -406,7 +406,7 @@ function getNextInWorkflow(_currentHandoff, _sdType) {
 - **Previous bug**: EXEC-TO-PLAN auto-chained to PLAN-TO-LEAD, skipping verification work
 - **Design intent**: AUTO-PROCEED = child-to-child continuation within orchestrators, NOT handoff-to-handoff chaining within a single SD
 - **Phase work must happen between handoffs**: PRD creation, implementation, verification, review
-- **SD-type-aware workflows** still exist in `workflow-definitions.js` (which handoffs are required/optional per type)
+- **SD-type-aware workflows** still exist in `scripts/modules/handoff/cli/workflow-definitions.js` (which handoffs are required/optional per type)
 
 **AUTO-PROCEED Scope**:
 - ✅ Child-to-child continuation after LEAD-FINAL-APPROVAL (orchestrator children)

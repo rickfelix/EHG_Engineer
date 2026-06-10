@@ -417,6 +417,6 @@ ls .worktrees/  # Shows SD keys
 
 ## Related Documentation
 
-- **Architecture**: `docs/architecture/worktree-first-isolation-integration.md`
+- **Architecture**: `docs/01_architecture/worktree-first-isolation-integration.md`
 - **Worktree Manager API**: `lib/worktree-manager.js`
-- **Handoff Flow**: `docs/reference/handoff-architecture.md`
+- **Handoff Flow**: `docs/leo/handoffs/handoff-system-guide.md`

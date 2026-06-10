@@ -174,7 +174,7 @@ Returns `true` for `interactive` (presents AskUserQuestion), `false` for all oth
 | `reasoning` | string | Why this LOC estimate |
 | `escalationReason` | string\|null | Why escalated (Tier 3 only) |
 | `askUserQuestionPayload` | Object\|null | Ready for AskUserQuestion (Tier 1/2 interactive only) |
-| `routingDecision` | Object\|null | Full decision from `work-item-router.js` |
+| `routingDecision` | Object\|null | Full decision from `lib/utils/work-item-router.js` |
 
 ---
 

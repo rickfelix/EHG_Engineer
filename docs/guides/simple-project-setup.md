@@ -79,9 +79,9 @@ GITHUB_REPO=my-cool-app-repo
 
 ## Step 3: Register Your Project
 
-Type this in your terminal and press Enter:
+Type this in your terminal and press Enter (the script now lives in the archive):
 ```
-node scripts/leo-register-from-env.js
+node scripts/archive/one-time/leo-register-from-env.js
 ```
 
 **That's it! Your project is registered!**
@@ -126,7 +126,7 @@ Let's say your GitHub is `github.com/johndoe/todo-app`
 
 3. **Register it:**
    ```
-   node scripts/leo-register-from-env.js
+   node scripts/archive/one-time/leo-register-from-env.js
    ```
 
 Done! Now you can use `node scripts/leo.js switch todo-app` anytime!

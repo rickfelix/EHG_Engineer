@@ -50,9 +50,9 @@ This is NORMAL and means the migration succeeded!
 
 ### 7. Verify the Migration
 
-Run this command in your terminal:
+Run this command in your terminal (`scripts/verify-sd-testing-status-migration.js` is retired — verify manually against the live DB instead, e.g. confirm the table/view exist):
 ```bash
-node scripts/verify-sd-testing-status-migration.js
+node scripts/verify-sd-testing-status-migration.js  # (retired)
 ```
 
 Expected output:
@@ -89,25 +89,25 @@ Once verified, you can use these tools:
 
 ### Query Untested SDs
 ```bash
-node scripts/query-untested-sds.js
+node scripts/archive/one-time/query-untested-sds.js
 ```
 
 ### Query Specific Filters
 ```bash
 # Show all SDs (tested and untested)
-node scripts/query-untested-sds.js --all
+node scripts/archive/one-time/query-untested-sds.js --all
 
 # Show only tested SDs
-node scripts/query-untested-sds.js --tested-only
+node scripts/archive/one-time/query-untested-sds.js --tested-only
 
 # Limit results
-node scripts/query-untested-sds.js --limit=10
+node scripts/archive/one-time/query-untested-sds.js --limit=10
 
 # Filter by priority
-node scripts/query-untested-sds.js --priority=high
+node scripts/archive/one-time/query-untested-sds.js --priority=high
 
 # Filter by application
-node scripts/query-untested-sds.js --app=EHG
+node scripts/archive/one-time/query-untested-sds.js --app=EHG
 ```
 
 ### Test a Specific SD

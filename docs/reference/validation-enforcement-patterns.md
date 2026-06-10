@@ -173,7 +173,7 @@ CHECK (status != 'active' OR EXISTS (
 **Right Approach**:
 ```bash
 # GATE 1: Invoke validation agent BEFORE approval
-node scripts/systems-analyst-codebase-audit.js <SD-ID>
+node scripts/archive/one-time/systems-analyst-codebase-audit.mjs <SD-ID>
 
 # Validation agent will:
 # 1. Search codebase for "auth", "authentication", "login"
@@ -276,11 +276,11 @@ cat ../ehg/src/components/auth/LoginForm.tsx
 **Right Approach**:
 ```bash
 # GATE 2: Infrastructure check BEFORE PRD creation
-node scripts/systems-analyst-codebase-audit.js <SD-ID>
+node scripts/archive/one-time/systems-analyst-codebase-audit.mjs <SD-ID>
 
 # Validation agent will:
 # 1. Search for existing authentication patterns
-# 2. Check Supabase configuration: src/lib/supabase.ts
+# 2. Check Supabase configuration: src/lib/supabase.ts (in the EHG app repo)
 # 3. Query users table (indicates auth system exists)
 # 4. Report: "Supabase Auth configured and in use"
 # 5. PRD updated to leverage existing Supabase Auth
@@ -469,7 +469,7 @@ const { error } = await supabase
 **Orchestration Flow**:
 ```bash
 # User creates LEAD→PLAN handoff
-node scripts/unified-handoff-system.js execute LEAD-to-PLAN <SD-ID>
+node scripts/handoff.js execute LEAD-to-PLAN <SD-ID>
 
 # System automatically:
 # 1. Queries leo_sub_agent_triggers for LEAD_PRE_APPROVAL phase
@@ -489,7 +489,7 @@ node scripts/unified-handoff-system.js execute LEAD-to-PLAN <SD-ID>
 
 ### 3. Script-Level Blocking (Handoff System)
 
-**GATE 1 Enforcement** (unified-handoff-system.js):
+**GATE 1 Enforcement** (`scripts/handoff.js`, formerly `unified-handoff-system.js`):
 ```javascript
 // Check backlog items before LEAD→PLAN handoff
 const { data: backlogItems } = await supabase
@@ -671,7 +671,7 @@ if (scopeCreep.length > 0) {
 
 - `CLAUDE.md` Sections 2358-2361 - Validation Agent Mandatory Gates
 - `docs/reference/validation-agent-proactive-gates.md` - Gate-by-gate guide
-- `scripts/systems-analyst-codebase-audit.js` - Validation agent implementation
+- `scripts/archive/one-time/systems-analyst-codebase-audit.mjs` - Validation agent implementation
 - `.claude/agents/validation-agent.md` - Validation agent configuration
 
 ---

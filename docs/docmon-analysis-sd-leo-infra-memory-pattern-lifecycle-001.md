@@ -308,6 +308,8 @@ the event bus supports multiple subscribers per event type.
 
 ## Documentation Checklist
 
+> Note (2026-06): the proposed files below were never created — the SD shipped without them. Paths under `docs/01_architecture/` that appear here are proposals from this analysis, not live documents (only `learning-capture-architecture.md` exists).
+
 ### To Be Created
 
 - [ ] **`docs/01_architecture/pattern-lifecycle-closure.md`**

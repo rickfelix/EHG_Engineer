@@ -241,7 +241,7 @@ async function checkSDWorkStatus() {
 
 ## Learning Signal Keywords
 
-**File**: `scripts/auto-learning-capture.js`
+**File**: `scripts/archive/one-time/auto-learning-capture.js` (engine archived — see note under Retrospective Creation)
 
 ### Signal Patterns
 
@@ -292,7 +292,7 @@ function hasCorrectiveAction(learnings) {
 
 ## Work Type Classification
 
-**File**: `scripts/auto-learning-capture.js`
+**File**: `scripts/archive/one-time/auto-learning-capture.js` (engine archived — see note under Retrospective Creation)
 
 ### File Pattern Classifiers
 
@@ -555,10 +555,10 @@ echo '{"tool_name":"Bash","tool_input":{"command":"gh pr merge 123 --merge"},"to
   node scripts/hooks/auto-learning-capture.cjs
 ```
 
-**Test engine**:
+**Test engine** (archived):
 ```bash
-# Run engine directly with PR number
-node scripts/auto-learning-capture.js --pr 123
+# Run engine directly with PR number (engine now lives in the archive)
+node scripts/archive/one-time/auto-learning-capture.js --pr 123
 ```
 
 **Verify database entries**:

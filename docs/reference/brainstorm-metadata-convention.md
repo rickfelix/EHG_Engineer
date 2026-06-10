@@ -52,7 +52,7 @@ Auto-filer exits with code 1 and INSERTs zero rows on rejection.
 
 ### `companion_sds_filed` (array, written by auto-filer)
 
-Output of `brainstorm-auto-file.mjs`. One entry per `companion_sds_to_file` request, recording outcome.
+Output of `scripts/eva/brainstorm-auto-file.mjs`. One entry per `companion_sds_to_file` request, recording outcome.
 
 ```json
 "companion_sds_filed": [

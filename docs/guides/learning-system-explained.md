@@ -320,9 +320,9 @@ Currently, sub-agents **DO NOT automatically query lessons** during execution.
 
 ## How Knowledge Gets Populated
 
-### 1. **Manual Seeding** (Initial)
+### 1. **Manual Seeding** (Initial — one-time script, now archived)
 ```bash
-node scripts/seed-issue-patterns.js
+node scripts/archive/one-time/seed-issue-patterns.js
 ```
 
 Populates common patterns like:

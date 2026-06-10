@@ -42,7 +42,7 @@ Two layers, complementary purposes:
 
 | Layer | Entry Point | Scope | Runtime |
 |-------|-------------|-------|---------|
-| **E2E Runner** | `scripts/e2e-stage-runner.mjs` | All 25 stages + 4 gate suites; synthetic data only | ~10–20s |
+| **E2E Runner** | `scripts/archive/one-time/e2e-stage-runner.mjs` | All 25 stages + 4 gate suites; synthetic data only | ~10–20s |
 | **Unit Tests** | `npm run test:unit` (Vitest) | 40 test files, 2,250+ assertions, per-stage and cross-cutting | ~30–60s |
 
 **E2E Runner** — 5 suites per stage:
@@ -98,17 +98,17 @@ Live venture execution, Supabase integration, frontend alignment (Stage 6 GUI mi
 npm run test:unit
 
 # E2E runner — all 25 stages + 4 gate suites
-node scripts/e2e-stage-runner.mjs
+node scripts/archive/one-time/e2e-stage-runner.mjs
 ```
 
 ### Targeted Runs
 
 ```bash
 # E2E: single stage only
-node scripts/e2e-stage-runner.mjs --stage=13
+node scripts/archive/one-time/e2e-stage-runner.mjs --stage=13
 
 # E2E: machine-readable output (CI pipelines, scripting)
-node scripts/e2e-stage-runner.mjs --json
+node scripts/archive/one-time/e2e-stage-runner.mjs --json
 
 # Unit: single stage file (Vitest filter)
 npm run test:unit -- stage-13
@@ -117,7 +117,7 @@ npm run test:unit -- stage-13
 npm run test:watch
 
 # Individual stage E2E runner (standalone scripts)
-node scripts/test-stage13-e2e.js
+node scripts/archive/one-time/test-stage13-e2e.js
 ```
 
 ### CI Integration
@@ -125,7 +125,7 @@ node scripts/test-stage13-e2e.js
 The E2E runner exits with code `1` if any critical or high-severity finding is present; `0` otherwise. Pipe `--json` output to parse structured results:
 
 ```bash
-node scripts/e2e-stage-runner.mjs --json > results.json
+node scripts/archive/one-time/e2e-stage-runner.mjs --json > results.json
 # results.json shape: { stageResults, allFindings, summary }
 # summary.criticalCount + summary.highCount > 0 → fail the build
 ```
@@ -215,7 +215,7 @@ After adding tests, run:
 
 ```bash
 npm run test:unit -- stage-{N}
-node scripts/e2e-stage-runner.mjs --stage={N}
+node scripts/archive/one-time/e2e-stage-runner.mjs --stage={N}
 ```
 
 Both should pass before you commit.
@@ -247,7 +247,7 @@ For the deferred items, see `brainstorm/2026-03-04-systemic-audit-findings-remed
 - **Audit findings and remediation**: [`brainstorm/2026-03-04-systemic-audit-findings-remediation.md`](../../../brainstorm/2026-03-04-systemic-audit-findings-remediation.md)
 - **Stage lifecycle overview**: [`docs/guides/workflow/venture-lifecycle-overview.md`](../workflow/venture-lifecycle-overview.md)
 - **Stage templates**: `lib/eva/stage-templates/stage-{N}.js` (N = 1–25)
-- **E2E master runner**: `scripts/e2e-stage-runner.mjs`
+- **E2E master runner**: `scripts/archive/one-time/e2e-stage-runner.mjs`
 - **Individual E2E runners**: `scripts/test-stage{N}-e2e.js` (N = 1–25)
 - **Unit test files**: `tests/unit/eva/stage-templates/`
 

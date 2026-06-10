@@ -32,12 +32,12 @@ SETTINGS-4 test (`tests/unit/settings-claude-project-dir.test.js`, QF-20260604-7
 
 SETTINGS-4 only validates the **directly-wired hook command files**. It cannot see the
 script files a hook forks *internally*. A bulk-archive sweep once moved
-`scripts/auto-learning-capture.js` (the spawn target of `auto-learning-capture.cjs`)
+`scripts/auto-learning-capture.js` (the spawn target of `scripts/hooks/auto-learning-capture.cjs`; the engine now lives at `scripts/archive/one-time/auto-learning-capture.js` and the hook skips honestly when it is absent)
 without updating the spawn; because the spawn used `stdio:'ignore'`+detached+`unref()`,
 the `MODULE_NOT_FOUND` was swallowed and the hook still printed a success banner — a
 **silent false success** (RCA `acde2541` / `PAT-HOOK-ARCHIVE-ORPHAN-001`). This guard is
 the "layer with teeth" that fails CI on that class. It also surfaced (and this SD fixed) a
-stray-`});` syntax error that had left the wired `session-state-sync.cjs` SessionStart hook
+stray-`});` syntax error that had left the wired `scripts/hooks/session-state-sync.cjs` SessionStart hook
 silently dead.
 
 ## The rule

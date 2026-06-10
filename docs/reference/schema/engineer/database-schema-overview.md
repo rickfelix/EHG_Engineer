@@ -257,7 +257,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_stage_gate_results](tables/eva_stage_gate_results.md) | 1,090 | ✅ | 2 | Tracks EVA gate evaluations with kill gate enforcement (stages 3,5,13,23 require 70% score) |
 | [eva_stage_gate_results_qparity20260610](tables/eva_stage_gate_results_qparity20260610.md) | 12 | ❌ | 0 | - |
 | [eva_support_decision_log](tables/eva_support_decision_log.md) | 4 | ✅ | 1 | EVA Support decision log. Mirrors envelope v1.0 REQUIRED_FIELDS verbatim per scripts/eva-support/decision-log-formatter.js. service_role-only RLS. |
-| [eva_support_research_cache](tables/eva_support_research_cache.md) | 0 | ✅ | 1 | EVA Support research result cache. Keyed by SHA-256 hex of normalize(query)=lowercase+trim+collapse-whitespace. TTL-bounded via ttl_until; eviction by separate cron/script (see scripts/cron/evict-research-cache.mjs if/when added). service_role-only RLS. |
+| [eva_support_research_cache](tables/eva_support_research_cache.md) | 0 | ✅ | 1 | EVA Support research result cache. Keyed by SHA-256 hex of normalize(query)=lowercase+trim+collapse-whitespace. TTL-bounded via ttl_until; eviction by separate cron/script (planned scripts/cron/evict-research-cache.mjs — not yet implemented). service_role-only RLS. |
 | [eva_sync_state](tables/eva_sync_state.md) | 4 | ✅ | 2 | - |
 | [eva_todoist_intake](tables/eva_todoist_intake.md) | 304 | ✅ | 2 | - |
 | [eva_trace_log](tables/eva_trace_log.md) | 0 | ✅ | 2 | - |
@@ -1194,7 +1194,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [eva_stage_gate_results](tables/eva_stage_gate_results.md) - Tracks EVA gate evaluations with kill gate enforcement (stages 3,5,13,23 require 70% score)
 - [eva_stage_gate_results_qparity20260610](tables/eva_stage_gate_results_qparity20260610.md)
 - [eva_support_decision_log](tables/eva_support_decision_log.md) - EVA Support decision log. Mirrors envelope v1.0 REQUIRED_FIELDS verbatim per scripts/eva-support/decision-log-formatter.js. service_role-only RLS.
-- [eva_support_research_cache](tables/eva_support_research_cache.md) - EVA Support research result cache. Keyed by SHA-256 hex of normalize(query)=lowercase+trim+collapse-whitespace. TTL-bounded via ttl_until; eviction by separate cron/script (see scripts/cron/evict-research-cache.mjs if/when added). service_role-only RLS.
+- [eva_support_research_cache](tables/eva_support_research_cache.md) - EVA Support research result cache. Keyed by SHA-256 hex of normalize(query)=lowercase+trim+collapse-whitespace. TTL-bounded via ttl_until; eviction by separate cron/script (planned scripts/cron/evict-research-cache.mjs — not yet implemented). service_role-only RLS.
 - [eva_sync_state](tables/eva_sync_state.md)
 - [eva_todoist_intake](tables/eva_todoist_intake.md)
 - [eva_trace_log](tables/eva_trace_log.md)

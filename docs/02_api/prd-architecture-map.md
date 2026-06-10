@@ -271,7 +271,7 @@ Utilities and frameworks that support multiple aspects of the platform.
 ### When Implementing Meta PRDs:
 - These are advanced recursive capabilities
 - Build after core platform is stable
-- Stage 61 (PRD Generation) is the flagship meta-capability
+- Stage 61 (PRD Generation) is the flagship meta-capability *(legacy enhanced-PRD numbering from the retired 40-stage workflow era; the live workflow uses stages 0-25)*
 
 ---
 

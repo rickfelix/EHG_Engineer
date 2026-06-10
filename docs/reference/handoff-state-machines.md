@@ -14,7 +14,7 @@ tags: [reference]
 
 This document exists because two classes of handoff failures traced to state machine invariants that were enforced by separate code paths that disagreed with each other:
 
-- **PAT-HF-PLANTOEXEC-eaccd2b3**: `prerequisite-preflight.js` and `PlanToExecVerifier.js` had different allow-lists for PRD status at PLAN-TO-EXEC. Parent orchestrators saw "in_progress" accepted by one and rejected by the other.
+- **PAT-HF-PLANTOEXEC-eaccd2b3**: `scripts/modules/handoff/pre-checks/prerequisite-preflight.js` and `scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js` had different allow-lists for PRD status at PLAN-TO-EXEC. Parent orchestrators saw "in_progress" accepted by one and rejected by the other.
 - **PAT-HF-LEADFINALAPPROVAL-d94c34d8**: `plan-to-lead/state-transitions.js` updated SD.status to `pending_approval`, but the update was non-blocking. Silent failures left SDs in `draft`, and `lead-final-approval/index.js` reported a misleading "wrong status" error instead of the real cause.
 
 The diagrams below are the **canonical** description of what each state means and which transitions are valid. Any code path that enforces PRD or SD status must be consistent with this document.

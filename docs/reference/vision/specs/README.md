@@ -39,6 +39,8 @@ tags: [reference, vision, specs]
 
 This folder contains the detailed technical specifications for Vision v2, the "Venture Factory" architecture that powers EHG's AI-first venture validation pipeline.
 
+> **Note**: These are design specifications. Component, function, and table identifiers named here (e.g. `fn_chairman_briefing`, `ChairmanBriefing`, `DecisionStack`) describe planned architecture and may not exist in the codebase yet.
+
 ---
 
 ## Document Hierarchy
@@ -418,7 +420,7 @@ Adversarial documentation audit prompt for systematic flaw detection:
 | `advisory_checkpoint` | Chairman notified, can override | 3, 5, 13, 16, 23 |
 | `hard_gate` | Chairman MUST decide | 25 |
 
-**Source of truth:** stage→gate mapping is defined in `docs/vision/specs/01-database-schema.md` (`lifecycle_stage_config`).
+**Source of truth:** stage→gate mapping is defined in `docs/reference/vision/specs/01-database-schema.md` (`lifecycle_stage_config`).
 
 ### Token Budget Profiles
 

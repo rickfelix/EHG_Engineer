@@ -147,12 +147,12 @@ The skill file `.claude/commands/inbox.md` defines:
 #### Verification Details
 
 The `lib/quality/` directory contains 6 modules:
-- `index.js` - Module index exporting all functions
-- `priority-calculator.js` - SEVERITY_PRIORITY_MAP, calculatePriority(), updateFeedbackPriority()
-- `burst-detector.js` - detectBursts(), createBurstGroup(), BURST_CONFIG
-- `snooze-manager.js` - snoozeFeedback(), unsnoozeFeedback(), resnooze(), SNOOZE_PRESETS
-- `focus-filter.js` - getMyFocusContext(), getCriticalItems(), getUrgentItems(), getActionRequired()
-- `ignore-patterns.js` - createIgnorePattern(), matchesIgnorePattern(), PATTERN_TYPES
+- `lib/quality/index.js` - Module index exporting all functions
+- `lib/quality/priority-calculator.js` - SEVERITY_PRIORITY_MAP, calculatePriority(), updateFeedbackPriority()
+- `lib/quality/burst-detector.js` - detectBursts(), createBurstGroup(), BURST_CONFIG
+- `lib/quality/snooze-manager.js` - snoozeFeedback(), unsnoozeFeedback(), resnooze(), SNOOZE_PRESETS
+- `lib/quality/focus-filter.js` - getMyFocusContext(), getCriticalItems(), getUrgentItems(), getActionRequired()
+- `lib/quality/ignore-patterns.js` - createIgnorePattern(), matchesIgnorePattern(), PATTERN_TYPES
 
 #### Discrepancies: None
 

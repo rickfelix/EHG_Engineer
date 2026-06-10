@@ -133,6 +133,8 @@ npm run cli help
 
 ## Commands
 
+> **Note**: The example script used below (`accept-handoff-infra-validation.mjs`) has since been archived to `scripts/archive/one-time/` — substitute any current script name when following these examples.
+
 ### search <keyword>
 Search scripts by keyword in filename, description, category, or dependencies.
 
@@ -341,9 +343,9 @@ Choose an option:
 scripts/
 ├── cli.cjs                      (Main CLI - 600 LOC) ✅ NEW
 ├── SCRIPT_INVENTORY.json        (From A1.3 - 3.2MB)
-├── generate-script-inventory.cjs (From A1.3)
-├── query-script-inventory.cjs   (From A1.3)
-└── CLI-README.md                (This file) ✅ NEW
+├── archive/one-time/generate-script-inventory.cjs (From A1.3 — archived)
+├── archive/one-time/query-script-inventory.cjs   (From A1.3 — archived)
+└── docs/reference/cli-readme.md (This file — moved from scripts/CLI-README.md)
 ```
 
 ### Components
@@ -507,7 +509,7 @@ The CLI uses ANSI colors for better readability:
 ✗ Script inventory not found
 Run: node scripts/generate-script-inventory.cjs
 ```
-**Solution**: Generate inventory using A1.3 tool
+**Solution**: Generate inventory using the A1.3 tool (now archived at `scripts/archive/one-time/generate-script-inventory.cjs`)
 
 **2. Script Not Found**
 ```
@@ -674,8 +676,8 @@ await executeScript('accept-handoff.mjs', ['SD-123']);
 ## Related Documentation
 
 - **A1.3**: Script Inventory Generator (`scripts/SCRIPT_INVENTORY.json`)
-- **A1.1**: Script Organization Blueprint (`scripts/MIGRATION_PLAN.md`)
-- **Phase 1 Plan**: `/docs/phase1-implementation-plan.md`
+- **A1.1**: Script Organization Blueprint (`scripts/MIGRATION_PLAN.md` — retired)
+- **Phase 1 Plan**: `/docs/phase1-implementation-plan.md` (retired)
 
 ---
 

@@ -7,6 +7,7 @@ last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
 # Stage 32 Critique: Customer Success & Retention Engineering
+> **Note**: This stage belongs to the retired 40-stage venture workflow (stages 27-40 retired); the live workflow uses stages 0-25.
 
 
 ## Metadata

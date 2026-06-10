@@ -164,12 +164,12 @@ TIER 3: Comprehensive Reference (15k chars total)
 ## What You Need to Know
 1. Follow LEAD→PLAN→EXEC workflow
 2. Database-first (no markdown as source of truth)
-3. Use process scripts (add-prd-to-database.js, unified-handoff-system.js)
+3. Use process scripts (add-prd-to-database.js, handoff.js)
 4. Small PRs (≤100 lines target)
 
 ## Quick Commands
 - Start SD: `node scripts/add-prd-to-database.js SD-XXX "Title"`
-- Create handoff: `node scripts/unified-handoff-system.js execute PLAN-to-EXEC SD-XXX`
+- Create handoff: `node scripts/handoff.js execute PLAN-to-EXEC SD-XXX`
 
 ---
 **Need More Details?** → "Load LEO Protocol Tier 2"
@@ -268,7 +268,7 @@ LEAD → PLAN → EXEC → PLAN (verification) → LEAD (approval)
 - Enforces quality constraints (≥3 functional reqs, ≥1 test scenario)
 
 ### Creating Handoffs
-`node scripts/unified-handoff-system.js execute [TYPE] SD-XXX`
+`node scripts/handoff.js execute [TYPE] SD-XXX`
 - Types: LEAD-to-PLAN, PLAN-to-EXEC, EXEC-to-PLAN
 - Automatic validation gates
 - Rejection with improvement guidance

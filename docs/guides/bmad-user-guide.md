@@ -122,7 +122,7 @@ BMAD enhances the existing 5-phase LEO workflow with:
 **How to Apply**:
 - Use checkpoint pattern for SDs with >8 user stories
 - Front-load implementation details in user stories (STORIES sub-agent)
-- Reference `docs/EXEC_CONTEXT.md` instead of full CLAUDE.md during EXEC
+- Reference `CLAUDE_EXEC.md` (or `CLAUDE_EXEC_DIGEST.md`) instead of full CLAUDE.md during EXEC
 
 ---
 
@@ -303,8 +303,9 @@ node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>
 
 **Execution**:
 ```bash
-node scripts/retrospective-review-for-lead.js <SD-ID>
+node scripts/archive/one-time/retrospective-review-for-lead.js <SD-ID>
 ```
+(script now archived)
 
 **Analysis**:
 - Success patterns from similar SDs
@@ -484,7 +485,7 @@ User Story Coverage: 100% (12/12 stories mapped)
 
 **Purpose**: Reduced CLAUDE.md for EXEC agents (~500 lines vs 5000+)
 
-**Location**: `docs/EXEC_CONTEXT.md`
+**Location**: `docs/EXEC_CONTEXT.md` (retired — superseded by `CLAUDE_EXEC.md` / `CLAUDE_EXEC_DIGEST.md` at the repo root)
 
 **Content**:
 - EXEC-specific guidance only
@@ -507,7 +508,7 @@ User Story Coverage: 100% (12/12 stories mapped)
 **Usage**:
 ```bash
 # During EXEC phase, reference lean context
-cat docs/EXEC_CONTEXT.md
+cat CLAUDE_EXEC_DIGEST.md
 
 # Full protocol still available if needed
 cat CLAUDE.md
@@ -566,7 +567,7 @@ Verdict: PASS - Ready for EXEC phase
 - User Story Context Coverage: ≥80% REQUIRED (no partial credit)
 - Checkpoint Plan: REQUIRED for SDs with >8 stories (no exceptions)
 
-**Integration**: Automatic validation during `unified-handoff-system.js` execution
+**Integration**: Automatic validation during `scripts/handoff.js` execution (formerly `unified-handoff-system.js`, now deprecated)
 
 ---
 
@@ -622,7 +623,7 @@ Verdict: PASS - Ready for PLAN verification
 - User Story → E2E Test Mapping: 100% REQUIRED (no partial credit)
 - Test Plan: REQUIRED (unit + E2E strategies minimum)
 
-**Integration**: Automatic validation during `unified-handoff-system.js` execution
+**Integration**: Automatic validation during `scripts/handoff.js` execution (formerly `unified-handoff-system.js`, now deprecated)
 
 ---
 
@@ -699,7 +700,7 @@ supabase.from('test_plans').select('*').eq('sd_id', 'SD-XXX').then(r => console.
 **Pre-Approval Checklist**:
 1. Run RISK sub-agent: `node scripts/execute-subagent.js --code RISK --sd-id <SD-ID>`
 2. Review risk scores and mitigations
-3. (Optional) Run retrospective review: `node scripts/retrospective-review-for-lead.js <SD-ID>`
+3. (Optional) Run retrospective review: `node scripts/archive/one-time/retrospective-review-for-lead.js <SD-ID>` (archived)
 4. Make approval decision based on risk profile
 
 **Example Workflow**:
@@ -760,7 +761,7 @@ node scripts/generate-checkpoint-plan.js SD-NEW-FEATURE-001
 node scripts/modules/bmad-validation.js validatePlanToExec SD-NEW-FEATURE-001
 
 # Step 6: Create handoff (if validation passes)
-node scripts/unified-handoff-system.js execute PLAN-to-EXEC SD-NEW-FEATURE-001
+node scripts/handoff.js execute PLAN-TO-EXEC SD-NEW-FEATURE-001
 ```
 
 ---
@@ -809,7 +810,7 @@ node scripts/qa-engineering-director-enhanced.js SD-NEW-FEATURE-001 --full-e2e
 node scripts/modules/bmad-validation.js validateExecToPlan SD-NEW-FEATURE-001
 
 # Step 8: Create handoff
-node scripts/unified-handoff-system.js execute EXEC-to-PLAN SD-NEW-FEATURE-001
+node scripts/handoff.js execute EXEC-TO-PLAN SD-NEW-FEATURE-001
 ```
 
 ---
@@ -842,7 +843,7 @@ node scripts/qa-engineering-director-enhanced.js SD-NEW-FEATURE-001 --full-e2e
 node scripts/modules/bmad-validation.js validateExecToPlan SD-NEW-FEATURE-001
 
 # Step 4: Create handoff
-node scripts/unified-handoff-system.js execute PLAN-to-LEAD SD-NEW-FEATURE-001
+node scripts/handoff.js execute PLAN-TO-LEAD SD-NEW-FEATURE-001
 ```
 
 ---
@@ -1138,8 +1139,8 @@ node scripts/modules/bmad-validation.js validatePlanToExec <SD-ID>
 node scripts/modules/bmad-validation.js validateExecToPlan <SD-ID>
 
 # Unified Handoff System (auto-validates BMAD)
-node scripts/unified-handoff-system.js execute PLAN-to-EXEC <SD-ID>
-node scripts/unified-handoff-system.js execute EXEC-to-PLAN <SD-ID>
+node scripts/handoff.js execute PLAN-TO-EXEC <SD-ID>
+node scripts/handoff.js execute EXEC-TO-PLAN <SD-ID>
 ```
 
 ---

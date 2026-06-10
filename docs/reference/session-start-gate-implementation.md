@@ -430,7 +430,7 @@ console.log('Gate data:', state.protocolGate);
 
 **Fix**:
 ```bash
-# Rename to .cjs
+# Rename to .cjs (already applied in this repo — the live hook is scripts/hooks/protocol-file-tracker.cjs)
 mv scripts/hooks/protocol-file-tracker.js scripts/hooks/protocol-file-tracker.cjs
 
 # Update settings.json

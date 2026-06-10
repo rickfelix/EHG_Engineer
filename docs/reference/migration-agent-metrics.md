@@ -186,8 +186,8 @@ DROP TABLE IF EXISTS learning_configurations;
 
 ## Related Documentation
 
-- `lib/agents/OBSERVABILITY-README.md` - Full observability docs
-- `lib/agents/C1.3-COMPLETION-SUMMARY.md` - Implementation details
+- `docs/reference/agents-observability.md` - Full observability docs
+- `docs/summaries/sd-sessions/c1.3-completion-summary.md` - Implementation details
 - `lib/agents/observability-example.cjs` - Usage examples
 
 ---

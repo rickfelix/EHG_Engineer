@@ -90,7 +90,7 @@ EXEC→PLAN handoff failed because `sd_scope_deliverables` table was empty. Work
 
 ### Enhancement to PLAN→EXEC Handoff
 
-**File**: `scripts/unified-handoff-system.js`
+**File**: `scripts/_deprecated/unified-handoff-system.js` (deprecated — the live handoff pipeline is `scripts/handoff.js` with executors under `scripts/modules/handoff/executors/`)
 **Function**: `executePlanToExec(sdId, options)`
 **Location**: Line ~216-299
 
@@ -284,27 +284,27 @@ inferDeliverableType(requirement) {
 **Before Enhancement:**
 ```bash
 # PLAN→EXEC handoff creates no deliverables
-node scripts/unified-handoff-system.js execute PLAN-to-EXEC SD-TEST-001
+node scripts/handoff.js execute PLAN-TO-EXEC SD-TEST-001
 
 # EXEC works without database tracking
 # ...implementation...
 
 # EXEC→PLAN handoff fails
-node scripts/unified-handoff-system.js execute EXEC-to-PLAN SD-TEST-001
+node scripts/handoff.js execute EXEC-TO-PLAN SD-TEST-001
 # ❌ Error: No completed deliverables found
 ```
 
 **After Enhancement:**
 ```bash
 # PLAN→EXEC handoff extracts and populates deliverables
-node scripts/unified-handoff-system.js execute PLAN-to-EXEC SD-TEST-001
+node scripts/handoff.js execute PLAN-TO-EXEC SD-TEST-001
 # ✅ Populated 6 deliverables in database
 
 # EXEC updates deliverables as completed
 # ...implementation with database tracking...
 
 # EXEC→PLAN handoff validates completion
-node scripts/unified-handoff-system.js execute EXEC-to-PLAN SD-TEST-001
+node scripts/handoff.js execute EXEC-TO-PLAN SD-TEST-001
 # ✅ EXEC→PLAN HANDOFF APPROVED (6/6 deliverables complete)
 ```
 

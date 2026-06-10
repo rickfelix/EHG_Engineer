@@ -132,8 +132,8 @@ Stage 26 (Security & Compliance)
 
 **Output Destinations**:
 - Stage 26: Quality certification (security review prerequisite)
-- Stage 27: Deployment planning (test results inform rollout strategy)
-- Stage 28: Monitoring setup (quality metrics baseline for production monitoring)
+- Stage 27 (retired 40-stage workflow): Deployment planning (test results inform rollout strategy)
+- Stage 28 (retired 40-stage workflow): Monitoring setup (quality metrics baseline for production monitoring)
 
 ### Shared Resources
 

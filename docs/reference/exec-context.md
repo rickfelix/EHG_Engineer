@@ -481,7 +481,7 @@ gh run view [run-id]
 
 For comprehensive guidance, see:
 - **Full Protocol**: `CLAUDE.md` (5000+ lines)
-- **LEO Workflow**: `docs/reference/leo-operations.md`
+- **LEO Workflow**: `docs/leo/README.md`
 - **Testing Guide**: `docs/reference/qa-director-guide.md`
 - **Database Schema**: `database/schema/`
 

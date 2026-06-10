@@ -39,4 +39,4 @@ tags: [reference, auto-generated]
 ---
 
 *This is reference documentation, load on-demand only*
-*Generated from: scripts/generate-claude-md-from-db-v3.js*
+*Generated from: scripts/generate-claude-md-from-db-v3.js (now archived at scripts/archive/one-time/; current generator: scripts/generate-claude-md-from-db.js)*

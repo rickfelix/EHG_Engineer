@@ -234,7 +234,7 @@ const CODE_EXTENSIONS = /\.(js|ts|tsx|jsx|mjs|cjs|py|rb|go|rs|java|cs|php|sql)$/
 - Results stale (>24h old)
 - Code-producing SD type without test evidence
 
-**Example Output**:
+**Example Output** (file names in the samples below are illustrative, not real paths):
 
 *TIER: REQUIRED (feature/bugfix/refactor/security/performance SDs):*
 ```
@@ -672,7 +672,7 @@ psql $DATABASE_URL -f database/migrations/20260105_add_retro_test_metrics.sql
 
 **2. Regenerate Schema Docs**:
 ```bash
-node scripts/schema-doc-generator.js retrospectives
+npm run schema:docs:table retrospectives
 ```
 
 **3. Update Environment Variables** (optional):
@@ -754,10 +754,10 @@ node scripts/handoff.js execute EXEC-TO-PLAN <SD-ID>
 **Fix**:
 ```bash
 # Regenerate schema docs
-node scripts/schema-doc-generator.js <table-name>
+npm run schema:docs:table <table-name>
 
 # Or regenerate all
-node scripts/regenerate-all-schema-docs.js
+npm run schema:docs:all
 ```
 
 ---

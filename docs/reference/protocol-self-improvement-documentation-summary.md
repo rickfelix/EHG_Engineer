@@ -232,13 +232,13 @@ Protocol Self-Improvement System Documentation
 ### Analysis
 ```bash
 # Analyze all retrospectives for patterns
-node scripts/analyze-retrospectives-for-protocol-improvements.mjs
+node scripts/archive/one-time/analyze-retrospectives-for-protocol-improvements.mjs
 ```
 
 ### Application
 ```bash
 # Apply high-impact improvements to protocol
-node scripts/add-protocol-improvements-from-retrospectives.mjs
+node scripts/archive/one-time/add-protocol-improvements-from-retrospectives.mjs
 
 # Regenerate CLAUDE.md from database
 node scripts/generate-claude-md-from-db.js
@@ -247,7 +247,7 @@ node scripts/generate-claude-md-from-db.js
 ### Migration
 ```bash
 # One-time: Add protocol_improvements column
-node scripts/apply-protocol-improvements-migration.js
+node scripts/archive/one-time/apply-protocol-improvements-migration.js
 ```
 
 ### Queries
@@ -276,12 +276,12 @@ GROUP BY affected_phase;
 - `protocol_improvements[]` array captures learnings
 
 ### 2. Pattern Detection
-- `scripts/analyze-retrospectives-for-protocol-improvements.mjs`
+- `scripts/archive/one-time/analyze-retrospectives-for-protocol-improvements.mjs`
 - Finds recurring themes (≥2 mentions)
 - Prioritizes by evidence count and impact
 
 ### 3. Protocol Updates
-- `scripts/add-protocol-improvements-from-retrospectives.mjs`
+- `scripts/archive/one-time/add-protocol-improvements-from-retrospectives.mjs`
 - Updates `leo_protocol_sections` table
 - Updates `leo_handoff_templates` table
 
@@ -315,13 +315,13 @@ node scripts/generate-claude-md-from-db.js
 ### 3. Run Analysis (Monthly)
 ```bash
 # Analyze retrospectives for patterns
-node scripts/analyze-retrospectives-for-protocol-improvements.mjs
+node scripts/archive/one-time/analyze-retrospectives-for-protocol-improvements.mjs
 ```
 
 ### 4. Apply Improvements (As Needed)
 ```bash
 # Apply high-impact improvements
-node scripts/add-protocol-improvements-from-retrospectives.mjs
+node scripts/archive/one-time/add-protocol-improvements-from-retrospectives.mjs
 
 # Regenerate context
 node scripts/generate-claude-md-from-db.js
@@ -359,9 +359,9 @@ ORDER BY month DESC;
 
 **Existing System Files**:
 - `database/migrations/20251204_add_protocol_improvements_to_retrospectives.sql` - Schema migration
-- `scripts/analyze-retrospectives-for-protocol-improvements.mjs` - Pattern analysis
-- `scripts/add-protocol-improvements-from-retrospectives.mjs` - Apply improvements
-- `scripts/apply-protocol-improvements-migration.js` - Migration helper
+- `scripts/archive/one-time/analyze-retrospectives-for-protocol-improvements.mjs` - Pattern analysis
+- `scripts/archive/one-time/add-protocol-improvements-from-retrospectives.mjs` - Apply improvements
+- `scripts/archive/one-time/apply-protocol-improvements-migration.js` - Migration helper
 - `scripts/generate-claude-md-from-db.js` - Context regeneration
 
 **Related Strategic Directives**:
