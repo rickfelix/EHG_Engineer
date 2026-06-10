@@ -50,6 +50,9 @@ import fs from 'node:fs';
 import { addPRDToDatabase } from './prd/index.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { startHeartbeat, stopHeartbeat } from '../lib/heartbeat-manager.mjs';
+// SD-LEO-INFRA-ARTIFACT-CONTRACT-SINGLE-001: shape checks derive from the PRD
+// artifact contract (single spec source shared with contract:scaffold/check).
+import { validateArtifact, formatViolations } from '../lib/artifact-contracts/index.js';
 
 // SD-FDBK-INFRA-ADD-PRD-DATABASE-001: --content flag closes the INLINE-mode Catch-22.
 // 2MB cap prevents parse-bomb / memory-exhaustion on file or stdin input (R4 mitigation).
@@ -124,79 +127,24 @@ export function loadContentPayload(rawValue) {
  * @throws {Error} with code 'CONTENT_SHAPE_VIOLATION' if any key has the wrong type
  */
 export function validateContentPayloadShape(payload) {
+  // SD-LEO-INFRA-ARTIFACT-CONTRACT-SINGLE-001 (gate-source inversion): the field
+  // list and shapes now come from the PRD artifact contract — the same spec that
+  // powers `npm run contract:scaffold/check` — so spec and enforcement cannot
+  // drift. mode:'shape' is BEHAVIOR-IDENTICAL to the previous hand-rolled checks
+  // (type/shape of keys WHEN PRESENT; required-key and minimum-count enforcement
+  // remain downstream in scripts/prd/quality-validator.js). Parity pinned by
+  // tests/unit/artifact-contracts/. Historical trap notes (grounding field-name
+  // trap e8008b14, integration_operationalization-as-array, the
+  // system_architecture.components formatter crash) now live as `hint` strings
+  // in lib/artifact-contracts/prd-contract.js and are rendered in the error.
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     const e = new Error(`--content: SHAPE_VIOLATION (top-level): expected object, got ${Array.isArray(payload) ? 'array' : payload === null ? 'null' : typeof payload}`);
     e.code = 'CONTENT_SHAPE_VIOLATION';
     throw e;
   }
-  const errors = [];
-  const typeOf = (v) => Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v;
-  const expectArray = (key) => {
-    if (!(key in payload)) return;
-    if (!Array.isArray(payload[key])) {
-      errors.push(`.${key}: expected array, got ${typeOf(payload[key])}`);
-    }
-  };
-  const expectObject = (key) => {
-    if (!(key in payload)) return;
-    const v = payload[key];
-    if (typeof v !== 'object' || v === null || Array.isArray(v)) {
-      errors.push(`.${key}: expected object, got ${typeOf(v)}`);
-    }
-  };
-  const expectArrayOfObjects = (key) => {
-    if (!(key in payload)) return;
-    if (!Array.isArray(payload[key])) {
-      errors.push(`.${key}: expected array, got ${typeOf(payload[key])}`);
-      return;
-    }
-    payload[key].forEach((item, idx) => {
-      if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-        errors.push(`.${key}[${idx}]: expected object, got ${typeOf(item)}`);
-      }
-    });
-  };
-  // Array-of-object PRD fields (rubric requires per-item structure)
-  //
-  // Functional-requirement field shape (SD-FDBK-FIX-FIX-PRD-GROUNDING-001):
-  //   { id, title?, requirement?, description?, priority, acceptance_criteria }
-  // ALL THREE text fields (title / requirement / description) are scored by the
-  // PRD-grounding validator — write the rich SD-vocabulary body in whichever field
-  // fits; the field-name choice no longer changes the grounding verdict. `title`
-  // (falling back to `requirement`) is also used as the display label in reports.
-  // Historical trap: the validator used to drop the `requirement` body whenever a
-  // title was present, scoring the FR on the short label alone (~1-2% Jaccard) and
-  // failing the quality gate (witnessed e8008b14 / SD-LEO-INFRA-ADAM-EVA-SEAM-001).
-  expectArrayOfObjects('functional_requirements');
-  expectArrayOfObjects('technical_requirements');
-  expectArrayOfObjects('test_scenarios');
-  expectArrayOfObjects('risks');
-  expectArrayOfObjects('smoke_test_steps');
-  // Loose-array fields (item shape varies; just enforce top-level type)
-  expectArray('acceptance_criteria');
-  expectArray('strategic_objectives');
-  expectArray('key_changes');
-  // Object fields (the integration_operationalization typo bit me directly here)
-  expectObject('integration_operationalization');
-  expectObject('metadata');
-  expectObject('system_architecture');
-  expectObject('implementation_approach');
-
-  // SD-LEO-INFRA-HARDEN-ADD-PRD-001: recurse into system_architecture.components — a string/object
-  // value passes expectObject('system_architecture') but then crashes downstream at
-  // scripts/prd/formatters.js (arch.components.forEach is not a function). Assert it's an array when present.
-  if (
-    payload.system_architecture &&
-    typeof payload.system_architecture === 'object' &&
-    !Array.isArray(payload.system_architecture) &&
-    'components' in payload.system_architecture &&
-    !Array.isArray(payload.system_architecture.components)
-  ) {
-    errors.push(`.system_architecture.components: expected array, got ${typeOf(payload.system_architecture.components)}`);
-  }
-
-  if (errors.length > 0) {
-    const e = new Error(`--content: SHAPE_VIOLATIONS (${errors.length}):\n  - ${errors.join('\n  - ')}`);
+  const { violations } = validateArtifact('prd', payload, { mode: 'shape' });
+  if (violations.length > 0) {
+    const e = new Error(`--content: SHAPE_VIOLATIONS (${violations.length}):\n${formatViolations(violations)}\n\n  Pre-check payloads with: npm run contract:check -- prd <file> (scaffold: npm run contract:scaffold -- prd)`);
     e.code = 'CONTENT_SHAPE_VIOLATION';
     throw e;
   }
