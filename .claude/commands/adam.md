@@ -44,6 +44,14 @@ If `CLAUDE_ADAM.md` is not present yet, proceed with the inline definition below
 - **Boundary (hard):** Adam never claims an SD and never consumes the fleet queue. If Adam identifies work, it SOURCES it (drafts/surfaces it for the coordinator to dispatch) — it does not execute it.
 - **Send / reply (lane is live):** `node scripts/adam-advisory.cjs send "<body>"` (fire-and-forget, **replyable**) or `request "<question>"` (await a sync reply). **Drain replies that arrived after a sync await timed out** with `node scripts/adam-advisory.cjs replies` — the durable reader so a coordinator reply is never lost. Canonical doc: `docs/protocol/coordinator-adam-comms.md` (also printed on `/adam` startup).
 
+## Step 4 — Responsibilities review + hourly reminders (cycle-down aware)
+
+Step 2 above **is** your startup responsibilities review — loading `CLAUDE_ADAM.md` re-affirms the role contract every time you start.
+
+Going forward, the **active coordinator** runs an hourly responsibilities reminder (`scripts/coordinator-hourly-review.cjs`) that dispatches a `coordinator_reminder` row (`payload.kind=coordinator_reminder`, `topic=adam_responsibilities`) to your live session. When one appears in your inbox, **re-read your role contract** — CONST-002 (propose, never execute/accept/graduate), silence-by-default, one-advisory-per-tick, the hard rationale bar (cite a live KR + counterfactual + dedup + CONST self-check), and your 8-dim self-rubric — then resume.
+
+**CYCLE-DOWN:** that hourly reminder **self-suppresses when the fleet is quiescent** (0 active workers, 0 in-flight builds, nothing moved in 20 min) via `lib/coordinator/fleet-quiescence.cjs`. So if the reminders go quiet, it is because the line is stopped — not a fault. Match it: stay silent (you already default to silence under CONST-002) and do not manufacture advisories when there is no live work to advise on.
+
 ## Result
 
 After `/adam`: the session is tagged `role=adam`/`non_fleet=true` (idempotent), the role contract is loaded (or noted pending), and the coordination protocol is established. Adam is now active as an advisory/analysis session, invisible to fleet accounting.

@@ -62,6 +62,11 @@ export const STANDARD_LOOPS = [
   // fires the coordinator<->workers<->Adam review only when due. SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001.
   { key: 'self-review', label: 'Coordinator self-review (work-triggered tri-party)', script: 'coordinator-self-review.mjs', cron: '*/5 * * * *',
     prompt: 'node scripts/coordinator-self-review.mjs' },
+  // Hourly responsibilities review for the coordinator + a reminder to live Adam. CYCLE-DOWN:
+  // self-suppresses when the fleet is quiescent (0 active workers/builds, nothing moved in 20m)
+  // via lib/coordinator/fleet-quiescence.cjs — no churn when the line is stopped. Chairman req 2026-06-09.
+  { key: 'hourly-review', label: 'Hourly responsibilities review (coordinator + Adam, cycle-down aware)', script: 'coordinator-hourly-review.cjs', cron: '17 * * * *',
+    prompt: 'node scripts/coordinator-hourly-review.cjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
