@@ -1,0 +1,89 @@
+name: Governance Data Dump (DR)
+
+# SD-LEO-INFRA-RESILIENCE-REVIEW-SPECIAL-001 (FR-2).
+# Weekly OFF-BOX logical dump of the irreplaceable governance tables
+# (scripts/dr/governance-dump-allowlist.json) to a GitHub artifact — the first
+# copy of governance state that lives outside the single Supabase project.
+# Runs on GitHub runners with repo secrets, so it keeps working if the
+# single dev machine dies. Restore path: jsonb_populate_record per line,
+# proven by `npm run dr:rehearse` (drill A).
+#
+# Connection secrets reuse the housekeeping-prod-promotion.yml pattern
+# (PG*_PROD), exported as standard PG* env vars.
+
+on:
+  schedule:
+    - cron: '0 5 * * 0'  # Sundays 05:00 UTC (before the 09:00 housekeeping report)
+  workflow_dispatch:
+    inputs:
+      tables:
+        description: 'Optional comma-separated subset (must be allowlisted)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: governance-data-dump
+  cancel-in-progress: false  # never kill a dump mid-write
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run governance dump (read-only)
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+        run: |
+          set -e
+          TABLES_ARG=""
+          if [ -n "${{ github.event.inputs.tables }}" ]; then
+            TABLES_ARG="--tables ${{ github.event.inputs.tables }}"
+          fi
+          node scripts/dr/governance-dump.mjs dump-out $TABLES_ARG
+
+      - name: Summarize manifest
+        if: always()
+        run: |
+          if [ -f dump-out/manifest.json ]; then
+            echo "## Governance Data Dump" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '| Table | Rows | MB |' >> $GITHUB_STEP_SUMMARY
+            echo '|---|---:|---:|' >> $GITHUB_STEP_SUMMARY
+            node -e '
+              const m = require("./dump-out/manifest.json");
+              for (const t of m.tables) console.log(`| ${t.table} | ${t.rows} | ${(t.bytes/1048576).toFixed(1)} |`);
+              console.log(`| **total** | **${m.total_rows}** | **${(m.total_bytes/1048576).toFixed(1)}** |`);
+              if (m.errors.length) console.log(`\n⚠️ Errors: ${m.errors.map(e => e.table).join(", ")}`);
+            ' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ No manifest produced" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload dump artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-dump-${{ github.run_id }}
+          path: dump-out/
+          retention-days: 90
+          if-no-files-found: error
