@@ -471,7 +471,9 @@
     "check:migration-readiness": "node scripts/check-migration-readiness.mjs",
     "validate:capability-trigger": "node scripts/validate-capability-lifecycle-trigger.mjs --live",
     "qf:create": "node scripts/create-quick-fix.js",
-    "migration:apply-state": "node scripts/verify-migration-apply-state.mjs"
+    "migration:apply-state": "node scripts/verify-migration-apply-state.mjs",
+    "retention:check": "node scripts/retention-enforce.js",
+    "retention:apply": "node scripts/retention-enforce.js --apply"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",
