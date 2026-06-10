@@ -115,7 +115,9 @@ export class LeadToPlanExecutor extends BaseExecutor {
     gates.push(createBaselineDebtGate(this.supabase));
 
     // Smoke Test Specification Gate (LEO v4.4.0)
-    gates.push(createSmokeTestSpecificationGate());
+    // SD-FDBK-FIX-FIX-SMOKE-TEST-001: inject supabase so metadata-stranded
+    // smoke_test_steps auto-hoist into the canonical top-level column.
+    gates.push(createSmokeTestSpecificationGate(this.supabase));
 
     // Placeholder Content Detection Gate (SD-LEO-INFRA-PROTOCOL-FILE-STATE-001)
     // Warning-only: detects default template text from leo-create-sd.js
