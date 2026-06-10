@@ -86,10 +86,11 @@ export class ShippingExecutor {
       }
 
       // SD-LEO-INFRA-CLAIM-LIFECYCLE-RELEASE-001 FR-1: capture pre-PR-create
-      // claim snapshot for compare-and-set release (Option B per validation-agent
-      // P1: existing columns claiming_session_id+claimed_at+heartbeat_at, no
-      // claim_version migration). Branch name is the canonical sd_key source for
-      // /ship — branches are formed as feat/<SD-KEY> or qf/<QF-KEY>.
+      // claim snapshot for compare-and-set release. SD-LEO-FIX-FIX-PHANTOM-COLUMN-001:
+      // the CAS pins on claiming_session_id ONLY — the original claimed_at/heartbeat_at
+      // pins were phantom SDv2 columns (42703 on every capture), which made this whole
+      // release path a silent no-op since it shipped. Branch name is the canonical
+      // sd_key source for /ship — branches are formed as feat/<SD-KEY> or qf/<QF-KEY>.
       const sdKeyFromBranch = (this.context.sdId || branch || '')
         .replace(/^(feat|fix|chore|qf)\//, '');
       let claimSnapshot = null;
@@ -147,7 +148,7 @@ PREOF
             if (releaseResult.released) {
               console.log(`   🔓 Claim released on PR-open for ${claimSnapshot.id}`);
             } else if (releaseResult.reason === 'already_released_or_reasserted') {
-              console.log(`   ℹ️  Claim noop (re-asserted post-snapshot or already released)`);
+              console.log('   ℹ️  Claim noop (re-asserted post-snapshot or already released)');
             }
           } catch (releaseErr) {
             console.warn(`   ⚠️  PR created but claim-release failed (non-blocking): ${releaseErr.message}`);

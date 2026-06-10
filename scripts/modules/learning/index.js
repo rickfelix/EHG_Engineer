@@ -27,15 +27,24 @@ async function emitFilterBypassAudit(commandName, sdId) {
   const sessionId = process.env.CLAUDE_SESSION_ID || 'unknown';
   console.warn('  ⚠ NOISE FILTER DISABLED — bypass active');
   console.log(`>>> LEARN_FILTER_BYPASS=true session_id=${sessionId} command=${commandName} sd_id=${sdId || 'none'} ts=${ts}`);
+  // SD-LEO-FIX-FIX-PHANTOM-COLUMN-001: the previous payload wrote phantom columns
+  // (event/session_id/details do not exist on audit_log) — PostgREST 42703'd every call,
+  // so the bypass audit never persisted a row. Remapped to the real shape
+  // (event_type/created_by/metadata); failures route through the fail-loud guard.
+  const auditPayload = {
+    event_type: 'LEARN_FILTER_BYPASS',
+    entity_type: 'learning_run',
+    entity_id: sdId || null,
+    severity: 'warning',
+    created_by: sessionId,
+    metadata: { command: commandName, sd_id: sdId, session_id: sessionId, ts },
+  };
   try {
     const supabase = createSupabaseServiceClient();
-    const { error } = await supabase.from('audit_log').insert({
-      event: 'LEARN_FILTER_BYPASS',
-      session_id: sessionId,
-      details: { command: commandName, sd_id: sdId, ts },
-    });
+    const { error } = await supabase.from('audit_log').insert(auditPayload);
     if (error) {
-      console.warn(`[audit] LEARN_FILTER_BYPASS insert failed (non-blocking): ${error.message}`);
+      const { logAuditWriteFailure } = await import('../../../lib/audit-write-guard.js');
+      logAuditWriteFailure('learning.emitFilterBypassAudit', error, auditPayload);
     }
   } catch (err) {
     console.warn(`[audit] LEARN_FILTER_BYPASS skipped (non-blocking): ${err.message}`);
