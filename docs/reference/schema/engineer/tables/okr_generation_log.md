@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-10T11:36:56.597Z
-**Rows**: 1
+**Generated**: 2026-06-10T18:05:35.965Z
+**Rows**: 2
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (14 total)
+## Columns (15 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -32,6 +32,7 @@
 | error_message | `text` | YES | - | - |
 | created_by | `text` | YES | `'eva-scheduler'::text` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
+| eva_vision_id | `uuid` | YES | - | Canonical vision spine FK (eva_vision_documents). A1b/-001-E threads THIS column — legacy vision_id keeps its strategic_vision FK until A1d. SD-LEO-INFRA-INITIATIVE-BACKBONE-CANONICAL-001. |
 
 ## Constraints
 
@@ -39,6 +40,7 @@
 - `okr_generation_log_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `okr_generation_log_eva_vision_id_fkey`: eva_vision_id → eva_vision_documents(id)
 - `okr_generation_log_vision_id_fkey`: vision_id → strategic_vision(id)
 
 ### Check Constraints
