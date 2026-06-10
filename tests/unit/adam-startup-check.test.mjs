@@ -36,17 +36,29 @@ test('parseArmedSet reads --armed arg, --armed= form, and ADAM_ARMED_CRONS env',
   assert.equal(parseArmedSet([], {}).provided, false); // no set → unverified path
 });
 
-test('loopStatus: armed on prompt or script match, MISSING when provided-but-absent, unverified otherwise', () => {
+test('loopStatus: armed on key, prompt or script match, MISSING when provided-but-absent, unverified otherwise', () => {
   const gov = ADAM_LOOPS.find((l) => l.key === 'governance-scan');
   assert.equal(loopStatus(gov, { provided: false, set: new Set() }), 'unverified');
+  assert.equal(loopStatus(gov, { provided: true, set: new Set([gov.key]) }), 'armed');
   assert.equal(loopStatus(gov, { provided: true, set: new Set([gov.prompt]) }), 'armed');
   assert.equal(loopStatus(gov, { provided: true, set: new Set([gov.script]) }), 'armed');
   assert.equal(loopStatus(gov, { provided: true, set: new Set(['something-else']) }), 'MISSING');
-  // offer-help has script=null → must match on prompt only, never falsely "armed" via null
+  // offer-help has script=null and a comma-bearing prompt → the KEY is its only viable
+  // CSV token (a comma-split prompt can never reassemble → would be MISSING forever and
+  // re-armed as a duplicate every /adam startup)
   const offer = ADAM_LOOPS.find((l) => l.key === 'offer-help');
   assert.equal(offer.script, null);
+  assert.ok(offer.prompt.includes(','), 'offer-help prompt contains commas (the CSV trap this guards)');
   assert.equal(loopStatus(offer, { provided: true, set: new Set(['x']) }), 'MISSING');
+  assert.equal(loopStatus(offer, { provided: true, set: new Set([offer.key]) }), 'armed');
   assert.equal(loopStatus(offer, { provided: true, set: new Set([offer.prompt]) }), 'armed');
+});
+
+test('end-to-end CSV verdict: --armed with all 3 loop KEYS → nothing to arm (no duplicate re-arm)', () => {
+  const armed = parseArmedSet(['--armed', ADAM_LOOPS.map((l) => l.key).join(',')], {});
+  const out = renderLoops(armed);
+  assert.match(out, /All 3 Adam tick loops armed\. Nothing to arm\./);
+  assert.doesNotMatch(out, /MISSING/);
 });
 
 test('renderLoops emits CronCreate specs for the not-yet-armed loops (idempotent note)', () => {

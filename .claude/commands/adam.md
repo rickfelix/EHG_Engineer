@@ -57,10 +57,10 @@ node scripts/adam-startup-check.mjs
 2. **inbox-monitor** (every 15 min) — drain coordinator replies (`node scripts/adam-advisory.cjs replies`).
 3. **offer-help** (every 2 h) — an agent-judgment tick: offer the coordinator concise analysis when it helps, else stay silent.
 
-**Arm them via `CronCreate` — IDEMPOTENTLY.** Run `CronList`, then re-invoke with the armed set to get an `armed|MISSING` verdict, and arm ONLY the missing loops:
+**Arm them via `CronCreate` — IDEMPOTENTLY.** Run `CronList`, map each existing cron to its loop KEY (`governance-scan` | `inbox-monitor` | `offer-help` — keys are the canonical comma-free tokens; prompts can contain commas and won't survive the CSV split), then re-invoke with the armed keys for an `armed|MISSING` verdict, and arm ONLY the missing loops:
 
 ```bash
-node scripts/adam-startup-check.mjs --armed "<prompt-or-script-1>,<prompt-or-script-2>,…"
+node scripts/adam-startup-check.mjs --armed "governance-scan,inbox-monitor"
 ```
 
 For each `❌ MISSING` loop, call the emitted `CronCreate({ cron, prompt, recurring: true })`. Skip any already in `CronList` (including any interim hand-armed cron) — this is the durable replacement for hand-arming Adam's tick.

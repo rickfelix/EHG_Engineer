@@ -12,8 +12,9 @@
 //
 // Usage:
 //   node scripts/adam-startup-check.mjs
-//   node scripts/adam-startup-check.mjs --armed "adam-opportunity-scan.cjs,adam-advisory.cjs"
-//   (or ADAM_ARMED_CRONS env, comma-separated) → armed|MISSING verdict vs CronList.
+//   node scripts/adam-startup-check.mjs --armed "governance-scan,inbox-monitor,offer-help"
+//   (or ADAM_ARMED_CRONS env, comma-separated loop KEYS — prompts/script basenames also
+//   match, but keys are canonical: prompts can contain commas) → armed|MISSING verdict.
 //
 // Fail-open: always exits 0; a hiccup never blocks /adam startup.
 
@@ -79,11 +80,14 @@ export function parseArmedSet(argv = [], env = {}) {
   return { provided, set };
 }
 
-// A loop is "armed" when an armed-set was provided AND it contains the loop's full prompt
-// or (for script-backed loops) its script basename. Falls back to basename so the agent can
-// pass either; the offer-help loop (script=null) matches on prompt only.
+// A loop is "armed" when an armed-set was provided AND it contains the loop's KEY (the
+// canonical comma-free token — prompts can contain commas, so a full prompt is unmatchable
+// through the CSV --armed channel: offer-help would read MISSING forever and get re-armed
+// as a duplicate every /adam startup), its full prompt, or (for script-backed loops) its
+// script basename.
 export function loopStatus(loop, armed) {
   if (!armed.provided) return 'unverified';
+  if (armed.set.has(loop.key)) return 'armed';
   if (armed.set.has(loop.prompt)) return 'armed';
   if (loop.script && armed.set.has(loop.script)) return 'armed';
   return 'MISSING';
@@ -104,7 +108,7 @@ export function renderResponsibilities(repoRoot = REPO_ROOT) {
 export function renderLoops(armed) {
   const lines = [`═══ ADAM RECURRING TICK (${ADAM_LOOPS.length} loops) — arm all idempotently ═══`];
   if (!armed.provided) {
-    lines.push('  (no --armed set supplied — run CronList and re-invoke with --armed "<prompt-or-script>,…" for an armed|MISSING verdict; emitting full spec below)');
+    lines.push('  (no --armed set supplied — run CronList and re-invoke with --armed "<loop-key>,…" (e.g. "governance-scan,inbox-monitor") for an armed|MISSING verdict; emitting full spec below)');
   }
   const toArm = [];
   for (const loop of ADAM_LOOPS) {
