@@ -194,9 +194,13 @@ async function managementReviewHandler(_options = {}) {
     eva_narrative: narrative,
   };
 
+  // Upsert (not insert) so a legitimate same-day re-run of the review round updates the existing
+  // row in place instead of appending a duplicate. Paired with the UNIQUE(review_date, review_type)
+  // constraint (migration 20260610_purge_management_reviews_pollution.sql) that makes scale
+  // re-pollution impossible — SD-LEO-INFRA-REVIVE-EVA-PURGE-MGMT-REVIEWS-001 FR-2.
   const { data: reviewData, error: reviewError } = await supabase
     .from('management_reviews')
-    .insert(review)
+    .upsert(review, { onConflict: 'review_date,review_type' })
     .select('id')
     .single();
 
