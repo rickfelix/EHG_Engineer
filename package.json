@@ -171,6 +171,7 @@
     "release:check": "node scripts/claude-code-release-check.js",
     "eva:scheduler:start": "node scripts/eva-scheduler.js start",
     "eva:scheduler:status": "node scripts/eva-scheduler.js status",
+    "eva:scheduler:setup-task": "node scripts/setup-eva-watcher-task.mjs",
     "eva:events:status": "node scripts/eva-events-status.js",
     "eva:services:status": "node scripts/eva-services-status.js",
     "eva:recovery:status": "node scripts/eva-recovery-status.js",
