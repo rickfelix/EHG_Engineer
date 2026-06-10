@@ -95,24 +95,44 @@ The fleet coordination system manages multiple parallel Claude Code sessions ("w
 
 Workers are assigned a **callsign** (NATO alphabet) and **color** for visual identification.
 
-### Assignment Flow
+Identities are written by **two** cooperating writers that share one pool/picker
+(`NATO`/`COLORS`/`nextAvailable`, exported from `assign-fleet-identities.cjs`):
+
+- the **coordinator cron** (`assign-fleet-identities.cjs`, every 5 min) — the steady-state
+  assigner and collision healer; and
+- **worker check-in** (`worker-checkin.cjs`, `assignFleetIdentityAtCheckin`) — names a worker
+  the moment it holds a claim, so a freshly-claimed worker is not nameless until the next cron
+  pass (SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001).
+
+### Assignment Flow (coordinator cron)
 
 1. Coordinator runs `assign-fleet-identities.cjs` during `/coordinator start`
 2. Script queries active sessions (heartbeat < 5 min, not coordinator)
 3. Workers without an existing identity get the next available callsign + color
 4. Identity stored in `claude_sessions.metadata.fleet_identity`
 5. `SET_IDENTITY` coordination message sent to worker
-6. Worker's inbox hook writes `.claude/fleet-identity.json` locally
+6. Worker's inbox hook writes `.claude/fleet-identity-<session_id>.json` locally
 7. Statusline reads the file and displays `Callsign | ProjectName:branch`
+
+### Assignment Flow (worker check-in — fast path)
+
+`runCheckin` self-assigns when, and only when, the worker **holds a real claim** and has **no
+existing identity** (and is not a coordinator or a test/ghost session — same exclusions the cron
+applies). It reuses the cron's pool/picker, read-modify-merges its own metadata, and emits the
+same `SET_IDENTITY` message. This is optimistic: two simultaneous check-ins can briefly pick the
+same callsign, which the cron's `dedupeAssignedCallsigns` pass heals on its next run (heartbeat-DESC,
+newest-wins) — the same class it already reconciles after session rotation. Fail-open: any error
+leaves the worker nameless (named by the next cron pass), never breaking check-in.
 
 ### Identity Lifecycle
 
 | Event | Behavior |
 |-------|----------|
-| New worker joins | Identity cron loop (every 5 min) detects and assigns |
+| New worker claims work | Named immediately at its next check-in (`assignFleetIdentityAtCheckin`); the 5-min cron is the fallback |
+| Idle / never-claimed worker | NOT named (neither path burns a pool slot until a real claim is held) |
 | Worker switches SD | Cron loop detects display_name mismatch, sends updated identity |
 | Worker exits | Identity preserved in metadata; callsign freed if worker doesn't return |
-| `--force` flag | Reassigns all workers from scratch |
+| `--force` flag | Reassigns all workers from scratch (cron only) |
 
 ### Available Identities
 
