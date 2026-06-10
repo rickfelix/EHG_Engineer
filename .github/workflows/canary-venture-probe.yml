@@ -1,0 +1,61 @@
+# Synthetic canary venture probe — weekly scheduled pipeline health check.
+# SD-LEO-INFRA-SYNTHETIC-CANARY-VENTURE-001.
+#
+# Drives THE isolated is_demo canary venture through the real stage machinery
+# and classifies every stage; failures file deduped canary_probe_alert rows.
+#
+# FLAG-GATED (cannot become a dormant switch): the job checks
+# leo_feature_flags.CANARY_VENTURE_PROBE_V1 FIRST and exits 0 quietly when
+# disabled (the flag ships OFF; enable via the standard registry flow after the
+# first supervised incremental run). Pattern: adam-exec-email-cron.
+name: Canary Venture Probe
+
+on:
+  schedule:
+    - cron: '17 6 * * 0'   # Sundays 06:17 UTC (dodges top-of-hour congestion)
+  workflow_dispatch:
+    inputs:
+      max_stages:
+        description: 'Bound the run (--max-stages)'
+        required: false
+        default: '26'
+
+concurrency:
+  group: canary-venture-probe
+  cancel-in-progress: false
+
+jobs:
+  canary-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --omit=dev --ignore-scripts
+
+      - name: Run canary probe (flag-gated)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set +e
+          node scripts/canary/run-canary-probe.mjs --max-stages "${{ github.event.inputs.max_stages || '26' }}" --teardown | tee probe-output.txt
+          code=${PIPESTATUS[0]}
+          {
+            echo "## Canary Venture Probe"
+            echo ""
+            echo '```'
+            tail -50 probe-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Exit 2 = flag disabled (quiet success); exit 1 = probe FAIL (red).
+          if [ "$code" = "2" ]; then
+            echo "flag disabled — quiet exit" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          exit $code

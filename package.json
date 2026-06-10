@@ -477,7 +477,8 @@
     "retention:apply": "node scripts/retention-enforce.js --apply",
     "schema:lint": "node scripts/lint/schema-reference-lint.mjs --diff",
     "schema:lint:all": "node scripts/lint/schema-reference-lint.mjs --all",
-    "schema:snapshot:lint": "node scripts/lint/schema-reference-snapshot.mjs"
+    "schema:snapshot:lint": "node scripts/lint/schema-reference-snapshot.mjs",
+    "canary:probe": "node scripts/canary/run-canary-probe.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",

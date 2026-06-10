@@ -308,7 +308,8 @@ echo "✅ No secrets detected in staged files"
 echo ""
 echo "🔍 Running artifact persistence service enforcement..."
 
-STAGED_JS_FOR_PERSIST=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|ts|mjs|cjs)$' | grep -v 'artifact-persistence-service' | grep -v '__tests__' | grep -v 'test/' | grep -v 'tests/' | grep -v 'backfill-artifact-data' | grep -v 'stage-execution-worker' || true)
+# run-canary-probe: the canary probe resets ITS OWN isolated is_demo fixture venture BACKWARD to stage 1 for deterministic full passes — advanceStage() only moves forward through exit gates (SD-LEO-INFRA-SYNTHETIC-CANARY-VENTURE-001).
+STAGED_JS_FOR_PERSIST=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|ts|mjs|cjs)$' | grep -v 'artifact-persistence-service' | grep -v '__tests__' | grep -v 'test/' | grep -v 'tests/' | grep -v 'backfill-artifact-data' | grep -v 'stage-execution-worker' | grep -v 'run-canary-probe' || true)
 
 if [ ! -z "$STAGED_JS_FOR_PERSIST" ]; then
   PERSIST_VIOLATIONS=""
