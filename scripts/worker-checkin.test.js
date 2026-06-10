@@ -807,6 +807,9 @@ describe('SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: runCheckin names a freshly-cla
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('idle');
     expect(r.callsign).toBeFalsy(); // idle/never-claimed sessions are never named at check-in
+  });
+});
+
 // ── duty-6 (operator 2026-06-10): coordinator dispatch-rank ordering in self-claim ──
 const { orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS } = require('./worker-checkin.cjs');
 
