@@ -28,11 +28,28 @@ describe('stop-loop-wakeup-reminder — shouldRemind (pure)', () => {
     expect(shouldRemind({ loopState: 'active', stopHookActive: true, flagEnabled: true })).toBe(false);
   });
 
-  it('TS-5: returns false for exited / null / unknown loop_state (escape + non-loop sessions)', () => {
+  it('TS-5: returns false for exited / null / unknown loop_state WITHOUT a claim (operator-safe)', () => {
     expect(shouldRemind({ loopState: 'exited', stopHookActive: false, flagEnabled: true })).toBe(false);
     expect(shouldRemind({ loopState: null, stopHookActive: false, flagEnabled: true })).toBe(false);
     expect(shouldRemind({ loopState: undefined, stopHookActive: false, flagEnabled: true })).toBe(false);
     expect(shouldRemind({ loopState: 'unknown', stopHookActive: false, flagEnabled: true })).toBe(false);
+  });
+
+  // Coverage-gap (operator 2026-06-10): a worker holding a live SD claim whose loop_state
+  // never entered the machine ('unknown'/null) is still about to go silent → remind.
+  it('TS-7: returns true for unknown/null loop_state WHEN the session holds an active SD claim', () => {
+    expect(shouldRemind({ loopState: 'unknown', stopHookActive: false, flagEnabled: true, hasActiveClaim: true })).toBe(true);
+    expect(shouldRemind({ loopState: null, stopHookActive: false, flagEnabled: true, hasActiveClaim: true })).toBe(true);
+  });
+
+  it('TS-8: a claim does NOT override the awaiting_tick (wakeup armed) or exited escapes', () => {
+    expect(shouldRemind({ loopState: 'awaiting_tick', stopHookActive: false, flagEnabled: true, hasActiveClaim: true })).toBe(false);
+    expect(shouldRemind({ loopState: 'exited', stopHookActive: false, flagEnabled: true, hasActiveClaim: true })).toBe(false);
+  });
+
+  it('TS-9: a claim is ignored when the flag is off or already reminded this turn', () => {
+    expect(shouldRemind({ loopState: 'unknown', stopHookActive: false, flagEnabled: false, hasActiveClaim: true })).toBe(false);
+    expect(shouldRemind({ loopState: 'unknown', stopHookActive: true, flagEnabled: true, hasActiveClaim: true })).toBe(false);
   });
 });
 

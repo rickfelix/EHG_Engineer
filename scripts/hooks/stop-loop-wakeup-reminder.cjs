@@ -32,7 +32,11 @@
  * 'active' (no wakeup armed) — exactly the attrition case it guards.
  */
 
-const { LOOP_STATE_ACTIVE } = require('../lib/sessions/loop-state-tracker.cjs');
+const {
+  LOOP_STATE_ACTIVE,
+  LOOP_STATE_AWAITING_TICK,
+  LOOP_STATE_EXITED,
+} = require('../lib/sessions/loop-state-tracker.cjs');
 
 // ── Clean shutdown — Windows libuv UV_HANDLE_CLOSING avoidance ────────────────
 // The claude_sessions query opens an undici/fetch keep-alive socket. Calling
@@ -59,15 +63,25 @@ async function shutdown() {
 
 /**
  * Pure decision: should the Stop hook block-and-remind this turn?
- * Block ONLY when the reminder is enabled AND this is a /loop worker mid-iteration
- * ('active' = no wakeup armed) AND we have not already reminded this turn.
- * @param {{ loopState: string|null|undefined, stopHookActive: boolean, flagEnabled: boolean }} args
+ * Block when the reminder is enabled, we have not already reminded this turn, AND the session
+ * is a worker about to go silent without a wakeup armed. Two worker signals:
+ *   - loop_state='active' (in a /loop, no wakeup armed), OR
+ *   - the session holds an active SD claim while loop_state never entered the machine
+ *     ('unknown'/null) — the coverage gap where a working worker would otherwise stop silently.
+ * Operator/coordinator/Adam sessions hold no sd-start claim and never reach 'active', so they
+ * are never trapped; and the block fires at most once per turn (stop_hook_active guard).
+ * @param {{ loopState: string|null|undefined, stopHookActive: boolean, flagEnabled: boolean, hasActiveClaim?: boolean }} args
  * @returns {boolean}
  */
-function shouldRemind({ loopState, stopHookActive, flagEnabled }) {
-  if (!flagEnabled) return false;          // default-OFF: no-op
-  if (stopHookActive) return false;        // never block twice — worker already saw the reminder
-  return loopState === LOOP_STATE_ACTIVE;  // only 'active' (no wakeup armed); 'awaiting_tick'/'exited'/null are fine
+function shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim }) {
+  if (!flagEnabled) return false;                       // default-OFF: no-op
+  if (stopHookActive) return false;                     // never block twice — already reminded
+  if (loopState === LOOP_STATE_ACTIVE) return true;     // in-loop, no wakeup armed
+  if (loopState === LOOP_STATE_AWAITING_TICK) return false; // wakeup already armed — fine
+  if (loopState === LOOP_STATE_EXITED) return false;    // loop legitimately ended
+  // loop_state 'unknown'/null: remind ONLY if this session holds a live SD claim (= a worker
+  // about to abandon in-progress work). A claim-less interactive session is never reminded.
+  return Boolean(hasActiveClaim);
 }
 
 function isFlagEnabled() {
@@ -76,11 +90,14 @@ function isFlagEnabled() {
 }
 
 const REMINDER = [
-  '/loop worker stopping with NO ScheduleWakeup armed (loop_state=active) — you will go INCOGNITO.',
-  'An autonomous /loop only re-fires on a ScheduleWakeup tick; ending the turn now strands your claimed SD',
-  'and your worktree gets reaped by the claim-sweep. Before you stop:',
-  '  • arm a ScheduleWakeup (short delay if work is in-flight, ~20min if idle), OR',
-  "  • if you intend to END the loop, set claude_sessions.loop_state='exited' for your session.",
+  'Worker stopping with NO ScheduleWakeup armed — you will go INCOGNITO and strand your claimed SD',
+  '(the worktree then gets reaped by the claim-sweep). Run the WIND-DOWN HANDSHAKE before you stop:',
+  "  1. If you hold an IN-PROGRESS SD: FINISH it or hand it off — never leave it half-done + unclaimed (orphan).",
+  '  2. NOTIFY the coordinator you are winding down so it can use the grace window:',
+  '       /signal feedback "winding down — finished <SD>, anything queued for me? idling ~180s"',
+  '  3. Arm a SHORT grace ScheduleWakeup (~180s); on that tick RE-CHECK your inbox for a coordinator reply',
+  '     BEFORE settling into the ~1200s idle cadence. (Short delay if work is in-flight, ~20min if truly idle.)',
+  "  • To legitimately END the loop instead, set claude_sessions.loop_state='exited' for your session.",
   '(This reminder fires once — if you stop again it will let you through.)',
 ].join('\n');
 
@@ -128,7 +145,20 @@ async function main() {
     if (error) { return shutdown(); }            // DB error — fail-open
 
     const loopState = data ? data.loop_state : null;
-    if (shouldRemind({ loopState, stopHookActive, flagEnabled })) {
+    // Coverage-gap signal: does this session hold a live SD claim? A claim-holder whose
+    // loop_state never entered the machine ('unknown'/null) is still a worker about to go
+    // silent. Cheap single-row probe; fail-open (treat as no claim) on any error.
+    let hasActiveClaim = false;
+    try {
+      const { data: claimRows } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key')
+        .eq('claiming_session_id', sessionId)
+        .limit(1);
+      hasActiveClaim = Array.isArray(claimRows) && claimRows.length > 0;
+    } catch { /* fail-open: no claim signal */ }
+
+    if (shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim })) {
       process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
     }
     return shutdown();
