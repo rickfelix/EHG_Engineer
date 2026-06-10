@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-10](#2026-06-10)
+  - [Infrastructure](#infrastructure)
 - [2026-06-09](#2026-06-09)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -39,6 +41,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-10
+
+### Infrastructure
+- **Enable the Adam governance heartbeat — arm Adam's recurring tick at `/adam` startup + flip `ADAM_GOVERNANCE_HEARTBEAT_V1=on`** - PRs #4514, #4516 (SD-LEO-INFRA-ENABLE-ADAM-GOVERNANCE-001)
+  - **Issue**: `/adam` startup armed **zero** crons, so the shipped read-only opportunity-scan engine (SD-LEO-INFRA-ADAM-OPPORTUNITY-SCAN-001) never ran on a timer — a textbook dormant-switch (chairman-surfaced, Adam advisory c1616804). An active Adam session had hand-armed an interim 30-min cron (816073a8) as a stopgap with no durable replacement.
+  - **Fix**: NEW `scripts/adam-startup-check.mjs` (mirrors `coordinator-startup-check.mjs`'s emit-spec pattern; reachable via the new `adam:startup-check` npm script) emits Adam's 3 tick-loop CronCreate specs — daily `governance-scan` (flag-gated `adam-opportunity-scan.cjs --scan --scope auto`), 15-min `inbox-monitor` (`adam-advisory.cjs replies`), 2-h `offer-help` (agent-judgment, silence-by-default). CronCreate/CronList are harness tools, so the script only EMITS; `adam.md` Step 4 instructs the agent to arm only the `❌ MISSING` loops, idempotent vs CronList by canonical loop KEY (prompts can contain commas, so a full prompt can't survive the CSV `--armed` channel — key-matching closes a duplicate-arm trap found during verification). `ADAM_GOVERNANCE_HEARTBEAT_V1=on` lands in `.claude/settings.json` env (reversible; the scan reads strictly `process.env`). No new scheduler, no migration; surfacing stays propose-only (CONST-002) with the global ≤1-advisory-per-tick cap.
+  - **Verification**: 9/9 unit tests (`node --test`); live smokes (emit / all-armed / one-missing); flag-on scan ran scope=harness, rationale bar applied, 0 cleared → silent. Gates: EXEC-TO-PLAN 94, PLAN-TO-LEAD 96, LEAD-FINAL 99; TESTING 95 / VALIDATION 96 / REGRESSION 95; retro quality 90.
 
 ## 2026-06-09
 
