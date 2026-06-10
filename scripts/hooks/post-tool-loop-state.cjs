@@ -15,32 +15,71 @@
  *   - Feature-flag gate: setting LEO_LOOP_STATE_SIGNAL=off short-circuits the
  *     write entirely (no tracker import, no DB call) so an operator can
  *     disable the writer per-session without redeploying.
+ *
+ * SD-FDBK-INFRA-AUTO-PUSH-WIP-001 (FR-2): the SAME deterministic ScheduleWakeup
+ * edge also auto-arms a capped claude_sessions.expected_silence_until so a parked
+ * /loop worker gets the claim-sweep inflight-protection automatically — the
+ * shipped park-worker.cjs writer was a MANUAL CLI nothing in the loop path
+ * invoked. We reuse park-worker.cjs's pre-clamped computeSilenceMinutes and the
+ * canonical writeTelemetryAwait IN-PROCESS (we cannot shell out to park-worker.cjs:
+ * its main() reads process.env.CLAUDE_SESSION_ID, which Claude Code does not
+ * propagate to PostToolUse subprocesses). Independently gated by
+ * LEO_PARK_SILENCE_ARM and fully best-effort (its own try/catch).
  */
 
 const TOOL_NAME = process.env.CLAUDE_TOOL_NAME || '';
 
+function isOff(v) {
+  const f = String(v == null ? 'on' : v).toLowerCase();
+  return f === 'off' || f === '0' || f === 'false';
+}
+
 (async () => {
   try {
     if (TOOL_NAME !== 'ScheduleWakeup') return;
+    if (isOff(process.env.LEO_LOOP_STATE_SIGNAL)) return;
 
-    const flag = (process.env.LEO_LOOP_STATE_SIGNAL || 'on').toLowerCase();
-    if (flag === 'off' || flag === '0' || flag === 'false') return;
+    // FR-2: read the FULL stdin payload ONCE — we need session_id AND
+    // tool_input.delaySeconds, and stdin can only be consumed once.
+    const sidLib = require('../../lib/hooks/session-id.cjs');
+    const payload = await sidLib.readHookStdinPayload();
 
-    // QF-20260504-765: stdin (Claude Code hook protocol) is canonical for
-    // PostToolUse; env fallbacks preserved for manual invocations.
-    const { resolveSessionId } = require('../../lib/hooks/session-id.cjs');
-    const sessionId =
-      (await resolveSessionId()) ||
-      process.env.SESSION_ID ||
-      '';
+    let sessionId = payload && sidLib.isValidSessionId(payload.session_id) ? payload.session_id : '';
+    if (!sessionId && sidLib.isValidSessionId(process.env.CLAUDE_SESSION_ID)) sessionId = process.env.CLAUDE_SESSION_ID;
+    if (!sessionId && sidLib.isValidSessionId(process.env.SESSION_ID)) sessionId = process.env.SESSION_ID;
+    if (!sessionId) {
+      // stdin/env fallbacks exhausted — these resolvers do NOT touch stdin.
+      const m = sidLib.readSessionIdFromIdentityMarker({}) || sidLib.readLatestMarkerByMtime();
+      if (sidLib.isValidSessionId(m)) sessionId = m;
+    }
     if (!sessionId) return;
 
     const {
       setLoopState,
       LOOP_STATE_AWAITING_TICK
     } = require('../lib/sessions/loop-state-tracker.cjs');
-
     await setLoopState(sessionId, LOOP_STATE_AWAITING_TICK);
+
+    // FR-2: arm a capped expected_silence_until on the same edge (best-effort).
+    if (!isOff(process.env.LEO_PARK_SILENCE_ARM)) {
+      try {
+        const delaySeconds = payload && payload.tool_input && Number(payload.tool_input.delaySeconds);
+        const wakeMinutes = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds / 60 : undefined;
+        // computeSilenceMinutes is pre-clamped to lib/fleet/silence-cap.cjs
+        // SILENCE_HARD_CAP_MIN (writer<=reader); undefined wake => safe DEFAULT, still capped.
+        const { computeSilenceMinutes } = require('../park-worker.cjs');
+        const { writeTelemetryAwait } = require('./lib/session-telemetry-writer.cjs');
+        const silenceMin = computeSilenceMinutes(wakeMinutes);
+        const nowMs = Date.now();
+        await writeTelemetryAwait(sessionId, {
+          heartbeat_at: new Date(nowMs).toISOString(),
+          expected_silence_until: new Date(nowMs + silenceMin * 60000).toISOString(),
+          last_activity_kind: 'idle',
+        });
+      } catch (e2) {
+        process.stderr.write(`[post-tool-loop-state] silence-arm (non-fatal): ${e2.message}\n`);
+      }
+    }
   } catch (e) {
     process.stderr.write(`[post-tool-loop-state] ${e.message}\n`);
   } finally {
