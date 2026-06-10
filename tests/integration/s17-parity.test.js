@@ -42,18 +42,41 @@ let cliVentureId;
 let frontendVentureId;
 let driftVentureId; // SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001: hoisted so afterAll can clean it even if the drift assertion fails before the inline delete
 
+/**
+ * Delete parity fixtures LOUDLY (SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-F).
+ *
+ * The old cleanup never checked the ventures delete error, so an FK violation (e.g.
+ * factory_guardrail_state, or — pre the is_demo trigger guard — EVA scheduler children like
+ * eva_scheduler_metrics) failed SILENTLY and fixtures leaked for days while every later run's
+ * self-clean kept silently failing too. This helper deletes the test-owned children plus the
+ * known external NO ACTION blocker, then deletes the ventures and THROWS on any error so a
+ * future leak fails the suite instead of hiding.
+ *
+ * @param {object} sb - supabase client
+ * @param {string[]} ids - venture ids to remove
+ */
+async function cleanParityFixtures(sb, ids) {
+  if (!ids || ids.length === 0) return;
+  await sb.from('chairman_decisions').delete().in('venture_id', ids);
+  await sb.from('venture_analysis_artifacts').delete().in('venture_id', ids);
+  // External NO ACTION blocker observed in the 2026-06-10 leak (factory pipeline state).
+  await sb.from('factory_guardrail_state').delete().in('venture_id', ids);
+  const { error } = await sb.from('ventures').delete().in('id', ids);
+  if (error) {
+    throw new Error(
+      `parity fixture cleanup FAILED (fixtures would leak): ${error.message} — ` +
+      'an FK child is blocking the delete; find it and extend cleanParityFixtures.'
+    );
+  }
+}
+
 beforeAll(async () => {
   supabase = getSupabaseClient();
 
   // Self-clean: remove any parity-test ventures leaked by prior runs that were killed
-  // before afterAll ran (mirrors the afterAll teardown, scoped by name prefix).
+  // before afterAll ran (same loud helper as the afterAll teardown, scoped by name prefix).
   const { data: stale } = await supabase.from('ventures').select('id').like('name', 'parity-test-%');
-  const staleIds = (stale ?? []).map((v) => v.id);
-  if (staleIds.length > 0) {
-    await supabase.from('chairman_decisions').delete().in('venture_id', staleIds);
-    await supabase.from('venture_analysis_artifacts').delete().in('venture_id', staleIds);
-    await supabase.from('ventures').delete().in('id', staleIds);
-  }
+  await cleanParityFixtures(supabase, (stale ?? []).map((v) => v.id));
 
   // Seed CLI-path venture (mirrors chairman-review.js insert pattern)
   const { data: cliVenture, error: cliErr } = await supabase
@@ -125,13 +148,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!supabase) return;
-  // Clean up test ventures and related records
+  // Clean up test ventures and related records — loud on failure (see cleanParityFixtures).
   const ids = [cliVentureId, frontendVentureId, driftVentureId].filter(Boolean);
-  if (ids.length === 0) return;
-
-  await supabase.from('chairman_decisions').delete().in('venture_id', ids);
-  await supabase.from('venture_analysis_artifacts').delete().in('venture_id', ids);
-  await supabase.from('ventures').delete().in('id', ids);
+  await cleanParityFixtures(supabase, ids);
 });
 
 describe('S17 Parity: CLI vs Frontend venture state', () => {
