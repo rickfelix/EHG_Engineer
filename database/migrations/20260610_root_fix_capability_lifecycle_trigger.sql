@@ -244,7 +244,8 @@ $function$;
 -- malformed delivers_capabilities — only restore it if the fail-soft version
 -- above causes a regression.
 --
--- CREATE OR REPLACE FUNCTION public.fn_handle_capability_lifecycle()
+-- [DOWN BODY — to restore, reassemble the header without the marker]
+-- CREATE OR REPLACE FUNCTION (rollback-target): public.fn_handle_capability_lifecycle()
 --  RETURNS trigger
 --  LANGUAGE plpgsql
 --  SET search_path TO 'public', 'extensions'
