@@ -308,12 +308,37 @@ export async function main(argv = process.argv, deps = {}) {
   return { exitCode: 1, action: 'unconfirmed', token, childExitCode: confirm.childExitCode ?? null };
 }
 
+/**
+ * Windows-safe termination (SD-LEO-INFRA-REVIVE-EVA-HOST-AND-ARM-001 FR-2).
+ *
+ * Calling process.exit() synchronously right after a Supabase/undici query aborts on Windows
+ * with a libuv assertion (UV_HANDLE_CLOSING, src/win/async.c) — a keep-alive socket +
+ * threadpool-DNS teardown race during libuv shutdown. The proven cure (ref:
+ * reference_process_exit_after_undici_aborts_windows; PR #4505) is to NOT exit synchronously:
+ *   1. set process.exitCode (so the eventual natural exit carries the right code),
+ *   2. release undici's keep-alive sockets so the event loop can drain on its own, and
+ *   3. arm an UNREF'd backstop that force-exits ONLY if some lingering ref'd handle prevents
+ *      natural drain. Being unref'd, the backstop never fires on the happy path (the loop has
+ *      already drained and the process has exited), so it cannot re-introduce the abort; it is
+ *      purely a hang-guard so the 5-minute cron task can never wedge.
+ * The static-pin test asserts the dangerous synchronous `main().then(=> process.exit())` form
+ * is gone and that the only process.exit lives inside this unref'd backstop.
+ */
+export async function gracefulExit(exitCode, { backstopMs = 4000 } = {}) {
+  process.exitCode = exitCode;
+  try {
+    const undici = await import('undici');
+    await undici.getGlobalDispatcher?.()?.close?.();
+  } catch { /* undici absent or not the active dispatcher — natural drain still applies */ }
+  setTimeout(() => process.exit(exitCode), backstopMs).unref(); // unref'd hang-guard only
+}
+
 // Canonical "run directly?" check (mirrors scripts/check-git-state.js:218). The `&&`
 // short-circuits when argv[1] is undefined (node -e / REPL / import), so importing this
 // module — e.g. for an ad-hoc liveness probe — never auto-runs main() against the DB.
 const isMain = !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isMain) {
-  main().then(({ exitCode }) => process.exit(exitCode))
-        .catch((err) => { console.error('eva-scheduler-watcher fatal:', err.message); process.exit(2); });
+  main().then(({ exitCode }) => gracefulExit(exitCode))
+        .catch((err) => { console.error('eva-scheduler-watcher fatal:', err.message); return gracefulExit(2); });
 }

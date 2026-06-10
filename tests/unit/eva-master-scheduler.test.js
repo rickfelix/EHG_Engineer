@@ -1012,8 +1012,11 @@ describe('EvaMasterScheduler', () => {
 
       await scheduler.poll();
 
+      // Filter on the dispatch-specific OBSERVE string. SD-LEO-INFRA-REVIVE-EVA-HOST-AND-ARM-001
+      // FR-3 added "OBSERVE: Would run job ..." logs (builtin jobs are now observe-gated too), so
+      // a bare 'OBSERVE' substring would also match job logs — the test's intent is dispatch-only.
       const observeLogs = mockLogger.log.mock.calls.filter(
-        (call) => call[0] && call[0].includes('OBSERVE'),
+        (call) => call[0] && call[0].includes('OBSERVE: Would dispatch'),
       );
       expect(observeLogs.length).toBe(2);
       expect(observeLogs[0][0]).toContain('v-observe-log');
@@ -1058,8 +1061,9 @@ describe('EvaMasterScheduler', () => {
 
       await scheduler.poll();
 
+      // Dispatch-specific filter (see FR-3 note above): exclude the new "Would run job" logs.
       const observeLogs = mockLogger.log.mock.calls.filter(
-        (call) => call[0] && call[0].includes('OBSERVE'),
+        (call) => call[0] && call[0].includes('OBSERVE: Would dispatch'),
       );
       // Should stop at 2, not continue to default 5
       expect(observeLogs.length).toBe(2);
