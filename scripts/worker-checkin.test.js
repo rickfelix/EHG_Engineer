@@ -631,3 +631,45 @@ describe('FIX-RECURRING-2ND: recover stranded pending_approval/LEAD_FINAL SDs', 
     expect(r).toBeNull();
   });
 });
+
+// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: runCheckin names a freshly-claimed, identity-less worker
+// AT check-in (closing the up-to-5-min lag before the assign-fleet-identities.cjs cron). The naming
+// is a fail-open wrapper over the resolution logic, so it must (a) name across every claim path,
+// (b) leave already-named workers untouched, and (c) never name an idle worker.
+describe('SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: runCheckin names a freshly-claimed worker', () => {
+  it('names an UNNAMED worker on resume (live used-set empty -> Alpha)', async () => {
+    const sb = makeStub({ session: { metadata: {}, sd_key: 'SD-MINE-001' } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume');
+    expect(r.sd).toBe('SD-MINE-001');
+    expect(r.callsign).toBe('Alpha'); // assigned at check-in, reported in the same response
+  });
+
+  it('does NOT rename an already-named worker (idempotent)', async () => {
+    const sb = makeStub({ session: { metadata: { callsign: 'Delta' }, sd_key: 'SD-MINE-001' } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume');
+    expect(r.callsign).toBe('Delta'); // unchanged — naming branch skipped because a callsign already exists
+  });
+
+  it('names a worker that self-claims an SD on this check-in', async () => {
+    const sb = makeStub({
+      session: { metadata: {}, sd_key: null },
+      messages: [],
+      candidates: [{ sd_id: 'SD-TOP-001', track: 'A' }],
+      sdRows: { 'SD-TOP-001': { current_phase: 'LEAD', sd_type: 'bugfix', dependencies: [] } },
+      claimResults: { 'SD-TOP-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-TOP-001');
+    expect(r.callsign).toBe('Alpha'); // named immediately on first claim, not one cycle later
+  });
+
+  it('does NOT assign a name when the worker idles (no claim -> no pool burn)', async () => {
+    const sb = makeStub({ session: { metadata: {}, sd_key: null }, messages: [], candidates: [] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
+    expect(r.callsign).toBeFalsy(); // idle/never-claimed sessions are never named at check-in
+  });
+});

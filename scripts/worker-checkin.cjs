@@ -31,6 +31,9 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
 const { draftDepsSatisfied, baselinedCandidateEligible } = require('../lib/fleet/claim-eligibility.cjs');
+// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
+// check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
+const { NATO, COLORS, nextAvailable, isTestSessionId } = require('./assign-fleet-identities.cjs');
 
 const ROLL_CALL_TTL_MS = 60 * 60 * 1000;     // availability row lives 1h
 const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (idempotency)
@@ -358,7 +361,103 @@ async function selfHealStaleClaim(sb, sessionId, sdKey) {
   } catch { /* fail-open */ }
 }
 
-async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId } = {}) {
+// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: assign a fleet identity (NATO callsign + color) to a
+// freshly-claimed worker AT check-in, instead of up to ~5 minutes later when the coordinator cron
+// scripts/assign-fleet-identities.cjs next runs (it is the ONLY other writer of fleet_identity).
+//
+// Optimistic self-assign: read the live used-set, pick the next free callsign/color with the SAME
+// pool/picker the cron uses, read-modify-merge our own claude_sessions.metadata, then emit a
+// SET_IDENTITY message (the coordination-inbox hook writes .claude/fleet-identity-<csid>.json from
+// it, which is what the statusline actually renders — see .claude/statusline.cjs). Concurrency is
+// best-effort only: two simultaneous check-ins can pick the same callsign; the existing 5-min
+// dedupeAssignedCallsigns cron pass (heartbeat-DESC, newest-wins) heals that duplicate exactly as it
+// heals post-rotation collisions today. NEVER throws — any failure leaves the worker nameless (named
+// by the next cron pass), never an action=error. Returns { callsign, color } or null.
+//
+// Caller (runCheckin wrapper) guarantees: a real claim is held and the worker has no callsign yet,
+// and the session_id is not a test/ghost id. This helper additionally enforces the coordinator
+// exclusion and is idempotent (adopts a complete identity the cron set in the race window).
+async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
+  try {
+    // Re-read our row: source of metadata to merge (read-modify-merge — NEVER clobber), the
+    // coordinator guard, and adoption of any identity assigned by the cron since the caller's read.
+    const { data: cur } = await sb.from('claude_sessions')
+      .select('metadata').eq('session_id', sessionId).maybeSingle();
+    const myMeta = (cur && cur.metadata) || {};
+    if (myMeta.is_coordinator === true) return null; // coordinators stay nameless in the worker pool (QF-20260508-648)
+    const existing = myMeta.fleet_identity;
+    if (existing && existing.callsign && existing.color) {
+      return { callsign: existing.callsign, color: existing.color }; // complete identity already present -> idempotent
+    }
+    // Seed used-sets from currently-live assigned identities so we pick a FREE slot (not blindly Alpha).
+    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    const { data: live } = await sb.from('claude_sessions')
+      .select('session_id, metadata')
+      .gte('heartbeat_at', fiveMinAgo)
+      .neq('status', 'terminated');
+    const usedCallsigns = new Set(), usedColors = new Set();
+    for (const r of (live || [])) {
+      if (!r || r.session_id === sessionId) continue;
+      const id = r.metadata && r.metadata.fleet_identity;
+      if (id && id.callsign) usedCallsigns.add(id.callsign);
+      if (id && id.color) usedColors.add(id.color);
+    }
+    const callsign = nextAvailable(NATO, usedCallsigns);
+    const color = nextAvailable(COLORS, usedColors);
+    // display_name parity with the cron: assign-fleet-identities.cjs labels with `worker.sd_id`, a
+    // column that does NOT exist on claude_sessions (it selects sd_key), so its label is ALWAYS
+    // 'idle'. We match `${callsign} | idle` so the cron's 5-min refresh loop sees no mismatch and
+    // never churns the row. The statusline reads callsign/color only, so the label is user-invisible.
+    const display_name = `${callsign} | idle`;
+    const metadata = { ...myMeta, fleet_identity: { color, callsign, display_name, assigned_at: new Date().toISOString() } };
+    const { error } = await sb.from('claude_sessions').update({ metadata }).eq('session_id', sessionId);
+    if (error) return null;
+    // Emit SET_IDENTITY so the coordination-inbox hook writes the per-session statusline file. This is
+    // the mechanism that makes the name VISIBLE; still fail-open — a message failure leaves the DB
+    // identity authoritative and the next cron refresh re-emits the message.
+    try {
+      await sb.from('session_coordination').insert({
+        target_session: sessionId,
+        target_sd: claimSd || null,
+        message_type: 'SET_IDENTITY',
+        subject: `Identity: ${callsign} (${color})`,
+        body: `The coordinator assigned you callsign "${callsign}" with color "${color}" at check-in. Your statusline will update automatically.`,
+        payload: { color, callsign, display_name },
+        sender_type: 'coordinator',
+        expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+      });
+    } catch { /* best-effort: cron re-emits within 5 min */ }
+    return { callsign, color };
+  } catch { return null; }
+}
+
+// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: actions whose result carries a freshly-held claim — every
+// path where a worker ends a check-in owning work and therefore deserves a name NOW.
+const CLAIMED_CHECKIN_ACTIONS = new Set(['resume', 'resume_final', 'claimed_assignment', 'self_claimed', 'self_claimed_qf']);
+
+// Public check-in entrypoint: resolve the action, then name a freshly-claimed, identity-less worker
+// before returning so the SAME response reports the callsign. Naming is a thin fail-open wrapper over
+// the resolution logic (resolveCheckin) so it covers ALL claim paths (resume / assignment / self-claim
+// SD / self-claim draft / self-claim QF) at one site, without threading naming through each return.
+async function runCheckin(sb, sessionId, opts = {}) {
+  const result = await resolveCheckin(sb, sessionId, opts);
+  try {
+    const claimedId = result && (result.sd || result.qf); // SD actions carry .sd; a QF self-claim carries .qf
+    if (
+      result &&
+      CLAIMED_CHECKIN_ACTIONS.has(result.action) &&
+      claimedId &&
+      !result.callsign &&                 // already named -> nothing to do (idempotent)
+      !isTestSessionId(sessionId)         // ghost/test sessions never burn the 8-name pool (QF-20260528-581)
+    ) {
+      const assigned = await assignFleetIdentityAtCheckin(sb, sessionId, claimedId);
+      if (assigned && assigned.callsign) result.callsign = assigned.callsign;
+    }
+  } catch { /* fail-open: naming must NEVER turn a check-in into action=error */ }
+  return result;
+}
+
+async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId } = {}) {
   // 1. resolve coordinator (fail-open to null -> broadcast)
   let coordinatorId = null;
   try { coordinatorId = await getCoordinator(sb); } catch { coordinatorId = null; }
@@ -514,7 +613,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, isSdInFlight, selfHealStaleClaim, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, isSdInFlight, selfHealStaleClaim, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
