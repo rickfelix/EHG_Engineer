@@ -31,4 +31,4 @@ Build Adam's read-only proactive scan engine — enumerate portfolio scopes, loa
 - Every surfaced candidate carries the full rationale structure or is suppressed.
 
 ## Rationale
-Reuse-first: enumeration reuses repo-paths.js (no new classifier/table); the single-scope design becomes the harness briefing module, platform+venture added alongside. The honest per-venture data gaps become Adam's own high-leverage proposals. Depends on the contract SD (the loop must be canonically specified first). EHG_Engineer. See the proactive-Adam design.
+Reuse-first: enumeration reuses repo-paths.js (no new classifier/table); the single-scope design becomes the harness briefing module, platform+venture added alongside. The honest per-venture data gaps become Adam's own high-value proposals. Depends on the contract SD (the loop must be canonically specified first). EHG_Engineer. See the proactive-Adam design.

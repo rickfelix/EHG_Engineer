@@ -14,7 +14,7 @@ medium
 EHG_Engineer
 
 ## Summary
-"Leverage our existing capabilities" is an exploit strategy. Applied to an immature portfolio with few proven, scored capabilities, it is degenerate — it echoes the trunk's internal infrastructure back as venture ideas (the original cron-bias symptom). The capability block injected into Stage-0 discovery prompts is currently flat: always on for anchored strategies and equally weighted regardless of how mature or large the portfolio is. There is no notion of explore-early / exploit-late.
+"Use our existing capabilities" is an exploit strategy. Applied to an immature portfolio with few proven, scored capabilities, it is degenerate — it echoes the trunk's internal infrastructure back as venture ideas (the original cron-bias symptom). The capability block injected into Stage-0 discovery prompts is currently flat: always on for anchored strategies and equally weighted regardless of how mature or large the portfolio is. There is no notion of explore-early / exploit-late.
 
 This SD makes capability anchoring maturity-weighted and portfolio-aware. A portfolio-maturity signal (count of production-grade / high-extraction capabilities, total reuse events, number of shipped ventures — available once SD-2 and SD-3 land) modulates how heavily the capability ledger influences discovery: low influence when the portfolio is immature (favor latent capability and market opportunity), rising influence as proven, reusable capability accumulates. It also lets discovery draw on the portfolio-wide graph rather than EHG_Engineer only.
 

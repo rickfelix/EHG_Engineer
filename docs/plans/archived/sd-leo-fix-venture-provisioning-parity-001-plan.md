@@ -52,7 +52,7 @@ Out of scope: redesigning the parity test's comparison logic; changing real (non
 
 ## Changes
 
-- MODIFY `tests/integration/s17-parity.test.js`: set `is_demo: true` on every seeded fixture insert (CLI, frontend, drift); add a robust `afterAll`/`finally` teardown keyed by `name LIKE 'parity-test-%'` (not just captured IDs) that deletes child rows, the venture rows, the provisioned GitHub repos, and the local clones; add a post-teardown assertion that zero `parity-test-%` ventures remain.
+- MODIFY `tests/integration/s17-parity.test.js`: set `is_demo: true` on every seeded fixture insert (CLI, frontend, drift); add a reliable `afterAll`/`finally` teardown keyed by `name LIKE 'parity-test-%'` (not just captured IDs) that deletes child rows, the venture rows, the provisioned GitHub repos, and the local clones; add a post-teardown assertion that zero `parity-test-%` ventures remain.
 - MODIFY `lib/eva/bridge/venture-provisioner.js` and/or the provisioner test harness: provide a teardown/cleanup path that deletes the GitHub repo + local `_EHG/<repoName>` clone created by the `repo_created` step (reusing the existing full-delete teardown where possible); ensure test-driven provisioning propagates a test/demo flag so the venture row is created with `is_demo=true`.
 - MODIFY `ehg/src/services/ventures.ts` `listVentures()`: add `.or("is_demo.eq.false,is_demo.is.null")` and `.is("deleted_at", null)` filters.
 - MODIFY `ehg/src/hooks/useVentureData.ts` `useVentures()`: add `.is("deleted_at", null)` (keep the existing `is_demo` filter).
