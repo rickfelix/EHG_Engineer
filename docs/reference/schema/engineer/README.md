@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-10T01:21:34.709Z
-**Tables**: 704
+**Generated**: 2026-06-10T11:36:56.597Z
+**Tables**: 705
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (704)
+## All Tables (705)
 
 ### LEO Protocol
 
@@ -459,6 +459,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [llm_models](tables/llm_models.md)
 - [llm_providers](tables/llm_providers.md)
 - [management_reviews](tables/management_reviews.md)
+- [management_reviews_quarantine_20260610](tables/management_reviews_quarantine_20260610.md)
 - [market_segments](tables/market_segments.md)
 - [marketing_attribution](tables/marketing_attribution.md)
 - [marketing_campaigns](tables/marketing_campaigns.md)
