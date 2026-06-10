@@ -1,6 +1,7 @@
+<!-- file_content_hash: 36efd797b7771305 -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-06-10 12:15:59 PM
+**Generated**: 2026-06-10 2:53:04 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -87,41 +88,6 @@ Task tool with subagent_type="database-agent":
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
-
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -163,6 +129,41 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -219,6 +220,48 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## 🤖 Built-in Agent Integration
+
+## Built-in Agent Integration
+
+### Three-Layer Agent Architecture
+
+LEO Protocol uses three complementary agent layers:
+
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
+
 ## Claude Code Plan Mode Integration
 
 **Status**: ACTIVE | **Version**: 1.0.0
@@ -261,48 +304,6 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
-
-## 🤖 Built-in Agent Integration
-
-## Built-in Agent Integration
-
-### Three-Layer Agent Architecture
-
-LEO Protocol uses three complementary agent layers:
-
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
-
-### Integration Principle
-
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
-
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
-```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
-
-This is faster than sequential exploration and provides comprehensive coverage.
 
 ## Sub-Agent Model Routing
 
@@ -379,6 +380,71 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
+## QF Lifecycle Reconciliation
+
+**Problem**: quick_fixes rows stay `status=open` after a PR is merged via direct `gh pr merge` (any path that skips complete-quick-fix.js). sd:next then recommends phantom work. Root cause documented in feedback memory `feedback_qf_db_stale_after_merge.md`.
+
+**Solution**: Two complementary reconciliation layers — pre-merge filter + post-merge sweep. Both are idempotent and safe to run on any schedule.
+
+### Layer 1 — Pre-Merge Filter (sd:next data loader)
+`scripts/modules/sd-next/data-loaders.js` exposes two functions:
+- `loadOpenQuickFixes()` — returns rows where `pr_url IS NULL` AND `commit_sha IS NULL`. Filters out QFs with in-flight PRs so sd:next does not restart work a parallel session is already merging (QF-380 merge-race fix).
+- `loadReadyToMergeQuickFixes()` — queries the inverse pool (`pr_url IS NOT NULL`), cross-checks each PR state via `gh api` with a 60-second in-memory cache, returns only OPEN + all-checks-green rows tagged `ready_to_merge=true`. Lets the sd:next dispatcher emit a `qf_merge` action for adoption-ready work instead of `qf_start`.
+
+> Why the cache: sd:next runs many times per session. Without the 60s dedup, each invocation hits the GitHub API for every open QF — rate limits bite within minutes.
+
+### Layer 2 — Post-Merge Sweep (orphan-qf-reaper)
+`scripts/orphan-qf-reaper.mjs` sweeps rows where `status IN (open, in_progress)` AND `pr_url` points to a MERGED PR, and flips them to `status=completed`. Protections:
+- **Idempotency**: `.eq(status, current)` guard on the update — a concurrent complete-quick-fix.js flip wins without erroring.
+- **5-minute safety window**: skips rows whose `pr_url` was set within the last 5 minutes, giving complete-quick-fix.js time to finish its own flip.
+- **Structured JSON logging**: one line per row evaluated, durable artifact for debugging races.
+
+### Scheduled Execution
+`.github/workflows/orphan-qf-reaper.yml` runs Layer 2 every 15 minutes on cron plus `workflow_dispatch`, with a `dry-run` input, a concurrency group to prevent overlap, and a per-run `reaper.log` artifact.
+
+### When to Reach For This
+- **`sd:next` recommends a QF you know was merged**: check `loadOpenQuickFixes` is filtering on `pr_url IS NULL`; inspect that QF's `pr_url` / `commit_sha` columns. If they're set, the reaper will close it on its next cron; for immediate cleanup, run `node scripts/orphan-qf-reaper.mjs`.
+- **Two sessions on the same QF**: verify `loadReadyToMergeQuickFixes` is wired into the dispatcher and emitting `qf_merge` for rows with open PRs.
+- **QF with open PR but sd:next ignores it**: the PR's checks are not all green — expected. Layer 1 only surfaces merge-ready work.
+
+### Anti-Pattern
+Do **not** replace these layers with a blanket "close all QFs with any pr_url set". The 5-minute window and merged-state check prevent closing a QF whose PR is still under review.
+
+> Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
 ## Execution Philosophy
 
 ### Quality-First (PARAMOUNT)
@@ -415,71 +481,6 @@ The pre-push hook automatically:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
-
-## QF Lifecycle Reconciliation
-
-**Problem**: quick_fixes rows stay `status=open` after a PR is merged via direct `gh pr merge` (any path that skips complete-quick-fix.js). sd:next then recommends phantom work. Root cause documented in feedback memory `feedback_qf_db_stale_after_merge.md`.
-
-**Solution**: Two complementary reconciliation layers — pre-merge filter + post-merge sweep. Both are idempotent and safe to run on any schedule.
-
-### Layer 1 — Pre-Merge Filter (sd:next data loader)
-`scripts/modules/sd-next/data-loaders.js` exposes two functions:
-- `loadOpenQuickFixes()` — returns rows where `pr_url IS NULL` AND `commit_sha IS NULL`. Filters out QFs with in-flight PRs so sd:next does not restart work a parallel session is already merging (QF-380 merge-race fix).
-- `loadReadyToMergeQuickFixes()` — queries the inverse pool (`pr_url IS NOT NULL`), cross-checks each PR state via `gh api` with a 60-second in-memory cache, returns only OPEN + all-checks-green rows tagged `ready_to_merge=true`. Lets the sd:next dispatcher emit a `qf_merge` action for adoption-ready work instead of `qf_start`.
-
-> Why the cache: sd:next runs many times per session. Without the 60s dedup, each invocation hits the GitHub API for every open QF — rate limits bite within minutes.
-
-### Layer 2 — Post-Merge Sweep (orphan-qf-reaper)
-`scripts/orphan-qf-reaper.mjs` sweeps rows where `status IN (open, in_progress)` AND `pr_url` points to a MERGED PR, and flips them to `status=completed`. Protections:
-- **Idempotency**: `.eq(status, current)` guard on the update — a concurrent complete-quick-fix.js flip wins without erroring.
-- **5-minute safety window**: skips rows whose `pr_url` was set within the last 5 minutes, giving complete-quick-fix.js time to finish its own flip.
-- **Structured JSON logging**: one line per row evaluated, durable artifact for debugging races.
-
-### Scheduled Execution
-`.github/workflows/orphan-qf-reaper.yml` runs Layer 2 every 15 minutes on cron plus `workflow_dispatch`, with a `dry-run` input, a concurrency group to prevent overlap, and a per-run `reaper.log` artifact.
-
-### When to Reach For This
-- **`sd:next` recommends a QF you know was merged**: check `loadOpenQuickFixes` is filtering on `pr_url IS NULL`; inspect that QF's `pr_url` / `commit_sha` columns. If they're set, the reaper will close it on its next cron; for immediate cleanup, run `node scripts/orphan-qf-reaper.mjs`.
-- **Two sessions on the same QF**: verify `loadReadyToMergeQuickFixes` is wired into the dispatcher and emitting `qf_merge` for rows with open PRs.
-- **QF with open PR but sd:next ignores it**: the PR's checks are not all green — expected. Layer 1 only surfaces merge-ready work.
-
-### Anti-Pattern
-Do **not** replace these layers with a blanket "close all QFs with any pr_url set". The 5-minute window and merged-state check prevent closing a QF whose PR is still under review.
-
-> Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
 
 ## Queue Ranking and QF Track Inference
 
@@ -1520,60 +1521,60 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Retrospective — SD-LEO-REFAC-GATE-PATTERN-UNIFICATION-001 — Gate UI Pattern Unification (Trilogy Closer at the UI Render Layer) [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 5/12/2026 | **Score**: 100
+### 1. SD-FDBK-ENH-RETROSPECTIVES-AUTO-VALIDATE-001: Symmetric + idempotent missing_protocol_improvements quality-warning lifecycle (PR #4285) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- Mock paths for lazy stage components in tests required cross-referencing src/data/venture-workflow.t...
-- useVentureWorkflow currentStage takes precedence over modeInfo.currentStage inside VentureActionBar....
+- The two quality_issues-writing triggers should arguably be unified so a single function owns quality...
+- A missing_protocol_improvements warning still does not survive a content-change INSERT because auto_...
 
 **Action Items**:
-- [ ] Add an ESLint or AST-based structural check that flags any new Stage*.tsx compon...
-- [ ] Build a test-scaffold generator that reads src/data/venture-workflow.ts and emit...
+- [ ] Add a lint/static check that flags any trigger reading or writing a column that ...
+- [ ] Open a follow-up SD to unify retrospectives quality_issues ownership into a sing...
 
-### 2. LEAD_TO_PLAN Handoff Retrospective: Gate Status Authority Unification — worker-state-driven UI labels for gate stages [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 5/12/2026 | **Score**: 100
+### 2. SD-LEO-FIX-SHOW-WHICH-STAGE-001: Show which stage is being viewed when browsing venture stage history — SD Completion Retrospective [QUALITY]
+**Category**: USER_EXPERIENCE | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-RETRO-EXECTOPLAN-934968a4] EXEC-TO-PLAN rejected 2 times during SD lifecycle. Avg score: 0%. Co...
-- [PAT-RETRO-PLANTOEXEC-934968a4] PLAN-TO-EXEC rejected 3 times during SD lifecycle. Avg score: 0%. Co...
+- The SD's named target files were wrong for the actual defect. Root cause (5 Whys): (1) header showed...
+- add-prd --content failed once because the integration_operationalization key whitelist is exact: the...
 
 **Action Items**:
-- [ ] Verify: VentureActionBar branches on stageWork.stage_status BEFORE the gate-fall...
-- [ ] Validate: 15 gate stages render "Analyzing stage..." with spinner during worker ...
+- [ ] Update the testing-agent so that when it maps a passing test to a user story it ...
+- [ ] Document the add-prd --content integration_operationalization key whitelist (the...
 
-### 3. Retrospective: SD-LEO-INFRA-CANONICAL-SCRIPTS-APPLY-001 — Canonical scripts/apply-migration.js + audit table [QUALITY]
-**Category**: DATABASE_SCHEMA | **Date**: 5/11/2026 | **Score**: 100
+### 3. SD-LEO-INFRA-ATOMIC-FLEET-WORK-001: Atomic fleet work-leasing — the swept-twice bug was a deploy gap, not a code gap [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 6/5/2026 | **Score**: 100
 
 **Key Improvements**:
-- sd-start.js reported "install skipped: lockfile hash match" while node_modules was empty (symlink-ta...
-- Prior session let PLAN-TO-EXEC pass @ 91 without TS-7 (PRD explicitly states TS-7 "gates PLAN-TO-EXE...
+- Migration deploy automation and auditing: committed does not equal applied, and there is currently n...
+- The "completed" definition for migration-bearing SDs should require a deploy gate; otherwise a write...
 
 **Action Items**:
-- [ ] File QF for sd-start.js to add a node_modules liveness check (count entries > 10...
-- [ ] Add a PRD validator that enforces test-set gating: if PRD names a test ID as gat...
+- [ ] In a fresh session, apply 20260605_atomic_lease_sweep_respect_inflight.sql via s...
+- [ ] Fix the false "check-readiness CI applies it" comment across migration templates...
 
-### 4. SD-LEO-INFRA-VENTURE-GATE-UNIFICATION-001 SD-Completion Retrospective — Venture Gate Unification across all 26 stages [QUALITY]
-**Category**: DATABASE_SCHEMA | **Date**: 5/12/2026 | **Score**: 100
+### 4. SD-LEO-INFRA-ENABLE-CLAIM-SWEEP-001 Retrospective [QUALITY]
+**Category**: DATABASE_SCHEMA | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- The MIGRATION_READINESS_INFRA_ERROR CI infra bug (missing SUPABASE_DB_PASSWORD GH Actions secret) fo...
-- The 2 retry tests in tests/unit/eva/stage-execution-worker.test.js were skipped rather than rewritte...
+- The initial verify step queried the wrong column (schema_migrations_applied.migration_name instead o...
+- My own session claim was swept during the ~18-minute database-agent run (re-affirmed via sd-start) —...
 
 **Action Items**:
-- [ ] Rewrite the 2 skipped retry tests in tests/unit/eva/stage-execution-worker.test....
-- [ ] File harness SD/QF for the pre-existing MIGRATION_READINESS_INFRA_ERROR root cau...
+- [ ] DEPLOY: update the main checkout's .claude/settings.json (or reload settings) so...
+- [ ] POST-DEPLOY VERIFY: confirm the fleet-wide claim-sweep-mid-sub-agent dormancy is...
 
-### 5. Retrospective: SD-LEO-REFAC-GATE-STATUS-AUTHORITY-001 — Pentalogy-Closing Worker-State UI Authority [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 5/12/2026 | **Score**: 100
+### 5. SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001 SD Completion Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- sub_agent_code case-asymmetry: 21st+ witness of the writer/consumer asymmetry pattern at the protoco...
-- CI workflow gap in EHG repo was deeper than expected: prior to SD-AUTO-ADVANCE-001 there was NO unit...
+- {"area":"EHG app listVentures() applies neither an is_demo nor a deleted_at predicate","prevention":...
+- {"area":"The pre-existing chairman_decisions parity assertion fails on the unmodified baseline","pre...
 
 **Action Items**:
-- [ ] 21st+ witness of writer/consumer asymmetry — exact pattern this pentalogy was su...
-- [ ] AUTO-ADVANCE SD added the first unit-test CI workflow; STATUS-AUTHORITY (this SD...
+- [ ] Open a follow-up QF to add is_demo=false and deleted_at IS NULL predicates to th...
+- [ ] Track and fix the pre-existing chairman_decisions parity assertion that fails on...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*

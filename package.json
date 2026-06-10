@@ -373,6 +373,7 @@
     "session:check-concurrency": "node scripts/session-check-concurrency.js",
     "session:park": "node scripts/park-worker.cjs",
     "prepark-wip": "node scripts/prepark-wip.cjs",
+    "protocol:pub-audit": "node scripts/protocol-publication-audit.cjs",
     "policy:check": "node scripts/auto-exec-policy-check.mjs",
     "engine:demo": "node scripts/auto-exec-engine-demo.mjs",
     "checkout-sync:demo": "node scripts/auto-exec-checkout-sync-demo.mjs",
