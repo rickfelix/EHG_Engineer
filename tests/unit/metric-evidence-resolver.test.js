@@ -141,19 +141,26 @@ describe('git kind', () => {
 // ── test kind ─────────────────────────────────────────────────────────────────
 
 describe('test kind', () => {
-  it('VERIFIED: existing test file runs green (exec exit 0)', async () => {
-    const exec = makeExec({ npx: () => '' });
+  // The runner is spawned as `node <repo>/node_modules/vitest/vitest.mjs run <ref>` — NOT npx
+  // (npx ENOENTs on Windows; shell:true would open injection on the author-controlled ref).
+  const NODE = process.execPath;
+
+  it('VERIFIED: existing test file runs green (exec exit 0), spawned via node + vitest entry', async () => {
+    const exec = makeExec({ [NODE]: () => '' });
     const r = await resolveEvidenceBinding(
       { kind: 'test', ref: 'tests/unit/metric-evidence-resolver.test.js' },
       { repoRoot: REPO, exec });
     expect(r).toMatchObject({ resolved: true, verified: true });
-    expect(exec).toHaveBeenCalledWith('npx', ['vitest', 'run', 'tests/unit/metric-evidence-resolver.test.js'], expect.anything());
+    const [file, args] = exec.mock.calls[0];
+    expect(file).toBe(NODE);
+    expect(args[0]).toMatch(/node_modules[\\/]vitest[\\/]vitest\.mjs$/);
+    expect(args.slice(1)).toEqual(['run', 'tests/unit/metric-evidence-resolver.test.js']);
   });
 
   it('CONTRADICTED: test file runs red (clean non-zero exit)', async () => {
     const r = await resolveEvidenceBinding(
       { kind: 'test', ref: 'tests/unit/metric-evidence-resolver.test.js' },
-      { repoRoot: REPO, exec: makeExec({ npx: () => { throw exitErr(1); } }) });
+      { repoRoot: REPO, exec: makeExec({ [NODE]: () => { throw exitErr(1); } }) });
     expect(r).toMatchObject({ resolved: true, verified: false });
     expect(r.detail).toMatch(/FAILED/);
   });
@@ -161,14 +168,14 @@ describe('test kind', () => {
   it('UNRESOLVABLE: runner timeout (signal) — infrastructure flake never contradicts', async () => {
     const r = await resolveEvidenceBinding(
       { kind: 'test', ref: 'tests/unit/metric-evidence-resolver.test.js' },
-      { repoRoot: REPO, exec: makeExec({ npx: () => { throw exitErr(null, 'SIGTERM'); } }) });
+      { repoRoot: REPO, exec: makeExec({ [NODE]: () => { throw exitErr(null, 'SIGTERM'); } }) });
     expect(r).toMatchObject({ resolved: false });
   });
 
   it('UNRESOLVABLE: file does not exist', async () => {
     const r = await resolveEvidenceBinding(
       { kind: 'test', ref: 'tests/does-not-exist.test.js' },
-      { repoRoot: REPO, exec: makeExec({ npx: () => '' }) });
+      { repoRoot: REPO, exec: makeExec({ [NODE]: () => '' }) });
     expect(r).toMatchObject({ resolved: false });
     expect(r.reason).toMatch(/not found/);
   });

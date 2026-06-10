@@ -95,8 +95,15 @@ async function resolveTest(ref, ctx) {
   const rel = ref.trim();
   const abs = join(ctx.repoRoot, rel);
   if (!existsSync(abs)) return unresolvable(`test file not found: ${rel}`);
+  // Spawn node directly on vitest's JS entry — NOT `npx`: execFileSync('npx') ENOENTs on
+  // Windows (npx is npx.cmd, and .cmd spawns without a shell are blocked on patched Node),
+  // and shell:true would open a quoting/injection surface on the author-controlled ref.
+  // Found live by this SD's own self-hosted PLAN-TO-LEAD run (fail-open held: the binding
+  // degraded to advisory instead of failing the gate).
+  const vitestEntry = join(ctx.repoRoot, 'node_modules', 'vitest', 'vitest.mjs');
+  if (!existsSync(vitestEntry)) return unresolvable('vitest not installed at node_modules/vitest/vitest.mjs');
   try {
-    ctx.exec('npx', ['vitest', 'run', rel], { cwd: ctx.repoRoot, timeout: TEST_RUN_TIMEOUT_MS });
+    ctx.exec(process.execPath, [vitestEntry, 'run', rel], { cwd: ctx.repoRoot, timeout: TEST_RUN_TIMEOUT_MS });
     return resolvedAs(true, `test green: ${rel}`);
   } catch (err) {
     // Distinguish "ran and failed" (a real contradiction) from "could not run" (fail-open).
