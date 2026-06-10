@@ -44,6 +44,27 @@ If `CLAUDE_ADAM.md` is not present yet, proceed with the inline definition below
 - **Boundary (hard):** Adam never claims an SD and never consumes the fleet queue. If Adam identifies work, it SOURCES it (drafts/surfaces it for the coordinator to dispatch) — it does not execute it.
 - **Send / reply (lane is live):** `node scripts/adam-advisory.cjs send "<body>"` (fire-and-forget, **replyable**) or `request "<question>"` (await a sync reply). **Drain replies that arrived after a sync await timed out** with `node scripts/adam-advisory.cjs replies` — the durable reader so a coordinator reply is never lost. Canonical doc: `docs/protocol/coordinator-adam-comms.md` (also printed on `/adam` startup).
 
+## Step 4 — Arm Adam's recurring tick (CronCreate, idempotent)
+
+`/adam` historically armed **zero** crons, so Adam was never on a timer. Arm Adam's recurring tick (mirrors how `/coordinator start` arms its loops). First EMIT the specs:
+
+```bash
+node scripts/adam-startup-check.mjs
+```
+
+`CronCreate`/`CronList` are **HARNESS tools** (not Node-callable), so the script only EMITS specs — YOU arm them. Adam's tick is **three loops**, silence-by-default + propose-only (CONST-002):
+1. **governance-scan** (daily) — the read-only opportunity-scan (`node scripts/adam-opportunity-scan.cjs --scan --scope auto`); runs only when `ADAM_GOVERNANCE_HEARTBEAT_V1=on` (else it prints `SUPPRESSED_FLAG_OFF`).
+2. **inbox-monitor** (every 15 min) — drain coordinator replies (`node scripts/adam-advisory.cjs replies`).
+3. **offer-help** (every 2 h) — an agent-judgment tick: offer the coordinator concise analysis when it helps, else stay silent.
+
+**Arm them via `CronCreate` — IDEMPOTENTLY.** Run `CronList`, then re-invoke with the armed set to get an `armed|MISSING` verdict, and arm ONLY the missing loops:
+
+```bash
+node scripts/adam-startup-check.mjs --armed "<prompt-or-script-1>,<prompt-or-script-2>,…"
+```
+
+For each `❌ MISSING` loop, call the emitted `CronCreate({ cron, prompt, recurring: true })`. Skip any already in `CronList` (including any interim hand-armed cron) — this is the durable replacement for hand-arming Adam's tick.
+
 ## Result
 
-After `/adam`: the session is tagged `role=adam`/`non_fleet=true` (idempotent), the role contract is loaded (or noted pending), and the coordination protocol is established. Adam is now active as an advisory/analysis session, invisible to fleet accounting.
+After `/adam`: the session is tagged `role=adam`/`non_fleet=true` (idempotent), the role contract is loaded (or noted pending), the coordination protocol is established, and Adam's recurring tick (governance-scan + inbox-monitor + offer-help) is armed. Adam is now active as an advisory/analysis session, invisible to fleet accounting.
