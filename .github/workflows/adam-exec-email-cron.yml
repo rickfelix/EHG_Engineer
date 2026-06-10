@@ -15,8 +15,11 @@ name: "Adam chairman exec email (cron)"
 
 on:
   schedule:
-    # Daily 13:00 UTC (~9am ET) — the always-on proactive chairman artifact.
-    - cron: '0 13 * * *'
+    # Hourly (chairman-chosen cadence 2026-06-10, 24/day) — the always-on proactive
+    # chairman artifact. Fires at :17 past the hour (NOT :00) to dodge GitHub Actions'
+    # top-of-hour scheduling congestion, where queued runs are routinely delayed or
+    # dropped — so the hourly email actually lands. Count is unchanged (24/day).
+    - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
