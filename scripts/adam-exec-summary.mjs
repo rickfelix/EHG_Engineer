@@ -8,12 +8,15 @@ import { execSync } from 'child_process';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { readFileSync, writeFileSync } from 'fs';
+// FR-2 (SD-LEO-INFRA-ADAM-PREFERENCE-LEARNING-001): per-scope roll-up reuses the existing
+// scope vocabulary instead of re-inventing it (scan-core delivered enumerateScopes).
+import { enumerateScopes } from '../lib/adam/scope-registry.js';
 
 const EM = '—', UP = ' ↑', DN = ' ↓';
 const I = { star: '\u{1F3AF}', flag: '⛳', tools: '\u{1F6E0}', loop: '\u{1F501}', siren: '\u{1F6A8}' };
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const t = Date.now();
-const DRY = !!process.env.ADAM_EMAIL_DRYRUN;
+const DRY = !!process.env.ADAM_EMAIL_DRYRUN || process.argv.includes('--dry-run');
 const SNAP = resolve('.adam-email-last.json');
 const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const arrow = (cur, prev) => (typeof prev !== 'number' || cur === prev) ? '' : (cur > prev ? UP : DN);
@@ -38,6 +41,25 @@ try { const { data: open } = await db.from('strategic_directives_v2').select('sd
 const northStar = 'Pilot DataDistill S' + pilotStage + '/26' + (arrow(pilotStage, snap.pilotStage) || ' (steady)') + ' ' + EM + ' advancing as the process fixes it surfaced land. ' + procInFlight + ' process SDs in flight (stages 20-26 + ops).';
 
 let needs = []; try { needs = JSON.parse(readFileSync(resolve('.adam-chairman-decisions.json'), 'utf8')) || []; } catch {}
+
+// FR-2: per-scope roll-up — count recent Adam advisories per scope (reuses FR-1's scope_key),
+// fail-soft so a scope/DB error never blocks the chairman email.
+let scopeRollup = [], perScope = {};
+try {
+  const scopes = await enumerateScopes(db);
+  const advSince = new Date(t - 24 * 3600 * 1000).toISOString();
+  let advs = [];
+  try {
+    const { data } = await db.from('session_coordination').select('payload').gte('created_at', advSince).filter('payload->>kind', 'eq', 'adam_advisory').limit(2000);
+    advs = data || [];
+  } catch {}
+  for (const a of advs) { const sk = a.payload && a.payload.scope_key; if (sk) perScope[sk] = (perScope[sk] || 0) + 1; }
+  const prev = snap.perScope || {};
+  scopeRollup = (scopes || []).map((s) => ({ scope: s.scope_key, n: perScope[s.scope_key] || 0, arrow: arrow(perScope[s.scope_key] || 0, prev[s.scope_key]) }));
+} catch {}
+const scopeRollupLine = scopeRollup.length ? scopeRollup.map((r) => r.scope + ': ' + r.n + (r.arrow || '')).join('  ·  ') : '(scope roll-up unavailable)';
+// FR-2: scope-tag a needs item label (forward-compatible — only when the item carries a scope).
+const needsLabel = (d) => (d && (d.scope_key || d.scope) ? '[' + (d.scope_key || d.scope) + '] ' : '') + (d ? d.label : '');
 
 const since = new Date(t - 24 * 3600 * 1000).toISOString(); // value section = rolling 24h (substantive), not the 30-min cadence
 let buckets = { cap: [], enab: [], prob: [] }, shippedN = 0, completedNow = snap.completedCount;
@@ -74,7 +96,8 @@ const subject = '[Chairman] Pilot S' + pilotStage + '/26 ' + EM + ' ' + needs.le
 const text = [
   'STRATEGIC ' + EM + ' chairman lens (two focuses: drive the pilot + improve the venture process)', '',
   'NORTH STAR: ' + northStar, '',
-  'NEEDS YOU (' + needs.length + '):', ...needs.map(d => '  - [' + d.priority + '] ' + d.label), '',
+  'NEEDS YOU (' + needs.length + '):', ...needs.map(d => '  - [' + d.priority + '] ' + needsLabel(d)), '',
+  'PER-SCOPE (advisories, last 24h): ' + scopeRollupLine, '',
   'VALUE DELIVERED (last 24h, ' + shippedN + ' SDs):',
   '  Capabilities added (' + buckets.cap.length + '): ' + bucketLine(buckets.cap, 3),
   '  Enablers added (' + buckets.enab.length + '): ' + bucketLine(buckets.enab, 3),
@@ -83,7 +106,8 @@ const text = [
   'CANARY: ' + canaryLine, '',
   '--- FLEET HEALTH ---', cardText
 ].join('\n');
-const needsHtml = needs.length ? '<ul style="margin:2px 0 0;padding-left:16px;font-size:13px">' + needs.map(d => '<li style="margin:0 0 3px"><b>[' + esc(d.priority) + ']</b> ' + esc(d.label) + '</li>').join('') + '</ul>' : '<span style="font-size:13px">nothing pending</span>';
+const needsHtml = needs.length ? '<ul style="margin:2px 0 0;padding-left:16px;font-size:13px">' + needs.map(d => '<li style="margin:0 0 3px"><b>[' + esc(d.priority) + ']</b> ' + esc(needsLabel(d)) + '</li>').join('') + '</ul>' : '<span style="font-size:13px">nothing pending</span>';
+const scopeRollupHtml = '<span style="font-size:13px">' + esc(scopeRollupLine) + '</span>';
 const valHtml = '<ul style="margin:2px 0 0;padding-left:16px;font-size:13px">' +
   '<li style="margin:0 0 3px"><b>Capabilities added (' + buckets.cap.length + '):</b> ' + esc(bucketLine(buckets.cap, 3)) + '</li>' +
   '<li style="margin:0 0 3px"><b>Enablers added (' + buckets.enab.length + '):</b> ' + esc(bucketLine(buckets.enab, 3)) + '</li>' +
@@ -93,6 +117,7 @@ const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px
   '<p style="font-size:12px;color:#777;margin:0 0 10px">Two focuses: drive the pilot (issue-discovery vehicle) + improve the venture-management process</p>' +
   '<p style="font-size:14px;margin:0 0 8px">' + I.star + ' <b>North star:</b> ' + esc(northStar) + '</p>' +
   '<p style="font-size:14px;margin:0 0 2px">' + I.flag + ' <b>Needs you (' + needs.length + '):</b></p>' + needsHtml +
+  '<p style="font-size:14px;margin:10px 0 2px"><b>Per-scope (advisories, last 24h):</b> ' + scopeRollupHtml + '</p>' +
   '<p style="font-size:14px;margin:10px 0 2px">' + I.tools + ' <b>Value delivered (last 24h, ' + shippedN + ' SDs):</b></p>' + valHtml +
   '<p style="font-size:14px;margin:10px 0 2px">' + I.loop + ' <b>Self-improvement:</b> ' + esc(selfLine) + '</p>' +
   '<p style="font-size:14px;margin:0 0 12px">' + I.siren + ' <b>Canary:</b> ' + esc(canaryLine) + '</p>' +
@@ -105,5 +130,5 @@ else {
   const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'Adam ' + EM + ' LEO Fleet Advisor <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
   console.log('ADAM-EMAIL', JSON.stringify(r));
-  try { writeFileSync(SNAP, JSON.stringify({ lastTs: t, pilotStage, completedCount: completedNow, selfScore, canaryCount: canaryN })); } catch {}
+  try { writeFileSync(SNAP, JSON.stringify({ lastTs: t, pilotStage, completedCount: completedNow, selfScore, canaryCount: canaryN, perScope })); } catch {}
 }
