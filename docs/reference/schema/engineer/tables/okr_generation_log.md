@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-09T23:32:49.554Z
+**Generated**: 2026-06-10T01:21:34.709Z
 **Rows**: 1
 **RLS**: Enabled (3 policies)
 
@@ -42,7 +42,7 @@
 - `okr_generation_log_vision_id_fkey`: vision_id → strategic_vision(id)
 
 ### Check Constraints
-- `okr_generation_log_status_check`: CHECK ((status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text])))
+- `okr_generation_log_status_check`: CHECK ((status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text, 'pending_chairman_acceptance'::text])))
 
 ## Indexes
 
