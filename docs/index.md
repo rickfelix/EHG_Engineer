@@ -292,7 +292,7 @@ Auto-generated documentation for 312+ database tables:
 
 | Document | Purpose |
 |----------|---------|
-| [planning/](archive/plans/documentation-cleanup-master-plan.md) | Planning documentation |
+| planning/ (archived plans live in docs/plans/archived/) | Planning documentation |
 
 ---
 

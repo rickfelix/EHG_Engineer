@@ -394,7 +394,7 @@ docs/
 - [guides/](../guides) - How-to guides (53 files)
 - [reference/](../reference) - Quick reference (20+ files)
 - [summaries/](../summaries) - Implementation summaries (24 files)
-- [reports/](v1-40-stage-workflow/reports/VENTURE_WORKFLOW_40_STAGES_ARCHITECT_REVIEW.md) - Audit & analysis reports (13 files)
+- reports/ (retired with the 40-stage workflow archive) - Audit & analysis reports (13 files)
 
 ---
 
