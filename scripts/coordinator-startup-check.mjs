@@ -32,6 +32,7 @@ export const RESPONSIBILITIES = [
   'MANAGER, not IC — delegate mechanical/parallelizable work (SD creation, audits, investigations, cleanups) to sub-agents or the fleet queue; reserve your cycles for judgment (prioritization, sensitive RCA, the execute step of destructive actions). Verify sub-agent output.',
   'KEEP WORKERS BUSY is the KPI — continuously source claimable work; idle workers + available work is a problem to solve. The coordinator is EITHER delegating/sourcing OR torn down, never idling in between.',
   'FORECAST utilization, do not REACT (operator 2026-06-10) — track each worker busy-state + ETA-to-free + belt depth (coordinator-capacity-forecast.mjs, armed cron); when the forecast predicts the belt running short (demand_soon + buffer > claimable), reach Adam for sourcing BEFORE workers go idle. An idle worker the forecast did not anticipate = failure. Never wait to be asked how busy the fleet is.',
+  'PRIORITIZE THE BACKLOG + WATCH INTERDEPENDENCIES (operator 2026-06-10) — the coordinator owns dispatch ordering: rank the claimable belt critical-path-first (unlock-count → priority → age) via coordinator-backlog-rank.mjs (armed cron; persists metadata.dispatch_rank that worker self-claim honors), and continuously track the dependency graph (blocked vs ready, stale dep-resolver anomalies, orchestrator parent/child gating). A critical-path SD sitting unclaimed while workers build leaf fixes = ordering failure.',
   'RECURRING 3-SOURCE AUDIT — check SD queue, harness backlog (feedback category=harness_backlog), and inbox; source backlog into DRAFT SDs only when the queue would starve idle workers.',
   'BACKGROUND MONITORING during operator conversations — run the cron ticks but surface only important events (stuck worker, empty-queue+idle, claim/worktree conflict, a worker question, a completion).',
   'CHAIRMAN EMAIL = the Adam exec-summary (GitHub-Actions cron, adam-exec-email-cron.yml) — the coordinator fleet email is RETIRED (chairman email cutover 2026-06-10); do NOT re-arm coordinator-email-summary.mjs. Escalate questions via the inbox/advisory lanes.',
@@ -76,6 +77,12 @@ export const STANDARD_LOOPS = [
   // reaches Adam for sourcing BEFORE the belt empties (30m cooldown). --dispatch enables the auto-reach.
   { key: 'capacity-forecast', label: 'Worker-utilization + belt dry-out forecaster (predictive Adam reach-out)', script: 'coordinator-capacity-forecast.mjs', cron: '3,13,23,33,43,53 * * * *',
     prompt: 'node scripts/coordinator-capacity-forecast.mjs --dispatch' },
+  // Backlog-ordering pass (operator directive 2026-06-10, SRE duty 6): ranks the claimable belt
+  // critical-path-first (unlock-count → priority → age) and persists metadata.dispatch_rank, which
+  // worker-checkin's self-claim tiers honor when fresh — "what gets done first" is coordinator-driven
+  // by default, not correction-by-dispatch.
+  { key: 'backlog-rank', label: 'Backlog prioritization pass (dispatch_rank for self-claim ordering)', script: 'coordinator-backlog-rank.mjs', cron: '6,21,36,51 * * * *',
+    prompt: 'node scripts/coordinator-backlog-rank.mjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
