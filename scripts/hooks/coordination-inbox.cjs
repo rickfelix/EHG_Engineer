@@ -104,9 +104,14 @@ function classifyInboxMessage(msg, opts = {}) {
   // through to the :105 carve-out below (surfaces, read_at left NULL) so a reply arriving after
   // a sync await times out is recovered by adam-advisory.cjs's durable `replies` reader.
   if (twoWayOn && isInfo && p.kind === 'coordinator_reply' && !amAdam) return { skip: true };
-  // Adam session: do NOT auto-drain a coordinator-originated INFO directive — leave read_at NULL
-  // so the Adam inbox monitor (read_at IS NULL) keeps surfacing it until Adam acts on it.
-  if (amAdam && isInfo && (msg.sender_type === 'orchestrator' || msg.sender_type === 'coordinator')) {
+  // Adam session: do NOT auto-drain a coordinator-originated directive of ANY message_type —
+  // leave read_at NULL so the Adam inbox monitor (read_at IS NULL) keeps surfacing it until Adam
+  // acts on it. QF-20260610-623: this carve-out was gated on isInfo, so a NON-INFO coordinator->Adam
+  // directive (e.g. COACHING — a live type per lib/coordinator/adam-action-ack.cjs:291 +
+  // scripts/coordinator-comms-check.mjs:84) fell through to the default drain (markRead/markAck:true)
+  // and was auto-acked on the next PostToolUse poll before Adam read it. Drop the isInfo gate so the
+  // carve-out fires for every message_type; INFO behavior is unchanged (it already matched here).
+  if (amAdam && (msg.sender_type === 'orchestrator' || msg.sender_type === 'coordinator')) {
     return { skip: false, markRead: false, markAck: false };
   }
   // Actionable idle rows — surface but do NOT mark read/ack on poll; re-surface until the agent
