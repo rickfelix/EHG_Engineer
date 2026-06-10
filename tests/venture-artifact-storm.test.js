@@ -112,7 +112,7 @@ describe('writeArtifactBatch single-current invariant (cleanup-safety mechanism)
             const inserted = arr.map((r) => ({ ...r, id: String(nextId++) }));
             rows.push(...inserted);
             return {
-              select: (cols) => ({
+              select: (_cols) => ({
                 single: async () => ({ data: inserted[0], error: null }),
                 then: (res) => res({ data: inserted.map(r => ({ id: r.id })), error: null }),
               }),
