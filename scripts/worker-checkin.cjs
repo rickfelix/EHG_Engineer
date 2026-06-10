@@ -310,6 +310,79 @@ async function recoverStrandedFinal(sb, sessionId, base) {
   return null;
 }
 
+// SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001: adopt ORPHANED in_progress SDs (zero active claims).
+// A session reaped mid-build (worktree + commits intact) leaves its SD in_progress with
+// claiming_session_id NULL — invisible to EVERY other tier: step 4 needs claude_sessions.sd_key,
+// step 5.7 only covers pending_approval/LEAD_FINAL, and step 6's isSdInFlight guard skips any SD
+// past LEAD (the exact bug: the orphan IS past LEAD, so checkin idled while sd:next flagged
+// LOCAL_ACTIVITY; recovery was a human-driven manual claim_sd — witnessed 2026-06-10 adopting
+// SD-LEO-INFRA-ENABLE-ADAM-GOVERNANCE-001). This tier mirrors recoverStrandedFinal: age-guarded
+// query, shared eligibility classifier, live-holder probe, claim_sd as the final race arbiter,
+// fail-open, idempotent (a re-strand is re-adopted next checkin).
+//
+// Sweep interaction (validated, do NOT re-introduce a destructive reset): the stale-session
+// sweep's phantom-detect (QF-20260426-SWEEP-PHANTOM-DETECT) targets the same zero-claim
+// in_progress population but RESETS it to draft/LEAD — gated by assertSweepHandoffGate, which
+// SKIPS any SD with an accepted handoff past LEAD. So the mid-build orphans this tier adopts
+// survive the sweep, and LEAD-phase no-commit orphans the sweep resets are picked up by the
+// draft tier (6.25) instead. Disjoint dispositions, no race.
+//
+// NOTE: isSdInFlight is deliberately NOT reused here — its phase!=LEAD leg would veto every
+// orphan by definition; only its live-foreign-holder leg applies (inlined below). claim_sd
+// independently refuses live peers (already_claimed / claimed_by_live_peer) and terminal
+// statuses ({completed,cancelled,deferred} — in_progress is claimable), so the probe is
+// defense-in-depth, not the sole guard.
+const ORPHAN_CANDIDATE_LIMIT = 5;
+// One full claim-TTL window (claimGuard TTL = 15 min): a mid-transition worker whose claim
+// briefly clears is never raced; sweep claim-clears also refresh updated_at, deferring adoption
+// one window past the clear. A genuine orphan sits indefinitely — the delay is safe.
+const ORPHAN_MIN_AGE_MS = 15 * 60 * 1000;
+
+async function adoptOrphanInProgress(sb, sessionId, base) {
+  try {
+    const cutoffIso = new Date(Date.now() - ORPHAN_MIN_AGE_MS).toISOString();
+    const { data: orphans } = await sb
+      .from('strategic_directives_v2')
+      // sd_key/sd_type/metadata feed classifyDispatchIneligibility; current_phase feeds the
+      // resume message (advisory — sd-start reads the live phase authoritatively on attach).
+      .select('sd_key, sd_type, status, current_phase, metadata, updated_at')
+      .eq('status', 'in_progress')
+      .is('claiming_session_id', null)
+      .neq('sd_type', 'orchestrator')         // parents are in_progress/no-claim BY DESIGN while children run
+      .lt('updated_at', cutoffIso)            // parked > one claim-TTL window — not a mid-transition race
+      .order('updated_at', { ascending: true }) // oldest orphan first
+      .limit(ORPHAN_CANDIDATE_LIMIT);
+    for (const sd of (orphans || [])) {
+      // Shared classifier (same predicate as the draft tier + coordinator sweep): orchestrator
+      // (redundant with .neq — harmless), test-fixture keys (SD-DEMO-*/SD-TEST-*), and
+      // metadata.requires_human_action all skip.
+      if (classifyDispatchIneligibility(sd) !== null) continue;
+      // Live-foreign-holder probe (the half-write case: SD-side claim cleared but a LIVE session
+      // still points at it via claude_sessions.sd_key). Fail-open: probe errors don't block.
+      try {
+        const { data: live } = await sb
+          .from('v_active_sessions')
+          .select('session_id')
+          .eq('sd_key', sd.sd_key)
+          .neq('session_id', sessionId)
+          .eq('is_alive', true)
+          .limit(1);
+        if (live && live.length) continue;
+      } catch { /* fail-open: claim_sd still arbitrates */ }
+      const claimed = await tryClaim(sb, sd.sd_key, sessionId);
+      if (claimed.ok) {
+        return {
+          ...base,
+          action: 'resume_orphan',
+          sd: sd.sd_key,
+          message: `Adopted ORPHANED in_progress SD ${sd.sd_key} (zero active claims — prior session reaped mid-build; worktree/commits likely intact). Re-attach + continue: node scripts/sd-start.js ${sd.sd_key} (re-attaches the existing worktree / resumes from the pushed branch), then continue the handoff chain from its live phase (currently ${sd.current_phase || 'unknown'} — sd-start reads the authoritative phase). On completion, re-run /checkin.`,
+        };
+      }
+    }
+  } catch { /* fail-open -> caller continues to normal self-claim */ }
+  return null;
+}
+
 /**
  * Dedup guard: should this SD candidate be SKIPPED by self-claim because it is already
  * being built? v_sd_next_candidates only filters completed/cancelled/deferred and
@@ -440,7 +513,7 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
 
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: actions whose result carries a freshly-held claim — every
 // path where a worker ends a check-in owning work and therefore deserves a name NOW.
-const CLAIMED_CHECKIN_ACTIONS = new Set(['resume', 'resume_final', 'claimed_assignment', 'self_claimed', 'self_claimed_qf']);
+const CLAIMED_CHECKIN_ACTIONS = new Set(['resume', 'resume_final', 'resume_orphan', 'claimed_assignment', 'self_claimed', 'self_claimed_qf']);
 
 // Public check-in entrypoint: resolve the action, then name a freshly-claimed, identity-less worker
 // before returning so the SAME response reports the callsign. Naming is a thin fail-open wrapper over
@@ -556,6 +629,13 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   const recovered = await recoverStrandedFinal(sb, sessionId, base);
   if (recovered) return recovered;
 
+  // 5.8 SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001: adopt an ORPHANED in_progress SD (zero active
+  //     claims, session reaped mid-build) BEFORE self-claiming new work — finishing a
+  //     partially-built SD beats starting fresh, but a one-handoff-from-shipped stranded final
+  //     (5.7) still wins over a mid-build orphan.
+  const adopted = await adoptOrphanInProgress(sb, sessionId, base);
+  if (adopted) return adopted;
+
   // 5.5 SD-FDBK-INFRA-AUTO-MAINTAIN-EXECUTION-001: ensure an active execution baseline exists
   //      BEFORE reading v_sd_next_candidates. With zero active baseline the view returns 0 rows
   //      and self-claim silently idles with a full queue. Fail-open: a failure here degrades to
@@ -620,7 +700,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, isSdInFlight, selfHealStaleClaim, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
