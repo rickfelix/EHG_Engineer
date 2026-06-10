@@ -18,6 +18,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -446,9 +447,16 @@ export function estimateRetroQualityScore(row = {}) {
 async function logHealLearningFailure(supabase, failing, reason) {
   console.warn(`  ⚠️  Learning capture failed for ${failing.sdKey}: ${reason}`);
   try {
-    await supabase.from('eva_event_log').insert({
+    // Live columns: metadata (not event_data); trigger_source/status/correlation_id are NOT NULL
+    // with no defaults; CHECKs: trigger_source in (realtime,cron,manual), status in
+    // (succeeded,failed,suppressed); correlation_id is uuid (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
+    const { error } = await supabase.from('eva_event_log').insert({
       event_type: 'heal_learning_capture_failed',
-      event_data: {
+      trigger_source: 'manual',
+      status: 'failed',
+      correlation_id: randomUUID(),
+      error_message: String(reason).slice(0, 500),
+      metadata: {
         sd_key: failing.sdKey,
         score_id: failing.scoreId,
         total_score: failing.score,
@@ -456,6 +464,7 @@ async function logHealLearningFailure(supabase, failing, reason) {
         threshold: ACCEPT_THRESHOLD,
       },
     });
+    if (error) console.warn(`  ⚠️  Escalation event write failed: ${error.message}`);
   } catch (_) {
     // Escalation is best-effort; never block.
   }
@@ -554,9 +563,15 @@ async function captureHealLearnings(supabase, failingScores, parsed) {
 
       // 6. Success event (non-blocking telemetry).
       try {
-        await supabase.from('eva_event_log').insert({
+        // Live columns: metadata (not event_data); trigger_source/status/correlation_id are NOT NULL
+        // with no defaults; CHECKs: trigger_source in (realtime,cron,manual), status in
+        // (succeeded,failed,suppressed); correlation_id is uuid (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
+        const { error: emitError } = await supabase.from('eva_event_log').insert({
           event_type: 'heal_learning_captured',
-          event_data: {
+          trigger_source: 'manual',
+          status: 'succeeded',
+          correlation_id: randomUUID(),
+          metadata: {
             sd_key: failing.sdKey,
             total_score: failing.score,
             delta,
@@ -566,6 +581,7 @@ async function captureHealLearnings(supabase, failingScores, parsed) {
             threshold: ACCEPT_THRESHOLD,
           },
         });
+        if (emitError) console.warn(`  ⚠️  Telemetry event write failed: ${emitError.message}`);
       } catch (_) {
         // Never block on telemetry.
       }

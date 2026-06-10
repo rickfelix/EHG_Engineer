@@ -131,9 +131,11 @@ async function managementReviewHandler(_options = {}) {
   const okrSnapshot = buildOkrSnapshot(objectives, keyResults);
 
   // --- Gather venture data ---
+  // Live column is current_lifecycle_stage — ventures has NO current_stage
+  // (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
   const { data: ventures } = await supabase
     .from('ventures')
-    .select('id, name, status, current_stage')
+    .select('id, name, status, current_lifecycle_stage')
     .eq('status', 'active');
 
   // Table eva_intake_queue does not exist yet
@@ -168,7 +170,7 @@ async function managementReviewHandler(_options = {}) {
 
   lines.push('## Ventures');
   for (const v of ventures || []) {
-    lines.push(`- ${v.name}: Stage ${v.current_stage}`);
+    lines.push(`- ${v.name}: Stage ${v.current_lifecycle_stage}`);
   }
 
   const narrative = lines.join('\n');
@@ -182,7 +184,7 @@ async function managementReviewHandler(_options = {}) {
     planned_sds: baselineData.totalItems || 0,
     actual_sds: completed,
     planned_ventures: (ventures || []).length,
-    actual_ventures: (ventures || []).filter(v => v.current_stage >= 5).length,
+    actual_ventures: (ventures || []).filter(v => v.current_lifecycle_stage >= 5).length,
     okr_snapshot: okrSnapshot,
     pipeline_snapshot: {
       intakePending: (intake || []).length,

@@ -141,12 +141,14 @@ async function analyzeGateCalibration() {
 
 // ─── Domain 3: Capability Delivery Tracking ───────────────────
 async function analyzeCapabilityDelivery() {
+  // Live column is completion_date — strategic_directives_v2 has NO completed_at
+  // (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
   const { data: completed } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, sd_type, category, completed_at, key_changes')
+    .select('id, sd_key, title, sd_type, category, completion_date, key_changes')
     .eq('status', 'completed')
-    .gte('completed_at', cutoffDate(60))
-    .order('completed_at', { ascending: false })
+    .gte('completion_date', cutoffDate(60))
+    .order('completion_date', { ascending: false })
     .limit(50);
 
   if (!completed || completed.length === 0) return [];
@@ -180,9 +182,11 @@ async function analyzeCapabilityDelivery() {
 
 // ─── Domain 4: Venture Stage Readiness ────────────────────────
 async function analyzeVentureReadiness() {
+  // Live column is current_lifecycle_stage — ventures has NO current_stage
+  // (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
   const { data: ventures } = await supabase
     .from('ventures')
-    .select('id, name, status, current_stage, updated_at')
+    .select('id, name, status, current_lifecycle_stage, updated_at')
     .eq('status', 'active');
 
   if (!ventures || ventures.length === 0) return [];
@@ -195,7 +199,7 @@ async function analyzeVentureReadiness() {
       const daysSinceUpdate = (Date.now() - new Date(v.updated_at).getTime()) / 86400000;
       if (daysSinceUpdate > 30) {
         findings.push({
-          title: `Venture "${v.name}" stalled at stage ${v.current_stage || 'unknown'}`,
+          title: `Venture "${v.name}" stalled at stage ${v.current_lifecycle_stage || 'unknown'}`,
           description: `No progress in ${Math.round(daysSinceUpdate)} days. Consider reviewing blockers or deprioritizing.`,
           dataPoints: 3, // venture + stage + staleness = 3 signals
           domain: 'venture_readiness',
@@ -259,11 +263,12 @@ async function analyzeProtocolHealth() {
 
 // ─── Domain 6: Cross-Venture Capability Reuse Detection ──────
 async function analyzeCrossVentureReuse() {
+  // Live column is completion_date (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
   const { data: sds } = await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key, title, key_changes, success_criteria, target_application')
     .eq('status', 'completed')
-    .gte('completed_at', cutoffDate(90))
+    .gte('completion_date', cutoffDate(90))
     .limit(50);
 
   if (!sds || sds.length < 5) return [];
