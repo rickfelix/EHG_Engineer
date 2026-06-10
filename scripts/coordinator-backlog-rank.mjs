@@ -92,7 +92,19 @@ async function main() {
   }
 
   // ── rank ──
+  // INTERIM QUARANTINE (belt audit 2026-06-10): un-triaged machine-filed SDs rank BELOW all
+  // human-authored work. pattern-alert-sd-creator bulk-filed 25 near-duplicate "criticals" in one
+  // wave, flooding ranks #1-25 ahead of chairman program work; the generator is the known
+  // false-positive-prone corrective pipeline. Sequencing is the coordinator's: priority FIELDS are
+  // left untouched (Adam right-sizes them in triage), but the RANK demotes auto-generated rows
+  // until a human/Adam review clears them (metadata.triaged_by set → quarantine lifts).
+  const quarantined = (d) => {
+    const m = d.metadata || {};
+    return m.auto_generated === true && !m.triaged_by;
+  };
   claimable.sort((a, b) => {
+    const qa = quarantined(a) ? 1 : 0, qb = quarantined(b) ? 1 : 0;
+    if (qa !== qb) return qa - qb;                          // human-authored first
     const ua = unlockScore(a.sd_key), ub = unlockScore(b.sd_key);
     if (ub !== ua) return ub - ua;
     const pa = PRIORITY_W[String(a.priority || '').toLowerCase()] ?? 0;
