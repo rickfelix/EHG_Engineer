@@ -92,7 +92,29 @@ export function createTranslationFidelityGate(supabase) {
           success_criteria: sd.success_criteria,
         };
 
-        const result = await runArchitectureToSDGate(archKey, sdData);
+        // SD-LEO-FIX-PHASE-SCOPE-TRANSLATION-001 (FR-3): phase-scope multi-SD plans.
+        // Query sibling SDs sharing this arch_key so the engine scores ONLY the slice
+        // this SD claims; sibling-owned plan content comes back sibling_covered and is
+        // reported as informational instead of failing the gate. Fail-toward-current:
+        // a sibling-query error degrades to the unscoped (legacy) evaluation.
+        let siblings = [];
+        try {
+          const { data: sibRows } = await supabase
+            .from('strategic_directives_v2')
+            .select('sd_key, title')
+            .filter('metadata->>arch_key', 'eq', archKey)
+            .neq('sd_key', sdKey)
+            .limit(40);
+          siblings = sibRows || [];
+        } catch (e) {
+          console.log(`   ⚠️  Sibling query failed (running unscoped): ${e.message}`);
+        }
+        const archPhase = sd?.metadata?.arch_phase || null;
+        if (siblings.length > 0 || archPhase) {
+          console.log(`   🔭 Phase-scoped: ${siblings.length} sibling SD(s) share ${archKey}${archPhase ? `; declared slice: ${archPhase}` : ''}`);
+        }
+
+        const result = await runArchitectureToSDGate(archKey, sdData, { archPhase, siblings });
 
         if (!result) {
           console.log('   ⚠️  Translation fidelity gate returned no result — treating as advisory pass');
@@ -102,9 +124,11 @@ export function createTranslationFidelityGate(supabase) {
           });
         }
 
-        // Map engine result to semantic gate result
+        // Map engine result to semantic gate result.
+        // FR-3: sibling-covered gaps are informational — excluded from criticals/issues.
         const gapCount = result.gaps?.length || 0;
-        const criticalGaps = result.gaps?.filter(g => g.severity === 'critical') || [];
+        const siblingCoveredGaps = result.gaps?.filter(g => g.sibling_covered) || [];
+        const criticalGaps = result.gaps?.filter(g => g.severity === 'critical' && !g.sibling_covered) || [];
         const score = result.score ?? 0;
         const sdType = sd?.sd_type || 'feature';
         const passingScore = getPassingScore(sdType);
@@ -115,8 +139,8 @@ export function createTranslationFidelityGate(supabase) {
         if (gapCount > 0) {
           console.log('   Gaps found:');
           for (const gap of result.gaps) {
-            const icon = gap.severity === 'critical' ? '❌' : gap.severity === 'major' ? '⚠️' : 'ℹ️';
-            console.log(`      ${icon} [${gap.severity}] ${gap.item} (source: ${gap.source})`);
+            const icon = gap.sibling_covered ? '🔭' : gap.severity === 'critical' ? '❌' : gap.severity === 'major' ? '⚠️' : 'ℹ️';
+            console.log(`      ${icon} [${gap.sibling_covered ? 'sibling-covered' : gap.severity}] ${gap.item} (source: ${gap.source})`);
           }
         }
 
@@ -136,13 +160,16 @@ export function createTranslationFidelityGate(supabase) {
             ...criticalGaps.map(g => `Critical gap: ${g.item}`)
           ],
           warnings: result.gaps
-            ?.filter(g => g.severity !== 'critical')
-            .map(g => `[${g.severity}] ${g.item}`) || [],
+            ?.filter(g => g.severity !== 'critical' || g.sibling_covered)
+            .map(g => g.sibling_covered ? `[sibling-covered] ${g.item}` : `[${g.severity}] ${g.item}`) || [],
           details: {
             arch_key: archKey,
             gate_type: 'architecture_to_sd',
             gap_count: gapCount,
             critical_gap_count: criticalGaps.length,
+            sibling_covered_count: siblingCoveredGaps.length,
+            sibling_count: siblings.length,
+            arch_phase: archPhase,
             model_used: result.details?.model_used,
             duration_ms: result.details?.duration_ms,
           },
