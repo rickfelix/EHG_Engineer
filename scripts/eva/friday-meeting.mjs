@@ -18,7 +18,9 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
 import { gatherRdProposals as _gatherRdProposals, renderRdProposals as _renderRdProposals, buildCombinedDecisionPayload as _buildCombinedDecisionPayload, processRdProposalDecision as _processRdProposalDecision } from '../../lib/skunkworks/friday-rd-section.js';
 import { buildInsightsReport, formatInsightsForDisplay } from '../modules/learning/insights.js';
-import { gatherStitchHealth, renderStitchHealth } from '../../lib/eva/bridge/stitch-metrics.js';
+// SD-LEO-ORCH-REPLACE-GOOGLE-STITCH-001-B (6b9021da14) removed the stitch bridge files but left this
+// import dangling, which broke friday-meeting.mjs at import time (the whole Friday cadence was un-runnable).
+// Removed here as a necessary enabler for the chairman-acceptance wiring below (dead import → deleted module).
 // SD-EVA-SUPPORT-CLI-SKILL-ORCH-001-B / FR-5, TR-4, US-005: Section 4b reads recent
 // eva_support_decision_log entries via the canonical store; outcome write helper
 // is callable by the /friday slash command after the chairman responds.
@@ -782,7 +784,7 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log('═'.repeat(55));
 
   // Gather all data in parallel
-  const [perfData, capData, consultData, intakeData, decisionLogData, rdData, fleetData, pluginData, insightsData, stitchData] = await Promise.all([
+  const [perfData, capData, consultData, intakeData, decisionLogData, rdData, fleetData, pluginData, insightsData] = await Promise.all([
     gatherPerformanceReview(),
     gatherCapabilityReport(),
     gatherConsultantFindings(),
@@ -792,7 +794,6 @@ export async function fridayMeetingHandler(options = {}) {
     gatherFleetTelemetry(),
     gatherPluginDiscoveries(),
     gatherLearningInsights(),
-    gatherStitchHealth().catch(err => { logger.warn('[friday-meeting] Stitch health gather failed:', err.message); return { fleet: { total_screens: 0 }, degraded_ventures: [], sd_suggestions: [], has_issues: false }; }),
   ]);
 
   // Render sections 1-5b
@@ -806,7 +807,6 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log(renderRdProposals(rdData));
   logger.log(renderFleetTelemetry(fleetData));
   logger.log(renderPluginDiscoveries(pluginData));
-  logger.log(renderStitchHealth(stitchData));
   logger.log(renderLearningInsights(insightsData));
 
   // Section 6: Decisions
