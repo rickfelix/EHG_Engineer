@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { createRequire } from 'module';
 // SD-LEO-INFRA-COORDINATOR-DISPATCH-TARGET-001: validated dispatch guard.
-const { insertCoordinationRow } = createRequire(import.meta.url)('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, isFullUuid } = createRequire(import.meta.url)('../lib/coordinator/dispatch.cjs');
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
@@ -97,20 +97,32 @@ export async function selfReviewMain() {
   // 3) DUE — solicit fresh critique from active workers + synthesize, then reset the counter
   const { data: sess } = await db.from('claude_sessions').select('session_id,metadata,heartbeat_at').gte('heartbeat_at', new Date(t - 30 * 60000).toISOString());
   // SD-...-001-D / FR-4: split workers vs Adam participants (default-OFF byte-identical).
-  const { workers, adamParticipants } = partitionParticipants(sess, me, adamReviewOn);
+  const { workers: rawWorkers, adamParticipants: rawAdam } = partitionParticipants(sess, me, adamReviewOn);
+  // Fixture/garbage guard (live crash 2026-06-10 ×2): drain-test rows leak non-UUID session_ids
+  // (e.g. drain_test_exe_s0_*) into claude_sessions with fresh heartbeats; the dispatch guard
+  // rightly REFUSES them, but an uncaught throw here killed the whole solicitation AND (because
+  // the counter stamps after the loops) put the review into a 5-min crash-loop. Filter to full
+  // UUIDs up front; per-target try/catch below contains anything else.
+  const workers = rawWorkers.filter((w) => isFullUuid(w));
+  const adamParticipants = rawAdam.filter((a) => isFullUuid(a));
   let solicited = 0;
+  let solicitFailed = 0;
   const body = 'COORDINATOR-FEEDBACK REQUEST (recurring review of the COORDINATOR, triggered by ' + delta + ' SDs shipped since the last review): candid critique of how the coordinator is running the fleet — (1) what worked (routing/sourcing/RCA/conflict-resolution/keeping you fed), (2) friction caused BY the coordinator (slow/missing replies, mis-routing, bad SD sourcing, unclear guidance, missed signals), (3) ONE concrete thing to do differently. Be blunt. Reply: /signal feedback, prefix "COORDINATOR-FEEDBACK".';
   for (const w of workers) {
-    await insertCoordinationRow(db, { target_session: w, sender_session: me, subject: 'Coordinator review (every ' + REVIEW_EVERY + ' SDs) — your candid feedback', message_type: 'COACHING', payload: { kind: 'coordinator_reply', body } });
-    solicited++;
+    try {
+      await insertCoordinationRow(db, { target_session: w, sender_session: me, subject: 'Coordinator review (every ' + REVIEW_EVERY + ' SDs) — your candid feedback', message_type: 'COACHING', payload: { kind: 'coordinator_reply', body } });
+      solicited++;
+    } catch (e) { solicitFailed++; console.error('[COORD-REVIEW] solicit skip ' + w + ': ' + e.message.split('\n')[0]); }
   }
   // SD-...-001-D / FR-5: bidirectional coordinator<->Adam solicitation (default-OFF).
   let adamSolicited = 0;
   if (adamReviewOn && adamParticipants.length) {
     const adamBody = 'ADAM-REVIEW REQUEST (bidirectional coordinator<->Adam review, ' + delta + ' SDs shipped since last review): candid critique of how the COORDINATOR works WITH Adam — (1) assignment clarity, (2) comms latency / reply timeliness on the advisory lane, (3) dependency handling for Adam-sourced work. Adam: reciprocate with your OWN friction. Reply: /signal feedback, prefix "ADAM-COORD-FEEDBACK". Both sides self-improve (coordinator.md + CLAUDE_ADAM.md).';
     for (const a of adamParticipants) {
-      await insertCoordinationRow(db, { target_session: a, sender_session: me, subject: 'Coordinator<->Adam review (every ' + REVIEW_EVERY + ' SDs) — candid bidirectional feedback', message_type: 'COACHING', payload: { kind: 'coordinator_reply', body: adamBody } });
-      adamSolicited++;
+      try {
+        await insertCoordinationRow(db, { target_session: a, sender_session: me, subject: 'Coordinator<->Adam review (every ' + REVIEW_EVERY + ' SDs) — candid bidirectional feedback', message_type: 'COACHING', payload: { kind: 'coordinator_reply', body: adamBody } });
+        adamSolicited++;
+      } catch (e) { solicitFailed++; console.error('[COORD-REVIEW] adam solicit skip ' + a + ': ' + e.message.split('\n')[0]); }
     }
   }
   try { writeFileSync(STATE, JSON.stringify({ lastReviewCompletedCount: completedNow, lastReviewAt: t })); } catch {}
