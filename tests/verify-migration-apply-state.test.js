@@ -8,8 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  stripNonDdl, normalizeName, extractDdlFacts, orderMigrations,
-  foldLifecycle, classifyFiles, ARTIFACT_RE,
+  extractDdlFacts, orderMigrations, foldLifecycle, classifyFiles, ARTIFACT_RE,
 } from '../scripts/verify-migration-apply-state.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
