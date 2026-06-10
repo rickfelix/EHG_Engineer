@@ -1,0 +1,69 @@
+# Schema-reference lint — blocks NEW code referencing nonexistent tables/columns.
+# SD-LEO-INFRA-SCHEMA-REFERENCE-LINT-001 (FR-4). Modeled on metadata-flag-lint.yml.
+#
+# Diff-only: compares ONLY files changed vs the PR base against the committed
+# schema snapshot (database/schema-reference-snapshot.json) — offline, no DB
+# credentials needed in CI. The pre-existing phantom backlog (~30 tables /
+# 782 column refs, data-layer scan 2026-06-10) never blocks a PR.
+#
+# ROLLOUT — ADVISORY FIRST: continue-on-error is true for a 7-day soak.
+# FLIP CRITERION: after 7 days (from merge of this workflow) with zero
+# false-positive reports in the harness backlog, set continue-on-error: false
+# to make the lint blocking. Escapes (always available):
+#   scripts/lint/schema-reference-allowlist.json  (files / tables)
+#   inline pragma: a comment containing schema-lint-disable-line
+name: Schema Reference Lint
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'src/**/*.js'
+      - 'src/**/*.ts'
+      - 'src/**/*.tsx'
+      - 'server/**'
+      - 'api/**'
+      - 'app/**'
+      - 'database/schema-reference-snapshot.json'
+      - 'scripts/lint/schema-reference-*'
+      - '.github/workflows/schema-reference-lint.yml'
+
+concurrency:
+  group: schema-reference-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  schema-reference-lint:
+    name: schema-reference-lint
+    runs-on: ubuntu-latest
+    # ADVISORY SOAK — see flip criterion in the header comment.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run schema-reference lint (diff vs PR base)
+        env:
+          SCHEMA_LINT_BASE: origin/${{ github.base_ref }}
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1 || true
+          node scripts/lint/schema-reference-lint.mjs --diff | tee lint-output.txt
+          exit_code=${PIPESTATUS[0]}
+          {
+            echo "## Schema Reference Lint"
+            echo ""
+            echo '```'
+            cat lint-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $exit_code
