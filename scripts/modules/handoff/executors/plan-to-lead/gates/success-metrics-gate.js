@@ -26,7 +26,8 @@ function isNotApplicable(value) {
   return NA_PATTERN.test(String(value).trim());
 }
 
-function parseMetricValue(value) {
+// Exported for unit tests (SD-FDBK-FIX-FIX-SUCCESS-METRICS-001) — pure, no side effects.
+export function parseMetricValue(value) {
   if (value == null) return null;
   const str = String(value).trim();
   if (!str) return null;
@@ -42,17 +43,34 @@ function parseMetricValue(value) {
   if (ofMatch && parseFloat(ofMatch[2]) > 0) return (parseFloat(ofMatch[1]) / parseFloat(ofMatch[2])) * 100;
   const inlineFracMatch = str.match(/\b(\d+)\s*\/\s*(\d+)\b/);
   if (inlineFracMatch && parseFloat(inlineFracMatch[2]) > 0) return (parseFloat(inlineFracMatch[1]) / parseFloat(inlineFracMatch[2])) * 100;
+  // SD-FDBK-FIX-FIX-SUCCESS-METRICS-001: operator-prefixed quantified values (">=1 finding",
+  // "<5 errors", "≥3 dimensions") fell through to the parseFloat fallback below, which returns NaN
+  // on the leading operator → null → the metric scored the non-numeric 75 even when genuinely met.
+  // Strip a leading comparison operator (ASCII + unicode) and parse the remainder. Comparison
+  // integrity is preserved: meetsTarget() extracts the operator from the RAW target string before
+  // any parsing, so an unmet operator-prefixed goal still fails (scores 50). This also fixes
+  // operator-prefixed TARGETS (">=1"), which nulled out via the same fallback. Placed after all
+  // existing branches so no currently-parsing form changes.
+  const opStripped = str.match(/^(?:[<>=]+|≥|≤)\s*([\d.]+)/);
+  if (opStripped) {
+    const opNum = parseFloat(opStripped[1]);
+    if (!isNaN(opNum)) return opNum;
+  }
   const num = parseFloat(str);
   if (!isNaN(num)) return num;
   return null;
 }
 
-function meetsTarget(actual, target) {
+// Exported for unit tests (SD-FDBK-FIX-FIX-SUCCESS-METRICS-001) — pure, no side effects.
+export function meetsTarget(actual, target) {
   if (actual == null || target == null) return null;
   const actualNum = parseMetricValue(String(actual));
   const targetStr = String(target).trim();
-  const opMatch = targetStr.match(/^([<>=]+)/);
-  const operator = opMatch ? opMatch[1] : '>=';
+  // SD-FDBK-FIX-FIX-SUCCESS-METRICS-001: also extract unicode operators (≥ → >=, ≤ → <=). Without
+  // this, a now-parsing "≤2" target would fall back to the default '>=' and INVERT the comparison
+  // into a false pass — the parse fix and this extraction must land together.
+  const opMatch = targetStr.match(/^([<>=]+|≥|≤)/);
+  const operator = opMatch ? (opMatch[1] === '≥' ? '>=' : opMatch[1] === '≤' ? '<=' : opMatch[1]) : '>=';
   const targetNum = parseMetricValue(targetStr);
   if (actualNum == null || targetNum == null) return null;
   switch (operator) {
@@ -220,8 +238,8 @@ export function createSuccessMetricsGate(supabase) {
               .eq('id', sdUuid);
           } else {
             // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-080: Explain why auto-population skipped
-            console.log(`   ⚠️  No evidence found for auto-population (0 handoffs, 0 completed stories)`);
-            console.log(`      💡 Complete user stories or handoffs to provide evidence for metric actuals`);
+            console.log('   ⚠️  No evidence found for auto-population (0 handoffs, 0 completed stories)');
+            console.log('      💡 Complete user stories or handoffs to provide evidence for metric actuals');
           }
         } catch (autoPopErr) {
           console.log(`   ⚠️  Auto-populate failed: ${autoPopErr.message} (continuing with manual values)`);
