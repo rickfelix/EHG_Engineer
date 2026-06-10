@@ -1,0 +1,60 @@
+name: Stage Contract Connectivity
+
+# SD-LEO-INFRA-STAGE-CONTRACT-REGISTRY-001 FR-4.
+# Runs the stage-contract connectivity solver
+# (scripts/validate-stage-contract-connectivity.mjs): asserts venture_stages
+# required artifacts have declared producers (C1), boundary configs are
+# coherent (C2), S18 consumes are satisfiable (C3), no deprecated alias sits
+# in a live registry (C4), the legacy stage_artifact_requirements table
+# mirrors the SSOT (C5), and the STAGE_CONTRACTS Map has no duplicate stage
+# keys (C7). Prevents the drift class behind the S21/S22 mislabeled-artifact
+# incidents (412 + 1,230 junk venture_artifacts rows from stale exit-gate
+# types feeding the orchestrator's generic fallback).
+#
+# Cloned from boundary-config-coherence.yml (which stays as-is; this solver's
+# C2 supersets its check — fold-in is a follow-up once this workflow soaks).
+
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/artifact-types.js'
+      - 'lib/eva/contracts/**'
+      - 'lib/eva/stage-templates/upstream-artifact-types.js'
+      - 'database/migrations/*venture_stages*.sql'
+      - 'database/migrations/*stage_artifact_requirements*.sql'
+      - 'database/migrations/*gate_boundary_config*.sql'
+      - 'scripts/validate-stage-contract-connectivity.mjs'
+      - '.github/workflows/stage-contract-connectivity.yml'
+  schedule:
+    # Nightly drift sweep — table edits bypass PRs, so path filters alone
+    # cannot catch registry drift (precedent: gate-health-weekly.yml).
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  stage-contract-connectivity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: stage-contract-connectivity-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Assert secrets present
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          [ -n "$SUPABASE_URL" ] || { echo "[STAGE_CONTRACT_INFRA_ERROR] SUPABASE_URL missing"; exit 2; }
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo "[STAGE_CONTRACT_INFRA_ERROR] SUPABASE_SERVICE_ROLE_KEY missing"; exit 2; }
+      - run: npm ci --no-audit --no-fund
+      - name: Run stage-contract connectivity solver
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run stage-contracts:check

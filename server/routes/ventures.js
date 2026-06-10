@@ -42,11 +42,19 @@ function aggregateTeardownResults(results) {
 }
 
 // Get all ventures
+// SD-LEO-INFRA-SYNTHETIC-CANARY-VENTURE-001 (FR-5c): demo/canary ventures
+// (is_demo=true — e.g. the synthetic canary probe venture) are excluded from
+// the list by default so they never surface in chairman dashboards/rollups.
+// Opt in with ?include_demo=1.
 router.get('/', asyncHandler(async (req, res) => {
-  const { data, error } = await dbLoader.supabase
+  let query = dbLoader.supabase
     .from('ventures')
     .select('*')
     .order('created_at', { ascending: false });
+  if (req.query.include_demo !== '1') {
+    query = query.or('is_demo.is.null,is_demo.eq.false');
+  }
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching ventures:', error);

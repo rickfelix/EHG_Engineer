@@ -93,10 +93,21 @@ export async function runScore(options = {}) {
   const score = await scoreSD({ sdKey, visionKey, archKey, scope, dryRun });
 
   // Step 2: Generate corrective SD (only when score has a DB record)
+  // SD-LEO-INFRA-CLASS-LEVEL-PATTERN-001: gated DEFAULT-OFF. This per-score
+  // auto-finding path produced 5/5 false positives (2026-06-10 triage —
+  // vision-tier complaints about single docs, zero site diversity). Class-level
+  // escalation now lives in lib/learning/class-escalation.js (site-diversity
+  // keyed, propose-only). NARROW gate: only this call site — the weekly
+  // eva-master-scheduler corrective round, heal-command, and corrective-triage
+  // promote flows are untouched. Re-enable with CORRECTIVE_AUTO_FINDINGS=on.
   let corrective = null;
   if (!dryRun && score.id) {
-    const generateCorrectiveSD = await getGenerateCorrectiveSD();
-    corrective = await generateCorrectiveSD(score.id);
+    if (process.env.CORRECTIVE_AUTO_FINDINGS === 'on') {
+      const generateCorrectiveSD = await getGenerateCorrectiveSD();
+      corrective = await generateCorrectiveSD(score.id);
+    } else {
+      console.log('  [score-command] corrective auto-finding skipped (CORRECTIVE_AUTO_FINDINGS!=on; class escalation handles multi-site patterns — SD-LEO-INFRA-CLASS-LEVEL-PATTERN-001)');
+    }
   }
 
   return { score, corrective, visionKey, archKey };

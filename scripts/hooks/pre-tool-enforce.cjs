@@ -1235,18 +1235,20 @@ async function main() {
   // module-level mocking does not apply).
   if (TOOL_NAME === 'Bash') {
     const cmd = (input && input.command || '').trim();
-    // QF-20260525-345 (RCA 6188492f): match `git push … --force` only when it is the
-    // OPERATIVE command — at start-of-command or after a true shell separator
-    // (; | & ( newline, && ||) — NOT after a bare space or a backtick. The previous
-    // boundary class `[\s;&|`]` admitted a space AND a backtick, so any command that
-    // merely MENTIONED the phrase inside a quoted argument false-positived: gh pr/issue
-    // `--body "… `git push --force-with-lease` …"` (markdown code-span → backtick),
-    // `git commit -m "… git push --force …"`, `echo`, `grep`. Same class QF-484 fixed
-    // for ENF-SD-CREATE-SKILL. Dropping backtick forgoes catching a `` `git push --force` ``
-    // command-substitution — not a real force-push vector (substitution captures stdout);
-    // all realistic vectors (bare, ; && || | & (, leading-ws, flag-after-positional) still block.
-    const FORCE_PUSH_RE = /(?:^|[;&|(\n]|&&|\|\|)\s*git\s+push\b[^\n]*--force\b/;
-    if (FORCE_PUSH_RE.test(cmd) && !/--help/.test(cmd)) {
+    // QF-20260525-345 (RCA 6188492f) matched `git push … --force` only at start-of-command
+    // or after a true shell separator (incl. newline — deliberately KEPT so an operative
+    // push on its own line of a multi-line block still blocks). QF-20260610-541 (feedback
+    // 00934869): that newline made a commit-message/heredoc body LINE starting `git push
+    // --force` look operative too. lib/force-push-operative.cjs strips documentary content
+    // (-m/-F/-c quoted strings + heredoc bodies not fed to a shell) BEFORE the same match.
+    // Fail-open to the verbatim legacy regex if the lib errs — the gate stays intact.
+    let forcePushDetected;
+    try {
+      forcePushDetected = require('./lib/force-push-operative.cjs').isOperativeForcePush(cmd);
+    } catch {
+      forcePushDetected = /(?:^|[;&|(\n]|&&|\|\|)\s*git\s+push\b[^\n]*--force\b/.test(cmd);
+    }
+    if (forcePushDetected && !/--help/.test(cmd)) {
       try {
         const { execSync } = require('child_process');
         const HAS_WITH_LEASE = /--force-with-lease\b/.test(cmd);
