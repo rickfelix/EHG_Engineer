@@ -88,9 +88,9 @@ async function resolveScopeForSend(supabase, repoPath) {
     // cwd matches the registry's main-root repo_path. Mirrors lib/repo-paths toCanonicalRepoPath.
     const canon = (p) => String(p || '').replace(/\\/g, '/').replace(/\/\.worktrees\/[^/]+/, '').replace(/\/+$/, '');
     const here = canon(repoPath);
-    const mine = scopes.find((s) => canon(s.repo_path) === here)
-      || scopes.find((s) => s.scope_key === 'platform')
-      || null;
+    // No 'platform' fallback: a repo that matches no enumerated scope stays UNTAGGED (honest)
+    // rather than mislabeled — scope_key only appears when we can actually identify the scope.
+    const mine = scopes.find((s) => canon(s.repo_path) === here) || null;
     if (!mine) return {};
     return { scopeKey: mine.scope_key, reuseClass: 'scope_local', appliesToScopes: [mine.scope_key] };
   } catch {
