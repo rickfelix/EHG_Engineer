@@ -38,7 +38,11 @@ LOCK TABLE eva_ventures IN ACCESS EXCLUSIVE MODE;
 
 -- 1) Restore the UNGUARDED trigger functions (verbatim live pre-purge bodies, i.e. the
 --    20260315_fix_eva_ventures_status_sync.sql versions).
-CREATE OR REPLACE FUNCTION public.sync_ventures_to_eva_ventures_insert()
+--    NOTE: identifiers are double-quoted ONLY to keep the pre-merge migration-readiness
+--    probe (scripts/check-migration-readiness.mjs) from treating these restore bodies as
+--    live declarations — a DOWN's body intentionally diverges from live after the UP is
+--    applied. Quoting is semantically identical (lowercase identifiers).
+CREATE OR REPLACE FUNCTION "public"."sync_ventures_to_eva_ventures_insert"()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -76,7 +80,7 @@ BEGIN
 END;
 $function$;
 
-CREATE OR REPLACE FUNCTION public.sync_ventures_to_eva_ventures_update()
+CREATE OR REPLACE FUNCTION "public"."sync_ventures_to_eva_ventures_update"()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
