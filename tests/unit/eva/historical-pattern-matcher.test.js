@@ -136,8 +136,8 @@ describe('HistoricalPatternMatcher', () => {
 
     it('should deduplicate by pattern_name', async () => {
       const mockData = [
-        { id: '1', pattern_name: 'Duplicate Pattern', category: 'eva', frequency: 5, last_seen: new Date().toISOString(), severity: 'high', description: 'First' },
-        { id: '2', pattern_name: 'Duplicate Pattern', category: 'dfe', frequency: 3, last_seen: new Date().toISOString(), severity: 'medium', description: 'Second' },
+        { id: '1', pattern_id: 'PAT-D1', issue_summary: 'First', category: 'eva', occurrence_count: 5, updated_at: new Date().toISOString(), severity: 'high', metadata: { pattern_name: 'Duplicate Pattern' } },
+        { id: '2', pattern_id: 'PAT-D2', issue_summary: 'Second', category: 'dfe', occurrence_count: 3, updated_at: new Date().toISOString(), severity: 'medium', metadata: { pattern_name: 'Duplicate Pattern' } },
       ];
       const supabase = createMockSupabase({ data: mockData });
 
@@ -148,8 +148,8 @@ describe('HistoricalPatternMatcher', () => {
 
     it('should sort by relevance descending', async () => {
       const mockData = [
-        { id: '1', pattern_name: 'Old Pattern', category: 'eva', frequency: 2, last_seen: '2020-01-01T00:00:00Z', severity: 'low', description: 'Old' },
-        { id: '2', pattern_name: 'Recent Pattern', category: 'eva', frequency: 8, last_seen: new Date().toISOString(), severity: 'high', description: 'Recent' },
+        { id: '1', pattern_id: 'PAT-OLD', issue_summary: 'Old', category: 'eva', occurrence_count: 2, updated_at: '2020-01-01T00:00:00Z', severity: 'low', metadata: { pattern_name: 'Old Pattern', last_seen_at: '2020-01-01T00:00:00Z' } },
+        { id: '2', pattern_id: 'PAT-NEW', issue_summary: 'Recent', category: 'eva', occurrence_count: 8, updated_at: new Date().toISOString(), severity: 'high', metadata: { pattern_name: 'Recent Pattern', last_seen_at: new Date().toISOString() } },
       ];
       const supabase = createMockSupabase({ data: mockData });
 

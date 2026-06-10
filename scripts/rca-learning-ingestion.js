@@ -340,25 +340,36 @@ async function updateIssuePatterns(rcr, learningRecord) {
       console.log(`  ✅ Updated pattern ${rcr.pattern_id} (count: ${pattern.occurrence_count + 1})`);
     }
   } else {
-    // Create new pattern
+    // Create new pattern.
+    // SD-LEO-FIX-FIX-PHANTOM-COLUMN-001: pattern_name/first_seen/last_seen are PHANTOM
+    // columns on issue_patterns (PostgREST 42703 — pattern creation silently failed,
+    // leaving the RCA learning loop partly inert). Real shape: pattern_id + issue_summary
+    // carry the name; timestamps preserved in metadata.{first_seen_at,last_seen_at} (the
+    // real first_seen_sd_id/last_seen_sd_id columns take SD ids, which an RCA record lacks).
+    const insertPayload = {
+      id: rcr.pattern_id,
+      pattern_id: rcr.pattern_id,
+      issue_summary: learningRecord.label,
+      category: rcr.root_cause_category,
+      severity: rcr.severity_priority,
+      occurrence_count: 1,
+      metadata: {
+        defect_class: learningRecord.defect_class,
+        preventable: learningRecord.preventable,
+        pattern_name: learningRecord.label,
+        first_seen_at: rcr.first_occurrence_at || rcr.detected_at,
+        last_seen_at: rcr.detected_at
+      }
+    };
     const { error } = await supabase
       .from('issue_patterns')
-      .insert({
-        id: rcr.pattern_id,
-        pattern_name: learningRecord.label,
-        category: rcr.root_cause_category,
-        severity: rcr.severity_priority,
-        occurrence_count: 1,
-        first_seen: rcr.first_occurrence_at || rcr.detected_at,
-        last_seen: rcr.detected_at,
-        metadata: {
-          defect_class: learningRecord.defect_class,
-          preventable: learningRecord.preventable
-        }
-      });
+      .insert(insertPayload);
 
     if (!error) {
       console.log(`  ✅ Created pattern ${rcr.pattern_id}`);
+    } else {
+      const { logAuditWriteFailure } = await import('../lib/audit-write-guard.js');
+      logAuditWriteFailure('rca-learning-ingestion.createPattern', error, insertPayload);
     }
   }
 }

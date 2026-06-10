@@ -1,3 +1,4 @@
+-- @approved-by:codestreetlabs@gmail.com
 -- ============================================================================
 -- Migration: v_sd_completion_integrity view
 -- SD: SD-FDBK-INFRA-ATOMIC-REVERT-HELPER-001

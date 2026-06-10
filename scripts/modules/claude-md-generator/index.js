@@ -258,9 +258,11 @@ class CLAUDEMDGeneratorV3 {
           console.log(`   Token budget OK: ${digestTotalTokens}/${this.options.tokenBudget} (${Math.round(digestTotalTokens / this.options.tokenBudget * 100)}%)`);
         }
 
-        // Calculate savings
-        const savingsPercent = Math.round((1 - digestTotalTokens / fullTotalTokens) * 100);
-        console.log(`\n   Token Savings: ${savingsPercent}% (${fullTotalTokens - digestTotalTokens} tokens saved)`);
+        // Calculate savings (skip under --only scoping where full totals may be 0)
+        if (fullTotalTokens > 0) {
+          const savingsPercent = Math.round((1 - digestTotalTokens / fullTotalTokens) * 100);
+          console.log(`\n   Token Savings: ${savingsPercent}% (${fullTotalTokens - digestTotalTokens} tokens saved)`);
+        }
       }
 
       // Write manifest
@@ -289,8 +291,35 @@ class CLAUDEMDGeneratorV3 {
    * @param {string} type - File type ('full' or 'digest')
    */
   generateFile(filename, data, generatorFn, type = 'full') {
+    // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): --only scoped regen.
+    // options.only = array of filenames; anything else is skipped (not rendered,
+    // not written, not in the manifest) so untouched files stay byte-identical.
+    if (Array.isArray(this.options.only) && this.options.only.length > 0 &&
+        !this.options.only.includes(filename)) {
+      console.log(`   ${filename.padEnd(25)} skipped (--only)`);
+      return;
+    }
+
     const filePath = path.join(this.baseDir, filename);
-    const content = generatorFn(data);
+    let content = generatorFn(data);
+
+    // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-3): real content hash in the
+    // header. The digest header templates emit `file_content_hash: pending` INSIDE the
+    // body, but the hash is only computable AFTER rendering (chicken-and-egg) — every
+    // live header showed 'pending'. Contract: body = file content with the hash LINE
+    // removed; header value = sha256(body)[:16]. FULL files (no template header) get a
+    // single prepended stamp line so staleness checks cover all generated files.
+    // Verify anywhere via verifyFileContentHash() below.
+    const HASH_LINE_RE = /^<!-- file_content_hash: [^>]*-->\r?\n/m;
+    if (HASH_LINE_RE.test(content)) {
+      const body = content.replace(HASH_LINE_RE, '');
+      const bodyHash = this.computeHash(body);
+      content = content.replace(HASH_LINE_RE, `<!-- file_content_hash: ${bodyHash} -->\n`);
+    } else {
+      const bodyHash = this.computeHash(content);
+      content = `<!-- file_content_hash: ${bodyHash} -->\n${content}`;
+    }
+
     const contentHash = this.computeHash(content);
 
     writeFileAtomic(filePath, content);
@@ -322,6 +351,27 @@ class CLAUDEMDGeneratorV3 {
 }
 
 export { CLAUDEMDGeneratorV3 };
+
+// SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
+// set, used to validate --only targets (unknown names fail loud listing these).
+export const KNOWN_GENERATED_FILES = [
+  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md',
+  'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md',
+];
+
+// SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-3): verify a generated file's
+// header hash against its body. Contract (mirrors generateFile): body = content with
+// the single `<!-- file_content_hash: ... -->` line removed; expected = sha256(body)[:16].
+// Returns { ok, expected, actual } — ok=false with actual=null when no hash line exists
+// (pre-FR-3 file or hand-edited header), making staleness/tamper checks one call.
+export function verifyFileContentHash(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const m = content.match(/^<!-- file_content_hash: ([0-9a-f]{16}) -->\r?\n/m);
+  if (!m) return { ok: false, expected: null, actual: null };
+  const body = content.replace(/^<!-- file_content_hash: [^>]*-->\r?\n/m, '');
+  const expected = crypto.createHash('sha256').update(body).digest('hex').substring(0, 16);
+  return { ok: expected === m[1], expected, actual: m[1] };
+}
 
 export {
   getActiveProtocol,

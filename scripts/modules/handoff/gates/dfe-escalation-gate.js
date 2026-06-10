@@ -57,7 +57,14 @@ function validateChairmanRole(ctx) {
 }
 
 /**
- * Log a force override to the governance audit log.
+ * Log a force override to the audit log.
+ *
+ * SD-LEO-FIX-FIX-PHANTOM-COLUMN-001: this event-style payload previously targeted
+ * governance_audit_log, whose real shape is a TABLE-CHANGE audit (table_name/record_id/
+ * operation/old_values/new_values) — every written key was phantom, PostgREST 42703'd, and
+ * the catch swallowed it: escalation overrides were never audited. Events belong on
+ * audit_log (event_type/entity_type/entity_id/severity/metadata); original keys preserved
+ * inside metadata. Failures route through the fail-loud guard.
  *
  * @param {Object} supabase - Supabase client
  * @param {Object} context - Override context
@@ -65,21 +72,28 @@ function validateChairmanRole(ctx) {
 async function logForceOverride(supabase, context) {
   if (!supabase) return;
 
-  try {
-    await supabase.from('governance_audit_log').insert({
-      event_type: 'escalation_force_override',
-      severity: 'high',
+  const payload = {
+    event_type: 'escalation_force_override',
+    entity_type: 'strategic_directive',
+    entity_id: context.sdKey || null,
+    severity: 'high',
+    metadata: {
       gate_name: 'DFE_ESCALATION_GATE',
       sd_key: context.sdKey || null,
-      details: {
-        escalation_id: context.escalationId,
-        confidence: context.confidence,
-        source: context.source,
-        role_verified: context.roleVerified ?? null,
-        role: context.role ?? null,
-        overridden_at: new Date().toISOString(),
-      },
-    });
+      escalation_id: context.escalationId,
+      confidence: context.confidence,
+      source: context.source,
+      role_verified: context.roleVerified ?? null,
+      role: context.role ?? null,
+      overridden_at: new Date().toISOString(),
+    },
+  };
+  try {
+    const { error } = await supabase.from('audit_log').insert(payload);
+    if (error) {
+      const { logAuditWriteFailure } = await import('../../../../lib/audit-write-guard.js');
+      logAuditWriteFailure('dfe-escalation-gate.logForceOverride', error, payload);
+    }
   } catch (err) {
     console.log(`   ⚠️  Audit log write failed: ${err.message}`);
   }

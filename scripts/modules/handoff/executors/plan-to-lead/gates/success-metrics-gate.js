@@ -15,6 +15,7 @@
  */
 
 import { verifyAllMetrics } from '../../../../../lib/metric-auto-verifier.js';
+import { resolveAllBindings, BINDING_EXAMPLES } from '../../../../../lib/metric-evidence-resolver.js';
 import { GATE_REASON_CODES, isPlaceholderActual } from './gate-reason-codes.js';
 
 // ── Achievement helpers (from success-metrics-achievement.js) ──
@@ -174,13 +175,40 @@ export function createSuccessMetricsGate(supabase) {
         typeof m === 'string' ? { name: m, target: 'N/A', actual: null } : m
       );
 
+      // ── SD-LEO-INFRA-GROUND-SUCCESS-METRICS-001: resolve opt-in evidence bindings FIRST ──
+      // Bound metrics ({evidence:{kind,ref}}) get their achievement from MACHINE-CHECKABLE
+      // evidence, not from the self-reported actual text (the Goodhart fix). Resolution runs
+      // BEFORE auto-populate so a bound metric is never given a speculative auto-populated
+      // actual (evidence takes precedence over speculation). Fail-open: an unresolvable
+      // binding degrades to the existing self-report path with an advisory warning.
+      let evidenceOutcomes = new Map();
+      try {
+        evidenceOutcomes = await resolveAllBindings(metrics, {
+          supabase,
+          sdUuid,
+          repoRoot: process.cwd(),
+        });
+      } catch (evErr) {
+        console.log(`   ⚠️  Evidence resolution failed (${evErr.message}) — all metrics fall back to self-report`);
+      }
+      const isEvidenceResolved = (idx) => {
+        const o = evidenceOutcomes.get(idx);
+        return !!(o && o.bound && o.resolved);
+      };
+      if (evidenceOutcomes.size > 0) {
+        console.log(`   🔗 Evidence bindings: ${evidenceOutcomes.size} bound metric(s)`);
+      }
+
       // SD-LEARN-FIX-ADDRESS-PAT-AUTO-074: Auto-populate missing actual values
       // from handoff evidence to prevent 0/100 scores on SDs that completed work
       // but didn't manually fill in success_metrics.actual
       // SD-LEARN-FIX-ADDRESS-PAT-AUTO-080: Also treat 'pending'/'tbd' as empty
+      // SD-LEO-INFRA-GROUND-SUCCESS-METRICS-001: evidence-RESOLVED metrics are excluded —
+      // their verdict comes from evidence, so they must not receive a speculative actual
+      // (neither the in-place mutation nor the persisted write-back below).
       const PENDING_PATTERN = /^(pending|tbd|to\s*be\s*determined|not\s*yet|awaiting|[\d.]+%?\s*-?\s*pending.*)$/i;
       const isEmptyOrPending = (val) => val == null || String(val).trim() === '' || PENDING_PATTERN.test(String(val).trim());
-      const hasEmptyActuals = metrics.some(m => isEmptyOrPending(m.actual));
+      const hasEmptyActuals = metrics.some((m, i) => !isEvidenceResolved(i) && isEmptyOrPending(m.actual));
       if (hasEmptyActuals) {
         try {
           // Query evidence: accepted handoffs, user story completion, PR merge status
@@ -201,12 +229,13 @@ export function createSuccessMetricsGate(supabase) {
           const completedStories = stories?.filter(s => EVIDENCE_STATUSES.has(s.status))?.length || 0;
 
           // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-080: Show auto-population status per metric
-          const emptyMetrics = metrics.filter(m => isEmptyOrPending(m.actual));
+          const emptyMetrics = metrics.filter((m, i) => !isEvidenceResolved(i) && isEmptyOrPending(m.actual));
           console.log(`   📋 Auto-population check: ${emptyMetrics.length} metric(s) missing actual values`);
           if (acceptedCount > 0 || completedStories > 0) {
             console.log(`   🔄 Auto-populating from evidence: ${acceptedCount} handoff(s), ${completedStories}/${totalStories} stories`);
             console.log(`      Source: ${acceptedCount > 0 ? 'handoff evidence' : ''}${acceptedCount > 0 && completedStories > 0 ? ' + ' : ''}${completedStories > 0 ? 'story completion' : ''}`);
-            for (const metric of metrics) {
+            for (const [mIdx, metric] of metrics.entries()) {
+              if (isEvidenceResolved(mIdx)) continue; // evidence verdict owns this metric — no speculation
               if (!isEmptyOrPending(metric.actual)) continue;
               const name = (metric.metric || metric.name || '').toLowerCase();
               const targetStr = String(metric.target || '').toLowerCase();
@@ -253,11 +282,37 @@ export function createSuccessMetricsGate(supabase) {
       // ═══════════════════════════════════════════
       console.log('   ── Achievement Check ──');
       const metricScores = [];
-      for (const metric of metrics) {
+      for (const [mIdx, metric] of metrics.entries()) {
         const name = metric.metric || metric.name || 'Unnamed metric';
         const actual = metric.actual;
         const target = metric.target;
         const hasActual = actual != null && String(actual).trim() !== '';
+
+        // SD-LEO-INFRA-GROUND-SUCCESS-METRICS-001: evidence verdict takes precedence over
+        // free-text parsing for bound metrics. verified=100 (the claim is machine-checked);
+        // contradicted=0 with a structured reason code (the author asserted a checkable claim
+        // and the check failed — harder than 'target not met' BY DESIGN; bindings are opt-in
+        // so no existing SD is affected). Unresolvable falls through to self-report scoring
+        // below with an advisory warning.
+        const outcome = evidenceOutcomes.get(mIdx);
+        if (outcome && outcome.bound && outcome.resolved) {
+          if (outcome.verified) {
+            metricScores.push({ name, score: 100, reason: `Evidence verified — ${outcome.detail}`, target, actual, evidence_backed: true });
+            console.log(`   ✅ ${name}: EVIDENCE VERIFIED (${outcome.detail})`);
+          } else {
+            metricScores.push({
+              name, score: 0,
+              reason: `Evidence CONTRADICTS claim — ${outcome.detail}`,
+              reason_code: GATE_REASON_CODES.SUCCESS_METRICS_EVIDENCE_CONTRADICTED,
+              target, actual, evidence_backed: true,
+            });
+            console.log(`   ❌ ${name}: EVIDENCE CONTRADICTED (${outcome.detail})`);
+          }
+          continue;
+        }
+        if (outcome && outcome.bound && !outcome.resolved) {
+          console.log(`   ⚠️  ${name}: evidence unresolvable (${outcome.reason}) — scoring from self-report (advisory)`);
+        }
 
         if (!hasActual) {
           metricScores.push({ name, score: 0, reason: 'No actual value recorded', reason_code: GATE_REASON_CODES.SUCCESS_METRICS_EMPTY_ACTUAL, target, actual });
@@ -320,7 +375,25 @@ export function createSuccessMetricsGate(supabase) {
       console.log(`   Mode: ${isVerificationAdvisory ? 'ADVISORY' : 'REQUIRED'}`);
 
       const repoRoot = process.cwd();
-      const { results: verifyResults, overallScore: verificationScore } = verifyAllMetrics(metrics, repoRoot);
+      const { results: verifyResults } = verifyAllMetrics(metrics, repoRoot);
+
+      // SD-LEO-INFRA-GROUND-SUCCESS-METRICS-001: evidence-resolved metrics override the
+      // heuristic verifier result (single source of truth per metric; verifyAllMetrics has
+      // no consumer outside this gate). Unbound/unresolvable metrics keep the heuristic.
+      for (const [mIdx, outcome] of evidenceOutcomes.entries()) {
+        if (!outcome.resolved || !verifyResults[mIdx]) continue;
+        verifyResults[mIdx] = {
+          ...verifyResults[mIdx],
+          measuredValue: outcome.detail,
+          score: outcome.verified ? 100 : 0,
+          status: outcome.verified ? 'verified' : 'mismatch',
+          issue: outcome.verified ? null : `Evidence contradicts claim: ${outcome.detail}`,
+          evidence_backed: true,
+        };
+      }
+      const verificationScore = verifyResults.length > 0
+        ? Math.round(verifyResults.reduce((sum, r) => sum + r.score, 0) / verifyResults.length)
+        : 100;
 
       for (const r of verifyResults) {
         const icon = r.status === 'verified' ? '✅' : r.status === 'mismatch' ? '❌' : 'ℹ️ ';
@@ -339,6 +412,22 @@ export function createSuccessMetricsGate(supabase) {
       // ═══════════════════════════════════════════
       const combinedScore = Math.round((achievementScore + verificationScore) / 2);
       const passed = achievementPassed && verificationPassed;
+
+      // SD-LEO-INFRA-GROUND-SUCCESS-METRICS-001: evidence adoption summary + self-documenting
+      // binding advisory. The gate teaches its own grounding mechanism at the moment of
+      // friction — remediation lives in gate output, not retros.
+      const evidenceSummary = {
+        bound: evidenceOutcomes.size,
+        evidence_backed: [...evidenceOutcomes.values()].filter(o => o.resolved).length,
+        unresolvable: [...evidenceOutcomes.values()].filter(o => o.bound && !o.resolved).length,
+        self_reported: metrics.length - evidenceOutcomes.size,
+      };
+      console.log(`\n   🔗 Evidence: ${evidenceSummary.evidence_backed} evidence-backed, ${evidenceSummary.unresolvable} unresolvable, ${evidenceSummary.self_reported} self-reported (of ${metrics.length})`);
+      if (evidenceSummary.self_reported > 0) {
+        console.log('   💡 Self-reported metrics can be GROUNDED with an opt-in evidence binding on the metric object:');
+        for (const ex of BINDING_EXAMPLES) console.log(`      ${ex}`);
+        console.log('      Bound metrics are scored from the machine check, not the actual text.');
+      }
 
       const issues = [
         ...metricScores.filter(m => m.score === 0).map(m =>
@@ -387,6 +476,7 @@ export function createSuccessMetricsGate(supabase) {
         }),
         details: {
           metrics_count: metrics.length,
+          evidence_summary: evidenceSummary,
           achievement: {
             score: achievementScore,
             threshold: ACHIEVEMENT_THRESHOLD,

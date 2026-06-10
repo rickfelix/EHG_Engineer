@@ -1,6 +1,7 @@
+<!-- file_content_hash: e9311797bc2ecab2 -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-10 12:15:59 PM
+**Generated**: 2026-06-10 2:53:04 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session

@@ -48,7 +48,13 @@ function buildCacheKey(upstream, downstream, gateType) {
     ? upstream.map(u => u.key || u.id).sort().join('+')
     : (upstream.key || upstream.id);
   const downKey = downstream.key || downstream.id;
-  return `${gateType}:${upKeys}:${downKey}`;
+  // SD-LEO-FIX-PHASE-SCOPE-TRANSLATION-001 (FR-2): scoped and unscoped
+  // evaluations must never share a cache entry — fold the scope into the key.
+  const scope = downstream.scope;
+  const scopeDigest = scope
+    ? `:scope[${scope.archPhase || ''}|${(scope.siblings || []).map(s => s.sd_key).sort().join(',')}]`
+    : '';
+  return `${gateType}:${upKeys}:${downKey}${scopeDigest}`;
 }
 
 /**
@@ -128,8 +134,9 @@ export async function evaluateTranslationFidelity(upstream, downstream, gateType
       score: parsed.score,
       maxScore: 100,
       gaps: parsed.gaps || [],
-      issues: parsed.gaps?.filter(g => g.severity === 'critical') || [],
-      warnings: parsed.gaps?.filter(g => g.severity !== 'critical') || [],
+      // FR-3: sibling-covered gaps are informational — they never become issues.
+      issues: parsed.gaps?.filter(g => g.severity === 'critical' && !g.sibling_covered) || [],
+      warnings: parsed.gaps?.filter(g => g.severity !== 'critical' || g.sibling_covered) || [],
       details: {
         gate_type: gateType,
         model_used: client.modelId || 'unknown',
@@ -283,7 +290,18 @@ export async function runVisionToArchitectureGate(visionId, archData) {
 
 // --- Gate 3: Architecture → SD ---
 
-export async function runArchitectureToSDGate(archKey, sdData) {
+/**
+ * @param {string} archKey
+ * @param {Object} sdData
+ * @param {Object} [opts] - SD-LEO-FIX-PHASE-SCOPE-TRANSLATION-001 (FR-1): phase scoping
+ *   for multi-SD architecture plans. opts.archPhase (string|null) — the plan slice this
+ *   SD declares via metadata.arch_phase. opts.siblings (Array<{sd_key,title}>) — other
+ *   SDs sharing the same arch_key. When present, the LLM is instructed to score ONLY
+ *   the slice this SD claims and mark sibling-owned content sibling_covered:true so the
+ *   executors can report it as informational instead of failing the gate.
+ *   Omitted/empty → byte-identical legacy behavior.
+ */
+export async function runArchitectureToSDGate(archKey, sdData, opts = {}) {
   // Fetch architecture plan
   const { data: arch, error } = await supabase
     .from('eva_architecture_plans')
@@ -295,6 +313,10 @@ export async function runArchitectureToSDGate(archKey, sdData) {
     console.warn(`   ⚠️  Architecture plan ${archKey} not found, skipping Gate 3`);
     return null;
   }
+
+  const scope = (opts.archPhase || (opts.siblings && opts.siblings.length > 0))
+    ? { archPhase: opts.archPhase || null, siblings: opts.siblings || [] }
+    : null;
 
   const upstreams = [
     {
@@ -337,6 +359,9 @@ export async function runArchitectureToSDGate(archKey, sdData) {
       success_criteria: sdData.success_criteria,
     }),
     dimensions: [],
+    // FR-1: scope rides on the downstream artifact so buildPrompts and
+    // buildCacheKey both see it without changing their signatures.
+    scope,
   };
 
   return runAndPersistGate(upstreams, downstream, 'architecture_to_sd');
@@ -354,7 +379,7 @@ Respond with valid JSON only:
   "score": <integer 0-100>,
   "reasoning": "<brief explanation>",
   "coverage_areas": [{"area": "<topic>", "covered": <boolean>, "notes": "<detail>"}],
-  "gaps": [{"item": "<what was lost>", "source": "<upstream artifact>", "severity": "critical|major|minor"}]
+  "gaps": [{"item": "<what was lost>", "source": "<upstream artifact>", "severity": "critical|major|minor", "sibling_covered": <boolean — true when the item belongs to a sibling SD's slice of a multi-SD plan; omit or false otherwise>}]
 }
 
 Scoring guide:
@@ -383,13 +408,35 @@ Scoring guide:
   const downstreamText = `--- Downstream: ${downstream.type} (${downstream.key}) ---
 ${downstream.dimensions?.length ? `Dimensions: ${sanitizeUnicode(JSON.stringify(downstream.dimensions))}\n` : ''}Content: ${sanitizeUnicode((downstream.content || '').substring(0, 3000))}`;
 
-  const userPrompt = `Gate: ${gateDescriptions[gateType]}
+  // SD-LEO-FIX-PHASE-SCOPE-TRANSLATION-001 (FR-1): multi-SD plan scoping.
+  // When the downstream SD declares a plan slice (arch_phase) or shares the
+  // architecture plan with sibling SDs, score ONLY the slice this SD claims —
+  // sibling-owned content is informational, not a translation loss.
+  const scope = downstream.scope;
+  let scopingBlock = '';
+  if (scope && (scope.archPhase || scope.siblings?.length)) {
+    const siblingList = (scope.siblings || [])
+      .slice(0, 40)
+      .map(s => `  - ${s.sd_key}: ${sanitizeUnicode(String(s.title || '').substring(0, 120))}`)
+      .join('\n');
+    scopingBlock = `
+
+MULTI-SD PLAN SCOPING (IMPORTANT):
+This architecture plan is delivered by ${1 + (scope.siblings?.length || 0)} Strategic Directives, NOT by this SD alone.
+This SD claims ONLY ${scope.archPhase ? `the plan slice/phase: "${sanitizeUnicode(scope.archPhase)}"` : 'the slice described by its own title/description/key_changes'}.
+${siblingList ? `The following SIBLING SDs deliver other parts of the plan:\n${siblingList}\n` : ''}Rules:
+- Score fidelity ONLY against the slice this SD claims. Plan content outside that slice must NOT reduce the score.
+- For every gap, set "sibling_covered": true when the missing content falls under a sibling SD's scope (or any plan area outside this SD's claimed slice); such items are informational, not losses.
+- Only content INSIDE this SD's claimed slice that is missing from the SD may be a genuine gap (sibling_covered: false).`;
+  }
+
+  const userPrompt = `Gate: ${gateDescriptions[gateType]}${scopingBlock}
 
 ${upstreamText}
 
 ${downstreamText}
 
-Analyze the translation fidelity. Identify what was preserved and what was lost.`;
+Analyze the translation fidelity. Identify what was preserved and what was lost.${scopingBlock ? ' Remember: score only this SD\'s claimed slice; mark out-of-slice items sibling_covered.' : ''}`;
 
   return { systemPrompt, userPrompt };
 }
@@ -410,6 +457,8 @@ function parseGateResponse(text) {
           item: g.item || 'Unknown',
           source: g.source || 'Unknown',
           severity: ['critical', 'major', 'minor'].includes(g.severity) ? g.severity : 'minor',
+          // FR-2: default false — absent field fails toward current (blocking) behavior.
+          sibling_covered: g.sibling_covered === true,
         })),
       };
     } catch (e) {

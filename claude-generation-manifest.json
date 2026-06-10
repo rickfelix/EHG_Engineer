@@ -1,91 +1,14 @@
 {
-  "generated_at": "2026-06-10T16:15:59.602Z",
-  "git_commit": "11a75297",
-  "db_snapshot_hash": "4c260fddb7740f6c",
+  "generated_at": "2026-06-10T18:53:32.650Z",
+  "git_commit": "afd81f04",
+  "db_snapshot_hash": "1c0d92b1433aad31",
   "files": {
-    "CLAUDE.md": {
-      "type": "full",
-      "chars": 19123,
-      "estimated_tokens": 4781,
-      "content_hash": "71e38744ddf89fba",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE.md"
-    },
-    "CLAUDE_CORE.md": {
-      "type": "full",
-      "chars": 78656,
-      "estimated_tokens": 19664,
-      "content_hash": "2b4d064b8f4fdd2f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_CORE.md"
-    },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 64883,
-      "estimated_tokens": 16221,
-      "content_hash": "030102cf1f6b5615",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_LEAD.md"
-    },
-    "CLAUDE_PLAN.md": {
-      "type": "full",
-      "chars": 89642,
-      "estimated_tokens": 22411,
-      "content_hash": "36a6afcce30d29ec",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_PLAN.md"
-    },
-    "CLAUDE_EXEC.md": {
-      "type": "full",
-      "chars": 81225,
-      "estimated_tokens": 20307,
-      "content_hash": "cd243f71e4b8eeb0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_EXEC.md"
-    },
-    "CLAUDE_ADAM.md": {
-      "type": "full",
-      "chars": 17842,
-      "estimated_tokens": 4461,
-      "content_hash": "d48765afc3ec8ca6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_ADAM.md"
-    },
-    "CLAUDE_DIGEST.md": {
-      "type": "digest",
-      "chars": 9402,
-      "estimated_tokens": 2351,
-      "content_hash": "07bfa82d3f52f9e6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_DIGEST.md"
-    },
-    "CLAUDE_CORE_DIGEST.md": {
-      "type": "digest",
-      "chars": 11326,
-      "estimated_tokens": 2832,
-      "content_hash": "3c2a07c9937e27d8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_CORE_DIGEST.md"
-    },
-    "CLAUDE_LEAD_DIGEST.md": {
-      "type": "digest",
-      "chars": 5213,
-      "estimated_tokens": 1304,
-      "content_hash": "62de3e23aacf0863",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_LEAD_DIGEST.md"
-    },
-    "CLAUDE_PLAN_DIGEST.md": {
-      "type": "digest",
-      "chars": 8203,
-      "estimated_tokens": 2051,
-      "content_hash": "acb696ef0597e44c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_PLAN_DIGEST.md"
-    },
-    "CLAUDE_EXEC_DIGEST.md": {
-      "type": "digest",
-      "chars": 10626,
-      "estimated_tokens": 2657,
-      "content_hash": "0cf2d71a326769d1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_EXEC_DIGEST.md"
-    },
-    "CLAUDE_ADAM_DIGEST.md": {
-      "type": "digest",
-      "chars": 3742,
-      "estimated_tokens": 936,
-      "content_hash": "ab92f7489a0ec2a3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001\\CLAUDE_ADAM_DIGEST.md"
+      "chars": 64927,
+      "estimated_tokens": 16232,
+      "content_hash": "ef8033fe1f36149b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001\\CLAUDE_LEAD.md"
     }
   }
 }
