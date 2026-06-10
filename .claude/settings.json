@@ -275,7 +275,7 @@
         ]
       },
       {
-        "matcher": "Task|Bash|Write|Edit|MultiEdit",
+        "matcher": "Task|Bash|Write|Edit|MultiEdit|AskUserQuestion",
         "hooks": [
           {
             "type": "command",
