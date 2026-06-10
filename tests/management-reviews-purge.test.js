@@ -4,7 +4,8 @@
 // live-DB or subprocess tests. Rationale (QF-20260609-547 lesson): migration/hook tests that spawn
 // subprocesses or require a live DB flake in CI; pinning the on-disk artifact is deterministic and
 // still catches every regression that matters here (a writer reverting to bare .insert, a missing
-// safety clause in the irreversible migration).
+// safety clause in the irreversible migration). The invariants pinned below were each hardened in
+// response to the adversarial verification workflow wf_5071dc05.
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,6 +28,20 @@ describe('purge migration (UP) — irreversible-safe invariants', () => {
     expect(sql).toMatch(/^--\s*@approved-by:\s*\S+@\S+/m);
   });
 
+  it('warns against --split-statements (named dollar-quoted DO blocks)', () => {
+    expect(sql).toMatch(/DO NOT run .*--split-statements/i);
+  });
+
+  it('bounds lock + statement time so a contended apply fails clean (no live stall)', () => {
+    expect(sql).toMatch(/SET LOCAL lock_timeout\s*=\s*'5s'/i);
+    expect(sql).toMatch(/SET LOCAL statement_timeout\s*=/i);
+  });
+
+  it('aborts if a stale quarantine table already exists (fresh-snapshot-or-fail)', () => {
+    expect(sql).toMatch(/to_regclass\('public\.management_reviews_quarantine_20260610'\)\s+IS NOT NULL/i);
+    expect(sql).toMatch(/RAISE EXCEPTION 'purge aborted: quarantine table[^']*already exists/i);
+  });
+
   it('takes an ACCESS EXCLUSIVE lock BEFORE any DML (race guard against per-second pollution)', () => {
     expect(sql).toMatch(/LOCK TABLE\s+management_reviews\s+IN\s+ACCESS EXCLUSIVE MODE/i);
     const lockIdx = sql.search(/LOCK TABLE\s+management_reviews\s+IN\s+ACCESS EXCLUSIVE MODE/i);
@@ -37,12 +52,22 @@ describe('purge migration (UP) — irreversible-safe invariants', () => {
   });
 
   it('quarantines the full table before deleting (reversibility source)', () => {
-    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS\s+management_reviews_quarantine_20260610\s+AS\s+SELECT \* FROM management_reviews/i);
+    expect(sql).toMatch(/CREATE TABLE\s+management_reviews_quarantine_20260610\s+AS\s+SELECT \* FROM management_reviews/i);
+    // plain CREATE TABLE (not IF NOT EXISTS) — the pre-existence guard handles idempotency safely
+    expect(sql).not.toMatch(/CREATE TABLE IF NOT EXISTS\s+management_reviews_quarantine_20260610/i);
   });
 
-  it('pre-asserts quarantine==live count AND zero chairman-touched rows (keep-predicate tripwire)', () => {
-    expect(sql).toMatch(/v_quar\s*<>\s*v_live/);            // snapshot completeness
-    expect(sql).toMatch(/chairman_notes IS NOT NULL OR chairman_approved_proposals IS NOT NULL/i);
+  it('pre-asserts quarantine==live count (snapshot completeness)', () => {
+    expect(sql).toMatch(/v_quar\s*<>\s*v_live/);
+  });
+
+  it('keep-predicate is safe-by-construction: aborts on ANY human-decision signal, not just chairman cols', () => {
+    expect(sql).toMatch(/chairman_notes IS NOT NULL/i);
+    expect(sql).toMatch(/chairman_approved_proposals IS NOT NULL/i);
+    expect(sql).toMatch(/overall_score IS NOT NULL/i);
+    expect(sql).toMatch(/eva_proposals/i);
+    expect(sql).toMatch(/jsonb_array_length\(decisions\)/i);
+    expect(sql).toMatch(/jsonb_array_length\(actions\)/i);
     expect(sql).toMatch(/RAISE EXCEPTION 'purge aborted:[^']*keep-predicate/i);
   });
 
@@ -86,8 +111,16 @@ describe('purge migration (DOWN) — reversibility', () => {
     expect(dropIdx).toBeLessThan(insertIdx); // drop before re-insert, else 23505
   });
 
-  it('re-inserts every quarantined row idempotently (ON CONFLICT (id) DO NOTHING)', () => {
-    expect(sql).toMatch(/INSERT INTO management_reviews\s+SELECT \* FROM management_reviews_quarantine_20260610\s+ON CONFLICT \(id\) DO NOTHING/i);
+  it('re-inserts COLUMN-EXPLICITLY (not SELECT *) so schema drift fails loud, idempotent on id', () => {
+    expect(sql).toMatch(/INSERT INTO management_reviews\s*\(/i);     // explicit column list
+    expect(sql).not.toMatch(/INSERT INTO management_reviews\s+SELECT \*/i);
+    expect(sql).toMatch(/ON CONFLICT \(id\) DO NOTHING/i);
+    expect(sql).toMatch(/FROM management_reviews_quarantine_20260610/i);
+  });
+
+  it('post-asserts every quarantined row landed (loud on silent id-collision drop)', () => {
+    expect(sql).toMatch(/v_missing\s*<>\s*0/);
+    expect(sql).toMatch(/RAISE EXCEPTION 'rollback incomplete:/i);
   });
 });
 
@@ -95,7 +128,6 @@ describe('management_reviews writers — upsert, not insert', () => {
   it('management-review-round.mjs upserts with the correct conflict target', () => {
     const src = read(ROUND_WRITER);
     expect(src).toMatch(/\.from\(['"]management_reviews['"]\)\s*\.upsert\(\s*review\s*,\s*\{\s*onConflict:\s*['"]review_date,review_type['"]\s*\}\s*\)/);
-    // and must NOT regress to a bare insert into management_reviews
     expect(src).not.toMatch(/\.from\(['"]management_reviews['"]\)\s*\.insert\(/);
   });
 
