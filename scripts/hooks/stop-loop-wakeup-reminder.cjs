@@ -34,6 +34,29 @@
 
 const { LOOP_STATE_ACTIVE } = require('../lib/sessions/loop-state-tracker.cjs');
 
+// ── Clean shutdown — Windows libuv UV_HANDLE_CLOSING avoidance ────────────────
+// The claude_sessions query opens an undici/fetch keep-alive socket. Calling
+// process.exit() afterward aborts on Windows: it forces libuv loop teardown while
+// a socket/threadpool completion calls uv_async_send() on a handle already flagged
+// UV_HANDLE_CLOSING → "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING),
+// file src\\win\\async.c, line 76". EMPIRICALLY this reproduces 100% with a bare
+// exit, with a setImmediate-deferred exit, AND even after dispatcher.close() if
+// process.exit() is still called. The ONLY reliable avoidance is to NOT call
+// process.exit(): close undici's sockets, then let the event loop drain so the
+// process exits on its own. (Folklore — mirror stop-subagent-enforcement.js's
+// setImmediate "gracefulExit" — does NOT work here; verified by repro before fix.)
+let _shuttingDown = false;
+async function shutdown() {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  // Backstop only: force-exit if the loop somehow fails to drain. unref'd so it
+  // never delays a clean natural exit; if it ever fires (8s, under the hook's 10s
+  // timeout) the sockets are already closed, so this exit can't race a live one.
+  setTimeout(() => process.exit(0), 8000).unref();
+  try { await require('undici').getGlobalDispatcher().close(); } catch { /* undici absent/already closed */ }
+  // Deliberately NO process.exit() — returning lets Node exit once the loop drains.
+}
+
 /**
  * Pure decision: should the Stop hook block-and-remind this turn?
  * Block ONLY when the reminder is enabled AND this is a /loop worker mid-iteration
@@ -66,17 +89,19 @@ function readStdinPayload(timeoutMs = 2000) {
   return new Promise((resolve) => {
     let data = '';
     let settled = false;
+    let timer = null;
     const finish = () => {
       if (settled) return;
       settled = true;
+      if (timer) clearTimeout(timer);   // don't let the timeout pin the loop open at drain
       try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); }
     };
     try {
       process.stdin.setEncoding('utf8');
       process.stdin.on('data', (c) => { data += c; });
       process.stdin.on('end', finish);
-      process.stdin.on('error', () => { if (!settled) { settled = true; resolve({}); } });
-      setTimeout(finish, timeoutMs);
+      process.stdin.on('error', () => { if (!settled) { settled = true; if (timer) clearTimeout(timer); resolve({}); } });
+      timer = setTimeout(finish, timeoutMs);
     } catch { resolve({}); }
   });
 }
@@ -84,14 +109,14 @@ function readStdinPayload(timeoutMs = 2000) {
 async function main() {
   try {
     const flagEnabled = isFlagEnabled();
-    if (!flagEnabled) { process.exit(0); }            // default-OFF fast path
+    if (!flagEnabled) { return shutdown(); }     // default-OFF fast path
 
     const payload = await readStdinPayload();
     const stopHookActive = payload.stop_hook_active === true;
-    if (stopHookActive) { process.exit(0); }          // already reminded — let it stop
+    if (stopHookActive) { return shutdown(); }   // already reminded — let it stop
 
     const sessionId = payload.session_id || process.env.CLAUDE_SESSION_ID || process.env.SESSION_ID || '';
-    if (!sessionId) { process.exit(0); }              // can't resolve — fail-open
+    if (!sessionId) { return shutdown(); }       // can't resolve — fail-open
 
     const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
     const supabase = createSupabaseServiceClient();
@@ -100,21 +125,26 @@ async function main() {
       .select('loop_state')
       .eq('session_id', sessionId)
       .maybeSingle();
-    if (error) { process.exit(0); }                   // DB error — fail-open
+    if (error) { return shutdown(); }            // DB error — fail-open
 
     const loopState = data ? data.loop_state : null;
     if (shouldRemind({ loopState, stopHookActive, flagEnabled })) {
       process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
     }
-    process.exit(0);
+    return shutdown();
   } catch (e) {
     process.stderr.write(`[stop-loop-wakeup-reminder] ${e.message}\n`);
-    process.exit(0);                                  // fail-open: never trap a worker
+    return shutdown();                           // fail-open: never trap a worker
   }
 }
 
 if (require.main === module) {
-  main();
+  // Registered only when run as the hook (never when require()'d by tests, so it
+  // can't swallow a test runner's failures). Absorbs any late JS-level rejection
+  // and routes it through the same deferred exit.
+  process.on('uncaughtException', () => shutdown());
+  process.on('unhandledRejection', () => shutdown());
+  main().catch(() => shutdown());
 }
 
 module.exports = { shouldRemind, isFlagEnabled };

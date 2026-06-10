@@ -41,6 +41,28 @@ const STATE_FILE = path.join(ROOT, '.claude', 'post-completion-pending.json');
 // crashed / moved on) and is cleared without nagging forever.
 const MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6h
 
+// ── Clean shutdown — Windows libuv UV_HANDLE_CLOSING avoidance ────────────────
+// When 'learn' is pending, learnRanInDb() opens an undici/fetch keep-alive socket
+// (Supabase). Calling process.exit() afterward aborts on Windows: it forces libuv
+// loop teardown while a socket/threadpool completion calls uv_async_send() on a
+// handle already flagged UV_HANDLE_CLOSING → "Assertion failed: !(handle->flags &
+// UV_HANDLE_CLOSING), file src\\win\\async.c, line 76". EMPIRICALLY this reproduces
+// even after a setImmediate-deferred exit AND after dispatcher.close() if exit() is
+// still called. The only reliable avoidance is to NOT call process.exit(): close
+// undici's sockets, then let the event loop drain so the process exits on its own.
+// Every exit path routes through this so the no-I/O fast paths stay uniform too.
+let _shuttingDown = false;
+async function shutdown() {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  // Backstop only: force-exit if the loop somehow fails to drain. unref'd so it
+  // never delays a clean natural exit; if it ever fires (8s, under the hook's 10s
+  // timeout) the sockets are already closed, so this exit can't race a live one.
+  setTimeout(() => process.exit(0), 8000).unref();
+  try { await require('undici').getGlobalDispatcher().close(); } catch { /* undici absent/already closed */ }
+  // Deliberately NO process.exit() — returning lets Node exit once the loop drains.
+}
+
 function readStdin() {
   try {
     return fs.readFileSync(0, 'utf8');
@@ -147,7 +169,7 @@ function clearStateFile() {
 
 async function main() {
   // Cheap common-path no-op: absent file ⇒ nothing pending.
-  if (!fs.existsSync(STATE_FILE)) { process.exit(0); }
+  if (!fs.existsSync(STATE_FILE)) { return shutdown(); }
 
   let payload = {};
   try { payload = JSON.parse(readStdin() || '{}'); } catch {}
@@ -158,24 +180,24 @@ async function main() {
   } catch {
     // Malformed ⇒ drop it (no-op).
     clearStateFile();
-    process.exit(0);
+    return shutdown();
   }
 
   const pending = Array.isArray(state.pending) ? state.pending.slice() : [];
-  if (pending.length === 0) { clearStateFile(); process.exit(0); }
+  if (pending.length === 0) { clearStateFile(); return shutdown(); }
 
   // Safety drain on age.
   const completedMs = state.completed_at ? Date.parse(state.completed_at) : NaN;
   if (!Number.isNaN(completedMs) && (Date.now() - completedMs) > MAX_AGE_MS) {
     clearStateFile();
-    process.exit(0);
+    return shutdown();
   }
 
   // Multi-session safety: only the session that completed the SD should be
   // nudged. If both ids are present and differ, this isn't our obligation.
   const mySession = payload.session_id || process.env.CLAUDE_SESSION_ID || null;
   if (state.session_id && mySession && state.session_id !== mySession) {
-    process.exit(0);
+    return shutdown();
   }
 
   // Clear steps that now have evidence.
@@ -192,7 +214,7 @@ async function main() {
   // Persist the decremented list (or delete when fully satisfied).
   if (remaining.length === 0) {
     clearStateFile();
-    process.exit(0);
+    return shutdown();
   }
   if (remaining.length !== pending.length) {
     try {
@@ -201,7 +223,7 @@ async function main() {
   }
 
   // Only nudge under AUTO-PROCEED (when OFF, continuation already pauses).
-  if (!autoProceedOn()) { process.exit(0); }
+  if (!autoProceedOn()) { return shutdown(); }
 
   const sdLabel = state.sd_key || state.sd_id || 'the just-completed SD';
   const cmds = remaining.map((s) => '/' + s).join(' → ');
@@ -212,7 +234,9 @@ async function main() {
     `(/document updates docs; /learn writes learning_runs/patterns future PRDs query.) ` +
     `Prefer driving completion via /leo complete so the full tail sequences automatically.\n`
   );
-  process.exit(0);
+  return shutdown();
 }
 
-main().catch(() => process.exit(0));
+process.on('uncaughtException', () => shutdown());
+process.on('unhandledRejection', () => shutdown());
+main().catch(() => shutdown());
