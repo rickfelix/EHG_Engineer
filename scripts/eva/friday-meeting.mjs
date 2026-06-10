@@ -25,6 +25,8 @@ import { gatherStitchHealth, renderStitchHealth } from '../../lib/eva/bridge/sti
 import { recentEntries as _recentDecisionLogEntries } from '../../lib/eva-support/decision-log-store.js';
 import { renderMarkdown as _renderDecisionLogMarkdown } from '../eva-support/decision-log-formatter.js';
 import { writeOutcome as _writeFridayOutcome } from '../../lib/eva-support/friday-outcome-bridge.js';
+// SD-LEO-INFRA-REVIVE-EVA-ACCEPTANCE-STATE-001: surface + accept OKR generations awaiting chairman acceptance.
+import { listPendingOkrGenerations, acceptPendingOkrGeneration } from '../../lib/eva/jobs/okr-accept-generation.js';
 import dotenv from 'dotenv';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
@@ -184,7 +186,12 @@ async function gatherPerformanceReview() {
     completedItems = (items || []).filter(i => i.is_ready).length;
   }
 
-  return { review, objectives: objectives || [], keyResults, snapshots, baseline, baselineItems, completedItems };
+  // SD-LEO-INFRA-REVIVE-EVA-ACCEPTANCE-STATE-001: OKR generations awaiting chairman acceptance
+  // (objectives/key_results are is_active:false and hidden from the OKR Progress block above until accepted).
+  let pendingOkrGenerations = [];
+  try { pendingOkrGenerations = await listPendingOkrGenerations({ supabase }); } catch { pendingOkrGenerations = []; }
+
+  return { review, objectives: objectives || [], keyResults, snapshots, baseline, baselineItems, completedItems, pendingOkrGenerations };
 }
 
 function renderPerformanceReview(data) {
@@ -244,6 +251,16 @@ function renderPerformanceReview(data) {
   } else {
     lines.push('');
     lines.push('  No active OKR objectives found.');
+  }
+
+  // SD-LEO-INFRA-REVIVE-EVA-ACCEPTANCE-STATE-001: surface OKR generations awaiting chairman acceptance.
+  if (data.pendingOkrGenerations?.length) {
+    lines.push('');
+    lines.push('  ⏳ OKR generations AWAITING YOUR ACCEPTANCE:');
+    for (const g of data.pendingOkrGenerations) {
+      lines.push(`     • ${g.period} (generated ${g.generation_date}): ${g.total_krs_generated || 0} KR(s) — id ${g.id}`);
+    }
+    lines.push('     Accept to make them live (is_active) via: acceptOkrGeneration({ generationId, meetingDate }).');
   }
 
   return lines.join('\n');
@@ -400,6 +417,30 @@ function renderRecentDecisionLogEntries(data) {
 // Re-export the outcome writer for the /friday slash command to call after the
 // chairman responds to the AskUserQuestion payload (FR-6, US-006).
 export const writeFridayOutcome = _writeFridayOutcome;
+
+/**
+ * SD-LEO-INFRA-REVIVE-EVA-ACCEPTANCE-STATE-001 — chairman accepts a pending OKR generation
+ * from the Friday flow: flip its objectives + key_results live, then record the acceptance audit
+ * via the existing writeFridayOutcome seam (outcome='accepted'). Idempotent (the underlying
+ * accept is a no-op on an already-accepted generation).
+ * @param {{ generationId: string, meetingDate?: string, chairmanFeedback?: string, db?: object }} args
+ * @returns {Promise<{accepted: boolean, alreadyAccepted: boolean, objectives: number, keyResults: number}>}
+ */
+export async function acceptOkrGeneration({ generationId, meetingDate, chairmanFeedback, db } = {}) {
+  const client = db || supabase;
+  const result = await acceptPendingOkrGeneration({ supabase: client, generationId });
+  if (result.accepted) {
+    try {
+      await _writeFridayOutcome({
+        agendaItemRef: `okr_generation:${generationId}`,
+        outcome: 'accepted',
+        chairmanFeedback: chairmanFeedback || `Accepted OKR generation ${generationId} (${result.objectives} objective(s), ${result.keyResults} KR(s) now live)`,
+        meetingDate,
+      });
+    } catch { /* audit is best-effort; the live flip already succeeded */ }
+  }
+  return result;
+}
 
 // ─── Section 5: R&D Proposals (delegated to lib/skunkworks/friday-rd-section.js)
 
