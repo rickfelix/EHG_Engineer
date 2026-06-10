@@ -15,6 +15,7 @@
  */
 
 
+import { randomUUID } from 'node:crypto';
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 /**
  * Validate cascade alignment for a new SD.
@@ -407,11 +408,17 @@ export async function validateCascadeAtHandoff({
       }
     }
 
-    // Log cascade check to eva_event_log
+    // Log cascade check to eva_event_log.
+    // Live columns: metadata (not event_data); trigger_source/status/correlation_id are NOT NULL
+    // with no defaults; CHECKs: trigger_source in (realtime,cron,manual), status in
+    // (succeeded,failed,suppressed); correlation_id is uuid (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
     try {
-      await supabase.from('eva_event_log').insert({
+      const { error: logError } = await supabase.from('eva_event_log').insert({
         event_type: 'cascade_alignment_check',
-        event_data: {
+        trigger_source: 'manual',
+        status: 'succeeded',
+        correlation_id: randomUUID(),
+        metadata: {
           sd_key: sd.sd_key || sd.id,
           parent_sd_key: parent.sd_key,
           handoff_type: handoffType,
@@ -422,6 +429,7 @@ export async function validateCascadeAtHandoff({
         },
         created_at: new Date().toISOString(),
       });
+      if (logError) logger.warn(`[CascadeValidator] Event log failed: ${logError.message}`);
     } catch (logErr) {
       logger.warn(`[CascadeValidator] Event log failed: ${logErr.message}`);
     }
