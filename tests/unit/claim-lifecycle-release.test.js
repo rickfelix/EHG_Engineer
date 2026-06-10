@@ -14,8 +14,9 @@ const REPO_ROOT = resolve(__dirname, '../..');
 const HELPER_PATH = resolve(REPO_ROOT, 'lib/claim-lifecycle-release.mjs');
 
 beforeEach(() => {
-  process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://test.local';
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  // No DB env fakery needed: every test here is a pure source-pin or exercises an
+  // early-return path that never reaches getSupabase() (SD-LEO-FIX-FIX-PHANTOM-COLUMN-001 —
+  // also keeps this suite clean for the Stage-1.6 DB-test guard).
   vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 
@@ -160,12 +161,17 @@ describe('FR-1 + FR-4: releaseClaimOnPROpen contract (AC-1.2, AC-1.3, AC-1.4, AC
     expect(typeof m.captureClaimSnapshot).toBe('function');
   });
 
-  it('UPDATE clause is WHERE-pinned on (id, claiming_session_id, claimed_at, heartbeat_at) — Option B compare-and-set', () => {
+  it('UPDATE clause is WHERE-pinned on (id, claiming_session_id) — real columns only', () => {
+    // SD-LEO-FIX-FIX-PHANTOM-COLUMN-001: claimed_at/heartbeat_at were PHANTOM SDv2 columns
+    // (they live on claude_sessions) — pinning on them 42703'd every release and made the
+    // whole path a silent no-op. The CAS now pins ONLY on the existing claiming_session_id.
     expect(body).toMatch(/\.update\(\{[^}]*claiming_session_id:\s*null/);
     expect(body).toMatch(/\.eq\(['"]id['"]/);
     expect(body).toMatch(/\.eq\(['"]claiming_session_id['"]/);
-    expect(body).toMatch(/\.eq\(['"]claimed_at['"]/);
-    expect(body).toMatch(/\.eq\(['"]heartbeat_at['"]/);
+    // Phantom columns must never reappear in CODE (comments stripped before the check):
+    const code = body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/^\s*\*.*$/gm, '');
+    expect(code).not.toMatch(/claimed_at/);
+    expect(code).not.toMatch(/heartbeat_at/);
     // NO claim_version usage (validation-agent P1 — column does not exist)
     expect(body).not.toMatch(/claim_version/);
   });
