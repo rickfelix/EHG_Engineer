@@ -198,6 +198,9 @@ scripts/generate-user-stories-*.js
 
 # Database results/exports (temporary artifacts)
 database/*.json
+# … but the schema-reference lint snapshot is a COMMITTED artifact the CI lint
+# reads offline (SD-LEO-INFRA-SCHEMA-REFERENCE-LINT-001)
+!database/schema-reference-snapshot.json
 
 # One-off root level scripts
 audit_rls.js
