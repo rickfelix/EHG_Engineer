@@ -1,3 +1,4 @@
+-- @approved-by:codestreetlabs@gmail.com
 -- Sibling A FR-A-2: bypass_ledger table (TEXT bypass_type + advisory trigger; NOT PostgreSQL ENUM)
 -- Insert-only ledger of every bypass event with audit_log pairing.
 -- Ordinal 20260516130001 strictly > Child 0 ordinals + > FR-A-1 ordinal.

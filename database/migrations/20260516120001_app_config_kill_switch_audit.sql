@@ -1,3 +1,4 @@
+-- @approved-by:codestreetlabs@gmail.com
 -- SD-WRITERCONSUMER-ASYMMETRY-DETECTION-SCOPECOMPLETION-ORCH-001-0 / FR-C0-9
 -- INSERT-only sidecar audit table for app_config kill-switch toggles.
 -- RISK C0-R-04 mitigation: app_config has 0 historical audit_log entries.
