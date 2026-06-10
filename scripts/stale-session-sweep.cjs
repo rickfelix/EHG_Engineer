@@ -215,9 +215,34 @@ async function isSweepResetAllowed(sdKey, targetResetPhase, contextLabel) {
       );
       return false;
     }
-    // Unexpected error — re-throw to caller (sweep aborts loudly rather
-    // than silently overriding state).
-    throw err;
+    // SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001 (FR-1): a vanished SD (TOCTOU — a
+    // concurrent test suite DELETEd an SD-TEST-* fixture between the sweep's
+    // snapshot and this handoff-gate lookup) makes assertSweepHandoffGate throw
+    // ExecContextError code=SD_NOT_FOUND. That is NOT a fault to abort the whole
+    // sweep on (it previously propagated to the top-level catch → process.exit(1),
+    // killing all fleet protection for the tick — live evidence fa7dc41e). Treat
+    // it as a per-item skip: the SD is gone, so there is nothing to reset. Do NOT
+    // swallow SCHEMA_ERROR (a genuine, permanent fault that must surface).
+    if (err && err.code === 'SD_NOT_FOUND') {
+      console.log(
+        '  SKIP_RESET: ' + sdKey + ' — ' + contextLabel +
+        ' — SD vanished before handoff-gate lookup (TOCTOU); skipping reset (non-fatal)'
+      );
+      return false;
+    }
+    // SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001 (FR-2): any other unexpected error
+    // (e.g. SCHEMA_ERROR) is contained at the item boundary, not re-thrown. This
+    // is the single fail-soft containment point for the QA reset gate — returning
+    // false ("reset not allowed") is the SAFE default: it does NOT override SD
+    // state, it simply skips this one item. Previously this re-threw and bubbled
+    // to the top-level catch → process.exit(1), killing ALL fleet protection for
+    // the tick over a single bad row. The fault is still surfaced via a WARN line
+    // emitted every tick until resolved (visible, but non-catastrophic).
+    console.warn(
+      '  WARN_RESET_GATE_ERROR: ' + sdKey + ' — ' + contextLabel + ' — ' +
+      (err && err.message ? err.message : err) + ' (skipping reset, non-fatal)'
+    );
+    return false;
   }
 }
 
@@ -240,6 +265,14 @@ const PHASE_RESET_MAP = {
 };
 
 async function resetSdPhaseOnRelease(sdKey, reason) {
+  // SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001 (FR-2): per-item fail-soft. This is the
+  // dominant throw source in the QA loops (it calls isSweepResetAllowed, which
+  // re-throws genuinely-unexpected errors such as SCHEMA_ERROR). A throw here used
+  // to bubble to the top-level catch → process.exit(1), aborting the whole sweep
+  // tick for ONE item. Contain it: log a warning and return so the remaining items
+  // still process. (FR-1 already neutralizes the common SD_NOT_FOUND case inside
+  // isSweepResetAllowed; this catch covers any other unexpected per-item fault.)
+  try {
   const { data: sd } = await supabase
     .from('strategic_directives_v2')
     .select('sd_key, current_phase, status')
@@ -264,6 +297,10 @@ async function resetSdPhaseOnRelease(sdKey, reason) {
       .eq('sd_key', sdKey);
     console.log('  PHASE_RESET: ' + sdKey + ' ' + sd.current_phase + ' → ' + resetTo + ' (' + reason + ')');
   }
+  } catch (err) {
+    // FR-2: contain a per-item reset fault; never abort the whole sweep tick.
+    console.warn('  WARN_RESET_SKIPPED: ' + sdKey + ' (' + reason + ') — ' + (err && err.message ? err.message : err));
+  }
 }
 
 function isProcessRunning(pid) {
@@ -281,6 +318,19 @@ function isProcessRunning(pid) {
 function bar(pct, width = 20) {
   const filled = Math.round((pct / 100) * width);
   return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
+}
+
+// SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001 (FR-3): `SD-TEST-` is a RESERVED sd_key
+// namespace for ephemeral test fixtures that concurrent test suites INSERT and
+// DELETE within a single run. The sweep's QA reset/mutation paths must never
+// iterate or mutate these \u2014 doing so (a) churns phantom resets every tick
+// (witnessed SD-TEST-MQ7XBNBM-ORCH-001 reset in_progress/EXEC/100% \u2192 draft) and
+// (b) is the TOCTOU source of the FR-1 fatal (a fixture deleted mid-sweep). Real
+// SDs use source prefixes (SD-LEO-/SD-FDBK-/etc.), never SD-TEST-. Single source
+// of truth, applied at every QA mutation site. SQL form: .not('sd_key','like','SD-TEST-%').
+const TEST_FIXTURE_SD_KEY_LIKE = 'SD-TEST-%';
+function isTestFixtureSdKey(sdKey) {
+  return typeof sdKey === 'string' && /^SD-TEST-/.test(sdKey);
 }
 
 // --- Layer 1: Terminal Identity Collision Detection ---
@@ -846,10 +896,13 @@ async function main() {
   const { data: allPendingApproval } = await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key, status, current_phase, progress_percentage, completion_date')
-    .eq('status', 'pending_approval');
+    .eq('status', 'pending_approval')
+    // FR-3: never QA-reset ephemeral SD-TEST-* fixtures.
+    .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE);
 
   const activeClaimSdIds = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_key));
-  const stuckApproval = (allPendingApproval || []).filter(sd => !activeClaimSdIds.has(sd.sd_key));
+  // FR-3 (defense-in-depth): also drop any fixture that slipped past the query filter.
+  const stuckApproval = (allPendingApproval || []).filter(sd => !activeClaimSdIds.has(sd.sd_key) && !isTestFixtureSdKey(sd.sd_key));
 
   // QF-20260423-909: Guard against resetting SDs that legitimately completed
   // PLAN-TO-LEAD and are resting in pending_approval awaiting LEAD-FINAL-APPROVAL.
@@ -922,7 +975,9 @@ async function main() {
     .from('strategic_directives_v2')
     .select('sd_key, status, claiming_session_id, is_working_on')
     .in('status', ['completed', 'cancelled'])
-    .not('claiming_session_id', 'is', null);
+    .not('claiming_session_id', 'is', null)
+    // FR-3: never touch ephemeral SD-TEST-* fixtures.
+    .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE);
 
   for (const sd of (terminalWithClaims || [])) {
     const { error } = await supabase
@@ -951,7 +1006,10 @@ async function main() {
     .from('strategic_directives_v2')
     .select('sd_key, current_phase, progress_percentage')
     .eq('status', 'in_progress')
-    .is('claiming_session_id', null);
+    .is('claiming_session_id', null)
+    // FR-3: never reset ephemeral SD-TEST-* fixtures (witnessed phantom churn of
+    // SD-TEST-MQ7XBNBM-ORCH-001 reset in_progress/EXEC/100% → draft every tick).
+    .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE);
 
   for (const sd of (phantomInProgress || [])) {
     // SD-FDBK-INFRA-EXEC-CONTEXT-GUARD-001 (FR-3, AC-4/AC-5): generalized
@@ -982,7 +1040,9 @@ async function main() {
     .from('strategic_directives_v2')
     .select('sd_key, title, description, scope')
     .in('status', ['draft', 'ready'])
-    .not('sd_key', 'like', '%ORCH-STAGE-VENTURE-WORKFLOW-001-%');
+    .not('sd_key', 'like', '%ORCH-STAGE-VENTURE-WORKFLOW-001-%')
+    // FR-3: never enrich ephemeral SD-TEST-* fixtures.
+    .not('sd_key', 'like', TEST_FIXTURE_SD_KEY_LIKE);
   const bareShellSDs = (pendingSDs || []).filter(sd => {
     if (sd.description && sd.description.startsWith('Child SD of')) return false;
     return !sd.description || sd.description === sd.title || (sd.description.length < 100 && sd.scope === sd.title);
@@ -2049,3 +2109,14 @@ module.exports.detectCrossSessionCollisions = detectCrossSessionCollisions;
 module.exports.loadRecentIntents = loadRecentIntents;
 module.exports.INTENT_WINDOW_MIN = INTENT_WINDOW_MIN;
 module.exports.INTENT_PAYLOAD_KEYS = INTENT_PAYLOAD_KEYS;
+
+// SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001 — claim-safety exports.
+// FR-3 predicate (pure): the reserved SD-TEST- fixture namespace check.
+module.exports.isTestFixtureSdKey = isTestFixtureSdKey;
+module.exports.TEST_FIXTURE_SD_KEY_LIKE = TEST_FIXTURE_SD_KEY_LIKE;
+// FR-1/FR-2: the fail-soft reset gate + a test-only seam to seed the lazily-imported
+// exec-context-guard cache (so tests can inject a mock assertSweepHandoffGate without
+// touching the live ESM module). Seeding the cache is exactly what the first real call
+// does — no production behavior change.
+module.exports.isSweepResetAllowed = isSweepResetAllowed;
+module.exports.__setExecContextGuardForTest = (mock) => { _execContextGuardCache = mock; };
