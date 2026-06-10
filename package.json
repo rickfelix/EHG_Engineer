@@ -375,6 +375,7 @@
     "session:park": "node scripts/park-worker.cjs",
     "prepark-wip": "node scripts/prepark-wip.cjs",
     "protocol:pub-audit": "node scripts/protocol-publication-audit.cjs",
+    "sre:row-growth": "node scripts/row-growth-snapshot.cjs",
     "policy:check": "node scripts/auto-exec-policy-check.mjs",
     "engine:demo": "node scripts/auto-exec-engine-demo.mjs",
     "checkout-sync:demo": "node scripts/auto-exec-checkout-sync-demo.mjs",
@@ -421,8 +422,6 @@
     "generate:skills": "node scripts/generate-skills-from-db.js",
     "generate:skills:check": "node scripts/generate-skills-from-db.js --check",
     "lint:skills": "node scripts/lint-skill-files.js",
-    "validate:schema-sync": "node scripts/validate-schema-sync.mjs",
-    "validate:schema-sync:json": "node scripts/validate-schema-sync.mjs --json",
     "validate:bypass": "node scripts/modules/bypass-detection-validator.js",
     "validate:bypass:all": "node scripts/modules/bypass-detection-validator.js --all",
     "governance": "node scripts/governance.js",
@@ -474,7 +473,10 @@
     "qf:create": "node scripts/create-quick-fix.js",
     "migration:apply-state": "node scripts/verify-migration-apply-state.mjs",
     "retention:check": "node scripts/retention-enforce.js",
-    "retention:apply": "node scripts/retention-enforce.js --apply"
+    "retention:apply": "node scripts/retention-enforce.js --apply",
+    "schema:lint": "node scripts/lint/schema-reference-lint.mjs --diff",
+    "schema:lint:all": "node scripts/lint/schema-reference-lint.mjs --all",
+    "schema:snapshot:lint": "node scripts/lint/schema-reference-snapshot.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",

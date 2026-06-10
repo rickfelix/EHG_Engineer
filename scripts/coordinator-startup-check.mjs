@@ -68,6 +68,14 @@ export const STANDARD_LOOPS = [
   // Cheap read+insert; */30 captures session_coordination FLEET-RETRO signals before they are swept.
   { key: 'fleet-retro',  label: 'Worker fleet-retro (periodic capture/synthesis)', script: 'coordinator-fleet-retro.mjs', cron: '*/30 * * * *',
     prompt: 'node scripts/coordinator-fleet-retro.mjs' },
+  // SD-LEO-INFRA-STANDING-ROW-GROWTH-001: daily governance-table row-growth gauge.
+  // Snapshots estimated row counts (PostgREST head+estimated — pg statistics, no COUNT(*))
+  // into a coordination_events baseline series and alerts the coordinator inbox on
+  // growth-factor / absolute-spike anomalies between consecutive snapshots. Internally
+  // due-gated (~22h), so an extra arm or manual run is a cheap no-op. Catches the
+  // management_reviews-45k / sd_baseline_items-13k class within a day, not by accident.
+  { key: 'row-growth',  label: 'Governance row-growth gauge (daily)', script: 'row-growth-snapshot.cjs', cron: '30 8 * * *',
+    prompt: 'node scripts/row-growth-snapshot.cjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
