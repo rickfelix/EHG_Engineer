@@ -184,7 +184,7 @@ dependencies, even though it performs I/O through the injected clients.
 
 ## The 5 Enforced Boundaries
 
-The venture lifecycle has 25 stages organized into 6 major phases. Reality
+The venture lifecycle (defined by the venture_stages SSOT; 25 stages as authored) is organized into 6 major phases. Reality
 Gates are enforced at the 5 transitions between these phases.
 
 ```mermaid

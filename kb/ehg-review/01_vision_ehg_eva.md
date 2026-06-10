@@ -1,5 +1,8 @@
 # 01_vision_ehg_eva.md
 
+> **⚠️ HISTORICAL DOCUMENT (bannered 2026-06-10)**: superseded by the chairman-locked canonical EHG vision (eva_vision_documents L1 `VISION-EHG-L1-001`, 2026-06-09). Preserved as a historical record; not a current source of truth. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+
+
 ## Why This Matters
 This document articulates the strategic vision for ExecHoldings Global, the platform's evolution timeline, and EVA's critical role as the intelligent orchestration layer. It defines where we're going, how we'll get there, and the measurable outcomes that define success.
 

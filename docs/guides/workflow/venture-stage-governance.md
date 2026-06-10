@@ -9,7 +9,7 @@ tags: [governance, auto-proceed, chairman-config, workers, gates, venture-workfl
 
 # Venture Stage Governance
 
-How ventures advance through the 26-stage lifecycle, how gates are evaluated, and how the chairman controls auto-approval behavior.
+How ventures advance through the venture lifecycle (see the venture_stages SSOT; 26 stages at the time of writing), how gates are evaluated, and how the chairman controls auto-approval behavior.
 
 ## Architecture Overview
 

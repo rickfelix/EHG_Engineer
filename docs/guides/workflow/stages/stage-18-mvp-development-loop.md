@@ -126,7 +126,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L799) - Stage 18 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
 - [Stage 17: Environment & Agent Config](stage-17-environment-and-agent-config.md) - Previous stage
 - [Stage 19: Integration & API Layer](stage-19-integration-and-api-layer.md) - Next stage
 

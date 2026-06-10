@@ -131,7 +131,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L719) - Stage 16 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-4-the-blueprint) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-4-the-blueprint) - Phase context
 - [Stage 15: Epic & User Story Breakdown](stage-15-epic-and-user-story-breakdown.md) - Previous stage
 - [Stage 17: Environment & Agent Config](stage-17-environment-and-agent-config.md) - Next stage
 

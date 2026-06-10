@@ -128,7 +128,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L759) - Stage 17 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
 - [Stage 16: Spec-Driven Schema Generation](stage-16-spec-driven-schema-generation.md) - Previous stage
 - [Stage 18: MVP Development Loop](stage-18-mvp-development-loop.md) - Next stage
 

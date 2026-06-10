@@ -130,7 +130,7 @@ This is an artifact-only stage focused on producing specific outputs.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L279) - Stage 5 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-1-the-truth) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-1-the-truth) - Phase context
 - [Stage 4: Competitive Intelligence](stage-04-competitive-intelligence.md) - Previous stage
 - [Stage 6: Risk Evaluation Matrix](stage-06-risk-evaluation-matrix.md) - Next stage
 
