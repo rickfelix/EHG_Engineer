@@ -76,6 +76,13 @@ export const STANDARD_LOOPS = [
   // management_reviews-45k / sd_baseline_items-13k class within a day, not by accident.
   { key: 'row-growth',  label: 'Governance row-growth gauge (daily)', script: 'row-growth-snapshot.cjs', cron: '30 8 * * *',
     prompt: 'node scripts/row-growth-snapshot.cjs' },
+  // SD-LEO-INFRA-CODIFY-SUBSYSTEM-REVIEW-001: weekly subsystem-review rotation.
+  // Stateless (registry = completed SDs stamping metadata.subsystem_review); posts ONE
+  // coordinator-inbox review-supply row naming the next-due subsystem + the
+  // /review-subsystem command. Due-gated ~6 days; extra arms/manual runs are no-ops.
+  // Converts idle-fleet gaps into review supply (4 reviews -> 27 evidenced SDs on 2026-06-10).
+  { key: 'review-rotation', label: 'Subsystem review rotation (weekly)', script: 'subsystem-review-rotation.cjs', cron: '0 9 * * 1',
+    prompt: 'node scripts/subsystem-review-rotation.cjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
