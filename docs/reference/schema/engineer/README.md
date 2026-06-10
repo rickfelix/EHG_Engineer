@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-10T18:41:40.990Z
-**Tables**: 725
+**Generated**: 2026-06-10T19:43:32.025Z
+**Tables**: 730
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (725)
+## All Tables (730)
 
 ### LEO Protocol
 
@@ -212,6 +212,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [ai_quality_assessments](tables/ai_quality_assessments.md)
 - [anthropic_plugin_registry](tables/anthropic_plugin_registry.md)
 - [app_config](tables/app_config.md)
+- [app_config_kill_switch_changes](tables/app_config_kill_switch_changes.md)
 - [app_rankings](tables/app_rankings.md)
 - [applications](tables/applications.md)
 - [archetype_benchmarks](tables/archetype_benchmarks.md)
@@ -237,6 +238,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [brainstorm_vote_tallies](tables/brainstorm_vote_tallies.md)
 - [brand_genome_submissions](tables/brand_genome_submissions.md)
 - [brand_variants](tables/brand_variants.md)
+- [bypass_ledger](tables/bypass_ledger.md)
 - [campaign_content](tables/campaign_content.md)
 - [campaign_enrollments](tables/campaign_enrollments.md)
 - [capability_reuse_log](tables/capability_reuse_log.md)
@@ -290,6 +292,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [context_usage_daily](tables/context_usage_daily.md)
 - [context_usage_log](tables/context_usage_log.md)
 - [continuous_execution_log](tables/continuous_execution_log.md)
+- [contract_chain_links](tables/contract_chain_links.md)
 - [coordination_events](tables/coordination_events.md)
 - [counterfactual_scores](tables/counterfactual_scores.md)
 - [cron_run_locks](tables/cron_run_locks.md)
@@ -567,6 +570,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [releases](tables/releases.md)
 - [remediation_manifests](tables/remediation_manifests.md)
 - [research_sessions](tables/research_sessions.md)
+- [retention_archive](tables/retention_archive.md)
+- [retention_runs](tables/retention_runs.md)
 - [retro_notifications](tables/retro_notifications.md)
 - [risk_assessments](tables/risk_assessments.md)
 - [risk_escalation_log](tables/risk_escalation_log.md)
