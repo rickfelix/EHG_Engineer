@@ -365,6 +365,7 @@
     "session:worktree": "node scripts/session-worktree.js",
     "session:check-concurrency": "node scripts/session-check-concurrency.js",
     "session:park": "node scripts/park-worker.cjs",
+    "sweep:scratch": "node scripts/maintenance/sweep-worker-scratch.mjs",
     "policy:check": "node scripts/auto-exec-policy-check.mjs",
     "engine:demo": "node scripts/auto-exec-engine-demo.mjs",
     "checkout-sync:demo": "node scripts/auto-exec-checkout-sync-demo.mjs",
