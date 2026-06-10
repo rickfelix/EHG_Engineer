@@ -28,7 +28,7 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
-const { evaluateDispatchEligibility } = require('../lib/fleet/claim-eligibility.cjs');
+const { evaluateDispatchEligibility, classifyDispatchIneligibility } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001 (FR-3): single shared definition of which
 // classified session statuses count as "currently holding the SD claim" — used
 // by BOTH the available-to-claim filter and the worker-render filter below so
@@ -1297,12 +1297,14 @@ async function main() {
   const [childRes, standaloneRes] = await Promise.all([
     supabase
       .from('strategic_directives_v2')
-      .select('sd_key, title, status, current_phase, progress_percentage, dependencies')
+      // sd_type + metadata feed the shared classifyDispatchIneligibility gate below
+      // (SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001) with no extra round-trips.
+      .select('sd_key, title, status, current_phase, progress_percentage, dependencies, sd_type, metadata')
       .like('sd_key', 'SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-%')
       .order('sd_key', { ascending: true }),
     supabase
       .from('strategic_directives_v2')
-      .select('sd_key, title, status, current_phase, progress_percentage, dependencies, priority')
+      .select('sd_key, title, status, current_phase, progress_percentage, dependencies, priority, sd_type, metadata')
       .in('status', ['draft', 'in_progress', 'ready', 'pending_approval'])
       .not('sd_key', 'like', 'SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001%')
       .limit(20)
@@ -1324,6 +1326,14 @@ async function main() {
     .filter(c => {
       if (c.status === 'completed') return false;
       if (claimedByActive.has(c.sd_key)) return false;
+      // SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001: route the coordinator/sweep PUSH path through the
+      // SAME shared eligibility classifier the worker self_claim PULL path uses, so a test-fixture
+      // phantom (SD-DEMO-*/SD-TEST-*), an orchestrator PARENT, or a requires_human_action SD can never
+      // be advertised available or emitted as a WORK_ASSIGNMENT. Pure + synchronous on already-loaded
+      // rows (no N+1). Fail-soft per SD: a malformed row that throws is dropped, never aborts the sweep.
+      try {
+        if (classifyDispatchIneligibility(c) !== null) return false;
+      } catch { return false; }
       // QF-20260525-542: canonical SD-key blocker rule (was completedKeys.has(dep) on
       // raw elements — object-shaped placeholders never matched → false BLOCKED).
       const depKeys = parseSdDependencies(c.dependencies);
