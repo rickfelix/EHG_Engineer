@@ -1,11 +1,11 @@
-# venture_artifacts_qparity20260610 Table
+# venture_artifacts_storm_quarantine_20260610 Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-06-10T23:03:19.769Z
-**Rows**: 24
+**Rows**: 2,684
 **RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
