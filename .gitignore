@@ -334,3 +334,6 @@ scripts/ops/LLM-COST-ALERT.txt
 
 # Adam opportunity-scan runtime ledger (SD-LEO-INFRA-ADAM-OPPORTUNITY-SCAN-001)
 .adam-scan-ledger.json
+
+# Adam self-assessment turn-counter state (SD-LEO-INFRA-ADAM-SELF-ASSESSMENT-001)
+.adam-self-assessment-state.json

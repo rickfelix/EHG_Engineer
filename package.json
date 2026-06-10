@@ -306,6 +306,7 @@
     "adam:retro": "node scripts/adam-retro.cjs",
     "adam:scan": "node scripts/adam-opportunity-scan.cjs --scan",
     "adam:briefing": "node scripts/adam-opportunity-scan.cjs --briefing",
+    "adam:self-score": "node scripts/adam-self-assessment-writer.cjs",
     "coordinator:cold-recovery": "node scripts/coordinator-cold-recovery.cjs",
     "coordinator:reply": "node scripts/coordinator-reply.cjs",
     "coordinator:startup-check": "node scripts/coordinator-startup-check.mjs",
