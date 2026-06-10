@@ -28,11 +28,13 @@ export const ROLE_CONTEXT_DOC = 'docs/protocol/fleet-coordinator-and-worker-beha
 
 // Concise, always-rendered responsibilities summary (surfaced even if the source doc is unreadable).
 export const RESPONSIBILITIES = [
+  'REQUIRED PRIMING READ (Step P) — before acting as coordinator, READ .claude/commands/coordinator.md IN FULL plus the durable role doc, and attest ("Primed: coordinator.md + role doc read ✓") in the startup confirm banner. Same contract as the LEO phase-file reads (CLAUDE_LEAD.md / CLAUDE_PLAN.md). An unprimed coordinator skips duties.',
   'MANAGER, not IC — delegate mechanical/parallelizable work (SD creation, audits, investigations, cleanups) to sub-agents or the fleet queue; reserve your cycles for judgment (prioritization, sensitive RCA, the execute step of destructive actions). Verify sub-agent output.',
   'KEEP WORKERS BUSY is the KPI — continuously source claimable work; idle workers + available work is a problem to solve. The coordinator is EITHER delegating/sourcing OR torn down, never idling in between.',
+  'FORECAST utilization, do not REACT (operator 2026-06-10) — track each worker busy-state + ETA-to-free + belt depth (coordinator-capacity-forecast.mjs, armed cron); when the forecast predicts the belt running short (demand_soon + buffer > claimable), reach Adam for sourcing BEFORE workers go idle. An idle worker the forecast did not anticipate = failure. Never wait to be asked how busy the fleet is.',
   'RECURRING 3-SOURCE AUDIT — check SD queue, harness backlog (feedback category=harness_backlog), and inbox; source backlog into DRAFT SDs only when the queue would starve idle workers.',
   'BACKGROUND MONITORING during operator conversations — run the cron ticks but surface only important events (stuck worker, empty-queue+idle, claim/worktree conflict, a worker question, a completion).',
-  'EXECUTIVE EMAIL is default-on — the operator is usually away; the email is the single gauge (active workers vs min(workable SDs, target)) + question escalation.',
+  'CHAIRMAN EMAIL = the Adam exec-summary (GitHub-Actions cron, adam-exec-email-cron.yml) — the coordinator fleet email is RETIRED (chairman email cutover 2026-06-10); do NOT re-arm coordinator-email-summary.mjs. Escalate questions via the inbox/advisory lanes.',
   'TEARDOWN DISCIPLINE — when no claimable AND no sourceable work AND zero workers (sustained): CronDelete ALL loops first, then clear the coordinator pointer + final email. Do not idle loops past a finished campaign.',
   'You CANNOT start a worker\'s execution — only /loop or a human paste in the worker window can. To restore a thinned fleet, hand the operator the wake-up prompt.',
 ];
@@ -52,8 +54,10 @@ export const STANDARD_LOOPS = [
     prompt: 'node scripts/fleet-dashboard.cjs inbox' },
   { key: 'audit',       label: 'Coordinator 3-source audit', script: 'coordinator-audit.mjs', cron: '*/15 * * * *',
     prompt: 'node scripts/coordinator-audit.mjs' },
-  { key: 'email',       label: 'Executive email summary (default-on)', script: 'coordinator-email-summary.mjs', cron: '*/30 * * * *',
-    prompt: 'node scripts/coordinator-email-summary.mjs' },
+  // RETIRED (chairman email cutover, advisory b7b73b86 / QF-20260609-024, 2026-06-10): the
+  // coordinator fleet email (coordinator-email-summary.mjs) is no longer a standard loop. The ONE
+  // chairman-facing email is the Adam exec-summary, scheduled durably via GitHub Actions
+  // (.github/workflows/adam-exec-email-cron.yml, live when repo var ADAM_EMAIL_LIVE=true).
   // SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5): daily feature-flag governance review.
   // Gated default-OFF behind leo_feature_flags FLAG_GOVERNANCE_REVIEW_V1 → cheap no-op until enabled.
   { key: 'flag-review', label: 'Feature-flag governance review', script: 'flag-governance-review.mjs', cron: '0 9 * * *',
@@ -67,6 +71,11 @@ export const STANDARD_LOOPS = [
   // via lib/coordinator/fleet-quiescence.cjs — no churn when the line is stopped. Chairman req 2026-06-09.
   { key: 'hourly-review', label: 'Hourly responsibilities review (coordinator + Adam, cycle-down aware)', script: 'coordinator-hourly-review.cjs', cron: '17 * * * *',
     prompt: 'node scripts/coordinator-hourly-review.cjs' },
+  // PROACTIVE capacity forecaster (operator directive 2026-06-10): tracks per-worker busy-state +
+  // ETA-to-free and belt-depth-vs-demand; on a FORECAST deficit (workers about to run out of work) it
+  // reaches Adam for sourcing BEFORE the belt empties (30m cooldown). --dispatch enables the auto-reach.
+  { key: 'capacity-forecast', label: 'Worker-utilization + belt dry-out forecaster (predictive Adam reach-out)', script: 'coordinator-capacity-forecast.mjs', cron: '3,13,23,33,43,53 * * * *',
+    prompt: 'node scripts/coordinator-capacity-forecast.mjs --dispatch' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.
