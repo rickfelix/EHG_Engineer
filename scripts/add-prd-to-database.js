@@ -157,6 +157,16 @@ export function validateContentPayloadShape(payload) {
     });
   };
   // Array-of-object PRD fields (rubric requires per-item structure)
+  //
+  // Functional-requirement field shape (SD-FDBK-FIX-FIX-PRD-GROUNDING-001):
+  //   { id, title?, requirement?, description?, priority, acceptance_criteria }
+  // ALL THREE text fields (title / requirement / description) are scored by the
+  // PRD-grounding validator — write the rich SD-vocabulary body in whichever field
+  // fits; the field-name choice no longer changes the grounding verdict. `title`
+  // (falling back to `requirement`) is also used as the display label in reports.
+  // Historical trap: the validator used to drop the `requirement` body whenever a
+  // title was present, scoring the FR on the short label alone (~1-2% Jaccard) and
+  // failing the quality gate (witnessed e8008b14 / SD-LEO-INFRA-ADAM-EVA-SEAM-001).
   expectArrayOfObjects('functional_requirements');
   expectArrayOfObjects('technical_requirements');
   expectArrayOfObjects('test_scenarios');
