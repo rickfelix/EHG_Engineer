@@ -30,6 +30,12 @@ const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
 const FIXTURE_RE = /^SD-(TEST|DEMO|SWITCH-OLD)\b|^SD-LEO-FEAT-TEST-E2E-/;
 
+// Dependencies appear in TWO shapes in live data: [{sd_id:'SD-…'}] (add-prd convention) and
+// raw string arrays ['SD-…'] (plan-keeper/Adam authoring). Reading only x.sd_id made this
+// ranker blind to string deps — it ranked a BLOCKED child claimable and missed unlock edges
+// (live catch 2026-06-10: PLAN-KEEPER-D ranked claimable while dep -C was draft). Coerce both.
+const depId = (x) => (typeof x === 'string' ? x : (x && (x.sd_id || x.sd_key || x.id)) || null);
+
 const sb = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -44,7 +50,7 @@ async function main() {
   // ── dependency graph: edges dep -> dependents (over non-terminal set + completed deps resolved) ──
   const byKey = new Map((sds || []).map(d => [d.sd_key, d]));
   const depKeys = new Set();
-  (sds || []).forEach(d => (d.dependencies || []).forEach(x => x && x.sd_id && depKeys.add(x.sd_id)));
+  (sds || []).forEach(d => (d.dependencies || []).forEach(x => { const k = depId(x); if (k) depKeys.add(k); }));
   let depStatus = {};
   if (depKeys.size) {
     const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
@@ -54,9 +60,10 @@ async function main() {
   const dependents = new Map();
   for (const d of (sds || [])) {
     for (const x of (d.dependencies || [])) {
-      if (!x || !x.sd_id) continue;
-      if (!dependents.has(x.sd_id)) dependents.set(x.sd_id, []);
-      dependents.get(x.sd_id).push(d.sd_key);
+      const k = depId(x);
+      if (!k) continue;
+      if (!dependents.has(k)) dependents.set(k, []);
+      dependents.get(k).push(d.sd_key);
     }
   }
   // unlock score: transitive count of non-terminal SDs downstream of key (DFS, cycle-safe)
@@ -78,7 +85,7 @@ async function main() {
     if (d.claiming_session_id) continue;
     if (d.sd_type === 'orchestrator') continue;          // parents are never dispatched
     if (FIXTURE_RE.test(d.sd_key)) continue;             // test fixtures are never ranked
-    const unmet = (d.dependencies || []).map(x => x && x.sd_id)
+    const unmet = (d.dependencies || []).map(depId)
       .filter(k => k && (byKey.has(k) ? byKey.get(k).status !== 'completed' : depStatus[k] !== 'completed'));
     if (unmet.length) continue;
     claimable.push(d);

@@ -88,8 +88,10 @@ async function main() {
   const openQfCount = Array.isArray(openQfRows) ? openQfRows.length : 0;
 
   // ── resolve dependency statuses → claimable belt ──
+  // Deps appear as [{sd_id}] AND raw string arrays (live mix); coerce both shapes.
+  const depId = (x) => (typeof x === 'string' ? x : (x && (x.sd_id || x.sd_key || x.id)) || null);
   const depKeys = new Set();
-  (sds || []).forEach(d => (d.dependencies || []).forEach(x => x && x.sd_id && depKeys.add(x.sd_id)));
+  (sds || []).forEach(d => (d.dependencies || []).forEach(x => { const k = depId(x); if (k) depKeys.add(k); }));
   let depStatus = {};
   if (depKeys.size) {
     const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
@@ -103,7 +105,7 @@ async function main() {
       continue;
     }
     if (d.sd_type === 'orchestrator') continue; // parents auto-complete; never dispatch
-    const unmet = (d.dependencies || []).map(x => x && x.sd_id).filter(k => k && depStatus[k] !== 'completed');
+    const unmet = (d.dependencies || []).map(depId).filter(k => k && depStatus[k] !== 'completed');
     if (unmet.length === 0) claimable.push(d);
   }
 
