@@ -12,9 +12,27 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
 
-import { CLAUDEMDGeneratorV3 } from './modules/claude-md-generator/index.js';
+import { CLAUDEMDGeneratorV3, KNOWN_GENERATED_FILES } from './modules/claude-md-generator/index.js';
 import { getActiveProtocol } from './modules/claude-md-generator/db-queries.js';
 import { runRegenLintHook } from './protocol-lint/regen-hook.mjs';
+
+// SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): parse --only <FILE[,FILE...]>
+// into a validated file list. Unknown names fail loud listing valid targets. Exported
+// (pure) for unit tests. Returns null when no --only flag is present (full regen).
+export function parseOnlyFlag(argv, known = KNOWN_GENERATED_FILES) {
+  const idx = argv.indexOf('--only');
+  if (idx === -1) return null;
+  const value = argv[idx + 1];
+  if (!value || value.startsWith('--')) {
+    throw new Error(`--only requires a value. Valid targets: ${known.join(', ')}`);
+  }
+  const files = value.split(',').map((f) => f.trim()).filter(Boolean);
+  const unknown = files.filter((f) => !known.includes(f));
+  if (unknown.length) {
+    throw new Error(`--only: unknown file(s) ${unknown.join(', ')}. Valid targets: ${known.join(', ')}`);
+  }
+  return files;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,7 +72,17 @@ if (import.meta.url === `file:///${normalizedArgv}`) {
       process.exit(1);
     }
 
-    const generator = new CLAUDEMDGeneratorV3(supabase, baseDir, mappingPath);
+    // FR-4: scoped regeneration — validate the target list before any work.
+    let only = null;
+    try {
+      only = parseOnlyFlag(process.argv);
+    } catch (e) {
+      console.error(e.message);
+      process.exit(1);
+    }
+    if (only) console.log(`Scoped regeneration (--only): ${only.join(', ')}\n`);
+
+    const generator = new CLAUDEMDGeneratorV3(supabase, baseDir, mappingPath, only ? { only } : {});
     await generator.generate();
   }
 
