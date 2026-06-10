@@ -672,7 +672,11 @@ fi
 # Extract SD identifier pattern from commit message or branch name
 # Matches: SD-LEO-GATE0-001, SD-FEATURE-001, SD-LEO-REFACTOR-LARGE-FILES-002
 # Also matches multi-segment: SD-LEO-SELF-IMPROVE-AIJUDGE-001
-SD_ID=$(echo "$COMMIT_MSG $BRANCH" | grep -oE 'SD-[A-Z0-9]+(-[A-Z0-9]+)*-[0-9]+' | head -1)
+# SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-B: also match the CHILD letter suffix
+# (leo-create-sd --child emits -B/-C/...). Without it the key truncates to the
+# PARENT orchestrator (often legitimately draft while children run), falsely
+# blocking every child commit with "SD is in DRAFT status".
+SD_ID=$(echo "$COMMIT_MSG $BRANCH" | grep -oE 'SD-[A-Z0-9]+(-[A-Z0-9]+)*-[0-9]+(-[A-Z])?' | head -1)
 
 if [ ! -z "$SD_ID" ]; then
   echo "   Found SD reference: $SD_ID"

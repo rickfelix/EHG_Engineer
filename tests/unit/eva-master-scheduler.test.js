@@ -19,7 +19,7 @@ vi.mock('../../lib/eva/eva-orchestrator.js', () => ({
   processStage: vi.fn(),
 }));
 
-import { EvaMasterScheduler } from '../../lib/eva/eva-master-scheduler.js';
+import { EvaMasterScheduler, computeBuildProvenance } from '../../lib/eva/eva-master-scheduler.js';
 import { processStage } from '../../lib/eva/eva-orchestrator.js';
 
 // ── Mock Factories ──────────────────────────────────────────────
@@ -1702,5 +1702,101 @@ describe('EvaMasterScheduler', () => {
       expect(status.circuit_breaker_state).toBe('UNKNOWN');
       expect(status.queue_depth).toBe(0);
     });
+  });
+});
+
+// ── SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-B ──────────────────────────
+// FR-1: build-provenance stamp (computed once, fail-open, merged into heartbeat).
+// FR-2: regression pin on the _runDueJobs observe gate (PR #4522) — the 2026-06-10
+// OKR bypass ran okr-monthly-generate under observe_only because the live daemon
+// predated that gate; these tests fail if the gate is ever removed.
+
+describe('SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-B: build provenance (FR-1)', () => {
+  test('computeBuildProvenance returns trimmed git sha + env fingerprint booleans', () => {
+    const p = computeBuildProvenance({
+      exec: () => 'abc123def456\n',
+      env: { OKR_REQUIRE_ACCEPTANCE: 'true', EVA_SCHEDULER_OBSERVE_ONLY: 'true' },
+      cwd: '/repo',
+    });
+    expect(p.git_sha).toBe('abc123def456');
+    expect(p.started_from).toBe('/repo');
+    expect(p.node_version).toBe(process.version);
+    expect(p.env).toEqual({ okr_require_acceptance: true, eva_scheduler_observe_only: true });
+    expect(typeof p.stamped_at).toBe('string');
+  });
+
+  test('fail-open: git probe throwing yields git_sha=null (never throws)', () => {
+    const p = computeBuildProvenance({ exec: () => { throw new Error('git unavailable'); }, env: {} });
+    expect(p.git_sha).toBeNull();
+    // requireAcceptance defaults TRUE when env var absent (mirrors okr-monthly-generator.js)
+    expect(p.env.okr_require_acceptance).toBe(true);
+    expect(p.env.eva_scheduler_observe_only).toBe(false);
+  });
+
+  test('OKR_REQUIRE_ACCEPTANCE=false is fingerprinted as false', () => {
+    const p = computeBuildProvenance({ exec: () => 'sha\n', env: { OKR_REQUIRE_ACCEPTANCE: 'false' } });
+    expect(p.env.okr_require_acceptance).toBe(false);
+  });
+
+  test('heartbeat upsert payload carries metadata.build_provenance (computed once at construction)', async () => {
+    const mockSupabase = createMockSupabase();
+    const mockLogger = createMockLogger();
+    const exec = vi.fn(() => 'deadbeef\n');
+    const scheduler = new EvaMasterScheduler({
+      supabase: mockSupabase,
+      logger: mockLogger,
+      config: { provenanceProbe: { exec, env: { OKR_REQUIRE_ACCEPTANCE: 'true' }, cwd: '/host/repo' } },
+    });
+    expect(exec).toHaveBeenCalledTimes(1); // cached at construction — no per-poll exec
+
+    await scheduler._updateHeartbeat('running');
+    const upsertArg = mockSupabase.upsert.mock.calls.at(-1)[0];
+    expect(upsertArg.metadata.build_provenance).toMatchObject({
+      git_sha: 'deadbeef',
+      started_from: '/host/repo',
+      env: { okr_require_acceptance: true },
+    });
+    expect(exec).toHaveBeenCalledTimes(1); // still once after a heartbeat write
+  });
+});
+
+describe('SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-B: _runDueJobs observe gate pin (FR-2)', () => {
+  test('observeOnly=true: due job handler NOT invoked, OBSERVE log emitted, cadence clock advanced', async () => {
+    const mockSupabase = createMockSupabase();
+    const mockLogger = createMockLogger();
+    const scheduler = new EvaMasterScheduler({
+      supabase: mockSupabase,
+      logger: mockLogger,
+      config: { observeOnly: true },
+    });
+    const handler = vi.fn();
+    scheduler.registerJob({ name: 'pin-test-job', handler, cadenceDays: 30 });
+    // No prior run -> due immediately.
+
+    await scheduler._runDueJobs();
+
+    expect(handler).not.toHaveBeenCalled(); // THE pin: gate removal fails here
+    const observeLogs = mockLogger.log.mock.calls.filter(
+      (c) => c[0] && c[0].includes('OBSERVE: Would run job pin-test-job'),
+    );
+    expect(observeLogs.length).toBe(1);
+    // Cadence clock advanced so observe-mode doesn't cause a thundering catch-up at flip.
+    expect(scheduler._jobLastRunAt.get('pin-test-job')).toBeGreaterThan(0);
+  });
+
+  test('observeOnly=false: the same due job handler IS invoked (gate is mode-scoped, not a blanket skip)', async () => {
+    const mockSupabase = createMockSupabase();
+    const mockLogger = createMockLogger();
+    const scheduler = new EvaMasterScheduler({
+      supabase: mockSupabase,
+      logger: mockLogger,
+      config: { observeOnly: false },
+    });
+    const handler = vi.fn().mockResolvedValue(undefined);
+    scheduler.registerJob({ name: 'pin-test-live-job', handler, cadenceDays: 30 });
+
+    await scheduler._runDueJobs();
+
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });
