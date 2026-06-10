@@ -141,12 +141,14 @@ async function analyzeGateCalibration() {
 
 // ─── Domain 3: Capability Delivery Tracking ───────────────────
 async function analyzeCapabilityDelivery() {
+  // Live column is completion_date — strategic_directives_v2 has NO completed_at
+  // (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
   const { data: completed } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, sd_type, category, completed_at, key_changes')
+    .select('id, sd_key, title, sd_type, category, completion_date, key_changes')
     .eq('status', 'completed')
-    .gte('completed_at', cutoffDate(60))
-    .order('completed_at', { ascending: false })
+    .gte('completion_date', cutoffDate(60))
+    .order('completion_date', { ascending: false })
     .limit(50);
 
   if (!completed || completed.length === 0) return [];
@@ -180,9 +182,11 @@ async function analyzeCapabilityDelivery() {
 
 // ─── Domain 4: Venture Stage Readiness ────────────────────────
 async function analyzeVentureReadiness() {
+  // Live column is current_lifecycle_stage — ventures has NO current_stage
+  // (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
   const { data: ventures } = await supabase
     .from('ventures')
-    .select('id, name, status, current_stage, updated_at')
+    .select('id, name, status, current_lifecycle_stage, updated_at')
     .eq('status', 'active');
 
   if (!ventures || ventures.length === 0) return [];
@@ -195,7 +199,7 @@ async function analyzeVentureReadiness() {
       const daysSinceUpdate = (Date.now() - new Date(v.updated_at).getTime()) / 86400000;
       if (daysSinceUpdate > 30) {
         findings.push({
-          title: `Venture "${v.name}" stalled at stage ${v.current_stage || 'unknown'}`,
+          title: `Venture "${v.name}" stalled at stage ${v.current_lifecycle_stage || 'unknown'}`,
           description: `No progress in ${Math.round(daysSinceUpdate)} days. Consider reviewing blockers or deprioritizing.`,
           dataPoints: 3, // venture + stage + staleness = 3 signals
           domain: 'venture_readiness',
@@ -259,11 +263,12 @@ async function analyzeProtocolHealth() {
 
 // ─── Domain 6: Cross-Venture Capability Reuse Detection ──────
 async function analyzeCrossVentureReuse() {
+  // Live column is completion_date (SD-LEO-FIX-FIX-PHANTOM-COLUMN-002).
   const { data: sds } = await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key, title, key_changes, success_criteria, target_application')
     .eq('status', 'completed')
-    .gte('completed_at', cutoffDate(90))
+    .gte('completion_date', cutoffDate(90))
     .limit(50);
 
   if (!sds || sds.length < 5) return [];
@@ -311,27 +316,35 @@ async function analyzeCrossVentureReuse() {
 }
 
 // ─── Domain 7: OKR Drift Detection ───────────────────────────
-async function analyzeOKRDrift() {
-  // Table okr_key_results does not exist yet
-  const keyResults = [];
+// SD-LEO-INFRA-ADAM-EVA-SEAM-001: patch the OKR-drift blind spot. The prior stub queried the
+// non-existent `okr_key_results` table, hard-coded `keyResults = []`, and so returned [] — Adam's
+// scan NEVER produced an OKR-drift finding. Run drift over the REAL `key_results`
+// (status: at_risk/on_track/achieved/pending) + `sd_key_result_alignment`. `client` is injectable
+// for tests; consultantAnalysisHandler calls it with no arg (defaults to the module supabase).
+export async function analyzeOKRDrift(client = supabase) {
+  const { data: keyResults } = await client
+    .from('key_results')
+    .select('id, code, title, status, updated_at')
+    .eq('is_active', true);
 
   if (!keyResults || keyResults.length === 0) return [];
 
   const findings = [];
 
-  // Key results significantly behind target
-  const behind = keyResults.filter(kr => kr.status === 'behind' || (kr.progress_percentage && kr.progress_percentage < 30));
+  // Behind target: the REAL status is 'at_risk' (the prior stub looked for a non-existent 'behind'
+  // and a non-existent progress_percentage column, so this never fired).
+  const behind = keyResults.filter(kr => kr.status === 'at_risk');
   if (behind.length >= 3) {
     findings.push({
-      title: `${behind.length} OKR key results are significantly behind`,
-      description: `${behind.length} key results have less than 30% progress or are marked "behind". Review alignment with SD delivery.`,
+      title: `${behind.length} OKR key results are at risk`,
+      description: `${behind.length} active key results are marked "at_risk" (behind target). Review alignment with SD delivery.`,
       dataPoints: behind.length,
       domain: 'okr_drift',
       sources: behind.map(kr => kr.id).slice(0, 5),
     });
   }
 
-  // Key results not updated recently
+  // Stale tracking: not updated in 14+ days — drift from active OKR maintenance.
   const stale = keyResults.filter(kr => {
     if (!kr.updated_at) return false;
     const daysSince = (Date.now() - new Date(kr.updated_at).getTime()) / 86400000;
@@ -346,6 +359,26 @@ async function analyzeOKRDrift() {
       domain: 'okr_drift',
       sources: stale.map(kr => kr.id).slice(0, 5),
     });
+  }
+
+  // Uncovered drift: an at_risk key result with NO strategic directive aligned to remediate it —
+  // the seam Adam should flag (drift with no work in flight). Advisory only (CONST-002: Adam
+  // proposes, it never accepts a rec or auto-generates an SD).
+  if (behind.length > 0) {
+    const { data: alignments } = await client
+      .from('sd_key_result_alignment')
+      .select('key_result_id');
+    const alignedKrIds = new Set((alignments || []).map(a => a.key_result_id));
+    const uncovered = behind.filter(kr => !alignedKrIds.has(kr.id));
+    if (uncovered.length >= 1) {
+      findings.push({
+        title: `${uncovered.length} at-risk OKR key result(s) have no aligned SD`,
+        description: `${uncovered.length} at_risk key results have no strategic directive aligned to remediate them — drift with no work in flight. Surface as advisory proposals for the coordinator/chairman.`,
+        dataPoints: uncovered.length,
+        domain: 'okr_drift',
+        sources: uncovered.map(kr => kr.id).slice(0, 5),
+      });
+    }
   }
 
   return findings;

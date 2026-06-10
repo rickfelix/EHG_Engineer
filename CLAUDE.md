@@ -1,3 +1,4 @@
+<!-- file_content_hash: 554e5acb03aefd5d -->
 # CLAUDE.md - LEO Protocol Orchestrator
 
 ## Prime Directive
@@ -22,7 +23,7 @@ AUTO-PROCEED is ON by default. You continue through phase transitions, PRD creat
 - Any "warrants confirmation" / "want me to continue?" rationalization
 - Numbered menu presentations at decision points
 - Intent to provide a "status checkpoint" after a successful handoff
-- Post-completion /document, /heal, /learn after an SD reaches LEAD-FINAL-APPROVAL — these are CONTINUATION steps, never pause points; "I didn't run them — say the word if you want them" is confirmation-fishing. Run the tail (or drive completion via /leo complete, which sequences /document → /heal → /learn automatically). Enforced by the post-completion-tail-enforcement Stop hook (SD-LEO-INFRA-AUTO-ENFORCE-POST-001).
+- Post-completion /document, /heal, /learn, and **completion-flags capture** after an SD reaches LEAD-FINAL-APPROVAL — these are CONTINUATION steps, never pause points; "I didn't run them — say the word if you want them" is confirmation-fishing. Run the tail (or drive completion via /leo complete, which sequences /document → /heal → /learn → capture-completion-flags automatically). Before emitting the Completion Flags block, answer the reflective interrogation "Are there any gaps we failed to close?" and route each finding via scripts/capture-completion-flags.js (incidental findings → durable feedback channel; "0 flags" shown explicitly). Enforced by the post-completion-tail-enforcement Stop hook (SD-LEO-INFRA-AUTO-ENFORCE-POST-001) + the completion-flags witness check in post-completion-validator.js (SD-LEO-INFRA-COMPLETION-FLAGS-DURABLE-001).
 
 If your reason for pausing is not on the five-point list above, KEEP WORKING. When in doubt: pick the highest-value option, state it in one sentence, and execute.
 
@@ -61,7 +62,6 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 
 10. **Friction signaling** — when you hit recurrence (gate 2× / RCA 2× / tool 3×), are about to bypass (`--no-verify` / 3rd-bypass-quota / mock-not-fix), see protocol-spec friction, recognize a harness bug, or match a memory trend, `/signal <type> "<body>"` to the active coordinator. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. See CLAUDE_CORE.md "Signaling friction to the coordinator". SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a.
 > Why: The /signal channel is documented only in CLAUDE_CORE.md, so workers loaded into a phase file (LEAD/PLAN/EXEC) without core never see when to send. Surfacing the trigger heuristic at every entry point makes the channel discoverable at the moment friction occurs, not 3+ workers and several recurrences later.
-
 11. **Sub-agent repo evidence** — sub-agents record their repo as `metadata.repo_path` + `executed_from_cwd`; there are NO top-level `repo_path`/`local_path` columns on `sub_agent_execution_results`. The canonical writer is `lib/sub-agents/resolve-repo.js` `applySubAgentRepoVerdict` — never hand-roll path columns. The `SUB_AGENT_REPO_RESOLUTION` gate compares `metadata->>repo_path` to `applications.local_path` via the `v_sub_agent_repo_compliance` view.
 > Why: Folklore in older prompts/memories said to store top-level `repo_path`/`local_path`; following it produces malformed evidence the gate cannot read. Code, gate, view and the results-table columns were all verified correct (bbe5451d / RCA 9d33b954 — PROTOCOL_PROCESS guidance-vs-columns drift), so this prologue line is the authoritative contract.
 
@@ -198,4 +198,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-05-27 4:44:53 PM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-06-10 2:53:04 PM | Protocol: LEO 4.4.1 | Source: Database*

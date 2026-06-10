@@ -1,6 +1,7 @@
+<!-- file_content_hash: 36efd797b7771305 -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-05-27 4:44:53 PM
+**Generated**: 2026-06-10 2:53:04 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -10,24 +11,6 @@
 > For Strunkian writing standards, see `docs/reference/strunkian-writing-standards.md`.
 
 ---
-
-## Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-> Why: Hand-rolled migration scripts reliably fail in the specific edge cases that matter most — missing SUPABASE_DB_PASSWORD, pooler URL routing, SSL mode selection, and retry logic on transient failures. The database-agent encodes these hard-won patterns, preventing migrations from getting stuck at connection setup.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
 
 ## Cascade Invalidation System
 
@@ -62,6 +45,24 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 - `eva_architecture_plans.needs_review_since` — auto-set by trigger, NULL when resolved
 - `eva_architecture_plans.vision_version_aligned_to` — tracks which vision version the plan was last aligned with
 
+## Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+> Why: Hand-rolled migration scripts reliably fail in the specific edge cases that matter most — missing SUPABASE_DB_PASSWORD, pooler URL routing, SSL mode selection, and retry logic on transient failures. The database-agent encodes these hard-won patterns, preventing migrations from getting stuck at connection setup.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
+
 ## 🏗️ Application Architecture - UNIFIED FRONTEND
 
 ## Application Architecture - UNIFIED FRONTEND
@@ -86,41 +87,6 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 ```bash
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
@@ -163,6 +129,41 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -304,40 +305,6 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
-## Work Tracking Policy
-
-**ALL changes to main must be tracked** as either:
-
-### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>75 LOC, see Work Item Routing)
-- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
-- Command: `npm run sd:create`
-
-### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (≤75 LOC per Tier 1/Tier 2 in Work Item Routing)
-- Branch: `quick-fix/QF-YYYYMMDD-NNN`
-- Command: `node scripts/create-quick-fix.js --interactive`
-
-> **LOC thresholds** are defined once in **Work Item Routing** (CLAUDE.md): Tier 1 ≤30 (auto-approve QF), Tier 2 31-75 (standard QF), Tier 3 >75 (full SD). Risk keywords (auth, migration, schema, feature) always force Tier 3 regardless of LOC.
-
-### Why This Matters
-- All work tracked in database
-- Lessons learned captured
-- Quality gates enforced
-- Progress metrics accurate
-
-### Emergency Bypass (Logged)
-```bash
-EMERGENCY_PUSH="critical: reason here" git push
-```
-This logs to audit_log and should be followed by retroactive SD/QF creation.
-
-### Pre-Push Enforcement
-The pre-push hook automatically:
-1. Detects SD/QF from branch name
-2. Verifies completion status in database
-3. Blocks if not ready for merge
-
 ## Sub-Agent Model Routing
 
 **CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
@@ -378,6 +345,142 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 *Updated: SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G to add Google/Gemini provider awareness*
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
+
+## Work Tracking Policy
+
+**ALL changes to main must be tracked** as either:
+
+### Strategic Directive (SD) - For Substantial Work
+- Features, refactors, infrastructure (>75 LOC, see Work Item Routing)
+- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
+- Command: `npm run sd:create`
+
+### Quick-Fix (QF) - For Small Fixes
+- Bugs, polish, docs (≤75 LOC per Tier 1/Tier 2 in Work Item Routing)
+- Branch: `quick-fix/QF-YYYYMMDD-NNN`
+- Command: `node scripts/create-quick-fix.js --interactive`
+
+> **LOC thresholds** are defined once in **Work Item Routing** (CLAUDE.md): Tier 1 ≤30 (auto-approve QF), Tier 2 31-75 (standard QF), Tier 3 >75 (full SD). Risk keywords (auth, migration, schema, feature) always force Tier 3 regardless of LOC.
+
+### Why This Matters
+- All work tracked in database
+- Lessons learned captured
+- Quality gates enforced
+- Progress metrics accurate
+
+### Emergency Bypass (Logged)
+```bash
+EMERGENCY_PUSH="critical: reason here" git push
+```
+This logs to audit_log and should be followed by retroactive SD/QF creation.
+
+### Pre-Push Enforcement
+The pre-push hook automatically:
+1. Detects SD/QF from branch name
+2. Verifies completion status in database
+3. Blocks if not ready for merge
+
+## QF Lifecycle Reconciliation
+
+**Problem**: quick_fixes rows stay `status=open` after a PR is merged via direct `gh pr merge` (any path that skips complete-quick-fix.js). sd:next then recommends phantom work. Root cause documented in feedback memory `feedback_qf_db_stale_after_merge.md`.
+
+**Solution**: Two complementary reconciliation layers — pre-merge filter + post-merge sweep. Both are idempotent and safe to run on any schedule.
+
+### Layer 1 — Pre-Merge Filter (sd:next data loader)
+`scripts/modules/sd-next/data-loaders.js` exposes two functions:
+- `loadOpenQuickFixes()` — returns rows where `pr_url IS NULL` AND `commit_sha IS NULL`. Filters out QFs with in-flight PRs so sd:next does not restart work a parallel session is already merging (QF-380 merge-race fix).
+- `loadReadyToMergeQuickFixes()` — queries the inverse pool (`pr_url IS NOT NULL`), cross-checks each PR state via `gh api` with a 60-second in-memory cache, returns only OPEN + all-checks-green rows tagged `ready_to_merge=true`. Lets the sd:next dispatcher emit a `qf_merge` action for adoption-ready work instead of `qf_start`.
+
+> Why the cache: sd:next runs many times per session. Without the 60s dedup, each invocation hits the GitHub API for every open QF — rate limits bite within minutes.
+
+### Layer 2 — Post-Merge Sweep (orphan-qf-reaper)
+`scripts/orphan-qf-reaper.mjs` sweeps rows where `status IN (open, in_progress)` AND `pr_url` points to a MERGED PR, and flips them to `status=completed`. Protections:
+- **Idempotency**: `.eq(status, current)` guard on the update — a concurrent complete-quick-fix.js flip wins without erroring.
+- **5-minute safety window**: skips rows whose `pr_url` was set within the last 5 minutes, giving complete-quick-fix.js time to finish its own flip.
+- **Structured JSON logging**: one line per row evaluated, durable artifact for debugging races.
+
+### Scheduled Execution
+`.github/workflows/orphan-qf-reaper.yml` runs Layer 2 every 15 minutes on cron plus `workflow_dispatch`, with a `dry-run` input, a concurrency group to prevent overlap, and a per-run `reaper.log` artifact.
+
+### When to Reach For This
+- **`sd:next` recommends a QF you know was merged**: check `loadOpenQuickFixes` is filtering on `pr_url IS NULL`; inspect that QF's `pr_url` / `commit_sha` columns. If they're set, the reaper will close it on its next cron; for immediate cleanup, run `node scripts/orphan-qf-reaper.mjs`.
+- **Two sessions on the same QF**: verify `loadReadyToMergeQuickFixes` is wired into the dispatcher and emitting `qf_merge` for rows with open PRs.
+- **QF with open PR but sd:next ignores it**: the PR's checks are not all green — expected. Layer 1 only surfaces merge-ready work.
+
+### Anti-Pattern
+Do **not** replace these layers with a blanket "close all QFs with any pr_url set". The 5-minute window and merged-state check prevent closing a QF whose PR is still under review.
+
+> Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
+## Execution Philosophy
+
+### Quality-First (PARAMOUNT)
+**Get it right, not fast.** Correctness > speed. 2-4 hours careful implementation beats 6-12 hours rework.
+
+### Testing-First (MANDATORY)
+- E2E testing is MANDATORY
+- 100% user story coverage required
+- Both unit tests AND E2E tests must pass
+
+### Database-First (REQUIRED)
+**Zero markdown files.** Database tables are single source of truth:
+- SDs → `strategic_directives_v2`
+- PRDs → `product_requirements_v2`
+- Handoffs → `sd_phase_handoffs`
+- Retrospectives → `retrospectives`
+
+### Validation-First (GATEKEEPING)
+- LEAD validates: Real problem? Feasible? Resources?
+- After approval: SCOPE LOCK - deliver what was approved
+
+### Anti-Bias Rules (MANDATORY)
+| Bias | Incorrect | Correct |
+|------|-----------|---------|
+| Efficiency | Skip workflow steps | Full workflow is non-negotiable |
+| Completion | "complete" = code works | "complete" = database status + validations |
+| Abstraction | Children are sub-tasks | Children are INDEPENDENT SDs |
+| Autonomy | No human gates | Each phase requires validation |
+
+**RULE**: When ANY bias-pattern detected, STOP and verify with user.
+
+**NEVER**:
+- Ship without completing full LEO Protocol
+- Skip LEAD approval for child SDs
+- Skip PRD creation for child SDs
+- Mark parent complete before all children complete in database
 
 ## Queue Ranking and QF Track Inference
 
@@ -447,108 +550,6 @@ AUTO_PROCEED_ACTION:{"action":"start"|"qf_start"|"continue"|...,
 
 Downstream consumers (`coordination-inbox.cjs`, integration tests) continue
 to parse without modification.
-
-## Execution Philosophy
-
-### Quality-First (PARAMOUNT)
-**Get it right, not fast.** Correctness > speed. 2-4 hours careful implementation beats 6-12 hours rework.
-
-### Testing-First (MANDATORY)
-- E2E testing is MANDATORY
-- 100% user story coverage required
-- Both unit tests AND E2E tests must pass
-
-### Database-First (REQUIRED)
-**Zero markdown files.** Database tables are single source of truth:
-- SDs → `strategic_directives_v2`
-- PRDs → `product_requirements_v2`
-- Handoffs → `sd_phase_handoffs`
-- Retrospectives → `retrospectives`
-
-### Validation-First (GATEKEEPING)
-- LEAD validates: Real problem? Feasible? Resources?
-- After approval: SCOPE LOCK - deliver what was approved
-
-### Anti-Bias Rules (MANDATORY)
-| Bias | Incorrect | Correct |
-|------|-----------|---------|
-| Efficiency | Skip workflow steps | Full workflow is non-negotiable |
-| Completion | "complete" = code works | "complete" = database status + validations |
-| Abstraction | Children are sub-tasks | Children are INDEPENDENT SDs |
-| Autonomy | No human gates | Each phase requires validation |
-
-**RULE**: When ANY bias-pattern detected, STOP and verify with user.
-
-**NEVER**:
-- Ship without completing full LEO Protocol
-- Skip LEAD approval for child SDs
-- Skip PRD creation for child SDs
-- Mark parent complete before all children complete in database
-
-## QF Lifecycle Reconciliation
-
-**Problem**: quick_fixes rows stay `status=open` after a PR is merged via direct `gh pr merge` (any path that skips complete-quick-fix.js). sd:next then recommends phantom work. Root cause documented in feedback memory `feedback_qf_db_stale_after_merge.md`.
-
-**Solution**: Two complementary reconciliation layers — pre-merge filter + post-merge sweep. Both are idempotent and safe to run on any schedule.
-
-### Layer 1 — Pre-Merge Filter (sd:next data loader)
-`scripts/modules/sd-next/data-loaders.js` exposes two functions:
-- `loadOpenQuickFixes()` — returns rows where `pr_url IS NULL` AND `commit_sha IS NULL`. Filters out QFs with in-flight PRs so sd:next does not restart work a parallel session is already merging (QF-380 merge-race fix).
-- `loadReadyToMergeQuickFixes()` — queries the inverse pool (`pr_url IS NOT NULL`), cross-checks each PR state via `gh api` with a 60-second in-memory cache, returns only OPEN + all-checks-green rows tagged `ready_to_merge=true`. Lets the sd:next dispatcher emit a `qf_merge` action for adoption-ready work instead of `qf_start`.
-
-> Why the cache: sd:next runs many times per session. Without the 60s dedup, each invocation hits the GitHub API for every open QF — rate limits bite within minutes.
-
-### Layer 2 — Post-Merge Sweep (orphan-qf-reaper)
-`scripts/orphan-qf-reaper.mjs` sweeps rows where `status IN (open, in_progress)` AND `pr_url` points to a MERGED PR, and flips them to `status=completed`. Protections:
-- **Idempotency**: `.eq(status, current)` guard on the update — a concurrent complete-quick-fix.js flip wins without erroring.
-- **5-minute safety window**: skips rows whose `pr_url` was set within the last 5 minutes, giving complete-quick-fix.js time to finish its own flip.
-- **Structured JSON logging**: one line per row evaluated, durable artifact for debugging races.
-
-### Scheduled Execution
-`.github/workflows/orphan-qf-reaper.yml` runs Layer 2 every 15 minutes on cron plus `workflow_dispatch`, with a `dry-run` input, a concurrency group to prevent overlap, and a per-run `reaper.log` artifact.
-
-### When to Reach For This
-- **`sd:next` recommends a QF you know was merged**: check `loadOpenQuickFixes` is filtering on `pr_url IS NULL`; inspect that QF's `pr_url` / `commit_sha` columns. If they're set, the reaper will close it on its next cron; for immediate cleanup, run `node scripts/orphan-qf-reaper.mjs`.
-- **Two sessions on the same QF**: verify `loadReadyToMergeQuickFixes` is wired into the dispatcher and emitting `qf_merge` for rows with open PRs.
-- **QF with open PR but sd:next ignores it**: the PR's checks are not all green — expected. Layer 1 only surfaces merge-ready work.
-
-### Anti-Pattern
-Do **not** replace these layers with a blanket "close all QFs with any pr_url set". The 5-minute window and merged-state check prevent closing a QF whose PR is still under review.
-
-> Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Sub-Agent Routing Reference
 
@@ -664,6 +665,38 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
+
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -704,38 +737,6 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Why**: SD-LEO-INFRA-CENTRALIZED-POST-STAGE-001 revealed that the S17 doc-gen hook failed silently on every run since it was shipped (wrong column name in query). Because the error was caught as non-fatal, the pipeline continued without vision/architecture docs, and S19 generated an unvalidated sprint plan.
 
 **Rule**: "Non-fatal" means the hook threw an unexpected exception. "Hook ran but wrote zero rows to its target table" is a **data integrity failure** that must surface.
-
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -1497,11 +1498,11 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
-| PAT-HF-LEADTOPLAN-3612ea70 | handoff_failure | [HIGH] high | 8 | [STABLE] | N/A |
-| PAT-HF-LEADTOPLAN-e756f97d | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
-| PAT-HF-PLANTOEXEC-82e31435 | handoff_failure | [HIGH] high | 7 | [STABLE] | N/A |
-| PAT-RETRO-LEADTOPLAN-e756f97d | session_retrospective | [HIGH] high | 7 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOEXEC-82e31435 | session_retrospective | [HIGH] high | 7 | [STABLE] | N/A |
+| PAT-HF-PLANTOLEAD-8229a741 | handoff_failure | [HIGH] high | 11 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOEXEC-3741735a | session_retrospective | [HIGH] high | 11 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOLEAD-8229a741 | session_retrospective | [HIGH] high | 11 | [STABLE] | N/A |
+| PAT-HF-PLANTOEXEC-3741735a | handoff_failure | [HIGH] high | 11 | [STABLE] | N/A |
+| PAT-HF-PLANTOLEAD-01c0ee53 | handoff_failure | [HIGH] high | 9 | [STABLE] | N/A |
 
 ### Prevention Checklists
 
@@ -1520,60 +1521,60 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. SD Completion Retrospective: Stage 19 Binding Contract for S18 Marketing Copy + Pre-Approval Playbook [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 4/28/2026 | **Score**: 100
+### 1. SD-FDBK-ENH-RETROSPECTIVES-AUTO-VALIDATE-001: Symmetric + idempotent missing_protocol_improvements quality-warning lifecycle (PR #4285) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- sd-start created the worktree from the main repo HEAD (not from a clean main), leaving the branch pr...
-- handoff.js LEAD-TO-PLAN auto-created a slug-named branch (feat/SD-...-stage-19-binding-contract-for-...
+- The two quality_issues-writing triggers should arguably be unified so a single function owns quality...
+- A missing_protocol_improvements warning still does not survive a content-change INSERT because auto_...
 
 **Action Items**:
-- [ ] File a Tier 1 QF for the replit-repo-seeder idempotency fix (commit 235b4285dc, ...
-- [ ] Consider tightening the Stage 19 binding contract from prompt-level (soft) to ty...
+- [ ] Add a lint/static check that flags any trigger reading or writing a column that ...
+- [ ] Open a follow-up SD to unify retrospectives quality_issues ownership into a sing...
 
-### 2. SD Completion Retrospective: Reconcile S18-S26 phantom SDs — validation-agent reframe saved 7 legitimate SDs from incorrect cancellation [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 4/28/2026 | **Score**: 100
+### 2. SD-LEO-FIX-SHOW-WHICH-STAGE-001: Show which stage is being viewed when browsing venture stage history — SD Completion Retrospective [QUALITY]
+**Category**: USER_EXPERIENCE | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- Supabase ilike does NOT support POSIX bracket expressions like `%S1[7-9]%` — initial dry-run silentl...
-- scripts/audit-*.js is gitignored by an over-broad sweep rule — required a .gitignore whitelist excep...
+- The SD's named target files were wrong for the actual defect. Root cause (5 Whys): (1) header showed...
+- add-prd --content failed once because the integration_operationalization key whitelist is exact: the...
 
 **Action Items**:
-- [ ] Wire scripts/audit-phantom-completions.js into a periodic check via .github/work...
-- [ ] Add reference memory: "Supabase ilike does NOT support POSIX bracket expressions...
+- [ ] Update the testing-agent so that when it maps a passing test to a user story it ...
+- [ ] Document the add-prd --content integration_operationalization key whitelist (the...
 
-### 3. SD Completion Retrospective: Phantom-completion structural gate — fail-closed SHIP_REVIEW_FINDINGS_PROOF + legacy direct-DB completion path closure (SD-3 of 3) [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 4/28/2026 | **Score**: 100
+### 3. SD-LEO-INFRA-ATOMIC-FLEET-WORK-001: Atomic fleet work-leasing — the swept-twice bug was a deploy gap, not a code gap [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 6/5/2026 | **Score**: 100
 
 **Key Improvements**:
-- helpers.js edit left an orphan `if (false)` block from the original control flow — required cleanup ...
-- `gh pr merge --auto` queues but does NOT trigger automatic rebase to clear DIRTY status against main...
+- Migration deploy automation and auditing: committed does not equal applied, and there is currently n...
+- The "completed" definition for migration-bearing SDs should require a deploy gate; otherwise a write...
 
 **Action Items**:
-- [ ] Wire SHIP_REVIEW_FINDINGS_PROOF into getRequiredGates() at scripts/modules/hando...
-- [ ] Apply 2 migrations to live DB: database/migrations/20260428_validation_gate_regi...
+- [ ] In a fresh session, apply 20260605_atomic_lease_sweep_respect_inflight.sql via s...
+- [ ] Fix the false "check-readiness CI applies it" comment across migration templates...
 
-### 4. PLAN-phase retrospective: SD-LEO-INFRA-EHG-REPO-ADD-001 — EHG supabase db push CI workflow + 20260427 migration drift backfill [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 4/28/2026 | **Score**: 100
+### 4. SD-LEO-INFRA-ENABLE-CLAIM-SWEEP-001 Retrospective [QUALITY]
+**Category**: DATABASE_SCHEMA | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- Three sub-agent runs returned WARNING with documented "verdict_intent: CONDITIONAL_PASS" because val...
-- PLAN TESTING gate flagged 3 missing scenarios (supabase-link auth pre-flight failure, ledger update ...
+- The initial verify step queried the wrong column (schema_migrations_applied.migration_name instead o...
+- My own session claim was swept during the ~18-minute database-agent run (re-affirmed via sd-start) —...
 
 **Action Items**:
-- [ ] Add scheduled (cron) run of check-migration-ledger-drift.js to EHG repo so ledge...
-- [ ] Adopt pg_get_viewdef-snapshot-in-header as a database-agent default pattern for ...
+- [ ] DEPLOY: update the main checkout's .claude/settings.json (or reload settings) so...
+- [ ] POST-DEPLOY VERIFY: confirm the fleet-wide claim-sweep-mid-sub-agent dormancy is...
 
-### 5. SD Completion Retrospective: SD-LEO-INFRA-START-WORKTREE-BRANCH-001 — Worktree Base-Ref Hardening [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 4/28/2026 | **Score**: 100
+### 5. SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001 SD Completion Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 6/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- Pre-existing test failures in tests/unit/worktree-manager.test.js (4 failures in verifyWorktreeRegis...
-- FR7 (backfill audit of poisoned worktrees) was deferred per LEAD Q8 — population size unknown, separ...
+- {"area":"EHG app listVentures() applies neither an is_demo nor a deleted_at predicate","prevention":...
+- {"area":"The pre-existing chairman_decisions parity assertion fails on the unmodified baseline","pre...
 
 **Action Items**:
-- [ ] File QF for tests/unit/worktree-manager.test.js verifyWorktreeRegisteredSync moc...
-- [ ] Decide whether to file an SD for FR7 backfill audit of poisoned worktrees, scope...
+- [ ] Open a follow-up QF to add is_demo=false and deleted_at IS NULL predicates to th...
+- [ ] Track and fix the pre-existing chairman_decisions parity assertion that fails on...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1603,35 +1604,36 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 | Code | Name | Purpose |
 |------|------|---------|
-| `RCA` | Root Cause Analysis Agent | MUST BE USED PROACTIVELY for all root cause analysis tasks.  |
-| `REGRESSION` | Regression Validator Sub-Agent | Validates that refactoring changes maintain backward compati |
 | `DOCMON` | Information Architecture Lead | ## Information Architecture Lead v3.0.0 - Database-First Enf |
+| `REGRESSION` | Regression Validator Sub-Agent | Validates that refactoring changes maintain backward compati |
+| `RCA` | Root Cause Analysis Agent | MUST BE USED PROACTIVELY for all root cause analysis tasks.  |
 | `QUICKFIX` | Quick-Fix Orchestrator ("LEO Lite" Field Medic) | Lightweight triage and resolution for small UAT-discovered i |
-| `UAT` | UAT Test Executor | Interactive UAT test execution guide for manual testing work |
 | `SECURITY` | Chief Security Architect | Former NSA security architect with 25 years experience secur |
 | `GITHUB` | DevOps Platform Architect | # DevOps Platform Architect Sub-Agent  **Identity**: You are |
+| `UAT` | UAT Test Executor | Interactive UAT test execution guide for manual testing work |
 | `DATABASE` | Principal Database Architect | ## Principal Database Architect v2.0.0 - Lessons Learned Edi |
+| `LAUNCH` | Launch Orchestration Sub-Agent | Handles production launch orchestration, go-live checklists, |
 | `TESTING` | QA Engineering Director | ## Enhanced QA Engineering Director v2.4.0 - Retrospective-I |
 | `PERFORMANCE` | Performance Engineering Lead | Performance engineering lead with 20+ years optimizing high- |
 | `RETRO` | Continuous Improvement Coach | ## Continuous Improvement Coach v4.0.0 - Quality-First Editi |
-| `LAUNCH` | Launch Orchestration Sub-Agent | Handles production launch orchestration, go-live checklists, |
-| `MONITORING` | Monitoring Sub-Agent | Handles monitoring setup, alerting, SLA definition, health c |
 | `FINANCIAL` | Financial Modeling Sub-Agent | Handles financial projections, P&L modeling, cash flow analy |
-| `API` | API Architecture Sub-Agent | ## API Sub-Agent v1.0.0  **Mission**: REST/GraphQL endpoint  |
+| `MONITORING` | Monitoring Sub-Agent | Handles monitoring setup, alerting, SLA definition, health c |
+| `VENTURE_STACK` | Venture Stack Compliance Sub-Agent | Deterministic compliance checker for venture-build leaves: e |
 | `VALIDATION` | Principal Systems Analyst | ## Principal Systems Analyst v3.0.0 - Retrospective-Informed |
+| `API` | API Architecture Sub-Agent | ## API Sub-Agent v1.0.0  **Mission**: REST/GraphQL endpoint  |
+| `RISK` | Risk Assessment Sub-Agent | ## Risk Assessment Sub-Agent v1.0.0  **BMAD Enhancement**: M |
 | `PRICING` | Pricing Strategy Sub-Agent | Handles pricing model development, unit economics, pricing t |
 | `ANALYTICS` | Analytics Sub-Agent | Handles analytics setup, metrics definition, dashboard creat |
-| `RISK` | Risk Assessment Sub-Agent | ## Risk Assessment Sub-Agent v1.0.0  **BMAD Enhancement**: M |
-| `MARKETING` | Marketing & GTM Sub-Agent | Handles go-to-market strategy, marketing campaigns, channel  |
-| `SALES` | Sales Process Sub-Agent | Handles sales playbook development, pipeline management, obj |
 | `DESIGN` | Senior Design Sub-Agent | ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition  |
 | `VALUATION` | Exit Valuation Sub-Agent | Handles exit valuation modeling, comparable analysis, acquis |
+| `MARKETING` | Marketing & GTM Sub-Agent | Handles go-to-market strategy, marketing campaigns, channel  |
 | `DEPENDENCY` | Dependency Management Sub-Agent | # Dependency Management Specialist Sub-Agent  **Identity**:  |
+| `SALES` | Sales Process Sub-Agent | Handles sales playbook development, pipeline management, obj |
 | `CRM` | CRM Sub-Agent | Handles customer relationship management, lead tracking, cus |
-| `STORIES` | User Story Context Engineering Sub-Agent | ## User Story Context Engineering v2.0.0 - Lessons Learned E |
+| `AUDIT` | Self-Audit Agent | Read-only audit capability for SD health checks. Evaluates s |
 | `PRIORITIZATION_PLANNER` | Prioritization Planner | # Prioritization Planner Sub-Agent  **Identity**: You are a  |
 | `ORCHESTRATOR_CHILD` | Orchestrator Child Agent | Teammate agent for parallel child SD execution within an orc |
-| `AUDIT` | Self-Audit Agent | Read-only audit capability for SD health checks. Evaluates s |
+| `STORIES` | User Story Context Engineering Sub-Agent | ## User Story Context Engineering v2.0.0 - Lessons Learned E |
 | `JUDGE` | Constitutional Judge | Resolves conflicts between LEO agent recommendations using c |
 | `CLAIM` | Claim Management | SD claim status, release, and listing via /claim command |
 | `VETTING` | Vetting Engine | Constitutional vetting of proposals using AEGIS framework. R |
@@ -1639,7 +1641,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-05-27*
+*Generated from database: 2026-06-10*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

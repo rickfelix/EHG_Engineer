@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
+const { extractSdFromAssignment, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
 
 describe('FR-2: extractSdFromAssignment', () => {
   it('prefers payload.sd_key', () => {
@@ -71,6 +71,18 @@ function makeStub(cfg) {
           if (state.filters.lt_updated_at !== undefined) {
             rows = rows.filter((r) => !r.updated_at || r.updated_at < state.filters.lt_updated_at);
           }
+          return Promise.resolve({ data: rows, error: null });
+        }
+        // adoptOrphanInProgress listing (SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001): a third
+        // STRING discriminant (.eq('status','in_progress')) — placed ABOVE the draft fallthrough.
+        // Honors the .lt('updated_at') age guard and the server-side .neq('sd_type') exclusion.
+        if (state.filters.status === 'in_progress') {
+          if (cfg.orphansThrow) return Promise.reject(new Error('orphan query failed'));
+          let rows = cfg.orphans || [];
+          if (state.filters.lt_updated_at !== undefined) {
+            rows = rows.filter((r) => !r.updated_at || r.updated_at < state.filters.lt_updated_at);
+          }
+          if (state.filters.neq_sd_type !== undefined) rows = rows.filter((r) => r.sd_type !== state.filters.neq_sd_type);
           return Promise.resolve({ data: rows, error: null });
         }
         // un-baselined-draft self-claim listing; honor the server-side `.neq('sd_type', …)` filter
@@ -632,6 +644,169 @@ describe('FIX-RECURRING-2ND: recover stranded pending_approval/LEAD_FINAL SDs', 
   });
 });
 
+// SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001: adopt orphaned in_progress SDs (zero active claims,
+// session reaped mid-build). Mirrors the stranded-final block: adoption happy path, every
+// exclusion axis (orchestrator / fixture-key / human-action / live-held / young), tier ordering
+// (stranded > orphan > all new-work tiers), claim-race fallthrough, fail-open, fleet naming.
+describe('ORPHAN-ADOPTION: adopt zero-claim in_progress SDs (resume_orphan)', () => {
+  const sess = { session: { metadata: { callsign: 'Bravo' }, sd_key: null }, messages: [] };
+  const old = '2020-01-01T00:00:00Z'; // safely older than the 15-min age guard
+  const orphan = (sd_key, over = {}) => ({
+    sd_key, status: 'in_progress', sd_type: 'infrastructure', current_phase: 'EXEC',
+    metadata: {}, updated_at: old, ...over,
+  });
+
+  it('adopts an eligible orphan with action=resume_orphan and re-attach instructions', async () => {
+    const sb = makeStub({ ...sess, orphans: [orphan('SD-ORPHAN-001')], candidates: [], claimResults: { 'SD-ORPHAN-001': true } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_orphan');
+    expect(r.sd).toBe('SD-ORPHAN-001');
+    expect(r.message).toMatch(/sd-start\.js SD-ORPHAN-001/);
+    expect(r.message).toMatch(/EXEC/); // advisory phase context in the message
+  });
+
+  it('excludes an orchestrator parent (in_progress/no-claim BY DESIGN while children run)', async () => {
+    const sb = makeStub({ ...sess, orphans: [orphan('SD-PARENT-001', { sd_type: 'orchestrator' })], candidates: [] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle'); // server-side .neq filter (honored by the stub) — never adopted
+  });
+
+  it('excludes test-fixture keys and requires_human_action SDs (shared classifier axes)', async () => {
+    const sb = makeStub({
+      ...sess,
+      orphans: [
+        orphan('SD-TEST-ORPHAN-001'),                                     // test_fixture_key axis
+        orphan('SD-HUMAN-001', { metadata: { requires_human_action: true } }), // human_action axis
+      ],
+      candidates: [],
+      claimResults: { 'SD-TEST-ORPHAN-001': true, 'SD-HUMAN-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle'); // both classifier-skipped despite being claimable
+  });
+
+  it('skips an orphan a LIVE foreign session still points at (claim half-write)', async () => {
+    const sb = makeStub({
+      ...sess,
+      orphans: [orphan('SD-HELD-001')],
+      activeSessions: [{ sd_key: 'SD-HELD-001', session_id: 'sess-OTHER', is_alive: true }],
+      candidates: [],
+      claimResults: { 'SD-HELD-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
+  });
+
+  it('skips an orphan younger than the age guard (mid-transition worker never raced)', async () => {
+    const sb = makeStub({
+      ...sess,
+      orphans: [orphan('SD-YOUNG-001', { updated_at: new Date().toISOString() })], // fresher than cutoff
+      candidates: [],
+      claimResults: { 'SD-YOUNG-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
+  });
+
+  it('stranded-final recovery (5.7) WINS over orphan adoption (5.8)', async () => {
+    const sb = makeStub({
+      ...sess,
+      stranded: [{ sd_key: 'SD-STRANDED-001', status: 'pending_approval', current_phase: 'LEAD_FINAL', updated_at: old }],
+      orphans: [orphan('SD-ORPHAN-001')],
+      candidates: [],
+      claimResults: { 'SD-STRANDED-001': true, 'SD-ORPHAN-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_final');
+    expect(r.sd).toBe('SD-STRANDED-001');
+  });
+
+  it('orphan adoption WINS over baselined / draft / QF self-claim (5.8 before 6/6.25/6.5)', async () => {
+    const sb = makeStub({
+      ...sess,
+      orphans: [orphan('SD-ORPHAN-001')],
+      candidates: [{ sd_id: 'SD-NEWWORK-001', track: 'A' }],
+      drafts: [{ sd_key: 'SD-DRAFT-001', status: 'draft', sd_type: 'feature', priority: 'critical', created_at: '2026-01-01T00:00:00Z', dependencies: [] }],
+      quickFixes: [{ id: 'QF-20260601-001', status: 'open', created_at: new Date().toISOString() }],
+      claimResults: { 'SD-ORPHAN-001': true, 'SD-NEWWORK-001': true, 'SD-DRAFT-001': true, 'QF-20260601-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_orphan');
+    expect(r.sd).toBe('SD-ORPHAN-001');
+  });
+
+  it('falls through to the next candidate when the first orphan loses the claim race', async () => {
+    const sb = makeStub({
+      ...sess,
+      orphans: [orphan('SD-CONTESTED-001'), orphan('SD-ORPHAN-002', { updated_at: '2020-06-01T00:00:00Z' })],
+      candidates: [],
+      claimResults: { 'SD-CONTESTED-001': false, 'SD-ORPHAN-002': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_orphan');
+    expect(r.sd).toBe('SD-ORPHAN-002');
+  });
+
+  it('adoptOrphanInProgress returns null (not throw) on a query error — fail-open', async () => {
+    const sb = makeStub({ ...sess, orphansThrow: true, candidates: [] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.ok).toBe(true);
+    expect(r.action).toBe('idle'); // error swallowed; resolver fell through, never action=error
+    const direct = await adoptOrphanInProgress(makeStub({ orphansThrow: true }), 'sess-1', { ok: true });
+    expect(direct).toBeNull();
+  });
+
+  it('runCheckin names an UNNAMED worker on resume_orphan (CLAIMED_CHECKIN_ACTIONS coverage)', async () => {
+    const sb = makeStub({
+      session: { metadata: {}, sd_key: null }, messages: [],
+      orphans: [orphan('SD-ORPHAN-001')], candidates: [],
+      claimResults: { 'SD-ORPHAN-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume_orphan');
+    expect(r.callsign).toBe('Alpha'); // named at check-in, same response
+  });
+});
+
+// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: runCheckin names a freshly-claimed, identity-less worker
+// AT check-in (closing the up-to-5-min lag before the assign-fleet-identities.cjs cron). The naming
+// is a fail-open wrapper over the resolution logic, so it must (a) name across every claim path,
+// (b) leave already-named workers untouched, and (c) never name an idle worker.
+describe('SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: runCheckin names a freshly-claimed worker', () => {
+  it('names an UNNAMED worker on resume (live used-set empty -> Alpha)', async () => {
+    const sb = makeStub({ session: { metadata: {}, sd_key: 'SD-MINE-001' } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume');
+    expect(r.sd).toBe('SD-MINE-001');
+    expect(r.callsign).toBe('Alpha'); // assigned at check-in, reported in the same response
+  });
+
+  it('does NOT rename an already-named worker (idempotent)', async () => {
+    const sb = makeStub({ session: { metadata: { callsign: 'Delta' }, sd_key: 'SD-MINE-001' } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('resume');
+    expect(r.callsign).toBe('Delta'); // unchanged — naming branch skipped because a callsign already exists
+  });
+
+  it('names a worker that self-claims an SD on this check-in', async () => {
+    const sb = makeStub({
+      session: { metadata: {}, sd_key: null },
+      messages: [],
+      candidates: [{ sd_id: 'SD-TOP-001', track: 'A' }],
+      sdRows: { 'SD-TOP-001': { current_phase: 'LEAD', sd_type: 'bugfix', dependencies: [] } },
+      claimResults: { 'SD-TOP-001': true },
+    });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed');
+    expect(r.sd).toBe('SD-TOP-001');
+    expect(r.callsign).toBe('Alpha'); // named immediately on first claim, not one cycle later
+  });
+
+  it('does NOT assign a name when the worker idles (no claim -> no pool burn)', async () => {
+    const sb = makeStub({ session: { metadata: {}, sd_key: null }, messages: [], candidates: [] });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('idle');
+    expect(r.callsign).toBeFalsy(); // idle/never-claimed sessions are never named at check-in
 // ── duty-6 (operator 2026-06-10): coordinator dispatch-rank ordering in self-claim ──
 const { orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS } = require('./worker-checkin.cjs');
 

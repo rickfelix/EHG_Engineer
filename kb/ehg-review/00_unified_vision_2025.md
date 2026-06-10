@@ -1,6 +1,9 @@
 # EHG/EVA Unified Vision
 
-**Document Type**: Source of Truth - Strategic Vision
+> **⚠️ HISTORICAL DOCUMENT (bannered 2026-06-10)**: superseded by the chairman-locked canonical EHG vision (eva_vision_documents L1 `VISION-EHG-L1-001`, 2026-06-09). Preserved as a historical record; not a current source of truth. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+
+
+**Document Type**: Historical Strategic Vision (superseded)
 **Version**: 1.1.0
 **Last Updated**: 2025-11-29
 **Status**: ACTIVE

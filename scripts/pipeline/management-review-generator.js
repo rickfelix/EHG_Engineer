@@ -338,9 +338,13 @@ async function generateReview() {
     eva_proposals: null,
   };
 
+  // Upsert (not insert) so a same-day re-run updates the existing row in place rather than appending
+  // a duplicate that would violate the UNIQUE(review_date, review_type) guard
+  // (migration 20260610_purge_management_reviews_pollution.sql) with a 23505 —
+  // SD-LEO-INFRA-REVIVE-EVA-PURGE-MGMT-REVIEWS-001 FR-2 (second writer site).
   const { data, error } = await supabase
     .from('management_reviews')
-    .insert(review)
+    .upsert(review, { onConflict: 'review_date,review_type' })
     .select('id')
     .single();
 

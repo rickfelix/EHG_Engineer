@@ -18,7 +18,7 @@ import { releasePreclaim } from '../lib/feedback/release-preclaim.js';
 function parseArgs() {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    console.log(`Usage: node scripts/release-feedback-preclaim.js --qf-id <QF-ID> [--reason "<text>"]`);
+    console.log('Usage: node scripts/release-feedback-preclaim.js --qf-id <QF-ID> [--reason "<text>"]');
     process.exit(args.length === 0 ? 1 : 0);
   }
   let qfId, reason;
@@ -39,11 +39,23 @@ function parseArgs() {
   const { released } = await releasePreclaim({ supabase, quickFixId: qfId });
   console.log(`Released ${released.length} pre-claim(s) for ${qfId}:`);
   for (const id of released) console.log(`  - ${id}`);
-  await supabase.from('audit_log').insert({
-    category: 'feedback_qf_release',
-    session_id: process.env.CLAUDE_SESSION_ID || null,
+  // SD-LEO-FIX-FIX-PHANTOM-COLUMN-001: category/session_id/message were phantom columns
+  // (42703 — the audit row never landed). Remapped to the real audit_log shape; original
+  // keys preserved in metadata; failure is loud via the shared guard.
+  const auditPayload = {
+    event_type: 'feedback_qf_release',
+    entity_type: 'quick_fix',
+    entity_id: qfId,
     severity: 'info',
-    message: `Manual release of ${released.length} pre-claim(s) for ${qfId}: ${reason}`,
-    metadata: { qf_id: qfId, released_ids: released, source: 'manual', reason },
-  });
+    created_by: process.env.CLAUDE_SESSION_ID || null,
+    metadata: {
+      message: `Manual release of ${released.length} pre-claim(s) for ${qfId}: ${reason}`,
+      qf_id: qfId, released_ids: released, source: 'manual', reason,
+    },
+  };
+  const { error: auditError } = await supabase.from('audit_log').insert(auditPayload);
+  if (auditError) {
+    const { logAuditWriteFailure } = await import('../lib/audit-write-guard.js');
+    logAuditWriteFailure('release-feedback-preclaim', auditError, auditPayload);
+  }
 })();

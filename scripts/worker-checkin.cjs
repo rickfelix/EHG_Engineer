@@ -30,7 +30,10 @@ const ws = require('../lib/fleet/worker-status.cjs');
 const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cjs');
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
-const { draftDepsSatisfied, baselinedCandidateEligible } = require('../lib/fleet/claim-eligibility.cjs');
+const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility } = require('../lib/fleet/claim-eligibility.cjs');
+// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
+// check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
+const { NATO, COLORS, nextAvailable, isTestSessionId } = require('./assign-fleet-identities.cjs');
 
 const ROLL_CALL_TTL_MS = 60 * 60 * 1000;     // availability row lives 1h
 const ROLL_CALL_DEDUP_MS = 5 * 60 * 1000;    // don't re-register within 5m (idempotency)
@@ -264,7 +267,9 @@ async function selfClaimDraftSd(sb, sessionId, base) {
   try {
     const { data: drafts } = await sb
       .from('strategic_directives_v2')
-      .select('sd_key, status, sd_type, priority, created_at, dependencies')
+      // metadata feeds the shared classifyDispatchIneligibility gate (the requires_human_action axis);
+      // sd_type already selected for the existing orchestrator exclusion.
+      .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata')
       .in('status', ['draft', 'active'])
       .is('claiming_session_id', null)
       .neq('sd_type', 'orchestrator')
@@ -278,6 +283,11 @@ async function selfClaimDraftSd(sb, sessionId, base) {
     // encodes priority as its tie-break); unranked/stale rows keep the order above. Fail-open.
     const ranked = await sortByDispatchRank(sb, ordered, (d) => d.sd_key);
     for (const d of ranked) {
+      // SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001: same shared classifier the baselined candidate-view
+      // tier (step 6) and the coordinator/sweep PUSH path use — the un-baselined draft tier must not
+      // self-claim a test-fixture phantom (SD-DEMO-*/SD-TEST-*) or a requires_human_action SD. (The
+      // orchestrator axis is also covered here, redundant with the .neq query filter above — harmless.)
+      if (classifyDispatchIneligibility(d) !== null) continue;
       if (!(await draftDepsSatisfied(sb, d))) continue; // skip dependency-blocked
       if (await isSdInFlight(sb, d.sd_key, sessionId)) continue; // dedup: skip SDs already started or live-foreign-held
       const claimed = await tryClaim(sb, d.sd_key, sessionId);
@@ -331,6 +341,79 @@ async function recoverStrandedFinal(sb, sessionId, base) {
           action: 'resume_final',
           sd: sd.sd_key,
           message: `Recovered stranded SD ${sd.sd_key} (was pending_approval/LEAD_FINAL with claim cleared — one handoff from shipped). Re-attach + finish: node scripts/sd-start.js ${sd.sd_key}, then node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key}. If PR_MERGE_VERIFICATION blocks, merge the PR first (gh pr merge), then re-run.`,
+        };
+      }
+    }
+  } catch { /* fail-open -> caller continues to normal self-claim */ }
+  return null;
+}
+
+// SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001: adopt ORPHANED in_progress SDs (zero active claims).
+// A session reaped mid-build (worktree + commits intact) leaves its SD in_progress with
+// claiming_session_id NULL — invisible to EVERY other tier: step 4 needs claude_sessions.sd_key,
+// step 5.7 only covers pending_approval/LEAD_FINAL, and step 6's isSdInFlight guard skips any SD
+// past LEAD (the exact bug: the orphan IS past LEAD, so checkin idled while sd:next flagged
+// LOCAL_ACTIVITY; recovery was a human-driven manual claim_sd — witnessed 2026-06-10 adopting
+// SD-LEO-INFRA-ENABLE-ADAM-GOVERNANCE-001). This tier mirrors recoverStrandedFinal: age-guarded
+// query, shared eligibility classifier, live-holder probe, claim_sd as the final race arbiter,
+// fail-open, idempotent (a re-strand is re-adopted next checkin).
+//
+// Sweep interaction (validated, do NOT re-introduce a destructive reset): the stale-session
+// sweep's phantom-detect (QF-20260426-SWEEP-PHANTOM-DETECT) targets the same zero-claim
+// in_progress population but RESETS it to draft/LEAD — gated by assertSweepHandoffGate, which
+// SKIPS any SD with an accepted handoff past LEAD. So the mid-build orphans this tier adopts
+// survive the sweep, and LEAD-phase no-commit orphans the sweep resets are picked up by the
+// draft tier (6.25) instead. Disjoint dispositions, no race.
+//
+// NOTE: isSdInFlight is deliberately NOT reused here — its phase!=LEAD leg would veto every
+// orphan by definition; only its live-foreign-holder leg applies (inlined below). claim_sd
+// independently refuses live peers (already_claimed / claimed_by_live_peer) and terminal
+// statuses ({completed,cancelled,deferred} — in_progress is claimable), so the probe is
+// defense-in-depth, not the sole guard.
+const ORPHAN_CANDIDATE_LIMIT = 5;
+// One full claim-TTL window (claimGuard TTL = 15 min): a mid-transition worker whose claim
+// briefly clears is never raced; sweep claim-clears also refresh updated_at, deferring adoption
+// one window past the clear. A genuine orphan sits indefinitely — the delay is safe.
+const ORPHAN_MIN_AGE_MS = 15 * 60 * 1000;
+
+async function adoptOrphanInProgress(sb, sessionId, base) {
+  try {
+    const cutoffIso = new Date(Date.now() - ORPHAN_MIN_AGE_MS).toISOString();
+    const { data: orphans } = await sb
+      .from('strategic_directives_v2')
+      // sd_key/sd_type/metadata feed classifyDispatchIneligibility; current_phase feeds the
+      // resume message (advisory — sd-start reads the live phase authoritatively on attach).
+      .select('sd_key, sd_type, status, current_phase, metadata, updated_at')
+      .eq('status', 'in_progress')
+      .is('claiming_session_id', null)
+      .neq('sd_type', 'orchestrator')         // parents are in_progress/no-claim BY DESIGN while children run
+      .lt('updated_at', cutoffIso)            // parked > one claim-TTL window — not a mid-transition race
+      .order('updated_at', { ascending: true }) // oldest orphan first
+      .limit(ORPHAN_CANDIDATE_LIMIT);
+    for (const sd of (orphans || [])) {
+      // Shared classifier (same predicate as the draft tier + coordinator sweep): orchestrator
+      // (redundant with .neq — harmless), test-fixture keys (SD-DEMO-*/SD-TEST-*), and
+      // metadata.requires_human_action all skip.
+      if (classifyDispatchIneligibility(sd) !== null) continue;
+      // Live-foreign-holder probe (the half-write case: SD-side claim cleared but a LIVE session
+      // still points at it via claude_sessions.sd_key). Fail-open: probe errors don't block.
+      try {
+        const { data: live } = await sb
+          .from('v_active_sessions')
+          .select('session_id')
+          .eq('sd_key', sd.sd_key)
+          .neq('session_id', sessionId)
+          .eq('is_alive', true)
+          .limit(1);
+        if (live && live.length) continue;
+      } catch { /* fail-open: claim_sd still arbitrates */ }
+      const claimed = await tryClaim(sb, sd.sd_key, sessionId);
+      if (claimed.ok) {
+        return {
+          ...base,
+          action: 'resume_orphan',
+          sd: sd.sd_key,
+          message: `Adopted ORPHANED in_progress SD ${sd.sd_key} (zero active claims — prior session reaped mid-build; worktree/commits likely intact). Re-attach + continue: node scripts/sd-start.js ${sd.sd_key} (re-attaches the existing worktree / resumes from the pushed branch), then continue the handoff chain from its live phase (currently ${sd.current_phase || 'unknown'} — sd-start reads the authoritative phase). On completion, re-run /checkin.`,
         };
       }
     }
@@ -396,7 +479,103 @@ async function selfHealStaleClaim(sb, sessionId, sdKey) {
   } catch { /* fail-open */ }
 }
 
-async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId } = {}) {
+// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: assign a fleet identity (NATO callsign + color) to a
+// freshly-claimed worker AT check-in, instead of up to ~5 minutes later when the coordinator cron
+// scripts/assign-fleet-identities.cjs next runs (it is the ONLY other writer of fleet_identity).
+//
+// Optimistic self-assign: read the live used-set, pick the next free callsign/color with the SAME
+// pool/picker the cron uses, read-modify-merge our own claude_sessions.metadata, then emit a
+// SET_IDENTITY message (the coordination-inbox hook writes .claude/fleet-identity-<csid>.json from
+// it, which is what the statusline actually renders — see .claude/statusline.cjs). Concurrency is
+// best-effort only: two simultaneous check-ins can pick the same callsign; the existing 5-min
+// dedupeAssignedCallsigns cron pass (heartbeat-DESC, newest-wins) heals that duplicate exactly as it
+// heals post-rotation collisions today. NEVER throws — any failure leaves the worker nameless (named
+// by the next cron pass), never an action=error. Returns { callsign, color } or null.
+//
+// Caller (runCheckin wrapper) guarantees: a real claim is held and the worker has no callsign yet,
+// and the session_id is not a test/ghost id. This helper additionally enforces the coordinator
+// exclusion and is idempotent (adopts a complete identity the cron set in the race window).
+async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
+  try {
+    // Re-read our row: source of metadata to merge (read-modify-merge — NEVER clobber), the
+    // coordinator guard, and adoption of any identity assigned by the cron since the caller's read.
+    const { data: cur } = await sb.from('claude_sessions')
+      .select('metadata').eq('session_id', sessionId).maybeSingle();
+    const myMeta = (cur && cur.metadata) || {};
+    if (myMeta.is_coordinator === true) return null; // coordinators stay nameless in the worker pool (QF-20260508-648)
+    const existing = myMeta.fleet_identity;
+    if (existing && existing.callsign && existing.color) {
+      return { callsign: existing.callsign, color: existing.color }; // complete identity already present -> idempotent
+    }
+    // Seed used-sets from currently-live assigned identities so we pick a FREE slot (not blindly Alpha).
+    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    const { data: live } = await sb.from('claude_sessions')
+      .select('session_id, metadata')
+      .gte('heartbeat_at', fiveMinAgo)
+      .neq('status', 'terminated');
+    const usedCallsigns = new Set(), usedColors = new Set();
+    for (const r of (live || [])) {
+      if (!r || r.session_id === sessionId) continue;
+      const id = r.metadata && r.metadata.fleet_identity;
+      if (id && id.callsign) usedCallsigns.add(id.callsign);
+      if (id && id.color) usedColors.add(id.color);
+    }
+    const callsign = nextAvailable(NATO, usedCallsigns);
+    const color = nextAvailable(COLORS, usedColors);
+    // display_name parity with the cron: assign-fleet-identities.cjs labels with `worker.sd_id`, a
+    // column that does NOT exist on claude_sessions (it selects sd_key), so its label is ALWAYS
+    // 'idle'. We match `${callsign} | idle` so the cron's 5-min refresh loop sees no mismatch and
+    // never churns the row. The statusline reads callsign/color only, so the label is user-invisible.
+    const display_name = `${callsign} | idle`;
+    const metadata = { ...myMeta, fleet_identity: { color, callsign, display_name, assigned_at: new Date().toISOString() } };
+    const { error } = await sb.from('claude_sessions').update({ metadata }).eq('session_id', sessionId);
+    if (error) return null;
+    // Emit SET_IDENTITY so the coordination-inbox hook writes the per-session statusline file. This is
+    // the mechanism that makes the name VISIBLE; still fail-open — a message failure leaves the DB
+    // identity authoritative and the next cron refresh re-emits the message.
+    try {
+      await sb.from('session_coordination').insert({
+        target_session: sessionId,
+        target_sd: claimSd || null,
+        message_type: 'SET_IDENTITY',
+        subject: `Identity: ${callsign} (${color})`,
+        body: `The coordinator assigned you callsign "${callsign}" with color "${color}" at check-in. Your statusline will update automatically.`,
+        payload: { color, callsign, display_name },
+        sender_type: 'coordinator',
+        expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+      });
+    } catch { /* best-effort: cron re-emits within 5 min */ }
+    return { callsign, color };
+  } catch { return null; }
+}
+
+// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: actions whose result carries a freshly-held claim — every
+// path where a worker ends a check-in owning work and therefore deserves a name NOW.
+const CLAIMED_CHECKIN_ACTIONS = new Set(['resume', 'resume_final', 'resume_orphan', 'claimed_assignment', 'self_claimed', 'self_claimed_qf']);
+
+// Public check-in entrypoint: resolve the action, then name a freshly-claimed, identity-less worker
+// before returning so the SAME response reports the callsign. Naming is a thin fail-open wrapper over
+// the resolution logic (resolveCheckin) so it covers ALL claim paths (resume / assignment / self-claim
+// SD / self-claim draft / self-claim QF) at one site, without threading naming through each return.
+async function runCheckin(sb, sessionId, opts = {}) {
+  const result = await resolveCheckin(sb, sessionId, opts);
+  try {
+    const claimedId = result && (result.sd || result.qf); // SD actions carry .sd; a QF self-claim carries .qf
+    if (
+      result &&
+      CLAIMED_CHECKIN_ACTIONS.has(result.action) &&
+      claimedId &&
+      !result.callsign &&                 // already named -> nothing to do (idempotent)
+      !isTestSessionId(sessionId)         // ghost/test sessions never burn the 8-name pool (QF-20260528-581)
+    ) {
+      const assigned = await assignFleetIdentityAtCheckin(sb, sessionId, claimedId);
+      if (assigned && assigned.callsign) result.callsign = assigned.callsign;
+    }
+  } catch { /* fail-open: naming must NEVER turn a check-in into action=error */ }
+  return result;
+}
+
+async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId } = {}) {
   // 1. resolve coordinator (fail-open to null -> broadcast)
   let coordinatorId = null;
   try { coordinatorId = await getCoordinator(sb); } catch { coordinatorId = null; }
@@ -488,6 +667,13 @@ async function runCheckin(sb, sessionId, { getCoordinator = getActiveCoordinator
   const recovered = await recoverStrandedFinal(sb, sessionId, base);
   if (recovered) return recovered;
 
+  // 5.8 SD-FDBK-INFRA-ORPHAN-ADOPTION-WORKER-001: adopt an ORPHANED in_progress SD (zero active
+  //     claims, session reaped mid-build) BEFORE self-claiming new work — finishing a
+  //     partially-built SD beats starting fresh, but a one-handoff-from-shipped stranded final
+  //     (5.7) still wins over a mid-build orphan.
+  const adopted = await adoptOrphanInProgress(sb, sessionId, base);
+  if (adopted) return adopted;
+
   // 5.5 SD-FDBK-INFRA-AUTO-MAINTAIN-EXECUTION-001: ensure an active execution baseline exists
   //      BEFORE reading v_sd_next_candidates. With zero active baseline the view returns 0 rows
   //      and self-claim silently idles with a full queue. Fail-open: a failure here degrades to
@@ -554,7 +740,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {

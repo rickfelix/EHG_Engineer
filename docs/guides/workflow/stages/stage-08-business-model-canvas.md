@@ -121,7 +121,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L399) - Stage 8 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-2-the-engine) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-2-the-engine) - Phase context
 - [Stage 7: Pricing Strategy](stage-07-pricing-strategy.md) - Previous stage
 - [Stage 9: Exit-Oriented Design](stage-09-exit-oriented-design.md) - Next stage
 

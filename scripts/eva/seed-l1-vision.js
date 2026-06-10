@@ -36,7 +36,11 @@ const REPO_ROOT = resolve(__dirname, '../../');
 // ============================================================================
 
 const SOURCE_FILES = {
-  vision: 'docs/plans/archived/eva-venture-lifecycle-vision.md',
+  // SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-C (A1c): the L1 vision is seeded from the
+  // chairman-approved canonical identity/strategy text — NOT from the lifecycle
+  // spec. The lifecycle spec seeds its OWN document row (LIFECYCLE_SPEC_KEY).
+  canonical: 'docs/vision/ehg-mission-vision-canonical.md',
+  lifecycle: 'docs/plans/archived/eva-venture-lifecycle-vision.md',
   architecture: 'docs/plans/archived/eva-platform-architecture.md',
   doctrine: 'brainstorm/topic-5-ehg-vision.md',
 };
@@ -47,6 +51,9 @@ const SOURCE_FILES = {
 
 const VISION_KEY = 'VISION-EHG-L1-001';
 const ARCH_KEY = 'ARCH-EHG-L1-001';
+// A1c: the venture-lifecycle spec is a standalone operating document, cross-linked
+// from L1 — never fused into the identity vision again.
+const LIFECYCLE_SPEC_KEY = 'SPEC-EVA-VENTURE-LIFECYCLE-001';
 
 // Max chars to send to LLM for dimension extraction (avoid context overflow)
 const MAX_LLM_CONTENT_CHARS = 8000;
@@ -152,12 +159,19 @@ export async function main() {
 
   // ── 1. Read source files ──────────────────────────────────────────────────
   console.log('📂 Reading source files...');
-  const visionContent = readSourceFile(SOURCE_FILES.vision);
+  const canonicalContent = readSourceFile(SOURCE_FILES.canonical);
+  const lifecycleContent = readSourceFile(SOURCE_FILES.lifecycle);
   const architectureContent = readSourceFile(SOURCE_FILES.architecture);
   const doctrineContent = readSourceFile(SOURCE_FILES.doctrine);
 
-  // Combine vision + doctrine for L1 vision record
-  const combinedVisionContent = `${visionContent}\n\n---\n\n# EHG Capability Doctrine\n\n${doctrineContent}`;
+  // SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-C (A1c): L1 = IDENTITY/STRATEGY ONLY — the
+  // chairman-approved canonical text + the Capability Doctrine identity block +
+  // a cross-link to the standalone lifecycle spec. The previous structure
+  // concatenated the 60k-char lifecycle spec AHEAD of the identity content,
+  // making the L1 apex masquerade as a lifecycle document (H1 was the lifecycle
+  // title; 73% of the content was stage spec). The lifecycle spec now seeds its
+  // OWN row (LIFECYCLE_SPEC_KEY below) — structurally separate, never re-fused.
+  const combinedVisionContent = `${canonicalContent}\n\n---\n\n> Operating specification: the venture-lifecycle spec is maintained as a SEPARATE document — see eva_vision_documents '${LIFECYCLE_SPEC_KEY}'.\n\n---\n\n# EHG Capability Doctrine\n\n${doctrineContent}`;
 
   // ── 2. Extract dimensions via LLM ─────────────────────────────────────────
   console.log('\n🤖 Extracting vision scoring dimensions via LLM...');
@@ -192,7 +206,7 @@ export async function main() {
     version: 1,
     status: 'draft',
     chairman_approved: false,
-    source_file_path: SOURCE_FILES.vision,
+    source_file_path: SOURCE_FILES.canonical,
     created_by: 'seed-l1-vision',
   };
 
@@ -209,6 +223,33 @@ export async function main() {
 
   console.log(`   ✅ ${visionData.vision_key} (id: ${visionData.id})`);
   const visionId = visionData.id;
+
+  // ── 3b. Upsert the standalone lifecycle-spec document (A1c) ───────────────
+  // Seeded non-active: eva_vision_documents_active_rich_check requires
+  // extracted_dimensions for active rows, and spec activation is an operational
+  // decision, not a seed side-effect. parent_vision_id cross-links back to L1.
+  console.log('\n📝 Upserting standalone lifecycle-spec document...');
+  const lifecycleRecord = {
+    vision_key: LIFECYCLE_SPEC_KEY,
+    level: 'L2',
+    content: lifecycleContent,
+    parent_vision_id: visionId,
+    version: 1,
+    status: 'draft',
+    chairman_approved: false,
+    source_file_path: SOURCE_FILES.lifecycle,
+    created_by: 'seed-l1-vision',
+  };
+  const { data: lifecycleData, error: lifecycleError } = await supabase
+    .from('eva_vision_documents')
+    .upsert(lifecycleRecord, { onConflict: 'vision_key' })
+    .select('id, vision_key, level, status')
+    .single();
+  if (lifecycleError) {
+    console.error(`❌ Failed to upsert lifecycle spec: ${lifecycleError.message}`);
+    process.exit(1);
+  }
+  console.log(`   ✅ ${lifecycleData.vision_key} (id: ${lifecycleData.id}, parent: ${visionId})`);
 
   // ── 4. Upsert eva_architecture_plans ─────────────────────────────────────
   console.log('\n📝 Upserting eva_architecture_plans...');

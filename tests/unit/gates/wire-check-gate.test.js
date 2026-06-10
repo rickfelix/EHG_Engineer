@@ -455,3 +455,70 @@ describe('wire-check-gate server-route scope (SD-FDBK-ENH-WIRE-CHECK-GATE-001)',
     expect(source).toMatch(/export function discoverEntryPoints/);
   });
 });
+
+// ─── SD-LEO-FIX-FIX-WIRE-CHECK-001: one-off probe FP fixes ───────────────────
+// 18 WIRE_CHECK fails/7d (3rd-highest gate offender) were dominated by legitimate
+// one-off verification/probe scripts. These pin the three new mechanisms:
+// scripts/probes/ exclusion, the @wire-check-exempt marker escape hatch, and the
+// actionable remediation + cross-session-leak warning in the failure output.
+describe('SD-LEO-FIX-FIX-WIRE-CHECK-001: probe-script exemptions', () => {
+  it('excludes scripts/probes/ paths (one-off probe convention dir)', async () => {
+    const { isExcludedFromWireCheck } = await import(
+      '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js'
+    );
+    expect(isExcludedFromWireCheck('scripts/probes/verify-deploy.mjs')).toBe(true);
+    expect(isExcludedFromWireCheck('scripts/probes/nested/check-live.cjs')).toBe(true);
+    // boundary-safe: does not over-match sibling names
+    expect(isExcludedFromWireCheck('scripts/probes-utils/real-module.js')).toBe(false);
+    expect(isExcludedFromWireCheck('lib/fleet/prepark-wip.cjs')).toBe(false);
+  });
+
+  it('hasWireCheckExemptMarker: marker in first 2KB exempts; absence/throw does not (fail-open)', async () => {
+    const { hasWireCheckExemptMarker } = await import(
+      '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js'
+    );
+    expect(hasWireCheckExemptMarker('any', {
+      readHead: () => '#!/usr/bin/env node\n// @wire-check-exempt: live deploy probe, deleted post-validation\n',
+    })).toBe(true);
+    expect(hasWireCheckExemptMarker('any', { readHead: () => '// regular module\nexport default 1;' })).toBe(false);
+    // word-boundary: does not match a longer identifier
+    expect(hasWireCheckExemptMarker('any', { readHead: () => 'const x = "@wire-check-exemption-policy";' })).toBe(false);
+    // unreadable file -> NOT exempt (the gate still validates it)
+    expect(hasWireCheckExemptMarker('any', { readHead: () => { throw new Error('EACCES'); } })).toBe(false);
+  });
+
+  it('reads the marker from a real file on disk (default readHead)', async () => {
+    const { hasWireCheckExemptMarker } = await import(
+      '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js'
+    );
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wirex-'));
+    try {
+      const marked = path.join(dir, 'probe.mjs');
+      fs.writeFileSync(marked, '// @wire-check-exempt: one-off DB probe\nconsole.log(1);\n');
+      const plain = path.join(dir, 'plain.mjs');
+      fs.writeFileSync(plain, 'console.log(2);\n');
+      expect(hasWireCheckExemptMarker(marked)).toBe(true);
+      expect(hasWireCheckExemptMarker(plain)).toBe(false);
+      expect(hasWireCheckExemptMarker(path.join(dir, 'missing.mjs'))).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('failure output names every exemption mechanism + cwd contract (source pin)', async () => {
+    const url = await import('url');
+    const __filename2 = url.fileURLToPath(import.meta.url);
+    const __dirname2 = path.dirname(__filename2);
+    const gateFile = path.resolve(__dirname2, '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js');
+    const source = fs.readFileSync(gateFile, 'utf8');
+    // remediation block reaches the ISSUES array (what a blocked worker actually sees)
+    expect(source).toMatch(/\.\.\.remediation,?\s*\]/);
+    expect(source).toMatch(/scripts\/one-off\/ or scripts\/probes\//);
+    expect(source).toMatch(/@wire-check-exempt: <reason>/);
+    expect(source).toMatch(/package\.json scripts entry/);
+    expect(source).toMatch(/string-literal relative import/);
+    // cross-session-leak warning names the worktree contract
+    expect(source).toMatch(/CROSS-SESSION LEAK RISK/);
+    expect(source).toMatch(/Re-run LEAD-FINAL-APPROVAL from the SD worktree/);
+  });
+});

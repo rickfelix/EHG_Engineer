@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-09T23:32:49.554Z
-**Rows**: 273
+**Generated**: 2026-06-10T19:47:18.729Z
+**Rows**: 274
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (22 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -40,6 +40,7 @@
 | quality_issues | `jsonb` | YES | `'[]'::jsonb` | - |
 | quality_checked_at | `timestamp with time zone` | YES | - | - |
 | content_hash | `text` | YES | - | - |
+| mission_id | `uuid` | YES | - | Mission foundation up-FK (missions). Portfolio mission (venture_id NULL) <-> L1; per-venture mission <-> that venture's L2; consumers COALESCE to portfolio. Only the L1 doc is backfilled. SD-LEO-INFRA-INITIATIVE-BACKBONE-CANONICAL-001. |
 
 ## Constraints
 
@@ -47,6 +48,7 @@
 - `eva_vision_documents_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `eva_vision_documents_mission_id_fkey`: mission_id → missions(id)
 - `eva_vision_documents_parent_vision_id_fkey`: parent_vision_id → eva_vision_documents(id)
 - `eva_vision_documents_venture_id_fkey`: venture_id → ventures(id)
 

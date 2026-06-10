@@ -39,7 +39,7 @@ export function prompt(question) {
   if (_nonInteractiveMode) {
     return Promise.reject(new Error(
       `[NON_INTERACTIVE] Refusing to prompt under --non-interactive mode. Question was: ${question.trim()}. ` +
-      `Pass the value explicitly via CLI flag (e.g., --uat-verified yes, --verification-notes "...", --actual-loc <N>, --force-complete --reason "...").`
+      'Pass the value explicitly via CLI flag (e.g., --uat-verified yes, --verification-notes "...", --actual-loc <N>, --force-complete --reason "...").'
     ));
   }
 
@@ -65,7 +65,7 @@ export function prompt(question) {
       if (!answered) {
         reject(new Error(
           `[NON_INTERACTIVE] stdin closed with no answer to: ${question.trim()}. ` +
-          `Pass the value via a CLI flag (--uat-verified yes / --actual-loc <N> / --non-interactive / --force-complete --reason "..."), or pipe an answer.`
+          'Pass the value via a CLI flag (--uat-verified yes / --actual-loc <N> / --non-interactive / --force-complete --reason "..."), or pipe an answer.'
         ));
       }
     });
@@ -95,6 +95,10 @@ export function parseArguments(args) {
       'skip-tests':         { type: 'boolean' },
       'tests-pass':         { type: 'string' },
       'skip-typecheck':     { type: 'boolean' },
+      // SD-FDBK-INFRA-RCA-FIRST-HARD-001 (FR-3): skip the advisory per-file test-coverage
+      // probe loop (verifyTestCoverage). Also auto-skipped under --skip-tests/--force-complete,
+      // a docs-only/empty diff, or filesChanged===0 — this flag is the explicit opt-out.
+      'skip-coverage':      { type: 'boolean' },
       'uat-verified':       { type: 'string' },
       'verification-notes': { type: 'string' },
       'force-complete':     { type: 'boolean' },
@@ -188,6 +192,8 @@ export function parseArguments(args) {
     skipTestRun:       values['skip-tests']       || false,
     testsPass:         values['tests-pass']       != null ? values['tests-pass'].toLowerCase().startsWith('y') : undefined,
     skipTypeCheck:     values['skip-typecheck']   || false,
+    // SD-FDBK-INFRA-RCA-FIRST-HARD-001 (FR-3): explicit opt-out of the coverage probe loop.
+    skipCoverage:      values['skip-coverage']    || false,
     uatVerified:       values['uat-verified']     != null ? values['uat-verified'].toLowerCase().startsWith('y') : undefined,
     verificationNotes: values['verification-notes'],
     forceComplete:     values['force-complete']   || false,
@@ -235,6 +241,9 @@ Options:
   --skip-tests          Skip running tests (trusts CI; testsPass=true by default)
   --tests-pass          Override testsPass explicitly (yes/no); optional with --skip-tests
   --skip-typecheck      Skip TypeScript verification (not recommended)
+  --skip-coverage       Skip the advisory per-file test-coverage probe loop. Also auto-skipped
+                        under --skip-tests / --force-complete / a docs-only or empty diff / when
+                        no files changed. Coverage is advisory (console-only) and never gates.
   --uat-verified        UAT verified (yes/no, will prompt if not provided)
   --verification-notes  Optional notes about verification
   --force-complete      Bypass self-verification + LOC-cap blocks; sets quick_fixes.force_completed=true.

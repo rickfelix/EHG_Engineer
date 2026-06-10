@@ -44,30 +44,6 @@ async function getIssuesForSD(supabase, sdId) {
 }
 
 /**
- * Query recent active issues (not SD-specific but recent/high-priority)
- * @param {Object} supabase - Supabase client
- * @returns {Promise<Array>} Array of recent issue patterns
- */
-async function getRecentActiveIssues(supabase) {
-  try {
-    const { data, error } = await supabase
-      .from('issue_patterns')
-      .select('pattern_id, issue_summary, category, severity, proven_solutions')
-      .eq('status', 'active')
-      .order('updated_at', { ascending: false })
-      .limit(5);
-
-    if (error) {
-      return [];
-    }
-
-    return data || [];
-  } catch (_err) {
-    return [];
-  }
-}
-
-/**
  * Create handoff retrospective
  *
  * @param {string} sdId - SD ID
@@ -83,8 +59,10 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
 
     // Query actual issues from issue_patterns table (PAT-RETRO-BOILERPLATE-001 fix)
     const sdIssues = await getIssuesForSD(supabase, sdId);
-    const recentIssues = sdIssues.length === 0 ? await getRecentActiveIssues(supabase) : [];
-    const allIssues = [...sdIssues, ...recentIssues];
+    // SD-FDBK-FIX-STOP-STAMPING-GLOBAL-001: no global fallback — only SD-linked
+    // patterns belong in this SD's retro. The old unscoped top-5 query stamped the
+    // same 5 PAT-AUTO lines into nearly every clean retro fleet-wide.
+    const allIssues = sdIssues;
 
     if (sdIssues.length > 0) {
       console.log(`   📋 Found ${sdIssues.length} issue(s) linked to this SD`);

@@ -1,0 +1,313 @@
+#!/usr/bin/env node
+/**
+ * Migration apply-state verifier — reconcile committed SQL files against live schema objects.
+ * SD-LEO-INFRA-MIGRATION-APPLY-STATE-001.
+ *
+ * The committed-not-deployed gap: a migration file can merge to main yet never be applied to
+ * prod (live examples found 2026-06-10: 20260510_v_sd_completion_integrity.sql and
+ * 20260516130001_add_bypass_ledger.sql — both committed, both objects absent live, with code
+ * paths writing bypass_ledger failing silently). The pre-merge probe
+ * (check-migration-readiness.mjs) is PR-scoped and FUNCTION+TRIGGER-only; this is the
+ * complementary REPO-WIDE RETROSPECTIVE sweep with TABLE/VIEW/INDEX/CONSTRAINT coverage.
+ *
+ * READ-ONLY and ADVISORY: reports per-file APPLIED / PARTIAL / NOT_APPLIED / NO_DDL, exits 0
+ * by default ([MIGRATION_APPLY_STATE_PASS|GAPS_FOUND]); --strict exits 1 on gaps; DB
+ * unreachable always exits 1 ([MIGRATION_APPLY_STATE_INFRA_ERROR]). Never applies anything —
+ * some committed files are intentionally retired; backfill is a human decision.
+ *
+ * Usage:
+ *   npm run migration:apply-state            # advisory report
+ *   node scripts/verify-migration-apply-state.mjs --strict   # CI-gateable
+ *   node scripts/verify-migration-apply-state.mjs --json     # machine-readable
+ */
+
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { armCliTeardown } from '../lib/cli-graceful-exit.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MIGRATIONS_DIR = path.resolve(__dirname, '..', 'database', 'migrations');
+
+export const OUTCOME = {
+  PASS: 'MIGRATION_APPLY_STATE_PASS',
+  GAPS: 'MIGRATION_APPLY_STATE_GAPS_FOUND',
+  INFRA: 'MIGRATION_APPLY_STATE_INFRA_ERROR',
+};
+
+// ── Stage 1: list + deterministic order ──────────────────────────────────────
+
+/**
+ * Forward migrations only. Excluded artifact suffixes (counted + listed, never expectations):
+ *  - *_DOWN.sql / *_rollback.sql — rollback artifacts (their creates would re-create what the
+ *    forward path dropped; live run showed them dominating false gaps otherwise)
+ *  - *_DEFERRED.sql — explicitly parked migrations (deferral is the recorded decision)
+ */
+export const ARTIFACT_RE = /(_DOWN|_rollback|_DEFERRED)\.sql$/i;
+
+export function listForwardMigrations(dir = MIGRATIONS_DIR) {
+  const all = readdirSync(dir).filter((f) => f.endsWith('.sql'));
+  const down = all.filter((f) => ARTIFACT_RE.test(f));
+  const forward = all.filter((f) => !ARTIFACT_RE.test(f));
+  return { forward: orderMigrations(forward), down };
+}
+
+/**
+ * Deterministic chronology for the DROP-tracking fold: files with a leading date token
+ * (8+ digits) sort by that token then name; legacy non-dated files (~138 in the corpus)
+ * sort lexically BEFORE all dated files — they predate the dated convention. Mis-ordering
+ * only affects cross-file create-then-drop pairs and the tool is advisory; the dropped-later
+ * ledger keeps any oddity visible.
+ */
+export function orderMigrations(files) {
+  const dated = [];
+  const legacy = [];
+  for (const f of files) {
+    const m = f.match(/^(\d{8,})/);
+    if (m) dated.push({ f, key: m[1] });
+    else legacy.push(f);
+  }
+  legacy.sort();
+  dated.sort((a, b) => (a.key === b.key ? (a.f < b.f ? -1 : 1) : a.key < b.key ? -1 : 1));
+  return [...legacy, ...dated.map((d) => d.f)];
+}
+
+// ── Stage 2: preprocess + extract ────────────────────────────────────────────
+
+/**
+ * Neutralize content that must never yield DDL facts: -- line comments, block comments,
+ * and dollar-quoted bodies — BOTH bare $$ and named $tag$ (the splitPostgreSQLStatements
+ * named-tag gap, wf_5071dc05, is the cautionary tale: function bodies routinely contain
+ * DDL-looking text like RAISE 'CREATE TABLE …' or EXECUTE strings).
+ */
+export function stripNonDdl(sql) {
+  let s = sql.replace(/\r\n/g, '\n');
+  // Dollar-quoted blocks first (they may contain comment-looking text and vice versa is rare).
+  s = s.replace(/(\$[A-Za-z_]\w*\$|\$\$)[\s\S]*?\1/g, ' ');
+  s = s.replace(/--[^\n]*/g, ' ');
+  s = s.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  return s;
+}
+
+/** lowercase, unquote, strip schema prefix (public assumed), strip trailing punctuation. */
+export function normalizeName(raw) {
+  if (!raw) return null;
+  let n = raw.trim().replace(/"/g, '').toLowerCase();
+  const dot = n.lastIndexOf('.');
+  if (dot !== -1) n = n.slice(dot + 1);
+  return n.replace(/[(;,\s].*$/, '') || null;
+}
+
+const ID = String.raw`(?:"[^"]+"|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?`;
+
+const CREATE_RES = [
+  { cls: 'table',      re: new RegExp(String.raw`\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(${ID})`, 'gi') },
+  { cls: 'matview',    re: new RegExp(String.raw`\bCREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(${ID})`, 'gi') },
+  { cls: 'view',       re: new RegExp(String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(${ID})`, 'gi') },
+  { cls: 'function',   re: new RegExp(String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(${ID})`, 'gi') },
+  { cls: 'trigger',    re: new RegExp(String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+(${ID})`, 'gi') },
+  { cls: 'index',      re: new RegExp(String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(${ID})`, 'gi') },
+  { cls: 'constraint', re: new RegExp(String.raw`\bADD\s+CONSTRAINT\s+(${ID})`, 'gi') },
+];
+
+const DROP_RES = [
+  { cls: 'table',      re: new RegExp(String.raw`\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi') },
+  { cls: 'matview',    re: new RegExp(String.raw`\bDROP\s+MATERIALIZED\s+VIEW\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi') },
+  { cls: 'view',       re: new RegExp(String.raw`\bDROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi') },
+  { cls: 'function',   re: new RegExp(String.raw`\bDROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi') },
+  { cls: 'trigger',    re: new RegExp(String.raw`\bDROP\s+TRIGGER\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi') },
+  { cls: 'index',      re: new RegExp(String.raw`\bDROP\s+INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+EXISTS\s+)?(${ID})`, 'gi') },
+  { cls: 'constraint', re: new RegExp(String.raw`\bDROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?(${ID})`, 'gi') },
+];
+
+/** Extract { creates: [{cls,name}], drops: [{cls,name}] } from one migration's SQL. */
+export function extractDdlFacts(sql) {
+  const s = stripNonDdl(sql);
+  const pull = (specs) => {
+    const out = [];
+    for (const { cls, re } of specs) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(s)) !== null) {
+        const name = normalizeName(m[1]);
+        if (name) out.push({ cls, name });
+      }
+    }
+    return out;
+  };
+  return { creates: pull(CREATE_RES), drops: pull(DROP_RES) };
+}
+
+// ── Stage 3: chronological fold ──────────────────────────────────────────────
+
+/**
+ * Fold per-file facts (in order) into the expected-live set. Returns:
+ *   expected: Map<'cls:name', { cls, name, file }>      — created, not subsequently dropped
+ *   droppedLater: [{ cls, name, createdIn, droppedIn }] — legitimate retirements (transparency)
+ *   perFile: Map<file, { creates, drops }>
+ */
+export function foldLifecycle(fileFacts) {
+  const expected = new Map();
+  const droppedLater = [];
+  const perFile = new Map();
+  for (const { file, creates, drops } of fileFacts) {
+    perFile.set(file, { creates, drops });
+    for (const d of drops) {
+      const key = `${d.cls}:${d.name}`;
+      const prior = expected.get(key);
+      if (prior) {
+        droppedLater.push({ ...d, createdIn: prior.file, droppedIn: file });
+        expected.delete(key);
+      }
+    }
+    for (const c of creates) {
+      expected.set(`${c.cls}:${c.name}`, { ...c, file });
+    }
+  }
+  return { expected, droppedLater, perFile };
+}
+
+// ── Stage 4: bulk live resolution + classification ───────────────────────────
+
+/** One bulk query per object class — no N+1 over the ~1100-file corpus. */
+async function resolveLive(client, expected) {
+  const byClass = new Map();
+  for (const { cls, name } of expected.values()) {
+    if (!byClass.has(cls)) byClass.set(cls, new Set());
+    byClass.get(cls).add(name);
+  }
+  const live = new Set(); // 'cls:name' present live
+  const mark = (cls, rows, col) => rows.forEach((r) => live.add(`${cls}:${r[col]}`));
+
+  const regclassClasses = ['table', 'view', 'matview', 'index'];
+  for (const cls of regclassClasses) {
+    const names = [...(byClass.get(cls) || [])];
+    if (!names.length) continue;
+    const { rows } = await client.query(
+      `SELECT n AS name FROM unnest($1::text[]) AS n WHERE to_regclass('public.' || n) IS NOT NULL`,
+      [names]
+    );
+    mark(cls, rows, 'name');
+  }
+  if (byClass.get('function')?.size) {
+    const { rows } = await client.query(
+      `SELECT DISTINCT p.proname AS name FROM pg_proc p
+         JOIN pg_namespace ns ON ns.oid = p.pronamespace
+        WHERE ns.nspname = 'public' AND p.proname = ANY($1::text[])`,
+      [[...byClass.get('function')]]
+    );
+    mark('function', rows, 'name');
+  }
+  if (byClass.get('trigger')?.size) {
+    const { rows } = await client.query(
+      `SELECT DISTINCT t.tgname AS name FROM pg_trigger t
+        WHERE NOT t.tgisinternal AND t.tgname = ANY($1::text[])`,
+      [[...byClass.get('trigger')]]
+    );
+    mark('trigger', rows, 'name');
+  }
+  if (byClass.get('constraint')?.size) {
+    const { rows } = await client.query(
+      `SELECT DISTINCT c.conname AS name FROM pg_constraint c
+         JOIN pg_namespace ns ON ns.oid = c.connamespace
+        WHERE ns.nspname = 'public' AND c.conname = ANY($1::text[])`,
+      [[...byClass.get('constraint')]]
+    );
+    mark('constraint', rows, 'name');
+  }
+  return live;
+}
+
+/** Per-file classification from its SURVIVING expected objects (drop-aware). */
+export function classifyFiles(orderedFiles, expected, perFile, live) {
+  const survivingByFile = new Map();
+  for (const { cls, name, file } of expected.values()) {
+    if (!survivingByFile.has(file)) survivingByFile.set(file, []);
+    survivingByFile.get(file).push({ cls, name });
+  }
+  return orderedFiles.map((file) => {
+    const facts = perFile.get(file) || { creates: [], drops: [] };
+    const surviving = survivingByFile.get(file) || [];
+    if (!facts.creates.length) return { file, status: 'NO_DDL', missing: [], objects: 0 };
+    if (!surviving.length) return { file, status: 'APPLIED', missing: [], objects: 0, note: 'all objects superseded by later migrations' };
+    const missing = surviving.filter((o) => !live.has(`${o.cls}:${o.name}`));
+    const status = missing.length === 0 ? 'APPLIED' : missing.length === surviving.length ? 'NOT_APPLIED' : 'PARTIAL';
+    return { file, status, missing, objects: surviving.length };
+  });
+}
+
+// ── CLI ───────────────────────────────────────────────────────────────────────
+
+async function main() {
+  const args = process.argv.slice(2);
+  const strict = args.includes('--strict');
+  const asJson = args.includes('--json');
+
+  const { forward, down } = listForwardMigrations();
+  const fileFacts = forward.map((file) => ({
+    file,
+    ...extractDdlFacts(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')),
+  }));
+  const { expected, droppedLater, perFile } = foldLifecycle(fileFacts);
+
+  let live;
+  let client;
+  try {
+    const { createDatabaseClient } = await import('./lib/supabase-connection.js');
+    client = await createDatabaseClient('ehg');
+    live = await resolveLive(client, expected);
+  } catch (e) {
+    console.error(`DB unreachable: ${e.message}`);
+    console.log(`[${OUTCOME.INFRA}]`);
+    return 1;
+  } finally {
+    try { await client?.end(); } catch { /* already closed */ }
+  }
+
+  const results = classifyFiles(forward, expected, perFile, live);
+  const summary = {
+    scanned: forward.length,
+    excluded_down: down.length,
+    applied: results.filter((r) => r.status === 'APPLIED').length,
+    partial: results.filter((r) => r.status === 'PARTIAL').length,
+    not_applied: results.filter((r) => r.status === 'NOT_APPLIED').length,
+    no_ddl: results.filter((r) => r.status === 'NO_DDL').length,
+    dropped_later: droppedLater.length,
+  };
+  const gaps = results.filter((r) => r.status === 'PARTIAL' || r.status === 'NOT_APPLIED').reverse(); // newest first
+
+  if (asJson) {
+    console.log(JSON.stringify({ summary, gaps, droppedLater, files: results }, null, 2));
+  } else {
+    console.log('MIGRATION APPLY-STATE REPORT (advisory, read-only)');
+    console.log(`  ordering: legacy non-dated files first (lexical), then date-prefixed (chronological)`);
+    console.log(`  scanned ${summary.scanned} forward migrations (${summary.excluded_down} *_DOWN.sql excluded)`);
+    console.log(`  APPLIED=${summary.applied}  PARTIAL=${summary.partial}  NOT_APPLIED=${summary.not_applied}  NO_DDL=${summary.no_ddl}  dropped-later pairs=${summary.dropped_later}`);
+    if (gaps.length) {
+      console.log(`\n  COMMITTED-NOT-DEPLOYED GAPS (${gaps.length} file(s), newest first):`);
+      for (const g of gaps) {
+        console.log(`   ${g.status.padEnd(12)} ${g.file}`);
+        for (const m of g.missing) console.log(`     missing ${m.cls}: ${m.name}`);
+      }
+    }
+  }
+
+  const marker = gaps.length ? OUTCOME.GAPS : OUTCOME.PASS;
+  // --json keeps stdout pure JSON for piping; the marker goes to stderr there.
+  if (asJson) console.error(`[${marker}]`);
+  else console.log(`\n[${marker}]`);
+  return gaps.length && strict ? 1 : 0;
+}
+
+// Entry — graceful teardown armed only after the work settles (exit-hang class,
+// SD-FDBK-INFRA-SWEEP-CLI-EXIT-001 primitive).
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  main()
+    .then((code) => armCliTeardown(code))
+    .catch((err) => {
+      console.error('❌ Error:', err.message);
+      console.log(`[${OUTCOME.INFRA}]`);
+      return armCliTeardown(1);
+    });
+}

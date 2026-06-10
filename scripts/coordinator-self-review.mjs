@@ -135,6 +135,36 @@ export async function selfReviewMain() {
     for (const r of (all || []).slice(0, 12)) console.log('  ' + (r.created_at || '').slice(5, 16) + ' | ' + String(r.description || '').replace(/\s+/g, ' ').slice(0, 160));
     console.log('[ACTION] Coordinator: cluster -> ADJUST + source concrete coordinator-tooling fixes as SDs; surface a digest to the operator.');
   }
+
+  // SD-LEO-INFRA-ENABLE-WIRE-AUTOMATIC-001 (FR-3): ENFORCE the verify step. Validate the latest
+  // coordinator self-score against the prior cycle and surface INVALID/escalation LOUDLY so the
+  // loop is grade->commit->act->VERIFY, not a vanity metric. DEFAULT-OFF (TRI_PARTY_VERIFY_V1) ->
+  // byte-identical when off; FAIL-OPEN; ARTIFACT-ONLY (prints + records the streak; NEVER blocks
+  // an SD handoff). The score rows are the JSON-`description` coordinator_review rows in `all`.
+  if (process.env.TRI_PARTY_VERIFY_V1 === 'on') {
+    try {
+      const { validateScoreContract, parseScore } = await import('../lib/fleet/verify-score-contract.mjs');
+      const scores = (all || []).map(r => parseScore(r)).filter(Boolean); // newest-first; capture rows drop out
+      if (scores.length) {
+        const priorStreak = (typeof state.belowThresholdStreak === 'number') ? state.belowThresholdStreak : 0;
+        const v = validateScoreContract({ current: scores[0], prior: scores[1] || null, priorStreak });
+        if (v.inconclusive) {
+          console.log('[VERIFY-STEP] INCONCLUSIVE — latest coordinator score row had no parseable dimensions; skipping (no penalty).');
+        } else {
+          try { const cur = JSON.parse(readFileSync(STATE, 'utf8')); writeFileSync(STATE, JSON.stringify({ ...cur, belowThresholdStreak: v.escalation.streak })); } catch {}
+          if (v.valid) {
+            console.log('[VERIFY-STEP] OK — latest self-score satisfies the grade->commit->act->VERIFY contract' + (scores[1] ? ' (prior cycle verified)' : ' (first cycle)') + '; below-threshold streak=' + v.escalation.streak + '.');
+          } else {
+            console.log('[VERIFY-STEP INVALID] the latest coordinator self-score violates the verify contract:');
+            for (const msg of v.violations) console.log('   x ' + msg);
+            console.log('[ACTION] Re-author the self-score: add committed_actions for every below-threshold dimension AND prior_action_outcomes verifying last cycle' + (v.escalation.triggered ? '; and ESCALATE the stuck dimension(s) to the operator' : '') + '. (Review-artifact only — no SD handoff is blocked.)');
+          }
+        }
+      }
+    } catch (verifyErr) {
+      console.log('[VERIFY-STEP] skipped (fail-open): ' + verifyErr.message);
+    }
+  }
 }
 
 // Main-guard: run only when invoked directly (the cron path), not on import (tests).

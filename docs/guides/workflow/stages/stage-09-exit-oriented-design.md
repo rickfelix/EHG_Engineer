@@ -124,7 +124,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L439) - Stage 9 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-2-the-engine) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-2-the-engine) - Phase context
 - [Stage 8: Business Model Canvas](stage-08-business-model-canvas.md) - Previous stage
 - [Stage 10: Strategic Naming](stage-10-strategic-naming.md) - Next stage
 

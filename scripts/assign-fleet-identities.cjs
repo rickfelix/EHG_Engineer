@@ -15,6 +15,18 @@
 const COLORS = ['blue', 'green', 'purple', 'orange', 'cyan', 'pink', 'yellow', 'red'];
 const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel'];
 
+// SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: hoisted to module scope (was nested in main())
+// and exported so scripts/worker-checkin.cjs can self-assign an identity at check-in using the
+// SAME pool/picker — both writers must allocate identically (including the wrap-suffix format),
+// or dedupeAssignedCallsigns string equality breaks and duplicates stop reconciling.
+function nextAvailable(pool, usedSet) {
+  for (const item of pool) {
+    if (!usedSet.has(item)) return item;
+  }
+  // All used — wrap around with suffix
+  return pool[0] + '-' + (usedSet.size + 1);
+}
+
 // QF-20260508-648: writer/consumer asymmetry — lib/coordinator/resolve.cjs
 // setActiveCoordinator() writes metadata.is_coordinator=true; this consumer
 // must filter it out so coordinator sessions aren't assigned worker callsigns.
@@ -249,14 +261,7 @@ async function main() {
   const activeSessionIds = new Set(uniqueWorkers.map(w => w.session_id));
   reserveParkedIdentities(usedCallsigns, usedColors, recentSessions, activeSessionIds);
 
-  // Find next available callsign and color for new workers
-  function nextAvailable(pool, usedSet) {
-    for (const item of pool) {
-      if (!usedSet.has(item)) return item;
-    }
-    // All used — wrap around with suffix
-    return pool[0] + '-' + (usedSet.size + 1);
-  }
+  // nextAvailable is now module-scoped (hoisted above) and shared with worker-checkin.cjs.
 
   // Refresh display_name for assigned workers whose SD changed
   let refreshed = 0;
@@ -385,7 +390,7 @@ async function main() {
   console.log('');
 }
 
-module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities };
+module.exports = { filterOutCoordinators, filterOutGhostSessions, isTestSessionId, dedupeAssignedCallsigns, reserveParkedIdentities, NATO, COLORS, nextAvailable };
 
 if (require.main === module) {
   main().catch(err => {

@@ -124,7 +124,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L359) - Stage 7 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-2-the-engine) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-2-the-engine) - Phase context
 - [Stage 6: Risk Evaluation Matrix](stage-06-risk-evaluation-matrix.md) - Previous stage
 - [Stage 8: Business Model Canvas](stage-08-business-model-canvas.md) - Next stage
 

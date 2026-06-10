@@ -1,5 +1,8 @@
 # 02_architecture_boundaries.md
 
+> **⚠️ HISTORICAL DOCUMENT (bannered 2026-06-10)**: superseded by the chairman-locked canonical EHG vision (eva_vision_documents L1 `VISION-EHG-L1-001`, 2026-06-09). Preserved as a historical record; not a current source of truth. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+
+
 ## Why This Matters
 Clear architectural boundaries and explicit separation of concerns are critical for maintaining system integrity, preventing scope creep, and enabling independent evolution of components. This document defines the technical architecture, application boundaries, and integration contracts that govern the EHG ecosystem.
 

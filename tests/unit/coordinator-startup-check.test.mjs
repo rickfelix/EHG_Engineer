@@ -20,9 +20,9 @@ test('STANDARD_LOOPS has the expected standard loops with the expected keys', ()
   // the one chairman-facing email is the Adam exec-summary GHA (adam-exec-email-cron.yml).
   // Operator 2026-06-10 added the predictive capacity-forecast loop (worker utilization + belt dry-out)
   // and the backlog-prioritization pass (dispatch_rank for self-claim ordering — SRE duty 6).
-  assert.equal(STANDARD_LOOPS.length, 10);
+  assert.equal(STANDARD_LOOPS.length, 11);
   const keys = STANDARD_LOOPS.map((l) => l.key);
-  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'flag-review', 'self-review', 'hourly-review', 'capacity-forecast', 'backlog-rank']);
+  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'flag-review', 'self-review', 'hourly-review', 'capacity-forecast', 'backlog-rank', 'fleet-retro']);
 });
 
 test('every loop carries a non-empty label, script, cron, and CronCreate prompt', () => {
@@ -90,7 +90,7 @@ test('loopStatus marks armed|MISSING|unverified, distinguishing inbox vs dashboa
 test('renderLoops emits CronCreate spec for missing/unverified loops', () => {
   const none = parseArmedSet([], {});
   const out = renderLoops(none);
-  assert.match(out, /STANDARD CRON LOOPS \(10\)/);
+  assert.match(out, /STANDARD CRON LOOPS \(11\)/);
   // All prompts emitted as CronCreate specs when nothing is armed
   for (const loop of STANDARD_LOOPS) {
     assert.ok(out.includes(loop.prompt), `expected CronCreate prompt for ${loop.key}`);
@@ -102,7 +102,7 @@ test('renderLoops reports all-armed cleanly when every loop is armed', () => {
   const allPrompts = STANDARD_LOOPS.map((l) => l.prompt).join(',');
   const armed = parseArmedSet(['--armed', allPrompts], {});
   const out = renderLoops(armed);
-  assert.match(out, /All 10 standard loops armed/);
+  assert.match(out, /All 11 standard loops armed/);
 });
 
 test('buildReport combines responsibilities + loop sections', () => {

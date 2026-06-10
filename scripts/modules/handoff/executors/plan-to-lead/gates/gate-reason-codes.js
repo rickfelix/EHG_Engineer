@@ -11,6 +11,11 @@
 export const GATE_REASON_CODES = Object.freeze({
   SUCCESS_METRICS_EMPTY_ACTUAL: 'SUCCESS_METRICS_EMPTY_ACTUAL',
   SUCCESS_METRICS_PLACEHOLDER_VALUE: 'SUCCESS_METRICS_PLACEHOLDER_VALUE',
+  // SD-LEO-INFRA-GROUND-SUCCESS-METRICS-001: an opt-in evidence binding RESOLVED and the
+  // evidence CONTRADICTS the claimed achievement (bound PR not merged, bound test red,
+  // bound gate score below expect, ...). Distinct from EMPTY/PLACEHOLDER: the author
+  // asserted a machine-checkable claim and the machine check failed.
+  SUCCESS_METRICS_EVIDENCE_CONTRADICTED: 'SUCCESS_METRICS_EVIDENCE_CONTRADICTED',
   HEAL_BELOW_THRESHOLD: 'HEAL_BELOW_THRESHOLD',
   HEAL_EXHAUSTED: 'HEAL_EXHAUSTED',
 });

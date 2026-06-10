@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# 25-Stage Venture Lifecycle Overview
+# Venture Lifecycle Overview
+
+> **Stage-count note (2026-06-10)**: the `venture_stages` table is the single source of truth for the venture lifecycle. Literal stage counts in this document reflect the lifecycle as originally authored (25 stages) — the live lifecycle has since changed (26 stages as of migration 20260329) and may change again. Read `venture_stages` for the current stage set. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+
 
 
 
@@ -54,7 +57,7 @@ tags: [guide, auto-generated]
 
 ## Executive Summary
 
-The 25-Stage Venture Lifecycle is EHG's structured framework for taking a venture idea from initial concept to optimized, scaling product. It consolidates the original 40-stage model into a streamlined 25-stage workflow organized into 6 phases, each with a distinct purpose.
+The staged Venture Lifecycle (25 stages as originally authored; see the venture_stages SSOT for the current set) is EHG's structured framework for taking a venture idea from initial concept to optimized, scaling product. It consolidates the original 40-stage model into a streamlined 25-stage workflow organized into 6 phases, each with a distinct purpose.
 
 **Design Philosophy**:
 - **Solo AI Entrepreneur**: Optimized for AI-assisted venture development
@@ -385,7 +388,7 @@ Stage 1 -> Stage 2 -> Stage 3 -> Stage 4 -> Stage 5
 
 ## Integration with LEO Protocol
 
-The 25-stage lifecycle integrates with the LEO Protocol governance system:
+The venture lifecycle integrates with the LEO Protocol governance system:
 
 1. **SDs for Implementation**: Stages marked `sd_required: true` require Strategic Directives
 2. **Phase Boundary Gates**: Risk re-calibration at phase transitions (see [Risk Re-calibration Protocol](../../04_features/risk-recalibration-protocol.md))
@@ -396,7 +399,7 @@ The 25-stage lifecycle integrates with the LEO Protocol governance system:
 
 ## Evolution from 40-Stage Model
 
-The 25-stage model consolidates the original 40-stage workflow:
+The streamlined lifecycle model (as authored) consolidated the original 40-stage workflow:
 
 | 40-Stage Concern | 25-Stage Approach |
 |------------------|-------------------|

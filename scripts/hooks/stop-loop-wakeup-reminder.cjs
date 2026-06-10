@@ -93,9 +93,13 @@ const REMINDER = [
   'Worker stopping with NO ScheduleWakeup armed — you will go INCOGNITO and strand your claimed SD',
   '(the worktree then gets reaped by the claim-sweep). Run the WIND-DOWN HANDSHAKE before you stop:',
   "  1. If you hold an IN-PROGRESS SD: FINISH it or hand it off — never leave it half-done + unclaimed (orphan).",
-  '  2. NOTIFY the coordinator you are winding down so it can use the grace window:',
+  // SD-FDBK-INFRA-AUTO-PUSH-WIP-001 (FR-3, merged from main 2026-06-10): push WIP FIRST so a
+  // claim re-route can't orphan the commit.
+  '  2. PUSH your WIP on the claim-bound branch FIRST (commit + git push, or `node scripts/prepark-wip.cjs`)',
+  '     — pushing first means a sweep re-route resumes from your branch instead of orphaning the commit.',
+  '  3. NOTIFY the coordinator you are winding down so it can use the grace window:',
   '       /signal feedback "winding down — finished <SD>, anything queued for me? idling ~180s"',
-  '  3. Arm a SHORT grace ScheduleWakeup (~180s); on that tick RE-CHECK your inbox for a coordinator reply',
+  '  4. Arm a SHORT grace ScheduleWakeup (~180s); on that tick RE-CHECK your inbox for a coordinator reply',
   '     BEFORE settling into the ~1200s idle cadence. (Short delay if work is in-flight, ~20min if truly idle.)',
   "  • To legitimately END the loop instead, set claude_sessions.loop_state='exited' for your session.",
   '(This reminder fires once — if you stop again it will let you through.)',

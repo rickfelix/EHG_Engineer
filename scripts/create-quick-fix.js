@@ -26,6 +26,7 @@ import { routeWorkItem } from '../lib/utils/work-item-router.js';
 import { getRepoPaths, ENGINEER_ROOT } from '../lib/repo-paths.js';
 import { preclaimFeedbackRows, resolveFeedbackIds, findFeedbackRefConflicts } from '../lib/feedback/preclaim-feedback-rows.js';
 import { releasePreclaim } from '../lib/feedback/release-preclaim.js';
+import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -674,8 +675,17 @@ Tiered Routing:
   }
 }
 
-// Run
-createQuickFix(options).catch((err) => {
-  console.error('❌ Error:', err.message);
-  process.exit(1);
-});
+// Run — both paths route through the shared graceful teardown, armed only AFTER the work
+// settles (worktree creation / npm provisioning can legitimately run minutes; a pre-armed
+// backstop would kill them mid-work). Success: no process.exit — natural drain, bounded by
+// the helper's unref'd backstop, so this CLI can never again hang to the caller's Bash
+// timeout (SIGTERM/143) after the quick_fixes row was already inserted — the failure that
+// caused the blind-retry duplicate QF-20260610-541/QF-20260610-221. Errors: exitCode=1 via
+// the helper (a direct process.exit after Supabase queries aborts on Windows with
+// UV_HANDLE_CLOSING). SD-FDBK-INFRA-SWEEP-CLI-EXIT-001.
+createQuickFix(options)
+  .then(() => armCliTeardown(0))
+  .catch((err) => {
+    console.error('❌ Error:', err.message);
+    return armCliTeardown(1);
+  });

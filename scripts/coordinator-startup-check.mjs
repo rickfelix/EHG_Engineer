@@ -83,6 +83,12 @@ export const STANDARD_LOOPS = [
   // by default, not correction-by-dispatch.
   { key: 'backlog-rank', label: 'Backlog prioritization pass (dispatch_rank for self-claim ordering)', script: 'coordinator-backlog-rank.mjs', cron: '6,21,36,51 * * * *',
     prompt: 'node scripts/coordinator-backlog-rank.mjs' },
+  // SD-LEO-INFRA-ENABLE-WIRE-AUTOMATIC-001 (FR-2a): restore the worker fleet-retro to a schedule
+  // (it had drifted to manual — last ran ~2.5d ago). Re-arms the existing, idempotent capture/
+  // synthesis script (reuses the feedback/issue_patterns pipeline; dedups on metadata.retro_key).
+  // Cheap read+insert; */30 captures session_coordination FLEET-RETRO signals before they are swept.
+  { key: 'fleet-retro',  label: 'Worker fleet-retro (periodic capture/synthesis)', script: 'coordinator-fleet-retro.mjs', cron: '*/30 * * * *',
+    prompt: 'node scripts/coordinator-fleet-retro.mjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.

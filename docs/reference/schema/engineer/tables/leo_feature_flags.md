@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-09T23:32:49.554Z
+**Generated**: 2026-06-10T19:47:18.729Z
 **Rows**: 17
 **RLS**: Enabled (2 policies)
 
@@ -47,6 +47,7 @@
 - `leo_feature_flags_flag_key_key`: UNIQUE (flag_key)
 
 ### Check Constraints
+- `chk_flag_lifecycle_enabled_consistency`: CHECK ((is_enabled = (lifecycle_state = 'enabled'::feature_flag_lifecycle_state)))
 - `chk_owner_type`: CHECK (((owner_type IS NULL) OR (owner_type = ANY (ARRAY['user'::text, 'team'::text]))))
 
 ## Indexes
@@ -90,7 +91,7 @@
 ### set_updated_at_leo_feature_flags
 
 - **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION trigger_set_updated_at()`
+- **Action**: `EXECUTE FUNCTION trigger_set_updated_at_flags_review_aware()`
 
 ### trg_audit_feature_flag_changes
 

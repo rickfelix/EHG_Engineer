@@ -842,7 +842,7 @@ async function main() {
         // rollup that requires the PARENT to be claimed, but sd-start routes orchestrators to
         // leaves and cannot claim the parent. Use the sanctioned claim helper, run the handoff,
         // then release — instead of an ad-hoc inline is_working_on UPDATE.
-        console.log(`   Orchestrator completion needs the PARENT claimed. Run:`);
+        console.log('   Orchestrator completion needs the PARENT claimed. Run:');
         console.log(`   ${colors.cyan}CLAUDE_SESSION_ID=<sid> node scripts/claim-orchestrator-for-rollup.mjs ${effectiveId}${colors.reset}`);
         console.log(`   ${colors.cyan}node scripts/handoff.js execute PLAN-TO-LEAD ${effectiveId}${colors.reset}`);
         console.log(`   ${colors.cyan}CLAUDE_SESSION_ID=<sid> node scripts/claim-orchestrator-for-rollup.mjs ${effectiveId} --release${colors.reset}`);
@@ -1030,7 +1030,7 @@ async function main() {
         `${colors.yellow}═══════════════════════════════════════════════════════════════════${colors.reset}`
       );
       console.log(`  ${abortMsg}`);
-      console.log(`  Inbox row remains visible (read-only contract); next session will also see it.`);
+      console.log('  Inbox row remains visible (read-only contract); next session will also see it.');
       console.log(
         `${colors.yellow}═══════════════════════════════════════════════════════════════════${colors.reset}\n`
       );
@@ -1599,6 +1599,40 @@ async function main() {
         console.log('   Parent auto-routing is NOT a substitute for explicit child claim.');
       }
     }
+
+    // SD-FDBK-INFRA-AUTO-PUSH-WIP-001 (FR-4): when this claim-bound branch already
+    // carries commits ahead of origin/main (an abandoned park's pushed WIP after a
+    // sweep re-route), surface them and fast-forward to the pushed origin tip
+    // instead of appearing to start blank. Read-only + best-effort: every git probe
+    // is wrapped so a missing origin/main or fetch failure is purely advisory and
+    // NEVER blocks the claim. Mirrors lib/fleet/branch-ahead.cjs parseAheadCount.
+    try {
+      const wt = worktreeInfo.cwd;
+      const branch = worktreeInfo.worktree.branch || '';
+      const gitCount = (range) => {
+        try {
+          const out = execSync(`git rev-list --count ${range}`, { cwd: wt, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000 });
+          const n = parseInt(String(out).trim(), 10);
+          return Number.isFinite(n) && n > 0 ? n : 0;
+        } catch { return 0; }
+      };
+      const aheadOfMain = branch ? gitCount(`origin/main..${branch}`) : 0;
+      if (aheadOfMain > 0) {
+        let remoteAhead = 0, localAhead = 0;
+        try { execSync(`git fetch origin ${branch}`, { cwd: wt, stdio: ['ignore', 'ignore', 'ignore'], timeout: 20000 }); } catch { /* advisory */ }
+        remoteAhead = gitCount(`${branch}..origin/${branch}`);
+        localAhead = gitCount(`origin/${branch}..${branch}`);
+        const { decideResumeFromBranch } = await import('../lib/fleet/sdstart-resume.mjs');
+        const d = decideResumeFromBranch({ aheadOfMain, branch, remoteAhead, localAhead });
+        if (d.notice) console.log(`\n${colors.cyan}${d.notice}${colors.reset}`);
+        if (d.fastForward) {
+          try {
+            execSync(`git merge --ff-only origin/${branch}`, { cwd: wt, stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000 });
+            console.log(`   ${colors.dim}(fast-forwarded to origin/${branch})${colors.reset}`);
+          } catch { /* advisory: leave HEAD as-is */ }
+        }
+      }
+    } catch { /* FR-4 is advisory-only — never block the claim */ }
   }
 
   // 5.45. SD-MAN-INFRA-FLEET-NPM-INSTALL-001 + SD-LEO-INFRA-FLEET-SAFE-NODE-001:

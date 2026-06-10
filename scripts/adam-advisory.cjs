@@ -45,17 +45,57 @@ const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
  * request mode. Conflating them made every fire-and-forget send falsely advertise
  * Reply?=yes in printAdamInbox.
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes }) {
   const payload = {
     kind: PAYLOAD_KINDS.ADAM_ADVISORY,
     sender_callsign: senderCallsign || null,
     repo: repo || null,
   };
-  if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);
+  // FR-1 (SD-LEO-INFRA-ADAM-PREFERENCE-LEARNING-001) — scope-tagged surfacing. ADDITIVE
+  // routing fields (no migration); scope_key reuses the lib/adam/scope-registry.js
+  // vocabulary (harness | platform | venture:<id>). reuse_class classifies applicability
+  // (scope_local | cross_scope); applies_to_scopes lists the scopes a cross-scope advisory
+  // covers. The two-stage actioned_at ACK is unchanged.
+  if (scopeKey) payload.scope_key = scopeKey;
+  if (reuseClass) payload.reuse_class = reuseClass;
+  if (Array.isArray(appliesToScopes) && appliesToScopes.length) payload.applies_to_scopes = appliesToScopes;
+  if (body) {
+    // Prefix the body with [<scope_key>] so a delivered-but-ignored advisory stays
+    // scannable by scope. Prefix BEFORE redact/slice so the tag survives the hard cap.
+    const tagged = scopeKey ? `[${scopeKey}] ${String(body)}` : String(body);
+    payload.body = redact(tagged).slice(0, BODY_HARD_CAP);
+  }
   if (correlationId) payload.correlation_id = correlationId; // replyable (always)
   if (expectsReply) payload.expects_reply = true;            // awaiting a sync reply (request mode only)
   // INVARIANT: no signal_type, no intent_action.
   return payload;
+}
+
+/**
+ * FR-1 — resolve the scope_key for an outgoing advisory from the SENDING repo, REUSING the
+ * lib/adam/scope-registry.js vocabulary (harness | platform | venture:<id>) instead of
+ * re-inventing it. The ESM registry is loaded via a string-LITERAL dynamic import (the
+ * CJS->ESM WIRE_CHECK-safe form). Fail-soft: any resolution error returns {} so the advisory
+ * still sends untagged (backward-compatible). Exported for tests.
+ * @returns {Promise<{scopeKey?:string, reuseClass?:string, appliesToScopes?:string[]}>}
+ */
+async function resolveScopeForSend(supabase, repoPath) {
+  try {
+    const { enumerateScopes } = await import('../lib/adam/scope-registry.js');
+    const scopes = await enumerateScopes(supabase);
+    if (!Array.isArray(scopes) || scopes.length === 0) return {};
+    // Canonicalize (forward-slash + strip any .worktrees/<sd> suffix) so a worker's worktree
+    // cwd matches the registry's main-root repo_path. Mirrors lib/repo-paths toCanonicalRepoPath.
+    const canon = (p) => String(p || '').replace(/\\/g, '/').replace(/\/\.worktrees\/[^/]+/, '').replace(/\/+$/, '');
+    const here = canon(repoPath);
+    // No 'platform' fallback: a repo that matches no enumerated scope stays UNTAGGED (honest)
+    // rather than mislabeled — scope_key only appears when we can actually identify the scope.
+    const mine = scopes.find((s) => canon(s.repo_path) === here) || null;
+    if (!mine) return {};
+    return { scopeKey: mine.scope_key, reuseClass: 'scope_local', appliesToScopes: [mine.scope_key] };
+  } catch {
+    return {};
+  }
 }
 
 async function snapshotSender(supabase, sessionId) {
@@ -140,7 +180,9 @@ async function main() {
   // sets expects_reply (it synchronously awaits).
   const correlationId = crypto.randomUUID();
   const expectsReply = mode === 'request';
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply });
+  // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
+  const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes });
   const subject = `[ADAM_ADVISORY] ${payload.body.slice(0, 80)}`;
   const expiresAt = new Date(Date.now() + (mode === 'request' ? timeoutMs + 5 * 60_000 : 24 * 60 * 60_000)).toISOString();
 
@@ -179,7 +221,7 @@ async function main() {
   }
 }
 
-module.exports = { buildAdvisoryPayload, drainReplies };
+module.exports = { buildAdvisoryPayload, resolveScopeForSend, drainReplies };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

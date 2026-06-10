@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-09T23:32:49.554Z
-**Rows**: 44,288
+**Generated**: 2026-06-10T19:47:18.729Z
+**Rows**: 1
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -47,6 +47,9 @@
 ### Primary Key
 - `management_reviews_pkey`: PRIMARY KEY (id)
 
+### Unique Constraints
+- `management_reviews_review_date_type_key`: UNIQUE (review_date, review_type)
+
 ### Check Constraints
 - `management_reviews_overall_score_check`: CHECK (((overall_score >= 0) AND (overall_score <= 100)))
 - `management_reviews_review_type_check`: CHECK ((review_type = ANY (ARRAY['weekly'::text, 'monthly'::text, 'ad_hoc'::text])))
@@ -56,6 +59,10 @@
 - `management_reviews_pkey`
   ```sql
   CREATE UNIQUE INDEX management_reviews_pkey ON public.management_reviews USING btree (id)
+  ```
+- `management_reviews_review_date_type_key`
+  ```sql
+  CREATE UNIQUE INDEX management_reviews_review_date_type_key ON public.management_reviews USING btree (review_date, review_type)
   ```
 
 ## RLS Policies

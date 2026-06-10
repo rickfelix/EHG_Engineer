@@ -15,13 +15,75 @@ import { isLightweightSDType, detectCodeProduction } from '../../../validation/s
 import { safeTruncate } from '../../../../../../lib/utils/safe-truncate.js';
 import { isAllPlaceholderSmokeSteps } from '../../../smoke-test-defaults.js';
 
+/** Parse a smoke_test_steps value that may be a JSONB array or a TEXT-column JSON string. */
+function parseStepsValue(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; }
+    catch (e) { console.debug('[SmokeTestSpec] JSON parse suppressed:', e?.message || e); return []; }
+  }
+  return [];
+}
+
+/**
+ * Resolve smoke test steps with a metadata fallback.
+ *
+ * SD-FDBK-FIX-FIX-SMOKE-TEST-001: the canonical location is the TOP-LEVEL
+ * strategic_directives_v2.smoke_test_steps column, but workers remediating a
+ * gate failure historically wrote metadata.smoke_test_steps (the failure
+ * message never named the column — ~20 gate fails/7d). Prefer top-level;
+ * fall back to metadata and report the source so the caller can warn + hoist.
+ *
+ * @param {Object} sd - Strategic Directive
+ * @returns {{steps: Array, source: 'top_level'|'metadata'|'none'}}
+ */
+export function resolveSmokeTestSteps(sd) {
+  const topLevel = parseStepsValue(sd.smoke_test_steps);
+  if (topLevel.length > 0) return { steps: topLevel, source: 'top_level' };
+  const fromMetadata = parseStepsValue(sd.metadata?.smoke_test_steps);
+  if (fromMetadata.length > 0) return { steps: fromMetadata, source: 'metadata' };
+  return { steps: [], source: 'none' };
+}
+
+/**
+ * Hoist metadata-stranded steps into the canonical top-level column.
+ * Idempotent and guarded: pre-reads the live row and writes ONLY when the
+ * live top-level column is still empty. Fail-open — a write error never
+ * blocks validation (the steps already validated from the fallback read).
+ */
+async function hoistStepsToTopLevel(supabase, sd, steps) {
+  const filterCol = sd.id ? 'id' : 'sd_key';
+  const filterVal = sd.id || sd.sd_key;
+  if (!filterVal) return { hoisted: false, reason: 'no id/sd_key on SD object' };
+  try {
+    const { data: live, error: readErr } = await supabase
+      .from('strategic_directives_v2')
+      .select('smoke_test_steps')
+      .eq(filterCol, filterVal)
+      .maybeSingle();
+    if (readErr) return { hoisted: false, reason: readErr.message };
+    if (parseStepsValue(live?.smoke_test_steps).length > 0) {
+      return { hoisted: false, reason: 'live top-level column already populated' };
+    }
+    const { error: writeErr } = await supabase
+      .from('strategic_directives_v2')
+      .update({ smoke_test_steps: steps })
+      .eq(filterCol, filterVal);
+    if (writeErr) return { hoisted: false, reason: writeErr.message };
+    return { hoisted: true };
+  } catch (e) {
+    return { hoisted: false, reason: e?.message || String(e) };
+  }
+}
+
 /**
  * Validate smoke test specification
  *
  * @param {Object} sd - Strategic Directive
+ * @param {Object} [supabase] - Optional client enabling the metadata→top-level hoist
  * @returns {Object} Validation result
  */
-export async function validateSmokeTestSpecification(sd) {
+export async function validateSmokeTestSpecification(sd, supabase) {
   const sdType = (sd.sd_type || 'feature').toLowerCase();
 
   // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
@@ -34,16 +96,16 @@ export async function validateSmokeTestSpecification(sd) {
       console.log(`   ℹ️  Reason: ${detection.reason}`);
 
       if (detection.producesCode) {
-        console.log(`   ⚠️  Code-producing infrastructure SD — smoke test specification REQUIRED`);
+        console.log('   ⚠️  Code-producing infrastructure SD — smoke test specification REQUIRED');
         // Fall through to the normal validation below (do NOT return early)
       } else {
-        console.log(`   ℹ️  Non-code infrastructure SD — smoke test specification not required`);
+        console.log('   ℹ️  Non-code infrastructure SD — smoke test specification not required');
         return {
           pass: true,
           score: 100,
           max_score: 100,
           issues: [],
-          warnings: [`Smoke test skipped for non-code infrastructure SD`],
+          warnings: ['Smoke test skipped for non-code infrastructure SD'],
           details: { skipped: true, reason: 'non-code infrastructure SD exempt', codeDetection: detection }
         };
       }
@@ -62,22 +124,38 @@ export async function validateSmokeTestSpecification(sd) {
 
   console.log(`   SD Type: ${sdType} - smoke test specification REQUIRED`);
 
-  // Check if smoke_test_steps exists and is valid
-  // Handle TEXT column returning JSON string (not pre-parsed JSONB)
-  let smokeTestSteps = sd.smoke_test_steps || [];
-  if (typeof smokeTestSteps === 'string') {
-    try { smokeTestSteps = JSON.parse(smokeTestSteps); } catch (e) { console.debug('[SmokeTestSpec] JSON parse suppressed:', e?.message || e); smokeTestSteps = []; }
-  }
-  const isArray = Array.isArray(smokeTestSteps);
-  const stepCount = isArray ? smokeTestSteps.length : 0;
+  // Check if smoke_test_steps exists and is valid.
+  // SD-FDBK-FIX-FIX-SMOKE-TEST-001: resolve with metadata fallback — the gate
+  // reads the TOP-LEVEL column, but steps stranded in metadata.smoke_test_steps
+  // are recovered (warn + hoist) instead of failing generically.
+  const { steps: smokeTestSteps, source: stepsSource } = resolveSmokeTestSteps(sd);
+  const stepCount = smokeTestSteps.length;
 
-  console.log(`   Smoke test steps: ${stepCount} defined`);
+  console.log(`   Smoke test steps: ${stepCount} defined${stepsSource === 'metadata' ? ' (in metadata.smoke_test_steps — see warning)' : ''}`);
+
+  const sourceWarnings = [];
+  if (stepsSource === 'metadata') {
+    console.log('   ⚠️  Steps found in metadata.smoke_test_steps — the canonical location is the TOP-LEVEL strategic_directives_v2.smoke_test_steps column.');
+    if (supabase) {
+      const hoist = await hoistStepsToTopLevel(supabase, sd, smokeTestSteps);
+      if (hoist.hoisted) {
+        console.log('   ✅ Auto-hoisted steps into the top-level strategic_directives_v2.smoke_test_steps column.');
+        sourceWarnings.push('smoke_test_steps were auto-hoisted from metadata.smoke_test_steps into the canonical top-level column');
+      } else {
+        console.log(`   ⚠️  Auto-hoist skipped (${hoist.reason}) — move them manually to the top-level column.`);
+        sourceWarnings.push(`smoke_test_steps read from metadata.smoke_test_steps (hoist skipped: ${hoist.reason}) — write future steps to the top-level strategic_directives_v2.smoke_test_steps column`);
+      }
+    } else {
+      sourceWarnings.push('smoke_test_steps read from metadata.smoke_test_steps — move them to the top-level strategic_directives_v2.smoke_test_steps column (no DB client available for auto-hoist)');
+    }
+  }
 
   if (stepCount === 0) {
     console.log('   ❌ BLOCKING: No smoke test steps defined');
     console.log('\n   LEAD Question 9: "Describe the 30-second demo that proves this SD delivered value."');
     console.log('   If you cannot answer this question, the SD is too vague.\n');
-    console.log('   Required: Add smoke_test_steps array with 3-5 user-observable steps');
+    console.log('   Required: Add smoke_test_steps (3-5 user-observable steps) to the TOP-LEVEL');
+    console.log('   strategic_directives_v2.smoke_test_steps column — NOT metadata.smoke_test_steps.');
     console.log('   Example:');
     console.log('   [');
     console.log('     { "step_number": 1, "instruction": "Navigate to /dashboard", "expected_outcome": "Dashboard loads with venture list" },');
@@ -90,17 +168,17 @@ export async function validateSmokeTestSpecification(sd) {
       score: 0,
       max_score: 100,
       issues: [
-        'BLOCKING: Feature SD requires smoke_test_steps for LEAD approval',
+        'BLOCKING: Feature SD requires smoke_test_steps for LEAD approval — write them to the top-level strategic_directives_v2.smoke_test_steps column (NOT metadata.smoke_test_steps)',
         'Answer LEAD Q9: "Describe the 30-second demo that proves this SD delivered value"'
       ],
       warnings: [],
-      remediation: 'Add smoke_test_steps JSONB array with 3-5 user-observable verification steps'
+      remediation: 'Add a smoke_test_steps JSONB array with 3-5 user-observable verification steps to the top-level strategic_directives_v2.smoke_test_steps column (NOT metadata.smoke_test_steps)'
     };
   }
 
   // Validate step quality
   const issues = [];
-  const warnings = [];
+  const warnings = [...sourceWarnings];
 
   if (stepCount < 3) {
     warnings.push(`Only ${stepCount} smoke test steps - recommend 3-5 for comprehensive verification`);
@@ -160,6 +238,7 @@ export async function validateSmokeTestSpecification(sd) {
     details: {
       stepCount,
       validSteps,
+      stepsSource,
       aiValidation: aiValidation?.isConcreteEnough ?? null
     }
   };
@@ -168,17 +247,19 @@ export async function validateSmokeTestSpecification(sd) {
 /**
  * Create the smoke test specification gate
  *
+ * @param {Object} [supabase] - Optional client enabling the metadata→top-level
+ *   auto-hoist (SD-FDBK-FIX-FIX-SMOKE-TEST-001). Omitted => pure validation.
  * @returns {Object} Gate configuration
  */
-export function createSmokeTestSpecificationGate() {
+export function createSmokeTestSpecificationGate(supabase) {
   return {
     name: 'SMOKE_TEST_SPECIFICATION',
     validator: async (ctx) => {
       console.log('\n👤 GATE: Smoke Test Specification (LEO v4.4.0)');
       console.log('-'.repeat(50));
-      return validateSmokeTestSpecification(ctx.sd);
+      return validateSmokeTestSpecification(ctx.sd, supabase);
     },
     required: true,
-    remediation: 'Add smoke_test_steps array with 3-5 user-observable verification steps. Example: [{step_number: 1, instruction: "Navigate to /dashboard", expected_outcome: "Dashboard loads with venture list visible"}]'
+    remediation: 'Add a smoke_test_steps array with 3-5 user-observable verification steps to the TOP-LEVEL strategic_directives_v2.smoke_test_steps column (NOT metadata.smoke_test_steps). Example: [{step_number: 1, instruction: "Navigate to /dashboard", expected_outcome: "Dashboard loads with venture list visible"}]'
   };
 }

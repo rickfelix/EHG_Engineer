@@ -1,8 +1,8 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-06-09T21:00:36.804Z -->
-<!-- git_commit: 225e94e2 -->
-<!-- db_snapshot_hash: 28e279c086f82f73 -->
-<!-- file_content_hash: pending -->
+<!-- generated_at: 2026-06-10T18:53:04.116Z -->
+<!-- git_commit: afd81f04 -->
+<!-- db_snapshot_hash: 1c0d92b1433aad31 -->
+<!-- file_content_hash: 3da908f1f2907dbc -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 

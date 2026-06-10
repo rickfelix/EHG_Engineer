@@ -1,8 +1,8 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-05-27T20:44:53.935Z -->
-<!-- git_commit: 9c8d531d -->
-<!-- db_snapshot_hash: 04691d7eb5ae8136 -->
-<!-- file_content_hash: pending -->
+<!-- generated_at: 2026-06-10T18:53:04.116Z -->
+<!-- git_commit: afd81f04 -->
+<!-- db_snapshot_hash: 1c0d92b1433aad31 -->
+<!-- file_content_hash: ae144aab1c432a75 -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
 
@@ -159,5 +159,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-05-27 4:44:53 PM*
+*DIGEST generated: 2026-06-10 2:53:04 PM*
 *Protocol: 4.4.1*

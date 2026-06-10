@@ -261,7 +261,7 @@ async function autoFixDeficiencies(supabase, sd) {
  * LEAD-TO-PLAN: Check SD JSONB field completeness
  * Catches: PAT-HF-LEADTOPLAN (SD does not meet completeness standards)
  */
-function checkLeadToPlanPrereqs(sd) {
+export function checkLeadToPlanPrereqs(sd) {
   const issues = [];
   const sdType = sd.sd_type || 'default';
   const threshold = SD_TYPE_THRESHOLDS[sdType] || DEFAULT_THRESHOLD;
@@ -324,13 +324,37 @@ function checkLeadToPlanPrereqs(sd) {
       remediation: 'No action required — informational entry only.'
     });
   } else {
-    const smokeSteps = sd.smoke_test_steps;
+    // SD-FDBK-FIX-FIX-SMOKE-TEST-001: tolerate a TEXT column returning a JSON string.
+    let smokeSteps = sd.smoke_test_steps;
+    if (typeof smokeSteps === 'string') {
+      try { smokeSteps = JSON.parse(smokeSteps); } catch { smokeSteps = null; }
+    }
     if (!smokeSteps || !Array.isArray(smokeSteps) || smokeSteps.length === 0) {
-      issues.push({
-        code: 'SMOKE_TEST_MISSING',
-        message: 'No smoke_test_steps defined',
-        remediation: 'Add smoke_test_steps: [{instruction: "...", expected_outcome: "..."}]'
-      });
+      // SD-FDBK-FIX-FIX-SMOKE-TEST-001: distinguish stranded-in-metadata from
+      // truly-missing — the SMOKE_TEST_SPECIFICATION gate reads the TOP-LEVEL
+      // strategic_directives_v2.smoke_test_steps column, but workers remediating
+      // a failure historically wrote metadata.smoke_test_steps.
+      let metaSteps = sd.metadata?.smoke_test_steps;
+      if (typeof metaSteps === 'string') {
+        try { metaSteps = JSON.parse(metaSteps); } catch { metaSteps = null; }
+      }
+      if (Array.isArray(metaSteps) && metaSteps.length > 0) {
+        const sdKey = sd.sd_key || sd.id || 'SD-XXX-001';
+        issues.push({
+          code: 'SMOKE_TEST_IN_METADATA',
+          message: `Found ${metaSteps.length} smoke_test_steps in metadata.smoke_test_steps — the SMOKE_TEST_SPECIFICATION gate reads the TOP-LEVEL strategic_directives_v2.smoke_test_steps column`,
+          remediation: [
+            'Hoist the steps into the top-level column (the gate also auto-hoists at execute time):',
+            `  node -e "require('dotenv').config(); const {createClient}=require('@supabase/supabase-js'); const s=createClient(process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY); s.from('strategic_directives_v2').select('metadata').eq('sd_key','${sdKey}').single().then(({data})=>s.from('strategic_directives_v2').update({smoke_test_steps:data.metadata.smoke_test_steps}).eq('sd_key','${sdKey}')).then(r=>console.log(r.error||'Hoisted'));"`
+          ].join('\n')
+        });
+      } else {
+        issues.push({
+          code: 'SMOKE_TEST_MISSING',
+          message: 'No smoke_test_steps defined',
+          remediation: 'Add smoke_test_steps: [{instruction: "...", expected_outcome: "..."}] to the TOP-LEVEL strategic_directives_v2.smoke_test_steps column (NOT metadata.smoke_test_steps)'
+        });
+      }
     } else {
       const canonicalized = smokeSteps.map(canonicalizeSmokeStep);
       const validSteps = canonicalized.filter(s => s.instruction && s.expected_outcome);

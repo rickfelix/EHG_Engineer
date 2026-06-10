@@ -118,12 +118,12 @@ No specific exit gates defined.
 
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
-- `venture_stage_work` - Stage entry/completion tracking
+- `venture_stage_work` - Stage entry/completion tracking
 
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L559) - Stage 12 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-3-the-identity) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-3-the-identity) - Phase context
 - [Stage 11: Go-to-Market Strategy](stage-11-go-to-market-strategy.md) - Previous stage
 - [Stage 13: Tech Stack Interrogation](stage-13-tech-stack-interrogation.md) - Next stage
 

@@ -111,20 +111,32 @@ export async function runShipReviewFindingsPopulator(sd, supabase) {
 }
 
 /**
- * Best-effort audit_log write. Swallows its own errors so the hook
- * cannot fail by virtue of logging the failure.
+ * Best-effort audit_log write — fire-and-forget but FAIL-LOUD on error.
+ * SD-LEO-FIX-FIX-PHANTOM-COLUMN-001: the original payload wrote phantom columns
+ * (action/sd_id/sd_key/details do not exist on audit_log) so PostgREST 42703'd every
+ * call and the swallow hid it — this LEAD-FINAL audit trail never persisted a row.
+ * Remapped to the real shape (QF-20260509-AUDIT-LOG-SHAPE canon: event_type/entity_type/
+ * entity_id/severity/metadata), original keys preserved inside metadata.
  */
 async function recordWarning(supabase, sd, reasonCode, message) {
+  const payload = {
+    event_type: 'ship_review_findings_populator_failed',
+    entity_type: 'strategic_directive',
+    entity_id: sd.sd_key || sd.id || null,
+    severity: 'warning',
+    metadata: { sd_id: sd.id || null, sd_key: sd.sd_key || null, reason_code: reasonCode, message },
+  };
   try {
-    await supabase.from('audit_log').insert({
-      action: 'ship_review_findings_populator_failed',
-      severity: 'warning',
-      sd_id: sd.id || null,
-      sd_key: sd.sd_key || null,
-      details: { reason_code: reasonCode, message },
-    });
-  } catch {
-    /* swallow */
+    const { error } = await supabase.from('audit_log').insert(payload);
+    if (error) {
+      const { logAuditWriteFailure } = await import('../../../../../../lib/audit-write-guard.js');
+      logAuditWriteFailure('ship-review-findings-populator', error, payload);
+    }
+  } catch (err) {
+    try {
+      const { logAuditWriteFailure } = await import('../../../../../../lib/audit-write-guard.js');
+      logAuditWriteFailure('ship-review-findings-populator', err, payload);
+    } catch { /* guard must never break the hook */ }
   }
 }
 

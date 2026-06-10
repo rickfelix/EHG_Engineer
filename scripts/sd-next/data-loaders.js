@@ -223,13 +223,30 @@ export async function loadOKRScorecard() {
   let scorecard = [];
 
   try {
+    // Canonical chairman-approved eva_vision_documents L1
+    // (SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-E: repointed off dormant strategic_vision).
+    // display.js renders vision.code + vision.statement.substring — map vision_key
+    // -> code and the one-line takeaway section -> statement.
     const { data: visionData } = await supabase
-      .from('strategic_vision')
-      .select('*')
-      .eq('is_active', true)
+      .from('eva_vision_documents')
+      .select('id, vision_key, status, statement:sections->>part_xii_the_final_oneline_takeaway')
+      .eq('vision_key', 'VISION-EHG-L1-001')
+      .eq('status', 'active')
+      .eq('chairman_approved', true)
       .single();
 
-    vision = visionData;
+    vision = visionData
+      ? {
+          id: visionData.id,
+          status: visionData.status,
+          code: visionData.vision_key,
+          statement: String(visionData.statement || '')
+            .replace(/\*\*/g, '')
+            .replace(/^[>\s]+/, '')
+            .replace(/\n+\s*---\s*$/, '')
+            .trim()
+        }
+      : null;
 
     const { data: scorecardData, error } = await supabase
       .from('v_okr_scorecard')

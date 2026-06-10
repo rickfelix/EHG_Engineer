@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-const { buildAdvisoryPayload, drainReplies } = require('./adam-advisory.cjs');
+const { buildAdvisoryPayload, drainReplies, resolveScopeForSend } = require('./adam-advisory.cjs');
 const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
 
 describe('FR-2: PAYLOAD_KINDS registry', () => {
@@ -51,5 +51,43 @@ describe('buildAdvisoryPayload', () => {
 describe('FR-4: durable reply reader export', () => {
   it('exports drainReplies for the persistent coordinator_reply reader', () => {
     expect(typeof drainReplies).toBe('function');
+  });
+});
+
+// SD-LEO-INFRA-ADAM-PREFERENCE-LEARNING-001 FR-1 — scope-tagged surfacing.
+describe('FR-1: scope-tagged advisory payload', () => {
+  it('emits scope_key / reuse_class / applies_to_scopes when provided', () => {
+    const p = buildAdvisoryPayload({ body: 'stale heartbeat', senderCallsign: 'Adam', repo: '/r', scopeKey: 'harness', reuseClass: 'scope_local', appliesToScopes: ['harness'] });
+    expect(p.scope_key).toBe('harness');
+    expect(p.reuse_class).toBe('scope_local');
+    expect(p.applies_to_scopes).toEqual(['harness']);
+  });
+
+  it('prefixes the body with [<scope_key>] when a scope is present', () => {
+    const p = buildAdvisoryPayload({ body: 'venture X stalled at S17', senderCallsign: 'Adam', repo: '/r', scopeKey: 'venture:abc-123' });
+    expect(p.body).toBe('[venture:abc-123] venture X stalled at S17');
+  });
+
+  it('is fully backward-compatible: NO scope fields and NO body prefix when scope is absent', () => {
+    const p = buildAdvisoryPayload({ body: 'plain advisory', senderCallsign: 'Adam', repo: '/r' });
+    expect(p.scope_key).toBeUndefined();
+    expect(p.reuse_class).toBeUndefined();
+    expect(p.applies_to_scopes).toBeUndefined();
+    expect(p.body).toBe('plain advisory'); // unchanged
+  });
+
+  it('omits applies_to_scopes when given an empty array (additive, no empty keys)', () => {
+    const p = buildAdvisoryPayload({ body: 'x', scopeKey: 'platform', appliesToScopes: [] });
+    expect(p.scope_key).toBe('platform');
+    expect(p.applies_to_scopes).toBeUndefined();
+  });
+
+  it('exports resolveScopeForSend and it is fail-soft (returns {} when scope enumeration throws)', async () => {
+    expect(typeof resolveScopeForSend).toBe('function');
+    // A supabase stub whose query path throws — resolveScopeForSend must swallow it and
+    // return {} so the advisory still sends untagged (never blocks a send on scope failure).
+    const throwingSupabase = { from() { throw new Error('db down'); } };
+    const r = await resolveScopeForSend(throwingSupabase, '/some/repo');
+    expect(r).toEqual({});
   });
 });

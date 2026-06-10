@@ -64,4 +64,18 @@ describe('classifyInboxMessage', () => {
     const v = classifyInboxMessage({ message_type: 'PRIORITY_CHANGE', payload: {}, sender_type: 'orchestrator' }, { isIdle: false });
     expect(v).toEqual({ skip: false, markRead: true, markAck: true });
   });
+
+  // QF-20260610-623: a NON-INFO coordinator->Adam directive (COACHING is a live type) must NOT be
+  // auto-drained by the poll. Before the fix the Adam carve-out was isInfo-gated, so a COACHING
+  // directive fell through to the default drain (markRead/markAck:true) and was acked before Adam
+  // read it. After the fix it stays UNREAD (read_at NULL) like the INFO case.
+  it('QF-623: a COACHING (non-INFO) coordinator->Adam directive stays UNREAD for Adam', () => {
+    const coaching = { message_type: 'COACHING', payload: { kind: 'comms_check' }, sender_type: 'coordinator' };
+    expect(classifyInboxMessage(coaching, { amAdam: true })).toEqual({ skip: false, markRead: false, markAck: false });
+    // orchestrator sender, same protection
+    const orchDirective = { message_type: 'COACHING', payload: {}, sender_type: 'orchestrator' };
+    expect(classifyInboxMessage(orchDirective, { amAdam: true })).toEqual({ skip: false, markRead: false, markAck: false });
+    // a NON-Adam session still drains the same COACHING row on display (byte-identical legacy behavior)
+    expect(classifyInboxMessage(coaching, { amAdam: false })).toEqual({ skip: false, markRead: true, markAck: true });
+  });
 });

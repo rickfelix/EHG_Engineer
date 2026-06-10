@@ -130,7 +130,7 @@ None (previous stage completion is sufficient)
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L119) - Stage 1 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-1-the-truth) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-1-the-truth) - Phase context
 
 - [Stage 2: AI Multi-Model Critique](stage-02-ai-multi-model-critique.md) - Next stage
 

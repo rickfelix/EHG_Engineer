@@ -10,6 +10,8 @@ Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001]
 
 # CLI Venture Lifecycle Documentation Hub
 
+> **Stage-count note (2026-06-10)**: the `venture_stages` table is the single source of truth for the venture lifecycle. Literal stage counts in this document reflect the lifecycle as originally authored (25 stages) — the live lifecycle has since changed (26 stages as of migration 20260329) and may change again. Read `venture_stages` for the current stage set. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+
 Complete documentation for the **Eva Orchestrator** and the **25-Stage Venture Lifecycle** framework. This system implements a CLI-driven autonomous orchestrator that takes ventures from initial idea through to optimized, scaling product.
 
 **Implementation Status**: All 28 Strategic Directives completed (2026-02-07)
@@ -41,7 +43,7 @@ Complete documentation for the **Eva Orchestrator** and the **25-Stage Venture L
 
 | Document | Stages | Phase |
 |----------|--------|-------|
-| [stages/README.md](./stages/README.md) | Index | Visual map of all 25 stages |
+| [stages/README.md](./stages/README.md) | Index | Visual map of the lifecycle stages (25 as authored; see venture_stages SSOT) |
 | [stages/phase-01-the-truth.md](./stages/phase-01-the-truth.md) | 1-5 | Idea validation (2 kill gates) |
 | [stages/phase-02-the-engine.md](./stages/phase-02-the-engine.md) | 6-9 | Business model foundation |
 | [stages/phase-03-the-identity.md](./stages/phase-03-the-identity.md) | 10-12 | Brand and GTM strategy |
@@ -156,7 +158,7 @@ Level 0: SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001 (Root)
 
 | Document | Location |
 |----------|----------|
-| 25-Stage Overview | `docs/workflow/25-stage-venture-lifecycle-overview.md` |
+| 25-Stage Overview | `docs/workflow/venture-lifecycle-overview.md` |
 | Design Analysis | `eva-orchestrator-design-analysis.md` |
 | Database Analysis | `docs/analysis/SD-LEO-FEAT-EVA-ORCHESTRATOR-001-DATABASE-ANALYSIS.md` |
 | SD Hierarchy Migration | `database/migrations/20260207_cli_venture_lifecycle_sd_hierarchy_SUMMARY.md` |

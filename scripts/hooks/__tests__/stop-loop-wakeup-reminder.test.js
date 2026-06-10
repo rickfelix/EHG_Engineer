@@ -9,7 +9,20 @@ import path from 'node:path';
 
 const require = createRequire(import.meta.url);
 const HOOK_PATH = path.resolve(__dirname, '../stop-loop-wakeup-reminder.cjs');
-const { shouldRemind, isFlagEnabled } = require(HOOK_PATH); // require.main guard → main() does NOT run
+const { shouldRemind, isFlagEnabled, REMINDER } = require(HOOK_PATH); // require.main guard → main() does NOT run
+
+// SD-FDBK-INFRA-AUTO-PUSH-WIP-001 (FR-5c): static source-pin — the strand warning
+// must offer the COMMIT-PRESERVING remediation (push WIP first), not just wakeup-arming.
+describe('stop-loop-wakeup-reminder — REMINDER text (FR-3 source-pin)', () => {
+  it('instructs pushing the WIP commit before arming a ScheduleWakeup', () => {
+    expect(typeof REMINDER).toBe('string');
+    expect(REMINDER).toMatch(/push your WIP commit/i);
+    // push-WIP must precede the REMEDIATION wakeup instruction ("THEN arm a ScheduleWakeup").
+    // (the opening warning line also mentions ScheduleWakeup, so anchor on the remediation phrase.)
+    expect(REMINDER.indexOf('push your WIP commit')).toBeLessThan(REMINDER.indexOf('THEN arm a ScheduleWakeup'));
+    expect(REMINDER).toMatch(/prepark-wip\.cjs/);
+  });
+});
 
 describe('stop-loop-wakeup-reminder — shouldRemind (pure)', () => {
   it('TS-1: returns false when the flag is disabled, even for an active /loop worker', () => {

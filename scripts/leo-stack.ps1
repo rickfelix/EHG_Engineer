@@ -321,8 +321,24 @@ function Stop-Workers {
         Stop-Server -PidFile $pidFile -Name $worker.display_name
     }
 
+    # SD-LEO-INFRA-REVIVE-EVA-HOST-AND-ARM-001 FR-5: when the EVA scheduler is hosted as a
+    # registered Windows scheduled task ('EHG EVA Scheduler Watcher'), the watcher cron owns the
+    # daemon's lifecycle — a leo-stack stop/restart must NOT reap it as an orphan (doing so kills
+    # the deliberately-hosted daemon every restart; the watcher would revive it within 5 min, but
+    # that is churn, not correctness). On hosts WITHOUT the task, a stray eva-master-scheduler is a
+    # genuine session orphan and is still swept. schtasks /Query exits 0 iff the task exists.
+    $evaHosted = $false
+    try {
+        & schtasks /Query /TN 'EHG EVA Scheduler Watcher' 2>&1 | Out-Null
+        $evaHosted = ($LASTEXITCODE -eq 0)
+    } catch { $evaHosted = $false }
+    if ($evaHosted) {
+        Write-Log "INFO" "[WORKERS] EVA scheduler is task-hosted - excluding eva-master-scheduler from orphan sweep (watcher owns it)" "Gray"
+    }
+
     # Kill orphan workers not tracked by PID files (zombie processes from previous sessions)
     $orphanPatterns = @('start-stage-worker', 'stage-zero-queue-processor', 'stage-execution-worker', 'eva-master-scheduler', 'subagent-worker')
+    if ($evaHosted) { $orphanPatterns = $orphanPatterns | Where-Object { $_ -ne 'eva-master-scheduler' } }
     $orphanCount = 0
     foreach ($pattern in $orphanPatterns) {
         $orphans = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
@@ -338,9 +354,10 @@ function Stop-Workers {
         Write-Log "WARN" "[WORKERS] Killed $orphanCount orphan worker process(es) from previous sessions" "Yellow"
     }
 
-    # Verification: confirm no stale worker processes remain
+    # Verification: confirm no stale worker processes remain (skip eva-master-scheduler when task-hosted)
+    $staleRegex = if ($evaHosted) { 'stage-zero|stage-execution-worker|start-stage-worker|subagent-worker' } else { 'stage-zero|stage-execution-worker|start-stage-worker|eva-master-scheduler|subagent-worker' }
     $staleWorkers = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandLine -match 'stage-zero|stage-execution-worker|start-stage-worker|eva-master-scheduler|subagent-worker' }
+        Where-Object { $_.CommandLine -match $staleRegex }
     if ($staleWorkers) {
         Write-Log "WARN" "[WORKERS] $($staleWorkers.Count) stale worker(s) still running - force killing..." "Yellow"
         foreach ($stale in $staleWorkers) {

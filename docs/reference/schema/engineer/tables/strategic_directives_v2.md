@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-09T23:32:49.554Z
-**Rows**: 3,651
+**Generated**: 2026-06-10T19:47:18.729Z
+**Rows**: 3,732
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (100 total)
+## Columns (101 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -122,6 +122,7 @@ Use the id column instead - it is the canonical identifier. |
 | wiring_validated | `boolean` | YES | - | Derived boolean maintained by trg_zz_maintain_wiring_validated on leo_wiring_validations insert/update. true = all required checks passed-or-waived; false = at least one required check failed unwaived; null = required checks missing. Gate logic reads this column, not the underlying validation rows. |
 | scope_slice | `jsonb` | YES | - | Optional slice of parent orchestrator scope this child claims. Shape: {stages?: number[], deliverable_globs?: string[]}. When set, scope-completion-gate filters parent arch plan deliverables through this slice before scoring. When NULL, gate scores the full parent deliverable set (pre-SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A behavior). |
 | adrs_consulted | `ARRAY` | **NO** | `ARRAY[]::text[]` | - |
+| initiative_id | `uuid` | YES | - | Initiative grain: the OKR objective this (orchestrator) SD advances. Nullable; forward-looking adoption. SD-LEO-INFRA-INITIATIVE-BACKBONE-CANONICAL-001. |
 
 ## Constraints
 
@@ -129,6 +130,7 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `strategic_directives_v2_initiative_id_fkey`: initiative_id → objectives(id)
 - `strategic_directives_v2_parent_sd_id_fkey`: parent_sd_id → strategic_directives_v2(id)
 - `strategic_directives_v2_target_release_id_fkey`: target_release_id → releases(id)
 - `strategic_directives_v2_venture_id_fkey`: venture_id → ventures(id)
