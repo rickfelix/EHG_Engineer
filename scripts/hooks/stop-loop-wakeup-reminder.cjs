@@ -79,7 +79,11 @@ const REMINDER = [
   '/loop worker stopping with NO ScheduleWakeup armed (loop_state=active) — you will go INCOGNITO.',
   'An autonomous /loop only re-fires on a ScheduleWakeup tick; ending the turn now strands your claimed SD',
   'and your worktree gets reaped by the claim-sweep. Before you stop:',
-  '  • arm a ScheduleWakeup (short delay if work is in-flight, ~20min if idle), OR',
+  // SD-FDBK-INFRA-AUTO-PUSH-WIP-001 (FR-3): push WIP FIRST so a claim re-route can't orphan the commit.
+  '  • push your WIP commit on the claim-bound branch FIRST (commit + git push, or run',
+  '    `node scripts/prepark-wip.cjs`), THEN arm a ScheduleWakeup (short delay if work is',
+  '    in-flight, ~20min if idle) — pushing first means a sweep re-route resumes from your branch',
+  '    instead of orphaning the partial commit, OR',
   "  • if you intend to END the loop, set claude_sessions.loop_state='exited' for your session.",
   '(This reminder fires once — if you stop again it will let you through.)',
 ].join('\n');
@@ -147,4 +151,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, isFlagEnabled };
+module.exports = { shouldRemind, isFlagEnabled, REMINDER };
