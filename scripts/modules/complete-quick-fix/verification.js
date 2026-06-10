@@ -5,6 +5,7 @@
 
 import path from 'path';
 import { execSync } from 'child_process';
+import { EXTERNAL_STEP_TIMEOUT_MS } from './constants.js';
 
 /**
  * Hard cap on QF size. Aligned with CLAUDE.md routing: Tier 1 ≤30,
@@ -231,11 +232,23 @@ export function validatePR(prUrl, qfId, qfTitle) {
 }
 
 /**
- * Verify test coverage for changed files
+ * Verify test coverage for changed files.
+ *
+ * SD-FDBK-INFRA-RCA-FIRST-HARD-001 (FR-3): this step is ADVISORY (console-only,
+ * non-gating) but historically ran UNCONDITIONALLY with an unbounded per-file
+ * `execSync('test -f')` loop. When `filesChanged` balloons (e.g. running from main
+ * after a worktree removal with a stale origin/main), the loop is filesChanged × 4
+ * patterns synchronous spawns and rides to the external 2m/5m SIGTERM (EXIT 124).
+ * Callers now pass `opts.skip` (true when --skip-coverage / --skip-tests /
+ * --force-complete / a docs-only diff / an empty diff) to short-circuit it, and
+ * each spawn is bounded by EXTERNAL_STEP_TIMEOUT_MS (FR-2) as defense-in-depth.
+ *
  * @param {Array} filesChanged - List of changed files
+ * @param {object} [opts] - { skip?: boolean } — when skip is true, return the
+ *   neutral coverage shape without entering the spawn loop.
  * @returns {object} Test coverage info
  */
-export function verifyTestCoverage(filesChanged) {
+export function verifyTestCoverage(filesChanged, opts = {}) {
   console.log('📋 Test Coverage Verification\n');
 
   const testCoverage = {
@@ -243,6 +256,17 @@ export function verifyTestCoverage(filesChanged) {
     e2eTestsExist: false,
     filesWithTests: []
   };
+
+  // FR-3: skip the spawn loop entirely when gated by the caller, or when there is
+  // nothing to check. Coverage is advisory, so skipping changes no gate verdict.
+  if (opts.skip || !Array.isArray(filesChanged) || filesChanged.length === 0) {
+    const reason = opts.skip
+      ? 'skipped (gated by --skip-coverage / --skip-tests / --force-complete / docs-only / empty diff)'
+      : 'skipped (no changed files to check)';
+    console.log(`   ⏭️  Test coverage check ${reason}.\n`);
+    testCoverage.skipped = true;
+    return testCoverage;
+  }
 
   try {
     for (const file of filesChanged) {
@@ -263,11 +287,15 @@ export function verifyTestCoverage(filesChanged) {
 
       for (const testPattern of testPatterns) {
         try {
-          execSync(`test -f "${testPattern}"`, { stdio: 'pipe' });
+          // FR-2: bound the probe so a wedged spawn cannot ride to the external
+          // SIGTERM. `test -f` is a fast POSIX/Git-Bash builtin; the timeout is a
+          // safety net against the loop's aggregate cost, not the per-call latency.
+          execSync(`test -f "${testPattern}"`, { stdio: 'pipe', timeout: EXTERNAL_STEP_TIMEOUT_MS });
           testCoverage.filesWithTests.push(file);
           break;
         } catch {
-          // Test file doesn't exist
+          // Test file doesn't exist (or the bounded probe timed out — treated as
+          // "no coverage found", which is advisory only and never blocks completion).
         }
       }
     }
