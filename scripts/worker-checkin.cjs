@@ -30,7 +30,7 @@ const ws = require('../lib/fleet/worker-status.cjs');
 const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cjs');
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
-const { draftDepsSatisfied, baselinedCandidateEligible } = require('../lib/fleet/claim-eligibility.cjs');
+const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: reuse the coordinator cron's pool + picker + ghost guard so
 // check-in-time self-assign and the 5-min cron allocate identities identically (see assignFleetIdentityAtCheckin).
 const { NATO, COLORS, nextAvailable, isTestSessionId } = require('./assign-fleet-identities.cjs');
@@ -232,7 +232,9 @@ async function selfClaimDraftSd(sb, sessionId, base) {
   try {
     const { data: drafts } = await sb
       .from('strategic_directives_v2')
-      .select('sd_key, status, sd_type, priority, created_at, dependencies')
+      // metadata feeds the shared classifyDispatchIneligibility gate (the requires_human_action axis);
+      // sd_type already selected for the existing orchestrator exclusion.
+      .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata')
       .in('status', ['draft', 'active'])
       .is('claiming_session_id', null)
       .neq('sd_type', 'orchestrator')
@@ -243,6 +245,11 @@ async function selfClaimDraftSd(sb, sessionId, base) {
       (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9)
     );
     for (const d of ordered) {
+      // SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001: same shared classifier the baselined candidate-view
+      // tier (step 6) and the coordinator/sweep PUSH path use — the un-baselined draft tier must not
+      // self-claim a test-fixture phantom (SD-DEMO-*/SD-TEST-*) or a requires_human_action SD. (The
+      // orchestrator axis is also covered here, redundant with the .neq query filter above — harmless.)
+      if (classifyDispatchIneligibility(d) !== null) continue;
       if (!(await draftDepsSatisfied(sb, d))) continue; // skip dependency-blocked
       if (await isSdInFlight(sb, d.sd_key, sessionId)) continue; // dedup: skip SDs already started or live-foreign-held
       const claimed = await tryClaim(sb, d.sd_key, sessionId);
