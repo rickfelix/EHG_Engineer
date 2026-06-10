@@ -310,6 +310,7 @@
     "adam:self-score": "node scripts/adam-self-assessment-writer.cjs",
     "coordinator:cold-recovery": "node scripts/coordinator-cold-recovery.cjs",
     "coordinator:reply": "node scripts/coordinator-reply.cjs",
+    "adam:startup-check": "node scripts/adam-startup-check.mjs",
     "coordinator:startup-check": "node scripts/coordinator-startup-check.mjs",
     "test:cold-recovery": "vitest run tests/unit/coordinator-cold-recovery.test.js --project unit",
     "coordinator:teardown": "node scripts/coordinator-teardown.cjs",
