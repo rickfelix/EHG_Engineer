@@ -127,7 +127,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L879) - Stage 20 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
 - [Stage 19: Integration & API Layer](stage-19-integration-and-api-layer.md) - Previous stage
 - [Stage 21: QA & UAT](stage-21-qa-and-uat.md) - Next stage
 

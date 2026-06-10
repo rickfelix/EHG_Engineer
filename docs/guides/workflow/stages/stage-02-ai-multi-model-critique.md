@@ -122,12 +122,12 @@ This is an artifact-only stage focused on producing specific outputs.
 
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
-- `venture_stage_work` - Stage entry/completion tracking
+- `venture_stage_work` - Stage entry/completion tracking
 
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L159) - Stage 2 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-1-the-truth) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-1-the-truth) - Phase context
 - [Stage 1: Draft Idea & Chairman Review](stage-01-draft-idea-and-chairman-review.md) - Previous stage
 - [Stage 3: Market Validation & RAT](stage-03-market-validation-and-rat.md) - Next stage
 

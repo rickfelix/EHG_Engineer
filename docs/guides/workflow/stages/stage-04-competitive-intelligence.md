@@ -124,7 +124,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L239) - Stage 4 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-1-the-truth) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-1-the-truth) - Phase context
 - [Stage 3: Market Validation & RAT](stage-03-market-validation-and-rat.md) - Previous stage
 - [Stage 5: Profitability Forecasting](stage-05-profitability-forecasting.md) - Next stage
 

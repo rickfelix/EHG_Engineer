@@ -9,6 +9,7 @@
  */
 
 import { execSync } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildCallGraph } from '../../../../../../lib/static-analysis/call-graph-builder.js';
@@ -51,8 +52,42 @@ export const EXCLUSION_PATTERNS = [
   /\.spec\.(js|mjs|cjs|jsx|tsx)$/,
   /(^|\/)__tests__\//,
   /(^|\/)tests?\//,
-  /(^|\/)scripts\/one-off\//
+  /(^|\/)scripts\/one-off\//,
+  // SD-LEO-FIX-FIX-WIRE-CHECK-001 (feedback e56615c2, 18 fails/7d): scripts/probes/
+  // is the recognized home for one-off verification/probe scripts (deploy checks,
+  // live smoke probes) that are legitimately standalone — no permanent entry point
+  // by design, often deleted after the SD ships. Same intent as scripts/one-off/.
+  /(^|\/)scripts\/probes\//
 ];
+
+/**
+ * SD-LEO-FIX-FIX-WIRE-CHECK-001: marker-comment escape hatch for one-off
+ * probe/validation scripts that cannot move into scripts/one-off/ or
+ * scripts/probes/. A file whose first 2KB contains the literal tag
+ * `@wire-check-exempt` (conventionally `// @wire-check-exempt: <reason>`)
+ * is excluded from the reachability check. Only ever read for the handful of
+ * NEW files in the diff (never the whole scoped tree), and fail-open: an
+ * unreadable file is simply NOT exempt (the gate still validates it).
+ */
+export const WIRE_CHECK_EXEMPT_MARKER = /@wire-check-exempt\b/;
+
+export function hasWireCheckExemptMarker(absPath, deps = {}) {
+  const readHead = deps.readHead || ((p) => {
+    const fd = fs.openSync(p, 'r');
+    try {
+      const buf = Buffer.alloc(2048);
+      const bytes = fs.readSync(fd, buf, 0, 2048, 0);
+      return buf.toString('utf8', 0, bytes);
+    } finally {
+      fs.closeSync(fd);
+    }
+  });
+  try {
+    return WIRE_CHECK_EXEMPT_MARKER.test(readHead(absPath));
+  } catch {
+    return false; // fail-open: unreadable -> not exempt, gate still validates
+  }
+}
 
 /**
  * Known dynamic-load trees: directories whose modules are loaded EXCLUSIVELY via
@@ -289,7 +324,16 @@ export function createWireCheckGate(_supabase) {
           .filter((f) => !f.includes('/tmp-') && !f.includes('/.tmp-'))
           .map((f) => f.replace(/\\/g, '/'))
           // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-127 FR-1: skip test/spec files
-          .filter((f) => !isExcludedFromWireCheck(f));
+          .filter((f) => !isExcludedFromWireCheck(f))
+          // SD-LEO-FIX-FIX-WIRE-CHECK-001: marker-comment escape hatch for one-off
+          // probe scripts. Read only these few diff candidates (never the full tree).
+          .filter((f) => {
+            if (hasWireCheckExemptMarker(path.resolve(rootDir, f))) {
+              console.log(`   ⏭️  ${f} — @wire-check-exempt marker (one-off probe/validation script)`);
+              return false;
+            }
+            return true;
+          });
       } catch (err) {
         // SD-LEO-INFRA-WIRE-CHECK-GATE-001: fail closed on diff errors so a
         // required:true gate does not silently pass on infrastructure failure.
@@ -381,6 +425,39 @@ export function createWireCheckGate(_supabase) {
         console.log(`     - ${f}`);
       }
 
+      // SD-LEO-FIX-FIX-WIRE-CHECK-001: cross-session-leak detection. The gate diffs
+      // mainRef...HEAD in rootDir (the MAIN repo checkout). When LEAD-FINAL runs from
+      // the main-repo cwd while main is checked out on a PEER SD's branch, the diff
+      // contains the peer's files and this gate false-flags work this SD never touched.
+      // Detect and WARN (advisory): the durable contract is "run handoffs from the SD
+      // worktree" — surfacing the mismatch at the moment of failure beats folklore.
+      const crossSessionWarnings = [];
+      try {
+        const headBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+          encoding: 'utf8', cwd: rootDir, timeout: 5000,
+        }).trim();
+        const sdKey = sd.sd_key || sd.id || '';
+        if (sdKey && headBranch && headBranch !== 'main' && headBranch !== 'HEAD'
+            && !headBranch.includes(sdKey)) {
+          crossSessionWarnings.push(
+            `CROSS-SESSION LEAK RISK: this gate scanned branch '${headBranch}' (cwd=${rootDir}), which does not match SD ${sdKey}. ` +
+            'The unreachable files below may belong to a PEER branch. Re-run LEAD-FINAL-APPROVAL from the SD worktree.'
+          );
+          console.log(`   ⚠️  ${crossSessionWarnings[0]}`);
+        }
+      } catch { /* advisory only — never block on the probe */ }
+
+      // SD-LEO-FIX-FIX-WIRE-CHECK-001: actionable remediation in the failure output.
+      // 18 fails/7d showed workers re-discovering the same exemption mechanisms from
+      // scratch; the gate now names every sanctioned path out.
+      const remediation = [
+        'If a file above is intentional, pick the matching mechanism:',
+        '  • One-off probe/validation script -> move it under scripts/one-off/ or scripts/probes/, OR add a `// @wire-check-exempt: <reason>` comment in its first 2KB.',
+        '  • CLI invoked from docs/prose (no static import) -> add a package.json scripts entry (`node <path>`); entry points are discovered from package.json scripts.',
+        '  • Loaded via a computed/dynamic import (pathToFileURL, template specifier) -> use a string-literal relative import, or add the tree to KNOWN_DYNAMIC_PATTERNS in wire-check-gate.js with evidence.',
+        '  • Genuinely dead code -> delete it in this PR.',
+      ];
+
       return {
         passed: false,
         score: 0,
@@ -388,16 +465,21 @@ export function createWireCheckGate(_supabase) {
         issues: [
           `${unreachable.size} new file(s) not reachable from any entry point:`,
           ...unreachableRelative.map((f) => `  - ${f}`),
+          ...remediation,
         ],
-        warnings: buildWarnings.length > 0
-          ? [`${buildWarnings.length} file(s) had parse warnings`]
-          : [],
+        warnings: [
+          ...crossSessionWarnings,
+          ...(buildWarnings.length > 0
+            ? [`${buildWarnings.length} file(s) had parse warnings`]
+            : []),
+        ],
         details: {
           newFiles: newFiles.length,
           reachable: reachable.size,
           unreachable: unreachable.size,
           unreachableFiles: unreachableRelative,
           entryPoints: entryPoints.length,
+          crossSessionLeakRisk: crossSessionWarnings.length > 0,
         },
       };
     },

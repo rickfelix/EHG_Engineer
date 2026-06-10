@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-05-28 6:30:24 AM
+**Generated**: 2026-06-10 12:15:59 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 **Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
@@ -1378,7 +1378,7 @@ Before LEAD approval, you MUST:
 **Additional questions for Vision V2 SDs:**
 
 1. **Spec Alignment**: Does the SD scope match the referenced spec sections?
-2. **25-Stage Insulation**: If SD touches agents/CEOs, does it maintain READ-ONLY access to venture_stage_work?
+2. **Venture-Stage Insulation**: If SD touches agents/CEOs, does it maintain READ-ONLY access to venture_stage_work?
 3. **Vision Document Traceability**: Are specific spec sections cited in the SD description?
 
 ### Implementation Guidance
@@ -1580,6 +1580,6 @@ At LEAD-phase scope-lock, before running `add-prd-to-database.js`, invoke `testi
 
 ---
 
-*Generated from database: 2026-05-28*
+*Generated from database: 2026-06-10*
 *Protocol Version: 4.4.1*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

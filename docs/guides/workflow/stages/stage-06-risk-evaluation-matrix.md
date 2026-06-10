@@ -128,7 +128,7 @@ This is an artifact-only stage focused on producing specific outputs.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L319) - Stage 6 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-2-the-engine) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-2-the-engine) - Phase context
 - [Stage 5: Profitability Forecasting](stage-05-profitability-forecasting.md) - Previous stage
 - [Stage 7: Pricing Strategy](stage-07-pricing-strategy.md) - Next stage
 

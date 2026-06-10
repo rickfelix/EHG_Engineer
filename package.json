@@ -303,6 +303,8 @@
     "sd:unpark": "node scripts/sd-park.js unpark",
     "signal": "node scripts/worker-signal.cjs",
     "checkin": "node scripts/worker-checkin.cjs",
+    "contract:scaffold": "node scripts/artifact-contract.js scaffold",
+    "contract:check": "node scripts/artifact-contract.js check",
     "fr:descope": "node scripts/record-fr-descope.js",
     "adam:register": "node scripts/adam-register.cjs",
     "adam:advisory": "node scripts/adam-advisory.cjs",
@@ -467,7 +469,8 @@
     "okr:sync": "node scripts/okr-priority-sync.js",
     "check:migration-readiness": "node scripts/check-migration-readiness.mjs",
     "validate:capability-trigger": "node scripts/validate-capability-lifecycle-trigger.mjs --live",
-    "qf:create": "node scripts/create-quick-fix.js"
+    "qf:create": "node scripts/create-quick-fix.js",
+    "migration:apply-state": "node scripts/verify-migration-apply-state.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",

@@ -222,12 +222,30 @@ export async function loadSDHierarchy(supabase) {
  */
 export async function loadOKRScorecard(supabase) {
   try {
-    // Load active vision
-    const { data: vision } = await supabase
-      .from('strategic_vision')
-      .select('*')
-      .eq('is_active', true)
+    // Load active vision — canonical chairman-approved eva_vision_documents L1
+    // (SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-E: repointed off dormant strategic_vision).
+    // Stable-key resolve; map vision_key -> code and the one-line takeaway section
+    // -> statement (display.js renders vision.code + vision.statement.substring).
+    const { data: visionDoc } = await supabase
+      .from('eva_vision_documents')
+      .select('id, vision_key, status, statement:sections->>part_xii_the_final_oneline_takeaway')
+      .eq('vision_key', 'VISION-EHG-L1-001')
+      .eq('status', 'active')
+      .eq('chairman_approved', true)
       .single();
+    const vision = visionDoc
+      ? {
+          id: visionDoc.id,
+          status: visionDoc.status,
+          code: visionDoc.vision_key,
+          // Strip the markdown blockquote/bold wrapper + trailing rule.
+          statement: String(visionDoc.statement || '')
+            .replace(/\*\*/g, '')
+            .replace(/^[>\s]+/, '')
+            .replace(/\n+\s*---\s*$/, '')
+            .trim()
+        }
+      : null;
 
     // Load OKR scorecard
     const { data: scorecard, error } = await supabase

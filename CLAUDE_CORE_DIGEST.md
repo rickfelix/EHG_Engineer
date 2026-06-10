@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-05-27T20:44:53.935Z -->
-<!-- git_commit: 9c8d531d -->
-<!-- db_snapshot_hash: 04691d7eb5ae8136 -->
+<!-- generated_at: 2026-06-10T16:15:59.602Z -->
+<!-- git_commit: 11a75297 -->
+<!-- db_snapshot_hash: 4c260fddb7740f6c -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
@@ -69,10 +69,6 @@ Every sub-agent invocation MUST include these five elements:
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## Friction signaling
-
-Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/signal <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. CLAUDE_CORE.md "Signaling friction" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
-
 ## Mandatory Agent Invocation Rules
 
 **CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
@@ -100,6 +96,10 @@ Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/
 2. Invoke required agent(s) BEFORE making changes
 3. Agent findings inform implementation
 4. Re-run agent AFTER changes to verify fixes
+
+## Friction signaling
+
+Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/signal <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. CLAUDE_CORE.md "Signaling friction" / SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
 
 ## Global Negative Constraints
 
@@ -269,5 +269,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-05-27 4:44:53 PM*
+*DIGEST generated: 2026-06-10 12:15:59 PM*
 *Protocol: 4.4.1*

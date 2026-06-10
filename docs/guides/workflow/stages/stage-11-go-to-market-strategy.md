@@ -120,13 +120,13 @@ No specific exit gates defined.
 
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
-- `venture_stage_work` - Stage entry/completion tracking
+- `venture_stage_work` - Stage entry/completion tracking
 - `venture_brand_messaging_options` (if separate table)
 
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L519) - Stage 11 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-3-the-identity) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-3-the-identity) - Phase context
 - [Stage 10: Strategic Naming](stage-10-strategic-naming.md) - Previous stage
 - [Stage 12: Sales & Success Logic](stage-12-sales-and-success-logic.md) - Next stage
 

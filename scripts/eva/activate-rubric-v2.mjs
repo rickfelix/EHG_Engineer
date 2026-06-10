@@ -75,7 +75,12 @@ async function setV1Active(active) {
 
 async function setFlagEnabled(isEnabled) {
   // Do NOT pass row_version (trigger auto-bumps it).
-  const { error } = await supabase.from('leo_feature_flags').update({ is_enabled: isEnabled }).eq('flag_key', SUB_FLAG_KEY);
+  // SD-FDBK-INFRA-RECONCILE-LEO-FEATURE-001: co-set lifecycle_state — the
+  // chk_flag_lifecycle_enabled_consistency CHECK rejects a lone is_enabled write
+  // (is_enabled must equal (lifecycle_state='enabled')). Activate -> enabled;
+  // rollback -> disabled, matching transitionLifecycleState's coupling.
+  const lifecycle_state = isEnabled ? 'enabled' : 'disabled';
+  const { error } = await supabase.from('leo_feature_flags').update({ is_enabled: isEnabled, lifecycle_state }).eq('flag_key', SUB_FLAG_KEY);
   if (error) throw new Error(`UPDATE sub-flag is_enabled=${isEnabled} failed: ${error.message}`);
 }
 

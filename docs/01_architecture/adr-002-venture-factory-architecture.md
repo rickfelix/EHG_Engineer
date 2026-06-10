@@ -142,10 +142,23 @@ tags: [architecture, auto-generated]
 - **Last Updated**: 2025-12-22
 - **Tags**: database, api, testing, unit
 
-**Status**: APPROVED
+**Status**: APPROVED *(historical — see supersession notice below)*
 **Date**: 2025-12-06
 **Author**: Lead Systems Architect (Claude)
 **Approver**: Chairman, EHG
+
+---
+
+> ## ⚠️ SUPERSESSION NOTICE (2026-06-10)
+>
+> This ADR is a **historical record**, preserved as approved in December 2025. It is **superseded as a current authority** by:
+>
+> - **Canonical vision**: the chairman-locked EHG mission + vision (2026-06-09), stored as `eva_vision_documents` L1 **`VISION-EHG-L1-001`** — the single strategy apex. Where this ADR's framing conflicts with the canonical vision, the canonical vision governs.
+> - **Stage counts**: the **`venture_stages` table is the single source of truth** for the venture lifecycle. Literal stage counts in this document (25-stage, 40-stage, etc.) reflect the lifecycle *as of approval* and are NOT current — the live lifecycle has since changed (26 stages as of migration 20260329) and may change again. Read `venture_stages`, never this document, for the current stage set.
+> - **Governance model**: statements below such as "System INFORMS decisions, never MAKES them" and `decision_due_at` time-boxing predate the canonical **govern-by-exception + AUTO-PROCEED** model (see CLAUDE.md Canonical Pause Points). The system now executes autonomously within chairman-set guardrails and escalates by exception.
+> - **Proposed tables**: schema proposals marked "(NEW)" below (`lifecycle_stage_config`, `venture_stage_work`, `venture_artifacts`) are historical design intent; the live schema is authoritative for what actually exists.
+>
+> *Superseded by SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001; canonical spine delivered by SD-LEO-INFRA-INITIATIVE-BACKBONE-CANONICAL-001.*
 
 ---
 
@@ -157,12 +170,13 @@ tags: [architecture, auto-generated]
 | 2025-12-06 | PROPOSED | Board upgrades + Chairman Override added | Chairman |
 | 2025-12-09 | PROPOSED | Addendum A: Kochel Integration Cross-Validation added | Lead Systems Architect |
 | **2025-12-09** | **APPROVED** | **Chairman formal approval following dual-AI cross-validation (Anti-Gravity 4.4/5, Claude 3.9/5). Adopted conservative verdict: "Ready with minor gaps".** | **Chairman, EHG** |
+| 2026-06-10 | SUPERSEDED | Marked historical — superseded by the chairman-locked canonical vision (eva_vision_documents L1 VISION-EHG-L1-001) + the venture_stages SSOT (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001) | Echo (LEO worker) |
 
 ---
 
 ## Executive Summary
 
-This Architecture Decision Record defines the **EHG Venture Factory** - a unified system that orchestrates multiple ventures through a 25-stage lifecycle while leveraging the Leo Protocol for engineering execution. This document serves as the read-only blueprint for understanding how the entire factory operates.
+This Architecture Decision Record defines the **EHG Venture Factory** - a unified system that orchestrates multiple ventures through the staged venture lifecycle (defined by the `venture_stages` SSOT; 25 stages at the time of approval) while leveraging the Leo Protocol for engineering execution. This document served as the read-only blueprint for understanding how the entire factory operates *(historical — see the supersession notice above)*.
 
 ---
 
