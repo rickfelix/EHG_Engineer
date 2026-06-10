@@ -1,3 +1,4 @@
+-- @approved-by:codestreetlabs@gmail.com
 -- Sibling D FR-D-1: contract_chain_links table (D-schema week 3 cohort, ADDITIVE-ONLY)
 -- Ordinal 20260516150000 strictly > Sibling B 20260516140001 (in main via PR #3789).
 
