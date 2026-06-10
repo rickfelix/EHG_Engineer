@@ -164,6 +164,8 @@ scripts/verify-*.js
 scripts/verify-*.cjs
 # Exceptions: these verify-*.js files are production dependencies of handoff executors
 !scripts/verify-git-branch-status.js
+# SD-LEO-INFRA-REVIVE-EVA-VERIFY-READINESS-001: production EVA revival acceptance harness
+!scripts/verify-eva-revival.mjs
 !scripts/verify-git-commit-status.js
 !scripts/verify-app-architecture.js
 # Marketing schema contract verifier (SD-EHG-MARKETING-DISTRIBUTION-INFRASTRUCTURE-ORCH-001-A)
