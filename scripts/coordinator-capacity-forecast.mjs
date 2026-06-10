@@ -74,14 +74,18 @@ function etaMinForClaim(progress, phase) {
 
 async function main() {
   const liveCutoff = new Date(Date.now() - HEARTBEAT_LIVE_MS).toISOString();
-  const [{ data: sessions }, { data: sds }] = await Promise.all([
+  const [{ data: sessions }, { data: sds }, { data: openQfRows }] = await Promise.all([
     sb.from('claude_sessions')
       .select('session_id, terminal_id, sd_key, heartbeat_at, loop_state, metadata')
       .gte('heartbeat_at', liveCutoff),
     sb.from('strategic_directives_v2')
       .select('sd_key, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies')
       .not('status', 'in', '("completed","cancelled","deferred")'),
+    // Open QFs are claimable belt too (a worker can claim a QF) — counting only SDs
+    // under-reports belt depth and over-reports deficit (workers self-claim QFs).
+    sb.from('quick_fixes').select('id').eq('status', 'open'),
   ]);
+  const openQfCount = Array.isArray(openQfRows) ? openQfRows.length : 0;
 
   // ── resolve dependency statuses → claimable belt ──
   const depKeys = new Set();
@@ -140,7 +144,7 @@ async function main() {
   }
 
   const demandSoon = idleNow + freeingSoon;
-  const beltDepth = claimable.length;
+  const beltDepth = claimable.length + openQfCount; // claimable SDs + open QFs (both worker-claimable)
   const deficit = (demandSoon + BELT_BUFFER) - beltDepth;
   let verdict;
   if (beltDepth === 0 && idleNow > 0) verdict = 'DEFICIT-URGENT';
@@ -155,8 +159,8 @@ async function main() {
   for (const r of rows) {
     console.log(`    ${r.sess} ${String(r.callsign).padEnd(8)} ${r.state.padEnd(13)} ${r.eta.padEnd(18)} ${r.detail}`);
   }
-  console.log(`  BELT: ${beltDepth} claimable  |  DEMAND(soon): ${demandSoon} (idle ${idleNow} + freeing-soon ${freeingSoon})  |  buffer ${BELT_BUFFER}`);
-  if (claimable.length) console.log(`        claimable now: ${claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ')}`);
+  console.log(`  BELT: ${beltDepth} claimable (${claimable.length} SD + ${openQfCount} QF)  |  DEMAND(soon): ${demandSoon} (idle ${idleNow} + freeing-soon ${freeingSoon})  |  buffer ${BELT_BUFFER}`);
+  if (claimable.length) console.log(`        claimable SDs: ${claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ')}`);
   console.log(`  VERDICT: ${verdict}` + (deficit > 0 ? `  → belt short by ${deficit} — SOURCE AHEAD (reach Adam)` : ''));
 
   // ── proactive Adam reach-out on a forecast deficit ──
