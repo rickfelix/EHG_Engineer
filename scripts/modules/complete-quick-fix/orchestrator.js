@@ -20,7 +20,7 @@ import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
 import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
-import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff } from './git-operations.js';
+import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff, fetchPRMetadata } from './git-operations.js';
 import {
   validateLOC,
   validateTests,
@@ -124,6 +124,44 @@ export async function completeQuickFix(qfId, options = {}) {
     console.log('⚠️  This issue was escalated to a full SD');
     console.log(`   Reason: ${qf.escalation_reason}`);
     return qf;
+  }
+
+  // SD-FDBK-INFRA-RCA-FIRST-HARD-001 (FR-4): early already-MERGED probe.
+  // Only status==='completed'/'escalated' short-circuits above, so a /checkin re-run on a
+  // QF whose PR is ALREADY MERGED (the f32a6df5 residual) would otherwise re-run the entire
+  // pipeline — including the now-bounded but still-wasteful external steps. When a PR id is
+  // resolvable (from --pr-url or the persisted qf.pr_url) ask gh for PR state (bounded by
+  // EXTERNAL_STEP_TIMEOUT_MS via fetchPRMetadata); if MERGED, reconcile the QF to terminal
+  // and return so the re-run is a fast idempotent no-op. gh (not local git) is authoritative
+  // here because after a worktree removal the local refs are gone but PR state survives.
+  // Best-effort: any failure/timeout falls through to the normal (now-bounded) pipeline and
+  // never blocks a genuinely-incomplete QF.
+  const probePrUrl = options.prUrl || qf.pr_url;
+  const probePrNumber = probePrUrl && String(probePrUrl).match(/\/pull\/(\d+)/)?.[1];
+  if (probePrNumber) {
+    try {
+      const meta = fetchPRMetadata(probePrNumber, testDir);
+      if (meta && meta.state === 'MERGED') {
+        console.log(`\n✅ PR #${probePrNumber} is already MERGED — reconciling ${qfId} to completed (idempotent re-run short-circuit).\n`);
+        const mergeSha = meta.mergeCommit?.oid || qf.commit_sha || null;
+        const { error: reconcileErr } = await supabase
+          .from('quick_fixes')
+          .update({
+            status: 'completed',
+            pr_url: probePrUrl,
+            commit_sha: mergeSha,
+            completed_at: qf.completed_at || new Date().toISOString()
+          })
+          .eq('id', qfId)
+          .neq('status', 'completed');
+        if (reconcileErr) {
+          console.log(`   ⚠️  Could not reconcile QF record (non-fatal): ${reconcileErr.message}`);
+        }
+        return { ...qf, status: 'completed', pr_url: probePrUrl, commit_sha: mergeSha };
+      }
+    } catch (e) {
+      console.log(`   ℹ️  Already-merged probe skipped (will run normal pipeline): ${e.message}`);
+    }
   }
 
   // Auto-detect git info. autoDetectGitInfo NOW throws on PR-metadata failure
@@ -330,8 +368,17 @@ export async function completeQuickFix(qfId, options = {}) {
   // createAutoPR has filesChanged available and the autoPr branch fires BEFORE
   // the PR-URL prompt. 13th-witness PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001.)
 
-  // Test Coverage Verification (uses filesChanged from above)
-  const testCoverage = verifyTestCoverage(filesChanged);
+  // Test Coverage Verification (uses filesChanged from above).
+  // SD-FDBK-INFRA-RCA-FIRST-HARD-001 (FR-3): gate the advisory per-file probe loop so a
+  // ballooned filesChanged (stale origin/main after a worktree removal) can't ride the
+  // unbounded spawn loop to EXIT 124. Skip when the operator opted out, when the test gate
+  // itself was skipped (docs-only / --skip-tests), or under --force-complete. Coverage is
+  // console-only and never gates, so skipping changes no verdict. (verifyTestCoverage also
+  // self-skips on an empty filesChanged and bounds each spawn via EXTERNAL_STEP_TIMEOUT_MS.)
+  const skipCoverage = Boolean(
+    options.skipCoverage || options.skipTestRun || options.forceComplete || skipTestGate
+  );
+  const testCoverage = verifyTestCoverage(filesChanged, { skip: skipCoverage });
 
   // PR verification
   let prUrl = options.prUrl;

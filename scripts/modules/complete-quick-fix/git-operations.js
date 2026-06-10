@@ -11,6 +11,7 @@
 import { execSync, execFileSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { EXTERNAL_STEP_TIMEOUT_MS } from './constants.js';
 
 // QF-20260511-123 / feedback 0930f169: prefer the QF worktree when cwd is inside
 // .worktrees/qf/<qfId>, so Tier-1 docs-QFs don't fall back to the parent repo's
@@ -325,12 +326,20 @@ export function fetchPRMetadata(prNumber, testDir) {
   const fields = 'state,headRefName,mergeCommit,additions,deletions,url,files';
   let raw;
   try {
+    // FR-2: bound the gh network RPC. Without a timeout a gh auth/network stall
+    // blocks indefinitely and rides to the external 2m/5m SIGTERM (the 244a67d3
+    // "no output before kill" class). On ETIMEDOUT, surface a loud message rather
+    // than a silent fallback to CWD HEAD.
     raw = execSync(`gh pr view ${prNumber} --json ${fields}`, {
       cwd: testDir,
       encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: EXTERNAL_STEP_TIMEOUT_MS
     });
   } catch (e) {
+    if (e.code === 'ETIMEDOUT' || e.signal === 'SIGTERM') {
+      throw new Error(`gh pr view ${prNumber} exceeded ${EXTERNAL_STEP_TIMEOUT_MS}ms (external step timeout). Cannot resolve PR metadata; check gh auth/network or pass --commit-sha/--branch-name/--actual-loc explicitly.`);
+    }
     const code = e.status ?? '?';
     const stderr = (e.stderr ? e.stderr.toString() : '').trim().split('\n')[0];
     throw new Error(`gh pr view ${prNumber} exited ${code}${stderr ? `: ${stderr}` : ''}. Cannot resolve PR metadata; pass --commit-sha/--branch-name/--actual-loc explicitly or fix gh auth.`);
@@ -469,18 +478,20 @@ export function autoDetectGitInfo(testDir, options = {}) {
   // ── Legacy in-worktree path (regression-safe) ──────────────────────────
   try {
     if (!result.commitSha) {
-      result.commitSha = execSync('git rev-parse HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
+      // FR-2: bound the legacy autodetect git calls (the 244a67d3 class — these run
+      // from a worktree whose refs can be gone after removal, blocking with no output).
+      result.commitSha = execSync('git rev-parse HEAD', { encoding: 'utf-8', cwd: testDir, timeout: EXTERNAL_STEP_TIMEOUT_MS }).trim();
       console.log(`🔍 Auto-detected commit SHA: ${result.commitSha.substring(0, 7)}`);
     }
 
     if (!result.branchName) {
-      result.branchName = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
+      result.branchName = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', cwd: testDir, timeout: EXTERNAL_STEP_TIMEOUT_MS }).trim();
       console.log(`🔍 Auto-detected branch: ${result.branchName}`);
     }
 
     if (!result.actualLoc) {
       try {
-        const diffStats = execSync('git diff origin/main --shortstat', { encoding: 'utf-8', cwd: testDir }).trim();
+        const diffStats = execSync('git diff origin/main --shortstat', { encoding: 'utf-8', cwd: testDir, timeout: EXTERNAL_STEP_TIMEOUT_MS }).trim();
         const match = diffStats.match(/(\d+) insertion/);
         if (match) {
           result.actualLoc = parseInt(match[1]);
