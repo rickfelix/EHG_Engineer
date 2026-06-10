@@ -3,7 +3,17 @@
  * SD: SD-UNIFIED-STAGE-GATE-ARTIFACTPRECONDITION-ORCH-001-C
  *
  * Tests the artifact gate logic by calling the RPC with various artifact states.
- * Requires: stage_artifact_requirements table populated via seed script.
+ *
+ * SD-LEO-INFRA-STAGE-CONTRACT-REGISTRY-001: requirements now come from
+ * venture_stages.required_artifacts (SSOT; the fn reads it canonical-first
+ * since 20260504, and the legacy stage_artifact_requirements table is a
+ * derived mirror after the 20260610 sync migration). Stage-15 expectations
+ * updated blueprint_wireframes -> wireframe_screens accordingly.
+ *
+ * KNOWN PRE-EXISTING FAILURE (2026-06-10, predates SD-LEO-INFRA-STAGE-
+ * CONTRACT-REGISTRY-001): all 6 tests fail with "invalid input syntax for
+ * type json" from the live RPC — an fn_advance_venture_stage call-signature /
+ * overload drift, NOT an artifact-gate logic regression. Needs its own fix SD.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -133,7 +143,8 @@ describe.skipIf(!HAS_REAL_DB)('fn_advance_venture_stage artifact precondition ga
     expect(data.stage).toBe(15);
     expect(data.missing).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ artifact_type: 'blueprint_wireframes' })
+        // SSOT (venture_stages) S15 requirement — was blueprint_wireframes pre-redesign.
+        expect.objectContaining({ artifact_type: 'wireframe_screens' })
       ])
     );
   });
@@ -141,7 +152,7 @@ describe.skipIf(!HAS_REAL_DB)('fn_advance_venture_stage artifact precondition ga
   it('should allow Stage 15 advancement after wireframe artifact inserted', async () => {
     const { error: insertErr } = await supabase.from('venture_artifacts').insert({
       venture_id: testVentureId,
-      artifact_type: 'blueprint_wireframes',
+      artifact_type: 'wireframe_screens',
       lifecycle_stage: 15,
       title: 'Test wireframe screens',
       content: 'Test'
