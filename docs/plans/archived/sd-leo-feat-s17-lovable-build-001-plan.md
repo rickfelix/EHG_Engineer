@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-25
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: C:/Users/rickf/AppData/Local/Temp/b1-lovable-preamble-plan.md -->
 <!-- SD Key: SD-LEO-FEAT-S17-LOVABLE-BUILD-001 -->
 <!-- Archived at: 2026-05-23T22:03:26.104Z -->

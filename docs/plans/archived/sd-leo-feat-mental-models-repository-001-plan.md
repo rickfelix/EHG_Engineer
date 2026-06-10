@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: docs/plans/mental-models-integration-architecture.md -->
 <!-- SD Key: SD-LEO-FEAT-MENTAL-MODELS-REPOSITORY-001 -->
 <!-- Archived at: 2026-03-06T12:25:03.090Z -->

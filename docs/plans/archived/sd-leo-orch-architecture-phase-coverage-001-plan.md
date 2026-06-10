@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: docs/plans/architecture-phase-coverage-lifecycle-controls-architecture.md -->
 <!-- SD Key: SD-LEO-ORCH-ARCHITECTURE-PHASE-COVERAGE-001 -->
 <!-- Archived at: 2026-03-09T18:21:38.946Z -->

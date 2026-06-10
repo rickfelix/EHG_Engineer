@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, leo, commands]
+---
+
 # LEO Command Reference
 
 Documentation for LEO Protocol commands and the command ecosystem.

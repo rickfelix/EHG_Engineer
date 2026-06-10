@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: f11d7436f85ab2367a3d281b52e3c773669617db6686f84966d3a55a4129551c -->
 
 # ADR-0001: Canonical Pause is a five-point set

@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-10
+tags: [documentation, protocol]
+---
+
 # Fleet-Worker `/loop` Directive (canonical)
 
 This is the **canonical, version-controlled** paste-able directive that puts a worker

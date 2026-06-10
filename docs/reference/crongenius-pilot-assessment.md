@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-28
+tags: [reference]
+---
+
 # CronGenius Pilot — Pre-Venture-#2 Assessment & Readiness Scrub
 
 > **Purpose:** we shipped the first venture (CronGenius M1); before onboarding ventures 2..N we scrub everything the pilot taught us and decide **what to fix or decide NOW vs. later.** This is the decision layer on top of the reference docs — it does not restate them.

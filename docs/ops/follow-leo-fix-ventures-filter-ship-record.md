@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-06
+tags: [documentation, ops]
+---
+
 # SD-FDBK-ENH-FOLLOW-LEO-FIX-001 — Ship Record (cross-repo: EHG)
 
 Defense-in-depth follow-up to SD-LEO-FIX-VENTURE-PROVISIONING-PARITY-001 (the deferred

@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation]
+---
+
 # EHG_Engineer Documentation
 
 > **DATABASE-FIRST (LEO Protocol v4.3.3)**: Strategic data lives in the database.
@@ -82,6 +91,7 @@ Deprecated or superseded documentation retained for reference.
 | Directory | Purpose | Key Files |
 |-----------|---------|-----------|
 | `01_architecture/` | System architecture | ADRs, design decisions |
+| `adr/` | Architecture Decision Records | [ADR Index](adr/README.md) — all 14 ADRs |
 | `02_api/` | API documentation | Endpoints, specifications |
 | `03_protocols_and_standards/` | LEO Protocol specs | v4.2 specs, v4.3.3 current |
 | `04_features/` | Feature documentation | User-facing features |

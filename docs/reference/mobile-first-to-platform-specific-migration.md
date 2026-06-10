@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [reference]
+---
+
 # Migration Path: Option C → Option B (Mobile-Only to Platform-Specific Templates)
 
 ## Context

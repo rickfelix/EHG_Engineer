@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: docs/plans/semantic-validation-gates-architecture.md -->
 <!-- SD Key: SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002 -->
 <!-- Archived at: 2026-03-08T19:40:12.873Z -->

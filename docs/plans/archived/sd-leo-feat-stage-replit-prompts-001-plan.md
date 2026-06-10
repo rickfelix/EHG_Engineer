@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-25
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: C:/Users/rickf/.claude/plans/s19-prompts-build-into-aware.md -->
 <!-- SD Key: SD-LEO-FEAT-STAGE-REPLIT-PROMPTS-001 -->
 <!-- Archived at: 2026-05-23T17:31:24.180Z -->

@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: f4be18d7f84f3c79811cebdc104f3f0d2cdf6e18fcd58ad1ee3162a4aa168500 -->
 
 # ADR-0012: Skill bodies follow progressive-disclosure (median 30-100 LOC + supporting docs)

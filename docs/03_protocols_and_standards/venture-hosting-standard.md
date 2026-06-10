@@ -1,3 +1,12 @@
+---
+category: protocol
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-03
+tags: [protocol, protocols-and-standards]
+---
+
 # Venture Hosting Standard (Replit)
 
 **Status:** Active standard — chairman directive, 2026-06-02 (auth corrected to **Clerk** 2026-06-03).

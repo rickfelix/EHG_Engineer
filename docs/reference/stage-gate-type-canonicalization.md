@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-19
+tags: [reference]
+---
+
 # Stage Gate Type Canonicalization
 
 **SD reference**: SD-LEO-REFAC-CANONICALIZE-STAGE-CONFIG-001 (shipped 2026-05-19)

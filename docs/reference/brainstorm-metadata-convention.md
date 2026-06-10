@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-04-27
+tags: [reference]
+---
+
 # brainstorm_sessions.metadata Convention
 
 **Status**: Active | **Source SD**: SD-LEO-INFRA-BRAINSTORM-SOURCE-TRUTH-CHECK-001 | **Validator version**: 1.0.0

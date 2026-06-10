@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: 203a179af474723f44785174a1940fc9031d5952fa63ff70cdf214a350de44c1 -->
 
 # ADR-0005: Sessions declare product mode vs campaign mode

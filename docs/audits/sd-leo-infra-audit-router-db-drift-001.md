@@ -1,3 +1,12 @@
+---
+category: analysis
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-29
+tags: [analysis, audits]
+---
+
 # Audit: CLAUDE.md Router Twins vs `leo_protocol_sections` DB Drift
 
 **SD:** SD-LEO-INFRA-AUDIT-CONTENT-ROUTER-001

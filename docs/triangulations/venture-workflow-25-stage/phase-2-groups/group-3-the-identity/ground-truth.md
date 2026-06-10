@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-3-the-identity]
+---
+
 # Phase 2 Ground-Truth Validation — Group 3: THE_IDENTITY (Stages 10-12)
 
 > This document compares claims from all three AI assessments (OpenAI, Gemini, Claude) against each other and identifies factual disputes, severity disagreements, and coverage gaps. Claude has direct codebase access; OpenAI and Gemini evaluated from prompt + code excerpts.

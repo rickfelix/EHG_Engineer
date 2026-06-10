@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [reference]
+---
+
 # Handoff State Machines (SD + PRD)
 
 **Source**: SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-126 Phase 6

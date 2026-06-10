@@ -1,3 +1,12 @@
+---
+category: protocol
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [protocol, protocols-and-standards, exceptions]
+---
+
 # Governance Exceptions Directory
 
 **Purpose**: This directory stores Chairman-approved exceptions to governance policies, particularly governance policy exceptions for stages.

@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: 5a127962e56940ad8571a83af991313cb0339d91a8db96481fdc78880dccfd82 -->
 
 # ADR-0003: Database is the single source of truth (no markdown source-of-truth)

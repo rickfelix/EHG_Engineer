@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-25
+tags: [documentation, protocol]
+---
+
 # Pre-Claim Cadence Gate
 
 **SD**: `SD-LEO-INFRA-PR-CADENCE-PRECLAIM-GATE-001`

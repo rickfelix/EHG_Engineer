@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: f6f460137645db7303f351c1f75f7959ea8769c858053c7eeea9506fd9188836 -->
 
 # ADR-0011: Adversarial sub-agent grilling replaces interactive human grilling

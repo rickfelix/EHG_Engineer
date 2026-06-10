@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [reference]
+---
+
 # Error Code Catalog
 
 Reference for all error codes emitted by the LEO Protocol handoff system, gate validators, database constraints, and runtime infrastructure.

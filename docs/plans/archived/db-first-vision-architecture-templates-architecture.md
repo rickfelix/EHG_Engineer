@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 # Architecture Plan: Database-First Vision & Architecture Document Templates
 
 **Plan Key**: `ARCH-DB-FIRST-DOCS-001`

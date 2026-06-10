@@ -1,3 +1,12 @@
+---
+category: guide
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-28
+tags: [guide, guides, workflow]
+---
+
 # Stage Pipeline Pre-Approval Playbook
 
 > **Audience:** the operator about to click *Approve* on a stage gate (Stage 18–26, the BUILD-AND-MARKET phase).

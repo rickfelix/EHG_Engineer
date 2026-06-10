@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: b41cb6423f2f278c99a8ffbe24260239b742a5b667099fbc0f3118261f9692f2 -->
 
 # ADR-0008: Scope completion is verified by contract, not heuristic

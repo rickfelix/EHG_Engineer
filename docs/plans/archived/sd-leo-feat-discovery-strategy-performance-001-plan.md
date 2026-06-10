@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: docs/plans/discovery-strategy-performance-scoring-architecture.md -->
 <!-- SD Key: SD-LEO-FEAT-DISCOVERY-STRATEGY-PERFORMANCE-001 -->
 <!-- Archived at: 2026-03-13T12:31:34.143Z -->
