@@ -9,6 +9,8 @@ tags: [guide, auto-generated]
 
 ## Table of Contents
 
+> **Stage-count note (2026-06-10)**: the `venture_stages` table is the single source of truth for the venture lifecycle. Literal stage counts in this document reflect the lifecycle as originally authored (25 stages) — the live lifecycle has since changed (26 stages as of migration 20260329) and may change again. Read `venture_stages` for the current stage set. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+
 - [Purpose](#purpose)
 - [System Architecture](#system-architecture)
 - [The 25-Stage Lifecycle](#the-25-stage-lifecycle)
@@ -50,7 +52,7 @@ Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001]
 
 ## Purpose
 
-The Eva Orchestrator is a CLI-driven autonomous system that guides ventures through a 25-stage development lifecycle. It coordinates stage execution, gate evaluation, artifact persistence, and chairman governance to systematically progress a venture from initial idea to optimized, scaling product.
+The Eva Orchestrator is a CLI-driven autonomous system that guides ventures through the staged development lifecycle defined by the venture_stages SSOT (25 stages when this guide was authored). It coordinates stage execution, gate evaluation, artifact persistence, and chairman governance to systematically progress a venture from initial idea to optimized, scaling product.
 
 **Design Philosophy:**
 - Solo AI Entrepreneur: Optimized for AI-assisted venture development
@@ -132,7 +134,7 @@ graph TB
 
 ## The 25-Stage Lifecycle
 
-The lifecycle organizes 25 stages into 6 phases, each serving a distinct purpose in venture development:
+The lifecycle organizes its stages (see the venture_stages SSOT) into 6 phases, each serving a distinct purpose in venture development:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -392,7 +394,7 @@ The Eva lifecycle integrates with LEO Protocol governance at two critical points
 
 1. **Stage 18 (Lifecycle-to-SD Bridge)**: Sprint plan output is converted into LEO Strategic Directives, creating orchestrator + child SDs that are tracked through LEAD-PLAN-EXEC workflow.
 
-2. **SD-Required Stages**: 12 of 25 stages require Strategic Directives, which means the work is formally tracked, gated, and reviewed through LEO Protocol.
+2. **SD-Required Stages**: a subset of stages (12 of 25 as authored) require Strategic Directives, which means the work is formally tracked, gated, and reviewed through LEO Protocol.
 
 ### With LLM Client Factory
 

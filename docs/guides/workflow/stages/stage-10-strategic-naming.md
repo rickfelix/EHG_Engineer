@@ -126,12 +126,12 @@ No specific exit gates defined.
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
 - `venture_stage_work` - Stage entry/completion tracking
-- `venture_brand_guidelines` (if separate table)
+- `venture_brand_guidelines` (if separate table)
 
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L479) - Stage 10 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-3-the-identity) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-3-the-identity) - Phase context
 - [Stage 9: Exit-Oriented Design](stage-09-exit-oriented-design.md) - Previous stage
 - [Stage 11: Go-to-Market Strategy](stage-11-go-to-market-strategy.md) - Next stage
 

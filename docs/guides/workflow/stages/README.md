@@ -144,7 +144,7 @@ This directory contains comprehensive documentation for each of the 25 stages in
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml) - Canonical stage configuration (updated 2026-03-05)
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md) - High-level lifecycle overview
+- [25-Stage Overview](../venture-lifecycle-overview.md) - High-level lifecycle overview
 - [Workflow README](../README.md) - Workflow documentation home
 - [Stage Templates](../../../../lib/eva/stage-templates/) - Actual stage implementations (source of truth for titles)
 

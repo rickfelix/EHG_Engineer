@@ -1,5 +1,8 @@
 # KB Refresh Report
 
+> **⚠️ HISTORICAL DOCUMENT (bannered 2026-06-10)**: superseded by the chairman-locked canonical EHG vision (eva_vision_documents L1 `VISION-EHG-L1-001`, 2026-06-09). Preserved as a historical record; not a current source of truth. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+
+
 **Date**: 2025-01-14
 **Performed by**: Senior Docs Engineer for ExecHoldings Global
 

@@ -1,5 +1,8 @@
 # 03_leo_protocol_roles_workflow.md
 
+> **⚠️ HISTORICAL DOCUMENT (bannered 2026-06-10)**: superseded by the chairman-locked canonical EHG vision (eva_vision_documents L1 `VISION-EHG-L1-001`, 2026-06-09). Preserved as a historical record; not a current source of truth. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+
+
 ## Why This Matters
 The LEO Protocol defines the operational framework for agent collaboration, quality enforcement, and workflow progression. This document specifies agent roles, responsibilities, boundaries, and the complete 40-stage venture workflow that transforms ideas into successful ventures.
 

@@ -245,7 +245,7 @@ For the deferred items, see `brainstorm/2026-03-04-systemic-audit-findings-remed
 - **Test report** (last clean run, 2026-03-05): [`docs/eva/e2e-stage-test-report.md`](../../eva/e2e-stage-test-report.md)
 - **Full testing guide** (orchestrator, integration, UAT): [`docs/guides/workflow/cli-venture-lifecycle/guides/testing-guide.md`](../workflow/cli-venture-lifecycle/guides/testing-guide.md)
 - **Audit findings and remediation**: [`brainstorm/2026-03-04-systemic-audit-findings-remediation.md`](../../../brainstorm/2026-03-04-systemic-audit-findings-remediation.md)
-- **Stage lifecycle overview**: [`docs/guides/workflow/25-stage-venture-lifecycle-overview.md`](../workflow/25-stage-venture-lifecycle-overview.md)
+- **Stage lifecycle overview**: [`docs/guides/workflow/venture-lifecycle-overview.md`](../workflow/venture-lifecycle-overview.md)
 - **Stage templates**: `lib/eva/stage-templates/stage-{N}.js` (N = 1–25)
 - **E2E master runner**: `scripts/e2e-stage-runner.mjs`
 - **Individual E2E runners**: `scripts/test-stage{N}-e2e.js` (N = 1–25)

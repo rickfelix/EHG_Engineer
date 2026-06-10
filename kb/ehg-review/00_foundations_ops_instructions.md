@@ -1,5 +1,8 @@
 # 00_foundations_ops_instructions.md
 
+> **⚠️ HISTORICAL DOCUMENT (bannered 2026-06-10)**: superseded by the chairman-locked canonical EHG vision (eva_vision_documents L1 `VISION-EHG-L1-001`, 2026-06-09). Preserved as a historical record; not a current source of truth. (SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001)
+
+
 ## Why This Matters
 This document establishes the foundational principles, operating instructions, and shared vocabulary for the ExecHoldings Global (EHG) platform. It serves as the North Star for all strategic decisions, technical implementations, and operational procedures across the organization.
 

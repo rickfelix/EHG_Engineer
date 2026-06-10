@@ -128,7 +128,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L639) - Stage 14 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-4-the-blueprint) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-4-the-blueprint) - Phase context
 - [Stage 13: Tech Stack Interrogation](stage-13-tech-stack-interrogation.md) - Previous stage
 - [Stage 15: Epic & User Story Breakdown](stage-15-epic-and-user-story-breakdown.md) - Next stage
 

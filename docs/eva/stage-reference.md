@@ -1,14 +1,14 @@
-# EVA 26-Stage Pipeline Reference
+# EVA Venture Pipeline Stage Reference
 
 > Authoritative reference for the EVA venture lifecycle pipeline.
 > Source of truth: `lib/eva/stage-templates/` and `lib/eva/stage-execution-worker.js`
 
 ## Overview
 
-The EVA pipeline processes ventures through 26 sequential stages organized into 6 lifecycle phases. Each stage has a defined purpose, input/output schema, analysis step, and optional chairman gate.
+The EVA pipeline processes ventures through the sequential stages defined by the venture_stages SSOT (26 at the time of writing), organized into 6 lifecycle phases. Each stage has a defined purpose, input/output schema, analysis step, and optional chairman gate.
 
 **Key concepts:**
-- **Stages** are numbered 1-26 and execute sequentially
+- **Stages** are numbered sequentially (1-26 at the time of writing; see the venture_stages SSOT) and execute in order
 - **Phases** group stages by business function (6 phases)
 - **Operating Modes** control the stage-execution-worker behavior (5 modes)
 - **Chairman Gates** are decision points requiring human approval (blocking or advisory)

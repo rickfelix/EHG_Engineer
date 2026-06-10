@@ -126,7 +126,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L839) - Stage 19 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
+- [25-Stage Overview](../venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
 - [Stage 18: MVP Development Loop](stage-18-mvp-development-loop.md) - Previous stage
 - [Stage 20: Security & Performance](stage-20-security-and-performance.md) - Next stage
 

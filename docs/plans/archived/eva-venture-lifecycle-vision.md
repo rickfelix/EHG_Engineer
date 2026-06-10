@@ -95,7 +95,7 @@ tags: [architecture, auto-generated]
 > **Version**: 4.7
 > **Created**: 2026-02-12
 > **Status**: Draft (Revised + 34 Chairman Clarifications + 8 OpenClaw-Informed Decisions)
-> **Supersedes**: `kb/ehg-review/00_unified_vision_2025.md`, `kb/ehg-review/01_vision_ehg_eva.md`, `docs/guides/workflow/25-stage-venture-lifecycle-overview.md`
+> **Supersedes**: `kb/ehg-review/00_unified_vision_2025.md`, `kb/ehg-review/01_vision_ehg_eva.md`, `docs/guides/workflow/venture-lifecycle-overview.md`
 > **Companion**: [Architecture Document](eva-platform-architecture.md) (Step 2, complete)
 > **Inputs**: Gemini vision diagrams, 25-stage CLI vs GUI gap analysis (PR #1117), CLI implementation review (`stages_v2.yaml`, Decision Filter Engine, Reality Gates, SD Bridge), brainstorming decisions (2026-02-11), OpenClaw architecture research + 8 binding decisions (2026-02-12)
 

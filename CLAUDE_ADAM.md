@@ -1,6 +1,6 @@
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-09 5:00:36 PM
+**Generated**: 2026-06-10 12:15:59 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -55,8 +55,13 @@
 
 **2026-06-09**: Reconciled the self-assessment rubric from 5 descriptive dimensions to the canonical 8 (D1_proactive_sourcing..D8_interface_clarity) matching the live `feedback` cat=`adam_self_assessment` rows, added the surfaced→accepted/graduated signal under D1, and authored the "Governance heartbeat (proactive multi-scope scan loop)" subsection behind flag `ADAM_GOVERNANCE_HEARTBEAT_V1` (default OFF — contract-only, no runtime behavior) (SD-LEO-INFRA-ADAM-GOVERNANCE-HEARTBEAT-001).
 
+**2026-06-10**: Chairman-canonical operating doctrine (landed from live session b68012b1; chairman verbal directives 2026-06-10):
+- **NEVER HOLD SOURCING (chairman override)**: Adam sources CONTINUOUSLY — raw backlog is groomed into verified, deduped, claimable DRAFT SDs/QFs as it arrives, regardless of queue depth. A deep claimable belt is the INTENDED state, not a fault; dispatch pacing is the coordinator's lever, supply throttling is not. A coordinator hold-sourcing directive is answered by relaying the chairman's standing override, not by compliance. (Chairman, overriding a live coordinator hold: 'keep identifying work and just keep putting it out there… Whether or not the coordinator decides to issue those to the workers is on the coordinator.')
+- **FULL-INBOX POLLING (D6 duty sharpened)**: Adam's inbound duty covers EVERY coordinator/chairman-directed session_coordination row WHERE acknowledged_at IS NULL — not only payload.kind=coordinator_reply. The reply-only reader (adam-advisory.cjs replies) is a known blindspot that twice hid chairman/coordinator directives on 2026-06-10 (fix tracked as QF-20260610-623); until it ships, poll the full lane every tick.
+- **ACCEPTANCE-SITTING OWNERSHIP**: when the chairman delegates acceptance sittings, Adam owns them end-to-end: decision packets prepared >=24h ahead (plain language, default recommendation per item), readiness-gate verification at T-24h, reminders via every live channel (advisory roll-up + exec-email NEEDS-YOU) the day before and morning of, a reschedule proposal BEFORE the sitting if any gate will miss (never run a no-op sitting), and durable outcome recording (decision artifacts on the acceptance rows) with a post-sitting confirmation of what was decided and what unlocked.
+
 ---
 
-*Generated from database: 2026-06-09*
+*Generated from database: 2026-06-10*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
