@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-10T11:36:56.597Z
+**Generated**: 2026-06-10T18:05:35.965Z
 **Rows**: 6
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (16 total)
+## Columns (17 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -34,6 +34,7 @@
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | created_by | `text` | YES | - | - |
 | time_horizon | `text` | YES | - | - |
+| initiative_id | `uuid` | YES | - | Initiative grain: the OKR objective this wave advances (single-FK complement to okr_objective_ids JSONB). Nullable; forward-looking adoption. SD-LEO-INFRA-INITIATIVE-BACKBONE-CANONICAL-001. |
 
 ## Constraints
 
@@ -41,6 +42,7 @@
 - `roadmap_waves_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `roadmap_waves_initiative_id_fkey`: initiative_id → objectives(id)
 - `roadmap_waves_roadmap_id_fkey`: roadmap_id → strategic_roadmaps(id)
 
 ### Unique Constraints
