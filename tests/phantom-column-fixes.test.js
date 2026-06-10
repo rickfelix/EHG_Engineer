@@ -94,7 +94,6 @@ describe('audit-write-guard — fail-loud contract', () => {
 
 describe('cluster 1 — claim-lifecycle release CAS on real columns only', () => {
   it('captureClaimSnapshot + releaseClaimOnPROpen succeed against a strict SDv2 mock', async () => {
-    const mod = await import('../lib/claim-lifecycle-release.mjs');
     const strict = makeStrictTable('strategic_directives_v2', {
       selectData: [{ id: 'uuid-1', claiming_session_id: 'sess-1' }],
     });
@@ -122,7 +121,6 @@ describe('cluster 1 — claim-lifecycle release CAS on real columns only', () =>
 describe('clusters 2+3 — audit_log writers emit only real columns', () => {
   it('ship-review-findings-populator recordWarning payload passes the strict mock', async () => {
     const strict = makeStrictTable('audit_log');
-    const mod = await import('../scripts/modules/handoff/executors/lead-final-approval/hooks/ship-review-findings-populator.js');
     // recordWarning is internal; exercise it via the exported flow OR statically + shape-test.
     const src = fs.readFileSync(path.join(ROOT, 'scripts/modules/handoff/executors/lead-final-approval/hooks/ship-review-findings-populator.js'), 'utf8');
     expect(src).toMatch(/event_type: 'ship_review_findings_populator_failed'/);
