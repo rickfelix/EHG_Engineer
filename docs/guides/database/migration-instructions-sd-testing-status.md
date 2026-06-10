@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -33,11 +33,11 @@ The `sd_testing_status` table and related database objects need to be created vi
    - Wait for confirmation message
 
 5. **Verify Migration**
-   - Run verification script:
-     ```bash
-     node scripts/verify-sd-testing-status-migration.js
+   - The original verification script (`scripts/verify-sd-testing-status-migration.js`) is retired; verify directly in SQL Editor:
+     ```sql
+     SELECT to_regclass('public.sd_testing_status'), to_regclass('public.v_untested_sds');
      ```
-   - Should show: "✅ Table EXISTS!" and "✅ View EXISTS!"
+   - Both should return non-NULL (table and view exist)
 
 ### What Gets Created:
 
@@ -73,7 +73,7 @@ The `sd_testing_status` table and related database objects need to be created vi
 ### Post-Migration:
 
 Once migration is applied:
-1. Run `node scripts/query-untested-sds.js` to see untested SDs
+1. Run `node scripts/archive/one-time/query-untested-sds.js` (archived) to see untested SDs
 2. Use `node scripts/qa-engineering-director-enhanced.js <SD-ID>` to test any SD
 3. Check dashboard for testing status visualization (if implemented)
 

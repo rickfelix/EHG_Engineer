@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, stage-zero-experimentation, post-implementation]
+---
+
 # Addendum: Cold Start Problem — Stage Zero Experimentation Framework
 
 > **Type**: Design Critique (Addendum to Post-Implementation Triangulation)

@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-03-01
 tags: [guide, auto-generated]
 ---
@@ -137,8 +137,8 @@ Loads venture context, chairman preferences, lifecycle stage configuration, and 
 - Initializes internal state machine with current stage
 
 **Error Conditions:**
-- Throws `ContextLoadError` if venture not found
-- Throws `ContextLoadError` if chairman preferences cannot be loaded
+- Throws `Error` ("Venture not found") if venture not found (no dedicated `ContextLoadError` class exists in the implementation)
+- Throws if chairman preferences cannot be loaded
 - Logs warning if stage config is incomplete (non-blocking)
 
 **Must be called before:** `processStage()`, `run()`, or `getStatus()`
@@ -320,7 +320,7 @@ TriggerResult {
 - The engine is stateless: all context must be passed in via `input`
 - Preferences are resolved via ChairmanPreferenceStore before being passed here
 - Trigger results are persisted in `eva_audit_log` for traceability
-- Constraint drift results from `constraint-drift-detector.js` can be converted to filter triggers via `buildFilterEnginePayload()`
+- Constraint drift results from `lib/eva/constraint-drift-detector.js` can be converted to filter triggers via `buildFilterEnginePayload()`
 
 ---
 

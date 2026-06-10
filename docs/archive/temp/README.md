@@ -1,3 +1,12 @@
+---
+category: archive
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [archive, temp]
+---
+
 # Temporary Files Archive
 
 This directory contains temporary files moved from the project root.

@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [reference]
+---
+
 # LEO Protocol Consistency Linter — Reference
 
 Owners: Protocol maintainers
@@ -29,7 +38,7 @@ Bypasses log to `leo_lint_run_history` with `trigger='bypass'` and non-null `byp
 
 SD-PROTOCOL-LINTER-DASHBOARD-001 ships a read-only React dashboard in the EHG app surfacing the linter's audit tables without requiring SQL.
 
-**Access**: `/admin/protocol-lint` (port 8080), gated by `AdminRoute` (requires role = chairman / executive / system_admin_ops / admin).
+**Access**: `/admin/protocol-lint` (port 8080), gated by the EHG app's `AdminRoute` component (requires role = chairman / executive / system_admin_ops / admin).
 
 **What it shows**:
 - **7-day trend chart**: daily violation counts (total / block / warn) at the top of the page.
@@ -103,7 +112,7 @@ All endpoints:
 | Code rules | `scripts/protocol-lint/rules/code/*.mjs` |
 | Rule fixtures | `scripts/protocol-lint/fixtures/*.json` |
 | Dashboard API | `server/routes/protocol-lint.js` (EHG_Engineer) |
-| Dashboard UI | `src/pages/admin/ProtocolLint.tsx` + `src/components/admin/protocol-lint/*.tsx` (EHG app) |
+| Dashboard UI | `src/pages/admin/ProtocolLint.tsx` + `src/components/admin/protocol-lint/*.tsx` (in the EHG app repo, not EHG_Engineer) |
 | Migration | `database/migrations/20260422_protocol_linter_tables.sql` |
 
 ## Adding a rule

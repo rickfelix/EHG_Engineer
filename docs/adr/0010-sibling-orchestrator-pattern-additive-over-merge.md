@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: 207ccc64fd06bfa80341f50266d5fdad58930e4342e5a846adea15b8b5a0d720 -->
 
 # ADR-0010: Sibling orchestrators preferred over merge into existing orchestrator

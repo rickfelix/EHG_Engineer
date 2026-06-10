@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -459,7 +459,7 @@ SD has 12+ user stories?
 - `docs/reference/test-timeout-handling.md` - Testing strategies
 - `docs/reference/context-monitoring.md` - Context management
 - `CLAUDE.md` - LEO Protocol 5-phase workflow
-- `docs/reference/unified-handoff-system.md` - Handoff creation
+- `docs/leo/handoffs/handoff-system-guide.md` - Handoff creation
 
 ---
 

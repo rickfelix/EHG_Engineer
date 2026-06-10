@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -244,8 +244,8 @@ const subscription = supabase
 
 ### 7.1 Run Integration Tests
 ```bash
-# From EHG_Engineer root directory
-node scripts/test-leo-ci-cd-integration.js
+# From EHG_Engineer root directory (script now archived)
+node scripts/archive/one-time/test-leo-ci-cd-integration.js
 ```
 
 ### 7.2 Test Webhook Processing
@@ -259,7 +259,7 @@ curl -X POST http://localhost:3000/api/webhooks/github-ci-status \
 
 ### 7.3 Test CI/CD Validation
 ```bash
-node scripts/leo-ci-cd-validator.js SD-016 EXEC
+node scripts/archive/one-time/leo-ci-cd-validator.js SD-016 EXEC  # (archived)
 ```
 
 ### 7.4 Test DevOps Agent

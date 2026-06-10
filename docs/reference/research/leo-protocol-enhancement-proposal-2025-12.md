@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -478,7 +478,7 @@ Pareto analysis identified that **20% of the proposed work delivers 80% of the v
 
 #### 1. DB Audit Logging Fix (CRITICAL)
 
-**Finding**: `scripts/auto-run-subagents.js` (lines 37-69) runs sub-agents via `execAsync` and parses stdout, but **never writes results to `subagent_activations` table**.
+**Finding**: `scripts/archive/one-time/auto-run-subagents.js` (lines 37-69) runs sub-agents via `execAsync` and parses stdout, but **never writes results to `subagent_activations` table**.
 
 **Risk**: Hallucination checks pass in console but leave no DB record. Gate 2.5 fails because it looks for DB records.
 
@@ -502,7 +502,7 @@ await supabase.from('subagent_activations').insert({
 
 **Risk**: If sub-agent prints debug JSON or library warnings, parsing breaks. "Fragile Scraping".
 
-**Fix**: Standardize sub-agents to accept `--outfile` argument:
+**Fix**: Standardize sub-agents to accept `--outfile` argument (`my-agent.js` is an illustrative placeholder, not a real script):
 ```bash
 node scripts/my-agent.js --outfile=./temp/result.json
 ```
@@ -555,7 +555,7 @@ Orchestrator reads file instead of stdout. Guarantees 100% JSON validity.
     □ Integration with execute-subagent.js
 
 □ Day 4: DB Audit Logging + IPC Fix (CRITICAL)
-  □ scripts/auto-run-subagents.js
+  □ scripts/archive/one-time/auto-run-subagents.js
     □ INSERT into subagent_activations table on completion
     □ Add --outfile argument support for sub-agents
     □ Read result from file instead of stdout regex
@@ -574,7 +574,7 @@ Orchestrator reads file instead of stdout. Guarantees 100% JSON validity.
 | File | Change | Priority |
 |------|--------|----------|
 | `playwright.config.js` | Add `trace: 'on'`, `recordHar` config | Day 1 |
-| `scripts/auto-run-subagents.js` | **DB audit logging** + file-based IPC | Day 4 (CRITICAL) |
+| `scripts/archive/one-time/auto-run-subagents.js` | **DB audit logging** + file-based IPC | Day 4 (CRITICAL) |
 | `lib/reporters/leo-playwright-reporter.js` | Enhance to generate Evidence Pack manifest | Day 2 |
 | `scripts/execute-subagent.js` | Add hallucination validation before accepting output | Day 3 |
 | `package.json` | Add `clean:artifacts` script | Day 5 |

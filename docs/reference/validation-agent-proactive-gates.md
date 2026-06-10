@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -103,7 +103,7 @@ Every gate is MANDATORY. Gates BLOCK progress when critical issues detected.
 node scripts/orchestrate-phase-subagents.js LEAD_PRE_APPROVAL <SD-ID>
 
 # Manual
-node scripts/systems-analyst-codebase-audit.js <SD-ID>
+node scripts/archive/one-time/systems-analyst-codebase-audit.mjs <SD-ID>
 ```
 
 **Blocks When**:
@@ -139,7 +139,7 @@ node scripts/systems-analyst-codebase-audit.js <SD-ID>
 node scripts/orchestrate-phase-subagents.js PLAN_PRD <SD-ID>
 
 # Manual
-node scripts/systems-analyst-codebase-audit.js <SD-ID>
+node scripts/archive/one-time/systems-analyst-codebase-audit.mjs <SD-ID>
 node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 ```
 
@@ -336,7 +336,7 @@ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>
 
 # PLAN supervisor verification
 /leo-verify [what to check]
-node scripts/plan-supervisor-verification.js --prd PRD-ID
+node scripts/archive/one-time/plan-supervisor-verification.js --prd PRD-ID
 ```
 
 **Blocks When**:
@@ -376,7 +376,7 @@ ORDER BY created_at;
 
 ```bash
 # For specific validation task
-node scripts/systems-analyst-codebase-audit.js <SD-ID>
+node scripts/archive/one-time/systems-analyst-codebase-audit.mjs <SD-ID>
 
 # For targeted sub-agent execution
 node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
@@ -640,7 +640,7 @@ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>
 
 **Lesson**: GATE 4 UI integration verification MANDATORY - "Done" = component + integration + accessible via UI + journey tested
 
-**Reference**: `docs/lessons-learned/2025-10-26-disconnected-venture-creation-dialog.md`
+**Reference**: `docs/lessons-learned/2025-10-26-disconnected-venture-creation-dialog.md` *(retired — document no longer in the tree)*
 
 ---
 
@@ -735,7 +735,7 @@ if (!backlogItems || backlogItems.length === 0) {
 
 **Detailed Guides**:
 - `docs/reference/validation-enforcement-patterns.md` - Enforcement mechanisms catalog
-- `scripts/systems-analyst-codebase-audit.js` - Validation agent implementation
+- `scripts/archive/one-time/systems-analyst-codebase-audit.mjs` - Validation agent implementation
 - `.claude/agents/validation-agent.md` - Validation agent configuration
 
 ---
@@ -745,7 +745,7 @@ if (!backlogItems || backlogItems.length === 0) {
 ### One-Line Decision
 
 ```
-Need to validate SD/PRD/implementation? → node scripts/systems-analyst-codebase-audit.js <SD-ID>
+Need to validate SD/PRD/implementation? → node scripts/archive/one-time/systems-analyst-codebase-audit.mjs <SD-ID>
 ```
 
 ### Four Gates, Four Questions

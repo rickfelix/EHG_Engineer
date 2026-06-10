@@ -1,3 +1,12 @@
+---
+category: archive
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [archive]
+---
+
 # Archive
 
 This directory contains archived documentation that is no longer active but preserved for historical reference and context.

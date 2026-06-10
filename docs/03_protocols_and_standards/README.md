@@ -1,3 +1,12 @@
+---
+category: protocol
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [protocol, protocols-and-standards]
+---
+
 # Handoff Documentation
 
 > **DATABASE-FIRST (LEO Protocol v4.3.3)**: Handoffs are stored in the `sd_phase_handoffs` table.

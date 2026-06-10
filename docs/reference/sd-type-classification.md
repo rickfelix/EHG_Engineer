@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -541,7 +541,7 @@ The `type_locked` flag is stored in the `governance_metadata` field:
 
 #### 1. Handoff Validation Gates
 
-The `sd-type-validation.js` gate checks the lock before auto-correcting:
+The `sd-type-validation.js` gate (`scripts/modules/handoff/executors/lead-to-plan/gates/sd-type-validation.js`) checks the lock before auto-correcting:
 
 ```javascript
 // scripts/modules/handoff/executors/lead-to-plan/gates/sd-type-validation.js

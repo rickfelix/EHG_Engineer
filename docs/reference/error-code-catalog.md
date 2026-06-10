@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [reference]
+---
+
 # Error Code Catalog
 
 Reference for all error codes emitted by the LEO Protocol handoff system, gate validators, database constraints, and runtime infrastructure.
@@ -39,7 +48,7 @@ These codes are returned when a phase handoff fails validation. Each rejection i
 | `PLAN_PRESENTATION_INVALID` | PLAN-TO-EXEC | Missing or incomplete `plan_presentation` in metadata | Handoff metadata lacks `goal_summary`, `file_scope`, `execution_plan`, or `testing_strategy` | Add `plan_presentation` object: `goal_summary` (<=300 chars), `file_scope`, `execution_plan` steps, `testing_strategy` (unit_tests + e2e_tests). |
 | `WORKFLOW_REVIEW_FAILED` | PLAN-TO-EXEC | Design sub-agent detected workflow issues | Dead ends, circular flows, missing error recovery in user stories | Fix workflow issues in user story `acceptance_criteria` and `implementation_context`. Target UX score >= 6.0/10. Invoke `subagent_type="design-agent"`. |
 | `PREREQUISITE_HANDOFF_CHECK` | Any | Required prior handoff not completed | Attempting EXEC-TO-PLAN without completing PLAN-TO-EXEC first | Complete the prerequisite handoff. Check `sd_phase_handoffs` for the required prior record. Also known as `ERR_CHAIN_INCOMPLETE`. |
-| `PLAN_TO_LEAD_HANDOFF_EXISTS` | LEAD-FINAL-APPROVAL | PLAN-TO-LEAD handoff not yet accepted | Trying final approval before verification phase completes | Run: `node scripts/unified-handoff-system.js execute PLAN-TO-LEAD <SD-ID>` |
+| `PLAN_TO_LEAD_HANDOFF_EXISTS` | LEAD-FINAL-APPROVAL | PLAN-TO-LEAD handoff not yet accepted | Trying final approval before verification phase completes | Run: `node scripts/handoff.js execute PLAN-TO-LEAD <SD-ID>` |
 | `DELIVERABLES_INCOMPLETE` | PLAN-TO-LEAD | Not all SD deliverables marked completed | Some entries in `sd_scope_deliverables` still pending | Query and update: `SELECT * FROM sd_scope_deliverables WHERE sd_id = '<UUID>' AND completion_status != 'completed'` |
 | `INVALID_STATUS` | LEAD-FINAL-APPROVAL | SD status is not `pending_approval` | SD is still `in_progress` or already `completed` | Run PLAN-TO-LEAD handoff first to move SD to `pending_approval`. |
 
@@ -48,7 +57,7 @@ These codes are returned when a phase handoff fails validation. Each rejection i
 | Code | Handoff | Description | Common Cause | Fix |
 |------|---------|-------------|--------------|-----|
 | `MANDATORY_TESTING_VALIDATION` | EXEC-TO-PLAN | TESTING sub-agent was not run | Feature/QA SD completed without running test suite | Run `npm test` (unit) and `npx playwright test` (E2E). Exempt types: documentation only. Invoke `subagent_type="testing-agent"`. Also reported as `ERR_TESTING_REQUIRED`. |
-| `TEST_EVIDENCE_AUTO_CAPTURE` | EXEC-TO-PLAN | No test evidence found in standard locations | Tests ran but reports not captured | Run tests to generate evidence: `npx playwright test`, `npm test -- --coverage`. Then: `node scripts/test-evidence-ingest.js --sd-id <SD-ID>`. |
+| `TEST_EVIDENCE_AUTO_CAPTURE` | EXEC-TO-PLAN | No test evidence found in standard locations | Tests ran but reports not captured | Run tests to generate evidence: `npx playwright test`, `npm test -- --coverage`. Then re-run the handoff — evidence is auto-ingested by the EXEC-TO-PLAN gate via `scripts/lib/test-evidence-ingest.js`. |
 | `E2E_COVERAGE_INCOMPLETE` | EXEC-TO-PLAN | Not all user stories have E2E test coverage | Some stories lack corresponding test files | Write E2E tests for uncovered user stories. Each story needs at least one passing test. |
 | `BMAD_VALIDATION_FAILED` | Any | BMAD acceptance criteria quality check failed | User stories lack proper Given/When/Then acceptance criteria | Regenerate stories with proper acceptance criteria. Invoke `subagent_type="general-purpose"`. |
 | `BMAD_PLAN_TO_EXEC_FAILED` | PLAN-TO-EXEC | BMAD quality check failed for PLAN-TO-EXEC | Story quality insufficient for entering EXEC phase | Improve user story acceptance criteria to meet BMAD standards. |
@@ -85,7 +94,7 @@ These codes are returned when a phase handoff fails validation. Each rejection i
 | `SYSTEM_ERROR` | Any | Unexpected system error during handoff execution | Database connectivity, module not found, unhandled exception | Check logs. Verify database connectivity and module paths. |
 | `SD_NOT_FOUND` | Any | SD not found in `strategic_directives_v2` | Typo in SD ID or SD was deleted | Verify `sd_key` vs `id` (UUID). Create SD: `node scripts/leo-create-sd.js`. |
 | `TEMPLATE_NOT_FOUND` | Any | Handoff template not found | Template deleted from `leo_handoff_templates` | Contact administrator. |
-| `DATABASE_FIELD_ERROR` | Any | Specific field error in database table | Wrong field name, wrong data type, missing required field | Check exact `table.field` path in error details. See `docs/reference/schema/handoff-field-reference.md`. |
+| `DATABASE_FIELD_ERROR` | Any | Specific field error in database table | Wrong field name, wrong data type, missing required field | Check exact `table.field` path in error details. See `docs/reference/schema/engineer/tables/sd_phase_handoffs.md`. |
 | `FIDELITY_DATA_MISSING` | PLAN-TO-LEAD | Gate 2 fidelity data missing from EXEC-TO-PLAN handoff | EXEC-TO-PLAN handoff metadata lacks `gate2_validation` | Update `sd_phase_handoffs.metadata.gate2_validation` with `{score, passed, gate_scores}`. |
 
 ---

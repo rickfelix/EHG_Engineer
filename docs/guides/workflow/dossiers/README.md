@@ -1,3 +1,12 @@
+---
+category: guide
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [guide, guides, workflow, dossiers]
+---
+
 # Stage Operating Dossiers — Index
 
 **Vision Version**: v4.7 (aligned 2026-02-14)
@@ -113,7 +122,7 @@ This directory contains operating dossiers for each of the 25 stages in the EHG 
 
 ## Vision Alignment
 
-**Canonical Source**: `docs/plans/eva-platform-architecture.md` (Vision v4.7, Section 5)
+**Canonical Source**: `docs/plans/archived/eva-platform-architecture.md` (Vision v4.7, Section 5; document now archived)
 **Last Aligned**: 2026-02-14
 **Phase Model**: 6-phase (THE TRUTH, THE ENGINE, THE IDENTITY, THE BLUEPRINT, THE BUILD LOOP, LAUNCH & LEARN)
 

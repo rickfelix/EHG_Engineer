@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: C:/Users/rickf/.claude/plans/venture-stage-design-standards-1-3.md -->
 <!-- SD Key: SD-LEO-FEAT-APPLY-VENTURE-STAGE-001 -->
 <!-- Archived at: 2026-03-09T23:15:48.654Z -->

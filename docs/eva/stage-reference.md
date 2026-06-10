@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-10
+tags: [documentation, eva]
+---
+
 # EVA Venture Pipeline Stage Reference
 
 > Authoritative reference for the EVA venture lifecycle pipeline.

@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-28
+tags: [reference]
+---
+
 # Venture Pipeline Playbook v1.2
 
 > **Forward-looking guide for taking a venture through the EHG pipeline**, distilled from the **CronGenius M1 pilot** — the first venture to complete a full orchestrator (parent + 3 children) end-to-end. **Two-session-validated** across the independent executions of Child B (Phase 2: auth + abuse prevention) and Child C (Phase 3: observability + portal).

@@ -2,7 +2,7 @@
 category: protocol
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [protocol, auto-generated]
 ---
@@ -172,7 +172,7 @@ Gate 0 consists of 6 enforcement mechanisms operating at different workflow stag
 ---
 
 ### Layer 4: Verification Script (Manual)
-**File**: `scripts/verify-sd-phase.js`
+**File**: `scripts/verify-sd-phase.js` (retired — script no longer in the tree; phase verification now happens inside `scripts/handoff.js` gates)
 **When**: Manual invocation before implementation
 
 **Usage**:
@@ -212,7 +212,7 @@ $ node scripts/verify-sd-phase.js SD-LEO-GATE0-001
    Run: node scripts/handoff.js execute LEAD-TO-PLAN SD-LEO-GATE0-001
 ```
 
-**Code Location**: `scripts/verify-sd-phase.js:1-184`
+**Code Location**: `scripts/verify-sd-phase.js:1-184` (retired)
 
 ---
 
@@ -248,7 +248,7 @@ $ node scripts/verify-sd-phase.js SD-LEO-GATE0-001
 ---
 
 ### Layer 6: Orchestrator Progress Fix (Monitoring)
-**File**: `scripts/update-orchestrator-progress.js`
+**File**: `scripts/archive/one-time/update-orchestrator-progress.js` (archived)
 **When**: Manual invocation or scheduled
 
 **Purpose**: Correct orchestrator progress calculation based on actual child completions.
@@ -285,7 +285,7 @@ Updating: SD-LEO-GATE0-001
   ✅ Progress updated to 100%
 ```
 
-**Code Location**: `scripts/update-orchestrator-progress.js:1-213`
+**Code Location**: `scripts/archive/one-time/update-orchestrator-progress.js:1-213`
 
 ---
 
@@ -442,7 +442,7 @@ git commit -m "feat(SD-XXX-001): large refactor..."
 
 ```bash
 # 1. Check the SD status in database
-node scripts/verify-sd-phase.js SD-XXX-001
+# (scripts/verify-sd-phase.js is retired — query strategic_directives_v2 directly)
 
 # 2. Run required handoffs if SD in draft
 node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
@@ -543,12 +543,12 @@ git checkout -b test/large-change
 git commit -m "chore: large refactor"
 # Expected: Block due to LOC threshold
 
-# Test Layer 4: Verification script
-node scripts/verify-sd-phase.js SD-LEO-GATE0-001
+# Test Layer 4: Verification script (retired — scripts/verify-sd-phase.js no longer in tree)
+# node scripts/verify-sd-phase.js SD-LEO-GATE0-001
 # Expected: Output showing SD status and validation result
 
-# Test Layer 6: Orchestrator progress
-node scripts/update-orchestrator-progress.js SD-LEO-GATE0-001
+# Test Layer 6: Orchestrator progress (script now archived)
+node scripts/archive/one-time/update-orchestrator-progress.js SD-LEO-GATE0-001
 # Expected: Progress recalculated based on children
 ```
 
@@ -614,8 +614,8 @@ supabase.from('strategic_directives_v2')
 
 **Resolution**:
 ```bash
-# Run progress recalculation
-node scripts/update-orchestrator-progress.js SD-ORCHESTRATOR-001
+# Run progress recalculation (script now archived)
+node scripts/archive/one-time/update-orchestrator-progress.js SD-ORCHESTRATOR-001
 
 # Verify children have PLAN-TO-LEAD handoffs accepted
 node -e "

@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -247,21 +247,21 @@ Design considers performance:
 
 ### Audit Frequency
 - **Per PRD:** Run design audit before EXEC
-- **Weekly:** Full system audit (`node scripts/design-ui-ux-audit.js --all`)
+- **Weekly:** Full system audit (`node scripts/archive/one-time/design-ui-ux-audit.js --all`)
 - **Per Release:** Comprehensive UI/UX review
 
 ## 🔧 Tools & Scripts
 
-### Audit Script
+### Audit Script (archived under `scripts/archive/one-time/`)
 ```bash
 # Audit all active PRDs
-node scripts/design-ui-ux-audit.js --all
+node scripts/archive/one-time/design-ui-ux-audit.js --all
 
 # Audit specific PRD
-node scripts/design-ui-ux-audit.js --prd PRD-2025-001
+node scripts/archive/one-time/design-ui-ux-audit.js --prd PRD-2025-001
 
 # Audit by Strategic Directive
-node scripts/design-ui-ux-audit.js --sd SD-2025-001
+node scripts/archive/one-time/design-ui-ux-audit.js --sd SD-2025-001
 ```
 
 ### Command

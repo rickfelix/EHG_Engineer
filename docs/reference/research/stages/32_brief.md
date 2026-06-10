@@ -2,11 +2,12 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
 # Stage 32 Research Brief: Customer Success & Retention Engineering
+> **Note**: This stage belongs to the retired 40-stage venture workflow (stages 27-40 retired); the live workflow uses stages 0-25.
 
 
 ## Metadata

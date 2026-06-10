@@ -1,3 +1,12 @@
+---
+category: protocol
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [protocol, protocols-and-standards, exceptions]
+---
+
 # Governance Exceptions Directory
 
 **Purpose**: This directory stores Chairman-approved exceptions to governance policies, particularly governance policy exceptions for stages.
@@ -28,7 +37,7 @@ exceptions/
 
 **Example Filenames**:
 - `stage-04-compliance-exception.md` (Stage 4 exception)
-- `stage-38-compliance-exception.md` (Stage 38 exception)
+- `stage-23-compliance-exception.md` (Stage 23 exception)
 
 ### 2. Timeline Exceptions
 **Naming**: `stage-XX-timeline-exception.md`

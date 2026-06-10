@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-1-high-level]
+---
+
 # Phase 1 Ground-Truth Validation — 25-Stage Venture Workflow
 
 > This document compares claims from all three AI assessments (OpenAI, Gemini/AntiGravity, Claude/Anthropic) against the actual codebase. Claude/Anthropic has codebase access; OpenAI and Gemini evaluated from the prompt description only.

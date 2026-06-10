@@ -1,3 +1,12 @@
+---
+category: archive
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [archive, protocols]
+---
+
 # Archived Protocol Versions
 
 This directory contains archived LEO Protocol versions that are no longer active but preserved for historical reference.

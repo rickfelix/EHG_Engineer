@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-11
+tags: [reference]
+---
+
 # Canonical Write Paths Registry
 
 **Owner:** SD-LEO-INFRA-LEAD-EMPIRICAL-PRECHECK-001 / FR-4

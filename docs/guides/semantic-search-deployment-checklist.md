@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -120,7 +120,7 @@ tags: [guide, auto-generated]
 
 - [ ] **Generate sub-agent embeddings (one-time)**
   ```bash
-  node scripts/generate-subagent-embeddings.js
+  node scripts/generate-subagent-embeddings.js # (retired - script no longer in tree)
   ```
   - Expected: 14 sub-agents processed
   - Expected cost: ~$0.0001
@@ -135,7 +135,7 @@ tags: [guide, auto-generated]
 
 - [ ] **Generate SD embeddings (batch)**
   ```bash
-  node scripts/generate-sd-embeddings.js
+  node scripts/archive/one-time/generate-sd-embeddings.js
   ```
   - Expected: ~47 SDs processed (varies by environment)
   - Expected cost: ~$0.0006 per 50 SDs
@@ -272,13 +272,13 @@ tags: [guide, auto-generated]
 ### Month 1: Continuous Improvement
 
 - [ ] **Regenerate embeddings for new sub-agents**
-  - If new agents added, run: `node scripts/generate-subagent-embeddings.js --force`
+  - If new agents added, run: `node scripts/generate-subagent-embeddings.js --force` (retired — script no longer in tree)
 
 - [ ] **Batch process any SDs missing embeddings**
-  - Weekly: `node scripts/generate-sd-embeddings.js` (skips existing)
+  - Weekly: `node scripts/archive/one-time/generate-sd-embeddings.js` (skips existing)
 
 - [ ] **Review and refine domain descriptions**
-  - Update `SUB_AGENT_DOMAINS` in `scripts/generate-subagent-embeddings.js`
+  - Update `SUB_AGENT_DOMAINS` in `scripts/generate-subagent-embeddings.js` (retired — script no longer in tree)
   - Regenerate if descriptions change significantly
 
 ---
@@ -343,8 +343,8 @@ If critical issues arise, rollback steps:
 ### Key Commands
 ```bash
 # Generate embeddings
-node scripts/generate-subagent-embeddings.js
-node scripts/generate-sd-embeddings.js
+node scripts/generate-subagent-embeddings.js # (retired - script no longer in tree)
+node scripts/archive/one-time/generate-sd-embeddings.js
 
 # Test hybrid selection
 node lib/context-aware-sub-agent-selector.js "<title>" "<description>" --hybrid

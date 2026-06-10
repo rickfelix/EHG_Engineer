@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: github-actions[bot]
+last_updated: 2026-06-10
+tags: [reference, schema, engineer, tables]
+---
+
 # eva_cascade_errors Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
@@ -24,7 +33,7 @@
 | stage | `text` | **NO** | - | vision_to_archplan | archplan_to_orchestrator |
 | error_code | `text` | **NO** | - | - |
 | error_message | `text` | **NO** | - | - |
-| remediation_command | `text` | YES | - | Suggested operator action, e.g. "node scripts/archplan-command.mjs --vision VISION-FOO-L2-001" |
+| remediation_command | `text` | YES | - | Suggested operator action, e.g. "node scripts/eva/archplan-command.mjs --vision VISION-FOO-L2-001" |
 | metadata | `jsonb` | **NO** | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |

@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: brainstorm/2026-03-06-vision-page-capability-integration.md -->
 <!-- SD Key: SD-LEO-FEAT-VISION-PAGE-CAPABILITY-001 -->
 <!-- Archived at: 2026-03-06T20:13:28.879Z -->

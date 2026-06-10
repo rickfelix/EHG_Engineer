@@ -2,7 +2,7 @@
 category: general
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: rickfelix
 last_updated: 2026-02-28
 tags: [general, auto-generated]
 ---
@@ -292,7 +292,7 @@ Auto-generated documentation for 312+ database tables:
 
 | Document | Purpose |
 |----------|---------|
-| [planning/](archive/plans/documentation-cleanup-master-plan.md) | Planning documentation |
+| planning/ (archived plans live in docs/plans/archived/) | Planning documentation |
 
 ---
 

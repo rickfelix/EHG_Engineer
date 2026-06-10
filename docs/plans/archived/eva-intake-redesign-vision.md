@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 # Vision: EVA Intake Redesign — Interactive 3-Dimension Classification
 
 ## Executive Summary

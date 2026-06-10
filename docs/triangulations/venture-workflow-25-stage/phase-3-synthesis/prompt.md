@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-3-synthesis]
+---
+
 # Phase 3 Final Synthesis Prompt — 25-Stage Venture Workflow Triangulation
 
 You are performing the final synthesis of a 3-phase triangulation exercise evaluating a 25-stage venture workflow system. The system is a React/TypeScript frontend that renders AI-generated advisory data through a structured venture lifecycle, organized into 6 groups of stages. Each stage has a dedicated renderer component that displays LLM-generated analysis.

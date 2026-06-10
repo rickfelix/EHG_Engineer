@@ -219,7 +219,7 @@ function generateCore(data, fileMapping) {
 
 > Sub-agent routing enforced by PreToolUse hook. See \`scripts/hooks/pre-tool-enforce.cjs\`.
 > For Five-Point Brief (sub-agent prompt quality), see CLAUDE.md Issue Resolution section.
-> For Strunkian writing standards, see \`docs/reference/strunkian-writing-standards.md\`.
+> For Strunkian writing standards, see \`.strunkian-rules.json\` (enforced by \`scripts/docmon.js\` at pre-push; the former \`docs/reference/strunkian-writing-standards.md\` guide is retired).
 
 ---
 

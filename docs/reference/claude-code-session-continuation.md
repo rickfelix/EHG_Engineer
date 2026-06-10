@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -631,7 +631,7 @@ See: `docs/leo/protocol/v4.3.3-auto-proceed-enhancement.md` for full details.
 - `CLAUDE.md` - LEO Protocol overview
 - `docs/reference/context-monitoring.md` - Context management strategies
 - `docs/reference/checkpoint-pattern.md` - Checkpoint implementation
-- `docs/reference/unified-handoff-system.md` - Handoff creation
+- `docs/leo/handoffs/handoff-system-guide.md` - Handoff creation
 - `docs/leo/protocol/v4.3.3-auto-proceed-enhancement.md` - AUTO-PROCEED and cross-session continuation
 - `docs/06_deployment/stop-hook-operations.md` - Stop hook operational runbook
 

@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-06
+tags: [documentation, ops]
+---
+
 # Claim-sweep in-flight protection (enablement runbook)
 
 **SD-LEO-INFRA-ENABLE-CLAIM-SWEEP-001**

@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-29
+tags: [documentation]
+---
+
 # Harness Backlog — DEPRECATED
 
 **As of 2026-04-29, harness-bug capture moved from this file to the `feedback` table** (`category='harness_backlog'`).

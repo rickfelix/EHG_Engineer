@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: docs/plans/portfolio-balance-venture-prioritization-architecture.md -->
 <!-- SD Key: SD-LEO-FEAT-PORTFOLIO-BALANCE-SYSTEM-001 -->
 <!-- Archived at: 2026-03-13T13:13:03.032Z -->

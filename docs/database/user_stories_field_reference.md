@@ -1,3 +1,12 @@
+---
+category: database
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [database]
+---
+
 # user_stories — Field Reference
 
 **Source of truth**: `public.user_stories` table (Supabase).

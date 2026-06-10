@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-5-the-build]
+---
+
 # Phase 2 Ground-Truth Validation — Group 5: THE_BUILD (Stages 17-22)
 
 > Compares claims from all three AI assessments (OpenAI, Gemini, Claude) against each other and against the codebase. Claude has direct codebase access; OpenAI and Gemini evaluated from prompt + Stage 1 consensus context. All line-number references below are from Claude's analysis, which provides the most granular sourcing.

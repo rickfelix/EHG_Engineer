@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-4-the-blueprint]
+---
+
 # Phase 2 Deep Dive: Group 4 — THE_BLUEPRINT (Stages 13-16)
 
 ## Context from Phase 1

@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -380,8 +380,8 @@ All overrides are logged for analysis.
 ### See Also
 - Token logging: `node scripts/token-logger.js --log`
 - Escalation events: Check `.token-log.json` for escalation history
-- Phase 0 MVP: `docs/research/phase-0-mvp-implementation.md`
-- Haiku-First Strategy: `docs/research/haiku-first-strategy.md`
+- Phase 0 MVP: `docs/reference/research/phase-0-mvp-implementation.md`
+- Haiku-First Strategy: `docs/reference/research/haiku-first-strategy.md`
 ```
 
 ---

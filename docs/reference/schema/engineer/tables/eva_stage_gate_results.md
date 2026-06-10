@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: github-actions[bot]
+last_updated: 2026-06-10
+tags: [reference, schema, engineer, tables]
+---
+
 # eva_stage_gate_results Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB

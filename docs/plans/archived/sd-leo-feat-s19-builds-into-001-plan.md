@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-25
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: C:/Users/rickf/.claude/plans/s19-build-into-s17-design-repo.md -->
 <!-- SD Key: SD-LEO-FEAT-S19-BUILDS-INTO-001 -->
 <!-- Archived at: 2026-05-23T13:51:23.564Z -->

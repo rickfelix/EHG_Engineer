@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -137,7 +137,7 @@ The SDIP Strategic Directive had a comprehensive PRD script (`create-sdip-prd.js
 4. Led to incomplete PRDs reaching implementation
 
 ### LEO 5.0 Solution
-- **All one-off scripts archived** to `scripts/archived-prd-scripts/`
+- **All one-off scripts archived** to `scripts/archive/prd-scripts/`
 - **Standard CLI enforced** via `add-prd-to-database.js`
 - **Database-first governance** strengthened
 - **Pre-commit hooks** prevent new one-off scripts
@@ -175,7 +175,7 @@ See [PRD Integration Section Guide](./prd-integration-section-guide.md) for deta
 
 ### Step 3: Validate PRD Quality
 ```bash
-node scripts/prd-validation-checklist.js PRD-XXXXXXXXX
+node scripts/archive/one-time/prd-validation-checklist.js PRD-XXXXXXXXX
 ```
 
 **Quality Thresholds**:
@@ -253,11 +253,11 @@ Include PRD validation results in PLAN-to-EXEC handoff.
 - **`scripts/add-prd-to-database.js`** - Standard CLI for PRD creation (USE THIS)
 
 ### PRD Validation
-- **`scripts/prd-validation-checklist.js`** - Quality validation
+- **`scripts/archive/one-time/prd-validation-checklist.js`** - Quality validation (archived)
 
 ### PRD Management
 - **`scripts/update-prd-status.js`** - Update PRD progress
-- **`scripts/complete-prd-validation.js`** - Mark PRD as complete
+- **`scripts/complete-prd-validation.js`** - Mark PRD as complete (retired — no longer in the tree)
 
 ### DEPRECATED (Do Not Use)
 - ❌ `scripts/create-{name}-prd.js` - One-off scripts (archived)
@@ -265,7 +265,7 @@ Include PRD validation results in PLAN-to-EXEC handoff.
 - ❌ `scripts/insert-prd-*.js` - Legacy scripts (archived)
 - ❌ `scripts/enhance-prd-*.js` - Legacy scripts (archived)
 
-**All archived scripts** in `scripts/archived-prd-scripts/` (200+ scripts).
+**All archived scripts** in `scripts/archive/prd-scripts/` (200+ scripts).
 
 **Policy**: See [Script Creation Guidelines](../reference/script-creation-guidelines.md)
 
@@ -302,10 +302,10 @@ Include PRD validation results in PLAN-to-EXEC handoff.
 node scripts/add-prd-to-database.js
 
 # Validate PRD quality
-node scripts/prd-validation-checklist.js PRD-XXXXXXXXX
+node scripts/archive/one-time/prd-validation-checklist.js PRD-XXXXXXXXX
 
 # Verify database state
-node scripts/query-prd.js PRD-XXXXXXXXX
+node scripts/archive/one-time/query-prd.js PRD-XXXXXXXXX
 ```
 
 ---
@@ -319,7 +319,7 @@ Instead:
 1. Extract the PRD content (requirements, context, etc.)
 2. Run standard CLI: `node scripts/add-prd-to-database.js`
 3. Enter content via interactive prompts
-4. Archive legacy script: `mv script.js scripts/archived-prd-scripts/`
+4. Archive legacy script: `mv script.js scripts/archive/prd-scripts/`
 
 ### If Legacy Script Has Unique Logic
 1. Document what makes it unique

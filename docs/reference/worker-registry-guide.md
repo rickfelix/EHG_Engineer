@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [reference]
+---
+
 # Worker Registry Guide
 
 ## Overview
@@ -23,7 +32,7 @@ Each worker entry in `config/workers.json`:
 ## Adding a New Worker
 
 1. Edit `config/workers.json`
-2. Add a new entry to the `workers` array:
+2. Add a new entry to the `workers` array (the values below are illustrative placeholders — `scripts/my-worker.js` is not a real script):
 
 ```json
 {

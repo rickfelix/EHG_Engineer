@@ -2,11 +2,13 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
 # SOP Index - 40-Stage Venture Workflow
+
+> **Note**: This index documents the retired 40-stage venture workflow; the live workflow uses stages 0-25. Stage numbers above 25 refer to the retired numbering.
 
 
 ## Metadata
