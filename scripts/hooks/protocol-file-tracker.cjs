@@ -42,7 +42,10 @@ const PROTOCOL_FILES = [
   'CLAUDE_PLAN_DIGEST.md',
   'CLAUDE_EXEC_DIGEST.md',
   'CLAUDE_CORE_DIGEST.md',
-  'CLAUDE_DIGEST.md'
+  'CLAUDE_DIGEST.md',
+  // Role contracts (no DIGEST variant, NOT a handoff-gate requirement — verified at
+  // role activation instead: adam-register.cjs checks this read via session state)
+  'CLAUDE_ADAM.md'
 ];
 
 // SD-LEO-INFRA-OPTIMIZE-PROTOCOL-FILE-001: Equivalence mapping for gate compatibility
