@@ -107,7 +107,11 @@ export async function rejectHandoff(supabase, sdId, reasonCode, message, details
     reasonCode,
     message,
     rejectionId: rejection.id,
-    improvements
+    improvements,
+    // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-3): surface the rejection details
+    // (sdValidation errors, actualScore/requiredScore) to the recorder so the
+    // persisted sd_phase_handoffs row carries per-field remediation.
+    details
   };
 }
 

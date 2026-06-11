@@ -177,6 +177,87 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
 }
 
 /**
+ * True when a JSONB-ish field already holds content (array with items,
+ * object with keys, or non-empty string).
+ */
+function isPopulated(val) {
+  if (!val) return false;
+  if (Array.isArray(val)) return val.length > 0;
+  if (typeof val === 'string') return val.trim().length > 0;
+  return Object.keys(val).length > 0;
+}
+
+/**
+ * Derive strategic_objectives from author-provided title + rationale + scope.
+ * SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-1): derivation restructures content
+ * the SD author already wrote — it never invents facts. String form requires
+ * >= 100 chars to satisfy verify-l2p's strategic-objectives scoring.
+ *
+ * @param {Object} sd - Strategic Directive record
+ * @returns {string|null} derived objectives text, or null when not derivable
+ */
+export function deriveStrategicObjectives(sd) {
+  if (!sd || isPopulated(sd.strategic_objectives)) return null;
+  const parts = [sd.title, sd.rationale, sd.scope]
+    .filter(p => typeof p === 'string' && p.trim().length > 0)
+    .map(p => p.trim());
+  if (parts.length === 0) return null;
+  const text = parts.join(' — ');
+  if (text.length < 100) return null;
+  return text;
+}
+
+/**
+ * Derive success_criteria from a numbered/bulleted "Acceptance Criteria"
+ * (or "Success Criteria") section in the SD description.
+ * SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-1). Shape follows
+ * STRUCTURAL_RULES.success_criteria: [{criterion, measure}].
+ *
+ * @param {Object} sd - Strategic Directive record
+ * @returns {Array<{criterion: string, measure: string}>|null}
+ */
+export function deriveSuccessCriteria(sd) {
+  if (!sd || isPopulated(sd.success_criteria)) return null;
+  const desc = typeof sd.description === 'string' ? sd.description : '';
+  const section = desc.match(/#+\s*(?:acceptance|success)\s+criteria\s*\n([\s\S]*?)(?=\n#+\s|\n---|$)/i);
+  if (!section) return null;
+  const items = section[1]
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => /^(\d+[.)]|[-*])\s+/.test(l))
+    .map(l => l.replace(/^(\d+[.)]|[-*])\s+/, '').replace(/^\[ \]\s*/, '').trim())
+    .filter(Boolean);
+  if (items.length === 0) return null;
+  return items.map(criterion => ({
+    criterion,
+    measure: 'Verified during PLAN/EXEC validation against the original pattern occurrences'
+  }));
+}
+
+/**
+ * Derive success_metrics by mirroring existing or just-derived success
+ * criteria into [{metric, target}] shape. Only runs when criteria exist —
+ * never fabricates measurables. SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-1).
+ *
+ * @param {Object} sd - Strategic Directive record
+ * @param {Array|null} derivedCriteria - output of deriveSuccessCriteria (may be null)
+ * @returns {Array<{metric: string, target: string}>|null}
+ */
+export function deriveSuccessMetrics(sd, derivedCriteria = null) {
+  if (!sd || isPopulated(sd.success_metrics)) return null;
+  const source = isPopulated(sd.success_criteria) ? sd.success_criteria : derivedCriteria;
+  if (!Array.isArray(source) || source.length === 0) return null;
+  const metrics = source
+    .map(c => {
+      const metric = typeof c === 'string' ? c : (c?.criterion || '');
+      const target = (typeof c === 'object' && c?.measure) ? c.measure : 'Criterion met and verified';
+      return metric ? { metric, target } : null;
+    })
+    .filter(Boolean);
+  return metrics.length > 0 ? metrics : null;
+}
+
+/**
  * Auto-fix common SD deficiencies that cause gate failures.
  * Only fixes structural gaps (missing fields), never overrides existing content.
  * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-122
@@ -213,6 +294,27 @@ async function autoFixDeficiencies(supabase, sd) {
     if (!sd.dependencies || !Array.isArray(sd.dependencies) || sd.dependencies.length === 0) {
       fixes.dependencies = [];
       fixed.push('dependencies');
+    }
+
+    // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-1): content-derivation for the
+    // fields the legacy autofix could never fill. Derivation only restructures
+    // author-provided content (title/rationale/scope, description Acceptance
+    // Criteria lists) — when the source content is absent, the field stays
+    // empty and the preflight still rejects, so the gate is not eroded.
+    const derivedObjectives = deriveStrategicObjectives(sd);
+    if (derivedObjectives) {
+      fixes.strategic_objectives = derivedObjectives;
+      fixed.push('strategic_objectives');
+    }
+    const derivedCriteria = deriveSuccessCriteria(sd);
+    if (derivedCriteria) {
+      fixes.success_criteria = derivedCriteria;
+      fixed.push('success_criteria');
+    }
+    const derivedMetrics = deriveSuccessMetrics(sd, derivedCriteria);
+    if (derivedMetrics) {
+      fixes.success_metrics = derivedMetrics;
+      fixed.push('success_metrics');
     }
   }
 

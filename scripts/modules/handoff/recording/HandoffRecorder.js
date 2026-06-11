@@ -303,6 +303,27 @@ export class HandoffRecorder {
     const rawScore = result.actualScore || 0;
     const normalizedScore = this._normalizeValidationScore(rawScore);
 
+    // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-3): persist per-field deficits in
+    // the row workers actually read. Before this, the rejected sd_phase_handoffs
+    // row carried only the generic message ("Strategic Directive does not meet
+    // completeness standards") while the actionable error list lived in console
+    // output + leo_handoff_rejections — producing blind retry loops (7x on SD
+    // e756f97d, 2026-05-16).
+    const requiredImprovements = (Array.isArray(result.improvements?.required) && result.improvements.required.length > 0)
+      ? result.improvements.required
+      : (Array.isArray(result.details?.sdValidation?.errors) && result.details.sdValidation.errors.length > 0)
+        ? result.details.sdValidation.errors
+        : null;
+    const actualScore = result.details?.actualScore ?? result.actualScore ?? null;
+    const requiredScore = result.details?.requiredScore ?? result.requiredScore ?? null;
+    let enrichedRejectionReason = result.message;
+    if (requiredImprovements) {
+      const scoreSuffix = (actualScore != null && requiredScore != null)
+        ? ` (score ${actualScore}%, required ${requiredScore}%)`
+        : '';
+      enrichedRejectionReason = `${result.message} | deficits: ${requiredImprovements.join('; ')}${scoreSuffix}`.slice(0, 1000);
+    }
+
     // SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 (FR-1): completion actions record
     // failures to leo_handoff_executions — PARITY with recordSuccess, which skips
     // sd_phase_handoffs for completion actions (no valid to_phase). Before this fix,
@@ -335,13 +356,17 @@ export class HandoffRecorder {
           gate_count: result.gateCount,
           failed_gate: result.failedGate || null,
           issue_count: (result.issues || []).length,
-          warning_count: (result.warnings || []).length
+          warning_count: (result.warnings || []).length,
+          // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-3): full per-field error
+          // list + required score, queryable without joining leo_handoff_rejections.
+          ...(requiredImprovements ? { required_improvements: requiredImprovements } : {}),
+          ...(requiredScore != null ? { required_score: requiredScore } : {})
         },
         rejected_at: new Date().toISOString(),
         reason: result.reasonCode,
         message: result.message
       },
-      rejection_reason: result.message,
+      rejection_reason: enrichedRejectionReason,
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
 
