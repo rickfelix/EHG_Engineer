@@ -72,12 +72,65 @@ function computeConfigMatch(configuredModel, reportedModelId) {
 }
 
 /**
+ * SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 (FR-4): best-effort token attribution
+ * for the sub-agent stamp seam. The CLI captured model identity only, so every
+ * sub-agent row landed with zero tokens (28/28 Opus rows token-less, 12h probe)
+ * and per-arm cost comparison was impossible. Source: the invoking sub-agent's
+ * own transcript JSONL (agent-*.jsonl in the session's Claude Code project dir,
+ * most recently modified within a freshness window — the invoker is by far the
+ * most likely writer). Fail-soft: any error returns null and the row logs as
+ * before. Reuses the effort-experiment JSONL reader (sumUsageInWindow).
+ */
+async function attributeAgentTokens() {
+  try {
+    const { defaultTranscriptDir, sumUsageInWindow } = await import('./effort-experiment/attribute-tokens.mjs');
+    const dir = defaultTranscriptDir();
+    if (!fs.existsSync(dir)) return null;
+    const FRESH_MS = 30 * 60_000;
+    const now = Date.now();
+    let best = null;
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.startsWith('agent-') || !name.endsWith('.jsonl')) continue;
+      const full = path.join(dir, name);
+      const mtime = fs.statSync(full).mtimeMs;
+      if (now - mtime > FRESH_MS) continue;
+      if (!best || mtime > best.mtime) best = { full, name, mtime };
+    }
+    if (!best) return null;
+    const { totals, turns } = await sumUsageInWindow(best.full); // whole file = this agent's own run
+    if (!turns) return null;
+    return {
+      input_tokens: totals.input_tokens + totals.cache_creation_input_tokens + totals.cache_read_input_tokens,
+      output_tokens: totals.output_tokens,
+      tokens_source: 'agent_transcript_jsonl',
+      tokens_transcript: best.name,
+      tokens_turns: turns
+    };
+  } catch {
+    return null; // fail-soft — identity logging must never break on attribution
+  }
+}
+
+/**
  * Log model usage to database
  */
 async function logModelUsage(data) {
   const supabase = await createSupabaseServiceClient('engineer');
 
   const configMatches = computeConfigMatch(data.configuredModel, data.modelId);
+
+  // FR-4: explicit tokens (data.inputTokens/outputTokens) win; otherwise attempt
+  // transcript attribution; otherwise log identity-only as before.
+  let tokenMeta = {};
+  if (Number.isFinite(data.inputTokens) || Number.isFinite(data.outputTokens)) {
+    tokenMeta = {
+      input_tokens: Number(data.inputTokens) || 0,
+      output_tokens: Number(data.outputTokens) || 0,
+      tokens_source: 'caller'
+    };
+  } else {
+    tokenMeta = (await attributeAgentTokens()) || {};
+  }
 
   const record = {
     session_id: data.sessionId || null,
@@ -88,7 +141,7 @@ async function logModelUsage(data) {
     reported_model_name: data.modelName,
     reported_model_id: data.modelId,
     config_matches_reported: configMatches,
-    metadata: data.metadata || {}
+    metadata: { ...(data.metadata || {}), ...tokenMeta }
   };
 
   const { data: result, error } = await supabase
@@ -119,6 +172,17 @@ async function main() {
     process.exit(1);
   }
 
+  // FR-4: optional --input-tokens N / --output-tokens N (extracted before positionals)
+  const takeFlag = (name) => {
+    const i = args.indexOf(name);
+    if (i < 0) return undefined;
+    const v = Number(args[i + 1]);
+    args.splice(i, 2);
+    return Number.isFinite(v) ? v : undefined;
+  };
+  const inputTokens = takeFlag('--input-tokens');
+  const outputTokens = takeFlag('--output-tokens');
+
   const [subagentType, modelName, modelId, sdId, phase, sessionId] = args;
 
   // Get configured model from agent file
@@ -137,7 +201,9 @@ async function main() {
     configuredModel,
     sdId: sdId || null,
     phase: phase || null,
-    sessionId: sessionId || null
+    sessionId: sessionId || null,
+    inputTokens,
+    outputTokens
   });
 
   if (result) {
