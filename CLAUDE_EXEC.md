@@ -1,7 +1,7 @@
-<!-- file_content_hash: d8f8a79262051607 -->
+<!-- file_content_hash: fbe9260da8c40fbe -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-06-10 2:53:04 PM
+**Generated**: 2026-06-11 10:37:46 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -200,70 +200,6 @@ See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for c
 **If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
 
 
-## Branch Creation (Automated at LEAD-TO-PLAN)
-
-## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
-
-### Automatic Branch Creation
-
-As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
-
-1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
-2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
-3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
-4. Database is updated with branch name for tracking
-
-### Manual Branch Creation (If Needed)
-
-If branch creation fails or you need to create one manually:
-
-```bash
-# Create branch for an SD (looks up title from database)
-npm run sd:branch SD-XXX-001
-
-# Create with auto-stash (non-interactive)
-npm run sd:branch:auto SD-XXX-001
-
-# Check if branch exists
-npm run sd:branch:check SD-XXX-001
-
-# Full command with options
-# Branch was auto-created at LEAD-TO-PLAN handoff
-```
-
-### Branch Naming Convention
-
-| SD Type | Branch Prefix | Example |
-|---------|---------------|---------|
-| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
-| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
-| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
-| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
-| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
-
-### Branch Hygiene Rules
-
-From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
-- **≤7 days stale** at PLAN-TO-EXEC handoff
-- **One SD per branch** (no mixing work)
-- **Merge main at phase transitions**
-
-### When Branch is Created
-
-```
-LEAD Phase                    PLAN Phase                   EXEC Phase
-    |                              |                            |
-    |   LEAD-TO-PLAN handoff       |                            |
-    |---[Branch Created Here]----->|                            |
-    |                              |   PRD Creation             |
-    |                              |   Sub-agent validation     |
-    |                              |                            |
-    |                              |   PLAN-TO-EXEC handoff     |
-    |                              |---[Branch Validated]------>|
-    |                              |                            |
-```
-
-
 ## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
 
 **Source**: Analysis of 175 high-quality retrospectives (score ≥60)
@@ -352,6 +288,70 @@ If `research_confidence_score = 0.00`, you skipped this step.
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
 
+## Branch Creation (Automated at LEAD-TO-PLAN)
+
+## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
+
+### Automatic Branch Creation
+
+As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
+
+1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
+2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
+3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
+4. Database is updated with branch name for tracking
+
+### Manual Branch Creation (If Needed)
+
+If branch creation fails or you need to create one manually:
+
+```bash
+# Create branch for an SD (looks up title from database)
+npm run sd:branch SD-XXX-001
+
+# Create with auto-stash (non-interactive)
+npm run sd:branch:auto SD-XXX-001
+
+# Check if branch exists
+npm run sd:branch:check SD-XXX-001
+
+# Full command with options
+# Branch was auto-created at LEAD-TO-PLAN handoff
+```
+
+### Branch Naming Convention
+
+| SD Type | Branch Prefix | Example |
+|---------|---------------|---------|
+| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
+| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
+| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
+| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
+| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
+
+### Branch Hygiene Rules
+
+From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
+- **≤7 days stale** at PLAN-TO-EXEC handoff
+- **One SD per branch** (no mixing work)
+- **Merge main at phase transitions**
+
+### When Branch is Created
+
+```
+LEAD Phase                    PLAN Phase                   EXEC Phase
+    |                              |                            |
+    |   LEAD-TO-PLAN handoff       |                            |
+    |---[Branch Created Here]----->|                            |
+    |                              |   PRD Creation             |
+    |                              |   Sub-agent validation     |
+    |                              |                            |
+    |                              |   PLAN-TO-EXEC handoff     |
+    |                              |---[Branch Validated]------>|
+    |                              |                            |
+```
+
+
 ## Vision/Architecture Doc Pre-Check
 
 ## Vision/Architecture Doc Pre-Check (Step 0.25)
@@ -434,6 +434,11 @@ During the EXEC phase, use sub-agents proactively for implementation quality and
 Sub-agents are FIRST RESPONDERS in EXEC phase. When you encounter a problem that matches an agent's domain, invoke the agent IMMEDIATELY rather than attempting manual solutions.
 > Why: Manual attempts before invoking the right agent waste context and produce lower-quality output. Retrospective data (PAT-RECURSION-005) shows manual sub-agent simulation consistently leads to rework — the agent has domain-specific tooling the orchestrator cannot replicate inline.
 
+
+### Concurrent Invocation Mandate (SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-C)
+Required sub-agents for a handoff MUST be invoked CONCURRENTLY — one message containing multiple Task tool calls — unless a documented data dependency exists between agents (state the dependency in the invocation message when sequencing is genuinely required).
+> Why: The required agents are independent evidence WRITERS — each inserts its own sub_agent_execution_results row (no shared upsert, no ordering requirement in any gate). Serial invocation is pure wall-clock waste: live 5-day measurement found only 3% of multi-agent evidence groups were collected in parallel, while 33% spread over 2+ minutes, across ~200 handoffs/day fleet-wide.
+Script-path equivalent: `npm run subagents:collect -- --sd <SD-KEY> --phase <HANDOFF>` launches all required agents for the handoff in parallel and waits for all evidence rows (one command replaces N serial invocations).
 *Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
 ## Migration Script Pattern (MANDATORY)
@@ -1232,7 +1237,7 @@ node scripts/batch-dispatcher.mjs simplify-all
 baseURL: 'http://localhost:5173'  // Dev mode
 ```
 
-**Full Guide**: See `docs/reference/e2e-testing-modes.md`
+**Full Guide**: See `docs/reference/e2e-testing-mode-configuration.md`
 
 ## Working with Child SDs During EXEC
 
@@ -1528,7 +1533,7 @@ The QA Engineering Director sub-agent now has access to:
 - Standard Playwright for E2E automation
 - Both Chrome (MCP) and Chromium (tests) browsers
 
-**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
+**Complete Guide**: See `docs/reference/playwright-mcp-guide.md` *(retired — no longer in the tree)*
 
 ## Triangulated Runtime Audit Protocol
 
@@ -2091,6 +2096,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-06-10*
+*Generated from database: 2026-06-11*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

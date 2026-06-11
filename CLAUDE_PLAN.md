@@ -1,7 +1,7 @@
-<!-- file_content_hash: 5c7e213ca2350361 -->
+<!-- file_content_hash: 7580d7a8250b555d -->
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-06-10 2:53:04 PM
+**Generated**: 2026-06-11 10:37:45 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 **Effort**: high (architecture decisions and PRD rubrics require full reasoning depth)
@@ -205,30 +205,6 @@ LEAD Phase                    PLAN Phase                   EXEC Phase
 ```
 
 
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
-
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -267,6 +243,30 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
 
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
+
 ## Phase-Specific Sub-Agent Guidance: PLAN
 
 During the PLAN phase, prioritize these sub-agents for PRD creation and architecture specification:
@@ -284,6 +284,11 @@ During the PLAN phase, prioritize these sub-agents for PRD creation and architec
 - **Before PLAN-TO-EXEC handoff**: Run security-agent and risk-agent for completeness validation
 - **NC-PLAN-004 compliance**: Gate 1 blocks handoff if sub-agent execution is not recorded
 
+
+### Concurrent Invocation Mandate (SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-C)
+Required sub-agents for a handoff MUST be invoked CONCURRENTLY — one message containing multiple Task tool calls — unless a documented data dependency exists between agents (state the dependency in the invocation message when sequencing is genuinely required).
+> Why: The required agents are independent evidence WRITERS — each inserts its own sub_agent_execution_results row (no shared upsert, no ordering requirement in any gate). Serial invocation is pure wall-clock waste: live 5-day measurement found only 3% of multi-agent evidence groups were collected in parallel, while 33% spread over 2+ minutes, across ~200 handoffs/day fleet-wide.
+Script-path equivalent: `npm run subagents:collect -- --sd <SD-KEY> --phase <HANDOFF>` launches all required agents for the handoff in parallel and waits for all evidence rows (one command replaces N serial invocations).
 *Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
 ## PRD Template Scaffolding
@@ -2435,6 +2440,6 @@ For every keyword-list FR expansion, include in acceptance_criteria: "Substring-
 
 ---
 
-*Generated from database: 2026-06-10*
+*Generated from database: 2026-06-11*
 *Protocol Version: 4.4.1*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

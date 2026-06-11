@@ -1,14 +1,21 @@
 {
-  "generated_at": "2026-06-10T18:53:32.650Z",
-  "git_commit": "afd81f04",
-  "db_snapshot_hash": "1c0d92b1433aad31",
+  "generated_at": "2026-06-11T02:37:45.938Z",
+  "git_commit": "7873efa7",
+  "db_snapshot_hash": "db09404169de6bee",
   "files": {
-    "CLAUDE_LEAD.md": {
+    "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 64927,
-      "estimated_tokens": 16232,
-      "content_hash": "ef8033fe1f36149b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001\\CLAUDE_LEAD.md"
+      "chars": 90630,
+      "estimated_tokens": 22658,
+      "content_hash": "79ca7826e6ce0349",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-C\\CLAUDE_PLAN.md"
+    },
+    "CLAUDE_EXEC.md": {
+      "type": "full",
+      "chars": 82262,
+      "estimated_tokens": 20566,
+      "content_hash": "74e7adea35334dbf",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-C\\CLAUDE_EXEC.md"
     }
   }
 }
