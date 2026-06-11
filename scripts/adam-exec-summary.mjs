@@ -103,6 +103,34 @@ try {
 } catch {}
 const selfLine = 'Adam self-score ' + selfLabel + arrow(selfScore, snap.selfScore) + '; coordinator self-score ' + coordRev;
 
+// QF-20260611-352: chairman steering gauges — META-TO-PRODUCT RATIO + DISTANCE-TO-QUIT.
+// Ratio: items FILED and COMPLETED in the 24h window split harness/meta vs product/venture
+// (key-prefix heuristic per the chairman's North-Star encoding). Fail-soft like every section.
+const META_RX = /^(SD-LEO-|SD-MAN-|SD-PAT-|SD-LEARN-|SD-FDBK-INFRA-|QF-)/i;
+let ratioLine = '(ratio unavailable)', newRatio = null;
+try {
+  const splitMP = (rows) => { let m = 0, p = 0; for (const r of rows || []) (META_RX.test(String(r.sd_key)) ? m++ : p++); return { m, p }; };
+  const { data: filedR } = await db.from('strategic_directives_v2').select('sd_key').gte('created_at', since).limit(2000);
+  const { data: doneR } = await db.from('strategic_directives_v2').select('sd_key').eq('status', 'completed').gte('updated_at', since).limit(2000);
+  const f = splitMP(filedR), c = splitMP(doneR), prev = snap.ratio || {};
+  const trend = (cur, pm, pp) => (typeof pm !== 'number') ? '' : (cur.m * (pp || 1) === pm * (cur.p || 1) ? ' (steady)' : (cur.m * (pp || 1) > pm * (cur.p || 1) ? ' (more meta)' : ' (more product)'));
+  ratioLine = 'FILED meta:product ' + f.m + ':' + f.p + trend(f, prev.fm, prev.fp) + '  ·  COMPLETED meta:product ' + c.m + ':' + c.p + trend(c, prev.cm, prev.cp);
+  newRatio = { fm: f.m, fp: f.p, cm: c.m, cp: c.p };
+} catch {}
+// DISTANCE-TO-QUIT: income-replacement gauge from the PLAN-KEEPER chairman amendment.
+// Renders MRR-vs-threshold once venture revenue exists; until then, the phase line.
+let quitLine = '(distance-to-quit unavailable)';
+try {
+  const { data: pk } = await db.from('strategic_directives_v2').select('metadata').eq('sd_key', 'SD-LEO-ORCH-ADAM-PLAN-KEEPER-001').single();
+  const amend = (pk && pk.metadata && pk.metadata.chairman_amendment_2026_06_11_income_replacement) || {};
+  const tn = amend.target_number_2026_06_11;
+  // tn is an object: { status, derived, draft_quit_threshold, ... } — surface the threshold line.
+  const target = tn && (typeof tn === 'string' ? tn : (tn.draft_quit_threshold || tn.status));
+  quitLine = target
+    ? 'PHASE 1: stabilizing harness, 0 revenue ventures live ' + EM + ' threshold: ' + target
+    : 'PHASE 1: stabilizing harness ' + EM + ' no income-replacement target recorded on PLAN-KEEPER amendment yet';
+} catch {}
+
 let canaryN = 0; try { const r = await db.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new').eq('severity', 'high').in('category', ['harness_backlog', 'ci_failure', 'corrective_finding']); canaryN = r.count || 0; } catch {}
 const canaryLine = canaryN ? (canaryN + ' high-sev open' + (arrow(canaryN, snap.canaryCount) || ' (steady)')) : 'no high-sev flags';
 
@@ -118,6 +146,8 @@ const text = [
   '  Capabilities added (' + buckets.cap.length + '): ' + bucketLine(buckets.cap, 3),
   '  Enablers added (' + buckets.enab.length + '): ' + bucketLine(buckets.enab, 3),
   '  Problems solved (' + buckets.prob.length + '): ' + bucketLine(buckets.prob, 3), '',
+  'META-TO-PRODUCT RATIO (24h): ' + ratioLine, '',
+  'DISTANCE-TO-QUIT: ' + quitLine, '',
   'SELF-IMPROVEMENT (tri-party): ' + selfLine, '',
   'CANARY: ' + canaryLine, '',
   '--- FLEET HEALTH ---', cardText
@@ -137,6 +167,8 @@ const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px
   '<p style="font-size:14px;margin:10px 0 2px"><b>Decisions awaiting you (' + pendingDecisions.length + '):</b></p>' + decisionsHtml +
   '<p style="font-size:14px;margin:10px 0 2px"><b>Per-scope (advisories, last 24h):</b> ' + scopeRollupHtml + '</p>' +
   '<p style="font-size:14px;margin:10px 0 2px">' + I.tools + ' <b>Value delivered (last 24h, ' + shippedN + ' SDs):</b></p>' + valHtml +
+  '<p style="font-size:14px;margin:10px 0 2px"><b>Meta-to-product ratio (24h):</b> ' + esc(ratioLine) + '</p>' +
+  '<p style="font-size:14px;margin:0 0 2px"><b>Distance-to-quit:</b> ' + esc(quitLine) + '</p>' +
   '<p style="font-size:14px;margin:10px 0 2px">' + I.loop + ' <b>Self-improvement:</b> ' + esc(selfLine) + '</p>' +
   '<p style="font-size:14px;margin:0 0 12px">' + I.siren + ' <b>Canary:</b> ' + esc(canaryLine) + '</p>' +
   '<p style="font-size:13px;font-weight:600;color:#555;margin:0 0 4px">Fleet health</p>' +
@@ -148,5 +180,5 @@ else {
   const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'Adam ' + EM + ' LEO Fleet Advisor <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
   console.log('ADAM-EMAIL', JSON.stringify(r));
-  try { writeFileSync(SNAP, JSON.stringify({ lastTs: t, pilotStage, completedCount: completedNow, selfScore, canaryCount: canaryN, perScope })); } catch {}
+  try { writeFileSync(SNAP, JSON.stringify({ lastTs: t, pilotStage, completedCount: completedNow, selfScore, canaryCount: canaryN, perScope, ratio: newRatio || snap.ratio })); } catch {}
 }
