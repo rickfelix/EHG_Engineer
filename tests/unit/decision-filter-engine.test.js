@@ -44,8 +44,10 @@ describe('Decision Filter Engine - Core API', () => {
     expect(ENGINE_VERSION).toBe('1.0.0');
   });
 
-  it('should export 8 trigger types', () => {
-    expect(TRIGGER_TYPES).toHaveLength(8);
+  it('should export 9 trigger types', () => {
+    // 9th: devils_advocate_challenge (SD-LEO-FIX-PERSIST-KILL-GATE-001 FR-4)
+    expect(TRIGGER_TYPES).toHaveLength(9);
+    expect(TRIGGER_TYPES).toContain('devils_advocate_challenge');
     expect(TRIGGER_TYPES).toContain('cost_threshold');
     expect(TRIGGER_TYPES).toContain('new_tech_vendor');
     expect(TRIGGER_TYPES).toContain('strategic_pivot');

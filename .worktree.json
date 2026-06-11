@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-VISION-CONSISTENCY-DOC-001",
-  "createdAt": "2026-06-10T15:43:03.765Z",
+  "sdKey": "SD-LEO-FIX-PERSIST-KILL-GATE-001",
+  "expectedBranch": "feat/SD-LEO-FIX-PERSIST-KILL-GATE-001",
+  "createdAt": "2026-06-10T23:31:54.073Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
