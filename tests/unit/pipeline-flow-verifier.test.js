@@ -36,7 +36,7 @@ describe('Pipeline Flow Verifier', () => {
     });
 
     it('extracts default exports', () => {
-      const tmpFile = path.join(process.cwd(), 'test/.tmp-export-test.js');
+      const tmpFile = path.join(process.cwd(), 'tests/unit/.tmp-export-test.js');
       fs.writeFileSync(tmpFile, 'export default function main() {}');
       try {
         const exports = extractExports(tmpFile);
@@ -47,7 +47,7 @@ describe('Pipeline Flow Verifier', () => {
     });
 
     it('extracts re-exports', () => {
-      const tmpFile = path.join(process.cwd(), 'test/.tmp-reexport-test.js');
+      const tmpFile = path.join(process.cwd(), 'tests/unit/.tmp-reexport-test.js');
       fs.writeFileSync(tmpFile, "export { foo, bar } from './module.js';\nexport * from './other.js';");
       try {
         const exports = extractExports(tmpFile);
@@ -62,7 +62,7 @@ describe('Pipeline Flow Verifier', () => {
 
   describe('extractImports', () => {
     it('extracts named imports', () => {
-      const tmpFile = path.join(process.cwd(), 'test/.tmp-import-test.js');
+      const tmpFile = path.join(process.cwd(), 'tests/unit/.tmp-import-test.js');
       fs.writeFileSync(tmpFile, "import { createClient } from '@supabase/supabase-js';\nimport { foo, bar } from './local.js';");
       try {
         const imports = extractImports(tmpFile);

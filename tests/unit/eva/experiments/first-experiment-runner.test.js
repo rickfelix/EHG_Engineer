@@ -5,36 +5,36 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { runFirstExperiment } from '../../../lib/eva/experiments/first-experiment-runner.js';
+import { runFirstExperiment } from '../../../../lib/eva/experiments/first-experiment-runner.js';
 
 // Mock all dependency modules
-vi.mock('../../../lib/eva/experiments/experiment-manager.js', () => ({
+vi.mock('../../../../lib/eva/experiments/experiment-manager.js', () => ({
   createExperiment: vi.fn(),
   startExperiment: vi.fn(),
   stopExperiment: vi.fn(),
 }));
 
-vi.mock('../../../lib/eva/experiments/experiment-assignment.js', () => ({
+vi.mock('../../../../lib/eva/experiments/experiment-assignment.js', () => ({
   assignVariant: vi.fn(),
 }));
 
-vi.mock('../../../lib/eva/experiments/dual-evaluator.js', () => ({
+vi.mock('../../../../lib/eva/experiments/dual-evaluator.js', () => ({
   evaluateDual: vi.fn(),
   promptAwareEvaluator: vi.fn(),
   getExperimentOutcomes: vi.fn(),
 }));
 
-vi.mock('../../../lib/eva/experiments/bayesian-analyzer.js', () => ({
+vi.mock('../../../../lib/eva/experiments/bayesian-analyzer.js', () => ({
   analyzeExperiment: vi.fn(),
   generateReport: vi.fn(),
 }));
 
 // proxy-metric-engine is NOT mocked — real deterministic scores
 
-import { createExperiment, startExperiment, stopExperiment } from '../../../lib/eva/experiments/experiment-manager.js';
-import { assignVariant } from '../../../lib/eva/experiments/experiment-assignment.js';
-import { evaluateDual, getExperimentOutcomes } from '../../../lib/eva/experiments/dual-evaluator.js';
-import { analyzeExperiment, generateReport } from '../../../lib/eva/experiments/bayesian-analyzer.js';
+import { createExperiment, startExperiment, stopExperiment } from '../../../../lib/eva/experiments/experiment-manager.js';
+import { assignVariant } from '../../../../lib/eva/experiments/experiment-assignment.js';
+import { evaluateDual, getExperimentOutcomes } from '../../../../lib/eva/experiments/dual-evaluator.js';
+import { analyzeExperiment, generateReport } from '../../../../lib/eva/experiments/bayesian-analyzer.js';
 
 // ── Fixtures ──────────────────────────────────────────
 

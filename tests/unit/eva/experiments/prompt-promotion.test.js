@@ -9,7 +9,7 @@ import {
   evaluatePromotion,
   createPromotionRecord,
   getWinnerConfidence,
-} from '../../../lib/eva/experiments/prompt-promotion.js';
+} from '../../../../lib/eva/experiments/prompt-promotion.js';
 
 // ── Fixtures ──────────────────────────────────────────
 

@@ -161,16 +161,16 @@ describe('Discovery Mode - executeDiscoveryMode', () => {
     ).rejects.toThrow('Strategy not found or inactive: trend_scanner');
   });
 
-  test('returns null when no candidates generated', async () => {
+  test('throws when no candidates generated (FR-7 strict mode)', async () => {
     const supabase = createMockSupabase();
     const llmClient = createMockLLMClient([]);
 
-    const result = await executeDiscoveryMode(
-      { strategy: 'trend_scanner' },
-      { supabase, logger: silentLogger, llmClient }
-    );
-
-    expect(result).toBeNull();
+    await expect(
+      executeDiscoveryMode(
+        { strategy: 'trend_scanner' },
+        { supabase, logger: silentLogger, llmClient }
+      )
+    ).rejects.toThrow(/trend_scanner_empty_response/);
   });
 
   test('runs trend_scanner and returns PathOutput', async () => {
@@ -242,8 +242,8 @@ describe('Discovery Mode - executeDiscoveryMode', () => {
 
   test('selects highest-scored candidate as top', async () => {
     const supabase = createMockSupabase();
-    // DataClean Pro has feasibility=8 + competition_level=low bonus=10 → score=90
-    // AutoReview AI has feasibility=9 + medium bonus=5 → score=95
+    // Composite weighted ranking (rankCandidates): low competition (1.0) outweighs
+    // the feasibility edge — DataClean Pro (feas 8, low) beats AutoReview AI (feas 9, medium).
     const llmClient = createMockLLMClient();
 
     const result = await executeDiscoveryMode(
@@ -251,8 +251,12 @@ describe('Discovery Mode - executeDiscoveryMode', () => {
       { supabase, logger: silentLogger, llmClient }
     );
 
-    expect(result.raw_material.top_candidate.name).toBe('AutoReview AI');
-    expect(result.metadata.top_score).toBe(95);
+    expect(result.raw_material.top_candidate.name).toBe('DataClean Pro');
+    expect(result.metadata.top_score).toBeGreaterThan(0);
+    expect(result.metadata.top_score).toBeLessThanOrEqual(100);
+    // Top candidate's composite score is the max across all returned candidates
+    const scores = result.raw_material.candidates.map(c => c.composite_score);
+    expect(result.raw_material.top_candidate.composite_score).toBe(Math.max(...scores));
   });
 
   test('includes analyzed_at timestamp', async () => {
@@ -341,7 +345,7 @@ describe('Discovery Mode - nursery_reeval strategy', () => {
 // ── Error Handling Tests ──────────────────────────────────
 
 describe('Discovery Mode - Error Handling', () => {
-  test('handles LLM returning non-JSON gracefully', async () => {
+  test('throws on non-JSON LLM response (FR-7 strict mode)', async () => {
     const supabase = createMockSupabase();
     const llmClient = {
       _model: 'mock-model',
@@ -353,15 +357,15 @@ describe('Discovery Mode - Error Handling', () => {
       },
     };
 
-    const result = await executeDiscoveryMode(
-      { strategy: 'trend_scanner' },
-      { supabase, logger: silentLogger, llmClient }
-    );
-
-    expect(result).toBeNull();
+    await expect(
+      executeDiscoveryMode(
+        { strategy: 'trend_scanner' },
+        { supabase, logger: silentLogger, llmClient }
+      )
+    ).rejects.toThrow(/trend_scanner_parse_failed/);
   });
 
-  test('handles LLM error gracefully', async () => {
+  test('propagates LLM transport errors (FR-7 strict mode)', async () => {
     const supabase = createMockSupabase();
     const llmClient = {
       _model: 'mock-model',
@@ -372,13 +376,12 @@ describe('Discovery Mode - Error Handling', () => {
     };
     const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-    const result = await executeDiscoveryMode(
-      { strategy: 'trend_scanner' },
-      { supabase, logger, llmClient }
-    );
-
-    expect(result).toBeNull();
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Rate limited'));
+    await expect(
+      executeDiscoveryMode(
+        { strategy: 'trend_scanner' },
+        { supabase, logger, llmClient }
+      )
+    ).rejects.toThrow('Rate limited');
   });
 
   test('handles LLM error in nursery_reeval gracefully', async () => {

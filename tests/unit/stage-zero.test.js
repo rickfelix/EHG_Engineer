@@ -297,7 +297,11 @@ describe('Path Router', () => {
 
   test('routes to discovery mode', async () => {
     const supabase = createMockSupabase();
-    const ventureJson = JSON.stringify([{ name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 }]);
+    const ventureJson = JSON.stringify([
+      { name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 },
+      { name: 'TestVenture2', problem_statement: 'Test problem 2', solution: 'Test solution 2', target_market: 'SMBs', automation_feasibility: 6 },
+      { name: 'TestVenture3', problem_statement: 'Test problem 3', solution: 'Test solution 3', target_market: 'SMBs', automation_feasibility: 5 },
+    ]);
     const llmClient = {
       _model: 'mock-model',
       complete: vi.fn().mockResolvedValue(ventureJson),
@@ -441,7 +445,11 @@ describe('Stage 0 Orchestrator', () => {
 
   test('executes full flow with discovery path', async () => {
     const supabase = createMockSupabase();
-    const ventureJson = JSON.stringify([{ name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 }]);
+    const ventureJson = JSON.stringify([
+      { name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 },
+      { name: 'TestVenture2', problem_statement: 'Test problem 2', solution: 'Test solution 2', target_market: 'SMBs', automation_feasibility: 6 },
+      { name: 'TestVenture3', problem_statement: 'Test problem 3', solution: 'Test solution 3', target_market: 'SMBs', automation_feasibility: 5 },
+    ]);
     const llmClient = {
       _model: 'mock-model',
       complete: vi.fn().mockResolvedValue(ventureJson),

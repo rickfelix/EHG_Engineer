@@ -7,7 +7,7 @@
 // ship alongside this test.
 
 import { describe, it, expect } from 'vitest';
-import { scoreModule, scoreWithAdapterRule } from '../../scripts/pocock/lib/deletion-test.mjs';
+import { scoreModule, scoreWithAdapterRule } from '../../../scripts/pocock/lib/deletion-test.mjs';
 
 // 10 labeled fixtures spanning all 3 bands (matches PRD AC-4-5: ≥90% accuracy).
 const fixtures = [
