@@ -15,8 +15,11 @@
 import { describe, it, expect } from 'vitest';
 import { getSeatByCode, getAllSeatCodes } from '../../../lib/brainstorm/board-seats/index.js';
 import { extractStandingQuestion, selectPanel } from '../../../lib/brainstorm/panel-selector.js';
+import { HAS_REAL_DB } from '../../helpers/db-available.js';
 
-const LIVE = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+// Sentinel-aware: the unit tier injects synthetic creds (tests/setup.unit.js),
+// so a bare truthiness check would run the live suite against test.invalid.local.
+const LIVE = HAS_REAL_DB;
 
 describe('board-seats: CMO + CGO legacy parity', () => {
   it('getSeatByCode resolves CMO and CGO with a renderable systemPrompt fn', () => {

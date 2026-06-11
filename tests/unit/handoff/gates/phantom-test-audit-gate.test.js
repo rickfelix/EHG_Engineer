@@ -14,6 +14,7 @@ import {
   collectAndAudit,
 } from '../../../../scripts/phantom-test-audit.js';
 import { createPhantomTestAuditGate } from '../../../../scripts/modules/handoff/executors/lead-final-approval/gates/phantom-test-audit-gate.js';
+import { HAS_REAL_DB } from '../../../helpers/db-available.js';
 
 const ROOT_DIR = resolve(import.meta.dirname || __dirname, '../../../..');
 
@@ -116,7 +117,9 @@ describe('TS-4: gates.js registration static-pin (FR-3+FR-4)', () => {
 });
 
 describe('TS-5: issue_patterns row + cross-link (FR-5+FR-4, DB-touching, skip-if-no-key)', () => {
-  const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY && !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
+  // Sentinel-aware (SD-LEO-INFRA-ENFORCE-UNIT-TIER-001): the unit tier injects
+  // synthetic creds, so a bare truthiness check would query test.invalid.local.
+  const hasKey = HAS_REAL_DB;
   const itOrSkip = hasKey ? it : it.skip;
 
   itOrSkip('PAT-PHANTOM-TABLE-TEST-MISALIGNMENT-001 row exists with metadata.related_patterns cross-link', async () => {

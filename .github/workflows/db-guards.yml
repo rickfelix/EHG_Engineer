@@ -1,0 +1,40 @@
+name: db-guards
+
+# BLOCKING static-analysis gate: no NEW unguarded DB-touching unit tests.
+# SD-LEO-INFRA-ENFORCE-UNIT-TIER-001 (FR-2).
+#
+# scripts/audit-db-test-guards.mjs scans the unit-project test files and fails
+# (exit 1) when a file outside the grandfathered ratchet baseline
+# (tests/db-guards-baseline.json) imports a real Supabase client without
+# mocking it, or when a describeDb suite is MISROUTED into a unit-project path.
+# Pure static analysis — no secrets, no DB connection.
+
+on:
+  pull_request:
+    paths:
+      - 'tests/**'
+      - 'scripts/**'
+      - 'lib/**'
+      - '.github/workflows/db-guards.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  db-guards:
+    name: db-test-guards ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # No npm ci: the auditor uses node builtins only (fs/path/url) — pure
+      # static analysis, no dependencies, no secrets.
+      - name: Audit DB-test guards (BLOCKING ratchet)
+        run: npm run test:db-guards

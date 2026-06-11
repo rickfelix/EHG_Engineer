@@ -6,12 +6,15 @@
 import { describe, it, expect } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { FALLBACK_DECISION_CREATING_STAGES } from '../../lib/eva/chairman-decision-watcher.js';
+import { HAS_REAL_DB } from '../helpers/db-available.js';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 describe('FALLBACK_DECISION_CREATING_STAGES parity with venture_stages', () => {
-  it.runIf(SUPABASE_URL && SUPABASE_KEY)(
+  // Sentinel-aware (SD-LEO-INFRA-ENFORCE-UNIT-TIER-001): synthetic creds satisfy
+  // truthiness but point at test.invalid.local — skip unless the DB is real.
+  it.runIf(HAS_REAL_DB)(
     'fallback Set equals (gate_type IN kill/promotion) ∪ (review_mode=review)',
     async () => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);

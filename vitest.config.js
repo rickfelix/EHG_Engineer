@@ -91,7 +91,14 @@ export default defineConfig({
     testTimeout: 60000,
     teardownTimeout: 10000,
     pool: 'forks',
-    setupFiles: ['./tests/setup.js'],
+    // setupFiles are strictly per-project (SD-LEO-INFRA-ENFORCE-UNIT-TIER-001
+    // FR-3): the unit project must NOT load `.env` (no live DB creds in the
+    // unit tier); the db project keeps the historical .env + sentinel behavior.
+    // Do NOT add a root-level setupFiles here -- with `extends: true` vitest
+    // MERGES root + project setupFiles (it does not override), so a root entry
+    // would run in BOTH projects (verified live: a root setup.unit.js ran
+    // before setup.db.js and its ||= sentinels blocked the .env load, because
+    // dotenv never overrides existing process.env values).
     server: {
       deps: {
         // Ensure scripts with shebangs are transformed
@@ -118,6 +125,8 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
+          // NO dotenv .env load — unit tests must not reach the live DB.
+          setupFiles: ['./tests/setup.unit.js'],
           include: [
             '**/__tests__/**/*.test.js',
             '**/*.test.js',
@@ -131,6 +140,8 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'db',
+          // Loads .env + .env.test (real credentials) — opt-in DB tier only.
+          setupFiles: ['./tests/setup.db.js'],
           include: DB_INCLUDE,
           exclude: SHARED_EXCLUDE,
         },

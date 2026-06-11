@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { resolveRepoPathDbFirst } from '../../lib/repo-paths.js';
+import { HAS_REAL_DB } from '../helpers/db-available.js';
 
 /**
  * SD-LEO-INFRA-VENTURE-LIFECYCLE-SOFT-001 — applications soft-delete reconciliation.
@@ -17,7 +18,9 @@ import { resolveRepoPathDbFirst } from '../../lib/repo-paths.js';
  */
 const URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const LIVE = Boolean(URL && KEY);
+// Sentinel-aware (SD-LEO-INFRA-ENFORCE-UNIT-TIER-001): synthetic creds satisfy
+// truthiness but point at test.invalid.local — only run against a real DB.
+const LIVE = HAS_REAL_DB;
 
 const SENTINEL = 'ZZZ_SOFTDEL_TEST_SD_LIFECYCLE_SOFT_001';
 const supabase = LIVE ? createClient(URL, KEY) : null;
