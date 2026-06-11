@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-06-11T01:45:42.993Z",
+  "caveat": "ESTIMATE: programmatic LLM calls only — Claude Code main-session tokens (the dominant factory cost) are NOT captured; pricing is a static snapshot.",
+  "classes": [
+    {
+      "class": "venture_artifacts_storm",
+      "status": "QUANTIFIED",
+      "method": "quarantined duplicate-regeneration rows (2026-06-10 purge); content chars/4 ≈ output tokens, 1:1 input assumption, gemini-2.5-flash pricing; lower bound (thinking/orchestration overhead unmodeled)",
+      "rows": 2684,
+      "est_input_tokens": 3222732,
+      "est_output_tokens": 3222732,
+      "est_usd": 9.02,
+      "by_artifact_type": {
+        "blueprint_sprint_plan": {
+          "rows": 1044,
+          "est_usd": 8.23
+        },
+        "build_security_audit": {
+          "rows": 411,
+          "est_usd": 0.38
+        },
+        "launch_test_plan": {
+          "rows": 1229,
+          "est_usd": 0.41
+        }
+      },
+      "root_cause_fix": "eva-orchestrator generic fallback re-persist — fixed d624465baf 2026-06-07 (SD-LEO-FIX-FIX-STAGE-SKIP-001)"
+    },
+    {
+      "class": "retry_threshold_hits",
+      "status": "UNQUANTIFIABLE",
+      "reason": "retry-state-manager stores per-session counters in ephemeral .claude/retry-state-*.json files (deleted with sessions); no durable record of how many retries reached the gate, and retried tool calls are not LLM-token events in model_usage_log"
+    },
+    {
+      "class": "exit_hang_duplicate_runs",
+      "status": "UNQUANTIFIABLE",
+      "reason": "UV-abort/exit-hang reruns are indistinguishable from legitimate runs in model_usage_log (no rerun marker); quantification would require a dedup fingerprint the logger does not record"
+    },
+    {
+      "class": "main_session_tokens",
+      "status": "UNQUANTIFIABLE",
+      "reason": "Claude Code main-session tokens (the dominant factory cost) are not captured in model_usage_log at all — out of scope for v1 (LEAD decision); revisit if a harness-level usage export becomes available"
+    }
+  ]
+}
