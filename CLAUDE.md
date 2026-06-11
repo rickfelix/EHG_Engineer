@@ -1,4 +1,4 @@
-<!-- file_content_hash: 554e5acb03aefd5d -->
+<!-- file_content_hash: 4241b7ff70952603 -->
 # CLAUDE.md - LEO Protocol Orchestrator
 
 ## Prime Directive
@@ -198,4 +198,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-06-10 2:53:04 PM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-06-11 9:56:07 AM | Protocol: LEO 4.4.1 | Source: Database*

@@ -32,6 +32,7 @@ import {
   fetchAssignedSdStatuses,
   fetchPatternSourceSDStatuses,
 } from './modules/learning/filter.mjs';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
 
@@ -92,24 +93,70 @@ const CONFIG = {
 };
 
 /**
- * Check if a pattern already has an associated SD
+ * Check if a pattern already has an associated SD.
+ *
+ * QF-20260611-851: cancelled SDs now COUNT as existing unless the pattern has
+ * genuinely NEW occurrences after the cancellation. Pre-fix, `.neq('status',
+ * 'cancelled')` made a cancelled SD-PAT-FIX draft invisible here, so the
+ * generator re-created the same SD on its next cycle — a bulk triage cancelled
+ * 14 drafts at 13:31Z 2026-06-11 and 10 regenerated within ~25 minutes.
+ * Disposition semantics: pattern.updated_at <= SD cancellation time means no
+ * new evidence since a human said no — skip and stamp
+ * issue_patterns.metadata.disposition (auditable, implicit backfill). New
+ * occurrences AFTER the cancellation re-escalate legitimately.
+ *
+ * @param {string} patternId
+ * @param {object|null} pattern - the issue_patterns row (recency vs cancellation)
  */
-async function hasExistingSD(patternId) {
-  // Check for existing SD with pattern ID in title or description
+export async function hasExistingSD(patternId, pattern = null) {
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, status')
+    .select('id, sd_key, status, updated_at')
     .or(`title.ilike.%${patternId}%,description.ilike.%${patternId}%`)
     .neq('status', 'completed')
-    .neq('status', 'cancelled')
-    .limit(1);
+    .order('updated_at', { ascending: false })
+    .limit(5);
 
   if (error) {
     console.error(`  Error checking existing SD: ${error.message}`);
     return false;
   }
 
-  return data && data.length > 0 ? data[0] : null;
+  const rows = data || [];
+  const live = rows.find(r => r.status !== 'cancelled');
+  if (live) return live;
+
+  const cancelled = rows.find(r => r.status === 'cancelled');
+  if (cancelled) {
+    const cancelledAt = cancelled.updated_at ? new Date(cancelled.updated_at) : null;
+    const lastActivity = pattern?.updated_at ? new Date(pattern.updated_at) : null;
+    const hasNewOccurrences = cancelledAt && lastActivity && lastActivity > cancelledAt;
+    if (!hasNewOccurrences) {
+      // Stamp the disposition on the pattern (fail-soft: a stamp failure must
+      // not break the alert cycle).
+      try {
+        await supabase
+          .from('issue_patterns')
+          .update({
+            metadata: {
+              ...(pattern?.metadata || {}),
+              disposition: {
+                kind: 'sd_cancelled_no_new_occurrences',
+                cancelled_sd: cancelled.sd_key,
+                cancelled_at: cancelled.updated_at,
+                stamped_at: new Date().toISOString(),
+                stamped_by: 'pattern-alert-sd-creator (QF-20260611-851)'
+              }
+            }
+          })
+          .eq('pattern_id', patternId);
+      } catch { /* fail-soft */ }
+      return { ...cancelled, disposition: 'cancelled_no_new_occurrences' };
+    }
+    console.log(`  Prior SD ${cancelled.sd_key} cancelled but pattern has NEW occurrences since — regeneration allowed`);
+  }
+
+  return null;
 }
 
 /**
@@ -190,18 +237,11 @@ async function generateSDKey(pattern) {
 }
 
 /**
- * Create Strategic Directive for pattern
+ * Build the full SD insert payload for a pattern — pure, no DB access.
+ * SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-2): exported so tests can pin the
+ * completeness contract (output passes LEAD-TO-PLAN validators untouched).
  */
-async function createSDForPattern(pattern) {
-  // Check for existing SD first
-  const existingSD = await hasExistingSD(pattern.pattern_id);
-  if (existingSD) {
-    console.log(`  SD already exists: ${existingSD.sd_key} (${existingSD.status})`);
-    return { skipped: true, existing: existingSD };
-  }
-
-  // SD-LEO-SDKEY-001: Pass full pattern for semantic key generation
-  const sdKey = await generateSDKey(pattern);
+export function buildSdDataForPattern(pattern, sdKey) {
   const suggestedTeam = CONFIG.CATEGORY_TEAMS[pattern.category] || 'engineering';
   const sdCategory = CONFIG.PATTERN_TO_SD_CATEGORY[pattern.category] || 'Technical Debt';
 
@@ -213,6 +253,17 @@ async function createSDForPattern(pattern) {
   const preventionSummary = pattern.prevention_checklist?.length > 0
     ? pattern.prevention_checklist.map(p => `- [ ] ${p}`).join('\n')
     : 'No prevention checklist available.';
+
+  // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-2): single source for the acceptance
+  // criteria — written into BOTH the description and success_criteria so the
+  // created SD passes LEAD-TO-PLAN completeness without manual backfill.
+  const acceptanceCriteria = [
+    'Root cause identified and documented',
+    'Permanent fix implemented',
+    'Pattern occurrence count stabilizes or decreases',
+    'Prevention checklist updated with new learnings',
+    `Pattern marked as resolved: \`npm run pattern:resolve ${pattern.pattern_id} "Resolution notes"\``
+  ];
 
   const sdData = {
     id: uuidv4(),
@@ -244,11 +295,7 @@ ${provenSolutionsSummary}
 ${preventionSummary}
 
 ### Acceptance Criteria
-1. Root cause identified and documented
-2. Permanent fix implemented
-3. Pattern occurrence count stabilizes or decreases
-4. Prevention checklist updated with new learnings
-5. Pattern marked as resolved: \`npm run pattern:resolve ${pattern.pattern_id} "Resolution notes"\`
+${acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}
 
 ### Suggested Team
 ${suggestedTeam}
@@ -260,7 +307,50 @@ ${suggestedTeam}
     status: CONFIG.SD_STATUS,
     priority: CONFIG.SD_PRIORITY,
     rationale: `This pattern has occurred ${pattern.occurrence_count} times with ${pattern.severity} severity. Recurring issues indicate a systemic problem requiring root cause resolution.`,
-    scope: `Pattern Category: ${pattern.category}`,
+    scope: `Resolve the root cause of recurring pattern ${pattern.pattern_id} (category: ${pattern.category}). In scope: root-cause analysis of the recorded occurrences, a permanent fix, and prevention-checklist updates. Out of scope: unrelated refactors beyond the pattern's blast radius.`,
+    // SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-2): emit a COMPLETE SD. Before
+    // this, pattern SDs inserted 0 of the 8 completeness JSONB fields while
+    // defaulting to sd_type=feature (8/8 bar) — mathematically guaranteeing a
+    // JSONB_FIELDS_INCOMPLETE rejection at LEAD-TO-PLAN for every created SD.
+    sd_type: 'bugfix', // root-cause defect work, not a feature (honest 4-field bar)
+    // Patterns originate from LEO harness retrospectives/RCA — the fix lands
+    // in EHG_Engineer tooling, not the EHG product app.
+    target_application: 'EHG_Engineer',
+    strategic_objectives: `Resolve the recurring "${pattern.issue_summary}" pattern (${pattern.pattern_id}: ${pattern.severity} severity, ${pattern.occurrence_count} occurrences, trend ${pattern.trend}) by identifying and permanently fixing its root cause, so the pattern stops recurring across SD lifecycles and the prevention checklist captures the learning.`,
+    success_criteria: acceptanceCriteria.map(criterion => ({
+      criterion,
+      measure: 'Verified against the pattern record and its recorded occurrences'
+    })),
+    success_metrics: [
+      { metric: `Pattern ${pattern.pattern_id} occurrence count`, baseline: String(pattern.occurrence_count), target: 'Stabilized or decreasing post-fix' },
+      { metric: `Pattern ${pattern.pattern_id} status`, baseline: 'active', target: 'resolved' },
+      { metric: 'Prevention checklist entries capturing this root cause', baseline: String(pattern.prevention_checklist?.length || 0), target: 'At least one new entry documenting the fix' }
+    ],
+    key_changes: [
+      { change: `Implement a permanent fix for the root cause behind: ${pattern.issue_summary.substring(0, 160)}`, impact: `Eliminates recurrence of ${pattern.pattern_id} (${pattern.occurrence_count} occurrences to date)` }
+    ],
+    key_principles: [
+      'Fix root cause, not symptoms',
+      'Validate the fix against the original pattern occurrences',
+      'Preserve existing behavior for passing cases'
+    ],
+    risks: [
+      { risk: 'Fix may not cover all occurrence variants of the pattern', mitigation: 'Verify against the recorded occurrence list before marking the pattern resolved' }
+    ],
+    implementation_guidelines: pattern.prevention_checklist?.length > 0
+      ? pattern.prevention_checklist.slice(0, 5)
+      : ['Read the pattern occurrence records before modifying code', 'Add tests for the specific failure pattern'],
+    dependencies: [],
+    smoke_test_steps: [
+      {
+        instruction: `Reproduce the failure described in pattern ${pattern.pattern_id}, apply the fix, then re-run the originally failing scenario`,
+        expected_outcome: 'The original failure no longer reproduces'
+      },
+      {
+        instruction: `npm run pattern:resolve ${pattern.pattern_id} "<resolution notes>"`,
+        expected_outcome: 'Pattern status transitions to resolved'
+      }
+    ],
     created_at: new Date().toISOString(),
     metadata: {
       source: 'pattern-alert-sd-creator',
@@ -271,6 +361,24 @@ ${suggestedTeam}
       auto_generated: true
     }
   };
+
+  return sdData;
+}
+
+/**
+ * Create Strategic Directive for pattern
+ */
+export async function createSDForPattern(pattern) {
+  // Check for existing SD first
+  const existingSD = await hasExistingSD(pattern.pattern_id, pattern);
+  if (existingSD) {
+    console.log(`  SD already exists: ${existingSD.sd_key} (${existingSD.status})`);
+    return { skipped: true, existing: existingSD };
+  }
+
+  // SD-LEO-SDKEY-001: Pass full pattern for semantic key generation
+  const sdKey = await generateSDKey(pattern);
+  const sdData = buildSdDataForPattern(pattern, sdKey);
 
   if (DRY_RUN) {
     console.log(`  [DRY RUN] Would create SD: ${sdKey}`);
@@ -297,7 +405,7 @@ ${suggestedTeam}
 /**
  * Main alert check and SD creation
  */
-async function checkPatternsAndCreateSDs() {
+export async function checkPatternsAndCreateSDs() {
   console.log('\n PATTERN ALERT SD CREATOR');
   console.log('═'.repeat(60));
   console.log(`Mode: ${DRY_RUN ? 'DRY RUN' : 'LIVE'}`);
@@ -360,12 +468,14 @@ async function checkPatternsAndCreateSDs() {
   return stats;
 }
 
-// Run
-checkPatternsAndCreateSDs()
-  .then((stats) => {
-    process.exit(stats.errors > 0 ? 1 : 0);
-  })
-  .catch((error) => {
-    console.error(' Fatal error:', error);
-    process.exit(1);
-  });
+// Run only when invoked directly (not when imported by tests)
+if (isMainModule(import.meta.url)) {
+  checkPatternsAndCreateSDs()
+    .then((stats) => {
+      process.exit(stats.errors > 0 ? 1 : 0);
+    })
+    .catch((error) => {
+      console.error(' Fatal error:', error);
+      process.exit(1);
+    });
+}

@@ -1,7 +1,7 @@
 # DataDistill Honest-Launch Calibration Readout — 2026-06
 
 **SD:** SD-LEO-INFRA-DATADISTILL-HONEST-LAUNCH-001 · **Venture:** DataDistill (`510177ba-435f-4dd7-bfa5-6154cc8cf54b`) · **Audience:** Adam roadmap (dq-review-adam lineage)
-**Status:** COMPLETE — all 26 stages traversed 2026-06-11 (first venture ever to finish the pipeline); closing synthesis below.
+**Status:** COMPLETE 2026-06-11 — DataDistill crossed the 26-stage finish line (workflow_status=completed; final 25→26 advance 14:48Z after the S25 chairman GO was answered via a live AskUserQuestion).
 
 ## Purpose
 
@@ -16,12 +16,13 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 | S20 exit (Code Quality, re-run) | — (never produced canonical artifact before) | PASS via Gemini validation; `code_quality_report` persisted (first ever — the type was blocked by a DB constraint, defect #6). | Pre-fix, S23's code_quality category was structurally unsatisfiable fleet-wide. |
 | S23 exit (Launch Readiness, re-run) | SKIPPED → (post-fixes) READY, 100%, 3/3 required pass | Chairman GO `f184cc80`: advance 23→24. | WELL-CALIBRATED after defects fixed: gate verdict and chairman judgment agreed. The first SKIPPED was honest signal of genuinely-missing upstream artifacts. |
 | S24 entry | READY precondition satisfied | PASS — first venture in stage 24. | — |
-| S24 exit (Go Live analysis) | ready_to_launch, 3 channels (blog_seo, twitter_x, email); ad-copy headlines NOT ready (`ad_copy_ready=false` ×3) | Chairman GO `9c44db4a` (chairman-via-coordinator, 13:08Z; pilot scope explicit) — launched_at stamped, `launch_metrics` t=0 emitted, advanced 24→25 | Aligned, precedent set: "targeting ready, copy pending" is acceptable launch-readiness at pilot scope. The exit gate itself was structurally unsatisfiable until defect #10 (below) — gate declarations must ship WITH their producers. |
-| S25 exit (Post-Launch Review) | Honest t=0 review persisted (artifact `7d197a3e`): zero metrics (no elapsed window), 2 assumptions validated / 2 invalidated, 4 learnings | Pending chairman decision `bf060e27` (routed via coordinator) | t=0 post-launch review is definitionally thin — the stage contract should gate on a minimum elapsed window or accept an explicit t0_review mode. |
+| S24 exit (Go Live) | ready_to_launch, 3 channels (blog_seo, twitter_x, email); ad-copy headlines pending | Chairman GO `9c44db4a` (via coordinator, pilot scope explicit) — launched_at stamped, launch_metrics t=0 emitted, advanced 24→25 | Precedent: "targeting ready, copy pending" acceptable at pilot scope. Exit gate was structurally unsatisfiable until defect #10 (launch_metrics had no producer). |
+| S25 exit (Post-Launch Review) | Honest t=0 review: zero metrics (no elapsed window), 2 assumptions validated / 2 invalidated, 4 learnings | Chairman GO `bf060e27` (decision=go via coordinator; status field reconciled to approved — the two-field write was non-atomic) — advanced 25→26 | t=0 review is definitionally thin; stage contract should gate on a minimum elapsed window or accept an explicit t0 mode. |
+| S26 exit (Growth Playbook — TERMINUS) | Playbook from partial-but-honest t=0 data; schema requires growth_experiments≥1 + scaling_priorities≥1 + operations_handoff + 90_day_plan | PASS — **first venture to complete the 26-stage lifecycle under binding evidence-backed gates** (transition 25→26 recorded 14:48Z via `advanceStage` after chairman GO `bf060e27`, answered via a live AskUserQuestion; final artifact `5e1c7086`, validation PASS 0 errors: 3 activation-led growth experiments + 3 scaling priorities + chairman-owned ops handoff + day-90 real-metrics decision point); workflow_status=completed, stage stays 26 | Reachable only after defects #11/#12 (all-postlaunch-artifacts requirement + analyzer param no caller ever wired). Gate declarations and analyzer param contracts must ship WITH their producers/callers. Defect #13: S26 declares no upstream deps (`upstreamData: {}`) — the inline analysis had to be grounded manually from S24/S25 artifacts. |
 
 ## First-contact defect log (FR-3)
 
-10 defects on first live contact with S20–S25, all fixed forward (PR #4635 merged + defect #10 on PR #4636; 2 prod migrations applied):
+9 defects on first live contact with S20–S24, all fixed forward (PR #4635, merged; 2 prod migrations applied):
 
 | # | Class | Defect | Disposition |
 |---|-------|--------|-------------|
@@ -34,7 +35,6 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 | 7 | positional-swap | S23 scorer read distribution from stage 22 post-resequence | Fixed inline (any-of both positions) |
 | 8 | rpc-type-cast | `fn_advance_venture_stage` text[]→jsonb cast exception — advancement impossible from any artifact-gated stage | Migration applied (function fix) |
 | 9 | deps+shadowing | S24 channels: wrong stage + CROSS_STAGE_DEPS missing 21 + merge shadowing | Fixed inline (`__byType` + deps; RCA `4ef74cda`) |
-| 10 | gate-without-producer | S24 exit gate (FR-5 verifiers) requires a current `launch_metrics` artifact with channels activated — NO producer existed anywhere; 24→25 structurally impossible for every venture | Fixed inline: go-live analyzer emits `launch_metrics` t=0 on launch decision; live artifact persisted via typed-artifacts batch path |
 
 ## Calibration findings for the Adam roadmap
 
@@ -44,19 +44,15 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 4. **Positional-swap residue from the S18–26 resequence is a live defect class** (#2, #7, #9 — three independent instances). A drift-lint of stage-numbered reads vs venture_stages SSOT would catch the remainder statically.
 5. **Gate-vs-chairman agreement was perfect post-fix** (S23 READY → chairman GO): early evidence the gate system calibrates well once the machinery actually runs.
 
-6. **Gate inputs are the calibration gap, not thresholds** (S23 attestation-mode advisory categories; S24 tolerating missing ad copy): input honesty (attestation-vs-evidence flags on checklist categories) should precede any threshold tuning.
+## Late-campaign defects (S24→S26 run)
 
-## S26 (added after execution)
+| # | Class | Defect | Disposition |
+|---|-------|--------|-------------|
+| 10 | gate-without-producer | S24 exit verifiers required a `launch_metrics` artifact with activated channels — no producer existed anywhere | Fixed (go-live trigger emits t=0 launch_metrics) |
+| 11 | all-or-nothing tolerance | S26 required ALL postlaunch artifacts; t=0 venture legitimately has zero user feedback → permanent SKIP | Fixed (partial honest data generates; gap recorded) |
+| 12 | unwired param contract | S26 analyzer's `postlaunchArtifacts` param supplied by NO caller → always classified missing | Fixed (self-fetch via the supabase client the engine does provide) |
+| 13 | missing upstream deps | S26 stage declares zero upstream dependencies (`upstreamData: {}`, `upstreamStages: []`) — the growth playbook had to be grounded manually from S24/S25 artifacts instead of receiving them | Deferred-with-reason: logged for the stage-contract registry; the inline path worked, fix belongs with the CROSS_STAGE_DEPS owner |
 
-| Gate | Predicted | Actual | Calibration note |
-|------|-----------|--------|------------------|
-| S25 exit decision | t=0 honest review (artifact `7d197a3e`) | Chairman GO `bf060e27` (chairman-via-coordinator, 14:48Z) — advanced 25→26 | Third consecutive gate-vs-chairman agreement. |
-| S26 entry+exit (Growth Playbook) | entry+exit PASS, evidence-backed (`evaluated_by` stage-26-growth-playbook); `growth_playbook` artifact `87aac120` with a 90-day plan | Executed 2026-06-11 ~14:55Z — pipeline terminus reached | The generated 90-day plan internalized the campaign's own calibration findings (attestation-vs-evidence flags, launch_metrics producer, t0_review mode) — the playbook stage consumes honest upstream data correctly. |
+## Outcome — CAMPAIGN COMPLETE
 
-## Closing synthesis
-
-**DataDistill is the first venture to traverse all 26 stages.** Every gate from S20 onward is evidence-backed (`gate_criteria` populated, `evaluated_by` non-null); all three chairman gates (S23 `f184cc80`, S24 `9c44db4a`, S25 `bf060e27`) were real decisions routed via the coordinator; the one override (S15 `5338c897`) is first-class recorded. 10 first-contact defects were fixed forward without halting the walk — two of them (#6 CHECK constraint, #8 RPC cast) had each independently made the launch corridor untraversable for EVERY venture, and a third (#10 gate-without-producer) made 24→25 structurally impossible. Gate-vs-chairman agreement was perfect post-fix (3/3 GO where the machinery said READY), so the calibration priority is **input honesty** (attestation vs evidence, t=0 metric windows), not threshold tuning. The synthetic canary should extend its frontier through S26 using this corridor.
-
-## Outstanding
-
-- None for the stage walk — campaign complete through S26. Follow-ups routed via completion flags: attestation-vs-evidence input flags, automated launch_metrics producer wiring, t0_review mode for S25, stage-read drift-lint.
+**DataDistill is the first venture to complete the 26-stage lifecycle** (workflow_status=completed, 2026-06-11). Every S20–S26 gate row is evidence-backed with non-null evaluated_by; every chairman decision recorded (S15 override, S23/S24/S25 GO); 12 first-contact defects fixed forward, 2 prod migrations applied. The launch corridor now demonstrably works end-to-end — the calibration baseline exists.
