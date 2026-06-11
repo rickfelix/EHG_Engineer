@@ -323,6 +323,36 @@ export class BaseExecutor {
       validationContext._traceCtx = traceCtx;
       validationContext._parentSpan = step3Span;
 
+      // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (L5): gate-verdict cache setup.
+      // PASS-only reuse for declared-input gates across retries of the same
+      // handoff. LEAD-FINAL-APPROVAL is hard-excluded (final bar); --no-cache
+      // (options.noCache) forces a full re-run. Fail-open: loader errors → no cache.
+      let verdictCacheModule = null;
+      try {
+        verdictCacheModule = await import('../gate-verdict-cache.js');
+        const cacheEnabled = verdictCacheModule.isCacheAllowed({
+          noCache: options.noCache,
+          handoffType: this.handoffType,
+        });
+        let priorResults = null;
+        if (cacheEnabled) {
+          priorResults = await verdictCacheModule.loadPriorGateResults(
+            this.supabase, sd?.id || sdId, this.handoffType
+          );
+        }
+        validationContext._verdictCache = {
+          enabled: cacheEnabled && !!priorResults,
+          prior: priorResults || {},
+          _allowed: cacheEnabled,
+        };
+        if (validationContext._verdictCache.enabled) {
+          console.log(`   ♻️  Gate-verdict cache armed (${Object.keys(priorResults).length} prior gate result(s) with input hashes)`);
+        }
+      } catch (cacheErr) {
+        validationContext._verdictCache = { enabled: false, prior: {}, _allowed: false };
+        console.warn(`   [gate-verdict-cache] disabled (fail-open): ${cacheErr.message}`);
+      }
+
       // SD-MAN-GEN-CORRECTIVE-VISION-GAP-013 (V02): Gate retry loop — auto-retry transient failures
       let gateResults;
       let currentRetryCount = options._retryCount || 0;
@@ -330,6 +360,18 @@ export class BaseExecutor {
 
       for (let attempt = 0; attempt <= maxGateRetries; attempt++) {
         gateResults = await this.validationOrchestrator.validateGates(gates, validationContext);
+
+        // L5: fold this attempt's hash-bearing PASS verdicts into the cache so the
+        // in-process retry below reuses them too (same PASS-only semantics).
+        if (verdictCacheModule && validationContext._verdictCache && validationContext._verdictCache._allowed) {
+          try {
+            validationContext._verdictCache.prior = verdictCacheModule.mergePassResults(
+              validationContext._verdictCache.prior, gateResults.gateResults
+            );
+            validationContext._verdictCache.enabled =
+              Object.keys(validationContext._verdictCache.prior).length > 0;
+          } catch { /* fail-open */ }
+        }
 
         if (gateResults.passed) break; // Gates passed — exit retry loop
 
@@ -353,6 +395,22 @@ export class BaseExecutor {
       }
 
       try { endSpan(step3Span, { result: gateResults.passed ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+
+      // L5 telemetry: cache-hit counts per run (fail-soft, fire-and-forget).
+      try {
+        const allEntries = Object.entries(gateResults.gateResults || {});
+        const hitNames = allEntries.filter(([, r]) => r && r.cache_hit === true).map(([n]) => n);
+        if (hitNames.length > 0 && verdictCacheModule) {
+          console.log(`   ♻️  Gate-verdict cache: ${hitNames.length} reused, ${allEntries.length - hitNames.length} evaluated (${hitNames.join(', ')})`);
+          verdictCacheModule.logCacheTelemetry(this.supabase, {
+            sdKey: sd?.sd_key || sdId,
+            handoffType: this.handoffType,
+            hits: hitNames.length,
+            reran: allEntries.length - hitNames.length,
+            gates: hitNames,
+          }).catch(() => {});
+        }
+      } catch { /* telemetry never affects the verdict */ }
 
       // SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-5: WAIT verdict short-circuit.
       // A WAIT verdict means the handoff is correctly blocked (e.g. parent orchestrator
@@ -461,13 +519,18 @@ export class BaseExecutor {
           }
 
           try { endSpan(rootSpan, { result: 'gate_failure' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
-          return ResultBuilder.gateFailure(gateResults.failedGate, {
+          const gateFailureResult = ResultBuilder.gateFailure(gateResults.failedGate, {
             issues: gateResults.issues,
             score: gateResults.totalScore,
             max_score: gateResults.totalMaxScore,
             warnings: gateResults.warnings,
             details: gateResults.gateResults
           }, remediation);
+          // L5 (SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B): surface per-gate results
+          // top-level so recordFailure persists them — retries follow rejections, so
+          // without this the cache has nothing to reuse.
+          gateFailureResult.gateResults = gateResults.gateResults;
+          return gateFailureResult;
         }
       }
 
