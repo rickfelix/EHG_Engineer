@@ -1102,6 +1102,14 @@ async function main() {
 
   // 4. Auto-release dead sessions (with WIP guard + MC liveness gate)
   const dead = classified.filter(s => s.status === 'DEAD');
+  // QF-20260611-162: announce-vs-write split. The CLAIM_RELEASED announce loop
+  // (step 6) used to iterate ALL of `dead`, but this release loop `continue`s on
+  // four hold guards (WIP, MC, hardcap-pid-alive, cross-signal) and the UPDATE
+  // can fail — so held/failed sessions were announced as released every ~5min
+  // forever while claiming_session_id persisted (7+ phantom announces across 2
+  // SDs, 2026-06-11). Track what ACTUALLY released vs failed; announce only those.
+  const releasedDead = [];
+  const releaseFailedDead = [];
 
   // SD-LEO-INFRA-FLEET-LIVENESS-MONTE-001 (US-005): Pre-fetch the latest MC
   // estimate per dead-classified session (single query, then index). An
@@ -1227,7 +1235,9 @@ async function main() {
 
     if (error) {
       actions.push('FAILED to release ' + s.session_id + ' (' + s.sd_key + '): ' + error.message);
+      releaseFailedDead.push({ ...s, release_error: error.message }); // QF-20260611-162
     } else {
+      releasedDead.push(s); // QF-20260611-162: write checked — only these announce CLAIM_RELEASED
       if (s.sd_key) {
         await resetSdPhaseOnRelease(s.sd_key, releaseReason);
         // Clear claiming_session_id on the SD so the next worker can claim it
@@ -1653,8 +1663,21 @@ async function main() {
       });
   }
 
-  // Also send CLAIM_RELEASED messages for any sessions we evicted (dead)
-  for (const d of dead) {
+  // Send CLAIM_RELEASED ONLY for sessions whose release write actually succeeded
+  // (QF-20260611-162 — previously iterated the raw `dead` list, announcing held/failed releases
+  // as released every ~5min forever). Dedup: skip if an identical announce for the
+  // same session+SD landed within the last 30 minutes.
+  const ANNOUNCE_DEDUP_MIN = 30;
+  const dedupSinceIso = new Date(Date.now() - ANNOUNCE_DEDUP_MIN * 60000).toISOString();
+  for (const d of releasedDead) {
+    const { data: dupes } = await supabase
+      .from('session_coordination')
+      .select('id')
+      .eq('target_session', d.session_id)
+      .eq('message_type', 'CLAIM_RELEASED')
+      .gte('created_at', dedupSinceIso)
+      .limit(1);
+    if (dupes && dupes.length > 0) continue;
     await supabase
       .from('session_coordination')
       .insert({
@@ -1664,6 +1687,28 @@ async function main() {
         subject: 'Claim on ' + (d.sd_key || 'unknown') + ' was released (PID dead)',
         body: 'Your session was detected as dead (PID ' + d.pid + '). Claim released. Available: ' + available.join(', '),
         payload: { released_sd: d.sd_key, reason: 'PID_DEAD', available_sds: available },
+        sender_type: 'sweep'
+      });
+  }
+  // Failed release writes announce the FAILURE with the error — never a phantom release.
+  for (const d of releaseFailedDead) {
+    const { data: dupes } = await supabase
+      .from('session_coordination')
+      .select('id')
+      .eq('target_session', d.session_id)
+      .eq('message_type', 'RELEASE_FAILED')
+      .gte('created_at', dedupSinceIso)
+      .limit(1);
+    if (dupes && dupes.length > 0) continue;
+    await supabase
+      .from('session_coordination')
+      .insert({
+        target_session: d.session_id,
+        target_sd: d.sd_key,
+        message_type: 'RELEASE_FAILED',
+        subject: 'Release of ' + (d.sd_key || 'unknown') + ' FAILED (PID dead, write rejected)',
+        body: 'Sweep detected this session dead (PID ' + d.pid + ') but the release UPDATE failed: ' + d.release_error,
+        payload: { released_sd: d.sd_key, reason: 'PID_DEAD_RELEASE_FAILED', error: d.release_error },
         sender_type: 'sweep'
       });
   }
