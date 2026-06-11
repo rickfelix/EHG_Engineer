@@ -20,6 +20,7 @@ import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import {
   generateSDKey,
   generateChildKey,
+  deriveChildIndex,
   SD_SOURCES,
   SD_TYPES,
   normalizeVenturePrefix
@@ -624,7 +625,7 @@ async function createFromQF(qfId) {
  * @param {string} overrides.type - Child SD type (default: 'feature', never inherits 'orchestrator')
  * @param {string} overrides.title - Child title override
  */
-async function createChild(parentKey, index = 0, overrides = {}) {
+async function createChild(parentKey, index = null, overrides = {}) {
   console.log(`\n📋 Creating child SD for: ${parentKey}`);
 
   // Fetch parent SD
@@ -639,16 +640,29 @@ async function createChild(parentKey, index = 0, overrides = {}) {
     process.exit(1);
   }
 
-  // Count existing children to determine index
+  // QF-20260610-473: derive index from MAX existing suffix (not count — count
+  // collides forever on non-contiguous children: {-B} -> count=1 -> proposes -B),
+  // honor an explicit index of 0 (nullish check, not ||), and self-heal residual
+  // collisions by bumping to the next free letter. Policy: derived default is
+  // max(taken)+1, so {-B} -> -C and {-A,-C} -> -D.
   const { data: existingChildren } = await supabase
     .from('strategic_directives_v2')
-    .select('id')
+    .select('sd_key')
     .eq('parent_sd_id', parent.id);
 
-  const childIndex = index || (existingChildren?.length || 0);
+  const parentSdKey = parent.sd_key || parentKey;
+  const derivation = deriveChildIndex(
+    parentSdKey,
+    (existingChildren || []).map((c) => c.sd_key),
+    Number.isInteger(index) ? index : null
+  );
+  const childIndex = derivation.index;
+  if (derivation.bumped) {
+    console.log(`   ℹ️  Suffix collision — bumped to next free index ${childIndex} (taken: ${derivation.takenIndexes.join(',')})`);
+  }
 
   // Generate child key
-  const sdKey = generateChildKey(parent.sd_key || parentKey, childIndex);
+  const sdKey = generateChildKey(parentSdKey, childIndex);
 
   // Inherit strategic fields from parent (SD-LEO-FIX-METADATA-001)
   const inheritedFields = inheritStrategicFields(parent);
@@ -2270,7 +2284,9 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const childIndexArg = args.find((a, i) =>
         i >= 2 && !a.startsWith('-') && !flagValuePositionsChild.has(i) && i !== childTypeIdx + 1 && i !== childTitleIdx + 1
       );
-      await createChild(childParentKey, parseInt(childIndexArg || '0', 10), childOverrides);
+      // QF-20260610-473: pass null when no explicit index (so an EXPLICIT 0 is honored
+      // and the absent case derives from max existing suffix instead of count).
+      await createChild(childParentKey, childIndexArg != null ? parseInt(childIndexArg, 10) : null, childOverrides);
     } else {
       // Direct creation: <source> <type> "<title>"
       // Detect unknown flags to prevent silent corruption (SD-LEO-FIX-CREATE-ARGS-001)
