@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
+import { HAS_REAL_DB } from '../helpers/db-available.js';
 
 const skillsPath = fileURLToPath(
   new URL('../../lib/agent-experience-factory/adapters/skills-adapter.js', import.meta.url)
@@ -34,11 +35,10 @@ describe('leo_sub_agents queries use the live `active` column (QF-20260529-822)'
 });
 
 // Behavioral: the SkillsAdapter query must run against the live schema without throwing.
-// DB-gated: skips cleanly without service-role creds (e.g. CI without secrets).
-const hasCreds = !!(
-  process.env.SUPABASE_SERVICE_ROLE_KEY &&
-  (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
-);
+// DB-gated: skips cleanly without REAL creds — sentinel-aware, because the unit
+// tier injects synthetic creds (tests/setup.unit.js) that satisfy a bare
+// truthiness check but point at test.invalid.local (SD-LEO-INFRA-ENFORCE-UNIT-TIER-001).
+const hasCreds = HAS_REAL_DB;
 
 describe.skipIf(!hasCreds)('SkillsAdapter — runs against live leo_sub_agents schema', () => {
   let SkillsAdapter, supabase;
