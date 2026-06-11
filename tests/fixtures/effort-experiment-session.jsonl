@@ -1,0 +1,6 @@
+{"type":"assistant","timestamp":"2026-06-11T01:40:00.000Z","message":{"role":"assistant","usage":{"input_tokens":100,"cache_creation_input_tokens":2000,"cache_read_input_tokens":50000,"output_tokens":500}}}
+{"type":"user","timestamp":"2026-06-11T01:41:00.000Z","message":{"role":"user","content":"no usage here"}}
+{"type":"assistant","timestamp":"2026-06-11T01:42:00.000Z","message":{"role":"assistant","usage":{"input_tokens":50,"cache_creation_input_tokens":1000,"cache_read_input_tokens":60000,"output_tokens":700}}}
+{"type":"assistant","timestamp":"2026-06-11T02:30:00.000Z","message":{"role":"assistant","usage":{"input_tokens":999,"cache_creation_input_tokens":999,"cache_read_input_tokens":999,"output_tokens":999}}}
+this line is not json but mentions "usage" so the parser must skip-count it
+{"type":"assistant","timestamp":"2026-06-11T01:45:00.000Z","message":{"role":"assistant","usage":{"input_tokens":25,"cache_creation_input_tokens":500,"cache_read_input_tokens":70000,"output_tokens":300}}}
