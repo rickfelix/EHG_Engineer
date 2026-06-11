@@ -18,6 +18,7 @@
  * without burning retry budget. Outside the window → FAIL (unchanged).
  */
 import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../../lib/handoff/wait-verdict.js';
+import { REQUIRED_SUBAGENTS } from '../required-subagents.js';
 
 /**
  * Race window (seconds) during which a missing evidence row is treated as a
@@ -27,16 +28,12 @@ const RACE_WINDOW_SECONDS = 30;
 
 /**
  * Required sub-agents per handoff type.
- * Initial map matches current Plan-approved agents per CLAUDE_LEAD.md.
- * Exported so /claim and /leo settings can surface the requirement visually.
+ * SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-C (FR-3): the mapping now lives in the
+ * shared SSOT module so the gate and the phase-subagent-orchestrator can never
+ * drift. Re-exported here so /claim, /leo settings, and existing importers keep
+ * working unchanged.
  */
-export const REQUIRED_SUBAGENTS = {
-  'LEAD-TO-PLAN': ['VALIDATION', 'Explore'],
-  'PLAN-TO-EXEC': ['TESTING'],
-  'EXEC-TO-PLAN': ['TESTING', 'SECURITY'],
-  'PLAN-TO-LEAD': ['RETRO'],
-  'LEAD-FINAL-APPROVAL': []
-};
+export { REQUIRED_SUBAGENTS };
 
 /**
  * Parse a DB timestamp string treating naive (no-TZ) values as UTC.

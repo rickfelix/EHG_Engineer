@@ -6,6 +6,7 @@
 import { getValidationRequirements } from '../../../lib/utils/sd-type-validation.js';
 // NOTE: intelligent-impact-analyzer.js is deprecated - Claude Code handles impact analysis natively
 import { getPatternBasedSubAgents } from '../../../lib/learning/pattern-to-subagent-mapper.js';
+import { getRequiredSubAgents } from '../handoff/required-subagents.js';
 
 import {
   MANDATORY_SUBAGENTS_BY_PHASE,
@@ -145,6 +146,27 @@ async function orchestrate(supabase, phase, sdId, options = {}) {
           if (skippedIdx >= 0) {
             skippedSubAgents.splice(skippedIdx, 1);
           }
+        }
+      }
+    }
+
+    // Step 3E: Union in the handoff gate's BLOCKING set (SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-C, FR-3)
+    // When the caller knows the target handoff (subagents:collect passes it), guarantee
+    // the SUBAGENT_EVIDENCE_MISSING blocking agents are in this run's parallel launch,
+    // so one collect run is always sufficient for the gate.
+    if (options.handoffType) {
+      const blockingCodes = getRequiredSubAgents(options.handoffType);
+      console.log(`\nStep 3E: Union with ${options.handoffType} gate blocking set: [${blockingCodes.join(', ')}]`);
+      for (const code of blockingCodes) {
+        const alreadyRequired = requiredSubAgents.some(sa => (sa.sub_agent_code || sa.code) === code);
+        if (alreadyRequired) continue;
+        const subAgent = phaseSubAgents.find(sa => (sa.sub_agent_code || sa.code) === code);
+        if (subAgent) {
+          console.log(`   [GATE-BLOCKING] ${code}: required by ${options.handoffType} evidence gate`);
+          requiredSubAgents.push({ ...subAgent, reason: `Blocking for ${options.handoffType}`, source: 'handoff_gate' });
+        } else {
+          // Not a scripted sub-agent (e.g. 'Explore' runs via the Task tool) — surface it loudly.
+          console.warn(`   ⚠ [GATE-BLOCKING] ${code}: not registered for ${phase} script execution — invoke via the Task tool before the handoff`);
         }
       }
     }
