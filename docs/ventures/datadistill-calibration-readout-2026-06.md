@@ -16,7 +16,9 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 | S20 exit (Code Quality, re-run) | — (never produced canonical artifact before) | PASS via Gemini validation; `code_quality_report` persisted (first ever — the type was blocked by a DB constraint, defect #6). | Pre-fix, S23's code_quality category was structurally unsatisfiable fleet-wide. |
 | S23 exit (Launch Readiness, re-run) | SKIPPED → (post-fixes) READY, 100%, 3/3 required pass | Chairman GO `f184cc80`: advance 23→24. | WELL-CALIBRATED after defects fixed: gate verdict and chairman judgment agreed. The first SKIPPED was honest signal of genuinely-missing upstream artifacts. |
 | S24 entry | READY precondition satisfied | PASS — first venture in stage 24. | — |
-| S24 exit (Go Live analysis) | ready_to_launch, 3 channels (blog_seo, twitter_x, email) | Pending chairman launch decision (routed via coordinator, corr `13a64707`). | — |
+| S24 exit (Go Live) | ready_to_launch, 3 channels (blog_seo, twitter_x, email); ad-copy headlines pending | Chairman GO `9c44db4a` (via coordinator, pilot scope explicit) — launched_at stamped, launch_metrics t=0 emitted, advanced 24→25 | Precedent: "targeting ready, copy pending" acceptable at pilot scope. Exit gate was structurally unsatisfiable until defect #10 (launch_metrics had no producer). |
+| S25 exit (Post-Launch Review) | Honest t=0 review: zero metrics (no elapsed window), 2 assumptions validated / 2 invalidated, 4 learnings | Chairman GO `bf060e27` (decision=go via coordinator; status field reconciled to approved — the two-field write was non-atomic) — advanced 25→26 | t=0 review is definitionally thin; stage contract should gate on a minimum elapsed window or accept an explicit t0 mode. |
+| S26 exit (Growth Playbook — TERMINUS) | Playbook from partial-but-honest t=0 data: 3 growth experiments, 0 scaling priorities (artifact `8f1c0689`) | PASS — **first venture to complete the 26-stage lifecycle under binding evidence-backed gates**; workflow_status=completed, stage stays 26 | Reachable only after defects #11/#12 (all-postlaunch-artifacts requirement + analyzer param no caller ever wired). Gate declarations and analyzer param contracts must ship WITH their producers/callers. |
 
 ## First-contact defect log (FR-3)
 
@@ -42,7 +44,14 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 4. **Positional-swap residue from the S18–26 resequence is a live defect class** (#2, #7, #9 — three independent instances). A drift-lint of stage-numbered reads vs venture_stages SSOT would catch the remainder statically.
 5. **Gate-vs-chairman agreement was perfect post-fix** (S23 READY → chairman GO): early evidence the gate system calibrates well once the machinery actually runs.
 
-## Outstanding
+## Late-campaign defects (S24→S26 run)
 
-- S24 launch decision (chairman, via coordinator) → 24→25→26 run + post-launch/growth gate rows.
-- Final predicted-vs-actual entries for S25/S26 once executed.
+| # | Class | Defect | Disposition |
+|---|-------|--------|-------------|
+| 10 | gate-without-producer | S24 exit verifiers required a `launch_metrics` artifact with activated channels — no producer existed anywhere | Fixed (go-live trigger emits t=0 launch_metrics) |
+| 11 | all-or-nothing tolerance | S26 required ALL postlaunch artifacts; t=0 venture legitimately has zero user feedback → permanent SKIP | Fixed (partial honest data generates; gap recorded) |
+| 12 | unwired param contract | S26 analyzer's `postlaunchArtifacts` param supplied by NO caller → always classified missing | Fixed (self-fetch via the supabase client the engine does provide) |
+
+## Outcome — CAMPAIGN COMPLETE
+
+**DataDistill is the first venture to complete the 26-stage lifecycle** (workflow_status=completed, 2026-06-11). Every S20–S26 gate row is evidence-backed with non-null evaluated_by; every chairman decision recorded (S15 override, S23/S24/S25 GO); 12 first-contact defects fixed forward, 2 prod migrations applied. The launch corridor now demonstrably works end-to-end — the calibration baseline exists.
