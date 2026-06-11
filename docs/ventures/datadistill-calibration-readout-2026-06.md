@@ -1,7 +1,7 @@
 # DataDistill Honest-Launch Calibration Readout — 2026-06
 
 **SD:** SD-LEO-INFRA-DATADISTILL-HONEST-LAUNCH-001 · **Venture:** DataDistill (`510177ba-435f-4dd7-bfa5-6154cc8cf54b`) · **Audience:** Adam roadmap (dq-review-adam lineage)
-**Status:** stages 20–24 complete (first venture ever to enter stage 24); launch decision pending via coordinator; this document updates as 24→26 completes.
+**Status:** COMPLETE — all 26 stages traversed 2026-06-11 (first venture ever to finish the pipeline); closing synthesis below.
 
 ## Purpose
 
@@ -46,7 +46,17 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 
 6. **Gate inputs are the calibration gap, not thresholds** (S23 attestation-mode advisory categories; S24 tolerating missing ad copy): input honesty (attestation-vs-evidence flags on checklist categories) should precede any threshold tuning.
 
+## S26 (added after execution)
+
+| Gate | Predicted | Actual | Calibration note |
+|------|-----------|--------|------------------|
+| S25 exit decision | t=0 honest review (artifact `7d197a3e`) | Chairman GO `bf060e27` (chairman-via-coordinator, 14:48Z) — advanced 25→26 | Third consecutive gate-vs-chairman agreement. |
+| S26 entry+exit (Growth Playbook) | entry+exit PASS, evidence-backed (`evaluated_by` stage-26-growth-playbook); `growth_playbook` artifact `87aac120` with a 90-day plan | Executed 2026-06-11 ~14:55Z — pipeline terminus reached | The generated 90-day plan internalized the campaign's own calibration findings (attestation-vs-evidence flags, launch_metrics producer, t0_review mode) — the playbook stage consumes honest upstream data correctly. |
+
+## Closing synthesis
+
+**DataDistill is the first venture to traverse all 26 stages.** Every gate from S20 onward is evidence-backed (`gate_criteria` populated, `evaluated_by` non-null); all three chairman gates (S23 `f184cc80`, S24 `9c44db4a`, S25 `bf060e27`) were real decisions routed via the coordinator; the one override (S15 `5338c897`) is first-class recorded. 10 first-contact defects were fixed forward without halting the walk — two of them (#6 CHECK constraint, #8 RPC cast) had each independently made the launch corridor untraversable for EVERY venture, and a third (#10 gate-without-producer) made 24→25 structurally impossible. Gate-vs-chairman agreement was perfect post-fix (3/3 GO where the machinery said READY), so the calibration priority is **input honesty** (attestation vs evidence, t=0 metric windows), not threshold tuning. The synthetic canary should extend its frontier through S26 using this corridor.
+
 ## Outstanding
 
-- S25 chairman decision `bf060e27` (via coordinator) → 25→26 advance + S26 Growth Playbook run (final stage — first venture ever to finish the pipeline).
-- Final predicted-vs-actual entry for S26 + closing synthesis once executed.
+- None for the stage walk — campaign complete through S26. Follow-ups routed via completion flags: attestation-vs-evidence input flags, automated launch_metrics producer wiring, t0_review mode for S25, stage-read drift-lint.
