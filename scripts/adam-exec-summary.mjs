@@ -42,6 +42,21 @@ const northStar = 'Pilot DataDistill S' + pilotStage + '/26' + (arrow(pilotStage
 
 let needs = []; try { needs = JSON.parse(readFileSync(resolve('.adam-chairman-decisions.json'), 'utf8')) || []; } catch {}
 
+// SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-001: 'Decisions awaiting you' — top 10 from the
+// chairman_pending_decisions union view (escalations, gate decisions, chairman approvals,
+// critical/high feedback, idle draft flags, OKR acceptances). Display-only (nothing
+// auto-decides); fail-soft so a view/DB error never blocks the chairman email.
+let pendingDecisions = [];
+try {
+  // select('*'): tolerant of pre/post-migration column sets (blocking/effective_priority are new).
+  const { data } = await db.from('chairman_pending_decisions').select('*').limit(50);
+  pendingDecisions = data || [];
+  try { const { sortPending } = await import(pathToFileURL(resolve('lib/chairman/decision-queue.mjs')).href); pendingDecisions = sortPending(pendingDecisions); } catch {}
+  pendingDecisions = pendingDecisions.slice(0, 10);
+} catch {}
+const decAge = (c) => { const h = Math.max(0, (t - new Date(c).getTime()) / 3600000); return h >= 48 ? Math.floor(h / 24) + 'd' : Math.floor(h) + 'h'; };
+const decLine = (d) => '[' + decAge(d.created_at) + '] [' + d.decision_type + (d.blocking ? '/BLOCKING' : '') + '] ' + d.title + (d.recommendation ? ' ' + EM + ' ' + d.recommendation : '');
+
 // FR-2: per-scope roll-up — count recent Adam advisories per scope (reuses FR-1's scope_key),
 // fail-soft so a scope/DB error never blocks the chairman email.
 let scopeRollup = [], perScope = {};
@@ -97,6 +112,7 @@ const text = [
   'STRATEGIC ' + EM + ' chairman lens (two focuses: drive the pilot + improve the venture process)', '',
   'NORTH STAR: ' + northStar, '',
   'NEEDS YOU (' + needs.length + '):', ...needs.map(d => '  - [' + d.priority + '] ' + needsLabel(d)), '',
+  'DECISIONS AWAITING YOU (' + pendingDecisions.length + '):', ...(pendingDecisions.length ? pendingDecisions.map(d => '  - ' + decLine(d)) : ['  (none pending)']), '',
   'PER-SCOPE (advisories, last 24h): ' + scopeRollupLine, '',
   'VALUE DELIVERED (last 24h, ' + shippedN + ' SDs):',
   '  Capabilities added (' + buckets.cap.length + '): ' + bucketLine(buckets.cap, 3),
@@ -107,6 +123,7 @@ const text = [
   '--- FLEET HEALTH ---', cardText
 ].join('\n');
 const needsHtml = needs.length ? '<ul style="margin:2px 0 0;padding-left:16px;font-size:13px">' + needs.map(d => '<li style="margin:0 0 3px"><b>[' + esc(d.priority) + ']</b> ' + esc(needsLabel(d)) + '</li>').join('') + '</ul>' : '<span style="font-size:13px">nothing pending</span>';
+const decisionsHtml = pendingDecisions.length ? '<ul style="margin:2px 0 0;padding-left:16px;font-size:13px">' + pendingDecisions.map(d => '<li style="margin:0 0 3px"><b>[' + esc(decAge(d.created_at)) + ' · ' + esc(d.decision_type) + (d.blocking ? ' · BLOCKING' : '') + ']</b> ' + esc(d.title) + (d.recommendation ? ' ' + EM + ' <i>' + esc(d.recommendation) + '</i>' : '') + '</li>').join('') + '</ul>' : '<span style="font-size:13px">nothing pending</span>';
 const scopeRollupHtml = '<span style="font-size:13px">' + esc(scopeRollupLine) + '</span>';
 const valHtml = '<ul style="margin:2px 0 0;padding-left:16px;font-size:13px">' +
   '<li style="margin:0 0 3px"><b>Capabilities added (' + buckets.cap.length + '):</b> ' + esc(bucketLine(buckets.cap, 3)) + '</li>' +
@@ -117,6 +134,7 @@ const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px
   '<p style="font-size:12px;color:#777;margin:0 0 10px">Two focuses: drive the pilot (issue-discovery vehicle) + improve the venture-management process</p>' +
   '<p style="font-size:14px;margin:0 0 8px">' + I.star + ' <b>North star:</b> ' + esc(northStar) + '</p>' +
   '<p style="font-size:14px;margin:0 0 2px">' + I.flag + ' <b>Needs you (' + needs.length + '):</b></p>' + needsHtml +
+  '<p style="font-size:14px;margin:10px 0 2px"><b>Decisions awaiting you (' + pendingDecisions.length + '):</b></p>' + decisionsHtml +
   '<p style="font-size:14px;margin:10px 0 2px"><b>Per-scope (advisories, last 24h):</b> ' + scopeRollupHtml + '</p>' +
   '<p style="font-size:14px;margin:10px 0 2px">' + I.tools + ' <b>Value delivered (last 24h, ' + shippedN + ' SDs):</b></p>' + valHtml +
   '<p style="font-size:14px;margin:10px 0 2px">' + I.loop + ' <b>Self-improvement:</b> ' + esc(selfLine) + '</p>' +

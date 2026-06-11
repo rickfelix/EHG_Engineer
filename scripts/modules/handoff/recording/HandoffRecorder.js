@@ -303,6 +303,18 @@ export class HandoffRecorder {
     const rawScore = result.actualScore || 0;
     const normalizedScore = this._normalizeValidationScore(rawScore);
 
+    // SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 (FR-1): completion actions record
+    // failures to leo_handoff_executions — PARITY with recordSuccess, which skips
+    // sd_phase_handoffs for completion actions (no valid to_phase). Before this fix,
+    // accepted finals lived only in leo_handoff_executions while every failed attempt
+    // inserted a rejected row into sd_phase_handoffs, so analytics reading that table
+    // saw LEAD-FINAL as 100% rejected (52/0 in the 4-day baseline vs 289 acceptances).
+    if (isCompletionAction(handoffType)) {
+      return this._recordCompletionActionFailure({
+        executionId, handoffType, sdId, sdUuid, result, template, normalizedScore
+      });
+    }
+
     const execution = {
       id: executionId,
       template_id: template?.id,
@@ -405,6 +417,91 @@ export class HandoffRecorder {
       console.error('⚠️  Critical: Could not store rejection:', error.message);
       // Don't throw - rejection recording is less critical
       return null;
+    }
+  }
+
+  /**
+   * SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 (FR-1): record a completion-action
+   * failure in leo_handoff_executions (same table as completion-action successes).
+   * Mirrors recordSuccess's row shape (from_agent/to_agent) with status='rejected'.
+   * Per-gate verdicts go into validation_details.gate_results (the table has no
+   * metadata column); LEAD-FINAL is excluded from the gate-verdict cache anyway.
+   * @private
+   */
+  async _recordCompletionActionFailure({ executionId, handoffType, sdId, sdUuid, result, template, normalizedScore }) {
+    const perGateResults = result.gateResults || result.details?.details || null;
+    const execution = {
+      id: executionId,
+      template_id: template?.id,
+      from_agent: handoffType.split('-')[0],
+      to_agent: handoffType.split('-')[2],
+      sd_id: sdUuid,
+      handoff_type: handoffType,
+      status: 'rejected',
+      validation_score: normalizedScore,
+      validation_passed: false,
+      validation_details: {
+        summary: {
+          passed: false,
+          score: result.normalizedScore || result.actualScore || 0,
+          gate_count: result.gateCount,
+          failed_gate: result.failedGate || null,
+          issue_count: (result.issues || []).length,
+          warning_count: (result.warnings || []).length
+        },
+        rejected_at: new Date().toISOString(),
+        reason: result.reasonCode,
+        message: result.message,
+        ...(perGateResults && typeof perGateResults === 'object' && Object.keys(perGateResults).length > 0
+          ? { gate_results: perGateResults, gate_results_version: 2 }
+          : {})
+      },
+      rejection_reason: result.message,
+      created_by: 'UNIFIED-HANDOFF-SYSTEM'
+    };
+
+    try {
+      const preValidation = await this.validationOrchestrator.preValidateData('leo_handoff_executions', execution);
+      if (!preValidation.valid) {
+        console.warn('⚠️  Pre-validation failed for completion-action rejection, attempting with modified data');
+        preValidation.errors.forEach(err => {
+          if (err.validValues && err.validValues.length > 0) {
+            execution[err.field] = err.validValues[0];
+            console.log(`   Fixed ${err.field}: ${err.value} → ${err.validValues[0]}`);
+          }
+        });
+      }
+
+      const { error } = await this.supabase
+        .from('leo_handoff_executions')
+        .insert(execution)
+        .select();
+      if (error) {
+        console.error('❌ Failed to store completion-action rejection:', error.message);
+        throw error;
+      }
+
+      console.log(`📝 Failure recorded: ${executionId} (completion action → leo_handoff_executions)`);
+
+      // Same fleet telemetry + governance audit as the phase-transition path
+      try {
+        await this.supabase.rpc('increment_handoff_fail_count', { p_sd_id: sdId });
+      } catch (rpcErr) {
+        console.warn(`   [handoff-fail-count] Non-blocking: ${rpcErr.message}`);
+      }
+      await this._logGovernanceAudit(handoffType, sdUuid, {
+        status: 'rejected',
+        score: normalizedScore,
+        executionId,
+        gateCount: result.gateCount,
+        failedGate: result.failedGate || null,
+        reasonCode: result.reasonCode
+      });
+
+      return executionId;
+    } catch (error) {
+      console.error('⚠️  Critical: Could not store completion-action rejection:', error.message);
+      return null; // parity: rejection recording is less critical
     }
   }
 
