@@ -378,6 +378,8 @@
     "prepark-wip": "node scripts/prepark-wip.cjs",
     "protocol:pub-audit": "node scripts/protocol-publication-audit.cjs",
     "sre:row-growth": "node scripts/row-growth-snapshot.cjs",
+    "ci:red-merge-detect": "node scripts/ci/red-merge-detector.mjs",
+    "fleet:freeze-drill": "node scripts/freeze-drill.mjs",
     "subagents:collect": "node scripts/collect-subagent-evidence.js",
     "effort:readout": "node scripts/effort-experiment/readout.mjs",
     "effort:set-arm": "node scripts/effort-experiment/set-arm.mjs",
