@@ -36,12 +36,15 @@ describe('stage-contracts', () => {
     });
 
     it('returns contract for stage 26 (pipeline terminus)', () => {
+      // SD-LEO-INFRA-DATADISTILL-HONEST-LAUNCH-001: contracts 21-26 repointed to
+      // the live SSOT (26 = Growth Playbook); the old assertions pinned the
+      // pre-redesign phantom shape (distribution_channels/pipeline_terminus).
       const c = getContract(26);
       expect(c).not.toBeNull();
       expect(c.consumes).toHaveLength(1);
       expect(c.consumes[0].stage).toBe(25);
-      expect(c.produces).toHaveProperty('distribution_channels');
-      expect(c.produces).toHaveProperty('pipeline_terminus');
+      expect(c.produces).toHaveProperty('growth_experiments');
+      expect(c.produces).toHaveProperty('scaling_priorities');
     });
 
     it('returns null for invalid stage', () => {
@@ -123,10 +126,12 @@ describe('stage-contracts', () => {
       expect(result.valid).toBe(true);
     });
 
-    it('fails stage 26 pre-stage when stage 25 data missing', () => {
+    it('passes stage 26 pre-stage when stage 25 data missing (consumes now optional)', () => {
+      // Repointed contract: S26 consumes only optional key_learnings from S25 —
+      // the S25 analyzer does its own upstream verification; the contract layer
+      // must not double-block on a stricter phantom shape (warnings, not errors).
       const result = validatePreStage(26, new Map(), { logger: silentLogger });
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toMatch(/stage-25 data missing/);
+      expect(result.valid).toBe(true);
     });
 
     it('passes stage 25 pre-stage when upstream stages absent (all optional)', () => {
@@ -206,23 +211,22 @@ describe('stage-contracts', () => {
       expect(result.valid).toBe(false);
     });
 
-    it('validates stage 26 post-stage output (pipeline terminus)', () => {
+    it('validates stage 26 post-stage output (Growth Playbook terminus)', () => {
+      // Repointed contract: S26 = Growth Playbook (growth_experiments required;
+      // scaling_priorities / operations_handoff optional).
       const output = {
-        distribution_channels: [{ name: 'Web', type: 'web', status: 'active' }],
+        growth_experiments: [{ name: 'SEO content sprint', hypothesis: 'organic signups +20%' }],
+        scaling_priorities: ['blog_seo'],
         operations_handoff: { monitoring: {}, escalation: {} },
-        launch_summary: 'CronRead launch: all items approved, pipeline complete.',
-        pipeline_terminus: true,
       };
       const result = validatePostStage(26, output, { logger: silentLogger });
       expect(result.valid).toBe(true);
     });
 
-    it('rejects stage 26 output with empty distribution_channels', () => {
+    it('rejects stage 26 output missing growth_experiments', () => {
       const output = {
-        distribution_channels: [],
+        scaling_priorities: [],
         operations_handoff: {},
-        launch_summary: 'CronRead launch complete.',
-        pipeline_terminus: true,
       };
       const result = validatePostStage(26, output, { logger: silentLogger });
       expect(result.valid).toBe(false);
