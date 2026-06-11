@@ -753,6 +753,24 @@ Selector: `payload->>kind='adam_advisory' AND payload->>actioned_at IS NULL AND 
 A peek/render NEVER retires an advisory — only `coordinator-ack-adam.cjs --advisory` does. The
 `--reply`/reply legs need `COORDINATOR_TWOWAY_V2=on`.
 
+### NO hand-rolled inserts (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001)
+
+**NEVER write `session_coordination` rows via ad-hoc `node -e` inserts.** Live 7-day evidence:
+158/166 `coordinator_reply` rows lacked `payload.reply_to` (hand-rolled), so awaiting senders
+never matched them — plus invented kinds (`coordinator_to_adam`) leaked into the lane. Always
+route through the canonical writers:
+
+| Intent | Canonical path |
+|--------|----------------|
+| Reply to a worker request | `node scripts/coordinator-reply.cjs --to <session> --correlation <id> "<body>"` (echoes the correlation under BOTH `reply_to` + `correlation_id`) |
+| Reply to an Adam advisory | `node scripts/coordinator-reply.cjs --advisory <id> "<body>"` or `coordinator-ack-adam.cjs --advisory <id> --reply "<body>"` |
+| Any other directive row | `lib/coordinator/dispatch.cjs insertCoordinationRow` with a kind from `PAYLOAD_KINDS`/`DIRECTIVE_KINDS` (`lib/fleet/worker-status.cjs`) — never an invented `payload.kind` |
+
+Receipt contract (all directive kinds): `read_at` = DELIVERED, `acknowledged_at` /
+`payload.actioned_at` = ACTIONED. Check `node scripts/fleet-dashboard.cjs inbox` —
+'UNDELIVERED OUTBOUND' lists your rows sitting unread at live targets; 'DEAD-LETTERED (24h)'
+lists rows the sweep dead-lettered (re-send to the successor session if still relevant).
+
 ---
 
 ## Same-SD Parallel Worker Assignment (FR-4)

@@ -105,6 +105,38 @@ async function main() {
   } catch (e) {
     console.log('[HOURLY-REVIEW] Adam reminder skipped (non-fatal): ' + e.message);
   }
+
+  // FR-2 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): hourly UNDELIVERED-receipt check.
+  // Surfaces this coordinator's outbound rows sitting UNREAD at a LIVE target (read_at =
+  // DELIVERED; the live 35-min-unread-GO incident class). Read-only + fail-open.
+  try {
+    const myId = process.env.CLAUDE_SESSION_ID;
+    if (myId) {
+      const { findUndelivered } = require('../lib/coordinator/receipts.cjs');
+      const sinceIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data: outbound } = await sb.from('session_coordination')
+        .select('id, target_session, message_type, subject, payload, created_at, read_at')
+        .eq('sender_session', myId)
+        .is('read_at', null)
+        .gte('created_at', sinceIso)
+        .limit(100);
+      const { data: sessions } = await sb.from('claude_sessions')
+        .select('session_id, heartbeat_at')
+        .gte('heartbeat_at', new Date(Date.now() - 15 * 60 * 1000).toISOString())
+        .limit(200);
+      const undelivered = findUndelivered(outbound || [], sessions || []);
+      if (undelivered.length > 0) {
+        console.log('\n[HOURLY-REVIEW] UNDELIVERED OUTBOUND — ' + undelivered.length + ' row(s) unread at a LIVE target (re-send or nudge):');
+        undelivered.slice(0, 10).forEach(function (r) {
+          const kind = (r.payload && r.payload.kind) || r.message_type || '?';
+          console.log('  • [' + String(r.id).slice(0, 8) + '] → ' + String(r.target_session).slice(0, 8)
+            + ' | ' + kind + ' | unread ' + Math.floor(r.ageMs / 60000) + 'm | ' + (r.subject || '').slice(0, 40));
+        });
+      }
+    }
+  } catch (e) {
+    console.log('[HOURLY-REVIEW] undelivered-receipt check skipped (non-fatal): ' + e.message);
+  }
 }
 
 main().catch(function (e) { console.error('[HOURLY-REVIEW] error (non-fatal): ' + e.message); }).finally(function () { process.exit(0); });

@@ -281,11 +281,17 @@ async function awaitCoordinatorReply(supabase, opts = {}) {
   for (;;) {
     let row = null;
     try {
+      // FR-1 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): FORGIVING matcher — accept the
+      // correlation echoed as payload.reply_to (canonical) OR payload.correlation_id
+      // (echo convention). Kind-filtered to reply-capable kinds (coordinator_reply, or an
+      // adam_advisory carrying a --reply-to echo) so an unrelated row reusing the
+      // correlation — e.g. a relayed copy of the original request — never satisfies the await.
       const { data } = await supabase
         .from('session_coordination')
         .select('id, payload, body, sender_session, created_at')
         .eq('target_session', sessionId)
-        .eq('payload->>reply_to', correlationId)
+        .or(`payload->>reply_to.eq.${correlationId},payload->>correlation_id.eq.${correlationId}`)
+        .in('payload->>kind', ['coordinator_reply', 'adam_advisory'])
         .order('created_at', { ascending: false })
         .limit(1);
       row = Array.isArray(data) && data.length ? data[0] : null;

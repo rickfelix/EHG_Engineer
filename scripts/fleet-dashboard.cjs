@@ -1206,6 +1206,103 @@ async function printAdamInbox() {
   console.log('');
 }
 
+// ── Section: Undelivered outbound + dead letters (FR-2/FR-4, SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001) ──
+// Receipt contract: read_at = DELIVERED, payload.actioned_at / acknowledged_at = ACTIONED.
+// This section closes the SENDER-side gap: outbound rows sitting UNREAD at a LIVE target
+// (live: GO messages sat unread 24-29 min while Adam was heartbeat-alive). Read-only —
+// stamps NOTHING (stamping read_at here would forge a DELIVERED receipt).
+async function printUndeliveredOutbound() {
+  const { findUndelivered } = require('../lib/coordinator/receipts.cjs');
+
+  console.log('UNDELIVERED OUTBOUND');
+  console.log('─'.repeat(72));
+
+  const coordinatorId = await _getActiveCoordinatorIdForInbox(supabase);
+  if (!coordinatorId) {
+    console.log('  (no active coordinator detected — run /coordinator start first)');
+    console.log('');
+    return;
+  }
+
+  const sinceIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const { data: outbound, error } = await supabase
+    .from('session_coordination')
+    .select('id, target_session, message_type, subject, payload, created_at, read_at')
+    .eq('sender_session', coordinatorId)
+    .is('read_at', null)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: true })
+    .limit(100);
+  if (error) {
+    console.log('  (outbound query failed: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+
+  const { data: sessions } = await supabase
+    .from('claude_sessions')
+    .select('session_id, heartbeat_at')
+    .gte('heartbeat_at', new Date(Date.now() - 15 * 60 * 1000).toISOString())
+    .limit(200);
+
+  const undelivered = findUndelivered(outbound, sessions || []);
+  if (undelivered.length === 0) {
+    console.log('  (no undelivered outbound rows at live targets)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + undelivered.length + ' outbound row(s) UNREAD at a LIVE target — consider re-sending or nudging:');
+  for (const r of undelivered) {
+    const kind = (r.payload && r.payload.kind) || r.message_type || '?';
+    const ageMin = Math.floor(r.ageMs / 60_000);
+    const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
+    console.log('  • [' + String(r.id).slice(0, 8) + '] → ' + String(r.target_session).slice(0, 8)
+      + ' | ' + kind + ' | unread ' + ageStr + ' | ' + (r.subject || '').slice(0, 40));
+  }
+  console.log('');
+}
+
+// FR-4 surfacing: rows the stale-session sweep dead-lettered (payload.dead_letter=true)
+// in the last 24h — undelivered traffic no longer vanishes tracelessly; the coordinator
+// can re-send to the successor session. Read-only.
+async function printDeadLetters() {
+  const { selectRecentDeadLetters } = require('../lib/coordinator/receipts.cjs');
+
+  console.log('DEAD-LETTERED (24h)');
+  console.log('─'.repeat(72));
+
+  const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: rows, error } = await supabase
+    .from('session_coordination')
+    .select('id, target_session, message_type, subject, payload, created_at')
+    .eq('payload->>dead_letter', 'true')
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) {
+    console.log('  (dead-letter query failed: ' + error.message + ')');
+    console.log('');
+    return;
+  }
+
+  const recent = selectRecentDeadLetters(rows || []);
+  if (recent.length === 0) {
+    console.log('  (no dead-lettered coordination rows in the last 24h)');
+    console.log('');
+    return;
+  }
+
+  console.log('  ' + recent.length + ' row(s) dead-lettered (target dead/gone) — re-send if still relevant:');
+  for (const r of recent) {
+    const kind = (r.payload && r.payload.kind) || r.message_type || '?';
+    const orig = (r.payload && r.payload.original_target) || r.target_session || '?';
+    console.log('  • [' + String(r.id).slice(0, 8) + '] was → ' + String(orig).slice(0, 8)
+      + ' | ' + kind + ' | ' + (r.subject || '').slice(0, 44));
+  }
+  console.log('');
+}
+
 // ── Section: Feedback work-store (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001) ──
 // READ-ONLY / additive: surfaces the feedback table (untriaged feedback + harness
 // backlog) on the coordinator single-pane view so pending feedback work is never
@@ -1304,7 +1401,12 @@ async function main() {
     forecast:      async () => await printForecast(d),
     predictions:   async () => await printPredictions(d),
     drain:         () => printDrainAgents(d),
-    inbox:         async () => await printInbox(),
+    inbox:         async () => {
+      await printInbox();
+      // FR-2/FR-4 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): sender-side receipts.
+      await printUndeliveredOutbound();
+      await printDeadLetters();
+    },
     adam:          async () => await printAdamInbox(), // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
@@ -1319,6 +1421,8 @@ async function main() {
       printRevivalPending(d); // SD-LEO-INFRA-COORDINATOR-WORKER-REVIVAL-001
       printCoordination(d);
       await printInbox(); // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-3a
+      await printUndeliveredOutbound(); // FR-2 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
+      await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
       await printFeedback(d); // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001 — feedback work-store
       await printCoaching(d);

@@ -45,7 +45,7 @@ const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
  * request mode. Conflating them made every fire-and-forget send falsely advertise
  * Reply?=yes in printAdamInbox.
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo }) {
   const payload = {
     kind: PAYLOAD_KINDS.ADAM_ADVISORY,
     sender_callsign: senderCallsign || null,
@@ -67,6 +67,14 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
   }
   if (correlationId) payload.correlation_id = correlationId; // replyable (always)
   if (expectsReply) payload.expects_reply = true;            // awaiting a sync reply (request mode only)
+  // FR-1 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): when this advisory ANSWERS an inbound
+  // coordinator_request, echo that request's correlation under BOTH keys (reply_to +
+  // correlation_id) so the awaiting side's forgiving matcher pairs it. The echo OVERRIDES the
+  // fresh correlation_id above — a reply correlates to its request, not to itself.
+  if (replyTo) {
+    payload.reply_to = replyTo;
+    payload.correlation_id = replyTo;
+  }
   // INVARIANT: no signal_type, no intent_action.
   return payload;
 }
@@ -96,6 +104,37 @@ async function resolveScopeForSend(supabase, repoPath) {
   } catch {
     return {};
   }
+}
+
+/**
+ * FR-1 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001) — resolve `--reply-to <value>` to the
+ * correlation to echo. The value may be EITHER a session_coordination row id (the inbound
+ * coordinator_request row — we echo ITS payload.correlation_id) or a bare correlation id
+ * (echoed as-is). Row lookup is best-effort: if no row matches, the value is treated as the
+ * correlation itself. Throws only when a matching ROW exists but carries no correlation_id
+ * (not replyable — surfacing that beats silently inventing a correlation). Exported for tests.
+ */
+async function resolveReplyToCorrelation(supabase, value) {
+  if (!value) return null;
+  let row = null;
+  try {
+    const { data } = await supabase
+      .from('session_coordination')
+      .select('id, payload')
+      .eq('id', value)
+      .maybeSingle();
+    row = data || null;
+  } catch { row = null; /* not a row id (or lookup failed) -> treat as correlation */ }
+  if (row) {
+    const corr = row.payload && row.payload.correlation_id;
+    if (!corr) {
+      const e = new Error(`row ${value} carries no payload.correlation_id (not replyable)`);
+      e.code = 'REPLY_TO_NOT_REPLYABLE';
+      throw e;
+    }
+    return corr;
+  }
+  return value;
 }
 
 async function snapshotSender(supabase, sessionId) {
@@ -145,7 +184,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'replies') {
-    console.error('Usage: node scripts/adam-advisory.cjs send "<body>"  |  request "<question>" [--timeout <ms>]  |  replies');
+    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>]  |  request "<question>" [--timeout <ms>]  |  replies');
     process.exit(2);
   }
 
@@ -164,7 +203,12 @@ async function main() {
 
   const tIdx = argv.indexOf('--timeout');
   const timeoutMs = tIdx >= 0 ? Number(argv[tIdx + 1]) || 30000 : 30000;
-  const body = argv.slice(1).filter((a, i) => !(a === '--timeout' || argv[i] === '--timeout')).join(' ').trim();
+  // FR-1 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): `send --reply-to <correlation_or_row_id>`
+  // — answer an inbound coordinator_request, echoing its correlation (resolved below).
+  const rIdx = argv.indexOf('--reply-to');
+  const replyToArg = rIdx >= 0 ? argv[rIdx + 1] || null : null;
+  const flagValueIdxs = new Set([tIdx, tIdx + 1, rIdx, rIdx + 1].filter(i => i >= 0));
+  const body = argv.slice(1).filter((a, i) => !flagValueIdxs.has(i + 1)).join(' ').trim();
   if (!body) { console.error('ERROR: advisory body required.'); process.exit(2); }
 
   const coordinatorId = await getActiveCoordinatorId(supabase);
@@ -180,9 +224,16 @@ async function main() {
   // sets expects_reply (it synchronously awaits).
   const correlationId = crypto.randomUUID();
   const expectsReply = mode === 'request';
+  // FR-1 (COORD-ADAM-COMMS-RESILIENT): resolve --reply-to (row id OR correlation) to the
+  // correlation to echo. Send-mode only; a hard failure here is surfaced, not swallowed.
+  let replyTo = null;
+  if (replyToArg && mode === 'send') {
+    try { replyTo = await resolveReplyToCorrelation(supabase, replyToArg); }
+    catch (e) { console.error(`ERROR: --reply-to ${replyToArg} — ${e.message}`); process.exit(2); }
+  }
   // FR-1: scope-tag the advisory from the sending repo (reuse-first, fail-soft).
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
-  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes });
+  const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo });
   const subject = `[ADAM_ADVISORY] ${payload.body.slice(0, 80)}`;
   const expiresAt = new Date(Date.now() + (mode === 'request' ? timeoutMs + 5 * 60_000 : 24 * 60 * 60_000)).toISOString();
 
@@ -208,7 +259,8 @@ async function main() {
   console.log('✓ Adam advisory sent');
   console.log('  advisory_id:', inserted.id);
   console.log('  target:', target);
-  console.log('  correlation_id:', correlationId, '(replyable)');
+  console.log('  correlation_id:', payload.correlation_id, replyTo ? '(echoed from --reply-to)' : '(replyable)');
+  if (replyTo) console.log('  reply_to:', replyTo);
   console.log('  callsign:', senderCallsign || '(none)');
 
   if (mode === 'request') {
@@ -221,7 +273,7 @@ async function main() {
   }
 }
 
-module.exports = { buildAdvisoryPayload, resolveScopeForSend, drainReplies };
+module.exports = { buildAdvisoryPayload, resolveScopeForSend, resolveReplyToCorrelation, drainReplies };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
