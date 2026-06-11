@@ -24,6 +24,38 @@ const supabase = createSupabaseServiceClient();
 const MIN_REJECTIONS_FOR_PATTERN = 2;
 
 /**
+ * SD-PAT-FIX-PLAN-EXEC-REJECTED-001: designed fast-fail rejection classes that
+ * must NOT feed pattern math. Their validation_score is 0 BY CONSTRUCTION
+ * (they fail before any gate scoring runs), so counting them produces
+ * alarmist "rejected N times, avg 0%" HIGH patterns from cheap guidance
+ * fails — pattern PAT-RETRO-PLANTOEXEC-3741735a (11 "rejections" = ONE
+ * April SD: 3 prerequisite fast-fails + 4 claim-mechanics fails + 1 real
+ * quality failure) auto-escalated into an SD this way.
+ *
+ * Matched against validation_details.reason AND rejection_reason text:
+ *  - PREREQUISITE_PREFLIGHT_FAILED: pre-pipeline guidance (PRD/stories not
+ *    yet created) — the fast-fail IS the designed remediation surface.
+ *  - ARTIFACT_PREFLIGHT_FAILED: deterministic artifact-shape fast-fail
+ *    (SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-A) — same pre-pipeline class.
+ *  - GATE_CLAIM_VALIDITY: multi-session claim mechanics
+ *    (no_deterministic_identity / foreign_claim), not artifact quality.
+ * Excluded rows are still COUNTED and surfaced via metadata.excluded_fast_fails
+ * when a pattern is created from the remaining genuine failures.
+ */
+export const FAST_FAIL_EXCLUDED_REASONS = [
+  'PREREQUISITE_PREFLIGHT_FAILED',
+  'ARTIFACT_PREFLIGHT_FAILED',
+  'GATE_CLAIM_VALIDITY',
+];
+
+/** True when a rejection row is a designed fast-fail (excluded from pattern math). */
+export function isFastFailRejection(rejection) {
+  const reason = rejection?.validation_details?.reason || '';
+  const text = rejection?.rejection_reason || '';
+  return FAST_FAIL_EXCLUDED_REASONS.some(code => reason.includes(code) || text.includes(code));
+}
+
+/**
  * Analyze all rejections for an SD and create issue_patterns for recurring failures.
  *
  * @param {string} sdId - UUID of the SD
@@ -53,9 +85,34 @@ export async function analyzeSDRejections(sdId, options = {}) {
       return { analyzed: true, patternsCreated: 0, gates: {} };
     }
 
+    // SD-PAT-FIX-PLAN-EXEC-REJECTED-001: segment out designed fast-fails BEFORE
+    // pattern math (see FAST_FAIL_EXCLUDED_REASONS above). They are counted per
+    // gate so a created pattern still surfaces them as metadata, never as
+    // occurrence_count / avg-score signal.
+    const excludedByGate = {};
+    let excludedTotal = 0;
+    const qualityRejections = rejections.filter((rejection) => {
+      if (isFastFailRejection(rejection)) {
+        const gate = rejection.handoff_type;
+        excludedByGate[gate] = (excludedByGate[gate] || 0) + 1;
+        excludedTotal++;
+        return false;
+      }
+      return true;
+    });
+
+    if (excludedTotal > 0) {
+      console.log(`  [session-retro] Excluded ${excludedTotal} designed fast-fail rejection(s) from pattern math (${Object.entries(excludedByGate).map(([g, n]) => `${g}:${n}`).join(', ')})`);
+    }
+
+    if (qualityRejections.length === 0) {
+      console.log('  [session-retro] All rejections were designed fast-fails — no quality signal');
+      return { analyzed: true, patternsCreated: 0, gates: {}, excludedFastFails: excludedTotal };
+    }
+
     // Group rejections by handoff_type (gate)
     const byGate = {};
-    for (const rejection of rejections) {
+    for (const rejection of qualityRejections) {
       const gate = rejection.handoff_type;
       if (!byGate[gate]) {
         byGate[gate] = [];
@@ -63,7 +120,7 @@ export async function analyzeSDRejections(sdId, options = {}) {
       byGate[gate].push(rejection);
     }
 
-    console.log(`  [session-retro] Analyzing ${rejections.length} rejection(s) across ${Object.keys(byGate).length} gate(s)`);
+    console.log(`  [session-retro] Analyzing ${qualityRejections.length} rejection(s) across ${Object.keys(byGate).length} gate(s)`);
 
     let patternsCreated = 0;
 
@@ -116,6 +173,8 @@ export async function analyzeSDRejections(sdId, options = {}) {
             rejection_count: gateRejections.length,
             avg_score: avgScore,
             reasons: reasons.slice(0, 10),
+            // SD-PAT-FIX-PLAN-EXEC-REJECTED-001: fast-fails segmented, not hidden.
+            excluded_fast_fails: excludedByGate[gate] || 0,
             analyzed_at: new Date().toISOString()
           }
         });
@@ -128,11 +187,12 @@ export async function analyzeSDRejections(sdId, options = {}) {
       }
     }
 
-    console.log(`  [session-retro] Analysis complete: ${patternsCreated} pattern(s) created from ${rejections.length} rejection(s)`);
+    console.log(`  [session-retro] Analysis complete: ${patternsCreated} pattern(s) created from ${qualityRejections.length} quality rejection(s) (${excludedTotal} fast-fail(s) excluded)`);
 
     return {
       analyzed: true,
       patternsCreated,
+      excludedFastFails: excludedTotal,
       gates: Object.fromEntries(
         Object.entries(byGate).map(([gate, rejs]) => [gate, rejs.length])
       )
