@@ -32,7 +32,8 @@ export async function reviewMain({ force = false } = {}) {
   }
 
   // Compute the digest BEFORE stamping so never-reviewed flags surface once.
-  const result = computeStaleFlags(flags || [], Date.now());
+  // env injected for the registry-vs-runtime drift detector (QF-20260610-863).
+  const result = computeStaleFlags(flags || [], Date.now(), { env: process.env });
   console.log(formatDigest(result));
 
   // Stamp last_reviewed_at on every reviewed flag (the automated review touched them this cycle).
