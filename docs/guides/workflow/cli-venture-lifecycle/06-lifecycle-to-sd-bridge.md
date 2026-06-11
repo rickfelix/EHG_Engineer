@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: rickfelix
 last_updated: 2026-03-01
 tags: [guide, auto-generated]
 ---
@@ -525,6 +525,8 @@ The panel runs via an **injected driver** (`driver`), mirroring the existing
 loop (headlessly unit-testable), and the live session injects the LLM-backed sub-agents.
 
 ### Module Map (6 units, 12 modules)
+
+All module files below live under `lib/eva/bridge/`.
 
 | Unit | Module | Responsibility |
 |------|--------|----------------|

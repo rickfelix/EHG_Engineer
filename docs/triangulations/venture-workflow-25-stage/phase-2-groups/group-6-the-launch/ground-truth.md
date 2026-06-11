@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-6-the-launch]
+---
+
 # Phase 2 Ground-Truth Validation — Group 6: THE_LAUNCH (Stages 23-25)
 
 > This document compares claims from all three AI deep-dive assessments (OpenAI, Gemini, Claude) against each other and against the codebase. Claude has direct codebase access; OpenAI and Gemini evaluated from the Group 6 prompt and Phase 1 consensus.

@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -434,7 +434,7 @@ Before saving retrospective, verify:
 
 **Monthly or After 5-10 SDs**:
 ```bash
-node scripts/analyze-retrospectives-for-protocol-improvements.mjs
+node scripts/archive/one-time/analyze-retrospectives-for-protocol-improvements.mjs
 ```
 
 **Output**: Patterns detected, recurring pain points, high-impact improvements
@@ -574,8 +574,8 @@ node scripts/analyze-retrospectives-for-protocol-improvements.mjs
 - Success patterns with evidence
 
 **Quick Links**:
-- Analysis script: `scripts/analyze-retrospectives-for-protocol-improvements.mjs`
-- Application script: `scripts/add-protocol-improvements-from-retrospectives.mjs`
+- Analysis script: `scripts/archive/one-time/analyze-retrospectives-for-protocol-improvements.mjs`
+- Application script: `scripts/archive/one-time/add-protocol-improvements-from-retrospectives.mjs`
 - Migration: `database/migrations/20251204_add_protocol_improvements_to_retrospectives.sql`
 
 ---

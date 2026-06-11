@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: 6c1b5f926435cf57e0721449f57d0cfeb899dc807230c6df6aefc926af7dd2f8 -->
 
 # ADR-0007: /goal is advisory-only; binding goal rejection

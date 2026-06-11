@@ -1,3 +1,12 @@
+---
+category: analysis
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-29
+tags: [analysis, audits]
+---
+
 # Audit: Migration `SET DEFAULT` vs Code-Override Drift (F12 sweep)
 
 **SD:** SD-LEO-INFRA-AUDIT-MIGRATION-SET-001

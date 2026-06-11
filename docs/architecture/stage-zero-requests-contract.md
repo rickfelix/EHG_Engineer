@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-24
+tags: [documentation, architecture]
+---
+
 # `stage_zero_requests` — Cross-Repo Intake Contract
 
 **Status:** Active · **SD:** SD-LEO-INFRA-STAGE-OPPORTUNITY-INTAKE-001 (FR-005, gap G5)

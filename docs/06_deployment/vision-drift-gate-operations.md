@@ -1,3 +1,12 @@
+---
+category: deployment
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-03
+tags: [deployment]
+---
+
 # Stage-19 Vision-Drift Gate — Operations Runbook
 
 **Category**: Deployment

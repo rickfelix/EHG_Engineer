@@ -26,8 +26,8 @@ Design Studio handles wireframe generation, visual convergence, and design mater
 
 ## Analysis Steps
 
-1. **Wireframe Generation** (`stage-15-wireframe-generator.js`) - Generates wireframe screens from brand genome + technical architecture. Conditional on Stage 10 brand data availability.
-2. **Visual Convergence** (`stage-19-visual-convergence.js`) - 5 expert LLM passes on generated wireframes for design quality assessment.
+1. **Wireframe Generation** (`lib/eva/stage-templates/analysis-steps/stage-15-wireframe-generator.js`) - Generates wireframe screens from brand genome + technical architecture. Conditional on Stage 10 brand data availability.
+2. **Visual Convergence** (`lib/eva/stage-templates/analysis-steps/stage-19-visual-convergence.js`) - 5 expert LLM passes on generated wireframes for design quality assessment.
 
 ## Output Schema
 
@@ -38,7 +38,7 @@ Design Studio handles wireframe generation, visual convergence, and design mater
 
 ## Artifacts
 
-- `blueprint_wireframes` - Persisted via `artifact-persistence-service.js`
+- `blueprint_wireframes` - Persisted via `lib/eva/artifact-persistence-service.js`
 
 ## History
 

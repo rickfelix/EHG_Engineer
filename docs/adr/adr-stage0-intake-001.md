@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-24
+tags: [architecture, adr]
+---
+
 # ADR-STAGE0-INTAKE-001: Canonical Stage 0 Opportunity-Intake Spine
 
 **Status:** Accepted (ratified 2026-05-24)

@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-12
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: C:/Users/rickf/.claude/plans/sd-venture-gate-unification.md -->
 <!-- SD Key: SD-LEO-INFRA-VENTURE-GATE-UNIFICATION-001 -->
 <!-- Archived at: 2026-05-12T14:05:09.834Z -->

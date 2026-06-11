@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-12
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: C:/Users/rickf/.claude/plans/sd-gate-auto-advance-truth-unification.md -->
 <!-- SD Key: SD-LEO-REFAC-GATE-AUTO-ADVANCE-001 -->
 <!-- Archived at: 2026-05-12T18:19:52.048Z -->

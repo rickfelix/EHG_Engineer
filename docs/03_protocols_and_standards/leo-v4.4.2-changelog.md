@@ -2,7 +2,7 @@
 category: protocol
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [protocol, auto-generated]
 ---
@@ -216,14 +216,14 @@ ORDER BY week DESC;
 
 ### New Documentation
 
-1. **`docs/03_protocols_and_standards/LEO_v4.4.2_testing_governance.md`** (NEW)
+1. **`docs/03_protocols_and_standards/leo-v4.4.2-testing-governance.md`** (NEW)
    - Full testing governance specification
    - Gate behavior details
    - Environment variable documentation
    - Troubleshooting guide
    - Usage examples
 
-2. **`docs/03_protocols_and_standards/LEO_v4.4.2_CHANGELOG.md`** (THIS FILE)
+2. **`docs/03_protocols_and_standards/leo-v4.4.2-changelog.md`** (THIS FILE)
    - Changelog and migration guide
 
 ### Updated Documentation
@@ -237,7 +237,7 @@ ORDER BY week DESC;
 
 2. **`docs/reference/schema/engineer/tables/retrospectives.md`** (AUTO-GENERATED)
    - Will reflect new test metrics columns after next schema doc regeneration
-   - Run: `node scripts/schema-doc-generator.js retrospectives`
+   - Run: `npm run schema:docs:table retrospectives` (`scripts/generate-schema-docs-from-db.js`)
 
 ---
 
@@ -252,7 +252,7 @@ psql $DATABASE_URL -f database/migrations/20260105_add_retro_test_metrics.sql
 
 **Step 2: Regenerate Schema Documentation** (Optional)
 ```bash
-node scripts/schema-doc-generator.js retrospectives
+npm run schema:docs:table retrospectives
 ```
 
 **Step 3: Configure Environment Variables** (Optional)
@@ -401,9 +401,9 @@ node scripts/handoff.js execute EXEC-TO-PLAN <SD-ID>
 
 **Fix**:
 ```bash
-node scripts/schema-doc-generator.js <table-name>
+npm run schema:docs:table <table-name>
 # Or regenerate all
-node scripts/regenerate-all-schema-docs.js
+npm run schema:docs:all
 ```
 
 ---

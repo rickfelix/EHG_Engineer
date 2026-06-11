@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-06
+tags: [documentation, ops]
+---
+
 # Stage 20 Gate-Fix Ship Record — SD-LEO-FIX-SHIP-STAGE-GATE-001
 
 This SD shipped two validated, operator-approved Stage 20 (code-quality gate) fix PRs to `main`.

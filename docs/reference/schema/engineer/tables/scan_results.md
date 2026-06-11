@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: github-actions[bot]
+last_updated: 2026-05-05
+tags: [reference, schema, engineer, tables]
+---
+
 # scan_results Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB

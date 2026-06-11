@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: docs/plans/eva-stage-pipeline-artifact-unification-architecture.md -->
 <!-- SD Key: SD-LEO-FIX-ARCHITECTURE-PLAN-EVA-001 -->
 <!-- Archived at: 2026-03-07T14:19:07.668Z -->

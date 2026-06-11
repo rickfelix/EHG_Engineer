@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [reference, schema, proposals]
+---
+
 # LEO Self-Improvement Data Contracts
 
 
@@ -285,13 +294,13 @@ const { data } = await supabase
 
 | File | Types |
 |------|-------|
-| `proposals.ts` | LeoProposalRow, LeoProposalInsert, LeoProposalUpdate, ProposalStatus |
-| `rubrics.ts` | LeoVettingRubricRow, RubricWeights, RubricCriterion |
-| `config.ts` | LeoPrioritizationConfigRow, LeoAuditConfigRow, ConfigStatus |
-| `feature-flags.ts` | LeoFeatureFlagRow, FeatureFlagStatus, FlagConditions |
-| `events.ts` | LeoEventRow, LeoEventInsert, EventEntityType, EventName |
-| `prompts.ts` | LeoPromptRow, PromptStatus, PromptMetadata |
-| `database.ts` | Database (for Supabase client), Json, TableRow, TableInsert |
+| `types/leo/proposals.ts` | LeoProposalRow, LeoProposalInsert, LeoProposalUpdate, ProposalStatus |
+| `types/leo/rubrics.ts` | LeoVettingRubricRow, RubricWeights, RubricCriterion |
+| `types/leo/config.ts` | LeoPrioritizationConfigRow, LeoAuditConfigRow, ConfigStatus |
+| `types/leo/feature-flags.ts` | LeoFeatureFlagRow, FeatureFlagStatus, FlagConditions |
+| `types/leo/events.ts` | LeoEventRow, LeoEventInsert, EventEntityType, EventName |
+| `types/leo/prompts.ts` | LeoPromptRow, PromptStatus, PromptMetadata |
+| `types/leo/database.ts` | Database (for Supabase client), Json, TableRow, TableInsert |
 
 ## RLS Policies
 

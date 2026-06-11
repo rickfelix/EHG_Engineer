@@ -44,6 +44,20 @@ const EXEMPT_PATTERNS = [
   /\bscripts[/\\]fleet-dashboard\.cjs\b/,
   /\bscripts[/\\]assign-fleet-identities\.cjs\b/,
   /[/\\]?\.claude[/\\]tmp[/\\]coord-[\w-]+\.(?:cjs|mjs)\b/,
+  // QF-20260610-626 — the remaining canonical coordinator cron loops (coordinator.md
+  // Step 0/5). All exit 0 by design on a fixed interval; the consecutive-attempt counter
+  // misreads the cron cadence as a stuck retry loop (the SD-FDBK-FIX-RCA-TIERED-
+  // ENFORCEMENT-001 exit-0 exemption keys on a single per-session lastOutcome file that
+  // interleaved loops clobber, so it never matches for them). Each pattern is anchored
+  // to the specific script basename — unrelated coordinator-* scripts stay RCA-gated.
+  /\bscripts[/\\]coordinator-self-review\.mjs\b/,           // loop 8, */5
+  /\bscripts[/\\]coordinator-audit\.mjs\b/,                 // loop 5, */15
+  /\bscripts[/\\]coordinator-email-summary\.mjs\b/,         // loop 6, */30
+  /\bscripts[/\\]coordinator-startup-check\.mjs\b/,         // startup probe
+  // Step-0 keepalive: a `node -e` inline script (no script path) that re-asserts the
+  // active coordinator ~every 2 min — match its stable tokens, not a path.
+  /\bsetActiveCoordinator\b/,
+  /\bcoordinator[/\\]resolve\.cjs\b/,
 ];
 
 /**

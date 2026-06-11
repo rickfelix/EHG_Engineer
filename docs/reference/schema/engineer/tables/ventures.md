@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-10T19:47:18.729Z
-**Rows**: 5
+**Generated**: 2026-06-10T23:56:15.245Z
+**Rows**: 6
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (87 total)
+## Columns (88 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -110,6 +110,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | target_platform | `text` | **NO** | `'both'::text` | Platform targeting: web (desktop only), mobile (mobile only), both (mobile-first + desktop) |
 | business_model_class | `text` | YES | - | Coarse business model classification used by GVOS Composer auto-classifier. Enum-constrained to prevent typo bypass of Artist-Expressive gating (SECURITY-003 from SD-GVOS-COMPOSER-SNAPSHOTLOCKED-REGISTRY-ORCH-001). NULL on existing rows; chairman fills per venture. |
 | build_model | `character varying(20)` | YES | - | SSOT venture build path at Stage 19: leo_bridge (LEO-SD bridge — orchestrator+child SDs) | seeded_repo (seed repo + Replit Agent + S20 gate) | NULL (arbiter default = seeded_repo until the venture EXEC loop ships). SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001. |
+| is_scaffolding | `boolean` | **NO** | `false` | Development/build-out vehicle (SD-LEO-FIX-MAKE-VENTURE-STAGE-001): gate history excluded from threshold calibration and portfolio analytics by default. Sibling of is_demo. Set only by explicit chairman decision. |
 
 ## Constraints
 

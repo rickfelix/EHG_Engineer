@@ -1,3 +1,12 @@
+---
+category: planning
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-25
+tags: [planning, plans]
+---
+
 # Finalize the Claude-Code-from-repo venture build model + Stage-0 app-type capture
 
 ## Type

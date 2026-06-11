@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -259,7 +259,7 @@ await supabase.from('claude_sessions').insert({
 
 ### 2. Multi-Session Claim Gate
 
-Used in `multi-session-claim-gate.js` to compare terminal IDs:
+Used in `scripts/modules/handoff/gates/multi-session-claim-gate.js` to compare terminal IDs:
 ```javascript
 const currentTerminalId = getTerminalId();
 const conflictingClaim = activeClaims.find(claim =>
@@ -270,7 +270,7 @@ const conflictingClaim = activeClaims.find(claim =>
 
 ### 3. Handoff Execution Context
 
-Used in `BaseExecutor.js` to enrich handoff metadata:
+Used in `scripts/modules/handoff/executors/BaseExecutor.js` to enrich handoff metadata:
 ```javascript
 const terminalId = getTerminalId();
 const handoffData = {

@@ -2,7 +2,7 @@
 category: general
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [general, auto-generated]
 ---
@@ -44,7 +44,7 @@ This report documents the findings from SD-LEO-INFRA-DOCUMENTATION-GAP-AUDIT-001
 The following major work has adequate documentation:
 
 1. **AUTO-PROCEED Enhancement (SD-LEO-ENH-AUTO-PROCEED-001)**
-   - Documentation: `docs/discovery/auto-proceed-enhancement-discovery.md`
+   - Documentation: `docs/reference/discovery/auto-proceed-enhancement-discovery.md`
    - Covers all 12 children
    - Status: ✅ Complete
 
@@ -106,7 +106,7 @@ The following major work has adequate documentation:
 
 The following docs exist but have format issues:
 
-1. `docs/reference/retro-sub-agent-guide.md` - Missing metadata header
+1. `docs/leo/sub-agents/retro-sub-agent-guide.md` - Missing metadata header
 2. `docs/reference/validation-enforcement.md` - Missing metadata header
 3. Various implementation summaries - Not in proper kebab-case
 

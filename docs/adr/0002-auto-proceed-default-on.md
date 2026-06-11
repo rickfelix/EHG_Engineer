@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: 3046e2cff9b530a4c89e847c5be357641dfefbb7f42b243c748c7d118ada7bc8 -->
 
 # ADR-0002: AUTO-PROCEED is ON by default

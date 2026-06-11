@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -81,4 +81,4 @@ tags: [reference, auto-generated]
 
 ## Full Documentation
 
-See: `docs/architecture/genesis-implementation-guide.md`
+See: `docs/01_architecture/genesis-implementation-guide.md`

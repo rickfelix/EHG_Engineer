@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-28
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: C:\Users\rickf/.claude/plans/sd-ehg-venture-pipeline-feedback-defaults-001-plan.md -->
 <!-- SD Key: SD-LEO-ENH-CONSTRAIN-STAGE-EMIT-001 -->
 <!-- Archived at: 2026-04-28T23:41:16.882Z -->

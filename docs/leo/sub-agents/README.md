@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, leo, sub-agents]
+---
+
 # LEO Sub-Agent System
 
 Documentation for the LEO Protocol sub-agent system.

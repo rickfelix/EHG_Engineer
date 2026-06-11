@@ -1,3 +1,12 @@
+---
+category: analysis
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-29
+tags: [analysis, audits]
+---
+
 # Audit: `metadata.is_*` Orphan & Phantom Flags
 
 **SD:** SD-LEO-INFRA-AUDIT-METADATA-ORPHAN-001

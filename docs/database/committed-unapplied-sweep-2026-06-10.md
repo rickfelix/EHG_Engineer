@@ -1,3 +1,12 @@
+---
+category: database
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-10
+tags: [database]
+---
+
 # Committed-but-unapplied DB objects — sweep triage
 
 **Source**: SD-LEO-INFRA-APPLY-RETIRE-COMMITTED-001 (2026-06-10), from the chairman-directed data-layer review scan (.claude/data-layer-scan-results.json, 7,640 files vs 708 live tables + 166 views).

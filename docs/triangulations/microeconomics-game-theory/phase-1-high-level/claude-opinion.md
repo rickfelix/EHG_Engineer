@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, microeconomics-game-theory, phase-1-high-level]
+---
+
 # Claude Opinion — Microeconomics & Game Theory Integration into EHG
 
 **Model**: Claude Opus 4.6 (with codebase access)

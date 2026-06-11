@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -349,8 +349,8 @@ npm run test:unit && npm run test:e2e
 
 ### Testing
 - `docs/reference/test-timeout-handling.md` - This document
-- `docs/reference/multi-app-testing.md` - Multi-app test architecture
-- `docs/reference/e2e-testing-modes.md` - Dev vs preview mode
+- `docs/guides/multi-app-protocol.md` - Multi-app architecture
+- `docs/reference/e2e-testing-mode-configuration.md` - Dev vs preview mode
 - `docs/reference/qa-director-guide.md` - QA Engineering Director
 
 ### Workflow
@@ -360,7 +360,7 @@ npm run test:unit && npm run test:e2e
 
 ### Protocol
 - `CLAUDE.md` - LEO Protocol (main reference)
-- `docs/reference/unified-handoff-system.md` - Handoff structure
+- `docs/leo/handoffs/handoff-system-guide.md` - Handoff structure
 - `docs/reference/context-monitoring.md` - Context management
 
 ---

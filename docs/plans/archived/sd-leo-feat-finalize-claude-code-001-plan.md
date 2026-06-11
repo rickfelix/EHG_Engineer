@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-25
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: docs/plans/converge-venture-build-claude-code-model.md -->
 <!-- SD Key: SD-LEO-FEAT-FINALIZE-CLAUDE-CODE-001 -->
 <!-- Archived at: 2026-05-25T12:30:59.484Z -->

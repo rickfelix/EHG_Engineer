@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-6-the-launch]
+---
+
 # OpenAI Phase 2 Opinion — Group 6: THE_LAUNCH (Stages 23-25)
 
 Group 6 is conceptually strong but operationally unreliable: the launch story is coherent, yet the two most important control points are broken or ambiguous.

@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-12
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: C:/Users/rickf/.claude/plans/sd-gate-status-authority-unification.md -->
 <!-- SD Key: SD-LEO-REFAC-GATE-STATUS-AUTHORITY-001 -->
 <!-- Archived at: 2026-05-12T20:05:47.249Z -->

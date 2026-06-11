@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-05
+tags: [documentation, ops]
+---
+
 # Parking a Strategic Directive (cancel ≠ park)
 
 **SD-LEO-INFRA-PARKED-STATUS-REPLACE-001**

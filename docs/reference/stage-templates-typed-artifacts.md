@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-25
+tags: [reference]
+---
+
 # Stage Templates — Typed-Artifact Pattern
 
 ## Overview
@@ -55,7 +64,7 @@ true:
 ## Migration recipe (4 phases, ~90 minutes)
 
 1. **Extract & test the projection helper** (~30 min) — Create
-   `lib/eva/stage-templates/analysis-steps/stage-N-projections.js` exporting
+   `lib/eva/stage-templates/analysis-steps/stage-N-projections.js` (N = the stage number; `stage-14-projections.js` is the shipped reference implementation) exporting
    `projectStageNArtifacts(payload) -> Array<{artifactType, payload, gaps?}>`.
    Use `ARTIFACT_TYPES` constants from `lib/eva/artifact-types.js` (no
    hardcoded strings). Write unit tests against the helper before wiring.
@@ -69,7 +78,7 @@ true:
 
 3. **Verify orchestrator wiring** (~5 min) — No orchestrator changes are
    required after Stage 14's pattern; the dual-form detection at
-   `eva-orchestrator.js` line 391-425 already handles new typed-array
+   `lib/eva/eva-orchestrator.js` line 391-425 already handles new typed-array
    returns. Confirm by running an end-to-end test with the new stage.
 
 4. **Coverage & docs** (~25 min) — Add unit tests covering at minimum:

@@ -77,6 +77,8 @@ Quick navigation index for all 25 stages across 6 phases.
 
 ## Complete Stage Table
 
+Template files in the last column live under `lib/eva/stage-templates/` (line counts are as of 2026-02 and may have drifted).
+
 | # | Name | Phase | Slug | Gate | Template |
 |---|------|-------|------|------|----------|
 | 1 | Draft Idea | 1 - The Truth | `draft-idea` | -- | `stage-01.js` (56 lines) |

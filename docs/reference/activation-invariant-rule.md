@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-26
+tags: [reference]
+---
+
 # Activation Invariant Rule
 
 **SD**: SD-LEO-INFRA-REQUIRE-END-END-001 / FR-5

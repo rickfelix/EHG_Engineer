@@ -1,3 +1,12 @@
+---
+category: archive
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [archive, v1-40-stage-workflow]
+---
+
 # V1 40-Stage Venture Workflow Archive
 
 **Archived**: 2025-12-06

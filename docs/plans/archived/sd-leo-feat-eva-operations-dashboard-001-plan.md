@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: .claude/plans/eva-operations-dashboard-ui.md -->
 <!-- SD Key: SD-LEO-FEAT-EVA-OPERATIONS-DASHBOARD-001 -->
 <!-- Archived at: 2026-03-05T11:05:48.467Z -->

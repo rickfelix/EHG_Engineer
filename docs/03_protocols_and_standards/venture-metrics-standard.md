@@ -1,3 +1,12 @@
+---
+category: protocol
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-02
+tags: [protocol, protocols-and-standards]
+---
+
 # Venture Metrics Standard (`/v1/metrics`)
 
 **Status:** Active standard — SD-LEO-INFRA-PORTFOLIO-PRODUCT-KPI-001, 2026-06-02

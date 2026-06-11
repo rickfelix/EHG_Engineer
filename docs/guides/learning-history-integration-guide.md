@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -77,8 +77,8 @@ The Learning History System provides cross-session knowledge retention through a
 | Tool | Purpose | Example Usage |
 |------|---------|---------------|
 | **search-prior-issues.js** | Search for similar historical issues | `node scripts/search-prior-issues.js "database timeout"` |
-| **record-pattern-success.js** | Record when a solution works/fails | `node scripts/record-pattern-success.js --pattern PAT-001 --sd SD-2025-001 --time 15` |
-| **create-issue-pattern.js** | Manually create new pattern | `node scripts/create-issue-pattern.js --from-issue "RLS blocking access"` |
+| **record-pattern-success.js** | Record when a solution works/fails | `node scripts/archive/one-time/record-pattern-success.js --pattern PAT-001 --sd SD-2025-001 --time 15` |
+| **create-issue-pattern.js** | Manually create new pattern | `node scripts/archive/one-time/create-issue-pattern.js --from-issue "RLS blocking access"` |
 | **auto-extract-patterns-from-retro.js** | Extract patterns from retrospectives | Auto-runs after retro generation |
 
 ### 3. Agent Persona Integration
@@ -104,13 +104,13 @@ node scripts/search-prior-issues.js "database connection timeout"
 # (Implement the solution exactly as documented)
 
 # 4. Record the outcome
-node scripts/record-pattern-success.js \
+node scripts/archive/one-time/record-pattern-success.js \
   --pattern PAT-003 \
   --sd SD-2025-015 \
   --time 18  # actual minutes it took
 
 # If solution failed:
-node scripts/record-pattern-success.js \
+node scripts/archive/one-time/record-pattern-success.js \
   --pattern PAT-003 \
   --sd SD-2025-015 \
   --failed
@@ -120,7 +120,7 @@ node scripts/record-pattern-success.js \
 
 ```bash
 # After encountering same issue 3 times
-node scripts/create-issue-pattern.js --from-issue "Vite build cache causing stale components"
+node scripts/archive/one-time/create-issue-pattern.js --from-issue "Vite build cache causing stale components"
 ```
 
 **Integration Points**:
@@ -181,7 +181,7 @@ node scripts/search-prior-issues.js --category over_engineering --list
 node scripts/search-prior-issues.js "<SD category>"
 
 # Verify learnings extracted
-node scripts/auto-run-subagents.js  # Includes Continuous Improvement Coach
+node scripts/archive/one-time/auto-run-subagents.js  # (archived) Includes Continuous Improvement Coach
 ```
 
 ## Automatic Retrospective Integration
@@ -410,7 +410,7 @@ Top Contributing SDs:
 
 **Cause**: Issue description <20 characters or generic phrase
 **Solution**:
-- Manual creation: `node scripts/create-issue-pattern.js`
+- Manual creation: `node scripts/archive/one-time/create-issue-pattern.js`
 - Ensure retrospective has detailed "What Needs Improvement" items
 
 ### Success Rate Seems Wrong
@@ -446,12 +446,12 @@ node scripts/search-prior-issues.js --category database --list
 node scripts/search-prior-issues.js --stats
 
 # RECORD OUTCOMES
-node scripts/record-pattern-success.js --pattern PAT-001 --sd SD-2025-001 --time 15
-node scripts/record-pattern-success.js --pattern PAT-001 --sd SD-2025-001 --failed
+node scripts/archive/one-time/record-pattern-success.js --pattern PAT-001 --sd SD-2025-001 --time 15
+node scripts/archive/one-time/record-pattern-success.js --pattern PAT-001 --sd SD-2025-001 --failed
 
 # CREATE PATTERNS
-node scripts/create-issue-pattern.js --from-issue "issue description"
-node scripts/create-issue-pattern.js  # Interactive mode
+node scripts/archive/one-time/create-issue-pattern.js --from-issue "issue description"
+node scripts/archive/one-time/create-issue-pattern.js  # Interactive mode
 
 # EXTRACT FROM RETRO
 node scripts/auto-extract-patterns-from-retro.js <RETRO_UUID>
@@ -464,4 +464,4 @@ node scripts/search-prior-issues.js --details PAT-001
 
 **Documentation Maintained By**: Learning History System
 **Questions?**: Check CLAUDE.md sections 193-448 and 450-556
-**Version History**: See `lib/learning/CHANGELOG.md`
+**Version History**: `lib/learning/CHANGELOG.md` (retired — no changelog is maintained for `lib/learning/`; see git history instead)

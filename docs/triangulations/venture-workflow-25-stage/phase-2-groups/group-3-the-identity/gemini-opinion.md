@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-3-the-identity]
+---
+
 Here is the Phase 2 Deep Dive analysis for **Group 3: THE_IDENTITY (Stages 10-12)**.
 
 ---

@@ -2,7 +2,7 @@
 category: feature
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-03-01
 tags: [feature, auto-generated]
 ---
@@ -33,7 +33,7 @@ tags: [feature, auto-generated]
 category: feature
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [feature, auto-generated]
 ---

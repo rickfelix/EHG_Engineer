@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-09
+tags: [documentation, protocol]
+---
+
 # Coordinator ↔ Adam comms lane (canonical)
 
 > Source of truth for the Adam advisory channel. Both `/coordinator` and `/adam` startup

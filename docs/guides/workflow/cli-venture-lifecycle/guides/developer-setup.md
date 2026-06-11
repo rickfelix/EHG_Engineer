@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-03-01
 tags: [guide, auto-generated]
 ---
@@ -237,8 +237,8 @@ via the `v_llm_model_registry` view. The factory caches this registry for
 
 The barrel export file that exposes the public API:
 
-- `createEvaOrchestrator()` - Factory function for orchestrator instances
-- `EvaOrchestrator` - Class export for direct instantiation
+- `processStage()` / `run()` - Orchestrator entry points (from `eva-orchestrator.js`)
+- `createVentureContextManager()` - Venture context tracking
 - Stage template utilities
 - Gate and filter exports
 
@@ -246,9 +246,10 @@ The barrel export file that exposes the public API:
 
 Central registry that maps stage numbers to their template modules. Provides:
 
-- `getStageTemplate(stageNumber)` - Loads and returns a validated template
-- `getAllStageMetadata()` - Returns metadata for all registered templates
-- `validateTemplate(template)` - Runs validation checks on a template
+- `getTemplate(stageNumber)` - Loads and returns a validated template
+- `getAllTemplates()` - Returns all registered templates
+- `getNamedExport(stageNumber, exportName)` / `getAllNamedExports()` - Access non-default stage exports
+- `STAGE_COUNT` - Number of registered stage templates
 
 ### Services Layer: lib/eva/services/
 
@@ -317,7 +318,7 @@ Eva Orchestrator
 
 - **Framework**: Vitest with real Supabase connection
 - **Requires**: Valid `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
-- **Run**: `npx vitest run lib/eva/__tests__/ --config vitest.integration.config.js`
+- **Run**: `npx vitest run lib/eva/__tests__/` (no separate integration config exists — `vitest.config.js` is used; `vitest.integration.config.js` was never created)
 
 ### UAT / E2E Tests
 
@@ -331,7 +332,7 @@ Eva Orchestrator
 After setup, verify the environment is ready:
 
 1. Environment variables are set in `.env`
-2. Database tables exist (check via `scripts/check-venture-tables.js`)
+2. Database tables exist (check via `scripts/archive/one-time/check-venture-tables.js`, now archived)
 3. `lifecycle_stage_config` has 30 rows
 4. LLM factory initializes without errors
 5. Unit tests pass: `npx vitest run lib/eva/__tests__/`

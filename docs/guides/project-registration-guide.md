@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -37,8 +37,9 @@ Everything else can stay as default!
 
 ### Step 3: Register Your Project
 ```bash
-node scripts/leo-register-from-env.js
+node scripts/archive/one-time/leo-register-from-env.js
 ```
+(script now archived)
 
 That's it! Your project is registered.
 
@@ -84,7 +85,7 @@ Let's say you have a GitHub repository at `github.com/johndoe/my-awesome-app`:
 
 3. **Register it:**
    ```bash
-   node scripts/leo-register-from-env.js
+   node scripts/archive/one-time/leo-register-from-env.js
    ```
 
 4. **Switch to it:**

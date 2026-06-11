@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, leo, api]
+---
+
 # LEO Protocol API
 
 API documentation for programmatic access to the LEO Protocol system.

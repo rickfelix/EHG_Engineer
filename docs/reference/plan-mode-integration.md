@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -214,7 +214,7 @@ This is non-blocking - any errors are logged but don't fail the handoff.
 
 ## Integration with Session Init
 
-The `session-init.cjs` hook triggers Plan Mode when a session starts on an SD branch:
+The `scripts/hooks/session-init.cjs` hook triggers Plan Mode when a session starts on an SD branch:
 
 ```javascript
 // Automatic trigger when SD detected

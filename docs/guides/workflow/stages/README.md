@@ -1,3 +1,12 @@
+---
+category: guide
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-10
+tags: [guide, guides, workflow, stages]
+---
+
 # 25-Stage Venture Lifecycle Documentation Index
 
 ## Metadata
@@ -85,7 +94,7 @@ This directory contains comprehensive documentation for each of the 25 stages in
 
 | Stage | Implementation Title | Design Spec Title | Work Type | SD Required |
 |-------|---------------------|-------------------|-----------|-------------|
-| [17](stage-17-environment-and-agent-config.md) | Pre-Build Checklist | Environment & Agent Config | artifact_only | No |
+| [17](stage-17-blueprint-review.md) | Pre-Build Checklist | Environment & Agent Config | artifact_only | No |
 | [18](stage-18-mvp-development-loop.md) | Sprint Planning | MVP Development Loop | artifact_only | No |
 | [19](stage-19-integration-and-api-layer.md) | Build Execution | Integration & API Layer | artifact_only | No |
 | [20](stage-20-security-and-performance.md) | Quality Assurance | Security & Performance | artifact_only | No |

@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-09
+tags: [documentation, protocol]
+---
+
 # The LEO Harness
 
 > **Status:** Canonical overview (authored by the Chairman 2026-06-09; finalized + committed via `QF-20260609-874`). The authoritative role specs remain `docs/protocol/fleet-coordinator-and-worker-behavior.md`, `.claude/commands/coordinator.md`, `.claude/commands/adam.md` / `CLAUDE_ADAM.md`, and `docs/protocol/fleet-worker-loop-directive.md`; this README is the overview/index that ties them together.
