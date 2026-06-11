@@ -106,6 +106,42 @@ export const LIFECYCLE_FEATURE_KEYWORDS = [
 // A01-A04 to emit identical noise correctives (see cancelled SDs 040/041/042).
 export const SUPPRESSED_ARCHITECTURAL_DIMS = new Set(['A01', 'A02', 'A03', 'A04', 'A05']);
 
+// QF-20260610-124: classifier verdicts that ALSO strip VISION dims. A narrow
+// readonly/bugfix/documentation source was never scoped to advance vision
+// dimensions, yet V-dim weak scores emitted P1 vision-gap findings against it —
+// all 5 corrective_finding rows ever emitted hit this class and every one was
+// triaged wont_fix/resolved. lifecycle_feature is deliberately EXCLUDED (keeps
+// its A-dims-only strip): feature-type sources may legitimately move V-dims.
+export const VISION_SUPPRESSED_REASONS = new Set(['cli_validation', 'readonly_bugfix', 'documentation']);
+
+/**
+ * QF-20260610-124: pure strip step for the 5b source-class filter (extracted so it
+ * is unit-testable without a Supabase client). For ANY suppression verdict, removes
+ * SUPPRESSED_ARCHITECTURAL_DIMS from every group; when `reason` is one of
+ * VISION_SUPPRESSED_REASONS, also removes V-dims. Mutates `groups` in place and
+ * drops now-empty groups (identical to the prior inline A-dim loop). Other
+ * (non-V/non-A) dims always pass through.
+ *
+ * @param {Array<{dims: Array<{dimId: string}>}>} groups
+ * @param {string|null} reason - classifySourceSD verdict
+ * @returns {{ suppressedArch: string[], suppressedVision: string[] }} sorted dim ids removed
+ */
+export function _stripSuppressedDims(groups, reason) {
+  const stripVision = VISION_SUPPRESSED_REASONS.has(reason);
+  const hit = (d) => SUPPRESSED_ARCHITECTURAL_DIMS.has(d.dimId) || (stripVision && d.dimId.startsWith('V'));
+  const suppressedArch = new Set();
+  const suppressedVision = new Set();
+  for (let i = groups.length - 1; i >= 0; i--) {
+    for (const d of groups[i].dims) {
+      if (!hit(d)) continue;
+      (d.dimId.startsWith('V') ? suppressedVision : suppressedArch).add(d.dimId);
+    }
+    groups[i].dims = groups[i].dims.filter(d => !hit(d));
+    if (groups[i].dims.length === 0) groups.splice(i, 1);
+  }
+  return { suppressedArch: [...suppressedArch].sort(), suppressedVision: [...suppressedVision].sort() };
+}
+
 /**
  * Lightweight classifier: inspect SD shape and return reason if architectural
  * correctives should be suppressed. Returns null when no suppression match.
@@ -657,36 +693,37 @@ export async function generateCorrectiveSD(scoreId, options = {}) {
     });
   }
 
-  // 5b. Architectural source-class filter (SD-LEO-INFRA-FILTER-CORRECTIVE-GENERATOR-001
-  // shipped A05-only; SD-LEO-INFRA-EXTEND-CORRECTIVE-GENERATOR-001 extends to A01-A05).
-  // For source SDs classified as read-only/CLI/documentation/lifecycle-feature, the
-  // entire architectural row (A01-A05) is noise because the SD does not change
-  // architecture. Strip all A-dims from each group; V-dims pass through. Drop empty
-  // groups. Other dimensions still emit normally for non-suppressed sources.
+  // 5b. Source-class filter (SD-LEO-INFRA-FILTER-CORRECTIVE-GENERATOR-001 shipped
+  // A05-only; SD-LEO-INFRA-EXTEND-CORRECTIVE-GENERATOR-001 extends to A01-A05;
+  // QF-20260610-124 extends readonly/bugfix/documentation verdicts to V-dims too).
+  // For suppressed sources the architectural row (A01-A05) is noise because the SD
+  // does not change architecture; for the readonly verdict subset the V-dims are
+  // equally noise (the SD never scoped vision-relevant behavior). lifecycle_feature
+  // keeps V-dims. Drop empty groups. Other dims still emit for non-suppressed sources.
   if (score.sd_id) {
     const verdict = await isSourceSDA05Suppressed(score.sd_id, supabase);
     if (verdict.suppress) {
-      let suppressedAny = false;
-      const suppressedDims = new Set();
-      for (let i = groups.length - 1; i >= 0; i--) {
-        const beforeLen = groups[i].dims.length;
-        for (const d of groups[i].dims) {
-          if (SUPPRESSED_ARCHITECTURAL_DIMS.has(d.dimId)) suppressedDims.add(d.dimId);
-        }
-        groups[i].dims = groups[i].dims.filter(d => !SUPPRESSED_ARCHITECTURAL_DIMS.has(d.dimId));
-        if (groups[i].dims.length < beforeLen) suppressedAny = true;
-        if (groups[i].dims.length === 0) groups.splice(i, 1);
-      }
-      if (suppressedAny) {
+      const { suppressedArch, suppressedVision } = _stripSuppressedDims(groups, verdict.reason);
+      if (suppressedArch.length > 0) {
         const eventType = verdict.reason === 'lifecycle_feature'
           ? 'skipped_lifecycle_feature_class'
           : 'skipped_a05_source_class';
-        const dimsList = [...suppressedDims].sort().join(',');
-        console.log(`[corrective-sd-generator] eva.corrective.${eventType} source_sd_id=${verdict.sourceSdKey} reason=${verdict.reason} dims=${dimsList} total_score=${score.total_score ?? '?'}`);
+        console.log(`[corrective-sd-generator] eva.corrective.${eventType} source_sd_id=${verdict.sourceSdKey} reason=${verdict.reason} dims=${suppressedArch.join(',')} total_score=${score.total_score ?? '?'}`);
         await _logAudit(supabase, scoreId, eventType, null, score.vision_id, {
           source_sd_id: verdict.sourceSdKey,
           reason: verdict.reason,
-          suppressed_dims: [...suppressedDims].sort(),
+          suppressed_dims: suppressedArch,
+        });
+      }
+      // QF-20260610-124 (FR-3): distinct event so the V-dim strip is observable in
+      // the brainstorm_sessions audit, mirroring the skipped_a05_source_class shape.
+      if (suppressedVision.length > 0) {
+        const eventType = 'skipped_vision_dim_readonly_source';
+        console.log(`[corrective-sd-generator] eva.corrective.${eventType} source_sd_id=${verdict.sourceSdKey} reason=${verdict.reason} dims=${suppressedVision.join(',')} total_score=${score.total_score ?? '?'}`);
+        await _logAudit(supabase, scoreId, eventType, null, score.vision_id, {
+          source_sd_id: verdict.sourceSdKey,
+          reason: verdict.reason,
+          suppressed_dims: suppressedVision,
         });
       }
     }
