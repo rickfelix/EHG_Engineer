@@ -41,6 +41,22 @@ const { data: dup } = await db.from('feedback')
 if (dup && dup.length) {
   console.log('ALREADY_OPEN id=' + dup[0].id + ' — surfaced in the next executive email');
 } else {
+  // SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-001 FR-4: also record the question as a pending
+  // chairman_decisions row so it appears in the unified decision queue (chairman_pending_decisions
+  // + the /decisions skill + the chairman email). Fail-soft — the feedback lane below stays primary.
+  // When the chairman answers (via /decisions or the dashboard), the decision is recorded through
+  // the fn_chairman_decide RPC; this script is fire-and-forget and never receives the answer itself.
+  try {
+    const { recordPendingDecision } = await import(pathToFileURL(resolve('lib/chairman/record-pending-decision.mjs')).href);
+    const rec = await recordPendingDecision(db, {
+      title: 'Worker question — ' + worker + (sd ? ' (' + sd + ')' : ''),
+      decisionType: 'session_question',
+      context: { question: q, worker, sd_key: sd || null, sender_session: session || null },
+      recommendation: recommended || undefined,
+      blocking: questionCategory === 'critical',
+    });
+    console.log(rec.recorded ? 'DECISION_QUEUED chairman_decisions id=' + rec.id : 'DECISION_QUEUE_SKIP ' + rec.error);
+  } catch (e) { console.log('DECISION_QUEUE_SKIP ' + e.message); }
   const { data, error } = await db.from('feedback').insert({
     type: 'issue', source_application: 'EHG_Engineer', source_type: 'auto_capture',
     category: 'operator_question', status: 'new', severity: 'medium',
