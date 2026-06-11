@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-11T14:29:21.270Z
-**Rows**: 9
-**RLS**: Disabled
+**Generated**: 2026-06-11T14:58:14.315Z
+**Rows**: 10
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -41,6 +41,14 @@
   ```sql
   CREATE UNIQUE INDEX retention_runs_pkey ON public.retention_runs USING btree (id)
   ```
+
+## RLS Policies
+
+### 1. service_role_all (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 
