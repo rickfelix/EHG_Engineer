@@ -753,16 +753,20 @@ export class BaseExecutor {
     const sdType = sd?.sd_type || 'feature';
     let typeNote = '';
     try {
+      // Drive-by (caught by schema-reference diff lint): 'gate_threshold' was a
+      // phantom column (live 42703) — the whole select errored into the catch on
+      // every call, so the type note NEVER rendered. 'prd_minimum_score' is the
+      // real threshold-style column on sd_type_validation_profiles.
       const { data: profile } = await this.supabase
         .from('sd_type_validation_profiles')
-        .select('requires_prd, requires_user_stories, gate_threshold')
+        .select('requires_prd, requires_user_stories, prd_minimum_score')
         .eq('sd_type', sdType)
         .single();
       if (profile) {
         const notes = [];
         if (!profile.requires_prd) notes.push('PRD not required for this SD type');
         if (!profile.requires_user_stories) notes.push('User stories not required for this SD type');
-        if (profile.gate_threshold) notes.push(`Gate threshold: ${profile.gate_threshold}%`);
+        if (profile.prd_minimum_score) notes.push(`PRD minimum score: ${profile.prd_minimum_score}`);
         if (notes.length > 0) typeNote = `\n   SD type '${sdType}': ${notes.join(', ')}`;
       }
     } catch (e) {
