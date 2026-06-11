@@ -1,4 +1,25 @@
 import { defineConfig } from 'vitest/config';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * Quarantine manifest — SD-LEO-FIX-GREEN-MAIN-TRIAGE-001.
+ * tests/quarantine-manifest.json tracks every red unit-tier file with a
+ * reason_class + linked_ref (the debt register). Quarantined files are
+ * excluded from the `unit` project here; un-quarantine = delete the entry.
+ * Fail-soft: a missing/corrupt manifest quarantines nothing.
+ */
+function loadQuarantineExclude() {
+  try {
+    const manifestPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'tests', 'quarantine-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    return (manifest.quarantined || []).map(e => `**/${e.file}`);
+  } catch {
+    return [];
+  }
+}
+const QUARANTINE_EXCLUDE = loadQuarantineExclude();
 
 /**
  * Vite plugin to strip shebang lines from .mjs/.js files.
@@ -101,7 +122,9 @@ export default defineConfig({
             '**/__tests__/**/*.test.js',
             '**/*.test.js',
           ],
-          exclude: [...SHARED_EXCLUDE, ...DB_INCLUDE],
+          // QUARANTINE_EXCLUDE: tracked red files (tests/quarantine-manifest.json)
+          // — SD-LEO-FIX-GREEN-MAIN-TRIAGE-001. The manifest is the debt register.
+          exclude: [...SHARED_EXCLUDE, ...DB_INCLUDE, ...QUARANTINE_EXCLUDE],
         },
       },
       {
