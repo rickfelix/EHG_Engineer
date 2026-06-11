@@ -374,6 +374,7 @@
     "session:worktree": "node scripts/session-worktree.js",
     "session:check-concurrency": "node scripts/session-check-concurrency.js",
     "session:park": "node scripts/park-worker.cjs",
+    "sweep:scratch": "node scripts/maintenance/sweep-worker-scratch.mjs",
     "prepark-wip": "node scripts/prepark-wip.cjs",
     "protocol:pub-audit": "node scripts/protocol-publication-audit.cjs",
     "sre:row-growth": "node scripts/row-growth-snapshot.cjs",

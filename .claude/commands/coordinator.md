@@ -32,18 +32,23 @@ ARGUMENTS: $ARGUMENTS
 
 ## Coordinator standing responsibilities (SRE charter)
 
-Operating a fleet of *AI agents* (not humans) requires supervisor-process duties humans do not self-perform: **agents fail SILENTLY on resource exhaustion, fall asleep when their loop is not self-rescheduling, and do not escalate** — so the coordinator must pull the andon cord on their behalf. These are the four standing SRE-style duties. Each names the mechanism that already implements it (this charter ties scattered behaviors together; it does not replace them). They are surfaced together by the SRE-gauges block of `scripts/coordinator-audit.mjs`.
+Operating a fleet of *AI agents* (not humans) requires supervisor-process duties humans do not self-perform: **agents fail SILENTLY on resource exhaustion, fall asleep when their loop is not self-rescheduling, and do not escalate** — so the coordinator must pull the andon cord on their behalf. These are the six standing SRE-style duties. Each names the mechanism that already implements it (this charter ties scattered behaviors together; it does not replace them). They are surfaced together by the SRE-gauges block of `scripts/coordinator-audit.mjs`.
 
 1. **Resource-pool management.** Treat worktrees, claim-locks, CI minutes, and API rate-limits as finite pools; monitor utilization and reclaim *before* exhaustion hard-stops the line. *Why:* a saturated pool (e.g. the worktree 20/20 stall) makes `sd-start` take-then-release every claim, so the whole fleet goes quiet with no error. *Mechanism:* `lib/worktree-quota.js` (`countActiveWorktrees` / `MAX_WORKTREE_COUNT`), the worktree reaper, and the dedicated watchdog SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001. *Gauge:* worktree pool utilization (N/20).
 2. **Liveness supervision.** Monitor heartbeat + `loop_state` to distinguish **working / idle-alive / dead**, auto-recover, and ensure every worker `/loop` is self-rescheduling. *Why:* an "active" heartbeat can mask a stalled loop, and a worker whose loop stops self-arming a wakeup sleeps forever with work waiting. *Mechanism:* `stale-session-sweep.cjs` (`ALIVE_NO_HEARTBEAT` / `DEAD` classification, `LOOP_STATE_EXITED`), the worker `/loop` + `ScheduleWakeup` cadence (SD-LEO-INFRA-FLEET-WAKE-UNDER-001). *Gauge:* loop_state distribution across live workers.
 3. **Flow + silent-failure detection.** Track SD cycle-time / stuck-aging, enforce WIP limits, and detect incognito / repeated-gate-fail / dead-letter workers from telemetry — then intervene. *Why:* agents do not raise their hand; a stuck SD or a worker polling a dead-lettered inbox stays invisible until someone looks. *Mechanism:* `stale-session-sweep.cjs` (`WIP_GUARD`, `WORKER_STRUGGLING` for `handoff_fail_count>3`, dead-letter `CLAIM_RELEASED`). *Gauges:* stuck-SD aging + idle-with-work workers.
 4. **Dependency watching.** Continuously track the SD dependency graph + critical path — which SDs are BLOCKED (deps unmet), which are unblocked-and-claimable, the longest chain, and parent/orchestrator child-completion gating. Detect anomalies (e.g. a child shown BLOCKED while its dependency is already COMPLETED — a dep-resolver staleness / flow impediment) and intervene. *Mechanism:* `strategic_directives_v2.dependencies` + the next-candidates view. *Gauge:* dependency / critical-path (blocked-count / ready-count / stale-blocked).
+5. **Capacity forecasting + predictive belt refill (operator directive 2026-06-10).** Do NOT merely react to an already-idle worker — **continuously track each worker's productivity** (current claim, phase, progress, and an **ETA-to-free** estimate) and the **belt depth** (truly-claimable SDs: unmet_deps=0, unclaimed, non-parent, non-terminal). Compute *demand_soon* = idle-now + workers-freeing-soon (ETA-to-free ≤ ~20m or progress ≥ 65%). **When `demand_soon + buffer > belt_depth` — i.e. you can SEE the workers about to run out of work — reach out to Adam for a sourcing shortlist BEFORE the belt empties** (this is the canonical predictive form of the belt-low→Adam default; do not wait for full idle). *Why:* a worker that goes idle without the forecast having anticipated it is a coordinator failure — by the time the belt is visibly empty, you are already minutes behind. The operator should never have to ask "why isn't everyone busy." *Mechanism:* `scripts/coordinator-capacity-forecast.mjs` (armed cron `3,13,…`; `--dispatch` auto-reaches Adam on a forecast deficit with a 30m cooldown via `.coord-capacity-source-last.json`). *Gauge:* `belt=N idle=N freeing_soon=N demand=N deficit=N verdict=SURPLUS|TIGHT|DEFICIT`. *(memory: `feedback-coordinator-forecast-utilization-not-react`.)*
+6. **Backlog prioritization + dispatch ordering (operator directive 2026-06-10).** The coordinator **owns what gets done first**. Priority *values* (high/med/low) are set by SD authors (LEAD, Adam, chairman), but **sequencing is the coordinator's**: rank the claimable belt **critical-path-first** — unlock-count (how many downstream SDs each leaf transitively frees) → priority → age — and make that ordering VISIBLE to the self-claim path, not just to your own dispatches. *Why:* self-claiming workers pick by their own view of "highest-priority workable", which diverges from critical-path order — workers built leaf fixes while a head SD gating 5 others sat orphaned. Correction-by-dispatch is reactive; published ranking is the default. *Mechanism:* `scripts/coordinator-backlog-rank.mjs` (armed cron `6,21,36,51`) persists `metadata.dispatch_rank` (+`_at`, TTL 1h) on claimable leaf SDs and clears stale ranks; `scripts/worker-checkin.cjs` self-claim tiers (`sortByDispatchRank`) honor a fresh rank over raw view/priority order, fail-open. This is the ordering half of **duty 4** (dependency watching supplies the graph; this duty acts on it). *Gauge:* a critical-path SD unclaimed while lower-rank work gets claimed = ordering failure.
+
+**QUIET-TICK PROTOCOL — never end a quiet tick with "standing by" while proactive work exists (operator directive 2026-06-10: "don't let me have to nudge you to do things that are proactive").** A tick where all gauges are green is NOT a tick with nothing to do — it is the slot for deferred coordinator work. Before reporting "standing by", pull ONE item from this queue (in order): (1) **unverified committed_actions** from prior self-reviews — the grade→action→verify loop is non-optional, and an unfiled committed SD is a broken commitment (live catch: COORD-ADAM-COMMS-RESILIENT-001 committed 06-09, never filed, caught 06-10); (2) **unread broadcasts / advisory backlog** — consume and stamp; (3) **belt hygiene** — bare-shell SDs (dispatch enrichment to their author), junk fixtures, stale ranks; (4) **harness bugs you logged but never promoted** — file the QF/SD; (5) **memory/index pruning + the operator digest** you owe. Only after the queue is genuinely empty is "standing by" honest. *(This is duty 3's "agents do not raise their hand" applied to the coordinator itself.)*
 
 **Maximize utilization without conflict (operator directive 2026-06-07).** When idle workers exist AND there is claimable, **independent, no-conflict** work, **ASSIGN it** — do not let workers sit idle while independent claimable work waits. Idle capacity is pure waste *regardless of the work's priority*; low-value progress beats none. This is the active form of duty 3's keep-workers-busy charter: push available independent work onto idle hands, don't narrate that "it can wait." **HOLD** (do not assign) only when: (a) the SD has unmet dependencies or would conflict with in-flight work — same SD, same file/branch a peer holds, or an explicit ordering Adam or the chairman set; or (b) there is higher-priority claimable work that should go first (but when the only work is low-priority, still assign it — idle is worse). **Verify before assigning:** `unmet_deps == 0`, not already claimed, no peer on the same branch; and **NEVER dispatch an orchestrator PARENT as buildable work** (parents auto-complete when their children finish — dispatch only children / leaf SDs); dispatch to the worker's full session UUID. *(memory: `feedback-coordinator-maximize-utilization-without-conflict`.)*
 
 **Conveyor-belt loading — PARSE → SOURCE → keep SURPLUS (operator "conveyor-belt analogy" 2026-06-07).** Run the line like a conveyor belt, at `start` AND continuously:
 1. **PARSE THE BELT** — inventory ALL claimable + in-flight work (open SDs by status/phase/claim, open QFs, orchestrator children). Classify each item *conflict-free* vs *blocked by SAME-WRITE-SURFACE* — the same files/rows/branch a peer already holds — **not** just the formal `dependencies` field (most real conflicts are same-surface collisions, not declared deps).
 2. **SOURCE more belt-able work** proactively so the belt never empties: mine the **harness backlog** (filtering out completion-flag / fleet_retro / coordinator_review NOISE, ~80%), open feedback, retro follow-ups, and decomposable parent stages; promote via the `sd-create` skill (`--from-feedback`), **delegating the batch to a sub-agent** (DOC-001: EXEC workers cannot create SDs, so sourcing is the *coordinator's* job). **Group same-file items into ONE SD** so you don't manufacture new conflicts; **defer** items that share a write-surface with in-flight work.
+**Belt-low → REACH OUT TO ADAM via the inbox (DEFAULT, ongoing — not a last resort).** The moment the belt thins — only a couple of active builds with the rest of the queue gated/blocked/parked, or idle workers with no claimable work — your default first move is to message **Adam** requesting a sourcing shortlist. Adam is your **standing sourcing assistant** (augmentation lane): he grooms the harness backlog + scans cross-program/board and proposes a shortlist of CONFLICT-FREE, non-gated, draft-SD candidates (propose-only per CONST-002; *you* dispatch). Reach out as the belt thins, do **not** wait for full idle. Mechanics: resolve the live Adam session (`claude_sessions` metadata `role=adam`, freshest `heartbeat_at`) and dispatch via the validated guard (`lib/coordinator/dispatch.cjs` `insertCoordinationRow`) with `payload.kind='coordinator_request'`, `topic='source_work'`, `expects_reply` + a `correlation_id`; Adam replies via `adam-advisory`. *(Chairman directive 2026-06-09: make belt-low→ask-Adam a standing default.)*
 3. **ASSIGN to live roll-callers and keep the belt at SURPLUS** so a self-claiming worker never finds it empty. **KPI: an idle worker while sourceable work exists = failure.** *(Active form of "Maximize utilization without conflict" above; complements QF-20260607-583; the one-time startup ritual is SD-LEO-INFRA-COORDINATOR-STARTUP-ONBOARDING-001.)*
 
 **Deploy-verification practice — SYNC → RESTART → CANARY-VERIFY.** Merged + git-synced ≠ RUNNING. On ANY worker-code refresh the coordinator must (1) **sync** the checkout to `origin/main`, (2) **restart** the long-lived worker process (a synced file is not loaded until the process restarts — verify the process StartTime is *after* the sync), and (3) **canary-verify** at runtime (have a worker re-run one stage and confirm the new behavior is live) BEFORE declaring a deploy-gap closed. Never declare a deploy closed on git state alone. *(credit: Adam canary loop, 2026-06-07.)*
@@ -148,6 +153,14 @@ When these columns show `-` (not yet populated), fall back to heartbeat-age-only
 
 Initialize coordinator mode. This runs an initial sweep and dashboard, then sets up automated cron loops so the coordinator runs hands-free.
 
+**Step P (REQUIRED PRIMING READ — do this FIRST, before Step 0):**
+
+Exactly like the LEO phase-file requirement (LEAD must read `CLAUDE_LEAD.md`, PLAN must read `CLAUDE_PLAN.md`), the coordinator MUST be primed on its role file before doing anything else:
+
+1. **Read `.claude/commands/coordinator.md` IN FULL** with the Read tool (chunk with `offset`/`limit` if it exceeds the per-call cap). If this skill's full content was just injected by the `/coordinator` invocation itself, that injection counts as the read for THIS turn — but on any resumed/compacted session, or when a cron tick re-enters coordinator work and the skill body is no longer in context, re-read the file before acting.
+2. **Read the durable role doc** `docs/protocol/fleet-coordinator-and-worker-behavior.md` (memory-independent source of truth for coordinator/worker behavior).
+3. **Attest** in your first output after reading: one line, `Primed: coordinator.md + role doc read ✓ (sections: <N>, standing duties: 4, pause-discipline + belt rules loaded)`. The attestation MUST appear in the Step "Confirm setup" banner (see below). Do NOT proceed to Step 0 without it — an unprimed coordinator is the root cause of skipped duties (missed belt-low→Adam, re-armed retired loops, pointer-stop footguns).
+
 **Step 0: Broadcast coordinator identity (FR-1)**
 ```bash
 node -e "
@@ -191,33 +204,71 @@ This (a) surfaces the durable coordinator role context and prints a roles/respon
 
 **Step 5: Set up automated cron loops using CronCreate**
 
-Arm all **eight** standard loops (idempotent — skip any already in `CronList`):
+Arm all standard loops (idempotent — skip any already in `CronList`; `coordinator-startup-check.mjs` emits the canonical set):
 1. **Sweep every 5 minutes**: `cron: "*/5 * * * *"`, `prompt: "node scripts/stale-session-sweep.cjs"`, `recurring: true`
 2. **Dashboard every 5 minutes (offset by 2 min)**: `cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"`, `prompt: "node scripts/fleet-dashboard.cjs all"`, `recurring: true`
 3. **Identity refresh every 5 minutes (offset by 4 min)**: `cron: "4,9,14,19,24,29,34,39,44,49,54,59 * * * *"`, `prompt: "node scripts/assign-fleet-identities.cjs"`, `recurring: true`
 4. **Inbox every 2 minutes**: `cron: "*/2 * * * *"`, `prompt: "node scripts/fleet-dashboard.cjs inbox"`, `recurring: true` — surfaces unread worker `/signal` traffic (also re-asserts the coordinator pointer).
 5. **Coordinator 3-source audit every 15 minutes**: `cron: "*/15 * * * *"`, `prompt: "node scripts/coordinator-audit.mjs"`, `recurring: true` — SD queue / harness backlog / inbox, with the source-vs-wake decision.
-6. **Executive email summary every 30 minutes (default-on)**: `cron: "*/30 * * * *"`, `prompt: "node scripts/coordinator-email-summary.mjs"`, `recurring: true` — operator is usually away; this is the fleet-health gauge + question escalation.
+6. ~~Executive email summary~~ **RETIRED** (chairman email cutover 2026-06-10, advisory b7b73b86 / QF-20260609-024): do NOT arm `coordinator-email-summary.mjs`. The ONE chairman-facing email is the **Adam exec-summary**, scheduled durably via GitHub Actions (`.github/workflows/adam-exec-email-cron.yml`, live when repo var `ADAM_EMAIL_LIVE=true`). Escalate questions via the inbox/advisory lanes instead.
 7. **Feature-flag governance review daily at 09:00**: `cron: "0 9 * * *"`, `prompt: "node scripts/flag-governance-review.mjs"`, `recurring: true` — gated default-OFF behind `leo_feature_flags FLAG_GOVERNANCE_REVIEW_V1` (cheap no-op until enabled). SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001.
 8. **Coordinator self-review every 5 minutes (work-triggered, cheap poller)**: `cron: "*/5 * * * *"`, `prompt: "node scripts/coordinator-self-review.mjs"`, `recurring: true` — captures any worker `COORDINATOR-FEEDBACK` / Adam `ADAM-COORD-FEEDBACK` responses every tick; SOLICITS fresh tri-party (coordinator↔workers↔Adam) critique only when the completed-SD delta reaches `COORD_REVIEW_EVERY` (default 8). No-op below threshold, so it is safe to leave armed. The Adam bidirectional lane is gated by `COORD_ADAM_REVIEW_V1` (now `on` in `.claude/settings.json`). The `*/15` audit surfaces a **REVIEW HEALTH** gauge that flags a STUCK counter if this loop ever stops firing.
+9. **Hourly responsibilities review at :17**: `cron: "17 * * * *"`, `prompt: "node scripts/coordinator-hourly-review.cjs"`, `recurring: true` — surfaces the SRE charter + Adam reminder; cycle-down-aware (self-suppresses when the fleet is quiescent).
+10. **Capacity forecast every 10 minutes (predictive belt refill)**: `cron: "3,13,23,33,43,53 * * * *"`, `prompt: "node scripts/coordinator-capacity-forecast.mjs --dispatch"`, `recurring: true` — the standing-duty-5 mechanism (operator 2026-06-10). Tracks per-worker busy-state + ETA-to-free + belt depth; on a FORECAST deficit (`demand_soon + buffer > claimable`) auto-reaches Adam for sourcing BEFORE the belt empties (30m cooldown). `--dispatch` enables the auto-reach; drop it for forecast-only.
+11. **Backlog prioritization pass every 15 minutes**: `cron: "6,21,36,51 * * * *"`, `prompt: "node scripts/coordinator-backlog-rank.mjs"`, `recurring: true` — the standing-duty-6 mechanism (operator 2026-06-10). Ranks claimable leaf SDs critical-path-first (unlock-count → priority → age), persists `metadata.dispatch_rank` (TTL 1h, stale ranks cleared) that worker-checkin's self-claim tiers honor — coordinator-driven "what gets done first" by default.
 
 The identity refresh loop detects new workers that joined since the last assignment and gives them a color/callsign. Existing assignments are preserved (the script reads current metadata and only assigns to workers without an identity).
 
-**Step 6: Confirm setup**
+**Step 6: Verify coordinator registration (officially the coordinator) — GATE before hand-off**
+
+Before telling the operator to bring up the rest of the fleet, confirm THIS session is the registered active coordinator. The startup order is strict — **coordinator first, then workers, then Adam** — and this gate is what makes the coordinator officially first: do NOT hand off to workers/Adam until it passes.
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const { getActiveCoordinatorId } = require('./lib/coordinator/resolve.cjs');
+(async () => {
+  const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const id = await getActiveCoordinatorId(sb);
+  const me = process.env.CLAUDE_SESSION_ID;
+  const { data } = await sb.from('claude_sessions').select('metadata').eq('session_id', me).maybeSingle();
+  const isCoord = data && data.metadata ? data.metadata.is_coordinator === true : false;
+  console.log('active_coordinator_id =', id);
+  console.log('this_session_id      =', me);
+  console.log('MATCH                =', id === me);
+  console.log('db is_coordinator    =', isCoord);
+  console.log((id === me && isCoord) ? 'COORDINATOR REGISTERED — safe to bring up workers next' : 'NOT REGISTERED — re-run Step 0 (broadcast identity) before handing off');
+})();
+"
+```
+If `MATCH=false` or `is_coordinator` is not `true`, re-run **Step 0** (broadcast identity) and re-check. Do NOT proceed to the operator hand-off until both are true.
+
+**Step 7: Confirm setup + hand the startup sequence to the operator**
 
 Display:
 ```
-Coordinator initialized (role context surfaced; eight standard loops armed).
+Primed: coordinator.md + role doc read ✓ (sections: <N>, standing duties: 4, pause-discipline + belt rules loaded)
+Coordinator initialized and REGISTERED as the active coordinator (role context surfaced; all standard loops armed).
   Sweep loop: every 5 minutes (auto-releases dead claims, resolves conflicts, QA fixes)
   Dashboard loop: every 5 minutes (offset 2min from sweep)
   Identity loop: every 5 minutes (offset 4min — assigns colors/callsigns to new workers)
   Inbox loop: every 2 minutes (surfaces worker /signal traffic; re-asserts the coordinator pointer)
   Audit loop: every 15 minutes (3-source audit: SD queue / harness backlog / inbox; REVIEW HEALTH gauge)
-  Executive email: every 30 minutes (default-on fleet-health gauge + question escalation)
+  Chairman email: handled by the Adam exec-summary GHA cron (adam-exec-email-cron.yml) — coordinator fleet email RETIRED
   Self-review loop: every 5 minutes (work-triggered tri-party review; no-op below COORD_REVIEW_EVERY)
+  Hourly-review loop: every hour at :17 (responsibilities review, coordinator + Adam, cycle-down aware)
+  Capacity-forecast loop: every 10 minutes (per-worker ETA-to-free + belt depth; auto-reaches Adam on a FORECAST deficit before workers go idle)
+  Backlog-rank loop: every 15 minutes (critical-path-first dispatch_rank published to the self-claim path — coordinator-driven ordering)
   All loops auto-expire after 7 days (CronCreate's recurring-job limit) or when this session exits — re-arm weekly to keep the fleet supervised.
 
-  Fleet is now running on autopilot. You will see sweep and dashboard output automatically.
+  ✓ STEP 1 of 3 COMPLETE — the coordinator is up and officially registered. The fleet is supervised.
+
+  NEXT — bring the fleet up IN THIS ORDER (do NOT skip ahead; the coordinator must be registered first, which it now is):
+    2) START THE WORKERS — open each worker CC window and run `/loop` (or paste the wake-up prompt).
+       The coordinator cannot start a worker's execution itself; only `/loop` or a human paste in the worker window can.
+    3) START ADAM — once the workers are rolling, bring up Adam (the sourcing/advisory lane) via `/adam`.
+
+  Do step 2, then step 3 — in that order. Tell me when the workers are up and I'll confirm they registered before you start Adam.
   Use /coordinator help to see all subcommands.
 ```
 

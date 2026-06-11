@@ -206,6 +206,41 @@ async function selfClaimQuickFix(sb, sessionId, base) {
 
 // SD-FDBK-FEAT-WORKER-CHECKIN-SELF-001: un-baselined-draft self-claim tier.
 const DRAFT_CANDIDATE_LIMIT = 10;
+
+// ── Coordinator dispatch-rank ordering (SRE duty 6, operator 2026-06-10) ──
+// The coordinator's backlog-ordering pass (scripts/coordinator-backlog-rank.mjs) persists
+// metadata.dispatch_rank (+ dispatch_rank_at) on claimable leaf SDs: critical-path-first, then
+// priority, then age. Self-claim honors a FRESH rank so "what gets done first" is
+// coordinator-driven by default instead of correction-by-dispatch. Stale (> TTL) or absent ranks
+// are ignored — the tier's existing order stands. Fail-open: any error → original order.
+const DISPATCH_RANK_TTL_MS = 60 * 60 * 1000; // ranking loop runs ~10-15min; 1h staleness cutoff
+
+/** Pure: stable-sort items by a rank map (lower rank first); unranked keep relative order. */
+function orderByRankMap(items, keyOf, rankMap) {
+  if (!rankMap || rankMap.size === 0) return items;
+  return items.slice().sort((a, b) =>
+    (rankMap.get(keyOf(a)) ?? Infinity) - (rankMap.get(keyOf(b)) ?? Infinity));
+}
+
+/** Fetch fresh dispatch_ranks for the candidate keys and order by them. Fail-open. */
+async function sortByDispatchRank(sb, items, keyOf) {
+  try {
+    const keys = (items || []).map(keyOf).filter(Boolean);
+    if (keys.length < 2) return items || [];
+    const { data } = await sb.from('strategic_directives_v2')
+      .select('sd_key, metadata').in('sd_key', keys);
+    const rankMap = new Map();
+    const now = Date.now();
+    for (const r of (data || [])) {
+      const m = r.metadata || {};
+      if (m.dispatch_rank != null && m.dispatch_rank_at
+          && (now - new Date(m.dispatch_rank_at).getTime()) < DISPATCH_RANK_TTL_MS) {
+        rankMap.set(r.sd_key, Number(m.dispatch_rank));
+      }
+    }
+    return orderByRankMap(items, keyOf, rankMap);
+  } catch { return items || []; } // fail-open: ordering must never break self-claim
+}
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: draftDepsSatisfied + baselinedCandidateEligible were
@@ -244,7 +279,10 @@ async function selfClaimDraftSd(sb, sessionId, base) {
     const ordered = (drafts || []).slice().sort(
       (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9)
     );
-    for (const d of ordered) {
+    // duty-6: a fresh coordinator dispatch_rank overrides the local priority order (rank already
+    // encodes priority as its tie-break); unranked/stale rows keep the order above. Fail-open.
+    const ranked = await sortByDispatchRank(sb, ordered, (d) => d.sd_key);
+    for (const d of ranked) {
       // SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001: same shared classifier the baselined candidate-view
       // tier (step 6) and the coordinator/sweep PUSH path use — the un-baselined draft tier must not
       // self-claim a test-fixture phantom (SD-DEMO-*/SD-TEST-*) or a requires_human_action SD. (The
@@ -648,7 +686,9 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       .from('v_sd_next_candidates')
       .select('sd_id, track, status, priority')
       .limit(SELF_CLAIM_CANDIDATE_LIMIT);
-    for (const c of (cands || [])) {
+    // duty-6: honor the coordinator's fresh dispatch_rank over raw view order (fail-open).
+    const rankedCands = await sortByDispatchRank(sb, cands || [], (c) => c.sd_id);
+    for (const c of rankedCands) {
       // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: skip dependency-blocked SDs and orchestrator PARENTS
       // (the view surfaces both; claim_sd enforces neither). Mirrors the step-6.25 guard.
       if (!(await baselinedCandidateEligible(sb, c.sd_id))) continue;
@@ -700,7 +740,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {

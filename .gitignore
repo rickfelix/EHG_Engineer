@@ -342,6 +342,46 @@ scripts/ops/LLM-COST-ALERT.txt
 # Adam opportunity-scan runtime ledger (SD-LEO-INFRA-ADAM-OPPORTUNITY-SCAN-001)
 .adam-scan-ledger.json
 
+# ── Autonomous-worker scratch & runtime droppings ──────────────────────────────
+# Workers write throwaway DB-probe scripts and runtime state that nothing pruned, so
+# 700+ untracked files piled up in every `git status`. These rules stop the git noise;
+# `npm run sweep:scratch` (+ the SessionStart hook) prunes them from disk. Every pattern
+# below was verified to have ZERO collisions with tracked files (forensics 2026-06-09).
+
+# Root-level ad-hoc scratch (root-anchored; verified 0 tracked root _* of any extension).
+# Workers dump probe scripts (.mjs/.cjs) and payload/diff scratch (.json/.diff/...) here.
+/_*.mjs
+/_*.cjs
+/_*.json
+/_*.diff
+/_*.txt
+/_*.sh
+/_*.sql
+
+# .claude/ scratch probes + ad-hoc dumps (underscore-prefixed). 0 tracked .claude/_*.
+.claude/_*
+# Sweep throttle marker written by the SessionStart hook.
+.claude/.scratch-sweep-last
+
+# Timestamped / working backup dirs (git already provides versioning).
+.claude/handoff-backup-*/
+/.coord-sync-backup/
+/.pre-pull-bak/
+
+# Loose agent runtime-state JSON written at the repo root (per-tick, rewritten in place).
+/.adam-chairman-decisions.json
+/.adam-email-last.json
+/.coord-email-last.json
+/.coord-review-last.json
+/docmon-report.json
+
+# Monitor PID files (scoped — do NOT blanket-ignore *.pid; .leo-dashboard.pid is tracked).
+/.monitor-*.pid
+
+# NOT ignored on purpose: scripts/one-off/_*, .rca/_*, .prd-payloads/, docs/plans/ — each
+# holds tracked _-prefixed deliverables / plan docs where the prefix does NOT distinguish
+# junk from real work. Triage those by hand (mirrored in the sweep script's exclude-list).
+
 # Adam self-assessment turn-counter state (SD-LEO-INFRA-ADAM-SELF-ASSESSMENT-001)
 .adam-self-assessment-state.json
 
