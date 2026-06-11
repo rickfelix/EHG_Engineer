@@ -93,24 +93,70 @@ const CONFIG = {
 };
 
 /**
- * Check if a pattern already has an associated SD
+ * Check if a pattern already has an associated SD.
+ *
+ * QF-20260611-851: cancelled SDs now COUNT as existing unless the pattern has
+ * genuinely NEW occurrences after the cancellation. Pre-fix, `.neq('status',
+ * 'cancelled')` made a cancelled SD-PAT-FIX draft invisible here, so the
+ * generator re-created the same SD on its next cycle — a bulk triage cancelled
+ * 14 drafts at 13:31Z 2026-06-11 and 10 regenerated within ~25 minutes.
+ * Disposition semantics: pattern.updated_at <= SD cancellation time means no
+ * new evidence since a human said no — skip and stamp
+ * issue_patterns.metadata.disposition (auditable, implicit backfill). New
+ * occurrences AFTER the cancellation re-escalate legitimately.
+ *
+ * @param {string} patternId
+ * @param {object|null} pattern - the issue_patterns row (recency vs cancellation)
  */
-async function hasExistingSD(patternId) {
-  // Check for existing SD with pattern ID in title or description
+export async function hasExistingSD(patternId, pattern = null) {
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, status')
+    .select('id, sd_key, status, updated_at')
     .or(`title.ilike.%${patternId}%,description.ilike.%${patternId}%`)
     .neq('status', 'completed')
-    .neq('status', 'cancelled')
-    .limit(1);
+    .order('updated_at', { ascending: false })
+    .limit(5);
 
   if (error) {
     console.error(`  Error checking existing SD: ${error.message}`);
     return false;
   }
 
-  return data && data.length > 0 ? data[0] : null;
+  const rows = data || [];
+  const live = rows.find(r => r.status !== 'cancelled');
+  if (live) return live;
+
+  const cancelled = rows.find(r => r.status === 'cancelled');
+  if (cancelled) {
+    const cancelledAt = cancelled.updated_at ? new Date(cancelled.updated_at) : null;
+    const lastActivity = pattern?.updated_at ? new Date(pattern.updated_at) : null;
+    const hasNewOccurrences = cancelledAt && lastActivity && lastActivity > cancelledAt;
+    if (!hasNewOccurrences) {
+      // Stamp the disposition on the pattern (fail-soft: a stamp failure must
+      // not break the alert cycle).
+      try {
+        await supabase
+          .from('issue_patterns')
+          .update({
+            metadata: {
+              ...(pattern?.metadata || {}),
+              disposition: {
+                kind: 'sd_cancelled_no_new_occurrences',
+                cancelled_sd: cancelled.sd_key,
+                cancelled_at: cancelled.updated_at,
+                stamped_at: new Date().toISOString(),
+                stamped_by: 'pattern-alert-sd-creator (QF-20260611-851)'
+              }
+            }
+          })
+          .eq('pattern_id', patternId);
+      } catch { /* fail-soft */ }
+      return { ...cancelled, disposition: 'cancelled_no_new_occurrences' };
+    }
+    console.log(`  Prior SD ${cancelled.sd_key} cancelled but pattern has NEW occurrences since — regeneration allowed`);
+  }
+
+  return null;
 }
 
 /**
@@ -324,7 +370,7 @@ ${suggestedTeam}
  */
 export async function createSDForPattern(pattern) {
   // Check for existing SD first
-  const existingSD = await hasExistingSD(pattern.pattern_id);
+  const existingSD = await hasExistingSD(pattern.pattern_id, pattern);
   if (existingSD) {
     console.log(`  SD already exists: ${existingSD.sd_key} (${existingSD.status})`);
     return { skipped: true, existing: existingSD };
