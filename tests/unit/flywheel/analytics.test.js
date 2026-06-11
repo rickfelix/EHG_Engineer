@@ -96,7 +96,9 @@ describe.skipIf(!HAS_REAL_DB)('Flywheel Analytics - Database Views', () => {
   });
 });
 
-describe('Flywheel Analytics - Module Functions', () => {
+// Sentinel-aware DB gate (SD-LEO-INFRA-ENFORCE-UNIT-TIER-001): every module
+// function issues a live query, so this suite must also skip without a real DB.
+describe.skipIf(!HAS_REAL_DB)('Flywheel Analytics - Module Functions', () => {
   // Import the actual module functions
   let analytics;
 
