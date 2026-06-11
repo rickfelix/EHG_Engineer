@@ -93,3 +93,42 @@ node scripts/coordinator-ack-adam.cjs --advisory <id> --reply "sourcing now" # r
 # Adam
 node scripts/adam-advisory.cjs replies                                       # drains the reply
 ```
+
+## Receipt contract — ALL directive kinds (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001)
+
+The two-stage ACK above is not advisory-specific. For **every** directive kind
+(`coordinator_request`, `work_assignment`, `adam_action_required`, `coordinator_reminder`,
+`coordinator_to_adam` — the canonical list is `DIRECTIVE_KINDS` in
+`lib/fleet/worker-status.cjs`, **import it, never duplicate it**), in **both** directions:
+
+| Marker | Meaning | Who stamps it |
+|--------|---------|---------------|
+| `read_at` | **DELIVERED** — a render/poll surfaced the row to the target | any poll/render (inbox hook, dashboard) |
+| `acknowledged_at` / `payload.actioned_at` | **ACTIONED** — the agent genuinely processed it | ONLY the agent that actioned the row |
+
+No poll/drain path may ever stamp `acknowledged_at` on a directive kind (FR-3 —
+the inbox hook's kind-allowlist enforces this; the sender-type allowlist that auto-acked
+5 chairman directives unseen is dead, per QF-20260610-545).
+
+**Sender-side receipts:** an outbound row unread (`read_at IS NULL`) at a **live** target
+for 10+ minutes is UNDELIVERED — surfaced by `node scripts/fleet-dashboard.cjs inbox`
+('UNDELIVERED OUTBOUND') and the hourly review. Pure selector:
+`lib/coordinator/receipts.cjs findUndelivered`.
+
+## Correlation echo — replies carry BOTH keys
+
+Every reply writer echoes the request's correlation under **both** `payload.reply_to`
+(canonical) **and** `payload.correlation_id`, and await matchers accept either key
+(forgiving matcher, kind-filtered). Adam answers an inbound `coordinator_request` with
+`node scripts/adam-advisory.cjs send "<answer>" --reply-to <correlation_or_row_id>` —
+the echo overrides the advisory's fresh correlation. Live evidence behind this rule:
+158/166 `coordinator_reply` rows in one week lacked `reply_to` (hand-rolled inserts),
+so awaiting senders never matched them.
+
+## Dead letters — never silently deleted
+
+The stale-session sweep no longer hard-DELETEs unread rows targeting dead/gone sessions.
+It stamps `payload.dead_letter=true` (+ `dead_letter_at`, `dead_letter_reason`,
+`original_target`), stamps `read_at` (drain marker), and backfills `expires_at = now+7d`
+when NULL so the audit trail is reaped after a week. Surfaced by the coordinator inbox
+section 'DEAD-LETTERED (24h)' — re-send to the successor session if still relevant.

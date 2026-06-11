@@ -1555,37 +1555,37 @@ async function main() {
   // Clean up expired messages first
   try { await supabase.rpc('cleanup_expired_coordination'); } catch { /* ignore */ }
 
-  // FIX #3: Clean up coordination messages targeting dead/stale sessions
-  // These accumulate because target sessions exit without reading them
-  // QF-20260426-SWEEP-MSG-NUKE: previously also deleted unexpired broadcasts
-  // (target_session='broadcast' is never in classified-set) and COACHING messages
-  // to STALE-but-claim-holding sessions (workers read on next sd-start chained run).
-  // Now: only delete unread messages where (a) target is a real session_id (UUID-shaped),
-  // (b) target is DEAD (claim released), and (c) message is past its expires_at if set.
+  // FIX #3 — REWORKED by FR-4 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): coordination
+  // messages targeting dead/gone sessions are DEAD-LETTERED, never hard-DELETEd. The old
+  // delete made undelivered traffic vanish tracelessly (the 'CLEANUP: deleted N unread...'
+  // path). Now (mirroring the :WORK_ASSIGNMENT read_at-drain precedent below): stamp
+  // payload.dead_letter=true + dead_letter_at/reason/original_target, stamp read_at (drops
+  // the row out of every unread selector), and backfill expires_at=now+7d when NULL so the
+  // cleanup_expired_coordination RPC reaps the audit trail after a week. Surfaced by the
+  // coordinator inbox 'DEAD-LETTERED (24h)' section (scripts/fleet-dashboard.cjs).
+  // Eligibility is unchanged from QF-20260426-SWEEP-MSG-NUKE: (a) UUID-shaped target,
+  // (b) target DEAD or gone, (c) past expires_at if set. Selection is the pure
+  // planDeadLetters() (exported for tests).
   const allSessionIds = new Set(classified.map(s => s.session_id));
   const deadIds = new Set(classified.filter(s => s.status === 'DEAD').map(s => s.session_id));
   const nowMs = Date.now();
-  const isUuidLike = (s) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(s);
-  const isExpired = (m) => !m.expires_at || new Date(m.expires_at).getTime() <= nowMs;
 
   const { data: unreadMsgs } = await supabase
     .from('session_coordination')
-    .select('id, target_session, message_type, expires_at')
+    .select('id, target_session, message_type, payload, expires_at')
     .is('acknowledged_at', null)
     .is('read_at', null);
 
-  const allDeadMsgIds = (unreadMsgs || [])
-    .filter(m => isUuidLike(m.target_session))
-    .filter(m => !allSessionIds.has(m.target_session) || deadIds.has(m.target_session))
-    .filter(isExpired)
-    .map(m => m.id);
-  if (allDeadMsgIds.length > 0) {
-    // Delete in batches of 50
-    for (let i = 0; i < allDeadMsgIds.length; i += 50) {
-      const batch = allDeadMsgIds.slice(i, i + 50);
-      await supabase.from('session_coordination').delete().in('id', batch);
+  const deadLetterPlan = planDeadLetters(unreadMsgs, { allSessionIds, deadIds }, nowMs);
+  if (deadLetterPlan.length > 0) {
+    // Per-row UPDATE (payload merge differs per row); chunked pacing of 50 retained.
+    for (let i = 0; i < deadLetterPlan.length; i += 50) {
+      const batch = deadLetterPlan.slice(i, i + 50);
+      for (const dl of batch) {
+        await supabase.from('session_coordination').update(dl.update).eq('id', dl.id);
+      }
     }
-    actions.push('CLEANUP: deleted ' + allDeadMsgIds.length + ' unread coordination messages targeting dead/gone sessions');
+    actions.push('CLEANUP: dead-lettered ' + deadLetterPlan.length + ' unread coordination messages targeting dead/gone sessions (payload.dead_letter=true, audit retained)');
   }
 
   // FR-1 (SD-LEO-FIX-STALE-SESSION-SWEEP-001): drain WORK_ASSIGNMENT rows whose target SD/QF has
@@ -2105,6 +2105,42 @@ async function main() {
   return { actions, warnings, collisions: collisionsDetected };
 }
 
+// FR-4 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001) — pure dead-letter planner.
+// Replaces the hard-DELETE of unread rows targeting dead/gone sessions: the same
+// eligibility predicates (UUID-shaped target; target DEAD or absent from the classified
+// set; past expires_at when set — a NULL expires_at counts as eligible, matching the old
+// behavior), but the output is an UPDATE plan, never a delete:
+//   read_at        = drain marker (drops out of every unread selector; audit preserved)
+//   payload        = merged with { dead_letter, dead_letter_at, dead_letter_reason,
+//                    original_target } so the coordinator audit/inbox can surface + re-send
+//   expires_at     = backfilled to now+DEAD_LETTER_TTL_MS ONLY when NULL, so the
+//                    cleanup_expired_coordination RPC reaps the audit trail after 7d
+// Idempotent: rows already stamped payload.dead_letter are excluded. ZERO IO.
+const DEAD_LETTER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+function planDeadLetters(unreadMsgs, { allSessionIds, deadIds }, nowMs) {
+  const isUuidLike = (s) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(s);
+  const nowIso = new Date(nowMs).toISOString();
+  return (unreadMsgs || [])
+    .filter(m => isUuidLike(m.target_session))
+    .filter(m => !allSessionIds.has(m.target_session) || deadIds.has(m.target_session))
+    .filter(m => !m.expires_at || new Date(m.expires_at).getTime() <= nowMs)
+    .filter(m => !(m.payload && m.payload.dead_letter === true))
+    .map(m => ({
+      id: m.id,
+      update: {
+        read_at: nowIso,
+        ...(m.expires_at ? {} : { expires_at: new Date(nowMs + DEAD_LETTER_TTL_MS).toISOString() }),
+        payload: {
+          ...(m.payload || {}),
+          dead_letter: true,
+          dead_letter_at: nowIso,
+          dead_letter_reason: 'target_dead',
+          original_target: m.target_session,
+        },
+      },
+    }));
+}
+
 // SD-FDBK-INFRA-CROSS-SESSION-CONFLICTION-001 / FR-2: guard auto-run so the pure
 // collision functions can be imported by unit tests without main() hitting the DB.
 if (require.main === module) {
@@ -2113,6 +2149,10 @@ if (require.main === module) {
     process.exit(1);
   });
 }
+
+// FR-4 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001) exports — pure dead-letter planner.
+module.exports.planDeadLetters = planDeadLetters;
+module.exports.DEAD_LETTER_TTL_MS = DEAD_LETTER_TTL_MS;
 
 // FR-2 exports — pure collision detector + intent loader (unit-testable in isolation).
 module.exports.detectCrossSessionCollisions = detectCrossSessionCollisions;

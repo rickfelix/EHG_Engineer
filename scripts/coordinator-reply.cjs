@@ -25,10 +25,15 @@ const { redact, BODY_HARD_CAP } = require('./worker-signal.cjs');
 const REPLY_DEFAULT_TTL_MS = 60 * 60_000;
 
 // Pure + exported (TS): the exact reply payload written to session_coordination.payload.
+// FR-1 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): echo the correlation under BOTH keys
+// (reply_to AND correlation_id) so any await matcher — legacy (reply_to-only) or forgiving
+// (either key) — pairs the reply with its request. Live 7d evidence: 158/166
+// coordinator_reply rows lacked reply_to and were never matched by an await.
 function buildReplyPayload({ correlationId, body, coordinatorSession }) {
   const payload = {
     kind: 'coordinator_reply',
     reply_to: correlationId,
+    correlation_id: correlationId,
     sender: coordinatorSession || null
   };
   if (body) payload.body = redact(String(body)).slice(0, BODY_HARD_CAP);

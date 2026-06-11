@@ -137,9 +137,20 @@ async function registerRollCall(sb, { sessionId, coordinatorId, callsign, mySd }
   }
 }
 
-async function ackMessage(sb, id) {
+async function ackMessage(sb, id, opts = {}) {
   try {
     const now = new Date().toISOString();
+    // FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): an ADAM-role session must never
+    // auto-ack a DIRECTIVE kind from the checkin path — stamp read_at only (DELIVERED) and
+    // leave acknowledged_at for genuine Adam processing. Kind-allowlist (imported
+    // ws.DIRECTIVE_KINDS, never duplicated) per the QF-20260610-545 lesson; WORK_ASSIGNMENT
+    // message_type counts as a directive even without payload.kind.
+    const { role = null, kind = null, messageType = null } = opts;
+    const isDirective = (kind && ws.DIRECTIVE_KINDS.includes(kind)) || messageType === 'WORK_ASSIGNMENT';
+    if (role === 'adam' && isDirective) {
+      await sb.from('session_coordination').update({ read_at: now }).eq('id', id);
+      return;
+    }
     await sb.from('session_coordination').update({ read_at: now, acknowledged_at: now }).eq('id', id);
   } catch { /* best-effort */ }
 }
@@ -600,12 +611,15 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   try { coordinatorId = await getCoordinator(sb); } catch { coordinatorId = null; }
 
   // 2. confirm callsign + current claim
-  let callsign = null, mySd = null;
+  let callsign = null, mySd = null, sessionRole = null;
   try {
     const { data } = await sb.from('claude_sessions').select('metadata, sd_key').eq('session_id', sessionId).maybeSingle();
     if (data) {
       callsign = (data.metadata && (data.metadata.fleet_identity?.callsign || data.metadata.callsign)) || null;
       mySd = data.sd_key || null;
+      // FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): role feeds the ackMessage
+      // Adam-directive guard (Adam sessions never auto-ack directive kinds via checkin).
+      sessionRole = (data.metadata && data.metadata.role) || null;
     }
   } catch { /* fail-open */ }
 
@@ -665,12 +679,12 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         if (tgt && ['completed', 'cancelled', 'deferred'].includes(tgt.status)) terminalStatus = tgt.status;
       } catch { /* fail-open: leave terminalStatus null, attempt the claim below */ }
       if (terminalStatus) {
-        await ackMessage(sb, assignment.id);
+        await ackMessage(sb, assignment.id, { role: sessionRole, kind: assignment.payload?.kind, messageType: assignment.message_type });
         base.stale_assignment_purged = { sd: sdKey, status: terminalStatus };
       } else {
         const claimed = await tryClaim(sb, sdKey, sessionId);
         if (claimed.ok) {
-          await ackMessage(sb, assignment.id);
+          await ackMessage(sb, assignment.id, { role: sessionRole, kind: assignment.payload?.kind, messageType: assignment.message_type });
           return { ...base, action: 'claimed_assignment', sd: sdKey, message: `Claimed assigned ${sdKey} via claim_sd. Run: node scripts/sd-start.js ${sdKey}` };
         }
         // could not claim the assigned SD -> fall through to self-claim
@@ -777,7 +791,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, ackMessage, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
