@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-04-26
+tags: [documentation, architecture]
+---
+
 # LLM Stream-Progress Watchdog
 
 **SD:** SD-LEO-INFRA-STAGE-ARCHETYPE-GENERATION-001 — ARM A

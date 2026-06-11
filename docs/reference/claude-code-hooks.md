@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -424,7 +424,7 @@ process.exit(result ? 0 : 2);
 
 ### UserPromptSubmit Hook: Semantic Router
 
-**Location**: `scripts/hooks/semantic-router-hook.js`
+**Location**: `scripts/hooks/semantic-router-hook.js` (retired — script removed and no longer registered in `.claude/settings.json`)
 **Purpose**: Provides semantic sub-agent recommendations based on user prompt analysis
 **Exit Behavior**: Exit 0 always (non-blocking, advisory only)
 **Timeout**: 1 second (fast semantic routing)
@@ -479,7 +479,7 @@ process.stdin.on('readable', () => {
 
 **When It Runs**: Every UserPromptSubmit (before session-cleanup.js)
 
-**Documentation**: `docs/01_architecture/semantic-routing-architecture.md`
+**Documentation**: `docs/04_features/semantic-routing-system.md`
 
 **Related SD**: SD-LEO-INFRA-INTEGRATE-SEMANTIC-ROUTER-001
 
@@ -1239,8 +1239,7 @@ const validationNeeded = changedFiles.some(needsValidation);
 ## Related Documentation
 
 - **Stop Hook Operations**: `docs/06_deployment/stop-hook-operations.md`
-- **Hook Troubleshooting**: `docs/troubleshooting/fix-hook-errors.md`
-- **Claude Code Settings**: `docs/reference/claude-code-settings.md`
+- **Hook Troubleshooting**: `docs/reference/troubleshooting/fix-hook-errors.md`
 - **LEO Protocol Enforcement**: `docs/03_protocols_and_standards/leo-v4.3-subagent-enforcement.md`
 
 ## Version History

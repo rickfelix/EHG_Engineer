@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [reference]
+---
+
 # Always / Ask First / Never — Vision Document Tri-Tier Boundaries
 
 **Source**: SD-LEO-INFRA-LEO-UPSTREAM-DECISION-001 (Commit 5 of 5: B1)

@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 2.1.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-04-25
 tags: [guide, auto-generated]
 ---

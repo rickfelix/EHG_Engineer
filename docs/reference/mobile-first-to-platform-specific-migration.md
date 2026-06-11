@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [reference]
+---
+
 # Migration Path: Option C → Option B (Mobile-Only to Platform-Specific Templates)
 
 ## Context
@@ -6,9 +15,9 @@ Board decision (2026-04-14, brainstorm b7df7fea): Deploy Option C (mobile-first,
 
 **Current State (Option C):**
 - Single template path: Expo for mobile/both, React/Next.js for web
-- `buildReplitInstructions()` in replit-prompt-formatter.js handles both
-- `detectStack()` in replit-format-strategies.js routes based on `targetPlatform`
-- Security defaults shared via `mobile-security-defaults.js`
+- `buildReplitInstructions()` in `lib/eva/bridge/replit-prompt-formatter.js` handles both
+- `detectStack()` in `lib/eva/bridge/replit-format-strategies.js` routes based on `targetPlatform`
+- Security defaults shared via `lib/eva/bridge/mobile-security-defaults.js`
 
 **Target State (Option B):**
 - Separate template modules per platform for deeper optimization
@@ -49,7 +58,7 @@ lib/eva/bridge/
 
 ### Step 3: Platform-Specific Repo Seeder Docs (~60 LOC)
 
-Enhance `replit-repo-seeder.js` with platform-specific doc generators:
+Enhance `lib/eva/bridge/replit-repo-seeder.js` with platform-specific doc generators:
 - Mobile: `EXPO_SETUP.md` (app.json config, EAS Build, Expo Go testing)
 - Web: `DEPLOYMENT.md` (hosting setup, SSR config, SEO checklist)
 - Both: include both docs

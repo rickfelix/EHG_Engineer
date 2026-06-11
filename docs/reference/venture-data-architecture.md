@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-28
+tags: [reference]
+---
+
 # Venture Data Architecture (two-layer)
 
 > **Standard for ventures 2..N**, established during the CronGenius pilot. Companion to the [Venture Pipeline Playbook](./venture-pipeline-playbook.md) (this expands its §6 telemetry contract).

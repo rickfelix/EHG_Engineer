@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-3-the-identity]
+---
+
 # Phase 2 Consensus — Group 3: THE_IDENTITY (Stages 10-12)
 
 > Synthesized from OpenAI, Gemini, and Claude opinions, adjusted by ground-truth validation. See `ground-truth.md` for detailed dispute resolution.

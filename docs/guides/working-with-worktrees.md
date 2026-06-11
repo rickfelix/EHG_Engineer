@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -417,6 +417,6 @@ ls .worktrees/  # Shows SD keys
 
 ## Related Documentation
 
-- **Architecture**: `docs/architecture/worktree-first-isolation-integration.md`
+- **Architecture**: `docs/01_architecture/worktree-first-isolation-integration.md`
 - **Worktree Manager API**: `lib/worktree-manager.js`
-- **Handoff Flow**: `docs/reference/handoff-architecture.md`
+- **Handoff Flow**: `docs/leo/handoffs/handoff-system-guide.md`

@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, assets, ui-reference]
+---
+
 # UI Reference Images
 
 This directory contains reference images for UI components and layouts used in the EHG Glass Cockpit interface.

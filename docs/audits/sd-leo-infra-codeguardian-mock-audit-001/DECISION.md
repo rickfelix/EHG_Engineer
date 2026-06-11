@@ -1,3 +1,12 @@
+---
+category: analysis
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-02
+tags: [analysis, audits, sd-leo-infra-codeguardian-mock-audit-001]
+---
+
 # Disposition Decision: services/codeguardian-mock/
 
 **SD**: SD-LEO-INFRA-CODEGUARDIAN-MOCK-AUDIT-001

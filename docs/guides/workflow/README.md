@@ -1,12 +1,22 @@
+---
+category: guide
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [guide, guides, workflow]
+---
+
 # EHG Venture Workflow Documentation
 
 ## Overview
-Complete documentation for the EHG 40-stage venture workflow, from ideation to exit.
+Complete documentation for the EHG venture workflow, from ideation to exit. The original 40-stage workflow is retired; the live model is the 25-stage workflow defined in `stages_v2.yaml`. References to stages above 25 in this directory describe the retired 40-stage workflow.
 
 ## Directory Structure
 
 ### Core Documentation
-- `stages.yaml` - Canonical definition of all 40 stages (single source of truth)
+- `stages_v2.yaml` - Canonical definition of the live 25-stage model (single source of truth)
+- `stages.yaml` - Archived 40-stage configuration (deprecated; retained for history)
 - `sop-index.md` - Index of all Standard Operating Procedures
 - `sop/` - Detailed SOPs for each stage
 
@@ -42,7 +52,7 @@ Complete documentation for the EHG 40-stage venture workflow, from ideation to e
 ## Key Documents
 
 ### Essential Reading
-1. [Stages Definition](stages.yaml) - The canonical source
+1. [Stages Definition](stages_v2.yaml) - The canonical source (25-stage model)
 2. [Workflow Critique](critique/overview.md) - Analysis and recommendations
 4. [SOP Index](sop-index.md) - All operating procedures
 
@@ -51,7 +61,7 @@ Complete documentation for the EHG 40-stage venture workflow, from ideation to e
 2. [Backlog](backlog/backlog.yaml) - Prioritized work items
 3. [Reference Research](../../reference/research/) - Deep-dive analysis templates
 
-## Workflow Phases
+## Workflow Phases (retired 40-stage workflow)
 
 ### Phase 1: IDEATION (Stages 1-10)
 Focus: Idea validation and feasibility assessment
@@ -73,17 +83,17 @@ Owner Mix: PLAN, EXEC, LEAD, EVA
 Focus: Growth, optimization, and exit
 Owner Mix: LEAD, PLAN, Chairman
 
-## Key Metrics
-- **Total Stages**: 40
+## Key Metrics (retired 40-stage workflow)
+- **Total Stages**: 40 (retired; live model is 25 stages)
 - **Decision Gates**: 4 formal, 15+ informal
 - **Automation Potential**: 50% fully automatable
 - **Typical Duration**: 6-12 months
 - **Success Predictability**: 60% by stage 10
 
 ## Tools & Scripts
-- `validate-stages.js` - Validate workflow consistency
-- `generate-mermaid.js` - Regenerate diagrams from stages.yaml
-- `generate-workflow-docs.js` - Regenerate all documentation
+- `scripts/archive/one-time/validate-stages.js` - Validate workflow consistency (archived)
+- `generate-mermaid.js` (retired) - Regenerated diagrams from stages.yaml
+- `scripts/generate-workflow-docs.js` - Regenerate all documentation
 
 ## Contributing
 1. All changes start with updating `stages.yaml`

@@ -264,14 +264,18 @@ async function resolveSessionClaimedSdKey(sessionId) {
 // Used only by the AskUserQuestion guard, so the lookup happens at most once per
 // AskUserQuestion call (a rare tool), never on the hot path of other tools.
 const { isBlockableWorker, ASKUSER_DENY_MESSAGE } = require('./askuser-worker-policy.cjs');
-async function resolveSessionMetadata(sessionId) {
+// Resolves the calling session's { metadata, loopState } for the AskUserQuestion guard.
+// loop_state is a TOP-LEVEL claude_sessions column (active|awaiting_tick|exited|unknown) — it is
+// the autonomy signal that catches a /loop worker the coordinator has not yet callsigned.
+// Returns { metadata:null, loopState:null } on ANY error → fail-open ALLOW (never wedge a tool).
+async function resolveSessionContext(sessionId) {
   try {
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey || !sessionId || sessionId === 'unknown') return null;
+    if (!supabaseUrl || !serviceKey || !sessionId || sessionId === 'unknown') return { metadata: null, loopState: null };
     const url = supabaseUrl +
       '/rest/v1/claude_sessions?session_id=eq.' +
-      encodeURIComponent(sessionId) + '&select=metadata&limit=1';
+      encodeURIComponent(sessionId) + '&select=metadata,loop_state&limit=1';
     // clearTimeout in finally: when fetch wins the race, the timeout promise would
     // otherwise stay pending and reject at 1500ms with NO handler → an unhandled
     // rejection that crashes node on the fall-through (non-block) path. Clearing the
@@ -281,12 +285,15 @@ async function resolveSessionMetadata(sessionId) {
       fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } }),
       new Promise((_, reject) => { _timer = setTimeout(() => reject(new Error('timeout')), 1500); }),
     ]).finally(() => clearTimeout(_timer));
-    if (!resp || !resp.ok) return null;
+    if (!resp || !resp.ok) return { metadata: null, loopState: null };
     const rows = await resp.json();
     const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-    return row && row.metadata && typeof row.metadata === 'object' ? row.metadata : null;
+    if (!row) return { metadata: null, loopState: null };
+    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : null;
+    const loopState = typeof row.loop_state === 'string' ? row.loop_state : null;
+    return { metadata, loopState };
   } catch {
-    return null; // fail-open: a resolution error must NEVER block a tool call
+    return { metadata: null, loopState: null }; // fail-open: a resolution error must NEVER block a tool call
   }
 }
 
@@ -560,8 +567,8 @@ async function main() {
   // session are EXEMPT. The metadata lookup runs ONLY for this (rare) tool, and fail-OPEN
   // (any resolution error → meta=null → not blockable) so it can never wedge a tool call.
   if (TOOL_NAME === 'AskUserQuestion') {
-    const meta = await resolveSessionMetadata(_SESSION_ID);
-    if (isBlockableWorker(meta)) {
+    const { metadata: meta, loopState } = await resolveSessionContext(_SESSION_ID);
+    if (isBlockableWorker(meta, loopState)) {
       const auditPromise = auditPermissionDecision(
         _SESSION_ID, TOOL_NAME, 'ENF-NO-ASKUSER-WORKER',
         'AskUserQuestion blocked for autonomous fleet worker', 'block',
@@ -572,7 +579,7 @@ async function main() {
     }
     // EXEMPT (coordinator/Adam/operator/unresolved): allow. No other enforcement
     // applies to AskUserQuestion, so exit now — but drain undici FIRST. The
-    // resolveSessionMetadata fetch above leaves a keep-alive socket whose libuv
+    // resolveSessionContext fetch above leaves a keep-alive socket whose libuv
     // async-handle is still closing; a raw process.exit here races it and trips
     // src\win\async.c:76 → STATUS_STACK_BUFFER_OVERRUN (verified: bare exit/fall-
     // through both crashed exempt sessions; draining the pool fixes it).
@@ -1235,18 +1242,20 @@ async function main() {
   // module-level mocking does not apply).
   if (TOOL_NAME === 'Bash') {
     const cmd = (input && input.command || '').trim();
-    // QF-20260525-345 (RCA 6188492f): match `git push … --force` only when it is the
-    // OPERATIVE command — at start-of-command or after a true shell separator
-    // (; | & ( newline, && ||) — NOT after a bare space or a backtick. The previous
-    // boundary class `[\s;&|`]` admitted a space AND a backtick, so any command that
-    // merely MENTIONED the phrase inside a quoted argument false-positived: gh pr/issue
-    // `--body "… `git push --force-with-lease` …"` (markdown code-span → backtick),
-    // `git commit -m "… git push --force …"`, `echo`, `grep`. Same class QF-484 fixed
-    // for ENF-SD-CREATE-SKILL. Dropping backtick forgoes catching a `` `git push --force` ``
-    // command-substitution — not a real force-push vector (substitution captures stdout);
-    // all realistic vectors (bare, ; && || | & (, leading-ws, flag-after-positional) still block.
-    const FORCE_PUSH_RE = /(?:^|[;&|(\n]|&&|\|\|)\s*git\s+push\b[^\n]*--force\b/;
-    if (FORCE_PUSH_RE.test(cmd) && !/--help/.test(cmd)) {
+    // QF-20260525-345 (RCA 6188492f) matched `git push … --force` only at start-of-command
+    // or after a true shell separator (incl. newline — deliberately KEPT so an operative
+    // push on its own line of a multi-line block still blocks). QF-20260610-541 (feedback
+    // 00934869): that newline made a commit-message/heredoc body LINE starting `git push
+    // --force` look operative too. lib/force-push-operative.cjs strips documentary content
+    // (-m/-F/-c quoted strings + heredoc bodies not fed to a shell) BEFORE the same match.
+    // Fail-open to the verbatim legacy regex if the lib errs — the gate stays intact.
+    let forcePushDetected;
+    try {
+      forcePushDetected = require('./lib/force-push-operative.cjs').isOperativeForcePush(cmd);
+    } catch {
+      forcePushDetected = /(?:^|[;&|(\n]|&&|\|\|)\s*git\s+push\b[^\n]*--force\b/.test(cmd);
+    }
+    if (forcePushDetected && !/--help/.test(cmd)) {
       try {
         const { execSync } = require('child_process');
         const HAS_WITH_LEASE = /--force-with-lease\b/.test(cmd);

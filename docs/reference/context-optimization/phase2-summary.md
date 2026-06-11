@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -279,6 +279,7 @@ cp .claude/backups/2025-10-12/*.md .claude/agents/
 3. **Monitor Agent Usage**
    ```bash
    # In 30 days, check which agents were never used
+   # (scripts/track-agent-usage.js is retired — no longer in the repo)
    node scripts/track-agent-usage.js
 
    # Consider archiving additional agents with 0 invocations

@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -246,7 +246,7 @@ CHECK (
 
 ### Fix 5: Data Healing
 
-**File Created**: `scripts/heal-empty-success-metrics.js`
+**File Created**: `scripts/archive/one-time/heal-empty-success-metrics.js`
 
 **Features**:
 - GPT-powered intelligent metric generation
@@ -257,7 +257,7 @@ CHECK (
 
 **Execution**:
 ```bash
-node scripts/heal-empty-success-metrics.js
+node scripts/archive/one-time/heal-empty-success-metrics.js
 ```
 
 **Results**: Successfully healed 8 SDs with context-appropriate metrics
@@ -361,7 +361,7 @@ Watch for these indicators:
 - **Pattern**: [PAT-AUTOPROCEED-EMPTY-ARRAY](patterns/pat-autoproceed-empty-array.md)
 - **Session Gate**: [session-start-gate-implementation.md](./session-start-gate-implementation.md)
 - **Migration**: database/migrations/20260130_add_success_metrics_constraint.sql
-- **Data Healing Script**: scripts/heal-empty-success-metrics.js
+- **Data Healing Script**: scripts/archive/one-time/heal-empty-success-metrics.js
 - **PR**: https://github.com/rickfelix/EHG_Engineer/pull/688
 
 ## Contributors

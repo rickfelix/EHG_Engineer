@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -37,4 +37,4 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 ---
 
 *This is reference documentation, load on-demand only*
-*Generated from: scripts/generate-claude-md-from-db-v3.js*
+*Generated from: scripts/generate-claude-md-from-db-v3.js (now archived at scripts/archive/one-time/; current generator: scripts/generate-claude-md-from-db.js)*

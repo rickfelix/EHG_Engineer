@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-05
+tags: [documentation, ops]
+---
+
 # LLM Cost Governance (Gemini / LLM factory)
 
 **Origin:** June 2026 cost incident — `gemini-2.5-pro` gate traffic via `lib/llm/client-factory.js`

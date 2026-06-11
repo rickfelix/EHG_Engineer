@@ -131,7 +131,9 @@ describe('recordGateResult evidence params (FR-1)', () => {
     await recordGateResult(api, { ventureId: 'v1', stageNumber: 3, gateType: 'kill', passed: true });
     const up = writes.find(w => w.op === 'upsert');
     expect(up.payload).not.toHaveProperty('gate_criteria');
-    expect(up.payload).not.toHaveProperty('evaluated_by');
+    // SD-LEO-FIX-MAKE-VENTURE-STAGE-001 (merged from main): evaluated_by is now
+    // always stamped — fallback chain ends at 'eva-orchestrator', never NULL.
+    expect(up.payload.evaluated_by).toBe('eva-orchestrator');
   });
 });
 

@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-4-the-blueprint]
+---
+
 # Phase 2 Consensus — Group 4: THE_BLUEPRINT (Stages 13-16)
 
 > Synthesized from OpenAI, Gemini, and Claude opinions, adjusted by ground-truth validation. Claude had direct codebase access; OpenAI and Gemini evaluated from code excerpts in the prompt.

@@ -158,10 +158,10 @@ Level 0: SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001 (Root)
 
 | Document | Location |
 |----------|----------|
-| 25-Stage Overview | `docs/workflow/venture-lifecycle-overview.md` |
-| Design Analysis | `eva-orchestrator-design-analysis.md` |
-| Database Analysis | `docs/analysis/SD-LEO-FEAT-EVA-ORCHESTRATOR-001-DATABASE-ANALYSIS.md` |
-| SD Hierarchy Migration | `database/migrations/20260207_cli_venture_lifecycle_sd_hierarchy_SUMMARY.md` |
+| 25-Stage Overview | `docs/guides/workflow/venture-lifecycle-overview.md` |
+| Design Analysis | `eva-orchestrator-design-analysis.json` (repo root) |
+| Database Analysis | `docs/analysis/SD-LEO-FEAT-EVA-ORCHESTRATOR-001-DATABASE-ANALYSIS.md` (retired — never published) |
+| SD Hierarchy Migration | `database/migrations/20260207_cli_venture_lifecycle_sd_hierarchy.sql` |
 | LEO Protocol | `CLAUDE.md` (auto-generated from database) |
 
 ---

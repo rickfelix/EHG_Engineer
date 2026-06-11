@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-01
+tags: [reference]
+---
+
 # Protected Unit Suites
 
 Path-scoped, **blocking** CI gates for unit-test directories that are verified green,

@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, wireframes]
+---
+
 # Wireframe Specifications: 25 Stage View Templates
 
 > SD: SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-E

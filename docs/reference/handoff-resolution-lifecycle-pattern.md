@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -407,7 +407,7 @@ ORDER BY handoff_type;
 
 ### Unit Tests
 
-**File**: `tests/unit/transition-readiness-resolution.test.js`
+**File**: `tests/unit/transition-readiness-rejection.test.js` (the resolution-lifecycle cases live in the rejection test file; a separate `-resolution.test.js` was never shipped)
 
 ```javascript
 import { describe, it, expect, vi, beforeEach } from 'vitest';

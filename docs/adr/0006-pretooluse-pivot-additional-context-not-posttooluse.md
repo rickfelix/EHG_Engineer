@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: 78120845d46390136626ca03ad8ea6ef3ad424f0d9bb69cecdc552ae4dc56661 -->
 
 # ADR-0006: Hook injection uses PreToolUse additionalContext, not PostToolUse

@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -290,7 +290,7 @@ import('@supabase/supabase-js').then(({ createClient }) => {
 
 ## Related Documentation
 
-- **Architecture Guide**: `docs/reference/claude-md-router-architecture.md`
+- **Architecture Guide**: `docs/leo/operational/router-architecture.md`
 - **Section Mapping**: `scripts/section-file-mapping.json`
 - **Database Schema**: `database/schema/007_leo_protocol_schema_fixed.sql`
 - **Generator Script**: `scripts/generate-claude-md-from-db.js`

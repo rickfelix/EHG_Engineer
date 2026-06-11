@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: rickfelix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -127,7 +127,7 @@ No specific exit gates defined.
 
 - [stages_v2.yaml](../stages_v2.yaml#L799) - Stage 18 definition
 - [25-Stage Overview](../venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
-- [Stage 17: Environment & Agent Config](stage-17-environment-and-agent-config.md) - Previous stage
+- [Stage 17: Blueprint Review](stage-17-blueprint-review.md) - Previous stage
 - [Stage 19: Integration & API Layer](stage-19-integration-and-api-layer.md) - Next stage
 
 

@@ -1,3 +1,12 @@
+---
+category: vision
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-10
+tags: [vision]
+---
+
 # ExecHoldings Global (EHG) — Mission & Vision
 
 > Chairman-approved 2026-06-09. CANONICAL. Supersedes the divergent vision statements in strategic_vision (EHG-2028) and the companies record; the venture-lifecycle specification remains a SEPARATE operating document. The public/external narrative is maintained SEPARATELY as a go-to-market positioning note, not as part of the canonical vision.

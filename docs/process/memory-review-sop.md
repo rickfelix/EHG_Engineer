@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-16
+tags: [documentation, process]
+---
+
 # MEMORY.md 49-Line Review SOP
 
 **Owner**: @rickfelix

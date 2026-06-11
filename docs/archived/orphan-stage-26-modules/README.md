@@ -1,3 +1,12 @@
+---
+category: documentation
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-09
+tags: [documentation, archived, orphan-stage-26-modules]
+---
+
 # Orphan Stage 26 modules — archived
 
 **SD**: SD-LEO-FEAT-STAGE-GROWTH-PLAYBOOK-001 / FR-1

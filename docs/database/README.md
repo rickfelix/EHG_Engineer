@@ -1,3 +1,12 @@
+---
+category: database
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [database]
+---
+
 # Migration Documentation
 
 This directory contains documentation about data migrations, system migrations, and architectural transitions.

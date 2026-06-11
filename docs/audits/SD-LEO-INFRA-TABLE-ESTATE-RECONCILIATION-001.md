@@ -1,3 +1,12 @@
+---
+category: analysis
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-10
+tags: [analysis, audits]
+---
+
 # Table-Estate Reconciliation — Decision Matrix
 
 **SD:** SD-LEO-INFRA-TABLE-ESTATE-RECONCILIATION-001 · **Date:** 2026-06-10 · **Worker:** Bravo (155eb55f)

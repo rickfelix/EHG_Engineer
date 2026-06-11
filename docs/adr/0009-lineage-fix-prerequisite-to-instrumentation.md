@@ -1,3 +1,12 @@
+---
+category: architecture
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-05-14
+tags: [architecture, adr]
+---
+
 <!-- POCOCK-ADR-RPC-SIGNED: bda7ac2f8511ac8df0b589c662e4e6a9cf26abda644cbf23fcd0496e4076eb3d -->
 
 # ADR-0009: Lineage fix is prerequisite to deeper instrumentation

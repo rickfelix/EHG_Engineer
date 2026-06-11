@@ -809,3 +809,63 @@ describe('SD-LEO-INFRA-ASSIGN-FLEET-IDENTITY-001: runCheckin names a freshly-cla
     expect(r.callsign).toBeFalsy(); // idle/never-claimed sessions are never named at check-in
   });
 });
+
+// ── duty-6 (operator 2026-06-10): coordinator dispatch-rank ordering in self-claim ──
+const { orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS } = require('./worker-checkin.cjs');
+
+describe('duty-6: orderByRankMap (pure) — coordinator dispatch-rank ordering', () => {
+  const items = [{ sd_id: 'A' }, { sd_id: 'B' }, { sd_id: 'C' }];
+  const keyOf = (x) => x.sd_id;
+
+  it('orders by rank ascending; unranked sink below ranked, keeping relative order', () => {
+    const m = new Map([['C', 1], ['A', 2]]);
+    expect(orderByRankMap(items, keyOf, m).map(keyOf)).toEqual(['C', 'A', 'B']);
+  });
+
+  it('empty/absent rank map returns the original order (no-op)', () => {
+    expect(orderByRankMap(items, keyOf, new Map()).map(keyOf)).toEqual(['A', 'B', 'C']);
+    expect(orderByRankMap(items, keyOf, null).map(keyOf)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('does not mutate the input array', () => {
+    const m = new Map([['C', 1]]);
+    orderByRankMap(items, keyOf, m);
+    expect(items.map(keyOf)).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('duty-6: sortByDispatchRank — fresh ranks honored, stale ignored, fail-open', () => {
+  const mkSb = (rows) => ({
+    from: () => ({ select: () => ({ in: () => Promise.resolve({ data: rows }) }) }),
+  });
+  const items = [{ sd_id: 'A' }, { sd_id: 'B' }];
+  const keyOf = (x) => x.sd_id;
+
+  it('orders by a FRESH dispatch_rank', async () => {
+    const fresh = new Date().toISOString();
+    const sb = mkSb([
+      { sd_key: 'A', metadata: { dispatch_rank: 2, dispatch_rank_at: fresh } },
+      { sd_key: 'B', metadata: { dispatch_rank: 1, dispatch_rank_at: fresh } },
+    ]);
+    expect((await sortByDispatchRank(sb, items, keyOf)).map(keyOf)).toEqual(['B', 'A']);
+  });
+
+  it('ignores a STALE rank (older than TTL) — original order stands', async () => {
+    const stale = new Date(Date.now() - DISPATCH_RANK_TTL_MS - 60000).toISOString();
+    const sb = mkSb([
+      { sd_key: 'A', metadata: { dispatch_rank: 2, dispatch_rank_at: stale } },
+      { sd_key: 'B', metadata: { dispatch_rank: 1, dispatch_rank_at: stale } },
+    ]);
+    expect((await sortByDispatchRank(sb, items, keyOf)).map(keyOf)).toEqual(['A', 'B']);
+  });
+
+  it('fail-open: a throwing client returns the original order', async () => {
+    const sb = { from: () => { throw new Error('boom'); } };
+    expect((await sortByDispatchRank(sb, items, keyOf)).map(keyOf)).toEqual(['A', 'B']);
+  });
+
+  it('short-circuits on <2 items without querying', async () => {
+    const sb = { from: () => { throw new Error('should not be called'); } };
+    expect((await sortByDispatchRank(sb, [{ sd_id: 'A' }], keyOf)).map(keyOf)).toEqual(['A']);
+  });
+});

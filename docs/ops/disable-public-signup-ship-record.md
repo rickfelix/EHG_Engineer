@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-08
+tags: [documentation, ops]
+---
+
 # Ship Record — Disable public signup on the EHG app (SD-LEO-GEN-DISABLE-PUBLIC-SIGNUP-001)
 
 ## Metadata

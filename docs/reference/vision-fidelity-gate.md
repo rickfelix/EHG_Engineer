@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-04-27
+tags: [reference]
+---
+
 # Vision-Fidelity Gate
 
 **SD**: `SD-LEO-INFRA-VISION-FIDELITY-GATE-001`

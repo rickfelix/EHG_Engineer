@@ -1,3 +1,12 @@
+---
+category: planning
+status: deprecated
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [planning, plans, archived]
+---
+
 <!-- Archived from: docs/plans/simplify-batch-leo-integration-architecture.md -->
 <!-- SD Key: SD-LEO-ORCH-LEO-SIMPLIFY-ENFORCEMENT-001 -->
 <!-- Archived at: 2026-03-06T03:07:53.419Z -->

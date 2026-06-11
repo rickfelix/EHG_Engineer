@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-04-27
+tags: [reference]
+---
+
 # brainstorm_sessions.metadata Convention
 
 **Status**: Active | **Source SD**: SD-LEO-INFRA-BRAINSTORM-SOURCE-TRUTH-CHECK-001 | **Validator version**: 1.0.0
@@ -43,7 +52,7 @@ Auto-filer exits with code 1 and INSERTs zero rows on rejection.
 
 ### `companion_sds_filed` (array, written by auto-filer)
 
-Output of `brainstorm-auto-file.mjs`. One entry per `companion_sds_to_file` request, recording outcome.
+Output of `scripts/eva/brainstorm-auto-file.mjs`. One entry per `companion_sds_to_file` request, recording outcome.
 
 ```json
 "companion_sds_filed": [

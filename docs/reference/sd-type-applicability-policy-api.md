@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -24,7 +24,7 @@ The SD-Type Applicability Policy module provides a centralized policy system for
 
 **Purpose**: Fix 75% handoff rejection rate by allowing validators to skip non-applicable checks based on SD type.
 
-**Integration**: Used by `ValidationOrchestrator.js` during handoff validation.
+**Integration**: Used by `scripts/modules/handoff/validation/ValidationOrchestrator.js` during handoff validation.
 
 ---
 

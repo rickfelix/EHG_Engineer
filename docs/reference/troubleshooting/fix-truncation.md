@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -90,7 +90,7 @@ When using LEO Protocol with Claude Code:
 
 4. **For Registration**:
    ```bash
-   node scripts/leo-register-from-env.js 2>&1 | tee /tmp/registration.log
+   node scripts/archive/one-time/leo-register-from-env.js  # script archived; restore or adapt before use 2>&1 | tee /tmp/registration.log
    ```
 
 ## Summary

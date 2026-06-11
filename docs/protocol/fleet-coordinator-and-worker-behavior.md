@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-06-09
+tags: [documentation, protocol]
+---
+
 # Fleet Coordinator & Worker Behavior (durable protocol)
 
 ## Metadata
@@ -52,17 +61,19 @@ recall but is NOT the source of truth.)
 4. **Background monitoring during operator conversations.** Run the cron ticks but respond minimally;
    surface ONLY important events (stuck/struggling worker, empty-queue+idle, claim/worktree conflict,
    a worker question, a completion). Keep one coherent conversation; don't dump a dashboard every tick.
-5. **Executive email** (`scripts/coordinator-email-summary.mjs`, 15-min): dynamic scope (live fleet, no
-   hardcoded campaign list). Single gauge = **active workers vs `min(workable SDs, target)`** → 🔴/🟡/🟢
-   + trend vs the previous email. GREEN = every workable SD has a builder (full throttle); YELLOW =
-   work waiting with no builder; RED = work exists and nobody building.
-6. **Question escalation — rides in the executive email.** When a worker `/signal`s a question it
+5. **Chairman email — RETIRED coordinator leg (chairman email cutover 2026-06-10, advisory b7b73b86 /
+   QF-20260609-024).** The coordinator fleet email (`scripts/coordinator-email-summary.mjs`) is NO LONGER
+   armed — the chairman asked for ONE chairman-facing email: the **Adam exec-summary**, scheduled durably
+   via GitHub Actions (`.github/workflows/adam-exec-email-cron.yml`, live when repo var
+   `ADAM_EMAIL_LIVE=true`). Do not re-arm the coordinator email loop. The fleet-health gauge concept
+   (active workers vs `min(workable SDs, target)` → 🔴/🟡/🟢) lives on inside the Adam exec email scope.
+6. **Question escalation — durable row + the chairman email.** When a worker `/signal`s a question it
    couldn't self-resolve: ANSWER it yourself if you can (the reply routes back to the worker). ONLY for a
    genuinely-human question, escalate with `scripts/coordinator-escalate-question.mjs` — it writes a
-   durable `feedback` row (`category='operator_question'`, `status='new'`) that the **15-minute executive
-   email surfaces** (a `❓N` flag in the subject + a "questions need your input" section). One channel the
-   operator already watches, NOT a separate email (add `COORD_ESCALATE_URGENT=1` only for a truly
-   time-sensitive one). The script dedups identical still-open questions. When the operator answers:
+   durable `feedback` row (`category='operator_question'`, `status='new'`). Post-cutover (2026-06-10) the
+   rendering email is the **Adam exec-summary** (daily GHA), not the retired coordinator email — for
+   anything that can't wait for the daily send, surface it directly in the operator conversation (add
+   `COORD_ESCALATE_URGENT=1` only for a truly time-sensitive one). The script dedups identical still-open questions. When the operator answers:
    route the answer back to the worker's inbox AND mark the row `status='resolved'` so it drops off the
    next email. Workers NEVER block waiting — they signal, then proceed on a best-guess default or a
    different SD (worker rule 2).
@@ -75,12 +86,17 @@ recall but is NOT the source of truth.)
 
 ## Coordinator standing responsibilities (SRE charter)
 
-Operating a fleet of *AI agents* (not humans) requires supervisor-process duties humans do not self-perform: **agents fail SILENTLY on resource exhaustion, fall asleep when their loop is not self-rescheduling, and do not escalate** — so the coordinator must pull the andon cord on their behalf. These are the four standing SRE-style duties. Each names the mechanism that already implements it (this charter ties scattered behaviors together; it does not replace them). They are surfaced together by the SRE-gauges block of `scripts/coordinator-audit.mjs`.
+Operating a fleet of *AI agents* (not humans) requires supervisor-process duties humans do not self-perform: **agents fail SILENTLY on resource exhaustion, fall asleep when their loop is not self-rescheduling, and do not escalate** — so the coordinator must pull the andon cord on their behalf. These are the six standing SRE-style duties. Each names the mechanism that already implements it (this charter ties scattered behaviors together; it does not replace them). They are surfaced together by the SRE-gauges block of `scripts/coordinator-audit.mjs`.
 
 1. **Resource-pool management.** Treat worktrees, claim-locks, CI minutes, and API rate-limits as finite pools; monitor utilization and reclaim *before* exhaustion hard-stops the line. *Why:* a saturated pool (e.g. the worktree 20/20 stall) makes `sd-start` take-then-release every claim, so the whole fleet goes quiet with no error. *Mechanism:* `lib/worktree-quota.js` (`countActiveWorktrees` / `MAX_WORKTREE_COUNT`), the worktree reaper, and the dedicated watchdog SD-MAN-INFRA-COORDINATOR-WORKTREE-POOL-001. *Gauge:* worktree pool utilization (N/20).
 2. **Liveness supervision.** Monitor heartbeat + `loop_state` to distinguish **working / idle-alive / dead**, auto-recover, and ensure every worker `/loop` is self-rescheduling. *Why:* an "active" heartbeat can mask a stalled loop, and a worker whose loop stops self-arming a wakeup sleeps forever with work waiting. *Mechanism:* `stale-session-sweep.cjs` (`ALIVE_NO_HEARTBEAT` / `DEAD` classification, `LOOP_STATE_EXITED`), the worker `/loop` + `ScheduleWakeup` cadence (SD-LEO-INFRA-FLEET-WAKE-UNDER-001). *Gauge:* loop_state distribution across live workers.
 3. **Flow + silent-failure detection.** Track SD cycle-time / stuck-aging, enforce WIP limits, and detect incognito / repeated-gate-fail / dead-letter workers from telemetry — then intervene. *Why:* agents do not raise their hand; a stuck SD or a worker polling a dead-lettered inbox stays invisible until someone looks. *Mechanism:* `stale-session-sweep.cjs` (`WIP_GUARD`, `WORKER_STRUGGLING` for `handoff_fail_count>3`, dead-letter `CLAIM_RELEASED`). *Gauges:* stuck-SD aging + idle-with-work workers.
 4. **Dependency watching.** Continuously track the SD dependency graph + critical path — which SDs are BLOCKED (deps unmet), which are unblocked-and-claimable, the longest chain, and parent/orchestrator child-completion gating. Detect anomalies (e.g. a child shown BLOCKED while its dependency is already COMPLETED — a dep-resolver staleness / flow impediment) and intervene. *Mechanism:* `strategic_directives_v2.dependencies` + the next-candidates view. *Gauge:* dependency / critical-path (blocked-count / ready-count / stale-blocked).
+5. **Capacity forecasting + predictive belt refill (operator directive 2026-06-10).** Do NOT merely react to an already-idle worker — continuously track each worker's productivity (current claim, phase, progress, **ETA-to-free**) and the **belt depth** (truly-claimable SDs). Compute *demand_soon* = idle-now + workers-freeing-soon (ETA-to-free ≤ ~20m or progress ≥ 65%). **When `demand_soon + buffer > belt_depth` — you can SEE the workers about to run out of work — reach out to Adam for a sourcing shortlist BEFORE the belt empties.** This is the canonical *predictive* form of the belt-low→Adam default (duty 2 of the responsibilities list / the conveyor-belt SOURCE step): the reach-out trigger is the FORECAST, not visible idle. *Why:* a worker that goes idle without the forecast having anticipated it is a coordinator failure — and the operator should never have to ask "why isn't everyone busy." *Mechanism:* `scripts/coordinator-capacity-forecast.mjs` (armed cron `3,13,…`; `--dispatch` auto-reaches live Adam on a forecast deficit, 30m cooldown via `.coord-capacity-source-last.json`). *Gauge:* `belt=N idle=N freeing_soon=N demand=N deficit=N verdict=SURPLUS|TIGHT|DEFICIT`.
+
+> **Note on heartbeat vs. busy:** "idle" here = a live session holding **no claim**, NOT heartbeat-age (the 30s session-tick keeps `heartbeat_at` fresh even when the `/loop` is stalled). A worker that is heartbeat-alive but never converts an assignment into a claim is a **stalled loop** — only `/loop` re-arm (operator action) fixes it; the forecaster flags it but cannot wake it.
+
+6. **Backlog prioritization + dispatch ordering (operator directive 2026-06-10).** The coordinator **owns what gets done first**. Priority *values* are authored upstream (LEAD, Adam, chairman); **sequencing is the coordinator's**: rank the claimable belt **critical-path-first** — unlock-count (downstream SDs each leaf transitively frees) → priority → age — and publish that ordering where the self-claim path reads it, instead of correcting worker picks dispatch-by-dispatch. *Why:* self-claiming workers order by their own "highest-priority workable" view, which diverges from critical-path order (observed: workers built leaf fixes while a head SD gating 5 others sat orphaned). *Mechanism:* `scripts/coordinator-backlog-rank.mjs` (armed cron) persists `metadata.dispatch_rank`/`dispatch_rank_at` (TTL 1h; stale ranks cleared) on claimable leaf SDs — excluding orchestrator parents and test fixtures; `scripts/worker-checkin.cjs` self-claim tiers honor a fresh rank via `sortByDispatchRank` (fail-open to existing order). This is the **acting half of duty 4**: dependency watching supplies the graph, this duty turns it into the dispatch order. *Gauge:* a critical-path SD unclaimed while lower-rank work gets claimed = ordering failure.
 
 **Deploy-verification practice — SYNC → RESTART → CANARY-VERIFY.** Merged + git-synced ≠ RUNNING. On ANY worker-code refresh the coordinator must (1) **sync** the checkout to `origin/main`, (2) **restart** the long-lived worker process (a synced file is not loaded until the process restarts — verify the process StartTime is *after* the sync), and (3) **canary-verify** at runtime (have a worker re-run one stage and confirm the new behavior is live) BEFORE declaring a deploy-gap closed. Never declare a deploy closed on git state alone. *(credit: Adam canary loop, 2026-06-07.)*
 
@@ -139,9 +155,11 @@ There is a SEPARATE failure mode (feedback `34113d39`, `category='harness_backlo
 |---|---|
 | Coordinator skill, subcommands, wake-up prompt | `.claude/commands/coordinator.md` |
 | Worker: no AskUserQuestion, AUTO-PROCEED, revival diagnostic | `.claude/commands/coordinator.md` (wake-up prompt, Step 4 + REGISTER), `templates/session-prologue.md` |
-| Dynamic exec email | `scripts/coordinator-email-summary.mjs` |
+| Chairman email (post-cutover 2026-06-10: Adam exec-summary, NOT the retired coordinator email) | `.github/workflows/adam-exec-email-cron.yml` → `scripts/adam-exec-summary.mjs` |
 | Recurring 3-source audit | `scripts/coordinator-audit.mjs` |
-| Question→operator escalation (surfaced in the 15-min email, ❓N) | `scripts/coordinator-escalate-question.mjs` (writes `operator_question` row) + `scripts/coordinator-email-summary.mjs` (renders it) |
+| Capacity forecasting + predictive belt refill (duty 5) | `scripts/coordinator-capacity-forecast.mjs` (armed cron `3,13,…`, `--dispatch`) |
+| Backlog prioritization + dispatch ordering (duty 6) | `scripts/coordinator-backlog-rank.mjs` (armed cron `6,21,…`) → `metadata.dispatch_rank`, honored by `scripts/worker-checkin.cjs` `sortByDispatchRank` |
+| Question→operator escalation (durable row; rendered by the Adam exec email / operator conversation) | `scripts/coordinator-escalate-question.mjs` (writes `operator_question` row) |
 | Teardown ordering / flag | `lib/coordinator/teardown-coordinator.cjs` (`COORD_TEARDOWN_SAFETY_V2`) |
 
 ## Comms check (radio check) — verify the two-way link at startup

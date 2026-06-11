@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-4-the-blueprint]
+---
+
 # Phase 2 Ground-Truth Validation — Group 4: THE_BLUEPRINT (Stages 13-16)
 
 > This document compares claims from all three AI assessments (OpenAI, Gemini, Claude) against each other, resolving disputes with codebase evidence. Claude had direct codebase access; OpenAI and Gemini evaluated from code excerpts provided in the prompt.

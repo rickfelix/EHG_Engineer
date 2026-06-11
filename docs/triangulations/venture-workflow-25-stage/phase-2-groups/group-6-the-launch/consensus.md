@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-6-the-launch]
+---
+
 # Phase 2 Consensus — Group 6: THE_LAUNCH (Stages 23-25)
 
 > Synthesized from OpenAI, Gemini, and Claude deep-dive opinions, validated against ground-truth analysis. Group 6 is the pipeline terminus — the highest-stakes phase where ventures transition from building to launching.

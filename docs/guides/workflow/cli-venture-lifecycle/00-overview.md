@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: rickfelix
 last_updated: 2026-03-01
 tags: [guide, auto-generated]
 ---
@@ -200,6 +200,8 @@ The lifecycle organizes its stages (see the venture_stages SSOT) into 6 phases, 
 | Barrel Export | `lib/eva/index.js` | 43 | Public API exports |
 
 ### Stage Templates (25 files, ~80-230 lines each)
+
+All stage template files below live under `lib/eva/stage-templates/`.
 
 | Phase | Files | Total Lines |
 |-------|-------|-------------|

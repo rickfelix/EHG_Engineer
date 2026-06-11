@@ -2,7 +2,7 @@
 category: protocol
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [protocol, auto-generated]
 ---
@@ -927,7 +927,7 @@ The Protocol Constitution is one of several governance frameworks in the EHG sys
 | Framework | Scope | Enforcement | Mutability |
 |-----------|-------|-------------|------------|
 | **Protocol Constitution** | Self-improvement system | AI Quality Judge + RLS | Immutable (RLS blocked) |
-| **Four Oaths** | All agent behavior | `four-oaths-enforcement.js` | Immutable (manifesto) |
+| **Four Oaths** | All agent behavior | `lib/governance/four-oaths-enforcement.js` | Immutable (manifesto) |
 | **Doctrine of Constraint** | EXEC role limits | Database triggers | Immutable (schema) |
 | **Genesis Oath** | Venture creation | Ritual/workflow | Mutable (vision evolution) |
 
@@ -1319,7 +1319,7 @@ VALUES (
 
 **Step 5: Validator Update**
 - Add `validateConst010()` method to ConstitutionValidator
-- Update severity configuration in `config.js`
+- Update severity configuration in `scripts/modules/ai-quality-judge/config.js`
 - Add to aggregate validation in `validate()` method
 
 **Step 6: Documentation Update**

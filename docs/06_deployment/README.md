@@ -1,3 +1,12 @@
+---
+category: deployment
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [deployment]
+---
+
 # Production & Operations
 
 This directory contains production deployment guides and operational documentation.

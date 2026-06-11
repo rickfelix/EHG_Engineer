@@ -2,7 +2,7 @@
 category: guide
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
@@ -135,7 +135,7 @@ DROP TRIGGER IF EXISTS trigger_auto_populate_retrospective_fields ON retrospecti
 ## Next Steps After Fix
 
 1. ✅ Apply this migration
-2. ✅ Re-run embedding generation: `node scripts/generate-embeddings-for-retrospectives.js`
+2. ✅ Re-run embedding generation: `node scripts/generate-retrospective-embeddings.js`
 3. ✅ Verify embeddings were created: Check `content_embedding IS NOT NULL`
 4. ✅ Test other retrospective operations still work (INSERT, UPDATE status, etc.)
 5. ✅ Document this fix in retrospective for SD-RETRO-ENHANCE-001

@@ -15,9 +15,14 @@ import {
 
 test('STANDARD_LOOPS has the expected standard loops with the expected keys', () => {
   // SD-LEO-INFRA-ACTIVATE-FEATURE-FLAG-001 (FR-5) added the daily flag-review loop.
-  assert.equal(STANDARD_LOOPS.length, 7);
+  // SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001 added self-review; chairman req 2026-06-09 added hourly-review.
+  // Chairman email cutover (advisory b7b73b86 / QF-20260609-024, 2026-06-10) RETIRED the email loop —
+  // the one chairman-facing email is the Adam exec-summary GHA (adam-exec-email-cron.yml).
+  // Operator 2026-06-10 added the predictive capacity-forecast loop (worker utilization + belt dry-out)
+  // and the backlog-prioritization pass (dispatch_rank for self-claim ordering — SRE duty 6).
+  assert.equal(STANDARD_LOOPS.length, 11);
   const keys = STANDARD_LOOPS.map((l) => l.key);
-  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'email', 'flag-review']);
+  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'flag-review', 'self-review', 'hourly-review', 'capacity-forecast', 'backlog-rank', 'fleet-retro']);
 });
 
 test('every loop carries a non-empty label, script, cron, and CronCreate prompt', () => {
@@ -29,11 +34,13 @@ test('every loop carries a non-empty label, script, cron, and CronCreate prompt'
   }
 });
 
-test('the two new loops (audit, email) and the inbox loop are present in the standard set', () => {
+test('audit + inbox loops present; coordinator fleet email loop RETIRED (chairman cutover)', () => {
   const byKey = Object.fromEntries(STANDARD_LOOPS.map((l) => [l.key, l]));
   assert.equal(byKey.audit.script, 'coordinator-audit.mjs');
-  assert.equal(byKey.email.script, 'coordinator-email-summary.mjs');
   assert.match(byKey.inbox.prompt, /fleet-dashboard\.cjs inbox/);
+  // The coordinator email must NOT be re-armed — the Adam exec-summary GHA is the chairman channel.
+  assert.equal(byKey.email, undefined);
+  assert.ok(!STANDARD_LOOPS.some((l) => l.prompt.includes('coordinator-email-summary')));
 });
 
 test('responsibilities summary renders the MANAGER-not-IC role context (FR-1)', () => {
@@ -70,8 +77,8 @@ test('loopStatus marks armed|MISSING|unverified, distinguishing inbox vs dashboa
   const none = parseArmedSet([], {});
   assert.equal(loopStatus(byKey.sweep, none), 'unverified');
   // Armed by full prompt
-  const armed = parseArmedSet(['--armed', 'node scripts/coordinator-email-summary.mjs,node scripts/fleet-dashboard.cjs inbox'], {});
-  assert.equal(loopStatus(byKey.email, armed), 'armed');
+  const armed = parseArmedSet(['--armed', 'node scripts/coordinator-audit.mjs,node scripts/fleet-dashboard.cjs inbox'], {});
+  assert.equal(loopStatus(byKey.audit, armed), 'armed');
   assert.equal(loopStatus(byKey.inbox, armed), 'armed');
   // dashboard (fleet-dashboard.cjs all) is NOT armed just because the inbox prompt is present
   assert.equal(loopStatus(byKey.dashboard, armed), 'MISSING');
@@ -83,7 +90,7 @@ test('loopStatus marks armed|MISSING|unverified, distinguishing inbox vs dashboa
 test('renderLoops emits CronCreate spec for missing/unverified loops', () => {
   const none = parseArmedSet([], {});
   const out = renderLoops(none);
-  assert.match(out, /STANDARD CRON LOOPS \(7\)/);
+  assert.match(out, /STANDARD CRON LOOPS \(11\)/);
   // All prompts emitted as CronCreate specs when nothing is armed
   for (const loop of STANDARD_LOOPS) {
     assert.ok(out.includes(loop.prompt), `expected CronCreate prompt for ${loop.key}`);
@@ -95,7 +102,7 @@ test('renderLoops reports all-armed cleanly when every loop is armed', () => {
   const allPrompts = STANDARD_LOOPS.map((l) => l.prompt).join(',');
   const armed = parseArmedSet(['--armed', allPrompts], {});
   const out = renderLoops(armed);
-  assert.match(out, /All 7 standard loops armed/);
+  assert.match(out, /All 11 standard loops armed/);
 });
 
 test('buildReport combines responsibilities + loop sections', () => {

@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-24
+tags: [documentation, lib, worktree-reaper]
+---
+
 # Worktree Reaper
 
 **SD-LEO-INFRA-FORMALIZED-WORKTREE-REAPER-001**

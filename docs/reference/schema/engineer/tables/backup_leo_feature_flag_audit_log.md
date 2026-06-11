@@ -1,3 +1,12 @@
+---
+category: reference
+status: approved
+version: 1.0.0
+author: github-actions[bot]
+last_updated: 2026-06-02
+tags: [reference, schema, engineer, tables]
+---
+
 # backup_leo_feature_flag_audit_log Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB

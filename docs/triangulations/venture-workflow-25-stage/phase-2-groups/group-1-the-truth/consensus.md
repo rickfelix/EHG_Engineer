@@ -1,3 +1,12 @@
+---
+category: documentation
+status: approved
+version: 1.0.0
+author: Rick Felix
+last_updated: 2026-04-23
+tags: [documentation, triangulations, venture-workflow-25-stage, phase-2-groups, group-1-the-truth]
+---
+
 # Phase 2 Consensus -- Group 1: THE_TRUTH (Stages 1-5)
 
 > Synthesized from OpenAI, Gemini, and Claude (with codebase access), adjusted by ground-truth validation.

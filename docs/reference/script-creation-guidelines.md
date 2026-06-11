@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -209,8 +209,8 @@ Each script implements its own logic:
 
 ### Current State (Post-LEO 5.0 Cleanup)
 All legacy scripts archived to:
-- `scripts/archived-sd-scripts/` (~100 scripts)
-- `scripts/archived-prd-scripts/` (~100 scripts)
+- `scripts/archive/sd-scripts/` (~100 scripts)
+- `scripts/archive/prd-scripts/` (~100 scripts)
 
 ### If You Have a One-Off Script
 1. **DO NOT run it** - Use standard CLI instead
@@ -221,7 +221,7 @@ All legacy scripts archived to:
 ### Example Migration
 **Before (WRONG)**:
 ```javascript
-// scripts/create-my-special-sd.js
+// scripts/create-my-special-sd.js  (illustrative anti-pattern example — not a real script)
 // Custom SD creation with special fields
 const sdData = {
   sd_key: 'SD-SPECIAL-001',
@@ -316,7 +316,7 @@ If you believe a one-off script is necessary:
 **WRONG Approach**:
 ```javascript
 // Create new script for special field
-// scripts/create-sd-with-custom-field.js
+// scripts/create-sd-with-custom-field.js  (illustrative anti-pattern example — not a real script)
 ```
 
 **CORRECT Approach**:
@@ -356,15 +356,15 @@ Pipeline checks:
 
 ```bash
 # Find local one-off SD creation scripts
-find scripts/ -name "create-*-sd.js" -not -path "*/archived-*"
+find scripts/ -name "create-*-sd.js" -not -path "*/archive/*"
 
 # Find local one-off PRD creation scripts
-find scripts/ -name "create-prd-*.js" -not -path "*/archived-*"
+find scripts/ -name "create-prd-*.js" -not -path "*/archive/*"
 
-# Archive script (manual step)
-mv scripts/create-my-sd.js scripts/archived-sd-scripts/
+# Archive script (manual step; filenames below are placeholders)
+mv scripts/create-my-sd.js scripts/archive/sd-scripts/
 # or
-mv scripts/create-prd-my-sd.js scripts/archived-prd-scripts/
+mv scripts/create-prd-my-sd.js scripts/archive/prd-scripts/
 
 # Use standard CLI instead
 node scripts/leo-create-sd.js

@@ -2,7 +2,7 @@
 category: reference
 status: draft
 version: 1.0.0
-author: auto-fixer
+author: Rick Felix
 last_updated: 2026-02-28
 tags: [reference, auto-generated]
 ---
@@ -118,7 +118,7 @@ Current state of AUTO-PROCEED documentation:
 ### 5. Session Continuity Architecture (Already Built)
 - `UnifiedStateManager` - Research-based state management
 - `unified-session-state.json` - Saves git, SD, workflow state
-- `precompact-unified.js` hook - Auto-saves before compaction
+- `precompact-unified.js` hook (retired — replaced by `scripts/hooks/precompact-snapshot.ps1`) - Auto-saves before compaction
 - `recover-session-state.cjs` - Recovers from checkpoints
 - `session-start-loader.ps1` - Loads at session start
 
@@ -420,7 +420,7 @@ CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1
 3. ✅ Platform-level env var - Simple, maintained by Claude Code team
 
 **Existing Cleanup Infrastructure:**
-- `scripts/cleanup-orphaned-tasks.js` - Manual cleanup of stale task files
+- `scripts/hooks/cleanup-orphaned-tasks.cjs` - Manual cleanup of stale task files
 - `scripts/hooks/session-cleanup.js` - Auto-cleanup at session start
 - These remain useful for edge cases but prevention is primary strategy
 
@@ -572,13 +572,13 @@ Original truth table only covered orchestrator completion. System paused BETWEEN
 **Why This Matters**:
 - Prevents skipping critical work (PRD creation, implementation, verification)
 - Aligns with original AUTO-PROCEED design intent
-- SD-type-specific workflows still defined in `workflow-definitions.js` (which handoffs are required/optional)
+- SD-type-specific workflows still defined in `scripts/modules/handoff/cli/workflow-definitions.js` (which handoffs are required/optional)
 - Maintains simplicity: all handoffs have same terminal behavior
 
 **Files Changed**:
 - `scripts/modules/handoff/cli/cli-main.js` - `getNextInWorkflow()` simplified
 - `docs/reference/sd-type-handoff-sequences.md` - Updated AUTO-PROCEED routing documentation
-- `docs/discovery/auto-proceed-enhancement-discovery.md` - This decision (D34)
+- `docs/reference/discovery/auto-proceed-enhancement-discovery.md` - This decision (D34)
 
 **Issue Pattern**: PAT-AUTO-PROCEED-002 - Handoff auto-chaining skips phase work
 

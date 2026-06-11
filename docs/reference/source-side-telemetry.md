@@ -108,12 +108,12 @@ Unknown (no signals):       N
 
 | Cap | Value | Enforced in |
 |---|---|---|
-| Silence window | 30 minutes | `tool-timeout.cjs` (`clampSilenceMs`) AND `stale-session-sweep.cjs` (`SILENCE_HARD_CAP_MS`) |
+| Silence window | 30 minutes | `scripts/hooks/lib/tool-timeout.cjs` (`clampSilenceMs`) AND `scripts/stale-session-sweep.cjs` (`SILENCE_HARD_CAP_MS`) |
 | Tick-alive window | 90 seconds | `stale-session-sweep.cjs` (`TICK_ALIVE_WINDOW_MS`) |
 | Tick write interval | 30 seconds | `scripts/session-tick.cjs` (`TICK_MS`) |
 | Parent-liveness poll interval | 5 seconds | `scripts/session-tick.cjs` (`PARENT_POLL_MS`) |
-| Git metric throttle | 30 seconds | `post-tool-clear-telemetry.cjs` (via `metadata.last_git_metric_at_ms`) |
-| HTTP fetch timeout | 1500 ms | `session-telemetry-writer.cjs` (`TELEMETRY_FETCH_TIMEOUT_MS`) |
+| Git metric throttle | 30 seconds | `scripts/hooks/post-tool-clear-telemetry.cjs` (via `metadata.last_git_metric_at_ms`) |
+| HTTP fetch timeout | 1500 ms | `scripts/hooks/lib/session-telemetry-writer.cjs` (`TELEMETRY_FETCH_TIMEOUT_MS`) |
 
 The silence-window cap is **non-configurable per session** to prevent a misconfigured hook from masking a dead worker.
 

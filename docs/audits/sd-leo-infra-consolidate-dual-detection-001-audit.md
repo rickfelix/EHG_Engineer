@@ -1,3 +1,12 @@
+---
+category: analysis
+status: approved
+version: 1.0.0
+author: rickfelix
+last_updated: 2026-05-27
+tags: [analysis, audits]
+---
+
 # Dual-detection cluster audit — SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001
 
 Generated (deterministic): 2026-05-28T00:00:00Z
