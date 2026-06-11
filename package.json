@@ -378,6 +378,8 @@
     "prepark-wip": "node scripts/prepark-wip.cjs",
     "protocol:pub-audit": "node scripts/protocol-publication-audit.cjs",
     "sre:row-growth": "node scripts/row-growth-snapshot.cjs",
+    "cost:report": "node scripts/llm-cost-report.mjs",
+    "cost:waste-ledger": "node scripts/cost-waste-ledger.mjs",
     "review:rotation": "node scripts/subsystem-review-rotation.cjs",
     "policy:check": "node scripts/auto-exec-policy-check.mjs",
     "engine:demo": "node scripts/auto-exec-engine-demo.mjs",

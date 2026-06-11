@@ -21,6 +21,8 @@ import {
 import { getRemediation } from './remediations.js';
 import { clearState as clearAutoProceedState } from '../../auto-proceed-state.js';
 import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.js';
+// SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: completion-boundary instrumentation
+import { stampCompletion } from '../../../../../lib/fleet/claim-stamp.cjs';
 // CAPA-1 (QF-20260525-306): parse "Closes feedback <uuid>" footers from merged SD
 // commits — autoCloseFeedback closes only by link, mirroring the QF orchestrator gap.
 import { parseAndExpandFeedbackFooters, resolveFeedback } from '../../../../../lib/governance/resolve-feedback.js';
@@ -411,6 +413,9 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     }
 
     // Transition SD to completed status
+    // SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: capture the completing session id
+    // BEFORE the update below nulls active_session_id.
+    const completedBySession = process.env.CLAUDE_SESSION_ID || sd.active_session_id || null;
     const { error: sdError } = await this.supabase
       .from('strategic_directives_v2')
       .update({
@@ -437,6 +442,11 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     console.log('   ✅ SD status transitioned: pending_approval → completed');
     console.log('   ✅ Progress set to 100%');
     console.log('   ✅ is_working_on released (set to false)');
+
+    // Fail-soft boundary instrumentation (SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3):
+    // stamp metadata.completed_by_session + completed_stamp_at for the
+    // completion→next-claim KPI. Never blocks the approval.
+    await stampCompletion(this.supabase, sd.id, completedBySession);
     console.log('   ✅ Completion timestamp recorded');
 
     try {

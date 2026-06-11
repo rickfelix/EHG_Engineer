@@ -181,6 +181,53 @@ export class HandoffOrchestrator {
         return preflightResult;
       }
 
+      // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-A (program L1): artifact pre-flight.
+      // Known deterministic gate-reject shapes fail FAST with the SHAPE_VIOLATION
+      // remediation list and skip the gate pipeline entirely; advisory shape issues
+      // are printed but never block; any internal preflight error FAILS OPEN.
+      try {
+        const { executeArtifactPreflight, formatViolations, logPreventedBounce } =
+          await import('./artifact-preflight.js');
+        const artifact = await executeArtifactPreflight({
+          sdRepo: this.sdRepo,
+          prdRepo: this.prdRepo,
+          handoffType: normalizedType,
+          sdId,
+        });
+        if (artifact.verdict === 'HARD_FAIL') {
+          console.log('');
+          console.log('🚫 ARTIFACT PRE-FLIGHT FAILED (gate pipeline NOT run — known deterministic reject)');
+          console.log('─'.repeat(50));
+          console.log(formatViolations(artifact.violations));
+          console.log('─'.repeat(50));
+          console.log('   Fix the artifact shape above, then retry the handoff.');
+          console.log('');
+          const rejected = ResultBuilder.rejected(
+            'ARTIFACT_PREFLIGHT_FAILED',
+            `Artifact preflight failed: ${artifact.violations.map(v => v.field).join(', ')}`
+          );
+          rejected.preflightViolations = artifact.violations;
+          await this.recorder.recordFailure(normalizedType, sdId, rejected, null);
+          logPreventedBounce(this.supabase, {
+            sdKey: (sd && sd.sd_key) || sdId,
+            handoffType: normalizedType,
+            trapFields: artifact.violations.map(v => v.field),
+          }).catch(() => {});
+          return rejected;
+        }
+        if (artifact.advisories && artifact.advisories.length > 0) {
+          console.log(`   ℹ️  [artifact-preflight] ${artifact.advisories.length} advisory shape issue(s) (non-blocking):`);
+          for (const a of artifact.advisories.slice(0, 5)) {
+            console.log(`      - ${a.field}: expected ${a.expected}, got ${a.got}`);
+          }
+        }
+        if (artifact.verdict === 'ERROR') {
+          console.warn(`   [artifact-preflight] skipped (fail-open): ${artifact.error}`);
+        }
+      } catch (preflightErr) {
+        console.warn(`   [artifact-preflight] skipped (fail-open): ${preflightErr.message}`);
+      }
+
       // Execute the handoff with AUTO-PROCEED metadata
       const result = await executor.execute(sdId, enhancedOptions);
 
@@ -862,9 +909,13 @@ export class HandoffOrchestrator {
         elapsed += pollIntervalMs;
 
         try {
+          // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-A (drive-by, caught by schema-reference
+          // lint): 'prd_id' is a phantom column (live 42703) — the PK is 'id'. The phantom
+          // select errored into the catch below on EVERY poll, so PRD-creation verification
+          // always timed out silently.
           const { data } = await this.supabase
             .from('product_requirements_v2')
-            .select('prd_id')
+            .select('id')
             .eq('sd_id', sdId)
             .limit(1);
 
