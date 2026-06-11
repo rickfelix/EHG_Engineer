@@ -28,45 +28,13 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-
-// --- Pricing per 1M tokens (USD), current as of 2026-06 ----------------------
-// input, output. Cached input handled separately (cache_hit rows cost ~0 here
-// because the logger records 0 tokens for response-cache hits).
-const PRICING = {
-  'gemini-2.5-pro':            { in: 1.25, out: 10.00 },
-  'gemini-2.5-flash':          { in: 0.30, out: 2.50 },
-  'gemini-2.5-flash-lite':     { in: 0.10, out: 0.40 },
-  'gemini-embedding-001':      { in: 0.15, out: 0.00 },
-  'gpt-5.5':                   { in: 5.00, out: 30.00 },
-  'gpt-5.4':                   { in: 2.50, out: 15.00 },
-  'gpt-5.4-mini':              { in: 0.75, out: 4.50 },
-  'gpt-5.4-nano':              { in: 0.20, out: 1.25 },
-  'claude-opus':               { in: 15.00, out: 75.00 },
-  'claude-sonnet':             { in: 3.00, out: 15.00 },
-  'claude-haiku':              { in: 1.00, out: 5.00 },
-  'local':                     { in: 0.00, out: 0.00 },
-};
-
-function priceFor(modelName) {
-  if (!modelName) return null;
-  const m = String(modelName).toLowerCase();
-  if (m.includes('qwen') || m.includes('ollama') || m.includes('llama') || m.includes('local')) return PRICING.local;
-  if (m.includes('flash-lite')) return PRICING['gemini-2.5-flash-lite'];
-  if (m.includes('gemini') && m.includes('flash')) return PRICING['gemini-2.5-flash'];
-  if (m.includes('gemini') && m.includes('pro')) return PRICING['gemini-2.5-pro'];
-  if (m.includes('embedding')) return PRICING['gemini-embedding-001'];
-  if (m.includes('gpt-5.5')) return PRICING['gpt-5.5'];
-  if (m.includes('nano')) return PRICING['gpt-5.4-nano'];
-  if (m.includes('mini')) return PRICING['gpt-5.4-mini'];
-  if (m.includes('gpt-5.4') || m.includes('gpt-5')) return PRICING['gpt-5.4'];
-  if (m.includes('opus')) return PRICING['claude-opus'];
-  if (m.includes('sonnet')) return PRICING['claude-sonnet'];
-  if (m.includes('haiku')) return PRICING['claude-haiku'];
-  return null; // unknown → counted in tokens, $0 estimate
-}
+// SD-LEO-INFRA-FACTORY-COST-UNIT-001: pricing + per-SD rollup extracted to shared lib
+// (behavior-identical) so the email cost panel and tests share one implementation.
+import { rowCost as libRowCost, COST_CAVEAT } from '../lib/cost/llm-pricing.js';
+import { rollup, UNATTRIBUTED } from '../lib/cost/usage-rollup.js';
 
 function parseArgs(argv) {
-  const a = { days: 7, since: null, check: false, json: false,
+  const a = { days: 7, since: null, check: false, json: false, bySd: false,
     maxDailyUsd: 12, maxDailyCalls: 3000, spike: 2.0 };
   for (let i = 2; i < argv.length; i++) {
     const k = argv[i];
@@ -74,6 +42,7 @@ function parseArgs(argv) {
     else if (k === '--since') a.since = argv[++i];
     else if (k === '--check') a.check = true;
     else if (k === '--json') a.json = true;
+    else if (k === '--by-sd') a.bySd = true;
     else if (k === '--max-daily-usd') a.maxDailyUsd = parseFloat(argv[++i]);
     else if (k === '--max-daily-calls') a.maxDailyCalls = parseInt(argv[++i], 10);
     else if (k === '--spike') a.spike = parseFloat(argv[++i]);
@@ -120,13 +89,7 @@ async function pullRows(url, key, sinceISO) {
   return all;
 }
 
-function rowCost(r) {
-  const p = priceFor(r.reported_model_name);
-  const inT = Number(r.metadata?.input_tokens || 0);
-  const outT = Number(r.metadata?.output_tokens || 0);
-  if (!p) return { usd: 0, inT, outT };
-  return { usd: (inT / 1e6) * p.in + (outT / 1e6) * p.out, inT, outT };
-}
+const rowCost = libRowCost;
 
 function aggregate(rows, keyFn) {
   const m = {};
@@ -191,12 +154,40 @@ async function main() {
   }
 
   if (args.json) {
-    console.log(JSON.stringify({
+    const out = {
       window: { sinceISO, rows: rows.length, totalUsd: Number(totalUsd.toFixed(2)) },
+      caveat: COST_CAVEAT,
       byModel: aggregate(rows, r => r.reported_model_name),
       byPurpose: aggregate(rows, r => r.subagent_type),
       byDay,
-    }, null, 2));
+    };
+    if (args.bySd) {
+      const r = rollup(rows);
+      out.bySd = r.bySd;
+      out.byPhase = r.byPhase;
+      out.coverage = r.coverage;
+    }
+    console.log(JSON.stringify(out, null, 2));
+    return;
+  }
+
+  if (args.bySd) {
+    // SD-LEO-INFRA-FACTORY-COST-UNIT-001 (FR-2): per-SD / per-phase factory P&L view.
+    const r = rollup(rows);
+    console.log(`\n=== FACTORY COST BY SD — since ${sinceISO.slice(0, 10)} (${rows.length} calls) ===`);
+    console.log(`${COST_CAVEAT}`);
+    console.log(`Attribution coverage: ${r.coverage.pct}% of calls carry sd_id (${r.coverage.attributedCalls}/${r.coverage.totalCalls})\n`);
+
+    const sdRows = Object.entries(r.bySd).sort((a, b) => b[1].usd - a[1].usd).slice(0, 25);
+    console.log(`${pad('sd_id', 44)} ${padN('calls', 7)} ${padN('inTok', 11)} ${padN('outTok', 11)} ${padN('est$', 9)}`);
+    for (const [k, v] of sdRows)
+      console.log(`${pad(k === UNATTRIBUTED ? `${UNATTRIBUTED} (null sd_id)` : k, 44)} ${padN(v.calls, 7)} ${padN(v.inT, 11)} ${padN(v.outT, 11)} ${padN(fmtUsd(v.usd), 9)}`);
+
+    console.log('\n--- BY PHASE ---');
+    console.log(`${pad('phase', 16)} ${padN('calls', 7)} ${padN('est$', 9)}`);
+    for (const [k, v] of Object.entries(r.byPhase).sort((a, b) => b[1].usd - a[1].usd))
+      console.log(`${pad(k, 16)} ${padN(v.calls, 7)} ${padN(fmtUsd(v.usd), 9)}`);
+    console.log('');
     return;
   }
 

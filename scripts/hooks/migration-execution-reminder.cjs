@@ -59,21 +59,28 @@ function extractSDId(filePath, content) {
  * Main hook execution
  */
 async function main() {
-  // Get tool output from environment
-  const toolOutput = process.env.CLAUDE_TOOL_OUTPUT || '';
-  const toolInput = process.env.CLAUDE_TOOL_INPUT || '';
-  const toolName = process.env.CLAUDE_TOOL_NAME || '';
+  // SD-LEO-INFRA-PARK-VISIBILITY-LOOP-STATE-001 (class fix, RCA #2 2026-05-04):
+  // Claude Code does NOT set CLAUDE_TOOL_NAME / CLAUDE_TOOL_INPUT for hooks —
+  // the payload arrives as JSON on stdin. The previous env-only reads meant
+  // this hook exited at the Write guard on EVERY harness invocation (dead
+  // since ship). Payload-first, env fallback (manual/test invocations).
+  const { readHookStdinPayload } = require('../../lib/hooks/session-id.cjs');
+  let payload = null;
+  try { payload = await readHookStdinPayload(); } catch { /* fall back to env */ }
+
+  const toolName = (payload && payload.tool_name) || process.env.CLAUDE_TOOL_NAME || '';
 
   // Only check for Write tool
   if (toolName !== 'Write') {
     process.exit(0);
   }
 
-  // Parse file path from tool input
+  // Tool input: payload object first; env JSON string fallback.
   let filePath = '';
   let content = '';
   try {
-    const input = JSON.parse(toolInput);
+    const input = (payload && typeof payload.tool_input === 'object' && payload.tool_input)
+      || JSON.parse(process.env.CLAUDE_TOOL_INPUT || '');
     filePath = input.file_path || '';
     content = input.content || '';
   } catch (_e) {
