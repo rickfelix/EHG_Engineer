@@ -909,9 +909,13 @@ export class HandoffOrchestrator {
         elapsed += pollIntervalMs;
 
         try {
+          // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-A (drive-by, caught by schema-reference
+          // lint): 'prd_id' is a phantom column (live 42703) — the PK is 'id'. The phantom
+          // select errored into the catch below on EVERY poll, so PRD-creation verification
+          // always timed out silently.
           const { data } = await this.supabase
             .from('product_requirements_v2')
-            .select('prd_id')
+            .select('id')
             .eq('sd_id', sdId)
             .limit(1);
 
