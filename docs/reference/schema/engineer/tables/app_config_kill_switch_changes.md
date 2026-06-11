@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-11T14:29:21.270Z
+**Generated**: 2026-06-11T14:58:14.315Z
 **Rows**: 0
-**RLS**: Disabled
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -42,6 +42,14 @@
   ```sql
   CREATE INDEX idx_app_config_kill_switch_changes_key_changed_at ON public.app_config_kill_switch_changes USING btree (key, changed_at DESC)
   ```
+
+## RLS Policies
+
+### 1. service_role_all (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 
