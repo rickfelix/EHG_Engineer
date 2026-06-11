@@ -78,4 +78,45 @@ describe('classifyInboxMessage', () => {
     // a NON-Adam session still drains the same COACHING row on display (byte-identical legacy behavior)
     expect(classifyInboxMessage(coaching, { amAdam: false })).toEqual({ skip: false, markRead: true, markAck: true });
   });
+
+  // QF-20260610-545: residual after QF-623 — the carve-out kept a sender_type ALLOWLIST
+  // (orchestrator|coordinator), so sender_type=chairman directives fell through to the default
+  // drain and 5 chairman messages were auto-acked unseen (harness-bug 43c2dee2). The fix replaces
+  // the allowlist with unconditional surface-not-drain for ALL amAdam non-skip rows.
+  it('QF-545: a chairman INFO coordinator_request to Adam stays UNREAD (no sender_type allowlist)', () => {
+    const chairmanReq = { message_type: 'INFO', payload: { kind: 'coordinator_request' }, sender_type: 'chairman' };
+    expect(classifyInboxMessage(chairmanReq, { amAdam: true })).toEqual({ skip: false, markRead: false, markAck: false });
+    // expects_reply variant, same protection
+    const expectsReply = { message_type: 'INFO', payload: { expects_reply: true }, sender_type: 'chairman' };
+    expect(classifyInboxMessage(expectsReply, { amAdam: true })).toEqual({ skip: false, markRead: false, markAck: false });
+  });
+
+  it('QF-545: NO amAdam row ever returns markAck:true from the poll path (exhaustive sweep)', () => {
+    const senders = ['chairman', 'coordinator', 'orchestrator', 'worker', 'system', undefined];
+    const types = ['INFO', 'COACHING', 'WORK_ASSIGNMENT', 'PRIORITY_CHANGE', 'TASK'];
+    const payloads = [{}, { kind: 'coordinator_request' }, { expects_reply: true }, { kind: 'coordinator_reply' }];
+    for (const sender_type of senders) {
+      for (const message_type of types) {
+        for (const payload of payloads) {
+          for (const isIdle of [true, false]) {
+            for (const twoWayOn of [true, false]) {
+              const v = classifyInboxMessage({ message_type, payload, sender_type }, { isIdle, twoWayOn, amAdam: true });
+              // skip rows are fine (coordinator-exclusive); any surfaced row must not be stamped
+              if (!v.skip) {
+                expect(v.markAck, `sender=${sender_type} type=${message_type} payload=${JSON.stringify(payload)}`).toBe(false);
+                expect(v.markRead).toBe(false);
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('QF-545: non-Adam (worker) drain behavior is byte-identical — plain INFO and busy non-actionable still drain', () => {
+    expect(classifyInboxMessage({ message_type: 'INFO', payload: {}, sender_type: 'chairman' }, { amAdam: false }))
+      .toEqual({ skip: false, markRead: true, markAck: true });
+    expect(classifyInboxMessage({ message_type: 'PRIORITY_CHANGE', payload: {}, sender_type: 'chairman' }, { isIdle: false, amAdam: false }))
+      .toEqual({ skip: false, markRead: true, markAck: true });
+  });
 });
