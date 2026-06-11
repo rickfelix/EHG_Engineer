@@ -1,7 +1,7 @@
 # DataDistill Honest-Launch Calibration Readout — 2026-06
 
 **SD:** SD-LEO-INFRA-DATADISTILL-HONEST-LAUNCH-001 · **Venture:** DataDistill (`510177ba-435f-4dd7-bfa5-6154cc8cf54b`) · **Audience:** Adam roadmap (dq-review-adam lineage)
-**Status:** stages 20–24 complete (first venture ever to enter stage 24); launch decision pending via coordinator; this document updates as 24→26 completes.
+**Status:** COMPLETE 2026-06-11 — DataDistill crossed the 26-stage finish line (workflow_status=completed; final 25→26 advance 14:48Z after the S25 chairman GO was answered via a live AskUserQuestion).
 
 ## Purpose
 
@@ -18,7 +18,7 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 | S24 entry | READY precondition satisfied | PASS — first venture in stage 24. | — |
 | S24 exit (Go Live) | ready_to_launch, 3 channels (blog_seo, twitter_x, email); ad-copy headlines pending | Chairman GO `9c44db4a` (via coordinator, pilot scope explicit) — launched_at stamped, launch_metrics t=0 emitted, advanced 24→25 | Precedent: "targeting ready, copy pending" acceptable at pilot scope. Exit gate was structurally unsatisfiable until defect #10 (launch_metrics had no producer). |
 | S25 exit (Post-Launch Review) | Honest t=0 review: zero metrics (no elapsed window), 2 assumptions validated / 2 invalidated, 4 learnings | Chairman GO `bf060e27` (decision=go via coordinator; status field reconciled to approved — the two-field write was non-atomic) — advanced 25→26 | t=0 review is definitionally thin; stage contract should gate on a minimum elapsed window or accept an explicit t0 mode. |
-| S26 exit (Growth Playbook — TERMINUS) | Playbook from partial-but-honest t=0 data: 3 growth experiments, 0 scaling priorities (artifact `8f1c0689`) | PASS — **first venture to complete the 26-stage lifecycle under binding evidence-backed gates**; workflow_status=completed, stage stays 26 | Reachable only after defects #11/#12 (all-postlaunch-artifacts requirement + analyzer param no caller ever wired). Gate declarations and analyzer param contracts must ship WITH their producers/callers. |
+| S26 exit (Growth Playbook — TERMINUS) | Playbook from partial-but-honest t=0 data; schema requires growth_experiments≥1 + scaling_priorities≥1 + operations_handoff + 90_day_plan | PASS — **first venture to complete the 26-stage lifecycle under binding evidence-backed gates** (transition 25→26 recorded 14:48Z via `advanceStage` after chairman GO `bf060e27`, answered via a live AskUserQuestion; final artifact `5e1c7086`, validation PASS 0 errors: 3 activation-led growth experiments + 3 scaling priorities + chairman-owned ops handoff + day-90 real-metrics decision point); workflow_status=completed, stage stays 26 | Reachable only after defects #11/#12 (all-postlaunch-artifacts requirement + analyzer param no caller ever wired). Gate declarations and analyzer param contracts must ship WITH their producers/callers. Defect #13: S26 declares no upstream deps (`upstreamData: {}`) — the inline analysis had to be grounded manually from S24/S25 artifacts. |
 
 ## First-contact defect log (FR-3)
 
@@ -51,6 +51,7 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 | 10 | gate-without-producer | S24 exit verifiers required a `launch_metrics` artifact with activated channels — no producer existed anywhere | Fixed (go-live trigger emits t=0 launch_metrics) |
 | 11 | all-or-nothing tolerance | S26 required ALL postlaunch artifacts; t=0 venture legitimately has zero user feedback → permanent SKIP | Fixed (partial honest data generates; gap recorded) |
 | 12 | unwired param contract | S26 analyzer's `postlaunchArtifacts` param supplied by NO caller → always classified missing | Fixed (self-fetch via the supabase client the engine does provide) |
+| 13 | missing upstream deps | S26 stage declares zero upstream dependencies (`upstreamData: {}`, `upstreamStages: []`) — the growth playbook had to be grounded manually from S24/S25 artifacts instead of receiving them | Deferred-with-reason: logged for the stage-contract registry; the inline path worked, fix belongs with the CROSS_STAGE_DEPS owner |
 
 ## Outcome — CAMPAIGN COMPLETE
 
