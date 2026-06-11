@@ -12,7 +12,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { estimateLOC } from '../../lib/ai-loc-estimator.js';
+import { estimateLOC, detectMultiDefectScope } from '../../lib/ai-loc-estimator.js';
 import { routeWorkItem } from '../../lib/utils/work-item-router.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
@@ -178,6 +178,18 @@ export async function runTriageGate(input, supabaseClient) {
     supabaseClient
   );
 
+  // Step 2.5 (QF-20260610-234, FR-2): scope-discovery advisory. estimateLOC already
+  // applies the soft floor internally; this surfaces the pre-claim recommendation on
+  // the TriageResult for a would-be Tier 1/2 item. Fail-soft: advisory text only —
+  // never blocks, never forces an error, never lowers a tier.
+  let scopeAdvisory = null;
+  try {
+    const scope = detectMultiDefectScope({ title, description: combinedDescription, type });
+    if (scope.likelyMultiDefect && routingDecision.tier <= 2) {
+      scopeAdvisory = `scope-discovery: symptom shows probable multi-defect coupling (${scope.signals.join(', ')}) — re-estimate LOC before claim; consider a full SD if multiple root causes confirm`;
+    }
+  } catch { /* fail-soft: advisory must never break triage */ }
+
   // Step 3: Determine if we should gate
   const shouldGate = routingDecision.tier <= 2 && isHardGateSource(lowerSource);
 
@@ -190,6 +202,9 @@ export async function runTriageGate(input, supabaseClient) {
       title,
       type
     );
+    if (scopeAdvisory && askUserQuestionPayload?.questions?.[0]) {
+      askUserQuestionPayload.questions[0].question += ` ⚠️ ${scopeAdvisory}`;
+    }
   }
 
   return {
@@ -199,8 +214,9 @@ export async function runTriageGate(input, supabaseClient) {
     workItemType: routingDecision.workItemType,
     estimatedLoc: locResult.estimatedLoc,
     confidence: locResult.confidence,
-    reasoning: locResult.reasoning,
+    reasoning: scopeAdvisory ? `${locResult.reasoning}; ${scopeAdvisory}` : locResult.reasoning,
     escalationReason: routingDecision.escalationReason,
+    scopeDiscoveryAdvisory: scopeAdvisory,
     askUserQuestionPayload,
     routingDecision,
   };

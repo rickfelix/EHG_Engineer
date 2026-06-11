@@ -45,6 +45,35 @@ describe('isBlockableWorker — AskUserQuestion block policy (SD-FDBK-ENH-ENFORC
     expect(isBlockableWorker({})).toBe(false);
   });
 
+  // --- loop_state hardening (operator 2026-06-10): a /loop worker with no assigned callsign
+  //     is STILL an autonomous worker and must be blocked; coordinator/Adam stay exempt. ---
+  it('BLOCKS a callsign-LESS worker that is in an active /loop (loop_state=active)', () => {
+    expect(isBlockableWorker({ source: 'startup' }, 'active')).toBe(true);
+  });
+
+  it('BLOCKS a callsign-less worker parked on a wakeup (loop_state=awaiting_tick)', () => {
+    expect(isBlockableWorker({}, 'awaiting_tick')).toBe(true);
+  });
+
+  it('EXEMPTS the coordinator even when in a loop (privilege wins over loop_state)', () => {
+    expect(isBlockableWorker({ is_coordinator: true }, 'active')).toBe(false);
+  });
+
+  it('EXEMPTS Adam even when in a loop', () => {
+    expect(isBlockableWorker({ role: 'adam' }, 'active')).toBe(false);
+  });
+
+  it('does NOT block a plain interactive session (no callsign, loop_state exited/unknown/null)', () => {
+    expect(isBlockableWorker({ source: 'startup' }, 'exited')).toBe(false);
+    expect(isBlockableWorker({ source: 'startup' }, 'unknown')).toBe(false);
+    expect(isBlockableWorker({ source: 'startup' }, null)).toBe(false);
+    expect(isBlockableWorker({ source: 'startup' })).toBe(false); // loopState omitted
+  });
+
+  it('FAILS OPEN when metadata is null even if loop_state says active (cannot verify exemptions)', () => {
+    expect(isBlockableWorker(null, 'active')).toBe(false);
+  });
+
   it('deny message names the /signal escalation path with the options+recommendation+default contract', () => {
     expect(ASKUSER_DENY_MESSAGE).toMatch(/\/signal/);
     expect(ASKUSER_DENY_MESSAGE).toMatch(/options/);

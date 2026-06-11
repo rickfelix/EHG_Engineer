@@ -208,6 +208,41 @@ async function selfClaimQuickFix(sb, sessionId, base) {
 
 // SD-FDBK-FEAT-WORKER-CHECKIN-SELF-001: un-baselined-draft self-claim tier.
 const DRAFT_CANDIDATE_LIMIT = 10;
+
+// ── Coordinator dispatch-rank ordering (SRE duty 6, operator 2026-06-10) ──
+// The coordinator's backlog-ordering pass (scripts/coordinator-backlog-rank.mjs) persists
+// metadata.dispatch_rank (+ dispatch_rank_at) on claimable leaf SDs: critical-path-first, then
+// priority, then age. Self-claim honors a FRESH rank so "what gets done first" is
+// coordinator-driven by default instead of correction-by-dispatch. Stale (> TTL) or absent ranks
+// are ignored — the tier's existing order stands. Fail-open: any error → original order.
+const DISPATCH_RANK_TTL_MS = 60 * 60 * 1000; // ranking loop runs ~10-15min; 1h staleness cutoff
+
+/** Pure: stable-sort items by a rank map (lower rank first); unranked keep relative order. */
+function orderByRankMap(items, keyOf, rankMap) {
+  if (!rankMap || rankMap.size === 0) return items;
+  return items.slice().sort((a, b) =>
+    (rankMap.get(keyOf(a)) ?? Infinity) - (rankMap.get(keyOf(b)) ?? Infinity));
+}
+
+/** Fetch fresh dispatch_ranks for the candidate keys and order by them. Fail-open. */
+async function sortByDispatchRank(sb, items, keyOf) {
+  try {
+    const keys = (items || []).map(keyOf).filter(Boolean);
+    if (keys.length < 2) return items || [];
+    const { data } = await sb.from('strategic_directives_v2')
+      .select('sd_key, metadata').in('sd_key', keys);
+    const rankMap = new Map();
+    const now = Date.now();
+    for (const r of (data || [])) {
+      const m = r.metadata || {};
+      if (m.dispatch_rank != null && m.dispatch_rank_at
+          && (now - new Date(m.dispatch_rank_at).getTime()) < DISPATCH_RANK_TTL_MS) {
+        rankMap.set(r.sd_key, Number(m.dispatch_rank));
+      }
+    }
+    return orderByRankMap(items, keyOf, rankMap);
+  } catch { return items || []; } // fail-open: ordering must never break self-claim
+}
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: draftDepsSatisfied + baselinedCandidateEligible were
@@ -230,39 +265,61 @@ const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
  * race/liveness arbiter). Returns a self_claimed result or null. Never throws (fail-open).
  * SD-FDBK-FEAT-WORKER-CHECKIN-SELF-001.
  */
+/**
+ * Fetch the ordered un-baselined draft candidate pool WITHOUT claiming
+ * (QF-20260610-986). Extracted from selfClaimDraftSd so the merged step-6 tier
+ * can rank-sort baselined + draft candidates in ONE pool — the old sequential
+ * tiers meant a coordinator dispatch_rank could NEVER lift a draft above any
+ * baselined candidate (witnessed live: rank-0 critical draft skipped for
+ * rank-5 baselined mediums; feedback dc87039d).
+ */
+async function fetchDraftCandidates(sb) {
+  const { data: drafts } = await sb
+    .from('strategic_directives_v2')
+    // metadata feeds the shared classifyDispatchIneligibility gate (the requires_human_action axis);
+    // sd_type already selected for the existing orchestrator exclusion.
+    .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata')
+    .in('status', ['draft', 'active'])
+    .is('claiming_session_id', null)
+    .neq('sd_type', 'orchestrator')
+    .order('created_at', { ascending: true })
+    .limit(DRAFT_CANDIDATE_LIMIT);
+  // priority-first; oldest-first within a priority (stable sort preserves the created_at order).
+  return (drafts || []).slice().sort(
+    (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9)
+  );
+}
+
+/** Per-row claim attempt for an un-baselined draft candidate (shared by the merged
+ *  step-6 tier and the legacy selfClaimDraftSd wrapper). Returns a result or null. */
+async function tryClaimDraftCandidate(sb, sessionId, base, d) {
+  // SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001: same shared classifier the baselined candidate-view
+  // tier (step 6) and the coordinator/sweep PUSH path use — the un-baselined draft tier must not
+  // self-claim a test-fixture phantom (SD-DEMO-*/SD-TEST-*) or a requires_human_action SD.
+  if (classifyDispatchIneligibility(d) !== null) return null;
+  if (!(await draftDepsSatisfied(sb, d))) return null; // skip dependency-blocked
+  if (await isSdInFlight(sb, d.sd_key, sessionId)) return null; // dedup: started or live-foreign-held
+  const claimed = await tryClaim(sb, d.sd_key, sessionId);
+  if (claimed.ok) {
+    return {
+      ...base,
+      action: 'self_claimed',
+      sd: d.sd_key,
+      message: `Self-claimed ${d.sd_key} (un-baselined draft) from the SD belt. Run: node scripts/sd-start.js ${d.sd_key}`,
+    };
+  }
+  return null;
+}
+
 async function selfClaimDraftSd(sb, sessionId, base) {
   try {
-    const { data: drafts } = await sb
-      .from('strategic_directives_v2')
-      // metadata feeds the shared classifyDispatchIneligibility gate (the requires_human_action axis);
-      // sd_type already selected for the existing orchestrator exclusion.
-      .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata')
-      .in('status', ['draft', 'active'])
-      .is('claiming_session_id', null)
-      .neq('sd_type', 'orchestrator')
-      .order('created_at', { ascending: true })
-      .limit(DRAFT_CANDIDATE_LIMIT);
-    // priority-first; oldest-first within a priority (stable sort preserves the created_at order).
-    const ordered = (drafts || []).slice().sort(
-      (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9)
-    );
-    for (const d of ordered) {
-      // SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001: same shared classifier the baselined candidate-view
-      // tier (step 6) and the coordinator/sweep PUSH path use — the un-baselined draft tier must not
-      // self-claim a test-fixture phantom (SD-DEMO-*/SD-TEST-*) or a requires_human_action SD. (The
-      // orchestrator axis is also covered here, redundant with the .neq query filter above — harmless.)
-      if (classifyDispatchIneligibility(d) !== null) continue;
-      if (!(await draftDepsSatisfied(sb, d))) continue; // skip dependency-blocked
-      if (await isSdInFlight(sb, d.sd_key, sessionId)) continue; // dedup: skip SDs already started or live-foreign-held
-      const claimed = await tryClaim(sb, d.sd_key, sessionId);
-      if (claimed.ok) {
-        return {
-          ...base,
-          action: 'self_claimed',
-          sd: d.sd_key,
-          message: `Self-claimed ${d.sd_key} (un-baselined draft) from the SD belt. Run: node scripts/sd-start.js ${d.sd_key}`,
-        };
-      }
+    const ordered = await fetchDraftCandidates(sb);
+    // duty-6: a fresh coordinator dispatch_rank overrides the local priority order (rank already
+    // encodes priority as its tie-break); unranked/stale rows keep the order above. Fail-open.
+    const ranked = await sortByDispatchRank(sb, ordered, (d) => d.sd_key);
+    for (const d of ranked) {
+      const result = await tryClaimDraftCandidate(sb, sessionId, base, d);
+      if (result) return result;
     }
   } catch { /* fail-open -> caller continues to QF/idle */ }
   return null;
@@ -644,30 +701,50 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   //      today's behavior (read returns [] -> idle), never an error action.
   try { await ensureActiveBaseline(sb); } catch { /* fail-open: never block the checkin */ }
 
-  // 6. self-claim top of sd:next (v_sd_next_candidates is baseline-ranked)
+  // 6. self-claim from ONE merged SD pool: baselined sd:next candidates + claimable
+  //    UN-BASELINED drafts, rank-sorted TOGETHER (QF-20260610-986, feedback dc87039d).
+  //    The old sequential tiers (6 then 6.25) meant a coordinator dispatch_rank could
+  //    never lift a draft above ANY baselined candidate — a rank-0 critical draft was
+  //    skipped for rank-5 baselined mediums. Merging preserves the no-rank precedence
+  //    (baselined entries listed first; orderByRankMap's stable sort keeps unranked
+  //    rows in input order) while fresh ranks reorder across both pools. Per-kind
+  //    eligibility guards and claim semantics unchanged; baselined entry wins a
+  //    same-SD dedup (both pools can surface one SD).
   try {
     const { data: cands } = await sb
       .from('v_sd_next_candidates')
       .select('sd_id, track, status, priority')
       .limit(SELF_CLAIM_CANDIDATE_LIMIT);
+    let draftRows = [];
+    try { draftRows = await fetchDraftCandidates(sb); } catch { /* fail-open: drafts absent */ }
+
+    const seen = new Set();
+    const merged = [];
     for (const c of (cands || [])) {
-      // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: skip dependency-blocked SDs and orchestrator PARENTS
-      // (the view surfaces both; claim_sd enforces neither). Mirrors the step-6.25 guard.
-      if (!(await baselinedCandidateEligible(sb, c.sd_id))) continue;
-      if (await isSdInFlight(sb, c.sd_id, sessionId)) continue;  // dedup: skip SDs already started or live-foreign-held
-      const claimed = await tryClaim(sb, c.sd_id, sessionId, c.track);
-      if (claimed.ok) {
-        return { ...base, action: 'self_claimed', sd: c.sd_id, track: c.track, message: `Self-claimed ${c.sd_id} from sd:next. Run: node scripts/sd-start.js ${c.sd_id}` };
+      if (c.sd_id && !seen.has(c.sd_id)) { seen.add(c.sd_id); merged.push({ kind: 'baselined', key: c.sd_id, track: c.track }); }
+    }
+    for (const d of draftRows) {
+      if (d.sd_key && !seen.has(d.sd_key)) { seen.add(d.sd_key); merged.push({ kind: 'draft', key: d.sd_key, row: d }); }
+    }
+
+    // duty-6: honor the coordinator's fresh dispatch_rank across the WHOLE pool (fail-open).
+    const ranked = await sortByDispatchRank(sb, merged, (x) => x.key);
+    for (const x of ranked) {
+      if (x.kind === 'baselined') {
+        // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: skip dependency-blocked SDs and orchestrator PARENTS
+        // (the view surfaces both; claim_sd enforces neither). Mirrors the draft-tier guard.
+        if (!(await baselinedCandidateEligible(sb, x.key))) continue;
+        if (await isSdInFlight(sb, x.key, sessionId)) continue;  // dedup: started or live-foreign-held
+        const claimed = await tryClaim(sb, x.key, sessionId, x.track);
+        if (claimed.ok) {
+          return { ...base, action: 'self_claimed', sd: x.key, track: x.track, message: `Self-claimed ${x.key} from sd:next. Run: node scripts/sd-start.js ${x.key}` };
+        }
+      } else {
+        const result = await tryClaimDraftCandidate(sb, sessionId, base, x.row);
+        if (result) return result;
       }
     }
   } catch { /* fail-open */ }
-
-  // 6.25 self-claim a claimable UN-BASELINED draft SD. v_sd_next_candidates is built from
-  // sd_baseline_items, so newly-created draft SDs (the normal LEAD starting state) are invisible
-  // to step 6 — this tier reads them directly from strategic_directives_v2, dep-checks them, and
-  // claims one. Strictly BELOW baselined candidates and ABOVE QFs/idle. SD-FDBK-FEAT-WORKER-CHECKIN-SELF-001.
-  const draftClaimed = await selfClaimDraftSd(sb, sessionId, base);
-  if (draftClaimed) return draftClaimed;
 
   // 6.5 self-claim an open quick_fix. v_sd_next_candidates is SD-only, so open
   // QFs are sourced here — strictly BELOW SD candidates and ABOVE idle, so a
@@ -702,7 +779,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
