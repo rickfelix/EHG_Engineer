@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-11](#2026-06-11)
+  - [Infrastructure](#infrastructure)
 - [2026-06-10](#2026-06-10)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -42,6 +44,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-11
+
+### Infrastructure
+- **Scripts estate reconciliation: weekly reachability gauge + scratch-sweep extension + liveness norm + first 102-file archive batch** - PRs #4626 (code) + #4629 (moves) (SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001)
+  - **Issue**: 4,562 script files; **717 of 2,091 live candidates (34%) were orphans** referenced by nothing, with archiving lagging ~6 months and zero recurring visibility (chairman-directed sprawl review 2026-06-10). PLAN ground-truthing corrected two stale premises: the broken `validate:schema-sync` aliases were **already retired by #4575** (target file never existed on main) and the scratch-lifecycle core **already landed via #4599** (`git cherry` misleads under squash-merges). The original scan also flagged two LIVE pre-commit hooks as orphans (`.husky` missing from its haystack).
+  - **Fix**: NEW weekly `scripts-reachability-gauge.mjs` (`sre:scripts-reachability`, `STANDARD_LOOPS` Mon 09:40) — `coordination_events` snapshot series with `new_orphans`/`resolved_orphans` deltas and growth-only alerts (≥10 WoW or any broken npm alias), `.husky` FP class fixed; `sweep-worker-scratch.mjs` extended with `scripts/tmp|temp` untracked-only roots (hard 7d floor; live dry-run 278 files/4.5 MB); liveness norm doc + archive README recipe; **proof-of-recipe batch: 102 oldest orphans (git-last-touch ≥45d) `git mv`'d reversibly** after a 4-screen protocol excluded 20 (all the tests/**-only reference class — a gauge blind spot flagged for follow-up). Drive-by: the STANDARD_LOOPS count-pin test was already broken on main (pinned 11 vs 13; node:test file outside the vitest glob).
+  - **Verification**: validator criticals **38 → 36** (zero new, 2 pre-existing resolved); gauge orphan_count **308 → 207** (arithmetic exact); the growth alert live-tripped end-to-end during measurement (self-artifact row verified-deleted); 24 new tests + loop parity green. Gates: LEAD-FINAL 98; TESTING PASS / VALIDATION PASS; retro 90. Remaining ~207 orphans are gauge-driven follow-up batches.
 
 ## 2026-06-10
 
