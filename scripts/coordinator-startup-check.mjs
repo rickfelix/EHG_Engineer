@@ -104,6 +104,14 @@ export const STANDARD_LOOPS = [
   // Converts idle-fleet gaps into review supply (4 reviews -> 27 evidenced SDs on 2026-06-10).
   { key: 'review-rotation', label: 'Subsystem review rotation (weekly)', script: 'subsystem-review-rotation.cjs', cron: '0 9 * * 1',
     prompt: 'node scripts/subsystem-review-rotation.cjs' },
+  // SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001 (FR-1): weekly scripts-estate reachability
+  // gauge. Scans scripts/** against the reference haystack (package.json, .github, .husky,
+  // hooks/skills configs, docs, code, CLAUDE*.md), persists a coordination_events baseline
+  // series (SCRIPTS_REACHABILITY_SNAPSHOT) and alerts the coordinator inbox ONLY on growth
+  // (orphan_count +>=10 week-over-week) or broken npm aliases. Internally due-gated (~6d),
+  // so an extra arm or manual run is a cheap no-op. Advisory — never CI-blocking.
+  { key: 'scripts-reachability', label: 'Scripts-estate reachability gauge (weekly)', script: 'scripts-reachability-gauge.mjs', cron: '40 9 * * 1',
+    prompt: 'node scripts/scripts-reachability-gauge.mjs' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.

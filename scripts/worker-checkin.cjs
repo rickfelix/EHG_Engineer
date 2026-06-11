@@ -687,7 +687,12 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         const claimed = await tryClaim(sb, sdKey, sessionId);
         if (claimed.ok) {
           await ackMessage(sb, assignment.id, { role: sessionRole, kind: assignment.payload?.kind, messageType: assignment.message_type });
-          return { ...base, action: 'claimed_assignment', sd: sdKey, message: `Claimed assigned ${sdKey} via claim_sd. Run: node scripts/sd-start.js ${sdKey}` };
+          // SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 (FR-5): surface the coordinator's
+          // ADVISORY effort recommendation so the worker banner can render it.
+          const effortRec = assignment.payload?.effort_recommendation || null;
+          return { ...base, action: 'claimed_assignment', sd: sdKey,
+            ...(effortRec ? { effort_recommendation: effortRec, effort_recommendation_reason: assignment.payload?.effort_recommendation_reason || null } : {}),
+            message: `Claimed assigned ${sdKey} via claim_sd.${effortRec ? ` Recommended effort: ${effortRec} (advisory).` : ''} Run: node scripts/sd-start.js ${sdKey}` };
         }
         // could not claim the assigned SD -> fall through to self-claim
         base.assignment_claim_error = claimed.error;

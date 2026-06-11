@@ -22,6 +22,9 @@
  *   node scripts/maintenance/sweep-worker-scratch.mjs --execute --older-than-hours 0   # delete all matched
  *   node scripts/maintenance/sweep-worker-scratch.mjs --auto           # hook mode: execute, throttled, silent, 24h gate
  *
+ *   scripts/tmp + scripts/temp candidates (SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001 FR-2)
+ *   carry their own 7-day minimum age gate that --older-than-hours can NOT lower.
+ *
  * Exit codes: 0 always in --auto (fail-open so it can never block a session). In manual
  * mode, 0 on success, 1 on an unexpected error (so a human notices).
  */
@@ -62,6 +65,16 @@ const NEVER_DELETE_BASENAMES = new Set([
   '.coord-email-last.json', '.coord-review-last.json',
   '.adam-scan-ledger.json', 'docmon-report.json',
 ]);
+
+// Scripts scratch dirs (SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001 FR-2): scripts/tmp
+// and scripts/temp are throwaway-by-convention but nothing pruned them (150 + 159 files,
+// ~0-1 tracked, by the 2026-06-10 sprawl scan). Swept recursively, UNTRACKED-ONLY (the
+// trackedSet invariant in main() covers these candidates like any other) and with their
+// own 7-DAY minimum age gate — these are bigger artifacts than session scratch, and the
+// per-candidate gate cannot be lowered by --older-than-hours (Math.max in main()).
+// scripts/one-off stays EXCLUDED (179+ tracked deliverables + live-cron scripts mix in).
+const SCRIPTS_SCRATCH_ROOTS = ['scripts/tmp', 'scripts/temp'];
+const SCRIPTS_SCRATCH_MIN_AGE_HOURS = 7 * 24;
 
 const ROOT_SCRATCH_RE = /^_.+\.(mjs|cjs|json|diff|txt|sh|sql)$/; // root-level ad-hoc scratch
 const MONITOR_PID_RE = /^\.monitor-.+\.pid$/;      // stale monitor PID files (scoped; NOT *.pid)
@@ -113,7 +126,8 @@ function dirSizeBytes(absPath) {
  */
 function findCandidates(root) {
   const out = [];
-  const add = (rel, bucket, isDir = false) => out.push({ rel, abs: path.join(root, rel), bucket, isDir });
+  const add = (rel, bucket, isDir = false, minAgeHours = 0) =>
+    out.push({ rel, abs: path.join(root, rel), bucket, isDir, minAgeHours });
 
   // 1) repo-root files: _*.mjs/_*.cjs probes, .monitor-*.pid, the stray artifact
   for (const name of fs.readdirSync(root)) {
@@ -145,6 +159,26 @@ function findCandidates(root) {
   for (const name of ROOT_BACKUP_DIRS) {
     const abs = path.join(root, name);
     if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) add(name, 'backup-dir', true);
+  }
+
+  // 4) scripts scratch dirs (recursive, files only — never the dirs themselves, so a
+  //    tracked file deep in a subtree can never be collateral). Untracked-only via the
+  //    trackedSet check in main(); 7-day per-candidate minimum age gate.
+  for (const scratchRoot of SCRIPTS_SCRATCH_ROOTS) {
+    const base = path.join(root, scratchRoot);
+    if (!fs.existsSync(base)) continue;
+    const stack = [base];
+    while (stack.length) {
+      const dir = stack.pop();
+      let entries = [];
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+      for (const entry of entries) {
+        const abs = path.join(dir, entry.name);
+        if (entry.isDirectory()) { stack.push(abs); continue; }
+        const rel = path.relative(root, abs).replace(/\\/g, '/');
+        add(rel, 'scripts-scratch', false, SCRIPTS_SCRATCH_MIN_AGE_HOURS);
+      }
+    }
   }
 
   return out;
@@ -217,7 +251,10 @@ function main() {
     }
     let age;
     try { age = ageHours(c.abs); } catch { skipped.push({ ...c, why: 'stat-failed' }); continue; }
-    if (age < args.olderThanHours) { skipped.push({ ...c, why: `too-new(${age.toFixed(1)}h)` }); continue; }
+    // Per-candidate minimum age (scripts-scratch = 7d) can never be lowered by
+    // --older-than-hours: a global "0" must not turn the scripts dirs into a hair trigger.
+    const gateHours = Math.max(args.olderThanHours, c.minAgeHours || 0);
+    if (age < gateHours) { skipped.push({ ...c, why: `too-new(${age.toFixed(1)}h<${gateHours}h)` }); continue; }
     let bytes = 0;
     try { bytes = c.isDir ? dirSizeBytes(c.abs) : fs.statSync(c.abs).size; } catch { /* ignore */ }
     planned.push({ ...c, ageH: age, bytes });

@@ -64,6 +64,14 @@ const SHARED_EXCLUDE = [
   '**/press-kit/**',
   '**/agents/**',
   '**/archive/**',
+  // SD-LEO-INFRA-TEST-ESTATE-HYGIENE-001: the unanchored '**/*.test.js' include
+  // swept the orphaned legacy test/ root (CI separately --excludes it, so local
+  // npm test diverged from CI) and tests/archived/ ('archive' above does NOT
+  // match 'archived'), whose .test.js files import @playwright/test and crash
+  // the unit run with "Playwright Test did not expect test.describe()".
+  '**/test/**',
+  '**/tests/archived/**',
+  '**/docs/archived/**',
   '**/.worktrees/**',
   '**/.cursor/worktrees/**',
   '**/.claude/worktrees/**',

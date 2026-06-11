@@ -1101,7 +1101,57 @@ async function main() {
   }
 
   // 4. Auto-release dead sessions (with WIP guard + MC liveness gate)
-  const dead = classified.filter(s => s.status === 'DEAD');
+  let dead = classified.filter(s => s.status === 'DEAD');
+
+  // SD-MAN-INFRA-MEDIUM-EFFORT-HARDENING-001 (FR-2): account-limit freeze gate.
+  // Multiple sessions on one host stopping heartbeats within minutes of each other is
+  // the freeze SIGNATURE (alive-but-frozen), not mass death — the sweep announced
+  // PID_DEAD all night for frozen sessions on 2026-06-11 (6.5h lost). Suppress
+  // releases for episode members and emit ONE deduped FLEET_FROZEN notice; the
+  // episode TTL inside the detector guarantees a real mass death still releases.
+  try {
+    const { detectFreeze } = require('../lib/fleet/freeze-detector.cjs');
+    const freeze = detectFreeze(dead);
+    if (freeze.frozen) {
+      dead = dead.filter(s => {
+        if (freeze.frozenSessionIds.has(s.session_id)) {
+          warnings.push('FREEZE_GUARD: ' + s.session_id + ' in freeze episode — suppressing PID_DEAD release (SD: ' + (s.sd_key || 'none') + ')');
+          return false;
+        }
+        return true;
+      });
+      for (const ep of freeze.episodes) {
+        // Dedup the notice per episode (one row per episode_key while it lasts).
+        const { data: existing } = await supabase
+          .from('session_coordination')
+          .select('id')
+          .eq('message_type', 'INFO')
+          .contains('payload', { kind: 'fleet_frozen', episode_key: ep.episode_key })
+          .limit(1);
+        if (!existing || existing.length === 0) {
+          await supabase.from('session_coordination').insert({
+            message_type: 'INFO',
+            subject: 'FLEET_FROZEN: probable account session-limit freeze (' + ep.session_ids.length + ' sessions on ' + ep.hostname + ')',
+            body: 'Sessions ' + ep.session_ids.join(', ') + ' stopped heartbeating together (' + ep.cluster_start + ' .. ' + ep.cluster_end + '). PID_DEAD releases suppressed until thaw or episode TTL.',
+            sender_type: 'sweep',
+            payload: {
+              kind: 'fleet_frozen',
+              episode_key: ep.episode_key,
+              hostname: ep.hostname,
+              session_ids: ep.session_ids,
+              cluster_start: ep.cluster_start,
+              cluster_end: ep.cluster_end,
+              note: 'Probable account session-limit freeze — PID_DEAD releases suppressed for these sessions until thaw or episode TTL.'
+            }
+          });
+          actions.push('FLEET_FROZEN: episode ' + ep.episode_key + ' (' + ep.session_ids.length + ' sessions) — releases suppressed');
+        }
+      }
+    }
+  } catch (fzErr) {
+    // Fail-open: detector problems must never block the sweep's normal staleness path.
+    warnings.push('FREEZE_GUARD: detector skipped due to error: ' + fzErr.message);
+  }
   // QF-20260611-162: announce-vs-write split. The CLAIM_RELEASED announce loop
   // (step 6) used to iterate ALL of `dead`, but this release loop `continue`s on
   // four hold guards (WIP, MC, hardcap-pid-alive, cross-signal) and the UPDATE

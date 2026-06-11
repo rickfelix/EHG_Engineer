@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-10T23:56:15.245Z
-**Rows**: 45
+**Generated**: 2026-06-11T12:32:38.538Z
+**Rows**: 47
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -19,7 +19,7 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| venture_id | `uuid` | **NO** | - | - |
+| venture_id | `uuid` | YES | - | - |
 | lifecycle_stage | `integer(32)` | **NO** | - | - |
 | health_score | `character varying(10)` | YES | - | - |
 | recommendation | `character varying(20)` | YES | - | - |
