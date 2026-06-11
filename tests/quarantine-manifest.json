@@ -43,14 +43,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "lib/claim-guard.test.js",
-      "reason_class": "supabase-mock-chain",
-      "error_signature": "TypeError: supabase.from(...).select(...).eq(...).maybeSingle is not a function",
-      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "lib/eva/__tests__/lifecycle-terminal-orchestrator.test.js",
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected { handled: true, …(2) } to deeply equal { Object (handled, completed, ...) }",
