@@ -16,11 +16,12 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 | S20 exit (Code Quality, re-run) | — (never produced canonical artifact before) | PASS via Gemini validation; `code_quality_report` persisted (first ever — the type was blocked by a DB constraint, defect #6). | Pre-fix, S23's code_quality category was structurally unsatisfiable fleet-wide. |
 | S23 exit (Launch Readiness, re-run) | SKIPPED → (post-fixes) READY, 100%, 3/3 required pass | Chairman GO `f184cc80`: advance 23→24. | WELL-CALIBRATED after defects fixed: gate verdict and chairman judgment agreed. The first SKIPPED was honest signal of genuinely-missing upstream artifacts. |
 | S24 entry | READY precondition satisfied | PASS — first venture in stage 24. | — |
-| S24 exit (Go Live analysis) | ready_to_launch, 3 channels (blog_seo, twitter_x, email) | Pending chairman launch decision (routed via coordinator, corr `13a64707`). | — |
+| S24 exit (Go Live analysis) | ready_to_launch, 3 channels (blog_seo, twitter_x, email); ad-copy headlines NOT ready (`ad_copy_ready=false` ×3) | Chairman GO `9c44db4a` (chairman-via-coordinator, 13:08Z; pilot scope explicit) — launched_at stamped, `launch_metrics` t=0 emitted, advanced 24→25 | Aligned, precedent set: "targeting ready, copy pending" is acceptable launch-readiness at pilot scope. The exit gate itself was structurally unsatisfiable until defect #10 (below) — gate declarations must ship WITH their producers. |
+| S25 exit (Post-Launch Review) | Honest t=0 review persisted (artifact `7d197a3e`): zero metrics (no elapsed window), 2 assumptions validated / 2 invalidated, 4 learnings | Pending chairman decision `bf060e27` (routed via coordinator) | t=0 post-launch review is definitionally thin — the stage contract should gate on a minimum elapsed window or accept an explicit t0_review mode. |
 
 ## First-contact defect log (FR-3)
 
-9 defects on first live contact with S20–S24, all fixed forward (PR #4635, merged; 2 prod migrations applied):
+10 defects on first live contact with S20–S25, all fixed forward (PR #4635 merged + defect #10 on PR #4636; 2 prod migrations applied):
 
 | # | Class | Defect | Disposition |
 |---|-------|--------|-------------|
@@ -33,6 +34,7 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 | 7 | positional-swap | S23 scorer read distribution from stage 22 post-resequence | Fixed inline (any-of both positions) |
 | 8 | rpc-type-cast | `fn_advance_venture_stage` text[]→jsonb cast exception — advancement impossible from any artifact-gated stage | Migration applied (function fix) |
 | 9 | deps+shadowing | S24 channels: wrong stage + CROSS_STAGE_DEPS missing 21 + merge shadowing | Fixed inline (`__byType` + deps; RCA `4ef74cda`) |
+| 10 | gate-without-producer | S24 exit gate (FR-5 verifiers) requires a current `launch_metrics` artifact with channels activated — NO producer existed anywhere; 24→25 structurally impossible for every venture | Fixed inline: go-live analyzer emits `launch_metrics` t=0 on launch decision; live artifact persisted via typed-artifacts batch path |
 
 ## Calibration findings for the Adam roadmap
 
@@ -42,7 +44,9 @@ First clean calibration cohort: every gate verdict below is evidence-backed (`ga
 4. **Positional-swap residue from the S18–26 resequence is a live defect class** (#2, #7, #9 — three independent instances). A drift-lint of stage-numbered reads vs venture_stages SSOT would catch the remainder statically.
 5. **Gate-vs-chairman agreement was perfect post-fix** (S23 READY → chairman GO): early evidence the gate system calibrates well once the machinery actually runs.
 
+6. **Gate inputs are the calibration gap, not thresholds** (S23 attestation-mode advisory categories; S24 tolerating missing ad copy): input honesty (attestation-vs-evidence flags on checklist categories) should precede any threshold tuning.
+
 ## Outstanding
 
-- S24 launch decision (chairman, via coordinator) → 24→25→26 run + post-launch/growth gate rows.
-- Final predicted-vs-actual entries for S25/S26 once executed.
+- S25 chairman decision `bf060e27` (via coordinator) → 25→26 advance + S26 Growth Playbook run (final stage — first venture ever to finish the pipeline).
+- Final predicted-vs-actual entry for S26 + closing synthesis once executed.
