@@ -112,6 +112,13 @@ export const STANDARD_LOOPS = [
   // so an extra arm or manual run is a cheap no-op. Advisory — never CI-blocking.
   { key: 'scripts-reachability', label: 'Scripts-estate reachability gauge (weekly)', script: 'scripts-reachability-gauge.mjs', cron: '40 9 * * 1',
     prompt: 'node scripts/scripts-reachability-gauge.mjs' },
+  // SD-MAN-INFRA-RETENTION-OPS-FINISHER-001: weekly archive-not-delete retention enforcement
+  // (machinery shipped + chairman-GO'd by SD-LEO-INFRA-RETENTION-POLICY-UNBOUNDED-001; 196k rows
+  // archived in the first live soak). Prompt mirrors scripts/retention-enforce.js --arming-spec.
+  // Batch-clamped + per-table fail-soft, so a re-arm or manual run is safe; backlog convergence
+  // (~513k workflow_trace_log + ~484k governance_audit_log) only progresses while this is armed.
+  { key: 'retention', label: 'Weekly retention enforcement (archive-not-delete)', script: 'retention-enforce.js', cron: '0 3 * * 0',
+    prompt: 'Run `npm run retention:apply` in EHG_Engineer and report the per-table archived/deleted counts; if the command exits non-zero or `npm run retention:check -- --liveness` reports STALE, surface to the coordinator.' },
 ];
 
 // Parse the armed-cron basenames the agent passes from its CronList output.

@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-FIX-RECONCILE-DEAD-ARRIVAL-001",
-  "expectedBranch": "feat/SD-LEO-FIX-RECONCILE-DEAD-ARRIVAL-001",
-  "createdAt": "2026-06-11T11:16:52.397Z",
+  "sdKey": "SD-MAN-INFRA-RETENTION-OPS-FINISHER-001",
+  "expectedBranch": "feat/SD-MAN-INFRA-RETENTION-OPS-FINISHER-001",
+  "createdAt": "2026-06-11T13:55:14.778Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
