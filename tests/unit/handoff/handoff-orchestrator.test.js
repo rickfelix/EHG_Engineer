@@ -18,7 +18,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Mock external modules BEFORE importing HandoffOrchestrator
 // ---------------------------------------------------------------------------
 
-// Mock Supabase client factory
+// Mock Supabase client factory — no real DB is touched anywhere in this suite,
+// so no describeDb / HAS_REAL_DB guard is needed (the factory below returns an
+// inert stub; the DB-import audit matches the mocked symbol name only).
 vi.mock('../../../lib/supabase-client.js', () => ({
   createSupabaseServiceClient: vi.fn(() => ({ _mock: true }))
 }));
@@ -55,9 +57,16 @@ vi.mock('../../../scripts/modules/handoff/rejection-subagent-mapping.js', () => 
 // ---------------------------------------------------------------------------
 // Now import the class under test
 // ---------------------------------------------------------------------------
-import { HandoffOrchestrator } from '../../../scripts/modules/handoff/HandoffOrchestrator.js';
+import { HandoffOrchestrator, createHandoffSystem } from '../../../scripts/modules/handoff/HandoffOrchestrator.js';
 import { resolveAutoProceed } from '../../../scripts/modules/handoff/auto-proceed-resolver.js';
 import { captureHandoffGate } from '../../../lib/flywheel/capture.js';
+import { ResultBuilder } from '../../../scripts/modules/handoff/ResultBuilder.js';
+import {
+  WORKFLOW_BY_SD_TYPE,
+  getWorkflowForType,
+  isHandoffRequired,
+  isHandoffOptional
+} from '../../../scripts/modules/handoff/cli/workflow-definitions.js';
 
 // ---------------------------------------------------------------------------
 // Helper factories
@@ -764,5 +773,684 @@ describe('Self-critique _validateSelfCritique internals', () => {
       }
     });
     expect(result.gaps).toEqual(['Missing error handling', 'No integration test']);
+  });
+});
+
+// ===========================================================================
+// Injected-deps suite — consolidated from tests/unit/handoff-orchestrator.test.js
+// (SD-LEO-INFRA-TEST-ESTATE-HYGIENE-001 FR-3). Uses a single shared deps object
+// rebuilt per test, mirroring the original file's constructor-injection style.
+// ===========================================================================
+describe('HandoffOrchestrator (injected-deps suite)', () => {
+  /** Create a mock executor that resolves with a success result */
+  function createDepsExecutor(overrides = {}) {
+    return {
+      execute: vi.fn().mockResolvedValue({ success: true, ...overrides }),
+      getRequiredGates: vi.fn().mockResolvedValue([]),
+      getRemediation: vi.fn().mockReturnValue(null)
+    };
+  }
+
+  /** Create a mock executor that resolves with a failure result */
+  function createFailingDepsExecutor(reasonCode = 'GATE_FAILED', message = 'Validation failed') {
+    return {
+      execute: vi.fn().mockResolvedValue({
+        success: false,
+        rejected: true,
+        reasonCode,
+        message
+      }),
+      getRequiredGates: vi.fn().mockResolvedValue([]),
+      getRemediation: vi.fn().mockReturnValue(null)
+    };
+  }
+
+  /** Build the default set of injected dependencies */
+  function createMockDeps() {
+    return {
+      supabase: {},
+      sdRepo: {
+        verifyExists: vi.fn().mockResolvedValue(true),
+        getById: vi.fn().mockResolvedValue({
+          id: 'uuid-123',
+          sd_key: 'SD-TEST-001',
+          title: 'Test SD',
+          sd_type: 'feature'
+        })
+      },
+      prdRepo: {
+        getByDirectiveId: vi.fn().mockResolvedValue(null)
+      },
+      handoffRepo: {
+        loadTemplate: vi.fn().mockResolvedValue({ id: 'tmpl-1', name: 'Test Template' }),
+        listExecutions: vi.fn().mockResolvedValue([]),
+        getStats: vi.fn().mockResolvedValue({ total: 0 })
+      },
+      validationOrchestrator: {
+        validateGatesAll: vi.fn().mockResolvedValue({
+          passed: true,
+          passedGates: [{ name: 'GATE_1' }],
+          failedGates: []
+        })
+      },
+      contentBuilder: {},
+      recorder: {
+        recordSuccess: vi.fn().mockResolvedValue(undefined),
+        recordFailure: vi.fn().mockResolvedValue(undefined),
+        recordSystemError: vi.fn().mockResolvedValue(undefined)
+      }
+    };
+  }
+
+  let deps;
+  let orchestrator;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolveAutoProceed.mockResolvedValue({
+      autoProceed: true,
+      source: 'default',
+      sessionId: 'test-session-001'
+    });
+    deps = createMockDeps();
+    orchestrator = new HandoffOrchestrator(deps);
+  });
+
+  describe('constructor', () => {
+    it('should accept injected dependencies', () => {
+      expect(orchestrator.sdRepo).toBe(deps.sdRepo);
+      expect(orchestrator.prdRepo).toBe(deps.prdRepo);
+      expect(orchestrator.handoffRepo).toBe(deps.handoffRepo);
+      expect(orchestrator.validationOrchestrator).toBe(deps.validationOrchestrator);
+      expect(orchestrator.recorder).toBe(deps.recorder);
+    });
+
+    it('should list all 5 supported handoff types', () => {
+      expect(orchestrator.supportedHandoffs).toEqual([
+        'LEAD-TO-PLAN',
+        'PLAN-TO-EXEC',
+        'EXEC-TO-PLAN',
+        'PLAN-TO-LEAD',
+        'LEAD-FINAL-APPROVAL'
+      ]);
+    });
+
+    it('should accept pre-built executors map', () => {
+      const executors = { 'LEAD-TO-PLAN': createDepsExecutor() };
+      const o = new HandoffOrchestrator({ ...deps, executors });
+      expect(o._executors).toBe(executors);
+    });
+  });
+
+  describe('createHandoffSystem', () => {
+    it('should return a HandoffOrchestrator instance', () => {
+      const system = createHandoffSystem(deps);
+      expect(system).toBeInstanceOf(HandoffOrchestrator);
+    });
+  });
+
+  describe('registerExecutor', () => {
+    it('should register an executor and normalize the type to uppercase', () => {
+      const executor = createDepsExecutor();
+      orchestrator.registerExecutor('lead-to-plan', executor);
+      expect(orchestrator._executors['LEAD-TO-PLAN']).toBe(executor);
+    });
+
+    it('should initialize _executors map if null', () => {
+      orchestrator._executors = null;
+      const executor = createDepsExecutor();
+      orchestrator.registerExecutor('PLAN-TO-EXEC', executor);
+      expect(orchestrator._executors['PLAN-TO-EXEC']).toBe(executor);
+    });
+  });
+
+  describe('executeHandoff', () => {
+    it('should verify SD exists before proceeding', async () => {
+      const executor = createDepsExecutor();
+      orchestrator.registerExecutor('LEAD-TO-PLAN', executor);
+
+      await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-TEST-001');
+
+      expect(deps.sdRepo.verifyExists).toHaveBeenCalledWith('SD-TEST-001');
+    });
+
+    it('should return system error when SD does not exist', async () => {
+      deps.sdRepo.verifyExists.mockRejectedValue(new Error('SD not found: SD-MISSING'));
+      orchestrator.registerExecutor('LEAD-TO-PLAN', createDepsExecutor());
+
+      const result = await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-MISSING');
+
+      expect(result.success).toBe(false);
+      expect(result.systemError).toBe(true);
+      expect(result.error).toContain('SD not found');
+    });
+
+    it('should resolve auto-proceed before execution', async () => {
+      orchestrator.registerExecutor('LEAD-TO-PLAN', createDepsExecutor());
+
+      await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-TEST-001');
+
+      expect(resolveAutoProceed).toHaveBeenCalledWith(
+        expect.objectContaining({ supabase: deps.supabase, verbose: true })
+      );
+    });
+
+    it('should include autoProceed in the result even on executor failure', async () => {
+      orchestrator.registerExecutor('PLAN-TO-EXEC', createFailingDepsExecutor());
+
+      const result = await orchestrator.executeHandoff('PLAN-TO-EXEC', 'SD-TEST-001');
+
+      expect(result.success).toBe(false);
+      expect(result.autoProceed).toBe(true);
+    });
+  });
+
+  describe('executeHandoff recording', () => {
+    it('should not record failure for system errors (no double-recording)', async () => {
+      const executor = {
+        execute: vi.fn().mockRejectedValue(new Error('timeout'))
+      };
+      orchestrator.registerExecutor('LEAD-TO-PLAN', executor);
+
+      await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-TEST-001');
+
+      expect(deps.recorder.recordFailure).not.toHaveBeenCalled();
+      expect(deps.recorder.recordSystemError).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('executeHandoff flywheel capture', () => {
+    it('should fire captureHandoffGate on failure too', async () => {
+      orchestrator.registerExecutor('PLAN-TO-EXEC', createFailingDepsExecutor());
+
+      await orchestrator.executeHandoff('PLAN-TO-EXEC', 'SD-TEST-001');
+
+      expect(captureHandoffGate).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('executeHandoff deferred PRD generation', () => {
+    it('should call _executeDeferredPrdGeneration when result has _deferredPrdGeneration', async () => {
+      const executor = createDepsExecutor({
+        _deferredPrdGeneration: { sdId: 'SD-TEST-001', sd: { id: 'uuid-1', title: 'Test' } }
+      });
+      orchestrator.registerExecutor('LEAD-TO-PLAN', executor);
+
+      // Spy on the deferred method
+      const spy = vi.spyOn(orchestrator, '_executeDeferredPrdGeneration').mockResolvedValue(undefined);
+
+      await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-TEST-001');
+
+      expect(spy).toHaveBeenCalledWith({
+        sdId: 'SD-TEST-001',
+        sd: { id: 'uuid-1', title: 'Test' }
+      });
+    });
+
+    it('should not call deferred PRD generation when flag is absent', async () => {
+      orchestrator.registerExecutor('LEAD-TO-PLAN', createDepsExecutor());
+      const spy = vi.spyOn(orchestrator, '_executeDeferredPrdGeneration');
+
+      await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-TEST-001');
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('self-critique pre-flight (_validateSelfCritique) — additional cases', () => {
+    it('should not block when no self-critique is provided (soft enforcement)', () => {
+      const result = orchestrator._validateSelfCritique('LEAD-TO-PLAN', {});
+
+      expect(result.blocked).toBe(false);
+      expect(result.warning).toBe(true);
+      expect(result.confidence).toBeNull();
+    });
+
+    it('should block with low confidence (< 5) and no explanation', () => {
+      const result = orchestrator._validateSelfCritique('PLAN-TO-LEAD', {
+        self_critique: { confidence: 3 }
+      });
+
+      expect(result.blocked).toBe(true);
+      expect(result.confidence).toBe(3);
+    });
+
+    it('should accept numeric self_critique as confidence directly', () => {
+      const result = orchestrator._validateSelfCritique('LEAD-TO-PLAN', {
+        self_critique: 8
+      });
+
+      expect(result.blocked).toBe(false);
+      expect(result.confidence).toBe(8);
+    });
+
+    it('should accept confidence option key directly', () => {
+      const result = orchestrator._validateSelfCritique('LEAD-TO-PLAN', {
+        confidence: { score: 8 }
+      });
+
+      expect(result.blocked).toBe(false);
+      expect(result.confidence).toBe(8);
+    });
+  });
+
+  describe('executeHandoff template loading', () => {
+    it('should load template from handoffRepo', async () => {
+      orchestrator.registerExecutor('PLAN-TO-EXEC', createDepsExecutor());
+
+      await orchestrator.executeHandoff('PLAN-TO-EXEC', 'SD-TEST-001');
+
+      expect(deps.handoffRepo.loadTemplate).toHaveBeenCalledWith('PLAN-TO-EXEC');
+    });
+
+    it('should continue without template when none is found', async () => {
+      deps.handoffRepo.loadTemplate.mockResolvedValue(null);
+      orchestrator.registerExecutor('PLAN-TO-EXEC', createDepsExecutor());
+
+      const result = await orchestrator.executeHandoff('PLAN-TO-EXEC', 'SD-TEST-001');
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('precheckHandoff', () => {
+    it('should validate all gates without stopping on first failure', async () => {
+      const executor = createDepsExecutor();
+      executor.getRequiredGates.mockResolvedValue([
+        { name: 'GATE_A' },
+        { name: 'GATE_B' },
+        { name: 'GATE_C' }
+      ]);
+      orchestrator.registerExecutor('PLAN-TO-EXEC', executor);
+
+      deps.validationOrchestrator.validateGatesAll.mockResolvedValue({
+        passed: false,
+        passedGates: [{ name: 'GATE_A' }],
+        failedGates: [
+          { name: 'GATE_B', issues: ['Missing PRD'] },
+          { name: 'GATE_C', issues: ['No tests'] }
+        ]
+      });
+
+      const result = await orchestrator.precheckHandoff('PLAN-TO-EXEC', 'SD-TEST-001');
+
+      expect(result.success).toBe(false);
+      expect(result.passedGates).toHaveLength(1);
+      expect(result.failedGates).toHaveLength(2);
+    });
+
+    it('should normalize handoff type to uppercase', async () => {
+      const executor = createDepsExecutor();
+      executor.getRequiredGates.mockResolvedValue([]);
+      orchestrator.registerExecutor('LEAD-TO-PLAN', executor);
+
+      deps.validationOrchestrator.validateGatesAll.mockResolvedValue({
+        passed: true,
+        passedGates: [],
+        failedGates: []
+      });
+
+      const result = await orchestrator.precheckHandoff('lead-to-plan', 'SD-TEST-001');
+
+      expect(result.handoffType).toBe('LEAD-TO-PLAN');
+    });
+
+    it('should pass precheckMode flag to validation orchestrator', async () => {
+      const executor = createDepsExecutor();
+      executor.getRequiredGates.mockResolvedValue([{ name: 'G1' }]);
+      orchestrator.registerExecutor('PLAN-TO-EXEC', executor);
+
+      deps.validationOrchestrator.validateGatesAll.mockResolvedValue({
+        passed: true,
+        passedGates: [{ name: 'G1' }],
+        failedGates: []
+      });
+
+      await orchestrator.precheckHandoff('PLAN-TO-EXEC', 'SD-TEST-001');
+
+      expect(deps.validationOrchestrator.validateGatesAll).toHaveBeenCalledWith(
+        [{ name: 'G1' }],
+        expect.objectContaining({ precheckMode: true })
+      );
+    });
+
+    it('should handle exceptions gracefully', async () => {
+      deps.sdRepo.getById.mockRejectedValue(new Error('Network timeout'));
+
+      const result = await orchestrator.precheckHandoff('LEAD-TO-PLAN', 'SD-TEST-001');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Network timeout');
+      expect(result.failedGates[0].name).toBe('SYSTEM');
+    });
+  });
+
+  describe('listHandoffExecutions', () => {
+    it('should delegate to handoffRepo.listExecutions', async () => {
+      const filters = { sdId: 'SD-TEST-001' };
+      await orchestrator.listHandoffExecutions(filters);
+
+      expect(deps.handoffRepo.listExecutions).toHaveBeenCalledWith(filters);
+    });
+  });
+
+  describe('getHandoffStats', () => {
+    it('should delegate to handoffRepo.getStats', async () => {
+      await orchestrator.getHandoffStats();
+
+      expect(deps.handoffRepo.getStats).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('error resilience', () => {
+    it('should return systemError when resolveAutoProceed throws', async () => {
+      resolveAutoProceed.mockRejectedValueOnce(new Error('Session lookup failed'));
+      orchestrator.registerExecutor('LEAD-TO-PLAN', createDepsExecutor());
+
+      const result = await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-TEST-001');
+
+      expect(result.success).toBe(false);
+      expect(result.systemError).toBe(true);
+      expect(result.error).toContain('Session lookup failed');
+    });
+
+    it('should return systemError when recorder.recordSuccess throws', async () => {
+      deps.recorder.recordSuccess.mockRejectedValue(new Error('Insert failed'));
+      orchestrator.registerExecutor('PLAN-TO-EXEC', createDepsExecutor());
+
+      const result = await orchestrator.executeHandoff('PLAN-TO-EXEC', 'SD-TEST-001');
+
+      expect(result.success).toBe(false);
+      expect(result.systemError).toBe(true);
+    });
+
+    it('should not crash when captureHandoffGate rejects (fire-and-forget)', async () => {
+      captureHandoffGate.mockRejectedValueOnce(new Error('Flywheel down'));
+      orchestrator.registerExecutor('LEAD-TO-PLAN', createDepsExecutor());
+
+      // Should not throw
+      const result = await orchestrator.executeHandoff('LEAD-TO-PLAN', 'SD-TEST-001');
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('_executeDeferredPrdGeneration inline mode', () => {
+    it('should log inline instructions when LLM_PRD_INLINE is not false', async () => {
+      const originalEnv = process.env.LLM_PRD_INLINE;
+      delete process.env.LLM_PRD_INLINE;
+
+      // Should return without spawning
+      await orchestrator._executeDeferredPrdGeneration({
+        sdId: 'SD-TEST-001',
+        sd: { id: 'uuid-123', title: 'Test SD' }
+      });
+
+      // No error thrown — inline mode just logs
+      process.env.LLM_PRD_INLINE = originalEnv;
+    });
+  });
+});
+
+// ===========================================================================
+// ResultBuilder — translated from tests/unit/handoff-orchestrator.spec.ts
+// (TS-only type assertions dropped; behavior preserved).
+// ===========================================================================
+describe('ResultBuilder', () => {
+  it('rejects unsupported handoff type via ResultBuilder', () => {
+    const result = ResultBuilder.unsupportedType('EXEC-TO-LEAD', [
+      'LEAD-TO-PLAN',
+      'PLAN-TO-EXEC'
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.rejected).toBe(true);
+    expect(result.reasonCode).toBe('UNSUPPORTED_HANDOFF_TYPE');
+    expect(result.message).toContain('EXEC-TO-LEAD');
+    expect(result.details.supportedTypes).toContain('LEAD-TO-PLAN');
+  });
+
+  it('ResultBuilder.notFound produces correct structure', () => {
+    const result = ResultBuilder.notFound('SD', 'SD-MISSING-001');
+
+    expect(result.success).toBe(false);
+    expect(result.reasonCode).toBe('SD_NOT_FOUND');
+    expect(result.message).toContain('SD-MISSING-001');
+    expect(result.details.entityType).toBe('SD');
+    expect(result.details.id).toBe('SD-MISSING-001');
+  });
+
+  it('ResultBuilder.systemError wraps Error objects', () => {
+    const error = new Error('Connection timeout');
+    const result = ResultBuilder.systemError(error);
+
+    expect(result.success).toBe(false);
+    expect(result.systemError).toBe(true);
+    expect(result.reasonCode).toBe('SYSTEM_ERROR');
+    expect(result.error).toBe('Connection timeout');
+  });
+
+  it('ResultBuilder.systemError wraps string messages', () => {
+    const result = ResultBuilder.systemError('Something broke');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Something broke');
+  });
+
+  it('ResultBuilder.rejected includes remediation guidance', () => {
+    const result = ResultBuilder.rejected(
+      'PRD_NOT_FOUND',
+      'PRD not found for SD-TEST-001',
+      { sdId: 'SD-TEST-001' }
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.rejected).toBe(true);
+    expect(result.reasonCode).toBe('PRD_NOT_FOUND');
+    expect(result.message).toContain('PRD not found');
+  });
+
+  it('ResultBuilder.gateFailure formats gate issues', () => {
+    const gateResult = {
+      issues: ['Missing PRD', 'No user stories'],
+      score: 20,
+      max_score: 100
+    };
+
+    const result = ResultBuilder.gateFailure('PRD_QUALITY', gateResult);
+
+    expect(result.success).toBe(false);
+    expect(result.reasonCode).toBe('PRD_QUALITY_FAILED');
+    expect(result.message).toContain('Missing PRD');
+    expect(result.message).toContain('No user stories');
+  });
+
+  it('ResultBuilder.fieldError provides table and field path', () => {
+    const result = ResultBuilder.fieldError(
+      'product_requirements_v2',
+      'metadata.gate2_validation',
+      'Field is null',
+      'Run add-prd-to-database.js to populate'
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.reasonCode).toBe('DATABASE_FIELD_ERROR');
+    expect(result.details.table).toBe('product_requirements_v2');
+    expect(result.details.field).toBe('metadata.gate2_validation');
+    expect(result.details.fullPath).toBe(
+      'product_requirements_v2.metadata.gate2_validation'
+    );
+    expect(result.remediation).toContain('add-prd-to-database.js');
+  });
+
+  it('creates a success result with extra data', () => {
+    const result = ResultBuilder.success({
+      sdId: 'SD-TEST-001',
+      score: 95
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.sdId).toBe('SD-TEST-001');
+    expect(result.score).toBe(95);
+  });
+
+  it('creates a minimal success result', () => {
+    const result = ResultBuilder.success();
+
+    expect(result.success).toBe(true);
+    expect(Object.keys(result)).toEqual(['success']);
+  });
+});
+
+// ===========================================================================
+// Workflow definitions — translated from tests/unit/handoff-orchestrator.spec.ts
+// ===========================================================================
+describe('Phase Transition Rules — Workflow Definitions', () => {
+  it('feature SD requires all 5 handoff types', () => {
+    const workflow = getWorkflowForType('feature');
+
+    expect(workflow.required).toContain('LEAD-TO-PLAN');
+    expect(workflow.required).toContain('PLAN-TO-EXEC');
+    expect(workflow.required).toContain('EXEC-TO-PLAN');
+    expect(workflow.required).toContain('PLAN-TO-LEAD');
+    expect(workflow.required).toContain('LEAD-FINAL-APPROVAL');
+    expect(workflow.optional).toHaveLength(0);
+  });
+
+  it('infrastructure SD makes EXEC-TO-PLAN optional', () => {
+    expect(isHandoffRequired('infrastructure', 'LEAD-TO-PLAN')).toBe(true);
+    expect(isHandoffRequired('infrastructure', 'PLAN-TO-EXEC')).toBe(true);
+    expect(isHandoffRequired('infrastructure', 'EXEC-TO-PLAN')).toBe(false);
+    expect(isHandoffOptional('infrastructure', 'EXEC-TO-PLAN')).toBe(true);
+  });
+
+  it('documentation SD skips code validation gates', () => {
+    const workflow = getWorkflowForType('documentation');
+
+    expect(workflow.skippedValidation).toContain('TESTING');
+    expect(workflow.skippedValidation).toContain('Implementation Fidelity');
+    expect(isHandoffOptional('documentation', 'EXEC-TO-PLAN')).toBe(true);
+  });
+
+  it('orchestrator SD only requires LEAD-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL', () => {
+    const workflow = getWorkflowForType('orchestrator');
+
+    expect(workflow.required).toEqual(['LEAD-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL']);
+    expect(workflow.optional).toContain('PLAN-TO-EXEC');
+    expect(workflow.optional).toContain('EXEC-TO-PLAN');
+  });
+
+  it('refactor SD has intensity-level overrides', () => {
+    const workflow = getWorkflowForType('refactor');
+
+    expect(workflow.intensityOverrides).toBeDefined();
+    expect(workflow.intensityOverrides.cosmetic.required).toEqual([
+      'LEAD-TO-PLAN',
+      'PLAN-TO-LEAD'
+    ]);
+    expect(workflow.intensityOverrides.architectural.required).toContain(
+      'LEAD-FINAL-APPROVAL'
+    );
+  });
+
+  it('unknown SD type falls back to feature workflow', () => {
+    const workflow = getWorkflowForType('totally_unknown_type');
+
+    expect(workflow).toEqual(WORKFLOW_BY_SD_TYPE.feature);
+  });
+
+  it('isHandoffRequired is case-insensitive on handoff type', () => {
+    expect(isHandoffRequired('feature', 'lead-to-plan')).toBe(true);
+    expect(isHandoffRequired('feature', 'Lead-To-Plan')).toBe(true);
+  });
+
+  it('all 9 SD types are defined in WORKFLOW_BY_SD_TYPE', () => {
+    const expectedTypes = [
+      'feature',
+      'infrastructure',
+      'documentation',
+      'database',
+      'security',
+      'refactor',
+      'bugfix',
+      'performance',
+      'orchestrator'
+    ];
+
+    for (const sdType of expectedTypes) {
+      expect(WORKFLOW_BY_SD_TYPE).toHaveProperty(sdType);
+      expect(WORKFLOW_BY_SD_TYPE[sdType].name).toBeTruthy();
+      expect(Array.isArray(WORKFLOW_BY_SD_TYPE[sdType].required)).toBe(true);
+    }
+  });
+});
+
+describe('Workflow Definitions — Additional SD Types', () => {
+  it('security SD requires all 5 handoffs with no skipped validation', () => {
+    const workflow = getWorkflowForType('security');
+
+    expect(workflow.required).toHaveLength(5);
+    expect(workflow.skippedValidation).toHaveLength(0);
+    expect(workflow.note).toContain('SECURITY');
+  });
+
+  it('database SD requires DATABASE sub-agent validation', () => {
+    const workflow = getWorkflowForType('database');
+
+    expect(workflow.required).toContain('EXEC-TO-PLAN');
+    expect(workflow.note).toContain('DATABASE');
+  });
+
+  it('bugfix SD requires all 5 handoffs with regression testing', () => {
+    const workflow = getWorkflowForType('bugfix');
+
+    expect(workflow.required).toHaveLength(5);
+    expect(workflow.note).toContain('regression');
+  });
+
+  it('performance SD requires PERFORMANCE sub-agent with benchmarks', () => {
+    const workflow = getWorkflowForType('performance');
+
+    expect(workflow.required).toHaveLength(5);
+    expect(workflow.note).toContain('PERFORMANCE');
+    expect(workflow.note).toContain('metrics');
+  });
+});
+
+// ===========================================================================
+// Result recording — executor RETURNS a systemError-flagged result (distinct
+// from executor THROWING) — translated from handoff-orchestrator.spec.ts
+// ===========================================================================
+describe('Result recording — returned systemError flag', () => {
+  it('does NOT record failure when result has systemError flag', async () => {
+    const recorder = {
+      recordSuccess: vi.fn(() => Promise.resolve()),
+      recordFailure: vi.fn(() => Promise.resolve()),
+      recordSystemError: vi.fn(() => Promise.resolve())
+    };
+    const systemErrorExecutor = {
+      execute: vi.fn(() => Promise.resolve({
+        success: false,
+        systemError: true,
+        error: 'Internal error'
+      }))
+    };
+
+    const orchestrator = createTestOrchestrator({
+      recorder,
+      executors: {
+        'EXEC-TO-PLAN': systemErrorExecutor,
+        'LEAD-TO-PLAN': createMockExecutor(),
+        'PLAN-TO-EXEC': createMockExecutor(),
+        'PLAN-TO-LEAD': createMockExecutor(),
+        'LEAD-FINAL-APPROVAL': createMockExecutor()
+      }
+    });
+
+    await orchestrator.executeHandoff('EXEC-TO-PLAN', 'SD-TEST-001');
+
+    // systemError results are not recorded via recordFailure
+    expect(recorder.recordFailure).not.toHaveBeenCalled();
+    expect(recorder.recordSuccess).not.toHaveBeenCalled();
   });
 });

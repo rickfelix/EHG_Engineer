@@ -21,7 +21,7 @@ describe('Event Schema Registry — DB Persistence (A05)', () => {
   beforeEach(async () => {
     // Fresh import to reset module state
     vi.resetModules();
-    registry = await import('../../../lib/eva/event-bus/event-schema-registry.js');
+    registry = await import('../../lib/eva/event-bus/event-schema-registry.js');
     registry.clearSchemas();
   });
 
@@ -170,7 +170,7 @@ describe('Vision Events — Hook Observer Bridge (A05)', () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    visionEvents = await import('../../../lib/eva/event-bus/vision-events.js');
+    visionEvents = await import('../../lib/eva/event-bus/vision-events.js');
     // Clear both handlers and hook observers
     visionEvents.clearVisionSubscribers();
     visionEvents.clearHookObservers();
@@ -250,12 +250,12 @@ describe('Vision Events — Hook Observer Bridge (A05)', () => {
 
 describe('Event Router — replayEventsFromLedger (A05)', () => {
   it('replayEventsFromLedger is exported from event-router', async () => {
-    const router = await import('../../../lib/eva/event-bus/event-router.js');
+    const router = await import('../../lib/eva/event-bus/event-router.js');
     expect(typeof router.replayEventsFromLedger).toBe('function');
   });
 
   it('returns empty stats when no events match filter', async () => {
-    const router = await import('../../../lib/eva/event-bus/event-router.js');
+    const router = await import('../../lib/eva/event-bus/event-router.js');
 
     // Chainable mock that supports any order of .eq/.gte/.lt/.order/.limit
     const createChainable = (resolveValue) => {
@@ -279,7 +279,7 @@ describe('Event Router — replayEventsFromLedger (A05)', () => {
   });
 
   it('returns error stats when query fails', async () => {
-    const router = await import('../../../lib/eva/event-bus/event-router.js');
+    const router = await import('../../lib/eva/event-bus/event-router.js');
 
     const createChainable = (resolveValue) => {
       const chainable = {};
@@ -302,7 +302,7 @@ describe('Event Router — replayEventsFromLedger (A05)', () => {
   });
 
   it('applies eventType filter when provided', async () => {
-    const router = await import('../../../lib/eva/event-bus/event-router.js');
+    const router = await import('../../lib/eva/event-bus/event-router.js');
 
     const eqMock = vi.fn();
     const createChainable = (resolveValue) => {
@@ -327,7 +327,7 @@ describe('Event Router — replayEventsFromLedger (A05)', () => {
   });
 
   it('filters by sdKey in event_data client-side', async () => {
-    const router = await import('../../../lib/eva/event-bus/event-router.js');
+    const router = await import('../../lib/eva/event-bus/event-router.js');
 
     const mockEvents = [
       { id: 'e1', event_type: 'sd.completed', event_data: { sdKey: 'SD-TEST-001' }, eva_venture_id: 'v1', created_at: '2026-01-01T00:00:00Z' },

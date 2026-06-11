@@ -9,7 +9,7 @@ import {
   generateProxyScores,
   generateBatchProxyScores,
   SYNTHESIS_COMPONENTS,
-} from '../../../lib/eva/experiments/proxy-metric-engine.js';
+} from '../../../../lib/eva/experiments/proxy-metric-engine.js';
 
 // ── Fixture venture UUIDs ──────────────────────────────
 

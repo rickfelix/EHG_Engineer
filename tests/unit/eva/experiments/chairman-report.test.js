@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { generateChairmanReport } from '../../../lib/eva/experiments/chairman-report.js';
+import { generateChairmanReport } from '../../../../lib/eva/experiments/chairman-report.js';
 
 // ── Fixtures ──────────────────────────────────────────
 

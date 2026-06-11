@@ -9,16 +9,16 @@ import {
   defaultEvaluator,
   promptAwareEvaluator,
   evaluateDual,
-} from '../../../lib/eva/experiments/dual-evaluator.js';
+} from '../../../../lib/eva/experiments/dual-evaluator.js';
 
 // Mock PromptLoader
-vi.mock('../../../lib/eva/prompt-loader.js', () => ({
+vi.mock('../../../../lib/eva/prompt-loader.js', () => ({
   getPrompt: vi.fn(),
   clearCache: vi.fn(),
   getCacheSize: vi.fn(() => 0),
 }));
 
-import { getPrompt } from '../../../lib/eva/prompt-loader.js';
+import { getPrompt } from '../../../../lib/eva/prompt-loader.js';
 
 // ── Fixtures ──────────────────────────────────────────
 

@@ -36,8 +36,13 @@ const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 // ── Mock LLM Client ──────────────────────────────
 
 function createMockLLMClient(overrideResponse = null) {
-  return {
+  const client = {
     _model: 'mock-model',
+    // New LLM-client interface (client.complete) — returns the same JSON text
+    complete: vi.fn(async () => {
+      const res = await client.messages.create();
+      return res.content[0].text;
+    }),
     messages: {
       create: vi.fn().mockResolvedValue({
         content: [{ text: JSON.stringify(overrideResponse || {
@@ -68,6 +73,8 @@ function createMockLLMClient(overrideResponse = null) {
             monthly_burn_at_launch: 2500,
             monthly_burn_at_scale: 7000,
           },
+          cost_breakdown: { build: 10000, run_monthly: 2500 },
+          timeline: { mvp_weeks: 9 },
           confidence: 72,
           key_assumptions: ['SMBs will pay $30-80/mo for review management', 'AI accuracy exceeds 85%'],
           summary: 'Moderate complexity venture with strong unit economics. Break-even in ~12 months realistic.',
@@ -75,6 +82,7 @@ function createMockLLMClient(overrideResponse = null) {
       }),
     },
   };
+  return client;
 }
 
 // ── generateForecast Tests ──────────────────────────────
@@ -99,6 +107,7 @@ describe('Modeling - generateForecast', () => {
   test('handles LLM error gracefully', async () => {
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn().mockRejectedValue(new Error('Rate limited')),
       messages: { create: vi.fn().mockRejectedValue(new Error('Rate limited')) },
     };
 
@@ -113,6 +122,7 @@ describe('Modeling - generateForecast', () => {
   test('handles non-JSON response', async () => {
     const llmClient = {
       _model: 'mock-model',
+      complete: vi.fn(async () => 'I need more information to generate projections.'),
       messages: {
         create: vi.fn().mockResolvedValue({
           content: [{ text: 'I need more information to generate projections.' }],
@@ -141,6 +151,8 @@ describe('Modeling - generateForecast', () => {
       revenue_projections: {
         year_1: { optimistic: 100000, realistic: 50000, pessimistic: 10000 },
       },
+      cost_breakdown: { build: 5000 },
+      timeline: { mvp_weeks: 6 },
       confidence: 40,
       summary: 'Partial forecast.',
     });
