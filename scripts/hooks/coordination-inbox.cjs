@@ -104,14 +104,18 @@ function classifyInboxMessage(msg, opts = {}) {
   // through to the :105 carve-out below (surfaces, read_at left NULL) so a reply arriving after
   // a sync await times out is recovered by adam-advisory.cjs's durable `replies` reader.
   if (twoWayOn && isInfo && p.kind === 'coordinator_reply' && !amAdam) return { skip: true };
-  // Adam session: do NOT auto-drain a coordinator-originated directive of ANY message_type —
-  // leave read_at NULL so the Adam inbox monitor (read_at IS NULL) keeps surfacing it until Adam
-  // acts on it. QF-20260610-623: this carve-out was gated on isInfo, so a NON-INFO coordinator->Adam
-  // directive (e.g. COACHING — a live type per lib/coordinator/adam-action-ack.cjs:291 +
-  // scripts/coordinator-comms-check.mjs:84) fell through to the default drain (markRead/markAck:true)
-  // and was auto-acked on the next PostToolUse poll before Adam read it. Drop the isInfo gate so the
-  // carve-out fires for every message_type; INFO behavior is unchanged (it already matched here).
-  if (amAdam && (msg.sender_type === 'orchestrator' || msg.sender_type === 'coordinator')) {
+  // Adam session: NEVER auto-drain ANY inbound row — surface-not-drain, unconditionally.
+  // QF-20260610-623 dropped the isInfo gate but kept a sender_type ALLOWLIST
+  // (orchestrator|coordinator), so sender_type=chairman directives (a live, exercised value —
+  // 5 chairman messages auto-acked unseen 2026-06-10, harness-bug 43c2dee2, directive
+  // dq-inbox-rca-20260610) fell through to the default drain below. Compounding: Adam manual
+  // polls filter acknowledged_at IS NULL, so a drained row is invisible forever.
+  // QF-20260610-545 (chairman-specified shape): the poll path must never stamp read/ack on a
+  // row not actually routed to the agent — for amAdam, EVERY non-skip directed row surfaces
+  // with read_at/acknowledged_at left NULL; Adam stamps ack on genuine processing. Cost: pure
+  // notifications re-surface until acked — acceptable for an advisory session whose duty is
+  // never missing a directive. Non-Adam (worker/coordinator) drain behavior is untouched.
+  if (amAdam) {
     return { skip: false, markRead: false, markAck: false };
   }
   // Actionable idle rows — surface but do NOT mark read/ack on poll; re-surface until the agent

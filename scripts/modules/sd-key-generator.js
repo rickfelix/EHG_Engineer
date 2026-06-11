@@ -825,6 +825,42 @@ export function generateChildKey(parentKey, childIndex) {
 }
 
 /**
+ * Derive the child index to use for a new child SD (QF-20260610-473).
+ *
+ * Fixes two coupled defects in the old count-based fallback:
+ *  - non-contiguous children (e.g. only -B exists) made count=1 propose -B
+ *    forever (duplicate-key, no self-heal). Policy: default = MAX existing
+ *    suffix + 1 (so {-B} -> -C, {-A,-C} -> -D).
+ *  - an EXPLICIT index of 0 was swallowed by `index || count` (0 is falsy),
+ *    so `--child <parent> 0` could never create -A.
+ *
+ * Collisions self-heal: if the chosen index (explicit or derived) is already
+ * taken, bump to the next free letter (bounded at Z).
+ *
+ * @param {string} parentKey - Parent SD key (e.g. "SD-X-001")
+ * @param {string[]} existingChildKeys - sd_keys of existing children
+ * @param {number|null} explicitIndex - Explicit 0-based index, or null to derive
+ * @returns {{index: number, bumped: boolean, takenIndexes: number[]}}
+ */
+export function deriveChildIndex(parentKey, existingChildKeys, explicitIndex = null) {
+  const taken = new Set();
+  for (const key of existingChildKeys || []) {
+    if (typeof key !== 'string' || !key.startsWith(`${parentKey}-`)) continue;
+    const m = key.slice(parentKey.length).match(/^-([A-Z])$/);
+    if (m) taken.add(m[1].charCodeAt(0) - 65);
+  }
+  let index = Number.isInteger(explicitIndex)
+    ? explicitIndex
+    : (taken.size > 0 ? Math.max(...taken) + 1 : 0);
+  let bumped = false;
+  while (taken.has(index) && index < 26) {
+    index += 1;
+    bumped = true;
+  }
+  return { index, bumped, takenIndexes: [...taken].sort((a, b) => a - b) };
+}
+
+/**
  * Generate a grandchild SD key
  *
  * @param {string} parentKey - Parent (child) SD key (e.g., "SD-FIX-NAV-001-A")
