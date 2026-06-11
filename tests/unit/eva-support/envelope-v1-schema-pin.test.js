@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
+import { HAS_REAL_DB } from '../../helpers/db-available.js';
 
 const FORMATTER_PATH = resolve(
   process.cwd(),
@@ -93,7 +94,9 @@ describe('envelope v1.0 schema pin (formatter + eva_support_decision_log)', () =
     });
   });
 
-  describe('eva_support_decision_log table columns', () => {
+  // Sentinel-aware DB gate (SD-LEO-INFRA-ENFORCE-UNIT-TIER-001): the beforeAll
+  // issues a live RPC, so the whole describe must skip in the no-creds unit tier.
+  describe.skipIf(!HAS_REAL_DB)('eva_support_decision_log table columns', () => {
     let columnNames;
 
     beforeAll(async () => {

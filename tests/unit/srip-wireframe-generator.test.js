@@ -39,6 +39,15 @@ function makeMockSupabase(overrides = {}) {
 
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
+// SD-LEO-INFRA-ENFORCE-UNIT-TIER-001: the generator hard-imports
+// getDesignReferencesByArchetype, which constructs its OWN Supabase client
+// (the injected _supabase does not cover it). Mock the service module so the
+// suite is hermetic — previously it only passed because real .env creds let
+// the live query succeed.
+vi.mock('../../lib/eva/services/design-reference-library.js', () => ({
+  getDesignReferencesByArchetype: vi.fn(async () => []),
+}));
+
 describe('SRIP Wireframe Generator', () => {
   let generateWireframes;
 

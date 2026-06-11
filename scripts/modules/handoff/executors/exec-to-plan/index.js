@@ -47,6 +47,11 @@ import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.
 // Scope Completion Verification Gate (SD-LEO-INFRA-COMPLETION-SCOPE-VERIFICATION-001)
 import { createScopeCompletionGate } from '../../gates/scope-completion-gate.js';
 
+// FR Delivery Traceability (SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001, built for THIS boundary;
+// wired by SD-LEO-FIX-RECONCILE-DEAD-ARRIVAL-001 — was dead-on-arrival with zero importers).
+// Warn-only by default (LEO_FR_TRACEABILITY_ENFORCE unset) + fail-open on classifier errors.
+import { createFrDeliveryTraceabilityGate } from '../../gates/fr-delivery-traceability-gate.js';
+
 // Parent Orchestrator Detection (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-1, FR-2)
 import { isParentOrchestrator as isParentOrchestratorAsync } from '../../../../../lib/handoff/parent-detection.js';
 import { getParentOrchestratorExecToPlanGates } from './parent-orchestrator.js';
@@ -263,6 +268,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
       // Scope Completion Verification (applies to children too)
       gates.push(createScopeCompletionGate());
 
+      // FR Delivery Traceability — children were the original gap this gate closes
+      // (SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001); warn-only default, fail-open.
+      gates.push(createFrDeliveryTraceabilityGate(this.supabase));
+
       return gates;
     }
 
@@ -308,6 +317,11 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Integration contract gate (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-2)
     // Verifies integration_contract items from PRD metadata are present in codebase
     gates.push(createIntegrationContractGate(this.supabase));
+
+    // FR Delivery Traceability (SD-LEO-INFRA-HARDEN-LEO-COMPLETION-001, built for this
+    // boundary; wired by SD-LEO-FIX-RECONCILE-DEAD-ARRIVAL-001). Warn-only by default
+    // (LEO_FR_TRACEABILITY_ENFORCE unset) + fail-open on classifier errors.
+    gates.push(createFrDeliveryTraceabilityGate(this.supabase));
 
     // Story auto-validation (SD-LEO-FIX-STORIES-SUB-AGENT-001)
     // Validates user stories after EXEC completion
