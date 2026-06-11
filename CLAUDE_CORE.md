@@ -1,7 +1,7 @@
-<!-- file_content_hash: 36efd797b7771305 -->
+<!-- file_content_hash: 04495700a3277581 -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-06-10 2:53:04 PM
+**Generated**: 2026-06-11 9:56:07 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -88,6 +88,41 @@ Task tool with subagent_type="database-agent":
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
+
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -129,41 +164,6 @@ bash scripts/leo-stack.sh restart   # All 3 servers
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -412,6 +412,75 @@ Do **not** replace these layers with a blanket "close all QFs with any pr_url se
 
 > Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
 
+## Queue Ranking and QF Track Inference
+
+**Purpose**: Document the unified queue ranking model used by `npm run sd:next`,
+established by SD-LEO-INFRA-UNIFY-QUICK-FIX-001.
+
+### Single Source of Truth: `scripts/modules/sd-next/rank-items.js`
+
+Both the baseline-active path (`SDNextSelector.js::displayTracks`) and the
+no-baseline fallback path (`display/fallback-queue.js::showFallbackQueue`)
+delegate ranking to the same pure `rankItems(items, context)` function. The
+urgency bands, vision gap weighting, OKR impact blending, and policy boost
+apply uniformly regardless of whether a baseline is active.
+
+Do NOT reintroduce inline sort logic or `composite_rank` arithmetic in the
+orchestrator files — that divergence was the bug this SD fixed.
+
+### QF Track Inference
+
+Quick Fixes rank alongside SDs in the same track sections. The QF → track
+assignment is inferred from existing `quick_fixes` columns; there is no
+`quick_fixes.track` schema column and none should be added.
+
+| `quick_fixes.type` | Default Track | Override |
+|---------------------|---------------|----------|
+| `bug`               | C (Quality)   | Track A if `branch_name` contains an infra keyword |
+| `polish`            | C (Quality)   | Track A if `branch_name` contains an infra keyword |
+| `documentation`     | STANDALONE    | (none) |
+| anything else       | STANDALONE    | (none) |
+
+Infra keyword set (in `rank-items.js::TRACK_A_BRANCH_KEYWORDS`): `infra`,
+`hook`, `gate`, `protocol`, `workflow`, `sd-next`, `handoff`. The
+heuristic is conservative by design — false-positive Track A assignment
+pollutes the Infrastructure track with mis-categorised work.
+
+### QF Severity → sequence_rank + urgency band
+
+| Severity   | sequence_rank | Default band (fresh) | Band (age > 7 days) |
+|------------|---------------|----------------------|---------------------|
+| `critical` | 100           | P0                   | P0                  |
+| `high`     | 200           | P1                   | P0                  |
+| `medium`   | 500           | P2                   | P0                  |
+| `low`      | 1000          | P3                   | P3                  |
+
+Tuning: edit `SEVERITY_TO_RANK` and `qfUrgencyBand` in `rank-items.js` —
+single-line changes; do not propagate these constants elsewhere.
+
+### Anti-patterns
+
+- ❌ Adding a `quick_fixes.track` column. We infer at read time on purpose.
+- ❌ Duplicating ranking logic in a new caller. Import `rankItems` instead.
+- ❌ Reintroducing a separate `OPEN QUICK FIXES` section at the bottom of
+  `sd:next` output. QFs render inline inside their track via
+  `display/tracks.js::displaySDItem` (branch on `item.kind === 'qf'`).
+- ❌ Conflating `item.kind` (routing discriminator) with `qf.type`
+  (DB column holding bug/polish/documentation). They are separate signals.
+
+### AUTO_PROCEED_ACTION envelope (unchanged)
+
+The refactor preserves the existing envelope shape exactly:
+
+```
+AUTO_PROCEED_ACTION:{"action":"start"|"qf_start"|"continue"|...,
+                     "sd_id": "<key>"|null, "qf_id": "<id>"|null,
+                     "reason": "<text>"}
+```
+
+Downstream consumers (`coordination-inbox.cjs`, integration tests) continue
+to parse without modification.
+
 ## 🖥️ UI Parity Requirement (MANDATORY)
 
 **Every backend data contract field MUST have a corresponding UI representation.**
@@ -481,75 +550,6 @@ Before marking any stage/feature as complete:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
-
-## Queue Ranking and QF Track Inference
-
-**Purpose**: Document the unified queue ranking model used by `npm run sd:next`,
-established by SD-LEO-INFRA-UNIFY-QUICK-FIX-001.
-
-### Single Source of Truth: `scripts/modules/sd-next/rank-items.js`
-
-Both the baseline-active path (`SDNextSelector.js::displayTracks`) and the
-no-baseline fallback path (`display/fallback-queue.js::showFallbackQueue`)
-delegate ranking to the same pure `rankItems(items, context)` function. The
-urgency bands, vision gap weighting, OKR impact blending, and policy boost
-apply uniformly regardless of whether a baseline is active.
-
-Do NOT reintroduce inline sort logic or `composite_rank` arithmetic in the
-orchestrator files — that divergence was the bug this SD fixed.
-
-### QF Track Inference
-
-Quick Fixes rank alongside SDs in the same track sections. The QF → track
-assignment is inferred from existing `quick_fixes` columns; there is no
-`quick_fixes.track` schema column and none should be added.
-
-| `quick_fixes.type` | Default Track | Override |
-|---------------------|---------------|----------|
-| `bug`               | C (Quality)   | Track A if `branch_name` contains an infra keyword |
-| `polish`            | C (Quality)   | Track A if `branch_name` contains an infra keyword |
-| `documentation`     | STANDALONE    | (none) |
-| anything else       | STANDALONE    | (none) |
-
-Infra keyword set (in `rank-items.js::TRACK_A_BRANCH_KEYWORDS`): `infra`,
-`hook`, `gate`, `protocol`, `workflow`, `sd-next`, `handoff`. The
-heuristic is conservative by design — false-positive Track A assignment
-pollutes the Infrastructure track with mis-categorised work.
-
-### QF Severity → sequence_rank + urgency band
-
-| Severity   | sequence_rank | Default band (fresh) | Band (age > 7 days) |
-|------------|---------------|----------------------|---------------------|
-| `critical` | 100           | P0                   | P0                  |
-| `high`     | 200           | P1                   | P0                  |
-| `medium`   | 500           | P2                   | P0                  |
-| `low`      | 1000          | P3                   | P3                  |
-
-Tuning: edit `SEVERITY_TO_RANK` and `qfUrgencyBand` in `rank-items.js` —
-single-line changes; do not propagate these constants elsewhere.
-
-### Anti-patterns
-
-- ❌ Adding a `quick_fixes.track` column. We infer at read time on purpose.
-- ❌ Duplicating ranking logic in a new caller. Import `rankItems` instead.
-- ❌ Reintroducing a separate `OPEN QUICK FIXES` section at the bottom of
-  `sd:next` output. QFs render inline inside their track via
-  `display/tracks.js::displaySDItem` (branch on `item.kind === 'qf'`).
-- ❌ Conflating `item.kind` (routing discriminator) with `qf.type`
-  (DB column holding bug/polish/documentation). They are separate signals.
-
-### AUTO_PROCEED_ACTION envelope (unchanged)
-
-The refactor preserves the existing envelope shape exactly:
-
-```
-AUTO_PROCEED_ACTION:{"action":"start"|"qf_start"|"continue"|...,
-                     "sd_id": "<key>"|null, "qf_id": "<id>"|null,
-                     "reason": "<text>"}
-```
-
-Downstream consumers (`coordination-inbox.cjs`, integration tests) continue
-to parse without modification.
 
 ## Sub-Agent Routing Reference
 
@@ -747,7 +747,7 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Branch Strategy**: `eng/` prefix for EHG_Engineer, standard prefixes for EHG app features
 **Size**: ≤100 LOC ideal; 101-200 LOC acceptable with brief justification; 201-400 LOC requires detailed rationale; >400 LOC generally prohibited. See **PR Size Guidelines** in CLAUDE_CORE.md for the canonical tiered table.
 
-**Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
+**Full Guidelines**: See `docs/03_protocols_and_standards/leo-git-commit-guidelines-v4.2.0.md`
 
 ## PR Size Guidelines
 
@@ -1498,11 +1498,11 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
-| PAT-HF-PLANTOLEAD-8229a741 | handoff_failure | [HIGH] high | 11 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOEXEC-3741735a | session_retrospective | [HIGH] high | 11 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOLEAD-8229a741 | session_retrospective | [HIGH] high | 11 | [STABLE] | N/A |
-| PAT-HF-PLANTOEXEC-3741735a | handoff_failure | [HIGH] high | 11 | [STABLE] | N/A |
-| PAT-HF-PLANTOLEAD-01c0ee53 | handoff_failure | [HIGH] high | 9 | [STABLE] | N/A |
+| PAT-HF-LEADTOPLAN-ae8fb5fc | handoff_failure | [HIGH] high | 9 | [STABLE] | N/A |
+| PAT-RETRO-LEADTOPLAN-ae8fb5fc | session_retrospective | [HIGH] high | 9 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOLEAD-01c0ee53 | session_retrospective | [HIGH] high | 9 | [STABLE] | N/A |
+| PAT-RETRO-LEADTOPLAN-8d725b00 | session_retrospective | [HIGH] high | 8 | [STABLE] | N/A |
+| PAT-HF-LEADTOPLAN-8d725b00 | handoff_failure | [HIGH] high | 8 | [STABLE] | N/A |
 
 ### Prevention Checklists
 
@@ -1641,7 +1641,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-06-10*
+*Generated from database: 2026-06-11*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
