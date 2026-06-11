@@ -333,6 +333,19 @@ export class HandoffRecorder {
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
 
+    // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (L5): persist per-gate verdicts on
+    // REJECTED rows too (previously summary-only). Retries follow rejections, so
+    // this is the storage the gate-verdict cache reads back — entries carry
+    // input_hash where the gate has a declared extractor. Version 2 = hash-bearing.
+    const perGateResults = result.gateResults || result.details?.details || null;
+    if (perGateResults && typeof perGateResults === 'object' && Object.keys(perGateResults).length > 0) {
+      execution.metadata = {
+        ...(execution.metadata || {}),
+        gate_results: perGateResults,
+        gate_results_version: 2,
+      };
+    }
+
     try {
       // Pre-validate - for rejections, try to fix common issues
       const preValidation = await this.validationOrchestrator.preValidateData('sd_phase_handoffs', execution);
@@ -692,9 +705,12 @@ export class HandoffRecorder {
             console.warn('   ⚠️  WARNING: GATE3_TRACEABILITY not found in gateResults');
           }
         }
-        // Store all gate results for comprehensive audit trail
+        // Store all gate results for comprehensive audit trail.
+        // L5 (SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B): version 2 when any entry
+        // carries an input_hash (hash-bearing shape the gate-verdict cache reads).
         metadata.gate_results = result.gateResults;
-        metadata.gate_results_version = 1;
+        metadata.gate_results_version =
+          Object.values(result.gateResults).some(r => r && r.input_hash) ? 2 : 1;
       } else {
         console.warn('   ⚠️  No gateResults in result object - cross-handoff traceability compromised');
       }

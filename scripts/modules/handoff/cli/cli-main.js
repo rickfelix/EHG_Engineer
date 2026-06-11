@@ -935,11 +935,16 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     }
   }
 
+  // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (L5): --no-cache forces a full gate
+  // re-run (gate-verdict cache bypassed entirely — audit/debug path).
+  const noCache = args.includes('--no-cache');
+
   // Execute handoff
   const result = await system.executeHandoff(handoffType, sdId, {
     prdId,
     bypassValidation,
-    bypassReason
+    bypassReason,
+    noCache
   });
 
   // Display results

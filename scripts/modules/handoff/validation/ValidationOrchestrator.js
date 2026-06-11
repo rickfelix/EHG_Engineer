@@ -36,6 +36,10 @@ import { OIVGate, OIV_GATE_WEIGHT } from './oiv/index.js';
 // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Gate context preloader
 import { preloadGateContext, getGateNumberForRule } from './validator-registry/gate-context-preloader.js';
 
+// SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (program L5): gate-verdict cache —
+// PASS-only reuse across handoff retries for gates with declared pure inputs.
+import { probeVerdictCache } from '../gate-verdict-cache.js';
+
 // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 (FR-5/TR-4): max-wait ceiling guard.
 // Escalates a perpetually-WAITing gate to FAIL after N consecutive waits OR a
 // wall-clock timeout, protecting ALL wait-returning gates (incl. PR #4021
@@ -291,12 +295,31 @@ export class ValidationOrchestrator {
 
       if (eligibleGates.length === 0) continue;
 
-      // Execute all gates within this tier concurrently
+      // Execute all gates within this tier concurrently.
+      // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (L5): consult the gate-verdict
+      // cache first — a declared-input gate whose inputs are byte-identical to a
+      // prior PASS verdict is reused without re-evaluation (cache_hit). FAIL/
+      // CONDITIONAL/WAIT verdicts are never reused; undeclared or unhashable
+      // gates always run; any probe error falls open to a normal run.
       const tierResults = await Promise.all(
-        eligibleGates.map(gate =>
-          this.validateGate(gate.name, gate.validator, context)
-            .then(gateResult => ({ gate, gateResult }))
-        )
+        eligibleGates.map(gate => {
+          let probe = { hit: false, inputHash: null };
+          try {
+            probe = probeVerdictCache(gate.name, context, context._verdictCache);
+          } catch { /* fail-open */ }
+          if (probe.hit) {
+            console.log(`   ♻️  ${gate.name}: reused prior PASS verdict (cache_hit, identical declared inputs)`);
+            const gateResult = { ...probe.priorResult, cache_hit: true, input_hash: probe.inputHash };
+            return Promise.resolve({ gate, gateResult });
+          }
+          return this.validateGate(gate.name, gate.validator, context)
+            .then(gateResult => {
+              if (probe.inputHash && gateResult && typeof gateResult === 'object') {
+                gateResult.input_hash = probe.inputHash;
+              }
+              return { gate, gateResult };
+            });
+        })
       );
 
       // Process results from this tier
