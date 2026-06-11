@@ -119,7 +119,9 @@ export class HandoffOrchestrator {
       console.log('Options:', { ...options, autoProceed: autoProceedResult.autoProceed });
       console.log('');
       // MANDATORY: Verify SD exists in database
-      await this.sdRepo.verifyExists(sdId);
+      // QF-20260610-551: capture the returned SD row (verifyExists selects category/title)
+      // — it feeds the prior-lessons advisory below without a redundant DB round-trip.
+      const sd = await this.sdRepo.verifyExists(sdId);
 
       // Validate handoff type
       if (!this.supportedHandoffs.includes(normalizedType)) {
@@ -211,6 +213,34 @@ export class HandoffOrchestrator {
         }
       } else if (!result.systemError) {
         await this.recorder.recordFailure(normalizedType, sdId, result, template);
+      }
+
+      // QF-20260610-551: prior-lessons advisory on the EXECUTE path. QF-457 wired this
+      // into precheckHandoff only, but autonomous /loop workers call executeHandoff
+      // directly (scripts/handoff.js execute → cli-main.js → here) and never run
+      // precheck — so the captured lessons never reached the workers they were meant
+      // for. Mirrors the precheck block: ADVISORY ONLY, fail-open (any error swallowed
+      // with a non-blocking warn), surfaced POST-VERDICT so the gate run and the
+      // recorded result are never delayed or altered. Default-on; LEO_SURFACE_LESSONS=off
+      // disables it.
+      if (process.env.LEO_SURFACE_LESSONS !== 'off') {
+        try {
+          const { surfacePriorLessons, formatPriorLessons, resolvePhaseStrategy } =
+            await import('../../../lib/learning/surface-prior-lessons.js');
+          const { IssueKnowledgeBase } = await import('../../../lib/learning/issue-knowledge-base.js');
+          const { patterns, retrospectives } = await surfacePriorLessons({
+            kb: new IssueKnowledgeBase(),
+            supabase: this.supabase,
+            sdCategory: (sd && (sd.category || sd.title)) || sdId,
+            phaseStrategy: resolvePhaseStrategy(normalizedType),
+            limit: 3
+          });
+          console.log('');
+          console.log(formatPriorLessons(patterns, retrospectives));
+          console.log('');
+        } catch (e) {
+          console.warn(`   [execute] prior-lessons surfacing skipped (advisory, non-blocking): ${e.message}`);
+        }
       }
 
       // SD-LEO-FEAT-DATA-FLYWHEEL-001: Fire-and-forget capture to eva_interactions
