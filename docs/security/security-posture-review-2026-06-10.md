@@ -45,6 +45,14 @@ All 28 carry full **anon + authenticated DML grants** (SELECT/INSERT/UPDATE/DELE
 
 **Remediation queue**: enable RLS (service-role-only policies) on these 4 — small reversible migration. Flag: `posture-F1`.
 
+> **REMEDIATED (2026-06-11, SD-MAN-FIX-SECURITY-GUARD-PACK-001):** migration
+> `database/migrations/20260611_guard_pack_rls_tables.sql` (+ `_DOWN`) enables RLS, adds a
+> `service_role_all` FOR ALL policy, and revokes ALL (incl. SELECT) from anon/authenticated on
+> all 4 tables. No authenticated reader exists for any of them (code-grep verified, incl.
+> `.from('coordination_events')` in ../ehg/src — zero matches). Supersedes the never-applied
+> `20260608_coordination_events_rls.sql` orphan. Round-trip probed live in a rolled-back
+> transaction (`.claude/probe-guard-pack.mjs`, 89/89 checks).
+
 ### 8 RLS-on, zero-policy tables — CONFIRMED fail-closed (LOW / no action)
 `_migration_metadata, batch_operation_log, brainstorm_vote_tallies, eva_friday_decisions, eva_friday_meetings, eva_preferences, opportunity_categories, opportunity_scores` — RLS-on + 0 policies = deny for anon/authenticated. Consumer grep confirms **all live consumers use the service-role client** (RLS-bypass); no code path expects non-service-role access. Intent verdict: service-role-only, working as designed.
 
@@ -91,6 +99,17 @@ Cross-referenced open chain (not re-implemented here): GUARD-ANON ESM gap (23132
 **Finding F-3, MED→HIGH class (the rescan_stage_20 family):** 8 **mutating**, authenticated-executable, RLS-bypassing fns with no in-fn authz: `advance_venture_stage`, `advance_venture_to_stage`, `bootstrap_venture_workflow`, `create_eva_conversation`, `eva_circuit_allows_request`, `record_eva_failure`, `record_eva_success`, `rescan_stage_20`. Plus 4 read-only (2 of them **anon-executable** — `check_feedback_rate_limit`, `get_gate_decision_status` — info-disclosure tier, **F-4 MED**).
 
 **Remediation queue**: guard-or-revoke pack mirroring the defense-depth pattern for the 8 mutating fns (extends the open rescan_stage_20 flag f116c356 to its whole class).
+
+> **REMEDIATED (2026-06-11, SD-MAN-FIX-SECURITY-GUARD-PACK-001):** migration
+> `database/migrations/20260611_guard_pack_secdef_fns.sql` (+ `_DOWN` restoring the captured
+> pre-guard bodies verbatim) adds in-fn guards to all 8 mutating fns. Guards are
+> **per-venture-access** (`fn_user_has_venture_access` OR `fn_is_chairman` OR
+> `fn_is_service_role`), NOT chairman-only — the live venture UI calls all 8 with authenticated
+> JWTs. `create_eva_conversation` guards on caller identity (`p_user_id = auth.uid()`); the
+> eva_* TEXT-id fns use a guarded uuid cast that preserves service-role legacy-id callers.
+> EXECUTE grants unchanged (authenticated retained by design). Verified live in a rolled-back
+> round-trip probe incl. deny-for-non-access-authenticated-JWT and allow-for-service-role checks.
+> The 4 read-only fns (F-4 MED, incl. 2 anon-executable) remain open — out of this pack's scope.
 
 ---
 
