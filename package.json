@@ -380,6 +380,7 @@
     "sre:row-growth": "node scripts/row-growth-snapshot.cjs",
     "subagents:collect": "node scripts/collect-subagent-evidence.js",
     "effort:readout": "node scripts/effort-experiment/readout.mjs",
+    "decisions": "node scripts/chairman-decisions.mjs",
     "effort:set-arm": "node scripts/effort-experiment/set-arm.mjs",
     "effort:attribute": "node scripts/effort-experiment/attribute-tokens.mjs",
     "cost:report": "node scripts/llm-cost-report.mjs",
