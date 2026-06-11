@@ -1,4 +1,14 @@
 #!/bin/bash
+# RETIRED 2026-06-11 (SD-LEO-FIX-RECONCILE-DEAD-ARRIVAL-001).
+# This script was NEVER wired into any .husky hook (zero references since ship by
+# SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-A) - a secret scanner that never ran.
+# The LIVE pre-commit secret scan is INLINE in .husky/pre-commit (~lines 228-300,
+# SD-SEC-CREDENTIAL-ROTATION-001) and is a strict pattern SUPERSET of this file
+# (adds Anthropic keys, AWS access/secret keys, private-key blocks, connection
+# strings, generic api_key/secret_key patterns) and runs on every commit.
+# Decision: retire rather than wire (redundant). Flagged to the security-posture
+# review via the durable feedback channel. Do not re-wire without diffing patterns
+# against the inline scan first.
 # Pre-commit hook: Block commits containing hardcoded secrets
 # Installed by SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-A
 #

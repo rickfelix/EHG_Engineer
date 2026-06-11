@@ -1,5 +1,18 @@
 #!/usr/bin/env node
 /**
+ * RETIRED 2026-06-11 (SD-LEO-FIX-RECONCILE-DEAD-ARRIVAL-001).
+ * Zero references anywhere (package.json, .github, hooks, crons) - the recommended
+ * 15-minute cron was NEVER armed, so this job never ran in production.
+ * SUPERSEDED by the flag-governance machinery (2026-06-09): lib/feature-flags/
+ * governance-review.js consumes expiry_at and surfaces past-expiry flags in the
+ * weekly stale-flag digest with an extend/kill recommendation
+ * (scripts/flag-governance-review.mjs, FLAG_GOVERNANCE_REVIEW_V1).
+ * SEMANTIC DELTA (documented deliberately): this job AUTO-TRANSITIONED
+ * lifecycle_state='expired'; the new machinery RECOMMENDS to a human instead -
+ * consistent with the deliberate-flip governance design (no automated lifecycle
+ * mutations). Since the job never ran, no behavior actually changed at retirement.
+ */
+/**
  * Feature Flag Expiry Checker
  * SD-LEO-SELF-IMPROVE-001K - Phase 6: Feature Flag Governance
  *
