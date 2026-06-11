@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-11T13:20:15.544Z
-**Rows**: 578,947
+**Generated**: 2026-06-11T14:29:21.270Z
+**Rows**: 581,691
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -63,6 +63,10 @@
 - `idx_audit_user`
   ```sql
   CREATE INDEX idx_audit_user ON public.governance_audit_log USING btree (changed_by)
+  ```
+- `idx_governance_audit_log_changed_at`
+  ```sql
+  CREATE INDEX idx_governance_audit_log_changed_at ON public.governance_audit_log USING btree (changed_at)
   ```
 
 ## RLS Policies
