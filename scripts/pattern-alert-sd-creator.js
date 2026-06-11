@@ -195,7 +195,7 @@ async function generateSDKey(pattern) {
  * SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-2): exported so tests can pin the
  * completeness contract (output passes LEAD-TO-PLAN validators untouched).
  */
-function buildSdDataForPattern(pattern, sdKey) {
+export function buildSdDataForPattern(pattern, sdKey) {
   const suggestedTeam = CONFIG.CATEGORY_TEAMS[pattern.category] || 'engineering';
   const sdCategory = CONFIG.PATTERN_TO_SD_CATEGORY[pattern.category] || 'Technical Debt';
 
@@ -322,7 +322,7 @@ ${suggestedTeam}
 /**
  * Create Strategic Directive for pattern
  */
-async function createSDForPattern(pattern) {
+export async function createSDForPattern(pattern) {
   // Check for existing SD first
   const existingSD = await hasExistingSD(pattern.pattern_id);
   if (existingSD) {
@@ -359,7 +359,7 @@ async function createSDForPattern(pattern) {
 /**
  * Main alert check and SD creation
  */
-async function checkPatternsAndCreateSDs() {
+export async function checkPatternsAndCreateSDs() {
   console.log('\n PATTERN ALERT SD CREATOR');
   console.log('═'.repeat(60));
   console.log(`Mode: ${DRY_RUN ? 'DRY RUN' : 'LIVE'}`);
@@ -421,11 +421,6 @@ async function checkPatternsAndCreateSDs() {
 
   return stats;
 }
-
-// SD-PAT-FIX-LEAD-PLAN-REJECTED-004 (FR-2): exported for unit testing —
-// the completeness contract (created SDs pass LEAD-TO-PLAN validators with
-// zero manual backfill) is pinned by tests/unit/handoff/pattern-sd-completeness.test.js.
-export { createSDForPattern, buildSdDataForPattern, checkPatternsAndCreateSDs };
 
 // Run only when invoked directly (not when imported by tests)
 if (isMainModule(import.meta.url)) {
