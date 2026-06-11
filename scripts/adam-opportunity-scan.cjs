@@ -34,6 +34,37 @@ function isFlagEnabled(env = process.env) {
   return v === 'on' || v === '1' || v === 'true';
 }
 
+/**
+ * QF-20260610-863 (W0-3, FR-1/FR-2): conjunctive authoritative gate. The registry
+ * (leo_feature_flags) was dead metadata — consumers read env only, so a registry
+ * is_enabled=false had ZERO effect (proven live). Now BOTH must be ON to run:
+ *   env OFF                      -> { enabled:false, source:'env_off' }        (registry never read)
+ *   env ON + registry false      -> { enabled:false, source:'registry_kill' }  (remote kill-switch, fail-CLOSED)
+ *   env ON + registry true       -> { enabled:true,  source:'env_and_registry_on' }
+ *   env ON + row missing/DB err  -> { enabled:true,  source:'registry_degraded_env_verdict', degraded:true }
+ * Asymmetry is deliberate: the kill direction is reliable (a readable registry
+ * false always kills), but a transient DB blip degrades to the env verdict — it
+ * can never silently flip ON a flag the env had off (env_off short-circuits before
+ * any DB read), and never crashes the tick. Pure-DI (client injected) per FR-5.
+ */
+async function resolveGovernanceFlagGate(supabase, flagKey, envVerdict) {
+  if (!envVerdict) return { enabled: false, source: 'env_off', degraded: false };
+  try {
+    const { data, error } = await supabase
+      .from('leo_feature_flags')
+      .select('is_enabled')
+      .eq('flag_key', flagKey)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { enabled: true, source: 'registry_degraded_env_verdict', degraded: true, detail: 'no registry row' };
+    return data.is_enabled === true
+      ? { enabled: true, source: 'env_and_registry_on', degraded: false }
+      : { enabled: false, source: 'registry_kill', degraded: false };
+  } catch (e) {
+    return { enabled: true, source: 'registry_degraded_env_verdict', degraded: true, detail: e.message };
+  }
+}
+
 /** Parse argv into { mode, scope, tick }. mode is null when no subcommand flag is present. */
 function parseArgs(argv) {
   let mode = null;
@@ -143,6 +174,14 @@ async function main() {
     const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
     const supabase = createSupabaseServiceClient('engineer');
 
+    // QF-20260610-863: the registry is now AUTHORITATIVE — conjoin it with the env
+    // verdict captured above. A registry is_enabled=false kills the loop live.
+    const gate = await resolveGovernanceFlagGate(supabase, 'ADAM_GOVERNANCE_HEARTBEAT_V1', flagEnabled);
+    if (gate.degraded) {
+      process.stderr.write(`[adam-scan] flag gate degraded to env verdict (${gate.detail || 'registry unreadable'})\n`);
+    }
+    const gateEnabled = gate.enabled;
+
     const { enumerateScopes, resolveScopeArg, countLiveVentures } = await import('../lib/adam/scope-registry.js');
     const scopes = await enumerateScopes(supabase);
     const liveVentureCount = countLiveVentures(scopes);
@@ -169,22 +208,23 @@ async function main() {
     const result = selectAdvisory(guarded.kept, { openSdKeys });
 
     if (!result.surfaced) {
-      const entry = appendLedger(buildLedgerEntry({ scope, verdict: 'ADAM_OK', cleared: 0, flagEnabled }));
+      const entry = appendLedger(buildLedgerEntry({ scope, verdict: 'ADAM_OK', cleared: 0, flagEnabled: gateEnabled }));
       process.stdout.write(`ADAM_OK scope=${scope.scope_key} (nothing cleared the bar)\n`);
       process.stdout.write(JSON.stringify(entry) + '\n');
       process.exit(0);
     }
 
     const body = formatAdvisoryBody(result.surfaced);
-    if (!flagEnabled) {
-      // Cleared the bar, but the surfacing path is inert until the flag flips.
-      appendLedger(buildLedgerEntry({ scope, verdict: 'SUPPRESSED_FLAG_OFF', cleared: result.cleared, flagEnabled, detail: result.surfaced.dedup_key || null }));
-      process.stdout.write(`SUPPRESSED_FLAG_OFF scope=${scope.scope_key} (1 cleared; ADAM_GOVERNANCE_HEARTBEAT_V1 is off)\n`);
+    if (!gateEnabled) {
+      // Cleared the bar, but the surfacing path is inert until the gate clears
+      // (env off, or QF-20260610-863: the authoritative registry killed it).
+      appendLedger(buildLedgerEntry({ scope, verdict: 'SUPPRESSED_FLAG_OFF', cleared: result.cleared, flagEnabled: gateEnabled, detail: result.surfaced.dedup_key || null }));
+      process.stdout.write(`SUPPRESSED_FLAG_OFF scope=${scope.scope_key} (1 cleared; ADAM_GOVERNANCE_HEARTBEAT_V1 gate off: ${gate.source})\n`);
       process.exit(0);
     }
 
-    // flag ON: emit exactly ONE advisory via the existing lane.
-    appendLedger(buildLedgerEntry({ scope, verdict: 'SURFACED', cleared: result.cleared, flagEnabled, detail: result.surfaced.dedup_key || null }));
+    // gate ON (env AND registry): emit exactly ONE advisory via the existing lane.
+    appendLedger(buildLedgerEntry({ scope, verdict: 'SURFACED', cleared: result.cleared, flagEnabled: gateEnabled, detail: result.surfaced.dedup_key || null }));
     const r = spawnSync('node', [ADVISORY_CLI, 'send', body], { stdio: 'inherit' });
     process.exit(r.status == null ? 0 : r.status);
   } catch (e) {
@@ -194,7 +234,7 @@ async function main() {
   }
 }
 
-module.exports = { isFlagEnabled, parseArgs, buildLedgerEntry, usage, LEDGER_PATH };
+module.exports = { isFlagEnabled, resolveGovernanceFlagGate, parseArgs, buildLedgerEntry, usage, LEDGER_PATH };
 
 if (require.main === module) {
   main();
