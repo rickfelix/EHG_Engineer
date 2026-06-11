@@ -1,20 +1,11 @@
----
-category: reference
-status: approved
-version: 1.0.0
-author: github-actions[bot]
-last_updated: 2026-06-10
-tags: [reference, schema, engineer, tables]
----
-
 # strategic_directives_v2 Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-10T23:13:02.713Z
-**Rows**: 3,733
+**Generated**: 2026-06-10T23:56:15.245Z
+**Rows**: 3,734
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
