@@ -146,7 +146,8 @@ const totalWorkers = liveWorkers + incognito;                     // TRUE provis
 //    failure must NEVER block the fleet email; the panel is simply omitted. ──
 let costHtml = '', costText = '';
 try {
-  const { renderCostPanel } = await import(pathToFileURL(resolve('lib/cost/email-cost-panel.js')).href);
+  // string-literal specifier (not pathToFileURL) so wire-check can statically reach the panel lib
+  const { renderCostPanel } = await import('../lib/cost/email-cost-panel.js');
   const panel = await renderCostPanel(db, { sinceTs: typeof snap.ts === 'number' ? snap.ts : null, now: t });
   costHtml = panel.html; costText = panel.text;
 } catch (e) {
