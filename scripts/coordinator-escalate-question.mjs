@@ -47,7 +47,7 @@ if (dup && dup.length) {
   // When the chairman answers (via /decisions or the dashboard), the decision is recorded through
   // the fn_chairman_decide RPC; this script is fire-and-forget and never receives the answer itself.
   try {
-    const { recordPendingDecision } = await import(pathToFileURL(resolve('lib/chairman/record-pending-decision.mjs')).href);
+    const { recordPendingDecision } = await import('../lib/chairman/record-pending-decision.mjs');
     const rec = await recordPendingDecision(db, {
       title: 'Worker question — ' + worker + (sd ? ' (' + sd + ')' : ''),
       decisionType: 'session_question',
