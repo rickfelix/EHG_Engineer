@@ -142,6 +142,18 @@ const recentSeen = (sessRaw || []).filter(s => isFleetWorker(s, me) && s.heartbe
 const incognito = Math.max(0, recentSeen.length - liveWorkers);   // provisioned but quiet >15m = incognito (needs a wake re-paste)
 const totalWorkers = liveWorkers + incognito;                     // TRUE provisioned headcount the operator stood up
 
+// ── cost panel (SD-LEO-INFRA-FACTORY-COST-UNIT-001 FR-5) — fail-soft: a cost query
+//    failure must NEVER block the fleet email; the panel is simply omitted. ──
+let costHtml = '', costText = '';
+try {
+  // string-literal specifier (not pathToFileURL) so wire-check can statically reach the panel lib
+  const { renderCostPanel } = await import('../lib/cost/email-cost-panel.js');
+  const panel = await renderCostPanel(db, { sinceTs: typeof snap.ts === 'number' ? snap.ts : null, now: t });
+  costHtml = panel.html; costText = panel.text;
+} catch (e) {
+  console.warn('[coordinator-email] cost panel skipped:', e.message);
+}
+
 // ── render ──
 const dot = { red: '🔴', yellow: '🟡', green: '🟢' }[overall];
 const word = { red: 'RED', yellow: 'YELLOW', green: 'GREEN' }[overall];
@@ -170,10 +182,10 @@ const liveHtml = incognito ? `<p style="font-size:14px;margin:0 0 8px;padding:8p
 const html = `<p style="font-size:17px;margin:0 0 10px"><b>${dot} ${word}</b> — ${meaning} <span style="color:#777;font-size:14px">(${trendWord} ${trendArrow})</span></p>
 ${qHtml}${liveHtml}<p style="font-size:14px;margin:0 0 6px"><b>Active workers:</b> ${gauge}${workable ? ` · ${workable} item${workable > 1 ? 's' : ''} in play` : ''}</p>
 <p style="font-size:13px;color:#777;margin:0 0 6px">📦 Since last email: <b>+${shippedSince}</b> shipped</p>
-<p style="font-size:11px;color:#999;margin:14px 0 0">${when} ET</p>`;
+${costHtml}<p style="font-size:11px;color:#999;margin:14px 0 0">${when} ET</p>`;
 const qText = qN ? `❓ ${qN} question${qN > 1 ? 's' : ''} need${qN > 1 ? '' : 's'} your input:\n${questions.map(q => { const l = qLabel(q); return `  • ${l.text} — ${l.who}${l.sd}`; }).join('\n')}\n\n` : '';
 const liveText = incognito ? `🔔 Needs you: ${incognito} worker${incognito > 1 ? 's' : ''} went incognito — a wake re-paste/relaunch refills the fleet.\n\n` : '';
-const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}${liveText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\nSince last email: +${shippedSince} shipped\n\n${when} ET`;
+const text = `${dot} ${word} — ${meaning} (${trendWord} ${trendArrow})\n\n${qText}${liveText}Active workers: ${gauge}${workable ? ` · ${workable} item(s) in play` : ''}\nSince last email: +${shippedSince} shipped\n${costText}\n${when} ET`;
 
 // QF-20260609-738: skip-if-unchanged + max-staleness heartbeat. The */30 cron used to
 // send EVERY run even when nothing material changed (the chairman is usually away), so the

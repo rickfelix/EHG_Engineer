@@ -78,6 +78,16 @@ const CHECK_INTERVAL_MS = parseInt(process.env.COORDINATION_CHECK_INTERVAL_MS, 1
 const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 
+// FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): the canonical directive-kind
+// allowlist lives in lib/fleet/worker-status.cjs — IMPORTED, never duplicated (the
+// QF-20260610-545 lesson: classify the row KIND, not the sender). Guarded require:
+// if the lib is unavailable the list is empty and behavior degrades to today's
+// drain (fail-toward-current), never a hook crash.
+let DIRECTIVE_KINDS = [];
+try {
+  ({ DIRECTIVE_KINDS } = require(path.resolve(__dirname, '../../lib/fleet/worker-status.cjs')));
+} catch { /* fail-open: ack-withholding disabled, hook still runs */ }
+
 // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: pure, per-message inbox decision.
 // Returns { skip, markRead, markAck }. The bug this fixes: this PostToolUse hook (fires on
 // every tool call in every session) stamped read_at on poll for actionable rows AND only
@@ -122,6 +132,14 @@ function classifyInboxMessage(msg, opts = {}) {
   // genuinely actions them (worker-checkin ackMessage stamps both on claim).
   if (isIdle && ACTIONABLE_TYPES.includes(msg && msg.message_type)) {
     return { skip: false, markRead: false, markAck: false };
+  }
+  // FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): DIRECTIVE kinds never receive
+  // acknowledged_at from a poll, for ANY role/sender — read-only drain (read_at = DELIVERED,
+  // so they don't re-render forever; ACK is withheld so delivered vs actioned stays
+  // distinguishable; genuine actioning stamps acknowledged_at / payload.actioned_at later).
+  // Kind-allowlist shape per QF-20260610-545 — never a sender_type allow/denylist.
+  if (p.kind && DIRECTIVE_KINDS.includes(p.kind)) {
+    return { skip: false, markRead: true, markAck: false };
   }
   // Default — a pure notification with no follow-up action; drain on display (legacy behavior).
   return { skip: false, markRead: true, markAck: true };
