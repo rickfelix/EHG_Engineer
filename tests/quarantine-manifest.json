@@ -1,0 +1,1510 @@
+{
+  "$schema": "tests/quarantine-manifest: tracked unit-tier quarantine (SD-LEO-FIX-GREEN-MAIN-TRIAGE-001). Un-quarantine = delete the entry. Every entry MUST have reason_class + linked_ref.",
+  "generated_at": "2026-06-11T10:09:40.368Z",
+  "quarantined": [
+    {
+      "file": "docs/archived/orphan-stage-23-modules/stage-23-deployment.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '/lib/eva/stage-templates/analysis-steps/stage-23-deployment.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/docs/arch",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.362Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "docs/archived/orphan-stage-23-modules/stage-23-release-readiness.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '/lib/eva/stage-templates/analysis-steps/stage-23-release-readiness.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/do",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.362Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "docs/archived/orphan-stage-23-modules/stage-24-launch-execution.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-launch-execution.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.362Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "docs/archived/orphan-stage-23-modules/stage-24-marketing-prep.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-marketing-prep.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TR",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.362Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/__tests__/repo-paths-git-capable.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected true to be false // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.362Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/claim-guard.test.js",
+      "reason_class": "supabase-mock-chain",
+      "error_signature": "TypeError: supabase.from(...).select(...).eq(...).maybeSingle is not a function",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/eva/__tests__/lifecycle-terminal-orchestrator.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected { handled: true, …(2) } to deeply equal { Object (handled, completed, ...) }",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/feature-flags/feature-flags.test.js",
+      "reason_class": "timeout",
+      "error_signature": "Error: No test found in suite Feature Flag Registry",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/hooks/__tests__/session-id.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '00000000-0000-0000-0000-fff7000fffff' to be 'null' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/llm/usage-logger.test.js",
+      "reason_class": "supabase-mock-chain",
+      "error_signature": "TypeError: db.from(...).select is not a function",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/security/encryption.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '/lib/security/encryption.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/lib/security/encryption.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/sub-agents/modules/stories/llm-story-generator.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected true to be false // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/utils/work-item-router.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/lib/utils/work-item-router.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "lib/worktree-rollback.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ '/p/wt', …(1) ]",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "packages/venture-agent/src/cli.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/packages/venture-agent/src/cli.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/__tests__/leo-create-sd-smoke-detector.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '#!/usr/bin/env node\\r\\n\\r\\n/**\\r\\n * …' to match /scope:\\s*scope\\s*\\|\\|\\s*null/",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/__tests__/sd-creation-roundtrip.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/__tests__/sd-creation-roundtrip.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/hooks/__tests__/coordination-inbox.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '◇ injected env (0) from .env // tip: …' to be 'abc-from-stdin-123' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/hooks/__tests__/fr1-fr5-structural.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '#!/usr/bin/env node\\r\\n/**\\r\\n * sess…' to match /\\}\\s*else\\s*\\{[\\s\\S]{0,500}method:\\s*…/",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/hooks/__tests__/post-tool-clear-telemetry.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '00000000-0000-0000-0000-fff7000fffff' to be 'null' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/hooks/__tests__/pre-tool-enforce-inflight-default-on.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/hooks/__tests__/pre-tool-enforce-inflight-default-on.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/hooks/__tests__/retry-state-manager-outcome-mix.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'Edit:/x.js:439083f38956' to be 'Edit:/x.js' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/hooks/__tests__/stop-loop-wakeup-reminder.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'undefined' to be 'string' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/leo-create-sd.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/leo-create-sd.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/test-coverage-quality.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'short_circuit_no_ui_diff' to be 'short_circuit_backend_only' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/user-story-coverage.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/modules/handoff/executors/lead-final-approval/gates/pr-merge-verification.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected true to be false // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/verifier-parity.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/modules/handoff/executors/lead-to-plan/gates/verifier-parity.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/modules/handoff/gates/dual-generation.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'full' to be 'digest' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/modules/plan-parser.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/modules/plan-parser.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/modules/prd/rewrite-loop.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/modules/prd/rewrite-loop.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/modules/sd-key-generator-coverage.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "TypeError: The \"path\" argument must be of type string. Received undefined",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/modules/shipping/__tests__/post-merge-worktree-cleanup-claim-protect.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected -1 to be greater than 662",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "scripts/twoway-roundtrip.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "test/unit/discovery-mode.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "LLMEmptyResponseError: trend_scanner_empty_response: got 2 chars from LLM",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "test/unit/modeling.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected +0 to be 5000000000 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "test/unit/stage-zero.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "LLMUndercountError: trend_scanner_undercount: got 1 of 5 expected",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "test/unit/synthesis-components-4-8.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "TypeError: Cannot read properties of null (reading 'type')",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "test/unit/synthesis-engine.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected +0 to be 72 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/archived/directive-lab-debug.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/archived/directive-lab-e2e.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/archived/directive-lab-enhanced-features.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/archived/enhanced-directive-lab.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/archived/step4-layout-fix-verification.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/capture-session-id-hook.test.js",
+      "reason_class": "windows-abort-0xC0000409",
+      "error_signature": "AssertionError: expected 3221226505 to be +0 // Object.is equality",
+      "linked_ref": "SD-FDBK-INFRA-SWEEP-CLI-EXIT-001",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/ci/sibling-a-recursive-failure-lint.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Recursive writer-consumer asymmetry detected — 1 bypass_validation site(s) without emitValidationAuditLog within 50 lines:",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/claude-md-generator/opus47-alignment.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '<!-- file_content_hash: 554e5acb03aef…' to contain 'docs/harness-backlog.md'",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/content-sanitizer.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/content-sanitizer.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/eva/launch-workflow.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/eva/operations.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected \"vi.fn()\" to be called 6 times, but got 8 times",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/eva/pipeline-data.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [] to have a length of 1 but got +0",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/eva/s15-design-studio-reliability.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: ENOENT: no such file or directory, open 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-GREEN-MAIN-TRIAGE-001\\lib\\eva\\bridge\\stitch-client.js'",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/eva/s20-pause-controller.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected true to be false // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/eva/stage-zero/synthesis/attention-capital.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 0 to be greater than 0",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/eva/stage-zero/synthesis/mental-models.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'model-2' to be 'model-3' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/feedback-build-prompt.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/feedback-build-prompt.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/playground-logic.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/playground-logic.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/programmatic/tool-loop.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'Understood! I\\'m ready.\\n\\nHow can I …' to be '{\"result\": \"ok\"}' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/rank-items.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/rank-items.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/review-findings-logger.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/review-findings-logger.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/review-gate.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/review-gate.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/review-risk-scorer.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/review-risk-scorer.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/security/security-definer-remediation.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: SQL execution failed: Could not find the function public.exec_sql(sql) in the schema cache / Could not find the function public.raw_query(query_text) in the schema cache",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/sub-agents/qa-engineering-director-v2.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected { verdict: 'ERROR', …(2) } to have property \"phases\"",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/subagent-workflow.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/theme-performance.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/theme-performance.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/auto-validate-user-stories-draft.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/auto-validate-user-stories-draft.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/automated-knowledge-retrieval.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module './context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/automated-knowledge-retrieval.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/blocked-state-detector.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/brand-variants.service.test.js",
+      "reason_class": "supabase-mock-chain",
+      "error_signature": "TypeError: query.order is not a function",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/brand-variants.validation.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [Function] to throw an error",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/circuit-breaker.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '/scripts/context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/circuit-breaker.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/claim-validity-gate.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: promise resolved \"{ …(6) }\" instead of rejecting",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/cleanup/delete-venture-fully.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected \"vi.fn()\" to be called 1 times, but got 0 times",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/coordinator-self-review-canonicalize.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected undefined to be truthy",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/decision-filter-engine.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'MEDIUM' to be 'HIGH' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/emit-feedback-bypass-static-guard.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: emit-feedback bypass-site set does not match OOS allowlist.",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/enforcement-npm-install-guard.test.js",
+      "reason_class": "windows-abort-0xC0000409",
+      "error_signature": "AssertionError: expected 3221226505 to be 2 // Object.is equality",
+      "linked_ref": "SD-FDBK-INFRA-SWEEP-CLI-EXIT-001",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/enforcement-rca-tiered.test.js",
+      "reason_class": "windows-abort-0xC0000409",
+      "error_signature": "AssertionError: expected 3221226505 to be +0 // Object.is equality",
+      "linked_ref": "SD-FDBK-INFRA-SWEEP-CLI-EXIT-001",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva-master-scheduler.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ { ventureId: 'v-1', …(1) }, …(1) ]",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva-orchestrator.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'FAILED' to be 'COMPLETED' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/artifact-persistence-advance-reset.test.js",
+      "reason_class": "supabase-mock-chain",
+      "error_signature": "TypeError: supabase.from(...).select is not a function",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/brand-stage-wiring.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [] to have a length of 2 but got +0",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/bridge/dependency-ordered-execution.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "TypeError: Cannot read properties of undefined (reading 'dependencyContext')",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/bridge/stitch-adapter.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '/lib/eva/bridge/stitch-adapter.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/eva/bridge/stitch-adapter.t",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/bridge/stitch-client-budget.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '/lib/eva/bridge/stitch-client.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/eva/bridge/stitch-client-bud",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/bridge/stitch-exporter.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '/lib/eva/bridge/stitch-exporter.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/eva/bridge/stitch-exporter",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/bridge/stitch-provisioner.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '/lib/eva/bridge/stitch-provisioner.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/eva/bridge/stitch-provi",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/capacity-assignment-engine.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [ { sessionId: 's1', rank: 1, …(3) } ] to deeply equal []",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/chairman-decision-allowlist.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected true not to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.363Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/chairman-governance.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'escalate_notify' to be 'auto_approve_with_flag' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/chairman-intake-review.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '## Item 1 of 1: Test\\n\\n\\n**Descripti…' to contain 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…'",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/chairman-sla-enforcer.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected undefined to be defined",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/concurrent-scoring.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'handler-v1' to be 'handler-v2' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/corrective-finding-recorder.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'sentry_error' to be 'corrective_finding' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/data-contract-scorer.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 26 to be 25 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/dead-code-scanner.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 0 to be greater than 0",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/decision-filter-engine.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'MEDIUM' to be 'HIGH' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/dfe-gate-escalation-router.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/economic-lens-analysis.test.js",
+      "reason_class": "supabase-mock-chain",
+      "error_signature": "TypeError: dedupQuery.limit(...).maybeSingle is not a function",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/exit-table-wiring.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "TypeError: Cannot read properties of undefined (reading 'acquisition')",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/exit/separation-rehearsal.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected undefined to be defined",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/expand-spinoff-evaluator.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 26 to be 25 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/experiments/calibration-report.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected true to be false // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/filter-calibration.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 2 to be 7 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/gate-failure-recovery.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'non-critical' to be 'critical' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/okr-monthly-generator-acceptance-routing.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: No canonical L1 vision found (eva_vision_documents vision_key=VISION-EHG-L1-001, status=active, chairman_approved=true)",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/orchestration-hub.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 20 to be 5 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/orchestrator-gate-result-persist.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '/**\\r\\n * Eva Orchestrator v1\\r\\n *\\r…' to contain 'import { writeArtifact, recordGateRes…'",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/pipeline-runner/synthetic-venture-factory.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'first_principles_rebuilder' to be 'marketplace' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/post-lifecycle-decisions.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/replit-reentry-adapter.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/seed-l1-vision-structure.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '---\\r' to be '# ExecHoldings Global (EHG) — Mission…' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/stage-execution-worker-health.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 200 to be 503 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/stage-execution-worker-resilience.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 120000 to be 300000 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/template-extractor.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected null to be truthy",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/eva/translation-fidelity-gate.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected true to be false // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/event-router-trimodal.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'EVENT' to be 'PRIORITY_QUEUE' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/factories/base-factory.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'item-1' to be 'item-5' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/factories/directive-factory.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Failed to create directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/gap-014/escalation-threshold.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [] to have a length of 1 but got +0",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/gates/architectural-pattern-checklist.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 75 to be 100 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/gates/cross-child-integration-gate.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected true to be false // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/genesis/branch-lifecycle.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "TypeError: Cannot destructure property 'data' of '(intermediate value)' as it is undefined.",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/governance/canonical-helper-bypass-guard.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: Found 13 unexempted bypass site(s) for table=feedback, helper=lib/governance/emit-feedback.js:",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/governance/chairman-escalation.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected null to be false // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/governance/guardrail-intelligence-analyzer.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'awareness-not-enforcement' to be 'enforcement' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/governance/hard-halt-protocol.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/governance/manifesto-mode.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected error to be instance of ManifestoActivationError",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/handoff-orchestrator.test.js",
+      "reason_class": "duplicate",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "SD-LEO-INFRA-TEST-ESTATE-HYGIENE-001",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/handoff/handoff-orchestrator.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected \"vi.fn()\" to be called once, but got 0 times",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/handoff/orchestrator-completion-hook.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/helpers/database-helpers.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Failed to create test directive: Could not find the 'phase' column of 'strategic_directives_v2' in the schema cache",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/integration-verification-gate.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/language-parsers.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [ …(2) ] to have a length of 1 but got 2",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/lead-final-approval-prereq-check.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'DRAFT_SD_NOT_APPROVED' to be 'INVALID_STATUS' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/learn-pipeline-content-fallback.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [] to include 'PAT-CONTENT-ONLY'",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/lib/context-aware-sub-agent-selector.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: process.exit unexpectedly called with \"0\"",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/lib/error-pattern-library.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: process.exit unexpectedly called with \"0\"",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/lib/eva/chairman-decision-watcher-lookup.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 17 to be 15 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/lib/lead-enrich-template-conformance.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: scripts/one-off/_lead-enrich-sd-fdbk-enh-cascade-trigger-3627-001.mjs fails FR-3 conformance: parseError=none | hasHelperImport=false | hasVerifyCall=false | exempt=false/missing-annot",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/lib/worktree-rmsync-junction-safety.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: Found 1 WORKTREE-RELATED file(s) using raw fs.rmSync({recursive:true}) without junction-safe handling:",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/marketing-ai-email-campaigns.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "Error: enrollInCampaign requires ventureId",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/mock/firewall.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/ops/ops-cost-governance.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'undefined' to be 'function' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/orchestrator-completeness-audit.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "AssertionError: expected +0 to be 2 // Object.is equality",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/prd-enrichment.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module './context7-circuit-breaker.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/scripts/automated-knowledge-retrieval.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/pre-tool-enforce-schema.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '[pre-tool-enforce] RCA-TIERED-ENFORCE…' to contain 'schema-preflight'",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.364Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/preflight-autofix.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/product-hunt-client.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [ { name: 'ChatGPT', …(6) }, …(9) ] to have a length of 1 but got 10",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/protocol-file-read-cross-mode.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 90 to be 100 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/protocol-policies/worktree-failure-classification.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [ 'outside_repo', …(5) ] to deeply equal [ 'outside_repo', …(2) ]",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/rca-gate-validation.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected +0 to be 2 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/rca-learning-ingestion.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 11 to be 15 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/rca-runtime-triggers.test.js",
+      "reason_class": "supabase-mock-chain",
+      "error_signature": "TypeError: supabase.from(...).update(...).eq is not a function",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/reality-gates.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/registry-aware-target-application.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'crongenius' to be 'CronGenius' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/repo-paths-db-first.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'C:\\Users\\rickf\\Projects\\_EHG\\commitcr…' to be 'D:\\db-authoritative\\commitcraft-ai' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/repo-paths.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engi…' to be 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engi…' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/resolve-sd-workdir/orphan-husk-recovery.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/resolve-sd-workdir/orphan-husk-recovery.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/resolve-sd-workdir/worktree-atomicity.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/resolve-sd-workdir/worktree-atomicity.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/risk-classifier/anti-bloat-system.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'view_not_available' to be 'view_not_exists' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/risk-classifier/risk-classifier.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'GOVERNED' to be 'IMMUTABLE' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/scripts/resolve-sd-workdir-substrate-gate.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected -1 to be greater than 0",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/sd-start-orch-routing-phase.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'verifyHandoffIntegrity(sdUuid) {\\r\\n …' to match /\\.eq\\(['\"]sd_key['\"]/",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/sd-workflow-templates.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 2 to be 4 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/semantic-search-client.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: promise resolved \"{ totalEntities: +0, …(2) }\" instead of rejecting",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/semantic-validation-gates.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 90 to be 100 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/services/brand-genome.test.js",
+      "reason_class": "supabase-mock-chain",
+      "error_signature": "TypeError: supabase.from(...).upsert is not a function",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/session-summary/secret-redactor.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'createClerkClient({ secret_key=[REDAC…' to contain 'CLERK_SECRET_KEY_REDACTED'",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/session-writer/no-bypass.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: Files writing raw to claude_sessions without going through lib/session-writer.cjs:",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/stage-17/selection-flow.test.js",
+      "reason_class": "supabase-mock-chain",
+      "error_signature": "TypeError: supabase.from(...).select(...).eq(...).eq(...).eq(...).eq is not a function",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/stage-gates-ext.test.js",
+      "reason_class": "supabase-mock-chain",
+      "error_signature": "AssertionError: expected { isGated: true, gateType: 'TASTE' } to deeply equal { isGated: false, gateType: null }",
+      "linked_ref": "feedback:e594e162-7234-4176-ba30-0f5b9435269b",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/stitch-design-system.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '../../lib/eva/bridge/stitch-design-system.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/stitch-design-sy",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/stitch-device-type-resolver.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: Cannot find module '../../lib/eva/bridge/stitch-device-type-resolver.js' imported from C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/stitch-de",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/sub-agents/design-workflow-review.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [ Array(1) ] to have a length of 2 but got 1",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/transition-readiness-rejection.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected true to be false // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/venture-aware-completion-gates.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engi…' to be 'D:\\db-authoritative\\test-venture' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/venture-ceo-handlers.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected +0 to be 2 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/vision-event-bus.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 1 to be 2 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/vision-gap-004.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected [ 'devils_advocate_challenge', …(8) ] to have a length of 8 but got 9",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/vision-portfolio-scorecard.test.js",
+      "reason_class": "unclassified",
+      "error_signature": "AssertionError: expected false to be true // Object.is equality",
+      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/vision-score-dynamic-threshold.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected 48 to be 32 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/vision-score-gate.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected undefined to be 70 // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/wiring-validators/orphan-detector.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/wiring-validators/orphan-detector.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/wiring-validators/spec-code-drift.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/wiring-validators/spec-code-drift.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/unit/wiring-validators/vision-traceability.test.js",
+      "reason_class": "suite-load-error",
+      "error_signature": "Error: No test suite found in file C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-FIX-GREEN-MAIN-TRIAGE-001/tests/unit/wiring-validators/vision-traceability.test.js",
+      "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    },
+    {
+      "file": "tests/wsjf-priority-fetcher.test.js",
+      "reason_class": "assertion-drift",
+      "error_signature": "AssertionError: expected '3' to be '1' // Object.is equality",
+      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
+      "quarantined_at": "2026-06-11T10:09:40.365Z",
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+    }
+  ]
+}
