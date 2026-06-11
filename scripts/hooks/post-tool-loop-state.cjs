@@ -7,9 +7,15 @@
  *
  * Hook contract:
  *   - matcher: "ScheduleWakeup" (set in .claude/settings.json) restricts firing
- *     to the right tool. We still verify CLAUDE_TOOL_NAME defensively in case
- *     the matcher is missing or the hook is invoked from a different settings
- *     entry.
+ *     to the right tool. We still verify the tool name defensively in case the
+ *     matcher is missing or the hook is invoked from a different settings entry.
+ *     SD-LEO-INFRA-PARK-VISIBILITY-LOOP-STATE-001: the tool name MUST be read
+ *     from the stdin payload (payload.tool_name) with CLAUDE_TOOL_NAME as a
+ *     fallback only — Claude Code does NOT set CLAUDE_TOOL_NAME for hooks (RCA
+ *     #2 2026-05-04, same class pre-tool-enforce.cjs fixed), so the previous
+ *     env-only guard exited silently on EVERY harness invocation. That single
+ *     guard is why claude_sessions.loop_state read 'unknown' fleet-wide all day
+ *     2026-06-10 and parked workers were indistinguishable from stalled ones.
  *   - Always exit 0 — observability writes MUST NOT block the tool call. Any
  *     failure is logged to stderr by the tracker module.
  *   - Feature-flag gate: setting LEO_LOOP_STATE_SIGNAL=off short-circuits the
@@ -27,8 +33,6 @@
  * LEO_PARK_SILENCE_ARM and fully best-effort (its own try/catch).
  */
 
-const TOOL_NAME = process.env.CLAUDE_TOOL_NAME || '';
-
 function isOff(v) {
   const f = String(v == null ? 'on' : v).toLowerCase();
   return f === 'off' || f === '0' || f === 'false';
@@ -36,13 +40,17 @@ function isOff(v) {
 
 (async () => {
   try {
-    if (TOOL_NAME !== 'ScheduleWakeup') return;
     if (isOff(process.env.LEO_LOOP_STATE_SIGNAL)) return;
 
-    // FR-2: read the FULL stdin payload ONCE — we need session_id AND
-    // tool_input.delaySeconds, and stdin can only be consumed once.
+    // Read the FULL stdin payload ONCE — we need tool_name, session_id AND
+    // tool_input.delaySeconds, and stdin can only be consumed once. The tool
+    // guard runs AFTER this read: payload-first, env fallback (the env var is
+    // not set by the harness — see header).
     const sidLib = require('../../lib/hooks/session-id.cjs');
     const payload = await sidLib.readHookStdinPayload();
+
+    const toolName = (payload && payload.tool_name) || process.env.CLAUDE_TOOL_NAME || '';
+    if (toolName !== 'ScheduleWakeup') return;
 
     let sessionId = payload && sidLib.isValidSessionId(payload.session_id) ? payload.session_id : '';
     if (!sessionId && sidLib.isValidSessionId(process.env.CLAUDE_SESSION_ID)) sessionId = process.env.CLAUDE_SESSION_ID;

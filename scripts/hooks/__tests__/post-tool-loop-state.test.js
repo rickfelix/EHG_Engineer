@@ -25,12 +25,18 @@ function spawnHook(stdinPayload, env = {}) {
     };
     require('${HOOK_PATH}');
   `;
+  // SD-LEO-INFRA-PARK-VISIBILITY-LOOP-STATE-001: spawn HARNESS-SHAPED by default —
+  // CLAUDE_TOOL_NAME deliberately ABSENT (Claude Code never sets it for hooks; the
+  // legacy default of injecting it here is exactly why the dead env-only guard
+  // shipped undetected fleet-wide). Tests exercising the env FALLBACK set it via `env`.
+  const spawnEnv = { ...process.env, LEO_PARK_SILENCE_ARM: 'off', ...env };
+  if (!('CLAUDE_TOOL_NAME' in env)) delete spawnEnv.CLAUDE_TOOL_NAME;
   const probe = spawn('node', ['-e', code], {
     stdio: ['pipe', 'pipe', 'pipe'],
     // These cases assert ONLY the loop_state resolution path. Disable the FR-2
     // silence-arm (SD-FDBK-INFRA-AUTO-PUSH-WIP-001) so they stay hermetic — the
     // arm is covered separately by spawnHookSilence below.
-    env: { ...process.env, CLAUDE_TOOL_NAME: 'ScheduleWakeup', LEO_PARK_SILENCE_ARM: 'off', ...env }
+    env: spawnEnv
   });
   if (stdinPayload === null) {
     probe.stdin.end();
@@ -106,9 +112,12 @@ function spawnHookSilence(stdinPayload, env = {}) {
     }};
     require('${HOOK_PATH}');
   `;
+  // Harness-shaped: CLAUDE_TOOL_NAME absent (the payloads carry tool_name) — see spawnHook.
+  const spawnEnvS = { ...process.env, ...env };
+  if (!('CLAUDE_TOOL_NAME' in env)) delete spawnEnvS.CLAUDE_TOOL_NAME;
   const probe = spawn('node', ['-e', code], {
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, CLAUDE_TOOL_NAME: 'ScheduleWakeup', ...env }
+    env: spawnEnvS
   });
   probe.stdin.end(stdinPayload);
   return new Promise((resolve) => {
@@ -150,5 +159,43 @@ describe('PTL-SILENCE-1: ScheduleWakeup hook arms a capped expected_silence_unti
     }), { LEO_PARK_SILENCE_ARM: 'off' });
     expect(r.stdout).not.toContain('SILENCE:');
     expect(r.code).toBe(0);
+  });
+});
+
+// SD-LEO-INFRA-PARK-VISIBILITY-LOOP-STATE-001: payload-first tool-name resolution.
+// The harness delivers tool_name in the stdin JSON and NEVER sets CLAUDE_TOOL_NAME
+// (RCA #2 2026-05-04). The previous env-only guard exited silently on every real
+// invocation — loop_state read 'unknown' fleet-wide. These pin both directions
+// with the env var ABSENT (the legacy suite injected it and masked the bug).
+describe('PTL-PAYLOAD-TOOLNAME: tool name resolves payload-first with env fallback', () => {
+  it('HARNESS SHAPE: payload tool_name=ScheduleWakeup, env var absent => writes', async () => {
+    const r = await spawnHook(JSON.stringify({
+      session_id: 'ptl-payload-1', hook_event_name: 'PostToolUse',
+      tool_name: 'ScheduleWakeup', tool_input: { delaySeconds: 1200 }
+    }));
+    expect(r.stdout).toBe('CALLED:ptl-payload-1:awaiting_tick');
+    expect(r.code).toBe(0);
+  });
+
+  it('payload tool_name=Bash, env var absent => excluded (no write)', async () => {
+    const r = await spawnHook(JSON.stringify({
+      session_id: 'ptl-payload-2', hook_event_name: 'PostToolUse', tool_name: 'Bash'
+    }));
+    expect(r.stdout).not.toContain('CALLED:');
+    expect(r.code).toBe(0);
+  });
+
+  it('env-only fallback still honored (manual invocations): no payload tool_name, env=ScheduleWakeup', async () => {
+    const r = await spawnHook(JSON.stringify({
+      session_id: 'ptl-payload-3'
+    }), { CLAUDE_TOOL_NAME: 'ScheduleWakeup' });
+    expect(r.stdout).toBe('CALLED:ptl-payload-3:awaiting_tick');
+  });
+
+  it('payload tool_name WINS over a conflicting env value', async () => {
+    const r = await spawnHook(JSON.stringify({
+      session_id: 'ptl-payload-4', tool_name: 'Bash'
+    }), { CLAUDE_TOOL_NAME: 'ScheduleWakeup' });
+    expect(r.stdout).not.toContain('CALLED:');
   });
 });
