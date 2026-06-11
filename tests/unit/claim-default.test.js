@@ -106,7 +106,9 @@ describe('audit logging on claim transfer', () => {
 describe('handoff.js claim assertion', () => {
   it('should import claimGuard', async () => {
     const source = (await import('fs')).readFileSync('scripts/handoff.js', 'utf8');
-    expect(source).toContain("import { claimGuard } from '../lib/claim-guard.mjs'");
+    // handoff.js was refactored to a DYNAMIC import: const { claimGuard } = await import('../lib/claim-guard.mjs');
+    expect(source).toContain("await import('../lib/claim-guard.mjs')");
+    expect(source).toContain('const { claimGuard }');
   });
 
   it('should check claim before execute commands', async () => {

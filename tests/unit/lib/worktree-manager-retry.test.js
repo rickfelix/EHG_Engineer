@@ -265,7 +265,8 @@ describe('FR-1: 4 ad-hoc safeRecursiveRm sites routed through safeRecursiveRmWit
 
   it('removeWorktree fallback uses safeRecursiveRmWithRetry + markCleanupPendingBestEffort (FR-1 site #2)', () => {
     // removeWorktree's catch block must contain the retry helper call AND the FR-2 mark.
-    const block = src.match(/export function removeWorktree[\s\S]*?\n\}/);
+    // \( excludes the sibling removeWorktreeViaGit from matching this locator.
+    const block = src.match(/export function removeWorktree\(sdKey\)[\s\S]*?\n\}/);
     expect(block).not.toBeNull();
     expect(block[0]).toContain('safeRecursiveRmWithRetry(worktreePath)');
     expect(block[0]).toContain('markCleanupPendingBestEffort(sdKey');

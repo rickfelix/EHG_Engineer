@@ -88,7 +88,9 @@ describe('is_working_on writer guard: claim acquisition routes through claim-gua
     // status check on the same path as the acquire (the DB trigger backstops other writers).
     const idx = guardSrc.indexOf('function reaffirmClaimColumns');
     expect(idx).toBeGreaterThan(0);
-    const block = guardSrc.slice(idx, idx + 600);
+    // Window sized to reach is_working_on:true past the CAS/QF comment block
+    // (currently ~offset 1138 from the function start) with headroom for growth.
+    const block = guardSrc.slice(idx, idx + 2000);
     expect(block).toMatch(/is_working_on:\s*true/);
   });
 });
