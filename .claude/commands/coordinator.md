@@ -264,13 +264,15 @@ Coordinator initialized and REGISTERED as the active coordinator (role context s
   ✓ STEP 1 of 3 COMPLETE — the coordinator is up and officially registered. The fleet is supervised.
 
   NEXT — bring the fleet up IN THIS ORDER (do NOT skip ahead; the coordinator must be registered first, which it now is):
-    2) START THE WORKERS — open each worker CC window and run `/loop` (or paste the wake-up prompt).
+    2) START THE WORKERS — open each worker CC window and paste the worker directive printed below.
        The coordinator cannot start a worker's execution itself; only `/loop` or a human paste in the worker window can.
     3) START ADAM — once the workers are rolling, bring up Adam (the sourcing/advisory lane) via `/adam`.
 
   Do step 2, then step 3 — in that order. Tell me when the workers are up and I'll confirm they registered before you start Adam.
   Use /coordinator help to see all subcommands.
 ```
+
+Then EMIT THE WORKER DIRECTIVE (operator request 2026-06-12 — every `/coordinator start` must hand the operator the paste-able worker prompt, not just point at it): Read `docs/protocol/fleet-worker-loop-directive.md` (the canonical, version-controlled copy) and print the full directive from its "The directive" code fence verbatim in a single fenced code block, prefaced with one line: "Worker startup prompt — paste into each worker CC window:". Always read the file rather than reproducing from memory, so edits to the canonical directive propagate automatically.
 
 **IMPORTANT**: When running scripts from a non-main branch or worktree, prefix with `git show origin/main:scripts/<file> | node -` to ensure you're running the latest merged version. Only use `node scripts/<file>` directly when on main.
 
