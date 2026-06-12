@@ -28,6 +28,10 @@
 
 import { execSync } from 'child_process';
 import { GATE_REASON_CODES, MAX_HEAL_ITERATIONS } from './gate-reason-codes.js';
+// Shared threshold policy (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001): consume the same
+// single source as the LEAD-TO-PLAN vision-score gate instead of dynamic-importing
+// across sibling executor directories (the QF-20260506-295 band-aid this replaces).
+import { countAddressableDimensions, calculateDynamicThreshold } from '../../../../../../lib/handoff/threshold-resolver.js';
 
 const DEFAULT_HEAL_THRESHOLD = 85;
 const DEFAULT_TOLERANCE_BUFFER = 3;
@@ -155,7 +159,7 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
       details.structural.handoffs = `${handoffCount} accepted`;
     } else if (handoffCount === 1) {
       structuralPassed += 0.5;
-      details.structural.handoffs = `1 accepted (partial credit, need ≥2)`;
+      details.structural.handoffs = '1 accepted (partial credit, need ≥2)';
     } else {
       details.structural.handoffs = `only ${handoffCount} accepted (need ≥2)`;
     }
@@ -314,7 +318,7 @@ async function loadHealThreshold(supabase, sdType) {
   // 1. Check leo_config for explicit global override
   try {
     const { data } = await supabase
-      .from('leo_config')
+      .from('leo_config') // schema-lint-disable-line — phantom table (absent from live DB); read fails open to DEFAULT_HEAL_THRESHOLD via catch. Pre-existing; flagged for cleanup (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001).
       .select('value')
       .eq('key', 'heal_gate_threshold')
       .single();
@@ -349,7 +353,7 @@ async function loadHealThreshold(supabase, sdType) {
 async function loadToleranceBuffer(supabase) {
   try {
     const { data } = await supabase
-      .from('leo_config')
+      .from('leo_config') // schema-lint-disable-line — phantom table (absent from live DB); read fails open to DEFAULT_TOLERANCE_BUFFER via catch. Pre-existing; flagged for cleanup (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001).
       .select('value')
       .eq('key', 'heal_gate_tolerance_buffer')
       .single();
@@ -744,9 +748,6 @@ export function createHealBeforeCompleteGate(supabase) {
             .eq('id', sdUuid)
             .single();
           if (scoreDims?.dimension_scores && sdForOverride?.metadata) {
-            const { countAddressableDimensions, calculateDynamicThreshold } = await import(
-              '../../lead-to-plan/gates/vision-score.js'
-            );
             const { addressable, total } = countAddressableDimensions(
               sdType,
               scoreDims.dimension_scores,

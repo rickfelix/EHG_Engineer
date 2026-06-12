@@ -38,6 +38,7 @@ export { createVisionFidelityGate } from './vision-fidelity.js';
 // RCA Feedback-Loop Enforcement (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-G)
 // Reuses the EXEC-TO-PLAN gate creator — readEnforcementMode + Pocock
 // /diagnose Phase-1 discipline applies to RCA results emitted in either phase.
+// sibling-import-allowed: re-exports the ENTIRE canonical gate factory — same implementation at two phases, no policy fork to drift (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001)
 export { createRcaFeedbackLoopGate } from '../../exec-to-plan/gates/rca-feedback-loop-gate.js';
 
 // Cross-Repo Stage-Config Drift (SD-FDBK-INFRA-SYSTEMIC-CROSS-REPO-001)
