@@ -18,6 +18,24 @@ const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPA
 const t = Date.now();
 const DRY = !!process.env.ADAM_EMAIL_DRYRUN || process.argv.includes('--dry-run');
 const SNAP = resolve('.adam-email-last.json');
+
+// Quick-fix QF-20260612-437: quiescence-gate the hourly send (chairman B13, 2026-06-12).
+// The eva-scheduler-host daemon fires this hourly regardless of fleet state — the chairman
+// received fleet-advisor emails with the fleet fully OFF. Reuse the same gate that silences
+// coordinator hourly reminders; gate fails open to ACTIVE, so a query error never drops a
+// legitimate email. --force (or DRY) bypasses for manual runs.
+const FORCE = process.argv.includes('--force');
+if (!DRY && !FORCE) {
+  try {
+    const { createRequire } = await import('module');
+    const q = createRequire(import.meta.url)('../lib/coordinator/fleet-quiescence.cjs');
+    const verdict = await q.assessFleetActivity(db); // returns {quiescent, reason}; fails open to ACTIVE
+    if (verdict.quiescent) {
+      console.log('ADAM-EMAIL skipped (fleet quiescent): ' + verdict.reason);
+      process.exit(0);
+    }
+  } catch (e) { console.log('quiescence check failed open (sending): ' + (e?.message || e)); }
+}
 const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const arrow = (cur, prev) => (typeof prev !== 'number' || cur === prev) ? '' : (cur > prev ? UP : DN);
 let snap = {}; try { snap = JSON.parse(readFileSync(SNAP, 'utf8')); } catch { snap = {}; }
