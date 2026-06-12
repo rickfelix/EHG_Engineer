@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-12](#2026-06-12)
+  - [Bugfix](#bugfix)
 - [2026-06-11](#2026-06-11)
   - [Infrastructure](#infrastructure)
 - [2026-06-10](#2026-06-10)
@@ -44,6 +46,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-12
+
+### Bugfix
+- **Writer/consumer asymmetry class across sibling LEO gates ended** - PR #4657 (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001, resolves pattern PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001, 5 occurrences)
+  - **Issue**: Cross-gate threshold policy (SD_TYPE_THRESHOLDS, countAddressableDimensions, calculateDynamicThreshold, MIN_ADJUSTED_THRESHOLD_RATIO) lived inside the LEAD-TO-PLAN vision-score gate; the PLAN-TO-LEAD heal-before-complete gate consumed it via a dynamic import across sibling executor directories (QF-20260506-295 band-aid). Policy added to one writer was not guaranteed to reach sibling consumers, producing mathematically inconsistent verdicts against the same data.
+  - **Fix**: policy extracted verbatim into NEW `lib/handoff/threshold-resolver.js` (dependency-free, single source); `vision-score.js` re-exports for back-compat; `heal-before-complete.js` static-imports the shared module. NEW class-wide static guard `tests/unit/gate-executor-sibling-import-guard.test.js` bans cross-sibling imports under `scripts/modules/handoff/executors/*/gates` (with a `sibling-import-allowed:` pragma for documented whole-gate factory reuse — it immediately surfaced and documented 2 more live instances).
+  - **Verification**: 54/54 tests green (both gate suites unchanged + guard with seeded-violation proof); `calculateDynamicThreshold(85,3,6)=51` byte-identical pre/post move. Gates: L2P 95, P2E 97, E2P 94, P2L 96, LEAD-FINAL 98; retro quality 100; pattern resolved via `npm run pattern:resolve`.
 
 ## 2026-06-11
 
