@@ -50,6 +50,12 @@
 
 ## 2026-06-12
 
+### Bugfix (worktree reaper)
+- **Reaper live-claim guard — claim-held / non-terminal SD worktrees are never stage1-removed** - PR #4669 (SD-FDBK-FIX-WORKTREE-REAPER-LIVE-001, 3rd recurrence of the reaper-ate-live-worktree class)
+  - **Issue**: the 2026-06-12 ~19:45Z reaper run removed TWO live worktrees: one mid-LEAD-FINAL-APPROVAL (ghost completion — accepted LFA only in leo_handoff_executions) and one custom-path worktree mid-EXEC (claim_status:absent). Causes: basename-keyed guards miss custom paths; the active allowlist (draft/active/in_progress) missed pending_approval; claim resolution was path-keyed only; git-cherry "absorbed" acted as sole stage1 authority despite being unreliable under squash merges.
+  - **Fix**: branch-first key resolution (`keyFromWorktree`), pure `decideShippedStaleAction` (protect when claim-held via BOTH claude_sessions and strategic_directives_v2.claiming_session_id, or any non-terminal status), `absorbed_no_pr` demoted to advisory-only, removal-time branch-key re-check. DB errors can only narrow removal.
+  - **Verification**: 34/34 tests (8 new incident-shape pins); live dry-run shows the two currently cherry-absorbed non-terminal worktrees suppressed — Stage 1 = 0. Gates: E2P 97, P2L accepted, LEAD-FINAL 96; retro 100.
+
 ### Infrastructure
 - **Stage-0 revival plumbing — discovery pipeline un-bricked, still dark** - PR #4663 (SD-MAN-INFRA-STAGE-REVIVAL-PLUMBING-001, chairman sitting #1 item 3 GO)
   - **Issue**: the opportunity-discovery scan engine's Step 1 was a single hardcoded competitor source whose `Market trend scans require target URL` throw was the de-facto "flag-dark" gate; the 8-row opportunity_blueprints queue was stale (6 E2E fixtures + 2 Dec-2025 ideas); no intake quality bar existed.
