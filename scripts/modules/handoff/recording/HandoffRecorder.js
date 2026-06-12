@@ -382,7 +382,7 @@ export class HandoffRecorder {
         message: result.message
       },
       rejection_reason: enrichedRejectionReason,
-      created_by: recorderIdentity()
+      created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
     };
 
     // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (L5): persist per-gate verdicts on
@@ -604,7 +604,7 @@ export class HandoffRecorder {
         wait_attempts: Number(result.waitMetadata?.wait_attempts) || 0,
         first_wait_at: result.waitMetadata?.first_wait_at || new Date().toISOString()
       },
-      created_by: recorderIdentity()
+      created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
     };
 
     try {
@@ -661,7 +661,7 @@ export class HandoffRecorder {
         error: errorMessage,
         occurred_at: new Date().toISOString()
       },
-      created_by: recorderIdentity()
+      created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
     };
 
     try {
@@ -869,7 +869,7 @@ export class HandoffRecorder {
         validation_passed: result.success !== false,
         validation_details: result.validation || {},
         metadata,
-        created_by: recorderIdentity()
+        created_by: HANDOFF_SYSTEM_TAG // sd_phase_handoffs DB guard allowlists the system tag; session identity lives on leo_handoff_executions.created_by
       };
 
       // Log elements for debugging
