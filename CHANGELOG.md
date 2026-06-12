@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-06-12](#2026-06-12)
+  - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
 - [2026-06-11](#2026-06-11)
   - [Infrastructure](#infrastructure)
@@ -48,6 +49,13 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-06-12
+
+### Infrastructure
+- **Stage-0 revival plumbing — discovery pipeline un-bricked, still dark** - PR #4663 (SD-MAN-INFRA-STAGE-REVIVAL-PLUMBING-001, chairman sitting #1 item 3 GO)
+  - **Issue**: the opportunity-discovery scan engine's Step 1 was a single hardcoded competitor source whose `Market trend scans require target URL` throw was the de-facto "flag-dark" gate; the 8-row opportunity_blueprints queue was stale (6 E2E fixtures + 2 Dec-2025 ideas); no intake quality bar existed.
+  - **Fix**: NEW `lib/discovery/source-registry.js` (mission-anchored registry at runScan Step 1: harness_exhaust, intake_streams reusing the existing eva_youtube/todoist intake plumbing, competitor_teardown, capability_overhang; nursery_recombination DEFERRED until cohort n>=3); NEW `scripts/discovery/reseed-queue.mjs` (8 rows archived reversibly in-table, 0 deletes, queue reseed-ready); NEW `lib/discovery/intake-bar.js` (7-point observe-first advisory bar, v1-unratified pending Adam/chairman review); `buildBlueprintRow` stamps `metadata.calibration_cohort=true + cohort_number=1 + intake_bar` on every pipeline row. Pipeline stays GATED: explicit invocation only, no cron, conjunctive enable false — the dark→live flip is a separate chairman-sequenced act.
+  - **Verification**: 6 contract tests; live smoke (registry 4+1, harness_exhaust 40 problems/20 patterns, post-apply 0 active/8 archived/0 deleted); schema-lint caught a real phantom-column read (todoist `content`→`title`/`description`) pre-merge. Gates: E2P 91, P2L 97, LEAD-FINAL 98; retro 90.
+
 
 ### Bugfix
 - **Writer/consumer asymmetry class across sibling LEO gates ended** - PR #4657 (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001, resolves pattern PAT-LEO-INFRA-WRITER-CONSUMER-ASYMMETRY-001, 5 occurrences)
