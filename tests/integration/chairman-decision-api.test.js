@@ -27,20 +27,35 @@ let testDecisionId = null;
 const createdDecisionIds = [];
 const testLogger = { log: () => {}, warn: () => {}, error: console.error };
 
+// Quick-fix QF-20260612-258: stage 0 is not a decision-creating stage per the
+// stage_creates_decision RPC (createOrReusePendingDecision returns {id:null,skipped}),
+// and real PENDING decisions now exist on live ventures since the chairman decision
+// queue went live (2026-06-11), so reuse-vs-create assertions collide with prod data.
+// Use gate stages (3/10/22) and a venture with no pending decisions.
+const STAGE_A = 3; // kill gate — creates_decision=true
+const STAGE_B = 10; // promotion gate — creates_decision=true
+
 describe.skipIf(!HAS_REAL_DB)('Chairman Decision API', () => {
   beforeAll(async () => {
-    // Find an existing venture to use for testing
+    // Find an existing venture with NO pending chairman decisions, so the
+    // reuse/create assertions below are not affected by live pending rows.
     const { data: ventures } = await supabase
       .from('ventures')
       .select('id, name')
-      .limit(1)
-      .single();
+      .limit(25);
 
-    if (ventures) {
-      testVentureId = ventures.id;
+    const { data: pendingRows } = await supabase
+      .from('chairman_decisions')
+      .select('venture_id')
+      .eq('status', 'pending');
+    const pendingVentureIds = new Set((pendingRows ?? []).map((r) => r.venture_id));
+    const cleanVenture = (ventures ?? []).find((v) => !pendingVentureIds.has(v.id));
+
+    if (cleanVenture) {
+      testVentureId = cleanVenture.id;
     } else {
-      // Skip all tests if no ventures exist
-      console.warn('No ventures found in database, skipping integration tests');
+      // Skip all tests if no usable venture exists
+      console.warn('No venture without pending decisions found, skipping integration tests');
       return;
     }
 
@@ -65,9 +80,9 @@ describe.skipIf(!HAS_REAL_DB)('Chairman Decision API', () => {
 
       const result = await createOrReusePendingDecision({
         ventureId: testVentureId,
-        stageNumber: 0,
+        stageNumber: STAGE_A,
         briefData: { name: 'Test Venture', problem_statement: 'Test problem' },
-        summary: 'Test decision for stage 0',
+        summary: 'Test decision for stage A',
         supabase,
         logger: testLogger,
       });
@@ -86,8 +101,8 @@ describe.skipIf(!HAS_REAL_DB)('Chairman Decision API', () => {
 
       expect(data.status).toBe('pending');
       expect(data.venture_id).toBe(testVentureId);
-      expect(data.lifecycle_stage).toBe(0);
-      expect(data.summary).toBe('Test decision for stage 0');
+      expect(data.lifecycle_stage).toBe(STAGE_A);
+      expect(data.summary).toBe('Test decision for stage A');
       expect(data.brief_data).toEqual({ name: 'Test Venture', problem_statement: 'Test problem' });
     });
 
@@ -96,7 +111,7 @@ describe.skipIf(!HAS_REAL_DB)('Chairman Decision API', () => {
 
       const result = await createOrReusePendingDecision({
         ventureId: testVentureId,
-        stageNumber: 0,
+        stageNumber: STAGE_A,
         briefData: { name: 'Updated Brief' },
         summary: 'Updated summary',
         supabase,
@@ -112,8 +127,8 @@ describe.skipIf(!HAS_REAL_DB)('Chairman Decision API', () => {
 
       const result = await createOrReusePendingDecision({
         ventureId: testVentureId,
-        stageNumber: 10,
-        summary: 'Test decision for stage 10',
+        stageNumber: STAGE_B,
+        summary: 'Test decision for stage B',
         supabase,
         logger: testLogger,
       });
@@ -151,27 +166,22 @@ describe.skipIf(!HAS_REAL_DB)('Chairman Decision API', () => {
       expect(data.rationale).toBe('Integration test approval');
     });
 
-    it('allows new PENDING after approval for same venture+stage', async () => {
-      if (!testVentureId) return;
+    it('returns the resolved decision on re-entry after approval for same venture+stage', async () => {
+      if (!testVentureId || !testDecisionId) return;
 
-      // Previous decision for stage 0 was approved, so new PENDING should succeed
+      // SD-VW-FIX-WORKER-GATE-REENTRY-001: a unique constraint on venture+stage
+      // means re-entry after approval returns the existing resolved decision
+      // (isNew=false) instead of creating a fresh PENDING row.
       const result = await createOrReusePendingDecision({
         ventureId: testVentureId,
-        stageNumber: 0,
+        stageNumber: STAGE_A,
         summary: 'Test decision after approval',
         supabase,
         logger: testLogger,
       });
 
-      expect(result.isNew).toBe(true);
-      expect(result.id).not.toBe(testDecisionId);
-      createdDecisionIds.push(result.id);
-
-      // Clean it up by rejecting
-      await supabase
-        .from('chairman_decisions')
-        .update({ status: 'rejected', decision: 'kill', rationale: 'cleanup' })
-        .eq('id', result.id);
+      expect(result.isNew).toBe(false);
+      expect(result.id).toBe(testDecisionId);
     });
 
     it('verifies already-approved decision stays approved', async () => {
