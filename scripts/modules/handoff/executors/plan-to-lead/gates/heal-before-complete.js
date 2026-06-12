@@ -318,7 +318,7 @@ async function loadHealThreshold(supabase, sdType) {
   // 1. Check leo_config for explicit global override
   try {
     const { data } = await supabase
-      .from('leo_config')
+      .from('leo_config') // schema-lint-disable-line — phantom table (absent from live DB); read fails open to DEFAULT_HEAL_THRESHOLD via catch. Pre-existing; flagged for cleanup (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001).
       .select('value')
       .eq('key', 'heal_gate_threshold')
       .single();
@@ -353,7 +353,7 @@ async function loadHealThreshold(supabase, sdType) {
 async function loadToleranceBuffer(supabase) {
   try {
     const { data } = await supabase
-      .from('leo_config')
+      .from('leo_config') // schema-lint-disable-line — phantom table (absent from live DB); read fails open to DEFAULT_TOLERANCE_BUFFER via catch. Pre-existing; flagged for cleanup (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001).
       .select('value')
       .eq('key', 'heal_gate_tolerance_buffer')
       .single();
