@@ -60,6 +60,11 @@ async function safeExit(code) {
       }
     }
   } catch { /* fail-open: undici unavailable means no pool to drain */ }
+  // Quick-fix QF-20260611-123: process.exit discards unflushed stdout on async
+  // (Linux pipe) streams — a 317KB --json payload was truncated mid-string in CI.
+  // An empty write's callback fires only after all previously queued writes drain.
+  await new Promise((resolve) => process.stdout.write('', () => resolve()));
+  await new Promise((resolve) => process.stderr.write('', () => resolve()));
   process.exit(code);
 }
 
