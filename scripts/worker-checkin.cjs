@@ -647,6 +647,14 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         const { data: sdRow } = await sb.from('strategic_directives_v2').select('status').eq('sd_key', mySd).maybeSingle();
         if (sdRow && ['completed', 'cancelled', 'deferred'].includes(sdRow.status)) staleTerminal = true;
       } catch { /* fail-open: leave staleTerminal false -> resume preserved */ }
+    } else {
+      // Quick-fix QF-20260612-113: QF claims land in claude_sessions.sd_key too, but the
+      // terminal self-heal above was SD-only — a completed/cancelled/escalated QF looped
+      // action=resume forever. Apply the same check against quick_fixes.status.
+      try {
+        const { data: qfRow } = await sb.from('quick_fixes').select('status').eq('id', mySd).maybeSingle();
+        if (qfRow && ['completed', 'cancelled', 'escalated'].includes(qfRow.status)) staleTerminal = true;
+      } catch { /* fail-open: leave staleTerminal false -> resume preserved */ }
     }
     if (staleTerminal) {
       await selfHealStaleClaim(sb, sessionId, mySd);
