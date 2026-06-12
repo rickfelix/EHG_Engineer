@@ -29,11 +29,17 @@ const HAS_REAL_DB = process.env.SUPABASE_URL
   && process.env.SUPABASE_SERVICE_ROLE_KEY
   && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
 
-const PEER = 'test-claim-refuse-live-peer';     // the live foreign claimant (SD-side claim holder)
-const CALLER = 'test-claim-refuse-caller';      // the second self-claimer
+// Quick-fix QF-20260612-167: fixed session ids + a shared first-unclaimed-SD
+// target collided when overlapping CI runs (main legs ~20s apart + PR legs)
+// executed this suite concurrently against the live DB — each run stomped the
+// other's scenario (witnessed 102->106 red-merge at 38c233f9, self-resolved
+// when runs stopped overlapping). Fixtures are now hermetic per run: unique
+// suffix on the probe sessions and a dedicated scratch draft SD.
+const RUN_SUFFIX = `${process.pid}-${Date.now().toString(36)}`;
+const PEER = `test-claim-refuse-live-peer-${RUN_SUFFIX}`;   // the live foreign claimant (SD-side claim holder)
+const CALLER = `test-claim-refuse-caller-${RUN_SUFFIX}`;    // the second self-claimer
 
 let targetKey = null;
-let orig = null;
 
 const isoSecsAgo = (s) => new Date(Date.now() - s * 1000).toISOString();
 
@@ -53,21 +59,25 @@ async function resetScenario(peerHbSecsAgo = 10) {
 
 describe.skipIf(!HAS_REAL_DB)('claim_sd refuses a LIVE foreign claim (SD-LEO-FIX-CLAIM-RPC-REFUSE-001)', () => {
   beforeAll(async () => {
-    const { data } = await supabase.from('strategic_directives_v2')
-      .select('sd_key, claiming_session_id, active_session_id, is_working_on')
-      .is('claiming_session_id', null).in('status', ['draft', 'active']).limit(1);
-    if (!data || !data[0]) return; // env-dependent (no unclaimed SD)
-    targetKey = data[0].sd_key;
-    orig = {
-      claiming_session_id: data[0].claiming_session_id,
-      active_session_id: data[0].active_session_id,
-      is_working_on: data[0].is_working_on,
-    };
+    // Dedicated scratch SD — no run can pick the same target as another run.
+    const key = `SD-TEST-CLAIM-REFUSE-${RUN_SUFFIX}`.toUpperCase();
+    const { error } = await supabase.from('strategic_directives_v2').insert({
+      sd_key: key,
+      id: key,
+      title: 'TEST FIXTURE (QF-20260612-167): claim_sd live-foreign-refusal scenario — safe to delete',
+      description: 'Scratch SD created by tests/database/claim-sd-refuse-live-foreign.test.js; deleted in afterAll.',
+      status: 'draft',
+      sd_type: 'bugfix',
+      category: 'test_fixture',
+      priority: 'low',
+    });
+    if (error) return; // env-dependent (insert blocked) — tests no-op like the old no-candidate path
+    targetKey = key;
   });
 
   afterAll(async () => {
-    if (targetKey && orig) {
-      await supabase.from('strategic_directives_v2').update(orig).eq('sd_key', targetKey);
+    if (targetKey) {
+      await supabase.from('strategic_directives_v2').delete().eq('sd_key', targetKey);
     }
     await supabase.from('claude_sessions').delete().eq('session_id', PEER);
     await supabase.from('claude_sessions').delete().eq('session_id', CALLER);
