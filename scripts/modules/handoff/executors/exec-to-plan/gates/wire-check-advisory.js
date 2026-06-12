@@ -36,6 +36,7 @@ import {
   discoverEntryPoints,
   getScopedJsFiles,
   isExcludedFromWireCheck,
+  // sibling-import-allowed: advisory leg consumes the CANONICAL wire-check engine whole — same implementation at two phases, no policy fork to drift (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001)
 } from '../../lead-final-approval/gates/wire-check-gate.js';
 
 const __filename = fileURLToPath(import.meta.url);
