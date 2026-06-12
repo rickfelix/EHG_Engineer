@@ -20,6 +20,7 @@ import {
 } from './helpers.js';
 import { getRemediation } from './remediations.js';
 import { clearState as clearAutoProceedState } from '../../auto-proceed-state.js';
+import { recorderIdentity, recorderIdentities } from '../../recording/HandoffRecorder.js';
 import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.js';
 // SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: completion-boundary instrumentation
 import { stampCompletion, stampExecutionContext } from '../../../../../lib/fleet/claim-stamp.cjs';
@@ -374,7 +375,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       validation_score: normalizedScore,
       validation_passed: !usePendingPath, // pending_acceptance hasn't validated yet
       validation_details: insertValidationDetails,
-      created_by: 'UNIFIED-HANDOFF-SYSTEM'
+      created_by: recorderIdentity()
     };
     if (insertStatus === 'accepted') {
       insertPayload.accepted_at = new Date().toISOString();
@@ -723,7 +724,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         .eq('sd_id', sdId)
         .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
         .eq('status', 'pending_acceptance')
-        .eq('created_by', 'UNIFIED-HANDOFF-SYSTEM');
+        .in('created_by', recorderIdentities());
       if (error) {
         console.warn(`   ⚠️  [LFA_PENDING_CLEANUP_FAILED] sd_id=${sdId} reason=${error.message}`);
       }

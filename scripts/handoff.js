@@ -103,11 +103,20 @@ const sdIdArg = args[2]; // e.g., node handoff.js execute LEAD-TO-PLAN <SD-ID>
 if (args[0] === 'execute' && sdIdArg) {
   try {
     const result = await claimGuard(sdIdArg, null, { autoFallback: true });
-    if (!result.success && !result.fallback) {
-      console.error(`[handoff.js] Claim check failed for ${sdIdArg}: ${result.error}`);
+    // SD-FDBK-FIX-HANDOFF-CLAIM-GATE-001 FR-1: fallback=true means an ACTIVE (or
+    // stale-but-alive) foreign session owns the claim — that must never drive
+    // `execute` (2026-06-12: a parallel driver produced a ghost completion this way).
+    // Documented bypass (--bypass-validation, reason recorded downstream) still works.
+    const { decideExecuteClaimGate } = await import('./modules/handoff/claim-gate-decision.js');
+    const verdict = decideExecuteClaimGate(result, args.includes('--bypass-validation'));
+    if (verdict.action === 'proceed_bypassed') {
+      console.warn(`[handoff.js] ⚠️  ${verdict.label} bypassed via --bypass-validation for ${sdIdArg} (owner: ${result.owner?.session_id || 'unknown'})`);
+    } else if (verdict.action === 'exit') {
+      console.error(`[handoff.js] ❌ ${verdict.label} for ${sdIdArg}: ${result.error}`);
       if (result.owner) {
         console.error(`   Owner: ${result.owner.session_id} (${result.owner.heartbeat_age_human})`);
       }
+      console.error('   Only the claim-holding session may run handoff execute. Acquire the claim first (node scripts/sd-start.js <SD-KEY>) or have the owner finish/release.');
       process.exit(1);
     }
   } catch (e) {

@@ -42,6 +42,21 @@ function isCompletionAction(handoffType) {
   return COMPLETION_ACTIONS.includes(handoffType.toUpperCase());
 }
 
+/**
+ * SD-FDBK-FIX-HANDOFF-CLAIM-GATE-001 FR-4: session attribution on every recorded row.
+ * The legacy constant carried zero session identity, so a parallel pipeline driver
+ * could not be attributed after the fact (2026-06-12 incident). Lookups that
+ * previously keyed on the constant must match BOTH values (see recorderIdentities).
+ */
+export const HANDOFF_SYSTEM_TAG = 'UNIFIED-HANDOFF-SYSTEM';
+export function recorderIdentity() {
+  return process.env.CLAUDE_SESSION_ID || HANDOFF_SYSTEM_TAG;
+}
+export function recorderIdentities() {
+  const id = recorderIdentity();
+  return id === HANDOFF_SYSTEM_TAG ? [HANDOFF_SYSTEM_TAG] : [HANDOFF_SYSTEM_TAG, id];
+}
+
 export class HandoffRecorder {
   constructor(supabase, options = {}) {
     if (!supabase) {
@@ -161,7 +176,7 @@ export class HandoffRecorder {
         verifier: 'unified-handoff-system.js'
       },
       accepted_at: new Date().toISOString(),
-      created_by: 'UNIFIED-HANDOFF-SYSTEM'
+      created_by: recorderIdentity()
     };
 
     try {
@@ -187,7 +202,7 @@ export class HandoffRecorder {
           .eq('sd_id', sdUuid)
           .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
           .eq('status', 'pending_acceptance')
-          .eq('created_by', 'UNIFIED-HANDOFF-SYSTEM')
+          .in('created_by', recorderIdentities())
           .limit(2);
         if (lookupError) {
           console.warn(`   [LFA-PENDING-UPSERT] lookup failed: ${lookupError.message} — falling back to INSERT`);
@@ -367,7 +382,7 @@ export class HandoffRecorder {
         message: result.message
       },
       rejection_reason: enrichedRejectionReason,
-      created_by: 'UNIFIED-HANDOFF-SYSTEM'
+      created_by: recorderIdentity()
     };
 
     // SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-B (L5): persist per-gate verdicts on
@@ -482,7 +497,7 @@ export class HandoffRecorder {
           : {})
       },
       rejection_reason: result.message,
-      created_by: 'UNIFIED-HANDOFF-SYSTEM'
+      created_by: recorderIdentity()
     };
 
     try {
@@ -589,7 +604,7 @@ export class HandoffRecorder {
         wait_attempts: Number(result.waitMetadata?.wait_attempts) || 0,
         first_wait_at: result.waitMetadata?.first_wait_at || new Date().toISOString()
       },
-      created_by: 'UNIFIED-HANDOFF-SYSTEM'
+      created_by: recorderIdentity()
     };
 
     try {
@@ -646,7 +661,7 @@ export class HandoffRecorder {
         error: errorMessage,
         occurred_at: new Date().toISOString()
       },
-      created_by: 'UNIFIED-HANDOFF-SYSTEM'
+      created_by: recorderIdentity()
     };
 
     try {
@@ -854,7 +869,7 @@ export class HandoffRecorder {
         validation_passed: result.success !== false,
         validation_details: result.validation || {},
         metadata,
-        created_by: 'UNIFIED-HANDOFF-SYSTEM'
+        created_by: recorderIdentity()
       };
 
       // Log elements for debugging

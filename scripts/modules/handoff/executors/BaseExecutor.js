@@ -148,9 +148,10 @@ export class BaseExecutor {
         // latency to the happy path (retry fires only on failure).
         let attempt = 0;
         const maxAttempts = 2;
+        let claimCheck = null;
         while (true) {
           try {
-            await assertValidClaim(this.supabase, sdKeyForGate, {
+            claimCheck = await assertValidClaim(this.supabase, sdKeyForGate, {
               operation: `handoff_${this.handoffType}`,
               allowMainRepoForAcquisition: isOrchestrator
             });
@@ -164,6 +165,23 @@ export class BaseExecutor {
             console.warn(`[claim-validity] no_deterministic_identity on attempt ${attempt} — waiting 250ms for marker-file to settle, then retrying once.`);
             await new Promise(r => setTimeout(r, 250));
           }
+        }
+        // SD-FDBK-FIX-HANDOFF-CLAIM-GATE-001 FR-2: assertValidClaim returns
+        // ownership='unclaimed' both for claiming_session_id=NULL and after its
+        // orphan auto-release path. Handoffs are claim-holder-only operations —
+        // an unclaimed SD must be explicitly claimed (sd-start) before any
+        // session may drive the pipeline (2026-06-12 parallel-driver incident).
+        const { evaluateClaimCheckForHandoff } = await import('../claim-gate-decision.js');
+        const noClaim = evaluateClaimCheckForHandoff(claimCheck, sdKeyForGate);
+        if (noClaim.block) {
+          console.error(`❌ NO_CLAIM: ${noClaim.detail}`);
+          try { endSpan(rootSpan, { result: 'claim_validity_gate_blocked' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }
+          return ResultBuilder.gateFailure('GATE_CLAIM_VALIDITY', {
+            issues: [`NO_CLAIM: handoff_${this.handoffType} attempted on unclaimed SD ${sdKeyForGate} — ${noClaim.detail}`],
+            score: 0,
+            max_score: 100,
+            warnings: [`Acquire the claim first: node scripts/sd-start.js ${sdKeyForGate}`]
+          }, `NO_CLAIM: ${sdKeyForGate} is unclaimed — handoffs require the claim-holding session`);
         }
       } catch (e) {
         if (e?.name === 'ClaimIdentityError') {
