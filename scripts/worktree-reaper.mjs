@@ -320,6 +320,85 @@ async function loadClaimMap(supabase, { heartbeatThresholdMs = 2 * 60 * 60 * 100
   return map;
 }
 
+// ── SD-FDBK-FIX-WORKTREE-REAPER-LIVE-001: live-claim guard helpers ─────
+//
+// Incident (2026-06-12 ~19:45Z, pid 12704): stage1 removed TWO live worktrees.
+// (1) path.basename(wt.path) is NOT the sd_key for custom-path worktrees
+//     (wt-*, ../EHG_Engineer-*), so the active-SD suppress guard missed them
+//     and loadClaimMap's path-keyed map read claim_status=absent.
+// (2) the suppress allowlist (draft/active/in_progress) missed
+//     pending_approval — an SD mid-LEAD-FINAL-APPROVAL was reaped, producing a
+//     ghost completion.
+// keyFromWorktree resolves the SD/QF key from the BRANCH first (path-shape-
+// agnostic); loadClaimedKeySet collects claim-held keys from BOTH claim sides.
+
+/** Resolve the SD/QF key for a worktree: branch name first, basename fallback. */
+function keyFromWorktree(wt) {
+  const m = String(wt?.branch || '').match(/^(?:refs\/heads\/)?(?:feat|qf|fix|chore|hotfix)\/(.+)$/);
+  if (m && m[1]) return m[1];
+  return path.basename(wt?.path || '');
+}
+
+/**
+ * Claim-held SD/QF keys from BOTH claim sides:
+ *   - claude_sessions (via v_active_sessions): sd_key + qf_id of active sessions
+ *   - strategic_directives_v2.claiming_session_id IS NOT NULL (the SD-side claim)
+ * Fail-safe per TR-2: on any error the set stays partial/empty — an empty set
+ * never WIDENS removal because the non-terminal guard still protects known SDs.
+ */
+async function loadClaimedKeySet(supabase) {
+  const set = new Set();
+  if (!supabase) return set;
+  try {
+    const { data } = await supabase
+      .from('v_active_sessions')
+      .select('sd_key, qf_id, computed_status')
+      .eq('computed_status', 'active');
+    for (const r of data || []) {
+      if (r.sd_key) set.add(r.sd_key);
+      if (r.qf_id) set.add(r.qf_id);
+    }
+  } catch { /* fail-safe */ }
+  try {
+    const { data } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, claiming_session_id')
+      .not('claiming_session_id', 'is', null)
+      .limit(2000);
+    for (const r of data || []) if (r.sd_key) set.add(r.sd_key);
+  } catch { /* fail-safe */ }
+  return set;
+}
+
+/**
+ * Pure stage1 protection decision for a shipped-stale match (exported for
+ * regression tests — both 2026-06-12 incident shapes pin through this).
+ * Returns { protect, advisory, reason, key }.
+ */
+function decideShippedStaleAction(wt, shipped, ctx) {
+  const key = keyFromWorktree(wt);
+  const isQf = key.startsWith('QF-');
+  const claimHeld = Boolean(ctx.claimedKeySet && ctx.claimedKeySet.has(key));
+  const knownNonTerminal = isQf
+    ? Boolean(ctx.qfMap && ctx.qfMap.has(key) && !(ctx.terminalQfSet && ctx.terminalQfSet.has(key)))
+    : Boolean(ctx.sdMap && ctx.sdMap.has(key) && !(ctx.terminalSdSet && ctx.terminalSdSet.has(key)));
+  const legacyActive = isQf
+    ? Boolean(ctx.activeQfSet && ctx.activeQfSet.has(key))
+    : Boolean(ctx.activeSdSet && ctx.activeSdSet.has(key));
+  if (claimHeld || knownNonTerminal || legacyActive) {
+    return {
+      protect: true, advisory: false, key,
+      reason: claimHeld ? 'claim-held' : (knownNonTerminal ? 'non-terminal-status' : (isQf ? 'active-qf-protected' : 'active-sd-protected')),
+    };
+  }
+  // git cherry "absorbed" with zero merged PRs is known-unreliable under
+  // squash merges — advisory-only, never stage1 authority on its own.
+  if ((shipped?.evidence?.merged_pr_count ?? 0) === 0) {
+    return { protect: false, advisory: true, key, reason: 'absorbed_no_pr cherry heuristic is advisory-only (unreliable under squash merges)' };
+  }
+  return { protect: false, advisory: false, key, reason: 'merged-pr-backed' };
+}
+
 async function loadSdKeySets(supabase) {
   const sdMap = new Set();
   const qfMap = new Set();
@@ -498,22 +577,17 @@ async function classifyWorktree(wt, ctx) {
     shipped = { matched: false, reason: 'error', evidence: { error: String(e?.message || e) } };
   }
   if (shipped.matched) {
-    // SD-FDBK-ENH-WORKTREE-REAPER-MJS-001: never reap a LIVE SD's worktree as shipped-stale.
-    // The worktree dir basename is the sd_key (.worktrees/<sd_key>); if that SD is still being
-    // actively worked (draft/active/in_progress), suppress shipped-stale so the cron cannot
-    // git-remove an in-flight, not-yet-committed worktree. Legitimate cleanup of completed/
-    // cancelled SDs' worktrees is unchanged (they are not in activeSdSet). This is a SECOND
-    // defense atop the heartbeat claim-guard — either alone now protects an active worktree.
-    const sdKey = path.basename(wt.path);
-    // SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001: QF worktrees (.worktrees/qf/<qf_id>) carry the qf_id
-    // as their basename and are NEVER in activeSdSet, so without a QF-aware check an open/in_progress
-    // quick-fix worktree would be git-removed as shipped-stale (data loss). Protect via activeQfSet.
-    const isQf = sdKey.startsWith('QF-');
-    const activeProtected = isQf
-      ? (ctx.activeQfSet && ctx.activeQfSet.has(sdKey))
-      : (ctx.activeSdSet && ctx.activeSdSet.has(sdKey));
-    if (activeProtected) {
-      reasons['shipped-stale-suppressed'] = { ...shipped, suppressed: true, reason: isQf ? 'active-qf-protected' : 'active-sd-protected', sd_key: sdKey };
+    // SD-FDBK-FIX-WORKTREE-REAPER-LIVE-001 (supersedes the basename-keyed
+    // SD-FDBK-ENH-WORKTREE-REAPER-MJS-001 / SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001
+    // guards): key resolves from the BRANCH (path-shape-agnostic), protection
+    // covers claim-held (either claim side) and ALL non-terminal statuses
+    // (pending_approval included), and an absorbed-no-PR cherry verdict is
+    // advisory-only — never stage1 authority on its own.
+    const action = decideShippedStaleAction(wt, shipped, ctx);
+    if (action.protect) {
+      reasons['shipped-stale-suppressed'] = { ...shipped, suppressed: true, reason: action.reason, sd_key: action.key };
+    } else if (action.advisory) {
+      reasons['shipped-stale-advisory'] = { ...shipped, advisory: true, reason: action.reason, sd_key: action.key };
     } else {
       categories.push('shipped-stale');
       reasons['shipped-stale'] = shipped;
@@ -890,13 +964,14 @@ export async function main(argv = process.argv) {
   }
 
   // Load reference data (best-effort — reaper is useful even with empty maps).
-  const [claimMap, { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet }] = await Promise.all([
+  const [claimMap, claimedKeySet, { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet }] = await Promise.all([
     loadClaimMap(supabase),
+    loadClaimedKeySet(supabase),
     loadSdKeySets(supabase),
   ]);
 
   const idleThresholdMs = opts.days * 24 * 60 * 60 * 1000;
-  const ctx = { repoRoot, claimMap, sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, idleThresholdMs };
+  const ctx = { repoRoot, claimMap, claimedKeySet, sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, idleThresholdMs };
 
   const header = humanTableHeader();
   const now = Date.now();
@@ -1056,7 +1131,9 @@ export async function main(argv = process.argv) {
     try {
       // Re-check active claim at removal time (race protection).
       const fresh = await loadClaimMap(supabase);
-      if (fresh.get(normalizePath(wtPath))) {
+      const freshKeys = await loadClaimedKeySet(supabase);
+      const recKey = keyFromWorktree({ path: wtPath, branch: rec.branch });
+      if (fresh.get(normalizePath(wtPath)) || freshKeys.has(recKey)) {
         console.log(`  ↷ ${path.basename(wtPath)} acquired active claim mid-run — skipping`);
         aborted++;
         continue;
@@ -1142,6 +1219,9 @@ export {
   assertCwdIsMainRepoRoot,
   loadDotenvFromDir,
   loadClaimMap,
+  loadClaimedKeySet,
+  keyFromWorktree,
+  decideShippedStaleAction,
   loadSdKeySets,
   collectDirtyStatus,
   countUnpushedCommits,
