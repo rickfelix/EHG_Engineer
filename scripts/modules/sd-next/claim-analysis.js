@@ -71,9 +71,10 @@ export function analyzeClaimRelationship({ claimingSessionId: _claimingSessionId
   // BACK — not dead. While its armed-silence window is live, do NOT mark the claim auto-releasable (parity
   // with claim_sd + the sweep + the peer-release seams; reuse the ONE predicate). Fail-safe: an expired /
   // over-SILENCE_HARD_CAP_MS / absent window returns false here and falls through to normal classification,
-  // so a genuinely-dead claim still reaps. (Defensive: the v_active_sessions view does not expose this field
-  // today, so in the display path this is a no-op until the session is enriched; the AUTHORITATIVE gate is
-  // at the release choke point autoReleaseStaleDeadClaim below, which fetches the field from claude_sessions.)
+  // so a genuinely-dead claim still reaps. (v_active_sessions does not expose this field, so the sd-next
+  // display path enriches each session with expected_silence_until from claude_sessions — FR-2,
+  // SDNextSelector.loadActiveSessions — before calling this; the AUTHORITATIVE gate at the release choke
+  // point autoReleaseStaleDeadClaim below re-fetches the field from claude_sessions regardless.)
   if (isWithinArmedSilenceWindow(claimingSession?.expected_silence_until, Date.now())) {
     return {
       relationship: 'parked_armed_silence',
