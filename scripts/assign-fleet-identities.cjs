@@ -53,6 +53,11 @@ function filterOutCoordinators(rows) {
 // `claimedSessionIds` — Set of session_ids that currently hold an SD claim (kept
 // DB-free so this stays a pure, unit-testable function). Pass an empty Set to rely
 // on per-row signals (sd_key / fleet_identity) only.
+// SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: DEFENSIVE FALLBACK ONLY. The canonical fixture check is
+// the shared lib/fleet/session-predicates.mjs isFixtureSession (a strict superset that also catches
+// *-probe-* and QF-TEST-* — bug 7b59dac8, where qf-route-probe-A/B consumed callsign Charlie).
+// main() dynamic-imports that predicate and injects it into filterOutGhostSessions; this local list
+// only runs if the function is called WITHOUT an injected predicate (never in production).
 const GHOST_SESSION_ID_PREFIXES = ['drain_test_', 'test_execute_', 'test-session-', 'test_session_'];
 
 function isTestSessionId(sessionId) {
@@ -60,12 +65,14 @@ function isTestSessionId(sessionId) {
   return GHOST_SESSION_ID_PREFIXES.some(p => sessionId.startsWith(p));
 }
 
-function filterOutGhostSessions(rows, claimedSessionIds = new Set()) {
+function filterOutGhostSessions(rows, claimedSessionIds = new Set(), isFixture = isTestSessionId) {
   const claimed = claimedSessionIds instanceof Set ? claimedSessionIds : new Set(claimedSessionIds || []);
+  const fixtureCheck = typeof isFixture === 'function' ? isFixture : isTestSessionId;
   return (rows || []).filter(w => {
     if (!w) return false;
-    // Genuine test/ghost session_ids never get a callsign, even if otherwise active.
-    if (isTestSessionId(w.session_id)) return false;
+    // Fixture/test/probe session_ids never get a callsign, even if otherwise active. The shared
+    // isFixtureSession (injected by main) catches *-probe-*/QF-TEST-* the local prefix list missed.
+    if (fixtureCheck(w.session_id)) return false;
     // Currently claiming an SD → real worker.
     if (w.sd_key) return true;
     // Between SDs but in the canonical claim cohort → real worker, momentarily idle.
@@ -183,7 +190,10 @@ async function main() {
   const claimedSessionIds = new Set(
     (rawWorkers || []).filter(w => w && w.sd_key).map(w => w.session_id)
   );
-  const workers = filterOutGhostSessions(nonCoordinators, claimedSessionIds);
+  // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug 7b59dac8): inject the SHARED fixture predicate so
+  // *-probe-* / QF-TEST-* fixtures never consume a callsign. Dynamic import: .cjs reading the .mjs SoT.
+  const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
+  const workers = filterOutGhostSessions(nonCoordinators, claimedSessionIds, isFixtureSession);
 
   if (!workers || workers.length === 0) {
     console.log('No active workers found.');

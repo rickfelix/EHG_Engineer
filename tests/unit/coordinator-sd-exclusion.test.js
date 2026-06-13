@@ -20,6 +20,7 @@ import {
   isBareShell,
   isExcludedFromBelt,
   bareShellLastCompare,
+  isStartedSd,
   FIXTURE_RE,
 } from '../../lib/coordinator/sd-exclusion.mjs';
 
@@ -161,6 +162,31 @@ describe('isExcludedFromBelt — the REAL forecaster belt predicate', () => {
   });
 });
 
+// SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug d5e59236): in-flight (started) guard.
+describe('isStartedSd — the REAL ranker in-flight guard', () => {
+  it('flags an SD past the initial LEAD draft as started (must not be fresh-ranked)', () => {
+    expect(isStartedSd({ current_phase: 'PLAN_PRD' })).toBe(true);
+    expect(isStartedSd({ current_phase: 'EXEC' })).toBe(true);
+    expect(isStartedSd({ current_phase: 'PLAN_VERIFICATION' })).toBe(true);
+    expect(isStartedSd({ current_phase: 'LEAD_FINAL' })).toBe(true);
+    expect(isStartedSd({ current_phase: ' EXEC ' })).toBe(true); // trimmed
+  });
+
+  it('does NOT flag a fresh LEAD-draft (or unset phase) SD — these stay fresh-rankable', () => {
+    expect(isStartedSd({ current_phase: 'LEAD' })).toBe(false);
+    expect(isStartedSd({ current_phase: '' })).toBe(false);
+    expect(isStartedSd({ current_phase: '   ' })).toBe(false);
+    expect(isStartedSd({})).toBe(false); // phase column absent → treat as fresh
+  });
+
+  it('fails OPEN on garbage input (never drops a real fresh leaf)', () => {
+    expect(isStartedSd(null)).toBe(false);
+    expect(isStartedSd(undefined)).toBe(false);
+    expect(isStartedSd('LEAD')).toBe(false);
+    expect(isStartedSd({ current_phase: 42 })).toBe(false);
+  });
+});
+
 describe('production wiring guards (catch call-site deletion)', () => {
   const rankerSrc = readFileSync(RANKER, 'utf8');
   const forecasterSrc = readFileSync(FORECASTER, 'utf8');
@@ -169,6 +195,11 @@ describe('production wiring guards (catch call-site deletion)', () => {
     expect(rankerSrc).toMatch(/from '\.\.\/lib\/coordinator\/sd-exclusion\.mjs'/);
     expect(rankerSrc).toContain('isFixtureSd(d.sd_key, d.metadata)');
     expect(rankerSrc).toContain('bareShellLastCompare(a, b)');
+  });
+
+  it('the ranker imports and applies the in-flight (started) guard', () => {
+    expect(rankerSrc).toContain('isStartedSd');
+    expect(rankerSrc).toContain('isStartedSd(d)');
   });
 
   it('the forecaster imports and applies the belt exclusion', () => {
@@ -180,5 +211,9 @@ describe('production wiring guards (catch call-site deletion)', () => {
     // bare-shell needs title+description; is_fixture needs metadata.
     expect(rankerSrc).toMatch(/select\([^)]*title[^)]*description[^)]*metadata/s);
     expect(forecasterSrc).toMatch(/select\([^)]*title[^)]*description[^)]*metadata/s);
+  });
+
+  it('the ranker SELECTs current_phase for the in-flight guard', () => {
+    expect(rankerSrc).toMatch(/select\([^)]*current_phase/s);
   });
 });

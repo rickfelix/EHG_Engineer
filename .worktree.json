@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001",
-  "expectedBranch": "feat/SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001",
-  "createdAt": "2026-06-13T04:03:43.227Z",
+  "sdKey": "SD-FDBK-INFRA-SHARED-FLEET-WORKER-001",
+  "expectedBranch": "feat/SD-FDBK-INFRA-SHARED-FLEET-WORKER-001",
+  "createdAt": "2026-06-13T04:20:25.417Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }

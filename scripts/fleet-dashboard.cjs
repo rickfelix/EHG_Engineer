@@ -128,7 +128,9 @@ async function loadData() {
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
       .from('v_active_sessions')
-      .select('session_id, sd_key, computed_status, tty, heartbeat_age_seconds, heartbeat_age_human')
+      // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + metadata so the idle filter can apply
+      // isDispatchableFleetMember (excludes coordinator/adam/non_fleet/fixture).
+      .select('session_id, sd_key, computed_status, metadata, tty, heartbeat_age_seconds, heartbeat_age_human')
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
       .from('strategic_directives_v2')
@@ -184,6 +186,17 @@ async function loadData() {
   const workable = workRes.data || [];
   const coordMessages = coordRes.data || [];
   const rawSessions = rawSessRes.data || [];
+
+  // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug 623eb17d): the idle "available worker" list (and the
+  // belt-countdown capacity math fed from it) must exclude role/identity polluters. Load the shared
+  // predicate + active coordinator id once so the idle filter below drops adam/non_fleet/coordinator/
+  // fixture sessions. isDispatchableFleetMember (NOT isGenuineCountableWorker) is used on purpose: a
+  // just-finished worker is released with claimed_at nulled, so an everClaimed-based predicate would
+  // under-count real idle capacity. Dynamic import: this is a .cjs reading an .mjs SoT.
+  const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+  const { isDispatchableFleetMember } = await import('../lib/fleet/session-predicates.mjs');
+  let _dashCoordinatorId = null;
+  try { _dashCoordinatorId = await getActiveCoordinatorId(supabase); } catch { _dashCoordinatorId = null; }
 
   const claimedSdIds = new Set(sessions.map(s => s.sd_key));
   // Cross-reference heartbeat age with PID marker liveness:
@@ -245,7 +258,14 @@ async function loadData() {
     !hasExpectedSilence(s)
   );
   const DEAD_THRESHOLD = STALE_THRESHOLD * 3; // 15min
-  const idleSessions = allSessions.filter(s => !s.sd_key && s.heartbeat_age_seconds < DEAD_THRESHOLD);
+  // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: only dispatchable fleet MEMBERS count as idle/available —
+  // exclude adam/non_fleet/coordinator/fixture (isDispatchableFleetMember fails toward "member" on
+  // garbage, so a classification quirk never hides a true idle worker).
+  const idleSessions = allSessions.filter(s =>
+    !s.sd_key &&
+    s.heartbeat_age_seconds < DEAD_THRESHOLD &&
+    isDispatchableFleetMember(s, _dashCoordinatorId)
+  );
 
   const completedChildren = children.filter(c => c.status === 'completed').length;
   const totalChildren = children.length;
