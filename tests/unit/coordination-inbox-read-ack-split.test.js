@@ -15,9 +15,12 @@ describe('classifyInboxMessage', () => {
     expect(v).toEqual({ skip: false, markRead: false, markAck: false });
   });
 
-  it('a plain INFO notification is drained on poll (read_at + acknowledged_at) — legacy behavior', () => {
+  it('a plain INFO notification is now READ-ONLY drained on poll (read_at only; ack withheld for /checkin)', () => {
+    // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001: coordinator INFO push is delivered by the worker
+    // /checkin loop (coordinator_messages[], filters acknowledged_at IS NULL), so the poll must NOT
+    // auto-ack it (was {markRead:true, markAck:true}). It still stamps read_at so the ephemeral render stops.
     const v = classifyInboxMessage({ message_type: 'INFO', payload: {}, sender_type: 'orchestrator' }, { isIdle: true, amAdam: false });
-    expect(v).toEqual({ skip: false, markRead: true, markAck: true });
+    expect(v).toEqual({ skip: false, markRead: true, markAck: false });
   });
 
   it('FR-3a worker signal (INFO + signal_type) is SKIPPED regardless of coordinator role', () => {
@@ -52,12 +55,14 @@ describe('classifyInboxMessage', () => {
       { amAdam: true }
     );
     expect(v).toEqual({ skip: false, markRead: false, markAck: false });
-    // a NON-Adam session draining the same plain INFO is the legacy drain (unchanged)
+    // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001: a NON-Adam worker now READ-ONLY drains coordinator
+    // INFO push (read_at=DELIVERED, ack WITHHELD) so the worker /checkin loop delivers it as
+    // coordinator_messages[] (it filters acknowledged_at IS NULL). Previously this full-drained (ack=true).
     const v2 = classifyInboxMessage(
       { message_type: 'INFO', payload: {}, sender_type: 'coordinator' },
       { amAdam: false }
     );
-    expect(v2).toEqual({ skip: false, markRead: true, markAck: true });
+    expect(v2).toEqual({ skip: false, markRead: true, markAck: false });
   });
 
   it('a non-actionable type to a busy (non-idle) session drains on display', () => {
@@ -75,8 +80,9 @@ describe('classifyInboxMessage', () => {
     // orchestrator sender, same protection
     const orchDirective = { message_type: 'COACHING', payload: {}, sender_type: 'orchestrator' };
     expect(classifyInboxMessage(orchDirective, { amAdam: true })).toEqual({ skip: false, markRead: false, markAck: false });
-    // a NON-Adam session still drains the same COACHING row on display (byte-identical legacy behavior)
-    expect(classifyInboxMessage(coaching, { amAdam: false })).toEqual({ skip: false, markRead: true, markAck: true });
+    // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001: a NON-Adam worker now READ-ONLY drains a COACHING
+    // row (ack withheld) so the /checkin loop delivers it as coordinator_messages[]. Previously full-drained.
+    expect(classifyInboxMessage(coaching, { amAdam: false })).toEqual({ skip: false, markRead: true, markAck: false });
   });
 
   // QF-20260610-545: residual after QF-623 — the carve-out kept a sender_type ALLOWLIST
@@ -113,9 +119,12 @@ describe('classifyInboxMessage', () => {
     }
   });
 
-  it('QF-545: non-Adam (worker) drain behavior is byte-identical — plain INFO and busy non-actionable still drain', () => {
+  it('non-Adam (worker): coordinator INFO push is now READ-ONLY drained (ack withheld for /checkin); non-INFO/COACHING still full-drain', () => {
+    // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001: INFO/COACHING are coordinator->worker push delivered
+    // by the /checkin loop, so the poll withholds ack (read_at only). Other types keep the legacy drain.
     expect(classifyInboxMessage({ message_type: 'INFO', payload: {}, sender_type: 'chairman' }, { amAdam: false }))
-      .toEqual({ skip: false, markRead: true, markAck: true });
+      .toEqual({ skip: false, markRead: true, markAck: false });
+    // PRIORITY_CHANGE (not INFO/COACHING) is unchanged — still drains on display for a busy worker.
     expect(classifyInboxMessage({ message_type: 'PRIORITY_CHANGE', payload: {}, sender_type: 'chairman' }, { isIdle: false, amAdam: false }))
       .toEqual({ skip: false, markRead: true, markAck: true });
   });

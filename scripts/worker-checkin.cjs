@@ -180,6 +180,86 @@ async function ackMessage(sb, id, opts = {}) {
   } catch { /* best-effort */ }
 }
 
+// SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001 (FR-1): is this a coordinator->worker PUSH the
+// worker must SEE on /checkin (beyond WORK_ASSIGNMENT)? COACHING is its own message_type; advisory
+// INFO carries payload.kind. EXCLUDED: friction signals (payload.signal_type), the worker's own
+// roll_call ping, WORK_ASSIGNMENT (surfaced as pending_work_assignment), and SET_IDENTITY (FR-2).
+function isCoordinatorPush(m) {
+  if (!m) return false;
+  const p = m.payload || {};
+  // Exclude OUTBOUND friction signals (worker->coordinator, top-level signal_type) — but NOT inbound
+  // coordinator->worker notifications that merely ECHO signal_type as context (e.g. a SIGNAL_RESOLVED
+  // row carries {signal_resolved:true, signal_type}); those ARE push the worker must see. (adversarial-
+  // review finding: the bare signal_type guard re-created the very blindness this SD closes.)
+  if (p.signal_type && !p.signal_resolved) return false;
+  if (p.kind === ws.PAYLOAD_KINDS.ROLL_CALL) return false; // the worker's own availability ping
+  const mt = m.message_type;
+  if (mt === 'WORK_ASSIGNMENT' || mt === 'SET_IDENTITY') return false; // handled elsewhere (pending_work_assignment / callsign)
+  // Surface ALL coordinator->worker push the worker would otherwise miss: COACHING + every
+  // self-targeted INFO (advisory: coordinator_reply/adam_advisory/plain announcement; AND directive:
+  // coordinator_request/coordinator_reminder — those are exactly the rows a blind /checkin missed).
+  // The caller bounded-acks advisory rows but NEVER auto-acks DIRECTIVE_KINDS (they need genuine action).
+  return mt === 'COACHING' || mt === 'INFO';
+}
+
+// FR-1 + FR-3: surface UNCONSUMED (acknowledged_at IS NULL) coordinator push targeting this session
+// as coordinator_messages[], and make /checkin the AUTHORITATIVE, NON-DRAINING, bounded delivery
+// point (its JSON is the worker's decision input — unlike the ephemeral PostToolUse render the RCA
+// flagged). Per row: first authoritative delivery stamps read_at only (DELIVERED) → re-surfaces once
+// (single-missed-render guard); a SECOND delivery of an ADVISORY (non-directive, non-adam) row stamps
+// acknowledged_at → CONSUMED (bounded, no infinite re-surface). DIRECTIVE_KINDS are never auto-acked
+// here (genuine action stamps acknowledged_at — mirrors ackMessage / the read-ack split). Fail-open.
+async function surfaceCoordinatorMessages(sb, sessionId, { role = null } = {}) {
+  let rows = [];
+  try {
+    rows = await ws.getMessagesForSession(sb, sessionId, { unackedOnly: true });
+  } catch { return []; }
+  const push = (rows || []).filter(isCoordinatorPush);
+  const now = new Date().toISOString();
+  const out = [];
+  for (const m of push) {
+    const p = m.payload || {};
+    const kind = p.kind || null;
+    const isDirective = !!(kind && ws.DIRECTIVE_KINDS.includes(kind));
+    out.push({ id: m.id, message_type: m.message_type, kind, subject: m.subject || null, body: m.body || null, created_at: m.created_at });
+    try {
+      if (!m.read_at) {
+        // first authoritative delivery — mark DELIVERED, leave unacked so it re-surfaces once
+        await sb.from('session_coordination').update({ read_at: now }).eq('id', m.id);
+      } else if (!isDirective && role !== 'adam') {
+        // advisory row already delivered once → CONSUMED (bounded); directives wait for genuine action
+        await sb.from('session_coordination').update({ acknowledged_at: now }).eq('id', m.id);
+      }
+    } catch { /* best-effort: the surfacing in `out` already happened */ }
+  }
+  return out.reverse(); // present oldest-first (chronological reading order)
+}
+
+// FR-2: re-hydrate the worker callsign from the durable SET_IDENTITY row when claude_sessions.metadata
+// lost it (callsign goes null after a release/sweep). Persists it back to metadata so it survives the
+// NEXT sweep. Fail-open: no SET_IDENTITY row → returns null (never fabricates a callsign).
+async function rehydrateCallsign(sb, sessionId, currentMeta) {
+  try {
+    const { data } = await sb.from('session_coordination')
+      .select('payload, created_at')
+      .eq('target_session', sessionId)
+      .eq('message_type', 'SET_IDENTITY')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const cs = data && data.payload && data.payload.callsign;
+    if (!cs) return null;
+    const prevFi = (currentMeta && currentMeta.fleet_identity) || {};
+    const color = (data.payload && data.payload.color) || prevFi.color || null;
+    const display_name = (data.payload && data.payload.display_name) || `${cs} | idle`;
+    try {
+      const meta = { ...(currentMeta || {}), fleet_identity: { ...prevFi, callsign: cs, color, display_name } };
+      await sb.from('claude_sessions').update({ metadata: meta }).eq('session_id', sessionId);
+    } catch { /* best-effort persist; the in-memory return still re-hydrates this response */ }
+    return cs;
+  } catch { return null; }
+}
+
 /**
  * Run the full handshake. Pure-ish: takes an injected supabase client + session
  * id so it is unit-testable without env/network. Returns the resolution object
@@ -649,10 +729,23 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
     }
   } catch { /* fail-open */ }
 
+  // 2b. FR-2: re-hydrate callsign from the durable SET_IDENTITY row if metadata lost it (survives
+  // release/sweep). Runs BEFORE registerRollCall so the re-hydrated callsign flows into the roll-call
+  // row + base.callsign in the SAME response.
+  if (!callsign) {
+    const rehydrated = await rehydrateCallsign(sb, sessionId, sessionMetadata);
+    if (rehydrated) callsign = rehydrated;
+  }
+
   // 3. register availability (idempotent)
   const rollCall = await registerRollCall(sb, { sessionId, coordinatorId, callsign, mySd });
 
   const base = { ok: true, callsign, coordinator: coordinatorId, roll_call_id: rollCall.id, two_way: process.env.COORDINATOR_TWOWAY_V2 === 'on' };
+
+  // FR-1/FR-3: surface UNCONSUMED coordinator->worker push as coordinator_messages[] on the `base`
+  // object so EVERY return path (resume / idle / self_claimed / self_claimed_qf) carries it — a busy
+  // claim-holder AND an idle worker both see coordinator coaching. Non-draining + bounded (see fn).
+  base.coordinator_messages = await surfaceCoordinatorMessages(sb, sessionId, { role: sessionRole });
 
   // 4. already working -> resume. A self-claimed quick-fix lands in claude_sessions.sd_key
   // too (claim_sd writes it for QF-% ids), so a QF claim must resume into the /quick-fix
@@ -873,7 +966,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {

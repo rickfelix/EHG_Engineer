@@ -19,9 +19,11 @@ describe('classifyInboxMessage — WORK_ASSIGNMENT surfaces regardless of idle (
     const v = classifyInboxMessage({ message_type: 'WORK_ASSIGNMENT', payload: {} }, { isIdle: true });
     expect(v.markRead).toBe(false);
   });
-  it('a plain INFO notification still drains (unchanged default)', () => {
+  it('a plain INFO notification is now READ-ONLY drained (ack withheld for /checkin delivery)', () => {
+    // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001: coordinator INFO push is delivered by the /checkin
+    // loop (coordinator_messages[]), so the poll withholds acknowledged_at (read_at=DELIVERED only).
     const v = classifyInboxMessage({ message_type: 'INFO', payload: {} }, { isIdle: false });
-    expect(v).toEqual({ skip: false, markRead: true, markAck: true });
+    expect(v).toEqual({ skip: false, markRead: true, markAck: false });
   });
 });
 
