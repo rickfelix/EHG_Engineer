@@ -48,7 +48,21 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
+## 2026-06-13
+
+### Bugfix
+- **QF classifier no longer auto-escalates same-generator siblings** - PR #4682 (SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001)
+  - **Issue**: classify-quick-fix.js escalated EVERY auto-filed red-merge QF to a full SD — the detector files template-identical QFs and `analyzePatterns` keyword-matched the siblings against each other, firing the systemic-pattern path (contradicting MEDIUM-EFFORT-HARDENING FR-3: red-merge auto-QFs stay QFs).
+  - **Fix**: new exported `generatorSignature()` (Auto-filed-by marker + kebab-case machine-prefix fallback) drives same-generator pair exclusion in the similarity loop; human-filed similarity is fail-open preserved. A 10-agent adversarial review before merge hardened three real edge cases: kebab-case fallback so non-generator prefixes (`error:auth_service:`, timestamps, ratios) can't falsely exclude and mask a systemic cluster; trailing-punctuation trim for sibling stability; `.neq('id')` self-exclusion (also closes a pre-existing organic self-count so the systemic threshold means 4 distinct OTHERS).
+  - **Verification**: 8 unit pins; live red-merge probe excludes 8 siblings (isSystemic=false). Gates L2P 96, P2E 97, E2P 97, LEAD-FINAL 95; retro 90.
+
 ## 2026-06-12
+
+### Infrastructure (fleet)
+- **Atomic QF claim on every routing surface** - PR #4675 (SD-FDBK-INFRA-CLAIM-VISIBILITY-ATOMIC-001)
+  - **Issue**: two unclaimed workers duplicated QF-20260611-123 (identical fix already on origin at push time) and QF-working sessions read idle-no-claim. claim_sd was already QF-aware and the selector already excluded live-peer-held QFs — but the qf_start routing surfaces never TOOK the claim.
+  - **Fix**: NEW `scripts/qf-start.js` (atomic claim via claim_sd; holder info + exit 3 on refusal; undici-drain safeExit); `sd-start.js` routes `^QF-` ids instead of crashing; `qf_start` actions carry `claim_cmd` + CLAIM FIRST; /quick-fix skill step 0; 6 contract pins.
+  - **Verification**: live race (probe A claims, probe B refused exit 3); gates 96/94/93 + LEAD-FINAL 98 (canonical row via the FDBK-FIX-LFA-ACCEPT-CANONICAL backfill after the known split-brain hit this very handoff); retro 90.
 
 ### Bugfix (worktree reaper)
 - **Reaper live-claim guard — claim-held / non-terminal SD worktrees are never stage1-removed** - PR #4669 (SD-FDBK-FIX-WORKTREE-REAPER-LIVE-001, 3rd recurrence of the reaper-ate-live-worktree class)

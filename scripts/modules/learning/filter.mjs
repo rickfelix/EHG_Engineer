@@ -47,6 +47,11 @@ export const REJECT_REASONS = Object.freeze({
   HANDOFF_FAILURE_NEEDS_MULTI_SD: 'HANDOFF_FAILURE_NEEDS_MULTI_SD',
   EMPTY_PROVEN_LOW_OCCURRENCE: 'EMPTY_PROVEN_LOW_OCCURRENCE',
   FINGERPRINT_STEM_DUP: 'FINGERPRINT_STEM_DUP',
+  // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (b): an assigned SD cancelled WITH a
+  // cancellation_reason is an evidence-backed human "no" — drop the pattern
+  // instead of passing it back to the creator (the old cancelled-passthrough
+  // re-armed the refile loop).
+  EVIDENCE_CANCELLED_ASSIGNED_SD: 'EVIDENCE_CANCELLED_ASSIGNED_SD',
 });
 
 const REASON_SEVERITY = {
@@ -60,6 +65,7 @@ const REASON_SEVERITY = {
   [REJECT_REASONS.HANDOFF_FAILURE_NEEDS_MULTI_SD]: 'INFO',
   [REJECT_REASONS.EMPTY_PROVEN_LOW_OCCURRENCE]: 'INFO',
   [REJECT_REASONS.FINGERPRINT_STEM_DUP]: 'INFO',
+  [REJECT_REASONS.EVIDENCE_CANCELLED_ASSIGNED_SD]: 'INFO',
 };
 
 function checkSource(pattern, allowSources) {
@@ -85,6 +91,11 @@ function checkAssignedSd(pattern, sdStatusMap, blockStatuses) {
   if (!sdId) return null;
   const status = sdStatusMap.get(sdId);
   if (status === undefined) return REJECT_REASONS.ALREADY_ASSIGNED_OPEN_SD;
+  // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (b): 'cancelled_with_evidence' is the
+  // sentinel fetchAssignedSdStatuses emits for a cancel that carries a recorded
+  // cancellation_reason — a human said no with evidence; suppress the pattern.
+  // Bare 'cancelled' keeps the legacy passthrough (requeue allowed).
+  if (status === 'cancelled_with_evidence') return REJECT_REASONS.EVIDENCE_CANCELLED_ASSIGNED_SD;
   if (status === 'cancelled') return null;
   if (blockStatuses.has(status)) return REJECT_REASONS.ALREADY_ASSIGNED_OPEN_SD;
   return null;
@@ -409,17 +420,27 @@ export async function fetchAssignedSdStatuses(supabase, patterns) {
 
   if (ids.length === 0) return new Map();
 
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, status')
-    .in('id', ids);
-
-  if (error) {
-    throw new Error(`fetchAssignedSdStatuses failed: ${error.message}`);
+  // Batched .in() — same oversized-URL guard as fetchPatternSourceSDStatuses.
+  const data = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data: page, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, status, cancellation_reason')
+      .in('id', ids.slice(i, i + 100));
+    if (error) {
+      throw new Error(`fetchAssignedSdStatuses failed: ${error.message}`);
+    }
+    data.push(...(page || []));
   }
 
   const map = new Map();
-  for (const row of data || []) map.set(row.id, row.status);
+  for (const row of data || []) {
+    // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (b): cancelled WITH a recorded reason is
+    // an evidence-cancel — encode as a distinct sentinel so checkAssignedSd can
+    // suppress instead of requeue. Plain cancels keep the legacy 'cancelled' value.
+    const evidenceCancelled = row.status === 'cancelled' && row.cancellation_reason && String(row.cancellation_reason).trim().length > 0;
+    map.set(row.id, evidenceCancelled ? 'cancelled_with_evidence' : row.status);
+  }
   return map;
 }
 
@@ -446,17 +467,22 @@ export async function fetchPatternSourceSDStatuses(supabase, patterns) {
 
   if (ids.size === 0) return new Map();
 
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, status')
-    .in('id', [...ids]);
-
-  if (error) {
-    throw new Error(`fetchPatternSourceSDStatuses failed: ${error.message}`);
-  }
-
+  // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001: batch the .in() — 400+ source ids
+  // build a ~15KB GET URL and the fetch fails outright. Under the old fail-open
+  // posture that meant the noise filter NEVER ran on real pattern volumes
+  // (silent contributor to the PAT-FIX storms).
   const map = new Map();
-  for (const row of data || []) map.set(row.id, row.status);
+  const all = [...ids];
+  for (let i = 0; i < all.length; i += 100) {
+    const { data, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, status')
+      .in('id', all.slice(i, i + 100));
+    if (error) {
+      throw new Error(`fetchPatternSourceSDStatuses failed: ${error.message}`);
+    }
+    for (const row of data || []) map.set(row.id, row.status);
+  }
   return map;
 }
 

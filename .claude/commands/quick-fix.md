@@ -90,6 +90,12 @@ This validates:
 
 If qualified for quick-fix:
 
+0. **CLAIM FIRST (atomic — never skip):**
+   ```bash
+   node scripts/qf-start.js QF-YYYYMMDD-NNN
+   ```
+   This takes the atomic claim via the QF-aware `claim_sd` RPC (sets `quick_fixes.claiming_session_id` + `status=in_progress` + your session's `sd_key`). If it exits non-zero the QF is held by a live peer — pick a different one; never duplicate in-flight work (SD-FDBK-INFRA-CLAIM-VISIBILITY-ATOMIC-001: two unclaimed workers produced duplicate fixes for QF-20260611-123).
+
 1. **Read details:**
    ```bash
    node scripts/read-quick-fix.js QF-YYYYMMDD-NNN

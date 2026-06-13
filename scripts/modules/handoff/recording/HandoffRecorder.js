@@ -842,12 +842,19 @@ export class HandoffRecorder {
           }
         }
         // PLAN-TO-EXEC: Store Gate 1 results for LEAD-FINAL-APPROVAL
+        // SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: gateResults is keyed by gate.name, and the live
+        // PLAN-TO-EXEC gate is GATE1_DESIGN_DATABASE — the legacy GATE1_PRD_QUALITY key is never
+        // produced, so gate1 was never mirrored to metadata.gate1_validation and GATE4 at
+        // LEAD-FINAL never found it (undercounting C1, forcing a bypass on passing security SDs).
+        // Recognize the live key with GATE1_PRD_QUALITY back-compat. (The full map is also stored
+        // at metadata.gate_results below, so the GATE4 reader can read the canonical name too.)
         if (handoffType === 'PLAN-TO-EXEC') {
-          if (result.gateResults.GATE1_PRD_QUALITY) {
-            metadata.gate1_validation = result.gateResults.GATE1_PRD_QUALITY;
-            console.log('   ✅ Gate 1 PRD quality saved to metadata.gate1_validation');
+          const gate1 = result.gateResults.GATE1_DESIGN_DATABASE || result.gateResults.GATE1_PRD_QUALITY;
+          if (gate1) {
+            metadata.gate1_validation = gate1;
+            console.log('   ✅ Gate 1 (DESIGN→DATABASE) saved to metadata.gate1_validation');
           } else {
-            console.warn('   ⚠️  WARNING: GATE1_PRD_QUALITY not found in gateResults');
+            console.warn('   ⚠️  WARNING: GATE1 (GATE1_DESIGN_DATABASE / GATE1_PRD_QUALITY) not found in gateResults');
           }
         }
         // PLAN-TO-LEAD: Store Gate 3 results for LEAD-FINAL-APPROVAL Gate 4

@@ -231,7 +231,10 @@ export class SDNextSelector {
       this.displayHarnessBacklog();
       displayWorktreeIsolationReminder(this.activeSessions, this.currentSession);
       if (qfSummaryNoBaseline?.topStartableQF) {
-        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available` };
+        // SD-FDBK-INFRA-CLAIM-VISIBILITY-ATOMIC-001: qf_start consumers MUST take the
+        // atomic claim before working — claim_cmd is the contract (two unclaimed
+        // workers duplicated QF-20260611-123 on 2026-06-12).
+        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, claim_cmd: `node scripts/qf-start.js ${qfSummaryNoBaseline.topStartableQF.id}`, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available — CLAIM FIRST via claim_cmd` };
       }
       return { action: 'none', sd_id: null, reason: 'No active baseline found' };
     }
@@ -251,7 +254,7 @@ export class SDNextSelector {
       this.displayHarnessBacklog();
       displayWorktreeIsolationReminder(this.activeSessions, this.currentSession);
       if (qfSummaryExhausted?.topStartableQF) {
-        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available` };
+        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, claim_cmd: `node scripts/qf-start.js ${qfSummaryExhausted.topStartableQF.id}`, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available — CLAIM FIRST via claim_cmd` };
       }
       return { action: 'none', sd_id: null, reason: 'Baseline exhausted - all items completed' };
     }
@@ -746,7 +749,7 @@ export class SDNextSelector {
       const sdUUIDs = filteredSDs.map(sd => sd.id);
       const { data: krAlignments } = await this.supabase
         .from('sd_key_result_alignment')
-        .select('sd_id, key_result_id, contribution_type, contribution_weight, key_results!inner(id, status, code, title)')
+        .select('sd_id, key_result_id, contribution_type, contribution_weight, key_results!inner(id, status, code, title)') // schema-lint-disable-line — embedded key_results!inner columns mis-attributed to sd_key_result_alignment by the lint parser; pre-existing query, table+embed verified live (SD-FDBK-INFRA-CLAIM-VISIBILITY-ATOMIC-001)
         .in('sd_id', sdUUIDs);
 
       if (krAlignments && krAlignments.length > 0) {

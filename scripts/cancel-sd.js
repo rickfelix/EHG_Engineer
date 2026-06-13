@@ -98,14 +98,20 @@ async function cancelSD(sd, reason) {
   // SD-LEO-INFRA-CLOSE-ISSUE-PATTERN-001 (FR-2): report the closure-loop reset that the
   // trg_reset_patterns_on_sd_cancel trigger performs on this cancel. Read-only count;
   // the trigger does the actual issue_patterns reset (assigned -> active).
+  // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (b): capture the linked pattern ROWS
+  // BEFORE the cancel — trg_reset_patterns_on_sd_cancel nulls assigned_sd_id
+  // during the cancel UPDATE, so a post-cancel lookup by assigned_sd_id finds
+  // nothing and the suppression would silently no-op.
   let assignedPatternCount = 0;
+  let linkedPatterns = [];
   try {
-    const { count } = await supabase
+    const { data: linkedRows } = await supabase
       .from('issue_patterns')
-      .select('id', { count: 'exact', head: true })
+      .select('id, pattern_id, metadata')
       .eq('status', 'assigned')
       .in('assigned_sd_id', [sd.id, sd.sd_key].filter(Boolean));
-    assignedPatternCount = count || 0;
+    linkedPatterns = linkedRows || [];
+    assignedPatternCount = linkedPatterns.length;
   } catch { /* non-fatal: reporting only */ }
 
   const updates = {
@@ -153,6 +159,48 @@ async function cancelSD(sd, reason) {
   // SD-LEO-INFRA-CLOSE-ISSUE-PATTERN-001 (FR-2): surface the closure-loop reset.
   if (assignedPatternCount > 0) {
     console.log(`✓ closure-loop: ${assignedPatternCount} assigned issue_pattern(s) reset to active by trg_reset_patterns_on_sd_cancel`);
+  }
+
+  // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (a/b): cancel-sd ALWAYS records a reason
+  // (this CLI requires one) — that reason IS the evidence-cancelled marker. The
+  // trigger's assigned->active reset RE-ARMS the alert creator (cancel -> active ->
+  // threshold -> re-file: two PAT-FIX storms on 2026-06-12). Override the reset:
+  // resolve linked pattern(s) with an auditable disposition so the family never
+  // re-files. Genuinely NEW post-cancel occurrences still re-escalate via the
+  // creator's recency check against the disposition timestamp.
+  if (assignedPatternCount > 0) {
+    try {
+      // Use the PRE-cancel snapshot (linkedPatterns): the trigger already
+      // nulled assigned_sd_id, so re-querying by it would return nothing.
+      const linked = linkedPatterns;
+      let suppressed = 0;
+      for (const p of linked || []) {
+        // Re-read metadata by id (id survives the trigger reset) so the
+        // trigger's last_cancelled_assignment breadcrumb is preserved.
+        const { data: freshRow } = await supabase
+          .from('issue_patterns').select('metadata').eq('id', p.id).single();
+        const { error: supErr } = await supabase
+          .from('issue_patterns')
+          .update({
+            status: 'resolved',
+            metadata: {
+              ...((freshRow || p).metadata || {}),
+              disposition: {
+                kind: 'evidence_cancelled_suppressed',
+                cancelled_sd: sd.sd_key,
+                cancellation_reason: String(reason).slice(0, 500),
+                stamped_at: new Date().toISOString(),
+                stamped_by: 'cancel-sd.js (SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001)'
+              }
+            }
+          })
+          .eq('id', p.id);
+        if (!supErr) suppressed++;
+      }
+      console.log(`✓ closure-loop: ${suppressed} linked pattern(s) resolved with evidence_cancelled_suppressed disposition (no re-file)`);
+    } catch (e) {
+      console.warn(`⚠️  pattern suppression failed (non-fatal — reconcile sweep is the backstop): ${e.message}`);
+    }
   }
 
   // Release the holder's claude_sessions row, if any.

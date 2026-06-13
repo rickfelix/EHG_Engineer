@@ -38,6 +38,65 @@ const execAsync = promisify(exec);
  * @param {Object} allGateResults - Results from Gates 1-3 (optional)
  * @returns {Promise<Object>} Validation result
  */
+
+/**
+ * Credit gate1/gate2/gate3 results + acceptance from a handoff-history list, mutating the
+ * passed accumulators. Behavior-preserving extraction of the per-handoff loop so the gate-key
+ * recognition (notably the live GATE1_DESIGN_DATABASE name) is directly unit-testable.
+ * PURE over its inputs except for the accumulator mutation. SD-FDBK-FIX-GATE-PIPELINE-GATE1-001.
+ *
+ * @param {Array<{handoff_type:string, status:string, metadata?:object}>} handoffs
+ * @param {{gateResults:object, acceptedHandoffs:object, gateDataSources:object}} acc
+ */
+export function creditGatesFromHandoffs(handoffs, { gateResults, acceptedHandoffs, gateDataSources }) {
+  for (const handoff of (handoffs || [])) {
+    // PLAN-TO-EXEC: Gate 1 (PRD Quality / DESIGN→DATABASE)
+    if (handoff.handoff_type === 'PLAN-TO-EXEC') {
+      if (handoff.status === 'accepted') acceptedHandoffs.gate1 = true;
+      if (!gateResults.gate1) {
+        // gate_results is keyed by gate.name; the live PLAN-TO-EXEC gate is GATE1_DESIGN_DATABASE —
+        // GATE1_PRD_QUALITY is never emitted. Check the live key first, then the legacy canonical
+        // name, then the legacy gate1_validation mirror.
+        const canon = handoff.metadata?.gate_results?.GATE1_DESIGN_DATABASE
+          || handoff.metadata?.gate_results?.GATE1_PRD_QUALITY;
+        if (canon) {
+          gateResults.gate1 = canon;
+          gateDataSources.gate1 = 'canonical';
+        } else if (handoff.metadata?.gate1_validation) {
+          gateResults.gate1 = handoff.metadata.gate1_validation;
+          gateDataSources.gate1 = 'legacy';
+        }
+      }
+    }
+    // EXEC-TO-PLAN: Gate 2 (Implementation Fidelity)
+    if (handoff.handoff_type === 'EXEC-TO-PLAN') {
+      if (handoff.status === 'accepted') acceptedHandoffs.gate2 = true;
+      if (!gateResults.gate2) {
+        if (handoff.metadata?.gate_results?.GATE2_IMPLEMENTATION_FIDELITY) {
+          gateResults.gate2 = handoff.metadata.gate_results.GATE2_IMPLEMENTATION_FIDELITY;
+          gateDataSources.gate2 = 'canonical';
+        } else if (handoff.metadata?.gate2_validation) {
+          gateResults.gate2 = handoff.metadata.gate2_validation;
+          gateDataSources.gate2 = 'legacy';
+        }
+      }
+    }
+    // PLAN-TO-LEAD: Gate 3 (Traceability)
+    if (handoff.handoff_type === 'PLAN-TO-LEAD') {
+      if (handoff.status === 'accepted') acceptedHandoffs.gate3 = true;
+      if (!gateResults.gate3) {
+        if (handoff.metadata?.gate_results?.GATE3_TRACEABILITY) {
+          gateResults.gate3 = handoff.metadata.gate_results.GATE3_TRACEABILITY;
+          gateDataSources.gate3 = 'canonical';
+        } else if (handoff.metadata?.gate3_validation) {
+          gateResults.gate3 = handoff.metadata.gate3_validation;
+          gateDataSources.gate3 = 'legacy';
+        }
+      }
+    }
+  }
+}
+
 export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {}, options = {}) {
   console.log('\n🚪 GATE 4: Workflow ROI & Pattern Effectiveness (LEAD Final)');
   console.log('='.repeat(60));
@@ -168,51 +227,7 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
         .order('created_at', { ascending: false })).data;
 
       if (handoffs) {
-        for (const handoff of handoffs) {
-          // PLAN-TO-EXEC: Gate 1 (PRD Quality)
-          // Read canonical gate_results first, fall back to legacy key. Acceptance is
-          // credited regardless of whether the gate value is already present.
-          if (handoff.handoff_type === 'PLAN-TO-EXEC') {
-            if (handoff.status === 'accepted') acceptedHandoffs.gate1 = true;
-            if (!gateResults.gate1) {
-              if (handoff.metadata?.gate_results?.GATE1_PRD_QUALITY) {
-                gateResults.gate1 = handoff.metadata.gate_results.GATE1_PRD_QUALITY;
-                gateDataSources.gate1 = 'canonical';
-              } else if (handoff.metadata?.gate1_validation) {
-                gateResults.gate1 = handoff.metadata.gate1_validation;
-                gateDataSources.gate1 = 'legacy';
-              }
-            }
-          }
-          // EXEC-TO-PLAN: Gate 2 (Implementation Fidelity)
-          if (handoff.handoff_type === 'EXEC-TO-PLAN') {
-            if (handoff.status === 'accepted') acceptedHandoffs.gate2 = true;
-            if (!gateResults.gate2) {
-              if (handoff.metadata?.gate_results?.GATE2_IMPLEMENTATION_FIDELITY) {
-                gateResults.gate2 = handoff.metadata.gate_results.GATE2_IMPLEMENTATION_FIDELITY;
-                gateDataSources.gate2 = 'canonical';
-              } else if (handoff.metadata?.gate2_validation) {
-                gateResults.gate2 = handoff.metadata.gate2_validation;
-                gateDataSources.gate2 = 'legacy';
-              }
-            }
-          }
-          // PLAN-TO-LEAD: Gate 3 (Traceability)
-          // SD-LEARN-FIX-ADDRESS-PAT-AUTO-002: Check canonical, then legacy gate3_validation,
-          // then nested gate_results.GATE3_TRACEABILITY
-          if (handoff.handoff_type === 'PLAN-TO-LEAD') {
-            if (handoff.status === 'accepted') acceptedHandoffs.gate3 = true;
-            if (!gateResults.gate3) {
-              if (handoff.metadata?.gate_results?.GATE3_TRACEABILITY) {
-                gateResults.gate3 = handoff.metadata.gate_results.GATE3_TRACEABILITY;
-                gateDataSources.gate3 = 'canonical';
-              } else if (handoff.metadata?.gate3_validation) {
-                gateResults.gate3 = handoff.metadata.gate3_validation;
-                gateDataSources.gate3 = 'legacy';
-              }
-            }
-          }
-        }
+        creditGatesFromHandoffs(handoffs, { gateResults, acceptedHandoffs, gateDataSources });
       }
     }
     // SD-LEO-INFRA-HARDEN-LEO-HANDOFF-001 FR-1: deterministic precheck == execute.

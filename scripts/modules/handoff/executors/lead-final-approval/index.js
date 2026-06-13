@@ -413,6 +413,68 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.warn(`   ⚠️  Migration verification check failed (non-blocking): ${migCheckError.message}`);
     }
 
+    // SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001: write the CANONICAL accepted LFA row
+    // BEFORE the completion reconcile below. The reconcile sets is_working_on=false,
+    // after which the enforce_is_working_on_for_handoffs BEFORE-INSERT trigger on
+    // sd_phase_handoffs rejects the recorder's post-return createArtifact insert
+    // ("Cannot create handoff for SD without active session claim") — every
+    // recorder-path LFA ghosted on first attempt post-#4674 (4x on 2026-06-12/13).
+    // Writing here, while the claim is live, passes the trigger; HandoffRecorder's
+    // #4674 idempotency check (existing accepted LFA row -> skip) makes the later
+    // recorder call a no-op. FAIL-LOUD AND FAIL-EARLY: if this canonical write
+    // fails, the SD is NEVER flipped to completed — stronger than #4674's post-hoc throw.
+    try {
+      const { HANDOFF_SYSTEM_TAG } = await import('../../recording/HandoffRecorder.js');
+      const { data: existingLfa } = await this.supabase
+        .from('sd_phase_handoffs')
+        .select('id')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+        .eq('status', 'accepted')
+        .limit(1)
+        .maybeSingle();
+      if (!existingLfa) {
+        const { error: canonErr } = await this.supabase
+          .from('sd_phase_handoffs')
+          .insert({
+            sd_id: sd.id,
+            from_phase: 'LEAD',
+            to_phase: 'LEAD', // APPROVAL->LEAD coercion (sd_phase_handoffs to_phase CHECK), parity with recordFailure
+            handoff_type: 'LEAD-FINAL-APPROVAL',
+            status: 'accepted',
+            executive_summary: `LEAD-FINAL-APPROVAL accepted for ${sd.sd_key || sd.id} (score ${normalizedScore}). Canonical row written pre-completion while the session claim is live (SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001); full validation detail on the leo_handoff_executions row.`,
+            deliverables_manifest: { items: [{ name: 'final approval accepted', status: 'completed' }] },
+            key_decisions: [{ decision: `Final approval granted (validation score ${normalizedScore})` }],
+            known_issues: [{ issue: 'None at approval time' }],
+            resource_utilization: { execution_table: 'leo_handoff_executions' },
+            action_items: [{ item: 'None — SD lifecycle complete; post-completion tail follows' }],
+            completeness_report: { validation_score: normalizedScore },
+            validation_score: normalizedScore,
+            validation_passed: true,
+            validation_details: { written_by: 'LeadFinalApprovalExecutor pre-completion canonical write' },
+            accepted_at: new Date().toISOString(),
+            created_by: HANDOFF_SYSTEM_TAG,
+            metadata: { canonical_pre_completion_write: true, sd_ref: 'SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001' }
+          });
+        if (canonErr) {
+          console.log(`   ❌ Canonical LFA write failed (SD NOT completed): ${canonErr.message}`);
+          await this._cleanupPendingPreInsert(sd.id, usePendingPath);
+          return ResultBuilder.rejected(
+            'CANONICAL_LFA_WRITE_FAILED',
+            `Canonical sd_phase_handoffs LFA write failed before completion: ${canonErr.message}. SD left at pending_approval — fix the cause and re-run LEAD-FINAL-APPROVAL.`,
+            { trigger_hint: 'enforce_is_working_on_for_handoffs (if claim-related)' }
+          );
+        }
+        console.log('   ✅ Canonical accepted LFA row written pre-completion (sd_phase_handoffs)');
+      } else {
+        console.log(`   ℹ️  Canonical accepted LFA row already exists (${existingLfa.id})`);
+      }
+    } catch (canonEx) {
+      console.log(`   ❌ Canonical LFA write errored (SD NOT completed): ${canonEx.message}`);
+      await this._cleanupPendingPreInsert(sd.id, usePendingPath);
+      return ResultBuilder.rejected('CANONICAL_LFA_WRITE_FAILED', `Canonical LFA write errored: ${canonEx.message}`);
+    }
+
     // Transition SD to completed status
     // SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: capture the completing session id
     // BEFORE the update below nulls active_session_id.

@@ -64,6 +64,19 @@ if (_reexecPlan.reexec) {
 // If cwd is still broken (no_valid_main_root / sentinel set), the loud STALE_CWD
 // guard below preserves the original exit(1) failure (never silently swallowed).
 
+// SD-FDBK-FIX-HANDOFF-EPIPE-GUARD-001: EPIPE-tolerant stdout/stderr. handoff.js is the
+// canonical SD-V2 phase/status writer and emits heavy interleaved gate output AROUND the
+// executors' DB .update/.insert writes. Piping it through head/grep closes the read end,
+// and the next console.log would raise an unhandled 'error' (EPIPE) that crashes the
+// process BEFORE persistence completes on POSIX/CI (Windows git-bash masks it), producing
+// a partially-written / non-recorded handoff. Swallow EPIPE on both streams so a closed
+// pipe never aborts a mid-persistence run. Shared util ported from the inline guard in
+// scripts/add-prd-to-database.js (SD-LEO-INFRA-HARDEN-ADD-PRD-001 / PR #4477). Attached
+// HERE — after the re-exec early-exit, before any heavy output — so it covers the entire
+// gate+persist pipeline. Builtin-free import keeps it safe before the heavy graph loads.
+const { attachIgnoreEpipe } = await import('../lib/utils/ignore-epipe.mjs');
+attachIgnoreEpipe();
+
 // Heavy graph: dynamic imports deferred until cwd is known-good (or re-exec'd).
 const { main } = await import('./modules/handoff/cli/index.js');
 const { claimGuard } = await import('../lib/claim-guard.mjs');
