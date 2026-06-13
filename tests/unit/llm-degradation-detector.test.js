@@ -39,14 +39,20 @@ describe('evaluateDegradationRung — rung boundaries', () => {
     expect(r.rung).toBe(RUNG.MODEL_FALLBACK);
   });
 
-  it('PAUSE_AND_SURFACE when consecutive_failures hits the rollback limit (highest precedence)', () => {
-    const r = evaluateDegradationRung({ ...healthy(), consecutive_failures: 3, failures_before_rollback: 3, current_error_rate: 0.9 }, NOW);
+  it('PAUSE_AND_SURFACE when consecutive_failures hits the limit ON AN ACTIVE PROBE (highest precedence)', () => {
+    const r = evaluateDegradationRung({ ...healthy(), status: 'rolling', consecutive_failures: 3, failures_before_rollback: 3, current_error_rate: 0.9 }, NOW);
     expect(r.rung).toBe(RUNG.PAUSE_AND_SURFACE);
     expect(isDegradedSafeMode(r.rung)).toBe(true);
   });
 
-  it('PAUSE_AND_SURFACE when status is rolled_back', () => {
-    expect(evaluateDegradationRung({ ...healthy(), status: 'rolled_back' }, NOW).rung).toBe(RUNG.PAUSE_AND_SURFACE);
+  it('does NOT pause on a stale/paused singleton with a leftover failure counter (no false-pause on a quiescent fleet)', () => {
+    // consecutive_failures is reset-only on llm_canary_state; a paused row at >=limit must NOT pin PAUSE.
+    const r = evaluateDegradationRung({ ...healthy(), status: 'paused', consecutive_failures: 9, failures_before_rollback: 3 }, NOW);
+    expect(r.rung).toBe(RUNG.NORMAL);
+  });
+
+  it('does NOT treat status=rolled_back as degradation (on the local-rollout canary it means back to the HEALTHY cloud — inverse of a cap)', () => {
+    expect(evaluateDegradationRung({ ...healthy(), status: 'rolled_back' }, NOW).rung).toBe(RUNG.NORMAL);
   });
 });
 

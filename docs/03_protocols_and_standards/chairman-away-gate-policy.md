@@ -70,10 +70,16 @@ KILL + chairman-required SD-ship gates *hold-and-surface*. No gate auto-decides 
 ## Interaction with the Anthropic-cap contingency + degraded-safe-mode
 
 When the fleet is in **degraded-safe-mode** (LLM cap/availability fallback exhausted, or harness
-wedged): **freeze new work, hold intake, surface.** All gates fall through to **HOLD-AND-SURFACE**
-regardless of the table above — a degraded fleet must not auto-advance or auto-kill anything. See
-the Anthropic-cap contingency + fallback ladder (single-session → model-fallback → pause-and-surface)
-and the `only-the-chairman-can` dependency map (companion docs in this SD).
+wedged): **freeze new work, hold intake, surface.** All gates should fall through to
+**HOLD-AND-SURFACE** regardless of the table above — a degraded fleet must not auto-advance or
+auto-kill anything. See the Anthropic-cap contingency + fallback ladder (single-session →
+model-fallback → pause-and-surface) and the `only-the-chairman-can` dependency map (companion docs).
+
+> **Enforcement:** this policy is **advisory / operator-applied** (a runbook), NOT an automatic gate
+> override. No code in this SD makes `stage-gates.js` or `handoff.js` consult the degradation rung —
+> wiring an automatic override is deliberately out of scope, since an auto-override would itself risk
+> conflicting with the no-auto-override doctrine. The detector surfaces the rung; the operator/runbook
+> applies the hold.
 
 ---
 
