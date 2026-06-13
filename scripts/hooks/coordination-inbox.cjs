@@ -77,6 +77,15 @@ function getIdentityFile(resolvedSessionId) {
 const CHECK_INTERVAL_MS = parseInt(process.env.COORDINATION_CHECK_INTERVAL_MS, 10) || 15_000;
 const HEARTBEAT_INTERVAL_MS = 30_000; // Update heartbeat every 30 seconds
 const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
+// SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (adversarial-review finding #1): only WORK_ASSIGNMENT
+// has a worker-side CLOSURE path for a busy worker (claim_sd/ackMessage stamps read_at when the
+// worker eventually actions it), so it is safe to surface-not-drain regardless of idle. The
+// advisory types (CLAIM_RELEASED/CLAIM_REMINDER) have NO worker-side ack path — surfacing them
+// regardless of idle would re-render every poll forever AND perpetually feed the coordinator's
+// findUndelivered UNDELIVERED-OUTBOUND alert with no terminal event. So they stay gated on idle
+// (drain-on-display for a busy worker, as before this SD).
+const DIRECTED_SURFACE_TYPES = ['WORK_ASSIGNMENT'];
+const ADVISORY_IDLE_TYPES = ['CLAIM_RELEASED', 'CLAIM_REMINDER'];
 
 // FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): the canonical directive-kind
 // allowlist lives in lib/fleet/worker-status.cjs — IMPORTED, never duplicated (the
@@ -101,7 +110,7 @@ try {
 //     read_at IS NULL SELECT) until actioned.
 // Pure + synchronous; no DB calls (amCoordinator/amAdam/twoWayOn/isIdle resolved once by caller).
 function classifyInboxMessage(msg, opts = {}) {
-  const { isIdle = false, twoWayOn = false, amAdam = false } = opts;
+  const { twoWayOn = false, amAdam = false, isIdle = false } = opts;
   const p = (msg && msg.payload) || {};
   const isInfo = msg && msg.message_type === 'INFO';
   // Coordinator-exclusive INFO rows — SKIP for EVERY session (the coordinator surfaces them via
@@ -128,9 +137,25 @@ function classifyInboxMessage(msg, opts = {}) {
   if (amAdam) {
     return { skip: false, markRead: false, markAck: false };
   }
-  // Actionable idle rows — surface but do NOT mark read/ack on poll; re-surface until the agent
-  // genuinely actions them (worker-checkin ackMessage stamps both on claim).
-  if (isIdle && ACTIONABLE_TYPES.includes(msg && msg.message_type)) {
+  // Actionable directed rows — surface but do NOT mark read/ack on poll; re-surface until the
+  // agent genuinely actions them (worker-checkin ackMessage stamps both on claim).
+  // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (seam 2): WORK_ASSIGNMENT previously gated on isIdle, so a
+  // coordinator->worker assignment sent to a BUSY (claim-holding) worker fell through to the default
+  // drain below (markRead:true/markAck:true) on the next poll and never re-surfaced — the
+  // directed-dispatch lane was unreliable for busy workers (witnessed: an assignment to Alpha stayed
+  // UNREAD across full check-in cycles). WORK_ASSIGNMENT has a worker-side CLOSURE path (claim_sd/
+  // ackMessage stamps read_at when actioned), so surface-not-drain regardless of idle; worker-checkin
+  // (seam 1) reads it on check-in without dropping the held claim.
+  const mt = msg && msg.message_type;
+  if (DIRECTED_SURFACE_TYPES.includes(mt)) {
+    return { skip: false, markRead: false, markAck: false };
+  }
+  // Advisory directed rows (CLAIM_RELEASED/CLAIM_REMINDER): genuinely relevant to surface for an
+  // IDLE worker (its claim was released / is at risk), but they have NO worker-side ack/closure path,
+  // so for a BUSY worker they must NOT re-surface forever (adversarial-review finding #1 — would also
+  // perpetually feed the coordinator UNDELIVERED-OUTBOUND alert with no terminal event). Keep the
+  // idle gate: surface-not-drain when idle, else fall through to the default drain-on-display.
+  if (isIdle && ADVISORY_IDLE_TYPES.includes(mt)) {
     return { skip: false, markRead: false, markAck: false };
   }
   // FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): DIRECTIVE kinds never receive
