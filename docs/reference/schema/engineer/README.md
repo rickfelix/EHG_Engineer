@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-13T10:54:26.478Z
-**Tables**: 731
+**Generated**: 2026-06-13T23:53:55.124Z
+**Tables**: 733
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (731)
+## All Tables (733)
 
 ### LEO Protocol
 
@@ -466,6 +466,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [learning_decisions](tables/learning_decisions.md)
 - [learning_inbox](tables/learning_inbox.md)
 - [learning_runs](tables/learning_runs.md)
+- [legal_processes](tables/legal_processes.md)
 - [llm_canary_metrics](tables/llm_canary_metrics.md)
 - [llm_canary_state](tables/llm_canary_state.md)
 - [llm_canary_transitions](tables/llm_canary_transitions.md)
@@ -510,6 +511,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [ops_customer_health_scores](tables/ops_customer_health_scores.md)
 - [ops_friday_scorecards](tables/ops_friday_scorecards.md)
 - [ops_health_alerts](tables/ops_health_alerts.md)
+- [ops_payment_events](tables/ops_payment_events.md)
 - [ops_product_health](tables/ops_product_health.md)
 - [ops_quarterly_assessments](tables/ops_quarterly_assessments.md)
 - [ops_revenue_alerts](tables/ops_revenue_alerts.md)

@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-13T10:54:26.478Z
+**Generated**: 2026-06-13T23:53:55.124Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (8 total)
+## Columns (10 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -26,6 +26,8 @@
 | correlation_id | `text` | YES | - | - |
 | description | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| stripe_charge_id | `text` | YES | - | - |
+| stripe_event_id | `text` | YES | - | - |
 
 ## Constraints
 
@@ -58,9 +60,17 @@
   ```sql
   CREATE INDEX idx_capital_transactions_stage_work ON public.capital_transactions USING btree (stage_work_id) WHERE (stage_work_id IS NOT NULL)
   ```
+- `idx_capital_transactions_stripe_charge`
+  ```sql
+  CREATE INDEX idx_capital_transactions_stripe_charge ON public.capital_transactions USING btree (stripe_charge_id) WHERE (stripe_charge_id IS NOT NULL)
+  ```
 - `idx_capital_transactions_venture`
   ```sql
   CREATE INDEX idx_capital_transactions_venture ON public.capital_transactions USING btree (venture_id)
+  ```
+- `uq_capital_transactions_stripe_event`
+  ```sql
+  CREATE UNIQUE INDEX uq_capital_transactions_stripe_event ON public.capital_transactions USING btree (stripe_event_id) WHERE (stripe_event_id IS NOT NULL)
   ```
 
 ## RLS Policies
