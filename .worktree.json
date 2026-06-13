@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001",
-  "expectedBranch": "feat/SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001",
-  "createdAt": "2026-06-13T01:51:38.260Z",
+  "sdKey": "SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-140",
+  "expectedBranch": "feat/SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-140",
+  "createdAt": "2026-06-13T00:39:27.706Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
