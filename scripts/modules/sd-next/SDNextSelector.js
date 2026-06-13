@@ -231,7 +231,10 @@ export class SDNextSelector {
       this.displayHarnessBacklog();
       displayWorktreeIsolationReminder(this.activeSessions, this.currentSession);
       if (qfSummaryNoBaseline?.topStartableQF) {
-        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available` };
+        // SD-FDBK-INFRA-CLAIM-VISIBILITY-ATOMIC-001: qf_start consumers MUST take the
+        // atomic claim before working — claim_cmd is the contract (two unclaimed
+        // workers duplicated QF-20260611-123 on 2026-06-12).
+        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, claim_cmd: `node scripts/qf-start.js ${qfSummaryNoBaseline.topStartableQF.id}`, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available — CLAIM FIRST via claim_cmd` };
       }
       return { action: 'none', sd_id: null, reason: 'No active baseline found' };
     }
@@ -251,7 +254,7 @@ export class SDNextSelector {
       this.displayHarnessBacklog();
       displayWorktreeIsolationReminder(this.activeSessions, this.currentSession);
       if (qfSummaryExhausted?.topStartableQF) {
-        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available` };
+        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, claim_cmd: `node scripts/qf-start.js ${qfSummaryExhausted.topStartableQF.id}`, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available — CLAIM FIRST via claim_cmd` };
       }
       return { action: 'none', sd_id: null, reason: 'Baseline exhausted - all items completed' };
     }

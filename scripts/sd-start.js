@@ -709,6 +709,18 @@ async function main() {
     process.exit(1);
   }
 
+  // SD-FDBK-INFRA-CLAIM-VISIBILITY-ATOMIC-001: QF ids are not SDs — route them
+  // to the atomic QF claim path instead of querying strategic_directives_v2 and
+  // crashing with 'Cannot coerce the result to a single JSON object'
+  // (witnessed 2026-06-12 on QF-20260611-123).
+  if (/^QF-/i.test(sdId)) {
+    console.log(`${colors.yellow}${sdId} is a quick-fix, not an SD.${colors.reset}`);
+    console.log(`Routing to the atomic QF claim: ${colors.cyan}node scripts/qf-start.js ${sdId}${colors.reset}\n`);
+    const { spawnSync } = await import('node:child_process');
+    const out = spawnSync(process.execPath, ['scripts/qf-start.js', sdId], { stdio: 'inherit' });
+    process.exit(out.status ?? 1);
+  }
+
   // SD-LEO-FIX-SESSION-LIFECYCLE-HYGIENE-001 (FR5 enhancement B):
   // Fail fast if this command is running from inside the .worktrees/ subtree.
   // Otherwise `git rev-parse --show-toplevel` (historically used downstream)
