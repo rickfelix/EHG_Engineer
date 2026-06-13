@@ -157,6 +157,19 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   /\d+ user stories? not fully (?:covered|tested|verified)/i,
   /capture (?:key )?learnings? (?:from|after)/i,
   /retrospective (?:quality|completeness) (?:score|at)/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-140: PERFORMANCE healthy-profile boilerplate (SAL-PERFORMANCE-REC, 9x)
+  /performance profile is healthy/i,
+  /continue monitoring performance metrics/i,
+  /consider performance budgets/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-140: VALIDATION generic process recommendations (SAL-VALIDATION-REC, 12x)
+  /link backlog items to define clear requirements/i,
+  /document reason for no backlog/i,
+  /perform codebase search to identify existing infrastructure/i,
+  /complete gap analysis.*backlog requirements vs existing code/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-140: VALIDATION surfacing a TESTING/QA BLOCKED verdict as a
+  // meta-"issue" (SAL-VALIDATION-ISS, 3x). The gate pipeline already handled the original BLOCK;
+  // re-surfacing it from legacy_sub_agent_results is meta-noise, not a new actionable pattern.
+  /QA Engineering Director found BLOCKING issues/i,
 ];
 
 /**
@@ -164,7 +177,7 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
  * Returns true if the text matches known non-actionable patterns.
  * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-008
  */
-function isNonActionableRecommendation(text) {
+export function isNonActionableRecommendation(text) {
   if (!text || typeof text !== 'string') return false;
   return NON_ACTIONABLE_SAL_PATTERNS.some(pattern => pattern.test(text));
 }
