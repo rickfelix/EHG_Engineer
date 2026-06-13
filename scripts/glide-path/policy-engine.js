@@ -4,6 +4,8 @@
  * portfolio_synergy_score, and time_horizon_classification.
  */
 
+import { enrichVentureWithIncome, INCOME_DIMENSION_KEY } from './replacement-net.js';
+
 /**
  * Score a venture against a policy.
  * @param {object} ventureData - Venture fields (archetype, metrics, etc.)
@@ -11,9 +13,23 @@
  * @returns {object} ScoreResult with composite_score, growth_strategy, etc.
  */
 export function scoreVenture(ventureData, policy) {
+  ventureData = ventureData || {}; // null-safe: a missing venture scores from dimension defaults
+  policy = policy || {};
   const dimensions = policy.dimensions || [];
   const weights = policy.weights || {};
   const phaseDefs = policy.phase_definitions || [];
+
+  // SD-LEO-INFRA-INCOME-OBJECTIVE-FUNCTION-001: CHOKE-POINT income wiring. When the policy declares
+  // the income_contribution dimension, auto-enrich the venture with its income score (derived from
+  // replacement-net + the three first-class income factors) so the data-driven loop below weights it
+  // as a first-class dimension — every scoreVenture caller becomes income-aware with NO parallel
+  // scorer and NO per-caller wiring. Idempotent (skips if already enriched). Gated on the policy
+  // having the dimension, so existing policies behave exactly as before.
+  let scored = ventureData;
+  if (dimensions.some((d) => d && d.key === INCOME_DIMENSION_KEY)
+      && (ventureData == null || ventureData[INCOME_DIMENSION_KEY] == null)) {
+    scored = enrichVentureWithIncome(ventureData || {}, policy);
+  }
 
   // Compute per-dimension scores
   const dimensionScores = {};
@@ -21,7 +37,7 @@ export function scoreVenture(ventureData, policy) {
   let totalWeight = 0;
 
   for (const dim of dimensions) {
-    const raw = extractDimensionValue(ventureData, dim);
+    const raw = extractDimensionValue(scored, dim);
     const normalized = normalizeDimension(raw, dim);
     dimensionScores[dim.key] = normalized;
     const w = weights[dim.key] || 0;
