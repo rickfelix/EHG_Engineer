@@ -48,6 +48,14 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
+## 2026-06-13
+
+### Bugfix
+- **QF classifier no longer auto-escalates same-generator siblings** - PR #4682 (SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001)
+  - **Issue**: classify-quick-fix.js escalated EVERY auto-filed red-merge QF to a full SD — the detector files template-identical QFs and `analyzePatterns` keyword-matched the siblings against each other, firing the systemic-pattern path (contradicting MEDIUM-EFFORT-HARDENING FR-3: red-merge auto-QFs stay QFs).
+  - **Fix**: new exported `generatorSignature()` (Auto-filed-by marker + kebab-case machine-prefix fallback) drives same-generator pair exclusion in the similarity loop; human-filed similarity is fail-open preserved. A 10-agent adversarial review before merge hardened three real edge cases: kebab-case fallback so non-generator prefixes (`error:auth_service:`, timestamps, ratios) can't falsely exclude and mask a systemic cluster; trailing-punctuation trim for sibling stability; `.neq('id')` self-exclusion (also closes a pre-existing organic self-count so the systemic threshold means 4 distinct OTHERS).
+  - **Verification**: 8 unit pins; live red-merge probe excludes 8 siblings (isSystemic=false). Gates L2P 96, P2E 97, E2P 97, LEAD-FINAL 95; retro 90.
+
 ## 2026-06-12
 
 ### Infrastructure (fleet)
