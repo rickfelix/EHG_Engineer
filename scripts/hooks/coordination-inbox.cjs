@@ -178,7 +178,10 @@ function classifyInboxMessage(msg, opts = {}) {
   // Without this, the hook drained (acked) COACHING/INFO before /checkin saw them — the RCA bug.
   // (signal_type / adam_advisory / two-way coordinator_reply are already skipped above; CLAIM_RELEASED/
   // CLAIM_REMINDER are their own message_types and keep the default drain.)
-  if (mt === 'COACHING' || isInfo) {
+  // (p.kind=roll_call is the worker's OWN availability ping, not coordinator->worker coaching — it must
+  // keep the legacy full-drain so it does not re-surface in acknowledged_at-IS-NULL readers. Mirrors the
+  // isCoordinatorPush roll_call exclusion in worker-checkin.cjs.)
+  if ((mt === 'COACHING' || isInfo) && p.kind !== 'roll_call') {
     return { skip: false, markRead: true, markAck: false };
   }
   // Default — a pure notification with no follow-up action; drain on display (legacy behavior).

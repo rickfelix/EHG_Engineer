@@ -92,9 +92,12 @@ describe('FR-3: DIRECTIVE_KINDS allowlist', () => {
     expect(v).toEqual({ skip: false, markRead: true, markAck: false });
   });
 
-  it('pure notification kinds keep the legacy read+ack drain (byte-identical)', () => {
+  it('roll_call keeps the legacy read+ack drain; plain coordinator INFO is now read-only (ack withheld for /checkin)', () => {
+    // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001: plain coordinator INFO push is delivered by the worker
+    // /checkin loop (coordinator_messages[]), so the poll withholds ack. roll_call is the worker's OWN
+    // availability ping (not coaching) and keeps the legacy full-drain so it never re-surfaces.
     expect(classifyInboxMessage({ message_type: 'INFO', payload: {} }, { amAdam: false }))
-      .toEqual({ skip: false, markRead: true, markAck: true });
+      .toEqual({ skip: false, markRead: true, markAck: false });
     expect(classifyInboxMessage({ message_type: 'INFO', payload: { kind: 'roll_call' } }, { amAdam: false }))
       .toEqual({ skip: false, markRead: true, markAck: true });
   });
