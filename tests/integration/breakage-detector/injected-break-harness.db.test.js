@@ -40,6 +40,9 @@ describeDb('breakage injected-break harness — X2 catch-rate >= 90% (end-to-end
 
   beforeAll(async () => {
     sb = createSupabaseServiceClient();
+    // Self-heal: sweep any stale harness rows left by a PRIOR run that was SIGKILL'd before its afterAll
+    // cleanup (the marker prefix is unique to this harness, so this only ever deletes harness leftovers).
+    try { await sb.from('system_alerts').delete().like('source_service', '__injected-break-harness__%'); } catch { /* best-effort */ }
     for (const breakClass of BREAK_CLASSES) {
       const opts = {
         severity: 'info',
