@@ -111,6 +111,7 @@
     "skill:audit": "node scripts/skill-audit.js",
     "skill:audit:body": "node scripts/pocock/audit-skill-bodies.mjs",
     "prio:top3": "node scripts/wsjf-priority-fetcher.js",
+    "glide:add-income-dimension": "node scripts/glide-path/add-income-dimension.mjs",
     "qf:link": "node scripts/qf-link-resolution.mjs",
     "session:prologue": "node scripts/generate-session-prologue.js",
     "db:create": "node scripts/execute-database-sql.js",
