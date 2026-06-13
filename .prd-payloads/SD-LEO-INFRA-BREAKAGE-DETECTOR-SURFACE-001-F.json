@@ -1,0 +1,52 @@
+{
+  "executive_summary": "Child F (the LAST child) of the breakage-detector orchestrator (A+B+C+D+E complete). THE X2 evidence artifact: a sandboxed vitest db-project integration test (tests/integration/breakage-detector/injected-break-harness.db.test.js) that, for EACH of the 7 FROZEN break-classes, injects a synthetic alert THROUGH THE EMIT PATH ITS OWNING DETECTOR USES — the child-C classes (schema-drift, migration-fail, row-growth-anomaly) via the fail-soft emitBreakageAlert boundary, the child-D classes (RLS-regression, model-availability-cap, gate-pipeline-down, payment-webhook-fail) via the fail-loud recordSystemAlert writer — then reads back system_alerts via metadata->>break_class, computes catch-rate against DENOMINATOR_COUNT (IMPORTED from child A, never local), and asserts >=90%. This proves end-to-end detection surfacing across BOTH detector emit paths through the child-B writer. SANDBOXED: a UNIQUE per-run marker source_service so injected rows never collide with real alerts; try/finally + afterAll cleanup deletes every injected row even on assertion failure; describeDb self-skips without a real DB (the opt-in `db` vitest project, NOT prod-mutating beyond the marked+cleaned rows). FROZEN CONTRACT consumed not redefined: break_class in metadata.break_class; alert_type via toAlertType() legal; severity in {info,warning,critical}; no schema migration.",
+  "functional_requirements": [
+    { "id": "FR-F1", "title": "Injected-break harness over all 7 frozen classes", "description": "tests/integration/breakage-detector/injected-break-harness.db.test.js: for each of BREAK_CLASSES (imported from child A), inject a synthetic alert and read it back from system_alerts via metadata->>break_class. Routes each class through the EMIT PATH its owning detector uses: child-C classes via emitBreakageAlert (lib/breakage/emit-breakage-alert.cjs), child-D classes via recordSystemAlert (lib/breakage/alert-writer.cjs) — so the harness exercises both detector emit paths, not just the raw writer.", "priority": "high", "acceptance_criteria": ["injects one synthetic alert per frozen break-class via its owning detector's emit path", "reads back via metadata->>break_class (the frozen read-back key)", "every class round-trips (no class lost taxonomy -> emit-path -> system_alerts -> read-back)"] },
+    { "id": "FR-F2", "title": "Catch-rate >= 90% vs the imported denominator (X2 evidence)", "description": "Compute catch-rate = (distinct classes read back) / DENOMINATOR_COUNT (IMPORTED from child A, never redefined) and assert >= 0.90. With 7 classes this effectively requires all 7 to round-trip (6/7 = 85.7% < 90%). This number is the X2 evidence.", "priority": "high", "acceptance_criteria": ["DENOMINATOR_COUNT is imported from child A (not a local literal)", "catch-rate >= 0.90 asserted", "alert_type of the read-back rows stays in the legal set (no widening)"] },
+    { "id": "FR-F3", "title": "Sandbox: marker + cleanup + db-skip (never pollutes prod)", "description": "Use a UNIQUE per-run source_service marker (so injected rows are identifiable + cannot collide with real alerts). Clean up EVERY injected row (delete by the exact marker via the service client) in afterAll / try-finally so it runs even when an assertion fails. Wrap the suite in describeDb (tests/helpers/db-available.js) so a no-DB run self-skips cleanly. The suite is the opt-in `db` vitest project (.db.test.js), excluded from the default `unit` run.", "priority": "high", "acceptance_criteria": ["unique per-run marker; injected rows never collide with real alerts", "cleanup deletes all injected rows even on assertion failure (try/finally or afterAll)", "describeDb self-skips without a real DB; no schema change"] },
+    { "id": "FR-F4", "title": "After F: roll up the orchestrator parent", "description": "F is the last child; once it completes, the parent SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001 can roll up (it WAITs at PLAN-TO-LEAD until all children are completed). Advance the parent to completion after F.", "priority": "high", "acceptance_criteria": ["F reaches LEAD-FINAL-APPROVAL completed", "the parent orchestrator rolls up (all children completed)"] }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Import the frozen contract", "description": "Import BREAK_CLASSES + DENOMINATOR_COUNT + toAlertType (child A), recordSystemAlert (child B), emitBreakageAlert (child C boundary), createSupabaseServiceClient — never redefine the taxonomy/denominator, never hand-roll a system_alerts insert." },
+    { "id": "TR-2", "title": "Sandbox safety", "description": "Unique per-run marker; mark+cleanup mandatory (system_alerts is the shared prod project — there is NO separate test DB); cleanup is best-effort + runs on failure; describeDb guard." },
+    { "id": "TR-3", "title": "Out of scope", "description": "No running against prod uncontrolled / no leaking test rows; no redefining the denominator (import it); no schema change; no alert_type widening; no changes to the detectors/writer/board (A-E)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "all 7 frozen classes round-trip via their emit paths", "type": "integration-db", "expected": "every break-class read back via metadata->>break_class" },
+    { "id": "TS-2", "scenario": "catch-rate >= 90% vs imported DENOMINATOR_COUNT", "type": "integration-db", "expected": "catch-rate >= 0.90" },
+    { "id": "TS-3", "scenario": "sandbox cleanup runs even on failure; no-DB self-skip", "type": "integration-db", "expected": "no leaked rows; describeDb skips without a DB" }
+  ],
+  "acceptance_criteria": [
+    "A sandboxed injected-break harness injects each of the 7 frozen break-classes via its owning detector's emit path, reads back via metadata->>break_class, computes catch-rate vs the imported DENOMINATOR_COUNT, and asserts >=90% (the X2 evidence)",
+    "Sandboxed: unique per-run marker, cleanup on failure, describeDb self-skip, no prod pollution, no schema change, no alert_type widening",
+    "F completes and the orchestrator parent rolls up; adversarial review of the catch-rate computation + cleanup + threshold clean"
+  ],
+  "risks": [
+    { "risk": "Leaked test rows pollute prod system_alerts", "mitigation": "Unique per-run marker + cleanup in afterAll/try-finally that runs even on assertion failure; cleanup deletes by the exact marker. TS-3 pins it.", "severity": "high" },
+    { "risk": "The harness tests only the writer, not the detector paths", "mitigation": "Routes child-C classes via emitBreakageAlert + child-D classes via recordSystemAlert — both detector emit paths, not just the raw writer.", "severity": "medium" },
+    { "risk": "Dedup or a leftover OPEN row from a prior failed run skews the catch-rate", "mitigation": "Unique per-run marker means no cross-run dedup; the 7 distinct classes under one marker never dedup within a run; read-back + cleanup are by the exact marker.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["the X2 roadmap metric (catch-rate evidence)", "CI via npm run test:db (opt-in db project)"],
+    "dependencies": ["lib/coordinator/break-class-taxonomy.cjs (BREAK_CLASSES/DENOMINATOR_COUNT/toAlertType — child A)", "lib/breakage/alert-writer.cjs (recordSystemAlert — child B)", "lib/breakage/emit-breakage-alert.cjs (emitBreakageAlert — child C boundary)", "tests/helpers/db-available.js (describeDb)", "system_alerts (shared project; marked+cleaned rows only)"],
+    "data_contracts": ["inject via the detector emit paths -> recordSystemAlert; read back via metadata->>break_class; alert_type legal; cleanup by marker; NO schema change"],
+    "runtime_config": ["opt-in db vitest project (npm run test:db); describeDb skips without SUPABASE creds"],
+    "observability_rollout": ["catch-rate assertion + the X2 evidence; CI db project"]
+  },
+  "system_architecture": {
+    "summary": "A single sandboxed vitest db-project integration test that round-trips all 7 frozen break-classes through their owning detector emit paths into system_alerts, reads back via metadata->>break_class, and asserts a >=90% catch-rate vs the imported denominator, with marker-based cleanup-on-failure.",
+    "components": [
+      { "name": "tests/integration/breakage-detector/injected-break-harness.db.test.js", "change": "NEW: the X2 catch-rate harness (FR-F1/2/3)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Import the frozen contract + both detector emit paths; inject one alert per class via its owning path under a unique marker; read back via metadata->>break_class; compute catch-rate vs the imported denominator; assert >=90%; clean up on failure; describeDb-guard; adversarially review cleanup + computation; then roll up the parent.",
+    "steps": ["build the harness (.db.test.js, db project, describeDb, marker+cleanup)", "run npm run test:db -> verify pass + no leaked rows", "PRD->adversarial review->PR->full chain->LFA", "roll up the parent orchestrator"]
+  },
+  "smoke_test_steps": [
+    { "instruction": "npx vitest run tests/integration/breakage-detector/injected-break-harness.db.test.js (db project, sandboxed)", "expected_outcome": "the harness injects a synthetic alert for each of the 7 frozen break-classes via its owning detector's emit path, reads them back via metadata->>break_class, computes catch-rate vs DENOMINATOR_COUNT, asserts >=90%, and cleans up its test rows" },
+    { "instruction": "Confirm the harness is sandboxed (clearly-marked test rows + cleanup) and never pollutes prod system_alerts or runs against prod", "expected_outcome": "test rows use a unique marker source_service and are deleted after; no prod mutation; DENOMINATOR_COUNT imported from child A (not local)" },
+    { "instruction": "Confirm the catch-rate >= 90% across the 7 frozen classes (the X2 evidence)", "expected_outcome": "each class round-trips taxonomy -> recordSystemAlert -> system_alerts -> metadata->>break_class read-back; catch-rate >= 0.90" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001-F" }
+}
