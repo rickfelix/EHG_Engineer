@@ -6,6 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { scoreVenture } from '../../scripts/glide-path/policy-engine.js';
+import { withIncomeDimension, INCOME_DIMENSION_DEF, DEFAULT_INCOME_DIMENSION_WEIGHT } from '../../scripts/glide-path/add-income-dimension.mjs';
 
 const phaseDefs = [{ phase: 'phase_a', min_score: 0, max_score: 100, allowed_growth_strategies: ['cash_engine'] }];
 
@@ -55,5 +56,36 @@ describe('scoreVenture — income choke-point auto-enrich', () => {
 
   it('does not throw on null venture', () => {
     expect(() => scoreVenture(null, policyWithIncome)).not.toThrow();
+  });
+});
+
+describe('withIncomeDimension — additive, idempotent policy upgrade', () => {
+  const basePolicy = {
+    dimensions: [{ key: 'revenue_potential', source_field: 'revenue_potential', default_value: 50, min: 0, max: 100 }],
+    weights: { revenue_potential: 1.0 },
+    metadata: {},
+  };
+
+  it('adds the income dimension + weight WITHOUT touching existing weights', () => {
+    const next = withIncomeDimension(basePolicy);
+    expect(next.changed).toBe(true);
+    expect(next.dimensions.some((d) => d.key === 'income_contribution')).toBe(true);
+    expect(next.weights.revenue_potential).toBe(1.0); // existing weight untouched (SDNextSelector safe)
+    expect(next.weights.income_contribution).toBe(DEFAULT_INCOME_DIMENSION_WEIGHT);
+    expect(next.metadata.income_weights).toBeTruthy(); // tunable weights stored as config
+  });
+
+  it('is idempotent — re-applying is a no-op', () => {
+    const once = withIncomeDimension(basePolicy);
+    const twice = withIncomeDimension({ dimensions: once.dimensions, weights: once.weights, metadata: once.metadata });
+    expect(twice.changed).toBe(false);
+    expect(twice.weights.income_contribution).toBe(DEFAULT_INCOME_DIMENSION_WEIGHT); // not doubled
+    expect(twice.dimensions.filter((d) => d.key === 'income_contribution')).toHaveLength(1); // not duplicated
+  });
+
+  it('the income dimension default_value is 0 (unknown income earns no credit)', () => {
+    expect(INCOME_DIMENSION_DEF.default_value).toBe(0);
+    expect(INCOME_DIMENSION_DEF.min).toBe(0);
+    expect(INCOME_DIMENSION_DEF.max).toBe(100);
   });
 });
