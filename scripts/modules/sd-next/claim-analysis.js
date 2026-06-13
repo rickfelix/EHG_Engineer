@@ -11,6 +11,10 @@ import os from 'os';
 import { isSameConversation } from '../../../lib/claim-guard.mjs';
 import { isProcessRunning } from '../../../lib/heartbeat-manager.mjs';
 import { getStaleThresholdSeconds } from '../../../lib/claim/stale-threshold.js';
+// SD-LEO-INFRA-RELEASE-SD-HONOR-ARMED-SILENCE-001 (3rd/last reaper seam): the ONE shared armed-silence
+// predicate — same import claim-guard.mjs uses; do NOT duplicate. Parity with claim_sd (CLAIM-RPC-HONOR-001)
+// + the peer-release seams (CLAIM-SILENCE-CONSUME-VERIFY-001) + the stale-session-sweep (already honors it).
+import { isWithinArmedSilenceWindow } from '../../../lib/fleet/silence-cap.cjs';
 
 /**
  * Analyze the relationship between the current session and a claiming session.
@@ -60,6 +64,23 @@ export function analyzeClaimRelationship({ claimingSessionId: _claimingSessionId
         pid: claimPid
       };
     }
+  }
+
+  // SD-LEO-INFRA-RELEASE-SD-HONOR-ARMED-SILENCE-001: a PARKED /loop worker arms expected_silence_until and
+  // EXITS between ticks (so its PID looks dead + heartbeat ages), but it is intentionally silent and COMING
+  // BACK — not dead. While its armed-silence window is live, do NOT mark the claim auto-releasable (parity
+  // with claim_sd + the sweep + the peer-release seams; reuse the ONE predicate). Fail-safe: an expired /
+  // over-SILENCE_HARD_CAP_MS / absent window returns false here and falls through to normal classification,
+  // so a genuinely-dead claim still reaps. (Defensive: the v_active_sessions view does not expose this field
+  // today, so in the display path this is a no-op until the session is enriched; the AUTHORITATIVE gate is
+  // at the release choke point autoReleaseStaleDeadClaim below, which fetches the field from claude_sessions.)
+  if (isWithinArmedSilenceWindow(claimingSession?.expected_silence_until, Date.now())) {
+    return {
+      relationship: 'parked_armed_silence',
+      canAutoRelease: false,
+      displayLabel: 'PARKED (armed silence)',
+      pid: claimPid,
+    };
   }
 
   // Session explicitly released/stale/idle → safe to auto-release regardless of heartbeat
@@ -234,12 +255,30 @@ export function checkEnrichmentSignal({ sd, activeSessions, recencyMinutes } = {
  *
  * @param {Object} supabase - Supabase client
  * @param {string} sessionId - The claiming session to release
+ * @param {string} [reason='auto_release_dead_pid'] - Audit reason recorded on release_sd / the fallback update
  * @returns {Promise<boolean>} true if released successfully
  */
-export async function autoReleaseStaleDeadClaim(supabase, sessionId) {
+export async function autoReleaseStaleDeadClaim(supabase, sessionId, reason = 'auto_release_dead_pid') {
+  // SD-LEO-INFRA-RELEASE-SD-HONOR-ARMED-SILENCE-001 (the AUTHORITATIVE gate — DB truth lives here, not in
+  // the pure display function): a parked /loop worker exits between ticks (PID dead) but is coming back
+  // while its armed-silence window is live. Honor it via the ONE shared predicate (parity with claim_sd +
+  // the peer-release seams + the sweep). Skipping the release_sd RPC prevents BOTH the claim clear AND the
+  // phase-reset that follows it (the 790368e7 Gate-0 DRAFT block). FAIL-OPEN: any fetch error / null /
+  // expired / over-cap window proceeds to release, so a genuinely-dead claim still reaps (no stuck-forever).
+  try {
+    const { data: sess } = await supabase
+      .from('claude_sessions')
+      .select('expected_silence_until')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    if (sess && isWithinArmedSilenceWindow(sess.expected_silence_until, Date.now())) {
+      return false; // parked within the armed-silence window — do NOT auto-release / phase-reset
+    }
+  } catch { /* fail-open: proceed to release a genuinely-stale claim */ }
+
   const { error: rpcError } = await supabase.rpc('release_sd', {
     p_session_id: sessionId,
-    p_reason: 'auto_release_dead_pid'
+    p_reason: reason
   });
 
   if (!rpcError) return true;
@@ -250,7 +289,7 @@ export async function autoReleaseStaleDeadClaim(supabase, sessionId) {
     .update({
       sd_key: null,
       released_at: new Date().toISOString(),
-      released_reason: 'auto_release_dead_pid',
+      released_reason: reason,
       status: 'idle'
     })
     .eq('session_id', sessionId);

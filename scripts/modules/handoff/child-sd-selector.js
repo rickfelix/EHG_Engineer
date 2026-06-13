@@ -15,6 +15,10 @@ import { sortByUrgency, scoreToBand } from '../auto-proceed/urgency-scorer.js';
 import { buildDependencyDAG, detectCycles, computeRunnableSet } from '../../../lib/orchestrator/dependency-dag.js';
 import { computeGateState } from '../../../lib/cadence/pre-claim-gate.mjs';
 import { isLeadDecisionPaused } from '../sd-next/status-helpers.js';
+// SD-LEO-INFRA-RELEASE-SD-HONOR-ARMED-SILENCE-001: route the child-path stale-claim reap through the SAME
+// gated helper the sd-next reaper uses, so a PARKED /loop worker on a CHILD SD (armed silence, PID dead
+// between ticks) is NOT reaped/phase-reset while its window is live. Reuses the ONE shared predicate.
+import { autoReleaseStaleDeadClaim } from '../sd-next/claim-analysis.js';
 
 /**
  * Check if an SD is a child (has a parent)
@@ -143,9 +147,17 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
           continue;
         }
         if (hbAge > 900) {
-          // Stale claim (> 15min) — auto-release and return this child
-          console.log(`   [child-sd-selector] Auto-releasing stale claim on ${candidate.sd_key} (${Math.round(hbAge)}s stale)`);
-          await supabase.rpc('release_sd', { p_session_id: candidate.claiming_session_id, p_reason: 'stale_child_auto_release' }).catch(() => {});
+          // Stale claim (> 15min) — auto-release via the GATED helper so a parked /loop worker within its
+          // armed-silence window (SILENCE_HARD_CAP 30min > this 15min trigger) is NOT reaped/phase-reset.
+          // autoReleaseStaleDeadClaim fetches expected_silence_until + applies isWithinArmedSilenceWindow
+          // (fail-open: expired/over-cap/absent/error still reaps). false = parked (or release failed) →
+          // leave the claim and skip this sibling to be safe (no double-claim hand-out).
+          const released = await autoReleaseStaleDeadClaim(supabase, candidate.claiming_session_id, 'stale_child_auto_release');
+          if (!released) {
+            console.log(`   [child-sd-selector] Skipping ${candidate.sd_key} — claim parked (armed silence) or release failed`);
+            continue;
+          }
+          console.log(`   [child-sd-selector] Auto-released stale claim on ${candidate.sd_key} (${Math.round(hbAge)}s stale)`);
           return { sd: candidate, allComplete: false, reason: 'Stale claim released, child available' };
         }
         // Between 5-15min — ambiguous, skip to be safe
