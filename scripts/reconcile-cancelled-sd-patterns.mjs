@@ -53,19 +53,27 @@ async function loadCancelledSdKeysAndIds() {
   // Paginate cancelled SDs; build a set of BOTH their id (uuid) and sd_key so we
   // can match assigned_sd_id stored in either form.
   const set = new Set();
+  // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (b): evidence map — cancelled SDs with a
+  // recorded cancellation_reason are evidence-cancels; their patterns get RESOLVED
+  // (suppressed) instead of reset to active (the reset re-armed the alert creator).
+  const evidence = new Map();
   const pageSize = 1000;
   for (let start = 0; start < 50000; start += pageSize) {
     const { data, error } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key')
+      .select('id, sd_key, cancellation_reason')
       .eq('status', 'cancelled')
       .range(start, start + pageSize - 1);
     if (error) throw new Error(`cancelled SD query failed: ${error.message}`);
     if (!data || data.length === 0) break;
-    for (const r of data) { if (r.id) set.add(r.id); if (r.sd_key) set.add(r.sd_key); }
+    for (const r of data) {
+      const hasReason = !!(r.cancellation_reason && String(r.cancellation_reason).trim().length > 0);
+      if (r.id) { set.add(r.id); evidence.set(r.id, hasReason); }
+      if (r.sd_key) { set.add(r.sd_key); evidence.set(r.sd_key, hasReason); }
+    }
     if (data.length < pageSize) break;
   }
-  return set;
+  return { set, evidence };
 }
 
 async function loadAssignedPatterns() {
@@ -87,7 +95,7 @@ async function loadAssignedPatterns() {
 
 async function main() {
   console.log(`mode=${EXECUTE ? 'EXECUTE' : 'DRY-RUN'}`);
-  const cancelled = await loadCancelledSdKeysAndIds();
+  const { set: cancelled, evidence } = await loadCancelledSdKeysAndIds();
   const assigned = await loadAssignedPatterns();
   console.log(`cancelled SDs (id+sd_key tokens): ${cancelled.size} | status='assigned' patterns: ${assigned.length}`);
 
@@ -107,16 +115,27 @@ async function main() {
   }
 
   for (const p of danglers) {
+    // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (b): resolve-or-suppress vs requeue.
+    // Evidence-cancel (SD has a recorded cancellation_reason) -> status='resolved'
+    // with disposition so the alert creator never re-files. Plain cancel -> legacy
+    // reset to active (legitimate requeue).
+    const isEvidence = evidence.get(p.assigned_sd_id) === true;
     const prior = { sd_key: p.assigned_sd_id, prior_assignment_date: p.assignment_date || null, reset_at: new Date().toISOString() };
-    const metadata = { ...(p.metadata || {}), last_cancelled_assignment: prior };
+    const metadata = isEvidence
+      ? { ...(p.metadata || {}), last_cancelled_assignment: prior, disposition: { kind: 'evidence_cancelled_suppressed', cancelled_sd: p.assigned_sd_id, stamped_at: prior.reset_at, stamped_by: 'reconcile-cancelled-sd-patterns.mjs' } }
+      : { ...(p.metadata || {}), last_cancelled_assignment: prior };
+    const patch = isEvidence
+      ? { status: 'resolved', metadata }
+      : { status: 'active', assigned_sd_id: null, assignment_date: null, metadata };
     try {
       const { error } = await supabase
         .from('issue_patterns')
-        .update({ status: 'active', assigned_sd_id: null, assignment_date: null, metadata })
+        .update(patch)
         .eq('id', p.id)
         .eq('status', 'assigned'); // idempotency guard: only flip rows still assigned
       if (error) { console.log(`  ✗ ${p.pattern_id || p.id}: ${error.message}`); tally.failed++; continue; }
       tally.reset++;
+      if (isEvidence) console.log(`  ✓ ${p.pattern_id || p.id}: resolved (evidence-cancelled, suppressed)`);
     } catch (e) {
       console.log(`  ✗ ${p.pattern_id || p.id}: ${e?.message || e}`);
       tally.failed++;
