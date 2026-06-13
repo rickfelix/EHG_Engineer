@@ -30,7 +30,7 @@ import { createClient } from '@supabase/supabase-js';
 // demotes bare-shell stubs. FIXTURE_RE catches epoch-stamped TEST-E2E keys; the
 // bare-shell demotion uses the shared bareShellLastCompare so the test suite
 // exercises the real comparator, not a re-implementation.
-import { isFixtureSd, isBareShell, bareShellLastCompare } from '../lib/coordinator/sd-exclusion.mjs';
+import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd } from '../lib/coordinator/sd-exclusion.mjs';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
@@ -49,7 +49,8 @@ const sb = createClient(
 async function main() {
   const { data: sds, error } = await sb.from('strategic_directives_v2')
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + title, description to classify bare-shell stubs.
-    .select('sd_key, title, description, status, sd_type, priority, created_at, claiming_session_id, dependencies, metadata')
+    // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: + current_phase for the in-flight (started) guard.
+    .select('sd_key, title, description, status, sd_type, priority, created_at, current_phase, claiming_session_id, dependencies, metadata')
     .not('status', 'in', '("completed","cancelled","deferred")');
   if (error) { console.error('[BACKLOG-RANK] load failed:', error.message); return; }
 
@@ -88,9 +89,19 @@ async function main() {
   // ── claimable leaves ──
   const claimable = [];
   let fixtureSkips = 0;
+  let inFlightSkips = 0;
   for (const d of (sds || [])) {
     if (d.claiming_session_id) continue;
     if (d.sd_type === 'orchestrator') continue;          // parents are never dispatched
+    // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug d5e59236): a started/mid-build SD past the
+    // initial LEAD draft (current_phase != 'LEAD') must NOT be ranked for FRESH dispatch even
+    // when momentarily unclaimed (e.g. reaped mid-build) — it is resumed via worker-checkin's
+    // resume_orphan path, not re-claimed from the backlog. Mirrors isSdInFlight's (a) branch.
+    if (isStartedSd(d)) {                                 // in-flight SD is resumed, never fresh-ranked
+      inFlightSkips++;
+      console.log(`  [skip] in-flight (${d.current_phase}) excluded from fresh ranking: ${d.sd_key}`);
+      continue;
+    }
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: fixtures (epoch-stamped TEST-E2E keys or
     // metadata.is_fixture) are never ranked — they get no dispatch_rank at all.
     if (isFixtureSd(d.sd_key, d.metadata)) {             // test fixtures are never ranked
@@ -104,6 +115,7 @@ async function main() {
     claimable.push(d);
   }
   if (fixtureSkips) console.log(`[BACKLOG-RANK] ${fixtureSkips} fixture SD(s) excluded from ranking`);
+  if (inFlightSkips) console.log(`[BACKLOG-RANK] ${inFlightSkips} in-flight SD(s) excluded from fresh ranking`);
   // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs (empty/title-only description)
   // cannot pass LEAD-TO-PLAN; log them so the demote-to-last below is auditable. The sort
   // below (bareShellLastCompare as the dominant key) is what actually places them last.

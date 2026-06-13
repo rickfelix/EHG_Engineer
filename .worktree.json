@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001",
-  "expectedBranch": "feat/SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001",
-  "createdAt": "2026-06-13T01:51:38.260Z",
+  "sdKey": "SD-FDBK-INFRA-SHARED-FLEET-WORKER-001",
+  "expectedBranch": "feat/SD-FDBK-INFRA-SHARED-FLEET-WORKER-001",
+  "createdAt": "2026-06-13T04:20:25.417Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
