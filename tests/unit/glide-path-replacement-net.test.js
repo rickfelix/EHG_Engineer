@@ -101,6 +101,19 @@ describe('incomeContribution — weighted blend, tunable, default time-to-first-
     expect(r.score).toBe(0);
     expect(r.components.replacement_net).toBe(0);
   });
+
+  // Adversarial-review fix: a loss-making venture must NOT score the 0.5 time-to-first-dollar floor.
+  it('PROFITABILITY GATE: a loss-maker / break-even scores 0 and ranks below a profitable venture', () => {
+    const lossMaker = incomeContribution({ revenue: 5000, business_expenses: 55000, effort_person_weeks: 1, days_to_first_dollar: 0 });
+    const breakEven = incomeContribution({ revenue: 5000, business_expenses: 5000, effort_person_weeks: 1, days_to_first_dollar: 0 });
+    const profitableSlow = incomeContribution({ revenue: 9000, business_expenses: 0, effort_person_weeks: 4, days_to_first_dollar: 365 });
+    expect(lossMaker.score).toBe(0);              // was 0.5 before the gate (the bug)
+    expect(breakEven.score).toBe(0);              // net=0 → no progress toward distance-to-quit
+    expect(profitableSlow.score).toBeGreaterThan(0);
+    expect(profitableSlow.score).toBeGreaterThan(lossMaker.score); // profit out-ranks a money-loser
+    expect(lossMaker.components.viable).toBe(false);
+    expect(profitableSlow.components.viable).toBe(true);
+  });
 });
 
 describe('enrichVentureWithIncome — populates the policy dimension (data-driven scoreVenture)', () => {

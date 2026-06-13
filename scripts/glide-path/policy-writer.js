@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { writeAuditEntry, diffPolicies } from './audit-writer.js';
 import { getActivePolicy } from './policy-reader.js';
+import { INCOME_DIMENSION_KEY } from './replacement-net.js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -11,7 +12,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
  * @param {Array} dimensions - [{ key: string, ... }]
  * @throws If validation fails.
  */
-function validateWeights(weights, dimensions) {
+export function validateWeights(weights, dimensions) {
   const dimKeys = new Set(dimensions.map(d => d.key));
   const weightKeys = Object.keys(weights);
 
@@ -21,9 +22,16 @@ function validateWeights(weights, dimensions) {
     }
   }
 
-  const sum = weightKeys.reduce((acc, k) => acc + (weights[k] || 0), 0);
+  // SD-LEO-INFRA-INCOME-OBJECTIVE-FUNCTION-001: income_contribution is an ADDITIVE OVERLAY dimension —
+  // it is added without rebalancing the base weights (the SD's "do not touch the other 6 weights"
+  // guarantee, so live SD ranking via SDNextSelector stays unchanged). The 1.0-sum invariant therefore
+  // validates the BASE dimensions only; the overlay weight is exempt. (scoreVenture normalizes by
+  // totalWeight, so a base-sum of 1.0 + an overlay is well-defined.)
+  const sum = weightKeys
+    .filter((k) => k !== INCOME_DIMENSION_KEY)
+    .reduce((acc, k) => acc + (weights[k] || 0), 0);
   if (Math.abs(sum - 1.0) > 0.001) {
-    throw new Error(`Weights sum to ${sum.toFixed(4)}, must be within 0.001 of 1.0`);
+    throw new Error(`Base weights sum to ${sum.toFixed(4)}, must be within 0.001 of 1.0 (income_contribution overlay is exempt)`);
   }
 }
 

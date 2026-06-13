@@ -110,15 +110,26 @@ export function incomeContribution(f = {}, opts = {}) {
   const wE = num(weights.escapeVelocity);
   const wR = num(weights.revenueToEffort);
   const totalW = wT + wE + wR;
-  const score = totalW > 0 ? (ttfd * wT + ev * wE + rte * wR) / totalW : 0;
+  const rawScore = totalW > 0 ? (ttfd * wT + ev * wE + rte * wR) / totalW : 0;
+
+  // PROFITABILITY GATE (adversarial-review fix, SD-LEO-INFRA-INCOME-OBJECTIVE-FUNCTION-001): a
+  // loss-making or break-even venture makes NO net progress toward distance-to-quit, so its income
+  // contribution is 0 regardless of how fast it claims a first (gross) dollar. The roadmap's
+  // "aggressive first-dollar" bias means a first dollar of PROFIT, not revenue while bleeding money —
+  // without this gate, time-to-first-dollar's weight floored a money-loser at 0.5, letting it
+  // out-rank a profitable-but-slow venture. escapeVelocity + revenue-to-effort already zero on net<=0;
+  // this propagates the loss signal through the whole blend.
+  const net = replacementNet(f);
+  const score = net <= 0 ? 0 : Math.max(0, Math.min(1, rawScore));
 
   return {
-    score: Math.max(0, Math.min(1, score)),
+    score,
     components: {
-      replacement_net: replacementNet(f),
+      replacement_net: net,
       revenue_to_effort: rte,
       time_to_first_dollar: ttfd,
       escape_velocity_contribution: ev,
+      viable: net > 0,
     },
   };
 }

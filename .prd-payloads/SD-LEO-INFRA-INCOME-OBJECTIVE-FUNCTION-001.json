@@ -1,0 +1,111 @@
+{
+  "executive_summary": "The roadmap repeatedly invokes 'revenue-to-effort and time-to-first-dollar first-class' as the ranking rule, but nothing encoded it — Phase-1 prioritization was hand-wave (critique G8). This SD makes distance-to-quit EXECUTABLE: it adds an income-contribution objective function (revenue-to-effort + time-to-first-dollar + contribution-to-$18k/mo escape-velocity) as a first-class, TUNABLE dimension of the EXISTING Glide Path policy weighting (scripts/glide-path/policy-engine.js scoreVenture) — NOT a parallel scorer — and defines a single canonical replacement-net (revenue − business expenses − PPO − retirement − SE-tax) used everywhere. It is the objective FUNCTION (the scorer), explicitly distinct from the venture PICK (which stays deferred behind the chairman trigger): it ranks effort by income contribution but selects nothing. The income score is surfaced informationally in prio:top3. Low-blast-radius: verified that adding the income weight without touching the existing 6 weights leaves live SD ranking (SDNextSelector) unchanged. Strategy-laden scoring math was adversarially reviewed before deploy.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Canonical replacement-net + income-contribution scorers",
+      "description": "scripts/glide-path/replacement-net.js defines the SINGLE canonical replacement-net (revenue − business_expenses − PPO − retirement − SE_tax) used everywhere, plus the three first-class income factors as pure, fail-safe, tunable functions: revenueToEffort (net per person-week), timeToFirstDollarScore (sooner-is-better exponential decay; unknown earns no credit), escapeVelocityContribution (fraction of the $18k/mo target, clamped), blended by incomeContribution() with default weights biasing time-to-first-dollar (roadmap 'aggressive first-dollar').",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "replacementNet computes revenue − biz_exp − PPO − retirement − SE_tax; missing fields treated as 0; loss-making allowed (negative)",
+        "the three factors return 0..1, fail-safe to 0 on missing data (unknown earns no credit)",
+        "incomeContribution blends them with TUNABLE weights (default time-to-first-dollar highest)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Wire income-contribution into the existing Glide Path weighting (choke-point, no parallel scorer)",
+      "description": "policy-engine.js scoreVenture auto-enriches a venture with income_contribution (via enrichVentureWithIncome) ONLY when the active policy declares the income_contribution dimension, then weights it through the existing data-driven composite. Every scoreVenture caller becomes income-aware with no per-caller wiring; gated, idempotent, null-safe; legacy policies (no income dimension) behave identically.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "scoreVenture includes income_contribution in dimension_scores when the policy declares it; an income-strong venture out-scores an income-absent one (unknown → 0)",
+        "a legacy policy without the income dimension is byte-for-byte unchanged",
+        "no parallel scorer is introduced (extends scoreVenture)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Add income_contribution as a tunable policy dimension (low-blast-radius, deploy-applied)",
+      "description": "scripts/glide-path/add-income-dimension.mjs (idempotent, additive) adds the income_contribution dimension {default_value:0,min:0,max:100} + a tunable 0.18 weight to the ACTIVE policy WITHOUT modifying the existing 6 weights, and stores income_weights in policy.metadata so the strategy stays config. Verified low-blast-radius: SDNextSelector reads specific weight keys by growth_strategy (not all weights, no scoreVenture call), so live SD ranking is unchanged. Applied at deploy AFTER the adversarial review.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "withIncomeDimension is idempotent (re-apply is a no-op, weight not doubled, dimension not duplicated)",
+        "existing 6 weights are untouched (SDNextSelector live ranking unchanged)",
+        "income_weights stored in metadata (tunable config; chairman adjusts)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Surface income-contribution in prio:top3 (informational)",
+      "description": "scripts/wsjf-priority-fetcher.js (prio:top3) surfaces income_contribution informationally. prio:top3 ranks PLATFORM SDs (venture-build SDs excluded via FR-5 of a prior SD), which have no direct revenue, so it reports null + an income_note clarifying the income objective is scored for ventures via the Glide Path. Ranking is unchanged; nothing is auto-picked.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "prio:top3 output includes income_contribution (null for platform SDs) + an honest note",
+        "ranking order is unchanged; no auto-selection",
+        "prio:top3 still runs clean"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Tests + adversarial review of the scoring math",
+      "description": "tests/unit/glide-path-replacement-net.test.js + tests/unit/glide-path-income-integration.test.js (25 tests) pin the canonical net, the factors, the blend, the scoreVenture integration, and the idempotent policy upgrade. A multi-agent adversarial review (ultracode) of the scoring math + policy reweight + scoreVenture blast-radius runs and its confirmed defects are fixed before deploy.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "25 unit tests pass; 150/150 across glide/policy suites (no regression)",
+        "the fail-safe + negative + clamp + idempotency edge cases are covered",
+        "adversarial review confirmed-defects fixed before merge/deploy"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No parallel scorer; data-driven extension", "description": "Extends the existing scoreVenture/policy weighting; the income factors are pure functions; the policy change is additive + idempotent + tunable via metadata." },
+    { "id": "TR-2", "title": "Service-role client for policy writes", "description": "add-income-dimension.mjs uses createSupabaseServiceClient — the anon client silently RLS-no-ops strategic-config UPDATEs." },
+    { "id": "TR-3", "title": "Strategy stays deferred", "description": "Defines the objective function only; does NOT select/rank ventures, flip gates, or touch the venture-intake gate pack." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Canonical net + factors + blend correctness incl. fail-safe/negative/clamp", "type": "unit", "expected": "replacement-net suite green" },
+    { "id": "TS-2", "scenario": "scoreVenture income choke-point: enriches when declared, legacy unchanged, idempotent", "type": "unit", "expected": "income-integration suite green" },
+    { "id": "TS-3", "scenario": "Policy upgrade additive + idempotent; live ranking unchanged", "type": "unit", "expected": "withIncomeDimension tests green; SDNextSelector unaffected" }
+  ],
+  "acceptance_criteria": [
+    "Distance-to-quit is an executable, tunable first-class factor in the existing Glide Path weighting (no parallel scorer)",
+    "Canonical replacement-net defined once; income surfaced informationally in prio:top3; venture-selection still deferred",
+    "25 tests pass + adversarial review clean; live SD ranking unchanged (additive weight)"
+  ],
+  "risks": [
+    { "risk": "Adding the income weight perturbs live SD ranking", "mitigation": "Weight is additive (existing 6 untouched); verified SDNextSelector reads specific keys, not all weights; adversarial review of the blast-radius lens.", "severity": "medium" },
+    { "risk": "Wrong scoring math encodes a bad objective fleet-wide", "mitigation": "Pure fail-safe functions, 25 unit tests covering edge cases, adversarial review of the scoring-math lens; weights tunable via policy.metadata.", "severity": "medium" },
+    { "risk": "default_value:0 unfairly penalizes income-less ventures in the composite", "mitigation": "Intentional — unknown income earns no credit (honest); flagged for the review's chokepoint-enrich lens to confirm vs a neutral default.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/glide-path/policy-engine.js scoreVenture (dry-run + deferred venture-scoring)", "scripts/wsjf-priority-fetcher.js (prio:top3 informational)"],
+    "dependencies": ["portfolio_allocation_policies active row (v1)", "scripts/glide-path/replacement-net.js"],
+    "data_contracts": ["adds income_contribution dimension + weight to the active policy (additive); prio:top3 output gains income_contribution/income_note fields"],
+    "runtime_config": ["policy.metadata.income_weights (tunable); income dimension weight 0.18 default"],
+    "observability_rollout": ["prio:top3 shows income_contribution; scoreVenture dimension_scores includes income_contribution for income-declaring policies"]
+  },
+  "system_architecture": {
+    "summary": "Income objective function as pure scorers + a choke-point auto-enrich in the data-driven Glide Path scoreVenture + an additive tunable policy dimension + an informational prio:top3 surface.",
+    "components": [
+      { "name": "scripts/glide-path/replacement-net.js", "change": "NEW — canonical replacement-net + income factors + enrich" },
+      { "name": "scripts/glide-path/policy-engine.js", "change": "scoreVenture choke-point income auto-enrich (gated, idempotent, null-safe)" },
+      { "name": "scripts/glide-path/add-income-dimension.mjs", "change": "NEW — idempotent additive policy-dimension upgrade (deploy step)" },
+      { "name": "scripts/wsjf-priority-fetcher.js", "change": "informational income_contribution surface in prio:top3" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Define the canonical net + factors, wire at the scoreVenture choke point, add a tunable additive policy dimension, surface informationally — review the math before deploy.",
+    "steps": [
+      "replacement-net.js scorers + enrich (done)",
+      "scoreVenture choke-point auto-enrich (done)",
+      "add-income-dimension.mjs + prio:top3 surface (done)",
+      "adversarial review → fix → apply policy script (deploy) → handoffs → LFA"
+    ]
+  },
+  "smoke_test_steps": [
+    { "instruction": "npx vitest run tests/unit/glide-path-replacement-net.test.js tests/unit/glide-path-income-integration.test.js", "expected_outcome": "25 tests pass" },
+    { "instruction": "npm run prio:top3", "expected_outcome": "runs clean; each item shows income_contribution (null for platform SDs) + income_note" },
+    { "instruction": "node scripts/glide-path/add-income-dimension.mjs --dry-run", "expected_outcome": "reports it would add income_contribution weight 0.18 without touching existing weights (or no-op if already present)" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-INCOME-OBJECTIVE-FUNCTION-001" }
+}

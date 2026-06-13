@@ -89,3 +89,20 @@ describe('withIncomeDimension — additive, idempotent policy upgrade', () => {
     expect(INCOME_DIMENSION_DEF.max).toBe(100);
   });
 });
+
+// Adversarial-review fix (minor): validateWeights must treat income_contribution as an additive
+// overlay so the post-deploy policy (base sum 1.0 + 0.18 overlay = 1.18) does not break a future
+// re-tune/clone that re-validates the weights.
+describe('validateWeights — income_contribution additive overlay', () => {
+  it('accepts a policy upgraded by withIncomeDimension (base 1.0 + income overlay)', async () => {
+    const { validateWeights } = await import('../../scripts/glide-path/policy-writer.js');
+    const next = withIncomeDimension({ dimensions: [{ key: 'revenue_potential' }], weights: { revenue_potential: 1.0 }, metadata: {} });
+    expect(() => validateWeights(next.weights, next.dimensions)).not.toThrow();
+  });
+
+  it('still REJECTS base weights that do not sum to 1.0 (overlay does not mask a bad base)', async () => {
+    const { validateWeights } = await import('../../scripts/glide-path/policy-writer.js');
+    const dims = [{ key: 'revenue_potential' }, { key: 'income_contribution' }];
+    expect(() => validateWeights({ revenue_potential: 0.5, income_contribution: 0.18 }, dims)).toThrow(/Base weights sum/);
+  });
+});
