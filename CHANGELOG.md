@@ -50,6 +50,12 @@
 
 ## 2026-06-12
 
+### Infrastructure (fleet)
+- **Atomic QF claim on every routing surface** - PR #4675 (SD-FDBK-INFRA-CLAIM-VISIBILITY-ATOMIC-001)
+  - **Issue**: two unclaimed workers duplicated QF-20260611-123 (identical fix already on origin at push time) and QF-working sessions read idle-no-claim. claim_sd was already QF-aware and the selector already excluded live-peer-held QFs — but the qf_start routing surfaces never TOOK the claim.
+  - **Fix**: NEW `scripts/qf-start.js` (atomic claim via claim_sd; holder info + exit 3 on refusal; undici-drain safeExit); `sd-start.js` routes `^QF-` ids instead of crashing; `qf_start` actions carry `claim_cmd` + CLAIM FIRST; /quick-fix skill step 0; 6 contract pins.
+  - **Verification**: live race (probe A claims, probe B refused exit 3); gates 96/94/93 + LEAD-FINAL 98 (canonical row via the FDBK-FIX-LFA-ACCEPT-CANONICAL backfill after the known split-brain hit this very handoff); retro 90.
+
 ### Bugfix (worktree reaper)
 - **Reaper live-claim guard — claim-held / non-terminal SD worktrees are never stage1-removed** - PR #4669 (SD-FDBK-FIX-WORKTREE-REAPER-LIVE-001, 3rd recurrence of the reaper-ate-live-worktree class)
   - **Issue**: the 2026-06-12 ~19:45Z reaper run removed TWO live worktrees: one mid-LEAD-FINAL-APPROVAL (ghost completion — accepted LFA only in leo_handoff_executions) and one custom-path worktree mid-EXEC (claim_status:absent). Causes: basename-keyed guards miss custom paths; the active allowlist (draft/active/in_progress) missed pending_approval; claim resolution was path-keyed only; git-cherry "absorbed" acted as sole stage1 authority despite being unreliable under squash merges.
