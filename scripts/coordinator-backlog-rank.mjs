@@ -25,10 +25,15 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+// SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: shared fail-open classifiers so the
+// ranker and the capacity forecaster exclude the same fixtures, and the ranker
+// demotes bare-shell stubs. FIXTURE_RE catches epoch-stamped TEST-E2E keys; the
+// bare-shell demotion uses the shared bareShellLastCompare so the test suite
+// exercises the real comparator, not a re-implementation.
+import { isFixtureSd, isBareShell, bareShellLastCompare } from '../lib/coordinator/sd-exclusion.mjs';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
-const FIXTURE_RE = /^SD-(TEST|DEMO|SWITCH-OLD)\b|^SD-LEO-FEAT-TEST-E2E-/;
 
 // Dependencies appear in TWO shapes in live data: [{sd_id:'SD-…'}] (add-prd convention) and
 // raw string arrays ['SD-…'] (plan-keeper/Adam authoring). Reading only x.sd_id made this
@@ -43,7 +48,8 @@ const sb = createClient(
 
 async function main() {
   const { data: sds, error } = await sb.from('strategic_directives_v2')
-    .select('sd_key, status, sd_type, priority, created_at, claiming_session_id, dependencies, metadata')
+    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + title, description to classify bare-shell stubs.
+    .select('sd_key, title, description, status, sd_type, priority, created_at, claiming_session_id, dependencies, metadata')
     .not('status', 'in', '("completed","cancelled","deferred")');
   if (error) { console.error('[BACKLOG-RANK] load failed:', error.message); return; }
 
@@ -81,14 +87,28 @@ async function main() {
 
   // ── claimable leaves ──
   const claimable = [];
+  let fixtureSkips = 0;
   for (const d of (sds || [])) {
     if (d.claiming_session_id) continue;
     if (d.sd_type === 'orchestrator') continue;          // parents are never dispatched
-    if (FIXTURE_RE.test(d.sd_key)) continue;             // test fixtures are never ranked
+    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: fixtures (epoch-stamped TEST-E2E keys or
+    // metadata.is_fixture) are never ranked — they get no dispatch_rank at all.
+    if (isFixtureSd(d.sd_key, d.metadata)) {             // test fixtures are never ranked
+      fixtureSkips++;
+      console.log(`  [skip] fixture excluded from ranking: ${d.sd_key}`);
+      continue;
+    }
     const unmet = (d.dependencies || []).map(depId)
       .filter(k => k && (byKey.has(k) ? byKey.get(k).status !== 'completed' : depStatus[k] !== 'completed'));
     if (unmet.length) continue;
     claimable.push(d);
+  }
+  if (fixtureSkips) console.log(`[BACKLOG-RANK] ${fixtureSkips} fixture SD(s) excluded from ranking`);
+  // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs (empty/title-only description)
+  // cannot pass LEAD-TO-PLAN; log them so the demote-to-last below is auditable. The sort
+  // below (bareShellLastCompare as the dominant key) is what actually places them last.
+  for (const d of claimable) {
+    if (isBareShell(d)) console.log(`  [demote] BARE_SHELL will sort below all authored SDs (description empty or equal to title): ${d.sd_key}`);
   }
 
   // ── rank ──
@@ -103,6 +123,12 @@ async function main() {
     return m.auto_generated === true && !m.triaged_by;
   };
   claimable.sort((a, b) => {
+    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs sort below EVERY
+    // authored SD (rank-last), so a worker never self-claims a stub that cannot pass
+    // LEAD-TO-PLAN. This precedes quarantine/unlock so it dominates the ordering.
+    // Uses the shared comparator so the demotion is unit-tested against real code.
+    const bs = bareShellLastCompare(a, b);
+    if (bs !== 0) return bs;                                // authored (non-bare-shell) first
     const qa = quarantined(a) ? 1 : 0, qb = quarantined(b) ? 1 : 0;
     if (qa !== qb) return qa - qb;                          // human-authored first
     const ua = unlockScore(a.sd_key), ub = unlockScore(b.sd_key);

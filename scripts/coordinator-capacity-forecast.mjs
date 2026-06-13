@@ -28,6 +28,10 @@ import { createRequire } from 'module';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+// SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: shared belt-exclusion predicate so test/UAT
+// fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
+// counting them as claimable over-reports capacity and suppresses the deficit/Adam alert.
+import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
@@ -79,7 +83,9 @@ async function main() {
       .select('session_id, terminal_id, sd_key, heartbeat_at, loop_state, metadata')
       .gte('heartbeat_at', liveCutoff),
     sb.from('strategic_directives_v2')
-      .select('sd_key, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies')
+      // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: + metadata (is_fixture marker) and
+      // title/description (bare-shell detection) so excluded rows do not inflate belt depth.
+      .select('sd_key, title, description, status, sd_type, current_phase, progress_percentage, claiming_session_id, dependencies, metadata')
       .not('status', 'in', '("completed","cancelled","deferred")'),
     // Open QFs are claimable belt too (a worker can claim a QF) — counting only SDs
     // under-reports belt depth and over-reports deficit (workers self-claim QFs).
@@ -99,15 +105,21 @@ async function main() {
   }
   const claimable = [];
   const claimsBySession = {};
+  let beltExcludes = 0;
   for (const d of (sds || [])) {
     if (d.claiming_session_id) {
       (claimsBySession[d.claiming_session_id] ||= []).push(d);
       continue;
     }
     if (d.sd_type === 'orchestrator') continue; // parents auto-complete; never dispatch
+    // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: fixtures and bare-shell stubs are not real
+    // belt — neither can pass LEAD-TO-PLAN. Excluding them keeps beltDepth honest so a
+    // forecast deficit (and the proactive Adam reach-out) is not masked by non-distributable rows.
+    if (isExcludedFromBelt(d)) { beltExcludes++; continue; }
     const unmet = (d.dependencies || []).map(depId).filter(k => k && depStatus[k] !== 'completed');
     if (unmet.length === 0) claimable.push(d);
   }
+  if (beltExcludes) console.log(`[CAPACITY-FORECAST] ${beltExcludes} non-distributable SD(s) (fixture/bare-shell) excluded from belt depth`);
 
   // ── classify live workers (exclude coordinator + adam) ──
   const workers = (sessions || []).filter(s => {
