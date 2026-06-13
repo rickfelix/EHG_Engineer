@@ -116,7 +116,11 @@ function classifyInboxMessage(msg, opts = {}) {
   // Coordinator-exclusive INFO rows — SKIP for EVERY session (the coordinator surfaces them via
   // fleet-dashboard printInbox/printAdamInbox; non-coordinator sessions must not drain them).
   // Previously these three skips were gated on amCoordinator===true (the root bug).
-  if (isInfo && p.signal_type) return { skip: true };                 // FR-3a worker signal
+  // FR-3a worker friction signal (OUTBOUND, worker->coordinator) — skip for non-coordinator sessions.
+  // EXCEPT an inbound coordinator->worker SIGNAL_RESOLVED notification that merely echoes signal_type as
+  // context (it carries signal_resolved:true) — that is genuine push delivered via /checkin, not a
+  // friction signal (SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001 adversarial-review finding).
+  if (isInfo && p.signal_type && !p.signal_resolved) return { skip: true };
   if (isInfo && p.kind === 'adam_advisory') return { skip: true };    // Adam advisory -> coordinator inbox
   // A worker's awaitCoordinatorReply consumes its own coordinator_reply, so workers skip it.
   // SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001 FR-4: an ADAM session must NOT skip — it falls
@@ -164,6 +168,17 @@ function classifyInboxMessage(msg, opts = {}) {
   // distinguishable; genuine actioning stamps acknowledged_at / payload.actioned_at later).
   // Kind-allowlist shape per QF-20260610-545 — never a sender_type allow/denylist.
   if (p.kind && DIRECTIVE_KINDS.includes(p.kind)) {
+    return { skip: false, markRead: true, markAck: false };
+  }
+  // SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001 (FR-3): COACHING + any remaining coordinator->worker
+  // INFO push (plain announcements, coordinator_reply when two-way is OFF) are now DELIVERED by the
+  // worker /checkin loop as coordinator_messages[]. This poll must NOT auto-ACK them (read-only drain:
+  // read_at=DELIVERED so the ephemeral render stops, acknowledged_at WITHHELD) — /checkin filters
+  // acknowledged_at IS NULL and is the authoritative bounded consumption point that stamps the ack.
+  // Without this, the hook drained (acked) COACHING/INFO before /checkin saw them — the RCA bug.
+  // (signal_type / adam_advisory / two-way coordinator_reply are already skipped above; CLAIM_RELEASED/
+  // CLAIM_REMINDER are their own message_types and keep the default drain.)
+  if (mt === 'COACHING' || isInfo) {
     return { skip: false, markRead: true, markAck: false };
   }
   // Default — a pure notification with no follow-up action; drain on display (legacy behavior).

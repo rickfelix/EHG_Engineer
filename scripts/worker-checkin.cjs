@@ -187,7 +187,11 @@ async function ackMessage(sb, id, opts = {}) {
 function isCoordinatorPush(m) {
   if (!m) return false;
   const p = m.payload || {};
-  if (p.signal_type) return false;                       // friction channel — not coaching
+  // Exclude OUTBOUND friction signals (worker->coordinator, top-level signal_type) — but NOT inbound
+  // coordinator->worker notifications that merely ECHO signal_type as context (e.g. a SIGNAL_RESOLVED
+  // row carries {signal_resolved:true, signal_type}); those ARE push the worker must see. (adversarial-
+  // review finding: the bare signal_type guard re-created the very blindness this SD closes.)
+  if (p.signal_type && !p.signal_resolved) return false;
   if (p.kind === ws.PAYLOAD_KINDS.ROLL_CALL) return false; // the worker's own availability ping
   const mt = m.message_type;
   if (mt === 'WORK_ASSIGNMENT' || mt === 'SET_IDENTITY') return false; // handled elsewhere (pending_work_assignment / callsign)

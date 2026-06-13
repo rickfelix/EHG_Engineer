@@ -9,7 +9,32 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, resolveCheckin } = require('../../scripts/worker-checkin.cjs');
+const { classifyInboxMessage } = require('../../scripts/hooks/coordination-inbox.cjs');
 const ws = require('../../lib/fleet/worker-status.cjs');
+
+// CRITICAL cross-file invariant (FR-3): the PostToolUse hook must NOT auto-ACK coordinator->worker
+// push for a non-Adam worker, or /checkin (which filters acknowledged_at IS NULL) could never deliver
+// it — the row would be drained before the worker's checkin ran (the exact RCA bug). The hook may stamp
+// read_at (DELIVERED) but must withhold acknowledged_at; /checkin is the authoritative consumption point.
+describe('coordination-inbox hook ↔ /checkin handoff: coordinator push is NOT auto-acked by the poll (FR-3)', () => {
+  it('COACHING is read-only drained for a worker (markAck:false) so /checkin can deliver it', () => {
+    expect(classifyInboxMessage({ message_type: 'COACHING', payload: {} }, { amAdam: false }).markAck).toBe(false);
+  });
+  it('plain coordinator INFO is read-only drained for a worker (markAck:false)', () => {
+    expect(classifyInboxMessage({ message_type: 'INFO', payload: {} }, { amAdam: false }).markAck).toBe(false);
+  });
+  it('a non-push type (PRIORITY_CHANGE) still full-drains for a busy worker (unchanged)', () => {
+    expect(classifyInboxMessage({ message_type: 'PRIORITY_CHANGE', payload: {} }, { isIdle: false, amAdam: false }))
+      .toEqual({ skip: false, markRead: true, markAck: true });
+  });
+  it('the hook does NOT skip a SIGNAL_RESOLVED notification (it read-only drains it for /checkin delivery)', () => {
+    // a bare OUTBOUND friction signal is still skipped; an inbound SIGNAL_RESOLVED is not
+    expect(classifyInboxMessage({ message_type: 'INFO', payload: { signal_type: 'stuck' } }, { amAdam: false })).toEqual({ skip: true });
+    const v = classifyInboxMessage({ message_type: 'INFO', payload: { signal_resolved: true, signal_type: 'stuck' } }, { amAdam: false });
+    expect(v.skip).toBeFalsy();
+    expect(v.markAck).toBe(false); // read-only drain -> /checkin (ack-NULL) delivers it
+  });
+});
 
 // A fake sb that records session_coordination UPDATEs so we can assert the read/ack stamping.
 function recordingSb({ setIdentityRow = null, sessionMeta = { role: 'worker' }, heldSd = null } = {}) {
@@ -50,8 +75,11 @@ describe('isCoordinatorPush — selection (FR-1)', () => {
   it('surfaces an INFO coordinator_reply', () => {
     expect(isCoordinatorPush({ message_type: 'INFO', payload: { kind: 'coordinator_reply' } })).toBe(true);
   });
-  it('EXCLUDES a friction signal (payload.signal_type)', () => {
+  it('EXCLUDES an OUTBOUND friction signal (signal_type, no signal_resolved)', () => {
     expect(isCoordinatorPush({ message_type: 'INFO', payload: { signal_type: 'stuck' } })).toBe(false);
+  });
+  it('SURFACES an inbound SIGNAL_RESOLVED notification that echoes signal_type as context (adversarial-review finding)', () => {
+    expect(isCoordinatorPush({ message_type: 'INFO', payload: { signal_resolved: true, signal_type: 'stuck', resulting_sd_key: 'SD-X-001' } })).toBe(true);
   });
   it("EXCLUDES the worker's own roll_call", () => {
     expect(isCoordinatorPush({ message_type: 'INFO', payload: { kind: 'roll_call' } })).toBe(false);
