@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001",
-  "expectedBranch": "feat/SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001",
-  "createdAt": "2026-06-13T01:51:38.260Z",
+  "sdKey": "SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001",
+  "expectedBranch": "feat/SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001",
+  "createdAt": "2026-06-13T04:03:43.227Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
