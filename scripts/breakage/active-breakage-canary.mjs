@@ -52,7 +52,7 @@ async function probeGatePipeline(service, nowMs) {
   let recent = [];
   try {
     const { data } = await service.from('sd_phase_handoffs')
-      .select('status, created_at, accepted_at')
+      .select('status, created_at, accepted_at, sd_id') // sd_id -> distinct-SD guard (no single-stuck-SD false-positive)
       .order('created_at', { ascending: false })
       .limit(50);
     recent = data || [];

@@ -47,14 +47,20 @@ describe('classifyGatePipelineProbe (FR-D2) — no idle false-positive', () => {
     const recent = Array.from({ length: 5 }, (_, i) => ({ created_at: isoAgo(i * 1000), status: i < 2 ? 'accepted' : 'rejected' }));
     expect(classifyGatePipelineProbe(recent, NOW).breakage).toBe(false);
   });
-  it('DOWN when recent activity has ZERO acceptances', () => {
-    const recent = Array.from({ length: 4 }, (_, i) => ({ created_at: isoAgo(i * 1000), status: 'rejected' }));
+  it('DOWN when recent activity across >=2 distinct SDs has ZERO acceptances (fleet-wide)', () => {
+    const recent = Array.from({ length: 4 }, (_, i) => ({ created_at: isoAgo(i * 1000), status: 'rejected', sd_id: `SD-${i % 3}` }));
     const v = classifyGatePipelineProbe(recent, NOW);
     expect(v.breakage).toBe(true);
     expect(v.breakClass).toBe('gate-pipeline-down');
+    expect(v.detail.distinctSds).toBeGreaterThanOrEqual(2);
+  });
+  it('NO fire when zero acceptances come from a SINGLE stuck SD (stuck worker, not down pipeline) — adversarial-review guard', () => {
+    const recent = Array.from({ length: 6 }, (_, i) => ({ created_at: isoAgo(i * 1000), status: 'rejected', sd_id: 'SD-STUCK' }));
+    const v = classifyGatePipelineProbe(recent, NOW);
+    expect(v.breakage).toBe(false); // 6 rejections, ZERO accepted, but only 1 distinct SD -> not a down pipeline
   });
   it('out-of-window rows do not count toward activity (stays idle)', () => {
-    const old = Array.from({ length: 5 }, () => ({ created_at: isoAgo(7 * 60 * 60 * 1000), status: 'rejected' }));
+    const old = Array.from({ length: 5 }, () => ({ created_at: isoAgo(7 * 60 * 60 * 1000), status: 'rejected', sd_id: 'SD-X' }));
     expect(classifyGatePipelineProbe(old, NOW).idle).toBe(true);
   });
 });
@@ -131,7 +137,7 @@ describe('run() — dry-run performs NO writes; live path is fail-loud (TS-4 / F
   it('dry-run classifies breakages but never calls recordSystemAlert', async () => {
     const calls = [];
     const summary = await run({
-      service: fakeService({ handoffs: [{ created_at: isoAgo(1000), status: 'rejected' }, { created_at: isoAgo(2000), status: 'rejected' }, { created_at: isoAgo(3000), status: 'rejected' }] }),
+      service: fakeService({ handoffs: [{ created_at: isoAgo(1000), status: 'rejected', sd_id: 'SD-A' }, { created_at: isoAgo(2000), status: 'rejected', sd_id: 'SD-B' }, { created_at: isoAgo(3000), status: 'rejected', sd_id: 'SD-C' }] }),
       anon: fakeAnon({ rlsRegressed: true }),
       detectFromDb: async () => ({ rung: 'PAUSE_AND_SURFACE', reason: 'seeded' }),
       record: async (...a) => { calls.push(a); return { id: 'x', deduped: false }; },
