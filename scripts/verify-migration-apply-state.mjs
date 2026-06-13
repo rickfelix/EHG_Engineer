@@ -295,7 +295,11 @@ async function main() {
   // SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001-C (FR-C2): surface a committed-not-deployed migration gap
   // as a migration-fail system_alerts row. Fail-soft (never changes the advisory exit/marker below); the
   // writer dedups on (source_service, break_class) so a recurring gap does not flood the table.
-  if (gaps.length > 0) {
+  // OPT-IN (mirrors schema-lint's --alert discipline, adversarial-review finding): the DEFAULT advisory
+  // run (`npm run migration:apply-state`, no flags) is read-only and writes NO alert — a parked-but-not-
+  // _DOWN migration is an expected gap, not a CRITICAL incident. Emit only when the operator has declared
+  // the gaps actionable via --alert or --strict (strict already treats gaps as a failure exit).
+  if (gaps.length > 0 && (args.includes('--alert') || strict)) {
     const { createRequire } = await import('node:module');
     const { emitBreakageAlert } = createRequire(import.meta.url)('../lib/breakage/emit-breakage-alert.cjs');
     await emitBreakageAlert('migration-fail', 'migration-apply-state', {
