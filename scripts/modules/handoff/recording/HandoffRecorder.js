@@ -4,15 +4,14 @@
  *
  * Manages recording of successful/failed handoffs and creates artifacts.
  *
- * IMPORTANT DISTINCTION (Root Cause Fix - SD-VENTURE-STAGE0-UI-001):
- * - Phase TRANSITIONS (LEAD-TO-PLAN, PLAN-TO-EXEC, etc.) create artifacts in sd_phase_handoffs
- *   because they transfer work from one phase to another with from_phase → to_phase
- * - COMPLETION actions (LEAD-FINAL-APPROVAL) only record in leo_handoff_executions
- *   because they don't transfer work - they complete the SD lifecycle
- *
- * The sd_phase_handoffs table has a constraint: to_phase IN ('LEAD', 'PLAN', 'EXEC')
- * LEAD-FINAL-APPROVAL would parse to to_phase='APPROVAL' which violates this constraint.
- * Instead of forcing it, we recognize that completion actions are fundamentally different.
+ * IMPORTANT DISTINCTION (revised by SD-FDBK-FIX-LFA-ACCEPT-CANONICAL-001):
+ * - Phase TRANSITIONS (LEAD-TO-PLAN, PLAN-TO-EXEC, etc.) create artifacts in sd_phase_handoffs.
+ * - COMPLETION actions (LEAD-FINAL-APPROVAL) record in leo_handoff_executions AND now also
+ *   persist an accepted sd_phase_handoffs row with to_phase coerced 'APPROVAL'->'LEAD'
+ *   (parity with recordFailure, which always wrote rejected LFA rows that way).
+ *   The original skip (SD-VENTURE-STAGE0-UI-001, citing the to_phase CHECK) made every
+ *   recorder-path completion read as a ghost in v_sd_completion_integrity, which treats
+ *   an accepted sd_phase_handoffs LFA row as the canonical completion evidence.
  */
 
 import { randomUUID } from 'crypto';
@@ -268,14 +267,28 @@ export class HandoffRecorder {
         failedGate: result.failedGate || null
       });
 
-      // Create handoff artifact ONLY for phase transitions, not completion actions
-      // Root Cause Fix (SD-VENTURE-STAGE0-UI-001):
-      // - Completion actions (LEAD-FINAL-APPROVAL) don't have a valid to_phase
-      // - sd_phase_handoffs requires to_phase IN ('LEAD', 'PLAN', 'EXEC')
-      // - Completion actions end the lifecycle, they don't transition to another phase
+      // SD-FDBK-FIX-LFA-ACCEPT-CANONICAL-001 FR-1/FR-2: completion actions now ALSO
+      // persist to sd_phase_handoffs (to_phase coerced 'APPROVAL'->'LEAD', parity with
+      // recordFailure). The prior skip (SD-VENTURE-STAGE0-UI-001) made every recorder-path
+      // completion a ghost: v_sd_completion_integrity treats sd_phase_handoffs as canonical
+      // and saw only rejected LFA rows. createArtifact THROWS on write failure (fail-loud) —
+      // an SD is never marked completed on the executions-table write alone.
       if (isCompletionAction(handoffType)) {
-        console.log(`ℹ️  ${handoffType} is a completion action - skipping sd_phase_handoffs artifact`);
-        console.log(`   (Completion recorded in leo_handoff_executions: ${executionId})`);
+        // Idempotency: a clean re-run after a prior accept must not duplicate the canonical row.
+        const { data: existingAccept } = await this.supabase
+          .from('sd_phase_handoffs')
+          .select('id')
+          .eq('sd_id', sdUuid)
+          .eq('handoff_type', handoffType)
+          .eq('status', 'accepted')
+          .limit(1)
+          .maybeSingle();
+        if (existingAccept) {
+          console.log(`ℹ️  ${handoffType} canonical row already accepted (${existingAccept.id}) — skipping duplicate insert`);
+        } else {
+          await this.createArtifact(handoffType, sdId, result, executionId);
+          console.log(`   (Completion also recorded in leo_handoff_executions: ${executionId})`);
+        }
       } else {
         await this.createArtifact(handoffType, sdId, result, executionId);
       }
@@ -722,7 +735,12 @@ export class HandoffRecorder {
         .limit(10);
 
       // Build content
-      const [fromPhase, , toPhase] = handoffType.split('-');
+      // SD-FDBK-FIX-LFA-ACCEPT-CANONICAL-001 FR-1: coerce 'APPROVAL'->'LEAD' exactly as
+      // recordFailure already does, so accepted LEAD-FINAL-APPROVAL rows satisfy the
+      // sd_phase_handoffs to_phase CHECK ('LEAD','PLAN','EXEC'). The old skip made every
+      // recorder-path completion a ghost in v_sd_completion_integrity (275/291 since 06-01).
+      const [fromPhase, , rawToPhase] = handoffType.split('-');
+      const toPhase = rawToPhase === 'APPROVAL' ? 'LEAD' : rawToPhase;
       const handoffContent = this.contentBuilder.build(handoffType, sd, result, subAgentResults);
 
       // Use normalizedScore (weighted average) if available, otherwise calculate from totalScore/maxScore
