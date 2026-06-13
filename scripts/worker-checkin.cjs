@@ -28,6 +28,10 @@
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
 const ws = require('../lib/fleet/worker-status.cjs');
 const { stampClaim } = require('../lib/fleet/claim-stamp.cjs');
+// SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001: acquisition-time guard so a propose-only
+// (non_fleet/role=adam) session never self-claims a build SD — the shared predicate
+// the ESM claim-validity gate also uses (one source; no asymmetry).
+const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-session.cjs');
 const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cjs');
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
@@ -613,10 +617,11 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   try { coordinatorId = await getCoordinator(sb); } catch { coordinatorId = null; }
 
   // 2. confirm callsign + current claim
-  let callsign = null, mySd = null, sessionRole = null;
+  let callsign = null, mySd = null, sessionRole = null, sessionMetadata = null;
   try {
     const { data } = await sb.from('claude_sessions').select('metadata, sd_key').eq('session_id', sessionId).maybeSingle();
     if (data) {
+      sessionMetadata = data.metadata || null;
       callsign = (data.metadata && (data.metadata.fleet_identity?.callsign || data.metadata.callsign)) || null;
       mySd = data.sd_key || null;
       // FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): role feeds the ackMessage
@@ -665,6 +670,22 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
         ? `Already claiming quick-fix ${mySd}; resume it: node scripts/read-quick-fix.js ${mySd}, then run the /quick-fix workflow (do NOT run sd-start.js for a QF).`
         : `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).` };
     }
+  }
+
+  // 4.5 ACQUISITION GUARD (SD-FDBK-FIX-SELF-ONLY-AUTHORIZATION-001, feedback a159d1ec):
+  // propose-only sessions (metadata.non_fleet=true / role=adam, CONST-002) must NEVER
+  // acquire a build claim. The claim-validity gate's CHECK 1.5 only fires at sd-start/
+  // handoff — but a propose-only session is the LEAST likely to ever reach a handoff, so
+  // that tripwire never trips and an Adam session could self-claim here and starve real
+  // workers (claim_sd surfaces it as a live foreign holder). Short-circuit to idle BEFORE
+  // every acquisition tier (assignment, recoverStrandedFinal, adoptOrphanInProgress,
+  // self-claim, QF). The resume of a pre-existing claim above is intentionally NOT blocked
+  // (legacy state; the gate still blocks its handoffs). Fail-safe: only an explicit
+  // non_fleet/adam triggers. A follow-up SD adds the symmetric guard inside the claim_sd
+  // RPC (covers qf-start / sweep / reacquire callers too).
+  if (isBuildForbiddenSession(sessionMetadata)) {
+    return { ...base, action: 'idle', recommended_wakeup_seconds: 1200,
+      message: 'Propose-only session (non_fleet / role=adam): build claims are forbidden per CONST-002 — not self-claiming. Adam proposes work via the decision queue.' };
   }
 
   // 5. pending WORK_ASSIGNMENT -> claim via claim_sd RPC
