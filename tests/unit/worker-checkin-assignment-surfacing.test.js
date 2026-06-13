@@ -8,9 +8,9 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { classifyInboxMessage } = require('../../scripts/hooks/coordination-inbox.cjs');
-const { resolveCheckin } = require('../../scripts/worker-checkin.cjs');
+const { resolveCheckin, extractDirectedSd } = require('../../scripts/worker-checkin.cjs');
 
-describe('classifyInboxMessage — directed rows surface regardless of idle (seam 2)', () => {
+describe('classifyInboxMessage — WORK_ASSIGNMENT surfaces regardless of idle (seam 2)', () => {
   it('WORK_ASSIGNMENT surfaces (markRead:false) for a BUSY worker (isIdle:false)', () => {
     const v = classifyInboxMessage({ message_type: 'WORK_ASSIGNMENT', payload: {} }, { isIdle: false });
     expect(v).toEqual({ skip: false, markRead: false, markAck: false });
@@ -19,13 +19,39 @@ describe('classifyInboxMessage — directed rows surface regardless of idle (sea
     const v = classifyInboxMessage({ message_type: 'WORK_ASSIGNMENT', payload: {} }, { isIdle: true });
     expect(v.markRead).toBe(false);
   });
-  it('CLAIM_RELEASED / CLAIM_REMINDER also surface for a busy worker', () => {
-    expect(classifyInboxMessage({ message_type: 'CLAIM_RELEASED', payload: {} }, { isIdle: false }).markRead).toBe(false);
-    expect(classifyInboxMessage({ message_type: 'CLAIM_REMINDER', payload: {} }, { isIdle: false }).markRead).toBe(false);
-  });
   it('a plain INFO notification still drains (unchanged default)', () => {
     const v = classifyInboxMessage({ message_type: 'INFO', payload: {} }, { isIdle: false });
     expect(v).toEqual({ skip: false, markRead: true, markAck: true });
+  });
+});
+
+describe('classifyInboxMessage — advisory types keep the idle gate (finding #1)', () => {
+  // CLAIM_RELEASED/CLAIM_REMINDER have no worker-side ack/closure path, so a BUSY worker must
+  // drain-on-display (else they re-surface forever + perpetually feed the coordinator's
+  // UNDELIVERED-OUTBOUND alert with no terminal event). They still surface for an IDLE worker.
+  for (const t of ['CLAIM_RELEASED', 'CLAIM_REMINDER']) {
+    it(`${t} surfaces when idle`, () => {
+      expect(classifyInboxMessage({ message_type: t, payload: {} }, { isIdle: true }).markRead).toBe(false);
+    });
+    it(`${t} DRAINS for a busy worker (no eternal re-surface)`, () => {
+      expect(classifyInboxMessage({ message_type: t, payload: {} }, { isIdle: false }))
+        .toEqual({ skip: false, markRead: true, markAck: true });
+    });
+  }
+});
+
+describe('extractDirectedSd — structured directed fields only (finding #2)', () => {
+  it('returns assigned_sd when present', () => {
+    expect(extractDirectedSd({ payload: { assigned_sd: 'SD-X-001' } })).toBe('SD-X-001');
+  });
+  it('returns sd_key when present', () => {
+    expect(extractDirectedSd({ payload: { sd_key: 'SD-Y-002' } })).toBe('SD-Y-002');
+  });
+  it('returns null for the sweep advisory shape {available_sds, current_sd}', () => {
+    expect(extractDirectedSd({ payload: { available_sds: ['SD-OTHER-003'], current_sd: 'SD-MINE-001' } })).toBe(null);
+  });
+  it('returns null for a free-text/empty payload (no structured directed field)', () => {
+    expect(extractDirectedSd({ payload: {}, subject: 'work SD-Z-004 available' })).toBe(null);
   });
 });
 
@@ -80,6 +106,52 @@ describe('resolveCheckin — surface pending WORK_ASSIGNMENT on resume (seam 1)'
       const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
       expect(res.action).toBe('resume');
       expect(res.pending_work_assignment).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  // finding #2 regression: the stale-session-sweep sends EVERY busy worker a generic
+  // "next work available" WORK_ASSIGNMENT with payload {available_sds, current_sd} and NO
+  // assigned_sd/sd_key. This is a queue pointer, NOT a directed redirect — it must NOT be
+  // surfaced as a pending_work_assignment (else every busy worker is told to claim available_sds[0]).
+  it('held claim + sweep advisory ({available_sds, current_sd}) → plain resume, NO pending assignment', async () => {
+    const heldSd = 'SD-CURRENT-001';
+    const sb = fakeSb({ heldSd, assignmentSd: null });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    ws.getMessagesForSession = async () => [{
+      id: 'sweep-1', message_type: 'WORK_ASSIGNMENT',
+      payload: { available_sds: ['SD-OTHER-002', 'SD-OTHER-003'], current_sd: heldSd },
+    }];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.action).toBe('resume');
+      expect(res.sd).toBe(heldSd);
+      expect(res.pending_work_assignment).toBeUndefined();
+    } finally {
+      ws.getMessagesForSession = orig;
+    }
+  });
+
+  // A genuine directed redirect beneath a (newer) sweep advisory must still be found (finding #3):
+  // the directed-field selector skips the advisory and surfaces the real redirect.
+  it('held claim + sweep advisory NEWER than a directed redirect → surfaces the directed redirect', async () => {
+    const heldSd = 'SD-CURRENT-001';
+    const sb = fakeSb({ heldSd, assignmentSd: 'SD-REDIRECT-009' });
+    const ws = require('../../lib/fleet/worker-status.cjs');
+    const orig = ws.getMessagesForSession;
+    // created_at DESC: sweep advisory first (newest), genuine directed redirect second.
+    ws.getMessagesForSession = async () => [
+      { id: 'sweep-2', message_type: 'WORK_ASSIGNMENT', payload: { available_sds: ['SD-OTHER-002'], current_sd: heldSd } },
+      { id: 'directed-1', message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: 'SD-REDIRECT-009' } },
+    ];
+    try {
+      const res = await resolveCheckin(sb, 'sess-busy', { getCoordinator: async () => null });
+      expect(res.action).toBe('resume');
+      expect(res.sd).toBe(heldSd);
+      expect(res.pending_work_assignment?.sd).toBe('SD-REDIRECT-009');
+      expect(res.pending_work_assignment?.message_id).toBe('directed-1');
     } finally {
       ws.getMessagesForSession = orig;
     }

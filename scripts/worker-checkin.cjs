@@ -75,6 +75,25 @@ function extractSdFromAssignment(msg) {
   return null;
 }
 
+// SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (adversarial-review finding #2): the busy-worker resume
+// surface (seam 1) must extract the target ONLY from the STRUCTURED directed fields, NOT the broad
+// fallbacks extractSdFromAssignment uses. The stale-session-sweep emits a generic "next work
+// available" WORK_ASSIGNMENT to EVERY busy claim-holder with payload {available_sds, current_sd}
+// and no assigned_sd/sd_key (available_sds EXCLUDES the worker's own SD). extractSdFromAssignment
+// would fall through to available_sds[0] and mislabel that queue pointer as a directed redirect for
+// every busy worker (all converging on the same SD). The canonical dispatch resolver
+// (lib/coordinator/dispatch.cjs) keys directed intent on payload.assigned_sd || payload.sd_key
+// (|| row.target_sd, which getMessagesForSession does not project) — mirror that: directed iff a
+// structured assigned_sd/sd_key is present. The generic sweep advisory is consumed elsewhere (the
+// idle self-claim path / seam-2's neutral "Available SDs" render), never as a directed assignment.
+function extractDirectedSd(msg) {
+  if (!msg) return null;
+  const p = msg.payload || {};
+  if (typeof p.assigned_sd === 'string' && p.assigned_sd) return p.assigned_sd;
+  if (typeof p.sd_key === 'string' && p.sd_key) return p.sd_key;
+  return null;
+}
+
 async function resolveTrack(sb, sdKey, fallback) {
   if (fallback) return fallback;
   try {
@@ -678,9 +697,13 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       let pendingAssignment = null;
       try {
         const msgs = await ws.getMessagesForSession(sb, sessionId, { unreadOnly: true });
-        const wa = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT');
+        // Only a row carrying a STRUCTURED directed field (assigned_sd/sd_key) is a real redirect;
+        // selecting on extractDirectedSd also skips past the generic sweep advisory if a directed
+        // row exists beneath it (finding #3: subtype-blind newest-wins .find() could otherwise mask
+        // a genuine redirect). getMessagesForSession returns created_at DESC, so this is newest-first.
+        const wa = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT' && extractDirectedSd(m));
         if (wa) {
-          const waSd = extractSdFromAssignment(wa);
+          const waSd = extractDirectedSd(wa);
           if (waSd && waSd !== mySd) pendingAssignment = { sd: waSd, message_id: wa.id };
         }
       } catch { /* fail-open: no pending-assignment surfacing */ }
@@ -850,7 +873,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { extractSdFromAssignment, tryClaim, registerRollCall, ackMessage, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
+module.exports = { extractSdFromAssignment, extractDirectedSd, tryClaim, registerRollCall, ackMessage, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, selfClaimDraftSd, fetchDraftCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, selfHealStaleClaim, orderByRankMap, sortByDispatchRank, DISPATCH_RANK_TTL_MS, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS };
 
 if (require.main === module) {
   main().catch(err => {
