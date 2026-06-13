@@ -23,6 +23,8 @@ const DEFAULT_TTL_MINUTES = 15;
 const RESUME_DISPATCH_WINDOW_MS = 10 * 60 * 1000; // idempotency window for resume re-dispatch
 const IN_FLIGHT_STATUSES = ['active', 'in_progress'];
 const DEAD_SESSION_STATUSES = ['released', 'stale', 'dead', 'terminated'];
+// SD-LEO-INFRA-CLAIM-SILENCE-CONSUME-VERIFY-001 (SEAM 2): shared CONSUME-side silence predicate.
+const { isWithinArmedSilenceWindow } = require('../lib/fleet/silence-cap.cjs');
 
 /**
  * Pure: is the claiming session dead/absent/stale (i.e. the claim is orphaned)?
@@ -31,7 +33,14 @@ const DEAD_SESSION_STATUSES = ['released', 'stale', 'dead', 'terminated'];
  */
 function isSessionStale(sessionRow, nowMs, ttlMs) {
   if (!sessionRow) return true;
+  // An EXPLICIT terminal status is a genuine death — silence never resurrects it.
   if (sessionRow.status && DEAD_SESSION_STATUSES.includes(sessionRow.status)) return true;
+  // SD-LEO-INFRA-CLAIM-SILENCE-CONSUME-VERIFY-001 (SEAM 2): a parked /loop worker arms a
+  // within-cap expected_silence_until and lets its heartbeat lapse legitimately. Honor that
+  // window (same predicate the sweep uses) so a cold-start coordinator never reaps + RESUME-
+  // redispatches a claim mid-silence. Beyond-cap/expired windows fall through to today's
+  // heartbeat-age staleness (fail toward release of a genuinely dead holder).
+  if (isWithinArmedSilenceWindow(sessionRow.expected_silence_until, nowMs)) return false;
   const hb = sessionRow.heartbeat_at ? new Date(sessionRow.heartbeat_at).getTime() : null;
   if (!hb || Number.isNaN(hb)) return true;
   return (nowMs - hb) > ttlMs;
@@ -57,7 +66,7 @@ async function detectOrphans(supabase, inflight, { nowMs, ttlMs }) {
     try {
       const { data, error } = await supabase
         .from('claude_sessions')
-        .select('session_id, heartbeat_at, status')
+        .select('session_id, heartbeat_at, status, expected_silence_until')
         .eq('session_id', sd.claiming_session_id)
         .maybeSingle();
       // Conservative on UNREADABLE state (R-1): a transient query error must NOT be
