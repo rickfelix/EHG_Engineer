@@ -7,6 +7,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { isFixtureSession } from '../../lib/fleet/session-predicates.mjs';
 
 const require = createRequire(import.meta.url);
 const {
@@ -16,6 +20,9 @@ const {
   dedupeAssignedCallsigns,
   reserveParkedIdentities
 } = require('../../scripts/assign-fleet-identities.cjs');
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ASSIGNER = resolve(__dirname, '../../scripts/assign-fleet-identities.cjs');
 
 describe('filterOutCoordinators (QF-20260508-648)', () => {
   it('excludes a coordinator row (metadata.is_coordinator=true)', () => {
@@ -285,5 +292,50 @@ describe('reserveParkedIdentities (SD-FDBK-ENH-COORDINATOR-TOOLING-DELTA-001)', 
     reserveParkedIdentities(usedCallsigns, usedColors, [sess('p', 'Golf', 'green')], new Set());
     expect([...usedCallsigns].sort()).toEqual(['Alpha', 'Golf']);
     expect([...usedColors].sort()).toEqual(['green', 'red']);
+  });
+});
+
+// SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug 7b59dac8): the production path injects the SHARED
+// isFixtureSession into filterOutGhostSessions so *-probe-* / QF-TEST-* fixtures never consume a
+// callsign — the gap the local 4-prefix list missed.
+describe('filterOutGhostSessions + shared isFixtureSession (SD-FDBK-INFRA-SHARED-FLEET-WORKER-001)', () => {
+  it('the LOCAL prefix fallback lets a CLAIMING *-probe-* survive (the witnessed bug)', () => {
+    // The bug: a probe that holds a claim (sd_key) or a prior fleet_identity SURVIVES the local
+    // 4-prefix filter (which does not match *-probe-*/QF-TEST-) and consumes a callsign (Charlie).
+    const rows = [
+      { session_id: 'qf-route-probe-A', sd_key: 'SD-Z' },                            // claiming probe
+      { session_id: 'QF-TEST-001', metadata: { fleet_identity: { callsign: 'Echo' } } }, // pre-assigned probe
+    ];
+    expect(filterOutGhostSessions(rows).map(r => r.session_id))
+      .toEqual(['qf-route-probe-A', 'QF-TEST-001']); // both wrongly survive under the local fallback
+  });
+
+  it('injecting the shared isFixtureSession DROPS the claiming/pre-assigned probe + legacy ghosts', () => {
+    const rows = [
+      { session_id: 'qf-route-probe-A', sd_key: 'SD-Z' },                            // would-survive probe
+      { session_id: 'qf-route-probe-B' },
+      { session_id: 'QF-TEST-001', metadata: { fleet_identity: { callsign: 'Echo' } } },
+      { session_id: 'drain_test_legacy' },
+    ];
+    const out = filterOutGhostSessions(rows, new Set(), isFixtureSession);
+    expect(out).toEqual([]); // the shared fixture check fires FIRST, before the claim/identity rescue
+  });
+
+  it('a REAL claiming worker (UUID/session_ id) is NEVER dropped by the shared predicate', () => {
+    const rows = [
+      { session_id: '65d08634-9ded-4c8f-96e8-2f4cfd991a2a', sd_key: 'SD-X' }, // claiming UUID worker
+      { session_id: 'session_a1b2c3d4_tty1_12345', sd_key: 'SD-Y' },          // legit session_ shape
+      { session_id: 'qf-route-probe-A' },                                      // fixture, no claim
+    ];
+    const out = filterOutGhostSessions(rows, new Set(), isFixtureSession).map(r => r.session_id);
+    expect(out).toContain('65d08634-9ded-4c8f-96e8-2f4cfd991a2a');
+    expect(out).toContain('session_a1b2c3d4_tty1_12345');
+    expect(out).not.toContain('qf-route-probe-A');
+  });
+
+  it('the assigner main() injects the shared predicate (call-site guard)', () => {
+    const src = readFileSync(ASSIGNER, 'utf8');
+    expect(src).toMatch(/from '\.\.\/lib\/fleet\/session-predicates\.mjs'|session-predicates\.mjs/);
+    expect(src).toContain('filterOutGhostSessions(nonCoordinators, claimedSessionIds, isFixtureSession)');
   });
 });
