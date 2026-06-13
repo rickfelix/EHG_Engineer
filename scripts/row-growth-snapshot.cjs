@@ -27,6 +27,7 @@ const {
   isSnapshotDue,
   readTableEstimates,
   readLatestSnapshot,
+  emitRowGrowthAnomalyAlert,
 } = require('../lib/coordinator/row-growth.cjs');
 
 async function resolveCoordinatorId(sb) {
@@ -103,6 +104,11 @@ async function main() {
       expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
     });
   } catch (e) { console.warn(`[row-growth] inbox alert failed (non-fatal): ${e.message}`); }
+
+  // Alert leg 3 (SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001-C FR-C3): surface to system_alerts via the
+  // frozen break-class write-contract so the chairman breakage surface (child E) + catch-rate harness
+  // (child F) see it. Fail-soft by construction (emitRowGrowthAnomalyAlert never throws).
+  await emitRowGrowthAnomalyAlert(sb, anomalies);
 }
 
 if (require.main === module) {

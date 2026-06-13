@@ -36,6 +36,14 @@ const STALE_DAYS = 7;
 const args = process.argv.slice(2);
 const mode = args.includes('--all') ? 'all' : 'diff';
 const asJson = args.includes('--json');
+// SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001-C (FR-C1): OPT-IN breakage surfacing. Default OFF so
+// pre-push CI behavior is byte-unchanged; when --alert is passed and drift is found, surface ONE
+// schema-drift row to system_alerts via the shared fail-soft boundary (never changes the lint exit).
+const alertOnDrift = args.includes('--alert');
+// True when a --diff run could not resolve its git base and fell back to a full RUNTIME_DIRS sweep.
+// A full sweep re-surfaces the pre-existing phantom backlog (not NEW drift), so we must NOT fire a
+// critical schema-drift alert on it (adversarial-review finding) — only a genuine diff-scoped result is.
+let degradedFallback = false;
 
 function loadJson(p, fallback) {
   try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return fallback; }
@@ -78,6 +86,7 @@ function candidateFiles() {
     } catch (e) {
       // Fail-soft: no diff base resolvable → advisory full sweep instead of a false block.
       console.warn(`⚠️  diff base unavailable (${e.message.split('\n')[0]}) — falling back to --all (advisory)`);
+      degradedFallback = true; // mark the sweep degraded so the opt-in alert does not fire on the backlog
       return candidateFilesAll();
     }
   }
@@ -110,6 +119,21 @@ for (const file of files) {
   const violations = findViolations(refs, snapshot)
     .filter(v => !allowedTables.has(v.table));
   allViolations.push(...violations);
+}
+
+// FR-C1: opt-in breakage surfacing — emit ONE schema-drift system_alerts row ONLY for a genuine
+// diff-scoped NEW drift (mode==='diff' and the diff base resolved). A full sweep (--all) or a degraded
+// --diff fallback re-surfaces the pre-existing phantom backlog, NOT new drift, so it must not fire a
+// critical alert (adversarial-review finding). Fail-soft: the boundary never throws, so the lint exit
+// below is untouched regardless.
+if (alertOnDrift && allViolations.length > 0 && mode === 'diff' && !degradedFallback) {
+  const { createRequire } = await import('node:module');
+  const { emitBreakageAlert } = createRequire(import.meta.url)('../../lib/breakage/emit-breakage-alert.cjs');
+  await emitBreakageAlert('schema-drift', 'schema-reference-lint', {
+    message: `schema-reference-lint (diff): ${allViolations.length} NEW schema-reference violation(s)`,
+    sourceEntityId: allViolations[0] ? `${allViolations[0].file}:${allViolations[0].line}` : null,
+    metadata: { violation_count: allViolations.length, mode: 'diff', first_violation: allViolations[0] || null },
+  });
 }
 
 if (asJson) {
