@@ -5,6 +5,19 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { isBuildForbiddenSession } from '../../lib/claim-validity-gate.js';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+
+describe('shared predicate single-source (no writer/consumer asymmetry)', () => {
+  it('the gate re-export and the shared cjs module agree on all cases (one source of truth)', () => {
+    const shared = require('../../lib/claim/build-forbidden-session.cjs').isBuildForbiddenSession;
+    for (const md of [{ role: 'adam' }, { non_fleet: true }, { role: 'worker' }, {}, null, undefined, { non_fleet: 'true' }]) {
+      expect(isBuildForbiddenSession(md)).toBe(shared(md));
+    }
+    // and the gate exposes it (worker-checkin requires the same cjs module directly)
+    expect(typeof shared).toBe('function');
+  });
+});
 
 describe('isBuildForbiddenSession (FR-1 predicate)', () => {
   it('rejects an explicit non_fleet session', () => {
@@ -76,5 +89,47 @@ describe('claimVirtualSession (FR-2 self-only guard)', () => {
     rows.set('drain-1', { session_id: 'drain-1', is_virtual: true });
     const { error } = await claimVirtualSession('drain-1', 'SD-X-001');
     expect(error).toBeUndefined();
+  });
+});
+
+// FR-1 acquisition guard: a propose-only session must short-circuit to idle in
+// resolveCheckin BEFORE any tryClaim/self-claim tier (the witnessed a159d1ec gap).
+describe('resolveCheckin acquisition guard (FR-1, worker-checkin)', () => {
+  let resolveCheckin, tryClaim;
+  beforeEach(() => {
+    ({ resolveCheckin, tryClaim } = require('../../scripts/worker-checkin.cjs'));
+  });
+
+  // Minimal fake sb: claude_sessions returns the given metadata + no current sd_key,
+  // so resolveCheckin reaches the acquisition guard. rpc is a spy that MUST NOT be called.
+  function fakeSb(metadata) {
+    const rpc = vi.fn(() => Promise.resolve({ data: { success: true }, error: null }));
+    return {
+      rpc,
+      from() {
+        return {
+          select() { return this; },
+          eq() { return this; },
+          maybeSingle() { return Promise.resolve({ data: { metadata, sd_key: null }, error: null }); },
+          insert() { return Promise.resolve({ error: null }); },
+          update() { return { eq() { return Promise.resolve({ error: null }); } }; },
+        };
+      },
+    };
+  }
+
+  it('an Adam (role=adam) session returns action=idle and never calls claim_sd', async () => {
+    const sb = fakeSb({ role: 'adam' });
+    const res = await resolveCheckin(sb, 'adam-sess', { getCoordinator: async () => null });
+    expect(res.action).toBe('idle');
+    expect(res.message).toMatch(/propose-only/i);
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+
+  it('a non_fleet session returns action=idle and never calls claim_sd', async () => {
+    const sb = fakeSb({ non_fleet: true });
+    const res = await resolveCheckin(sb, 'nonfleet-sess', { getCoordinator: async () => null });
+    expect(res.action).toBe('idle');
+    expect(sb.rpc).not.toHaveBeenCalled();
   });
 });
