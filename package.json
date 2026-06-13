@@ -306,6 +306,8 @@
     "checkin": "node scripts/worker-checkin.cjs",
     "contract:scaffold": "node scripts/artifact-contract.js scaffold",
     "contract:check": "node scripts/artifact-contract.js check",
+    "payments:test-charge": "node scripts/payments/test-charge-harness.mjs",
+    "llc:track": "node scripts/legal/track-llc-formation.mjs",
     "stage-contracts:check": "node scripts/validate-stage-contract-connectivity.mjs",
     "fr:descope": "node scripts/record-fr-descope.js",
     "adam:register": "node scripts/adam-register.cjs",
