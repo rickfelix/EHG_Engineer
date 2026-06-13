@@ -1,0 +1,31 @@
+{
+  "executive_summary": "Child B of the BREAKAGE-DETECTOR orchestrator: the single fail-loud write-contract recordSystemAlert() that every breakage detector + the canary (children C/D) and the catch-rate harness (F) use to persist alerts to system_alerts. Consumes child A's frozen taxonomy contract (COMPLETED + merged): alert_type via toAlertType() stays in the LIVE system_alerts_alert_type_check set (circuit_breaker/threshold_breach/system_health/eva_error); the precise class id rides in metadata.break_class (the harness read-back key); severity from BREAK_CLASS_SPEC.defaultSeverity (or a legal caller override). Reuses the 14 existing system_alerts columns — NO alert_type CHECK widening (protects the 3 live EVA SECURITY-DEFINER functions). Fail-loud on write failure; dedup of duplicate OPEN alerts (+ optional dedup index) so a recurring breakage does not flood the table. ~130 LOC, EHG_Engineer only. Unit-tested with a fake supabase so tests never write to live system_alerts.",
+  "functional_requirements": [
+    { "id": "FR-1", "title": "lib/breakage/alert-writer.cjs recordSystemAlert()", "description": "CommonJS module exporting async recordSystemAlert(supabase, { breakClass, source, severity?, message?, metadata? }). Imports lib/coordinator/break-class-taxonomy.cjs. Builds a system_alerts row: alert_type = toAlertType(breakClass) (legal CHECK value); severity = severity || BREAK_CLASS_SPEC[breakClass].defaultSeverity (validated against LEGAL_SEVERITIES, default 'warning' if illegal); metadata = { ...callerMetadata, break_class: breakClass, source }. Reuses the 14 existing columns only. Validates breakClass is in BREAK_CLASSES (loud reject otherwise). Returns the inserted row id." },
+    { "id": "FR-2", "title": "Open-alert dedup + fail-loud", "description": "Before inserting, suppress a duplicate OPEN alert for the same (metadata.break_class + source) — query for an existing unresolved system_alerts row matching that pair; if found, skip the insert (return the existing id + deduped:true) rather than flooding. Fail-loud: any insert/query error throws (or logs loud + rethrows) — never a silent swallow. Optional: a dedup index recommendation (no non-index schema migration in scope)." },
+    { "id": "FR-3", "title": "Regression tests (fake supabase, no live writes)", "description": "tests/unit pins with a fake supabase client (no live DB): (a) recordSystemAlert builds alert_type via toAlertType() in the legal set, metadata.break_class = the class, severity in LEGAL_SEVERITIES; (b) an unknown breakClass is loud-rejected; (c) a duplicate OPEN alert (fake returns an existing row) is deduped (no second insert); (d) a write error throws fail-loud. Tests must NOT write to the real system_alerts." }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "description": "Import the contract from lib/coordinator/break-class-taxonomy.cjs (child A, merged) — toAlertType, BREAK_CLASSES, BREAK_CLASS_SPEC, LEGAL_SEVERITIES. Do NOT re-declare the class list / severity / encoding (single source of truth)." },
+    { "id": "TR-2", "description": "Reuse the 14 existing system_alerts columns; alert_type/severity must satisfy the LIVE CHECK constraints. NO alert_type CHECK widening; no non-index schema migration. Class id lives ONLY in metadata.break_class." },
+    { "id": "TR-3", "description": "Fail-loud (throw on write/query failure). EHG_Engineer only. Tests use a fake supabase — zero live system_alerts writes. No hand-rolled inserts elsewhere (call sites in child C use THIS writer)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "recordSystemAlert(supabase, {breakClass:'schema-drift', source:'x'})", "expected": "inserts row: alert_type=toAlertType('schema-drift') (legal), metadata.break_class='schema-drift', severity legal" },
+    { "id": "TS-2", "scenario": "recordSystemAlert with breakClass not in BREAK_CLASSES", "expected": "loud reject (throws) — never an illegal write" },
+    { "id": "TS-3", "scenario": "duplicate OPEN alert for same (break_class, source)", "expected": "deduped — no second insert, returns existing id + deduped:true" },
+    { "id": "TS-4", "scenario": "supabase insert returns an error", "expected": "fail-loud (throws/logs+rethrows), not silently swallowed" }
+  ],
+  "acceptance_criteria": [
+    "lib/breakage/alert-writer.cjs recordSystemAlert() exists, imports the child-A taxonomy, and writes legal system_alerts rows (alert_type via toAlertType, metadata.break_class, legal severity) reusing the 14 existing columns",
+    "Duplicate OPEN alerts are deduped; write failures fail loud",
+    "NO alert_type CHECK widening; no non-index schema migration",
+    "Tests pin the row shape + dedup + fail-loud with a fake supabase (no live system_alerts writes); children C/D/F can import this single writer"
+  ],
+  "risks": [
+    { "risk": "Tests pollute live system_alerts", "mitigation": "Unit tests use a fake supabase client; zero live writes (TR-3)" },
+    { "risk": "Illegal alert_type/severity trips the live CHECK", "mitigation": "alert_type via toAlertType() (child A guarantees legal); severity validated against LEGAL_SEVERITIES with a legal default" },
+    { "risk": "Dedup misses or over-suppresses", "mitigation": "Dedup keys on (metadata.break_class + source) for OPEN alerts only; resolved alerts re-alert; pinned by TS-3" }
+  ],
+  "metadata": { "estimated_loc": 130, "target_application": "EHG_Engineer", "parent_sd": "SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001", "child": "B", "depends_on": "A" }
+}
