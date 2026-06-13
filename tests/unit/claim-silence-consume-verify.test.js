@@ -7,7 +7,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 const require = createRequire(import.meta.url);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const { isWithinArmedSilenceWindow, SILENCE_HARD_CAP_MS } = require('../../lib/fleet/silence-cap.cjs');
 const NOW = 1_700_000_000_000;
@@ -128,5 +132,34 @@ describe('assertValidClaim — SEAM 1 orphan-release honors armed silence (FR-1)
     const res = await assertValidClaim(sb, SDKEY, { operation: 'handoff' });
     expect(released).toBe(true);
     expect(res.ownership).toBe('unclaimed');
+  });
+});
+
+// ── SEAM: claimGuard stale-release (adversarial-review finding #2) ──────────
+// claimGuard is a heavy multi-query acquisition path (db-clock, terminal detection); the silence
+// DECISION logic is isWithinArmedSilenceWindow (behaviorally pinned above). A source-contract pin
+// (same pattern as claim-validity-gate-sd-key-drift.test.js) guarantees the guard is wired: import,
+// SELECT column, a claimed_by_silenced_session HARD-STOP, and that it precedes the release reap.
+describe('claim-guard.mjs — stale-release honors armed silence (source-contract)', () => {
+  const cg = readFileSync(resolve(__dirname, '../..', 'lib/claim-guard.mjs'), 'utf8');
+  it('imports isWithinArmedSilenceWindow from the shared silence-cap module', () => {
+    expect(cg).toMatch(/import\s*\{\s*isWithinArmedSilenceWindow\s*\}\s*from\s*['"]\.\/fleet\/silence-cap\.cjs['"]/);
+  });
+  it('enriches the claim row with expected_silence_until', () => {
+    expect(cg).toMatch(/expected_silence_until/);
+    expect(cg).toMatch(/\.select\(['"][^'"]*heartbeat_at[^'"]*expected_silence_until[^'"]*['"]\)/);
+  });
+  it('HARD-STOPs with claimed_by_silenced_session when the holder is within an armed window', () => {
+    expect(cg).toMatch(/isWithinArmedSilenceWindow\(\s*claim\.expected_silence_until/);
+    expect(cg).toMatch(/claimed_by_silenced_session/);
+  });
+  it('the silence HARD-STOP precedes the stale-release PID path (never releases a silenced holder)', () => {
+    // Anchor on the stale-release path marker (release_sd appears on several paths; this pins the
+    // Case-2 stale-release path specifically). The silence HARD-STOP must come before it.
+    const silenceIdx = cg.indexOf('claimed_by_silenced_session');
+    const stalePathIdx = cg.indexOf('check PID liveness before releasing');
+    expect(silenceIdx).toBeGreaterThan(-1);
+    expect(stalePathIdx).toBeGreaterThan(-1);
+    expect(silenceIdx).toBeLessThan(stalePathIdx);
   });
 });
