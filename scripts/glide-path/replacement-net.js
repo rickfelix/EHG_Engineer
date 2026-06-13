@@ -1,7 +1,10 @@
+<<<<<<< HEAD
 // @wire-check-exempt: library module imported by scripts/glide-path/policy-engine.js (scoreVenture),
 // scripts/glide-path/add-income-dimension.mjs (npm: glide:add-income-dimension), and the unit tests
 // (glide-path-replacement-net / glide-path-income-integration). Reachable via the glide-path barrel
 // re-export chain, which the wire-check entry-point tracer does not follow.
+=======
+>>>>>>> origin/main
 /**
  * Replacement-net + income-contribution scoring — SD-LEO-INFRA-INCOME-OBJECTIVE-FUNCTION-001.
  *
