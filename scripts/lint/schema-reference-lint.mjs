@@ -36,6 +36,10 @@ const STALE_DAYS = 7;
 const args = process.argv.slice(2);
 const mode = args.includes('--all') ? 'all' : 'diff';
 const asJson = args.includes('--json');
+// SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001-C (FR-C1): OPT-IN breakage surfacing. Default OFF so
+// pre-push CI behavior is byte-unchanged; when --alert is passed and drift is found, surface ONE
+// schema-drift row to system_alerts via the shared fail-soft boundary (never changes the lint exit).
+const alertOnDrift = args.includes('--alert');
 
 function loadJson(p, fallback) {
   try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return fallback; }
@@ -110,6 +114,18 @@ for (const file of files) {
   const violations = findViolations(refs, snapshot)
     .filter(v => !allowedTables.has(v.table));
   allViolations.push(...violations);
+}
+
+// FR-C1: opt-in breakage surfacing — emit ONE schema-drift system_alerts row when drift is found and
+// --alert is passed. Fail-soft (the boundary never throws), so the lint result/exit below is untouched.
+if (alertOnDrift && allViolations.length > 0) {
+  const { createRequire } = await import('node:module');
+  const { emitBreakageAlert } = createRequire(import.meta.url)('../../lib/breakage/emit-breakage-alert.cjs');
+  await emitBreakageAlert('schema-drift', 'schema-reference-lint', {
+    message: `schema-reference-lint (${mode}): ${allViolations.length} schema-reference violation(s)`,
+    sourceEntityId: allViolations[0] ? `${allViolations[0].file}:${allViolations[0].line}` : null,
+    metadata: { violation_count: allViolations.length, mode, first_violation: allViolations[0] || null },
+  });
 }
 
 if (asJson) {
