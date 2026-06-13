@@ -4,13 +4,20 @@
  * boundary, and confirms the genuine-worker SoT is re-exported (single source of truth).
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   isFixtureSession,
   isFleetWorker,
   liveFleetWorkers,
   everClaimed,
   isGenuineCountableWorker,
+  isDispatchableFleetMember,
 } from '../../lib/fleet/session-predicates.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DASHBOARD = resolve(__dirname, '../../scripts/fleet-dashboard.cjs');
 
 describe('isFixtureSession — fixture/probe/test id detection', () => {
   it('flags the witnessed fixture ids (the four cited bugs)', () => {
@@ -77,5 +84,49 @@ describe('genuine-worker SoT re-export (single source of truth)', () => {
     // adam/non_fleet excluded by isFleetWorker even with a real id
     const adam = { session_id: 'aaaaaaaa-0000-4000-8000-000000000000', status: 'active', metadata: { role: 'adam' }, sd_key: 'SD-Z' };
     expect(isGenuineCountableWorker(adam, coordId)).toBe(false);
+  });
+});
+
+describe('isDispatchableFleetMember — idle/capacity panel role guard (no everClaimed)', () => {
+  const coordId = 'cccccccc-0000-4000-8000-000000000000';
+
+  it('counts a JUST-FINISHED worker (released: sd_key+claimed_at nulled) as a member', () => {
+    // This is the regression isGenuineCountableWorker would cause: everClaimed=false here.
+    const justFinished = { session_id: '65d08634-9ded-4c8f-96e8-2f4cfd991a2a', status: 'idle', metadata: {}, sd_key: null, claimed_at: null };
+    expect(isDispatchableFleetMember(justFinished, coordId)).toBe(true);
+    // contrast: the everClaimed-based predicate drops it
+    expect(isGenuineCountableWorker(justFinished, coordId)).toBe(false);
+  });
+
+  it('counts a freshly-spawned not-yet-claimed worker as a member', () => {
+    const fresh = { session_id: 'b887c648-e65a-447f-a46c-bb672f42b089', status: 'active', metadata: {}, sd_key: null };
+    expect(isDispatchableFleetMember(fresh, coordId)).toBe(true);
+  });
+
+  it('EXCLUDES the witnessed polluters: coordinator, adam, non_fleet, fixture', () => {
+    expect(isDispatchableFleetMember({ session_id: coordId, metadata: {} }, coordId)).toBe(false);
+    expect(isDispatchableFleetMember({ session_id: 'aaaaaaaa-0000-4000-8000-000000000000', metadata: { role: 'adam' } }, coordId)).toBe(false);
+    expect(isDispatchableFleetMember({ session_id: 'dddddddd-0000-4000-8000-000000000000', metadata: { non_fleet: true } }, coordId)).toBe(false);
+    expect(isDispatchableFleetMember({ session_id: 'qf-route-probe-A', metadata: {} }, coordId)).toBe(false);
+  });
+
+  it('fails toward "member" on garbage but excludes a null session', () => {
+    expect(isDispatchableFleetMember(null, coordId)).toBe(false);
+    expect(isDispatchableFleetMember(undefined, coordId)).toBe(false);
+    expect(isDispatchableFleetMember({}, coordId)).toBe(true);   // unknown role → counted (same as legacy)
+  });
+});
+
+describe('production wiring guard (catch idle-filter call-site deletion)', () => {
+  const dashSrc = readFileSync(DASHBOARD, 'utf8');
+
+  it('the dashboard imports + applies isDispatchableFleetMember on the idle filter', () => {
+    expect(dashSrc).toMatch(/from '\.\.\/lib\/fleet\/session-predicates\.mjs'|session-predicates\.mjs/);
+    expect(dashSrc).toContain('isDispatchableFleetMember(s, _dashCoordinatorId)');
+  });
+
+  it('the dashboard SELECTs metadata so the role guard can read it', () => {
+    // the allSessions query (idle source) must include metadata for the role/non_fleet checks
+    expect(dashSrc).toMatch(/select\([^)]*metadata/s);
   });
 });
