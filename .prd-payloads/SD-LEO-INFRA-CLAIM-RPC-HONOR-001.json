@@ -1,0 +1,105 @@
+{
+  "executive_summary": "claim_sd is the central claim arbiter (4 callers). Its non-force takeover branches — drift_recovery and auto_stale_takeover — reap a claim holder with zero expected_silence_until awareness, so a parked /loop worker heartbeat-silent >15min but inside its armed (<=30min) silence window gets reaped. cleanup_stale_sessions already exempts such a worker in SQL, gated on chairman_dashboard_config.metadata->>'sweep_respect_inflight_agent' (verified LIVE/ON), so today the sweep and the claim arbiter disagree — a split-brain. This SD migrates claim_sd to honor the SAME flag with the SAME hard-cap model (30 + claim_ttl = 45min), refusing both takeover branches against a holder inside a future silence window with a structured claimed_by_silenced_peer result. --force and expired / beyond-cap windows still take over; fail-open on any config error. Additive guards only; mutually exclusive (drift implies no session-side holder). Shipped only via the guarded prod-deploy path after a dedicated adversarial review of the SQL.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "auto_stale_takeover honors the armed silence window",
+      "description": "In claim_sd, before the auto_stale_takeover assignment (v_existing_session NOT NULL AND v_existing_hb_age >= 900 AND NOT v_takeover), add a guard that RETURNS {success:false, error:'claimed_by_silenced_peer'} when the respect-in-flight flag is ON, p_force_takeover is false, the existing session's expected_silence_until is in the future, and its heartbeat age is within the hard-cap ceiling (v_hardcap_minutes*60). Capture cs.expected_silence_until in the existing prior-session SELECT. Never silently double-claims a silenced holder.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A >900s-silent holder inside its armed window is REFUSED with claimed_by_silenced_peer and is NOT reaped (net-zero claiming_session_id)",
+        "An expired window still takes over; a window beyond the 45-min hard-cap still takes over (no forever-wedge)",
+        "--force always overrides the window"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "drift_recovery honors the armed silence window",
+      "description": "Before the drift_recovery assignment (v_drift_detected AND NOT v_takeover), add the parallel guard reading the SD-side claimant's expected_silence_until (captured alongside v_sd_claim_hb_age). It RETURNS claimed_by_silenced_peer when the flag is ON, not force, window future, and the claimant's heartbeat within the hard-cap. The guard is mutually exclusive with FR-1 (drift requires v_existing_session IS NULL) and fires AFTER the existing claimed_by_live_peer guard (which already covers hb<900).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A silenced SD-side claimant (>=900s, drifted session pointer) is REFUSED and not reaped",
+        "Once its window expires the drift takeover still proceeds",
+        "Self-resume (holder re-claims its own SD) is unaffected"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Parity with cleanup_stale_sessions + fail-open",
+      "description": "Read the SAME chairman_dashboard_config flag (sweep_respect_inflight_agent, default FALSE) and claim_ttl_minutes (default 15) cleanup_stale_sessions uses, with v_hardcap_minutes = 30 + GREATEST(COALESCE(ttl,15),0). Any config-read error leaves the flag OFF — identical to today's reap-on-stale behavior. No change to the force / live-foreign / terminal / sd_not_found / conflict / claim-switch / new-claim / audit paths. Idempotent CREATE OR REPLACE preserving SECURITY DEFINER and search_path.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Flag, COALESCE defaults, and hard-cap formula are identical in meaning to cleanup_stale_sessions",
+        "Fail-open: a config error degrades to current behavior (no exception aborts a claim)",
+        "Function signature, return shape, SECURITY DEFINER and search_path are unchanged"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Regression tests (deploy verification)",
+      "description": "tests/database/claim-sd-honor-silence-window.test.js — live-DB integration tests gated on HAS_REAL_DB with hermetic per-run fixtures, asserting: auto_stale refuses-within-window / takes-over-expired / takes-over-beyond-cap / force-overrides; drift refuses-within-window / takes-over-expired; self-resume unaffected. These exercise the deployed claim_sd and serve as the deploy gate.",
+      "priority": "high",
+      "acceptance_criteria": [
+        ">=6 scenario tests covering both branches + expiry + hard-cap + force + self-resume",
+        "Fixtures are hermetic (unique RUN_SUFFIX) and restored net-zero in afterAll",
+        "Tests pass against the deployed migration"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Guarded prod-deploy of a central RPC",
+      "description": "Migration 20260613_claim_sd_honor_armed_silence.sql ships via the guarded prod-deploy path (3 serial guards: @approved-by matches git user.email; --issue-token; --prod-deploy). MCP apply_migration is read-only. A wrong claim_sd = fleet-wide claim outage."
+    },
+    {
+      "id": "TR-2",
+      "title": "Mandated adversarial SQL review before deploy",
+      "description": "A multi-agent adversarial review of the SQL (forever-wedge/DoS, false-refusal/availability, guard ordering/mutual-exclusion, parity/SQL-correctness, under-protection) runs and its confirmed defects are fixed before the prod-deploy."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Silenced holder within window is refused (both branches)", "type": "integration", "expected": "claimed_by_silenced_peer; holder not reaped" },
+    { "id": "TS-2", "scenario": "Expired / beyond-cap window still reaps; --force overrides", "type": "integration", "expected": "takeover=true" },
+    { "id": "TS-3", "scenario": "Self-resume and flag-OFF fail-open unaffected", "type": "integration", "expected": "claim proceeds as today" }
+  ],
+  "acceptance_criteria": [
+    "claim_sd refuses to reap a holder inside an armed silence window on BOTH drift_recovery and auto_stale_takeover, gated on the same flag as cleanup_stale_sessions",
+    "--force and expired/beyond-cap windows still take over; fail-open preserves current behavior",
+    "Adversarial SQL review confirmed-defects fixed; regression tests pass post-deploy"
+  ],
+  "risks": [
+    { "risk": "A silenced-peer guard wrongly REFUSES a legitimate claim, wedging an SD unclaimable", "mitigation": "Hard-cap (45min) + expected_silence_until>NOW() both required; --force always escapes; mirrors the proven cleanup_stale_sessions model; adversarial review of the false-refusal lens.", "severity": "high" },
+    { "risk": "A claim is wedged open forever (DoS)", "mitigation": "Hard-cap ceiling reaps any holder whose heartbeat exceeds 30+TTL minutes regardless of expected_silence_until; verified by the beyond-cap test.", "severity": "high" },
+    { "risk": "Wrong migration to the central arbiter = fleet-wide claim outage", "mitigation": "Idempotent additive CREATE OR REPLACE, guarded prod-deploy (3 serial guards), mandated adversarial review, coordinator/chairman visibility, fail-open config read.", "severity": "high" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["lib/claim-guard.mjs", "lib/session-conflict-checker.mjs", "scripts/qf-start.js", "scripts/worker-checkin.cjs (all call claim_sd)"],
+    "dependencies": ["chairman_dashboard_config.metadata.sweep_respect_inflight_agent (LIVE/ON)", "claude_sessions.expected_silence_until column", "cleanup_stale_sessions silence model (parity source)"],
+    "data_contracts": ["claim_sd return shape unchanged; new error value 'claimed_by_silenced_peer' added"],
+    "runtime_config": ["sweep_respect_inflight_agent flag governs both the sweep and the arbiter (no split-brain)"],
+    "observability_rollout": ["claimed_by_silenced_peer refusals are visible in claim_sd return + caller logs; takeover audit (session_lifecycle_events) emits only on an actual takeover, unchanged"]
+  },
+  "system_architecture": {
+    "summary": "Two additive silence guards at the claim_sd choke point, mirroring cleanup_stale_sessions, gated on one shared config flag.",
+    "components": [
+      { "name": "database/migrations/20260613_claim_sd_honor_armed_silence.sql", "change": "NEW — CREATE OR REPLACE claim_sd with two claimed_by_silenced_peer guards + config read + 2 SELECT column captures" },
+      { "name": "tests/database/claim-sd-honor-silence-window.test.js", "change": "NEW — live-DB deploy-verification regression tests" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Mirror the cleanup_stale_sessions silence model into claim_sd's two takeover branches; review adversarially; deploy via the guarded path; verify with integration tests.",
+    "steps": [
+      "Capture expected_silence_until in the prior-session and SD-side-claimant SELECTs",
+      "Add the auto_stale and drift silence guards (flag-gated, hard-capped, force-respecting)",
+      "Adversarial SQL review; fix confirmed defects",
+      "Guarded prod-deploy + run the integration tests as the deploy gate"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Review database/migrations/20260613_claim_sd_honor_armed_silence.sql for the two claimed_by_silenced_peer guards + the chairman_dashboard_config read", "expected_outcome": "Both guards present, flag-gated, NOT p_force_takeover, hard-cap bounded" },
+    { "step_number": 2, "instruction": "After the guarded prod-deploy: npx vitest run tests/database/claim-sd-honor-silence-window.test.js", "expected_outcome": "All scenarios pass (refuse-within-window, takeover-expired/beyond-cap, force-overrides, self-resume)" },
+    { "step_number": 3, "instruction": "SELECT pg_get_functiondef('claim_sd'::regproc) and confirm claimed_by_silenced_peer appears twice", "expected_outcome": "Deployed function honors the silence window on both branches" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-CLAIM-RPC-HONOR-001" }
+}
