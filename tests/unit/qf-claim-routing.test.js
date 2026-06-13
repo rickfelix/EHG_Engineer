@@ -39,7 +39,7 @@ describe('qf-start.js claim CLI', () => {
     const src = read('scripts/qf-start.js');
     expect(src).toContain("rpc('claim_sd'");
     expect(src).toContain('claimed_by');
-    expect(src).toContain('process.exit(3)');
+    expect(src).toContain('safeExit(3)');
   });
 });
 
