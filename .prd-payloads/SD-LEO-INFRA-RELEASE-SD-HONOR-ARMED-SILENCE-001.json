@@ -1,0 +1,55 @@
+{
+  "executive_summary": "The 3rd/last armed-silence reaper seam. RCA-confirmed live recurrence: during a multi-tick /loop SD build, the worker process EXITS between ticks (re-invoked by ScheduleWakeup) so its PID looks dead and the heartbeat ages; the sd-next auto-release path (scripts/modules/sd-next/claim-analysis.js analyzeClaimRelationship -> autoReleaseStaleDeadClaim -> release_sd RPC) then classifies the PARKED-but-claimed SD as stale_dead (canAutoRelease=true) and reaps it, and the phase rolls back to draft/LEAD — so the next tick Gate-0 pre-commit blocks 'SD is in DRAFT status' until a manual service-client reconcile (the 790368e7 workaround run every tick this session). The claim_sd arbiter (CLAIM-RPC-HONOR-001) + the peer-release seams (CLAIM-SILENCE-CONSUME-VERIFY-001) already honor the armed-silence window via the ONE shared predicate lib/fleet/silence-cap.cjs isWithinArmedSilenceWindow(expectedSilenceUntil, nowMs); this SD extends the SAME predicate to the sd-next/release_sd path: a claim whose holder's claude_sessions.expected_silence_until is within the armed-silence window is PARKED (intentionally silent, coming back) — NOT dead — so it is NOT auto-released or phase-reset. The fail-safe is preserved: an expired / over-SILENCE_HARD_CAP_MS / absent window falls through to the normal stale_dead classification and is still reaped.",
+  "functional_requirements": [
+    { "id": "FR-1", "title": "Gate the sd-next auto-release on the shared armed-silence predicate", "description": "In scripts/modules/sd-next/claim-analysis.js analyzeClaimRelationship, add a guard (after the same_conversation check, BEFORE the status/heartbeat stale classification): if isWithinArmedSilenceWindow(claimingSession.expected_silence_until, Date.now()) return { relationship:'parked_armed_silence', canAutoRelease:false, displayLabel:'PARKED (armed silence)' }. REUSE the ONE shared predicate from lib/fleet/silence-cap.cjs — do NOT add a 4th copy. This makes a parked /loop worker (PID dead between ticks) NOT reapable while its armed-silence window is live.", "priority": "high", "acceptance_criteria": ["a claim whose holder's expected_silence_until is within the armed-silence window -> canAutoRelease=false (not reaped)", "the shared isWithinArmedSilenceWindow predicate is imported + reused (no 4th copy)", "the guard precedes the stale_inactive/stale_dead classification"] },
+    { "id": "FR-2", "title": "Carry expected_silence_until into the claim analysis", "description": "Ensure the activeSessions fetch that builds claimingSession includes claude_sessions.expected_silence_until (so analyzeClaimRelationship can read it). Add the column to the select if missing; null/absent is handled (predicate returns false -> normal classification).", "priority": "high", "acceptance_criteria": ["claimingSession includes expected_silence_until from the activeSessions source", "a missing/null expected_silence_until falls through to normal classification (fail-safe)"] },
+    { "id": "FR-3", "title": "Fail-safe: genuinely-stale claims still reap", "description": "An EXPIRED window (now >= expected_silence_until), an OVER-CAP window (delta > SILENCE_HARD_CAP_MS), or an ABSENT window must NOT block the reap — the predicate returns false and the existing stale_dead/stale_inactive path still auto-releases. No claim-stuck-forever. A foreign live worker (fresh heartbeat) is already other_active (not reaped). Pin this.", "priority": "high", "acceptance_criteria": ["expired window -> not within -> normal classification (stale_dead still reaps)", "over-SILENCE_HARD_CAP_MS window -> not within -> reaps", "absent window -> not within -> reaps; no regression to the other relationships"] },
+    { "id": "FR-4", "title": "sd-start re-affirm restores current_phase (belt-and-suspenders)", "description": "If a parked claim was nonetheless phase-reset (e.g. by a path this SD does not gate), sd-start re-affirm should restore current_phase for a self-held resumed claim, not just the claim — so a worker is never left at draft/LEAD with WIP. (Only if a cheap, safe restore exists; otherwise document the primary FR-1 fix is sufficient and this is covered by the worker's tick-reconcile.)", "priority": "medium", "acceptance_criteria": ["a self-held resumed claim is not left phase-reset when a prior phase existed", "the restore is bounded/safe (does not fabricate a phase)"] },
+    { "id": "FR-5", "title": "Regression test", "description": "Unit test for analyzeClaimRelationship: within-window expected_silence_until -> parked_armed_silence/canAutoRelease=false even when status=idle or PID dead; expired/over-cap/absent window -> the prior classification (stale_dead reaps) is unchanged; same_conversation + other_active unaffected.", "priority": "high", "acceptance_criteria": ["within-window -> not reaped (pinned)", "expired/over-cap/absent -> still reaps (pinned)", "no regression to same_conversation/other_active/stale_remote"] }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Reuse the ONE predicate", "description": "Import isWithinArmedSilenceWindow + SILENCE_HARD_CAP_MS from lib/fleet/silence-cap.cjs (CJS) into claim-analysis.js (ESM) via interop/createRequire — never duplicate. Parity with claim-guard.mjs / claim-validity-gate.js / coordinator-cold-recovery.cjs." },
+    { "id": "TR-2", "title": "Fail-safe direction", "description": "The guard only SUPPRESSES a reap when definitely within an armed-silence window; any ambiguity (null/expired/over-cap/parse-fail) falls through to the existing classification -> reaps. Never strand a genuinely-dead claim." },
+    { "id": "TR-3", "title": "Out of scope", "description": "Do NOT change the claim_sd arbiter (CLAIM-RPC-HONOR-001) or the peer-release/sweep seams (CLAIM-SILENCE-CONSUME-VERIFY-001); no schema change; no new predicate copy." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "parked worker within armed-silence window (PID dead) -> not reaped", "type": "unit", "expected": "canAutoRelease=false, relationship=parked_armed_silence" },
+    { "id": "TS-2", "scenario": "expired / over-cap / absent window -> stale_dead still reaps", "type": "unit", "expected": "canAutoRelease=true (unchanged)" },
+    { "id": "TS-3", "scenario": "same_conversation + other_active unaffected", "type": "unit", "expected": "canAutoRelease=false (yours / active)" }
+  ],
+  "acceptance_criteria": [
+    "The sd-next/release_sd auto-release path honors the armed-silence window via the shared isWithinArmedSilenceWindow predicate (no 4th copy): a parked-but-claimed multi-tick SD within its window is NOT reaped or phase-reset",
+    "The fail-safe holds: expired/over-cap/absent window + foreign live claims still reap (no claim-stuck-forever)",
+    "Regression test pins within-window-skip + outside-window/expired-still-reap; adversarial review of predicate parity + fail-safe + no-regression clean"
+  ],
+  "risks": [
+    { "risk": "Claim-stuck-forever if a genuinely-dead claim is mis-treated as parked", "mitigation": "isWithinArmedSilenceWindow returns false for null/expired/over-SILENCE_HARD_CAP_MS, so an abandoned claim (no fresh arming) reaps once the window lapses; the hard cap bounds the max suppression. TS-2 pins it.", "severity": "high" },
+    { "risk": "A 4th predicate copy drifts from the canonical one", "mitigation": "Import lib/fleet/silence-cap.cjs; adversarial review asserts byte-parity reuse.", "severity": "medium" },
+    { "risk": "expected_silence_until not present in claimingSession", "mitigation": "FR-2 adds it to the activeSessions select; absent -> false -> normal classification (fail-safe).", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["the /loop fleet worker (multi-tick builds no longer phase-reset between ticks)", "sd-next display/recommendation paths"],
+    "dependencies": ["lib/fleet/silence-cap.cjs (isWithinArmedSilenceWindow + SILENCE_HARD_CAP_MS)", "scripts/modules/sd-next/claim-analysis.js (analyzeClaimRelationship + autoReleaseStaleDeadClaim)", "the activeSessions source (claude_sessions.expected_silence_until)"],
+    "data_contracts": ["read claude_sessions.expected_silence_until; no writes beyond the existing release path; NO schema change"],
+    "runtime_config": ["SILENCE_HARD_CAP_MS bounds the max suppression window"],
+    "observability_rollout": ["a parked claim shows 'PARKED (armed silence)' instead of being reaped; unit pins"]
+  },
+  "system_architecture": {
+    "summary": "A single guard in the sd-next reap-decision function (analyzeClaimRelationship) using the shared armed-silence predicate, plus carrying expected_silence_until into the claim analysis, with a strict fail-safe direction.",
+    "components": [
+      { "name": "scripts/modules/sd-next/claim-analysis.js", "change": "MODIFY: import + apply isWithinArmedSilenceWindow guard in analyzeClaimRelationship (FR-1)" },
+      { "name": "the activeSessions fetch (sd-next)", "change": "MODIFY: add expected_silence_until to the select (FR-2)" },
+      { "name": "tests/unit/...-armed-silence.test.js", "change": "NEW: FR-5 regression pins" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Reuse the ONE shared armed-silence predicate; add a parked-armed-silence guard before the stale classification in the sd-next reap decision; carry expected_silence_until into claimingSession; keep a strict fail-safe (only suppress within a live, bounded window); pin with unit tests; adversarially review parity + fail-safe before merge.",
+    "steps": ["import + guard in analyzeClaimRelationship", "add expected_silence_until to the activeSessions select", "unit tests (within-skip / expired-reap)", "PRD->adversarial review->PR->full chain->LFA"]
+  },
+  "smoke_test_steps": [
+    { "instruction": "npx vitest run the new release_sd/sd-next armed-silence regression test", "expected_outcome": "the auto-release path SKIPS reaping a parked-but-claimed SD whose claim is within its armed-silence window (isWithinArmedSilenceWindow) and does NOT phase-reset it; outside-window/expired/over-cap claims still reap" },
+    { "instruction": "Simulate a parked multi-tick SD (claiming_session_id=self, is_working_on=true, expected_silence_until in the future) and run the sd-next/release_sd reap path", "expected_outcome": "the SD is NOT released and current_phase is NOT reset to draft/LEAD (no Gate-0 DRAFT block next tick); the worker commits WIP without a manual service-client reconcile" },
+    { "instruction": "Confirm the SHARED isWithinArmedSilenceWindow predicate is REUSED (not a 4th copy) and the hard cap still reaps a genuinely-stale claim", "expected_outcome": "ONE predicate imported (byte-parity with the claim_sd + peer-release seams); SILENCE_HARD_CAP_MS bounds the window; expired/forced/over-cap claims still reap (fail-safe)" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-RELEASE-SD-HONOR-ARMED-SILENCE-001" }
+}
