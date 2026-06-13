@@ -40,6 +40,37 @@ describe('QF-20260525-211 (B1): CLAIM_FIX terminal-status guard', () => {
   });
 });
 
+describe('SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: CLAIM_FIX fixture-session guard (bug fd018627)', () => {
+  it('imports the SHARED isFixtureSession predicate (SoT, not a local re-impl)', () => {
+    expect(src).toMatch(/await import\(['"]\.\.\/lib\/fleet\/session-predicates\.mjs['"]\)/);
+    expect(src).toContain('isFixtureSession');
+  });
+
+  it('guards the broken-claim loop on isFixtureSession(s.session_id)', () => {
+    expect(src).toMatch(/if\s*\(\s*isFixtureSession\(s\.session_id\)\s*\)/);
+  });
+
+  it('bilaterally releases the fixture session — clears sd_key with a race guard', () => {
+    const idx = src.indexOf("released_reason: 'SWEEP_FIXTURE_SESSION_CLAIM_FIX'");
+    expect(idx).toBeGreaterThan(0);
+    const block = src.slice(idx - 400, idx + 600);
+    expect(block).toMatch(/sd_key:\s*null/);
+    expect(block).toMatch(/\.eq\(['"]sd_key['"],\s*s\.sd_key\)/); // race guard on the session clear
+  });
+
+  it('clears the SD claim ONLY if it still points at the fixture (race guard), then continues', () => {
+    const idx = src.indexOf('SWEEP_FIXTURE_SESSION_CLAIM_FIX');
+    const block = src.slice(idx, idx + 800);
+    expect(block).toMatch(/claiming_session_id:\s*null/);
+    expect(block).toMatch(/\.eq\(['"]claiming_session_id['"],\s*s\.session_id\)/); // race guard on the SD clear
+    expect(block).toMatch(/continue;/);
+  });
+
+  it('the fixture guard PRECEDES the terminal-status guard (covers all downstream branches)', () => {
+    expect(src.indexOf('SWEEP_FIXTURE_SESSION_CLAIM_FIX')).toBeLessThan(src.indexOf('SWEEP_SD_TERMINAL_CLAIM_FIX'));
+  });
+});
+
 describe('QF-20260525-211 (B2): workingOnCompleted covers cancelled', () => {
   it('workingOnCompleted filter matches completed OR cancelled', () => {
     const idx = src.indexOf('const workingOnCompleted');

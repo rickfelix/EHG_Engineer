@@ -1521,6 +1521,8 @@ async function main() {
   }
 
   // Also check: sessions with sd_id but SD's claiming_session_id doesn't match (broken claim)
+  // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: shared fixture-session predicate (.cjs → .mjs SoT).
+  const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
   for (const s of classified.filter(c => c.status === 'ACTIVE' && c.sd_key)) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
@@ -1529,6 +1531,38 @@ async function main() {
       .single();
 
     if (!sd) continue;
+
+    // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug fd018627): a FIXTURE/test session id (e.g.
+    // test-switch-claim-guards-session, replayed from claim_history) must NEVER drive a CLAIM_FIX
+    // re-assert onto a real SD. Bilaterally release the fixture's stale sd_key; if the SD itself
+    // still points at the fixture, clear that too so it becomes claimable. isFixtureSession FAILS
+    // TOWARD "not a fixture" (UUIDs + the legit session_<hex>_<tty>_<pid> shape return false), so a
+    // real worker is never wrongly released. Guards ALL downstream branches (terminal / eligibility
+    // / re-assert) in one place.
+    if (isFixtureSession(s.session_id)) {
+      await supabase
+        .from('claude_sessions')
+        .update({
+          sd_key: null,
+          status: s.status === 'ACTIVE' ? 'idle' : 'released',
+          released_at: now.toISOString(),
+          released_reason: 'SWEEP_FIXTURE_SESSION_CLAIM_FIX',
+          worktree_path: null,
+          worktree_branch: null,
+          current_branch: null,
+        })
+        .eq('session_id', s.session_id)
+        .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
+      if (sd.claiming_session_id === s.session_id) {
+        await supabase
+          .from('strategic_directives_v2')
+          .update({ claiming_session_id: null, is_working_on: false })
+          .eq('sd_key', s.sd_key)
+          .eq('claiming_session_id', s.session_id); // race guard: only clear if still the fixture
+      }
+      actions.push('CLAIM_FIX: released FIXTURE session ' + s.session_id.substring(0, 20) + ' (never re-assert onto ' + s.sd_key + ')');
+      continue;
+    }
 
     // QF-20260525-211 (B1): never re-assert a claim on a terminal SD. FIX #2 above cleared
     // claiming_session_id on completed/cancelled SDs; without this guard CLAIM_FIX would
