@@ -26,6 +26,10 @@
 -- additive guards only (no change to the force / live-foreign / terminal / conflict / claim paths).
 -- A wrong claim_sd = fleet-wide claim outage — this ships only via the guarded prod-deploy path with
 -- a dedicated adversarial review of the SQL and coordinator/chairman visibility.
+--
+-- @approved-by: codestreetlabs@gmail.com
+-- Chairman decision 3b8d0499 approved (GO routed via coordinator b887c648, 2026-06-13). Adversarial
+-- SQL review wf_987d8106: 4 lenses clean, 1 out-of-scope sibling finding filed to harness_backlog.
 
 CREATE OR REPLACE FUNCTION public.claim_sd(p_sd_id text, p_session_id text, p_track text, p_force_takeover boolean DEFAULT false)
  RETURNS jsonb
