@@ -29,8 +29,9 @@ describe('claim-validity-gate.js imports detectSdKeyDrift from canonical re-expo
 
 describe('owner SELECT projection includes sd_key column (FR-2 input)', () => {
   it('SELECT projection lists status, is_alive, AND sd_key', () => {
-    // Pin the column list literal — sd_key is the new addition vs prior projection.
-    expect(src).toMatch(/\.select\(['"]status, is_alive, sd_key['"]\)/);
+    // Pin the column list — sd_key is the FR-2 input. SD-LEO-INFRA-CLAIM-SILENCE-CONSUME-VERIFY-001
+    // appended expected_silence_until (SEAM 1), so allow trailing columns after sd_key.
+    expect(src).toMatch(/\.select\(['"]status, is_alive, sd_key[^'"]*['"]\)/);
   });
 });
 
@@ -45,8 +46,12 @@ describe('FR-2 fallthrough: sd_key drift triggers auto-release alongside ownerIs
     expect(src).toMatch(/ownerHasSdKeyDrifted\s*=\s*sdKeyDriftVerdict\s*===\s*['"]drift['"]/);
   });
 
-  it('auto-release condition includes both ownerIsDead AND ownerHasSdKeyDrifted (logical OR)', () => {
-    expect(src).toMatch(/if\s*\(\s*ownerIsDead\s*\|\|\s*ownerHasSdKeyDrifted\s*\)/);
+  it('auto-release condition includes both ownerIsDead AND ownerHasSdKeyDrifted', () => {
+    // SD-LEO-INFRA-CLAIM-SILENCE-CONSUME-VERIFY-001 (SEAM 1) gated the dead-owner arm on
+    // !ownerIsSilenced (drift still releases unconditionally). Both conditions still appear.
+    expect(src).toMatch(/if\s*\(\s*ownerHasSdKeyDrifted\s*\|\|\s*\(\s*ownerIsDead\s*&&\s*!ownerIsSilenced\s*\)\s*\)/);
+    expect(src).toMatch(/ownerIsDead/);
+    expect(src).toMatch(/ownerHasSdKeyDrifted/);
   });
 
   it('release reason is "sd_key_drift" when drift triggers (NOT stale/released/missing)', () => {

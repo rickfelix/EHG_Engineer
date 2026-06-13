@@ -1,0 +1,61 @@
+{
+  "executive_summary": "P0 claim-loss-in-armed-silence-window — CONSUME side. The WRITE side shipped in SD-LEO-INFRA-PARK-VISIBILITY-LOOP-STATE-001 (parked /loop workers durably arm claude_sessions.expected_silence_until, capped at SILENCE_HARD_CAP_MIN=30 via lib/fleet/silence-cap.cjs). Source feedback 1adab229: SD-TRIGGER-ESTATE-AUDIT-001's claim was cleared at 20:38:55Z DURING an armed silence window (armed ~20:31:44, until ~20:51:44, within cap), OFF a */5 sweep boundary — a live peer-release path released the claim WITHOUT consulting expected_silence_until. A live trace of every production claim-release/CLAIM_FIX/deconfliction/peer-checkin-self-heal seam found two seams that do NOT consult expected_silence_until (verified: 0 references in either file): (SEAM 1, PRIMARY) lib/claim-validity-gate.js assertValidClaim orphan-auto-release, and (SEAM 2) scripts/coordinator-cold-recovery.cjs isSessionStale. Both can reap a LIVE claim whose holder is legitimately silent (heartbeat naturally lapsed within an armed, within-cap window). This is a writer<=reader parity gap: the WRITE side arms the window but these two READERS ignore it. Fix: make both seams treat a future-dated, within-cap silence window as live (skip release / report not-stale), reusing the SAME shared SILENCE_HARD_CAP_MS that the sweep already honors. The already-correct paths (sweep DEAD path via evaluateSourceSideSignals, detectors.detectIdleNoClaim, self-release paths) are NOT touched (regression-pin only).",
+  "functional_requirements": [
+    { "id": "FR-1", "title": "claim-validity-gate orphan-release honors the armed silence window (SEAM 1, PRIMARY)", "description": "In lib/claim-validity-gate.js assertValidClaim, BEFORE the orphan-auto-release branch fires for a DIFFERENT (foreign) holder, fetch the holder's expected_silence_until (extend the existing claude_sessions SELECT). If now < expected_silence_until AND the window is within SILENCE_HARD_CAP_MS (imported from lib/fleet/silence-cap.cjs), treat the holder as LIVE: do NOT clear claiming_session_id and throw the existing foreign_claim (yield) path — exactly as the sweep treats ALIVE_SOURCE_SIDE. ownerIsDead computation (owner.status in stale|released || owner.is_alive===false) and the sd_key-drift release path remain UNCHANGED (drift is a genuine release signal, orthogonal to silence). Fail-open: if the silence field is absent/unreadable, behavior is exactly today's (release as before) — the guard only ADDS protection, never removes a legitimate release." },
+    { "id": "FR-2", "title": "coordinator-cold-recovery isSessionStale honors the armed silence window (SEAM 2)", "description": "In scripts/coordinator-cold-recovery.cjs, isSessionStale must consult expected_silence_until (add it to the claude_sessions SELECT). Return NOT-stale when now < expected_silence_until AND the window is within SILENCE_HARD_CAP_MS, so a cold-start coordinator never reaps + RESUME-redispatches a claim whose holder is inside an armed, within-cap silence window. Existing status-in-(released|stale|dead|terminated) and heartbeat-age TTL logic is otherwise unchanged." },
+    { "id": "FR-3", "title": "Regression tests per seam + cross-reader parity pin", "description": "Add tests/unit pins: (a) assertValidClaim with a foreign holder whose expected_silence_until is future and within-cap throws foreign_claim and does NOT clear claiming_session_id; with an EXPIRED or beyond-cap silence window it releases as before (no regression of legitimate orphan-release); (b) coordinator-cold-recovery isSessionStale returns false for a within-cap silenced holder, true for an expired/beyond-cap one; (c) a parity test asserting all three readers (sweep, claim-validity-gate, cold-recovery) gate on the SAME shared SILENCE_HARD_CAP_MS so writer<=reader parity holds." }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "description": "Reuse lib/fleet/silence-cap.cjs SILENCE_HARD_CAP_MS as the single source of the cap — never hardcode 30min in either seam (writer<=reader parity; same lesson as SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001)." },
+    { "id": "TR-2", "description": "Both fixes are ADDITIVE protection and fail-open: any error reading expected_silence_until preserves today's release behavior. No schema change. EHG_Engineer lib/scripts only." },
+    { "id": "TR-3", "description": "Do NOT alter sd_key-drift release, the sweep DEAD path, detectors.detectIdleNoClaim, or any self-release/CAS-pinned path — those already behave correctly and are regression-pinned only." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "assertValidClaim: foreign holder, expected_silence_until future and within-cap", "expected": "throws foreign_claim; claiming_session_id NOT cleared" },
+    { "id": "TS-2", "scenario": "assertValidClaim: foreign holder, expected_silence_until expired OR beyond-cap, owner stale", "expected": "orphan-release proceeds as today (no regression)" },
+    { "id": "TS-3", "scenario": "assertValidClaim: sd_key drift detected", "expected": "release proceeds (drift unchanged, orthogonal to silence)" },
+    { "id": "TS-4", "scenario": "cold-recovery isSessionStale: within-cap silenced holder", "expected": "returns NOT-stale (not reaped/redispatched)" },
+    { "id": "TS-5", "scenario": "cold-recovery isSessionStale: expired silence + old heartbeat", "expected": "returns stale (today's behavior)" },
+    { "id": "TS-6", "scenario": "parity: all three readers use SILENCE_HARD_CAP_MS", "expected": "same cap constant; no per-seam hardcode" }
+  ],
+  "acceptance_criteria": [
+    "A live, within-cap silenced foreign holder is NOT released by assertValidClaim (SEAM 1 closed)",
+    "A within-cap silenced holder is NOT reaped/redispatched by coordinator-cold-recovery (SEAM 2 closed)",
+    "Expired/beyond-cap windows and sd_key-drift still release as before (no regression of legitimate orphan-release)",
+    "All three readers (sweep, claim-validity-gate, cold-recovery) gate on the shared SILENCE_HARD_CAP_MS",
+    "Tests pin both seams + parity; fail-open verified"
+  ],
+  "risks": [
+    { "risk": "Over-protecting: a genuinely dead holder that happened to have a stale future silence stamp is never released", "mitigation": "Cap-bounded: only windows within SILENCE_HARD_CAP_MS (30min) are honored; beyond-cap or expired windows release as today. Same bound the sweep already uses." },
+    { "risk": "Reading expected_silence_until adds a column to a hot SELECT", "mitigation": "Single additional column on an already-fetched row; negligible." },
+    { "risk": "Diverging cap constants across readers", "mitigation": "TR-1 mandates importing SILENCE_HARD_CAP_MS; FR-3 parity test pins it." }
+  ],
+  "integration_operationalization": {
+    "consumers": ["lib/claim-validity-gate.js assertValidClaim (every sd-start/handoff claim check)", "scripts/coordinator-cold-recovery.cjs (cold-start coordinator orphan recovery)"],
+    "dependencies": ["lib/fleet/silence-cap.cjs SILENCE_HARD_CAP_MS (existing)", "claude_sessions.expected_silence_until (written by park-worker.cjs, existing)"],
+    "data_contracts": ["No schema change; reads an existing column"],
+    "runtime_config": ["None"],
+    "observability_rollout": "Effective on merge: a parked worker's claim survives its armed silence window across ALL peer-release seams, not just the sweep. Observable as zero off-sweep-boundary claim releases during armed within-cap windows."
+  },
+  "system_architecture": {
+    "components": [
+      { "name": "lib/claim-validity-gate.js", "role": "SEAM 1: consult holder expected_silence_until before orphan-release" },
+      { "name": "scripts/coordinator-cold-recovery.cjs", "role": "SEAM 2: isSessionStale consults expected_silence_until" },
+      { "name": "lib/fleet/silence-cap.cjs", "role": "shared SILENCE_HARD_CAP_MS (single source of the cap)" }
+    ]
+  },
+  "implementation_approach": {
+    "steps": [
+      "FR-1: extend claude_sessions SELECT in assertValidClaim to include expected_silence_until; add a within-cap future-window guard before the orphan-release branch; throw foreign_claim instead of clearing the claim.",
+      "FR-2: extend isSessionStale's SELECT + logic in coordinator-cold-recovery.cjs to honor the within-cap window.",
+      "FR-3: unit tests per seam (held vs released cases) + a parity test on SILENCE_HARD_CAP_MS.",
+      "Adversarial review (claim-mutation blast radius) before merge.",
+      "Single PR <=120 LOC."
+    ]
+  },
+  "smoke_test_steps": [
+    { "instruction": "npx vitest run the new claim-validity-gate + cold-recovery silence pins", "expected_outcome": "All pins pass: within-cap silenced holder HELD; expired/beyond-cap/drift RELEASED as before" },
+    { "instruction": "grep -c expected_silence_until lib/claim-validity-gate.js scripts/coordinator-cold-recovery.cjs", "expected_outcome": ">0 in both (gap closed)" }
+  ],
+  "metadata": { "estimated_loc": 110, "target_application": "EHG_Engineer" }
+}
