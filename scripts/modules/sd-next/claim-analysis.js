@@ -255,9 +255,10 @@ export function checkEnrichmentSignal({ sd, activeSessions, recencyMinutes } = {
  *
  * @param {Object} supabase - Supabase client
  * @param {string} sessionId - The claiming session to release
+ * @param {string} [reason='auto_release_dead_pid'] - Audit reason recorded on release_sd / the fallback update
  * @returns {Promise<boolean>} true if released successfully
  */
-export async function autoReleaseStaleDeadClaim(supabase, sessionId) {
+export async function autoReleaseStaleDeadClaim(supabase, sessionId, reason = 'auto_release_dead_pid') {
   // SD-LEO-INFRA-RELEASE-SD-HONOR-ARMED-SILENCE-001 (the AUTHORITATIVE gate — DB truth lives here, not in
   // the pure display function): a parked /loop worker exits between ticks (PID dead) but is coming back
   // while its armed-silence window is live. Honor it via the ONE shared predicate (parity with claim_sd +
@@ -277,7 +278,7 @@ export async function autoReleaseStaleDeadClaim(supabase, sessionId) {
 
   const { error: rpcError } = await supabase.rpc('release_sd', {
     p_session_id: sessionId,
-    p_reason: 'auto_release_dead_pid'
+    p_reason: reason
   });
 
   if (!rpcError) return true;
@@ -288,7 +289,7 @@ export async function autoReleaseStaleDeadClaim(supabase, sessionId) {
     .update({
       sd_key: null,
       released_at: new Date().toISOString(),
-      released_reason: 'auto_release_dead_pid',
+      released_reason: reason,
       status: 'idle'
     })
     .eq('session_id', sessionId);

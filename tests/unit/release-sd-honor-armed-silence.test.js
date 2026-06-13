@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import { analyzeClaimRelationship, autoReleaseStaleDeadClaim } from '../../scripts/modules/sd-next/claim-analysis.js';
+import { getNextReadyChild } from '../../scripts/modules/handoff/child-sd-selector.js';
 const require = createRequire(import.meta.url);
 const { SILENCE_HARD_CAP_MS } = require('../../lib/fleet/silence-cap.cjs');
 
@@ -77,5 +78,58 @@ describe('autoReleaseStaleDeadClaim — authoritative DB-backed armed-silence ga
     const released = await autoReleaseStaleDeadClaim(sb, 'sess-dead');
     expect(released).toBe(true);
     expect(sb.calls.rpc.find((c) => c.name === 'release_sd')).toBeDefined();
+  });
+});
+
+// Child-path coverage: the orchestrator child selector reaps a stale CHILD claim (>15min heartbeat). It must
+// route through the SAME gated helper so a parked /loop worker on a child SD (armed-silence, PID dead between
+// ticks) is NOT reaped/phase-reset — closing the sibling seam the adversarial review surfaced.
+function childSelectorSb({ claimerHbAge = 1000, sess = { expected_silence_until: null }, child } = {}) {
+  const calls = { rpc: [] };
+  const candidate = child || { id: 'child-1', sd_key: 'SD-CHILD-001', status: 'active', metadata: {}, governance_metadata: {}, created_at: '2026-06-13T00:00:00Z', claiming_session_id: 'sess-x', sd_type: 'feature' };
+  const sb = {
+    calls,
+    from(table) {
+      const b = { _table: table, _select: null };
+      b.select = (cols) => { b._select = cols; return b; };
+      b.eq = () => b;
+      b.neq = () => b;
+      b.in = () => b;
+      b.maybeSingle = () => {
+        if (table === 'v_active_sessions') return Promise.resolve({ data: { session_id: candidate.claiming_session_id, heartbeat_age_seconds: claimerHbAge, computed_status: 'stale' }, error: null });
+        if (table === 'claude_sessions') return Promise.resolve({ data: sess, error: null });
+        return Promise.resolve({ data: null, error: null });
+      };
+      // thenable: distinguish the two strategic_directives_v2 queries by their select columns
+      b.then = (resolve) => {
+        if (table === 'strategic_directives_v2') {
+          if (b._select && b._select.includes('claiming_session_id')) return resolve({ data: [candidate], error: null });
+          return resolve({ data: [{ id: candidate.id, status: candidate.status }], error: null }); // allChildren
+        }
+        return resolve({ data: null, error: null });
+      };
+      return b;
+    },
+    rpc(name, args) { calls.rpc.push({ name, args }); return Promise.resolve({ error: null }); },
+  };
+  return sb;
+}
+
+describe('getNextReadyChild — child-path armed-silence (sibling seam)', () => {
+  it('a stale CHILD claim within the armed-silence window is NOT reaped (no release_sd) and the child is NOT handed out', async () => {
+    const sb = childSelectorSb({ claimerHbAge: 1000, sess: { expected_silence_until: iso(5 * 60 * 1000) } });
+    const res = await getNextReadyChild(sb, 'parent-1');
+    expect(res.sd).toBeNull(); // parked child skipped -> falls through to "no ready children"
+    expect(sb.calls.rpc.find((c) => c.name === 'release_sd')).toBeUndefined();
+  });
+
+  it('FAIL-SAFE: a stale CHILD claim with an expired/absent window IS reaped (release_sd, child-specific reason) and the child is returned', async () => {
+    const sb = childSelectorSb({ claimerHbAge: 1000, sess: { expected_silence_until: null } });
+    const res = await getNextReadyChild(sb, 'parent-1');
+    expect(res.sd).not.toBeNull();
+    expect(res.sd.sd_key).toBe('SD-CHILD-001');
+    const rel = sb.calls.rpc.find((c) => c.name === 'release_sd');
+    expect(rel).toBeDefined();
+    expect(rel.args.p_reason).toBe('stale_child_auto_release'); // audit reason preserved through the gated helper
   });
 });
