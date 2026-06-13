@@ -382,6 +382,7 @@
     "prepark-wip": "node scripts/prepark-wip.cjs",
     "protocol:pub-audit": "node scripts/protocol-publication-audit.cjs",
     "sre:row-growth": "node scripts/row-growth-snapshot.cjs",
+    "breakage:canary": "node scripts/breakage/active-breakage-canary.mjs",
     "ci:red-merge-detect": "node scripts/ci/red-merge-detector.mjs",
     "fleet:freeze-drill": "node scripts/freeze-drill.mjs",
     "sre:scripts-reachability": "node scripts/scripts-reachability-gauge.mjs",
