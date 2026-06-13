@@ -1,0 +1,58 @@
+{
+  "executive_summary": "Closes the operator-absence gap (roadmap X3/X4): what happens to in-flight work when the one human is unavailable or swamped. Machine-continuity (orphan-adoption, auto-push-WIP, reaper-guard, DR rehearsal, decision-queue) is ~80% shipped; the remaining gaps are governance + existential. This SD delivers: (1) a documented chairman-away gate policy for the live-true KILL/PROMOTION gates (safe standing default where not-acting is strictly safe, else hold-and-surface; NO auto-override — no-auto-override doctrine preserved; DRAFT for chairman ratification); (2) a one-page only-the-chairman-can dependency map including harness-level incident diagnosis (G6); (3) an Anthropic-cap/model-availability contingency (G4) that reuses the live llm_canary_state substrate to detect degradation + a documented fallback ladder (single-session → model-fallback → pause-and-surface/degraded-safe-mode); (4) a launch-spike rehearsal against seeded load + one breakage with a PRE-REGISTERED chairman touch-count ceiling and a degraded-safe-mode (freeze new work / hold intake / surface). It explicitly does NOT delegate chairman authority, build a support pipeline, or build a standby operator.",
+  "functional_requirements": [
+    { "id": "FR-1", "title": "Chairman-away gate policy (DRAFT for ratification)", "description": "docs/03_protocols_and_standards/chairman-away-gate-policy.md: per live-true KILL/PROMOTION gate (7 venture gates from stage-gates.js + LEAD-FINAL), a SAFE standing default where not-acting is strictly safe (KILL gates: no auto-kill, venture waits) else HOLD-AND-SURFACE (PROMOTION + pre-launch KILL + chairman-required SD-ship). Default-to-hold rule; degraded-safe-mode forces all gates to hold; NO chairman-authority delegation. Notes the 11-vs-7-vs-5 gate-count ambiguity (prd-ambiguous 9d4d8351).", "priority": "high", "acceptance_criteria": ["every live KILL/PROMOTION gate has a documented away-behavior", "no gate auto-overrides the chairman (no-auto-override preserved)", "ambiguity in the gate inventory resolves to hold"] },
+    { "id": "FR-2", "title": "Only-the-chairman-can dependency map", "description": "docs/03_protocols_and_standards/only-the-chairman-can.md: the bounded non-delegable acts (hard-kill, scale promotion, venture-pick, gate-binding flip, fleet-migration approval, WEDGED-HARNESS diagnosis G6, spend/legal, doctrine-override) + their away-behavior. Frames the goal as survivable absence, not autonomous authority.", "priority": "high", "acceptance_criteria": ["the map explicitly includes harness-level incident diagnosis (G6)", "each item has an away-behavior", "nothing on the list is auto-resolved by an agent"] },
+    { "id": "FR-3", "title": "Anthropic-cap contingency: detector + fallback ladder", "description": "scripts/continuity/llm-degradation-detector.mjs (PURE source-agnostic evaluateDegradationRung → rung NORMAL/SINGLE_SESSION/MODEL_FALLBACK/PAUSE_AND_SURFACE; detectFromDb read-only, fail-open, writes nothing) + docs/.../anthropic-cap-contingency.md (documented ladder: single-session → model-fallback[non-Anthropic] → pause-and-surface). ADDRESSES G4: ships the evaluator + documented ladder + rehearsal; the LIVE cloud-health feeder (stamps error_rate/latency/liveness from real Anthropic 429/5xx outcomes) is a NAMED DEFERRED follow-up — the live llm_canary_state is the dormant local-rollout canary, so detectFromDb reads NORMAL in prod today (disclosed in the doc). status='rolled_back' is NOT treated as degradation (inverted on that substrate); consecutive_failures only counts while status='rolling' (no stale-singleton false-pause).", "priority": "high", "acceptance_criteria": ["detector maps signals to the correct rung with explicit precedence", "fail-direction: all-unknown/never-probed → NORMAL (no false freeze); only definite signals from an active probe degrade", "pause-and-surface is the documented floor (never silent-fail)", "the local-rollout-canary repurpose limitation + the deferred live feeder are explicitly disclosed (no G4-closure overclaim)"] },
+    { "id": "FR-4", "title": "Launch-spike rehearsal + runbook", "description": "scripts/continuity/spike-rehearsal.mjs (pure runRehearsal: seeded intake + 1 breakage → asserts PAUSE_AND_SURFACE/degraded-safe-mode freeze+hold+surface within a PRE-REGISTERED chairman touch-count ceiling; seeded fixtures, dry-run, idempotent, no support-pipeline dep [G9], ceiling is an INPUT [G15]) + docs/.../spike-rehearsal-runbook.md + npm continuity:spike-rehearsal.", "priority": "high", "acceptance_criteria": ["rehearsal reaches degraded-safe-mode + freezes work + holds all intake", "chairman touches <= the pre-registered ceiling AND do not scale with spike size", "dry-run-able + idempotent + no serial dependency on the deferred support pipeline"] },
+    { "id": "FR-5", "title": "Tests", "description": "tests/unit/llm-degradation-detector.test.js (12) + tests/unit/spike-rehearsal.test.js (4): every rung boundary, precedence, recovery, fail-safe, the rolled_back=NOT-degradation case, and the stale-singleton no-false-pause guard; rehearsal pass + ceiling-exceeded-fail + touch-count-does-not-scale.", "priority": "high", "acceptance_criteria": ["16 unit tests pass", "rung boundaries + precedence + fail-direction + stale-singleton guard covered", "rehearsal pass/fail + touch-count-invariance covered"] }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No chairman-authority delegation", "description": "Every gate either has a SAFE inaction default or holds-and-surfaces; nothing auto-decides a chairman-reserved act. The detector/rehearsal are read-only/pure (no chairman-reserved mutation)." },
+    { "id": "TR-2", "title": "Reuse the live canary substrate", "description": "Detection reads the existing llm_canary_state / llm_canary_transitions (migration 20260206) — no new table; documented as a repurpose." },
+    { "id": "TR-3", "title": "Out of scope", "description": "No automated support pipeline (Phase 2), no standby second operator, no capacity auto-scaling, no flipping any gate to binding." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Detector rung boundaries + precedence + fail-direction", "type": "unit", "expected": "11 detector tests green" },
+    { "id": "TS-2", "scenario": "Rehearsal reaches degraded-safe-mode within the pre-registered ceiling; fails if ceiling exceeded; touches don't scale", "type": "unit", "expected": "4 rehearsal tests green; dry-run PASS" },
+    { "id": "TS-3", "scenario": "Away-gate policy + dependency map document every gate/act with an away-behavior", "type": "doc-review", "expected": "no gate/act without a documented away-behavior" }
+  ],
+  "acceptance_criteria": [
+    "Documented chairman-away gate policy (no auto-override) + only-the-chairman-can map (incl. G6) + Anthropic-cap contingency: source-agnostic detector + documented fallback ladder (ADDRESSES G4; live cloud-health feeder explicitly deferred, not overclaimed) + a seeded launch-spike rehearsal with a pre-registered touch ceiling (G9/G15)",
+    "16 unit tests pass; rehearsal dry-run PASSES",
+    "No chairman-authority delegation; advisory-only (no automatic gate override); adversarial review of the rung logic + safe-defaults + rehearsal criteria resolved (inverted rolled_back trigger dropped, stale-singleton false-pause guarded, doc overclaims corrected)"
+  ],
+  "risks": [
+    { "risk": "The detector cannot observe a real Anthropic outage as-wired — the live llm_canary_state is the dormant local-rollout canary with no writer, so detectFromDb reads NORMAL in prod", "mitigation": "EXPLICITLY DISCLOSED in anthropic-cap-contingency.md (Current limitation) and FR-3 — this SD ships the source-agnostic evaluator + documented ladder + rehearsal; the live cloud-health feeder (stamps signals from real Anthropic 429/5xx) is a NAMED DEFERRED follow-up. G4 is mitigated by the documented ladder + away-gate policy (operator-walked), not by automatic detection. No G4-closure overclaim.", "severity": "medium" },
+    { "risk": "False-pause freezes a healthy fleet", "mitigation": "all-unknown→NORMAL fail-open; degrade only on definite signals; unit tests pin the boundaries; pause requires consecutive_failures>=limit or rolled_back.", "severity": "low" },
+    { "risk": "A safe-default secretly delegates a chairman decision", "mitigation": "Default-to-hold rule; KILL gates default to inaction (no auto-kill); review's away-policy-safety lens; explicitly a DRAFT for chairman ratification.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/continuity/spike-rehearsal.mjs + the runbook consume the detector", "the away-gate policy + dependency map are governance docs the chairman ratifies"],
+    "dependencies": ["llm_canary_state + llm_canary_transitions (migration 20260206_llm_canary_routing.sql)", "lib/agents/modules/venture-state-machine/stage-gates.js (gate inventory)"],
+    "data_contracts": ["read-only on llm_canary_state; no schema change; no chairman-reserved writes"],
+    "runtime_config": ["canary thresholds (error_rate_threshold, latency_multiplier_threshold, failures_before_rollback) stay in the canary row; pre-registered touch ceiling is a rehearsal input"],
+    "observability_rollout": ["npm continuity:spike-rehearsal (dry-run PASS/FAIL); detector returns a rung+reason for any consumer"]
+  },
+  "system_architecture": {
+    "summary": "Governance docs (away-policy + dependency map) + a pure read-only degradation detector over the live canary substrate + a seeded dry-run rehearsal proving degraded-safe-mode within a pre-registered touch ceiling.",
+    "components": [
+      { "name": "docs/03_protocols_and_standards/chairman-away-gate-policy.md", "change": "NEW (FR-1)" },
+      { "name": "docs/03_protocols_and_standards/only-the-chairman-can.md", "change": "NEW (FR-2)" },
+      { "name": "docs/03_protocols_and_standards/anthropic-cap-contingency.md", "change": "NEW (FR-3 doc)" },
+      { "name": "scripts/continuity/llm-degradation-detector.mjs", "change": "NEW (FR-3 detector, pure + read-only)" },
+      { "name": "scripts/continuity/spike-rehearsal.mjs", "change": "NEW (FR-4 rehearsal) + docs/.../spike-rehearsal-runbook.md" },
+      { "name": "tests/unit/{llm-degradation-detector,spike-rehearsal}.test.js", "change": "NEW (FR-5, 15 tests)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Document the governance policy + dependency map; build a pure read-only degradation detector over the live canary substrate + a documented fallback ladder; prove it with a seeded, ceiling-bounded dry-run rehearsal; adversarially review the rung logic + safe-defaults + rehearsal criteria.",
+    "steps": ["away-gate policy doc", "only-the-chairman-can map", "contingency doc + detector + tests", "rehearsal harness + runbook + tests", "PRD → adversarial review → fix → handoffs → LFA"]
+  },
+  "smoke_test_steps": [
+    { "instruction": "npx vitest run tests/unit/llm-degradation-detector.test.js tests/unit/spike-rehearsal.test.js", "expected_outcome": "16 tests pass" },
+    { "instruction": "node scripts/continuity/spike-rehearsal.mjs", "expected_outcome": "PASS — degraded-safe-mode reached, chairmanTouches=1 within ceiling" },
+    { "instruction": "Review the 4 docs in docs/03_protocols_and_standards/ (away-policy, only-the-chairman-can, anthropic-cap-contingency, spike-rehearsal-runbook)", "expected_outcome": "every live gate + non-delegable act has a documented away-behavior; no auto-override" }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-SOLO-OPERATOR-CONTINUITY-001" }
+}
