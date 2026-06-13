@@ -322,6 +322,8 @@
     "coordinator:teardown": "node scripts/coordinator-teardown.cjs",
     "coordinator:self-review": "node scripts/coordinator-self-review.mjs",
     "coordinator:audit": "node scripts/coordinator-audit.mjs",
+    "coordinator:backlog-rank": "node scripts/coordinator-backlog-rank.mjs",
+    "coordinator:capacity-forecast": "node scripts/coordinator-capacity-forecast.mjs",
     "sd:start": "node scripts/sd-start.js",
     "sd:drain": "node scripts/sd-drain.mjs",
     "sd:recover": "node scripts/sd-recover.js",
