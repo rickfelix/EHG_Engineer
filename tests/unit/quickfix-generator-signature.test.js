@@ -33,6 +33,27 @@ describe('generatorSignature', () => {
     expect(generatorSignature('Login fails with 500: token refresh race in auth middleware')).toBeNull();
   });
 
+  // Post-adversarial-review (SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001): the fallback
+  // first token must be a kebab-case slug, so log-namespace / timestamp / ratio
+  // prefixes do NOT collide and falsely exclude distinct QFs (under-counting
+  // recurrence). These no-space-after-colon forms were the uncovered gap.
+  it('does NOT match non-kebab log/namespace/timestamp prefixes (no false exclusion)', () => {
+    expect(generatorSignature('error:auth_service:cannot read property of undefined')).toBeNull();
+    expect(generatorSignature('warn:rate_limiter:exceeded for tenant')).toBeNull();
+    expect(generatorSignature('auth:login: user not found')).toBeNull();
+    expect(generatorSignature('10:30:00 cron job did not fire')).toBeNull();
+    expect(generatorSignature('103:113: test failure ratio')).toBeNull();
+  });
+
+  // Trailing punctuation abutting the script path must not split true siblings
+  // across signatures (a template edit mid-window would otherwise diverge).
+  it('trims trailing punctuation on the auto-filed path so siblings still match', () => {
+    const withPeriod = 'X. Auto-filed by scripts/ci/red-merge-detector.mjs.';
+    const withParen = 'Y. Auto-filed by scripts/ci/red-merge-detector.mjs (SD-FOO FR-3).';
+    expect(generatorSignature(withPeriod)).toBe('auto-filed:scripts/ci/red-merge-detector.mjs');
+    expect(generatorSignature(withPeriod)).toBe(generatorSignature(withParen));
+  });
+
   it('different generators do NOT share a signature', () => {
     const other = 'Stale queue item detected. Auto-filed by scripts/ci/stale-queue-detector.mjs';
     expect(generatorSignature(other)).not.toBe(generatorSignature(RED_MERGE_A));

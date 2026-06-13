@@ -183,6 +183,7 @@ async function classifyQuickFix(qfId, options = {}) {
   console.log('\n🔍 Running Root Cause Analysis...\n');
 
   const patternAnalysis = await analyzePatterns({
+    id: qf.id, // SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001: exclude self from its own candidate set
     title: qf.title,
     description: qf.description,
     consoleError: qf.actual_behavior,
