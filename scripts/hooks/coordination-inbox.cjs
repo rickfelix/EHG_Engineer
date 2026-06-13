@@ -101,7 +101,10 @@ try {
 //     read_at IS NULL SELECT) until actioned.
 // Pure + synchronous; no DB calls (amCoordinator/amAdam/twoWayOn/isIdle resolved once by caller).
 function classifyInboxMessage(msg, opts = {}) {
-  const { isIdle = false, twoWayOn = false, amAdam = false } = opts;
+  // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001: isIdle no longer gates the ACTIONABLE_TYPES branch
+  // (directed coordinator->worker rows surface regardless of idle) — opts still accepts it for
+  // caller back-compat, but it is intentionally not destructured here.
+  const { twoWayOn = false, amAdam = false } = opts;
   const p = (msg && msg.payload) || {};
   const isInfo = msg && msg.message_type === 'INFO';
   // Coordinator-exclusive INFO rows — SKIP for EVERY session (the coordinator surfaces them via
@@ -128,9 +131,17 @@ function classifyInboxMessage(msg, opts = {}) {
   if (amAdam) {
     return { skip: false, markRead: false, markAck: false };
   }
-  // Actionable idle rows — surface but do NOT mark read/ack on poll; re-surface until the agent
-  // genuinely actions them (worker-checkin ackMessage stamps both on claim).
-  if (isIdle && ACTIONABLE_TYPES.includes(msg && msg.message_type)) {
+  // Actionable directed rows — surface but do NOT mark read/ack on poll; re-surface until the
+  // agent genuinely actions them (worker-checkin ackMessage stamps both on claim).
+  // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (seam 2): previously gated on isIdle, so a
+  // coordinator->worker WORK_ASSIGNMENT sent to a BUSY (claim-holding) worker fell through to the
+  // default drain below (markRead:true/markAck:true) on the next poll and never re-surfaced — the
+  // directed-dispatch lane was unreliable for busy workers (witnessed: an assignment to Alpha
+  // stayed UNREAD across full check-in cycles). These ACTIONABLE_TYPES (WORK_ASSIGNMENT /
+  // CLAIM_RELEASED / CLAIM_REMINDER) are genuinely relevant whether the worker is idle or busy, so
+  // surface-not-drain regardless of idle state; worker-checkin (seam 1) reads them on check-in
+  // without dropping the held claim. (isIdle retained in opts for callers/back-compat.)
+  if (ACTIONABLE_TYPES.includes(msg && msg.message_type)) {
     return { skip: false, markRead: false, markAck: false };
   }
   // FR-3 (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001): DIRECTIVE kinds never receive

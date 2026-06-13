@@ -666,9 +666,32 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       base.self_healed_stale_claim = mySd;
       mySd = null; // fall through to assignment / self-claim below
     } else {
-      return { ...base, action: 'resume', sd: mySd, message: isQf
+      // SD-FDBK-FIX-WORKER-CHECK-SURFACES-001 (seam 1): a claim-holding worker used to
+      // short-circuit to resume BEFORE the step-5 WORK_ASSIGNMENT pull, so a coordinator
+      // directive targeting a BUSY worker was never read on check-in (witnessed: an assignment to
+      // Alpha stayed UNREAD across full cycles). Peek for a WORK_ASSIGNMENT targeting THIS session
+      // for a DIFFERENT SD and SURFACE it on the resume result so the worker sees it now. We do NOT
+      // drain read_at and do NOT auto-switch the claim — never-strand (CLAUDE.md rule 7a): the
+      // worker finishes / explicitly hands off current work, then actions the assignment (genuine
+      // claim_sd/ackMessage stamps read_at then). Surfacing persists (seam 2 re-surfaces on poll)
+      // until actioned. Fail-open: any error preserves today's plain resume.
+      let pendingAssignment = null;
+      try {
+        const msgs = await ws.getMessagesForSession(sb, sessionId, { unreadOnly: true });
+        const wa = (msgs || []).find(m => m.message_type === 'WORK_ASSIGNMENT');
+        if (wa) {
+          const waSd = extractSdFromAssignment(wa);
+          if (waSd && waSd !== mySd) pendingAssignment = { sd: waSd, message_id: wa.id };
+        }
+      } catch { /* fail-open: no pending-assignment surfacing */ }
+      const resumeMsg = isQf
         ? `Already claiming quick-fix ${mySd}; resume it: node scripts/read-quick-fix.js ${mySd}, then run the /quick-fix workflow (do NOT run sd-start.js for a QF).`
-        : `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).` };
+        : `Already claiming ${mySd}; resume work (run sd-start to (re)attach the worktree).`;
+      return { ...base, action: 'resume', sd: mySd,
+        ...(pendingAssignment ? { pending_work_assignment: pendingAssignment } : {}),
+        message: pendingAssignment
+          ? `${resumeMsg} NOTE: coordinator WORK_ASSIGNMENT pending for ${pendingAssignment.sd} — finish/hand off ${mySd} first, then claim it (never drop an in-progress SD).`
+          : resumeMsg };
     }
   }
 
