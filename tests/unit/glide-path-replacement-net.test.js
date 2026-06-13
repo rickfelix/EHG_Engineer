@@ -10,6 +10,8 @@ import {
   escapeVelocityContribution,
   timeToFirstDollarScore,
   incomeContribution,
+  enrichVentureWithIncome,
+  INCOME_DIMENSION_KEY,
   DEFAULT_INCOME_WEIGHTS,
   ESCAPE_VELOCITY_TARGET_MONTHLY,
 } from '../../scripts/glide-path/replacement-net.js';
@@ -98,5 +100,30 @@ describe('incomeContribution — weighted blend, tunable, default time-to-first-
     const r = incomeContribution({});
     expect(r.score).toBe(0);
     expect(r.components.replacement_net).toBe(0);
+  });
+});
+
+describe('enrichVentureWithIncome — populates the policy dimension (data-driven scoreVenture)', () => {
+  it('adds income_contribution (0..100) without mutating the input', () => {
+    const v = { id: 'V1', revenue: 18000, business_expenses: 0, effort_person_weeks: 2, days_to_first_dollar: 0 };
+    const out = enrichVentureWithIncome(v, {});
+    expect(out[INCOME_DIMENSION_KEY]).toBeGreaterThan(0);
+    expect(out[INCOME_DIMENSION_KEY]).toBeLessThanOrEqual(100);
+    expect(out.income_components).toBeTruthy();
+    expect(v).not.toHaveProperty(INCOME_DIMENSION_KEY); // input not mutated
+    expect(out.id).toBe('V1'); // other fields preserved
+  });
+
+  it('reads TUNABLE weights from policy.metadata.income_weights', () => {
+    const slow = { revenue: 18000, effort_person_weeks: 100, days_to_first_dollar: 365 };
+    const ttfdHeavy = enrichVentureWithIncome(slow, { metadata: { income_weights: { timeToFirstDollar: 1, escapeVelocity: 0, revenueToEffort: 0 } } });
+    const evHeavy = enrichVentureWithIncome(slow, { metadata: { income_weights: { timeToFirstDollar: 0, escapeVelocity: 1, revenueToEffort: 0 } } });
+    expect(ttfdHeavy[INCOME_DIMENSION_KEY]).not.toBe(evHeavy[INCOME_DIMENSION_KEY]); // policy weights drive the score
+  });
+
+  it('fail-safe: empty/garbage venture → income_contribution 0', () => {
+    expect(enrichVentureWithIncome({}, {})[INCOME_DIMENSION_KEY]).toBe(0);
+    expect(enrichVentureWithIncome(undefined, undefined)[INCOME_DIMENSION_KEY]).toBe(0);
+    expect(INCOME_DIMENSION_KEY).toBe('income_contribution');
   });
 });

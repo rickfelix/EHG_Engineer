@@ -133,3 +133,34 @@ export const DEFAULT_INCOME_WEIGHTS = Object.freeze({
   escapeVelocity: 0.3,
   revenueToEffort: 0.2,
 });
+
+/** Policy dimension key under which the income-contribution score is consumed by scoreVenture. */
+export const INCOME_DIMENSION_KEY = 'income_contribution';
+
+/**
+ * Enrich a venture row with its income_contribution score (0..100) so the DATA-DRIVEN Glide Path
+ * scoreVenture (scripts/glide-path/policy-engine.js) can consume it as a first-class dimension —
+ * NOT a parallel scorer. The income sub-scores derive from MULTIPLE venture fields (replacement-net),
+ * which scoreVenture's single-source_field extractor cannot compute, so callers pre-compute it here.
+ *
+ * Tunable strategy stays as policy CONFIG: weights + revenue-to-effort reference are read from
+ * policy.metadata.income_weights / policy.metadata.income_revenue_to_effort_ref (falling back to the
+ * roadmap defaults). Returns a NEW object (never mutates input); a venture lacking income data lands
+ * at income_contribution=0 (fail-safe — unknown earns no credit, never a phantom high score).
+ *
+ * @param {object} ventureData
+ * @param {object} [policy] active portfolio_allocation_policies row (reads policy.metadata)
+ * @returns {object} { ...ventureData, income_contribution: 0..100, income_components: {...} }
+ */
+export function enrichVentureWithIncome(ventureData = {}, policy = {}) {
+  const meta = (policy && policy.metadata) || {};
+  const { score, components } = incomeContribution(ventureData || {}, {
+    weights: meta.income_weights || DEFAULT_INCOME_WEIGHTS,
+    revenueToEffortRef: meta.income_revenue_to_effort_ref,
+  });
+  return {
+    ...(ventureData || {}),
+    [INCOME_DIMENSION_KEY]: Math.round(score * 100), // 0..100 to match the policy dimension min/max
+    income_components: components,
+  };
+}
