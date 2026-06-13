@@ -749,7 +749,7 @@ export class SDNextSelector {
       const sdUUIDs = filteredSDs.map(sd => sd.id);
       const { data: krAlignments } = await this.supabase
         .from('sd_key_result_alignment')
-        .select('sd_id, key_result_id, contribution_type, contribution_weight, key_results!inner(id, status, code, title)')
+        .select('sd_id, key_result_id, contribution_type, contribution_weight, key_results!inner(id, status, code, title)') // schema-lint-disable-line — embedded key_results!inner columns mis-attributed to sd_key_result_alignment by the lint parser; pre-existing query, table+embed verified live (SD-FDBK-INFRA-CLAIM-VISIBILITY-ATOMIC-001)
         .in('sd_id', sdUUIDs);
 
       if (krAlignments && krAlignments.length > 0) {
