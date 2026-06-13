@@ -3,6 +3,9 @@
 
 ## Table of Contents
 
+- [2026-06-13](#2026-06-13)
+  - [Infrastructure](#infrastructure)
+  - [Bugfix](#bugfix)
 - [2026-06-12](#2026-06-12)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -49,6 +52,11 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-06-13
+
+### Infrastructure
+- **Every breakage detector now writes alerts through one fail-loud, deduped contract** - PR #4701 (SD-LEO-INFRA-BREAKAGE-DETECTOR-SURFACE-001-B)
+  - **What shipped**: `lib/breakage/alert-writer.cjs` — `recordSystemAlert(supabase, opts)` + pure `buildAlertRow(opts)`: the single write-contract that every breakage detector, the canary (children C/D), and the catch-rate harness (F) use to persist a breakage alert to `system_alerts`. It consumes child A’s frozen taxonomy (`lib/coordinator/break-class-taxonomy.cjs`), maps the precise break-class id into the LIVE `system_alerts_alert_type_check` legal set via `toAlertType()` — **no CHECK widening** (protects the 3 live EVA SECURITY-DEFINER functions) — rides the precise class id in `metadata.break_class`, dedups OPEN alerts on `(source_service, metadata->>break_class)`, and throws fail-loud on any query/insert error. Reuses the 14 existing `system_alerts` columns; no schema migration.
+  - **Verification**: `tests/unit/alert-writer.test.js` 8/8 (fake supabase, zero live writes). `@wire-check-exempt` decomposition-root marker (removed when child C imports the writer). Canonical API doc is the in-module JSDoc contract header (lines 1-25).
 
 ### Bugfix
 - **QF classifier no longer auto-escalates same-generator siblings** - PR #4682 (SD-FDBK-FIX-CLASSIFY-QUICK-FIX-001)
