@@ -13,7 +13,11 @@
 ALTER TABLE capital_transactions ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT;
 ALTER TABLE capital_transactions ADD COLUMN IF NOT EXISTS stripe_event_id  TEXT;
 
--- Defense-in-depth idempotency: one Stripe event cannot create duplicate capital rows.
+-- Per-EVENT dedup: prevents the SAME Stripe event from creating duplicate capital
+-- rows. NOTE (adversarial-review IDEMP-02): this does NOT dedup per-PAYMENT — a
+-- single payment emits multiple distinct events (payment_intent.succeeded,
+-- charge.succeeded, checkout.session.completed). Phase-2 (collector integration)
+-- MUST dedup on payment_intent_id/charge_id before summing, or it will double-count.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_capital_transactions_stripe_event
   ON capital_transactions (stripe_event_id) WHERE stripe_event_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_capital_transactions_stripe_charge

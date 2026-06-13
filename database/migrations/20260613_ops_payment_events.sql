@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS ops_payment_events (
   stripe_charge_id   TEXT,                            -- ch_...
   payment_intent_id  TEXT,                            -- pi_...
   event_type         TEXT NOT NULL,                   -- e.g. checkout.session.completed
-  amount_cents       INTEGER,                         -- Stripe minor units (cents)
+  amount_cents       BIGINT,                          -- Stripe minor units (int64; negative = refund/money-out)
   currency           TEXT,                            -- ISO 4217 lower-case (e.g. usd)
   status             TEXT,                            -- captured | succeeded | refunded | ...
   livemode           BOOLEAN NOT NULL DEFAULT false,  -- false = Stripe TEST mode
@@ -27,16 +27,15 @@ CREATE INDEX IF NOT EXISTS idx_ops_payment_events_pi        ON ops_payment_event
 CREATE INDEX IF NOT EXISTS idx_ops_payment_events_venture   ON ops_payment_events (venture_id)         WHERE venture_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_ops_payment_events_event_ts  ON ops_payment_events (event_ts DESC);
 
--- RLS: financial data. Mirror the capital_transactions convention:
---   authenticated -> SELECT only; service_role -> ALL. Webhook ingest writes
---   via the service-role client (bypasses RLS legitimately). No anon access.
+-- RLS: financial data containing the FULL Stripe event (raw_payload may include
+-- customer PII / partial card metadata). Service-role ONLY — webhook ingest and
+-- backend reads use the service-role client. Authenticated/anon get NO direct
+-- access (adversarial-review PAY-RAIL-002); a sanitized, PII-free VIEW is the
+-- intended surface for any future dashboard (Phase-2).
 ALTER TABLE ops_payment_events ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='ops_payment_events' AND policyname='ops_payment_events_select') THEN
-    CREATE POLICY ops_payment_events_select ON ops_payment_events FOR SELECT TO authenticated USING (true);
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='ops_payment_events' AND policyname='ops_payment_events_service') THEN
     CREATE POLICY ops_payment_events_service ON ops_payment_events FOR ALL TO service_role USING (true) WITH CHECK (true);
   END IF;

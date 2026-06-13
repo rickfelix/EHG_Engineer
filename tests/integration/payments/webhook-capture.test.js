@@ -20,9 +20,13 @@ let handleStripeWebhook;
 
 function res() { const r = { code: null, body: null }; r.status = (c) => { r.code = c; return r; }; r.json = (b) => { r.body = b; return r; }; return r; }
 function eventBody(id, overrides = {}) {
-  return JSON.stringify({ id, object: 'event', type: 'checkout.session.completed', livemode: false,
+  return JSON.stringify({ id, object: 'event', type: 'checkout.session.completed', livemode: overrides.livemode ?? false,
     created: overrides.created ?? Math.floor(Date.now() / 1000),
-    data: { object: { object: 'checkout.session', id: 'cs_' + id, payment_intent: 'pi_' + id, amount_total: 2500, currency: 'usd', status: 'complete' } } });
+    data: { object: { object: 'checkout.session', id: 'cs_' + id, payment_intent: 'pi_' + id, amount_total: overrides.amount_total ?? 2500, currency: 'usd', payment_status: 'paid', status: 'complete' } } });
+}
+async function getRow(eventId) {
+  const { data } = await sb.from('ops_payment_events').select('amount_cents,status').eq('stripe_event_id', eventId).maybeSingle();
+  return data;
 }
 async function countRows(eventId) {
   const { count } = await sb.from('ops_payment_events').select('id', { count: 'exact', head: true }).eq('stripe_event_id', eventId);
@@ -88,5 +92,62 @@ describe('Stripe webhook capture (integration)', () => {
     const r = res();
     await handleStripeWebhook({ method: 'GET', headers: {} }, r);
     expect(r.code).toBe(405);
+  });
+});
+
+describe('Stripe webhook hardening (adversarial-review regressions)', () => {
+  it('PAYRAIL-SIG-001: a correctly-signed event is NOT dropped when STRIPE_SECRET_KEY is unset (verification decoupled from key guard)', async () => {
+    const saved = process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_SECRET_KEY; // simulate key misconfig at cutover
+    try {
+      const id = RUN + '_nokey';
+      const body = eventBody(id);
+      const sig = buildStripeSignatureHeader(body, WHSEC);
+      const r = res();
+      await handleStripeWebhook({ method: 'POST', headers: { 'stripe-signature': sig }, rawBody: body }, r);
+      expect(r.code).toBe(200);            // NOT 400 'Invalid signature'
+      expect(await countRows(id)).toBe(1); // real event captured, not lost
+    } finally { if (saved !== undefined) process.env.STRIPE_SECRET_KEY = saved; }
+  });
+
+  it('SEC-003: a LIVE event in test mode returns 500 (retryable, not dropped) and is not captured', async () => {
+    const id = RUN + '_live';
+    const body = eventBody(id, { livemode: true });
+    const sig = buildStripeSignatureHeader(body, WHSEC);
+    const r = res();
+    await handleStripeWebhook({ method: 'POST', headers: { 'stripe-signature': sig }, rawBody: body }, r);
+    expect(r.code).toBe(500);
+    expect(await countRows(id)).toBe(0);
+  });
+
+  it('TS-7: malformed JSON body (valid HMAC over the bytes) => 400, nothing written', async () => {
+    const id = RUN + '_malformed';
+    const body = '{ not valid json ' + id;
+    const sig = buildStripeSignatureHeader(body, WHSEC);
+    const r = res();
+    await handleStripeWebhook({ method: 'POST', headers: { 'stripe-signature': sig }, rawBody: body }, r);
+    expect(r.code).toBe(400);
+  });
+
+  it('TS-10: a large int64 amount (> 2^31) is captured correctly (BIGINT)', async () => {
+    const id = RUN + '_big';
+    const big = 5_000_000_000;
+    const body = eventBody(id, { amount_total: big });
+    const sig = buildStripeSignatureHeader(body, WHSEC);
+    const r = res();
+    await handleStripeWebhook({ method: 'POST', headers: { 'stripe-signature': sig }, rawBody: body }, r);
+    expect(r.code).toBe(200);
+    const row = await getRow(id);
+    expect(row?.amount_cents).toBe(big);
+    expect(row?.status).toBe('paid'); // payment_status, not lifecycle
+  });
+
+  it('TS-9: concurrent re-delivery of the same event id yields exactly one row', async () => {
+    const id = RUN + '_race';
+    const body = eventBody(id);
+    const sig = buildStripeSignatureHeader(body, WHSEC);
+    const mk = () => handleStripeWebhook({ method: 'POST', headers: { 'stripe-signature': sig }, rawBody: body }, res());
+    await Promise.all([mk(), mk(), mk()]);
+    expect(await countRows(id)).toBe(1);
   });
 });
