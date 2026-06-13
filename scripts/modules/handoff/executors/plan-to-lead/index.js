@@ -36,7 +36,7 @@ import {
   createRetrospectiveQualityGate,
   createGitCommitEnforcementGate,
   createTraceabilityGate,
-  createWorkflowROIGate,
+  // createWorkflowROIGate removed — GATE4 moved to LEAD-FINAL-APPROVAL (SD-FDBK-FIX-GATE-PIPELINE-GATE1-001)
   createUserStoryExistenceGate,
   createDocumentationLinkValidationGate,
   createHealBeforeCompleteGate,
@@ -293,8 +293,13 @@ export class PlanToLeadExecutor extends BaseExecutor {
     const isBugfixSD = sdType === 'bugfix' || sdType === 'bug_fix';
 
     if (!isNonCodeSD && !isBugfixSD) {
-      gates.push(createTraceabilityGate(this.supabase));
-      gates.push(createWorkflowROIGate(this.supabase));
+      gates.push(createTraceabilityGate(this.supabase)); // GATE3 — legitimately scored at PLAN-TO-LEAD
+      // SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: createWorkflowROIGate (GATE4_WORKFLOW_ROI) is a
+      // LEAD-FINAL computation ("X/3 gates cleared", reads the PLAN-TO-LEAD acceptance + gate3).
+      // At PLAN-TO-LEAD the PLAN-TO-LEAD handoff is not yet accepted, so the gate3 acceptance and
+      // the N/3 rollup are structurally unscoreable — it ran one phase too early and forced a
+      // --bypass-validation on passing security SDs. Moved to LEAD-FINAL-APPROVAL (getRequiredGates),
+      // where the PLAN-TO-LEAD handoff is accepted and the rollup is sound.
     }
 
     // User story existence gate

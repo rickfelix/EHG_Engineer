@@ -50,6 +50,14 @@ export { createCrossSdFileOverlapTemporalShipGate };
 import { createActivationInvariantGate } from './gates/activation-invariant-gate.js';
 export { createActivationInvariantGate };
 
+// SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: GATE4_WORKFLOW_ROI is NOT pushed here as an executor gate.
+// It is ALREADY evaluated at LEAD-FINAL-APPROVAL via the DB-driven validator-registry rules
+// (leo_validation_rules gate='4' handoff_type='LEAD-FINAL-APPROVAL': valueDelivered,
+// patternEffectiveness, executiveValidation, processAdherence — all resolve to
+// validateGate4LeadFinal via the gate-4 preloader). Adding an executor-level push would run the
+// git-shelling + multi-DB-round-trip GATE4 computation a SECOND time per handoff (dedup keys on
+// rule name, which differs). The (A) fix is simply removing the PREMATURE PLAN-TO-LEAD execution.
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -1212,6 +1220,11 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // works against real data. Closes 26th writer-consumer asymmetry witness.
   // (SD-LEO-INFRA-REQUIRE-END-END-001 FR-2)
   gates.push(createActivationInvariantGate(supabase, prdRepo));
+
+  // SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: GATE4_WORKFLOW_ROI is intentionally NOT pushed here —
+  // it already runs at LEAD-FINAL via the validator-registry DB rules (see header note). The (A)
+  // fix is the PLAN-TO-LEAD removal + the (B) gate1 key-drift fix so the LFA computation scores
+  // correctly. Adding a push here would double-run validateGate4LeadFinal.
 
   return gates;
 }
