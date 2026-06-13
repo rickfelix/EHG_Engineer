@@ -197,30 +197,62 @@ async function getAlertablePatterns() {
       console.log(`  Noise filter: ${result.rejected.length} pattern(s) suppressed before threshold check`);
     }
   } catch (filterErr) {
-    // Fail-open: a filter error must not block legitimate alerting; matches
-    // the context-builder.js fail-open posture at line 469.
-    console.warn(`[noise-filter] skipped due to error: ${filterErr.message}`);
+    // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (5): FAIL-CLOSED. The fail-open posture
+    // meant a single filter error filed EVERYTHING (one input to the 2026-06-12
+    // 13-SD storm). An auto-SD-creating path must skip a cycle, not file unfiltered.
+    console.error(`[noise-filter] FAIL-CLOSED: filter error — skipping this alert cycle: ${filterErr.message}`);
+    return [];
   }
 
   // Filter patterns that meet threshold criteria
   return surviving.filter(p => {
+    // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (d): incident-window discount.
+    // Occurrence growth attributable to a flagged incident (e.g. one SD's
+    // parallel-driver reconcile churn) is recorded on the pattern as
+    // metadata.incident_discount (count) and must not push the pattern over
+    // CRITICAL/HIGH/INCREASING thresholds.
+    const effectiveCount = effectiveOccurrences(p);
+    if (effectiveCount !== p.occurrence_count) {
+      console.log(`  [incident-discount] ${p.pattern_id}: ${p.occurrence_count} raw -> ${effectiveCount} effective`);
+    }
+
     // Critical severity with 5+ occurrences
-    if (p.severity === 'critical' && p.occurrence_count >= CONFIG.CRITICAL_SEVERITY_THRESHOLD) {
+    if (p.severity === 'critical' && effectiveCount >= CONFIG.CRITICAL_SEVERITY_THRESHOLD) {
       return true;
     }
 
     // High severity with 7+ occurrences
-    if (p.severity === 'high' && p.occurrence_count >= CONFIG.HIGH_SEVERITY_THRESHOLD) {
+    if (p.severity === 'high' && effectiveCount >= CONFIG.HIGH_SEVERITY_THRESHOLD) {
       return true;
     }
 
     // Increasing trend with 4+ occurrences (regardless of severity)
-    if (p.trend === 'increasing' && p.occurrence_count >= CONFIG.INCREASING_TREND_THRESHOLD) {
+    if (p.trend === 'increasing' && effectiveCount >= CONFIG.INCREASING_TREND_THRESHOLD) {
       return true;
     }
 
     return false;
   });
+}
+
+/**
+ * SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (c): per-run storm cap. The 2026-06-12
+ * storm filed 13 SDs in one 2-second burst. Cap auto-filing (default 3); the
+ * remainder becomes a logged drop-list + loud signal so a genuine multi-class
+ * outbreak gets human triage, not blanket-filed SDs. Pure — exported for tests.
+ */
+export function stormCapLimit(envValue) {
+  const n = parseInt(envValue || '3', 10);
+  return Number.isFinite(n) && n > 0 ? n : 3;
+}
+
+/**
+ * SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (d): effective occurrence count after the
+ * incident-window discount (metadata.incident_discount). Pure — exported for tests.
+ */
+export function effectiveOccurrences(pattern) {
+  const discount = Number(pattern?.metadata?.incident_discount || 0);
+  return Math.max(0, (pattern?.occurrence_count || 0) - (Number.isFinite(discount) ? discount : 0));
 }
 
 /**
@@ -398,6 +430,19 @@ export async function createSDForPattern(pattern) {
     return { error };
   }
 
+  // SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 (a): stamp the closure-loop linkage at
+  // creation time. Without assigned_sd_id + status='assigned', the cancel-side
+  // machinery (trg_reset_patterns_on_sd_cancel, reconcile sweep, checkAssignedSd)
+  // has zero rows to act on and the pattern re-files forever.
+  try {
+    const { error: linkErr } = await supabase
+      .from('issue_patterns')
+      .update({ assigned_sd_id: data.id, status: 'assigned', assignment_date: new Date().toISOString() })
+      .eq('pattern_id', pattern.pattern_id);
+    if (linkErr) console.warn(`  ⚠️  linkage stamp failed for ${pattern.pattern_id}: ${linkErr.message}`);
+    else console.log(`  ✓ pattern ${pattern.pattern_id} linked (assigned_sd_id=${data.id})`);
+  } catch (e) { console.warn(`  ⚠️  linkage stamp failed: ${e.message}`); }
+
   console.log(`  Created SD: ${data.sd_key}`);
   return { success: true, sd: data };
 }
@@ -427,10 +472,17 @@ export async function checkPatternsAndCreateSDs() {
   const stats = {
     created: 0,
     skipped: 0,
-    errors: 0
+    errors: 0,
+    dropped: []
   };
 
+  const MAX_SDS_PER_RUN = stormCapLimit(process.env.PATTERN_ALERT_MAX_SDS_PER_RUN);
+
   for (const pattern of patterns) {
+    if (stats.created >= MAX_SDS_PER_RUN) {
+      stats.dropped.push(pattern.pattern_id);
+      continue;
+    }
     console.log(`\n${pattern.pattern_id} (${pattern.category}/${pattern.severity})`);
     console.log(`   Occurrences: ${pattern.occurrence_count}, Trend: ${pattern.trend}`);
     console.log(`   "${pattern.issue_summary.substring(0, 50)}..."`);
@@ -444,6 +496,23 @@ export async function checkPatternsAndCreateSDs() {
     } else if (result.error) {
       stats.errors++;
     }
+  }
+
+  if (stats.dropped.length > 0) {
+    console.error(`\n🚨 STORM CAP HIT: ${stats.created} SD(s) filed (cap ${MAX_SDS_PER_RUN}); ${stats.dropped.length} alertable pattern(s) DROPPED this run: ${stats.dropped.join(', ')}`);
+    // Durable loud signal: a feedback row the coordinator/inbox surfaces.
+    try {
+      await supabase.from('feedback').insert({
+        type: 'issue',
+        category: 'harness_backlog',
+        priority: 'P1',
+        status: 'new',
+        title: `pattern-alert storm cap hit: ${stats.dropped.length} pattern(s) dropped`,
+        description: `checkPatternsAndCreateSDs filed ${stats.created}/${MAX_SDS_PER_RUN} SDs and dropped ${stats.dropped.length} alertable patterns this run (SD-FDBK-FIX-PATTERN-ALERT-CREATOR-001 storm cap). Dropped pattern ids: ${stats.dropped.join(', ')}. Triage whether this is a genuine multi-class outbreak or threshold churn.`,
+        source_type: 'pattern-alert-sd-creator',
+        metadata: { dropped_pattern_ids: stats.dropped, cap: MAX_SDS_PER_RUN, created: stats.created }
+      });
+    } catch (e) { console.warn(`  ⚠️  storm-cap signal write failed: ${e.message}`); }
   }
 
   // Summary
