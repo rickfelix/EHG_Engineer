@@ -49,11 +49,19 @@ class WSJFPriorityFetcher {
         return new Date(b.created_at) - new Date(a.created_at);
       });
 
-      // Return top 3 with priority reasons
+      // Return top 3 with priority reasons.
+      // SD-LEO-INFRA-INCOME-OBJECTIVE-FUNCTION-001: income_contribution is surfaced INFORMATIONALLY for
+      // transparency. prio:top3 ranks PLATFORM SDs (venture-build SDs are excluded above via FR-5), which
+      // carry no direct revenue — the income objective function (revenue-to-effort + time-to-first-dollar
+      // + $18k-escape-velocity, canonical replacement-net) is computed for VENTURES by the Glide Path
+      // scoreVenture income_contribution dimension. It is reported as null here (no direct income score for
+      // a platform SD); ranking is unchanged and nothing is auto-picked.
       return sorted.slice(0, 3).map((d, idx) => ({
         id: d.id,
         title: d.title,
-        priority_reason: this.getPriorityReason(d, idx + 1)
+        priority_reason: this.getPriorityReason(d, idx + 1),
+        income_contribution: null,
+        income_note: 'platform SD — no direct income; income objective scored for ventures via Glide Path',
       }));
     } catch (error) {
       throw error;

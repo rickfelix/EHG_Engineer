@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-CLAIM-RPC-HONOR-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-CLAIM-RPC-HONOR-001",
-  "createdAt": "2026-06-13T09:02:02.315Z",
+  "sdKey": "SD-LEO-INFRA-INCOME-OBJECTIVE-FUNCTION-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-INCOME-OBJECTIVE-FUNCTION-001",
+  "createdAt": "2026-06-13T11:26:57.241Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
