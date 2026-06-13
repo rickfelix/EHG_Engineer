@@ -46,8 +46,17 @@ describe('isFixtureSession — fixture/probe/test id detection', () => {
     expect(isFixtureSession('session_a1b2c3d4_tty1_12345')).toBe(false);
   });
 
-  it('flags a bare non-UUID synthetic id', () => {
-    expect(isFixtureSession('some-random-synthetic-id')).toBe(true);
+  it('does NOT flag an unknown non-marker id as a fixture (over-release fix: positive markers ONLY)', () => {
+    // Adversarial review (SD-FDBK-INFRA-SHARED-FLEET-WORKER-001) proved the old "synthetic catch-all"
+    // over-released GENUINE workers whose ids are legit non-UUID shapes. Only explicit fixture markers
+    // (FIXTURE_SESSION_RE) count; every other shape is treated as REAL.
+    expect(isFixtureSession('some-random-synthetic-id')).toBe(false);
+    expect(isFixtureSession('session_1776019751948')).toBe(false);        // epoch worker id (live: Bravo)
+    expect(isFixtureSession('session_1774443726642_4821')).toBe(false);   // epoch_pid worker id
+    expect(isFixtureSession('leo-assist-1778504351303')).toBe(false);     // /leo assist worker id (live: Echo)
+    expect(isFixtureSession('coordinator-65d08634-9ded-4c8f-96e8-2f4cfd991a2a')).toBe(false);
+    expect(isFixtureSession('qf-876-1778500000000')).toBe(false);         // qf-<n>-<epoch> (NOT qf-test)
+    expect(isFixtureSession('51362')).toBe(false);                        // bare numeric id
   });
 
   it('does not flag a real UUID, and the probe/test markers are delimiter-anchored (no mid-word match)', () => {

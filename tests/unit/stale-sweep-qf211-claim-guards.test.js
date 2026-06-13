@@ -69,6 +69,22 @@ describe('SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: CLAIM_FIX fixture-session guard
   it('the fixture guard PRECEDES the terminal-status guard (covers all downstream branches)', () => {
     expect(src.indexOf('SWEEP_FIXTURE_SESSION_CLAIM_FIX')).toBeLessThan(src.indexOf('SWEEP_SD_TERMINAL_CLAIM_FIX'));
   });
+
+  // Adversarial-review fix (Defect 2): a fixture must not win conflict-keeper selection and evict a
+  // real worker before the CLAIM_FIX fixture guard runs ~166 lines later.
+  it('excludes fixtures from the conflict bySD build (keeper selection)', () => {
+    const idx = src.indexOf('const bySD = {}');
+    expect(idx).toBeGreaterThan(0);
+    const block = src.slice(idx, idx + 260);
+    expect(block).toMatch(/if\s*\(\s*isFixtureSession\(s\.session_id\)\s*\)\s*return;/);
+  });
+
+  it('imports isFixtureSession ABOVE the conflict build (not only in the broken-claim loop)', () => {
+    const importIdx = src.indexOf("import('../lib/fleet/session-predicates.mjs')");
+    const conflictIdx = src.indexOf('const bySD = {}');
+    expect(importIdx).toBeGreaterThan(0);
+    expect(importIdx).toBeLessThan(conflictIdx); // hoisted before conflict detection
+  });
 });
 
 describe('QF-20260525-211 (B2): workingOnCompleted covers cancelled', () => {

@@ -758,8 +758,15 @@ async function main() {
   }
 
   // 3. Detect conflicts (multiple sessions claiming same SD)
+  // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (adversarial review): exclude FIXTURE sessions from conflict
+  // keeper selection. The conflict loop picks the freshest-heartbeat session as keeper and EVICTS the
+  // rest; without this, a fixture sharing an sd_key with a real worker (the fd018627 condition) could
+  // win keeper and bounce the real worker BEFORE the CLAIM_FIX fixture guard (further below) releases
+  // the fixture. Fixtures never participate in keeper selection; they are bilaterally released later.
+  const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
   const bySD = {};
   classified.forEach(s => {
+    if (isFixtureSession(s.session_id)) return; // fixture: never a conflict keeper/evictor
     if (!bySD[s.sd_key]) bySD[s.sd_key] = [];
     bySD[s.sd_key].push(s);
   });
@@ -1521,8 +1528,7 @@ async function main() {
   }
 
   // Also check: sessions with sd_id but SD's claiming_session_id doesn't match (broken claim)
-  // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: shared fixture-session predicate (.cjs → .mjs SoT).
-  const { isFixtureSession } = await import('../lib/fleet/session-predicates.mjs');
+  // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: isFixtureSession is imported once above (conflict build).
   for (const s of classified.filter(c => c.status === 'ACTIVE' && c.sd_key)) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
