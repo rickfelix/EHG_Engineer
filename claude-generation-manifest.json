@@ -1,95 +1,95 @@
 {
-  "generated_at": "2026-06-14T20:52:50.248Z",
-  "git_commit": "a27b6afe",
+  "generated_at": "2026-06-14T22:47:30.011Z",
+  "git_commit": "05b3e6dc",
   "db_snapshot_hash": "916e51b7a22a4063",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 19368,
       "estimated_tokens": 4842,
-      "content_hash": "c5007233675348b6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE.md"
+      "content_hash": "b8593f28fe7d905c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
       "chars": 81294,
       "estimated_tokens": 20324,
-      "content_hash": "7dbce519976e4041",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_CORE.md"
+      "content_hash": "4010a1f74046a684",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 65128,
       "estimated_tokens": 16282,
-      "content_hash": "377a216774c9d0e9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_LEAD.md"
+      "content_hash": "8d984d62f982ecca",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 90830,
       "estimated_tokens": 22708,
-      "content_hash": "6137f9f96a38f147",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_PLAN.md"
+      "content_hash": "5619747899656e71",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 84821,
       "estimated_tokens": 21206,
-      "content_hash": "a9e5d91c4acc6a3f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_EXEC.md"
+      "content_hash": "30f62f0bf57420e4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 23273,
-      "estimated_tokens": 5819,
-      "content_hash": "cadc2cb0aac709d5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_ADAM.md"
+      "chars": 23804,
+      "estimated_tokens": 5951,
+      "content_hash": "a5019378643d6da8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 9611,
       "estimated_tokens": 2403,
-      "content_hash": "f96a690df17c166a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_DIGEST.md"
+      "content_hash": "e1d62c510a6f7bc9",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 11535,
       "estimated_tokens": 2884,
-      "content_hash": "6d2c7dfef7e12585",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "aad32205e83536b3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 5422,
       "estimated_tokens": 1356,
-      "content_hash": "702dfdb250295933",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "6be0e178c8b71c76",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 8412,
       "estimated_tokens": 2103,
-      "content_hash": "30b3e1bb8b461c41",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "c0599efa4886d5fe",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 10835,
       "estimated_tokens": 2709,
-      "content_hash": "77519577a04610ad",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "6fd215300cb816ca",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 3952,
       "estimated_tokens": 988,
-      "content_hash": "d0083005c27b3873",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "1c2757af3661c60d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001\\CLAUDE_ADAM_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "3d962834f9e80992",
+    "global": "c64cc463c9a6628a",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -343,7 +343,7 @@
       "596": "bf95e6419e99aee7",
       "597": "8220a84f943767a6",
       "599": "7ddd3e2178799aa8",
-      "601": "eb219777e1887ecd",
+      "601": "88747ca78c466c44",
       "602": "ad0aecae8cdc6cb3",
       "603": "ca922c736e8d8ed3"
     },
