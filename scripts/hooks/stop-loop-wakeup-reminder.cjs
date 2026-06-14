@@ -73,9 +73,14 @@ async function shutdown() {
  * @param {{ loopState: string|null|undefined, stopHookActive: boolean, flagEnabled: boolean, hasActiveClaim?: boolean }} args
  * @returns {boolean}
  */
-function shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim }) {
+function shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim, windDownSignaled }) {
   if (!flagEnabled) return false;                       // default-OFF: no-op
   if (stopHookActive) return false;                     // never block twice — already reminded
+  // ALLOW-PATH (SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001, exit-mode 4c): a worker that
+  // announced its wind-down via /signal (session_coordination) is making a LEGITIMATE,
+  // coordinator-visible stop — never block it. Closes the false-positive where a worker
+  // does the handshake and then gets trapped by the reminder.
+  if (windDownSignaled) return false;
   if (loopState === LOOP_STATE_ACTIVE) return true;     // in-loop, no wakeup armed
   if (loopState === LOOP_STATE_AWAITING_TICK) return false; // wakeup already armed — fine
   if (loopState === LOOP_STATE_EXITED) return false;    // loop legitimately ended
@@ -162,7 +167,26 @@ async function main() {
       hasActiveClaim = Array.isArray(claimRows) && claimRows.length > 0;
     } catch { /* fail-open: no claim signal */ }
 
-    if (shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim })) {
+    // ALLOW-PATH probe (SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001): did this session announce a
+    // wind-down via /signal recently? session_coordination.sender_session = this session, and the
+    // body/payload mentions wind-down/offline. If so, the stop is legitimate — do not block.
+    let windDownSignaled = false;
+    try {
+      const sinceIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { data: sigRows } = await supabase
+        .from('session_coordination')
+        .select('body, payload, created_at')
+        .eq('sender_session', sessionId)
+        .gte('created_at', sinceIso)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      windDownSignaled = Array.isArray(sigRows) && sigRows.some((r) => {
+        const blob = `${r.body || ''} ${JSON.stringify(r.payload || '')}`.toLowerCase();
+        return /winding down|wind-down|going offline|offline —|going idle|signing off/.test(blob);
+      });
+    } catch { /* fail-open: treat as not-signaled (conservative — still reminds) */ }
+
+    if (shouldRemind({ loopState, stopHookActive, flagEnabled, hasActiveClaim, windDownSignaled })) {
       process.stdout.write(JSON.stringify({ decision: 'block', reason: REMINDER }));
     }
     return shutdown();
@@ -181,4 +205,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, isFlagEnabled };
+module.exports = { shouldRemind, isFlagEnabled, REMINDER };
