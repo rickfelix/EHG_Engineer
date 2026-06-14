@@ -23,9 +23,11 @@ test('STANDARD_LOOPS has the expected standard loops with the expected keys', ()
   // SD-LEO-INFRA-STANDING-ROW-GROWTH-001 added row-growth; SD-LEO-INFRA-CODIFY-SUBSYSTEM-REVIEW-001
   // added review-rotation (this pin had drifted to 11 while both shipped — fixed here).
   // SD-LEO-INFRA-SCRIPTS-ESTATE-RECONCILIATION-001 (FR-1) added the weekly scripts-reachability gauge.
-  assert.equal(STANDARD_LOOPS.length, 14);
+  // SD-MAN-INFRA-RETENTION-OPS-FINISHER-001 added 'retention' (this pin had drifted — it was never added here).
+  // SD-LEO-INFRA-COORDINATOR-CHARTER-SELF-AUDIT-001 added the durable charter-compliance self-audit (after 'audit').
+  assert.equal(STANDARD_LOOPS.length, 16);
   const keys = STANDARD_LOOPS.map((l) => l.key);
-  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'flag-review', 'self-review', 'hourly-review', 'capacity-forecast', 'backlog-rank', 'fleet-retro', 'row-growth', 'review-rotation', 'scripts-reachability']);
+  assert.deepEqual(keys, ['sweep', 'dashboard', 'identity', 'inbox', 'audit', 'charter-audit', 'flag-review', 'self-review', 'hourly-review', 'capacity-forecast', 'backlog-rank', 'fleet-retro', 'row-growth', 'review-rotation', 'scripts-reachability', 'retention']);
 });
 
 test('every loop carries a non-empty label, script, cron, and CronCreate prompt', () => {
@@ -93,7 +95,7 @@ test('loopStatus marks armed|MISSING|unverified, distinguishing inbox vs dashboa
 test('renderLoops emits CronCreate spec for missing/unverified loops', () => {
   const none = parseArmedSet([], {});
   const out = renderLoops(none);
-  assert.match(out, /STANDARD CRON LOOPS \(14\)/);
+  assert.match(out, /STANDARD CRON LOOPS \(16\)/);
   // All prompts emitted as CronCreate specs when nothing is armed
   for (const loop of STANDARD_LOOPS) {
     assert.ok(out.includes(loop.prompt), `expected CronCreate prompt for ${loop.key}`);
@@ -102,10 +104,16 @@ test('renderLoops emits CronCreate spec for missing/unverified loops', () => {
 });
 
 test('renderLoops reports all-armed cleanly when every loop is armed', () => {
-  const allPrompts = STANDARD_LOOPS.map((l) => l.prompt).join(',');
-  const armed = parseArmedSet(['--armed', allPrompts], {});
+  // Build the armed set from loop SCRIPTS (basename match) + the shared fleet-dashboard.cjs full prompts
+  // (loopStatus requires a full-prompt match for the shared script). Using scripts avoids the comma-in-prompt
+  // shredding the prior join(',') approach suffered (retention + charter-audit prompts contain commas).
+  const armedTokens = [
+    ...STANDARD_LOOPS.map((l) => l.script),
+    ...STANDARD_LOOPS.filter((l) => l.script === 'fleet-dashboard.cjs').map((l) => l.prompt),
+  ];
+  const armed = parseArmedSet(['--armed', armedTokens.join(',')], {});
   const out = renderLoops(armed);
-  assert.match(out, /All 14 standard loops armed/);
+  assert.match(out, /All 16 standard loops armed/);
 });
 
 test('buildReport combines responsibilities + loop sections', () => {

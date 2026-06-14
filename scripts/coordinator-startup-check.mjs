@@ -55,6 +55,11 @@ export const STANDARD_LOOPS = [
     prompt: 'node scripts/fleet-dashboard.cjs inbox' },
   { key: 'audit',       label: 'Coordinator 3-source audit', script: 'coordinator-audit.mjs', cron: '*/15 * * * *',
     prompt: 'node scripts/coordinator-audit.mjs' },
+  // SD-LEO-INFRA-COORDINATOR-CHARTER-SELF-AUDIT-001: durable charter-compliance self-audit (replaces the
+  // lost session-only CronCreate). READ-ONLY detection; authoritative PID/armed-silence liveness; fail-loud
+  // on a foundational query error; names a remediation per violation. The prompt compels REMEDIATE-THEN-VERIFY.
+  { key: 'charter-audit', label: 'Coordinator charter-compliance self-audit (durable, remediate-then-verify)', script: 'coordinator-charter-audit.mjs', cron: '8,23,38,53 * * * *',
+    prompt: 'Run `node scripts/coordinator-charter-audit.mjs` (READ-ONLY). For EACH reported violation perform the named remediation ACTION, then RE-RUN and confirm the output ends with CHARTER_AUDIT_VIOLATIONS=0 — never observe-only.' },
   // RETIRED (chairman email cutover, advisory b7b73b86 / QF-20260609-024, 2026-06-10): the
   // coordinator fleet email (coordinator-email-summary.mjs) is no longer a standard loop. The ONE
   // chairman-facing email is the Adam exec-summary, scheduled durably via GitHub Actions
