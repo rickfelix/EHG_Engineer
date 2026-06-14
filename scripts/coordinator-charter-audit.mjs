@@ -24,6 +24,8 @@ import { createClient } from '@supabase/supabase-js';
 import { getDbNowMs } from '../lib/fleet/db-clock.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { countActiveWorktrees, MAX_WORKTREE_COUNT, countFilesystemWorktreeDirs } from '../lib/worktree-quota.js';
+// SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness dimension.
+import { checkoutFreshness, freshnessBadge } from '../lib/governance/checkout-freshness.js';
 import {
   classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
@@ -120,6 +122,15 @@ async function main() {
   for (const a of D.dep.anomalies.slice(0, 5)) console.log('      ANOMALY ' + a.sd + ' dep(s) not found: ' + a.unknownDeps.join(','));
   console.log('  DUTY-6 BACKLOG-RANK  : ' + D.rank.detail + flag(D.rank));
   console.log('  QUIET-TICK COMMITTED : ' + D.quiet.detail + flag(D.quiet));
+
+  // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: ADVISORY freshness dimension — fail-open and deliberately
+  // kept OUT of `D`/summarizeViolations, so a stale checkout surfaces a warning but never trips the
+  // hard violation count / exit. STALE-CRITICAL (protocol drift) is the high-value advisory here.
+  try {
+    console.log('  DUTY-FRESHNESS CHECK : ' + freshnessBadge(checkoutFreshness(process.cwd(), { role: 'coordinator' })));
+  } catch (e) {
+    console.log('  DUTY-FRESHNESS CHECK : ✅ freshness check skipped (fail-open): ' + (e?.message || String(e)));
+  }
 
   const summary = summarizeViolations(Object.values(D));
   if (summary.count > 0) {
