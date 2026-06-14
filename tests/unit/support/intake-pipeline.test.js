@@ -71,6 +71,17 @@ describe('triageSupportTicket (FR-2)', () => {
   it('abuse => escalate', () => {
     expect(triageSupportTicket(normalizeSupportTicket({ subject: 'spam fraud scam', body: '' })).routing_decision).toBe('escalate');
   });
+  it('ABUSE VETO: an abuse keyword forces escalate even when a benign category outscores it (no auto-resolve)', () => {
+    // billing keywords (refund/charge/invoice/billing/payment/subscription) outscore abuse on count,
+    // but the fraud/scam signal must VETO auto-resolve — never send a canned FAQ to a fraud complaint.
+    const t = triageSupportTicket(normalizeSupportTicket({ subject: 'refund my charge', body: 'this is a scam and fraud, refund the double charge invoice billing payment subscription' }));
+    expect(t.category).toBe('abuse');
+    expect(t.routing_decision).toBe('escalate');
+  });
+  it('WORD-BOUNDARY: "download"/"recharge" do NOT trigger the down/charge keywords (no false high-severity)', () => {
+    const t = triageSupportTicket(normalizeSupportTicket({ subject: 'how do i download the recharge guide', body: 'where is the setup tutorial' }));
+    expect(t.severity).toBe('low'); // 'down' in download / 'charge' in recharge must NOT match
+  });
   it('unknown category => escalate (fail-loud default)', () => {
     expect(triageSupportTicket(normalizeSupportTicket({ subject: 'hello there', body: 'nice day' })).routing_decision).toBe('escalate');
   });

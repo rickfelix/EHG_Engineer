@@ -41,6 +41,10 @@ const EDGE = { channel: 'email', subject: 'URGENT: service is down and I was cha
   console.log('EDGE disposition:', edge.disposition.status, '| reason:', edge.disposition.reason);
 
   const queue = await getSupportEscalationQueue(sb, { limit: 5 });
-  console.log(`escalation queue: ${queue.length} open item(s)`);
-  for (const q of queue) console.log('  -', q.title, `(${q.priority || 'n/a'})`);
+  if (queue === null) {
+    console.log('escalation queue: READ FAILED (errored — not necessarily empty)');
+  } else {
+    console.log(`escalation queue: ${queue.length} open item(s)`);
+    for (const q of queue) console.log('  -', q.title, `(${q.priority || 'n/a'})`);
+  }
 })().catch((e) => { console.error('demo failed:', e.message); process.exit(1); });
