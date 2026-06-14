@@ -18,9 +18,11 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
-import { readFileSync } from 'fs';
 import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs';
 import { renderDecisionLines } from '../lib/chairman/decision-layman.mjs';
+// SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
+// static .adam-vision-build.json number.
+import { computeBuildGauge } from '../lib/vision/vdr-registry.js';
 
 const EM = '—';
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -80,17 +82,31 @@ if (avgActive === null) {
 }
 const workerText = pulseSource === 'unavailable' ? 'count unavailable (will refresh next run)' : `${avgActive} active${avgIdle ? `, ${avgIdle} idle` : ''} (${pulseSource})`;
 
-// ── 2. EHG VISION build-% gauge (.adam-vision-build.json) ──
-const LAYER_LABEL = { infrastructure: 'infrastructure', application: 'UI/UX', 'venture/income': 'venture/income', process: 'process' };
-let vis = null;
-try { vis = JSON.parse(readFileSync(resolve('.adam-vision-build.json'), 'utf8')); }
-catch (e) { console.warn('[adam-email] vision gauge file unreadable (.adam-vision-build.json): ' + (e?.message || e)); vis = null; }
-const visPct = (vis && typeof vis.overall_pct === 'number') ? vis.overall_pct : null;
-const layers = (vis && Array.isArray(vis.per_layer)) ? vis.per_layer : [];
-const layerLine = layers.map((l) => `${LAYER_LABEL[l.layer] || l.layer} ${l.pct == null ? '?' : l.pct}%`).join('  ·  ');
-let measured = null;
-if (vis && vis.measured_at) { const d = new Date(vis.measured_at + 'T00:00:00Z'); if (!Number.isNaN(d.getTime())) measured = d.toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); }
-const visNote = vis ? `(v1 estimate${measured ? ' as of ' + measured : ''} ${EM} live auto-updating gauge coming)` : '';
+// ── 2. EHG VISION build-% gauge (LIVE VDR — SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 FR-4) ──
+// Replaces the static .adam-vision-build.json estimate with the auto-computed Vision Denominator
+// Registry gauge (deterministic typed probes over EHG-VISION.md's REQUIRED capabilities; no LLM).
+// Fail-soft: a gauge error or an unavailable vision doc degrades to "(gauge unavailable)".
+const LAYER_LABEL = { infrastructure: 'infrastructure', application: 'UI/UX', venture: 'venture/income', process: 'process' };
+let visPct = null;
+let layerLine = '';
+let visNote = '';
+try {
+  const gauge = await computeBuildGauge({ io: { supabase: db } }); // no grep seam ⇒ code_grep probes report 'unknown' (excluded)
+  if (gauge && gauge.available && typeof gauge.overall_pct === 'number') {
+    visPct = gauge.overall_pct;
+    layerLine = Object.entries(gauge.per_layer || {})
+      .filter(([, pct]) => pct != null)
+      .map(([layer, pct]) => `${LAYER_LABEL[layer] || layer} ${pct}%`)
+      .join('  ·  ');
+    visNote = `(live VDR gauge ${EM} ${gauge.denominator}/${gauge.total_capabilities} capabilities probed${gauge.unknown_count ? `, ${gauge.unknown_count} unknown` : ''})`;
+  } else {
+    visNote = `(gauge unavailable ${EM} ${gauge && gauge.measured_at_note ? gauge.measured_at_note : 'vision doc not found'})`;
+  }
+} catch (e) {
+  console.warn('[adam-email] live VDR gauge failed (fail-soft): ' + (e?.message || e));
+  visPct = null;
+  visNote = `(gauge unavailable ${EM} compute error)`;
+}
 
 // ── 3. ACTIONS FOR YOU: render the pending decisions (fetched above) as a copy-paste block ──
 const LEAD_IN = "I have received the following executive decisions via email and I'm ready to address them:";
