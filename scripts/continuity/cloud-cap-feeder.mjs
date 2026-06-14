@@ -15,10 +15,11 @@
  * A healthy batch -> status='paused' (disarms PAUSE) + consecutive_failures=0. baseline_latency_p95_ms
  * is stamped once on the first healthy batch. last_quality_check_at is refreshed every run (liveness).
  *
- * SAFETY: opt-in CLI (no background spend); only writer of these columns. Stale-rolling (feeder
- * stopped mid-degradation) is contained by detectFromDb's Layer-2 quiescent-fleet guard (0 live
- * workers -> NORMAL) plus the evaluator's liveness rung. Injectable client/clock/supabase => tests
- * make ZERO live Anthropic calls or DB writes.
+ * SAFETY: opt-in CLI (no background spend); only writer of these columns. A STOPPED feeder cannot pin
+ * a degraded rung on live workers — detectFromDb suppresses any degraded signal whose
+ * last_quality_check_at is stale beyond the liveness window (feeder not actively probing -> NORMAL),
+ * with the 0-live-workers guard as a second layer. probeCount is clamped (only real-spend surface).
+ * Injectable client/clock/supabase => tests make ZERO live Anthropic calls or DB writes.
  *
  * @module scripts/continuity/cloud-cap-feeder
  */
@@ -31,6 +32,7 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 export const CAP_FAILURE_CATEGORIES = Object.freeze(new Set(['rate_limit', 'overloaded', 'server', 'timeout']));
 
 export const DEFAULT_PROBE_COUNT = 5;
+export const MAX_PROBE_COUNT = 20; // clamp the only real-spend surface against a fat-finger invocation
 export const SINGLETON_ID = 'singleton';
 
 /**
@@ -41,13 +43,22 @@ export const SINGLETON_ID = 'singleton';
 export function categorizeProbeError(err) {
   if (!err) return 'other';
   const status = typeof err.status === 'number' ? err.status : null;
-  const type = err.error?.type || err.type || null;
+  // The real @anthropic-ai/sdk overloaded error exposes the discriminator on err.type; err.error.type
+  // reads the response ENVELOPE (not the inner error), so check both.
+  const type = err.type || err.error?.type || err.error?.error?.type || null;
   const name = err.name || '';
+  const ctorName = err.constructor?.name || '';
   const msg = err.message || '';
+  // Real Anthropic.APIConnectionTimeoutError: name==='Error', message==='Request timed out.', no code —
+  // identify by constructor name, a "timed out"/"timeout" message, or the undici cause code.
+  const causeCode = err.cause?.code || '';
+  const isTimeout = ctorName === 'APIConnectionTimeoutError'
+    || /timed?\s*out|timeout/i.test(name) || /timed?\s*out|timeout/i.test(msg)
+    || err.code === 'ETIMEDOUT' || causeCode === 'UND_ERR_CONNECT_TIMEOUT' || causeCode === 'ETIMEDOUT';
   if (status === 429) return 'rate_limit';
   if (status === 529 || type === 'overloaded_error') return 'overloaded';
   if (status != null && status >= 500) return 'server';
-  if (/timeout/i.test(name) || /timeout/i.test(msg) || err.code === 'ETIMEDOUT') return 'timeout';
+  if (isTimeout) return 'timeout';
   return 'other';
 }
 
@@ -159,7 +170,8 @@ export async function feedCloudHealth({ supabase, client, nowFn = Date.now, nowI
     .maybeSingle();
   if (readErr) throw new Error(`[cloud-cap-feeder] read failed (fail-loud): ${readErr.message}`);
 
-  const results = await runProbeBatch({ client, count: probeCount, nowFn });
+  const safeCount = Math.max(1, Math.min(MAX_PROBE_COUNT, Math.floor(Number(probeCount)) || DEFAULT_PROBE_COUNT));
+  const results = await runProbeBatch({ client, count: safeCount, nowFn });
   const summary = summarizeBatch(results);
   const next = computeNextHealthState(prev, summary);
 

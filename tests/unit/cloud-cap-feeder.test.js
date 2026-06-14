@@ -13,13 +13,18 @@ const errWith = (props) => Object.assign(new Error(props.message || 'probe error
 
 describe('categorizeProbeError', () => {
   it('429 -> rate_limit', () => expect(categorizeProbeError(errWith({ status: 429 }))).toBe('rate_limit'));
-  it('529 / overloaded_error -> overloaded', () => {
+  it('529 / overloaded_error -> overloaded (status + the SDK err.type discriminator)', () => {
     expect(categorizeProbeError(errWith({ status: 529 }))).toBe('overloaded');
-    expect(categorizeProbeError(errWith({ error: { type: 'overloaded_error' } }))).toBe('overloaded');
+    expect(categorizeProbeError(errWith({ type: 'overloaded_error' }))).toBe('overloaded');
   });
   it('5xx -> server', () => expect(categorizeProbeError(errWith({ status: 503 }))).toBe('server'));
-  it('timeout name/code -> timeout', () => {
-    expect(categorizeProbeError(errWith({ name: 'APIConnectionTimeoutError' }))).toBe('timeout');
+  it('REAL Anthropic timeout shapes -> timeout (constructor.name, "Request timed out." message, undici cause)', () => {
+    // The real Anthropic.APIConnectionTimeoutError has err.name==='Error', message==='Request timed out.',
+    // and no .code — only the CONSTRUCTOR name is distinctive. Cover all three real discriminators.
+    class APIConnectionTimeoutError extends Error {}
+    expect(categorizeProbeError(new APIConnectionTimeoutError('boom'))).toBe('timeout'); // constructor.name path
+    expect(categorizeProbeError(Object.assign(new Error('Request timed out.'), { name: 'Error' }))).toBe('timeout'); // real message ("timed out")
+    expect(categorizeProbeError(Object.assign(new Error('x'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } }))).toBe('timeout'); // undici connect-timeout cause
     expect(categorizeProbeError(errWith({ code: 'ETIMEDOUT' }))).toBe('timeout');
   });
   it('4xx config (401/400) -> other (NOT a cap signal — never false-PAUSE on a bad key)', () => {

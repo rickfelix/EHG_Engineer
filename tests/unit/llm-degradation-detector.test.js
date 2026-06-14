@@ -127,6 +127,16 @@ describe('detectFromDb — repoint + Layer-2 quiescent-fleet guard (SD-LEO-INFRA
     expect((await detectFromDb(fakeDb({ healthRow: pausing, liveCount: 1 }), NOW2)).rung).toBe(RUNG.PAUSE_AND_SURFACE);
   });
 
+  it('STALE degraded row (feeder stopped) -> NORMAL even with live workers (stale-signal suppress)', async () => {
+    const staleIso = new Date(NOW2 - (40 * 60 * 1000)).toISOString(); // 40 min old (> 30min liveness window)
+    const stalePause = { ...pausing, last_quality_check_at: staleIso };
+    const r1 = await detectFromDb(fakeDb({ healthRow: stalePause, liveCount: 5 }), NOW2);
+    expect(r1.rung).toBe(RUNG.NORMAL);
+    expect(r1.reason).toMatch(/stale/i);
+    const staleFallback = { ...degraded, last_quality_check_at: staleIso };
+    expect((await detectFromDb(fakeDb({ healthRow: staleFallback, liveCount: 5 }), NOW2)).rung).toBe(RUNG.NORMAL);
+  });
+
   it('degraded row + UNKNOWN liveness (query error) -> NOT suppressed (surface the real signal)', async () => {
     const r = await detectFromDb(fakeDb({ healthRow: degraded, liveError: { message: 'liveness q failed' } }), NOW2);
     expect(r.rung).toBe(RUNG.MODEL_FALLBACK);

@@ -102,8 +102,15 @@ export function isDegradedSafeMode(rung) {
   return rung === RUNG.PAUSE_AND_SURFACE;
 }
 
-/** Live-worker window (ms): a degraded signal is suppressed if no worker heartbeat is this fresh. */
-export const DEFAULT_LIVE_WORKER_WINDOW_MS = 5 * 60 * 1000; // 5 min (claim-guard TTL parity)
+/**
+ * Live-worker window (ms): a degraded signal is suppressed only if NO worker heartbeat is this fresh.
+ * 15 min for parity with the main-worker TTL — pure-heartbeat liveness has a known false-stale rate,
+ * and the wrong-suppression risk is worst exactly when a cap blocks workers mid-tool-call, so a
+ * generous window avoids reading a busy fleet as quiescent.
+ * NOTE: countLiveWorkers MUST be passed a SERVICE-ROLE supabase client — an anon/RLS-restricted client
+ * silently reads count=0 (no error) and would wrongly suppress a real degradation as 'quiescent'.
+ */
+export const DEFAULT_LIVE_WORKER_WINDOW_MS = 15 * 60 * 1000; // 15 min (main-worker TTL parity)
 
 /**
  * Count workers with a fresh heartbeat (the authoritative "is work flowing right now" signal).
@@ -145,6 +152,19 @@ export async function detectFromDb(supabase, nowMs, opts = {}) {
     if (error) return { rung: RUNG.NORMAL, reason: `cloud-health read error (fail-open): ${error.message}`, signals: {} };
     const verdict = evaluateDegradationRung(data, nowMs, opts);
     if (verdict.rung === RUNG.NORMAL) return verdict;
+    // Stale-signal guard: a degraded row whose last probe is older than the liveness window means the
+    // feeder STOPPED (it is the sole writer + an opt-in CLI, not a daemon). A degraded rung — especially
+    // PAUSE, which out-ranks the evaluator's own liveness-stale rung and so would otherwise pin PAUSE on
+    // hours-old data — assumes an actively-probing source; once stale that assumption is violated. Treat
+    // a stale degraded signal as NORMAL (fail-open: stale == no current signal), so a stopped feeder can
+    // never pin a degraded rung on live workers. A running feeder refreshes last_quality_check_at each
+    // cadence, so this only fires when the feeder is genuinely not running.
+    const livenessStaleMs = numOrNull(opts.livenessStaleMs) ?? DEFAULT_LIVENESS_STALE_MS;
+    const lastCheckMs = data?.last_quality_check_at ? Date.parse(data.last_quality_check_at) : null;
+    const signalStale = Number.isFinite(lastCheckMs) && Number.isFinite(nowMs) && (nowMs - lastCheckMs) > livenessStaleMs;
+    if (signalStale) {
+      return { rung: RUNG.NORMAL, reason: `stale cloud-health signal (feeder not actively probing) — suppress ${verdict.rung}`, signals: { ...verdict.signals, signalStale: true } };
+    }
     const liveWorkers = await countLiveWorkers(supabase, nowMs, liveWorkerWindowMs);
     if (liveWorkers === 0) {
       return { rung: RUNG.NORMAL, reason: `quiescent fleet (0 live workers) — suppress ${verdict.rung}`, signals: { ...verdict.signals, liveWorkers } };

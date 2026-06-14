@@ -38,3 +38,14 @@ ON CONFLICT (id) DO NOTHING;
 
 COMMENT ON TABLE llm_cloud_health IS
   'Singleton live cloud-health signal for the chairman-away degradation ladder (SD-LEO-INFRA-CLOUD-CAP-LIVE-FEEDER-001). Sole writer: scripts/continuity/cloud-cap-feeder.mjs. Read by llm-degradation-detector.mjs::detectFromDb. Distinct from llm_canary_state (local-model rollout).';
+
+-- RLS: parity with the sibling continuity tables (llm_canary_state/_transitions/_metrics) and the
+-- repo standard (SD-SEC-DB-LINTER-001 — every public table must have RLS enabled). The feeder +
+-- detectFromDb use the service-role client (RLS-bypass), so this is additive/zero-functional-risk;
+-- without it the security-linter sentinel (rls_disabled_in_public) goes red and the writable health
+-- row is exposed to anon/authenticated via PostgREST.
+ALTER TABLE llm_cloud_health ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON llm_cloud_health FROM anon, authenticated;
+GRANT ALL ON llm_cloud_health TO service_role;
+CREATE POLICY service_role_full_access ON llm_cloud_health
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
