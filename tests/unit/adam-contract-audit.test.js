@@ -41,6 +41,32 @@ describe('auditSourcingGateConflict (pure)', () => {
   });
 });
 
+describe('hardened against evasion (adversarial review w22s1wray)', () => {
+  it('FLAGS an en-dash (U+2013) delimited re-gating (was a false-negative)', () => {
+    const enDash = "Adam does NOT autonomously begin self-generated proactive work – sourcing/filing SDs, building – without the coordinator's confirmation.";
+    expect(auditSourcingGateConflict(enDash).conflict).toBe(true);
+  });
+  it('FLAGS a reworded trailing clause (go / approval), dash-delimited', () => {
+    const go = "self-generated proactive work — sourcing/filing SDs, building — without the coordinator's go.";
+    const appr = "self-generated proactive work — filing SDs — without the coordinator's approval.";
+    expect(auditSourcingGateConflict(go).conflict).toBe(true);
+    expect(auditSourcingGateConflict(appr).conflict).toBe(true);
+  });
+  it('FLAGS a multi-line enumeration', () => {
+    const ml = "self-generated proactive work —\n  - sourcing/filing SDs\n  - building\n— without the coordinator's confirmation.";
+    expect(auditSourcingGateConflict(ml).conflict).toBe(true);
+  });
+  it('still does NOT false-positive on the paren-delimited changelog even with a go trailing', () => {
+    // changelog uses PARENS after "proactive work" (not a dash) -> dash-delimited regex never fires
+    const cl = "**2026-06-08**: Adam never autonomously begins self-generated proactive work (sourcing/filing SDs, building) without the coordinator's go.";
+    expect(auditSourcingGateConflict(cl).conflict).toBe(false);
+  });
+  it('curly apostrophe in coordinator’s is handled', () => {
+    const curly = "self-generated proactive work — sourcing/filing SDs — without the coordinator’s confirmation.";
+    expect(auditSourcingGateConflict(curly).conflict).toBe(true);
+  });
+});
+
 describe('REAL regenerated CLAUDE_ADAM.md (integration — the actual shipped contract)', () => {
   it('the shipped contract has NO sourcing-in-the-gate conflict', () => {
     const p = resolve(REPO_ROOT, 'CLAUDE_ADAM.md');
