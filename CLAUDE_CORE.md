@@ -1,16 +1,34 @@
-<!-- file_content_hash: 04495700a3277581 -->
+<!-- file_content_hash: adc9e77df54ba1a0 -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-06-11 9:56:07 AM
+**Generated**: 2026-06-14 3:07:10 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
 
 > Sub-agent routing enforced by PreToolUse hook. See `scripts/hooks/pre-tool-enforce.cjs`.
 > For Five-Point Brief (sub-agent prompt quality), see CLAUDE.md Issue Resolution section.
-> For Strunkian writing standards, see `docs/reference/strunkian-writing-standards.md`.
+> For Strunkian writing standards, see `.strunkian-rules.json` (enforced by `scripts/docmon.js` at pre-push; the former `docs/reference/strunkian-writing-standards.md` guide is retired).
 
 ---
+
+## Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+> Why: Hand-rolled migration scripts reliably fail in the specific edge cases that matter most — missing SUPABASE_DB_PASSWORD, pooler URL routing, SSL mode selection, and retry logic on transient failures. The database-agent encodes these hard-won patterns, preventing migrations from getting stuck at connection setup.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
 
 ## Cascade Invalidation System
 
@@ -45,24 +63,6 @@ node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> 
 - `eva_architecture_plans.needs_review_since` — auto-set by trigger, NULL when resolved
 - `eva_architecture_plans.vision_version_aligned_to` — tracks which vision version the plan was last aligned with
 
-## Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-> Why: Hand-rolled migration scripts reliably fail in the specific edge cases that matter most — missing SUPABASE_DB_PASSWORD, pooler URL routing, SSL mode selection, and retry logic on transient failures. The database-agent encodes these hard-won patterns, preventing migrations from getting stuck at connection setup.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
-
 ## 🏗️ Application Architecture - UNIFIED FRONTEND
 
 ## Application Architecture - UNIFIED FRONTEND
@@ -87,41 +87,6 @@ Task tool with subagent_type="database-agent":
 ```bash
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
@@ -164,6 +129,41 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -305,6 +305,40 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
+## Work Tracking Policy
+
+**ALL changes to main must be tracked** as either:
+
+### Strategic Directive (SD) - For Substantial Work
+- Features, refactors, infrastructure (>75 LOC, see Work Item Routing)
+- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
+- Command: `npm run sd:create`
+
+### Quick-Fix (QF) - For Small Fixes
+- Bugs, polish, docs (≤75 LOC per Tier 1/Tier 2 in Work Item Routing)
+- Branch: `quick-fix/QF-YYYYMMDD-NNN`
+- Command: `node scripts/create-quick-fix.js --interactive`
+
+> **LOC thresholds** are defined once in **Work Item Routing** (CLAUDE.md): Tier 1 ≤30 (auto-approve QF), Tier 2 31-75 (standard QF), Tier 3 >75 (full SD). Risk keywords (auth, migration, schema, feature) always force Tier 3 regardless of LOC.
+
+### Why This Matters
+- All work tracked in database
+- Lessons learned captured
+- Quality gates enforced
+- Progress metrics accurate
+
+### Emergency Bypass (Logged)
+```bash
+EMERGENCY_PUSH="critical: reason here" git push
+```
+This logs to audit_log and should be followed by retroactive SD/QF creation.
+
+### Pre-Push Enforcement
+The pre-push hook automatically:
+1. Detects SD/QF from branch name
+2. Verifies completion status in database
+3. Blocks if not ready for merge
+
 ## Sub-Agent Model Routing
 
 **CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
@@ -346,39 +380,75 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
-## Work Tracking Policy
+## 🖥️ UI Parity Requirement (MANDATORY)
 
-**ALL changes to main must be tracked** as either:
+**Every backend data contract field MUST have a corresponding UI representation.**
 
-### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>75 LOC, see Work Item Routing)
-- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
-- Command: `npm run sd:create`
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
 
-### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (≤75 LOC per Tier 1/Tier 2 in Work Item Routing)
-- Branch: `quick-fix/QF-YYYYMMDD-NNN`
-- Command: `node scripts/create-quick-fix.js --interactive`
+### Requirements
 
-> **LOC thresholds** are defined once in **Work Item Routing** (CLAUDE.md): Tier 1 ≤30 (auto-approve QF), Tier 2 31-75 (standard QF), Tier 3 >75 (full SD). Risk keywords (auth, migration, schema, feature) always force Tier 3 regardless of LOC.
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
 
-### Why This Matters
-- All work tracked in database
-- Lessons learned captured
-- Quality gates enforced
-- Progress metrics accurate
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
 
-### Emergency Bypass (Logged)
-```bash
-EMERGENCY_PUSH="critical: reason here" git push
-```
-This logs to audit_log and should be followed by retroactive SD/QF creation.
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
 
-### Pre-Push Enforcement
-The pre-push hook automatically:
-1. Detects SD/QF from branch name
-2. Verifies completion status in database
-3. Blocks if not ready for merge
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
+## Execution Philosophy
+
+### Quality-First (PARAMOUNT)
+**Get it right, not fast.** Correctness > speed. 2-4 hours careful implementation beats 6-12 hours rework.
+
+### Testing-First (MANDATORY)
+- E2E testing is MANDATORY
+- 100% user story coverage required
+- Both unit tests AND E2E tests must pass
+
+### Database-First (REQUIRED)
+**Zero markdown files.** Database tables are single source of truth:
+- SDs → `strategic_directives_v2`
+- PRDs → `product_requirements_v2`
+- Handoffs → `sd_phase_handoffs`
+- Retrospectives → `retrospectives`
+
+### Validation-First (GATEKEEPING)
+- LEAD validates: Real problem? Feasible? Resources?
+- After approval: SCOPE LOCK - deliver what was approved
+
+### Anti-Bias Rules (MANDATORY)
+| Bias | Incorrect | Correct |
+|------|-----------|---------|
+| Efficiency | Skip workflow steps | Full workflow is non-negotiable |
+| Completion | "complete" = code works | "complete" = database status + validations |
+| Abstraction | Children are sub-tasks | Children are INDEPENDENT SDs |
+| Autonomy | No human gates | Each phase requires validation |
+
+**RULE**: When ANY bias-pattern detected, STOP and verify with user.
+
+**NEVER**:
+- Ship without completing full LEO Protocol
+- Skip LEAD approval for child SDs
+- Skip PRD creation for child SDs
+- Mark parent complete before all children complete in database
 
 ## QF Lifecycle Reconciliation
 
@@ -480,76 +550,6 @@ AUTO_PROCEED_ACTION:{"action":"start"|"qf_start"|"continue"|...,
 
 Downstream consumers (`coordination-inbox.cjs`, integration tests) continue
 to parse without modification.
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
-
-## Execution Philosophy
-
-### Quality-First (PARAMOUNT)
-**Get it right, not fast.** Correctness > speed. 2-4 hours careful implementation beats 6-12 hours rework.
-
-### Testing-First (MANDATORY)
-- E2E testing is MANDATORY
-- 100% user story coverage required
-- Both unit tests AND E2E tests must pass
-
-### Database-First (REQUIRED)
-**Zero markdown files.** Database tables are single source of truth:
-- SDs → `strategic_directives_v2`
-- PRDs → `product_requirements_v2`
-- Handoffs → `sd_phase_handoffs`
-- Retrospectives → `retrospectives`
-
-### Validation-First (GATEKEEPING)
-- LEAD validates: Real problem? Feasible? Resources?
-- After approval: SCOPE LOCK - deliver what was approved
-
-### Anti-Bias Rules (MANDATORY)
-| Bias | Incorrect | Correct |
-|------|-----------|---------|
-| Efficiency | Skip workflow steps | Full workflow is non-negotiable |
-| Completion | "complete" = code works | "complete" = database status + validations |
-| Abstraction | Children are sub-tasks | Children are INDEPENDENT SDs |
-| Autonomy | No human gates | Each phase requires validation |
-
-**RULE**: When ANY bias-pattern detected, STOP and verify with user.
-
-**NEVER**:
-- Ship without completing full LEO Protocol
-- Skip LEAD approval for child SDs
-- Skip PRD creation for child SDs
-- Mark parent complete before all children complete in database
 
 ## Sub-Agent Routing Reference
 
@@ -1258,6 +1258,25 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
 
 **Session Restoration Protocol**: If you notice context seems sparse or you're missing critical details, proactively ask: "I may have lost context during compaction. Let me check .claude/session-state.md for current work state."
 
+## Loop Continuity / Never-Exit (Fleet Worker Contract)
+
+The WORKER analog of CLAUDE.md "Canonical Pause Points — THE ONLY REASONS TO STOP". An autonomous fleet worker in a /loop must NEVER exit prematurely: the enumerated stops below are the ONLY legitimate exits; every other condition re-arms a ScheduleWakeup and re-enters the loop.
+
+**THE ONLY legitimate stops (the allow-path):**
+1. The operator tells you to stop / wind down.
+2. A canonical pause point is reached.
+3. You completed the /signal wind-down handshake (announced offline + gave the grace window).
+
+**Every other condition is a CONTINUE — re-arm a ScheduleWakeup and re-run the loop. Four enforced exit-modes:**
+- **(4a) Post-ship**: you just shipped an SD → /signal a fleet-retro → /checkin → claim the next workable SD (READY > EXEC > PLANNING > DRAFT) in the SAME turn. Shipping is the START of the next iteration, not the end of the loop (the #1 wrong-stop).
+- **(4b) Blocked claim**: your SD hit a chairman gate/blocker while unblocked belt work exists → build what IS buildable, /signal the specific blocker, PARK that SD (push WIP), and claim a DIFFERENT unblocked SD. Never idle holding a blocked claim.
+- **(4c) No wind-down handshake**: never exit silently → /signal feedback "winding down — finished <SD>, anything queued? idling ~180s", arm a SHORT (~180s) grace ScheduleWakeup, re-check the inbox on that tick, THEN settle into the ~1200s idle cadence.
+- **(4d) Transient error**: a connectivity/API/tool blip is NOT a stop → re-arm a ScheduleWakeup and resume (retry ≤2, then invoke the RCA sub-agent). Never treat a transient error as terminal.
+
+**ENFORCEMENT (the teeth):** the Stop hook `scripts/hooks/stop-loop-wakeup-reminder.cjs` BLOCKS a premature stop (emits `{decision:"block"}` + re-prompts you to push WIP and arm a wakeup) UNLESS you took the allow-path (operator-stop / canonical pause point / an announced /signal wind-down detected in session_coordination). Gated by `LEO_LOOP_WAKEUP_REMINDER`; fail-open + single-fire (blocks at most once per turn) so a legitimate stop is never trapped.
+
+**CANON SYNC:** this section (`leo_protocol_sections#fleet_worker_loop_continuity`) is the source of truth; it is mirrored in `docs/protocol/fleet-worker-loop-directive.md` and the `[ROLE] WORKER` block in `scripts/hooks/session-role-orient.cjs`. Keep all three in sync.
+
 ## Script Creation Anti-Patterns
 
 ### PROHIBITED Patterns
@@ -1498,11 +1517,11 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
-| PAT-HF-LEADTOPLAN-ae8fb5fc | handoff_failure | [HIGH] high | 9 | [STABLE] | N/A |
-| PAT-RETRO-LEADTOPLAN-ae8fb5fc | session_retrospective | [HIGH] high | 9 | [STABLE] | N/A |
-| PAT-RETRO-PLANTOLEAD-01c0ee53 | session_retrospective | [HIGH] high | 9 | [STABLE] | N/A |
-| PAT-RETRO-LEADTOPLAN-8d725b00 | session_retrospective | [HIGH] high | 8 | [STABLE] | N/A |
-| PAT-HF-LEADTOPLAN-8d725b00 | handoff_failure | [HIGH] high | 8 | [STABLE] | N/A |
+| PAT-HF-PLANTOEXEC-3e540545 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOEXEC-SD-EVA-F | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOLEAD-e8842331 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-HF-PLANTOLEAD-e8842331 | handoff_failure | [HIGH] high | 6 | [STABLE] | N/A |
+| PAT-RETRO-PLANTOEXEC-3e540545 | session_retrospective | [HIGH] high | 6 | [STABLE] | N/A |
 
 ### Prevention Checklists
 
@@ -1641,7 +1660,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-06-11*
+*Generated from database: 2026-06-14*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

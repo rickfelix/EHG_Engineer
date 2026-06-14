@@ -24,6 +24,13 @@ overlooked even if the full directive was never pasted.
 > Keep this file and the `[ROLE]` WORKER block in `scripts/hooks/session-role-orient.cjs`
 > in sync. The backup copy in user memory (`reference-fleet-worker-startup-prompt`)
 > points here.
+>
+> **CANON SOURCE (SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001):** the enforced never-exit
+> contract is `leo_protocol_sections#fleet_worker_loop_continuity` (regenerated into
+> CLAUDE_EXEC.md + CLAUDE_CORE.md) and is enforced by the Stop hook
+> `scripts/hooks/stop-loop-wakeup-reminder.cjs`. This doc, that DB section, and the WORKER
+> block must all carry the same four exit-modes (4a-4d) + the allow-path (operator-stop /
+> canonical pause point / announced `/signal` wind-down).
 
 ---
 

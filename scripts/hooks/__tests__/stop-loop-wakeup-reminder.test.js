@@ -13,14 +13,45 @@ const { shouldRemind, isFlagEnabled, REMINDER } = require(HOOK_PATH); // require
 
 // SD-FDBK-INFRA-AUTO-PUSH-WIP-001 (FR-5c): static source-pin — the strand warning
 // must offer the COMMIT-PRESERVING remediation (push WIP first), not just wakeup-arming.
-describe('stop-loop-wakeup-reminder — REMINDER text (FR-3 source-pin)', () => {
-  it('instructs pushing the WIP commit before arming a ScheduleWakeup', () => {
+describe('stop-loop-wakeup-reminder — REMINDER text (source-pin, shipped wording)', () => {
+  it('is exported and instructs pushing WIP before arming the grace ScheduleWakeup', () => {
     expect(typeof REMINDER).toBe('string');
-    expect(REMINDER).toMatch(/push your WIP commit/i);
-    // push-WIP must precede the REMEDIATION wakeup instruction ("THEN arm a ScheduleWakeup").
-    // (the opening warning line also mentions ScheduleWakeup, so anchor on the remediation phrase.)
-    expect(REMINDER.indexOf('push your WIP commit')).toBeLessThan(REMINDER.indexOf('THEN arm a ScheduleWakeup'));
+    expect(REMINDER).toMatch(/PUSH your WIP/i);
+    // push-WIP must precede the grace-wakeup remediation
+    expect(REMINDER.indexOf('PUSH your WIP')).toBeLessThan(REMINDER.indexOf('Arm a SHORT grace ScheduleWakeup'));
     expect(REMINDER).toMatch(/prepark-wip\.cjs/);
+    expect(REMINDER).toMatch(/\/signal/); // wind-down handshake instruction present
+  });
+});
+
+// SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001 (FR-2 allow-path): a worker that announced its
+// wind-down via /signal must NOT be blocked (false-positive guard), while an un-announced
+// premature stop STILL blocks.
+describe('stop-loop-wakeup-reminder — wind-down allow-path', () => {
+  it('does NOT block when windDownSignaled, even for an active worker', () => {
+    expect(shouldRemind({ loopState: 'active', stopHookActive: false, flagEnabled: true, windDownSignaled: true })).toBe(false);
+  });
+  it('does NOT block a claim-holder that announced wind-down (unknown state + claim)', () => {
+    expect(shouldRemind({ loopState: 'unknown', stopHookActive: false, flagEnabled: true, hasActiveClaim: true, windDownSignaled: true })).toBe(false);
+  });
+  it('STILL blocks an active worker that did NOT announce wind-down', () => {
+    expect(shouldRemind({ loopState: 'active', stopHookActive: false, flagEnabled: true, windDownSignaled: false })).toBe(true);
+  });
+  it('flag-off and stop_hook_active guards still win over everything', () => {
+    expect(shouldRemind({ loopState: 'active', stopHookActive: false, flagEnabled: false, windDownSignaled: false })).toBe(false);
+    expect(shouldRemind({ loopState: 'active', stopHookActive: true, flagEnabled: true, windDownSignaled: false })).toBe(false);
+  });
+});
+
+// SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001 (FR-3): no new loop_state value — the DB CHECK
+// constraint pins claude_sessions.loop_state to exactly 4 values; the hook reads the tracker's
+// constants (single source), so there is no writer/consumer asymmetry.
+describe('loop_state coherence (FR-3, no-new-state)', () => {
+  const tracker = require(path.resolve(__dirname, '../../lib/sessions/loop-state-tracker.cjs'));
+  it('the tracker exposes exactly the 4 DB-pinned states (no 5th added)', () => {
+    expect(tracker.VALID_STATES).toEqual(expect.arrayContaining(['active', 'awaiting_tick', 'exited', 'unknown']));
+    expect(tracker.VALID_STATES.length).toBe(4);
+    expect(tracker.LOOP_STATE_ACTIVE).toBe('active');
   });
 });
 
