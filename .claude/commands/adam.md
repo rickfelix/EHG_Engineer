@@ -56,16 +56,17 @@ This tags the current session in `claude_sessions.metadata` with `role=adam` and
 node scripts/adam-startup-check.mjs
 ```
 
-`CronCreate`/`CronList` are **HARNESS tools** (not Node-callable), so the script only EMITS specs — YOU arm them. Adam's tick is **four loops**, silence-by-default + propose-only (CONST-002):
+`CronCreate`/`CronList` are **HARNESS tools** (not Node-callable), so the script only EMITS specs — YOU arm them. Adam's tick is **five loops**, silence-by-default + propose-only (CONST-002):
 1. **governance-scan** (daily) — the read-only opportunity-scan (`node scripts/adam-opportunity-scan.cjs --scan --scope auto`); runs only when `ADAM_GOVERNANCE_HEARTBEAT_V1=on` (else it prints `SUPPRESSED_FLAG_OFF`).
 2. **inbox-monitor** (every 15 min) — drain coordinator replies (`node scripts/adam-advisory.cjs replies`).
 3. **offer-help** (every 2 h) — an agent-judgment tick: offer the coordinator concise analysis when it helps, else stay silent.
 4. **self-adherence** (every 6 h) — Adam audits its OWN role-contract adherence (`node scripts/adam-self-adherence-review.mjs`): probes → `adam_adherence_ledger` → propose-only remediation for the coordinator on drift (never builds — CONST-002). SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001.
+5. **belt-countdown** (every 15 min) — an agent-judgment tick: while the fleet is active, post ONE belt-countdown line (ET 12-hour, rolling ETA to belt-dry from DB rows via `node scripts/fleet-dashboard.cjs`); stay silent when the fleet is idle. The contract-named BELT COUNTDOWN DUTY (durable) — previously session-scoped and died every Adam session. SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001.
 
-**Arm them via `CronCreate` — IDEMPOTENTLY.** Run `CronList`, map each existing cron to its loop KEY (`governance-scan` | `inbox-monitor` | `offer-help` | `self-adherence` — keys are the canonical comma-free tokens; prompts can contain commas and won't survive the CSV split), then re-invoke with the armed keys for an `armed|MISSING` verdict, and arm ONLY the missing loops:
+**Arm them via `CronCreate` — IDEMPOTENTLY.** Run `CronList`, map each existing cron to its loop KEY (`governance-scan` | `inbox-monitor` | `offer-help` | `self-adherence` | `belt-countdown` — keys are the canonical comma-free tokens; prompts can contain commas and won't survive the CSV split), then re-invoke with the armed keys for an `armed|MISSING` verdict, and arm ONLY the missing loops:
 
 ```bash
-node scripts/adam-startup-check.mjs --armed "governance-scan,inbox-monitor,offer-help,self-adherence"
+node scripts/adam-startup-check.mjs --armed "governance-scan,inbox-monitor,offer-help,self-adherence,belt-countdown"
 ```
 
 For each `❌ MISSING` loop, call the emitted `CronCreate({ cron, prompt, recurring: true })`. Skip any already in `CronList` (including any interim hand-armed cron) — this is the durable replacement for hand-arming Adam's tick.
@@ -80,4 +81,4 @@ Going forward, the **active coordinator** runs an hourly responsibilities remind
 
 ## Result
 
-After `/adam`: the role contract has been read in full and **verified** (`contract_read: true` in the register output), the session is tagged `role=adam`/`non_fleet=true` (idempotent), the coordination protocol is established, and Adam's recurring tick (governance-scan + inbox-monitor + offer-help + self-adherence) is armed. Adam is now active as an advisory/analysis session, invisible to fleet accounting.
+After `/adam`: the role contract has been read in full and **verified** (`contract_read: true` in the register output), the session is tagged `role=adam`/`non_fleet=true` (idempotent), the coordination protocol is established, and Adam's recurring tick (governance-scan + inbox-monitor + offer-help + self-adherence + belt-countdown) is armed. Adam is now active as an advisory/analysis session, invisible to fleet accounting.

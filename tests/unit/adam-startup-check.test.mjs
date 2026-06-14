@@ -2,6 +2,9 @@
 // SD-LEO-INFRA-ENABLE-ADAM-GOVERNANCE-001 (FR-1)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   ADAM_LOOPS,
   RESPONSIBILITIES,
@@ -11,16 +14,79 @@ import {
   renderLoops,
   buildReport,
   ROLE_CONTEXT_DOC,
+  parseDurableDutyMarkers,
+  missingDurableDuties,
+  renderContractParity,
 } from '../../scripts/adam-startup-check.mjs';
 
-test('ADAM_LOOPS has the 4 expected tick loops with the expected keys', () => {
-  // self-adherence added by SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (child E).
-  assert.equal(ADAM_LOOPS.length, 4);
-  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence']);
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+test('ADAM_LOOPS has the 5 expected tick loops with the expected keys', () => {
+  // self-adherence added by SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (child E);
+  // belt-countdown added by SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2 — durable contract duty).
+  assert.equal(ADAM_LOOPS.length, 5);
+  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence', 'belt-countdown']);
   ADAM_LOOPS.forEach((l) => {
     assert.ok(l.cron && typeof l.cron === 'string', `${l.key} has a cron`);
     assert.ok(l.prompt && typeof l.prompt === 'string', `${l.key} has a prompt`);
   });
+});
+
+// SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): the consumer-side invariant for the loop
+// registry — every DURABLE contract-named duty in CLAUDE_ADAM.md must exist in ADAM_LOOPS, or
+// it silently dies every Adam session (the belt-countdown failure mode).
+test('FR2: every CLAUDE_ADAM.md durable duty marker is present in ADAM_LOOPS (contract↔tooling parity)', () => {
+  const contract = readFileSync(resolve(REPO_ROOT, 'CLAUDE_ADAM.md'), 'utf-8');
+  const duties = parseDurableDutyMarkers(contract);
+  assert.ok(duties.includes('belt-countdown'), 'contract declares the BELT COUNTDOWN DUTY (durable)');
+  const missing = missingDurableDuties(contract, ADAM_LOOPS);
+  assert.deepEqual(missing, [], `durable duties missing from ADAM_LOOPS: ${missing.join(', ')}`);
+});
+
+test('FR2: parseDurableDutyMarkers slugs the marker name and EXCLUDES non-durable/temporary duties', () => {
+  const md = [
+    '**BELT COUNTDOWN DUTY (durable)**: post a one-liner.',
+    '**SOME TEMP WATCHER**: a session-scoped watcher (NOT a durable duty).',
+    '**AUTONOMY COMPLETION WATCHER**: temporary, .PUSHED lifecycle (no durable marker).',
+  ].join('\n');
+  assert.deepEqual(parseDurableDutyMarkers(md), ['belt-countdown']);
+  // A durable duty with no ADAM_LOOPS entry must be reported missing (the guard's teeth).
+  assert.deepEqual(missingDurableDuties('**GHOST DUTY (durable)**', ADAM_LOOPS), ['ghost']);
+});
+
+// SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (review fix): the matcher must be FORGIVING so a
+// stylistic variation never SILENTLY drops a durable duty from enforcement (a false negative =
+// an unenforced duty). Hyphenated names, mixed/upper case, and uppercase DURABLE all match.
+test('FR2: parseDurableDutyMarkers is forgiving (hyphens, mixed case, UPPER DURABLE) — no silent false negatives', () => {
+  assert.deepEqual(parseDurableDutyMarkers('**Full-Inbox Sweep DUTY (durable)**'), ['full-inbox-sweep']);
+  assert.deepEqual(parseDurableDutyMarkers('**Belt Countdown DUTY (DURABLE)**'), ['belt-countdown']);
+  assert.deepEqual(parseDurableDutyMarkers('**FOO-BAR DUTY ( durable )**'), ['foo-bar']);
+  // a plain bold heading without the " DUTY (durable)" token is NOT a durable duty
+  assert.deepEqual(parseDurableDutyMarkers('**SOME HEADING**'), []);
+});
+
+// FR2: the parity invariant has RUNTIME teeth — renderContractParity surfaces drift at /adam
+// startup (fail-open), not only in CI.
+test('FR2: renderContractParity reports CLEAN for the real contract and is fail-open', () => {
+  const out = renderContractParity(REPO_ROOT);
+  assert.match(out, /CONTRACT↔TOOLING PARITY/);
+  assert.match(out, /✅ all durable .* duties present/);
+  assert.doesNotThrow(() => renderContractParity('/no/such/path'));
+  assert.match(renderContractParity('/no/such/path'), /fail-open/);
+});
+
+test('FR2: buildReport includes the contract-parity section', () => {
+  const report = buildReport([], {}, REPO_ROOT);
+  assert.match(report, /CONTRACT↔TOOLING PARITY/);
+});
+
+test('FR2: belt-countdown is an agent-prompt 15-min tick (durable, survives session restart)', () => {
+  const belt = ADAM_LOOPS.find((l) => l.key === 'belt-countdown');
+  assert.ok(belt, 'belt-countdown loop exists');
+  assert.equal(belt.script, null, 'agent-prompt tick (no script)');
+  assert.equal(belt.cron, '*/15 * * * *', 'every 15 minutes');
+  assert.match(belt.prompt, /belt-countdown/i);
+  assert.match(belt.prompt, /Eastern time|ET/i);
 });
 
 test('self-adherence loop runs the recurring self-adherence review (propose-only)', () => {
@@ -62,16 +128,16 @@ test('loopStatus: armed on key, prompt or script match, MISSING when provided-bu
   assert.equal(loopStatus(offer, { provided: true, set: new Set([offer.prompt]) }), 'armed');
 });
 
-test('end-to-end CSV verdict: --armed with all 4 loop KEYS → nothing to arm (no duplicate re-arm)', () => {
+test('end-to-end CSV verdict: --armed with all 5 loop KEYS → nothing to arm (no duplicate re-arm)', () => {
   const armed = parseArmedSet(['--armed', ADAM_LOOPS.map((l) => l.key).join(',')], {});
   const out = renderLoops(armed);
-  assert.match(out, /All 4 Adam tick loops armed\. Nothing to arm\./);
+  assert.match(out, /All 5 Adam tick loops armed\. Nothing to arm\./);
   assert.doesNotMatch(out, /MISSING/);
 });
 
 test('renderLoops emits CronCreate specs for the not-yet-armed loops (idempotent note)', () => {
   const out = renderLoops(parseArmedSet([], {}));
-  assert.match(out, /ADAM RECURRING TICK \(4 loops\)/);
+  assert.match(out, /ADAM RECURRING TICK \(5 loops\)/);
   assert.match(out, /CronCreate\(\{ cron: "0 13 \* \* \*"/); // governance-scan spec emitted
   assert.match(out, /idempotent/i);
 });
@@ -79,7 +145,7 @@ test('renderLoops emits CronCreate specs for the not-yet-armed loops (idempotent
 test('renderLoops reports "Nothing to arm" when all loops are in the armed set', () => {
   const armedSet = new Set(ADAM_LOOPS.map((l) => l.prompt));
   const out = renderLoops({ provided: true, set: armedSet });
-  assert.match(out, /All 4 Adam tick loops armed\. Nothing to arm\./);
+  assert.match(out, /All 5 Adam tick loops armed\. Nothing to arm\./);
 });
 
 test('renderResponsibilities is fail-open (bad repoRoot → fallback, never throws)', () => {
