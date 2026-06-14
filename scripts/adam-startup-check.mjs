@@ -34,6 +34,7 @@ export const RESPONSIBILITIES = [
   'Global <=1-advisory-per-tick cap; cite a live KR + counterfactual + dedup + a CONST self-check (the rationale bar).',
   'Daily deep governance-scan (one scope per tick, weighted round-robin); gated on ADAM_GOVERNANCE_HEARTBEAT_V1.',
   'Drain coordinator replies/reminders (the inbox); offer the coordinator concise analysis when it helps.',
+  'Recurring SELF-adherence audit: probe own role-contract duties, ledger findings, source propose-only remediation on drift (never build — CONST-002).',
 ];
 
 // Adam's recurring tick. Each loop is one CronCreate spec the /adam agent arms idempotently.
@@ -61,6 +62,16 @@ export const ADAM_LOOPS = [
     script: null, // agent-prompt tick — no script to run
     cron: '0 */2 * * *',
     prompt: 'Adam offer-help tick: peek the coordinator state (node scripts/fleet-dashboard.cjs all) + your inbox; if the coordinator has a strategy/analysis question you can answer or is overloaded, offer ONE concise analysis via node scripts/adam-advisory.cjs send "<body>" — else STAY SILENT (silence-by-default, propose-only, CONST-002).',
+  },
+  {
+    // SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (child E): Adam audits its OWN role-contract
+    // adherence (probes -> adam_adherence_ledger -> propose-only remediation for the coordinator;
+    // Adam never builds, CONST-002). The self-improving governance loop.
+    key: 'self-adherence',
+    label: 'Adam self-adherence audit (role-contract probes -> ledger -> propose-only remediation)',
+    script: 'adam-self-adherence-review.mjs',
+    cron: '0 */6 * * *',
+    prompt: 'node scripts/adam-self-adherence-review.mjs',
   },
 ];
 
