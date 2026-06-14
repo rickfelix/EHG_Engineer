@@ -16,11 +16,14 @@
  */
 
 import { randomUUID, createHash } from 'crypto';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { dirname, basename, join as joinPath } from 'node:path';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import {
   generateSDKey,
   generateChildKey,
   deriveChildIndex,
+  keyExists,
   SD_SOURCES,
   SD_TYPES,
   normalizeVenturePrefix
@@ -2020,6 +2023,184 @@ export function formatDependencyForDisplay(dep) {
   return dep.dependency ?? dep.sd_key ?? dep.sd_id ?? dep.id ?? JSON.stringify(dep);
 }
 
+// ============================================================================
+// --from-proposal ingest (SD-LEO-INFRA-FROM-PROPOSAL-INGEST-001)
+// Materialize .prd-payloads/PROPOSAL-*.json into DRAFT SDs via the EXISTING
+// createSD() path. Critical divergence from --from-plan: the key is taken
+// VERBATIM from proposed_sd_key (no generateSDKey / archive / content-hash).
+// validateProposalShape + mapProposalToCreateArgs are PURE + exported so unit
+// tests exercise them with zero DB access; createFromProposal accepts injected
+// deps {keyExists, createSD, readFile, resolveFiles} so dry-run + idempotency
+// are testable without the (non-injectable, module-singleton) live supabase.
+// ============================================================================
+
+const VALID_PROPOSAL_PRIORITIES = ['critical', 'high', 'medium', 'low'];
+
+/**
+ * Validate a parsed proposal object fail-loud. Required: proposed_sd_key, title,
+ * sd_type, priority (+ PROPOSAL===true, status_intended==='draft' when present).
+ * sd_type is validated by reusing mapToDbType() (canonical 15-value enum, throws);
+ * priority is lowercased + checked against the 4-value set. On any failure: a
+ * bracket-tokenized console.error + process.exit(1). Returns the normalized core.
+ * @param {object} proposal
+ * @param {string} filePath
+ * @returns {{sdKey:string,title:string,type:string,priority:string,rawType:string}}
+ */
+export function validateProposalShape(proposal, filePath) {
+  const where = filePath || '<proposal>';
+  if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {
+    console.error(`[INVALID_PROPOSAL] ${where}: payload must be a JSON object`);
+    process.exit(1);
+  }
+  if (proposal.PROPOSAL !== true) {
+    console.error(`[INVALID_PROPOSAL] ${where}: not a proposal (expected "PROPOSAL": true)`);
+    process.exit(1);
+  }
+  if (proposal.status_intended != null && proposal.status_intended !== 'draft') {
+    console.error(`[INVALID_PROPOSAL] ${where}: status_intended must be "draft" (got ${JSON.stringify(proposal.status_intended)})`);
+    process.exit(1);
+  }
+  // Required fields must be non-empty STRINGS. The typeof check is load-bearing:
+  // without it a number/boolean/array/object (e.g. title:[] or proposed_sd_key:42)
+  // would pass and flow verbatim into createSD -> a corrupt INSERT or an uncaught
+  // TypeError at sdKey.startsWith. (adversarial review w2b0qjnoa, 2 HIGH findings)
+  for (const field of ['proposed_sd_key', 'title', 'sd_type', 'priority']) {
+    const v = proposal[field];
+    if (v === undefined || v === null || typeof v !== 'string' || v.trim() === '') {
+      console.error(`[INVALID_PROPOSAL] ${where}: required field "${field}" must be a non-empty string`);
+      process.exit(1);
+    }
+  }
+  let type;
+  try {
+    type = mapToDbType(proposal.sd_type); // reuses canonical enum; throws on invalid (now guaranteed a string)
+  } catch (e) {
+    console.error(`[INVALID_PROPOSAL_SD_TYPE] ${where}: ${e.message}`);
+    process.exit(1);
+  }
+  // priority is guaranteed a non-empty string by the loop above, so a single-element
+  // array like ['high'] can no longer String()-coerce through this check.
+  const priority = proposal.priority.toLowerCase();
+  if (!VALID_PROPOSAL_PRIORITIES.includes(priority)) {
+    console.error(`[INVALID_PROPOSAL_PRIORITY] ${where}: "${proposal.priority}". Valid: ${VALID_PROPOSAL_PRIORITIES.join(', ')}`);
+    process.exit(1);
+  }
+  return { sdKey: proposal.proposed_sd_key, title: proposal.title, type, priority, rawType: proposal.sd_type };
+}
+
+/**
+ * Map a validated proposal to createSD() args. Key is verbatim; description falls
+ * back rationale -> scope -> title; metadata.source='proposal' + provenance.
+ * No vision_key/arch_key (avoids enrichFromVisionArch orphan-FK), no parentId,
+ * no orchestrator auto-routing. PURE.
+ */
+export function mapProposalToCreateArgs(normalized, proposal, filePath) {
+  return {
+    sdKey: normalized.sdKey,
+    title: normalized.title,
+    type: normalized.type,
+    priority: normalized.priority,
+    description: proposal.rationale || proposal.scope || proposal.title,
+    // Sibling parity: UAT/learn/feedback/QF/plan/child all set an explicit rationale
+    // (used by the LEAD evaluator). Fall back to a provenance line when absent.
+    rationale: proposal.rationale || `Materialized from proposal ${filePath || 'unknown'}`,
+    scope: proposal.scope || null,
+    success_criteria: Array.isArray(proposal.success_criteria) ? proposal.success_criteria : null,
+    metadata: {
+      source: 'proposal',
+      proposal_file_path: filePath || null,
+      proposal_provenance: proposal.provenance || null,
+      roadmap_phase: proposal.roadmap_phase || null,
+      tier_hint: proposal.tier_hint || null,
+      gold_origin: proposal.gold_origin || null,
+      necessity: proposal.necessity || null,
+      dedup_note: proposal.dedup_note || null,
+    },
+  };
+}
+
+/**
+ * Resolve a path or simple glob (basename may contain '*') to a sorted file list.
+ * Fail-loud if nothing matches / the file is missing.
+ */
+function resolveProposalFiles(pathOrGlob) {
+  if (!pathOrGlob || typeof pathOrGlob !== 'string') {
+    console.error('[INVALID_PROPOSAL] --from-proposal requires a file path or glob (e.g. .prd-payloads/PROPOSAL-*.json)');
+    process.exit(1);
+  }
+  if (pathOrGlob.includes('*')) {
+    const dir = dirname(pathOrGlob);
+    const pat = basename(pathOrGlob);
+    const rx = new RegExp('^' + pat.split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
+    let entries;
+    try { entries = readdirSync(dir); } catch (e) {
+      console.error(`[INVALID_PROPOSAL] cannot read directory "${dir}": ${e.message}`);
+      process.exit(1);
+    }
+    const matched = entries.filter(f => rx.test(f)).sort().map(f => joinPath(dir, f));
+    if (matched.length === 0) {
+      console.error(`[INVALID_PROPOSAL] no files match glob "${pathOrGlob}"`);
+      process.exit(1);
+    }
+    return matched;
+  }
+  if (!existsSync(pathOrGlob)) {
+    console.error(`[INVALID_PROPOSAL] file not found: "${pathOrGlob}"`);
+    process.exit(1);
+  }
+  return [pathOrGlob];
+}
+
+/**
+ * --from-proposal ingest: read PROPOSAL-*.json file(s), validate, and create a
+ * DRAFT SD per file via the existing createSD() path (verbatim key). Idempotent
+ * (skips an already-materialized key). --dry-run validates + reports, zero writes.
+ * @param {string} pathOrGlob
+ * @param {{dryRun?:boolean, deps?:{keyExists?:Function, createSD?:Function, readFile?:Function, resolveFiles?:Function}}} options
+ */
+export async function createFromProposal(pathOrGlob, options = {}) {
+  const { dryRun = false, deps = {} } = options;
+  const _keyExists = deps.keyExists || keyExists;
+  const _createSD = deps.createSD || createSD;
+  const _readFile = deps.readFile || readFileSync;
+  const _resolveFiles = deps.resolveFiles || resolveProposalFiles;
+
+  const files = _resolveFiles(pathOrGlob);
+  const results = [];
+  for (const file of files) {
+    let raw, proposal;
+    try {
+      raw = _readFile(file, 'utf8');
+    } catch (e) {
+      console.error(`[INVALID_PROPOSAL] ${file}: cannot read file: ${e.message}`);
+      process.exit(1);
+    }
+    try {
+      proposal = JSON.parse(raw);
+    } catch (e) {
+      console.error(`[INVALID_PROPOSAL] ${file}: invalid JSON: ${e.message}`);
+      process.exit(1);
+    }
+    const normalized = validateProposalShape(proposal, file);
+    const exists = await _keyExists(normalized.sdKey);
+    if (exists) {
+      console.log(`⏭️  ${normalized.sdKey} already exists, skipping (${file})`);
+      results.push({ sdKey: normalized.sdKey, file, action: 'skipped' });
+      continue;
+    }
+    const args = mapProposalToCreateArgs(normalized, proposal, file);
+    if (dryRun) {
+      console.log(`🔎 [dry-run] would create ${args.sdKey} (${args.type}/${args.priority}) — ${args.title}`);
+      results.push({ sdKey: normalized.sdKey, file, action: 'dry-run' });
+      continue;
+    }
+    await _createSD(args);
+    console.log(`✅ Created DRAFT SD ${args.sdKey} from ${file}`);
+    results.push({ sdKey: normalized.sdKey, file, action: 'created' });
+  }
+  return results;
+}
+
 // Export for programmatic use (e.g., corrective-sd-generator)
 // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-4): export buildDefaultSmokeTestSteps for unit-test access.
 export { createSD, buildDefaultSmokeTestSteps };
@@ -2040,6 +2221,7 @@ Usage:
   node scripts/leo-create-sd.js --from-learn <pattern-id>
   node scripts/leo-create-sd.js --from-feedback <feedback-id>
   node scripts/leo-create-sd.js --from-qf <QF-ID>
+  node scripts/leo-create-sd.js --from-proposal <path|glob> [--dry-run]
   node scripts/leo-create-sd.js --from-plan [path] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js --child <parent-key> [index] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js <source> <type> "<title>"
@@ -2073,6 +2255,7 @@ Flags:
                         Pairs with computeReposForSD() at lead-final-approval/gates.js
                         (SD-LEO-INFRA-CROSS-REPO-MERGE-001). Supported in all 3 modes:
                         direct LEO, --from-plan, --child.
+  --dry-run          (--from-proposal only) Validate + report would-create SDs; ZERO database writes.
   --help             Show this help message
 
 Dependency Field Guide:
@@ -2143,6 +2326,13 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       });
     } else if (args[0] === '--from-qf') {
       await createFromQF(args[1]);
+    } else if (args[0] === '--from-proposal') {
+      // SD-LEO-INFRA-FROM-PROPOSAL-INGEST-001: materialize PROPOSAL-*.json into DRAFT SDs.
+      // path/glob = first non-flag positional after --from-proposal; --dry-run = no writes.
+      const dryRun = args.includes('--dry-run');
+      const fpKnownFlags = new Set(['--from-proposal', '--dry-run']);
+      const proposalArg = args.find((a, i) => i > 0 && !a.startsWith('-') && !fpKnownFlags.has(a)) || args[1];
+      await createFromProposal(proposalArg, { dryRun });
     } else if (args[0] === '--from-plan') {
       // Check for --yes flag (skip confirmation for auto-detect)
       const hasYesFlag = args.includes('--yes') || args.includes('-y');
