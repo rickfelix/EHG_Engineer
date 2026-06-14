@@ -1,7 +1,7 @@
-<!-- file_content_hash: f8f0b7c0c0712a6e -->
+<!-- file_content_hash: 569a7a2581969535 -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-11 9:56:07 AM
+**Generated**: 2026-06-14 10:27:42 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -73,8 +73,16 @@
 
 **THE DEFERRED QUESTION ADAM OWNS:** "which 1-2 ventures get the first dedicated revenue push?" is chairman-DEFERRED until (a) the current SD backlog is implemented AND (b) the LEO Roadmap is laid out. Adam re-asks it at that moment — the chairman must not have to remember.
 
+**2026-06-11 (handoff-drill fixes — durable encoding of session-fragile duties)**:
+- **BELT COUNTDOWN DUTY (durable)**: while the fleet is active, Adam posts a belt-countdown one-liner every 15 minutes — ONE line, Eastern time in 12-hour format, with a rolling ETA to belt-dry (claimable-SD depth vs current fleet burn). This duty previously lived only in session-scoped crons and DIED with every Adam session (confirmed by the 2026-06-11 handoff drill). Every `/adam` startup must RE-ARM it alongside the three canonical tick loops; countdown timestamps derive from DB rows — never hand-converted ET↔UTC.
+- **FULL-INBOX SWEEP (sharpened — never trust ack state)**: the known auto-ack bug stamps read_at/acknowledged_at on rows Adam never processed (QF-20260610-623, sender_type-allowlist class). Sweep the coordination lane by created_at + payload.kind over the recent window (e.g. 24h) REGARDLESS of read/ack stamps; acknowledged_at-IS-NULL filtering alone provably hides chairman/coordinator directives.
+- **LIVE STATE LIVES IN THE DB, NOT MEMORY (handoff rule)**: experiment arm state (e.g. effort-tier `metadata.arms_log`), open-watch lists, and queue state must be re-read LIVE at session start; memory files are point-in-time and go stale within hours on an active fleet. A fresh Adam asserting experiment/queue state from memory without a live DB read is a D4 (verify-before-certainty) failure.
+
+- **CHAIRMAN PHONE-NOTIFY (urgent action-items + decisions) — SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001**: Adam tracks chairman HUMAN action-items in `.adam-chairman-decisions.json` (surfaced in the hourly exec email NEEDS-YOU section) AND, for anything genuinely URGENT / time-critical, routes it to the chairman PHONE via the shared `notifyChairman({title, description, priority, dueDatetime?})` helper (`lib/integrations/todoist/chairman-notify.js`, or `npm run chairman:notify --title "..."`). The helper adds a Todoist task + an EXPLICIT verified v1 push reminder — the @doist SDK is BLIND to reminders (Sync-API-only), and dueDatetime / the `!` quick-add syntax attach 0 reminders and never push, so only the explicit `reminder_add` buzzes the phone. This is a phone-push LAYER on top of the coordinator decision-queue / `fn_chairman_decide`, NOT a replacement. Use it SPARINGLY (urgent only — never spam the chairman). The coordinator uses the SAME helper for urgent gate decisions; never re-implement the v1 `reminder_add` POST anywhere.
+
+
 ---
 
-*Generated from database: 2026-06-11*
+*Generated from database: 2026-06-14*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

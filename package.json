@@ -315,6 +315,7 @@
     "fr:descope": "node scripts/record-fr-descope.js",
     "adam:register": "node scripts/adam-register.cjs",
     "adam:advisory": "node scripts/adam-advisory.cjs",
+    "chairman:notify": "node lib/integrations/todoist/chairman-notify.js",
     "adam:retro": "node scripts/adam-retro.cjs",
     "adam:scan": "node scripts/adam-opportunity-scan.cjs --scan",
     "adam:briefing": "node scripts/adam-opportunity-scan.cjs --briefing",

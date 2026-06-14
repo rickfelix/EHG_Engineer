@@ -1,21 +1,14 @@
 {
-  "generated_at": "2026-06-11T02:37:45.938Z",
-  "git_commit": "7873efa7",
-  "db_snapshot_hash": "db09404169de6bee",
+  "generated_at": "2026-06-14T02:27:42.375Z",
+  "git_commit": "50078d88",
+  "db_snapshot_hash": "15cdd0a6da83d8c4",
   "files": {
-    "CLAUDE_PLAN.md": {
+    "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 90630,
-      "estimated_tokens": 22658,
-      "content_hash": "79ca7826e6ce0349",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-C\\CLAUDE_PLAN.md"
-    },
-    "CLAUDE_EXEC.md": {
-      "type": "full",
-      "chars": 82262,
-      "estimated_tokens": 20566,
-      "content_hash": "74e7adea35334dbf",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-MAN-ORCH-LEO-HARNESS-EFFICIENCY-001-C\\CLAUDE_EXEC.md"
+      "chars": 22138,
+      "estimated_tokens": 5535,
+      "content_hash": "93a7e9653f6217c5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001\\CLAUDE_ADAM.md"
     }
   }
 }
