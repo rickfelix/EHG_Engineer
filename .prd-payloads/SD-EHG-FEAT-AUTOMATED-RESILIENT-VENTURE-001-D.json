@@ -1,0 +1,91 @@
+{
+  "executive_summary": "Child D (the integration capstone) of the CONST-014 decomposition of SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001 (Cloudflare venture-publish retarget). Ties children A (stack descriptor), B (DB provisioning/routing) and C (spend-guardrails) into a SINGLE publish() action plus post-publish verifiers. publish() is DRY-RUN by default — it plans the Cloudflare Pages/Workers-or-Cloud-Run deploy + D1/Neon DB + R2 + production migrations and emits a reviewable evidence object WITHOUT executing anything, unless explicitly told dryRun:false and the venture passes every readiness check (guardrails active, DB connection provisioned). All external CLIs (wrangler/gcloud/neonctl/git) go through an injected, mockable cli-adapters layer so the whole orchestration is testable with no real CLIs. Non-overlapping with A/B/C/E; the only shared-file edit is a single family-aware line in build-tasks-writer.",
+  "business_context": "Today 'publish a venture' is a hand-run sequence of CLI steps with no single safe entry point and no machine-checkable proof the deploy succeeded. That is error-prone and blocks autonomous venture launch. D makes publishing one reviewable, fail-safe step: dry-run-by-default so an operator can see exactly what WOULD happen, human-gated for the real run, refusing to publish a venture whose guardrails (C) or DB connection (B) are not ready, and backed by post-publish verifiers that prove the Pages URL / compute / DB / storage actually came up. This is the capstone that makes the Cloudflare retarget usable end-to-end.",
+  "technical_context": "Reuses (does NOT modify): C's lib/venture-deploy/spend-guardrails.js (evaluateGuardrails, GUARDRAIL_NAMES, persistGuardrailDecisions) + the 'spend guardrails ready' verifier; B's stakes-router + the stack_descriptor.connection {provider, secret_ref} written by the provisioner + B's 'stack descriptor valid' / 'deployment target provisioned' verifiers; A's lib/venture-deploy/stack-descriptor.js (validateStackDescriptor, deployTargetFamily). build-tasks-writer.js already dispatches on deployTargetFamily and has a computed `family`; only its Child-3 line 3.5 (currently hardcoded 'Replit hosting') needs to become family-aware. New gate strings MUST be distinct from B ('stack descriptor valid','deployment target provisioned') and C ('spend guardrails ready').",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Single publish() orchestration action — dry-run-default, human-gated, fail-safe",
+      "description": "CREATE lib/venture-deploy/publish.js exporting async publish(ventureId, supabase, deployCfg, deps). DRY-RUN by DEFAULT (deployCfg.dryRun !== false). It (a) reads the venture's stack_descriptor + connection (B) and resolves deployTargetFamily; (b) checks readiness — guardrails active via C's evaluateGuardrails/the recorded venture_guardrail_state, and DB connection provisioned (stack_descriptor.connection.provider+secret_ref); (c) plans the ordered deploy steps (Pages build + Workers/Cloud-Run deploy + D1/Neon ensure + R2 + prod migrations) via the cli-adapters; (d) in dry-run, executes NOTHING and returns evidence of the planned actions; in real-run (dryRun:false) it refuses with a blocked status naming the first failing readiness check, else runs the steps through the adapters. Emits { status: 'planned'|'published'|'blocked', deploymentUrl, databaseReady, guardrailsActive, evidence: { plannedActions[], adapterCalls[] } }. Fail-loud on a missing/invalid descriptor.",
+      "acceptance_criteria": [
+        "Calling publish() with no dryRun override for a ready venture returns status 'planned' with a populated evidence.plannedActions and executes ZERO real adapter side-effects — an operator can read exactly what a real publish would do.",
+        "Calling publish() with dryRun:false for a venture whose guardrails are not active OR whose DB connection is missing returns status 'blocked' naming the failing check, and performs no partial deploy.",
+        "Calling publish() with dryRun:false for a fully-ready venture invokes the cli-adapters in order and returns status 'published' with deploymentUrl/databaseReady/guardrailsActive set.",
+        "publish() fails loud on a missing or invalid stack_descriptor (never a silent no-op deploy)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Injected, mockable CLI adapters",
+      "description": "CREATE lib/venture-deploy/cli-adapters.js wrapping the external deploy CLIs (wrangler pages/deploy, gcloud run deploy, neonctl, git/CI trigger) behind a small typed interface { deployPages, deployWorkers, deployCloudRun, ensureD1, ensureNeon, ensureR2, runMigrations }. Each adapter is a thin execFile wrapper; the module exports a default real-adapter set AND accepts dependency injection so publish() can be driven with fakes. Real adapters are NEVER invoked in dry-run.",
+      "acceptance_criteria": [
+        "publish() consumes cli-adapters via injection (deps.adapters), so unit tests pass in fakes and need no real wrangler/gcloud/neonctl installed.",
+        "The default real adapters are thin execFile wrappers with no business logic.",
+        "In dry-run, no adapter's execute path is called — only its planned-action descriptor is recorded in evidence."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fail-closed post-publish verifiers",
+      "description": "UPDATE lib/eva/lifecycle/exit-gate-verifiers.js: register post-publish verifiers under gate strings DISTINCT from B/C — 'pages url live' (deploymentUrl recorded for cloudflare/cloud-run ventures), 'compute deployed' (Workers/Cloud Run service recorded), and 'publish evidence recorded' (a publish evidence artifact/record exists for the venture). All FAIL-CLOSED: query error / missing record => satisfied:false. Registered = enforced once a stage wires the string into gates.exit.",
+      "acceptance_criteria": [
+        "The post-publish verifiers return satisfied:false when the venture has no recorded deployment URL / compute / publish evidence (fail-closed).",
+        "They return satisfied:true only when the corresponding publish record is present.",
+        "The new gate strings are substring-distinct from B's and C's gate strings (no resolveVerifier collision)."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Family-aware Child-3 deploy build-task line",
+      "description": "UPDATE lib/eva/bridge/build-tasks-writer.js — the single Child-3 line 3.5 (currently hardcoded 'Replit hosting (autoscale)') becomes family-aware using the already-computed `family`: replit => existing Replit prose (byte-identical for replit ventures); cloudflare => Cloudflare Pages/Workers via `wrangler`; cloud-run => `gcloud run deploy`. One line only — disjoint from A.",
+      "acceptance_criteria": [
+        "A replit-family venture's generated build tasks contain the byte-identical original '3.5 Deploy — Replit hosting' line (no regression).",
+        "A cloudflare-family venture's 3.5 line references Cloudflare Pages/Workers + wrangler.",
+        "A cloud-run-family venture's 3.5 line references gcloud run deploy."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Tests + activation",
+      "description": "CREATE tests/unit/venture-publish.test.js covering publish() dry-run-default (no side-effects + evidence shape), real-run blocked-on-failed-readiness, real-run published-with-fakes, fail-loud on bad descriptor; the post-publish verifiers fail-closed/pass; and the family-aware build-task line for all 3 families. Set product_requirements_v2.activation_test_id to this test.",
+      "acceptance_criteria": [
+        "Unit tests cover publish() dry-run/blocked/published/fail-loud with mocked cli-adapters (no real CLIs).",
+        "Tests assert the post-publish verifiers are fail-closed and the build-task line is family-aware for replit/cloudflare/cloud-run.",
+        "All tests pass green under the vitest unit project; PRD.activation_test_id is set and the activation test passes."
+      ]
+    }
+  ],
+  "non_functional_requirements": [
+    {"id": "NFR-1", "title": "Safe-by-default", "description": "publish() is dry-run by default and human-gated; it never executes a real deploy without an explicit dryRun:false AND passing every readiness check."},
+    {"id": "NFR-2", "title": "Testable without real infra", "description": "All external CLIs are behind injected, mockable adapters so the orchestration is fully unit-testable with no wrangler/gcloud/neonctl installed."},
+    {"id": "NFR-3", "title": "No regression / non-overlapping", "description": "Reuses A/B/C modules read-only; the only shared-file change is one family-aware line in build-tasks-writer, preserving byte-identical output for replit ventures."}
+  ],
+  "test_scenarios": [
+    {"id": "TS-1", "scenario": "publish() dry-run default: zero side-effects, evidence.plannedActions populated"},
+    {"id": "TS-2", "scenario": "publish() real-run: blocked when guardrails inactive / DB connection missing; published when ready (fakes)"},
+    {"id": "TS-3", "scenario": "post-publish verifiers fail-closed + pass; family-aware build-task line for replit/cloudflare/cloud-run"}
+  ],
+  "acceptance_criteria": [
+    "Single publish() action orchestrates the venture deploy, dry-run by default, human-gated, refusing on failed readiness checks, reusing A/B/C.",
+    "All external CLIs behind injected mockable adapters; no real CLI invoked in dry-run or tests.",
+    "Fail-closed post-publish verifiers registered with gate strings distinct from B/C.",
+    "Child-3 deploy build-task line is family-aware (replit byte-identical, cloudflare/cloud-run cloud prose).",
+    "Tests green; PRD.activation_test_id set."
+  ],
+  "risks": [
+    {"risk": "publish() accidentally executes a real deploy in dry-run", "severity": "high", "mitigation": "dry-run is the DEFAULT; real adapters are only reachable via injected execute path gated on dryRun:false; a test asserts zero adapter side-effects in dry-run."},
+    {"risk": "build-tasks-writer edit regresses replit ventures", "severity": "medium", "mitigation": "keep the replit branch byte-identical; test asserts the original line for replit family."},
+    {"risk": "post-publish gate strings collide with B/C", "severity": "low", "mitigation": "choose substring-distinct strings; test asserts resolveVerifier maps them to the new verifiers, not B/C."}
+  ],
+  "implementation_approach": {
+    "summary": "Build the mockable cli-adapters first, then the dry-run-default publish() orchestration that reuses A/B/C, then the fail-closed post-publish verifiers and the one family-aware build-task line, then tests + adversarial review.",
+    "steps": [
+      "CREATE lib/venture-deploy/cli-adapters.js — injected, mockable wrappers (wrangler/gcloud/neonctl/CI).",
+      "CREATE lib/venture-deploy/publish.js — dry-run-default, human-gated publish() reusing C's guardrails + B's connection; emits {status, deploymentUrl, databaseReady, guardrailsActive, evidence}.",
+      "UPDATE lib/eva/lifecycle/exit-gate-verifiers.js — fail-closed post-publish verifiers, gate strings distinct from B/C.",
+      "UPDATE lib/eva/bridge/build-tasks-writer.js — single family-aware Child-3 deploy line (replit byte-identical).",
+      "CREATE tests/unit/venture-publish.test.js + set PRD.activation_test_id; rewrite auto-stories to INVEST; adversarial review; TESTING evidence; handoffs."
+    ]
+  },
+  "dependencies": ["SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-A (COMPLETED)", "SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-B (COMPLETED)", "SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-C (COMPLETED)"]
+}
