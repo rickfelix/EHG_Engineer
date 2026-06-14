@@ -22,6 +22,8 @@ import 'dotenv/config';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+// SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: advisory, fail-open checkout-freshness badge.
+import { checkoutFreshness, freshnessBadge } from '../lib/governance/checkout-freshness.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -141,9 +143,18 @@ export function renderLoops(armed) {
   return lines.join('\n');
 }
 
+/** Advisory checkout-freshness badge (fail-open — never throws, never blocks startup). */
+export function renderFreshness(repoRoot = REPO_ROOT) {
+  try {
+    return '═══ CHECKOUT FRESHNESS ═══\n  ' + freshnessBadge(checkoutFreshness(repoRoot, { role: 'adam' }));
+  } catch (err) {
+    return '═══ CHECKOUT FRESHNESS ═══\n  ✅ freshness check skipped (fail-open): ' + (err?.message || String(err));
+  }
+}
+
 export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
   const armed = parseArmedSet(argv, env);
-  return [renderResponsibilities(repoRoot), '', renderLoops(armed)].join('\n');
+  return [renderResponsibilities(repoRoot), '', renderLoops(armed), '', renderFreshness(repoRoot)].join('\n');
 }
 
 // ── Main (fail-open: always exit 0) ──
