@@ -1,0 +1,93 @@
+{
+  "executive_summary": "Child B of the CONST-014 decomposition of SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001 (Cloudflare venture-publish retarget). Consumes child A's stack-descriptor contract (lib/venture-deploy/stack-descriptor.js; ventures.stack_descriptor JSONB) and makes automated-venture DB provisioning STAKES-AWARE and per-venture isolated. A pure stakes-router encodes the 5 D1->Neon graduation triggers (research-resolved, not invented): every venture defaults to cheap Cloudflare D1 and is graduated to Neon Postgres only when ANY trigger fires; replit-autoscale targets remain a no-op (replit-postgres). The provisioner's DB step is updated to route via the stakes-router and write the resolved connection back into ventures.stack_descriptor.connection (read by sibling D). Two fail-closed exit-gate verifiers (descriptor-shape + deployment_target coherence) block a venture from advancing with a missing/malformed descriptor. A new additive table holds per-venture DB connection secrets with RLS and NO hardcoded credentials.",
+  "business_context": "The legacy venture publish flow hardcoded Replit + Supabase. The hosting research (6 sources, primary-verified) resolved the D1-vs-Neon tension into a STAKES-BASED routing rule: D1 for disposable/experimental ventures (max economy, $0 idle), Neon for revenue-bearing/important ones (robust, portable). Paying for Neon up front on every venture wastes capital; staying on D1 for a revenue-bearing venture risks data loss and lock-in. Stakes-based routing scales cost with proven need. Per-venture DB isolation (separate connection secrets per venture) prevents one venture's credentials or data from leaking into another.",
+  "technical_context": "A (shipped, on main) provides: lib/venture-deploy/stack-descriptor.js exporting DB_PROVIDERS ['d1','neon','replit-postgres'], DEPLOYMENT_TARGETS, validateStackDescriptor(d), deployTargetFamily(d); the descriptor JSONB has db_provider + deployment_target (required), optional storage/region, a graduation object (passthrough — 'meaning owned by sibling B'), and a connection object (written by B, read by D). ventures.stack_descriptor column exists (20260614_add_ventures_stack_descriptor.sql). B owns: lib/venture-deploy/stakes-router.js (NEW, pure), lib/eva/bridge/venture-provisioner.js (UPDATE DB step), lib/eva/lifecycle/exit-gate-verifiers.js (UPDATE: 2 new verifiers, gate strings distinct from C's 'spend guardrails ready' and D's), and a NEW per-venture DB-secrets migration. Non-overlapping with A, C, D, E.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Pure stakes-router encoding the 5 D1->Neon graduation triggers",
+      "description": "NEW lib/venture-deploy/stakes-router.js — a PURE module (no I/O) exporting GRADUATION_TRIGGERS (the 5 canonical research-resolved trigger keys: collects_irreplaceable_data, write_amplifying_jobs, needs_postgres_features, needs_portable_migration, revenue_bearing) and routeDbProvider(descriptor) => { provider: 'd1'|'neon'|'replit-postgres', triggersFired: string[], reason }. Rules: deployment_target 'replit-autoscale' (or absent/unknown) => replit-postgres no-op; otherwise default 'd1'; graduate to 'neon' if ANY of the 5 descriptor.graduation.<trigger> flags is truthy. Fail-loud: a malformed descriptor (not a plain object, or an invalid deployment_target per stack-descriptor.js) throws rather than silently defaulting.",
+      "acceptance_criteria": [
+        "routeDbProvider with a cloud descriptor and no graduation flags returns provider 'd1' and triggersFired [].",
+        "routeDbProvider with any one of the 5 graduation flags truthy returns provider 'neon' and names that trigger in triggersFired.",
+        "routeDbProvider with deployment_target 'replit-autoscale' returns provider 'replit-postgres' (no-op path).",
+        "routeDbProvider throws on a malformed/invalid descriptor (fail-loud, never a silent default)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Provisioner DB step routes via the stakes-router and writes resolved connection",
+      "description": "UPDATE lib/eva/bridge/venture-provisioner.js: the DB-provisioning step reads the venture's stack_descriptor, calls routeDbProvider, and for the resolved provider performs the DB step (replit => no-op / existing behavior; d1 => default Cloudflare D1; neon => Neon). It writes the resolved connection details (db_connection_url / binding) into ventures.stack_descriptor.connection (NOT a hardcoded credential — a reference/url sourced from the per-venture secrets table) so sibling D can read it. Idempotent + fail-loud on a missing descriptor.",
+      "acceptance_criteria": [
+        "Provisioning a venture whose descriptor routes to d1 records a d1 connection in ventures.stack_descriptor.connection without provisioning Neon.",
+        "Provisioning a venture whose descriptor hits a graduation trigger routes to neon and records a neon connection reference.",
+        "A venture with a missing/malformed stack_descriptor fails the DB step loudly (no silent skip).",
+        "The connection written contains a reference/url, never a hardcoded credential literal."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fail-closed descriptor-shape + deployment_target exit-gate verifiers",
+      "description": "UPDATE lib/eva/lifecycle/exit-gate-verifiers.js: register TWO verifiers in GATE_VERIFIERS under gate strings DISTINCT from C ('spend guardrails ready') and D. (a) 'stack descriptor valid' — reads ventures.stack_descriptor and returns satisfied:false unless validateStackDescriptor passes. (b) 'deployment target provisioned' — returns satisfied:false unless stack_descriptor.connection is populated for the routed provider. Both FAIL-CLOSED: query error / missing descriptor / missing connection => satisfied:false. Unregistered gates skip-allow, so registration is what makes these fail-closed.",
+      "acceptance_criteria": [
+        "The 'stack descriptor valid' verifier returns satisfied:false for a venture whose stack_descriptor is missing or fails validateStackDescriptor.",
+        "The 'deployment target provisioned' verifier returns satisfied:false when stack_descriptor.connection is absent.",
+        "Both verifiers return satisfied:true only when the descriptor is valid AND connection is populated.",
+        "A DB query error yields satisfied:false (fail-closed), and the new gate strings do not collide with C's or D's."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Per-venture DB secrets table (additive, RLS, no hardcoded credentials)",
+      "description": "NEW additive migration database/migrations/<date>_venture_db_secrets.sql — a per-venture table (keyed by venture_id, UNIQUE) holding the DB connection secret reference (e.g. secret_ref / connection_url) per venture, with RLS (service_role write / authenticated read). NO existing table altered, NO hardcoded credentials in the SQL. The chairman @approved-by prod-deploy attestation is intentionally NOT self-authored (CONST-002) — prod-apply parked for the chairman gate.",
+      "acceptance_criteria": [
+        "The migration is additive (CREATE TABLE IF NOT EXISTS), keyed/UNIQUE by venture_id, with RLS enabled and service-write/authenticated-read policies.",
+        "The migration contains no hardcoded credential literals and no self-authored @approved-by line.",
+        "Per-venture isolation: a row is scoped to exactly one venture_id (UNIQUE constraint)."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Tests + activation",
+      "description": "NEW tests/unit/venture-stakes-router.test.js (or similar) covering: stakes-router all-d1 / each-of-5-triggers->neon / replit no-op / fail-loud; both exit-gate verifiers fail-closed + pass; per-venture isolation. Set product_requirements_v2.activation_test_id to the activation test so GATE_ACTIVATION_INVARIANT can verify the stakes-routing is live.",
+      "acceptance_criteria": [
+        "Unit tests cover the stakes-router (d1 default, all 5 triggers->neon, replit no-op, fail-loud) and both fail-closed verifiers.",
+        "All tests pass green under the vitest unit project (no live DB).",
+        "PRD.activation_test_id is set and the activation test passes."
+      ]
+    }
+  ],
+  "non_functional_requirements": [
+    {"id": "NFR-1", "title": "Pure/testable", "description": "The stakes-router is a pure function (no DB/network) so it is fully unit-testable with no live DB."},
+    {"id": "NFR-2", "title": "Fail-closed/fail-loud", "description": "Verifiers fail-closed (block on absence/error); router fails loud on malformed input; no silent defaults."},
+    {"id": "NFR-3", "title": "No hardcoded credentials", "description": "All DB connection secrets are per-venture references, never literals committed to the repo."}
+  ],
+  "test_scenarios": [
+    {"id": "TS-1", "scenario": "stakes-router: d1 default (no triggers), each of 5 triggers -> neon, replit-autoscale -> replit no-op, malformed -> throws"},
+    {"id": "TS-2", "scenario": "exit-gate verifiers: descriptor-shape fail-closed + pass; deployment-target-provisioned fail-closed + pass; query error -> fail-closed"},
+    {"id": "TS-3", "scenario": "per-venture isolation: provisioning/connection writes scoped by venture_id"}
+  ],
+  "acceptance_criteria": [
+    "Stakes-router encodes the 5 canonical D1->Neon graduation triggers and is pure + fail-loud.",
+    "Provisioner DB step routes via the stakes-router and writes the resolved connection into ventures.stack_descriptor.connection.",
+    "Two fail-closed exit-gate verifiers (descriptor-shape + deployment-target) registered with gate strings distinct from C/D.",
+    "Additive per-venture DB-secrets migration with RLS and no hardcoded credentials; chairman attestation not self-authored.",
+    "Tests green; PRD.activation_test_id set."
+  ],
+  "risks": [
+    {"risk": "Graduation-trigger semantics drift from the research", "severity": "medium", "mitigation": "Encode the exact 5 research-resolved triggers as named constants with a doc comment citing the source; cover each in a test."},
+    {"risk": "Provisioner is a large 633-line orchestrator — change could regress existing steps", "severity": "medium", "mitigation": "Touch only the DB step; keep all other steps intact; rely on existing provisioner tests + import smoke."},
+    {"risk": "Migration prod-apply blocked on chairman attestation", "severity": "low", "mitigation": "Build the migration but do NOT self-author @approved-by; park prod-apply and flag at completion (CONST-002)."}
+  ],
+  "implementation_approach": {
+    "summary": "Build the pure stakes-router first, wire it into the provisioner DB step, register the two fail-closed verifiers, add the per-venture DB-secrets migration, then tests + adversarial review.",
+    "steps": [
+      "Write pure stakes-router.js (5 graduation triggers + routeDbProvider, fail-loud).",
+      "Update provisioner DB step to route via the stakes-router and write resolved connection into ventures.stack_descriptor.connection.",
+      "Register 2 fail-closed verifiers (descriptor-shape + deployment-target) in exit-gate-verifiers.js with gate strings distinct from C/D.",
+      "Write additive per-venture DB-secrets migration (RLS, no hardcoded creds, no self-authored @approved-by).",
+      "Tests + set PRD.activation_test_id; adversarial review (governance/schema change); TESTING evidence; handoffs."
+    ]
+  },
+  "dependencies": ["SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-A (stack-descriptor contract — COMPLETED)"]
+}

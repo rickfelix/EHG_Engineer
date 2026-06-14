@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-C",
-  "expectedBranch": "feat/SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-C",
-  "createdAt": "2026-06-14T18:46:20.105Z",
+  "sdKey": "SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-B",
+  "expectedBranch": "feat/SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-B",
+  "createdAt": "2026-06-14T20:40:02.596Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
