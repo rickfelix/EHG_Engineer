@@ -23,7 +23,14 @@ async function getActiveProtocol(supabase) {
     .from('leo_protocol_sections')
     .select('*')
     .eq('protocol_id', data.id)
-    .order('order_index');
+    // SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1): deterministic secondary sort.
+    // Without an `id` tiebreak, Postgres returns rows that share an order_index in an
+    // UNSPECIFIED order, so the rendered CLAUDE_*.md byte-order for a tied group could
+    // shuffle (table rewrite / VACUUM / plan change) with no DB content change — making the
+    // generated docs non-deterministic AND invisible to the per-section drift digest. The
+    // tiebreak pins a stable render order so the digest faithfully tracks rendered output.
+    .order('order_index')
+    .order('id');
 
   data.sections = sections || [];
   return data;

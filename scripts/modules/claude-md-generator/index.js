@@ -46,6 +46,12 @@ import {
   generateAdamDigest
 } from './digest-generators.js';
 
+// SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-5): every generated file carries a
+// prominent DO-NOT-edit banner. It is DETERMINISTIC (no timestamp), so it is identically
+// present in both the in-memory render and the on-disk file and never causes a drift
+// false-positive. Pure ASCII to keep the byte-comparison encoding-stable.
+export const GENERATED_BANNER = '<!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->';
+
 /**
  * CLAUDE.md Generator V3 - Modular Architecture with Dual Generation
  *
@@ -147,6 +153,144 @@ class CLAUDEMDGeneratorV3 {
   }
 
   /**
+   * SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1b): the single ordered list of every
+   * generated file and its generator fn. generate() (write path) and renderAll() (the
+   * drift-check render path) BOTH iterate this — ONE source of truth, never a divergent
+   * re-derivation. Digest files are included only when generateDigest is enabled.
+   * @param {Object} digestMetadata - { generatedAt, gitCommit, dbSnapshotHash }
+   * @returns {Array<[string, Function, string]>} [filename, generatorFn, type]
+   */
+  getFileSpecs(digestMetadata) {
+    const specs = [
+      ['CLAUDE.md', (d) => generateRouter(d, this.fileMapping), 'full'],
+      ['CLAUDE_CORE.md', (d) => generateCore(d, this.fileMapping), 'full'],
+      ['CLAUDE_LEAD.md', (d) => generateLead(d, this.fileMapping), 'full'],
+      ['CLAUDE_PLAN.md', (d) => generatePlan(d, this.fileMapping), 'full'],
+      ['CLAUDE_EXEC.md', (d) => generateExec(d, this.fileMapping), 'full'],
+      ['CLAUDE_ADAM.md', (d) => generateAdam(d, this.fileMapping), 'full'],
+    ];
+    if (this.options.generateDigest) {
+      specs.push(
+        ['CLAUDE_DIGEST.md', (d) => generateRouterDigest(d, this.digestMapping, digestMetadata), 'digest'],
+        ['CLAUDE_CORE_DIGEST.md', (d) => generateCoreDigest(d, this.digestMapping, digestMetadata), 'digest'],
+        ['CLAUDE_LEAD_DIGEST.md', (d) => generateLeadDigest(d, this.digestMapping, digestMetadata), 'digest'],
+        ['CLAUDE_PLAN_DIGEST.md', (d) => generatePlanDigest(d, this.digestMapping, digestMetadata), 'digest'],
+        ['CLAUDE_EXEC_DIGEST.md', (d) => generateExecDigest(d, this.digestMapping, digestMetadata), 'digest'],
+        ['CLAUDE_ADAM_DIGEST.md', (d) => generateAdamDigest(d, this.digestMapping, digestMetadata), 'digest'],
+      );
+    }
+    return specs;
+  }
+
+  /**
+   * SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1b): load every DB input + init the
+   * manifest header (generated_at / git_commit / db_snapshot_hash) and the digest metadata.
+   * Extracted from generate() so renderAll() (the drift check) consumes IDENTICAL inputs
+   * without re-deriving the fetches.
+   * @returns {Promise<{ data: Object, digestMetadata: Object, protocol: Object }>}
+   */
+  async loadData() {
+    this.loadMappings();
+
+    // Fetch all data from database
+    const protocol = await getActiveProtocol(this.supabase);
+    const agents = await getAgents(this.supabase);
+    const subAgents = await getSubAgents(this.supabase);
+    const handoffTemplates = await getHandoffTemplates(this.supabase);
+    const validationRules = await getValidationRules(this.supabase);
+    const schemaConstraints = await getSchemaConstraints(this.supabase);
+    const processScripts = await getProcessScripts(this.supabase);
+    const hotPatterns = await getHotPatterns(this.supabase, 5);
+    // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4b: known friction points from worker /signal aggregation
+    const knownFrictionPoints = await getKnownFrictionPoints(this.supabase, 5);
+    const recentRetrospectives = await getRecentRetrospectives(this.supabase, 30, 5);
+    const gateHealth = await getGateHealth(this.supabase);
+    const pendingProposals = await getPendingProposals(this.supabase, 5);
+    const autonomousDirectives = await getAutonomousDirectives(this.supabase);
+    // SD-LEO-INFRA-VISION-PROTOCOL-FEEDBACK-001: live VGAP data for protocol injection
+    const visionGapInsights = await getVisionGapInsights(this.supabase, 3);
+
+    const data = {
+      protocol,
+      agents,
+      subAgents,
+      handoffTemplates,
+      validationRules,
+      schemaConstraints,
+      processScripts,
+      hotPatterns,
+      knownFrictionPoints,
+      recentRetrospectives,
+      gateHealth,
+      pendingProposals,
+      autonomousDirectives,
+      visionGapInsights
+    };
+
+    // Initialize manifest header
+    this.manifest.generated_at = new Date().toISOString();
+    this.manifest.git_commit = this.getGitCommit();
+    this.manifest.db_snapshot_hash = this.computeDbSnapshotHash(data);
+    // SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1): persist per-section content digests
+    // so the drift check can detect a section CONTENT edit (which the coarse db_snapshot_hash,
+    // a count-only hash, misses) WITHOUT false positives from rendered-file telemetry/timestamps.
+    this.manifest.section_digests = computeSectionDigests(protocol.sections);
+
+    // Metadata for digest headers
+    const digestMetadata = {
+      generatedAt: this.manifest.generated_at,
+      gitCommit: this.manifest.git_commit,
+      dbSnapshotHash: this.manifest.db_snapshot_hash
+    };
+
+    return { data, digestMetadata, protocol };
+  }
+
+  /**
+   * SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1b): pure render of one file's FINAL
+   * content (FR-5 banner + file_content_hash injected), with NO disk write and NO manifest
+   * mutation. generateFile() calls this then writes; renderAll() calls this and compares.
+   * One render path => the drift check can never diverge from what is actually written.
+   * @returns {string} final content, identical to what generateFile() writes
+   */
+  renderFileContent(generatorFn, data) {
+    let content = generatorFn(data);
+
+    // FR-5: prepend the deterministic GENERATED banner (idempotent).
+    if (!content.startsWith(GENERATED_BANNER)) {
+      content = `${GENERATED_BANNER}\n${content}`;
+    }
+
+    // file_content_hash: body = content minus the hash line; header = sha256(body)[:16].
+    const HASH_LINE_RE = /^<!-- file_content_hash: [^>]*-->\r?\n/m;
+    if (HASH_LINE_RE.test(content)) {
+      const body = content.replace(HASH_LINE_RE, '');
+      const bodyHash = this.computeHash(body);
+      content = content.replace(HASH_LINE_RE, `<!-- file_content_hash: ${bodyHash} -->\n`);
+    } else {
+      const bodyHash = this.computeHash(content);
+      content = `<!-- file_content_hash: ${bodyHash} -->\n${content}`;
+    }
+    return content;
+  }
+
+  /**
+   * SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1b): render every generated file in
+   * memory from the live DB and return { filename: content } WITHOUT writing to disk or
+   * mutating the manifest. This is the render half of the drift-check primitive
+   * (scripts/check-claude-md-drift.cjs).
+   * @returns {Promise<Object<string,string>>}
+   */
+  async renderAll() {
+    const { data, digestMetadata } = await this.loadData();
+    const rendered = {};
+    for (const [filename, generatorFn] of this.getFileSpecs(digestMetadata)) {
+      rendered[filename] = this.renderFileContent(generatorFn, data);
+    }
+    return rendered;
+  }
+
+  /**
    * Generate all CLAUDE files (FULL + DIGEST)
    * @returns {Object} Generation manifest
    */
@@ -154,99 +298,22 @@ class CLAUDEMDGeneratorV3 {
     console.log('Generating modular CLAUDE files from database (V3.1 - Dual Generation)...\n');
 
     try {
-      this.loadMappings();
+      const { data, digestMetadata, protocol } = await this.loadData();
 
-      // Fetch all data from database
-      const protocol = await getActiveProtocol(this.supabase);
-      const agents = await getAgents(this.supabase);
-      const subAgents = await getSubAgents(this.supabase);
-      const handoffTemplates = await getHandoffTemplates(this.supabase);
-      const validationRules = await getValidationRules(this.supabase);
-      const schemaConstraints = await getSchemaConstraints(this.supabase);
-      const processScripts = await getProcessScripts(this.supabase);
-      const hotPatterns = await getHotPatterns(this.supabase, 5);
-      // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-4b: known friction points from worker /signal aggregation
-      const knownFrictionPoints = await getKnownFrictionPoints(this.supabase, 5);
-      const recentRetrospectives = await getRecentRetrospectives(this.supabase, 30, 5);
-      const gateHealth = await getGateHealth(this.supabase);
-      const pendingProposals = await getPendingProposals(this.supabase, 5);
-      const autonomousDirectives = await getAutonomousDirectives(this.supabase);
-      // SD-LEO-INFRA-VISION-PROTOCOL-FEEDBACK-001: live VGAP data for protocol injection
-      const visionGapInsights = await getVisionGapInsights(this.supabase, 3);
+      console.log('=== GENERATING FILES (FULL + DIGEST) ===\n');
+      // SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1b): iterate the single getFileSpecs()
+      // list so the write path and the drift-check render path never diverge.
+      for (const [filename, generatorFn, type] of this.getFileSpecs(digestMetadata)) {
+        this.generateFile(filename, data, generatorFn, type);
+      }
 
-      const data = {
-        protocol,
-        agents,
-        subAgents,
-        handoffTemplates,
-        validationRules,
-        schemaConstraints,
-        processScripts,
-        hotPatterns,
-        knownFrictionPoints,
-        recentRetrospectives,
-        gateHealth,
-        pendingProposals,
-        autonomousDirectives,
-        visionGapInsights
-      };
-
-      // Initialize manifest
-      this.manifest.generated_at = new Date().toISOString();
-      this.manifest.git_commit = this.getGitCommit();
-      this.manifest.db_snapshot_hash = this.computeDbSnapshotHash(data);
-
-      // Metadata for digest headers
-      const digestMetadata = {
-        generatedAt: this.manifest.generated_at,
-        gitCommit: this.manifest.git_commit,
-        dbSnapshotHash: this.manifest.db_snapshot_hash
-      };
-
-      console.log('=== FULL FILES ===\n');
-
-      // Generate FULL files
-      this.generateFile('CLAUDE.md', data, (d) => generateRouter(d, this.fileMapping), 'full');
-      this.generateFile('CLAUDE_CORE.md', data, (d) => generateCore(d, this.fileMapping), 'full');
-      this.generateFile('CLAUDE_LEAD.md', data, (d) => generateLead(d, this.fileMapping), 'full');
-      this.generateFile('CLAUDE_PLAN.md', data, (d) => generatePlan(d, this.fileMapping), 'full');
-      this.generateFile('CLAUDE_EXEC.md', data, (d) => generateExec(d, this.fileMapping), 'full');
-      // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-C: Adam role contract (database-first)
-      this.generateFile('CLAUDE_ADAM.md', data, (d) => generateAdam(d, this.fileMapping), 'full');
-
-      // Calculate FULL totals
+      // Totals + token-budget enforcement (computed from the populated manifest).
       const fullFiles = Object.entries(this.manifest.files).filter(([_, f]) => f.type === 'full');
-      const fullTotalChars = fullFiles.reduce((sum, [_, f]) => sum + f.chars, 0);
+      const digestFiles = Object.entries(this.manifest.files).filter(([_, f]) => f.type === 'digest');
       const fullTotalTokens = fullFiles.reduce((sum, [_, f]) => sum + f.estimated_tokens, 0);
+      const digestTotalTokens = digestFiles.reduce((sum, [_, f]) => sum + f.estimated_tokens, 0);
 
-      console.log(`\n   FULL Total: ${(fullTotalChars / 1024).toFixed(1)} KB (~${fullTotalTokens} tokens)`);
-
-      // Generate DIGEST files if enabled
-      if (this.options.generateDigest) {
-        console.log('\n=== DIGEST FILES ===\n');
-
-        this.generateFile('CLAUDE_DIGEST.md', data,
-          (d) => generateRouterDigest(d, this.digestMapping, digestMetadata), 'digest');
-        this.generateFile('CLAUDE_CORE_DIGEST.md', data,
-          (d) => generateCoreDigest(d, this.digestMapping, digestMetadata), 'digest');
-        this.generateFile('CLAUDE_LEAD_DIGEST.md', data,
-          (d) => generateLeadDigest(d, this.digestMapping, digestMetadata), 'digest');
-        this.generateFile('CLAUDE_PLAN_DIGEST.md', data,
-          (d) => generatePlanDigest(d, this.digestMapping, digestMetadata), 'digest');
-        this.generateFile('CLAUDE_EXEC_DIGEST.md', data,
-          (d) => generateExecDigest(d, this.digestMapping, digestMetadata), 'digest');
-        // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-C: Adam role contract digest
-        this.generateFile('CLAUDE_ADAM_DIGEST.md', data,
-          (d) => generateAdamDigest(d, this.digestMapping, digestMetadata), 'digest');
-
-        // Calculate DIGEST totals
-        const digestFiles = Object.entries(this.manifest.files).filter(([_, f]) => f.type === 'digest');
-        const digestTotalChars = digestFiles.reduce((sum, [_, f]) => sum + f.chars, 0);
-        const digestTotalTokens = digestFiles.reduce((sum, [_, f]) => sum + f.estimated_tokens, 0);
-
-        console.log(`\n   DIGEST Total: ${(digestTotalChars / 1024).toFixed(1)} KB (~${digestTotalTokens} tokens)`);
-
-        // Check token budget
+      if (this.options.generateDigest && digestFiles.length > 0) {
         if (digestTotalTokens > this.options.tokenBudget) {
           console.error(`\n   TOKEN BUDGET EXCEEDED: ${digestTotalTokens} > ${this.options.tokenBudget}`);
           console.error('   Per-file breakdown:');
@@ -254,14 +321,11 @@ class CLAUDEMDGeneratorV3 {
             console.error(`     ${name}: ${f.estimated_tokens} tokens`);
           });
           throw new Error(`DIGEST token budget exceeded: ${digestTotalTokens} > ${this.options.tokenBudget}`);
-        } else {
-          console.log(`   Token budget OK: ${digestTotalTokens}/${this.options.tokenBudget} (${Math.round(digestTotalTokens / this.options.tokenBudget * 100)}%)`);
         }
-
-        // Calculate savings (skip under --only scoping where full totals may be 0)
+        console.log(`   Token budget OK: ${digestTotalTokens}/${this.options.tokenBudget} (${Math.round(digestTotalTokens / this.options.tokenBudget * 100)}%)`);
         if (fullTotalTokens > 0) {
           const savingsPercent = Math.round((1 - digestTotalTokens / fullTotalTokens) * 100);
-          console.log(`\n   Token Savings: ${savingsPercent}% (${fullTotalTokens - digestTotalTokens} tokens saved)`);
+          console.log(`   Token Savings: ${savingsPercent}% (${fullTotalTokens - digestTotalTokens} tokens saved)`);
         }
       }
 
@@ -301,25 +365,10 @@ class CLAUDEMDGeneratorV3 {
     }
 
     const filePath = path.join(this.baseDir, filename);
-    let content = generatorFn(data);
-
-    // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-3): real content hash in the
-    // header. The digest header templates emit `file_content_hash: pending` INSIDE the
-    // body, but the hash is only computable AFTER rendering (chicken-and-egg) — every
-    // live header showed 'pending'. Contract: body = file content with the hash LINE
-    // removed; header value = sha256(body)[:16]. FULL files (no template header) get a
-    // single prepended stamp line so staleness checks cover all generated files.
-    // Verify anywhere via verifyFileContentHash() below.
-    const HASH_LINE_RE = /^<!-- file_content_hash: [^>]*-->\r?\n/m;
-    if (HASH_LINE_RE.test(content)) {
-      const body = content.replace(HASH_LINE_RE, '');
-      const bodyHash = this.computeHash(body);
-      content = content.replace(HASH_LINE_RE, `<!-- file_content_hash: ${bodyHash} -->\n`);
-    } else {
-      const bodyHash = this.computeHash(content);
-      content = `<!-- file_content_hash: ${bodyHash} -->\n${content}`;
-    }
-
+    // SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1b): single shared render path
+    // (FR-5 banner + file_content_hash injection) — byte-identical to renderAll()'s
+    // output, so the drift check can never diverge from what is written here.
+    const content = this.renderFileContent(generatorFn, data);
     const contentHash = this.computeHash(content);
 
     writeFileAtomic(filePath, content);
@@ -364,6 +413,48 @@ export const KNOWN_GENERATED_FILES = [
 // the single `<!-- file_content_hash: ... -->` line removed; expected = sha256(body)[:16].
 // Returns { ok, expected, actual } — ok=false with actual=null when no hash line exists
 // (pre-FR-3 file or hand-edited header), making staleness/tamper checks one call.
+// SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1): content-aware per-section digest of
+// leo_protocol_sections — the SOURCE prose that determines the generated docs, and the only
+// sound drift signal. (The coarse db_snapshot_hash hashes section COUNT, not content; the
+// rendered files additionally embed volatile live telemetry — hotPatterns/gateHealth/retros —
+// so neither a count hash nor a render-diff is a reliable drift detector.) Hashes ONLY the
+// stable rendering-relevant fields, never volatile row metadata (updated_at/created_at).
+// Single source of the hashing logic — imported by scripts/check-claude-md-drift.cjs so the
+// writer (manifest) and the consumer (drift check) can never diverge.
+// @param {Array<Object>} sections - leo_protocol_sections rows for the active protocol
+// @returns {{ global: string, byId: Object<string,string>, meta: Object<string,Object> }}
+export function computeSectionDigests(sections) {
+  const byId = {};
+  const meta = {};
+  const seq = [];
+  // Iterate in the PASSED (render) order — callers pass protocol.sections exactly as
+  // getActiveProtocol returns them (deterministic via the order_index,id sort), so the
+  // `global` hash below faithfully reflects rendered section order. Do NOT re-sort here, or
+  // the digest would decouple from the renderer (the false-negative this guard exists to avoid).
+  for (const s of (sections || [])) {
+    const id = String(s.id);
+    // Hash ONLY fields that flow into rendered output: section_type (controls file membership
+    // via section-file-mapping), title + content (the body), and order_index (controls section
+    // ORDER). context_tier and the target_file COLUMN are intentionally excluded — neither is
+    // rendered (placement is keyed off section_type via the mapping), so hashing them produced
+    // false-positive "drift" on edits that change no rendered byte.
+    const payload = JSON.stringify({
+      section_type: s.section_type ?? null,
+      title: s.title ?? null,
+      content: s.content ?? null,
+      order_index: s.order_index ?? null,
+    });
+    const h = crypto.createHash('sha256').update(payload).digest('hex').substring(0, 16);
+    byId[id] = h;
+    meta[id] = { section_type: s.section_type ?? null, target_file: s.target_file ?? null, title: s.title ?? null };
+    seq.push(`${id}:${h}`);
+  }
+  // global = hash over the render-order sequence, so a pure REORDERING (no per-section content
+  // change) still flips global and is caught by diffSectionDigests (which consults globalMatch).
+  const global = crypto.createHash('sha256').update(seq.join('|')).digest('hex').substring(0, 16);
+  return { global, byId, meta };
+}
+
 export function verifyFileContentHash(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8');
   const m = content.match(/^<!-- file_content_hash: ([0-9a-f]{16}) -->\r?\n/m);

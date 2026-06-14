@@ -1,14 +1,1628 @@
 {
-  "generated_at": "2026-06-14T02:27:42.375Z",
-  "git_commit": "50078d88",
-  "db_snapshot_hash": "15cdd0a6da83d8c4",
+  "generated_at": "2026-06-14T20:52:50.248Z",
+  "git_commit": "a27b6afe",
+  "db_snapshot_hash": "916e51b7a22a4063",
   "files": {
+    "CLAUDE.md": {
+      "type": "full",
+      "chars": 19368,
+      "estimated_tokens": 4842,
+      "content_hash": "c5007233675348b6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE.md"
+    },
+    "CLAUDE_CORE.md": {
+      "type": "full",
+      "chars": 81294,
+      "estimated_tokens": 20324,
+      "content_hash": "7dbce519976e4041",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_CORE.md"
+    },
+    "CLAUDE_LEAD.md": {
+      "type": "full",
+      "chars": 65128,
+      "estimated_tokens": 16282,
+      "content_hash": "377a216774c9d0e9",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_LEAD.md"
+    },
+    "CLAUDE_PLAN.md": {
+      "type": "full",
+      "chars": 90830,
+      "estimated_tokens": 22708,
+      "content_hash": "6137f9f96a38f147",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_PLAN.md"
+    },
+    "CLAUDE_EXEC.md": {
+      "type": "full",
+      "chars": 84821,
+      "estimated_tokens": 21206,
+      "content_hash": "a9e5d91c4acc6a3f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_EXEC.md"
+    },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 22138,
-      "estimated_tokens": 5535,
-      "content_hash": "93a7e9653f6217c5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001\\CLAUDE_ADAM.md"
+      "chars": 23273,
+      "estimated_tokens": 5819,
+      "content_hash": "cadc2cb0aac709d5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_ADAM.md"
+    },
+    "CLAUDE_DIGEST.md": {
+      "type": "digest",
+      "chars": 9611,
+      "estimated_tokens": 2403,
+      "content_hash": "f96a690df17c166a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_DIGEST.md"
+    },
+    "CLAUDE_CORE_DIGEST.md": {
+      "type": "digest",
+      "chars": 11535,
+      "estimated_tokens": 2884,
+      "content_hash": "6d2c7dfef7e12585",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_CORE_DIGEST.md"
+    },
+    "CLAUDE_LEAD_DIGEST.md": {
+      "type": "digest",
+      "chars": 5422,
+      "estimated_tokens": 1356,
+      "content_hash": "702dfdb250295933",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_LEAD_DIGEST.md"
+    },
+    "CLAUDE_PLAN_DIGEST.md": {
+      "type": "digest",
+      "chars": 8412,
+      "estimated_tokens": 2103,
+      "content_hash": "30b3e1bb8b461c41",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_PLAN_DIGEST.md"
+    },
+    "CLAUDE_EXEC_DIGEST.md": {
+      "type": "digest",
+      "chars": 10835,
+      "estimated_tokens": 2709,
+      "content_hash": "77519577a04610ad",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_EXEC_DIGEST.md"
+    },
+    "CLAUDE_ADAM_DIGEST.md": {
+      "type": "digest",
+      "chars": 3952,
+      "estimated_tokens": 988,
+      "content_hash": "d0083005c27b3873",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001\\CLAUDE_ADAM_DIGEST.md"
+    }
+  },
+  "section_digests": {
+    "global": "3d962834f9e80992",
+    "byId": {
+      "94": "ef2f1e7ed617b5e0",
+      "189": "6398659126897bbb",
+      "190": "10f2475eae8afd22",
+      "191": "22bfa253c667b537",
+      "192": "47bb75dc50f88454",
+      "193": "b08aee786e136af8",
+      "194": "18d2d52d4afd5c6c",
+      "196": "415854485180c1ba",
+      "197": "3ca6b6673aceedc3",
+      "198": "92cca3364de0bc34",
+      "199": "a9facc33a2d2b4ec",
+      "201": "28796aa3a9ca8661",
+      "202": "fdb3c89e8348f61d",
+      "203": "00b10a9e35bf0e59",
+      "204": "faff41fb18dd6a2c",
+      "205": "e1261146fada8c22",
+      "206": "630e37f49e96fd34",
+      "207": "e445b9976ac071e4",
+      "208": "a7d1a5ecfdf8499c",
+      "209": "36c316bc964a6cfe",
+      "210": "f2ad58fdc48f49a2",
+      "211": "5d137550e1e954b7",
+      "212": "53916ba04560d9cf",
+      "213": "05620e243a2c48a1",
+      "214": "9a1bc63221a289d3",
+      "215": "74abef4df87e4fbf",
+      "216": "07a5aa99e8763a1a",
+      "217": "fc247f263fc764e7",
+      "218": "07846ee9a13b2745",
+      "219": "84474842daa1743b",
+      "220": "c5d729a254d975b7",
+      "222": "80f96bc1e28c9059",
+      "225": "138f5e1820aa2ea9",
+      "226": "43e95d9812289214",
+      "227": "1284797091b7cb8c",
+      "228": "a2254594a872302b",
+      "230": "0a7f087d552a0d96",
+      "231": "f88ee38333c1f53b",
+      "232": "884be0b20a5b9183",
+      "233": "4d0d7baf850ac007",
+      "234": "8755dce3bed36c63",
+      "240": "b7056a9a915c7931",
+      "245": "6cc258fd0010cb4e",
+      "246": "5fd6159fed4be823",
+      "247": "9aa71821dd77b214",
+      "248": "e03238bf8a9d8635",
+      "249": "9d02322b78e81385",
+      "250": "14f743b7a91a8d79",
+      "251": "593b3b10a8a47c83",
+      "252": "c052fcbf28a24544",
+      "254": "f1ea45d423dc8c4c",
+      "255": "f305b58f7b0dfd1f",
+      "256": "aee0db021da60e56",
+      "257": "f72613a96f171e1c",
+      "258": "0c2e7546195bf5b4",
+      "259": "146327422ab6adc9",
+      "262": "c8f9dd74bec589b1",
+      "263": "87494b8d3831ebb4",
+      "264": "47834c25c1940b74",
+      "265": "171d12c6afd3a7cc",
+      "266": "8b93d6ac1d446420",
+      "267": "976ed19065d9e1e7",
+      "269": "d127f90f556f59c3",
+      "270": "1bb7d913d65e2386",
+      "271": "51446290af3288ac",
+      "272": "b6ef6bf5e5e47205",
+      "273": "0fce9ec10a892325",
+      "274": "e7a098480995413c",
+      "275": "8a1c47b19d98488b",
+      "276": "5bf34816e9d52cc5",
+      "277": "904074ab992a9409",
+      "278": "501f54098bf25aed",
+      "279": "c279d5b5a31fb8c7",
+      "280": "b74fa08ccc3ba6ac",
+      "281": "53f5ab89a2f5e19a",
+      "282": "87fd6e852562a3a2",
+      "284": "1c9f5a99ff118036",
+      "286": "887ca730108ffa29",
+      "287": "9cd7f602ff4fecd8",
+      "288": "c7f7324a8090c87e",
+      "289": "38e17ba9d7a8d144",
+      "290": "ecc81495351e7611",
+      "291": "12e28b9bffda36db",
+      "292": "3af0fb5d3a3e5774",
+      "293": "8a5a7eb0b9a694f9",
+      "294": "9bfc656114c59db0",
+      "295": "447331e1e6f386f3",
+      "296": "c6ccef265c848ffd",
+      "297": "458e28fd2a9a81df",
+      "299": "ee0885ebefc14f26",
+      "300": "87e4aa2892c00fd2",
+      "301": "cec5f28b18b461a4",
+      "303": "9ccb23f56cde7b93",
+      "305": "e1a835721684425e",
+      "306": "0c43eb6c7b16f82d",
+      "307": "4a5e9b832ae9c14e",
+      "308": "a02867048d9feb1f",
+      "309": "a1aa83f4ff4bfa3a",
+      "310": "c1efcb6577442b08",
+      "311": "a5bd1792e7f8dfb9",
+      "312": "47a97e7ca854a28e",
+      "315": "85757a0fe109468e",
+      "316": "e0eb178d0a81ac28",
+      "317": "7f5c188709ac7334",
+      "318": "0ec59de5577d5fd8",
+      "320": "b24e3e2f4b075d53",
+      "321": "82d6263d718533f0",
+      "322": "9f9e5e6bdf49868b",
+      "323": "574a443c18466c7e",
+      "324": "aa06eb6069e082b9",
+      "325": "6daf416a2d333242",
+      "329": "27dbea1143f8be69",
+      "334": "ad19b97845f7d155",
+      "335": "19226e238cf2a19a",
+      "336": "175b688bb9e15d76",
+      "337": "89098d5ae399de8c",
+      "338": "251bf7a761ac46e3",
+      "340": "a39ffe7c0c8cb1c4",
+      "341": "a63ae4ddb330324d",
+      "342": "711a605f28c687d0",
+      "344": "dd1a643fe3c9a1a7",
+      "345": "ba1f3253e0734f19",
+      "347": "e64c2ad11f63001f",
+      "349": "511d3e1346215f92",
+      "351": "1263b944c16bc45a",
+      "360": "f2d25d7d352c5e3f",
+      "361": "676eb8472b459dde",
+      "362": "973ecfa886452ba4",
+      "363": "49dae90de190bf06",
+      "364": "6f412b7f8aa9c9eb",
+      "365": "d0f3fd2281b7fb22",
+      "366": "9201b170e0f90729",
+      "369": "999bfb4d0c2ec34f",
+      "370": "2d2f62f10a40d590",
+      "371": "70ef0843cca84b6a",
+      "372": "b22dee3afacbd3ce",
+      "375": "8b08cc11ab858a95",
+      "376": "2d6c6ac7b6c7a00f",
+      "377": "3ccae6ca7a8ca946",
+      "378": "8cef93059452a0d8",
+      "384": "8544beddce1568f1",
+      "388": "dc79234b779a4c8e",
+      "389": "c40ddf9d5d7f7253",
+      "390": "a99a83cab43a7eee",
+      "391": "29f13662c0a42f86",
+      "394": "61ae563931eb8e87",
+      "396": "001d779e71a61bfa",
+      "398": "19e1fc396913f973",
+      "399": "33cd544e54561eab",
+      "400": "c35fa7bcd622f945",
+      "401": "c98dbc8b1ecd0597",
+      "402": "70f35a8617d0c379",
+      "403": "dcd6ef2d05643688",
+      "404": "3c0a8c33301e8019",
+      "405": "dff2041f598544f0",
+      "406": "775ef3684d8c8d2a",
+      "407": "7fd77a4b1ab7b2a1",
+      "408": "e718266c938598fd",
+      "409": "082a7a428676eb6e",
+      "410": "ef523472690082c7",
+      "414": "6169151951624c25",
+      "415": "7180712fdb003725",
+      "416": "5111a5863e908b5e",
+      "417": "7a52daa48bb5f7e0",
+      "419": "f1ee3672581052af",
+      "420": "3758794f6943f4c8",
+      "423": "39276248fee9a4c1",
+      "424": "14a9b10a48a20de1",
+      "425": "966640ccb77eabed",
+      "428": "b4f817b4d03aaff3",
+      "431": "5cfbef3d6872768b",
+      "434": "5188b26b9528594d",
+      "435": "dc205008f2747ac6",
+      "436": "8115bd7ee9303db3",
+      "439": "08a9d4b4ea40618b",
+      "444": "ff96de4f8cf05c1a",
+      "449": "86f83ca9a7afe8cc",
+      "450": "94087ec605b29ee4",
+      "452": "5bb15e4ce5af0b4e",
+      "459": "ed8de7b4fcf8ece3",
+      "460": "a24d3ead26a7e88b",
+      "461": "92a304282379c1be",
+      "462": "0e2fea90fdb631ac",
+      "463": "6b87118dd098a71c",
+      "469": "eac9aaedca6ccab4",
+      "470": "d3f1f4686a774290",
+      "471": "d186e84c659f0140",
+      "472": "2f19f3d58680c855",
+      "473": "1dbd94cbba0db507",
+      "483": "21b66fe1b527b196",
+      "484": "8b550827f1b37ff5",
+      "485": "5c1a012b3d30cf06",
+      "486": "46b4cf97f5415c69",
+      "492": "842c875ef688dff7",
+      "493": "27caa3d6ece1e129",
+      "494": "355f84ac069b7d1c",
+      "495": "5290901da4072c8d",
+      "496": "6445ce3caa83071c",
+      "497": "30ed2c0762b07d8b",
+      "498": "c8a8b32c2e5048de",
+      "499": "cd4f7fd863c14843",
+      "500": "5bbc37016edfa158",
+      "501": "b571649ae0a1ee01",
+      "508": "1a68c498faab183d",
+      "509": "04b0c66269a5d830",
+      "510": "95e58f07e9d0edfd",
+      "513": "cfc7186bd2334d0b",
+      "514": "411fc58da048166f",
+      "517": "869202c848cc1cec",
+      "518": "01595b7ba313e82d",
+      "519": "b598db22d6c48b60",
+      "520": "8997c803f49046a7",
+      "521": "3a41c86e6d321678",
+      "522": "f6c3d5c2a90a4eb1",
+      "524": "0b517bbcc30ec9ff",
+      "525": "d553f3c1dceb8887",
+      "526": "a6ad4a059caf827b",
+      "529": "2d15257e180cc154",
+      "531": "32a4a018ec71ab0f",
+      "538": "97573d76a94e5f98",
+      "539": "b539a095719b2087",
+      "540": "2559404924b120a1",
+      "541": "a2ec8a812765018a",
+      "544": "2a7694d82dc5756b",
+      "545": "1d2551641b2c4f81",
+      "549": "8a5f3735df0d8557",
+      "550": "e089fb954b1d73c8",
+      "555": "9555caf0ac7f81cc",
+      "556": "dde11ace1ff56a1f",
+      "557": "44d4738331e23bef",
+      "558": "f0d604ad0512c6bc",
+      "562": "0200a46bd76ad848",
+      "563": "1ff455c3f40da523",
+      "565": "355d48a91fc08a8f",
+      "567": "64f2b952b04863ae",
+      "570": "a3899d3f9b3a5824",
+      "573": "f16e2c959d262928",
+      "574": "08e2c1be8c49e95f",
+      "575": "9f3c912d460ffcb2",
+      "576": "1bb168991a70140f",
+      "577": "90708c21ba1f683f",
+      "580": "4232fb5222f35163",
+      "584": "768510d24242f194",
+      "589": "34719a2e3fd508a7",
+      "590": "b44b6d41eabcb2d8",
+      "592": "775e8922b58033b1",
+      "593": "5aa3c836ecc1752c",
+      "594": "ac4c90927e1cff29",
+      "595": "b99d7c14d039c4be",
+      "596": "bf95e6419e99aee7",
+      "597": "8220a84f943767a6",
+      "599": "7ddd3e2178799aa8",
+      "601": "eb219777e1887ecd",
+      "602": "ad0aecae8cdc6cb3",
+      "603": "ca922c736e8d8ed3"
+    },
+    "meta": {
+      "94": {
+        "section_type": "session_verification_quick_start",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "🚀 Session Verification & Quick Start (MANDATORY)"
+      },
+      "189": {
+        "section_type": "multi_application_testing_architecture",
+        "target_file": null,
+        "title": "Multi-Application Testing Architecture"
+      },
+      "190": {
+        "section_type": "exec_dual_test_requirement",
+        "target_file": null,
+        "title": "EXEC Dual Test Requirement"
+      },
+      "191": {
+        "section_type": "development_workflow",
+        "target_file": null,
+        "title": "🔧 CRITICAL DEVELOPMENT WORKFLOW"
+      },
+      "192": {
+        "section_type": "trigger-disable-pattern",
+        "target_file": null,
+        "title": "Database Trigger Management for Special Cases"
+      },
+      "193": {
+        "section_type": "context_monitoring",
+        "target_file": null,
+        "title": "Proactive Context Monitoring"
+      },
+      "194": {
+        "section_type": "database_query_best_practices",
+        "target_file": null,
+        "title": "Database Query Best Practices"
+      },
+      "196": {
+        "section_type": "PHASE_4_VERIFICATION",
+        "target_file": null,
+        "title": "Stubbed/Mocked Code Detection"
+      },
+      "197": {
+        "section_type": "parallel_execution",
+        "target_file": null,
+        "title": "Parallel Execution"
+      },
+      "198": {
+        "section_type": "retrospective-schema-reference",
+        "target_file": null,
+        "title": "Retrospective Table Schema Reference"
+      },
+      "199": {
+        "section_type": "file_warning",
+        "target_file": null,
+        "title": "⚠️ DO NOT EDIT THIS FILE DIRECTLY"
+      },
+      "201": {
+        "section_type": "subagent_parallel_execution",
+        "target_file": null,
+        "title": "Sub-Agent Parallel Execution"
+      },
+      "202": {
+        "section_type": "schema_documentation_access",
+        "target_file": null,
+        "title": "Database Schema Documentation Access"
+      },
+      "203": {
+        "section_type": "schema_documentation_reference",
+        "target_file": null,
+        "title": "Database Schema Documentation"
+      },
+      "204": {
+        "section_type": "exec_component_sizing_guidelines",
+        "target_file": null,
+        "title": "Component Sizing Guidelines"
+      },
+      "205": {
+        "section_type": "simplicity_first_enforcement",
+        "target_file": null,
+        "title": "Quality Validation Examples"
+      },
+      "206": {
+        "section_type": "exec_todo_comment_standard",
+        "target_file": null,
+        "title": "TODO Comment Standard"
+      },
+      "207": {
+        "section_type": "plan_cicd_verification",
+        "target_file": null,
+        "title": "CI/CD Pipeline Verification"
+      },
+      "208": {
+        "section_type": "lead_code_review_requirement",
+        "target_file": null,
+        "title": "LEAD Code Review for UI/UX SDs"
+      },
+      "209": {
+        "section_type": "session_prologue",
+        "target_file": null,
+        "title": "Session Prologue (Short)"
+      },
+      "210": {
+        "section_type": "exec_implementation_requirements",
+        "target_file": null,
+        "title": "🚨 EXEC Agent Implementation Requirements"
+      },
+      "211": {
+        "section_type": "git_commit_guidelines",
+        "target_file": null,
+        "title": "🔄 Git Commit Guidelines"
+      },
+      "212": {
+        "section_type": "lead_pre_approval_simplicity_gate",
+        "target_file": null,
+        "title": "🛡️ LEAD Pre-Approval Strategic Validation Gate"
+      },
+      "213": {
+        "section_type": "test_section",
+        "target_file": null,
+        "title": "Test Section"
+      },
+      "214": {
+        "section_type": "communication_context",
+        "target_file": null,
+        "title": "📊 Communication & Context"
+      },
+      "215": {
+        "section_type": "directive_submission_review",
+        "target_file": null,
+        "title": "📋 Directive Submission Review Process"
+      },
+      "216": {
+        "section_type": "unified_handoff_system",
+        "target_file": null,
+        "title": "🔄 Unified Handoff System (Database-First)"
+      },
+      "217": {
+        "section_type": "database_schema_overview",
+        "target_file": null,
+        "title": "Database Schema Overview"
+      },
+      "218": {
+        "section_type": "design_database_validation_gates",
+        "target_file": null,
+        "title": "DESIGN→DATABASE Validation Gates"
+      },
+      "219": {
+        "section_type": "database_first_enforcement_expanded",
+        "target_file": null,
+        "title": "Database-First Enforcement - Expanded"
+      },
+      "220": {
+        "section_type": "database",
+        "target_file": null,
+        "title": "Database Operations - One Table at a Time"
+      },
+      "222": {
+        "section_type": "planning_pattern",
+        "target_file": null,
+        "title": "Child SD Pattern: When to Break into Child Strategic Directives"
+      },
+      "225": {
+        "section_type": "documentation_platform",
+        "target_file": null,
+        "title": "📚 Documentation Platform Integration"
+      },
+      "226": {
+        "section_type": "e2e_testing_mode_configuration",
+        "target_file": null,
+        "title": "E2E Testing: Dev Mode vs Preview Mode"
+      },
+      "227": {
+        "section_type": "sub_agent_compression",
+        "target_file": null,
+        "title": "Sub-Agent Report Compression System"
+      },
+      "228": {
+        "section_type": "guide",
+        "target_file": null,
+        "title": "Database Migration Pre-Flight Checklist"
+      },
+      "230": {
+        "section_type": "plan_pre_exec_checklist",
+        "target_file": null,
+        "title": "PLAN Pre-EXEC Checklist"
+      },
+      "231": {
+        "section_type": "execution_philosophy",
+        "target_file": null,
+        "title": "Execution Philosophy"
+      },
+      "232": {
+        "section_type": "five_phase_workflow",
+        "target_file": null,
+        "title": "5-Phase Strategic Directive Workflow"
+      },
+      "233": {
+        "section_type": "testing_tools",
+        "target_file": null,
+        "title": "Playwright MCP Integration"
+      },
+      "234": {
+        "section_type": "sub_agents",
+        "target_file": null,
+        "title": "Native Claude Code Sub-Agent Integration"
+      },
+      "240": {
+        "section_type": "quick_reference",
+        "target_file": null,
+        "title": "Knowledge Retrieval Commands"
+      },
+      "245": {
+        "section_type": "application_architecture",
+        "target_file": null,
+        "title": "🏗️ Application Architecture - UNIFIED FRONTEND"
+      },
+      "246": {
+        "section_type": "strategic_directive_execution_protocol",
+        "target_file": null,
+        "title": "Strategic Directive Execution Protocol"
+      },
+      "247": {
+        "section_type": "context_management_upfront",
+        "target_file": null,
+        "title": "Context Management Throughout Execution"
+      },
+      "248": {
+        "section_type": "bmad_enhancements",
+        "target_file": null,
+        "title": "🔬 BMAD Method Enhancements"
+      },
+      "249": {
+        "section_type": "best_practices",
+        "target_file": null,
+        "title": "Database Migration Validation - Two-Phase Approach"
+      },
+      "250": {
+        "section_type": "pr_size_guidelines",
+        "target_file": null,
+        "title": "PR Size Guidelines"
+      },
+      "251": {
+        "section_type": "sd_evaluation",
+        "target_file": null,
+        "title": "6-Step SD Evaluation Checklist"
+      },
+      "252": {
+        "section_type": "process",
+        "target_file": null,
+        "title": "LEAD Over-Engineering Evaluation Process"
+      },
+      "254": {
+        "section_type": "qa_engineering_enhanced",
+        "target_file": null,
+        "title": "Enhanced QA Engineering Director v2.0 - Testing-First Edition"
+      },
+      "255": {
+        "section_type": "testing_tier_strategy",
+        "target_file": null,
+        "title": "Testing Tier Strategy"
+      },
+      "256": {
+        "section_type": "handoff-rls-bypass-pattern",
+        "target_file": null,
+        "title": "Handoff Creation: RLS Bypass Pattern"
+      },
+      "257": {
+        "section_type": "smart_router",
+        "target_file": null,
+        "title": "Context Router & Loading Strategy"
+      },
+      "258": {
+        "section_type": "supabase_operations",
+        "target_file": null,
+        "title": "🗄️ Supabase Database Operations"
+      },
+      "259": {
+        "section_type": "testing_tier_strategy_updated",
+        "target_file": null,
+        "title": "Testing Tier Strategy (Updated)"
+      },
+      "262": {
+        "section_type": "quick-reference",
+        "target_file": null,
+        "title": "Database Workaround Anti-Patterns (NEVER DO THIS)"
+      },
+      "263": {
+        "section_type": "plan_presentation_template",
+        "target_file": null,
+        "title": "Pre-Implementation Plan Presentation Template"
+      },
+      "264": {
+        "section_type": "PHASE_2_PLANNING",
+        "target_file": null,
+        "title": "Deferred Work Management"
+      },
+      "265": {
+        "section_type": "guideline",
+        "target_file": null,
+        "title": "⚠️ Mandatory Process Scripts"
+      },
+      "266": {
+        "section_type": "exec_edge_case_testing_checklist",
+        "target_file": null,
+        "title": "Edge Case Testing Checklist"
+      },
+      "267": {
+        "section_type": "plan_visual_documentation_examples",
+        "target_file": null,
+        "title": "Visual Documentation Best Practices"
+      },
+      "269": {
+        "section_type": "knowledge_retrieval",
+        "target_file": null,
+        "title": "📚 Automated PRD Enrichment (MANDATORY)"
+      },
+      "270": {
+        "section_type": "execution_pattern",
+        "target_file": null,
+        "title": "Working with Child SDs (Execution Phase)"
+      },
+      "271": {
+        "section_type": "quick_fix_workflow",
+        "target_file": null,
+        "title": "🎯 LEO Quick-Fix Workflow"
+      },
+      "272": {
+        "section_type": "best_practice",
+        "target_file": null,
+        "title": "Scripts as Documentation-by-Example: Schema Validation"
+      },
+      "273": {
+        "section_type": "session_verification",
+        "target_file": null,
+        "title": "🔍 Session Start Verification (MANDATORY)"
+      },
+      "274": {
+        "section_type": "database_column_reference",
+        "target_file": null,
+        "title": "📊 Database Column Quick Reference"
+      },
+      "275": {
+        "section_type": "exec_requirement",
+        "target_file": null,
+        "title": "📦 Database-First Progress Tracking (MANDATORY)"
+      },
+      "276": {
+        "section_type": "lead_operations",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "SD to Quick Fix Reverse Rubric (LEO v4.3.3)"
+      },
+      "277": {
+        "section_type": "pattern_search_guide",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "🔍 Issue Pattern Search (Knowledge Base)"
+      },
+      "278": {
+        "section_type": "ui_parity_requirement",
+        "target_file": null,
+        "title": "🖥️ UI Parity Requirement (MANDATORY)"
+      },
+      "279": {
+        "section_type": "lead_strategic_validation_q7",
+        "target_file": null,
+        "title": "🔍 Strategic Validation Question 7: UI Inspectability"
+      },
+      "280": {
+        "section_type": "gate_2_5_human_inspectability",
+        "target_file": null,
+        "title": "🚪 Gate 2.5: Human Inspectability Validation"
+      },
+      "281": {
+        "section_type": "exec_ui_parity_verification",
+        "target_file": null,
+        "title": "✅ EXEC UI Parity Verification Checklist"
+      },
+      "282": {
+        "section_type": "stage_7_hard_block",
+        "target_file": null,
+        "title": "🚫 Stage 7 Hard Block: UI Coverage Prerequisite"
+      },
+      "284": {
+        "section_type": "branch_hygiene_gate",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "🌿 Branch Hygiene Gate (MANDATORY)"
+      },
+      "286": {
+        "section_type": "exec_completion_merge_requirement",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "🔀 SD/Quick-Fix Completion: Commit, Push, Merge"
+      },
+      "287": {
+        "section_type": "prd_research_lookup",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Research Lookup Before PRD Creation"
+      },
+      "288": {
+        "section_type": "skill_integration",
+        "target_file": null,
+        "title": "🎯 Skill Integration (Claude Code Skills)"
+      },
+      "289": {
+        "section_type": "builtin_agent_integration",
+        "target_file": null,
+        "title": "🤖 Built-in Agent Integration"
+      },
+      "290": {
+        "section_type": "lead_explore_integration",
+        "target_file": null,
+        "title": "🔍 Explore Before Validation (LEAD Phase)"
+      },
+      "291": {
+        "section_type": "plan_multi_perspective",
+        "target_file": null,
+        "title": "🎯 Multi-Perspective Planning"
+      },
+      "292": {
+        "section_type": "plan_verify_explore",
+        "target_file": null,
+        "title": "✅ Scope Verification with Explore (PLAN_VERIFY)"
+      },
+      "293": {
+        "section_type": "exec_skill_integration",
+        "target_file": null,
+        "title": "📚 Skill Integration (EXEC Phase)"
+      },
+      "294": {
+        "section_type": "common_commands",
+        "target_file": null,
+        "title": "Common Commands"
+      },
+      "295": {
+        "section_type": "parent_child_sd_governance",
+        "target_file": null,
+        "title": "Parent-Child SD Phase Governance"
+      },
+      "296": {
+        "section_type": "plan_test_infrastructure_gate",
+        "target_file": null,
+        "title": "🧪 Test Infrastructure Readiness Gate (Before PLAN→EXEC)"
+      },
+      "297": {
+        "section_type": "exec_retrospective_anti_patterns",
+        "target_file": null,
+        "title": "❌ Anti-Patterns from Retrospectives (EXEC Phase)"
+      },
+      "299": {
+        "section_type": "session_init",
+        "target_file": "CLAUDE.md",
+        "title": "Session Initialization - SD Selection"
+      },
+      "300": {
+        "section_type": "lead_operations",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "SD Orchestration & Baseline Management"
+      },
+      "301": {
+        "section_type": "multi_track_parallel_execution",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Multi-Track Parallel Execution"
+      },
+      "303": {
+        "section_type": "model_routing_guidance",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Sub-Agent Model Routing"
+      },
+      "305": {
+        "section_type": "multi_instance_coordination",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Multi-Instance Coordination (MANDATORY)"
+      },
+      "306": {
+        "section_type": "auto_merge_workflow",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Auto-Merge Workflow for SD Completion"
+      },
+      "307": {
+        "section_type": "mandatory_phase_transitions",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "🚫 MANDATORY: Phase Transition Commands (BLOCKING)"
+      },
+      "308": {
+        "section_type": "mandatory_phase_transitions_lead",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "🚫 MANDATORY: Phase Transition Commands (BLOCKING)"
+      },
+      "309": {
+        "section_type": "mandatory_phase_transitions_plan",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "🚫 MANDATORY: Phase Transition Commands (BLOCKING)"
+      },
+      "310": {
+        "section_type": "mandatory_phase_transitions_exec",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "🚫 MANDATORY: Phase Transition Commands (BLOCKING)"
+      },
+      "311": {
+        "section_type": "ai_quality_russian_judge",
+        "target_file": null,
+        "title": "AI-Powered Russian Judge Quality Assessment"
+      },
+      "312": {
+        "section_type": "handoff_quality_gates",
+        "target_file": null,
+        "title": "Quality Assessment Integration in Handoffs"
+      },
+      "315": {
+        "section_type": "parent_child_exec",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Working with Child SDs During EXEC"
+      },
+      "316": {
+        "section_type": "parent_child_lead",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Parent-Child Decomposition Approval"
+      },
+      "317": {
+        "section_type": "parent_child_overview",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Parent-Child SD Hierarchy"
+      },
+      "318": {
+        "section_type": "parent_child_plan",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Child SD Pattern: When to Decompose"
+      },
+      "320": {
+        "section_type": "handoffs",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Handoff Retrospectives"
+      },
+      "321": {
+        "section_type": "handoff_chain_diagram",
+        "target_file": null,
+        "title": "Mandatory 4-Step Handoff Chain"
+      },
+      "322": {
+        "section_type": "lesson_learned_capture",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Lesson Learned Capture (MANDATORY)"
+      },
+      "323": {
+        "section_type": "vision_v2_lead",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Vision V2 SD Handling (SD-VISION-V2-*)"
+      },
+      "324": {
+        "section_type": "vision_v2_plan",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Vision V2 PRD Requirements (SD-VISION-V2-*)"
+      },
+      "325": {
+        "section_type": "vision_v2_exec",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Vision V2 Implementation Requirements (SD-VISION-V2-*)"
+      },
+      "329": {
+        "section_type": "parent_child_validation",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Child SD Field Requirements for LEAD Evaluation"
+      },
+      "334": {
+        "section_type": "negative_constraints_global",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Global Negative Constraints"
+      },
+      "335": {
+        "section_type": "negative_constraints_plan",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "PLAN Phase Negative Constraints"
+      },
+      "336": {
+        "section_type": "negative_constraints_exec",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "EXEC Phase Negative Constraints"
+      },
+      "337": {
+        "section_type": "prd_template_scaffold",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "PRD Template Scaffolding"
+      },
+      "338": {
+        "section_type": "sd_type_workflow_paths",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "SD Type-Aware Workflow Paths"
+      },
+      "340": {
+        "section_type": "plan_to_exec_checklist",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "PLAN-TO-EXEC Checklist (MANDATORY)"
+      },
+      "341": {
+        "section_type": "negative_constraints_global",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Background Task Output Retrieval"
+      },
+      "342": {
+        "section_type": "quality_intelligence",
+        "target_file": null,
+        "title": "Quality Intelligence System (v4.3.4)"
+      },
+      "344": {
+        "section_type": "lead_operations",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Baseline Issues Management"
+      },
+      "345": {
+        "section_type": "docs-info-architecture",
+        "target_file": null,
+        "title": "Documentation Information Architecture"
+      },
+      "347": {
+        "section_type": "human_like_testing",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Human-Like E2E Testing Fixtures"
+      },
+      "349": {
+        "section_type": "work_tracking_policy",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Work Tracking Policy"
+      },
+      "351": {
+        "section_type": "mandatory_agent_invocation",
+        "target_file": "CLAUDE.md",
+        "title": "Mandatory Agent Invocation Rules"
+      },
+      "360": {
+        "section_type": "workflow",
+        "target_file": null,
+        "title": "Triangulated Runtime Audit Protocol"
+      },
+      "361": {
+        "section_type": "lead_refactor_evaluation",
+        "target_file": null,
+        "title": "Refactoring SD Evaluation"
+      },
+      "362": {
+        "section_type": "plan_refactor_brief_guide",
+        "target_file": null,
+        "title": "Refactor Brief Documentation"
+      },
+      "363": {
+        "section_type": "template",
+        "target_file": null,
+        "title": "Refactor Brief Template"
+      },
+      "364": {
+        "section_type": "genesis_codebase",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Genesis Codebase Locations"
+      },
+      "365": {
+        "section_type": "lead_strategic_validation_q9",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "🎯 Strategic Validation Question 9: Human-Verifiable Outcome"
+      },
+      "366": {
+        "section_type": "sustainable_issue_resolution",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Sustainable Issue Resolution Philosophy"
+      },
+      "369": {
+        "section_type": "workflow",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Branch Creation (Automated at LEAD-TO-PLAN)"
+      },
+      "370": {
+        "section_type": "workflow",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Branch Should Already Exist (LEO v4.4.1)"
+      },
+      "371": {
+        "section_type": "handoff_checklist",
+        "target_file": null,
+        "title": "Checklist Item 1"
+      },
+      "372": {
+        "section_type": "sub_agent_workflow",
+        "target_file": null,
+        "title": "Sub-Agent Trigger Guidance"
+      },
+      "375": {
+        "section_type": "reference",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Validation Rules (SD-LEARN-008)"
+      },
+      "376": {
+        "section_type": "plan_streams",
+        "target_file": null,
+        "title": "PLAN Phase Design & Architecture Streams"
+      },
+      "377": {
+        "section_type": "critical_term_definitions",
+        "target_file": null,
+        "title": "Critical Term Definitions"
+      },
+      "378": {
+        "section_type": "child_sd_preflight_validation",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Child SD Pre-Work Validation (MANDATORY)"
+      },
+      "384": {
+        "section_type": "infrastructure",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Claude Code Plan Mode Integration"
+      },
+      "388": {
+        "section_type": "sd_creation_process",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Strategic Directive Creation Process"
+      },
+      "389": {
+        "section_type": "sd_type_validation_requirements_deprecated",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "SD Type-Specific Validation Requirements"
+      },
+      "390": {
+        "section_type": "sd_creation_errors",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Common SD Creation Errors and Solutions"
+      },
+      "391": {
+        "section_type": "skill_intent_detection",
+        "target_file": "CLAUDE.md",
+        "title": "Skill Intent Detection (Proactive Invocation)"
+      },
+      "394": {
+        "section_type": "conditional_handoffs_deprecated",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "⚠️ Conditional Handoffs by SD Type (CRITICAL)"
+      },
+      "396": {
+        "section_type": "guidance",
+        "target_file": "CLAUDE.md",
+        "title": "Sub-Agent Database Recording"
+      },
+      "398": {
+        "section_type": "constitution",
+        "target_file": null,
+        "title": "CONST-001: Human Approval Required"
+      },
+      "399": {
+        "section_type": "constitution",
+        "target_file": null,
+        "title": "CONST-002: No Self-Approval"
+      },
+      "400": {
+        "section_type": "constitution",
+        "target_file": null,
+        "title": "CONST-003: Audit Trail"
+      },
+      "401": {
+        "section_type": "constitution",
+        "target_file": null,
+        "title": "CONST-004: Rollback Capability"
+      },
+      "402": {
+        "section_type": "constitution",
+        "target_file": null,
+        "title": "CONST-005: Database First"
+      },
+      "403": {
+        "section_type": "constitution",
+        "target_file": null,
+        "title": "CONST-006: Complexity Conservation"
+      },
+      "404": {
+        "section_type": "constitution",
+        "target_file": null,
+        "title": "CONST-007: Velocity Limit"
+      },
+      "405": {
+        "section_type": "constitution",
+        "target_file": null,
+        "title": "CONST-008: Chesterton's Fence"
+      },
+      "406": {
+        "section_type": "constitution",
+        "target_file": null,
+        "title": "CONST-009: Emergency Freeze"
+      },
+      "407": {
+        "section_type": "sd_creation_anti_pattern",
+        "target_file": null,
+        "title": "SD Creation Anti-Pattern (PROHIBITED)"
+      },
+      "408": {
+        "section_type": "prd_creation_anti_pattern",
+        "target_file": null,
+        "title": "PRD Creation Anti-Pattern (PROHIBITED)"
+      },
+      "409": {
+        "section_type": "script_anti_patterns",
+        "target_file": null,
+        "title": "Script Creation Anti-Patterns"
+      },
+      "410": {
+        "section_type": "sub_agent_config",
+        "target_file": "CLAUDE.md",
+        "title": "Database Sub-Agent Auto-Invocation"
+      },
+      "414": {
+        "section_type": "compaction_instructions",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Compaction Instructions (CRITICAL)"
+      },
+      "415": {
+        "section_type": "weighted_keyword_scoring",
+        "target_file": null,
+        "title": "Weighted Keyword Scoring System"
+      },
+      "416": {
+        "section_type": "auto_proceed_mode",
+        "target_file": null,
+        "title": "AUTO-PROCEED Mode"
+      },
+      "417": {
+        "section_type": "child_sd_context_loading",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Child SD Context Loading (MANDATORY)"
+      },
+      "419": {
+        "section_type": "strunkian_writing_standards",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Strunkian Writing Standards"
+      },
+      "420": {
+        "section_type": "orchestrator_chaining",
+        "target_file": "CLAUDE.md",
+        "title": "Orchestrator Chaining Mode"
+      },
+      "423": {
+        "section_type": "migration_script_pattern",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Migration Script Pattern (MANDATORY)"
+      },
+      "424": {
+        "section_type": "rca_issue_resolution_mandate",
+        "target_file": null,
+        "title": "RCA Issue Resolution Mandate"
+      },
+      "425": {
+        "section_type": "rca_multi_expert_protocol",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "RCA Multi-Expert Collaboration Protocol"
+      },
+      "428": {
+        "section_type": "work_item_routing",
+        "target_file": "CLAUDE.md",
+        "title": "Work Item Creation Routing"
+      },
+      "431": {
+        "section_type": "feature_documentation",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Feedback Quality Layer"
+      },
+      "434": {
+        "section_type": "migration_execution_delegation",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Migration Execution - DATABASE Sub-Agent Delegation"
+      },
+      "435": {
+        "section_type": "proposals",
+        "target_file": null,
+        "title": "Protocol Improvement Proposals"
+      },
+      "436": {
+        "section_type": "vetting",
+        "target_file": null,
+        "title": "Vetting Rules and Rubrics"
+      },
+      "439": {
+        "section_type": "sd_continuation_truth_table",
+        "target_file": "CLAUDE.md",
+        "title": "SD Continuation Truth Table"
+      },
+      "444": {
+        "section_type": "migration_execution_protocol",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Migration Execution Protocol"
+      },
+      "449": {
+        "section_type": "migration_execution_protocol_lead",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Migration Execution Protocol"
+      },
+      "450": {
+        "section_type": "migration_execution_protocol_plan",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Migration Execution Protocol"
+      },
+      "452": {
+        "section_type": "sd_recovery_protocol",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "SD Recovery Protocol (Limbo State Detection)"
+      },
+      "459": {
+        "section_type": "jsonb_validation_guidance",
+        "target_file": null,
+        "title": "JSONB Field Validation Guidance"
+      },
+      "460": {
+        "section_type": "infrastructure_exec_skip",
+        "target_file": null,
+        "title": "Infrastructure SD: EXEC-TO-PLAN Skip Conditions"
+      },
+      "461": {
+        "section_type": "enum_consistency_validation",
+        "target_file": null,
+        "title": "Enum Value Consistency Validation"
+      },
+      "462": {
+        "section_type": "env_var_migration_validation",
+        "target_file": null,
+        "title": "Environment Variable Validation for Migration Scripts"
+      },
+      "463": {
+        "section_type": "postgresql_immutability_constraints",
+        "target_file": null,
+        "title": "PostgreSQL Function Immutability Constraints for Index Creation"
+      },
+      "469": {
+        "section_type": "gate_exemption_visibility",
+        "target_file": null,
+        "title": "Gate Exemption Visibility During LEAD Approval"
+      },
+      "470": {
+        "section_type": "retroactive_compliance_procedure",
+        "target_file": null,
+        "title": "Retroactive LEO Protocol Compliance Procedure"
+      },
+      "471": {
+        "section_type": "jest_esm_testing_patterns",
+        "target_file": null,
+        "title": "Vitest ESM Testing Patterns Guide"
+      },
+      "472": {
+        "section_type": "branch_auto_checkout_guidance",
+        "target_file": null,
+        "title": "Branch Auto-Checkout After Creation in PLAN-TO-EXEC"
+      },
+      "473": {
+        "section_type": "prd_grounding_validation_guidance",
+        "target_file": null,
+        "title": "PRD Grounding Validation as Mandatory Pipeline Step"
+      },
+      "483": {
+        "section_type": "handoff_error_field_paths",
+        "target_file": null,
+        "title": "Handoff Validation Error Messages: Field Path Requirements"
+      },
+      "484": {
+        "section_type": "documentation_standards_validation",
+        "target_file": null,
+        "title": "Documentation Standards Compliance Gate"
+      },
+      "485": {
+        "section_type": "anti_pattern_impl_before_docs",
+        "target_file": null,
+        "title": "Anti-Pattern: Implementation Before Documentation"
+      },
+      "486": {
+        "section_type": "gate_bypass_audit_requirements",
+        "target_file": null,
+        "title": "Gate Bypass Audit Trail Requirements"
+      },
+      "492": {
+        "section_type": "stop_hook_context_awareness",
+        "target_file": null,
+        "title": "Stop Hook Context Awareness for Ad-Hoc Work"
+      },
+      "493": {
+        "section_type": "infrastructure_config_persistence",
+        "target_file": null,
+        "title": "Infrastructure Config File Persistence Through Hooks"
+      },
+      "494": {
+        "section_type": "sd_context_persistence_handoffs",
+        "target_file": null,
+        "title": "SD Context Persistence Across Handoff Boundaries"
+      },
+      "495": {
+        "section_type": "schema_validation_helper",
+        "target_file": null,
+        "title": "Schema Validation Helper for Database Queries"
+      },
+      "496": {
+        "section_type": "precommit_hook_edge_case_checklist",
+        "target_file": null,
+        "title": "Pre-commit Hook Edge Case Testing Checklist"
+      },
+      "497": {
+        "section_type": "sd_type_detection_keywords",
+        "target_file": null,
+        "title": "SD Type Detection - Extended Infrastructure Keywords"
+      },
+      "498": {
+        "section_type": "debate_circuit_breaker",
+        "target_file": null,
+        "title": "Debate Circuit Breaker Protocol"
+      },
+      "499": {
+        "section_type": "feature_flag_governance",
+        "target_file": null,
+        "title": "Feature Flag Governance Pattern"
+      },
+      "500": {
+        "section_type": "audit_logging_standards_mutations",
+        "target_file": null,
+        "title": "Audit Logging Standards for Database Mutations"
+      },
+      "501": {
+        "section_type": "judge_sub_agent_capabilities",
+        "target_file": null,
+        "title": "JUDGE Sub-Agent Capabilities"
+      },
+      "508": {
+        "section_type": "test_coverage_quality_gate",
+        "target_file": null,
+        "title": "Test Coverage Quality Gate (EXEC-TO-PLAN)"
+      },
+      "509": {
+        "section_type": "integration_test_requirement_gate",
+        "target_file": null,
+        "title": "Integration Test Requirement Gate (EXEC-TO-PLAN)"
+      },
+      "510": {
+        "section_type": "documentation_link_validation_gate",
+        "target_file": null,
+        "title": "Documentation Link Validation Gate (PLAN-TO-LEAD)"
+      },
+      "513": {
+        "section_type": "teams_protocol",
+        "target_file": "CLAUDE.md",
+        "title": "Teams Protocol"
+      },
+      "514": {
+        "section_type": "sub_agent_prompt_quality",
+        "target_file": null,
+        "title": "Sub-Agent Invocation Quality Standard"
+      },
+      "517": {
+        "section_type": "vision_heal_loop",
+        "target_file": null,
+        "title": "Vision Heal Loop (Auto-Continue)"
+      },
+      "518": {
+        "section_type": "governance_strategic_hierarchy",
+        "target_file": null,
+        "title": "Strategic Governance Hierarchy"
+      },
+      "519": {
+        "section_type": "governance_chairman_ceo_roles",
+        "target_file": null,
+        "title": "Chairman and CEO Governance Roles"
+      },
+      "520": {
+        "section_type": "governance_okr_alignment_lead",
+        "target_file": null,
+        "title": "OKR Alignment in LEAD Evaluation"
+      },
+      "521": {
+        "section_type": "governance_kr_linkage_plan",
+        "target_file": null,
+        "title": "KR Linkage in PRD Creation"
+      },
+      "522": {
+        "section_type": "governance_kr_progress_exec",
+        "target_file": null,
+        "title": "KR Progress Tracking in EXEC"
+      },
+      "524": {
+        "section_type": "reference",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "/batch Command Reference"
+      },
+      "525": {
+        "section_type": "plan_smoke_test_requirement",
+        "target_file": null,
+        "title": "Smoke Test Evidence Requirement (Pipeline/Integration SDs)"
+      },
+      "526": {
+        "section_type": "plan_failure_chain_ordering",
+        "target_file": null,
+        "title": "First-Failure-First Ordering (Pipeline Orchestrator SDs)"
+      },
+      "529": {
+        "section_type": "exec_acceptance_criteria_verification",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "User Story Acceptance Criteria Verification (MANDATORY)"
+      },
+      "531": {
+        "section_type": "ui_design_evaluation_process",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "UI Design Evaluation Process"
+      },
+      "538": {
+        "section_type": "sub_agent_routing_reference",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Sub-Agent Routing Reference"
+      },
+      "539": {
+        "section_type": "sub_agent_phase_guidance_lead",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Phase-Specific Sub-Agent Guidance: LEAD"
+      },
+      "540": {
+        "section_type": "sub_agent_phase_guidance_plan",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Phase-Specific Sub-Agent Guidance: PLAN"
+      },
+      "541": {
+        "section_type": "sub_agent_phase_guidance_exec",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Phase-Specific Sub-Agent Guidance: EXEC"
+      },
+      "544": {
+        "section_type": "handoff_precheck",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Handoff Precheck Command"
+      },
+      "545": {
+        "section_type": "handoff_precheck",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Handoff Precheck Command"
+      },
+      "549": {
+        "section_type": "cascade_invalidation_system",
+        "target_file": null,
+        "title": "Cascade Invalidation System"
+      },
+      "550": {
+        "section_type": "cascade_invalidation_plan",
+        "target_file": null,
+        "title": "Cascade Invalidation — PLAN Phase Guidance"
+      },
+      "555": {
+        "section_type": "db_ops_protocol",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "DB Ops Protocol (Common Pitfalls)"
+      },
+      "556": {
+        "section_type": "gate_failure_protocol",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Gate Failure Protocol"
+      },
+      "557": {
+        "section_type": "vision_arch_doc_check",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Vision/Architecture Doc Pre-Check"
+      },
+      "558": {
+        "section_type": "pipeline_debugging_protocol",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Pipeline Debugging Protocol"
+      },
+      "562": {
+        "section_type": "skill",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "LEO Settings Skill"
+      },
+      "563": {
+        "section_type": "skill",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "LEO Resume Skill"
+      },
+      "565": {
+        "section_type": "multi_repo_sd_verification",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Multi-Repo SD Verification"
+      },
+      "567": {
+        "section_type": "auto_proceed_router",
+        "target_file": "CLAUDE.md",
+        "title": "AUTO-PROCEED Mode"
+      },
+      "570": {
+        "section_type": "prd_creation_anti_pattern",
+        "target_file": "CLAUDE.md",
+        "title": "PRD Creation — Inline Mode is the Default for Claude Code"
+      },
+      "573": {
+        "section_type": "directive",
+        "target_file": "CLAUDE.md",
+        "title": "HANDOFF_POST_ACTION Directive Parsing"
+      },
+      "574": {
+        "section_type": "claim_heartbeat_protocol",
+        "target_file": null,
+        "title": "Claim Heartbeat Protocol"
+      },
+      "575": {
+        "section_type": "code_quality_pre_commit",
+        "target_file": null,
+        "title": "Code Quality Pre-Commit Check"
+      },
+      "576": {
+        "section_type": "protocol_lint_tooling",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Protocol Consistency Linter"
+      },
+      "577": {
+        "section_type": "qf_lifecycle_reconciliation",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "QF Lifecycle Reconciliation"
+      },
+      "580": {
+        "section_type": "gate_retrospective_invariants",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Retrospective-Gate Invariants"
+      },
+      "584": {
+        "section_type": "lead_anti_pattern_confirmation_fishing",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Anti-Pattern: Confirmation-Fishing at Scope-Lock"
+      },
+      "589": {
+        "section_type": "queue_ranking_unified",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Queue Ranking and QF Track Inference"
+      },
+      "590": {
+        "section_type": "reference",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "PRD metadata.db_content_assertions field guide"
+      },
+      "592": {
+        "section_type": "signaling_friction",
+        "target_file": "CLAUDE_CORE.md",
+        "title": "Signaling friction to the coordinator"
+      },
+      "593": {
+        "section_type": "lead_testing_agent_harness_fix_cadence",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Default Sub-Agent Invocation Cadence for Harness-Fix SDs"
+      },
+      "594": {
+        "section_type": "plan_keyword_list_substring_audit",
+        "target_file": "CLAUDE_PLAN.md",
+        "title": "Substring-Redundancy Audit for Keyword-List Expansions"
+      },
+      "595": {
+        "section_type": "exec_atomic_insert_writer_consumer_pattern",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Atomic INSERT Pattern for Writer/Consumer Asymmetry Fixes"
+      },
+      "596": {
+        "section_type": "signaling_friction_pointer_phase",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Friction signaling"
+      },
+      "597": {
+        "section_type": "signaling_friction_pointer_digest",
+        "target_file": "CLAUDE_CORE_DIGEST.md",
+        "title": "Friction signaling"
+      },
+      "599": {
+        "section_type": "venture_lifecycle_pipeline",
+        "target_file": "CLAUDE_LEAD.md",
+        "title": "Venture Lifecycle Pipeline"
+      },
+      "601": {
+        "section_type": "adam_role_contract",
+        "target_file": "CLAUDE_ADAM.md",
+        "title": "Adam Role Contract — Chairman-Attached Advisory/Analysis Session"
+      },
+      "602": {
+        "section_type": "adam_self_adherence_loop",
+        "target_file": "CLAUDE_ADAM.md",
+        "title": "Adam Self-Adherence Loop (recurring audit + propose-only remediation)"
+      },
+      "603": {
+        "section_type": "fleet_worker_loop_continuity",
+        "target_file": "CLAUDE_EXEC.md",
+        "title": "Loop Continuity / Never-Exit (Fleet Worker Contract)"
+      }
     }
   }
 }

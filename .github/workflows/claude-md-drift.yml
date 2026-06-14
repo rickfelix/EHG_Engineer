@@ -1,0 +1,79 @@
+name: CLAUDE.md Drift Check
+
+# SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-4a): enforced backstop. The generated
+# CLAUDE_*.md family is produced from leo_protocol_sections; this job red-flags any PR whose
+# committed docs have drifted from the live DB (a section content edit not regenerated). Unlike
+# the local pre-commit gate (FR-2), CI cannot be bypassed with --no-verify, so it is the
+# authoritative change-time enforcement point.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'CLAUDE*.md'
+      - 'claude-generation-manifest.json'
+      - 'scripts/generate-claude-md-from-db.js'
+      - 'scripts/check-claude-md-drift.cjs'
+      - 'scripts/modules/claude-md-generator/**'
+      - 'scripts/section-file-mapping*.json'
+      - '.github/workflows/claude-md-drift.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'CLAUDE*.md'
+      - 'claude-generation-manifest.json'
+      - 'scripts/generate-claude-md-from-db.js'
+      - 'scripts/check-claude-md-drift.cjs'
+      - 'scripts/modules/claude-md-generator/**'
+      - 'scripts/section-file-mapping*.json'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift-check:
+    name: Generated docs match leo_protocol_sections
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Check CLAUDE_*.md drift vs leo_protocol_sections
+        shell: bash
+        run: |
+          set +e
+          node scripts/check-claude-md-drift.cjs
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "::notice::CLAUDE_*.md are in sync with leo_protocol_sections"
+            exit 0
+          elif [ "$code" -eq 1 ]; then
+            echo "::error::CLAUDE_*.md have drifted from leo_protocol_sections. Run 'node scripts/generate-claude-md-from-db.js' and commit the regenerated files."
+            exit 1
+          else
+            # Exit 2 = internal/infra error (e.g. missing DB secrets). Fail-open in CI so a
+            # transient DB blip or unconfigured fork PR does not red-flag an unrelated change.
+            echo "::warning::Drift check could not run (exit $code) — skipping (infra/secret issue, not a content drift)."
+            exit 0
+          fi
