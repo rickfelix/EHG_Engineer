@@ -123,6 +123,15 @@ describe('FR-3: D1 kill-switch reuses CircuitBreaker (read-only)', () => {
     expect(ks.isHalted()).toBe(false);
   });
 
+  it('FAIL-LOUD: trip() throws (never returns false) if the breaker cannot open', () => {
+    // A pathological config whose failure-rate path can never open (threshold >= 1).
+    // threshold>=1 disables the failure-rate path; default dailyCostCap (500) is
+    // far beyond the bounded guard, so the breaker genuinely cannot open here.
+    const ks = createVentureKillSwitch(VENTURE, { failureThreshold: 1, windowSize: 5 });
+    expect(() => ks.trip()).toThrow(/failed to trip/);
+    expect(ks.isHalted()).toBe(false); // confirmed it did not silently fail open
+  });
+
   it('ZERO-DIFF GUARD: circuit-breaker.js content is unchanged (proves read-only reuse)', () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const cbPath = resolve(here, '../../lib/eva/pipeline-runner/circuit-breaker.js');
