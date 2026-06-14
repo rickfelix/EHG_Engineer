@@ -29,7 +29,12 @@ import { registerItem, setDisposition, backlogDepth } from '../../lib/intake/con
 const APPLY = process.argv.includes('--apply');
 const DRY_RUN = !APPLY; // dry-run is the default
 const limIdx = process.argv.indexOf('--limit');
-const LIMIT = limIdx !== -1 ? parseInt(process.argv[limIdx + 1], 10) : null;
+const _rawLimit = limIdx !== -1 ? parseInt(process.argv[limIdx + 1], 10) : null;
+if (_rawLimit !== null && (!Number.isInteger(_rawLimit) || _rawLimit <= 0)) {
+  console.error(`--limit must be a positive integer (got "${process.argv[limIdx + 1]}")`);
+  process.exit(1);
+}
+const LIMIT = _rawLimit; // applied UNIFORMLY across the combined batch (not just Pool-1)
 const PROPOSALS_DIR = path.resolve('.prd-payloads');
 
 /** D1: priority_score (numeric, 0-1 or 0-100) -> normalized_priority. */
@@ -72,11 +77,9 @@ async function loadCapabilities(sb) {
 
 /** Pool 1: eva_consultant_recommendations (live source). */
 async function loadPool1(sb) {
-  let q = sb.from('eva_consultant_recommendations')
+  const { data, error } = await sb.from('eva_consultant_recommendations')
     .select('id, trend_id, title, description, priority_score, action_type, status')
     .order('created_at', { ascending: true });
-  if (LIMIT) q = q.limit(LIMIT);
-  const { data, error } = await q;
   if (error) throw new Error(`loadPool1: ${error.message}`);
   return (data || []).map(r => ({
     source_pool: 'eva_consultant_rec',
@@ -133,7 +136,8 @@ async function main() {
     loadPool1(sb), loadPool2(sb), loadExistingSds(sb), loadCapabilities(sb),
   ]);
   const pool3 = loadPool3();
-  const items = [...pool1, ...pool2, ...pool3];
+  let items = [...pool1, ...pool2, ...pool3];
+  if (LIMIT) items = items.slice(0, LIMIT); // uniform cap across all pools
   const existingSdKeys = new Set(existingSds.map(s => s.sd_key).filter(Boolean));
   console.log(`   pools: eva_consultant_rec=${pool1.length}, sd_proposal=${pool2.length}, prd_payload_file=${pool3.length} | total=${items.length}`);
   console.log(`   existing SDs (dedup corpus)=${existingSds.length}, capabilities=${capabilities.length}`);
@@ -158,18 +162,33 @@ async function main() {
         source_external_id: item.source_external_id, title: item.title,
         description: item.description, normalized_priority: item.normalized_priority,
       }, { client: sb });
-      if (row && row.disposition) { skipped++; continue; } // already triaged (idempotent)
+      if (row && row.disposition) {
+        // Already triaged (idempotent). IDEMP-3: still reconcile the SOURCE status
+        // in case a prior run dispositioned the ledger but failed the source update.
+        if (item.source_pool === 'eva_consultant_rec') {
+          await sb.from('eva_consultant_recommendations').update({ status: 'triaged' }).eq('id', item.source_id);
+        }
+        skipped++; continue;
+      }
 
       let linked_sd_key = null, promoted_proposal_path = null, disposition = verdict.disposition;
       if (verdict.promote) {
         // Promote novel items via the EXISTING --from-proposal ingest (no fork).
         const proposalPath = item._proposalPath || await writeProposalForItem(item);
         promoted_proposal_path = proposalPath;
-        const { createFromProposal } = await import('../leo-create-sd.js');
         process.env.SDKEY_SKIP_PROTOCOL_READ = '1';
+        const { createFromProposal } = await import('../leo-create-sd.js');
         const created = await createFromProposal(proposalPath, { dryRun: false });
-        linked_sd_key = (created && (created.sd_key || created[0]?.sd_key)) || null;
+        // createFromProposal returns [{sdKey, file, action}] (camelCase).
+        const linked = Array.isArray(created) ? (created.find(r => r && r.sdKey) || created[0]) : created;
+        linked_sd_key = (linked && (linked.sdKey || linked.sd_key)) || null;
         disposition = 'converted';
+        // DEDUP-03: add the just-promoted SD to the in-run corpus so subsequent
+        // items in THIS batch dedup against it (prevents intra-batch duplicates).
+        if (linked_sd_key) {
+          existingSds.push({ sd_key: linked_sd_key, title: item.title, scope: '', description: item.description || '', key_changes: [] });
+          existingSdKeys.add(linked_sd_key);
+        }
       }
       await setDisposition(row.id, {
         disposition,
@@ -209,15 +228,23 @@ async function main() {
   }
 }
 
-/** Write a PROPOSAL-*.json for a promote item that has no source file (Pool-1 create_sd). */
+/**
+ * Write a PROPOSAL-*.json for a promote item that has no source file (Pool-1 create_sd).
+ * The proposed_sd_key + filename are DETERMINISTIC per source item, so a re-run
+ * reuses the same key — createFromProposal's keyExists guard then makes promotion
+ * idempotent (no duplicate SD on crash-then-rerun). proposed_sd_key is REQUIRED by
+ * validateProposalShape (a non-empty string) — omitting it process.exit(1)s the run.
+ */
 async function writeProposalForItem(item) {
   const { writeFileSync, mkdirSync } = await import('fs');
   mkdirSync(PROPOSALS_DIR, { recursive: true });
-  const slug = String(item.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-  const fname = `PROPOSAL-INTAKE-${slug || 'item'}-${String(item.source_id).slice(0, 8)}.json`;
-  const fpath = path.join(PROPOSALS_DIR, fname);
+  const shortId = String(item.source_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase() || 'ITEM';
+  const proposedKey = `SD-LEO-INTAKE-${shortId}`;
+  const fpath = path.join(PROPOSALS_DIR, `PROPOSAL-${proposedKey}.json`);
   writeFileSync(fpath, JSON.stringify({
     PROPOSAL: true,
+    proposed_sd_key: proposedKey,
+    status_intended: 'draft',
     title: item.title,
     sd_type: 'infrastructure',
     priority: item.normalized_priority || 'medium',
