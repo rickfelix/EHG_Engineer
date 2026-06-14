@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-14](#2026-06-14)
+  - [Infrastructure](#infrastructure)
 - [2026-06-13](#2026-06-13)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -50,6 +52,13 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-14
+
+### Infrastructure
+- **Durable read-only coordinator charter-compliance self-audit with named remediations** - PR #4729 (SD-LEO-INFRA-COORDINATOR-CHARTER-SELF-AUDIT-001)
+  - **What shipped**: `scripts/coordinator-charter-audit.mjs` (`npm run coordinator:charter-audit`) + pure detectors in `lib/coordinator/charter-audit-detectors.mjs`, wired into `STANDARD_LOOPS` (`coordinator-startup-check.mjs`) so it survives a coordinator session restart (replacing a lost session-only CronCreate). READ-ONLY detection (zero writes); each violation NAMES a remediation; the cron prompt compels **remediate-then-verify** (confirm `CHARTER_AUDIT_VIOLATIONS=0`). Hardens the inline SRE-gauges: **fail-loud** on foundational SD/session queries (a column error inline silently returned `[]` = false all-clean); **authoritative liveness** (heartbeat OR in-window armed-silence OR a live PID via the sweep `resolveCcPidFromTerminalId`) so a long-EXEC/armed-silence worker is not miscounted idle/dead; + 3 new duty checks (worktrees N/20, backlog-rank staleness, QUIET-TICK committed-action).
+  - **Verification**: 32 detector unit + 10 startup-check tests pass; live-smoke validated (read-only; real per-duty gauges + `CHARTER_AUDIT_VIOLATIONS=2`). A 9-agent adversarial review found + fixed 4 major defects, all in the audit's own false-clean/false-alive/false-positive classes: DUTY-1 fail-loud was unreachable (`countActiveWorktrees` swallows git errors → compare git vs filesystem); liveness ignored `status` (a RELEASED+fresh-heartbeat session read ALIVE → dispatch to a dead session); `extractDepKey` object branch bypassed the SD-key rule (`{sd_key:'none'}` → false ANOMALY); the unclaimed/claimable belt was looser than canonical (an orchestrator PARENT got recommended for dispatch → route through `classifyDispatchIneligibility`). VALIDATION PASS (fail-loud empirically proven), RETRO 90. Gates L2P 95 / P2E 93 / E2P 92 / P2L 96 / LEAD-FINAL 99.
 
 ## 2026-06-13
 
