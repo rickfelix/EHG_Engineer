@@ -113,6 +113,7 @@
     "skill:audit:body": "node scripts/pocock/audit-skill-bodies.mjs",
     "prio:top3": "node scripts/wsjf-priority-fetcher.js",
     "continuity:spike-rehearsal": "node scripts/continuity/spike-rehearsal.mjs",
+    "continuity:cloud-cap-feeder": "node scripts/continuity/cloud-cap-feeder.mjs",
     "glide:add-income-dimension": "node scripts/glide-path/add-income-dimension.mjs",
     "qf:link": "node scripts/qf-link-resolution.mjs",
     "session:prologue": "node scripts/generate-session-prologue.js",
