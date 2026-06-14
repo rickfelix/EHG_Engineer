@@ -2060,21 +2060,27 @@ export function validateProposalShape(proposal, filePath) {
     console.error(`[INVALID_PROPOSAL] ${where}: status_intended must be "draft" (got ${JSON.stringify(proposal.status_intended)})`);
     process.exit(1);
   }
+  // Required fields must be non-empty STRINGS. The typeof check is load-bearing:
+  // without it a number/boolean/array/object (e.g. title:[] or proposed_sd_key:42)
+  // would pass and flow verbatim into createSD -> a corrupt INSERT or an uncaught
+  // TypeError at sdKey.startsWith. (adversarial review w2b0qjnoa, 2 HIGH findings)
   for (const field of ['proposed_sd_key', 'title', 'sd_type', 'priority']) {
     const v = proposal[field];
-    if (v === undefined || v === null || (typeof v === 'string' && v.trim() === '')) {
-      console.error(`[INVALID_PROPOSAL] ${where}: missing required field "${field}"`);
+    if (v === undefined || v === null || typeof v !== 'string' || v.trim() === '') {
+      console.error(`[INVALID_PROPOSAL] ${where}: required field "${field}" must be a non-empty string`);
       process.exit(1);
     }
   }
   let type;
   try {
-    type = mapToDbType(proposal.sd_type); // reuses canonical enum; throws on invalid
+    type = mapToDbType(proposal.sd_type); // reuses canonical enum; throws on invalid (now guaranteed a string)
   } catch (e) {
     console.error(`[INVALID_PROPOSAL_SD_TYPE] ${where}: ${e.message}`);
     process.exit(1);
   }
-  const priority = String(proposal.priority).toLowerCase();
+  // priority is guaranteed a non-empty string by the loop above, so a single-element
+  // array like ['high'] can no longer String()-coerce through this check.
+  const priority = proposal.priority.toLowerCase();
   if (!VALID_PROPOSAL_PRIORITIES.includes(priority)) {
     console.error(`[INVALID_PROPOSAL_PRIORITY] ${where}: "${proposal.priority}". Valid: ${VALID_PROPOSAL_PRIORITIES.join(', ')}`);
     process.exit(1);
@@ -2095,6 +2101,9 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath) {
     type: normalized.type,
     priority: normalized.priority,
     description: proposal.rationale || proposal.scope || proposal.title,
+    // Sibling parity: UAT/learn/feedback/QF/plan/child all set an explicit rationale
+    // (used by the LEAD evaluator). Fall back to a provenance line when absent.
+    rationale: proposal.rationale || `Materialized from proposal ${filePath || 'unknown'}`,
     scope: proposal.scope || null,
     success_criteria: Array.isArray(proposal.success_criteria) ? proposal.success_criteria : null,
     metadata: {

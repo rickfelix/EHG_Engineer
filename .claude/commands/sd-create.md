@@ -22,6 +22,9 @@ SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-uat <test-id>
 SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-learn <pattern-id>
 SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-feedback <id>
 SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-plan [path]
+# Materialize sourced proposal(s) into DRAFT SD(s); --dry-run validates with zero writes
+# (SD-LEO-INFRA-FROM-PROPOSAL-INGEST-001 — key taken verbatim from proposed_sd_key)
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-proposal <path|glob> [--dry-run]
 node scripts/modules/sd-key-generator.js --child <parent-key> <index>
 
 # Cross-repo SDs — set metadata.target_repos[] at creation time

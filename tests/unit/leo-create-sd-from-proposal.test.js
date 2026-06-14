@@ -90,6 +90,25 @@ describe('validateProposalShape (SD-LEO-INFRA-FROM-PROPOSAL-INGEST-001)', () => 
     expect(() => validateProposalShape(validProposal({ status_intended: 'active' }), 'p.json')).toThrow('process.exit(1)');
     expect(errorSpy.mock.calls.map(c => c[0]).join('\n')).toContain('[INVALID_PROPOSAL]');
   });
+
+  // Adversarial review w2b0qjnoa (2 HIGH): type-laxness — non-string required fields
+  // and array-wrapped priority must NOT coerce through into createSD.
+  it.each([
+    ['title', []],
+    ['title', 42],
+    ['title', {}],
+    ['title', ['Some Title']],
+    ['proposed_sd_key', 42],
+    ['proposed_sd_key', ['SD-X-2']],
+    ['sd_type', 42],
+    ['priority', ['high']], // single-element array previously String()-coerced to 'high'
+    ['priority', 5],
+  ])('non-string %s = %j → [INVALID_PROPOSAL] non-empty-string + exit 1 (no coercion)', (field, badValue) => {
+    expect(() => validateProposalShape(validProposal({ [field]: badValue }), 'p.json')).toThrow('process.exit(1)');
+    const msg = errorSpy.mock.calls.map(c => c[0]).join('\n');
+    expect(msg).toContain('[INVALID_PROPOSAL]');
+    expect(msg).toContain(field);
+  });
 });
 
 describe('mapProposalToCreateArgs (pure field mapping)', () => {
@@ -112,6 +131,30 @@ describe('mapProposalToCreateArgs (pure field mapping)', () => {
   it('description falls back rationale -> scope -> title', () => {
     expect(mapProposalToCreateArgs(normalized, validProposal({ rationale: undefined }), 'p.json').description).toBe('DOES: x. DOES NOT: y.');
     expect(mapProposalToCreateArgs(normalized, validProposal({ rationale: undefined, scope: undefined }), 'p.json').description).toBe('Example proposal');
+  });
+
+  it('sets a rationale (sibling parity): proposal rationale, else a provenance fallback', () => {
+    expect(mapProposalToCreateArgs(normalized, validProposal(), 'p.json').rationale).toBe('because the belt needs refilling');
+    expect(mapProposalToCreateArgs(normalized, validProposal({ rationale: undefined }), 'p.json').rationale).toContain('Materialized from proposal');
+  });
+
+  // Adversarial review w2b0qjnoa (invariant regression guard): a DIRTY proposal carrying
+  // vision_key/arch_key/parent_id (top-level AND nested in metadata) must NOT leak those
+  // into the mapped createSD args — else enrichFromVisionArch / orchestrator-routing /
+  // parent-FK could silently re-activate. The closed whitelist is the protection.
+  it('dirty proposal: vision_key/arch_key/parent_id never leak into mapped args', () => {
+    const dirty = validProposal({
+      vision_key: 'VIS-EVIL-001', arch_key: 'ARCH-EVIL-001', parent_id: 'SD-PARENT-001',
+      parentId: 'SD-PARENT-002', metadata: { vision_key: 'VIS-NESTED-001', arch_key: 'ARCH-NESTED-001' },
+    });
+    const args = mapProposalToCreateArgs(normalized, dirty, 'p.json');
+    expect(args.metadata.vision_key).toBeUndefined();
+    expect(args.metadata.arch_key).toBeUndefined();
+    expect(args.metadata.parent_id).toBeUndefined();
+    expect(args.parentId).toBeUndefined();
+    expect(args.vision_key).toBeUndefined();
+    expect(args.arch_key).toBeUndefined();
+    expect(args.metadata.source).toBe('proposal'); // only the closed whitelist survives
   });
 });
 
