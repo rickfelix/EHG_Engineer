@@ -45,6 +45,12 @@ describe('isFleetWorker', () => {
   it('excludes Adam (metadata.role=adam)', () => {
     expect(isFleetWorker(worker({ metadata: { role: 'adam' } }), ME)).toBe(false);
   });
+  it('excludes the coordinator intrinsically via metadata.is_coordinator even when coordinatorId is unset (the CI cron case)', () => {
+    // GitHub Actions crons (worker-pulse, exec-email) have no CLAUDE_SESSION_ID, so coordinatorId
+    // is undefined and the session_id match is a no-op. The intrinsic flag must still exclude it.
+    expect(isFleetWorker(worker({ session_id: 'coord', metadata: { is_coordinator: true } }), undefined)).toBe(false);
+    expect(isFleetWorker(worker({ session_id: 'coord', metadata: { is_coordinator: 'true' } }), undefined)).toBe(false);
+  });
   it('excludes non_fleet sessions', () => {
     expect(isFleetWorker(worker({ metadata: { non_fleet: true } }), ME)).toBe(false);
   });

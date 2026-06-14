@@ -1,202 +1,143 @@
-// adam-exec-summary v2 — chairman-lens exec summary (Adam-owned). Dual focus (chairman 2026-06-08): pilot
-// (DataDistill, issue-discovery VEHICLE) + venture-process improvement (the real deliverable). Pilot pace =
-// "advancing as the process fixes land", not "stalled". Value section classifies shipped SDs into
-// capabilities / enablers / problems-solved. Trends on every line. Reuses coordinator fleet card verbatim.
+// adam-exec-summary v3 — chairman exec email, drastically simplified (chairman directive 2026-06-14).
+//
+// The chairman asked for TWO headline numbers + their action list, nothing else:
+//   1. WORKERS — the hourly AVERAGE of 15-min active-worker pulses, rounded to a whole number
+//      (a pulse job records active-vs-not every 15 min into fleet_worker_pulse; this averages the
+//      last hour). Fails soft to the live instantaneous count before any pulses exist.
+//   2. EHG VISION BUILD-% — the build-completeness gauge (.adam-vision-build.json) with its
+//      per-layer breakdown. Honestly labelled as the v1 estimate until the live VDR gauge ships.
+//   3. ACTIONS FOR YOU — chairman_pending_decisions rendered as a single copy-paste block the
+//      chairman selects and pastes back into Claude Code to action them. Free-text flags are shown
+//      AS RECEIVED (no LLM, chairman 2026-06-14); every line ends with the real decision_type:id
+//      reference so a pasted instruction resolves to the exact row.
+//
+// Removed vs v2: north star, per-scope roll-up, value-delivered buckets, meta:product ratio,
+// distance-to-quit, tri-party self-score, canary, and the embedded coordinator fleet card.
+// No emojis anywhere (chairman directive).
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { execSync } from 'child_process';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
-import { readFileSync, writeFileSync } from 'fs';
-// FR-2 (SD-LEO-INFRA-ADAM-PREFERENCE-LEARNING-001): per-scope roll-up reuses the existing
-// scope vocabulary instead of re-inventing it (scan-core delivered enumerateScopes).
-import { enumerateScopes } from '../lib/adam/scope-registry.js';
+import { readFileSync } from 'fs';
+import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs';
+import { renderDecisionLines } from '../lib/chairman/decision-layman.mjs';
 
-const EM = '—', UP = ' ↑', DN = ' ↓';
-const I = { star: '\u{1F3AF}', flag: '⛳', tools: '\u{1F6E0}', loop: '\u{1F501}', siren: '\u{1F6A8}' };
+const EM = '—';
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const t = Date.now();
+const me = process.env.CLAUDE_SESSION_ID;
 const DRY = !!process.env.ADAM_EMAIL_DRYRUN || process.argv.includes('--dry-run');
-const SNAP = resolve('.adam-email-last.json');
-
-// Quick-fix QF-20260612-437: quiescence-gate the hourly send (chairman B13, 2026-06-12).
-// The eva-scheduler-host daemon fires this hourly regardless of fleet state — the chairman
-// received fleet-advisor emails with the fleet fully OFF. Reuse the same gate that silences
-// coordinator hourly reminders; gate fails open to ACTIVE, so a query error never drops a
-// legitimate email. --force (or DRY) bypasses for manual runs.
 const FORCE = process.argv.includes('--force');
-if (!DRY && !FORCE) {
+
+// ── ACTIONS FOR YOU: pending chairman decisions, fetched FIRST so the quiescence gate can see them ──
+let rows = [];
+try {
+  const { data } = await db.from('chairman_pending_decisions').select('*').limit(200);
+  rows = data || [];
+} catch { rows = []; }
+const { count: nActions, lines } = renderDecisionLines(rows, new Date(t));
+
+// Quiescence gate (QF-20260612-437): skip the hourly send when the fleet is fully OFF — UNLESS the
+// chairman has pending actions, which must surface regardless of fleet state (they are often the very
+// reason the fleet is idle). Fails open to ACTIVE so a query error never drops a real email.
+if (!DRY && !FORCE && nActions === 0) {
   try {
     const { createRequire } = await import('module');
     const q = createRequire(import.meta.url)('../lib/coordinator/fleet-quiescence.cjs');
-    const verdict = await q.assessFleetActivity(db); // returns {quiescent, reason}; fails open to ACTIVE
-    if (verdict.quiescent) {
-      console.log('ADAM-EMAIL skipped (fleet quiescent): ' + verdict.reason);
-      process.exit(0);
-    }
+    const verdict = await q.assessFleetActivity(db);
+    if (verdict.quiescent) { console.log('ADAM-EMAIL skipped (fleet quiescent, no pending actions): ' + verdict.reason); process.exit(0); }
   } catch (e) { console.log('quiescence check failed open (sending): ' + (e?.message || e)); }
 }
-const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const arrow = (cur, prev) => (typeof prev !== 'number' || cur === prev) ? '' : (cur > prev ? UP : DN);
-let snap = {}; try { snap = JSON.parse(readFileSync(SNAP, 'utf8')); } catch { snap = {}; }
-const TERMINAL = "(completed,cancelled,archived,deferred)";
-const PROCESS_RX = /LIFECYCLE|STAGE|VENTURE|GROWTH|LAUNCH|DISTRIBUTION|OPERATIONS|POST-BUILD|S2[0-6]|VISUAL|PLAYBOOK/i;
 
-let cardText = '(fleet card unavailable)', cardSubject = 'Fleet';
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// ── 1. WORKERS: hourly average of 15-min active pulses (rounded), fail-soft to live count ──
+let avgActive = null, avgIdle = 0, pulseSource = 'live';
 try {
-  const out = execSync('node --env-file=.env scripts/coordinator-email-summary.mjs', { encoding: 'utf8', env: { ...process.env, COORD_EMAIL_DRYRUN: '1' } });
-  const sm = out.match(/SUBJECT:\s*(.+)/); if (sm) cardSubject = sm[1].trim();
-  const parts = out.split('---'); if (parts.length >= 2) cardText = parts[1].trim();
-} catch (e) { cardText = '(fleet card error)'; }
-
-let pilotStage = 0;
-try {
-  const { data: v } = await db.from('ventures').select('id').ilike('name', '%datadistill%').limit(1);
-  if (v && v[0]) { const { data: a } = await db.from('venture_artifacts').select('lifecycle_stage').eq('venture_id', v[0].id).order('lifecycle_stage', { ascending: false }).limit(1); pilotStage = (a && a[0]) ? (a[0].lifecycle_stage || 0) : 0; }
-} catch {}
-let procInFlight = 0;
-try { const { data: open } = await db.from('strategic_directives_v2').select('sd_key,scope,title').not('status', 'in', TERMINAL); procInFlight = (open || []).filter(r => PROCESS_RX.test(String(r.sd_key) + ' ' + String(r.title) + ' ' + String(r.scope))).length; } catch {}
-const northStar = 'Pilot DataDistill S' + pilotStage + '/26' + (arrow(pilotStage, snap.pilotStage) || ' (steady)') + ' ' + EM + ' advancing as the process fixes it surfaced land. ' + procInFlight + ' process SDs in flight (stages 20-26 + ops).';
-
-let needs = []; try { needs = JSON.parse(readFileSync(resolve('.adam-chairman-decisions.json'), 'utf8')) || []; } catch {}
-
-// SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-001: 'Decisions awaiting you' — top 10 from the
-// chairman_pending_decisions union view (escalations, gate decisions, chairman approvals,
-// critical/high feedback, idle draft flags, OKR acceptances). Display-only (nothing
-// auto-decides); fail-soft so a view/DB error never blocks the chairman email.
-let pendingDecisions = [];
-try {
-  // select('*'): tolerant of pre/post-migration column sets (blocking/effective_priority are new).
-  const { data } = await db.from('chairman_pending_decisions').select('*').limit(50);
-  pendingDecisions = data || [];
-  try { const { sortPending } = await import(pathToFileURL(resolve('lib/chairman/decision-queue.mjs')).href); pendingDecisions = sortPending(pendingDecisions); } catch {}
-  pendingDecisions = pendingDecisions.slice(0, 10);
-} catch {}
-const decAge = (c) => { const h = Math.max(0, (t - new Date(c).getTime()) / 3600000); return h >= 48 ? Math.floor(h / 24) + 'd' : Math.floor(h) + 'h'; };
-const decLine = (d) => '[' + decAge(d.created_at) + '] [' + d.decision_type + (d.blocking ? '/BLOCKING' : '') + '] ' + d.title + (d.recommendation ? ' ' + EM + ' ' + d.recommendation : '');
-
-// FR-2: per-scope roll-up — count recent Adam advisories per scope (reuses FR-1's scope_key),
-// fail-soft so a scope/DB error never blocks the chairman email.
-let scopeRollup = [], perScope = {};
-try {
-  const scopes = await enumerateScopes(db);
-  const advSince = new Date(t - 24 * 3600 * 1000).toISOString();
-  let advs = [];
-  try {
-    const { data } = await db.from('session_coordination').select('payload').gte('created_at', advSince).filter('payload->>kind', 'eq', 'adam_advisory').limit(2000);
-    advs = data || [];
-  } catch {}
-  for (const a of advs) { const sk = a.payload && a.payload.scope_key; if (sk) perScope[sk] = (perScope[sk] || 0) + 1; }
-  const prev = snap.perScope || {};
-  scopeRollup = (scopes || []).map((s) => ({ scope: s.scope_key, n: perScope[s.scope_key] || 0, arrow: arrow(perScope[s.scope_key] || 0, prev[s.scope_key]) }));
-} catch {}
-const scopeRollupLine = scopeRollup.length ? scopeRollup.map((r) => r.scope + ': ' + r.n + (r.arrow || '')).join('  ·  ') : '(scope roll-up unavailable)';
-// FR-2: scope-tag a needs item label (forward-compatible — only when the item carries a scope).
-const needsLabel = (d) => (d && (d.scope_key || d.scope) ? '[' + (d.scope_key || d.scope) + '] ' : '') + (d ? d.label : '');
-
-const since = new Date(t - 24 * 3600 * 1000).toISOString(); // value section = rolling 24h (substantive), not the 30-min cadence
-let buckets = { cap: [], enab: [], prob: [] }, shippedN = 0, completedNow = snap.completedCount;
-try {
-  const r = await db.from('strategic_directives_v2').select('sd_key', { count: 'exact', head: true }).eq('status', 'completed'); completedNow = r.count;
-  const { data: done } = await db.from('strategic_directives_v2').select('sd_key,title,sd_type').eq('status', 'completed').gte('updated_at', since).order('updated_at', { ascending: false }).limit(40);
-  shippedN = (done || []).length;
-  const clean = (s) => String(s || '').replace(/^(SD-[A-Z0-9-]+:?\s*)/i, '').replace(/\s+/g, ' ').trim();
-  const trunc = (s, n) => { s = clean(s); if (s.length <= n) return s; const cut = s.slice(0, n); const sp = cut.lastIndexOf(' '); return (sp > n * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,.:;—-]+$/, '') + '…'; };
-  for (const r2 of (done || [])) {
-    const k = String(r2.sd_key || '').toUpperCase(); const ty = String(r2.sd_type || '').toLowerCase();
-    const label = trunc(r2.title, 50);
-    if (ty === 'bugfix' || ty === 'fix' || /\b(FIX|GUARD|BUG|HANG|DRIFT|REPAIR|RESIDUAL|VALIDATE)\b/.test(k)) buckets.prob.push(label);
-    else if (ty === 'feature' || /(FEAT|GATE|LIFECYCLE|CONVERT|HARDEN)/.test(k)) buckets.cap.push(label);
-    else buckets.enab.push(label);
+  const sinceHr = new Date(t - 60 * 60 * 1000).toISOString();
+  const { data: pulses, error } = await db.from('fleet_worker_pulse')
+    .select('active_count,total_count,idle_count').gte('captured_at', sinceHr);
+  if (!error && pulses && pulses.length) {
+    const sum = (f) => pulses.reduce((a, p) => a + (Number(f(p)) || 0), 0);
+    avgActive = Math.round(sum((p) => p.active_count) / pulses.length);
+    avgIdle = Math.round(sum((p) => (p.idle_count != null ? p.idle_count : (p.total_count - p.active_count))) / pulses.length);
+    pulseSource = 'hourly avg';
   }
-} catch {}
-const bucketLine = (arr, n) => arr.length ? (arr.slice(0, n).join(' · ') + (arr.length > n ? ' · +' + (arr.length - n) + ' more' : '')) : 'none';
+} catch { /* table may not exist yet -> live fallback */ }
+if (avgActive === null) {
+  // Live instantaneous fallback — same genuine-worker predicate the fleet dashboard/coordinator use.
+  try {
+    const { data: sessRaw, error: sErr } = await db.from('claude_sessions')
+      .select('session_id,heartbeat_at,sd_key,status,claimed_at,worktree_path,continuous_sds_completed,metadata')
+      .order('heartbeat_at', { ascending: false }).limit(60);
+    if (sErr) throw sErr; // a query error must NOT masquerade as a real "0 active"
+    const live = liveFleetWorkers(sessRaw, me, t);
+    const PROVISIONED_WINDOW = parseInt(process.env.COORD_PROVISIONED_WINDOW_MIN || '480', 10) * 60000;
+    const recentSeen = (sessRaw || []).filter((s) => isFleetWorker(s, me) && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < PROVISIONED_WINDOW);
+    avgActive = live.length;
+    avgIdle = Math.max(0, recentSeen.length - live.length);
+  } catch (e) { console.warn('[adam-email] worker count unavailable: ' + (e?.message || e)); avgActive = null; avgIdle = 0; pulseSource = 'unavailable'; }
+}
+const workerText = pulseSource === 'unavailable' ? 'count unavailable (will refresh next run)' : `${avgActive} active${avgIdle ? `, ${avgIdle} idle` : ''} (${pulseSource})`;
 
-let selfLabel = 'pending', selfScore = snap.selfScore, coordRev = 'pending';
-try {
-  const { data: a } = await db.from('feedback').select('description').eq('category', 'adam_self_assessment').order('created_at', { ascending: false }).limit(1);
-  const { data: c } = await db.from('feedback').select('description').eq('category', 'coordinator_review').order('created_at', { ascending: false }).limit(1);
-  try { const o = JSON.parse((a && a[0] && a[0].description) || '{}'); selfLabel = o.overall || 'pending'; const m = String(selfLabel).match(/(\d+)\s*\/\s*40/); if (m) selfScore = parseInt(m[1], 10); } catch {}
-  try { const co = JSON.parse((c && c[0] && c[0].description) || '{}'); coordRev = co.overall || ((c && c[0]) ? 'on file' : 'pending'); } catch { coordRev = (c && c[0]) ? 'on file' : 'pending'; }
-} catch {}
-const selfLine = 'Adam self-score ' + selfLabel + arrow(selfScore, snap.selfScore) + '; coordinator self-score ' + coordRev;
+// ── 2. EHG VISION build-% gauge (.adam-vision-build.json) ──
+const LAYER_LABEL = { infrastructure: 'infrastructure', application: 'UI/UX', 'venture/income': 'venture/income', process: 'process' };
+let vis = null;
+try { vis = JSON.parse(readFileSync(resolve('.adam-vision-build.json'), 'utf8')); }
+catch (e) { console.warn('[adam-email] vision gauge file unreadable (.adam-vision-build.json): ' + (e?.message || e)); vis = null; }
+const visPct = (vis && typeof vis.overall_pct === 'number') ? vis.overall_pct : null;
+const layers = (vis && Array.isArray(vis.per_layer)) ? vis.per_layer : [];
+const layerLine = layers.map((l) => `${LAYER_LABEL[l.layer] || l.layer} ${l.pct == null ? '?' : l.pct}%`).join('  ·  ');
+let measured = null;
+if (vis && vis.measured_at) { const d = new Date(vis.measured_at + 'T00:00:00Z'); if (!Number.isNaN(d.getTime())) measured = d.toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); }
+const visNote = vis ? `(v1 estimate${measured ? ' as of ' + measured : ''} ${EM} live auto-updating gauge coming)` : '';
 
-// QF-20260611-352: chairman steering gauges — META-TO-PRODUCT RATIO + DISTANCE-TO-QUIT.
-// Ratio: items FILED and COMPLETED in the 24h window split harness/meta vs product/venture
-// (key-prefix heuristic per the chairman's North-Star encoding). Fail-soft like every section.
-const META_RX = /^(SD-LEO-|SD-MAN-|SD-PAT-|SD-LEARN-|SD-FDBK-INFRA-|QF-)/i;
-let ratioLine = '(ratio unavailable)', newRatio = null;
-try {
-  const splitMP = (rows) => { let m = 0, p = 0; for (const r of rows || []) (META_RX.test(String(r.sd_key)) ? m++ : p++); return { m, p }; };
-  const { data: filedR } = await db.from('strategic_directives_v2').select('sd_key').gte('created_at', since).limit(2000);
-  const { data: doneR } = await db.from('strategic_directives_v2').select('sd_key').eq('status', 'completed').gte('updated_at', since).limit(2000);
-  const f = splitMP(filedR), c = splitMP(doneR), prev = snap.ratio || {};
-  const trend = (cur, pm, pp) => (typeof pm !== 'number') ? '' : (cur.m * (pp || 1) === pm * (cur.p || 1) ? ' (steady)' : (cur.m * (pp || 1) > pm * (cur.p || 1) ? ' (more meta)' : ' (more product)'));
-  ratioLine = 'FILED meta:product ' + f.m + ':' + f.p + trend(f, prev.fm, prev.fp) + '  ·  COMPLETED meta:product ' + c.m + ':' + c.p + trend(c, prev.cm, prev.cp);
-  newRatio = { fm: f.m, fp: f.p, cm: c.m, cp: c.p };
-} catch {}
-// DISTANCE-TO-QUIT: income-replacement gauge from the PLAN-KEEPER chairman amendment.
-// Renders MRR-vs-threshold once venture revenue exists; until then, the phase line.
-let quitLine = '(distance-to-quit unavailable)';
-try {
-  const { data: pk } = await db.from('strategic_directives_v2').select('metadata').eq('sd_key', 'SD-LEO-ORCH-ADAM-PLAN-KEEPER-001').single();
-  const amend = (pk && pk.metadata && pk.metadata.chairman_amendment_2026_06_11_income_replacement) || {};
-  const tn = amend.target_number_2026_06_11;
-  // tn is an object: { status, derived, draft_quit_threshold, ... } — surface the threshold line.
-  const target = tn && (typeof tn === 'string' ? tn : (tn.draft_quit_threshold || tn.status));
-  quitLine = target
-    ? 'PHASE 1: stabilizing harness, 0 revenue ventures live ' + EM + ' threshold: ' + target
-    : 'PHASE 1: stabilizing harness ' + EM + ' no income-replacement target recorded on PLAN-KEEPER amendment yet';
-} catch {}
+// ── 3. ACTIONS FOR YOU: render the pending decisions (fetched above) as a copy-paste block ──
+const LEAD_IN = "I have received the following executive decisions via email and I'm ready to address them:";
+const numbered = lines.map((l, i) => `${i + 1}. ${l}`);
+const copyBlock = nActions ? [LEAD_IN, '', ...numbered].join('\n') : null;
 
-let canaryN = 0; try { const r = await db.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new').eq('severity', 'high').in('category', ['harness_backlog', 'ci_failure', 'corrective_finding']); canaryN = r.count || 0; } catch {}
-const canaryLine = canaryN ? (canaryN + ' high-sev open' + (arrow(canaryN, snap.canaryCount) || ' (steady)')) : 'no high-sev flags';
-
+// ── subject + bodies (no emojis) ──
 const when = new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
-const subject = '[Chairman] Pilot S' + pilotStage + '/26 ' + EM + ' ' + needs.length + ' need you ' + EM + ' ' + procInFlight + ' process SDs ' + EM + ' ' + cardSubject;
-const text = [
-  'STRATEGIC ' + EM + ' chairman lens (two focuses: drive the pilot + improve the venture process)', '',
-  'NORTH STAR: ' + northStar, '',
-  'NEEDS YOU (' + needs.length + '):', ...needs.map(d => '  - [' + d.priority + '] ' + needsLabel(d)), '',
-  'DECISIONS AWAITING YOU (' + pendingDecisions.length + '):', ...(pendingDecisions.length ? pendingDecisions.map(d => '  - ' + decLine(d)) : ['  (none pending)']), '',
-  'PER-SCOPE (advisories, last 24h): ' + scopeRollupLine, '',
-  'VALUE DELIVERED (last 24h, ' + shippedN + ' SDs):',
-  '  Capabilities added (' + buckets.cap.length + '): ' + bucketLine(buckets.cap, 3),
-  '  Enablers added (' + buckets.enab.length + '): ' + bucketLine(buckets.enab, 3),
-  '  Problems solved (' + buckets.prob.length + '): ' + bucketLine(buckets.prob, 3), '',
-  'META-TO-PRODUCT RATIO (24h): ' + ratioLine, '',
-  'DISTANCE-TO-QUIT: ' + quitLine, '',
-  'SELF-IMPROVEMENT (tri-party): ' + selfLine, '',
-  'CANARY: ' + canaryLine, '',
-  '--- FLEET HEALTH ---', cardText
-].join('\n');
-const needsHtml = needs.length ? '<ul style="margin:2px 0 0;padding-left:16px;font-size:13px">' + needs.map(d => '<li style="margin:0 0 3px"><b>[' + esc(d.priority) + ']</b> ' + esc(needsLabel(d)) + '</li>').join('') + '</ul>' : '<span style="font-size:13px">nothing pending</span>';
-const decisionsHtml = pendingDecisions.length ? '<ul style="margin:2px 0 0;padding-left:16px;font-size:13px">' + pendingDecisions.map(d => '<li style="margin:0 0 3px"><b>[' + esc(decAge(d.created_at)) + ' · ' + esc(d.decision_type) + (d.blocking ? ' · BLOCKING' : '') + ']</b> ' + esc(d.title) + (d.recommendation ? ' ' + EM + ' <i>' + esc(d.recommendation) + '</i>' : '') + '</li>').join('') + '</ul>' : '<span style="font-size:13px">nothing pending</span>';
-const scopeRollupHtml = '<span style="font-size:13px">' + esc(scopeRollupLine) + '</span>';
-const valHtml = '<ul style="margin:2px 0 0;padding-left:16px;font-size:13px">' +
-  '<li style="margin:0 0 3px"><b>Capabilities added (' + buckets.cap.length + '):</b> ' + esc(bucketLine(buckets.cap, 3)) + '</li>' +
-  '<li style="margin:0 0 3px"><b>Enablers added (' + buckets.enab.length + '):</b> ' + esc(bucketLine(buckets.enab, 3)) + '</li>' +
-  '<li style="margin:0 0 3px"><b>Problems solved (' + buckets.prob.length + '):</b> ' + esc(bucketLine(buckets.prob, 3)) + '</li></ul>';
-const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
-  '<p style="font-size:16px;font-weight:600;margin:0 0 2px">Strategic ' + EM + ' chairman lens</p>' +
-  '<p style="font-size:12px;color:#777;margin:0 0 10px">Two focuses: drive the pilot (issue-discovery vehicle) + improve the venture-management process</p>' +
-  '<p style="font-size:14px;margin:0 0 8px">' + I.star + ' <b>North star:</b> ' + esc(northStar) + '</p>' +
-  '<p style="font-size:14px;margin:0 0 2px">' + I.flag + ' <b>Needs you (' + needs.length + '):</b></p>' + needsHtml +
-  '<p style="font-size:14px;margin:10px 0 2px"><b>Decisions awaiting you (' + pendingDecisions.length + '):</b></p>' + decisionsHtml +
-  '<p style="font-size:14px;margin:10px 0 2px"><b>Per-scope (advisories, last 24h):</b> ' + scopeRollupHtml + '</p>' +
-  '<p style="font-size:14px;margin:10px 0 2px">' + I.tools + ' <b>Value delivered (last 24h, ' + shippedN + ' SDs):</b></p>' + valHtml +
-  '<p style="font-size:14px;margin:10px 0 2px"><b>Meta-to-product ratio (24h):</b> ' + esc(ratioLine) + '</p>' +
-  '<p style="font-size:14px;margin:0 0 2px"><b>Distance-to-quit:</b> ' + esc(quitLine) + '</p>' +
-  '<p style="font-size:14px;margin:10px 0 2px">' + I.loop + ' <b>Self-improvement:</b> ' + esc(selfLine) + '</p>' +
-  '<p style="font-size:14px;margin:0 0 12px">' + I.siren + ' <b>Canary:</b> ' + esc(canaryLine) + '</p>' +
-  '<p style="font-size:13px;font-weight:600;color:#555;margin:0 0 4px">Fleet health</p>' +
-  '<pre style="font-size:13px;background:#f6f8fa;border-radius:4px;padding:10px;white-space:pre-wrap;margin:0">' + esc(cardText) + '</pre>' +
-  '<p style="font-size:11px;color:#999;margin:12px 0 0">' + when + ' ET ' + EM + ' Adam ' + EM + ' LEO Fleet Advisor</p></div>';
+const visSubj = visPct != null ? `EHG ${visPct}% built` : 'EHG vision n/a';
+const workerSubj = pulseSource === 'unavailable' ? 'workers n/a' : `${avgActive} active${pulseSource === 'hourly avg' ? ' (hr avg)' : ''}`;
+const actionsSubj = nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'all clear';
+const subject = `[Chairman] ${visSubj} · ${workerSubj} · ${actionsSubj}`;
 
-if (DRY) { console.log('=== [ADAM DRY RUN] no email sent ===\nSUBJECT: ' + subject + '\n---\n' + text + '\n---'); }
-else {
+const text = [
+  `Workers: ${workerText}`,
+  '',
+  visPct != null ? `EHG vision: ${visPct}% built` : 'EHG vision: (gauge unavailable)',
+  ...(layerLine ? ['   ' + layerLine] : []),
+  ...(visNote ? ['   ' + visNote] : []),
+  '',
+  '──────────────────────────────────────────────',
+  nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'No decisions need you right now.',
+  ...(nActions ? ['   Copy everything below this line and paste it into Claude Code.', '──────────────────────────────────────────────', '', copyBlock] : ['──────────────────────────────────────────────']),
+  '',
+  `as of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor`,
+].join('\n');
+
+const layerHtml = layerLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(layerLine)}</div>` : '';
+const noteHtml = visNote ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(visNote)}</div>` : '';
+const actionsHtml = nActions
+  ? `<p style="font-size:14px;margin:0 0 2px"><b>${nActions} ${nActions === 1 ? 'action' : 'actions'} for you</b></p>` +
+    `<p style="font-size:12px;color:#888;margin:0 0 6px">Copy everything in the box below and paste it into Claude Code.</p>` +
+    `<pre style="font-size:13px;background:#f6f8fa;border:1px solid #e1e4e8;border-radius:4px;padding:12px;white-space:pre-wrap;margin:0;font-family:ui-monospace,Menlo,Consolas,monospace">${esc(copyBlock)}</pre>`
+  : `<p style="font-size:14px;margin:0 0 6px"><b>No decisions need you right now.</b></p>`;
+const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
+  `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
+  `<p style="font-size:15px;font-weight:600;margin:0 0 0">EHG vision: ${visPct != null ? visPct + '% built' : '(gauge unavailable)'}</p>` +
+  layerHtml + noteHtml +
+  '<hr style="border:none;border-top:1px solid #e1e4e8;margin:14px 0">' +
+  actionsHtml +
+  `<p style="font-size:11px;color:#999;margin:14px 0 0">as of ${esc(when)} ET ${EM} Adam ${EM} LEO Fleet Advisor</p></div>`;
+
+if (DRY) {
+  console.log('=== [ADAM DRY RUN] no email sent ===\nSUBJECT: ' + subject + '\n---\n' + text + '\n---');
+  console.log(`workers active=${avgActive} idle=${avgIdle} source=${pulseSource} | visionPct=${visPct} | actions=${nActions} lines=${lines.length}`);
+} else {
   const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'Adam ' + EM + ' LEO Fleet Advisor <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
   console.log('ADAM-EMAIL', JSON.stringify(r));
-  try { writeFileSync(SNAP, JSON.stringify({ lastTs: t, pilotStage, completedCount: completedNow, selfScore, canaryCount: canaryN, perScope, ratio: newRatio || snap.ratio })); } catch {}
 }

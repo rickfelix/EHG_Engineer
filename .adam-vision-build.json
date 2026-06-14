@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "overall_pct": 46,
+  "confidence": "medium",
+  "measured_at": "2026-06-13",
+  "per_layer": [
+    { "layer": "infrastructure", "pct": 62 },
+    { "layer": "application", "pct": 40 },
+    { "layer": "venture/income", "pct": 22 },
+    { "layer": "process", "pct": 75 }
+  ],
+  "headline": "factory largely built; income rail + venture-operating layer mostly unbuilt",
+  "note": "v1 hand-curated denominator; soft under-count (audit ran on a stale tree); live auto-updating version pending SD-LEO-INFRA-VISION-BUILD-AUDIT-001"
+}
