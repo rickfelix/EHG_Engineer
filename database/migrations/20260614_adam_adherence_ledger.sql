@@ -1,6 +1,7 @@
 -- adam_adherence_ledger — durable store for Adam's recurring self-adherence audit.
 -- SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (Adam-autonomy child E, self-improving governance loop).
 -- Minimal ADDITIVE table — no change to any existing table. One row per probe per audit run.
+-- @approved-by: codestreetlabs@gmail.com
 
 CREATE TABLE IF NOT EXISTS adam_adherence_ledger (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
