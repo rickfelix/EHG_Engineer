@@ -166,7 +166,8 @@
   "CLAUDE_ADAM.md": {
     "description": "Adam role contract (~2-3k chars) — Chairman-attached advisory/analysis role. Loaded by the /adam skill exactly as workers load CLAUDE_CORE.",
     "sections": [
-      "adam_role_contract"
+      "adam_role_contract",
+      "adam_self_adherence_loop"
     ]
   },
   "SHARED": {
