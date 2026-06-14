@@ -1,0 +1,224 @@
+/**
+ * SD-LEO-INFRA-COORDINATOR-CHARTER-SELF-AUDIT-001 — pure charter-audit detector tests.
+ * Pins: fail-loud foundational query; authoritative liveness (heartbeat|armed-silence|PID); DUTY-3 idle+work
+ * with pending-assignment suppression; completed-dep NO-false-block (unknown dep -> ANOMALY); backlog-rank
+ * staleness; QUIET-TICK committed-action; and the durable STANDARD_LOOPS entry.
+ */
+import { describe, it, expect } from 'vitest';
+import {
+  classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
+  detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
+  extractDepKey, resolveWorktreeCount, computeDispatchBelt,
+} from '../../../lib/coordinator/charter-audit-detectors.mjs';
+import { STANDARD_LOOPS } from '../../../scripts/coordinator-startup-check.mjs';
+
+const NOW = 1_750_000_000_000;
+const TERMINAL = new Set(['completed', 'cancelled', 'archived', 'deferred']);
+const ago = (ms) => new Date(NOW - ms).toISOString();
+const withinArmed = (until, now) => { const d = until ? new Date(until).getTime() - now : -1; return d > 0 && d <= 30 * 60 * 1000; };
+
+describe('foundationalQueryError — fail-loud (FR-4)', () => {
+  it('returns a QUERY_ERROR marker on a real error (never silent)', () => {
+    const m = foundationalQueryError({ message: 'column x does not exist' }, 'strategic_directives_v2');
+    expect(m).toContain('QUERY_ERROR');
+    expect(m).toContain('strategic_directives_v2');
+    expect(m).toContain('column x does not exist');
+  });
+  it('returns null when there is no error', () => {
+    expect(foundationalQueryError(null, 'claude_sessions')).toBeNull();
+  });
+});
+
+describe('classifyLiveness — authoritative liveness (FR-2)', () => {
+  const ctx = { nowMs: NOW, staleThresholdMs: 5 * 60 * 1000, isWithinArmedSilence: withinArmed, isPidAlive: (s) => s.session_id === 'pid-alive' };
+  it('fresh heartbeat -> alive (heartbeat)', () => {
+    expect(classifyLiveness({ heartbeat_at: ago(60_000) }, ctx)).toEqual({ alive: true, reason: 'heartbeat' });
+  });
+  it('stale heartbeat but in-window armed-silence -> alive (armed_silence) — long-EXEC worker not idle/dead', () => {
+    const r = classifyLiveness({ heartbeat_at: ago(20 * 60_000), expected_silence_until: ago(-10 * 60_000) }, ctx);
+    expect(r).toEqual({ alive: true, reason: 'armed_silence' });
+  });
+  it('stale heartbeat + no silence but a live PID -> alive (pid)', () => {
+    const r = classifyLiveness({ heartbeat_at: ago(20 * 60_000), session_id: 'pid-alive' }, ctx);
+    expect(r).toEqual({ alive: true, reason: 'pid' });
+  });
+  it('stale heartbeat + no signal -> NOT alive', () => {
+    expect(classifyLiveness({ heartbeat_at: ago(20 * 60_000), session_id: 'dead' }, ctx).alive).toBe(false);
+  });
+  it('a RELEASED session with a FRESH heartbeat -> NOT alive (lifecycle status is authoritative-dead first)', () => {
+    const r = classifyLiveness({ status: 'released', heartbeat_at: ago(31_000), session_id: 'released-but-fresh' }, ctx);
+    expect(r).toEqual({ alive: false, reason: 'lifecycle_terminated' });
+  });
+});
+
+describe('resolveWorktreeCount — fail-loud on git silent-failure (FR-3/FR-4)', () => {
+  it('git=0 while the filesystem shows worktree dirs -> -1 (git failed; fail-loud, never silent 0)', () => {
+    expect(resolveWorktreeCount({ gitCount: 0, fsDirCount: 5 })).toBe(-1);
+  });
+  it('git matches the fs -> the git count; genuinely-empty -> 0', () => {
+    expect(resolveWorktreeCount({ gitCount: 7, fsDirCount: 7 })).toBe(7);
+    expect(resolveWorktreeCount({ gitCount: 0, fsDirCount: 0 })).toBe(0);
+  });
+});
+
+describe('computeDispatchBelt — canonical dispatch-eligibility (FR-3/FR-5)', () => {
+  const classify = (s) => (s.sd_type === 'orchestrator' ? 'orchestrator_parent' : (s.metadata && s.metadata.requires_human_action ? 'human_action_required' : null));
+  it('an orchestrator PARENT is excluded from unclaimed + claimable (never recommended for dispatch)', () => {
+    const sds = [
+      { sd_key: 'SD-PARENT-001', sd_type: 'orchestrator', claiming_session_id: null, parent_sd_id: null, dependencies: [] },
+      { sd_key: 'SD-LEAF-001', sd_type: 'infrastructure', claiming_session_id: null, parent_sd_id: null, dependencies: [] },
+    ];
+    const r = computeDispatchBelt({ sds, statusByKey: {}, terminalSet: TERMINAL, classifyIneligibility: classify });
+    expect(r.unclaimed.map((s) => s.sd_key)).toEqual(['SD-LEAF-001']);
+    expect(r.claimable.map((s) => s.sd_key)).toEqual(['SD-LEAF-001']);
+  });
+  it('a human-action SD is excluded; a child (parent_sd_id) is excluded; a claimed SD is excluded', () => {
+    const sds = [
+      { sd_key: 'SD-HUMAN-001', sd_type: 'infrastructure', claiming_session_id: null, parent_sd_id: null, metadata: { requires_human_action: true }, dependencies: [] },
+      { sd_key: 'SD-CHILD-001', sd_type: 'infrastructure', claiming_session_id: null, parent_sd_id: 'SD-PARENT-001', dependencies: [] },
+      { sd_key: 'SD-CLAIMED-001', sd_type: 'infrastructure', claiming_session_id: 'sess', parent_sd_id: null, dependencies: [] },
+    ];
+    expect(computeDispatchBelt({ sds, statusByKey: {}, terminalSet: TERMINAL, classifyIneligibility: classify }).unclaimed).toHaveLength(0);
+  });
+  it('claimable requires all real deps terminal (a non-terminal SD-key dep -> not claimable)', () => {
+    const sds = [{ sd_key: 'SD-X-001', sd_type: 'infrastructure', claiming_session_id: null, parent_sd_id: null, dependencies: ['SD-DEP-001'] }];
+    expect(computeDispatchBelt({ sds, statusByKey: { 'SD-DEP-001': 'in_progress' }, terminalSet: TERMINAL, classifyIneligibility: classify }).claimable).toHaveLength(0);
+    expect(computeDispatchBelt({ sds, statusByKey: { 'SD-DEP-001': 'completed' }, terminalSet: TERMINAL, classifyIneligibility: classify }).claimable).toHaveLength(1);
+  });
+});
+
+describe('extractDepKey — object-sentinel parity (FR-5)', () => {
+  it('a structured {sd_key:"none"} / {sd_id:"N/A"} sentinel -> null (object branch must not bypass the SD-key rule)', () => {
+    expect(extractDepKey({ sd_key: 'none' })).toBeNull();
+    expect(extractDepKey({ sd_id: 'N/A' })).toBeNull();
+    expect(extractDepKey({ sd_key: 'SD-REAL-001' })).toBe('SD-REAL-001');
+  });
+});
+
+describe('detectIdleWithWork — DUTY-3 + pending-assignment suppression (FR-3/FR-5)', () => {
+  it('idle live worker + unclaimed work -> violation', () => {
+    const r = detectIdleWithWork({ liveSessions: [{ session_id: 'w1', sd_key: null }], unclaimedCount: 2 });
+    expect(r.violation).toBe(true);
+    expect(r.remediation).toMatch(/assign/i);
+  });
+  it('a worker with a pending WORK_ASSIGNMENT is NOT re-flagged (no duplicate-assignment spray)', () => {
+    const r = detectIdleWithWork({ liveSessions: [{ session_id: 'w1', sd_key: null }], unclaimedCount: 2, pendingAssignmentSessionIds: new Set(['w1']) });
+    expect(r.violation).toBe(false);
+  });
+  it('no unclaimed work -> no violation', () => {
+    expect(detectIdleWithWork({ liveSessions: [{ session_id: 'w1', sd_key: null }], unclaimedCount: 0 }).violation).toBe(false);
+  });
+});
+
+describe('extractDepKey — SD-key vs free-text prose (FR-5 dep-resolver correctness)', () => {
+  it('object {sd_key}/{sd_id} -> the key', () => {
+    expect(extractDepKey({ sd_key: 'SD-A-001' })).toBe('SD-A-001');
+    expect(extractDepKey({ sd_id: 'SD-B-002' })).toBe('SD-B-002');
+  });
+  it('bare SD-key string + SD-key-with-prose -> the leading SD-key', () => {
+    expect(extractDepKey('SD-LEO-INFRA-X-001')).toBe('SD-LEO-INFRA-X-001');
+    expect(extractDepKey('SD-LEO-INFRA-ADAM-AUTONOMY-HARDENING-001 (parent; child B)')).toBe('SD-LEO-INFRA-ADAM-AUTONOMY-HARDENING-001');
+  });
+  it('pure prose / "none" / null -> null (NOT a dependency edge)', () => {
+    expect(extractDepKey('the coordinator cron framework + standing loop set')).toBeNull();
+    expect(extractDepKey('none')).toBeNull();
+    expect(extractDepKey(null)).toBeNull();
+  });
+});
+
+describe('detectDependencyHealth — completed-dep NO-false-block (FR-5)', () => {
+  it('a prose dependency is NOT a dep edge (no false ANOMALY, no false BLOCK)', () => {
+    const sds = [{ sd_key: 'C', dependencies: ['the coordinator cron framework', 'SD-DEP-001 (the real one)'] }];
+    const r = detectDependencyHealth({ sds, statusByKey: { 'SD-DEP-001': 'completed' }, terminalSet: TERMINAL, nowMs: NOW });
+    expect(r.anomalies).toHaveLength(0); // prose ignored, the real dep is completed
+    expect(r.blocked).toBe(0);
+    expect(r.ready).toBe(1);
+  });
+
+  it('a child whose dep is COMPLETED is dep-satisfied, NOT blocked', () => {
+    const sds = [{ sd_key: 'SD-C-001', dependencies: ['SD-DEP1-001'] }];
+    const r = detectDependencyHealth({ sds, statusByKey: { 'SD-DEP1-001': 'completed' }, terminalSet: TERMINAL, nowMs: NOW });
+    expect(r.blocked).toBe(0);
+    expect(r.ready).toBe(1);
+  });
+  it('an UNKNOWN/missing dep key is a dep-resolver ANOMALY, NOT silently counted blocked', () => {
+    const sds = [{ sd_key: 'SD-C-001', dependencies: ['SD-MISSING-001'] }];
+    const r = detectDependencyHealth({ sds, statusByKey: {}, terminalSet: TERMINAL, nowMs: NOW });
+    expect(r.blocked).toBe(0);
+    expect(r.anomalies).toHaveLength(1);
+    expect(r.anomalies[0]).toEqual({ sd: 'SD-C-001', unknownDeps: ['SD-MISSING-001'] });
+    expect(r.violation).toBe(true);
+  });
+  it('a known non-terminal dep is genuinely BLOCKED', () => {
+    const sds = [{ sd_key: 'SD-C-001', dependencies: ['SD-DEP1-001'] }];
+    const r = detectDependencyHealth({ sds, statusByKey: { 'SD-DEP1-001': 'in_progress' }, terminalSet: TERMINAL, nowMs: NOW });
+    expect(r.blocked).toBe(1);
+  });
+});
+
+describe('detectWorktreePool — DUTY-1 fail-loud (FR-3)', () => {
+  it('count -1 (git error) -> violation (fail-loud, not silent 0)', () => {
+    const r = detectWorktreePool({ count: -1, max: 20 });
+    expect(r.violation).toBe(true);
+    expect(r.detail).toMatch(/UNAVAILABLE/);
+  });
+  it('near cap -> violation; below -> clean; saturated -> SATURATED', () => {
+    expect(detectWorktreePool({ count: 18, max: 20, threshold: 0.85 }).violation).toBe(true);
+    expect(detectWorktreePool({ count: 7, max: 20, threshold: 0.85 }).violation).toBe(false);
+    expect(detectWorktreePool({ count: 20, max: 20 }).detail).toMatch(/SATURATED/);
+  });
+});
+
+describe('detectBacklogRankStaleness — DUTY-6 (FR-3)', () => {
+  it('claimable SDs with absent or stale dispatch_rank_at -> violation', () => {
+    const claimableSds = [
+      { sd_key: 'A', metadata: {} },                                    // absent
+      { sd_key: 'B', metadata: { dispatch_rank_at: ago(2 * 3600_000) } }, // 2h > 1h TTL
+    ];
+    const r = detectBacklogRankStaleness({ claimableSds, nowMs: NOW, ttlMs: 3600_000 });
+    expect(r.violation).toBe(true);
+    expect(r.staleCount).toBe(2);
+  });
+  it('all freshly ranked -> no violation', () => {
+    const claimableSds = [{ sd_key: 'A', metadata: { dispatch_rank_at: ago(10 * 60_000) } }];
+    expect(detectBacklogRankStaleness({ claimableSds, nowMs: NOW, ttlMs: 3600_000 }).violation).toBe(false);
+  });
+});
+
+describe('detectQuietTickUnverified — committed-action verification (FR-3)', () => {
+  it('prior committed_actions + latest 0 prior_action_outcomes -> violation', () => {
+    const reviews = [
+      { metadata: { prior_action_outcomes: [] } },                 // latest
+      { metadata: { committed_actions: ['fix X', 'file Y'] } },    // prior
+    ];
+    expect(detectQuietTickUnverified({ coordinatorReviews: reviews }).violation).toBe(true);
+  });
+  it('latest has prior_action_outcomes -> verified (no violation)', () => {
+    const reviews = [
+      { metadata: { prior_action_outcomes: ['verified X'] } },
+      { metadata: { committed_actions: ['fix X'] } },
+    ];
+    expect(detectQuietTickUnverified({ coordinatorReviews: reviews }).violation).toBe(false);
+  });
+  it('fewer than 2 reviews -> no violation', () => {
+    expect(detectQuietTickUnverified({ coordinatorReviews: [{ metadata: {} }] }).violation).toBe(false);
+  });
+});
+
+describe('summarizeViolations', () => {
+  it('collects only violations with their remediations', () => {
+    const s = summarizeViolations([{ violation: true, detail: 'd1', remediation: 'r1' }, { violation: false, detail: 'd2' }]);
+    expect(s.count).toBe(1);
+    expect(s.violations[0]).toEqual({ detail: 'd1', remediation: 'r1' });
+  });
+});
+
+describe('STANDARD_LOOPS — durable schedule (FR-6)', () => {
+  it('contains the charter-audit loop with a remediate-then-verify prompt', () => {
+    const loop = STANDARD_LOOPS.find((l) => l.key === 'charter-audit');
+    expect(loop).toBeTruthy();
+    expect(loop.script).toBe('coordinator-charter-audit.mjs');
+    expect(loop.prompt).toMatch(/RE-RUN/i);
+    expect(loop.prompt).toMatch(/CHARTER_AUDIT_VIOLATIONS=0/);
+  });
+});
