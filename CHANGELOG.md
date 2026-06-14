@@ -5,6 +5,7 @@
 
 - [2026-06-14](#2026-06-14)
   - [Infrastructure](#infrastructure)
+  - [Bugfix](#bugfix)
 - [2026-06-13](#2026-06-13)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -71,6 +72,11 @@
 - **Durable read-only coordinator charter-compliance self-audit with named remediations** - PR #4729 (SD-LEO-INFRA-COORDINATOR-CHARTER-SELF-AUDIT-001)
   - **What shipped**: `scripts/coordinator-charter-audit.mjs` (`npm run coordinator:charter-audit`) + pure detectors in `lib/coordinator/charter-audit-detectors.mjs`, wired into `STANDARD_LOOPS` (`coordinator-startup-check.mjs`) so it survives a coordinator session restart (replacing a lost session-only CronCreate). READ-ONLY detection (zero writes); each violation NAMES a remediation; the cron prompt compels **remediate-then-verify** (confirm `CHARTER_AUDIT_VIOLATIONS=0`). Hardens the inline SRE-gauges: **fail-loud** on foundational SD/session queries (a column error inline silently returned `[]` = false all-clean); **authoritative liveness** (heartbeat OR in-window armed-silence OR a live PID via the sweep `resolveCcPidFromTerminalId`) so a long-EXEC/armed-silence worker is not miscounted idle/dead; + 3 new duty checks (worktrees N/20, backlog-rank staleness, QUIET-TICK committed-action).
   - **Verification**: 32 detector unit + 10 startup-check tests pass; live-smoke validated (read-only; real per-duty gauges + `CHARTER_AUDIT_VIOLATIONS=2`). A 9-agent adversarial review found + fixed 4 major defects, all in the audit's own false-clean/false-alive/false-positive classes: DUTY-1 fail-loud was unreachable (`countActiveWorktrees` swallows git errors → compare git vs filesystem); liveness ignored `status` (a RELEASED+fresh-heartbeat session read ALIVE → dispatch to a dead session); `extractDepKey` object branch bypassed the SD-key rule (`{sd_key:'none'}` → false ANOMALY); the unclaimed/claimable belt was looser than canonical (an orchestrator PARENT got recommended for dispatch → route through `classifyDispatchIneligibility`). VALIDATION PASS (fail-loud empirically proven), RETRO 90. Gates L2P 95 / P2E 93 / E2P 92 / P2L 96 / LEAD-FINAL 99.
+
+### Bugfix
+- **Adam no longer wrongly withholds an already-RCA'd DRAFT SD — the role contract now exempts sourcing/filing from the coordinator-GO gate, resolving a live misfire where Adam blocked a proposal citing CONST-002** - PR #4752 (SD-LEO-FIX-RESOLVE-ADAM-CONTRACT-001)
+  - **What shipped**: `leo_protocol_sections` id=601 (the Adam role contract, DB source of truth) gated sourcing/filing DRAFT SDs behind coordinator-GO, contradicting the chairman-canonical NEVER HOLD SOURCING override and the CONST-002 red-flag list (which bars only claim/build/worktree/dispatch/accept/graduate). Three contract edits: removed sourcing/filing from the Proactivity-is-PROPOSE GO-gated enumeration and added an EXEMPT carve-out (a DRAFT row is a CONST-002-safe proposal, not a dispatch); aligned the D2 self-score rubric failure descriptor (authoring a DRAFT is NOT a failure); added bidirectional cross-pointers between the GO-gated clause and NEVER HOLD SOURCING. `CLAUDE_ADAM.md` + DIGEST regenerated from the DB (the durable rendered record). NEW `lib/governance/adam-contract-audit.js` — a pure recurrence-guard detector flagging any future re-gating of sourcing/filing. Escalated from QF-20260614-918 (classify false-positive: "auth" matched inside "authoring").
+  - **Verification**: `tests/unit/adam-contract-audit.test.js` 11/11, including a real-file assertion on the shipped contract; adversarial review broadened the guard regex to close evasion gaps (Unicode dashes incl. en-dash autocorrect, reworded trailing go/approval/sign-off clauses, multi-line enumerations, curly apostrophes) while keeping the dated PARENS-delimited changelog excluded from matches. Substantive change lives in the DB section + regenerated CLAUDE_ADAM.md, both already merged.
 
 ## 2026-06-13
 
