@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ehg.dev/contracts/stack-descriptor.schema.json",
+  "title": "EHG Venture Stack Descriptor",
+  "type": "object",
+  "required": [
+    "db_provider",
+    "deployment_target"
+  ],
+  "properties": {
+    "db_provider": {
+      "type": "string",
+      "enum": [
+        "d1",
+        "neon",
+        "replit-postgres"
+      ],
+      "description": "Database provider for this venture."
+    },
+    "deployment_target": {
+      "type": "string",
+      "enum": [
+        "cloudflare-pages",
+        "cloudflare-workers",
+        "cloud-run",
+        "replit-autoscale"
+      ],
+      "description": "Deployment platform for this venture."
+    },
+    "storage": {
+      "type": "string",
+      "enum": [
+        "r2",
+        "replit-object-storage"
+      ],
+      "description": "Object storage provider (optional)."
+    },
+    "region": {
+      "type": "string",
+      "description": "Deployment region hint (optional)."
+    },
+    "graduation": {
+      "type": "object",
+      "description": "Graduation trigger config (meaning owned by sibling B — passthrough only).",
+      "additionalProperties": true
+    },
+    "connection": {
+      "type": "object",
+      "description": "Resolved connection details — written by sibling B (provisioning: DB connection string / Hyperdrive binding / Cloud Run service URL), read by sibling D (publish). Passthrough only here.",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
