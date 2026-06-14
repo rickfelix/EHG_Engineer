@@ -344,6 +344,28 @@ export class SDNextSelector {
     try {
       this.activeSessions = await this.sessionManager.getActiveSessions();
 
+      // SD-LEO-INFRA-RELEASE-SD-HONOR-ARMED-SILENCE-001 (FR-2): v_active_sessions does NOT expose
+      // expected_silence_until, so the parked_armed_silence guard in analyzeClaimRelationship would
+      // never fire on the display path. Enrich each active session with the field via ONE batch query
+      // against claude_sessions so the "PARKED (armed silence)" badge renders. No schema change (read
+      // only); the AUTHORITATIVE reap gate (autoReleaseStaleDeadClaim) re-fetches the field itself, so
+      // this is display-only. Fail-safe: absent/null -> predicate returns false -> normal classification.
+      try {
+        const sessionIds = this.activeSessions.map((s) => s.session_id).filter(Boolean);
+        if (sessionIds.length > 0) {
+          const { data: silenceRows } = await this.supabase
+            .from('claude_sessions')
+            .select('session_id, expected_silence_until')
+            .in('session_id', sessionIds);
+          if (silenceRows) {
+            const byId = new Map(silenceRows.map((r) => [r.session_id, r.expected_silence_until]));
+            for (const session of this.activeSessions) {
+              if (byId.has(session.session_id)) session.expected_silence_until = byId.get(session.session_id);
+            }
+          }
+        }
+      } catch { /* non-fatal: absent field -> normal classification (fail-safe) */ }
+
       for (const session of this.activeSessions) {
         if (session.sd_id) {
           this.claimedSDs.set(session.sd_id, session.session_id);
