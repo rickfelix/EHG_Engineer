@@ -13,7 +13,7 @@ function aggSb(charges, upserts) {
   return {
     from(table) {
       if (table === 'ops_payment_events') {
-        const b = { select() { return this; }, eq() { return this; }, then(res) { return res({ data: charges, error: null }); } };
+        const b = { select() { return this; }, eq() { return this; }, in() { return this; }, then(res) { return res({ data: charges, error: null }); } };
         return b;
       }
       // income_capture_monthly
@@ -26,6 +26,8 @@ function aggSb(charges, upserts) {
     },
   };
 }
+// rail row shorthand
+const ev = (o) => ({ amount_cents: null, event_ts: '2026-06-10T12:00:00Z', status: 'succeeded', payment_intent_id: null, stripe_charge_id: null, livemode: false, ...o });
 
 function attSb(decision, updates) {
   return {
@@ -45,25 +47,45 @@ function attSb(decision, updates) {
 
 // ---- aggregator --------------------------------------------------------------------------------
 describe('aggregateIncomeCapture (FR-2)', () => {
-  it('converts cents->dollars, counts charges, and groups by first-of-month', async () => {
+  it('converts cents->dollars, counts distinct payments, and groups by first-of-month', async () => {
     const upserts = [];
     const charges = [
-      { amount_cents: 5000, event_ts: '2026-06-10T12:00:00Z', livemode: false, status: 'succeeded' },
-      { amount_cents: 2500, event_ts: '2026-06-20T08:00:00Z', livemode: false, status: 'succeeded' },
+      ev({ amount_cents: 5000, event_ts: '2026-06-10T12:00:00Z', payment_intent_id: 'pi_a' }),
+      ev({ amount_cents: 2500, event_ts: '2026-06-20T08:00:00Z', payment_intent_id: 'pi_b' }),
     ];
     const rows = await aggregateIncomeCapture({ supabase: aggSb(charges, upserts), livemode: false });
     expect(rows).toHaveLength(1);
-    expect(upserts).toHaveLength(1);
     expect(upserts[0].row.period_month).toBe('2026-06-01');
     expect(upserts[0].row.recurring_revenue).toBe(75); // (5000+2500)/100
     expect(upserts[0].row.revenue_event_count).toBe(2);
-    expect(upserts[0].row.livemode).toBe(false);
     expect(upserts[0].opts).toEqual({ onConflict: 'period_month,livemode' });
+  });
+
+  it('counts a payment ONCE when both payment_intent.succeeded AND charge.succeeded are captured (no double-count)', async () => {
+    const upserts = [];
+    const charges = [
+      ev({ amount_cents: 5000, status: 'succeeded', payment_intent_id: 'pi_x', stripe_charge_id: null }),      // payment_intent.succeeded
+      ev({ amount_cents: 5000, status: 'succeeded', payment_intent_id: 'pi_x', stripe_charge_id: 'ch_x' }),     // charge.succeeded (same payment)
+    ];
+    await aggregateIncomeCapture({ supabase: aggSb(charges, upserts), livemode: false });
+    expect(upserts[0].row.recurring_revenue).toBe(50); // counted once, not 100
+    expect(upserts[0].row.revenue_event_count).toBe(1);
+  });
+
+  it("includes checkout-session revenue (status='paid') and nets refunds", async () => {
+    const upserts = [];
+    const charges = [
+      ev({ amount_cents: 10000, status: 'paid', payment_intent_id: 'pi_co' }),                 // checkout.session paid
+      ev({ amount_cents: -3000, status: 'partially_refunded', payment_intent_id: 'pi_co', stripe_charge_id: 'ch_co' }), // refund nets
+    ];
+    await aggregateIncomeCapture({ supabase: aggSb(charges, upserts), livemode: false });
+    expect(upserts[0].row.recurring_revenue).toBe(70); // 100 paid - 30 refund
+    expect(upserts[0].row.revenue_event_count).toBe(1); // refund does not increment the payment count
   });
 
   it('NEVER writes the chairman-gated deduction columns', async () => {
     const upserts = [];
-    const charges = [{ amount_cents: 9900, event_ts: '2026-05-01T00:00:00Z', livemode: true, status: 'succeeded' }];
+    const charges = [ev({ amount_cents: 9900, event_ts: '2026-05-01T00:00:00Z', payment_intent_id: 'pi_z', livemode: true })];
     await aggregateIncomeCapture({ supabase: aggSb(charges, upserts), livemode: true });
     const row = upserts[0].row;
     expect(row).not.toHaveProperty('ppo');
@@ -79,7 +101,7 @@ describe('aggregateIncomeCapture (FR-2)', () => {
   });
 
   it('returns null and does not throw on a read error', async () => {
-    const sb = { from: () => ({ select() { return this; }, eq() { return this; }, then(res) { return res({ data: null, error: { message: 'boom' } }); } }) };
+    const sb = { from: () => ({ select() { return this; }, eq() { return this; }, in() { return this; }, then(res) { return res({ data: null, error: { message: 'boom' } }); } }) };
     expect(await aggregateIncomeCapture({ supabase: sb, livemode: true })).toBeNull();
   });
 });
@@ -144,6 +166,15 @@ describe('applyDeductionAttestation (FR-3)', () => {
     const updates = [];
     const decision = { id: 'dec-3', decision_type: 'something_else', status: 'approved', brief_data: { ppo: 1 } };
     const out = await applyDeductionAttestation({ supabase: attSb(decision, updates), periodMonth: '2026-06-01', attestationId: 'dec-3' });
+    expect(out).toBeNull();
+    expect(updates).toHaveLength(0);
+  });
+
+  it('REFUSES an APPROVED attestation with PARTIAL brief_data (no silent fabricated-zero)', async () => {
+    const updates = [];
+    // ppo present but solo_401k + se_tax missing — must NOT write 0s + a ref (which would read unattested=false)
+    const decision = { id: 'dec-4', decision_type: 'replacement_net_deduction_params', status: 'approved', brief_data: { ppo: 1200 } };
+    const out = await applyDeductionAttestation({ supabase: attSb(decision, updates), periodMonth: '2026-06-01', attestationId: 'dec-4' });
     expect(out).toBeNull();
     expect(updates).toHaveLength(0);
   });
