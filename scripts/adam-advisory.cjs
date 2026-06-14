@@ -45,6 +45,15 @@ const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
  * request mode. Conflating them made every fire-and-forget send falsely advertise
  * Reply?=yes in printAdamInbox.
  */
+// SD-LEO-INFRA-ADAM-ADVISORY-COMMS-001: durable delivery TTL, mode-INDEPENDENT. expires_at governs
+// how long an advisory row stays discoverable (survives the expired-row sweep) — NOT how long the
+// sender awaits a reply (that is timeoutMs, applied only to awaitCoordinatorReply). PURE for tests.
+const ADVISORY_TTL_MS = 24 * 60 * 60_000; // 24h — same durable window send mode always had.
+function advisoryExpiresAt(nowMs) {
+  const base = Number.isFinite(nowMs) ? nowMs : Date.now();
+  return new Date(base + ADVISORY_TTL_MS).toISOString();
+}
+
 function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo }) {
   const payload = {
     kind: PAYLOAD_KINDS.ADAM_ADVISORY,
@@ -235,7 +244,13 @@ async function main() {
   const { scopeKey, reuseClass, appliesToScopes } = await resolveScopeForSend(supabase, process.cwd());
   const payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, scopeKey, reuseClass, appliesToScopes, replyTo });
   const subject = `[ADAM_ADVISORY] ${payload.body.slice(0, 80)}`;
-  const expiresAt = new Date(Date.now() + (mode === 'request' ? timeoutMs + 5 * 60_000 : 24 * 60 * 60_000)).toISOString();
+  // SD-LEO-INFRA-ADAM-ADVISORY-COMMS-001 (RCA 076cf785): expires_at is the DURABLE delivery TTL
+  // (how long the row stays discoverable / survives the expired-row sweep) and is decoupled from
+  // the synchronous await window. The old `mode === 'request' ? timeoutMs + 5min` gave a
+  // request-mode advisory only ~5.5min — swept BEFORE the ~15min coordinator inbox poll (the 5th
+  // Adam->coordinator comms-loss mode). ALL modes now get a durable 24h TTL; `timeoutMs` continues
+  // to bound ONLY awaitCoordinatorReply below.
+  const expiresAt = advisoryExpiresAt(Date.now());
 
   // FR-6: route through the validated dispatch writer. insertCoordinationRow THROWS
   // (DISPATCH_TARGET_*) on a bad/dead target instead of returning {error}, so wrap it
@@ -273,7 +288,7 @@ async function main() {
   }
 }
 
-module.exports = { buildAdvisoryPayload, resolveScopeForSend, resolveReplyToCorrelation, drainReplies };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
