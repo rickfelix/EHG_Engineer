@@ -110,6 +110,9 @@ scripts/check-*.cjs
 # Production check-* scripts (must be committed) — add an explicit negation below
 !scripts/check-migration-readiness.mjs
 !scripts/check-activation-catalog.mjs
+# SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1): the drift-check primitive is a
+# permanent, shared script (used by FR-2 pre-commit, FR-3 SessionStart, FR-4a CI).
+!scripts/check-claude-md-drift.cjs
 scripts/cleanup-*.js
 !scripts/cleanup-phantom-worktrees.js
 scripts/complete-*.mjs

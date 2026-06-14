@@ -808,5 +808,15 @@ else
   echo "✅ Root temp file check passed ($ROOT_TOTAL files)"
 fi
 
+# ============================================================================
+# STAGE 10: CLAUDE_*.md Drift Gate (BLOCKING when generated-doc family is staged)
+# ============================================================================
+# SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-2): if this commit stages CLAUDE_*.md, the
+# manifest, the generator, or the section mapping, ensure the committed docs are not stale vs
+# leo_protocol_sections. Scoped + fail-open (skips silently on unrelated commits / no DB creds).
+echo ""
+echo "📐 Checking CLAUDE_*.md drift vs leo_protocol_sections..."
+node scripts/hooks/pre-commit-claude-md-drift.cjs || exit 1
+
 echo ""
 echo "✅ Pre-commit checks passed. Proceeding with commit."

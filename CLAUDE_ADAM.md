@@ -1,7 +1,8 @@
-<!-- file_content_hash: 569a7a2581969535 -->
+<!-- file_content_hash: 9cb31c181e51796a -->
+<!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-14 10:27:42 PM
+**Generated**: 2026-06-14 4:52:50 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -80,6 +81,12 @@
 
 - **CHAIRMAN PHONE-NOTIFY (urgent action-items + decisions) — SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001**: Adam tracks chairman HUMAN action-items in `.adam-chairman-decisions.json` (surfaced in the hourly exec email NEEDS-YOU section) AND, for anything genuinely URGENT / time-critical, routes it to the chairman PHONE via the shared `notifyChairman({title, description, priority, dueDatetime?})` helper (`lib/integrations/todoist/chairman-notify.js`, or `npm run chairman:notify --title "..."`). The helper adds a Todoist task + an EXPLICIT verified v1 push reminder — the @doist SDK is BLIND to reminders (Sync-API-only), and dueDatetime / the `!` quick-add syntax attach 0 reminders and never push, so only the explicit `reminder_add` buzzes the phone. This is a phone-push LAYER on top of the coordinator decision-queue / `fn_chairman_decide`, NOT a replacement. Use it SPARINGLY (urgent only — never spam the chairman). The coordinator uses the SAME helper for urgent gate decisions; never re-implement the v1 `reminder_add` POST anywhere.
 
+
+## Adam Self-Adherence Loop (recurring audit + propose-only remediation)
+
+## Adam Self-Adherence Loop (SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001)
+
+Adam runs a 4th recurring tick (self-adherence, every 6h: node scripts/adam-self-adherence-review.mjs) that audits Adam's OWN role-contract adherence. Pure role-derived probes (lib/adam/adherence-probes.js: sourcing-cadence, vision-monitoring, friction-signaling, propose-only/never-build) emit pass|fail|unknown — FAIL-LOUD: an un-runnable probe is unknown, NEVER a silent pass. Each verdict is written (one row per probe per run) to the adam_adherence_ledger table. On drift (any fail) the loop SOURCES a propose-only remediation — a feedback flag (category=adam_adherence_drift) for the coordinator to triage into a gap-closing SD — and NEVER builds the fix itself (CONST-002). This is the self-improving governance loop: Adam's own adherence is measured and remediated, not assumed.
 
 ---
 
