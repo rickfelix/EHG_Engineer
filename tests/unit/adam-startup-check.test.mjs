@@ -13,13 +13,21 @@ import {
   ROLE_CONTEXT_DOC,
 } from '../../scripts/adam-startup-check.mjs';
 
-test('ADAM_LOOPS has the 3 expected tick loops with the expected keys', () => {
-  assert.equal(ADAM_LOOPS.length, 3);
-  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['governance-scan', 'inbox-monitor', 'offer-help']);
+test('ADAM_LOOPS has the 4 expected tick loops with the expected keys', () => {
+  // self-adherence added by SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (child E).
+  assert.equal(ADAM_LOOPS.length, 4);
+  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['governance-scan', 'inbox-monitor', 'offer-help', 'self-adherence']);
   ADAM_LOOPS.forEach((l) => {
     assert.ok(l.cron && typeof l.cron === 'string', `${l.key} has a cron`);
     assert.ok(l.prompt && typeof l.prompt === 'string', `${l.key} has a prompt`);
   });
+});
+
+test('self-adherence loop runs the recurring self-adherence review (propose-only)', () => {
+  const sa = ADAM_LOOPS.find((l) => l.key === 'self-adherence');
+  assert.ok(sa, 'self-adherence loop exists');
+  assert.equal(sa.script, 'adam-self-adherence-review.mjs');
+  assert.ok(sa.prompt.includes('adam-self-adherence-review'), 'runs the review script');
 });
 
 test('governance-scan loop runs the flag-gated opportunity-scan', () => {
@@ -54,16 +62,16 @@ test('loopStatus: armed on key, prompt or script match, MISSING when provided-bu
   assert.equal(loopStatus(offer, { provided: true, set: new Set([offer.prompt]) }), 'armed');
 });
 
-test('end-to-end CSV verdict: --armed with all 3 loop KEYS → nothing to arm (no duplicate re-arm)', () => {
+test('end-to-end CSV verdict: --armed with all 4 loop KEYS → nothing to arm (no duplicate re-arm)', () => {
   const armed = parseArmedSet(['--armed', ADAM_LOOPS.map((l) => l.key).join(',')], {});
   const out = renderLoops(armed);
-  assert.match(out, /All 3 Adam tick loops armed\. Nothing to arm\./);
+  assert.match(out, /All 4 Adam tick loops armed\. Nothing to arm\./);
   assert.doesNotMatch(out, /MISSING/);
 });
 
 test('renderLoops emits CronCreate specs for the not-yet-armed loops (idempotent note)', () => {
   const out = renderLoops(parseArmedSet([], {}));
-  assert.match(out, /ADAM RECURRING TICK \(3 loops\)/);
+  assert.match(out, /ADAM RECURRING TICK \(4 loops\)/);
   assert.match(out, /CronCreate\(\{ cron: "0 13 \* \* \*"/); // governance-scan spec emitted
   assert.match(out, /idempotent/i);
 });
@@ -71,7 +79,7 @@ test('renderLoops emits CronCreate specs for the not-yet-armed loops (idempotent
 test('renderLoops reports "Nothing to arm" when all loops are in the armed set', () => {
   const armedSet = new Set(ADAM_LOOPS.map((l) => l.prompt));
   const out = renderLoops({ provided: true, set: armedSet });
-  assert.match(out, /All 3 Adam tick loops armed\. Nothing to arm\./);
+  assert.match(out, /All 4 Adam tick loops armed\. Nothing to arm\./);
 });
 
 test('renderResponsibilities is fail-open (bad repoRoot → fallback, never throws)', () => {
