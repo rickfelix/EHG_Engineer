@@ -75,6 +75,17 @@ export const ADAM_LOOPS = [
     cron: '0 */6 * * *',
     prompt: 'node scripts/adam-self-adherence-review.mjs',
   },
+  {
+    // SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): the contract-named BELT COUNTDOWN DUTY
+    // (CLAUDE_ADAM.md "BELT COUNTDOWN DUTY (durable)") previously lived only in session-scoped
+    // crons and DIED with every Adam session (2026-06-11 handoff drill). Arming it here makes it
+    // survive session restarts — closing the contract↔tooling gap the duty-marker parity test enforces.
+    key: 'belt-countdown',
+    label: 'Belt-countdown one-liner (ET 12h, rolling ETA to belt-dry) while the fleet is active',
+    script: null, // agent-prompt tick — depth/burn come from DB rows via fleet-dashboard, never hand-converted ET↔UTC
+    cron: '*/15 * * * *',
+    prompt: 'Adam belt-countdown tick: if the fleet is active, post ONE belt-countdown line via node scripts/adam-advisory.cjs send "<line>" — Eastern time in 12-hour format with a rolling ETA to belt-dry (claimable-SD depth vs current fleet burn; read depth/burn from DB rows via node scripts/fleet-dashboard.cjs, never hand-convert ET↔UTC). If the fleet is idle/empty, STAY SILENT.',
+  },
 ];
 
 // Parse the armed-cron basenames/prompts the agent passes from its CronList output.
@@ -91,6 +102,37 @@ export function parseArmedSet(argv = [], env = {}) {
   const provided = raw.trim().length > 0;
   const set = new Set(raw.split(',').map((s) => s.trim()).filter(Boolean));
   return { provided, set };
+}
+
+// SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): parse the contract's DURABLE recurring-duty
+// markers from CLAUDE_ADAM.md. A durable duty is bolded as `**<NAME> DUTY (durable)**`; the
+// captured NAME is slugged (lowercase, spaces→hyphens) so it can be matched against an
+// ADAM_LOOPS key. The "(durable)" qualifier is load-bearing: TEMPORARY, self-deleting watchers
+// (e.g. the .PUSHED-lifecycle autonomy-completion-watcher) are NOT marked durable, so they are
+// excluded here and correctly stay session-scoped (NOT required in ADAM_LOOPS). Pure; no I/O.
+// MARKER CONVENTION (keep CLAUDE_ADAM.md authors aware): a durable recurring duty is bolded as
+//   **<NAME> DUTY (durable)**
+// where <NAME> is a human label (letters/digits/spaces/hyphens, any case) and the literal token
+// " DUTY (durable)" follows (case-insensitive on "durable", whitespace-tolerant). The slug is
+// <NAME> lowercased with spaces→hyphens. The regex is deliberately FORGIVING so a stylistic
+// variation (hyphenated name, mixed case, uppercase DURABLE) never SILENTLY drops a duty from
+// enforcement — a false negative here = an unenforced duty, the exact failure this guards.
+export function parseDurableDutyMarkers(markdown) {
+  const slugs = new Set();
+  const re = /\*\*\s*([A-Za-z0-9][A-Za-z0-9 -]*?)\s+DUTY\s*\(\s*durable\s*\)\s*\*\*/gi;
+  let m;
+  while ((m = re.exec(String(markdown || ''))) !== null) {
+    slugs.add(m[1].trim().toLowerCase().replace(/\s+/g, '-'));
+  }
+  return [...slugs];
+}
+
+// FR2: which contract-named durable duties are MISSING from ADAM_LOOPS. [] === parity holds.
+// This is the consumer-side invariant for the loop registry: a duty the contract PROMISES must
+// actually exist in the tooling that arms it, or it silently dies every session.
+export function missingDurableDuties(markdown, loops = ADAM_LOOPS) {
+  const keys = new Set(loops.map((l) => l.key));
+  return parseDurableDutyMarkers(markdown).filter((slug) => !keys.has(slug));
 }
 
 // A loop is "armed" when an armed-set was provided AND it contains the loop's KEY (the
@@ -152,9 +194,29 @@ export function renderFreshness(repoRoot = REPO_ROOT) {
   }
 }
 
+/**
+ * SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): RUNTIME contract↔tooling parity verdict.
+ * Reads CLAUDE_ADAM.md and FAILS LOUD (a warning line at every /adam startup) when a durable
+ * contract duty is missing from ADAM_LOOPS — so future drift surfaces to the operator, not only
+ * to CI. Fail-open: a read/parse hiccup never throws or blocks startup.
+ */
+export function renderContractParity(repoRoot = REPO_ROOT) {
+  const head = '═══ CONTRACT↔TOOLING PARITY ═══\n  ';
+  try {
+    const md = readFileSync(resolve(repoRoot, ROLE_CONTEXT_DOC), 'utf8');
+    const missing = missingDurableDuties(md, ADAM_LOOPS);
+    if (missing.length === 0) {
+      return head + '✅ all durable CLAUDE_ADAM.md duties present in ADAM_LOOPS';
+    }
+    return head + `⚠️ CONTRACT DRIFT: durable duty(ies) declared in ${ROLE_CONTEXT_DOC} but absent from ADAM_LOOPS: ${missing.join(', ')} — they will DIE every session until armed. Add them to ADAM_LOOPS (scripts/adam-startup-check.mjs).`;
+  } catch (err) {
+    return head + '✅ parity check skipped (fail-open): ' + (err?.message || String(err));
+  }
+}
+
 export function buildReport(argv = [], env = {}, repoRoot = REPO_ROOT) {
   const armed = parseArmedSet(argv, env);
-  return [renderResponsibilities(repoRoot), '', renderLoops(armed), '', renderFreshness(repoRoot)].join('\n');
+  return [renderResponsibilities(repoRoot), '', renderLoops(armed), '', renderContractParity(repoRoot), '', renderFreshness(repoRoot)].join('\n');
 }
 
 // ── Main (fail-open: always exit 0) ──

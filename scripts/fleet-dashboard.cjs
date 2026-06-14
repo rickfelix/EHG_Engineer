@@ -1171,18 +1171,15 @@ async function printAdamInbox() {
     return;
   }
 
-  const { data: advisories, error } = await supabase
-    .from('session_coordination')
-    .select('id, sender_session, sender_type, subject, body, payload, created_at')
-    .eq('target_session', coordinatorId)
-    .eq('payload->>kind', 'adam_advisory')
-    // SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001 FR-1: re-surface gate is payload.actioned_at
-    // IS NULL (not read_at), mirroring the two-stage ACK in lib/coordinator/adam-action-ack.cjs.
-    // A parked-cron render stamps read_at (DELIVERED) but NEVER actioned_at, so an unactioned
-    // advisory keeps re-surfacing until the coordinator runs coordinator-ack-adam.cjs --advisory.
-    .is('payload->>actioned_at', null)
-    .order('created_at', { ascending: false })
-    .limit(20);
+  // SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR3): drive the SINGLE canonical consumer
+  // selector instead of re-implementing the query here. selectUnactionedAdvisories is the
+  // one place that defines "an unactioned advisory" (payload.kind=adam_advisory +
+  // payload.actioned_at IS NULL, no expires_at filter — the row must physically survive,
+  // which is why FR1 gives it a durable TTL). It also covers the broadcast-coordinator
+  // sentinel, which this inline query previously MISSED. Unifying here removes a
+  // writer/consumer-asymmetry drift surface (PAT-PROCESS-PRODUCER-CONSUMER-INVARIANT-001).
+  const { selectUnactionedAdvisories } = require('../lib/coordinator/adam-advisory-store.cjs');
+  const { rows: advisories, error } = await selectUnactionedAdvisories(supabase, coordinatorId, { limit: 20 });
 
   if (error) {
     console.log('  (adam inbox query failed: ' + error.message + ')');
