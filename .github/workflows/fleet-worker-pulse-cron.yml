@@ -1,0 +1,49 @@
+name: "Fleet worker pulse (cron)"
+
+# Chairman directive 2026-06-14: the exec email shows the HOURLY AVERAGE of active workers.
+# This job samples active-vs-not fleet workers every 15 minutes into fleet_worker_pulse;
+# scripts/adam-exec-summary.mjs averages the last hour. The pulse is read-only against the
+# fleet + a tiny insert/prune; it sends no email and is safe to run continuously.
+#
+# Reliability note: GitHub Actions cron is best-effort (runs may be delayed/dropped). The
+# hourly average tolerates missing samples — it averages over whatever pulses landed in the
+# window. If a lighter cadence is wanted, this can move to the local eva-scheduler-host daemon.
+
+on:
+  schedule:
+    # Every 15 minutes, offset off the top of the hour to dodge scheduling congestion.
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  pulse:
+    name: Sample active fleet workers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Record worker pulse
+        run: node scripts/fleet-worker-pulse.mjs
