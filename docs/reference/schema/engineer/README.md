@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-14T03:48:14.552Z
-**Tables**: 734
+**Generated**: 2026-06-14T18:21:12.887Z
+**Tables**: 736
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (734)
+## All Tables (736)
 
 ### LEO Protocol
 
@@ -186,6 +186,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activation_catalog_expectations](tables/activation_catalog_expectations.md)
 - [activity_logs](tables/activity_logs.md)
+- [adam_adherence_ledger](tables/adam_adherence_ledger.md)
 - [advisory_checkpoints](tables/advisory_checkpoints.md)
 - [aegis_constitutions](tables/aegis_constitutions.md)
 - [aegis_rules](tables/aegis_rules.md)
@@ -293,6 +294,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [context_usage_log](tables/context_usage_log.md)
 - [continuous_execution_log](tables/continuous_execution_log.md)
 - [contract_chain_links](tables/contract_chain_links.md)
+- [conversion_ledger](tables/conversion_ledger.md)
 - [coordination_events](tables/coordination_events.md)
 - [counterfactual_scores](tables/counterfactual_scores.md)
 - [cron_run_locks](tables/cron_run_locks.md)
