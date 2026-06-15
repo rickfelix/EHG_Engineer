@@ -13,8 +13,9 @@
 --
 -- HONEST-GAUGE NOTE: this supplies only the DENOMINATOR (which capabilities count). The NUMERATOR is the
 -- live typed probes. today/required below are DESCRIPTIVE chairman-ladder metadata only — they are NOT
--- used to credit 'built' (presence != realized). The 3 kr_status probes read 'built' from live ACHIEVED
--- governance KRs (KR-GOV-3.2/2.2/2.3); the 2 code_grep probes read 'partial' (intent) or 'unknown'.
+-- used to credit 'built' (presence != realized). The 3 kr_status probes map to their SEMANTICALLY-CORRECT
+-- governance KRs and read their HONEST live band: KR-GOV-3.2 (7/7 → built), KR-GOV-3.1 (2/6 → partial),
+-- KR-GOV-3.3 (0/3 → unbuilt); the 2 code_grep probes read 'partial' (intent) or 'unknown' (no seam).
 --
 -- IDEMPOTENT: ON CONFLICT (rung_id, capability) DO NOTHING — (rung_id, capability) is the table's ONLY
 -- UNIQUE constraint; (rung_id, ordinal) is a plain non-unique index and must NOT be a conflict target.
