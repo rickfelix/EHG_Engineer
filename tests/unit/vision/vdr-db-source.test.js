@@ -88,7 +88,9 @@ describe('computeBuildGauge visionSource=true (FR-4) — DB denominator, unchang
     expect(g.available).toBe(true);
     expect(g.coherence.ok).toBe(true); // DB labels match VDR_REGISTRY → no drift
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
-    expect(g.unknown_count).toBe(5);
+    // 9 unknown = 5 original code_grep + 4 SD-LEO-INFRA-V1-AUTOMATION-PROBES-001 automation/intelligence
+    // code_grep probes (ordinals 17-20), all 'unknown' here (no grep seam in this stub) — excluded.
+    expect(g.unknown_count).toBe(9);
     expect(g.denominator).toBe(6);
     expect(g.overall_pct).toBe(33); // identical to the markdown-source path
     expect(g.measured_at_note).toMatch(/DB vision source/);

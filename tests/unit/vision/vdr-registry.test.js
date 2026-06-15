@@ -96,7 +96,10 @@ describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', ()
     expect(g.available).toBe(true);
     expect(g.coherence.ok).toBe(true);
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
-    expect(g.unknown_count).toBe(5);
+    // 9 unknown = the 5 original code_grep probes + the 4 SD-LEO-INFRA-V1-AUTOMATION-PROBES-001
+    // automation/intelligence code_grep probes (ordinals 17-20) — all 'unknown' here because this
+    // stub injects no grep seam. They are honestly excluded from the denominator (which stays 6).
+    expect(g.unknown_count).toBe(9);
     expect(g.denominator).toBe(6);
     // (1 + 0.5 + 0.5 + 0 + 0 + 0) / 6 = 2.0/6 = 33%
     expect(g.overall_pct).toBe(33);
