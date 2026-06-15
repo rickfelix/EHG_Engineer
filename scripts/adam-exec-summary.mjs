@@ -155,6 +155,22 @@ try {
   quitLine = `Distance-to-quit: (unavailable ${EM} threshold source not reachable this run)`;
 }
 
+// ── 2c. chairman_decisions CONSUMED counter (SD-LEO-INFRA-ADAM-PRIORITY-ANCHORING-001 FR-4) ──
+// How many chairman_decisions the Adam preference model consumed as a weak soft
+// prior this run. Fail-soft on EVERY branch: a query/import error degrades to a
+// graceful "(unavailable)" line and NEVER crashes the summary.
+let decisionsLine = null;
+try {
+  const { data: decisions } = await db.from('chairman_decisions').select('id, decision, status');
+  const rows = decisions || [];
+  const { deriveDecisionsPrior } = await import('../lib/adam/preference-model.js');
+  const { consumed } = deriveDecisionsPrior(rows);
+  decisionsLine = `chairman_decisions consumed: ${consumed} of ${rows.length}`;
+} catch (e) {
+  console.warn('[adam-email] chairman_decisions-consumed counter unavailable (fail-soft): ' + (e?.message || e));
+  decisionsLine = 'chairman_decisions consumed: (unavailable)';
+}
+
 // ── 3. ACTIONS FOR YOU: render the pending decisions (fetched above) as a copy-paste block ──
 const LEAD_IN = "I have received the following executive decisions via email and I'm ready to address them:";
 const numbered = lines.map((l, i) => `${i + 1}. ${l}`);
@@ -175,6 +191,7 @@ const text = [
   ...(layerLine ? ['   ' + layerLine] : []),
   ...(visNote ? ['   ' + visNote] : []),
   ...(quitLine ? ['', quitLine] : []),
+  ...(decisionsLine ? [decisionsLine] : []),
   '',
   '──────────────────────────────────────────────',
   nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'No decisions need you right now.',
@@ -186,6 +203,7 @@ const text = [
 const layerHtml = layerLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(layerLine)}</div>` : '';
 const noteHtml = visNote ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(visNote)}</div>` : '';
 const quitHtml = quitLine ? `<p style="font-size:14px;margin:10px 0 0">${esc(quitLine)}</p>` : '';
+const decisionsHtml = decisionsLine ? `<p style="font-size:12px;color:#888;margin:4px 0 0">${esc(decisionsLine)}</p>` : '';
 const actionsHtml = nActions
   ? `<p style="font-size:14px;margin:0 0 2px"><b>${nActions} ${nActions === 1 ? 'action' : 'actions'} for you</b></p>` +
     `<p style="font-size:12px;color:#888;margin:0 0 6px">On your phone, press and hold the box below, tap "Select All", then "Copy" — then paste it into Claude Code.</p>` +
@@ -194,7 +212,7 @@ const actionsHtml = nActions
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
   `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
   `<p style="font-size:15px;font-weight:600;margin:0 0 0">EHG vision: ${visPct != null ? visPct + '% built' : '(gauge unavailable)'}</p>` +
-  layerHtml + noteHtml + quitHtml +
+  layerHtml + noteHtml + quitHtml + decisionsHtml +
   '<hr style="border:none;border-top:1px solid #e1e4e8;margin:14px 0">' +
   actionsHtml +
   `<p style="font-size:11px;color:#999;margin:14px 0 0">as of ${esc(when)} ET ${EM} Adam ${EM} LEO Fleet Advisor</p></div>`;
