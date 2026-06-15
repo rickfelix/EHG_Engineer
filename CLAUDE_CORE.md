@@ -1,8 +1,8 @@
-<!-- file_content_hash: 728825879b7c1e92 -->
+<!-- file_content_hash: 697282a4ad688cb1 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-06-14 4:52:50 PM
+**Generated**: 2026-06-15 8:09:48 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -30,6 +30,23 @@ The DATABASE sub-agent handles common blockers automatically:
 Task tool with subagent_type="database-agent":
 "Execute the migration file: database/migrations/YYYYMMDD_name.sql"
 ```
+
+---
+
+## Tiered Auto-Apply Policy (SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001)
+
+Handoff-time migration auto-apply is gated by a **fail-closed, allow-list tier classifier** (`scripts/lib/migration-tier-classifier.mjs`). The classifier is PURE (no DB/IO) and **default-deny**: a migration is auto-apply-eligible **only** when EVERY statement provably matches an additive allow rule.
+
+- **TIER-1 (auto-apply eligible)** — provably additive only: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX` (incl. CONCURRENTLY / IF NOT EXISTS), nullable `ADD COLUMN` with a constant-only default, `ENABLE ROW LEVEL SECURITY` / `CREATE POLICY`, and bare `CREATE FUNCTION`/`VIEW` (NOT `OR REPLACE`, no `SECURITY DEFINER`, body free of destructive SQL). These flow to the DATABASE sub-agent for execution (the mechanics above are unchanged).
+- **TIER-2 (chairman-gated)** — EVERYTHING ELSE: any `DROP`/`TRUNCATE`/`DELETE`/`UPDATE`/`RENAME`/`GRANT`/`REVOKE`, `ALTER COLUMN ... TYPE`, multi-action ALTER with a non-additive action, volatile or `NOT NULL` defaults, `CREATE OR REPLACE`, `SECURITY DEFINER`, `DO` blocks, named-`$tag$` function bodies hiding destructive SQL, and unparseable/under-split/ambiguous input. These are **never auto-applied** — they require the full 3-factor `@approved-by` chairman gate:
+  ```
+  node scripts/apply-migration.js <path> --prod-deploy
+  ```
+  (`--prod-deploy` + a single-use 1h token + an `-- @approved-by: <email>` header matching `git config user.email` — enforced by `scripts/lib/migration-guards.js`, which the tier classifier NEVER weakens.)
+
+**Default-deny safety contract**: a false TIER-1 verdict on a destructive migration would auto-apply it past the chairman gate, so the classifier is allow-list only, NEVER throws, and NEVER returns TIER-1 on any error/ambiguity path. Both auto-apply vectors are gated — SD-declared migrations AND uncommitted manual-update SQL.
+
+**Rollout**: the gate is opt-in via `LEO_MIGRATION_TIER_GATE=on` (default OFF). When OFF, classification is advisory only (computed, logged, and audited to `audit_log` as `MIGRATION_TIER_CLASSIFICATION`) and the existing auto-apply behavior is unchanged. Every tier decision is recorded fail-soft — an audit failure never blocks a handoff.
 
 ## Cascade Invalidation System
 
@@ -1661,7 +1678,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-06-14*
+*Generated from database: 2026-06-15*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
