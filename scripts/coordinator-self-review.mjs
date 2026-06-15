@@ -12,6 +12,8 @@ import { resolve } from 'path';
 import { createRequire } from 'module';
 // SD-LEO-INFRA-COORDINATOR-DISPATCH-TARGET-001: validated dispatch guard.
 const { insertCoordinationRow, isFullUuid } = createRequire(import.meta.url)('../lib/coordinator/dispatch.cjs');
+// SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: single-writer mutation guard.
+import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-guard.mjs';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const me = process.env.CLAUDE_SESSION_ID;
@@ -43,6 +45,14 @@ export function partitionParticipants(sess, me, adamReviewOn) {
 // SD-...-001-D: wrapped in a named fn + main-guard so partitionParticipants is
 // importable by tests without executing this DB-touching body on import.
 export async function selfReviewMain() {
+  // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: guard — block if this session
+  // is not the canonical coordinator (fail-open on resolver error / no session_id).
+  // Finding 1: resolve our id env-first, disk-pointer fallback (works out-of-band).
+  // Finding 2: return; (void) on block like the other 3 consumers — guardMutation already
+  // logged the [COORD_MUTATION_BLOCKED] warn, so the block stays observable.
+  const _guardVerdict = await guardMutation(db, resolveOwnSessionId(), 'coordinator-self-review');
+  if (!_guardVerdict.allowed) return;
+
   // 1) ALWAYS capture responses -> durable feedback (cheap; dedup by metadata.review_key)
   const since = new Date(t - 24 * 3600 * 1000).toISOString();
   const { data: sigs } = await db.from('session_coordination').select('id,sender_session,payload,created_at')

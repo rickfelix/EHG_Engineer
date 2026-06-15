@@ -25,6 +25,8 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+// SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: single-writer mutation guard.
+import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-guard.mjs';
 // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: shared fail-open classifiers so the
 // ranker and the capacity forecaster exclude the same fixtures, and the ranker
 // demotes bare-shell stubs. FIXTURE_RE catches epoch-stamped TEST-E2E keys; the
@@ -153,6 +155,20 @@ async function main() {
 
   const now = new Date().toISOString();
   console.log(`[BACKLOG-RANK] ${now}${DRY ? ' (dry-run)' : ''} — ${claimable.length} claimable leaf SD(s) ranked`);
+
+  // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: guard rank WRITES only
+  // (the SELECT/ranking reads above are always allowed). Skip the write if this session
+  // is not the canonical coordinator. Fail-open on resolver error / no session_id.
+  // Finding 1: env-first with disk-pointer fallback so an out-of-band run still resolves.
+  const me = resolveOwnSessionId();
+  if (!DRY) {
+    const _rankGuard = await guardMutation(sb, me, 'coordinator-backlog-rank');
+    if (!_rankGuard.allowed) {
+      console.log('[BACKLOG-RANK] mutation blocked by coordinator guard — not the canonical coordinator; skipping writes.');
+      return;
+    }
+  }
+
   let writes = 0, clears = 0;
   for (let i = 0; i < claimable.length; i++) {
     const d = claimable[i];

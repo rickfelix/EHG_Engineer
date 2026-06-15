@@ -570,6 +570,47 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
   }
 }
 
+// SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): guarded WORK_ASSIGNMENT
+// dispatch, extracted from main() so the single-writer gate is unit-testable in isolation.
+// When `allowed` is false (this sweep is running as a NON-canonical coordinator), NO
+// WORK_ASSIGNMENT (sender_type:'sweep') insert happens — preventing a lingering OLD coordinator
+// from re-dispatching to every worker every 5 min (the double-dispatch FR-2 names first).
+// When `allowed` is true, dispatch proceeds exactly as before (skip workers that already have an
+// unacknowledged WORK_ASSIGNMENT to avoid spam). Returns { dispatched, skipped } for observability.
+async function dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, available, allowed) {
+  if (!allowed) {
+    console.log('[SWEEP] WORK_ASSIGNMENT dispatch SKIPPED for ' + (activeSessions || []).length + ' active session(s) — not the canonical coordinator (double-dispatch guard).');
+    return { dispatched: 0, skipped: (activeSessions || []).length, blocked: true };
+  }
+  let dispatched = 0;
+  for (const s of activeSessions || []) {
+    // Check if we already have an unacknowledged message for this session
+    const { data: existing } = await supabase
+      .from('session_coordination')
+      .select('id')
+      .eq('target_session', s.session_id)
+      .eq('message_type', 'WORK_ASSIGNMENT')
+      .is('acknowledged_at', null)
+      .limit(1);
+
+    if (existing && existing.length > 0) continue; // Don't spam
+
+    await supabase
+      .from('session_coordination')
+      .insert({
+        target_session: s.session_id,
+        target_sd: s.sd_key,
+        message_type: 'WORK_ASSIGNMENT',
+        subject: 'Next work available when ' + s.sd_key.split('-').pop() + ' completes',
+        body: 'When you complete ' + s.sd_key + ', pick up the next unclaimed child.\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
+        payload: { available_sds: available, current_sd: s.sd_key },
+        sender_type: 'sweep'
+      });
+    dispatched++;
+  }
+  return { dispatched, skipped: 0, blocked: false };
+}
+
 async function main() {
   const now = new Date();
   const actions = [];
@@ -1484,6 +1525,30 @@ async function main() {
   // third claim-holding status, ALIVE_SOURCE_SIDE.
   const activeSessions = classified.filter(s => CLAIM_HOLDING_STATUSES.has(s.status));
 
+  // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): single-writer guard.
+  // The sweep cron fires INSIDE the coordinator's live session, so process.env.CLAUDE_SESSION_ID
+  // (env-first, .claude/session-id.json fallback) IS the coordinator id. A lingering OLD
+  // coordinator's sweep would otherwise keep re-dispatching WORK_ASSIGNMENT rows + re-asserting
+  // claims every 5 min (the double-dispatch FR-2 exists to stop). Compute the verdict ONCE and
+  // gate ONLY the harmful coordinator double-act mutations below:
+  //   - CLAIM_FIX re-assert (claiming_session_id / is_working_on writes)
+  //   - WORK_ASSIGNMENT terminal-drain (read_at stamp)
+  //   - WORK_ASSIGNMENT dispatch (sender_type:'sweep' inserts)
+  //   - is_coordinator stale-flag clear (existing guard, now sharing this verdict)
+  // DEAD-session cleanup / bilateral claim releases stay UNGATED — idempotent hygiene that is
+  // safe to run from any session and must not be blocked. Fail-OPEN: any guard error → allowed
+  // (never brick the only live coordinator; the sweep is coordinator-invoked).
+  let _coordMutationAllowed = true;
+  try {
+    const { guardMutation: _sweepGuardFn, resolveOwnSessionId: _sweepResolveId } =
+      await import('../lib/coordinator-mutation-guard.mjs');
+    const _sweepVerdict = await _sweepGuardFn(supabase, _sweepResolveId(), 'stale-session-sweep:coordinator-mutations');
+    _coordMutationAllowed = _sweepVerdict.allowed;
+    if (!_coordMutationAllowed) {
+      console.log('[SWEEP] coordinator-mutation guard: NOT the canonical coordinator — WORK_ASSIGNMENT dispatch/drain + CLAIM_FIX re-assert + is_coordinator-clear will be SKIPPED this run (dead-session cleanup still runs).');
+    }
+  } catch { /* fail-open — guard error must not suppress sweep coordinator duties */ }
+
   // 6b. QA — Claim Integrity: detect idle sessions with no SD claim and nudge them
   const { data: idleSessions } = await supabase
     .from('v_active_sessions')
@@ -1629,7 +1694,13 @@ async function main() {
         continue;
       }
       // Eligible -> existing re-assert behavior (unchanged).
-      if (sd.claiming_session_id !== s.session_id) {
+      // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): the re-assert is a
+      // harmful coordinator double-act (a rogue OLD coordinator re-stamping claiming_session_id /
+      // is_working_on every 5 min). Skip it when not the canonical coordinator. The bilateral
+      // CLEARS above (ineligible/terminal/fixture) are idempotent hygiene and stay UNGATED.
+      if (!_coordMutationAllowed) {
+        warnings.push('CLAIM_FIX: re-assert SKIPPED for ' + s.sd_key + ' — not the canonical coordinator (rogue double-act guard)');
+      } else if (sd.claiming_session_id !== s.session_id) {
         await supabase
           .from('strategic_directives_v2')
           .update({ claiming_session_id: s.session_id, is_working_on: true })
@@ -1694,7 +1765,11 @@ async function main() {
   // sweep interval (assignment-age floor) so a transient terminal read can't drop a mid-transition
   // in-flight assignment. Terminal sets BRANCH by target shape: SD → {completed,cancelled,deferred};
   // QF → {completed,cancelled,escalated} (escalated is QF-only; deferred is SD-only). Fail-open.
-  try {
+  // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): the drain is a
+  // WORK_ASSIGNMENT-table coordinator mutation — skip it when not the canonical coordinator.
+  if (!_coordMutationAllowed) {
+    console.log('[SWEEP] WORK_ASSIGNMENT terminal-drain SKIPPED — not the canonical coordinator.');
+  } else try {
     const SWEEP_INTERVAL_MS = 5 * 60_000;
     const assignAgeCutoff = new Date(nowMs - SWEEP_INTERVAL_MS).toISOString();
     const { data: openAssignments } = await supabase
@@ -1728,30 +1803,13 @@ async function main() {
     warnings.push('WORK_ASSIGNMENT_TERMINAL_DRAIN: skipped due to error: ' + (e && e.message ? e.message : e));
   }
 
-  for (const s of activeSessions) {
-    // Check if we already have an unacknowledged message for this session
-    const { data: existing } = await supabase
-      .from('session_coordination')
-      .select('id')
-      .eq('target_session', s.session_id)
-      .eq('message_type', 'WORK_ASSIGNMENT')
-      .is('acknowledged_at', null)
-      .limit(1);
-
-    if (existing && existing.length > 0) continue; // Don't spam
-
-    await supabase
-      .from('session_coordination')
-      .insert({
-        target_session: s.session_id,
-        target_sd: s.sd_key,
-        message_type: 'WORK_ASSIGNMENT',
-        subject: 'Next work available when ' + s.sd_key.split('-').pop() + ' completes',
-        body: 'When you complete ' + s.sd_key + ', pick up the next unclaimed child.\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
-        payload: { available_sds: available, current_sd: s.sd_key },
-        sender_type: 'sweep'
-      });
-  }
+  // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): the WORK_ASSIGNMENT
+  // dispatch is the EXACT double-dispatch FR-2 names first — a lingering OLD coordinator's
+  // sweep would re-insert a WORK_ASSIGNMENT (sender_type:'sweep') to every active worker every
+  // 5 min. Extracted to a guarded, exported helper so the gate is unit-testable in isolation.
+  // (Dead-session cleanup / claim releases above already ran ungated — only this rogue double-act
+  // is blocked.)
+  await dispatchWorkAssignmentsIfAllowed(supabase, activeSessions, available, _coordMutationAllowed);
 
   // Send CLAIM_RELEASED ONLY for sessions whose release write actually succeeded
   // (QF-20260611-162 — previously iterated the raw `dead` list, announcing held/failed releases
@@ -2008,26 +2066,33 @@ async function main() {
   // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-1 — clear is_coordinator flag on
   // sessions whose heartbeat is older than 10 minutes. Logged as
   // COORDINATOR_FLAG_CLEARED. Best-effort — failure does not abort sweep.
+  // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: guard this coordinator-mutation
+  // entry point — only the canonical coordinator session should clear stale flags. Reuses the
+  // single shared _coordMutationAllowed verdict computed once at the top of main() (Finding 3).
   try {
-    const cutoff = new Date(Date.now() - 10 * 60_000).toISOString();
-    const { data: stale } = await supabase
-      .from('claude_sessions')
-      .select('session_id, metadata, heartbeat_at')
-      .filter('metadata->>is_coordinator', 'eq', 'true')
-      .lt('heartbeat_at', cutoff);
-    let cleared = 0;
-    for (const s of stale || []) {
-      const next = { ...(s.metadata || {}) };
-      delete next.is_coordinator;
-      delete next.coordinator_since;
-      await supabase
+    if (!_coordMutationAllowed) {
+      console.log('[SWEEP] coordinator-flag-clear SKIPPED — not the canonical coordinator.');
+    } else {
+      const cutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+      const { data: stale } = await supabase
         .from('claude_sessions')
-        .update({ metadata: next })
-        .eq('session_id', s.session_id);
-      cleared++;
-      console.log('  COORDINATOR_FLAG_CLEARED: session=' + s.session_id + ' heartbeat=' + s.heartbeat_at);
+        .select('session_id, metadata, heartbeat_at')
+        .filter('metadata->>is_coordinator', 'eq', 'true')
+        .lt('heartbeat_at', cutoff);
+      let cleared = 0;
+      for (const s of stale || []) {
+        const next = { ...(s.metadata || {}) };
+        delete next.is_coordinator;
+        delete next.coordinator_since;
+        await supabase
+          .from('claude_sessions')
+          .update({ metadata: next })
+          .eq('session_id', s.session_id);
+        cleared++;
+        console.log('  COORDINATOR_FLAG_CLEARED: session=' + s.session_id + ' heartbeat=' + s.heartbeat_at);
+      }
+      if (cleared > 0) console.log('STALE COORDINATOR FLAGS CLEARED: ' + cleared);
     }
-    if (cleared > 0) console.log('STALE COORDINATOR FLAGS CLEARED: ' + cleared);
   } catch (coordErr) {
     console.log('COORDINATOR FLAG CLEANUP: ' + (coordErr && coordErr.message ? coordErr.message : 'unknown'));
   }
@@ -2305,3 +2370,8 @@ module.exports.TEST_FIXTURE_SD_KEY_LIKE = TEST_FIXTURE_SD_KEY_LIKE;
 // does — no production behavior change.
 module.exports.isSweepResetAllowed = isSweepResetAllowed;
 module.exports.__setExecContextGuardForTest = (mock) => { _execContextGuardCache = mock; };
+
+// SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2 (Finding 3): export the guarded
+// WORK_ASSIGNMENT dispatch so the single-writer gate is unit-testable (assert NO sender_type:'sweep'
+// insert happens when !allowed; insert happens when allowed).
+module.exports.dispatchWorkAssignmentsIfAllowed = dispatchWorkAssignmentsIfAllowed;
