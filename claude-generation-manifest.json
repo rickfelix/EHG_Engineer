@@ -1,95 +1,18 @@
 {
-  "generated_at": "2026-06-15T12:09:47.932Z",
-  "git_commit": "325cf649",
-  "db_snapshot_hash": "916e51b7a22a4063",
+  "generated_at": "2026-06-15T14:14:51.161Z",
+  "git_commit": "57724514",
+  "db_snapshot_hash": "9dec9bcfcb3db91b",
   "files": {
-    "CLAUDE.md": {
-      "type": "full",
-      "chars": 19368,
-      "estimated_tokens": 4842,
-      "content_hash": "933f827bf3d79e16",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE.md"
-    },
-    "CLAUDE_CORE.md": {
-      "type": "full",
-      "chars": 83527,
-      "estimated_tokens": 20882,
-      "content_hash": "f5d60c2034d7bc4a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_CORE.md"
-    },
-    "CLAUDE_LEAD.md": {
-      "type": "full",
-      "chars": 65128,
-      "estimated_tokens": 16282,
-      "content_hash": "15c96ba78b124906",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_LEAD.md"
-    },
-    "CLAUDE_PLAN.md": {
-      "type": "full",
-      "chars": 90830,
-      "estimated_tokens": 22708,
-      "content_hash": "437ecbbfa98cd289",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_PLAN.md"
-    },
-    "CLAUDE_EXEC.md": {
-      "type": "full",
-      "chars": 84821,
-      "estimated_tokens": 21206,
-      "content_hash": "1a5cf425808d4967",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_EXEC.md"
-    },
-    "CLAUDE_ADAM.md": {
-      "type": "full",
-      "chars": 23804,
-      "estimated_tokens": 5951,
-      "content_hash": "862ead18f8275380",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_ADAM.md"
-    },
-    "CLAUDE_DIGEST.md": {
-      "type": "digest",
-      "chars": 9611,
-      "estimated_tokens": 2403,
-      "content_hash": "a9d6633d9917d606",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_DIGEST.md"
-    },
-    "CLAUDE_CORE_DIGEST.md": {
-      "type": "digest",
-      "chars": 11535,
-      "estimated_tokens": 2884,
-      "content_hash": "08c610abfba0c9b0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_CORE_DIGEST.md"
-    },
-    "CLAUDE_LEAD_DIGEST.md": {
-      "type": "digest",
-      "chars": 5422,
-      "estimated_tokens": 1356,
-      "content_hash": "c821dd23439bb687",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_LEAD_DIGEST.md"
-    },
-    "CLAUDE_PLAN_DIGEST.md": {
-      "type": "digest",
-      "chars": 8412,
-      "estimated_tokens": 2103,
-      "content_hash": "ffe41d2cde167293",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_PLAN_DIGEST.md"
-    },
-    "CLAUDE_EXEC_DIGEST.md": {
-      "type": "digest",
-      "chars": 10835,
-      "estimated_tokens": 2709,
-      "content_hash": "1ac484330aaef44a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_EXEC_DIGEST.md"
-    },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 3952,
-      "estimated_tokens": 988,
-      "content_hash": "8397b573c4785854",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001\\CLAUDE_ADAM_DIGEST.md"
+      "chars": 6928,
+      "estimated_tokens": 1732,
+      "content_hash": "00e8b1242f80df58",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-ROLE-CONTRACT-001\\CLAUDE_ADAM_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "6a2cf7210eeb84dc",
+    "global": "555a881c9ae0da20",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -345,7 +268,8 @@
       "599": "7ddd3e2178799aa8",
       "601": "88747ca78c466c44",
       "602": "ad0aecae8cdc6cb3",
-      "603": "ca922c736e8d8ed3"
+      "603": "ca922c736e8d8ed3",
+      "604": "629ec121c6d72a97"
     },
     "meta": {
       "94": {
@@ -1622,6 +1546,11 @@
         "section_type": "fleet_worker_loop_continuity",
         "target_file": "CLAUDE_EXEC.md",
         "title": "Loop Continuity / Never-Exit (Fleet Worker Contract)"
+      },
+      "604": {
+        "section_type": "adam_role_contract",
+        "target_file": "CLAUDE_ADAM.md",
+        "title": "SD Creation How-To + Duty Procedures (Conversion · Build-% Gauge · Escalation)"
       }
     }
   }
