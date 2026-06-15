@@ -832,3 +832,5 @@ Canonical scoring for the work-triggered tri-party review (`coordinator-self-rev
 - **Last Updated**: 2026-06-08
 - **Tags**: fleet, coordinator, cron, self-review, standard-loops
 - **Author**: SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001
+
+See also: role-session-handoff.md (singleton handoff protocol — never 0/never 2 holders, register-before-retire, DB-canonical pointer, auto split-brain resolve)
