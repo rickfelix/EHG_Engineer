@@ -52,11 +52,13 @@ export const ADAM_LOOPS = [
     prompt: 'node scripts/adam-opportunity-scan.cjs --scan --scope auto',
   },
   {
+    // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: drain ALL coordinator-directed kinds (replies +
+    // coordinator directives), not reply-only — closes the reply-only blindspot.
     key: 'inbox-monitor',
-    label: 'Adam inbox — drain coordinator replies (durable reader)',
+    label: 'Adam inbox — drain ALL coordinator-directed kinds (full-lane reader)',
     script: 'adam-advisory.cjs',
     cron: '*/15 * * * *',
-    prompt: 'node scripts/adam-advisory.cjs replies',
+    prompt: 'node scripts/adam-advisory.cjs inbox',
   },
   {
     key: 'offer-help',

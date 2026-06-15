@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
+import { ADAM_LOOPS } from '../../scripts/adam-startup-check.mjs'; // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001 parity test
 const require = createRequire(import.meta.url);
 
 const ROOT = path.resolve(__dirname, '../..');
@@ -21,7 +22,7 @@ const { classifyInboxMessage } = require('../../scripts/hooks/coordination-inbox
 const { ackMessage } = require('../../scripts/worker-checkin.cjs');
 const { buildReplyPayload } = require('../../scripts/coordinator-reply.cjs');
 const { awaitCoordinatorReply, buildRequestPayload } = require('../../scripts/worker-signal.cjs');
-const { buildAdvisoryPayload, resolveReplyToCorrelation } = require('../../scripts/adam-advisory.cjs');
+const { buildAdvisoryPayload, resolveReplyToCorrelation, drainInbox, isReplyRow, isDirectiveRow } = require('../../scripts/adam-advisory.cjs');
 const sweep = require('../../scripts/stale-session-sweep.cjs');
 const receipts = require('../../lib/coordinator/receipts.cjs');
 
@@ -41,6 +42,7 @@ describe('FR-3: DIRECTIVE_KINDS allowlist', () => {
       'adam_action_required',
       'coordinator_reminder',
       'coordinator_to_adam',
+      'coordinator_directive', // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001
     ]);
     expect(Object.isFrozen(ws.DIRECTIVE_KINDS)).toBe(true);
   });
@@ -49,6 +51,7 @@ describe('FR-3: DIRECTIVE_KINDS allowlist', () => {
     const consumers = [
       'scripts/hooks/coordination-inbox.cjs',
       'scripts/worker-checkin.cjs',
+      'scripts/adam-advisory.cjs', // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: full-lane inbox drain consumer
     ];
     for (const file of consumers) {
       const text = src(file);
@@ -370,5 +373,91 @@ describe('FR-2: selectRecentDeadLetters (pure)', () => {
       { id: 'not-dl', payload: { kind: 'coordinator_request' } },
     ], { now: NOW });
     expect(r.map((x) => x.id)).toEqual(['newest', 'recent']);
+  });
+});
+
+// ───────────── SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001 — full-lane inbox drain ─────────────
+
+describe('full-lane: isDirectiveRow / isReplyRow lane classification', () => {
+  it('isDirectiveRow matches the IMPORTED DIRECTIVE_KINDS (incl. coordinator_directive), not replies/unknowns', () => {
+    expect(isDirectiveRow({ payload: { kind: 'coordinator_directive' } })).toBe(true);
+    expect(isDirectiveRow({ payload: { kind: 'coordinator_reminder' } })).toBe(true);
+    expect(isDirectiveRow({ payload: { kind: 'coordinator_reply' } })).toBe(false); // reply lane, not directive
+    expect(isDirectiveRow({ payload: { kind: 'totally_unknown' } })).toBe(false);
+    expect(isDirectiveRow({ payload: {} })).toBe(false);
+    expect(isDirectiveRow(null)).toBe(false);
+  });
+  it('isReplyRow matches coordinator_reply OR a payload.reply_to correlation', () => {
+    expect(isReplyRow({ payload: { kind: 'coordinator_reply' } })).toBe(true);
+    expect(isReplyRow({ payload: { reply_to: 'C-1' } })).toBe(true);
+    expect(isReplyRow({ payload: { kind: 'coordinator_directive' } })).toBe(false);
+  });
+});
+
+describe('full-lane: drainInbox surfaces BOTH lanes + two-stage ACK', () => {
+  // AND-only server query (.eq target_session + .is read_at null), then a consume update; the mock
+  // returns the seeded rows on the 1st .from() and captures the read_at update on the 2nd.
+  function mockInboxSb(rows, captured) {
+    let callIdx = 0;
+    return {
+      from() {
+        callIdx += 1;
+        if (callIdx === 1) {
+          const q = {
+            select() { return q; }, eq() { return q; }, is() { return q; }, order() { return q; },
+            limit() { return Promise.resolve({ data: rows, error: null }); },
+          };
+          return q;
+        }
+        const u = {
+          update(patch) { captured.update = patch; return u; },
+          in(_k, ids) { captured.ids = ids; return u; },
+          is() { return Promise.resolve({}); },
+        };
+        return u;
+      },
+    };
+  }
+
+  it('surfaces a coordinator_directive AND a coordinator_reply; stamps read_at (DELIVERED), withholds acknowledged_at/actioned_at', async () => {
+    const rows = [
+      { id: 'dir-1', payload: { kind: 'coordinator_directive', body: 'do X' }, created_at: iso(NOW) },
+      { id: 'rep-1', payload: { kind: 'coordinator_reply', reply_to: 'C-9', body: 'ack' }, created_at: iso(NOW) },
+      { id: 'noise', payload: { kind: 'adam_advisory', body: 'fyi' }, created_at: iso(NOW) }, // neither lane
+    ];
+    const captured = {};
+    await drainInbox(mockInboxSb(rows, captured), UUID_A);
+    expect(captured.ids).toEqual(['dir-1', 'rep-1']);              // both lanes surfaced; noise excluded
+    expect(captured.update).toHaveProperty('read_at');            // DELIVERED
+    expect(captured.update).not.toHaveProperty('acknowledged_at'); // two-stage ACK: withheld
+    expect(captured.update).not.toHaveProperty('actioned_at');
+  });
+
+  it('no surfaced rows (only non-lane noise) → no DB update (idempotent / quiet)', async () => {
+    const captured = {};
+    await drainInbox(mockInboxSb([{ id: 'x', payload: { kind: 'adam_advisory' }, created_at: iso(NOW) }], captured), UUID_A);
+    expect(captured.ids).toBeUndefined();
+    expect(captured.update).toBeUndefined();
+  });
+});
+
+describe('full-lane parity: ADAM_LOOPS inbox-monitor drains the full lane', () => {
+  it('inbox-monitor prompt is the full-lane verb (not reply-only) — re-wiring drift guard', () => {
+    const loop = ADAM_LOOPS.find((l) => l.key === 'inbox-monitor');
+    expect(loop, 'inbox-monitor loop must exist').toBeTruthy();
+    expect(loop.prompt).toBe('node scripts/adam-advisory.cjs inbox');
+    expect(loop.prompt).not.toMatch(/replies\s*$/);
+  });
+});
+
+describe('full-lane safety net: read-adam-directives covers EVERY directive sender', () => {
+  it('DIRECTIVE_SENDERS includes chairman (a DELIVERED-but-unacked chairman directive stays recoverable)', () => {
+    // The full-lane drain stamps read_at on directive rows of ANY sender; the acked-NULL safety net
+    // must therefore not be sender-restricted, or a chairman directive is DELIVERED-then-dropped
+    // (harness-bug 43c2dee2). Adversarial-review finding B1.
+    const { DIRECTIVE_SENDERS } = require('../../scripts/read-adam-directives.cjs');
+    expect(DIRECTIVE_SENDERS).toContain('chairman');
+    expect(DIRECTIVE_SENDERS).toContain('coordinator');
+    expect(DIRECTIVE_SENDERS).toContain('orchestrator');
   });
 });

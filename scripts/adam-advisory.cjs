@@ -24,7 +24,8 @@
  * Usage:
  *   node scripts/adam-advisory.cjs send "<advisory body>"                          (fire-and-forget; replyable)
  *   node scripts/adam-advisory.cjs request "<question>" [--timeout 30000]          (awaits a coordinator reply; needs COORDINATOR_TWOWAY_V2=on)
- *   node scripts/adam-advisory.cjs replies                                         (drain coordinator replies that arrived after any sync await timed out)
+ *   node scripts/adam-advisory.cjs replies                                         (drain ONLY the reply lane — kept for back-compat)
+ *   node scripts/adam-advisory.cjs inbox                                           (FULL-LANE drain: replies + coordinator directives — the recurring inbox-monitor tick)
  */
 
 const crypto = require('crypto');
@@ -32,7 +33,10 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { redact, BODY_HARD_CAP, awaitCoordinatorReply } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
-const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
+const { PAYLOAD_KINDS, DIRECTIVE_KINDS } = require('../lib/fleet/worker-status.cjs');
+// SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: reuse the canonical Adam-session resolver for the unattended
+// full-lane tick (env vars are not reliably propagated to cron subprocesses).
+const { resolveAdamSessionId } = require('./read-adam-directives.cjs');
 
 /**
  * Pure: build the advisory payload. INVARIANT: carries payload.kind=adam_advisory
@@ -207,11 +211,72 @@ async function drainReplies(supabase, sessionId) {
     .is('read_at', null);
 }
 
+/**
+ * SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001 — is this row a coordinator DIRECTIVE kind? Classifies by
+ * the IMPORTED canonical DIRECTIVE_KINDS allowlist (QF-20260610-545: classify the KIND, never the
+ * sender_type). Never duplicates the literals — source-pinned by coord-adam-comms-resilient.test.js.
+ */
+function isDirectiveRow(r) {
+  const k = r && r.payload && r.payload.kind;
+  return k != null && DIRECTIVE_KINDS.includes(k);
+}
+
+/**
+ * SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001 — unified FULL-LANE inbox drain (the corrective for the
+ * reply-only blindspot that left SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001's full-lane criterion
+ * unmet). `drainReplies` surfaces ONLY the reply lane, so coordinator DIRECTIVE-kind rows (any
+ * payload.kind in the imported DIRECTIVE_KINDS allowlist) targeting the Adam session were never
+ * drained by the recurring inbox-monitor tick.
+ *
+ * This drains BOTH lanes for THIS Adam session. It fetches this session's UNREAD rows with AND-ONLY
+ * server filters (target_session + read_at IS NULL) — NEVER a payload->>kind .or()/.in() (the
+ * ambiguous-PostgREST trap PR #4770 hit) — and classifies the lane IN JS:
+ *   reply lane     = isReplyRow(r)            (coordinator_reply OR a payload.reply_to correlation)
+ *   directive lane = isDirectiveRow(r)        (payload.kind in the IMPORTED DIRECTIVE_KINDS)
+ * Lane separation is GUARANTEED by the AND-only target_session scope (every returned row is THIS
+ * session's). Surfaced rows are stamped read_at = DELIVERED. acknowledged_at / payload.actioned_at
+ * are WITHHELD (two-stage ACK, mirroring classifyInboxMessage's {markRead:true, markAck:false}) so a
+ * DELIVERED-but-unacked directive stays recoverable via scripts/read-adam-directives.cjs (the
+ * acknowledged_at IS NULL tier) until Adam genuinely acts.
+ */
+async function drainInbox(supabase, sessionId) {
+  const { data: allRows, error } = await supabase
+    .from('session_coordination')
+    .select('id, sender_session, sender_type, message_type, subject, body, payload, created_at')
+    .eq('target_session', sessionId)
+    .is('read_at', null)
+    .order('created_at', { ascending: true })
+    .limit(100);
+  if (error) { console.error('ERROR: inbox query failed:', error.message); process.exit(1); }
+
+  const rows = (allRows || []).filter((r) => isReplyRow(r) || isDirectiveRow(r));
+  if (rows.length === 0) { console.log('(no unread directed inbox rows — replies or directives)'); return; }
+
+  console.log(`${rows.length} inbox row${rows.length === 1 ? '' : 's'} (full lane — replies + directives):`);
+  const ids = [];
+  for (const r of rows) {
+    const lane = isReplyRow(r) ? 'reply' : 'directive';
+    const kind = (r.payload && r.payload.kind) || r.message_type || '?';
+    const text = (r.payload && r.payload.body) || r.body || r.subject || '(empty)';
+    const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
+    console.log(`  • [${lane}/${kind}] (${ageMin}m) ${text}`);
+    ids.push(r.id);
+  }
+  // Consume: stamp read_at = DELIVERED on surfaced rows still NULL (idempotent). Deliberately do NOT
+  // set acknowledged_at / payload.actioned_at — directives stay in the read-but-unacked tier
+  // (read-adam-directives.cjs) until genuinely actioned (two-stage ACK).
+  await supabase
+    .from('session_coordination')
+    .update({ read_at: new Date().toISOString() })
+    .in('id', ids)
+    .is('read_at', null);
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
-  if (mode !== 'send' && mode !== 'request' && mode !== 'replies') {
-    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>]  |  request "<question>" [--timeout <ms>]  |  replies');
+  if (mode !== 'send' && mode !== 'request' && mode !== 'replies' && mode !== 'inbox') {
+    console.error('Usage: node scripts/adam-advisory.cjs send "<body>" [--reply-to <correlation_or_row_id>]  |  request "<question>" [--timeout <ms>]  |  replies  |  inbox');
     process.exit(2);
   }
 
@@ -222,9 +287,19 @@ async function main() {
   try { supabase = createSupabaseServiceClient(); }
   catch (e) { console.error('ERROR: supabase client unavailable:', e.message); process.exit(1); }
 
-  // FR-4 — durable reply reader.
+  // FR-4 — durable reply reader (reply lane only; kept for back-compat).
   if (mode === 'replies') {
     await drainReplies(supabase, sessionId);
+    return;
+  }
+
+  // SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001 — unified FULL-LANE drain (replies + coordinator directives).
+  // Resolve the CANONICAL Adam session (CLAUDE_SESSION_ID only if it IS the Adam session, else the
+  // most-recent role='adam' session) so the unattended cron tick can't drain the wrong/empty session
+  // if the env var didn't propagate; falls back to the env sessionId.
+  if (mode === 'inbox') {
+    const adamId = (await resolveAdamSessionId(supabase)) || sessionId;
+    await drainInbox(supabase, adamId);
     return;
   }
 
@@ -299,7 +374,7 @@ async function main() {
   if (mode === 'request') {
     console.log('  — awaiting coordinator reply…');
     const result = await awaitCoordinatorReply(supabase, { sessionId, correlationId, timeoutMs });
-    if (result.timedOut) { console.log('⌛ No reply within timeout (reply may arrive later — drain it with `node scripts/adam-advisory.cjs replies`).'); process.exit(0); }
+    if (result.timedOut) { console.log('⌛ No reply within timeout (reply may arrive later — drain it with `node scripts/adam-advisory.cjs inbox`).'); process.exit(0); }
     // Consume: stamp read_at so neither the durable `replies` reader nor the inbox re-shows it.
     try { await supabase.from('session_coordination').update({ read_at: new Date().toISOString(), acknowledged_at: new Date().toISOString() }).eq('id', result.reply.id); } catch {}
     console.log('✓ Reply:', (result.reply.payload && result.reply.payload.body) || result.reply.body || '(empty)');
@@ -338,7 +413,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainAdamOutbound };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, drainAdamOutbound };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

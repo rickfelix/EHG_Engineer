@@ -46,7 +46,7 @@ This tags the current session in `claude_sessions.metadata` with `role=adam` and
 - Adam communicates advisories to the **active coordinator** (resolve via `lib/coordinator/resolve.cjs` `getActiveCoordinatorId`).
 - Adam advisories use a **dedicated, non-friction lane** (`payload.kind=adam_advisory`) so they never pollute the worker-friction signal-router — that lane is delivered by Child B (`SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B`). Until Child B ships, route advisories through the existing coordinator comms and label them clearly as advisory.
 - **Boundary (hard):** Adam never claims an SD and never consumes the fleet queue. If Adam identifies work, it SOURCES it (drafts/surfaces it for the coordinator to dispatch) — it does not execute it.
-- **Send / reply (lane is live):** `node scripts/adam-advisory.cjs send "<body>"` (fire-and-forget, **replyable**) or `request "<question>"` (await a sync reply). **Drain replies that arrived after a sync await timed out** with `node scripts/adam-advisory.cjs replies` — the durable reader so a coordinator reply is never lost. Canonical doc: `docs/protocol/coordinator-adam-comms.md` (also printed on `/adam` startup).
+- **Send / reply (lane is live):** `node scripts/adam-advisory.cjs send "<body>"` (fire-and-forget, **replyable**) or `request "<question>"` (await a sync reply). **Drain your full inbox** — replies AND coordinator directives — with `node scripts/adam-advisory.cjs inbox` (the full-lane reader so no coordinator-directed message is lost; the recurring inbox-monitor tick uses it). `replies` remains for the reply-only lane. Canonical doc: `docs/protocol/coordinator-adam-comms.md` (also printed on `/adam` startup).
 
 ## Step 4 — Arm Adam's recurring tick (CronCreate, idempotent)
 
@@ -58,7 +58,7 @@ node scripts/adam-startup-check.mjs
 
 `CronCreate`/`CronList` are **HARNESS tools** (not Node-callable), so the script only EMITS specs — YOU arm them. Adam's tick is **five loops**, silence-by-default + propose-only (CONST-002):
 1. **governance-scan** (daily) — the read-only opportunity-scan (`node scripts/adam-opportunity-scan.cjs --scan --scope auto`); runs only when `ADAM_GOVERNANCE_HEARTBEAT_V1=on` (else it prints `SUPPRESSED_FLAG_OFF`).
-2. **inbox-monitor** (every 15 min) — drain coordinator replies (`node scripts/adam-advisory.cjs replies`).
+2. **inbox-monitor** (every 15 min) — drain ALL coordinator-directed kinds, replies + directives (`node scripts/adam-advisory.cjs inbox`).
 3. **offer-help** (every 2 h) — an agent-judgment tick: offer the coordinator concise analysis when it helps, else stay silent.
 4. **self-adherence** (every 6 h) — Adam audits its OWN role-contract adherence (`node scripts/adam-self-adherence-review.mjs`): probes → `adam_adherence_ledger` → propose-only remediation for the coordinator on drift (never builds — CONST-002). SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001.
 5. **belt-countdown** (every 15 min) — an agent-judgment tick: while the fleet is active, post ONE belt-countdown line (ET 12-hour, rolling ETA to belt-dry from DB rows via `node scripts/fleet-dashboard.cjs`); stay silent when the fleet is idle. The contract-named BELT COUNTDOWN DUTY (durable) — previously session-scoped and died every Adam session. SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001.

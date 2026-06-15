@@ -18,7 +18,11 @@
 require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
-const DIRECTIVE_SENDERS = ['coordinator', 'orchestrator'];
+// SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001: include 'chairman'. The full-lane inbox drain stamps
+// read_at=DELIVERED on directive-kind rows of ANY sender; this acked-NULL safety net must cover
+// chairman too, or a chairman directive is DELIVERED-then-dropped (harness-bug 43c2dee2: 5 chairman
+// messages auto-acked unseen — the exact blindspot this SD lineage closes). Sender-agnostic by intent.
+const DIRECTIVE_SENDERS = ['coordinator', 'orchestrator', 'chairman'];
 
 // Resolve the Adam session id: prefer CLAUDE_SESSION_ID when it is the Adam session, else fall
 // back to the most-recent active session tagged metadata.role='adam'. Returns null if none.
