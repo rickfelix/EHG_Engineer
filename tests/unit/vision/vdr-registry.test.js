@@ -78,10 +78,11 @@ describe('assertRegistryCoherence (FR-1 fail-loud denominator↔probe lockstep)'
 
 describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', () => {
   it('computes overall % + per-layer with HONEST banding, EXCLUDING unknowns from the denominator', async () => {
-    // 6 DB-backed probeable; 5 code_grep → unknown (no grep seam). With the post-review semantics:
+    // 8 DB-backed probeable; 5 code_grep → unknown (no grep seam). With the post-review semantics:
     //   built(1):  Take-a-dollar (KR04 achieved)
     //   partial(.5): self-operating (agent_messages=2 < min20), survivability (KR02 45/90)
-    //   unbuilt(0): distance-to-quit (KR05 0/1), venture-learning (pattern_occurrences=0), north-star (KR05 0/1)
+    //   unbuilt(0): distance-to-quit (KR05 0/1), venture-learning (pattern_occurrences=0), north-star (KR05 0/1),
+    //              Capability Registry (sd_capabilities=0 < min50), Expertise on-demand (specialist_registry=0 < min10)
     const io = {
       supabase: stubSupabase({
         countByTable: { agent_messages: 2, pattern_occurrences: 0, key_results: 1 },
@@ -97,10 +98,11 @@ describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', ()
     expect(g.coherence.ok).toBe(true);
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
     expect(g.unknown_count).toBe(5);
-    expect(g.denominator).toBe(6);
-    // (1 + 0.5 + 0.5 + 0 + 0 + 0) / 6 = 2.0/6 = 33%
-    expect(g.overall_pct).toBe(33);
-    expect(g.per_layer).toMatchObject({ venture: 75, infrastructure: 50, application: 0, process: 0 });
+    expect(g.denominator).toBe(8); // +2: the capability-layer db_count probes (unbuilt at count 0)
+    // (1 + 0.5 + 0.5 + 0 + 0 + 0 + 0 + 0) / 8 = 2.0/8 = 25%
+    expect(g.overall_pct).toBe(25);
+    // infrastructure scored = survivability(0.5) + Capability Registry(0) + Expertise on-demand(0) = 0.5/3 = 17%
+    expect(g.per_layer).toMatchObject({ venture: 75, infrastructure: 17, application: 0, process: 0 });
     for (const c of g.components) expect(STATUS_SCORE).toHaveProperty(c.status);
   });
 
