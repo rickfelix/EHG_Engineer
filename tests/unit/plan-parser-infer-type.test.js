@@ -15,18 +15,23 @@ import { describe, it, expect } from 'vitest';
 import { inferSDType } from '../../scripts/modules/plan-parser.js';
 
 describe('inferSDType — FR-1 infra-vs-fix precedence', () => {
-  it('infers infrastructure when the literal word "infrastructure" appears even alongside "fix" (the regression)', () => {
-    const plan = 'Adam SD-creation process hardening infrastructure: honor the explicit type and fix the keying so no manual surgery is needed.';
-    expect(inferSDType(plan)).toBe('infrastructure');
-  });
-
-  it('infers infrastructure when an SD-LEO-INFRA-* key token appears alongside "fix"', () => {
+  it('infers infrastructure when an SD-LEO-INFRA-* key token appears alongside "fix" (the regression — high-confidence token wins)', () => {
+    // The original mis-typed plan was child F of SD-LEO-INFRA-ADAM-AUTONOMY-HARDENING-001;
+    // the canonical key token is the high-confidence signal that beats the incidental "fix".
     const plan = 'Child F of SD-LEO-INFRA-ADAM-AUTONOMY-HARDENING-001. Fix the canonical create path so child linkage is wired automatically.';
     expect(inferSDType(plan)).toBe('infrastructure');
   });
 
-  it('infers the actual ADAM-CREATION-PROCESS plan title as infrastructure', () => {
+  it('infers the actual ADAM-CREATION-PROCESS plan title as infrastructure (word check, no bug keyword)', () => {
     expect(inferSDType('# Adam SD-creation process hardening infrastructure: governed canonical create path with correct type and key')).toBe('infrastructure');
+  });
+
+  // ── Over-promotion guard (adversarial review HIGH): the BARE word "infrastructure" is
+  //    NOT high-confidence — a genuine bugfix that merely names an infra component must
+  //    stay 'bugfix' (the bug/fix check wins over the lower-priority bare-word infra check). ──
+  it('does NOT over-promote a bugfix that merely mentions the word "infrastructure" (no token)', () => {
+    expect(inferSDType('Fix the infrastructure deployment bug that causes errors in CI')).toBe('bugfix');
+    expect(inferSDType('Patch the infrastructure worker that is broken and failing on startup')).toBe('bugfix');
   });
 
   it('does NOT promote a genuine bugfix to infrastructure (no infra declaration)', () => {

@@ -160,14 +160,15 @@ export function inferSDType(content) {
   }
 
   // SD-LEO-INFRA-ADAM-CREATION-PROCESS-001 (FR-1): a HIGH-CONFIDENCE infrastructure
-  // declaration wins over an INCIDENTAL "fix" keyword. Previously an infrastructure plan
-  // that merely mentioned "fix" was mis-typed 'bugfix' because the bug/fix check below
-  // fires before the weaker infra signals (script/tooling/automation) further down. Only
-  // an EXPLICIT declaration qualifies here — the literal word "infrastructure" or an
-  // SD-LEO-INFRA-* key token — so a genuine bugfix that merely says "fix the deploy
-  // script" still classifies 'bugfix' (no false infra promotion). Placed AFTER the
-  // security check so security still maps to bugfix.
-  if (/\binfrastructure\b/.test(lowerContent) || /\bsd-leo-infra-/.test(lowerContent)) {
+  // declaration wins over an INCIDENTAL "fix" keyword. The ONLY high-confidence signal is
+  // a canonical SD-LEO-INFRA-* key token — that is an unambiguous infrastructure-intent
+  // marker (e.g. an autonomy child naming its parent), so it classifies 'infrastructure'
+  // before the bug/fix check below even when the plan also says "fix". The bare word
+  // "infrastructure" is deliberately NOT here — it is not high-confidence ("Fix the
+  // infrastructure bug" is a genuine bugfix) — it stays in the lower-priority infra check
+  // AFTER bug/fix (adversarial review HIGH: bare-word early check over-promoted bugfixes).
+  // Placed AFTER the security check so security still maps to bugfix.
+  if (/\bsd-leo-infra-/.test(lowerContent)) {
     return 'infrastructure';
   }
 
