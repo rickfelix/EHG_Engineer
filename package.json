@@ -159,6 +159,7 @@
     "eva:health": "node scripts/eva-health-check.cjs",
     "eva:run": "node scripts/eva-run.js",
     "eva:stage": "node scripts/eva/run-stage.js",
+    "eva:retire-pilot-ventures": "node scripts/eva/retire-pilot-ventures.mjs",
     "eva:heal": "node scripts/eva/vision-heal.js",
     "eva:rounds": "node scripts/eva/run-rounds.js",
     "eva:decisions": "node scripts/eva-decisions.js",
