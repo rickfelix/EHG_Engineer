@@ -31,6 +31,8 @@ import {
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
   extractDepKey, resolveWorktreeCount, computeDispatchBelt,
 } from '../lib/coordinator/charter-audit-detectors.mjs';
+// SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: DUTY-7 silent-stall detector (drafts stranded with null vision_score).
+import { findStalledDrafts } from '../lib/coordinator/draft-stall-detector.mjs';
 
 const require = createRequire(import.meta.url);
 const { isWithinArmedSilenceWindow } = require('../lib/fleet/silence-cap.cjs');
@@ -42,6 +44,10 @@ try { ({ resolveCcPidFromTerminalId } = require('./stale-session-sweep.cjs')); }
 
 const STALE_MS = Number(process.env.COORD_STALE_THRESHOLD_MS) || 5 * 60 * 1000;
 const DISPATCH_RANK_TTL_MS = 60 * 60 * 1000; // mirrors worker-checkin.cjs DISPATCH_RANK_TTL_MS
+// SILENT-STALL-PREVENTION-001 — honor an explicit 0 (Number()||7 would silently swallow it); fall back to 7
+// only on NaN/empty/negative.
+const _draftStallDays = Number(process.env.DRAFT_STALL_DAYS_THRESHOLD);
+const DRAFT_STALL_MS = (Number.isFinite(_draftStallDays) && _draftStallDays >= 0 ? _draftStallDays : 7) * 86400000;
 const TERMINAL = new Set(['completed', 'cancelled', 'archived', 'deferred']);
 const depKeysOf = (s) => (Array.isArray(s.dependencies) ? s.dependencies.map(extractDepKey).filter(Boolean) : []);
 
@@ -52,7 +58,7 @@ async function main() {
 
   // ── FOUNDATIONAL queries — FAIL LOUD (never silent-empty / false all-clean) ──
   const { data: sdRows, error: sdErr } = await db.from('strategic_directives_v2')
-    .select('sd_key,status,current_phase,claiming_session_id,updated_at,dependencies,parent_sd_id,metadata,sd_type')
+    .select('sd_key,status,current_phase,claiming_session_id,updated_at,created_at,vision_score,dependencies,parent_sd_id,metadata,sd_type')
     .not('status', 'in', '(' + [...TERMINAL].join(',') + ')');
   const sdMarker = foundationalQueryError(sdErr, 'strategic_directives_v2');
   if (sdMarker) { console.error(sdMarker); process.exit(1); }
@@ -100,6 +106,20 @@ async function main() {
   // human-action SDs) — so the audit never recommends dispatching an unclaimable PARENT to an idle worker.
   const { unclaimed, claimable } = computeDispatchBelt({ sds, statusByKey, terminalSet: TERMINAL, classifyIneligibility: classifyDispatchIneligibility });
 
+  // SILENT-STALL-PREVENTION-001 (DSD-1): the AUTHORITATIVE scored-signal is an eva_vision_scores row (the same
+  // fallback the hard vision-score gate uses), NOT the strategic_directives_v2.vision_score column (which is
+  // essentially never populated on a successful conception-time score). Build the set of candidate-draft sd_keys
+  // that DO have an eva_vision_scores row so a successfully-scored draft is NOT mislabelled a silent stall. Pure
+  // fail-OPEN: on any error the set stays empty → the detector degrades to the column-only check (current safe
+  // behavior). Bounded: queried only for the unscored-draft candidate keys, not the whole table.
+  const candidateDraftKeys = sds.filter((s) => s.status === 'draft' && (s.vision_score === null || s.vision_score === undefined)).map((s) => s.sd_key);
+  let scoredDraftKeys = new Set();
+  if (candidateDraftKeys.length) {
+    const { data: evaRows, error: evaErr } = await db.from('eva_vision_scores').select('sd_id').in('sd_id', candidateDraftKeys);
+    if (evaErr) console.error('[COORD-CHARTER-AUDIT] WARN: eva_vision_scores query failed (fail-open, column-only): ' + evaErr.message);
+    else scoredDraftKeys = new Set((evaRows || []).map((r) => r.sd_id));
+  }
+
   // QUIET-TICK coordinator_review history (latest 2)
   const { data: reviews, error: revErr } = await db.from('feedback')
     .select('metadata,created_at').eq('category', 'coordinator_review').order('created_at', { ascending: false }).limit(2);
@@ -112,6 +132,10 @@ async function main() {
     dep: detectDependencyHealth({ sds, statusByKey, terminalSet: TERMINAL, nowMs }),
     rank: detectBacklogRankStaleness({ claimableSds: claimable, nowMs, ttlMs: DISPATCH_RANK_TTL_MS }),
     quiet: detectQuietTickUnverified({ coordinatorReviews: reviews || [] }),
+    // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: drafts stranded with a null vision_score (silent stall).
+    // Advisory remediation count only — summarizeViolations never drives a process.exit (foundational-query
+    // failures are the ONLY hard exits), so a stalled draft surfaces a remediation action, never a hard fail.
+    draft: findStalledDrafts(sds, nowMs, { thresholdMs: DRAFT_STALL_MS, scoredKeys: scoredDraftKeys }),
   };
 
   const flag = (r) => (r.remediation ? '  ⚠ ' + r.remediation : '');
@@ -122,6 +146,7 @@ async function main() {
   for (const a of D.dep.anomalies.slice(0, 5)) console.log('      ANOMALY ' + a.sd + ' dep(s) not found: ' + a.unknownDeps.join(','));
   console.log('  DUTY-6 BACKLOG-RANK  : ' + D.rank.detail + flag(D.rank));
   console.log('  QUIET-TICK COMMITTED : ' + D.quiet.detail + flag(D.quiet));
+  console.log('  DUTY-7 DRAFT-STALL   : ' + D.draft.detail + flag(D.draft)); // SILENT-STALL-PREVENTION-001
 
   // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: ADVISORY freshness dimension — fail-open and deliberately
   // kept OUT of `D`/summarizeViolations, so a stale checkout surfaces a warning but never trips the

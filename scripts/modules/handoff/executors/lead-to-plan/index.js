@@ -84,6 +84,16 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // PAT-HF-LEADTOPLAN-b891d12d: Show translation fidelity gaps BEFORE gates run.
     // Surfaces known gaps from prior failed runs so they can be fixed without a full retry cycle.
     await displayTranslationFidelityPreview(sd, this.supabase);
+
+    // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: opportunistic, FAIL-OPEN, NON-BLOCKING vision-score populate.
+    // If the conception-time async score silently failed, this fires a re-score WITHOUT awaiting it — purely to
+    // raise the pass-rate of the hard createVisionScoreGate below (which is unchanged and remains the safety net).
+    // Import-guarded + fire-and-forget so it can NEVER block this handoff; setup() still returns null regardless.
+    try {
+      const { triggerAsyncVisionScore } = await import('./gates/vision-score-async-trigger.js');
+      triggerAsyncVisionScore(sd, this.supabase);
+    } catch { /* non-blocking: a silent-stall re-score must never affect the LEAD handoff */ }
+
     return null;
   }
 
