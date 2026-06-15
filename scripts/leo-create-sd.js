@@ -756,6 +756,29 @@ async function createChild(parentKey, index = null, overrides = {}) {
     console.warn(`[createChild] ⚠️  Parent claim check failed (fail-open): ${e.message}`);
   }
 
+  // SD-LEO-INFRA-ADAM-CREATION-PROCESS-001 (FR-3): one-step child linkage. createSD set
+  // parent_sd_id, but NOT relationship_type='child' (children then failed
+  // validate-child-sd-completeness) and NOT the parent-registry registration (previously
+  // manual DB surgery during sourcing). linkChild does both idempotently in one call.
+  try {
+    const { linkChild } = await import('../lib/sd/child-linkage.js');
+    const linkRes = await linkChild(supabase, parent, sdKey, {
+      role: overrides.role ?? overrides.title ?? null,
+      childUuid: sd?.uuid_id ?? null,
+      registeredBy: 'leo-create-sd',
+      today: new Date().toISOString().slice(0, 10),
+      registryOptional: true,
+    });
+    console.log(
+      '   🔗 Child linkage: relationship_type=\'child\'' +
+      (linkRes.registered
+        ? `; registered in parent ${parent.sd_key} (${linkRes.registryKind})`
+        : (linkRes.alreadyRegistered ? '; already registered in parent' : ''))
+    );
+  } catch (e) {
+    console.warn(`[createChild] ⚠️  Child-linkage step failed (non-fatal): ${e.message}`);
+  }
+
   return sd;
 }
 
@@ -1753,6 +1776,12 @@ async function createSD(options) {
   const sdData = {
     id: randomUUID(),
     sd_key: sdKey,
+    // SD-LEO-INFRA-ADAM-CREATION-PROCESS-001 (FR-2): set the human-readable key at
+    // creation so sd_code_user_facing is the SD key, NOT the UUID (the prior default
+    // left it equal to id=randomUUID(), forcing a governance-gated re-key). Both id and
+    // sd_code_user_facing are non-null at INSERT, so the sync trigger
+    // (sync_sd_code_user_facing, BEFORE INSERT) no-ops — id is NOT mutated.
+    sd_code_user_facing: sdKey,
     title,
     description,
     scope: scope || description,  // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-3): prefer atomic-INSERT scope, fall back to description.
@@ -1897,7 +1926,7 @@ async function createSD(options) {
   const { data, error } = await supabase
     .from('strategic_directives_v2')
     .insert(sdData)
-    .select('id, sd_key, title, sd_type, status, priority, current_phase')
+    .select('id, uuid_id, sd_key, sd_code_user_facing, title, sd_type, status, priority, current_phase')
     .single();
 
   if (error) {
