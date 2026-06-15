@@ -222,6 +222,40 @@ function isDirectiveRow(r) {
 }
 
 /**
+ * SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001 — the Adam inbox must drain ALL classes DIRECTED to the Adam
+ * session, not just the reply lane + the shared DIRECTIVE_KINDS (which FULL-LANE already covered).
+ * Live data showed several genuinely Adam-directed classes still undrained, so this Adam-SCOPED
+ * allowlist = the imported DIRECTIVE_KINDS (workers consume that; we do NOT mutate it) PLUS the
+ * chairman/coordinator-directed classes that target Adam directly. Classify the KIND via the allowlist
+ * (QF-20260610-545), never a broad payload->>kind server filter.
+ *
+ * DELIBERATELY EXCLUDED (owned by dedicated handlers — the Adam inbox must never mark them read first):
+ *   canary_request   -> the canary responder
+ *   comms_check      -> /checkin roll-call
+ *   ack / coordinator_ack -> terminal acknowledgements (nothing to action)
+ *   (untyped: no payload.kind) -> roll_call + other untyped rows (NOT directed action items)
+ */
+const ADAM_INBOX_KINDS = Object.freeze([
+  ...DIRECTIVE_KINDS,
+  'chairman_heads_up',
+  'chairman_handoff',
+  'coordinator_advisory',
+  'coordinator_adam_feedback',
+  'assist_request',
+  'reconcile_consult',
+]);
+
+/**
+ * Is this row a directed Adam-inbox message? True when its payload.kind is in the Adam-scoped
+ * ADAM_INBOX_KINDS allowlist (a SUPERSET of DIRECTIVE_KINDS). Untyped rows (no payload.kind) and any
+ * excluded/responder-owned kind return false (never drained by the Adam inbox).
+ */
+function isAdamInboxRow(r) {
+  const k = r && r.payload && r.payload.kind;
+  return k != null && ADAM_INBOX_KINDS.includes(k);
+}
+
+/**
  * SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001 — unified FULL-LANE inbox drain (the corrective for the
  * reply-only blindspot that left SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001's full-lane criterion
  * unmet). `drainReplies` surfaces ONLY the reply lane, so coordinator DIRECTIVE-kind rows (any
@@ -249,13 +283,15 @@ async function drainInbox(supabase, sessionId) {
     .limit(100);
   if (error) { console.error('ERROR: inbox query failed:', error.message); process.exit(1); }
 
-  const rows = (allRows || []).filter((r) => isReplyRow(r) || isDirectiveRow(r));
-  if (rows.length === 0) { console.log('(no unread directed inbox rows — replies or directives)'); return; }
+  // SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001: widen the drain to ALL directed Adam classes
+  // (isAdamInboxRow ⊇ DIRECTIVE_KINDS) — responder-owned + untyped rows stay untouched.
+  const rows = (allRows || []).filter((r) => isReplyRow(r) || isAdamInboxRow(r));
+  if (rows.length === 0) { console.log('(no unread directed inbox rows — replies or directed classes)'); return; }
 
-  console.log(`${rows.length} inbox row${rows.length === 1 ? '' : 's'} (full lane — replies + directives):`);
+  console.log(`${rows.length} inbox row${rows.length === 1 ? '' : 's'} (full lane — replies + all directed classes):`);
   const ids = [];
   for (const r of rows) {
-    const lane = isReplyRow(r) ? 'reply' : 'directive';
+    const lane = isReplyRow(r) ? 'reply' : (isDirectiveRow(r) ? 'directive' : 'adam-directed');
     const kind = (r.payload && r.payload.kind) || r.message_type || '?';
     const text = (r.payload && r.payload.body) || r.body || r.subject || '(empty)';
     const ageMin = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60_000);
@@ -413,7 +449,7 @@ async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {})
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, drainAdamOutbound };
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, isAdamInboxRow, ADAM_INBOX_KINDS, drainAdamOutbound };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });
