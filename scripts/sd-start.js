@@ -67,6 +67,9 @@ import { evaluateDependencyGate, formatDependencyRefusal } from '../lib/sd-start
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-3): claim-time fitness fail-fast (repo-match + premise +
 // preconditions). CJS module imported as default (Node CJS interop) for its named export.
 import sdFit from '../lib/fleet/sd-executable-here.cjs';
+// SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-5): propose-only partial-block triage surfaced on an unfit
+// fail-fast (a missing-precondition block proposes a code/run split — never created here).
+import unfitTriage from '../lib/fleet/unfit-triage.cjs';
 
 dotenv.config();
 
@@ -1394,7 +1397,18 @@ async function main() {
     if (fitVerdict && fitVerdict.fit === false) {
       console.error(`\n${colors.red}   ❌ UNFIT(${fitVerdict.blockClass}): ${(fitVerdict.reasons || []).join('; ')}${colors.reset}`);
       console.error(`${colors.dim}   Refusing to hold this claim from the current checkout; releasing ${effectiveId}.${colors.reset}`);
-      console.error(`${colors.dim}   Route it: node scripts/worker-signal.cjs unfit "${fitVerdict.blockClass}: ${sd.sd_key}"${colors.reset}`);
+      console.error(`${colors.dim}   Route it: node scripts/worker-signal.cjs unfit "${fitVerdict.blockClass}: ${sd.sd_key}" --block-class ${fitVerdict.blockClass}${colors.reset}`);
+      // FR-5: on a PARTIAL block (the code is buildable here but the run is gated), surface a
+      // propose-only code/run decomposition for the coordinator. Nothing is created here.
+      try {
+        const proposal = unfitTriage.proposeUnfitDecomposition({ sd_key: sd.sd_key, title: sd.title }, fitVerdict);
+        if (proposal && proposal.propose) {
+          console.error(`${colors.dim}   Partial block — proposed split (propose-only, NOT created):${colors.reset}`);
+          for (const c of proposal.children) {
+            console.error(`${colors.dim}     - [${c.role}${c.blocked ? ' BLOCKED' : ''}] ${c.title}${colors.reset}`);
+          }
+        }
+      } catch { /* triage is advisory — never block the release on it */ }
       await supabase.rpc('release_sd', {
         p_session_id: session.session_id,
         p_reason: 'manual'
