@@ -23,6 +23,9 @@ import { renderDecisionLines } from '../lib/chairman/decision-layman.mjs';
 // SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
 // static .adam-vision-build.json number.
 import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-registry.js';
+// SD-LEO-INFRA-VDR-GREP-SEAM-CROSSREPO-001: the shared code-grep seam so the 5 code_grep probes resolve
+// (the chairman-visible gauge measures all 11 capabilities, not just the 6 DB/KR-backed ones).
+import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
 // SD-LEO-INFRA-WORKER-COUNT-PULSE-RESILIENCE-001: honest sparse-pulse worker-count source.
 import { resolveWorkerCount, SPARSE_THRESHOLD } from '../lib/fleet/worker-count-source.mjs';
 
@@ -105,8 +108,10 @@ try {
   // (visionSource:true → the re-anchorable ladder pointer), so the gauge re-points automatically when
   // the chairman promotes the next rung — no code edit, no dependency on a missing EHG-VISION.md file.
   // Still fail-soft: an unavailable ladder/DB degrades to "(gauge unavailable)", never a false 0%.
-  // no grep seam ⇒ code_grep probes report 'unknown' (excluded from the denominator)
-  const gauge = await computeBuildGauge({ io: { supabase: db }, visionSource: true });
+  // SD-LEO-INFRA-VDR-GREP-SEAM-CROSSREPO-001: inject the shared code-grep seam so the 5 code_grep probes
+  // resolve (present⇒'partial', absent checkout⇒'unknown'/excluded — never a guessed/inflated number).
+  const grep = makeDefaultGrepSeam();
+  const gauge = await computeBuildGauge({ io: { supabase: db, grep }, visionSource: true });
   const fmt = formatGaugeForSummary(gauge, { em: EM }); // single-source display mapping (shared with the Chairman-UI tile)
   visPct = fmt.pct;
   layerLine = fmt.layerLine;
