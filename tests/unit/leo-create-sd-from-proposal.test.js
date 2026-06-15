@@ -313,4 +313,13 @@ describe('createFromProposalB64 / createFromProposalStdin (file-free routes)', (
     await expect(createFromProposalStdin({ deps })).rejects.toThrow('process.exit(1)');
     expect(deps.createSD).not.toHaveBeenCalled();
   });
+
+  // Adversarial review LOW-2: a stdin read failure (e.g. the real reader rejecting on an
+  // interactive TTY with no piped input) must fail loud, never hang or proceed.
+  it('--proposal-stdin when the reader rejects → [INVALID_PROPOSAL] cannot read stdin + exit 1', async () => {
+    const deps = { readStdin: async () => { throw new Error('stdin is a TTY (no piped proposal JSON)'); }, createSD: vi.fn() };
+    await expect(createFromProposalStdin({ deps })).rejects.toThrow('process.exit(1)');
+    expect(deps.createSD).not.toHaveBeenCalled();
+    expect(errorSpy.mock.calls.map(c => c[0]).join('\n')).toContain('cannot read stdin');
+  });
 });

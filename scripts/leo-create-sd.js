@@ -2252,6 +2252,12 @@ export async function createFromProposalB64(b64, options = {}) {
  */
 function readStdinUtf8() {
   return new Promise((resolve, reject) => {
+    // No piped input (interactive TTY): 'end' would never fire and the process would
+    // hang until Ctrl-C. Fail loud instead — the caller surfaces [INVALID_PROPOSAL].
+    if (process.stdin.isTTY) {
+      reject(new Error('stdin is a TTY (no piped proposal JSON)'));
+      return;
+    }
     let data = '';
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (chunk) => { data += chunk; });
@@ -2436,7 +2442,11 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // The base64 string is the first non-flag positional (base64 never starts with '-').
       const dryRun = args.includes('--dry-run');
       const b64KnownFlags = new Set(['--proposal-b64', '--dry-run']);
-      const b64Arg = args.find((a, i) => i > 0 && !a.startsWith('-') && !b64KnownFlags.has(a)) || args[1];
+      // No `|| args[1]` fallback: if no non-flag positional is present (e.g.
+      // `--proposal-b64 --dry-run`), b64Arg stays undefined so createFromProposalB64's
+      // guard reports the clear "requires a base64-encoded proposal JSON string" error
+      // instead of base64-decoding the literal '--dry-run' flag into junk.
+      const b64Arg = args.find((a, i) => i > 0 && !a.startsWith('-') && !b64KnownFlags.has(a));
       await createFromProposalB64(b64Arg, { dryRun });
     } else if (args[0] === '--proposal-stdin') {
       // SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001: file-free DB-direct sourcing via a pipe.
