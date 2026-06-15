@@ -78,8 +78,8 @@ currently projection-fed until a real dollar lands (see the KR-04 dependency).
 ## How to verify
 
 ```bash
-npm run okr:wire-o-2026-07 -- --apply      # idempotent; inserts the 6 KR->SD rows (or no-op)
-# then query sd_key_result_alignment for the 5 KR uuids — expect 6 rows (KR-04 has 2)
+npm run okr:wire-o-2026-07 -- --apply      # idempotent; inserts the 8 KR->SD rows (or no-op)
+# then query sd_key_result_alignment for the 5 KR uuids — expect 8 rows (KR-04 has 2, KR-05 has 3)
 ```
 
 ## Scope note
