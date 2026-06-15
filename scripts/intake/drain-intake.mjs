@@ -142,14 +142,17 @@ async function main() {
   console.log(`   pools: eva_consultant_rec=${pool1.length}, sd_proposal=${pool2.length}, prd_payload_file=${pool3.length} | total=${items.length}`);
   console.log(`   existing SDs (dedup corpus)=${existingSds.length}, capabilities=${capabilities.length}`);
 
-  const tally = { dismissed: 0, merged_duplicate: 0, deferred: 0, converted: 0 };
+  const tally = { declined: 0, duplicate: 0, already_covered: 0, deferred_to_rung: 0, built: 0, converted: 0, undispositioned: 0 };
   const byVerdict = {};
   const promoted = [];
   let applied = 0, skipped = 0;
 
   for (const item of items) {
     const verdict = classify(item, { existingSds, capabilities, existingSdKeys });
-    const d = verdict.disposition || 'deferred';
+    // A null/falsy disposition is an AMBIGUOUS item needing human eyes — it stays
+    // UN-dispositioned (registered, in backlog). Do NOT fall back to the RETIRED
+    // parking value 'deferred'; bucket it honestly as 'undispositioned'.
+    const d = verdict.disposition || 'undispositioned';
     tally[d] = (tally[d] || 0) + 1;
     byVerdict[verdict.triage_verdict] = (byVerdict[verdict.triage_verdict] || 0) + 1;
 
@@ -190,14 +193,19 @@ async function main() {
           existingSdKeys.add(linked_sd_key);
         }
       }
-      await setDisposition(row.id, {
-        disposition,
-        triage_verdict: verdict.triage_verdict,
-        dedup_match_sd_key: verdict.dedup_match_sd_key,
-        dedup_score: verdict.dedup_score,
-        dismiss_reason: verdict.dismiss_reason,
-        linked_sd_key, promoted_proposal_path,
-      }, { client: sb });
+      // Only write a disposition when triage produced a REAL value. A null/falsy
+      // disposition means the item is ambiguous and needs human eyes — leave it
+      // UN-dispositioned (registered, still in the backlog) rather than parking it.
+      if (disposition) {
+        await setDisposition(row.id, {
+          disposition,
+          triage_verdict: verdict.triage_verdict,
+          dedup_match_sd_key: verdict.dedup_match_sd_key,
+          dedup_score: verdict.dedup_score,
+          dismiss_reason: verdict.dismiss_reason,
+          linked_sd_key, promoted_proposal_path,
+        }, { client: sb });
+      }
 
       // Status-update the SOURCE row (never delete). Defensive: non-fatal on CHECK conflicts.
       if (item.source_pool === 'eva_consultant_rec') {
@@ -213,10 +221,13 @@ async function main() {
   }
 
   console.log('\n--- disposition plan ---');
-  console.log(`   dismissed       : ${tally.dismissed || 0}`);
-  console.log(`   merged_duplicate: ${tally.merged_duplicate || 0}`);
-  console.log(`   deferred        : ${tally.deferred || 0}`);
+  console.log(`   declined        : ${tally.declined || 0}`);
+  console.log(`   duplicate       : ${tally.duplicate || 0}`);
+  console.log(`   already_covered : ${tally.already_covered || 0}`);
+  console.log(`   deferred_to_rung: ${tally.deferred_to_rung || 0}`);
+  console.log(`   built           : ${tally.built || 0}`);
   console.log(`   converted       : ${tally.converted || 0}  (promote candidates)`);
+  console.log(`   undispositioned : ${tally.undispositioned || 0}  (ambiguous — needs human eyes, stays in backlog)`);
   console.log('   by verdict      :', JSON.stringify(byVerdict));
 
   if (DRY_RUN) {
@@ -224,7 +235,7 @@ async function main() {
   } else {
     const depth = await backlogDepth({ client: sb });
     console.log(`\n   APPLIED: ${applied} dispositioned, ${skipped} already-triaged (idempotent), ${promoted.length} promoted.`);
-    console.log(`   backlog depth now (disposition IS NULL): ${depth}`);
+    console.log(`   backlog depth now (no terminal disposition — NULL + converted + legacy count): ${depth}`);
   }
 }
 
