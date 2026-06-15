@@ -113,7 +113,7 @@ const text = [
   '',
   '──────────────────────────────────────────────',
   nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'No decisions need you right now.',
-  ...(nActions ? ['   Copy everything below this line and paste it into Claude Code.', '──────────────────────────────────────────────', '', copyBlock] : ['──────────────────────────────────────────────']),
+  ...(nActions ? ['   Press and hold the text below, Select All, Copy — then paste it into Claude Code.', '──────────────────────────────────────────────', '', copyBlock] : ['──────────────────────────────────────────────']),
   '',
   `as of ${when} ET ${EM} Adam ${EM} LEO Fleet Advisor`,
 ].join('\n');
@@ -122,8 +122,8 @@ const layerHtml = layerLine ? `<div style="font-size:13px;color:#444;margin:2px 
 const noteHtml = visNote ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(visNote)}</div>` : '';
 const actionsHtml = nActions
   ? `<p style="font-size:14px;margin:0 0 2px"><b>${nActions} ${nActions === 1 ? 'action' : 'actions'} for you</b></p>` +
-    `<p style="font-size:12px;color:#888;margin:0 0 6px">Copy everything in the box below and paste it into Claude Code.</p>` +
-    `<pre style="font-size:13px;background:#f6f8fa;border:1px solid #e1e4e8;border-radius:4px;padding:12px;white-space:pre-wrap;margin:0;font-family:ui-monospace,Menlo,Consolas,monospace">${esc(copyBlock)}</pre>`
+    `<p style="font-size:12px;color:#888;margin:0 0 6px">On your phone, press and hold the box below, tap "Select All", then "Copy" — then paste it into Claude Code.</p>` +
+    `<pre style="font-size:13px;background:#f6f8fa;border:1px solid #e1e4e8;border-radius:4px;padding:12px;white-space:pre-wrap;margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;-webkit-user-select:all;user-select:all">${esc(copyBlock)}</pre>`
   : `<p style="font-size:14px;margin:0 0 6px"><b>No decisions need you right now.</b></p>`;
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
   `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
