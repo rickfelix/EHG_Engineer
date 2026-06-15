@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-06-15T14:06:25.672Z",
-  "git_commit": "2deda204",
+  "generated_at": "2026-06-15T14:14:51.161Z",
+  "git_commit": "57724514",
   "db_snapshot_hash": "9dec9bcfcb3db91b",
   "files": {
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 6928,
       "estimated_tokens": 1732,
-      "content_hash": "8d27f7415f3295cd",
+      "content_hash": "00e8b1242f80df58",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-ROLE-CONTRACT-001\\CLAUDE_ADAM_DIGEST.md"
     }
   },

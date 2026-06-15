@@ -26,6 +26,10 @@ import { parseDeclaredObjects } from '../../../lib/migration-object-parser.js';
 import { captureObjectDefinitions } from '../../../lib/migration-verification.js';
 import { hasBeenApplied } from '../../../../lib/migration-audit-reader.js';
 import { createDatabaseClient } from '../../../lib/supabase-connection.js';
+// SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001 FR-2: tier the pending set so only
+// provably-additive (TIER-1) migrations are eligible for handoff-time auto-apply;
+// TIER-2 (destructive/ambiguous) defer to the unchanged 3-factor @approved-by gate.
+import { classifyMigration } from '../../../lib/migration-tier-classifier.mjs';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -37,6 +41,72 @@ const PROJECT_ROOT = path.resolve(__dirname, '../../../../');
 // Retry configuration
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
+
+// ── SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001 (FR-2/FR-3) ────────────────────
+
+/** Tier gate is opt-in (reversible rollout). When OFF, behavior is unchanged and
+ *  the tier is only computed/logged (advisory). Flip LEO_MIGRATION_TIER_GATE=on. */
+export function tierGateEnabled() {
+  return String(process.env.LEO_MIGRATION_TIER_GATE || '').toLowerCase() === 'on';
+}
+
+/** Classify each pending migration by reading its SQL. Fail-closed: an unreadable
+ *  file => TIER-2 (default-deny). Returns the objects annotated with tier metadata. */
+export function classifyPendingTiers(pendingMigrations) {
+  return (pendingMigrations || []).map((m) => {
+    let sql = null;
+    try {
+      const abs = path.isAbsolute(m.file) ? m.file : path.join(PROJECT_ROOT, m.file);
+      sql = existsSync(abs) ? readFileSync(abs, 'utf8') : null;
+    } catch { sql = null; }
+    if (sql === null) return { ...m, tier: 2, tierReason: 'unreadable_migration_file', matched: [] };
+    const v = classifyMigration(sql);
+    return { ...m, tier: v.tier, tierReason: v.reason, matched: Array.isArray(v.matched) ? v.matched : [] };
+  });
+}
+
+/** FR-3: a coarse inverse/rollback hint from the matched allow-tokens (advisory). */
+export function inverseHint(matched) {
+  const hints = [];
+  for (const tok of matched || []) {
+    const [kind, arg] = String(tok).split(':');
+    if (kind === 'create_table_if_not_exists' && arg) hints.push(`DROP TABLE IF EXISTS ${arg};`);
+    else if (kind === 'add_column_nullable' && arg) for (const tc of arg.split(',')) hints.push(`ALTER TABLE ${tc.split('.')[0]} DROP COLUMN IF EXISTS ${tc.split('.')[1]};`);
+    else if (kind === 'enable_rls' && arg) hints.push(`ALTER TABLE ${arg} DISABLE ROW LEVEL SECURITY;`);
+    else if (kind === 'create_index') hints.push('DROP INDEX IF EXISTS <index>; -- name from the migration');
+    else if (kind === 'create_policy') hints.push('DROP POLICY <name> ON <table>;');
+    else if (kind === 'create_view') hints.push('DROP VIEW IF EXISTS <view>;');
+    else if (kind === 'create_matview') hints.push('DROP MATERIALIZED VIEW IF EXISTS <matview>;');
+    else if (kind === 'create_function') hints.push('DROP FUNCTION IF EXISTS <function>;');
+  }
+  return hints;
+}
+
+/** FR-3: fail-soft audit of the tier decision per migration. Reuses audit_log if
+ *  present; never throws (an audit failure must not block the handoff). */
+async function recordTierAudit(supabase, sd, classified) {
+  try {
+    const rows = classified.map((m) => ({
+      event_type: 'MIGRATION_TIER_CLASSIFICATION',
+      entity_type: 'migration',
+      entity_id: m.file,
+      severity: m.tier === 2 ? 'warning' : 'info',
+      metadata: {
+        sd_key: sd?.sd_key || sd?.id || null,
+        file: m.file,
+        tier: m.tier,
+        verdict: m.tierReason,
+        matched: m.matched,
+        gate_enabled: String(process.env.LEO_MIGRATION_TIER_GATE || '').toLowerCase() === 'on',
+        inverse_rollback_hint: m.tier === 1 ? inverseHint(m.matched) : null,
+      },
+    }));
+    if (!rows.length) return;
+    await supabase.from('audit_log').insert(rows);
+  } catch (e) {
+    console.log(`   [Tier Audit] ⚠️ non-fatal: ${e?.message || e}`);
+  }
+}
 
 /**
  * Check for pending database migrations before handoff
@@ -87,8 +157,58 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
       sdPending.forEach(m => console.log(`      • ${m.file} (${m.status})`));
     }
 
-    // Step 3: If we have pending migrations, USE THE DATABASE SUB-AGENT to execute them
-    if (result.hasPendingMigrations && options.autoExecute !== false) {
+    // ── SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001 (FR-2/FR-3): tier the pending set.
+    // ADVISORY ALWAYS (classify + audit + attach to result); GATING OPT-IN via
+    // LEO_MIGRATION_TIER_GATE=on. When the gate is OFF this block changes NOTHING about
+    // which files reach the auto-apply path below — it only computes/logs/audits the tier.
+    // When ON, only provably-additive TIER-1 files are auto-apply-eligible; TIER-2
+    // (destructive/ambiguous/unparseable) defer to the unchanged 3-factor @approved-by
+    // chairman gate (scripts/lib/migration-guards.js, which this SD NEVER touches).
+    // BOTH auto-apply vectors are gated: SD-declared migrations AND uncommitted manual
+    // updates (both flow into executeWithRetry -> invokeDatabaseSubAgent/executeDirect).
+    const gateOn = tierGateEnabled();
+    let tier1Pending = sdPending;            // SD-declared files eligible for auto-apply
+    let tier2Deferred = [];                  // SD-declared files held for @approved-by
+    let uncommittedEligible = uncommitted;   // uncommitted manual-update files eligible
+    let uncommittedDeferred = [];
+    if (sdPending.length > 0 || uncommitted.length > 0) {
+      const classifiedSd = classifyPendingTiers(sdPending);
+      const classifiedUnc = classifyPendingTiers(uncommitted.map(f => ({ file: f, status: 'UNCOMMITTED' })));
+      const allClassified = [...classifiedSd, ...classifiedUnc];
+      result.tierClassification = classifiedSd;
+      result.tierClassificationUncommitted = classifiedUnc;
+      result.tierGateEnabled = gateOn;
+
+      const nT1 = allClassified.filter(m => m.tier === 1).length;
+      const nT2 = allClassified.length - nT1;
+      console.log(`   🔐 TIER CLASSIFICATION (gate ${gateOn ? 'ON' : 'OFF — advisory only'}): ${nT1} TIER-1 additive · ${nT2} TIER-2 destructive/ambiguous`);
+      allClassified.forEach(m => console.log(`      • [TIER-${m.tier}] ${m.file} — ${m.tierReason}`));
+
+      // FR-3: fail-soft audit of EVERY classification decision (never blocks the handoff).
+      await recordTierAudit(supabase, sd, allClassified);
+
+      if (gateOn) {
+        tier1Pending = classifiedSd.filter(m => m.tier === 1);
+        tier2Deferred = classifiedSd.filter(m => m.tier === 2);
+        uncommittedEligible = classifiedUnc.filter(m => m.tier === 1).map(m => m.file);
+        uncommittedDeferred = classifiedUnc.filter(m => m.tier === 2).map(m => m.file);
+        const deferredFiles = [...tier2Deferred.map(m => m.file), ...uncommittedDeferred];
+        if (deferredFiles.length > 0) {
+          console.log('   ⛔ TIER-2 migrations are NOT auto-applied (default-deny). Apply each via the unchanged 3-factor chairman gate:');
+          deferredFiles.forEach(f => console.log(`      node scripts/apply-migration.js ${f} --prod-deploy`));
+        }
+      } else {
+        console.log('   ℹ️  Tier gate OFF — classification is advisory only; auto-apply behavior unchanged. Enable with LEO_MIGRATION_TIER_GATE=on.');
+      }
+    }
+    const hasDeferred = tier2Deferred.length > 0 || uncommittedDeferred.length > 0;
+    const hasAutoApplyEligible = tier1Pending.length > 0 || uncommittedEligible.length > 0;
+
+    // Step 3: If we have pending migrations, USE THE DATABASE SUB-AGENT to execute them.
+    // (When the gate is OFF, hasAutoApplyEligible === hasPendingMigrations and the
+    // tier1Pending/uncommittedEligible sets equal the originals — so this is byte-for-byte
+    // the original behavior. When ON, only TIER-1-eligible files reach executeWithRetry.)
+    if (result.hasPendingMigrations && options.autoExecute !== false && hasAutoApplyEligible) {
       console.log('\n   ╔════════════════════════════════════════════════════════════╗');
       console.log('   ║  🗄️  INVOKING DATABASE SUB-AGENT FOR MIGRATION EXECUTION   ║');
       console.log('   ╚════════════════════════════════════════════════════════════╝');
@@ -99,10 +219,11 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
 
       result.executionAttempted = true;
 
-      // Execute with retry logic
+      // Execute with retry logic. Only TIER-1-eligible files when the gate is ON;
+      // identical to the original (full) sets when the gate is OFF.
       const execResult = await executeWithRetry(supabase, sd, {
-        uncommittedFiles: uncommitted,
-        pendingMigrations: sdPending
+        uncommittedFiles: uncommittedEligible,
+        pendingMigrations: tier1Pending
       });
 
       result.executionResult = execResult;
@@ -113,7 +234,9 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
         console.log('   ✅ DATABASE sub-agent successfully executed all migrations');
         // FR-4: re-check via pg introspection (not git status). Includes a
         // settle delay + retries to absorb supabase pooler schema-cache lag.
-        const recheck = await recheckDeclaredObjectsPostApply(sdPending);
+        // Only the auto-applied (TIER-1) set is rechecked; deferred TIER-2 files
+        // are re-asserted as pending below so they keep blocking the handoff.
+        const recheck = await recheckDeclaredObjectsPostApply(tier1Pending);
         if (recheck.allApplied) {
           result.hasPendingMigrations = false;
           console.log('   ✅ Verification passed: All declared objects present in pg after apply');
@@ -142,11 +265,26 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
         console.log('');
       }
     } else if (result.hasPendingMigrations) {
-      console.log('\n   ℹ️  Pending migrations detected - autoExecute disabled');
-      console.log('   💡 The DATABASE sub-agent should be used to execute these migrations.');
-      console.log('   💡 Run `node scripts/execute-manual-migrations.js` for manual execution');
+      if (gateOn && hasDeferred && !hasAutoApplyEligible) {
+        // Gate ON and every pending migration is TIER-2 — nothing auto-applies (default-deny).
+        console.log('\n   ⛔ All pending migrations are TIER-2 (destructive/ambiguous) — none auto-applied (default-deny).');
+        console.log('   💡 Apply each via the unchanged 3-factor chairman gate:');
+        [...tier2Deferred.map(m => m.file), ...uncommittedDeferred].forEach(f => console.log(`      node scripts/apply-migration.js ${f} --prod-deploy`));
+      } else {
+        console.log('\n   ℹ️  Pending migrations detected - autoExecute disabled');
+        console.log('   💡 The DATABASE sub-agent should be used to execute these migrations.');
+        console.log('   💡 Run `node scripts/execute-manual-migrations.js` for manual execution');
+      }
     } else {
       console.log('   ✅ No pending migrations found - database is in sync');
+    }
+
+    // TIER-2 files that were deferred are still pending — re-assert so they block the
+    // handoff even if the TIER-1 subset applied + rechecked clean. No-op when the gate
+    // is OFF (hasDeferred is always false then), preserving original blocking behavior.
+    if (hasDeferred) {
+      result.hasPendingMigrations = true;
+      result.tierDeferredFiles = [...tier2Deferred.map(m => m.file), ...uncommittedDeferred];
     }
 
     console.log('   ' + '─'.repeat(50));
@@ -154,7 +292,11 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
     // Blocking enforcement: if migrations remain pending after all attempts, block the handoff
     result.blocking = result.hasPendingMigrations;
     if (result.blocking) {
-      console.log('   🚫 BLOCKING: Pending migrations prevent handoff completion');
+      if (hasDeferred) {
+        console.log(`   🚫 BLOCKING: ${result.tierDeferredFiles.length} TIER-2 migration(s) require the @approved-by chairman gate before handoff`);
+      } else {
+        console.log('   🚫 BLOCKING: Pending migrations prevent handoff completion');
+      }
     }
 
     return result;

@@ -1,0 +1,91 @@
+{
+  "executive_summary": "A FAIL-CLOSED tiered migration risk classifier that lets the fleet stop parking trivially-safe additive migrations on the chairman gate, while keeping every destructive migration fully gated. A PURE allow-list DDL linter (scripts/lib/migration-tier-classifier.mjs) classifies a migration TIER-1 ONLY if every statement is provably additive (CREATE TABLE IF NOT EXISTS / CREATE INDEX / nullable ADD COLUMN with constant-or-no default / CREATE POLICY + ENABLE RLS / bare CREATE FUNCTION|VIEW with a non-destructive body); EVERYTHING else — destructive, multi-statement-ambiguous, unparseable, OR REPLACE, DO-block, unrecognized — defaults to TIER-2. TIER-1 auto-applies via the EXISTING handoff-time apply path (BaseExecutor._checkAndExecutePendingMigrations, env-gated); TIER-2 keeps the unchanged 3-factor @approved-by chairman gate (scripts/lib/migration-guards.js). Per auto-apply we log an audit row (file, classification, verdict, timestamp, inverse/drop rollback). The CLAUDE_CORE migration protocol section (leo_protocol_sections id=444) is updated + regenerated so every worker learns the policy. Built on the design grounding workflow (3-layer split, 16 fail-closed rules, 23-case adversarial corpus).",
+  "business_context": "scripts/lib/migration-guards.js applies one 3-factor chairman gate to EVERY prod migration — a trivial CREATE TABLE IF NOT EXISTS gets the same human gate as a destructive ALTER/DROP. That is friction without added safety and caused fleet-wide parked-migration toil (venture_db_secrets, venture_guardrail_state, etc.). The chairman asked whether workers can auto-apply migrations; the answer (established by SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001) is that BLIND auto-apply is unsafe — a flagged migration can be re-run-harmful or destructive. This SD delivers the safe middle: a strict allow-list prover that auto-applies ONLY provably-additive migrations and routes everything else (default-deny) to the preserved chairman gate. The safety rests entirely on the prover being airtight, so it is allow-list-only, multi-layer, and heavily adversarially tested.",
+  "technical_context": "Reuses (does NOT rebuild): the SQL-splitting + DDL-extraction primitives already in the repo — splitPostgreSQLStatements (scripts/lib/supabase-connection.js) and stripNonDdl/normalizeName/extractDdlFacts (scripts/verify-migration-apply-state.mjs); the auto-apply path BaseExecutor._checkAndExecutePendingMigrations() -> invokeDatabaseSubAgent (env-gated by LEO_MIGRATION_GATE_ENFORCE); the 3-factor guard scripts/lib/migration-guards.js (TIER-2, untouched). Known primitive gap compensated: splitPostgreSQLStatements does not track named dollar tags ($tag$) — the classifier adds a named-tag pre-check + a function-body deep-scan so a destructive body cannot mis-split into a false TIER-1. The CLAUDE_CORE migration section is leo_protocol_sections id=444 (section_type='migration_execution_protocol', target CLAUDE_CORE.md, publication_status='file'); regenerate via `npm run leo:generate` (full, no --only) and verify the [hash] console line.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Pure ALLOW-LIST DDL tier classifier (fail-closed, default-deny)",
+      "description": "CREATE scripts/lib/migration-tier-classifier.mjs exporting a PURE classifyMigration(sql) => {tier:1|2, reason, matched[]}. TIER-1 ONLY when EVERY statement matches an explicit allow rule: (A) CREATE TABLE IF NOT EXISTS (IF NOT EXISTS mandatory); (B) CREATE INDEX (incl CONCURRENTLY/UNIQUE/IF NOT EXISTS); (C) ALTER TABLE with ONLY additive nullable ADD COLUMN actions (no NOT NULL, no PK/UNIQUE/REFERENCES/GENERATED/CONSTRAINT inline, default constant-only); (D) CREATE POLICY or ALTER TABLE ENABLE ROW LEVEL SECURITY (only that ALTER form); (E) bare CREATE FUNCTION/VIEW/MATERIALIZED VIEW (NOT 'OR REPLACE') whose body contains no destructive SQL. Implements all 16 fail-closed rules (parse failure, unrecognized statement, multi-statement/under-split ambiguity, volatile/non-constant default, NOT NULL, DO block, function-body-destructive, OR REPLACE, non-additive ALTER, DROP/TRUNCATE/DELETE/UPDATE/RENAME/GRANT/REVOKE, CREATE TRIGGER, bare CREATE TABLE, empty/comment-only, parser-disagreement, SECURITY DEFINER/system-schema, any exception). 3-layer defense: Layer-1 splitPostgreSQLStatements per-statement allow-match; Layer-2 stripNonDdl whole-file forbidden-token sweep (excluding matched allow-heads); Layer-3 function-body deep-scan. TIER-1 requires ALL layers to agree; the function NEVER throws and NEVER returns tier:1 on an error path. Bound input size to avoid regex catastrophic-backtrack.",
+      "acceptance_criteria": [
+        "classifyMigration returns tier:1 ONLY for the provably-additive allow-list; every one of the 19 adversarial TIER-2 smuggle cases (DO-block DROP, drop-after-create, NOT NULL/volatile default, named-tag body DROP, comment/block-comment-hidden DROP, CREATE OR REPLACE, GRANT, RENAME, ALTER COLUMN TYPE, multi-action ALTER with a bad action, TRUNCATE obfuscated, CREATE TRIGGER, bare CREATE TABLE, DISABLE RLS, under-split blob) classifies tier:2.",
+        "The 4 clean additive cases (CREATE TABLE IF NOT EXISTS, CREATE INDEX CONCURRENTLY, nullable ADD COLUMN constant default, ENABLE RLS + CREATE POLICY, read-only CREATE VIEW) classify tier:1.",
+        "classifyMigration NEVER throws (try/catch => tier:2 on any error) and NEVER returns tier:1 on parse failure / unrecognized / ambiguity / non-string input.",
+        "The classifier is pure (no DB, no live-schema, no I/O) and reuses splitPostgreSQLStatements + stripNonDdl rather than re-rolling SQL parsing."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Gate the EXISTING auto-apply path on tier (reuse, do not rebuild)",
+      "description": "Wire classifyMigration into the existing handoff-time auto-apply path at scripts/modules/handoff/executors/BaseExecutor.js _checkAndExecutePendingMigrations() (and/or pending-migrations-check.js invokeDatabaseSubAgent): a pending migration is auto-applied ONLY when classifyMigration(sql).tier===1; a TIER-2 migration is NOT auto-executed — it is deferred with a clear log instructing `node scripts/apply-migration.js <path> --prod-deploy` (the unchanged 3-factor @approved-by chairman gate). Reuse the existing apply machinery + the LEO_MIGRATION_GATE_ENFORCE env gate; do NOT build new apply machinery and do NOT weaken migration-guards.js.",
+      "acceptance_criteria": [
+        "A TIER-1 pending migration is eligible for auto-apply via the existing path; a TIER-2 one is deferred to the manual --prod-deploy 3-factor gate (never auto-applied).",
+        "scripts/lib/migration-guards.js is unchanged (the TIER-2 3-factor @approved-by guard is preserved exactly).",
+        "No new apply machinery is introduced — the existing BaseExecutor/apply-migration path is reused."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Audit row per auto-applied (TIER-1) migration with rollback",
+      "description": "Every TIER-1 auto-apply logs an audit record: migration file, classification (tier + matched allow rules), the linter verdict/reason, timestamp, and the inverse/rollback statement (the DROP that undoes the additive create) for fast recovery. Reuse the existing audit store (schema_migrations_applied / system audit) where possible; fail-soft (audit failure must not crash the apply, but is logged).",
+      "acceptance_criteria": [
+        "An auto-applied TIER-1 migration produces an audit row capturing file, tier, matched rules, verdict, timestamp, and an inverse/drop rollback hint.",
+        "Audit writing is fail-soft (does not crash the apply path) and reuses an existing store, no new table required unless necessary."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Protocol update so the fleet learns the tiered policy",
+      "description": "Update leo_protocol_sections id=444 (section_type='migration_execution_protocol', CLAUDE_CORE.md) content to document the tiered policy: additive migrations on the TIER-1 allow-list auto-apply post-merge; ONLY destructive/ambiguous migrations carry the @approved-by chairman gate; default-deny when in doubt. Regenerate via `npm run leo:generate` (full) and verify the CLAUDE_CORE.md [hash] re-render. Mirror a concise pointer into the phase rows (LEAD id=449 / PLAN id=450 / EXEC) and the CORE digest mapping so phase- and digest-loading sessions also learn it.",
+      "acceptance_criteria": [
+        "leo_protocol_sections id=444 content documents the tiered policy (TIER-1 allow-list auto-applies; TIER-2 keeps @approved-by; default-deny).",
+        "CLAUDE_CORE.md is regenerated and contains the tiered policy (verified via the generator [hash] line, not skipped).",
+        "Workers reading CORE (and, via a pointer/mirror, the phase files) learn to stop parking provably-additive migrations."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Tests + activation (the full adversarial corpus)",
+      "description": "CREATE a unit suite running classifyMigration against the full 23-case adversarial corpus (19 TIER-2 smuggle attempts + 4 TIER-1) + per-allow-rule real-splitPostgreSQLStatements integration assertions (mocked-green suites miss real-path edge bytes). Set product_requirements_v2.activation_test_id to the suite so GATE_ACTIVATION_INVARIANT proves a destructive migration cannot classify TIER-1 by default.",
+      "acceptance_criteria": [
+        "All 23 adversarial corpus cases assert the expected tier (every smuggle attempt => tier:2).",
+        "At least one real-splitPostgreSQLStatements integration assertion per allow rule (not just string-shape assertions).",
+        "All tests pass under the vitest unit project; PRD.activation_test_id set and the activation test passes."
+      ]
+    }
+  ],
+  "non_functional_requirements": [
+    {"id": "NFR-1", "title": "Fail-closed by construction", "description": "Allow-list only (never a deny-list); default-deny on any doubt; the classifier never throws and never returns tier:1 on an error/ambiguity path. A false tier:1 on a destructive migration is the catastrophe to prevent."},
+    {"id": "NFR-2", "title": "Preserve the chairman gate", "description": "The TIER-2 3-factor @approved-by prod-deploy guard (migration-guards.js) is unchanged; this SD only adds a tier gate in front of the EXISTING auto-apply path."},
+    {"id": "NFR-3", "title": "Pure + reuse", "description": "The classifier is a pure function reusing the repo's existing SQL-split/strip primitives; no new apply machinery."}
+  ],
+  "test_scenarios": [
+    {"id": "TS-1", "scenario": "classifier: 19 TIER-2 smuggle cases all => tier:2; 4 clean additive => tier:1; never-throws on bad input"},
+    {"id": "TS-2", "scenario": "auto-apply gate: TIER-1 eligible for the existing auto-apply path; TIER-2 deferred to --prod-deploy 3-factor gate"},
+    {"id": "TS-3", "scenario": "protocol: CLAUDE_CORE.md regenerated with the tiered policy ([hash] re-render confirmed)"}
+  ],
+  "acceptance_criteria": [
+    "A pure fail-closed allow-list tier classifier that classifies only provably-additive migrations TIER-1 and defaults everything else to TIER-2 (23-case adversarial corpus green).",
+    "TIER-1 auto-applies via the existing path; TIER-2 keeps the unchanged 3-factor chairman gate.",
+    "Audit row per auto-apply with rollback; CLAUDE_CORE protocol section updated + regenerated so the fleet learns.",
+    "Tests + PRD.activation_test_id set."
+  ],
+  "risks": [
+    {"risk": "A false TIER-1 verdict auto-applies a destructive migration (catastrophic)", "severity": "high", "mitigation": "Allow-list-only + 16 fail-closed rules + 3-layer split agreement + default-deny + a dedicated adversarial-review lens whose only job is to smuggle a destructive migration past the classifier; the full 23-case corpus must be green."},
+    {"risk": "Named dollar-tag function body mis-splits and a fragment matches an allow head", "severity": "high", "mitigation": "Named-tag pre-check (unbalanced => TIER-2) + function-body deep-scan (Rule E / FC-7); preserved as a hard requirement."},
+    {"risk": "Weakening the chairman gate for destructive migrations", "severity": "high", "mitigation": "migration-guards.js untouched; TIER-2 path unchanged; a guard-preserved test locks it."},
+    {"risk": "CLAUDE_CORE regen silently skipped (--only cache trap)", "severity": "medium", "mitigation": "Use full `npm run leo:generate`; verify the [hash] console line + manifest update."}
+  ],
+  "implementation_approach": {
+    "summary": "Build the pure allow-list classifier + its full adversarial test corpus first (the security core), then gate the existing auto-apply path on tier, add the audit row, update + regenerate the protocol section, and run a dedicated adversarial-review lens before shipping.",
+    "steps": [
+      "CREATE scripts/lib/migration-tier-classifier.mjs — pure classifyMigration reusing splitPostgreSQLStatements + stripNonDdl; 5 allow rules + 16 fail-closed rules + 3-layer split; never-throws.",
+      "CREATE the unit suite with the full 23-case adversarial corpus + per-rule real-split integration assertions; set activation_test_id.",
+      "Gate BaseExecutor._checkAndExecutePendingMigrations / pending-migrations-check on classifyMigration: TIER-1 auto-apply via the existing path, TIER-2 defer to --prod-deploy (migration-guards.js untouched).",
+      "Add the FR-3 audit row (file, tier, matched, verdict, ts, inverse/drop) — fail-soft, reuse existing store.",
+      "Update leo_protocol_sections id=444 content with the tiered policy + regenerate CLAUDE_CORE.md (full leo:generate, verify [hash]); mirror a pointer to phase rows + digest mapping.",
+      "Dedicated multi-lens adversarial review (smuggle-a-destructive-migration lens) -> fix-first; then TESTING(+SECURITY) -> handoff chain."
+    ]
+  },
+  "dependencies": ["SD-LEO-INFRA-PRE-MERGE-MIGRATION-001 (auto-apply primitive — reused)", "SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 (recent-vs-legacy classifier + the migration-autonomy finding)"]
+}
