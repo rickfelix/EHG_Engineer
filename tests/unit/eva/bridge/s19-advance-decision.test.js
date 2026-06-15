@@ -46,10 +46,17 @@ describe('classifyBridgeOutcome (TS-1)', () => {
   it('created:false + non-idempotent failure errors + payloads → ZERO_SDS_FAILURE', () => {
     expect(classifyBridgeOutcome({ created: false, errors: ['SD_TYPE_CHANGE rollback'], orchestratorKey: null }, 2)).toBe(O.ZERO_SDS_FAILURE);
   });
+
+  it('SD-LEO-INFRA-PILOT-VENTURE-GUARD-001: skipped:true + payloads present → PILOT_SKIPPED (NOT ZERO_SDS_FAILURE)', () => {
+    // A pilot/test-fixture venture legitimately produces 0 SDs from N payloads. The skipped flag
+    // must be checked before the payload-count discriminant or it would be mis-read as the schism.
+    expect(classifyBridgeOutcome({ created: false, skipped: true, errors: [], orchestratorKey: null }, 3)).toBe(O.PILOT_SKIPPED);
+    expect(classifyBridgeOutcome({ created: false, skipped: true, errors: [] }, 0)).toBe(O.PILOT_SKIPPED);
+  });
 });
 
 describe('shouldHoldAtS19 (TS-2)', () => {
-  const ALL = [O.CREATED, O.NOOP_EXISTS, O.NOOP_EMPTY, O.ZERO_SDS_FAILURE, O.VISION_MISSING];
+  const ALL = [O.CREATED, O.NOOP_EXISTS, O.NOOP_EMPTY, O.ZERO_SDS_FAILURE, O.VISION_MISSING, O.PILOT_SKIPPED];
 
   it('buildComplete===true → ADVANCE for every outcome (complete tree OR chairman_override)', () => {
     for (const o of ALL) expect(shouldHoldAtS19(o, true)).toBe(false);
@@ -61,6 +68,10 @@ describe('shouldHoldAtS19 (TS-2)', () => {
 
   it('buildComplete===false + NOOP_EMPTY → ADVANCE (the infinite-hold guard)', () => {
     expect(shouldHoldAtS19(O.NOOP_EMPTY, false)).toBe(false);
+  });
+
+  it('buildComplete===false + PILOT_SKIPPED → ADVANCE (pilot intentionally un-built, not held/failed)', () => {
+    expect(shouldHoldAtS19(O.PILOT_SKIPPED, false)).toBe(false);
   });
 
   it('buildComplete===false + every other outcome → HOLD', () => {
