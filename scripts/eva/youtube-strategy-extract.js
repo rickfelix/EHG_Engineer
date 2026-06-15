@@ -43,12 +43,22 @@ const SD_KEY = 'SD-LEO-INFRA-YOUTUBE-STRATEGY-EXTRACTION-001';
 const LEDGER_PATH = path.resolve(process.cwd(), 'memory', 'youtube-strategy-ledger.json');
 const REFERENCE_PATH = path.resolve(process.cwd(), 'docs', 'reference', 'youtube-strategy-frameworks.md');
 
+// A non-positive or non-numeric --limit means "no limit"? No — that silently
+// drains the whole backlog on a typo. Treat only a finite positive integer as a
+// real limit; anything else (0, NaN, negative) -> null = no limit only when the
+// flag was absent. Here an explicit bad value collapses to null but is logged by
+// the caller path; positive-int is the sole "limited" case.
+function toPositiveLimit(raw) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
 export function parseArgs(argv = []) {
   const a = { limit: null, dryRun: false, dispose: false, verbose: false, lang: 'en' };
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i];
-    if (t === '--limit') a.limit = Number(argv[++i]) || null;
-    else if (t.startsWith('--limit=')) a.limit = Number(t.split('=')[1]) || null;
+    if (t === '--limit') a.limit = toPositiveLimit(argv[++i]);
+    else if (t.startsWith('--limit=')) a.limit = toPositiveLimit(t.split('=')[1]);
     else if (t === '--dry-run') a.dryRun = true;
     else if (t === '--dispose') a.dispose = true;
     else if (t === '--verbose' || t === '-v') a.verbose = true;
@@ -97,9 +107,15 @@ async function fetchSDList(supabase) {
 }
 
 function appendReferenceLibrary(entries) {
-  const novel = entries.filter((e) => e.analysis_status === 'ok' && e.dedup_status === 'novel' && e._summary);
+  let novel = entries.filter((e) => e.analysis_status === 'ok' && e.dedup_status === 'novel' && e._summary);
   if (novel.length === 0) return 0;
-  const fresh = !fs.existsSync(REFERENCE_PATH);
+  // Idempotent append: skip any framework whose video already appears in the file
+  // (re-runs must not duplicate committed reference blocks).
+  let existing = '';
+  try { existing = fs.readFileSync(REFERENCE_PATH, 'utf8'); } catch { /* fresh file */ }
+  novel = novel.filter((e) => !existing.includes(`youtu.be/${e.video_id}`));
+  if (novel.length === 0) return 0;
+  const fresh = existing === '';
   const header = fresh
     ? '# YouTube Strategy Frameworks — extracted reference library\n\nNovel frameworks distilled from the For-Processing strategy playlist by `scripts/eva/youtube-strategy-extract.js` (SD-LEO-INFRA-YOUTUBE-STRATEGY-EXTRACTION-001). Duplicates of existing SDs/capabilities are excluded.\n'
     : '';
@@ -123,9 +139,12 @@ async function routeEnhancements(supabase, entries, verbose) {
         type: 'enhancement',
         category: 'completion_flag',
         severity: 'low',
-        source_type: 'youtube_extraction',
+        // 'youtube_intake' is the only youtube value allowed by the
+        // feedback_source_type_check CHECK constraint; the extraction provenance
+        // lives in metadata.source instead (verified against live DB).
+        source_type: 'youtube_intake',
         sd_id: SD_KEY,
-        metadata: { video_id: e.video_id, composite_score: e.composite_score, category: e.category },
+        metadata: { source: 'youtube_strategy_extraction', video_id: e.video_id, composite_score: e.composite_score, category: e.category },
         dedup_key: `youtube-framework-${e.video_id}`,
       });
       routed++;
@@ -165,9 +184,15 @@ export async function main(argv = process.argv.slice(2)) {
     return { processed: entries.length, summary, dryRun: true };
   }
 
-  // Persist ledger (merge by video_id; strip working fields).
+  // Persist ledger (merge by video_id; strip working fields). Preserve a prior
+  // disposed:true so re-processing a video never resets its disposal history.
   const ledger = loadLedger();
-  for (const e of entries) ledger.videos[e.video_id] = cleanLedgerEntry(e);
+  for (const e of entries) {
+    const prior = ledger.videos[e.video_id];
+    const clean = cleanLedgerEntry(e);
+    if (prior && prior.disposed) clean.disposed = true;
+    ledger.videos[e.video_id] = clean;
+  }
   ledger.updated_at = new Date().toISOString();
   saveLedger(ledger);
 

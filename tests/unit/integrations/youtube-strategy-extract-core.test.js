@@ -179,6 +179,17 @@ describe('runExtraction (injectable orchestration)', () => {
     expect(scoreStub).toHaveBeenCalledTimes(1); // batched once over the 2 OK items
   });
 
+  it('dedups an opaque/episodic title using a summary slice (not always-novel)', async () => {
+    const sdList2 = [{ sd_key: 'SD-PRICING-001', title: 'Value based pricing framework' }];
+    const opaque = [{ youtube_video_id: 'vidEPISODE1', title: 'Episode 47', channel_name: 'X', duration_seconds: 600, chairman_intent: 'value', target_application: 'ehg_engineer' }];
+    const analyze = vi.fn(async () => ({ summary: 'a value based pricing framework walkthrough', method: 'native' }));
+    const { entries } = await runExtraction(opaque, { analyzeWithFallback: analyze, sdList: sdList2 });
+    // Title 'Episode 47' tokenizes to <2 tokens -> dedup falls back to the summary,
+    // which overlaps the SD title -> dup-of-SD (would be 'novel' under title-only).
+    expect(entries[0].dedup_status).toBe('dup-of-SD');
+    expect(entries[0].matched_sd).toBe('SD-PRICING-001');
+  });
+
   it('fails-open when no score dep is provided (OK entries keep null score)', async () => {
     const { entries } = await runExtraction([candidates[1]], { analyzeWithFallback: analyzeStub, sdList });
     expect(entries[0].analysis_status).toBe('ok');
@@ -260,12 +271,22 @@ describe('disposeEntries (FR-5, injectable clients)', () => {
     expect(sb.calls[0].patch).toMatchObject({ status: 'processed', destination_playlist_id: 'PL_PROC' });
   });
 
-  it('records a per-video error without aborting the batch', async () => {
+  it('records a per-video error without aborting the batch (insert failure = not disposed)', async () => {
     let n = 0;
     const yt = fakeYoutube({ insert: vi.fn(async () => { n++; if (n === 1) throw new Error('quota'); return { data: {} }; }) });
     const r = await disposeEntries(okEntries(2), { youtube: yt, supabase: fakeSupabase() });
     expect(r.moved).toBe(1);
     expect(r.errors).toHaveLength(1);
     expect(r.errors[0].error).toMatch(/quota/);
+  });
+
+  it('insert+mark succeed but source-delete fails -> still moved (soft warning), no re-insert risk', async () => {
+    const yt = fakeYoutube({ delete: vi.fn(async () => { throw new Error('delete quota'); }) });
+    const sb = fakeSupabase();
+    const r = await disposeEntries(okEntries(1), { youtube: yt, supabase: sb });
+    expect(r.moved).toBe(1);                 // captured in Processed + marked processed
+    expect(r.errors).toHaveLength(0);        // delete failure is NOT a disposal failure
+    expect(r.delete_warnings).toHaveLength(1);
+    expect(sb.calls).toHaveLength(1);        // intake row marked processed (won't re-insert next run)
   });
 });
