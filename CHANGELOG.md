@@ -5,6 +5,7 @@
 
 - [2026-06-15](#2026-06-15)
   - [Infrastructure](#infrastructure)
+  - [Bugfix](#bugfix)
 - [2026-06-14](#2026-06-14)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -70,6 +71,11 @@
 - **Adam's role contract now TEACHES the SD-creation how-to + its duties (not just names them)** - PR #4773 (SD-LEO-INFRA-ADAM-ROLE-CONTRACT-001)
   - **What shipped**: A new `leo_protocol_sections` row (`section_type=adam_role_contract`, id=604) authored in the DB and rendered into `CLAUDE_ADAM.md` via `scripts/generate-claude-md-from-db.js` (never hand-edited). It teaches the SD-creation HOW-TO — the required NOT-NULL fields; the VERIFIED JSONB shapes (`success_criteria={criterion,measure}`, `key_changes={change,impact}` — NOT `{change,type}`); the canonical `/sd-create` create path + the `ENF-SD-CREATE-SKILL` block; and the keyword type-inference hazard (standalone `fix` matches before `infrastructure`) + the `docs→docs` `mapToDbType` caveat — plus procedural teaching of the conversion, build-% gauge (Vision Denominator Registry), and escalation duties, referencing `CLAUDE_LEAD.md` rather than duplicating it. Child C of SD-LEO-INFRA-ADAM-AUTONOMY-HARDENING-001 (closes the chairman keystone 2026-06-13: a LEO role is reliable because its required-reading contract CONTAINS the how-to).
   - **Verification**: a 3-lens adversarial content review (accuracy-vs-code / does-it-teach / no-drift) caught 4 real accuracy errors, all corrected verbatim-from-code; drift guard green (`check-claude-md-drift.cjs`); TESTING PASS 95 / VALIDATION PASS 100. Gates L2P 94 / P2E 99 / E2P 96 / P2L 100 / LEAD-FINAL 99; heal 92/100.
+
+### Bugfix
+- **Adam's inbox tick now drains ALL coordinator-directed kinds (replies + directives), closing the reply-only blindspot** - PR #4789 (SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001)
+  - **What shipped**: A new `inbox` mode (`drainInbox`) in `scripts/adam-advisory.cjs` drains BOTH the reply lane AND coordinator-directive kinds (the imported `DIRECTIVE_KINDS` allowlist, now including `coordinator_directive`) targeting the Adam session — using AND-only server filters (`target_session` + `read_at IS NULL`) + JS lane classification (never a `payload->>kind` `.or()`/`.in()`, the ambiguous-PostgREST trap PR #4770 hit). Two-stage ACK: stamps `read_at`=DELIVERED but withholds `acknowledged_at`/`actioned_at` so a directive stays recoverable via `read-adam-directives.cjs` until Adam acts. The recurring `inbox-monitor` ADAM_LOOPS tick + the load-bearing `/adam` cron-arming playbook are repointed from `replies` to `inbox`. Delivers the unmet full-lane "delivery is TESTED" criterion of the completed SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (cited, not reopened).
+  - **Verification**: Adversarial review caught 3 real gaps the green isolated tests missed — a `chairman`-sent directive was DELIVERED-then-dropped (the acked-NULL safety net only covered coordinator/orchestrator → added `chairman` to `read-adam-directives.cjs` `DIRECTIVE_SENDERS`, harness-bug 43c2dee2 class); the cron-arming docs were half-wired (still said `replies`); and the unattended tick trusted `CLAUDE_SESSION_ID` (now resolves via `resolveAdamSessionId`). 108 touched-module tests pass (0 regressions); ~89 LOC production. Heal 100/100; gates L2P 96 / P2E 95 / E2P 98 / P2L 99 / LEAD-FINAL pass.
 
 ## 2026-06-14
 
