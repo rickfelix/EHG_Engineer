@@ -2,11 +2,12 @@
 // Hermetic: no live DB (injected supabase stub), no real time (nowMs injected). Validates the
 // deterministic election (mirror of the coordinator), the fail-open resolvers, the single-Adam
 // guard's deliberate refuse-new-on-fresh-prior divergence, and the pure MULTIPLE_ADAMS detector.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const adam = require('../../../lib/coordinator/adam-identity.cjs');
 const { detectMultipleAdams, runDetectors } = require('../../../lib/coordinator/detectors.cjs');
+const { registerAdam } = require('../../../scripts/adam-register.cjs');
 
 const NOW = Date.parse('2026-06-15T16:00:00.000Z');
 const fresh = (minAgo) => new Date(NOW - minAgo * 60_000).toISOString();
@@ -118,5 +119,75 @@ describe('detectMultipleAdams (pure, mirror of detectSplitBrain)', () => {
     const ev = events.find((e) => e.event_type === 'MULTIPLE_ADAMS');
     expect(ev).toBeTruthy();
     expect(ev.severity).toBe('critical');
+  });
+});
+
+// FR-3: registerAdam flag-gated guard. Stub supabase covers the self-row fetch, the fresh-Adam
+// election query, update(), and rpc(). `freshAdams` feeds fetchFreshAdams; `rpc` controls RPC result.
+function regStub({ selfMeta = null, freshAdams = [], rpcError = null } = {}) {
+  const calls = { update: 0, rpc: [] };
+  const supabase = {
+    from() {
+      const chain = {
+        _eqCol: null,
+        select() { return chain; },
+        eq() { return chain; },
+        gte() { return chain; },
+        filter() { return Promise.resolve({ data: freshAdams, error: null }); }, // fetchFreshAdams
+        maybeSingle() { return Promise.resolve({ data: { session_id: 'self', metadata: selfMeta }, error: null }); }, // self row
+        update() { calls.update += 1; return { eq() { return Promise.resolve({ error: null }); } }; },
+      };
+      return chain;
+    },
+    rpc(fn, args) { calls.rpc.push({ fn, args }); return Promise.resolve({ error: rpcError }); },
+  };
+  return { supabase, calls };
+}
+
+describe('registerAdam (FR-3 flag-gated single-Adam guard)', () => {
+  afterEach(() => { delete process.env.ROLE_HANDOFF_ADAM_V1; });
+
+  it('flag OFF: legacy path (tagged via JS merge, no rpc) — byte-identical', async () => {
+    delete process.env.ROLE_HANDOFF_ADAM_V1;
+    const { supabase, calls } = regStub({ selfMeta: { callsign: 'x' } });
+    const r = await registerAdam(supabase, 'self');
+    expect(r).toMatchObject({ ok: true, action: 'tagged' });
+    expect(calls.rpc).toHaveLength(0);
+    expect(calls.update).toBe(1);
+  });
+
+  it('flag OFF: already tagged => verified (no write)', async () => {
+    delete process.env.ROLE_HANDOFF_ADAM_V1;
+    const { supabase, calls } = regStub({ selfMeta: { role: 'adam', non_fleet: true } });
+    const r = await registerAdam(supabase, 'self');
+    expect(r).toMatchObject({ ok: true, action: 'verified' });
+    expect(calls.update).toBe(0);
+  });
+
+  it('flag ON: a FRESH prior Adam => REFUSED (no write, prior not cleared)', async () => {
+    process.env.ROLE_HANDOFF_ADAM_V1 = 'on';
+    const { supabase, calls } = regStub({ freshAdams: [{ session_id: 'prior', heartbeat_at: fresh(1), metadata: { role: 'adam' } }] });
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW });
+    expect(r).toMatchObject({ ok: false, action: 'refused' });
+    expect(r.fresh_priors).toEqual(['prior']);
+    expect(calls.rpc).toHaveLength(0); // never clears the fresh prior, never writes
+    expect(calls.update).toBe(0);
+  });
+
+  it('flag ON: no prior + RPC works => tagged via set_adam_flag (atomic, no JS update)', async () => {
+    process.env.ROLE_HANDOFF_ADAM_V1 = 'on';
+    const { supabase, calls } = regStub({ freshAdams: [], rpcError: null });
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW });
+    expect(r).toMatchObject({ ok: true, action: 'tagged' });
+    expect(calls.rpc.map((c) => c.fn)).toContain('set_adam_flag');
+    expect(calls.update).toBe(0); // atomic path, no JS read-modify-write
+  });
+
+  it('flag ON: RPC absent => fail-soft JS-merge fallback (no crash)', async () => {
+    process.env.ROLE_HANDOFF_ADAM_V1 = 'on';
+    const { supabase, calls } = regStub({ freshAdams: [], rpcError: { code: 'PGRST202', message: 'Could not find the function set_adam_flag' } });
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW });
+    expect(r).toMatchObject({ ok: true, action: 'tagged_fallback' });
+    expect(calls.update).toBe(1); // fail-soft legacy merge
   });
 });
