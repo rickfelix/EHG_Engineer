@@ -108,7 +108,7 @@ function appendLedger(entry) {
   return entry;
 }
 
-function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = null }) {
+function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = null, trace = null }) {
   return {
     ts: new Date().toISOString(),
     scope: scope ? scope.scope_key : 'none',
@@ -116,6 +116,8 @@ function buildLedgerEntry({ scope, verdict, cleared = 0, flagEnabled, detail = n
     cleared,
     flag: flagEnabled ? 'on' : 'off',
     ...(detail ? { detail } : {}),
+    // SD-LEO-INFRA-ADAM-PRIORITY-ANCHORING-001: audit the rank perturbations.
+    ...(Array.isArray(trace) && trace.length ? { trace } : {}),
   };
 }
 
@@ -200,12 +202,41 @@ async function main() {
     }
 
     // mode === 'scan'
-    const { selectAdvisory, formatAdvisoryBody } = await import('../lib/adam/rationale-bar.js');
+    const { selectAdvisory, formatAdvisoryBody, LEO_ROADMAP_ID } = await import('../lib/adam/rationale-bar.js');
     const { applyLivenessGuard } = await import('../lib/adam/liveness-guard.js');
 
     const guarded = applyLivenessGuard(briefing.candidates || [], liveVentureCount);
     const openSdKeys = await fetchOpenSdKeys(supabase);
-    const result = selectAdvisory(guarded.kept, { openSdKeys });
+
+    // SD-LEO-INFRA-ADAM-PRIORITY-ANCHORING-001 (FR-2/FR-3): compute the bounded
+    // preference weights + the LEO-Roadmap Q2 wave alignment, and attach both to
+    // selectAdvisory. Behavior change is GATED BY THE FLAG: when the gate is off
+    // we pass NEITHER (flat/no-op path) so selection is byte-identical to today.
+    let selectOpts = { openSdKeys };
+    if (gateEnabled) {
+      try {
+        const { computePreferenceWeights } = await import('../lib/adam/preference-model.js');
+        const { calculateAlignment } = await import('../lib/integrations/okr-wave-linker.js');
+        // chairman_decisions: weak soft prior (read-only, fail-soft to []).
+        let decisions = [];
+        try {
+          const { data } = await supabase.from('chairman_decisions').select('id, decision, status');
+          decisions = data || [];
+        } catch { decisions = []; }
+        const pref = await computePreferenceWeights({ supabase, decisions });
+        selectOpts.prefWeights = pref.weights;
+        // Q2 alignment keyed STRICTLY on the LEO Roadmap; self-gates to no-op on 0 waves.
+        let waveAlignment = null;
+        try { waveAlignment = await calculateAlignment(supabase, LEO_ROADMAP_ID); } catch { waveAlignment = null; }
+        selectOpts.waveAlignment = waveAlignment;
+      } catch (e) {
+        // Fail-soft: drop the perturbation entirely -> byte-identical baseline.
+        process.stderr.write(`[adam-scan] preference/wave term skipped (fail-soft): ${e.message}\n`);
+        selectOpts = { openSdKeys };
+      }
+    }
+
+    const result = selectAdvisory(guarded.kept, selectOpts);
 
     if (!result.surfaced) {
       const entry = appendLedger(buildLedgerEntry({ scope, verdict: 'ADAM_OK', cleared: 0, flagEnabled: gateEnabled }));
@@ -224,7 +255,7 @@ async function main() {
     }
 
     // gate ON (env AND registry): emit exactly ONE advisory via the existing lane.
-    appendLedger(buildLedgerEntry({ scope, verdict: 'SURFACED', cleared: result.cleared, flagEnabled: gateEnabled, detail: result.surfaced.dedup_key || null }));
+    appendLedger(buildLedgerEntry({ scope, verdict: 'SURFACED', cleared: result.cleared, flagEnabled: gateEnabled, detail: result.surfaced.dedup_key || null, trace: result.trace }));
     const r = spawnSync('node', [ADVISORY_CLI, 'send', body], { stdio: 'inherit' });
     process.exit(r.status == null ? 0 : r.status);
   } catch (e) {
