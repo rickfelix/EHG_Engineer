@@ -85,6 +85,15 @@ describe('computeDispatchBelt — canonical dispatch-eligibility (FR-3/FR-5)', (
     expect(computeDispatchBelt({ sds, statusByKey: { 'SD-DEP-001': 'in_progress' }, terminalSet: TERMINAL, classifyIneligibility: classify }).claimable).toHaveLength(0);
     expect(computeDispatchBelt({ sds, statusByKey: { 'SD-DEP-001': 'completed' }, terminalSet: TERMINAL, classifyIneligibility: classify }).claimable).toHaveLength(1);
   });
+  it('an in-flight (started, current_phase past LEAD) unclaimed SD is excluded from claimable but stays in unclaimed (DUTY-6 belt parity: backlog-rank skips isStartedSd, so the audit must not count it rank-stale)', () => {
+    const sds = [
+      { sd_key: 'SD-ORPHAN-001', sd_type: 'infrastructure', claiming_session_id: null, parent_sd_id: null, current_phase: 'PLAN_PRD', dependencies: [] },
+      { sd_key: 'SD-FRESH-001', sd_type: 'infrastructure', claiming_session_id: null, parent_sd_id: null, current_phase: 'LEAD', dependencies: [] },
+    ];
+    const r = computeDispatchBelt({ sds, statusByKey: {}, terminalSet: TERMINAL, classifyIneligibility: classify });
+    expect(r.unclaimed.map((s) => s.sd_key).sort()).toEqual(['SD-FRESH-001', 'SD-ORPHAN-001']); // both are unclaimed leaves
+    expect(r.claimable.map((s) => s.sd_key)).toEqual(['SD-FRESH-001']);                          // in-flight orphan NOT fresh-rankable
+  });
 });
 
 describe('extractDepKey — object-sentinel parity (FR-5)', () => {
