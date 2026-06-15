@@ -114,8 +114,22 @@ SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-feedback <id>
 
 ### `create --child <parent-key>`
 ```bash
+# Preview the next child key:
 node scripts/modules/sd-key-generator.js --child <parent-key> <index>
+
+# Create the child (canonical path). --type sets the child's sd_type explicitly
+# (a child never inherits 'orchestrator'):
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --child <parent-key> [index] --type infrastructure
 ```
+
+**One-step child linkage (SD-LEO-INFRA-ADAM-CREATION-PROCESS-001, FR-3).** Creating a
+child via the canonical path now wires it fully in ONE governed step (no manual DB
+surgery) via `lib/sd/child-linkage.js`:
+- `parent_sd_id` is set on the child, **and**
+- `relationship_type = 'child'` is set (required by `validate-child-sd-completeness.js`), **and**
+- the child is registered in the parent's registry — a letter-keyed `metadata.autonomy_children`
+  entry for an autonomy parent, or a `metadata.children` array otherwise. Registration is
+  idempotent (re-running adds no duplicate entry).
 
 ### `create --from-plan [path]`
 
@@ -130,10 +144,25 @@ Then run:
 SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-plan
 # Or with specific path:
 SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md
+# Set the type EXPLICITLY for an infrastructure/governance plan so inference cannot mis-type it:
+SD_CREATE_VIA_SKILL=1 node scripts/leo-create-sd.js --from-plan <path> --type infrastructure
 ```
 
 Extracts: title, summary, success criteria, scope, and SD type from plan content.
 Original plan archived to `docs/plans/archived/{sd-key}-plan.md`.
+
+**Explicit type wins (SD-LEO-INFRA-ADAM-CREATION-PROCESS-001, FR-1).** Type resolution
+precedence: `--type` flag > a `## Type` plan header > keyword inference. For an
+infrastructure plan, declare the type explicitly (flag or header) — inference now also
+treats the literal word "infrastructure" or an `SD-LEO-INFRA-*` token as a high-confidence
+infrastructure signal (it no longer mis-types as `bugfix` just because the plan mentions
+"fix"). A genuine reclassification later still records `type_change_reason` +
+`governance_metadata.type_reclassification`; the explicit-type-at-creation flow exists so
+that change is rarely needed.
+
+**Correct key at creation (FR-2).** `sd_code_user_facing` is set to the human-readable SD
+key at creation (no longer left equal to the UUID), so no post-hoc governance-gated re-key
+is needed.
 
 ## Step 4: Display Result
 

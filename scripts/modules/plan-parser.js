@@ -159,6 +159,18 @@ export function inferSDType(content) {
     return 'bugfix'; // Security issues map to bugfix type (canonical sd_type per SD-FDBK-INFRA-TYPE-SOURCE-TRUTH-001)
   }
 
+  // SD-LEO-INFRA-ADAM-CREATION-PROCESS-001 (FR-1): a HIGH-CONFIDENCE infrastructure
+  // declaration wins over an INCIDENTAL "fix" keyword. Previously an infrastructure plan
+  // that merely mentioned "fix" was mis-typed 'bugfix' because the bug/fix check below
+  // fires before the weaker infra signals (script/tooling/automation) further down. Only
+  // an EXPLICIT declaration qualifies here — the literal word "infrastructure" or an
+  // SD-LEO-INFRA-* key token — so a genuine bugfix that merely says "fix the deploy
+  // script" still classifies 'bugfix' (no false infra promotion). Placed AFTER the
+  // security check so security still maps to bugfix.
+  if (/\binfrastructure\b/.test(lowerContent) || /\bsd-leo-infra-/.test(lowerContent)) {
+    return 'infrastructure';
+  }
+
   // Check for bug/error keywords
   if (lowerContent.includes('bug') ||
       lowerContent.includes('error') ||
