@@ -159,6 +159,20 @@ describe('mapProposalToCreateArgs (pure field mapping)', () => {
     expect(args.arch_key).toBeUndefined();
     expect(args.metadata.source).toBe('proposal'); // only the closed whitelist survives
   });
+
+  // SD-LEO-INFRA-ADAM-SELF-AUDIT-RESOLVERS-001 (FR-1a, load-bearing): the canonical Adam-origin
+  // marker metadata.sourced_by='adam' is stamped ONLY for an explicit Adam-origin proposal, and
+  // is ABSENT for any non-Adam proposal (so non-Adam creation paths are unchanged).
+  it('FR-1a: explicit sourced_by:adam proposal stamps metadata.sourced_by=adam', () => {
+    const args = mapProposalToCreateArgs(normalized, validProposal({ sourced_by: 'adam' }), 'p.json');
+    expect(args.metadata.sourced_by).toBe('adam');
+  });
+
+  it('FR-1a: a non-Adam proposal does NOT stamp sourced_by (no fabricated attribution)', () => {
+    expect(mapProposalToCreateArgs(normalized, validProposal(), 'p.json').metadata.sourced_by).toBeUndefined();
+    // a different/foreign value is also not coerced to 'adam'
+    expect(mapProposalToCreateArgs(normalized, validProposal({ sourced_by: 'drain-intake' }), 'p.json').metadata.sourced_by).toBeUndefined();
+  });
 });
 
 describe('createFromProposal (dry-run + idempotency, injected deps, zero DB/FS)', () => {

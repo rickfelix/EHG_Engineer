@@ -117,6 +117,17 @@ try {
   visNote = `(gauge unavailable ${EM} compute error)`;
 }
 
+// FR-4 (SD-LEO-INFRA-ADAM-SELF-AUDIT-RESOLVERS-001): write a DURABLE 'Adam read the vision gauge'
+// marker so the self-adherence audit can measure the vision-monitoring duty. Best-effort + fail-soft:
+// a write failure NEVER blocks the email, and a SKIP in dry-run keeps dry-runs side-effect-free. Only
+// record once the gauge actually produced a number (visPct != null) — a failed gauge isn't a "read".
+if (!DRY && visPct != null) {
+  try {
+    const { recordVisionGaugeRead } = await import('./adam-self-adherence-review.mjs');
+    await recordVisionGaugeRead(db, { sessionId: me || null, pct: visPct });
+  } catch (e) { console.warn('[adam-email] vision_gauge_read marker skipped (fail-soft): ' + (e?.message || e)); }
+}
+
 // ── 2b. DISTANCE-TO-QUIT (SD-LEO-INFRA-VISION-LADDER-V1-001 FR-5) ──
 // The quit threshold is READ AT RUNTIME from the chairman amendment metadata — the fleet NEVER
 // hardcodes a dollar figure (chairman-source-of-truth: SD-LEO-ORCH-ADAM-PLAN-KEEPER-001
