@@ -9,6 +9,7 @@
     "migration:apply": "node scripts/apply-migration.js",
     "migration:issue-token": "node scripts/apply-migration.js --issue-token",
     "income:capture": "node scripts/income/run-income-capture.mjs",
+    "vision:gauge": "node scripts/vision-gauge-refresh.mjs",
     "setup-db": "node scripts/setup-database.js",
     "setup-db-supabase": "node scripts/setup-database-supabase.js",
     "check-directives": "node scripts/check-directives-data.js",
