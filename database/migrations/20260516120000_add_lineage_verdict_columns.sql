@@ -3,6 +3,9 @@
 -- on strategic_directives_v2. CHECK constraints on TEXT enum + NUMERIC range.
 -- NULL grandfathered for rows with created_at < cutover_ts (no retroactive blocking).
 -- RISK C0-R-03 mitigation: separate TEXT column, NOT JSONB CHECK on metadata.
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman confirmed in-session (AskUserQuestion, session 7c76f0db) under
+-- SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 to apply the genuine deploy-drift gaps.
 
 BEGIN;
 
