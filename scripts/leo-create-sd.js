@@ -2122,6 +2122,29 @@ export function validateProposalShape(proposal, filePath) {
  * back rationale -> scope -> title; metadata.source='proposal' + provenance.
  * No vision_key/arch_key (avoids enrichFromVisionArch orphan-FK), no parentId,
  * no orchestrator auto-routing. PURE.
+ *
+ * SD-LEO-INFRA-ADAM-SELF-AUDIT-RESOLVERS-001 (FR-1a, load-bearing): stamp the CANONICAL
+ * Adam-sourced marker `metadata.sourced_by='adam'` ONLY when the proposal carries the
+ * explicit, opt-in `sourced_by: 'adam'` field. This is the durable attribution the
+ * sourcing-cadence probe counts (resolveFacts.sourcedInWindow). The marker is opt-in by
+ * design: a non-Adam proposal (e.g. drain-intake, which sets provenance.source='drain-intake'
+ * but never sourced_by) is left UN-stamped, so non-Adam creation paths are unchanged.
+ * The closed-whitelist metadata invariant is preserved — the key only appears when the
+ * proposal explicitly declares Adam origin.
+ *
+ * WHERE THIS FIRES (canonical Adam sourcing path — NOT a no-op): mapProposalToCreateArgs is the
+ * single mapper for ingestProposalObject(), which is the shared core of Adam's FILE-FREE DB-direct
+ * sourcing routes `--proposal-b64` and `--proposal-stdin` (SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001),
+ * plus `--from-proposal`. Those routes ARE the intended forward producer of Adam's sourcing: an Adam
+ * session emits a proposal JSON carrying `sourced_by:'adam'`, and this line is the ONLY code path
+ * that stamps the canonical marker. So FR-1b's consumer count (resolveFacts.sourcedInWindow) relies
+ * on a real producer, not a phantom one.
+ *
+ * Live-state note (verified 2026-06-15): the ~31 existing strategic_directives_v2 rows already
+ * carrying metadata.sourced_by='adam' have source=leo|plan|feedback (NOT proposal) and were stamped
+ * by Adam's earlier DB-direct sourcing (manual metadata write), since no other CODE producer stamps
+ * sourced_by. Those historical rows are still counted by FR-1b as-is; this stamp makes the
+ * proposal-based routes the durable, code-enforced producer going forward. No retroactive change.
  */
 export function mapProposalToCreateArgs(normalized, proposal, filePath) {
   return {
@@ -2144,6 +2167,10 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath) {
       gold_origin: proposal.gold_origin || null,
       necessity: proposal.necessity || null,
       dedup_note: proposal.dedup_note || null,
+      // FR-1a: canonical Adam-origin attribution (the code-enforced producer for FR-1b's
+      // sourcing-cadence consumer; see this function's doc comment). Only stamped for an explicit
+      // Adam-origin proposal — never coerced/defaulted, so a non-Adam proposal stays unattributed.
+      ...(proposal.sourced_by === 'adam' ? { sourced_by: 'adam' } : {}),
     },
   };
 }
