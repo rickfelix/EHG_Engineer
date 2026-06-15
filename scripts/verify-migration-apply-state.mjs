@@ -35,6 +35,41 @@ export const OUTCOME = {
   INFRA: 'MIGRATION_APPLY_STATE_INFRA_ERROR',
 };
 
+// ── Recent-vs-legacy classifier (SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 FR-2) ──
+//
+// The deploy-drift CI gate (--recent-only / --strict) must FAIL LOUD only on RECENT
+// committed-but-unapplied migrations and stay advisory for the deliberately-retired
+// legacy backlog (~106 files). A migration is RECENT iff it carries a leading date
+// token (YYYYMMDD…) that is >= RETIRED_BEFORE; everything older (and every non-dated
+// legacy file) is LEGACY and excluded from the strict fail set.
+//
+// RETIRED_BEFORE is the SD's corrective ship boundary: this SD applied every genuine
+// gap and retired the rest THROUGH 2026-06-14, so the entire pre-existing corpus is the
+// settled baseline and only a migration dated 2026-06-15+ that is unapplied is real new
+// drift. Pure + offline (filename only) — no DB and no per-file manifest to drift.
+// NOTE: this is noise-suppression for the gate ONLY; it does NOT weaken the 3-factor
+// @approved-by prod-deploy guard (scripts/lib/migration-guards.js), which is untouched.
+export const RETIRED_BEFORE = '20260615';
+
+/** Leading 8+ digit date token (YYYYMMDD…), or null for a non-dated (legacy) file. */
+export function migrationDateToken(file) {
+  const m = String(file).match(/^(\d{8,})/);
+  return m ? m[1] : null;
+}
+
+/** True iff the file is dated AND its date token >= cutoff (recent). Non-dated => legacy => false. */
+export function isRecent(file, cutoff = RETIRED_BEFORE) {
+  const token = migrationDateToken(file);
+  // Compare on the leading 8-char YYYYMMDD so a 14-digit YYYYMMDDHHMMSS token and an
+  // 8-digit token compare by calendar day (lexical == chronological for fixed-width dates).
+  return token !== null && token.slice(0, 8) >= String(cutoff).slice(0, 8);
+}
+
+/** Filter a gaps array (objects with a .file) to only the RECENT ones — the strict-gate fail set. */
+export function partitionRecentGaps(gaps, cutoff = RETIRED_BEFORE) {
+  return (gaps || []).filter((g) => isRecent(g.file, cutoff));
+}
+
 // ── Stage 1: list + deterministic order ──────────────────────────────────────
 
 /**
@@ -242,6 +277,12 @@ async function main() {
   const args = process.argv.slice(2);
   const strict = args.includes('--strict');
   const asJson = args.includes('--json');
+  // FR-2: --recent-only restricts the strict fail set (and the GAPS marker / alert) to
+  // RECENT gaps (date token >= cutoff). Legacy gaps still print as advisory. --since=YYYYMMDD
+  // overrides the RETIRED_BEFORE cutoff. The DEFAULT (no --recent-only) is unchanged.
+  const recentOnly = args.includes('--recent-only');
+  const sinceArg = args.find((a) => a.startsWith('--since='));
+  const cutoff = sinceArg ? sinceArg.slice('--since='.length) : RETIRED_BEFORE;
 
   const { forward, down } = listForwardMigrations();
   const fileFacts = forward.map((file) => ({
@@ -276,18 +317,37 @@ async function main() {
   };
   const gaps = results.filter((r) => r.status === 'PARTIAL' || r.status === 'NOT_APPLIED').reverse(); // newest first
 
+  // FR-2 recent-vs-legacy partition. failSet drives the --strict exit + GAPS marker + alert.
+  const recentGaps = partitionRecentGaps(gaps, cutoff);
+  const legacyGaps = gaps.filter((g) => !isRecent(g.file, cutoff));
+  const failSet = recentOnly ? recentGaps : gaps;
+
   if (asJson) {
-    console.log(JSON.stringify({ summary, gaps, droppedLater, files: results }, null, 2));
+    console.log(JSON.stringify({ summary, gaps, recentGaps, legacyGaps, cutoff, recentOnly, droppedLater, files: results }, null, 2));
   } else {
     console.log('MIGRATION APPLY-STATE REPORT (advisory, read-only)');
     console.log(`  ordering: legacy non-dated files first (lexical), then date-prefixed (chronological)`);
     console.log(`  scanned ${summary.scanned} forward migrations (${summary.excluded_down} *_DOWN.sql excluded)`);
     console.log(`  APPLIED=${summary.applied}  PARTIAL=${summary.partial}  NOT_APPLIED=${summary.not_applied}  NO_DDL=${summary.no_ddl}  dropped-later pairs=${summary.dropped_later}`);
     if (gaps.length) {
-      console.log(`\n  COMMITTED-NOT-DEPLOYED GAPS (${gaps.length} file(s), newest first):`);
-      for (const g of gaps) {
-        console.log(`   ${g.status.padEnd(12)} ${g.file}`);
-        for (const m of g.missing) console.log(`     missing ${m.cls}: ${m.name}`);
+      if (recentOnly) {
+        console.log(`\n  RECENT gaps (date >= ${cutoff}, BLOCKING under --strict): ${recentGaps.length}; LEGACY gaps (advisory only): ${legacyGaps.length}`);
+        if (recentGaps.length) {
+          console.log(`  RECENT COMMITTED-NOT-DEPLOYED GAPS (newest first):`);
+          for (const g of recentGaps) {
+            console.log(`   ${g.status.padEnd(12)} ${g.file}  [RECENT]`);
+            for (const m of g.missing) console.log(`     missing ${m.cls}: ${m.name}`);
+          }
+        }
+        if (legacyGaps.length) {
+          console.log(`  LEGACY gaps suppressed from the fail set (advisory): ${legacyGaps.map((g) => g.file).join(', ')}`);
+        }
+      } else {
+        console.log(`\n  COMMITTED-NOT-DEPLOYED GAPS (${gaps.length} file(s), newest first):`);
+        for (const g of gaps) {
+          console.log(`   ${g.status.padEnd(12)} ${g.file}`);
+          for (const m of g.missing) console.log(`     missing ${m.cls}: ${m.name}`);
+        }
       }
     }
   }
@@ -299,21 +359,23 @@ async function main() {
   // run (`npm run migration:apply-state`, no flags) is read-only and writes NO alert — a parked-but-not-
   // _DOWN migration is an expected gap, not a CRITICAL incident. Emit only when the operator has declared
   // the gaps actionable via --alert or --strict (strict already treats gaps as a failure exit).
-  if (gaps.length > 0 && (args.includes('--alert') || strict)) {
+  if (failSet.length > 0 && (args.includes('--alert') || strict)) {
     const { createRequire } = await import('node:module');
     const { emitBreakageAlert } = createRequire(import.meta.url)('../lib/breakage/emit-breakage-alert.cjs');
     await emitBreakageAlert('migration-fail', 'migration-apply-state', {
-      message: `migration-apply-state: ${gaps.length} committed-not-deployed migration gap(s)`,
-      sourceEntityId: gaps[0] ? gaps[0].file : null,
-      metadata: { gap_count: gaps.length, gaps: gaps.map((g) => ({ file: g.file, status: g.status })) },
+      message: `migration-apply-state: ${failSet.length} ${recentOnly ? 'recent ' : ''}committed-not-deployed migration gap(s)`,
+      sourceEntityId: failSet[0] ? failSet[0].file : null,
+      metadata: { gap_count: failSet.length, recent_only: recentOnly, gaps: failSet.map((g) => ({ file: g.file, status: g.status })) },
     });
   }
 
-  const marker = gaps.length ? OUTCOME.GAPS : OUTCOME.PASS;
+  // failSet drives the marker + strict exit: with --recent-only, legacy gaps print
+  // (advisory) but never flip the marker or fail the gate.
+  const marker = failSet.length ? OUTCOME.GAPS : OUTCOME.PASS;
   // --json keeps stdout pure JSON for piping; the marker goes to stderr there.
   if (asJson) console.error(`[${marker}]`);
   else console.log(`\n[${marker}]`);
-  return gaps.length && strict ? 1 : 0;
+  return failSet.length && strict ? 1 : 0;
 }
 
 // Entry — graceful teardown armed only after the work settles (exit-hang class,
