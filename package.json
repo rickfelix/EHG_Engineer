@@ -371,6 +371,7 @@
     "sd:claim": "node scripts/claude-session-coordinator.mjs claim",
     "sd:release": "node scripts/claude-session-coordinator.mjs release",
     "sd:verify": "node scripts/sd-verify.js",
+    "sd:verify-completion": "node scripts/verify-completion.mjs",
     "sd:verify:list": "node scripts/sd-verify.js --list",
     "sd:complete": "node scripts/sd-verify.js --complete",
     "sd:hierarchy": "node scripts/lib/sd-hierarchy-mapper.js",
