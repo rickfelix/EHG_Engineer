@@ -2,7 +2,7 @@
  * Unit tests for the pure YouTube strategy-extraction core (FR-3 of
  * SD-LEO-INFRA-YOUTUBE-STRATEGY-EXTRACTION-001). No I/O — pure functions only.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   tokenize,
   categorizeFramework,
@@ -10,6 +10,9 @@ import {
   buildLedgerEntry,
   isEnhancementWorthy,
   isDisposable,
+  summarizeEntries,
+  runExtraction,
+  cleanLedgerEntry,
   CATEGORIES,
 } from '../../../lib/integrations/youtube/strategy-extract-core.js';
 
@@ -105,5 +108,88 @@ describe('isDisposable', () => {
     expect(isDisposable({ analysis_status: 'failed_long' })).toBe(false);
     expect(isDisposable({ analysis_status: 'failed_other' })).toBe(false);
     expect(isDisposable(null)).toBe(false);
+  });
+});
+
+describe('summarizeEntries', () => {
+  it('counts by status/method/category/dedup/recommendation', () => {
+    const s = summarizeEntries([
+      { analysis_status: 'ok', method: 'native', category: 'build', dedup_status: 'novel', recommendation: 'promote' },
+      { analysis_status: 'ok', method: 'transcript_fallback', category: 'build', dedup_status: 'dup-of-SD', recommendation: 'review' },
+      { analysis_status: 'failed_long', method: 'failed_long', category: null, dedup_status: null, recommendation: null },
+    ]);
+    expect(s.total).toBe(3);
+    expect(s.by_status).toEqual({ ok: 2, failed_long: 1 });
+    expect(s.by_category).toEqual({ build: 2 });
+    expect(s.by_dedup).toEqual({ novel: 1, 'dup-of-SD': 1 });
+  });
+});
+
+describe('cleanLedgerEntry', () => {
+  it('strips _-prefixed working fields', () => {
+    expect(cleanLedgerEntry({ video_id: 'v', _row: {}, _summary: 's', category: 'build' })).toEqual({ video_id: 'v', category: 'build' });
+  });
+});
+
+describe('runExtraction (injectable orchestration)', () => {
+  const sdList = [{ sd_key: 'SD-PRICING-001', title: 'Value based pricing framework' }];
+  const candidates = [
+    { youtube_video_id: 'vid00000001', title: 'Pricing framework deep dive', channel_name: 'Wharton', duration_seconds: 4000, chairman_intent: 'value', target_application: 'ehg_engineer' },
+    { youtube_video_id: 'vid00000002', title: 'CI automation pipeline tooling', channel_name: 'DevX', duration_seconds: 600, chairman_intent: 'insight', target_application: 'ehg_engineer' },
+    { youtube_video_id: 'vid00000003', title: 'Unwatchable private video', channel_name: 'X', duration_seconds: 5000, chairman_intent: 'idea' },
+  ];
+
+  const analyzeStub = vi.fn(async (videoId) => {
+    if (videoId === 'vid00000001') return { summary: 'pricing framework content', method: 'transcript_fallback' };
+    if (videoId === 'vid00000002') return { summary: 'a CI automation pipeline tooling framework', method: 'native' };
+    return { summary: null, method: 'failed_long' };
+  });
+  const scoreStub = vi.fn(async (items) => ({
+    item_scores: items.map((_, i) => ({ item_index: i + 1, composite: i === 0 ? 55 : 82, recommendation: i === 0 ? 'review' : 'promote' })),
+    method: 'ai',
+  }));
+
+  it('analyzes, categorizes, dedups, and batch-scores OK entries; fails-safe the rest', async () => {
+    const { entries, summary } = await runExtraction(candidates, { analyzeWithFallback: analyzeStub, score: scoreStub, sdList });
+    expect(entries).toHaveLength(3);
+
+    const e1 = entries[0]; // pricing -> dup-of-SD, scored 55/review
+    expect(e1.analysis_status).toBe('ok');
+    expect(e1.method).toBe('transcript_fallback');
+    expect(e1.dedup_status).toBe('dup-of-SD');
+    expect(e1.matched_sd).toBe('SD-PRICING-001');
+    expect(e1.composite_score).toBe(55);
+    expect(e1.recommendation).toBe('review');
+
+    const e2 = entries[1]; // CI automation -> enhancement, novel, scored 82/promote
+    expect(e2.analysis_status).toBe('ok');
+    expect(e2.category).toBe('enhancement');
+    expect(e2.dedup_status).toBe('novel');
+    expect(e2.composite_score).toBe(82);
+    expect(isEnhancementWorthy(e2)).toBe(true);
+
+    const e3 = entries[2]; // failed
+    expect(e3.analysis_status).toBe('failed_long');
+    expect(e3.category).toBe(null);
+    expect(e3.composite_score).toBe(null);
+
+    expect(summary.by_status).toEqual({ ok: 2, failed_long: 1 });
+    expect(scoreStub).toHaveBeenCalledTimes(1); // batched once over the 2 OK items
+  });
+
+  it('fails-open when no score dep is provided (OK entries keep null score)', async () => {
+    const { entries } = await runExtraction([candidates[1]], { analyzeWithFallback: analyzeStub, sdList });
+    expect(entries[0].analysis_status).toBe('ok');
+    expect(entries[0].composite_score).toBe(null);
+  });
+
+  it('treats an analyzer throw as failed_other (never propagates)', async () => {
+    const thrower = vi.fn(async () => { throw new Error('boom'); });
+    const { entries } = await runExtraction([candidates[1]], { analyzeWithFallback: thrower });
+    expect(entries[0].analysis_status).toBe('failed_other');
+  });
+
+  it('throws only if analyzeWithFallback dep is missing', async () => {
+    await expect(runExtraction(candidates, {})).rejects.toThrow(/analyzeWithFallback/);
   });
 });
