@@ -13,6 +13,7 @@ import {
   classifyFunctionalAdequacy,
   aggregateCanary,
   kindForPath,
+  isCodeFile,
   TRIVIAL_BYTES,
   MIN_SUBSTANTIVE_LINES,
 } from '../../lib/eva/deliverable-canary.js';
@@ -55,6 +56,50 @@ describe('deriveDeclaredDeliverables — auto-derive a declared manifest', () =>
     expect(kindForPath('database/migrations/x.sql')).toBe('migration');
     expect(kindForPath('tests/unit/x.test.js')).toBe('test');
     expect(kindForPath('lib/eva/x.js')).toBe('file');
+  });
+});
+
+describe('deriveDeclaredDeliverables — no-false-fail guards (adversarial review)', () => {
+  it('EXCLUDES git files the SD DELETED or RENAMED (they are correctly absent at main)', () => {
+    const changed = [
+      { file: 'lib/kept.js', change_type: 'modified' },
+      { file: 'lib/added.js', change_type: 'added' },
+      { file: 'lib/old-deprecated.js', change_type: 'deleted' },
+      { file: 'lib/old-name.js', change_type: 'renamed' },
+    ];
+    const refs = deriveDeclaredDeliverables({}, changed).map((d) => d.ref);
+    expect(refs).toContain('lib/kept.js');
+    expect(refs).toContain('lib/added.js');
+    expect(refs).not.toContain('lib/old-deprecated.js'); // deleted => would false-fail existence
+    expect(refs).not.toContain('lib/old-name.js');       // renamed old name => absent at main
+  });
+
+  it('SKIPS reference-phrasing key_changes entries (REUSE / see / removed) — not deliverables to verify', () => {
+    const sd = {
+      key_changes: [
+        'REUSE lib/gap-detection/analyzers/deliverable-analyzer.js for the git signal',
+        'See scripts/some-reference-script.js for the prior art',
+        'lib/eva/deliverable-canary.js (NEW): the real deliverable',
+      ],
+    };
+    const refs = deriveDeclaredDeliverables(sd, []).map((d) => d.ref);
+    expect(refs).toEqual(['lib/eva/deliverable-canary.js']); // only the genuine NEW deliverable
+  });
+
+  it('STRIPS URL-embedded paths so a citation does not become a (false-fail) deliverable', () => {
+    const sd = { key_changes: ['Modeled after https://github.com/other/repo/blob/main/lib/shared/utils.js'] };
+    const refs = deriveDeclaredDeliverables(sd, []).map((d) => d.ref);
+    expect(refs).not.toContain('lib/shared/utils.js');
+  });
+});
+
+describe('isCodeFile — functional-adequacy gating', () => {
+  it('true for code extensions, false for config/docs/data (existence-only, no hollow probe)', () => {
+    expect(isCodeFile('lib/x.js')).toBe(true);
+    expect(isCodeFile('lib/x.ts')).toBe(true);
+    expect(isCodeFile('config/flags.json')).toBe(false);
+    expect(isCodeFile('docs/CHANGELOG.md')).toBe(false);
+    expect(isCodeFile('database/migrations/x.sql')).toBe(false);
   });
 });
 
