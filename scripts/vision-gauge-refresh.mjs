@@ -17,42 +17,19 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeBuildGauge } from '../lib/vision/vdr-registry.js';
+// SD-LEO-INFRA-VDR-GREP-SEAM-CROSSREPO-001: the cross-repo code-grep seam + repo-root map were extracted
+// from this file into a SINGLE shared source so scripts/adam-exec-summary.mjs injects the identical seam.
+import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
-// Sibling-repo roots for cross-repo code_grep probes (e.g. the ehg app UI). Absent ⇒ 'unknown'.
-const REPO_ROOTS = {
-  EHG_Engineer: REPO_ROOT,
-  ehg: path.resolve(REPO_ROOT, '..', 'ehg'),
-};
-
-/**
- * Portable code-grep seam for the VDR: `git grep` over tracked files (no ripgrep dependency),
- * scoped to a subdir pathspec. Returns { accessible, matched }; accessible=false ⇒ the probe
- * degrades to 'unknown' (honest — never guessed).
- */
-function grep(pattern, sub, repo) {
-  const root = REPO_ROOTS[repo];
-  if (!root || !fs.existsSync(root)) return { accessible: false, matched: false };
-  const target = sub ? path.join(root, sub) : root;
-  if (!fs.existsSync(target)) return { accessible: false, matched: false };
-  try {
-    // Exclude archived/dead/test paths so a vocabulary hit there cannot credit a capability
-    // (review: 'effort_level' in scripts/archive/* false-credited the fleet-dial capability).
-    execFileSync('git', ['-C', root, 'grep', '-lE', pattern, '--', sub || '.',
-      ':!**/archive/**', ':!**/__tests__/**', ':!**/*.test.*', ':!**/*.spec.*'],
-      { stdio: 'pipe', timeout: 20000 });
-    return { accessible: true, matched: true };
-  } catch (e) {
-    if (e && e.status === 1) return { accessible: true, matched: false };
-    return { accessible: false, matched: false };
-  }
-}
+// Shared seam: git grep over tracked files (archive/test excluded); an absent/unreadable checkout
+// returns accessible:false so the probe degrades to 'unknown' (honest — never guessed). The 'ehg'
+// sibling root is overridable via VDR_EHG_REPO_ROOT (default <repo>/../ehg).
+const grep = makeDefaultGrepSeam({ engineerRoot: REPO_ROOT });
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
