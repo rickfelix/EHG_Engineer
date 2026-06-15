@@ -143,6 +143,18 @@ async function main() {
   const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
   const supabase = createSupabaseServiceClient();
 
+  // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-B / FR-2: single-writer mutation guard.
+  // Dynamic import of .mjs guard from .cjs context; async context already established.
+  // Finding 1: resolveOwnSessionId resolves env-first with .claude/session-id.json fallback,
+  // so an out-of-band cron run with an empty env var still resolves the real id and can block a rogue.
+  const { guardMutation: _guardMutation, resolveOwnSessionId: _resolveOwnSessionId } = await import('../lib/coordinator-mutation-guard.mjs');
+  const _mySessionId = _resolveOwnSessionId();
+  const _fleetGuard = await _guardMutation(supabase, _mySessionId, 'assign-fleet-identities');
+  if (!_fleetGuard.allowed) {
+    console.log('[FLEET-IDENTITY] mutation blocked by coordinator guard — not the canonical coordinator; skipping assignment.');
+    return;
+  }
+
   // Parse flags
   const args = process.argv.slice(2);
   const forceReassign = args.includes('--force');
