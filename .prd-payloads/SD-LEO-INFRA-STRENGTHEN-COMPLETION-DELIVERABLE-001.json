@@ -1,0 +1,121 @@
+{
+  "executive_summary": "Strengthen SD-completion deliverable verification from a PR/handoff-EXISTENCE PROXY into a LIVE-END-STATE deliverable canary. Today the completion gate (enforce_progress_on_completion trigger) and the PCVP verifier (lib/eva/post-completion-verifier.js) only prove the WORKFLOW ran: progress=100%, an EXEC-phase handoff exists, a PR_MERGE shipping_decision exists, stories marked completed, handoff score >=70. None verify that the SD's DECLARED deliverables actually exist and function at main — an SD can merge a PR yet ship a hollow or absent deliverable and still pass (the gap the chairman flagged). This SD adds a conservative, advisory-first deliverable canary: auto-derive the SD's declared deliverables (reusing the existing git-based lib/gap-detection/analyzers/deliverable-analyzer.js plus the SD's scope/key_changes), probe each for EXISTENCE (present + non-empty at main) and FUNCTIONAL ADEQUACY (non-hollow), and ROUTE failures to a durable channel — without false-failing legitimate completions or hard-blocking on inconclusive derivation. Pure classifiers + thin IO, mirroring the conservative no-false-alarm pattern of lib/breakage/active-canary-probes.cjs. Wired as a new tiered check in the PCVP verifier; default ADVISORY (records result + routes a flag), with an opt-in env flag to escalate to blocking once trusted (it gates EVERY completion — blast radius demands an opt-in rollout).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Auto-derive an SD's declared deliverables into a typed manifest",
+      "description": "Add a pure deriveDeclaredDeliverables(sd, changedFiles) in lib/eva/deliverable-canary.js that produces a manifest of {ref, kind, declared_from} entries. Sources: (a) the SD's key_changes / scope text parsed for explicitly-named repo paths and DB objects (declared_from='scope'); (b) the git-derived changed files from the EXISTING lib/gap-detection/analyzers/deliverable-analyzer.js (declared_from='git'), categorized (code|migration|test|config|docs). Reuse deliverable-analyzer — do NOT re-roll git derivation. kind in {file, migration, db_object, test}. When NO deliverables are derivable (no scope paths AND no git signal), the manifest is empty and the canary is INCONCLUSIVE (never a false-fail).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "deriveDeclaredDeliverables returns a typed manifest from key_changes/scope paths + deliverable-analyzer git files, deduped.",
+        "Reuses lib/gap-detection/analyzers/deliverable-analyzer.js for git-derived files (no re-rolled git logic).",
+        "An SD with no derivable deliverables yields an empty manifest flagged inconclusive (not a fail)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Existence probe per declared deliverable (present + non-empty at main)",
+      "description": "Add a pure classifyExistence(deliverable, fsProbeResult) classifier + a thin IO probe that checks each file/migration deliverable EXISTS at the current main HEAD and is non-empty (above a trivial byte/line floor); for a db_object deliverable, checks the object is present via introspection. CONSERVATIVE: a probe that cannot run (IO error, ambiguous ref) returns inconclusive (breakage:false) — never a false 'missing'. A deliverable that is DECLARED but ABSENT/empty at main returns exists:false (the core gap: PR merged but file not actually present).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A declared deliverable present + non-empty at main => exists:true.",
+        "A declared deliverable absent or empty at main => exists:false (caught — the PR-proxy gap).",
+        "An unresolvable/erroring probe => inconclusive, never a false 'missing' (fail-open)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Functional-adequacy probe per declared deliverable (non-hollow)",
+      "description": "Add a pure classifyFunctionalAdequacy(deliverable, signals) classifier applying conservative non-hollow heuristics per kind: a code file is above a minimal substantive-content threshold and, if the SD/manifest names a symbol/export, that symbol is present; a code deliverable has an associated test OR the SD has a passing activation test; a migration declares at least one DDL object. Thresholds are intentionally LENIENT to avoid false-failing legitimately-small but real deliverables — the probe flags HOLLOW (e.g. empty stub, a file that is only a comment/export-nothing), not 'small'. Inconclusive when adequacy cannot be assessed.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A substantive real deliverable => adequate:true.",
+        "A hollow deliverable (empty/stub/comment-only/no declared symbol) => adequate:false.",
+        "A legitimately-small-but-real deliverable is NOT false-failed; unassessable => inconclusive."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Wire the canary into the PCVP verifier + route failures durably (advisory-first, opt-in blocking)",
+      "description": "Add a 'deliverable_canary' check to lib/eva/post-completion-verifier.js (VERIFICATION_TIERS + checkFunctions) that runs FR-1..FR-3 and produces a pass/fail/inconclusive verdict with per-deliverable detail. ROUTING: the verdict is recorded in sd_verification_results / pcvp_verification_log (existing stores) AND, on a real failure (declared deliverable missing/hollow), a durable completion-flag/feedback row is routed. DEFAULT = ADVISORY: the canary records + routes but does NOT change the existing pass/fail blocking semantics; an opt-in env flag (e.g. LEO_DELIVERABLE_CANARY_ENFORCE=block) escalates a confirmed canary failure to a hard fail. Inconclusive NEVER blocks. This conservative, env-gated rollout matches the blast radius (the verifier runs on every completion).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "deliverable_canary appears in the PCVP tier config + checkFunctions and runs FR-1..FR-3.",
+        "A canary failure routes a durable flag (sd_verification_results + completion-flag/feedback); inconclusive routes advisory-only.",
+        "Default behavior is advisory (no change to existing blocking); LEO_DELIVERABLE_CANARY_ENFORCE=block escalates a confirmed failure to a hard fail. Inconclusive never blocks."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Both-directions tests + activation test",
+      "description": "tests/unit/deliverable-canary.test.js (the activation test) covers the pure classifiers in BOTH directions: a real, substantive, present deliverable PASSES (no false-fail); a missing/empty/hollow declared deliverable FAILS (catches the proxy gap); an inconclusive/unassessable case does NOT fail (conservative fail-open). Tests are pure (no DB/IO literals — build any keys dynamically) per the active-canary-probes pure-classifier pattern.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "tests/unit/deliverable-canary.test.js is green and set as activation_test_id.",
+        "Covers pass (real deliverable), fail (missing/hollow), and inconclusive (no false-fail) directions.",
+        "No DB-test-guard trigger literals in the pure test."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Pure core + thin IO", "description": "lib/eva/deliverable-canary.js separates pure classifiers (derive/existence/functional-adequacy) from thin IO (fs/git/DB probes), mirroring lib/breakage/active-canary-probes.cjs." },
+    { "id": "TR-2", "title": "Conservative / no false alarm", "description": "Every classifier's uncertain case returns inconclusive (no false fail); only a DECLARED-and-(absent|hollow) deliverable fails. Default advisory; blocking is opt-in (LEO_DELIVERABLE_CANARY_ENFORCE)." },
+    { "id": "TR-3", "title": "Reuse, don't rebuild", "description": "Reuse lib/gap-detection/analyzers/deliverable-analyzer.js for git derivation and the existing sd_verification_results/pcvp_verification_log stores + completion-flags routing." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "real present substantive deliverable", "type": "unit", "expected": "existence + functional-adequacy pass; canary pass" },
+    { "id": "TS-2", "scenario": "declared deliverable absent/empty at main (PR merged, file missing)", "type": "unit", "expected": "existence fail; canary fail; durable flag routed" },
+    { "id": "TS-3", "scenario": "hollow deliverable (stub/comment-only/no declared symbol)", "type": "unit", "expected": "functional-adequacy fail; canary fail" },
+    { "id": "TS-4", "scenario": "no derivable deliverables / unassessable", "type": "unit", "expected": "inconclusive; canary does NOT fail or block" }
+  ],
+  "acceptance_criteria": [
+    "The deliverable canary catches a completion whose declared deliverable is absent/hollow at main (the PR-existence-proxy gap) and routes it durably.",
+    "It never false-fails a legitimate completion and never hard-blocks on inconclusive derivation; blocking is opt-in via LEO_DELIVERABLE_CANARY_ENFORCE.",
+    "Activation test tests/unit/deliverable-canary.test.js is green; deliverable-analyzer + PCVP stores reused (not rebuilt)."
+  ],
+  "risks": [
+    { "risk": "False-failing a legitimate completion (the canary gates every completion)", "mitigation": "Conservative classifiers (inconclusive on any uncertainty), lenient functional thresholds (flag hollow not small), default ADVISORY (no blocking) with opt-in enforcement, both-directions tests", "severity": "high" },
+    { "risk": "Deliverable derivation is imprecise (git history vs declared scope diverge)", "mitigation": "Derive from BOTH scope/key_changes and git; empty/ambiguous derivation => inconclusive, never a fail", "severity": "medium" },
+    { "risk": "Probing main for files races a still-merging PR", "mitigation": "Canary runs at/after completion (post-merge); inconclusive on IO/race rather than false-missing", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["lib/eva/post-completion-verifier.js (PCVP)", "post-completion validators / completion-flags routing", "fleet completion-integrity reporting (runBatchVerification)"],
+    "dependencies": ["lib/gap-detection/analyzers/deliverable-analyzer.js", "strategic_directives_v2 (scope, key_changes)", "sd_verification_results + pcvp_verification_log", "git working tree at main"],
+    "data_contracts": ["sd_verification_results (verification_type, result, details)", "pcvp_verification_log", "completion-flag/feedback routing for canary failures"],
+    "runtime_config": ["LEO_DELIVERABLE_CANARY_ENFORCE (default unset/advisory; 'block' escalates a confirmed failure to a hard fail)"],
+    "observability_rollout": ["Advisory-first: records verification results + routes flags without changing blocking; opt-in enforcement after the advisory signal is trusted; both-directions tests gate the rollout"]
+  },
+  "system_architecture": {
+    "summary": "A pure deliverable-canary classifier module + a new advisory check in the PCVP verifier, reusing the existing git deliverable-analyzer and verification stores.",
+    "components": [
+      { "name": "lib/eva/deliverable-canary.js", "change": "NEW (pure derive/existence/functional-adequacy classifiers + thin IO probes)" },
+      { "name": "lib/eva/post-completion-verifier.js", "change": "UPDATE (add 'deliverable_canary' check to VERIFICATION_TIERS + checkFunctions; advisory-first + opt-in enforce)" },
+      { "name": "lib/gap-detection/analyzers/deliverable-analyzer.js", "change": "REUSE (git-derived changed files)" },
+      { "name": "tests/unit/deliverable-canary.test.js", "change": "NEW (both-directions activation test)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build a pure, conservative deliverable-canary (derive declared deliverables -> existence probe -> functional-adequacy probe -> verdict), wire it as an advisory check in the PCVP verifier with opt-in enforcement, reusing the git deliverable-analyzer + existing verification stores; prove both directions with a pure activation test; adversarial-review the gate logic.",
+    "steps": [
+      "FR-1: lib/eva/deliverable-canary.js pure deriveDeclaredDeliverables(sd, changedFiles) — parse key_changes/scope for declared paths/objects + take deliverable-analyzer's git files; typed deduped manifest; empty => inconclusive.",
+      "FR-2: pure classifyExistence + thin fs/git/DB probe — present + non-empty at main => exists; absent/empty => fail; erroring/ambiguous => inconclusive (fail-open).",
+      "FR-3: pure classifyFunctionalAdequacy + signals — non-hollow heuristics (substantive content, declared symbol present, test/activation exists); lenient (flag hollow not small); unassessable => inconclusive.",
+      "FR-4: wire 'deliverable_canary' into lib/eva/post-completion-verifier.js (tiers + checkFunctions); record in sd_verification_results/pcvp_verification_log + route a durable flag on failure; DEFAULT advisory; LEO_DELIVERABLE_CANARY_ENFORCE=block opt-in; inconclusive never blocks.",
+      "FR-5: tests/unit/deliverable-canary.test.js — pass/fail/inconclusive directions; pure (no DB-test-guard literals).",
+      "Adversarial-review the gate logic in BOTH directions (legitimate completion still passes; hollow/absent now fails; inconclusive never false-fails) before EXEC-TO-PLAN; fix-first; commit; ship."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the deliverable canary against a known-good recently-completed SD that shipped real files (e.g. SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001). Inspect the verification result.", "expected_outcome": "The canary auto-derives the SD's declared deliverables, existence + functional-adequacy probes PASS, the result records pass — NO false-fail on a legitimate completion." },
+    { "step_number": 2, "instruction": "Run the canary against a synthetic SD whose declared deliverables do NOT exist at main (or are empty/hollow).", "expected_outcome": "The existence/functional-adequacy probe FAILS and routes a durable flag (sd_verification_results + completion-flag/feedback) — catching the gap the PR-existence proxy misses." },
+    { "step_number": 3, "instruction": "Run the canary on an SD where no deliverables are derivable (ambiguous/no git or scope signal).", "expected_outcome": "The canary returns INCONCLUSIVE and records advisory-only — it does NOT hard-block or false-fail on ambiguity (conservative, fail-open)." }
+  ],
+  "success_metrics": [
+    { "metric": "Catches a completion whose declared deliverable is absent/hollow at main", "target": "100% (the synthetic hollow case fails + routes a flag)" },
+    { "metric": "False-fail rate on legitimate completions", "target": "0 (real-deliverable + inconclusive cases never fail)" },
+    { "metric": "Rollout safety", "target": "default advisory (no blocking); blocking opt-in via LEO_DELIVERABLE_CANARY_ENFORCE" },
+    { "metric": "Activation test tests/unit/deliverable-canary.test.js", "target": "green (both directions)" }
+  ],
+  "activation_test_id": "tests/unit/deliverable-canary.test.js",
+  "metadata": { "sd_key": "SD-LEO-INFRA-STRENGTHEN-COMPLETION-DELIVERABLE-001" }
+}
