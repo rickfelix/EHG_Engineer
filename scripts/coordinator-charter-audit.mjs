@@ -29,7 +29,7 @@ import { checkoutFreshness, freshnessBadge } from '../lib/governance/checkout-fr
 import {
   classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
-  extractDepKey, resolveWorktreeCount, computeDispatchBelt,
+  extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectProgressStall,
 } from '../lib/coordinator/charter-audit-detectors.mjs';
 // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: DUTY-7 silent-stall detector (drafts stranded with null vision_score).
 import { findStalledDrafts } from '../lib/coordinator/draft-stall-detector.mjs';
@@ -37,6 +37,12 @@ import { findStalledDrafts } from '../lib/coordinator/draft-stall-detector.mjs';
 const require = createRequire(import.meta.url);
 const { isWithinArmedSilenceWindow } = require('../lib/fleet/silence-cap.cjs');
 const { classifyDispatchIneligibility } = require('../lib/fleet/claim-eligibility.cjs');
+// SD-LEO-INFRA-PROGRESS-STALL-DETECTION-001: reuse the CANONICAL stuck-worker staleness predicate for DUTY-8
+// (no re-derived staleness math → no drift with the stale-session-sweep). GUARDED like the PID resolver above:
+// a missing/broken detectors.cjs degrades detectStuckWorker to null → detectProgressStall fail-opens to a
+// no-violation no-op (DUTY-8 is strictly additive and must never crash the audit at import time).
+let detectStuckWorker = null;
+try { ({ detectStuckWorker } = require('../lib/coordinator/detectors.cjs')); } catch { /* DUTY-8 fail-open if unavailable */ }
 // Reuse the sweep's authoritative PID resolver (import-safe — main() is require.main-guarded). Optional: a
 // failed import degrades the PID signal to a no-op (armed-silence + heartbeat still drive liveness).
 let resolveCcPidFromTerminalId = () => null;
@@ -48,6 +54,16 @@ const DISPATCH_RANK_TTL_MS = 60 * 60 * 1000; // mirrors worker-checkin.cjs DISPA
 // only on NaN/empty/negative.
 const _draftStallDays = Number(process.env.DRAFT_STALL_DAYS_THRESHOLD);
 const DRAFT_STALL_MS = (Number.isFinite(_draftStallDays) && _draftStallDays >= 0 ? _draftStallDays : 7) * 86400000;
+// SD-LEO-INFRA-PROGRESS-STALL-DETECTION-001 — DUTY-8 threshold: a claimed SD whose updated_at is stale beyond
+// this (while the worker is fresh-heartbeating + NOT in armed-silence) is a progress-stall. Honor an explicit 0.
+// Default 4h is DELIBERATELY conservative and is the PRIMARY false-positive guard: strategic_directives_v2.updated_at
+// only advances on an actual SD-row UPDATE (handoffs / phase writes / progress-tick), NOT during ordinary EXEC work
+// (editing code, running tests). A worker can also only arm an expected_silence_until window for ~30min (silence
+// hard cap, well below this threshold), so armed-silence is merely a secondary early-out for an explicitly-parked
+// worker — the 4h threshold (far longer than any normal phase) is what keeps DUTY-8 a rare, high-signal advisory
+// rather than nagging every healthy long-EXEC worker. Env-tunable via PROGRESS_STALL_HOURS_THRESHOLD.
+const _progressStallHrs = Number(process.env.PROGRESS_STALL_HOURS_THRESHOLD);
+const PROGRESS_STALL_MS = (Number.isFinite(_progressStallHrs) && _progressStallHrs >= 0 ? _progressStallHrs : 4) * 3600000;
 const TERMINAL = new Set(['completed', 'cancelled', 'archived', 'deferred']);
 const depKeysOf = (s) => (Array.isArray(s.dependencies) ? s.dependencies.map(extractDepKey).filter(Boolean) : []);
 
@@ -136,6 +152,9 @@ async function main() {
     // Advisory remediation count only — summarizeViolations never drives a process.exit (foundational-query
     // failures are the ONLY hard exits), so a stalled draft surfaces a remediation action, never a hard fail.
     draft: findStalledDrafts(sds, nowMs, { thresholdMs: DRAFT_STALL_MS, scoredKeys: scoredDraftKeys }),
+    // SD-LEO-INFRA-PROGRESS-STALL-DETECTION-001: DUTY-8 — claim-holders heartbeat-ALIVE but claimed SD FROZEN.
+    // Reuses the canonical detectStuckWorker predicate (injected); advisory remediation count only (no new exit).
+    progress: detectProgressStall({ liveSessions: live, sds, nowMs, thresholdMs: PROGRESS_STALL_MS, isWithinArmedSilence: isWithinArmedSilenceWindow, detectStuck: detectStuckWorker }),
   };
 
   const flag = (r) => (r.remediation ? '  ⚠ ' + r.remediation : '');
@@ -147,6 +166,7 @@ async function main() {
   console.log('  DUTY-6 BACKLOG-RANK  : ' + D.rank.detail + flag(D.rank));
   console.log('  QUIET-TICK COMMITTED : ' + D.quiet.detail + flag(D.quiet));
   console.log('  DUTY-7 DRAFT-STALL   : ' + D.draft.detail + flag(D.draft)); // SILENT-STALL-PREVENTION-001
+  console.log('  DUTY-8 PROGRESS-STALL: ' + D.progress.detail + flag(D.progress)); // PROGRESS-STALL-DETECTION-001
 
   // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: ADVISORY freshness dimension — fail-open and deliberately
   // kept OUT of `D`/summarizeViolations, so a stale checkout surfaces a warning but never trips the
