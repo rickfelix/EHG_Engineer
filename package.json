@@ -501,6 +501,7 @@
     "check:migration-readiness": "node scripts/check-migration-readiness.mjs",
     "check:ghosts": "node scripts/ghost-completion-check.mjs",
     "check:external-status": "node scripts/check-external-status.mjs",
+    "check:workflow-yaml": "node scripts/check-workflow-yaml.mjs",
     "validate:capability-trigger": "node scripts/validate-capability-lifecycle-trigger.mjs --live",
     "qf:create": "node scripts/create-quick-fix.js",
     "migration:apply-state": "node scripts/verify-migration-apply-state.mjs",
