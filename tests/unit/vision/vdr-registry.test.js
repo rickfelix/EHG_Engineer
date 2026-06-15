@@ -77,9 +77,11 @@ describe('assertRegistryCoherence (FR-1 fail-loud denominator↔probe lockstep)'
 });
 
 describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', () => {
-  it('computes overall % + per-layer, EXCLUDING unknowns from the denominator', async () => {
-    // KR-04 achieved (built), KR-05 pending (unbuilt), KR-02 pending current>0 (partial);
-    // agent_messages=2 (built), pattern_occurrences=0 (unbuilt); all code_grep → unknown (no grep seam).
+  it('computes overall % + per-layer with HONEST banding, EXCLUDING unknowns from the denominator', async () => {
+    // 6 DB-backed probeable; 5 code_grep → unknown (no grep seam). With the post-review semantics:
+    //   built(1):  Take-a-dollar (KR04 achieved)
+    //   partial(.5): self-operating (agent_messages=2 < min20), survivability (KR02 45/90)
+    //   unbuilt(0): distance-to-quit (KR05 0/1), venture-learning (pattern_occurrences=0), north-star (KR05 0/1)
     const io = {
       supabase: stubSupabase({
         countByTable: { agent_messages: 2, pattern_occurrences: 0, key_results: 1 },
@@ -89,21 +91,36 @@ describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', ()
           'KR-2026-07-02': { status: 'pending', current_value: 45, target_value: 90 },
         },
       }),
-      // no grep → code_grep probes return 'unknown'
     };
     const g = await computeBuildGauge({ io, visionMarkdown: visionFixture() });
     expect(g.available).toBe(true);
     expect(g.coherence.ok).toBe(true);
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
-    // 5 code_grep capabilities → unknown; 6 DB-backed → probeable
     expect(g.unknown_count).toBe(5);
     expect(g.denominator).toBe(6);
-    // built: Take-a-dollar(KR04), north-star(row_predicate exists), self-operating(agent_messages=2) = 3 built(1.0)
-    // partial: survivability(KR02 45/90) = 0.5 ; unbuilt: distance-to-quit(KR05), venture-learning(pattern_occurrences=0) = 0
-    // overall = (1+1+1+0.5+0+0)/6 = 3.5/6 = 58%
-    expect(g.overall_pct).toBe(58);
-    // every component carries an honest status + score mapping
+    // (1 + 0.5 + 0.5 + 0 + 0 + 0) / 6 = 2.0/6 = 33%
+    expect(g.overall_pct).toBe(33);
+    expect(g.per_layer).toMatchObject({ venture: 75, infrastructure: 50, application: 0, process: 0 });
     for (const c of g.components) expect(STATUS_SCORE).toHaveProperty(c.status);
+  });
+
+  it('FIX: all-unknown (0 probeable) ⇒ overall_pct=null + available:false (not a confident 0%)', async () => {
+    // no supabase, no grep ⇒ every probe is 'unknown'
+    const g = await computeBuildGauge({ io: {}, visionMarkdown: visionFixture() });
+    expect(g.denominator).toBe(0);
+    expect(g.available).toBe(false);
+    expect(g.overall_pct).toBeNull();
+    expect(g.measured_at_note).toMatch(/unmeasurable|no probeable/i);
+  });
+
+  it('FIX: registry↔vision drift ⇒ gauge withheld (available:false), not computed over a wrong denominator', async () => {
+    // a vision fixture with an unmapped capability → coherence.ok=false
+    const md = visionFixture([...VDR_REGISTRY.map((e) => e.capability), 'Brand New Unmapped Capability']);
+    const g = await computeBuildGauge({ io: { supabase: stubSupabase({}) }, visionMarkdown: md });
+    expect(g.coherence.ok).toBe(false);
+    expect(g.available).toBe(false);
+    expect(g.overall_pct).toBeNull();
+    expect(g.measured_at_note).toMatch(/drift/i);
   });
 
   it('fails soft (available:false) when the vision doc path does not exist', async () => {
@@ -125,19 +142,23 @@ describe('runProbe (FR-1 typed probe runners, injected IO)', () => {
     expect((await runProbe({ type: 'kr_status', code: 'B' }, { supabase: sb })).status).toBe('partial');
     expect((await runProbe({ type: 'kr_status', code: 'C' }, { supabase: sb })).status).toBe('unbuilt');
   });
-  it('db_count: gte builds when present; absent builds when zero', async () => {
-    const sb = stubSupabase({ countByTable: { t_has: 5, t_empty: 0 } });
-    expect((await runProbe({ type: 'db_count', table: 't_has', min: 1, builtWhen: 'gte' }, { supabase: sb })).status).toBe('built');
-    expect((await runProbe({ type: 'db_count', table: 't_empty', min: 1, builtWhen: 'gte' }, { supabase: sb })).status).toBe('unbuilt');
+  it('db_count: HONEST band — built at >=min, partial in (0,min), unbuilt at 0; absent builds at 0', async () => {
+    const sb = stubSupabase({ countByTable: { t_many: 25, t_one: 1, t_empty: 0 } });
+    expect((await runProbe({ type: 'db_count', table: 't_many', min: 20, builtWhen: 'gte' }, { supabase: sb })).status).toBe('built');
+    expect((await runProbe({ type: 'db_count', table: 't_one', min: 20, builtWhen: 'gte' }, { supabase: sb })).status).toBe('partial'); // single stray row ⇒ NOT built
+    expect((await runProbe({ type: 'db_count', table: 't_empty', min: 20, builtWhen: 'gte' }, { supabase: sb })).status).toBe('unbuilt');
     expect((await runProbe({ type: 'db_count', table: 't_empty', builtWhen: 'absent' }, { supabase: sb })).status).toBe('built');
   });
-  it('code_grep: unknown when no grep seam; built/unbuilt via injected grep', async () => {
+  it('code_grep: unknown when no grep seam; a present MATCH ⇒ partial (intent, not built); no match ⇒ unbuilt', async () => {
     expect((await runProbe({ type: 'code_grep', path: 'x', pattern: 'y' }, {})).status).toBe('unknown');
     const grepHit = async () => ({ accessible: true, matched: true });
     const grepMiss = async () => ({ accessible: true, matched: false });
     const grepGone = async () => ({ accessible: false, matched: false });
-    expect((await runProbe({ type: 'code_grep', path: 'x', pattern: 'y', builtWhen: 'present' }, { grep: grepHit })).status).toBe('built');
+    // FIX (review): a code/vocabulary match is intent/scaffolding, not realization ⇒ 'partial', NOT 'built'.
+    expect((await runProbe({ type: 'code_grep', path: 'x', pattern: 'y', builtWhen: 'present' }, { grep: grepHit })).status).toBe('partial');
     expect((await runProbe({ type: 'code_grep', path: 'x', pattern: 'y', builtWhen: 'present' }, { grep: grepMiss })).status).toBe('unbuilt');
+    // absence-is-built still earns 'built' (a clean absence proves the capability)
+    expect((await runProbe({ type: 'code_grep', path: 'x', pattern: 'y', builtWhen: 'absent' }, { grep: grepMiss })).status).toBe('built');
     expect((await runProbe({ type: 'code_grep', path: 'x', pattern: 'y' }, { grep: grepGone })).status).toBe('unknown');
   });
   it('unknown probe type → unknown (never fabricated)', async () => {

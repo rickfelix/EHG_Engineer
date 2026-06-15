@@ -42,7 +42,11 @@ function grep(pattern, sub, repo) {
   const target = sub ? path.join(root, sub) : root;
   if (!fs.existsSync(target)) return { accessible: false, matched: false };
   try {
-    execFileSync('git', ['-C', root, 'grep', '-lE', pattern, '--', sub || '.'], { stdio: 'pipe', timeout: 20000 });
+    // Exclude archived/dead/test paths so a vocabulary hit there cannot credit a capability
+    // (review: 'effort_level' in scripts/archive/* false-credited the fleet-dial capability).
+    execFileSync('git', ['-C', root, 'grep', '-lE', pattern, '--', sub || '.',
+      ':!**/archive/**', ':!**/__tests__/**', ':!**/*.test.*', ':!**/*.spec.*'],
+      { stdio: 'pipe', timeout: 20000 });
     return { accessible: true, matched: true };
   } catch (e) {
     if (e && e.status === 1) return { accessible: true, matched: false };
