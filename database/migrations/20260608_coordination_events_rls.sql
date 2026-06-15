@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman in-session (session 7c76f0db) SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001; service_role-only policies, no access change.
 -- ============================================================================
 -- SD-LEO-GEN-ENABLE-RLS-SERVICE-001
 -- Enable RLS + service_role-only (append-only) policy on public.coordination_events
