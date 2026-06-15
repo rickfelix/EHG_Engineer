@@ -89,7 +89,10 @@ async function main() {
 
   if (dryRun) { console.log('[vision-gauge] --dry-run: not persisted'); return; }
 
-  const { error } = await supabase.from('vision_build_gauge').insert(row);
+  // vision_build_gauge is created by 20260614_vision_build_gauge.sql, a chairman-gated migration
+  // not yet applied to prod, so it is absent from the schema snapshot until apply (the lint
+  // resolves automatically once the snapshot is regenerated post-apply).
+  const { error } = await supabase.from('vision_build_gauge').insert(row); // schema-lint-disable-line
   if (error) {
     // Table may not exist yet (migration not applied) — surface clearly, don't crash silently.
     console.error('[vision-gauge] insert failed (is the migration applied?): ' + error.message);
