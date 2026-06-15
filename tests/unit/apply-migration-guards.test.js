@@ -17,9 +17,9 @@ import {
   hashToken,
 } from '../../scripts/lib/migration-guards.js';
 
-const SQL_OK = `-- @approved-by: rick@example.com\nCREATE TABLE t(x int);`;
-const SQL_NO_HEADER = `CREATE TABLE t(x int);`;
-const SQL_BAD_EMAIL = `-- @approved-by: someone-else@example.com\nCREATE TABLE t(x int);`;
+const SQL_OK = '-- @approved-by: rick@example.com\nCREATE TABLE t(x int);';
+const SQL_NO_HEADER = 'CREATE TABLE t(x int);';
+const SQL_BAD_EMAIL = '-- @approved-by: someone-else@example.com\nCREATE TABLE t(x int);';
 
 function fakeClient({ tokenRow }) {
   return {
@@ -170,5 +170,50 @@ describe('token primitives (SEC-C1)', () => {
   });
   it('different token values produce different hashes', () => {
     expect(hashToken('a')).not.toBe(hashToken('b'));
+  });
+});
+
+// SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 FR-3 (NFR-2): positive lock that the
+// FR-2 deploy-drift CI gate did NOT weaken the 3-factor @approved-by prod-deploy
+// guard. If a future change makes a prod-deploy missing the header OR the token
+// pass, one of these breaks CI.
+describe('guard-preserved — FR-2 must not weaken the prod-deploy guard', () => {
+  it('rejects a prod-deploy missing the @approved-by header (approver factor)', async () => {
+    const c = fakeClient({ tokenRow: { id: 'r1', token_issued_at: new Date().toISOString(), token_consumed_at: null } });
+    const r = await validateProdDeployGuards({
+      flagPresent: true,
+      tokenEnv: 'c'.repeat(64),
+      sqlContent: SQL_NO_HEADER, // no -- @approved-by
+      gitUserEmail: 'rick@example.com',
+      client: c,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.factor).toBe('approver');
+  });
+
+  it('rejects a prod-deploy with a valid header but a missing/unknown token (token factor)', async () => {
+    const c = fakeClient({ tokenRow: null }); // token not found in audit table
+    const r = await validateProdDeployGuards({
+      flagPresent: true,
+      tokenEnv: 'd'.repeat(64),
+      sqlContent: SQL_OK, // header matches gitUserEmail
+      gitUserEmail: 'rick@example.com',
+      client: c,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.factor).toBe('token');
+  });
+
+  it('still accepts when all three factors are present (no regression)', async () => {
+    const c = fakeClient({ tokenRow: { id: 'r1', token_issued_at: new Date().toISOString(), token_consumed_at: null } });
+    const r = await validateProdDeployGuards({
+      flagPresent: true,
+      tokenEnv: 'e'.repeat(64),
+      sqlContent: SQL_OK,
+      gitUserEmail: 'rick@example.com',
+      client: c,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.approver).toBe('rick@example.com');
   });
 });

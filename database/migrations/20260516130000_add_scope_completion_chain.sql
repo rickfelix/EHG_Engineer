@@ -1,3 +1,6 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman confirmed in-session (AskUserQuestion, session 7c76f0db) under
+-- SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 to apply the genuine deploy-drift gaps.
 -- Sibling A FR-A-1: scope_completion_chain table (ADDITIVE-ONLY)
 -- Tracks expected-vs-actual completion chain for SDs/handoffs/orchestrator children.
 -- Ordinal 20260516130000 strictly > Child 0 ordinals 20260516120000/120001 (in main).
