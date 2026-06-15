@@ -113,6 +113,9 @@ scripts/check-*.cjs
 # SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1): the drift-check primitive is a
 # permanent, shared script (used by FR-2 pre-commit, FR-3 SessionStart, FR-4a CI).
 !scripts/check-claude-md-drift.cjs
+# SD-LEO-INFRA-AUTO-CHECK-EXTERNAL-001: the external-status attribution-guard CLI is a permanent,
+# shared script (the runtime consumer of lib/fleet/external-status-check.mjs) — must be committed.
+!scripts/check-external-status.mjs
 scripts/cleanup-*.js
 !scripts/cleanup-phantom-worktrees.js
 scripts/complete-*.mjs
