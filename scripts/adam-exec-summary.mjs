@@ -22,7 +22,7 @@ import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs
 import { renderDecisionLines } from '../lib/chairman/decision-layman.mjs';
 // SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
 // static .adam-vision-build.json number.
-import { computeBuildGauge } from '../lib/vision/vdr-registry.js';
+import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-registry.js';
 
 const EM = '—';
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -86,22 +86,16 @@ const workerText = pulseSource === 'unavailable' ? 'count unavailable (will refr
 // Replaces the static .adam-vision-build.json estimate with the auto-computed Vision Denominator
 // Registry gauge (deterministic typed probes over EHG-VISION.md's REQUIRED capabilities; no LLM).
 // Fail-soft: a gauge error or an unavailable vision doc degrades to "(gauge unavailable)".
-const LAYER_LABEL = { infrastructure: 'infrastructure', application: 'UI/UX', venture: 'venture/income', process: 'process' };
 let visPct = null;
 let layerLine = '';
 let visNote = '';
 try {
-  const gauge = await computeBuildGauge({ io: { supabase: db } }); // no grep seam ⇒ code_grep probes report 'unknown' (excluded)
-  if (gauge && gauge.available && typeof gauge.overall_pct === 'number') {
-    visPct = gauge.overall_pct;
-    layerLine = Object.entries(gauge.per_layer || {})
-      .filter(([, pct]) => pct != null)
-      .map(([layer, pct]) => `${LAYER_LABEL[layer] || layer} ${pct}%`)
-      .join('  ·  ');
-    visNote = `(live VDR gauge ${EM} ${gauge.denominator}/${gauge.total_capabilities} capabilities probed${gauge.unknown_count ? `, ${gauge.unknown_count} unknown` : ''})`;
-  } else {
-    visNote = `(gauge unavailable ${EM} ${gauge && gauge.measured_at_note ? gauge.measured_at_note : 'vision doc not found'})`;
-  }
+  // no grep seam ⇒ code_grep probes report 'unknown' (excluded from the denominator)
+  const gauge = await computeBuildGauge({ io: { supabase: db } });
+  const fmt = formatGaugeForSummary(gauge, { em: EM }); // single-source display mapping (shared with the Chairman-UI tile)
+  visPct = fmt.pct;
+  layerLine = fmt.layerLine;
+  visNote = fmt.note;
 } catch (e) {
   console.warn('[adam-email] live VDR gauge failed (fail-soft): ' + (e?.message || e));
   visPct = null;

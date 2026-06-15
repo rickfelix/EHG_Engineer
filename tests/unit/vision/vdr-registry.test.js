@@ -6,6 +6,7 @@ import {
   parseCapabilityGap,
   assertRegistryCoherence,
   computeBuildGauge,
+  formatGaugeForSummary,
   VDR_REGISTRY,
   STATUS_SCORE,
 } from '../../../lib/vision/vdr-registry.js';
@@ -141,5 +142,36 @@ describe('runProbe (FR-1 typed probe runners, injected IO)', () => {
   });
   it('unknown probe type → unknown (never fabricated)', async () => {
     expect((await runProbe({ type: 'bogus' }, {})).status).toBe('unknown');
+  });
+});
+
+describe('formatGaugeForSummary (FR-4/FR-5 single-source display mapping)', () => {
+  it('maps an available gauge to pct + layerLine + a live note', () => {
+    const fmt = formatGaugeForSummary({
+      available: true, overall_pct: 42,
+      per_layer: { infrastructure: 10, application: 80, venture: null, process: 25 },
+      denominator: 6, total_capabilities: 11, unknown_count: 5,
+    });
+    expect(fmt.available).toBe(true);
+    expect(fmt.pct).toBe(42);
+    // null layers dropped; venture omitted; labels applied (application → UI/UX, venture → venture/income)
+    expect(fmt.layerLine).toBe('infrastructure 10%  ·  UI/UX 80%  ·  process 25%');
+    expect(fmt.note).toMatch(/live VDR gauge.*6\/11 capabilities probed, 5 unknown/);
+  });
+  it('omits the "unknown" suffix when unknown_count is 0', () => {
+    const fmt = formatGaugeForSummary({ available: true, overall_pct: 100, per_layer: {}, denominator: 11, total_capabilities: 11, unknown_count: 0 });
+    expect(fmt.note).toMatch(/11\/11 capabilities probed\)/);
+    expect(fmt.note).not.toMatch(/unknown/);
+  });
+  it('maps an unavailable gauge to pct=null + a clear unavailable note', () => {
+    const fmt = formatGaugeForSummary({ available: false, overall_pct: null, measured_at_note: 'vision doc unavailable at X' });
+    expect(fmt.available).toBe(false);
+    expect(fmt.pct).toBeNull();
+    expect(fmt.layerLine).toBe('');
+    expect(fmt.note).toMatch(/gauge unavailable.*vision doc unavailable at X/);
+  });
+  it('treats null/garbage gauge as unavailable (never throws)', () => {
+    expect(formatGaugeForSummary(null).available).toBe(false);
+    expect(formatGaugeForSummary(undefined).pct).toBeNull();
   });
 });
