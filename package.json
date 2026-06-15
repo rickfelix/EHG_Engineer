@@ -318,6 +318,7 @@
     "stage-contracts:check": "node scripts/validate-stage-contract-connectivity.mjs",
     "fr:descope": "node scripts/record-fr-descope.js",
     "adam:register": "node scripts/adam-register.cjs",
+    "adam:restart": "node scripts/adam-restart.cjs",
     "adam:advisory": "node scripts/adam-advisory.cjs",
     "chairman:notify": "node lib/integrations/todoist/chairman-notify.js",
     "adam:retro": "node scripts/adam-retro.cjs",

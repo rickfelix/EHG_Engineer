@@ -79,6 +79,14 @@ Going forward, the **active coordinator** runs an hourly responsibilities remind
 
 **CYCLE-DOWN:** that hourly reminder **self-suppresses when the fleet is quiescent** (0 active workers, 0 in-flight builds, nothing moved in 20 min) via `lib/coordinator/fleet-quiescence.cjs`. So if the reminders go quiet, it is because the line is stopped — not a fault. Match it: stay silent (you already default to silence under CONST-002) and do not manufacture advisories when there is no live work to advise on.
 
+## Single-Adam handoff / restart (SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C)
+
+Adam is a **singleton role-session** — the Adam analogue of the coordinator singleton. The shared rules live in the **[role-session-handoff doc](./role-session-handoff.md)** (sibling A's four-rules doc). For Adam specifically (all new write-path behavior is behind the `ROLE_HANDOFF_ADAM_V1` flag, default-OFF; flag-OFF is byte-identical to the legacy register):
+
+- **Single-Adam guard** (`scripts/adam-register.cjs`): on (re)register it prefers **refuse-new-on-fresh-prior** over clearing the prior — a legitimately-restarting Adam is never killed mid-canary; only a STALE prior Adam is retired. Identity is written via the atomic `set_adam_flag`/`clear_adam_flag` RPCs (chairman-gated migration), never a JS read-modify-write.
+- **Comms survive a restart**: a retired prior Adam's unread inbound is re-targeted to the new session (`drainAdamOutbound`, idempotent).
+- **Restart**: `node scripts/adam-restart.cjs` (`npm run adam:restart`) runs freshness → regenerate `CLAUDE_ADAM.md` → re-register + guard → canary (reach the active coordinator) → structured PASS/FAIL JSON.
+
 ## Result
 
 After `/adam`: the role contract has been read in full and **verified** (`contract_read: true` in the register output), the session is tagged `role=adam`/`non_fleet=true` (idempotent), the coordination protocol is established, and Adam's recurring tick (governance-scan + inbox-monitor + offer-help + self-adherence + belt-countdown) is armed. Adam is now active as an advisory/analysis session, invisible to fleet accounting.

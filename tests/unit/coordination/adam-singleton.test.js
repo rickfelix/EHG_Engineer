@@ -124,18 +124,25 @@ describe('detectMultipleAdams (pure, mirror of detectSplitBrain)', () => {
 
 // FR-3: registerAdam flag-gated guard. Stub supabase covers the self-row fetch, the fresh-Adam
 // election query, update(), and rpc(). `freshAdams` feeds fetchFreshAdams; `rpc` controls RPC result.
-function regStub({ selfMeta = null, freshAdams = [], rpcError = null } = {}) {
-  const calls = { update: 0, rpc: [] };
+function regStub({ selfMeta = null, allAdams = [], rpcError = null, drainRows = [] } = {}) {
+  const calls = { update: 0, rpc: [], drainSelect: 0 };
   const supabase = {
     from() {
       const chain = {
-        _eqCol: null,
         select() { return chain; },
         eq() { return chain; },
         gte() { return chain; },
-        filter() { return Promise.resolve({ data: freshAdams, error: null }); }, // fetchFreshAdams
+        filter() { return Promise.resolve({ data: allAdams, error: null }); }, // fetchAllAdams
         maybeSingle() { return Promise.resolve({ data: { session_id: 'self', metadata: selfMeta }, error: null }); }, // self row
-        update() { calls.update += 1; return { eq() { return Promise.resolve({ error: null }); } }; },
+        update() {
+          calls.update += 1;
+          const uchain = {
+            eq() { return Promise.resolve({ error: null }); },                 // legacy register update().eq()
+            in() { return uchain; }, is() { return uchain; }, gte() { return uchain; },
+            select() { calls.drainSelect += 1; return Promise.resolve({ data: drainRows, error: null }); }, // drain
+          };
+          return uchain;
+        },
       };
       return chain;
     },
@@ -166,7 +173,7 @@ describe('registerAdam (FR-3 flag-gated single-Adam guard)', () => {
 
   it('flag ON: a FRESH prior Adam => REFUSED (no write, prior not cleared)', async () => {
     process.env.ROLE_HANDOFF_ADAM_V1 = 'on';
-    const { supabase, calls } = regStub({ freshAdams: [{ session_id: 'prior', heartbeat_at: fresh(1), metadata: { role: 'adam' } }] });
+    const { supabase, calls } = regStub({ allAdams: [{ session_id: 'prior', heartbeat_at: fresh(1), metadata: { role: 'adam' } }] });
     const r = await registerAdam(supabase, 'self', { nowMs: NOW });
     expect(r).toMatchObject({ ok: false, action: 'refused' });
     expect(r.fresh_priors).toEqual(['prior']);
@@ -176,7 +183,7 @@ describe('registerAdam (FR-3 flag-gated single-Adam guard)', () => {
 
   it('flag ON: no prior + RPC works => tagged via set_adam_flag (atomic, no JS update)', async () => {
     process.env.ROLE_HANDOFF_ADAM_V1 = 'on';
-    const { supabase, calls } = regStub({ freshAdams: [], rpcError: null });
+    const { supabase, calls } = regStub({ allAdams: [], rpcError: null });
     const r = await registerAdam(supabase, 'self', { nowMs: NOW });
     expect(r).toMatchObject({ ok: true, action: 'tagged' });
     expect(calls.rpc.map((c) => c.fn)).toContain('set_adam_flag');
@@ -185,9 +192,86 @@ describe('registerAdam (FR-3 flag-gated single-Adam guard)', () => {
 
   it('flag ON: RPC absent => fail-soft JS-merge fallback (no crash)', async () => {
     process.env.ROLE_HANDOFF_ADAM_V1 = 'on';
-    const { supabase, calls } = regStub({ freshAdams: [], rpcError: { code: 'PGRST202', message: 'Could not find the function set_adam_flag' } });
+    const { supabase, calls } = regStub({ allAdams: [], rpcError: { code: 'PGRST202', message: 'Could not find the function set_adam_flag' } });
     const r = await registerAdam(supabase, 'self', { nowMs: NOW });
     expect(r).toMatchObject({ ok: true, action: 'tagged_fallback' });
     expect(calls.update).toBe(1); // fail-soft legacy merge
+  });
+
+  it('flag ON: a STALE prior => retire (clear_adam_flag) + register + FR-4 drain re-targets inbound', async () => {
+    process.env.ROLE_HANDOFF_ADAM_V1 = 'on';
+    const { supabase, calls } = regStub({
+      allAdams: [{ session_id: 'staleprior', heartbeat_at: fresh(999), metadata: { role: 'adam' } }],
+      rpcError: null,
+      drainRows: [{ id: 'm1' }, { id: 'm2' }],
+    });
+    const r = await registerAdam(supabase, 'self', { nowMs: NOW });
+    expect(r).toMatchObject({ ok: true, action: 'tagged_after_retire', drained: 2 });
+    expect(r.retired).toEqual(['staleprior']);
+    expect(calls.rpc.map((c) => c.fn)).toEqual(expect.arrayContaining(['clear_adam_flag', 'set_adam_flag']));
+    expect(calls.drainSelect).toBe(1); // FR-4 drain ran (re-targeted old->new)
+  });
+});
+
+describe('drainAdamOutbound (FR-4 idempotent re-target)', () => {
+  const { drainAdamOutbound } = require('../../../scripts/adam-advisory.cjs');
+  it('re-targets unread old-session rows to the new session and counts them', async () => {
+    let captured = null;
+    const sb = { from() { const c = {
+      update(patch) { captured = { patch, in: null }; return c; },
+      in(_col, ids) { captured.in = ids; return c; },
+      is() { return c; }, gte() { return c; },
+      select() { return Promise.resolve({ data: [{ id: 'a' }, { id: 'b' }], error: null }); },
+    }; return c; } };
+    const r = await drainAdamOutbound(sb, { newSessionId: 'new', oldSessionIds: ['old1', 'old2'] });
+    expect(r.moved).toBe(2);
+    expect(captured.patch).toEqual({ target_session: 'new' });
+    expect(captured.in).toEqual(['old1', 'old2']);
+  });
+  it('no-op for empty/self-only old ids (idempotent boundary)', async () => {
+    const sb = { from() { throw new Error('should not query'); } };
+    expect(await drainAdamOutbound(sb, { newSessionId: 'new', oldSessionIds: [] })).toEqual({ moved: 0 });
+    expect(await drainAdamOutbound(sb, { newSessionId: 'new', oldSessionIds: ['new'] })).toEqual({ moved: 0 });
+    expect(await drainAdamOutbound(null, { newSessionId: 'new', oldSessionIds: ['x'] })).toEqual({ moved: 0 });
+  });
+});
+
+describe('runAdamRestart (FR-5 orchestrator, injectable)', () => {
+  const { runAdamRestart } = require('../../../scripts/adam-restart.cjs');
+  const okDeps = () => ({
+    checkFreshness: async () => ({ verdict: 'FRESH' }),
+    regenerateContract: async () => ({ ok: true, file: 'CLAUDE_ADAM.md' }),
+    register: async () => ({ ok: true, action: 'tagged', retired: [], drained: 0 }),
+    canary: async () => ({ ok: true, coordinator_id: 'coord-1' }),
+  });
+
+  it('all steps pass => PASS with 4 steps', async () => {
+    const r = await runAdamRestart(okDeps());
+    expect(r.verdict).toBe('PASS');
+    expect(r.steps.map((s) => s.step)).toEqual(['freshness', 'regenerate_contract', 'register', 'canary']);
+  });
+  it('freshness is ADVISORY — a throw does not fail the restart', async () => {
+    const d = okDeps(); d.checkFreshness = async () => { throw new Error('git missing'); };
+    const r = await runAdamRestart(d);
+    expect(r.verdict).toBe('PASS');
+    expect(r.steps[0]).toMatchObject({ step: 'freshness', ok: true });
+  });
+  it('regenerate failure => FAIL at regenerate', async () => {
+    const d = okDeps(); d.regenerateContract = async () => ({ ok: false, status: 1 });
+    const r = await runAdamRestart(d);
+    expect(r).toMatchObject({ ok: false, verdict: 'FAIL' });
+    expect(r.summary).toMatch(/regenerate_contract/);
+  });
+  it('register refused (fresh prior) => FAIL', async () => {
+    const d = okDeps(); d.register = async () => ({ ok: false, action: 'refused' });
+    const r = await runAdamRestart(d);
+    expect(r.verdict).toBe('FAIL');
+    expect(r.summary).toMatch(/refused/);
+  });
+  it('canary cannot reach coordinator => FAIL', async () => {
+    const d = okDeps(); d.canary = async () => ({ ok: false, detail: 'no active coordinator' });
+    const r = await runAdamRestart(d);
+    expect(r.verdict).toBe('FAIL');
+    expect(r.summary).toMatch(/canary/);
   });
 });

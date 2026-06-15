@@ -26,7 +26,11 @@ const path = require('path');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { resolveStateReadPath } = require('./hooks/lib/session-state-resolver.cjs');
 // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C (FR-3): single-Adam guard + atomic write.
-const { fetchFreshAdams, decideSingleAdamGuard } = require('../lib/coordinator/adam-identity.cjs');
+// fetchAllAdams (not fetchFreshAdams) so the guard sees stale priors too and classifies fresh-vs-
+// stale itself (fresh => refuse; stale-only => retire).
+const { fetchAllAdams, decideSingleAdamGuard } = require('../lib/coordinator/adam-identity.cjs');
+// FR-4: re-target a retired prior Adam's unread inbound to the new session (comms survive a restart).
+const { drainAdamOutbound } = require('./adam-advisory.cjs');
 
 const ADAM_ROLE = 'adam';
 const CONTRACT_FILE = 'CLAUDE_ADAM.md';
@@ -96,7 +100,7 @@ async function registerAdam(supabase, sessionId, opts = {}) {
   // atomic set_adam_flag write-path. Flag-OFF falls through to the legacy path below (byte-identical).
   if (isAdamHandoffV1Enabled()) {
     const nowMs = (opts && Number.isFinite(opts.nowMs)) ? opts.nowMs : Date.now();
-    const priorAdams = await fetchFreshAdams(supabase, { nowMs });
+    const priorAdams = await fetchAllAdams(supabase); // ALL adams (incl. stale) so the guard classifies
     const decision = decideSingleAdamGuard({ priorAdams, selfSessionId: sessionId, nowMs });
     if (decision.action === 'refuse') {
       // A FRESH prior Adam holds the singleton — do NOT register a 2nd and do NOT clear the prior
@@ -110,19 +114,30 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
     }
     const wrote = await writeAdamFlagViaRpc(supabase, sessionId);
+    let action = null;
+    let fallbackReason = null;
     if (wrote.persisted) {
-      return { ok: true, action: retired.length ? 'tagged_after_retire' : 'tagged', session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired,
-        message: `Registered as the single Adam${retired.length ? ` (retired stale prior(s): ${retired.join(', ')})` : ''} via atomic set_adam_flag.` };
+      action = retired.length ? 'tagged_after_retire' : 'tagged';
+    } else {
+      // Fail-soft: the chairman-gated migration is unapplied (or a transient RPC error). Fall back
+      // to the legacy JS merge (+ adam_since) — no worse than flag-OFF; atomic safety lands on apply.
+      const mergedAdam = { ...((row.metadata && typeof row.metadata === 'object') ? row.metadata : {}), role: ADAM_ROLE, non_fleet: true, adam_since: new Date(nowMs).toISOString() };
+      try {
+        const { error } = await supabase.from('claude_sessions').update({ metadata: mergedAdam }).eq('session_id', sessionId);
+        if (error) return { ok: false, action: 'error', error: error.message };
+      } catch (e) { return { ok: false, action: 'error', error: e.message }; }
+      action = 'tagged_fallback';
+      fallbackReason = wrote.reason;
     }
-    // Fail-soft: the chairman-gated migration is unapplied (or a transient RPC error). Fall back to
-    // the legacy JS merge (+ adam_since) — no worse than flag-OFF; atomic safety lands on apply.
-    const mergedAdam = { ...((row.metadata && typeof row.metadata === 'object') ? row.metadata : {}), role: ADAM_ROLE, non_fleet: true, adam_since: new Date(nowMs).toISOString() };
-    try {
-      const { error } = await supabase.from('claude_sessions').update({ metadata: mergedAdam }).eq('session_id', sessionId);
-      if (error) return { ok: false, action: 'error', error: error.message };
-    } catch (e) { return { ok: false, action: 'error', error: e.message }; }
-    return { ok: true, action: 'tagged_fallback', session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired,
-      message: `Registered (fail-soft JS merge — set_adam_flag RPC ${wrote.reason}; apply the chairman-gated migration for atomic writes).` };
+    // FR-4: re-target the retired prior Adam(s)' unread inbound to this new session (comms survive
+    // the handoff). Fail-open + idempotent; a drain error never fails the registration.
+    let drained = 0;
+    if (retired.length) {
+      const d = await drainAdamOutbound(supabase, { newSessionId: sessionId, oldSessionIds: retired });
+      drained = (d && d.moved) || 0;
+    }
+    return { ok: true, action, session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired, drained,
+      message: `Registered as the single Adam${retired.length ? ` (retired stale prior(s): ${retired.join(', ')}; re-targeted ${drained} inbound row(s))` : ''}${fallbackReason ? ` — fail-soft JS merge (set_adam_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_adam_flag'}.` };
   }
 
   const { alreadyTagged, merged } = computeAdamTag(row.metadata);
