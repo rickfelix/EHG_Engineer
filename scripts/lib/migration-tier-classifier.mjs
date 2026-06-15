@@ -55,6 +55,11 @@ const APPLY_TIME_OR_COUPLING = /\b(materialized\s+view|partition\s+of|inherits)\
 // DEFAULT nextval + (on a non-empty table) a rewrite — NOT a nullable-additive column.
 const SERIAL_PSEUDOTYPE = /\b(smallserial|bigserial|serial8|serial4|serial2|serial)\b/i;
 
+// Zero-width chars JS \s does NOT match: U+200B (ZWSP), U+200C (ZWNJ), U+200D (ZWJ).
+// Built from char codes so no invisible character lives in this source file (which an
+// editor or git filter could silently strip, disarming the FC-18 normalization).
+const ZERO_WIDTH = new RegExp('[' + String.fromCharCode(0x200b, 0x200c, 0x200d) + ']', 'g');
+
 // Strip SQL line comments (dash-dash to EOL) and block comments, replacing each with a
 // space. Postgres treats comments as whitespace in its token stream, so a destructive or
 // flag token can be split by an INTERIOR comment (the SECURITY DEFINER comment-split
@@ -257,6 +262,12 @@ const RULES = [matchCreateTableINE, matchCreateIndex, matchAdditiveAddColumn, ma
 export function classifyMigration(sql) {
   try {
     if (typeof sql !== 'string') return T2('non_string_input');
+    // FC-18: normalize the zero-width chars that JS \s does NOT match (U+200B/C/D) to
+    // spaces, so an invisible char cannot split a keyword pair (e.g. SECURITY<ZWSP>DEFINER)
+    // past a \s-based check. Postgres rejects these as token delimiters (a real apply would
+    // syntax-error), so normalizing toward TIER-2 removes any doubt. Defense-in-depth.
+    // (regex built from char codes so no invisible chars live in this source file.)
+    sql = sql.replace(ZERO_WIDTH, ' ');
     if (sql.length > MAX_SQL_BYTES) return T2('migration_too_large');
     if (!sql.trim()) return T2('empty_migration');
 

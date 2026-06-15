@@ -129,4 +129,15 @@ describe('classifyMigration — invariants', () => {
     expect(r.tier).toBe(1);
     expect(r.matched.length).toBe(2); // both statements independently matched an allow rule
   });
+
+  it('FC-18: a zero-width char (U+200B) cannot split SECURITY..DEFINER past the \\s-based check', () => {
+    // Built from char codes so no invisible char lives in this test source. JS \s does
+    // NOT match U+200B/C/D, so without the FC-18 normalization SECURITY<ZWSP>DEFINER would
+    // evade FC-15 and classify TIER-1. (SECURITY sub-agent finding, adversarial review.)
+    for (const cp of [0x200b, 0x200c, 0x200d]) {
+      const zw = String.fromCharCode(cp);
+      const sql = `CREATE FUNCTION esc() RETURNS void LANGUAGE sql SECURITY${zw}DEFINER AS $b$ SELECT 1 $b$;`;
+      expect(classifyMigration(sql).tier, `U+${cp.toString(16)} split must be TIER-2`).toBe(2);
+    }
+  });
 });
