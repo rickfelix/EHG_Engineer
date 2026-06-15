@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-14T23:33:58.416Z
-**Rows**: 3,845
+**Generated**: 2026-06-15T00:11:01.798Z
+**Rows**: 3,846
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (101 total)
+## Columns (103 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -123,6 +123,8 @@ Use the id column instead - it is the canonical identifier. |
 | scope_slice | `jsonb` | YES | - | Optional slice of parent orchestrator scope this child claims. Shape: {stages?: number[], deliverable_globs?: string[]}. When set, scope-completion-gate filters parent arch plan deliverables through this slice before scoring. When NULL, gate scores the full parent deliverable set (pre-SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A behavior). |
 | adrs_consulted | `ARRAY` | **NO** | `ARRAY[]::text[]` | - |
 | initiative_id | `uuid` | YES | - | Initiative grain: the OKR objective this (orchestrator) SD advances. Nullable; forward-looking adoption. SD-LEO-INFRA-INITIATIVE-BACKBONE-CANONICAL-001. |
+| lineage_attribution_confidence | `numeric(5,2)` | YES | - | - |
+| lineage_verdict | `text` | YES | - | - |
 
 ## Constraints
 
@@ -142,6 +144,8 @@ Use the id column instead - it is the canonical identifier. |
 
 ### Check Constraints
 - `chk_deferred_requires_trigger_condition`: CHECK ((NOT ((((metadata ->> 'do_not_advance_without_trigger'::text))::boolean = true) AND ((metadata -> 'trigger_condition'::text) IS NULL))))
+- `chk_lineage_attribution_confidence_range`: CHECK (((lineage_attribution_confidence IS NULL) OR ((lineage_attribution_confidence >= (0)::numeric) AND (lineage_attribution_confidence <= (100)::numeric))))
+- `chk_lineage_verdict_enum`: CHECK (((lineage_verdict IS NULL) OR (lineage_verdict = ANY (ARRAY['BACKFILLED_HIGH'::text, 'BACKFILLED_LOW_CONFIDENCE'::text, 'GRANDFATHERED_NO_VALIDATION'::text]))))
 - `chk_sd_v2_triage`: CHECK (((rolled_triage IS NULL) OR (rolled_triage = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text, 'Future'::text]))))
 - `key_changes_is_array`: CHECK (((key_changes IS NULL) OR (jsonb_typeof(key_changes) = 'array'::text)))
 - `key_principles_is_array`: CHECK (((key_principles IS NULL) OR (jsonb_typeof(key_principles) = 'array'::text)))
