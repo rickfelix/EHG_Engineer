@@ -209,10 +209,17 @@ export class BaseExecutor {
 
       if (migrationCheckResult && migrationCheckResult.blocking === true) {
         const enforceMode = (process.env.LEO_MIGRATION_GATE_ENFORCE || 'warn').toLowerCase();
-        const pending = [
-          ...(migrationCheckResult.uncommittedManualUpdates || []),
-          ...(migrationCheckResult.pendingMigrations || []).map(m => m.file)
-        ];
+        // When the tier gate (LEO_MIGRATION_TIER_GATE) deferred only TIER-2 files (the
+        // TIER-1 subset already auto-applied), the precise blocking set is tierDeferredFiles
+        // — prefer it so the operator recipe lists only files that actually need the
+        // chairman gate. Falls back to the full pending set when the tier gate is OFF
+        // (tierDeferredFiles undefined), preserving the original message verbatim.
+        const pending = Array.isArray(migrationCheckResult.tierDeferredFiles) && migrationCheckResult.tierDeferredFiles.length
+          ? [...migrationCheckResult.tierDeferredFiles]
+          : [
+              ...(migrationCheckResult.uncommittedManualUpdates || []),
+              ...(migrationCheckResult.pendingMigrations || []).map(m => m.file)
+            ];
         const applyRecipe = pending.map(p => `  node scripts/apply-migration.js "${p}" --prod-deploy --issue-token <token>`).join('\n');
         if (enforceMode === 'block') {
           try { endSpan(rootSpan, { result: 'migration_gate_block' }); persist(traceCtx, { supabase: this.supabase }); } catch (_) { /* telemetry non-fatal */ }

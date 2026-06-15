@@ -43,6 +43,29 @@ const FORBIDDEN_TOPLEVEL = /\b(DROP|TRUNCATE|DELETE|UPDATE|RENAME|GRANT|REVOKE|C
 // Destructive tokens inside a CREATE FUNCTION / VIEW body (Rule E deep-scan).
 const BODY_DESTRUCTIVE = /\b(DROP|TRUNCATE|DELETE\s+FROM|UPDATE\b[\s\S]*?\bSET\b|ALTER\s+(TABLE|VIEW|MATERIALIZED|SEQUENCE|TYPE|SCHEMA|POLICY)|GRANT|REVOKE|CALL|COPY|EXECUTE|\bDO\b|INSERT\s+INTO|MERGE)\b/i;
 
+// Constructs that EXECUTE a query at apply time or structurally couple to an existing
+// object, and have NO provably-additive allow-listed counterpart — fail closed wherever
+// they appear in the residue (whole-file defense-in-depth, adversarial review SD-LEO-
+// INFRA-MIGRATION-TIER-CLASSIFIER-001). NOTE: CTAS (`... AS SELECT`) and expression
+// indexes are caught at the RULE level (Rule A / Rule B) instead, because a plain
+// CREATE VIEW legitimately uses `AS SELECT` and so cannot be swept whole-file.
+const APPLY_TIME_OR_COUPLING = /\b(materialized\s+view|partition\s+of|inherits)\b/i;
+
+// serial pseudo-types: Postgres expands these to NOT NULL + an implicit sequence +
+// DEFAULT nextval + (on a non-empty table) a rewrite — NOT a nullable-additive column.
+const SERIAL_PSEUDOTYPE = /\b(smallserial|bigserial|serial8|serial4|serial2|serial)\b/i;
+
+// Strip SQL line comments (dash-dash to EOL) and block comments, replacing each with a
+// space. Postgres treats comments as whitespace in its token stream, so a destructive or
+// flag token can be split by an INTERIOR comment (the SECURITY DEFINER comment-split
+// bypass) to evade a \s-based regex. Run the security / body scans over this cleaned form.
+// Over-stripping only makes a scan MORE conservative (errs toward TIER-2), which is safe.
+function stripSqlComments(s) {
+  return String(s)
+    .replace(/\/\*[\s\S]*?\*\//g, ' ') // block comments
+    .replace(/--[^\n]*/g, ' ');        // line comments
+}
+
 // A constant-only DEFAULT expression: numeric/string/bool/null literal, or a bare
 // cast of those. Anything with a function call, sub-SELECT, or column ref is rejected.
 const CONST_DEFAULT = /^\s*(?:NULL|TRUE|FALSE|-?\d+(?:\.\d+)?|'(?:[^']|'')*'|"(?:[^"]|"")*")\s*(?:::\s*[A-Za-z_][\w ]*(?:\[\])?\s*)?$/i;
@@ -119,15 +142,44 @@ function splitTopLevelCommas(s) {
 // ── Allow-rule matchers (return {token} on match, else null) ──────────────────
 
 // Rule A — CREATE TABLE IF NOT EXISTS (IF NOT EXISTS mandatory; FC-12).
+// MUST be the canonical column-definition form: the column list '(' immediately follows
+// the table name. Reject the tail forms that EXECUTE a query at apply time or couple to
+// an existing object (adversarial review SD-LEO-INFRA-MIGRATION-TIER-CLASSIFIER-001):
+//   - CTAS  `... AS SELECT|VALUES|...`  → runs the query at apply (data exfil / arbitrary fn)
+//   - PARTITION OF                       → attaches to / locks an existing parent table
+//   - INHERITS                           → couples to an existing parent
+//   - LIKE                               → copies from a template (not a standalone create)
+// (An in-table column DEFAULT — even a volatile one like gen_random_uuid() — is NOT
+//  rejected: for a brand-new empty table the default only fires on later INSERTs, never
+//  at apply, so it stays provably-additive at apply time.)
 function matchCreateTableINE(head) {
-  const m = head.match(/^create\s+table\s+if\s+not\s+exists\s+([a-z0-9_."]+)/);
-  return m ? { token: `create_table_if_not_exists:${m[1]}` } : null;
+  const m = head.match(/^create\s+table\s+if\s+not\s+exists\s+([a-z0-9_."]+)\s*(.*)$/);
+  if (!m) return null;
+  const rest = m[2];
+  if (!rest.startsWith('(')) return null;                       // not a column-list create (CTAS/PARTITION OF/OF type/...)
+  if (/\b(as|partition|inherits|like|execute)\b/.test(rest)) return null; // CTAS / coupling / template forms
+  return { token: `create_table_if_not_exists:${m[1]}` };
 }
 
 // Rule B — CREATE INDEX (incl UNIQUE / CONCURRENTLY / IF NOT EXISTS).
+// MUST be a plain column-list index. An expression / functional index, an INCLUDE(...)
+// or USING method(...) expression, or a partial-index WHERE predicate is EVALUATED per
+// existing row at BUILD time, so a volatile function there executes at apply (adversarial
+// review: nextval/pg_advisory_lock/side-effecting fns). Allow ONLY a bare column list:
+//   - require an `ON <table>` before the column-list parens,
+//   - the column-list parens must contain NO nested '(' or ')' (a function call,
+//     expression, INCLUDE(...), USING(...) or WITH(...) clause), and
+//   - reject any trailing WHERE (partial-index predicates are not provably side-effect-free).
 function matchCreateIndex(head) {
-  const m = head.match(/^create\s+(?:unique\s+)?index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?/);
-  return m ? { token: 'create_index' } : null;
+  if (!/^create\s+(?:unique\s+)?index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?/.test(head)) return null;
+  const open = head.indexOf('(');
+  const close = head.lastIndexOf(')');
+  if (open === -1 || close <= open) return null;                       // no column list => unrecognized
+  if (!/\bon\s+[a-z0-9_."]+/.test(head.slice(0, open))) return null;   // require ON <table> before the column list
+  const inner = head.slice(open + 1, close);
+  if (inner.includes('(') || inner.includes(')')) return null;         // function/expr/INCLUDE/USING/WITH => TIER-2
+  if (/\bwhere\b/.test(head.slice(close))) return null;                // partial-index predicate => TIER-2
+  return { token: 'create_index' };
 }
 
 // Rule C — ALTER TABLE with ONLY additive nullable ADD COLUMN actions (FC-3/4/5/9).
@@ -147,6 +199,9 @@ function matchAdditiveAddColumn(head) {
     let rest = am[2];
     // forbidden inline qualifiers => TIER-2 (FC-5/FC-9)
     if (/\b(not\s+null|primary\s+key|unique|references|generated|constraint|check)\b/.test(rest)) return null;
+    // serial pseudo-types imply NOT NULL + an implicit sequence + DEFAULT nextval + a
+    // possible rewrite — not a nullable-additive column (adversarial review).
+    if (SERIAL_PSEUDOTYPE.test(rest)) return null;
     // default must be constant-only (FC-4)
     const dm = rest.match(/\bdefault\b\s+(.+)$/);
     if (dm) {
@@ -165,17 +220,31 @@ function matchPolicyOrEnableRls(head) {
   return m ? { token: `enable_rls:${m[1]}` } : null;
 }
 
-// Rule E — bare CREATE FUNCTION/VIEW/MATVIEW (NOT 'OR REPLACE'), body free of destructive SQL.
+// Rule E — bare CREATE FUNCTION / VIEW (NOT 'OR REPLACE'), body free of destructive SQL.
+// CREATE MATERIALIZED VIEW is EXCLUDED: it is materialized WITH DATA at apply time, so its
+// defining SELECT EXECUTES during the migration (setval/pg_sleep/pg_terminate_backend =>
+// apply-time side effects) — always TIER-2 (adversarial review). A plain VIEW and a bare
+// CREATE FUNCTION are additive at apply (the view is lazy; the function definition is
+// stored, not executed) — but guarded below.
 function matchSafeCreateFnView(head, rawStmt) {
-  if (/^create\s+or\s+replace\b/.test(head)) return null; // FC-8: OR REPLACE => TIER-2
-  if (!/^create\s+(function|view|materialized\s+view)\b/.test(head)) return null;
-  // SECURITY DEFINER privilege-escalation vector => TIER-2 (FC-15)
-  if (/\bsecurity\s+definer\b/i.test(rawStmt)) return null;
-  // deep-scan the FULL raw statement body for destructive tokens (FC-7).
-  if (BODY_DESTRUCTIVE.test(rawStmt)) return null;
-  const kind = head.startsWith('create function') ? 'create_function'
-    : head.startsWith('create materialized view') ? 'create_matview' : 'create_view';
-  return { token: kind };
+  if (/^create\s+or\s+replace\b/.test(head)) return null;            // FC-8: OR REPLACE => TIER-2
+  if (/^create\s+materialized\s+view\b/.test(head)) return null;     // matview executes WITH DATA at apply => TIER-2
+  if (!/^create\s+(function|view)\b/.test(head)) return null;
+  // Postgres treats comments as whitespace, so scan a COMMENT-STRIPPED form — otherwise
+  // `SECURITY/*c*/DEFINER` or `SECURITY --c<nl>DEFINER` parse as DEFINER yet evade \s (FC-15).
+  const clean = stripSqlComments(rawStmt);
+  if (/\bsecurity\s+definer\b/i.test(clean)) return null;            // FC-15 (covers EXTERNAL SECURITY DEFINER)
+  if (BODY_DESTRUCTIVE.test(clean)) return null;                     // FC-7 deep-scan (comment-split safe)
+  if (head.startsWith('create view')) {
+    // A provably-additive VIEW is a pure projection. A function call / sub-expression in
+    // the defining query is an un-provable footgun (runs on every read; cannot prove it
+    // pure), so require the body (everything after the first `AS`) to contain no parens.
+    const am = clean.match(/\bas\b([\s\S]*)$/i);
+    const body = am ? am[1] : clean;
+    if (body.includes('(')) return null;
+    return { token: 'create_view' };
+  }
+  return { token: 'create_function' };
 }
 
 const RULES = [matchCreateTableINE, matchCreateIndex, matchAdditiveAddColumn, matchPolicyOrEnableRls];
@@ -232,6 +301,14 @@ export function classifyMigration(sql) {
       // Allow-listed heads never contain these verbs, so any hit is a real forbidden
       // token (or a parser disagreement) — fail closed.
       return T2('forbidden_token_in_residue');
+    }
+
+    // FC-17: whole-file defense-in-depth for apply-time-executing / object-coupling forms
+    // that carry no destructive VERB token (so the FORBIDDEN_TOPLEVEL sweep is blind to
+    // them) but are caught at the rule level above. Re-check the residue so a future
+    // rule-level regression cannot silently re-open them (matview / PARTITION OF / INHERITS).
+    if (APPLY_TIME_OR_COUPLING.test(residue)) {
+      return T2('apply_time_or_coupling_construct');
     }
 
     return { tier: 1, reason: 'all_statements_provably_additive', matched };

@@ -37,6 +37,39 @@ const TIER2_CORPUS = [
   ['empty / comment-only', '-- just a comment\n'],
   ['non-string input', 12345],
   ['REFRESH MATERIALIZED VIEW (unrecognized)', 'REFRESH MATERIALIZED VIEW mv_stats;'],
+  // ── Adversarial-review breaks (wf_db7f5a79-892): apply-time-executing CREATE forms,
+  //    expression indexes, serial pseudo-types, and the SECURITY DEFINER comment-split.
+  //    Each of these classified TIER-1 before the fix — they MUST be TIER-2. ──
+  ['matview executes setval at apply (WITH DATA)', "CREATE MATERIALIZED VIEW mv AS SELECT setval('seq', 999999);"],
+  ['matview kills sessions at apply', 'CREATE MATERIALIZED VIEW mv AS SELECT pg_terminate_backend(pid) FROM pg_stat_activity;'],
+  ['matview pg_sleep apply-time DoS', 'CREATE MATERIALIZED VIEW mv AS SELECT pg_sleep(86400);'],
+  ['matview invokes arbitrary fn at apply', 'CREATE MATERIALIZED VIEW mv AS SELECT nuke_tables();'],
+  ['matview IF NOT EXISTS invokes drop_all', 'CREATE MATERIALIZED VIEW IF NOT EXISTS mv AS SELECT drop_all();'],
+  ['matview even WITH NO DATA is TIER-2 (blanket)', 'CREATE MATERIALIZED VIEW mv AS SELECT id FROM users WITH NO DATA;'],
+  ['plain VIEW with side-effecting fn body', 'CREATE VIEW v AS SELECT pg_terminate_backend(pid) FROM pg_stat_activity;'],
+  ['CTAS exfiltrates auth.users at apply', 'CREATE TABLE IF NOT EXISTS leak AS SELECT * FROM auth.users;'],
+  ['CTAS kills sessions at apply', 'CREATE TABLE IF NOT EXISTS kill AS SELECT pg_terminate_backend(pid) FROM pg_stat_activity;'],
+  ['CTAS resets a sequence at apply', "CREATE TABLE IF NOT EXISTS seqdump AS SELECT setval('users_id_seq', 1, false);"],
+  ['CTAS with column-alias list then AS SELECT', 'CREATE TABLE IF NOT EXISTS t (id int) AS SELECT 1;'],
+  ['PARTITION OF couples to existing parent', 'CREATE TABLE IF NOT EXISTS p1 PARTITION OF master FOR VALUES FROM (1) TO (100);'],
+  ['INHERITS couples to existing parent', 'CREATE TABLE IF NOT EXISTS c INHERITS (parent);'],
+  ['LIKE copies from a template table', 'CREATE TABLE IF NOT EXISTS c (LIKE src INCLUDING ALL);'],
+  ['expression index runs nextval per row', "CREATE INDEX idx ON big_table (nextval('seq'));"],
+  ['partial-index WHERE runs advisory lock per row', 'CREATE INDEX idx ON foo (id) WHERE pg_advisory_lock(id) IS NOT NULL;'],
+  ['unique partial-index WHERE calls a fn', 'CREATE UNIQUE INDEX idx ON public.users (id) WHERE public.side_effect();'],
+  ['INCLUDE clause with a fn call', "CREATE INDEX idx ON t (a) INCLUDE (nextval('s'));"],
+  ['USING method with a fn expression', 'CREATE INDEX idx ON t USING gin (side_effect(a));'],
+  ['CONCURRENTLY expression index', 'CREATE INDEX CONCURRENTLY idx ON t (evil(a));'],
+  ['immutable-fn expression index (conservative TIER-2)', 'CREATE INDEX idx_lower ON users (lower(email));'],
+  ['serial pseudo-type ADD COLUMN', 'ALTER TABLE foo ADD COLUMN id serial;'],
+  ['bigserial pseudo-type ADD COLUMN', 'ALTER TABLE foo ADD COLUMN id bigserial;'],
+  ['smallserial pseudo-type ADD COLUMN', 'ALTER TABLE foo ADD COLUMN id smallserial;'],
+  ['serial8 alias ADD COLUMN', 'ALTER TABLE foo ADD COLUMN id serial8;'],
+  ['SECURITY DEFINER block-comment split (FC-15)', 'CREATE FUNCTION esc() RETURNS void LANGUAGE sql SECURITY/*c*/DEFINER AS $b$ SELECT 1 $b$;'],
+  ['SECURITY DEFINER line-comment split (FC-15)', 'CREATE FUNCTION esc() RETURNS void LANGUAGE sql SECURITY --c\nDEFINER AS $b$ SELECT 1 $b$;'],
+  ['EXTERNAL SECURITY DEFINER comment split (FC-15)', 'CREATE FUNCTION esc() RETURNS void LANGUAGE sql EXTERNAL SECURITY/*c*/DEFINER AS $b$ SELECT 1 $b$;'],
+  ['weaponized SECURITY DEFINER auth.users exfil', 'CREATE FUNCTION all_secrets() RETURNS SETOF auth.users LANGUAGE sql SECURITY/*x*/DEFINER AS $b$ SELECT * FROM auth.users $b$;'],
+  ['camouflage: additive ADD COLUMN + CTAS-kill', 'ALTER TABLE foo ADD COLUMN note text;\nCREATE TABLE IF NOT EXISTS k AS SELECT pg_terminate_backend(pid) FROM pg_stat_activity;'],
 ];
 
 // ── Provably-additive: every one of these MUST classify TIER-1 (auto-apply eligible) ──
@@ -47,6 +80,10 @@ const TIER1_CORPUS = [
   ['ENABLE RLS + CREATE POLICY', 'ALTER TABLE notes ENABLE ROW LEVEL SECURITY;\nCREATE POLICY notes_owner ON notes FOR SELECT TO authenticated USING (user_id = auth.uid());'],
   ['read-only CREATE VIEW', 'CREATE VIEW active_users AS SELECT id, email FROM users WHERE deleted_at IS NULL;'],
   ['two nullable ADD COLUMNs in one ALTER', 'ALTER TABLE p ADD COLUMN a text, ADD COLUMN b int DEFAULT 0;'],
+  // ── Non-regression guards: the adversarial-review fix must NOT over-reject these
+  //    genuinely-additive forms (proves the fix is precise, not a blanket ban). ──
+  ['bare CREATE FUNCTION (definition stored, not executed at apply)', 'CREATE FUNCTION add_two(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;'],
+  ['CREATE TABLE IF NOT EXISTS with in-table volatile DEFAULT (fires on INSERT, not apply)', 'CREATE TABLE IF NOT EXISTS evt (id uuid DEFAULT gen_random_uuid(), at timestamptz DEFAULT now());'],
 ];
 
 describe('classifyMigration — TIER-2 (must never auto-apply)', () => {
