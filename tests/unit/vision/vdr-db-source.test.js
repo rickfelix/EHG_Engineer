@@ -73,7 +73,9 @@ describe('dbVisionSource (FR-4) — reads active rung criteria from the ladder p
 
 describe('computeBuildGauge visionSource=true (FR-4) — DB denominator, unchanged probe math', () => {
   it('computes the gauge from the DB source with the SAME 4-state/unknowns-excluded math', async () => {
-    // Same probe inputs as the markdown-source test: 6 DB-backed probeable, 5 code_grep unknown.
+    // Same probe inputs as the markdown-source test: 6 original DB-backed probeable + the 2
+    // capability-layer db_count probes (sd_capabilities/specialist_registry, no count here → 0 →
+    // unbuilt) = 8 scored; 5 code_grep unknown.
     const io = {
       supabase: stubLadderSupabase({
         countByTable: { agent_messages: 2, pattern_occurrences: 0, key_results: 1 },
@@ -89,8 +91,8 @@ describe('computeBuildGauge visionSource=true (FR-4) — DB denominator, unchang
     expect(g.coherence.ok).toBe(true); // DB labels match VDR_REGISTRY → no drift
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
     expect(g.unknown_count).toBe(5);
-    expect(g.denominator).toBe(6);
-    expect(g.overall_pct).toBe(33); // identical to the markdown-source path
+    expect(g.denominator).toBe(8); // +2: the capability-layer db_count probes (unbuilt at count 0)
+    expect(g.overall_pct).toBe(25); // (1+0.5+0.5+0+0+0+0+0)/8 = 2.0/8 = 25%; identical to the markdown-source path
     expect(g.measured_at_note).toMatch(/DB vision source/);
   });
 
