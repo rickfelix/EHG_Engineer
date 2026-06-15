@@ -1,0 +1,133 @@
+{
+  "executive_summary": "Adam<->coordinator interface hardening, child D of SD-LEO-INFRA-ADAM-AUTONOMY-HARDENING-001. LEAD VALIDATION (row 459dc65f) found that the SD's original auto-ack and two-stage-ACK goals are ALREADY DELIVERED: QF-20260610-623 (PR #4533, commit b7dfd42) shipped the amAdam all-message-types auto-ack carve-out (coordination-inbox.cjs:141-143), the read-but-unacknowledged monitor (read-adam-directives.cjs), and the COACHING test; and the read_at->actioned_at two-stage ACK already exists as the payload.actioned_at JSONB contract (coordinator-ack-adam.cjs:65-71, adam-action-ack.cjs hasBeenActioned, read-adam-advisories.cjs gate). This PRD therefore VERIFIES (does not rebuild) those, and delivers the genuine remaining work: the chairman-directed working_context standing-context substrate (a continuously-current, mutually-readable list of each operator's concurrent workstreams on claude_sessions.metadata.working_context, with waiting-on-the-other-party as the highest-value signal), a narrowed reply-reader full-lane fix, and a regression test that locks the delivery contract. The verification story: a hermetic working-context library unit suite + a fleet-dashboard dual-render + a live CLI demo against the existing manual blob on session f808779a.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "working_context canonical-thread library (lib/coordinator/working-context.cjs)",
+      "description": "A pure, injectable, CJS library that models each operator session's working_context as a LIST of concurrent workstreams (not a single focus). Canonical thread lifecycle states are active|waiting|blocked|done|cancelled with an optional waiting_on field (coordinator|chairman|adam|<party>) so a waiting-on-the-other-party thread is first-class. normalizeThread/normalizeWorkingContext map the live hand-maintained free-form vocabulary on claude_sessions.metadata.working_context (session f808779a: states like 'waiting-on-coordinator', 'monitoring', 'done-7/7') onto the canonical shape so the library auto-maintains the existing data rather than clobbering it. pruneThreads transitions done|cancelled threads out of the live list into recently_closed and ages recently_closed entries past a TTL out. isStale flags a context whose top-level updated_at is older than the 30-minute staleness threshold (a stale context MISLEADS, worse than none). deriveThreadState maps a thread to a live signal (SD status / advisory ack / claim state) and returns the derived canonical state where mappable, null otherwise, so the context self-maintains instead of relying on manual upkeep that rots. formatWorkingContext is the single-source display mapping (reused by the CLI and the fleet-dashboard) that renders threads with state badges, HIGHLIGHTS waiting-on-other, and labels staleness.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "normalizeThread maps 'waiting-on-coordinator' -> {state:'waiting', waiting_on:'coordinator'}, 'monitoring' -> {state:'active'}, 'done-7/7' -> {state:'done'}; unknown states resolve to a documented honest default and never throw.",
+        "pruneThreads moves done|cancelled threads into recently_closed and removes recently_closed entries older than the TTL; the live threads list contains only open (active|waiting|blocked) threads.",
+        "isStale returns true when updated_at is missing or older than the 30-minute threshold (configurable), false otherwise.",
+        "deriveThreadState returns the canonical state derived from an injected live signal when the thread maps to one, and null when no mapping applies.",
+        "formatWorkingContext is pure, never throws on null/garbage input, and visibly highlights waiting-on-<other-party> threads and a STALE banner."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Atomic JSONB write path + chairman-gated RPC migration + CLI",
+      "description": "Writes to working_context go through an atomic JSONB merge, NEVER a JS whole-object read-modify-write (the lost-update lesson: a select->mutate->write of claude_sessions.metadata clobbers concurrent writers of other metadata keys — is_coordinator, claim, fleet_identity). A new chairman-gated, additive, reversible migration creates a SECURITY DEFINER RPC set_session_working_context(p_session_id text, p_wc jsonb) that runs UPDATE claude_sessions SET metadata = COALESCE(metadata,'{}'::jsonb) || jsonb_build_object('working_context', p_wc) with an in-migration DO $verify$ ASSERT. The JS store (getWorkingContext/writeWorkingContext) calls the RPC and FAIL-SOFTS (warns 'persistence pending migration apply', returns persisted:false) when the function is absent (migration not yet applied) rather than falling back to the dangerous RMW. A CLI scripts/working-context.cjs exposes show / set / done / cancel / prune / refresh (refresh = auto-derive + prune + write, the per-tick self-maintenance path).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "writeWorkingContext invokes supabase.rpc('set_session_working_context', ...) and never issues a full-object .update({metadata}) read-modify-write.",
+        "When the RPC is absent the writer returns {persisted:false, reason} and prints a clear 'migration unapplied' warning — it does not crash and does not perform an unsafe RMW.",
+        "The migration is additive, reversible, carries an in-migration verify, and has NO -- @approved-by attestation (chairman-gated, dormant until applied).",
+        "scripts/working-context.cjs set/done/prune mutate the in-memory context via the FR-1 library then persist via the writer."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "fleet-dashboard dual-render of both operators' working_context",
+      "description": "scripts/fleet-dashboard.cjs gains a working-context section that reads the Adam session's and the coordinator session's metadata.working_context and renders both via the FR-1 formatWorkingContext single-source mapping, with a per-context freshness indicator (FRESH/STALE by the 30-minute rule) and waiting-on-the-other-party threads highlighted, so neither operator mistakes the other's heads-down silence for being ignored and both have standing CONTEXT alongside the point-to-point advisories.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The dashboard renders Adam's and the coordinator's working_context side-by-side using formatWorkingContext (no duplicated display logic).",
+        "A context older than 30 minutes renders a visible STALE/unreliable indicator.",
+        "waiting-on-<other-party> threads are visually distinguished from active/blocked threads."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Narrowed reply-reader full-lane (adam-advisory.cjs replies)",
+      "description": "The `node scripts/adam-advisory.cjs replies` drain command currently filters payload->>kind = 'coordinator_reply' ONLY (drainReplies, line ~168), so a reply to an Adam advisory that is not tagged coordinator_reply is hidden. (Inbound coordinator directives of all kinds are already covered by read-adam-directives.cjs + the amAdam inbox carve-out + the DIRECTIVE_KINDS allowlist, so this is a CLI-convenience gap, not a delivery-reliability gap.) Broaden the drain to surface every reply targeting the Adam session — coordinator_reply OR any row carrying a payload.reply_to (a correlated reply to an Adam advisory) — while preserving the advisory-vs-friction lane separation and the exactly-once read_at consume.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "drainReplies surfaces coordinator_reply rows AND rows with a payload.reply_to that are not coordinator_reply, for the Adam session, where read_at IS NULL.",
+        "Each surfaced reply is consumed exactly once (read_at stamped only on rows still NULL).",
+        "No friction-router or deconfliction regression: rows without a reply correlation are not scooped."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Regression tests + verified-not-rebuilt contract documentation",
+      "description": "A hermetic vitest suite tests/unit/coordination/working-context.test.js covers the FR-1 library (normalize, prune, stale, derive, format) and the FR-2 writer fail-soft (RPC-absent path via an injected supabase stub) and the FR-4 full-lane drain. The PRD and a code comment document that success criteria #1 (auto-ack cannot hide a directed row) and #3 (two-stage read->actioned ACK) are VERIFIED as already delivered by QF-20260610-623 + the payload.actioned_at contract, citing files, and are NOT rebuilt — closing the SD's 'Delivery is TESTED' criterion against the genuine remaining surface.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "working-context.test.js is hermetic (no live DB / no real time via injected nowMs) and green.",
+        "A test exercises the RPC-absent fail-soft path and asserts no RMW is attempted.",
+        "A test asserts drainReplies surfaces a non-coordinator_reply reply (payload.reply_to set).",
+        "The PRD records the verified-not-rebuilt items with file:line + PR#/commit evidence."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Additive; no new table/column", "description": "working_context lives on the EXISTING claude_sessions.metadata JSONB. The only schema artifact is the chairman-gated set_session_working_context RPC migration. The redundant '(new)_two_stage_ack.sql' from the SD scope is DROPPED — session_coordination uses read_at + acknowledged_at + payload.actioned_at by design (VALIDATION finding)." },
+    { "id": "TR-2", "title": "Atomic JSONB writes only — never JS RMW", "description": "Per the singleton/metadata atomic-jsonb lesson, working_context is written via metadata || jsonb_build_object through a SECURITY DEFINER RPC; the JS path fail-softs when the RPC is absent rather than performing a lost-update-prone whole-object read-modify-write." },
+    { "id": "TR-3", "title": "Backward-compatible + lane separation preserved", "description": "The library normalizes (never clobbers) the live working_context blob shape {mode, threads:[{what,state}], updated_at, staleness_rule, recently_closed}. adam-advisory lane invariants (payload.kind=adam_advisory, NO signal_type / intent_action) are preserved by FR-4. Modules are CJS (.cjs) because the repo is type:module." },
+    { "id": "TR-4", "title": "Do not rebuild already-delivered work", "description": "No changes to the QF-20260610-623 auto-ack carve-out, read-adam-directives.cjs, or the payload.actioned_at two-stage ACK contract beyond verification + tests." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "normalize live free-form states to canonical lifecycle", "type": "unit", "expected": "waiting-on-coordinator/monitoring/done-7/7 map to {waiting,waiting_on:coordinator}/{active}/{done}; canonical shape out." },
+    { "id": "TS-2", "scenario": "prune done|cancelled into recently_closed + age out", "type": "unit", "expected": "live threads contain only open threads; recently_closed older than TTL removed." },
+    { "id": "TS-3", "scenario": "staleness detection", "type": "unit", "expected": "isStale true when updated_at missing or >30min old." },
+    { "id": "TS-4", "scenario": "auto-derive thread state from injected live signal", "type": "unit", "expected": "derived canonical state when mapped, null otherwise." },
+    { "id": "TS-5", "scenario": "writer fail-soft when RPC absent", "type": "unit", "expected": "returns persisted:false + warning; no full-object metadata update issued." },
+    { "id": "TS-6", "scenario": "drainReplies full-lane", "type": "unit", "expected": "surfaces a payload.reply_to reply that is not coordinator_reply; consumes exactly once." }
+  ],
+  "acceptance_criteria": [
+    "working_context is a continuously-current, mutually-readable LIST of concurrent threads per operator with waiting-on-other surfaced (SD criterion: standing context, currency over staleness).",
+    "All writes are atomic JSONB (no JS RMW); the RPC migration is chairman-gated and the JS path fail-softs when unapplied.",
+    "fleet-dashboard renders both operators' contexts with freshness + waiting-on-other highlighting via a single-source formatter.",
+    "The reply-only drainReplies blindspot is closed for the Adam session (narrowed FR-4).",
+    "SD criteria #1 (auto-ack cannot hide a directed row) and #3 (two-stage read->actioned ACK) are VERIFIED already-delivered (QF-20260610-623 + payload.actioned_at contract) and locked by regression, not rebuilt.",
+    "Advisory lane separation (adam_advisory kind, no signal_type) is preserved."
+  ],
+  "risks": [
+    { "risk": "JS read-modify-write of claude_sessions.metadata would reintroduce the lost-update race (clobbers concurrent metadata writers).", "mitigation": "Atomic metadata || jsonb_build_object via SECURITY DEFINER RPC; JS path fail-softs (never RMW) when the RPC is absent.", "severity": "high" },
+    { "risk": "Stale working_context actively misleads (worse than none).", "mitigation": "Top-level updated_at + 30-min isStale rule surfaced in every render; auto-derive + prune keep it current; manual threads still get the freshness backstop.", "severity": "medium" },
+    { "risk": "Chairman-gated migration is unapplied at ship, so persistence is dormant.", "mitigation": "Reads work against the existing manual blob; writer fail-softs with a clear notice; in-migration verify proves correctness on apply; captured as a completion flag.", "severity": "low" },
+    { "risk": "Re-deriving/rebuilding work already shipped by QF-20260610-623 or the payload.actioned_at contract.", "mitigation": "VALIDATION (row 459dc65f) enumerated already-delivered items with evidence; this PRD verifies + tests them only.", "severity": "medium" },
+    { "risk": "Broadening drainReplies could scoop non-reply rows or break lane separation.", "mitigation": "Filter strictly to coordinator_reply OR rows with a payload.reply_to correlation; preserve exactly-once read_at consume; unit-tested.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["The Adam operator session", "The coordinator operator session", "scripts/fleet-dashboard.cjs", "scripts/working-context.cjs CLI"],
+    "dependencies": ["claude_sessions.metadata (existing JSONB column)", "set_session_working_context RPC (new chairman-gated migration)", "lib/coordinator/working-context.cjs (new library)"],
+    "data_contracts": ["claude_sessions.metadata.working_context = {mode, threads:[{what,state,waiting_on?,since}], updated_at, staleness_rule?, recently_closed:[{at,what,state}]}", "RPC set_session_working_context(p_session_id text, p_wc jsonb)"],
+    "runtime_config": ["none (no new env var/flag); persistence activates when the chairman applies the RPC migration"],
+    "observability_rollout": ["working-context.test.js unit suite", "node scripts/working-context.cjs show (live render)", "fleet-dashboard working-context section", "the 5 smoke_test_steps"]
+  },
+  "system_architecture": {
+    "summary": "A pure working_context lifecycle library + an atomic JSONB write path (RPC) + dual-render, layered over the existing claude_sessions.metadata and the already-delivered ACK/inbox contracts.",
+    "components": [
+      { "name": "lib/coordinator/working-context.cjs", "change": "NEW — canonical thread model, normalize, prune, isStale, deriveThreadState, formatWorkingContext" },
+      { "name": "lib/coordinator/working-context-store.cjs", "change": "NEW — getWorkingContext/writeWorkingContext (RPC + fail-soft)" },
+      { "name": "scripts/working-context.cjs", "change": "NEW — show/set/done/cancel/prune/refresh CLI" },
+      { "name": "database/migrations/20260615_set_session_working_context.sql", "change": "NEW — chairman-gated atomic-merge RPC + verify" },
+      { "name": "scripts/fleet-dashboard.cjs", "change": "UPDATE — working-context dual-render section" },
+      { "name": "scripts/adam-advisory.cjs", "change": "UPDATE — drainReplies full-lane (narrowed FR-4)" },
+      { "name": "tests/unit/coordination/working-context.test.js", "change": "NEW — hermetic regression suite" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the pure library first, layer the atomic store + migration, then wire CLI + dashboard, narrow FR-4, and lock with hermetic tests.",
+    "steps": [
+      "Write lib/coordinator/working-context.cjs (pure model + normalize/prune/isStale/deriveThreadState/formatWorkingContext) and its hermetic test suite.",
+      "Write lib/coordinator/working-context-store.cjs (RPC writer + fail-soft) and the chairman-gated set_session_working_context migration with in-migration verify.",
+      "Write scripts/working-context.cjs CLI (show/set/done/cancel/prune/refresh).",
+      "Wire the dual-render working-context section into scripts/fleet-dashboard.cjs via formatWorkingContext.",
+      "Narrow FR-4: broaden drainReplies to the full reply lane (coordinator_reply OR payload.reply_to).",
+      "Run the suite + a live `working-context.cjs show` smoke against session f808779a; document verified-not-rebuilt items."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the working-context library unit tests: npx vitest run tests/unit/coordination/working-context.test.js", "expected_outcome": "All green. normalizeThread maps live free-form states; pruneThreads moves done|cancelled into recently_closed and ages the list out; isStale flags >30min-old contexts." },
+    { "step_number": 2, "instruction": "Show the rendered working context: node scripts/working-context.cjs show", "expected_outcome": "Renders the Adam and coordinator working_context as canonical parallel threads; waiting-on-<other party> threads are HIGHLIGHTED; a stale context is labelled STALE/unreliable." },
+    { "step_number": 3, "instruction": "Set + close a thread: node scripts/working-context.cjs set \"CronGenius refresh\" --state waiting-on-coordinator ; then node scripts/working-context.cjs done \"CronGenius refresh\"", "expected_outcome": "Thread upserted then transitioned to done and pruned into recently_closed; updated_at bumped; write goes through the atomic RPC (or fail-soft warns when the chairman-gated migration is unapplied) — never a whole-object JS RMW." },
+    { "step_number": 4, "instruction": "Render the fleet dashboard: node scripts/fleet-dashboard.cjs (working-context section)", "expected_outcome": "Both operators' working_context render with a freshness indicator; waiting-on-the-other-party threads surfaced." },
+    { "step_number": 5, "instruction": "Drain the full directive lane: node scripts/adam-advisory.cjs replies", "expected_outcome": "The replies reader surfaces all directed reply kinds for the Adam session, not coordinator_reply only — the reply-only blindspot at adam-advisory.cjs:168 is closed." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001"
+  }
+}

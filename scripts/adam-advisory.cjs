@@ -154,25 +154,33 @@ async function snapshotSender(supabase, sessionId) {
 }
 
 /**
- * FR-4 — durable reader: drain coordinator replies targeting THIS Adam session that
- * were not consumed by an in-flight sync await (read_at IS NULL). These are replies
- * that arrived after `request` mode's await timed out, or replies to fire-and-forget
- * `send` advisories. Gates on read_at IS NULL (same gate the inbox hook leaves NULL
- * for an Adam session) so each reply is consumed EXACTLY once. Stamps read_at to consume.
+ * FR-4 — durable reader: drain replies targeting THIS Adam session that were not consumed by an
+ * in-flight sync await (read_at IS NULL). These are replies that arrived after `request` mode's
+ * await timed out, or replies to fire-and-forget `send` advisories. Gates on read_at IS NULL
+ * (same gate the inbox hook leaves NULL for an Adam session) so each reply is consumed EXACTLY
+ * once. Stamps read_at to consume.
+ *
+ * SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-4) — FULL-LANE reader. This previously surfaced
+ * ONLY payload.kind='coordinator_reply', so a reply to an Adam advisory that carries a correlation
+ * (payload.reply_to) under any other kind was hidden — the reply-only blindspot. Broaden to:
+ * coordinator_reply OR any row carrying a payload.reply_to. Lane separation is preserved: a
+ * non-reply row (no reply_to and not a coordinator_reply) is never scooped, and the exactly-once
+ * read_at consume is unchanged. (Inbound coordinator DIRECTIVES of all kinds remain covered by
+ * scripts/read-adam-directives.cjs + the amAdam inbox carve-out; this closes the `replies` lane.)
  */
 async function drainReplies(supabase, sessionId) {
   const { data: rows, error } = await supabase
     .from('session_coordination')
     .select('id, sender_session, subject, body, payload, created_at')
     .eq('target_session', sessionId)
-    .eq('payload->>kind', 'coordinator_reply')
+    .or('payload->>kind.eq.coordinator_reply,payload->>reply_to.not.is.null')
     .is('read_at', null)
     .order('created_at', { ascending: true })
     .limit(50);
   if (error) { console.error('ERROR: replies query failed:', error.message); process.exit(1); }
-  if (!rows || rows.length === 0) { console.log('(no unread coordinator replies)'); return; }
+  if (!rows || rows.length === 0) { console.log('(no unread directed replies)'); return; }
 
-  console.log(`${rows.length} coordinator repl${rows.length === 1 ? 'y' : 'ies'}:`);
+  console.log(`${rows.length} directed repl${rows.length === 1 ? 'y' : 'ies'}:`);
   const ids = [];
   for (const r of rows) {
     const replyTo = (r.payload && r.payload.reply_to) || '?';
