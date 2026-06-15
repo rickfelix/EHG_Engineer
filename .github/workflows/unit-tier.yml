@@ -31,4 +31,9 @@ jobs:
 
       - name: Quarantine burn-down summary
         if: always()
-        run: node scripts/unit-tier-quarantine.mjs report .claude-unit-run.log 2>/dev/null || node -e "const m=require('./tests/quarantine-manifest.json'); const by={}; for(const e of m.quarantined) by[e.reason_class]=(by[e.reason_class]||0)+1; console.log('Quarantined files: '+m.quarantined.length); console.log(JSON.stringify(by,null,1));"
+        # SD-LEO-FIX-UNIT-TIER-STARTUP-001: block scalar (run: |) so the embedded
+        # "Quarantined files: " colon-space is literal text, not a YAML mapping
+        # separator. A plain scalar here caused a top-level parse failure (34:276)
+        # -> startup_failure on every run since #4619. Command is byte-identical.
+        run: |
+          node scripts/unit-tier-quarantine.mjs report .claude-unit-run.log 2>/dev/null || node -e "const m=require('./tests/quarantine-manifest.json'); const by={}; for(const e of m.quarantined) by[e.reason_class]=(by[e.reason_class]||0)+1; console.log('Quarantined files: '+m.quarantined.length); console.log(JSON.stringify(by,null,1));"
