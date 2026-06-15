@@ -1,0 +1,125 @@
+{
+  "executive_summary": "Harden the canonical Adam SD-creation path (scripts/leo-create-sd.js) so a --from-plan draft comes out correctly typed, correctly keyed, and fully child-wired in one governed call with ZERO post-hoc DB surgery. Grounding of the current code reshaped the scope (convergent-work check): explicit-type honoring on --from-plan is ALREADY implemented (parsePlanFile parses a `## Type` header and the --type flag overrides it at leo-create-sd.js:847-855), so FR-1 is a verify-and-harden, not a rebuild. The genuine gaps are: (FR-2) createSD never sets sd_code_user_facing, so it defaults to the UUID instead of the human-readable sd_key, forcing a governance-gated re-key (which itself trips the id<->sd_code_user_facing sync trigger); and (FR-3) the --child path (createChild) sets parent_sd_id but NOT relationship_type='child' and does NOT register the child in the parent's autonomy_children/children registry. We deliver a reusable lib/sd/child-linkage.js helper (pure core + governed IO) that does all three in one idempotent step, wire createChild to it, set sd_code_user_facing=sd_key at creation (preserving the id/uuid_id PK semantics), improve inferSDType for the infrastructure-signal case that mis-fired to bugfix, document the flow, and prove it with tests + a zero-DB-surgery demo — all inside the SD_CREATE_VIA_SKILL governance enforcement.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Explicit SD type is honored end-to-end on --from-plan; inference no longer mis-types obvious infrastructure plans",
+      "description": "VERIFY + HARDEN (convergent: largely already implemented). scripts/leo-create-sd.js parsePlanFile already parses a `## Type` plan header (parsed.type) which wins over inferSDType, and the --type flag (overrides.typeOverride) overrides it further (leo-create-sd.js:847-855). Lock this behavior with a regression test so it cannot silently break. Then improve inferSDType (lib/sd/type-detection.js / type-classifier.js) so that when NEITHER a `## Type` header NOR --type is supplied, a plan carrying clear infrastructure signals (e.g. SD-LEO-INFRA-* intent, tooling/process/governance/handoff/gate vocabulary, scope of scripts/lib paths) is inferred as 'infrastructure' rather than mis-inferred as 'bugfix' (the exact regression captured in this SD's evidence). The fix MUST NOT bypass assertValidSdType / mapToDbType (canonical 15-value enum, fail-loud).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A --from-plan run with --type infrastructure produces sd_type='infrastructure' (regression test asserts the override path).",
+        "A --from-plan run whose plan has a `## Type: infrastructure` header (no --type flag) produces sd_type='infrastructure'.",
+        "A --from-plan run with NEITHER a type header NOR --type, on a plan with clear infrastructure signals, infers sd_type='infrastructure' (not 'bugfix').",
+        "Unknown/typo types still fail loudly via assertValidSdType (no phantom sd_type)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "sd_code_user_facing is set to the human-readable sd_key at creation (never the UUID)",
+      "description": "GENUINE GAP. createSD (leo-create-sd.js, sdData ~line 1753) inserts id=randomUUID() and sd_key=<key> but NEVER sets sd_code_user_facing, so the 20260124 migration default/sync leaves it equal to the UUID — forcing a later governance-gated re-key. Set sd_code_user_facing = sdKey in the createSD insert so the human-readable key is correct at creation with no post-hoc re-key. CRITICAL: a DB trigger syncs id <-> sd_code_user_facing ('id-follows-sd_code_user_facing'), and the real PK is uuid_id. EXEC MUST analyze that trigger and the id/uuid_id/sd_code_user_facing column semantics and verify (rolled-back-txn test or in-migration assert) that setting sd_code_user_facing=sd_key at insert does NOT corrupt id or uuid_id. This is a data-model/governance interaction and MUST be adversarially reviewed before ship.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A freshly created SD (direct, --from-plan, and --child paths) has sd_code_user_facing === sd_key, never a UUID.",
+        "id and uuid_id retain valid, non-corrupted values after creation (the id<->sd_code_user_facing trigger interaction is verified, not broken).",
+        "No post-hoc re-key is required for a correctly-created SD (zero re-key events in the demo).",
+        "The trigger interaction is covered by a verification test (rolled-back-txn or in-DB assert)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "One-step, idempotent child-linkage helper sets parent_sd_id + relationship_type='child' + registers the child in the parent's registry",
+      "description": "GENUINE GAP. Today createChild (leo-create-sd.js:631) sets parent_sd_id on the child but does NOT set relationship_type='child' and does NOT register the child in the parent's autonomy_children/children registry. CREATE lib/sd/child-linkage.js exporting (a) a PURE computeChildLinkage(parent, childKey, opts) => { childFields: { parent_sd_id, relationship_type: 'child' }, parentRegistryPatch } that merges the child into the parent's registry idempotently (no duplicate entries on re-run) and never inherits 'orchestrator' as a child work-type; and (b) a governed IO wrapper linkChild(supabase, parent, childKey, opts) that applies the child fields AND the parent registry patch in one step. Wire createChild() to call linkChild so every child created via the canonical path is fully wired with zero manual DB surgery.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Creating a child via the canonical path sets parent_sd_id, relationship_type='child', and a parent registry entry — all in one call.",
+        "computeChildLinkage is pure (no DB/IO) and unit-tested; re-registering the same child is idempotent (no duplicate registry entries).",
+        "A child never inherits relationship/work-type 'orchestrator'.",
+        "No manual DB UPDATE is needed to complete child linkage after creation."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Document the explicit-type and one-step child-linkage flow in the /sd-create skill",
+      "description": "Update .claude/commands/sd-create.md to document (1) how to set the type explicitly on --from-plan (## Type header or --type), (2) the one-step child-linkage flow via the new helper, and (3) that the common case no longer needs a governance type-change or re-key — while genuine reclassification still records type_change_reason + governance_metadata.type_reclassification. Stays inside SD_CREATE_VIA_SKILL.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        ".claude/commands/sd-create.md documents the explicit-type flow (## Type header + --type).",
+        ".claude/commands/sd-create.md documents the one-step child-linkage helper and its guarantees (parent_sd_id + relationship_type + parent registry).",
+        "The doc states the SD_CREATE_VIA_SKILL enforcement is not bypassed and that genuine type changes still require the governance reason fields."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Tests + a zero-DB-surgery activation demo proving correct type, key, and child wiring",
+      "description": "Create tests/unit/sd-child-linkage.test.js (the activation test) covering the pure computeChildLinkage: sets parent_sd_id + relationship_type='child', merges the parent registry idempotently, and never inherits 'orchestrator'. Add a focused regression test for FR-1 (explicit --type / ## Type honoring + the infrastructure-signal inference). The activation demo: create an infrastructure child SD via the canonical path and observe it is correctly typed (infrastructure, not bugfix), correctly keyed (sd_code_user_facing === sd_key), and fully wired (parent_sd_id + relationship_type='child' + parent registry) with ZERO manual DB surgery — all via the governed /sd-create / leo-create-sd path (no SD_CREATE_VIA_SKILL bypass).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "tests/unit/sd-child-linkage.test.js is green and is set as the SD activation_test_id.",
+        "A regression test asserts explicit-type honoring and the infrastructure-signal inference.",
+        "The demo creates an infra child correctly typed + keyed + child-wired with zero manual DB surgery.",
+        "No bypass of SD_CREATE_VIA_SKILL; genuine type reclassification still records type_change_reason + governance_metadata.type_reclassification."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Pure core + governed IO", "description": "lib/sd/child-linkage.js separates a pure computeChildLinkage (unit-testable, no DB) from a thin governed IO wrapper, mirroring the repo's pure-core/injectable-IO pattern." },
+    { "id": "TR-2", "title": "Additive, fail-loud, no governance bypass", "description": "No new sd_type enum values; reuse assertValidSdType/mapToDbType; do NOT bypass SD_CREATE_VIA_SKILL; do NOT weaken governance type-change triggers." },
+    { "id": "TR-3", "title": "Trigger-safe key write", "description": "Setting sd_code_user_facing=sd_key at insert must be verified safe against the id<->sd_code_user_facing sync trigger and the uuid_id PK (rolled-back-txn or in-DB assert)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "computeChildLinkage sets parent_sd_id + relationship_type='child' and idempotently merges the parent registry", "type": "unit", "expected": "childFields={parent_sd_id,relationship_type:'child'}; re-run adds no duplicate registry entry" },
+    { "id": "TS-2", "scenario": "explicit --type and ## Type header are honored; infra-signal plan infers infrastructure (not bugfix)", "type": "unit", "expected": "resolved sd_type is infrastructure in all three cases" },
+    { "id": "TS-3", "scenario": "create an infrastructure child via the canonical path and inspect the rows", "type": "integration", "expected": "sd_type=infrastructure, sd_code_user_facing===sd_key, parent_sd_id+relationship_type+parent-registry all set, zero manual DB surgery" }
+  ],
+  "acceptance_criteria": [
+    "An Adam --from-plan infrastructure child SD is created correctly typed + keyed + fully child-wired with zero post-hoc DB surgery, inside SD_CREATE_VIA_SKILL.",
+    "sd_code_user_facing === sd_key at creation on all create paths; id/uuid_id PK semantics intact.",
+    "The activation test tests/unit/sd-child-linkage.test.js is green."
+  ],
+  "risks": [
+    { "risk": "id<->sd_code_user_facing sync trigger could corrupt id/uuid_id when sd_code_user_facing is set at insert", "mitigation": "Analyze the trigger; verify with a rolled-back-txn / in-DB assert; adversarial-review the data-model interaction before ship", "severity": "high" },
+    { "risk": "Improving inferSDType could over-classify legitimate non-infra plans as infrastructure", "mitigation": "Explicit type (header/--type) always wins; inference change is narrow (clear infra signals) and regression-tested both directions", "severity": "medium" },
+    { "risk": "Child-linkage parent-registry write races a concurrent parent mutation", "mitigation": "Idempotent merge (no duplicate entries) + read-modify-write guarded; keep registry patch minimal and additive", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Adam autonomous SD sourcing", "/sd-create skill", "leo-create-sd.js --from-plan and --child paths", "orchestrator child decomposition"],
+    "dependencies": ["scripts/leo-create-sd.js", "scripts/modules/sd-key-generator.js", "lib/sd/type-detection.js", "lib/sd/type-classifier.js", "strategic_directives_v2 (sd_code_user_facing, id, uuid_id, parent_sd_id, relationship_type, metadata)"],
+    "data_contracts": ["strategic_directives_v2.sd_code_user_facing (UNIQUE, NOT NULL)", "strategic_directives_v2.relationship_type", "parent metadata.autonomy_children/children registry"],
+    "runtime_config": ["none (no new env flags; governance hooks unchanged)"],
+    "observability_rollout": ["Demo run produces a correctly typed/keyed/wired child with zero manual DB surgery; regression + unit tests green; no SD_CREATE_VIA_SKILL bypass"]
+  },
+  "system_architecture": {
+    "summary": "A reusable pure-core/governed-IO child-linkage helper plus targeted hardening of the canonical create path's typing and keying.",
+    "components": [
+      { "name": "lib/sd/child-linkage.js", "change": "NEW (pure computeChildLinkage + governed linkChild IO wrapper)" },
+      { "name": "scripts/leo-create-sd.js", "change": "UPDATE (set sd_code_user_facing=sd_key at insert; wire createChild to linkChild)" },
+      { "name": "lib/sd/type-detection.js / type-classifier.js", "change": "UPDATE (narrow infra-signal inference improvement)" },
+      { "name": ".claude/commands/sd-create.md", "change": "UPDATE (document explicit-type + child-linkage flow)" },
+      { "name": "scripts/modules/sd-key-generator.js", "change": "READ (key generation; sd_type-aware per b7b316b4e2)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the reusable child-linkage helper (pure + IO) and wire it; set sd_code_user_facing=sd_key at creation with a trigger-safe, adversarially-reviewed change; narrowly improve type inference; document; prove with tests + a zero-DB-surgery demo.",
+    "steps": [
+      "FR-3: create lib/sd/child-linkage.js — pure computeChildLinkage(parent, childKey, opts) returning {childFields:{parent_sd_id, relationship_type:'child'}, parentRegistryPatch} (idempotent registry merge, never inherit 'orchestrator') + governed linkChild(supabase, ...) IO wrapper; wire createChild() (leo-create-sd.js:631) to call linkChild.",
+      "FR-2: set sd_code_user_facing=sdKey in the createSD insert (leo-create-sd.js sdData ~1753); FIRST analyze the id<->sd_code_user_facing sync trigger + uuid_id PK and verify (rolled-back-txn / in-DB assert) the write is non-corrupting; adversarial-review the interaction.",
+      "FR-1: add a regression test pinning explicit --type / ## Type honoring; narrowly improve inferSDType so a clear infrastructure-signal plan with no explicit type infers 'infrastructure' (not 'bugfix'), without bypassing assertValidSdType/mapToDbType.",
+      "FR-5: write tests/unit/sd-child-linkage.test.js (pure computeChildLinkage) as the activation test + the FR-1 regression test; run the zero-DB-surgery demo creating an infra child correctly typed/keyed/wired.",
+      "FR-4: update .claude/commands/sd-create.md documenting the explicit-type + one-step child-linkage flow and the no-bypass/governance guarantees.",
+      "Adversarial-review the FR-2 trigger/data-model interaction and the FR-3 helper before EXEC-TO-PLAN; fix-first; commit; ship via the full handoff chain."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the canonical Adam create path for an INFRASTRUCTURE SD from a plan with an explicit type (node scripts/leo-create-sd.js --from-plan <plan.md> --type infrastructure, via the /sd-create skill), then query strategic_directives_v2 for the new row.", "expected_outcome": "The created SD has sd_type='infrastructure' (NOT mis-inferred as 'bugfix') and sd_code_user_facing set to the human-readable SD key (e.g. SD-LEO-INFRA-...), NOT the UUID — with ZERO post-hoc governance type-change or re-key required." },
+    { "step_number": 2, "instruction": "Create a child SD in one step via the new lib/sd/child-linkage.js helper, passing the parent key, then query both the child row and the parent's metadata.", "expected_outcome": "The child row has parent_sd_id = the parent UUID and relationship_type='child', AND the parent's children/autonomy_children registry contains the new child key — all wired in one governed call with no manual DB surgery." },
+    { "step_number": 3, "instruction": "Confirm the hardened create path still routes through the /sd-create skill enforcement (the SD_CREATE_VIA_SKILL governance hook) and that a genuine type reclassification still records its reason.", "expected_outcome": "Creation succeeds only via the governed skill path (no direct-insert bypass of SD_CREATE_VIA_SKILL); when a real type change IS needed it still records type_change_reason + governance_metadata.type_reclassification." }
+  ],
+  "success_metrics": [
+    { "metric": "Manual DB-surgery steps after Adam --from-plan child creation", "target": "0 (typed + keyed + child-wired in one governed call)" },
+    { "metric": "sd_code_user_facing correctness at creation across all paths", "target": "100% equal to sd_key (never the UUID)" },
+    { "metric": "Child-linkage completeness (parent_sd_id + relationship_type='child' + parent-registry entry)", "target": "all three present in one call; idempotent on re-run" },
+    { "metric": "Activation test tests/unit/sd-child-linkage.test.js", "target": "green" }
+  ],
+  "activation_test_id": "tests/unit/sd-child-linkage.test.js",
+  "metadata": { "sd_key": "SD-LEO-INFRA-ADAM-CREATION-PROCESS-001" }
+}
