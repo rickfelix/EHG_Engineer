@@ -85,11 +85,10 @@ async function main() {
     return;
   }
   if (cmd === 'prune' || cmd === 'refresh') {
-    await loadAndWrite(supabase, sessionId, (cur) => {
-      const pruned = wc.pruneThreads(cur);
-      if (cmd === 'refresh') pruned.updated_at = new Date().toISOString(); // re-stamp freshness on the tick
-      return pruned;
-    });
+    // Both prune closed/aged threads. updated_at is bumped by pruneThreads ONLY when a real change
+    // occurred (a thread was actually closed) — neither command force-stamps freshness, so a tick
+    // with no real change never advertises false currency (a stale context misleads worse than none).
+    await loadAndWrite(supabase, sessionId, (cur) => wc.pruneThreads(cur));
     return;
   }
 

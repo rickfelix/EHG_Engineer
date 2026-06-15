@@ -19,7 +19,11 @@ function saveDashState(s) { try { fs.mkdirSync(path.dirname(DASH_STATE_FILE), { 
 function normalizeRender(s) {
   return s.replace(/\[[0-9;]*m/g, '').replace(/\d+s ago/g, '_s_').replace(/\d+m ago/g, '_m_')
     .replace(/\d+:\d+:\d+ [AP]M/g, '_T_').replace(/\d+:\d+ [AP]M/g, '_t_').replace(/uptime \d+h\d+m/gi, '_U_')
-    .replace(/[\d.]+h ago/g, '_H_').replace(/\d{4,}m/g, '_W_');
+    .replace(/[\d.]+h ago/g, '_H_').replace(/\d{4,}m/g, '_W_')
+    // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3): working_context age indicators tick every
+    // minute ("STALE (98m old …)" / "fresh (1m)") — normalize them so the steady-state suppress hash
+    // does not change every minute and the dashboard can still reach its identical-render threshold.
+    .replace(/-?\d+m old/g, '_m_old').replace(/\(-?\d+m\)/g, '(_m_)');
 }
 // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B (Phase 2)
 const teamBanner = require('../lib/execute/team-banner.cjs');

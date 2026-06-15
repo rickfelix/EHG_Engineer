@@ -45,8 +45,10 @@ describe('normalizeState (canonical lifecycle + waiting-on party)', () => {
     expect(normalizeState('cancelled')).toEqual({ state: 'cancelled' });
     expect(normalizeState('active')).toEqual({ state: 'active' });
   });
-  it('honest default: unknown/empty states resolve to active (kept VISIBLE, never auto-pruned)', () => {
-    expect(normalizeState('something weird')).toEqual({ state: 'active' });
+  it('honest default: unknown states resolve to active but PRESERVE the original (raw_state) for audit', () => {
+    expect(normalizeState('something weird')).toEqual({ state: 'active', raw_state: 'something weird' });
+    expect(normalizeState('  Paused  ')).toEqual({ state: 'active', raw_state: 'Paused' }); // original case kept
+    // empty/null/undefined carry NO raw_state (nothing to preserve)
     expect(normalizeState('')).toEqual({ state: 'active' });
     expect(normalizeState(null)).toEqual({ state: 'active' });
     expect(normalizeState(undefined)).toEqual({ state: 'active' });
@@ -77,6 +79,26 @@ describe('normalizeThread / normalizeWorkingContext (backward-compatible, never 
     const t = normalizeThread({ what: 'x', state: 'active', waiting_on: 'coordinator' });
     expect(t.waiting_on).toBeUndefined();
   });
+  it('accepts alternate name fields before dropping a thread (reduces silent loss)', () => {
+    expect(normalizeThread({ description: 'desc-named', state: 'active' }).what).toBe('desc-named');
+    expect(normalizeThread({ title: 'title-named' }).what).toBe('title-named');
+    expect(normalizeThread({ name: 'name-named' }).what).toBe('name-named');
+  });
+  it('coerceSince: preserves string, converts number/Date to ISO, never silently drops a timestamp', () => {
+    const ms = Date.parse('2026-06-15T10:00:00.000Z');
+    expect(normalizeThread({ what: 'a', since: '2026-06-15T10:00:00.000Z' }).since).toBe('2026-06-15T10:00:00.000Z');
+    expect(normalizeThread({ what: 'a', since: ms }).since).toBe('2026-06-15T10:00:00.000Z');
+    expect(normalizeThread({ what: 'a', since: new Date(ms) }).since).toBe('2026-06-15T10:00:00.000Z');
+    expect(normalizeThread({ what: 'a' }).since).toBeNull(); // genuinely absent -> null (not fabricated)
+  });
+  it('preserves unknown top-level keys (staleness_rule) across the normalize cycle', () => {
+    const norm = normalizeWorkingContext(liveBlob());
+    expect(norm.staleness_rule).toBe('if updated_at > ~30min old, treat as STALE'); // not dropped
+  });
+  it('keeps a recently_closed entry that has `at` even if `what` is non-string', () => {
+    const norm = normalizeWorkingContext({ recently_closed: [{ at: new Date(T0).toISOString(), state: 'done' }, { foo: 'bar' }] });
+    expect(norm.recently_closed).toHaveLength(1); // the dated one survives; the shapeless one is dropped
+  });
 });
 
 describe('isStale (currency-over-staleness)', () => {
@@ -84,6 +106,15 @@ describe('isStale (currency-over-staleness)', () => {
     const wc = { updated_at: new Date(T0).toISOString() };
     expect(isStale(wc, T0 + STALE_THRESHOLD_MS - 1)).toBe(false);
     expect(isStale(wc, T0 + STALE_THRESHOLD_MS + 1)).toBe(true);
+  });
+  it('boundary: exactly at the threshold is still fresh (> not >=)', () => {
+    const wc = { updated_at: new Date(T0).toISOString() };
+    expect(isStale(wc, T0 + STALE_THRESHOLD_MS)).toBe(false);
+    expect(isStale(wc, T0 + STALE_THRESHOLD_MS + 1)).toBe(true);
+  });
+  it('future-dated beyond clock-skew tolerance => stale (a future timestamp must NOT read as fresh)', () => {
+    expect(isStale({ updated_at: new Date(T0 + 60_000).toISOString() }, T0)).toBe(false); // 1m future within tolerance
+    expect(isStale({ updated_at: new Date(T0 + 60 * 60_000).toISOString() }, T0)).toBe(true); // 1h future => unreliable
   });
   it('missing/garbage updated_at => stale (treat as unreliable)', () => {
     expect(isStale({}, T0)).toBe(true);
@@ -179,6 +210,11 @@ describe('formatWorkingContext (single-source display)', () => {
   it('shows a STALE banner past the threshold', () => {
     const out = formatWorkingContext(liveBlob(), { nowMs: T0 + STALE_THRESHOLD_MS + 60_000 });
     expect(out).toMatch(/STALE \(\d+m old — re-derive before trusting\)/);
+  });
+  it('surfaces an unrecognized raw state (never hides intent)', () => {
+    const wc = { threads: [{ what: 'odd thread', state: 'paused-indefinitely' }], updated_at: new Date(T0).toISOString() };
+    const out = formatWorkingContext(wc, { nowMs: T0 });
+    expect(out).toMatch(/\[active\] odd thread \(raw: "paused-indefinitely"\)/);
   });
   it('never throws on null/garbage', () => {
     expect(formatWorkingContext(null)).toMatch(/\(none\)/);
