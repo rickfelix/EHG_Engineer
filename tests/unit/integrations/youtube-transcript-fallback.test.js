@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   fetchTranscript,
   analyzeTranscriptContent,
+  analyzeWithFallback,
   pickTranscriptTrack,
   parseTimedTextJson3,
 } from '../../../lib/integrations/youtube/transcript-fallback.js';
@@ -156,5 +157,52 @@ describe('analyzeTranscriptContent', () => {
     await analyzeTranscriptContent(huge, { maxTranscriptChars: 100 });
     const promptText = sentBody.contents[0].parts[0].text;
     expect(promptText).toContain('[transcript truncated]');
+  });
+});
+
+describe('analyzeWithFallback (native<->transcript decision, FR-2)', () => {
+  // Inject stubs so no real network/module call happens.
+  const deps = (over = {}) => ({
+    _analyzeVideoContent: vi.fn().mockResolvedValue(null),
+    _fetchTranscript: vi.fn().mockResolvedValue(null),
+    _analyzeTranscriptContent: vi.fn().mockResolvedValue(null),
+    ...over,
+  });
+
+  it('short video: native success -> method=native, transcript never attempted', async () => {
+    const d = deps({ _analyzeVideoContent: vi.fn().mockResolvedValue('native summary') });
+    const out = await analyzeWithFallback(VID, { metadata: { durationSeconds: 600 }, ...d });
+    expect(out).toEqual({ summary: 'native summary', method: 'native' });
+    expect(d._fetchTranscript).not.toHaveBeenCalled();
+  });
+
+  it('short video: native null -> transcript fallback used', async () => {
+    const d = deps({ _fetchTranscript: vi.fn().mockResolvedValue('the transcript'), _analyzeTranscriptContent: vi.fn().mockResolvedValue('t summary') });
+    const out = await analyzeWithFallback(VID, { metadata: { durationSeconds: 600 }, ...d });
+    expect(out).toEqual({ summary: 't summary', method: 'transcript_fallback' });
+    expect(d._analyzeVideoContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('short video: both fail -> failed_other', async () => {
+    const out = await analyzeWithFallback(VID, { metadata: { durationSeconds: 600 }, ...deps() });
+    expect(out).toEqual({ summary: null, method: 'failed_other' });
+  });
+
+  it('long video: transcript tried FIRST (native not called) -> transcript_fallback', async () => {
+    const d = deps({ _fetchTranscript: vi.fn().mockResolvedValue('long transcript'), _analyzeTranscriptContent: vi.fn().mockResolvedValue('long summary') });
+    const out = await analyzeWithFallback(VID, { metadata: { durationSeconds: 4000 }, longVideoThresholdSeconds: 2700, ...d });
+    expect(out).toEqual({ summary: 'long summary', method: 'transcript_fallback' });
+    expect(d._analyzeVideoContent).not.toHaveBeenCalled();
+  });
+
+  it('long video: no transcript -> last-ditch native success -> method=native', async () => {
+    const d = deps({ _analyzeVideoContent: vi.fn().mockResolvedValue('native rescue') });
+    const out = await analyzeWithFallback(VID, { metadata: { durationSeconds: 4000 }, longVideoThresholdSeconds: 2700, ...d });
+    expect(out).toEqual({ summary: 'native rescue', method: 'native' });
+  });
+
+  it('long video: transcript + native both fail -> failed_long (KEEP for retry)', async () => {
+    const out = await analyzeWithFallback(VID, { metadata: { durationSeconds: 4000 }, longVideoThresholdSeconds: 2700, ...deps() });
+    expect(out).toEqual({ summary: null, method: 'failed_long' });
   });
 });
