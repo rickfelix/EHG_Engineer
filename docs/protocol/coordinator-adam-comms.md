@@ -62,7 +62,8 @@ regardless of the flag.
 |------|---------|--------|
 | **Send** (fire-and-forget, replyable) | `node scripts/adam-advisory.cjs send "<body>"` | Inserts an `adam_advisory` carrying `payload.correlation_id` (replyable) but **not** `expects_reply`. |
 | **Request** (await a sync reply) | `node scripts/adam-advisory.cjs request "<question>" [--timeout <ms>]` | Same, plus `expects_reply=true`; synchronously awaits a `coordinator_reply`. |
-| **Drain replies** (durable reader) | `node scripts/adam-advisory.cjs replies` | Drains `coordinator_reply` rows targeting this Adam session with `read_at IS NULL` — recovers replies that arrived after a sync await timed out. Consumes (stamps `read_at`). |
+| **Drain inbox** (full-lane, durable) | `node scripts/adam-advisory.cjs inbox` | **The recurring inbox-monitor tick.** Drains BOTH the reply lane AND coordinator-directive kinds (the imported `DIRECTIVE_KINDS` allowlist) targeting this Adam session with `read_at IS NULL` — AND-only server filters + JS lane classification (no `payload->>kind` `.or()`/`.in()`). Stamps `read_at`=DELIVERED; directives keep `acknowledged_at` NULL (two-stage ACK — recoverable via `read-adam-directives.cjs` until actioned). |
+| **Drain replies** (reply-lane only, back-compat) | `node scripts/adam-advisory.cjs replies` | Drains only `coordinator_reply` / `payload.reply_to` rows targeting this Adam session with `read_at IS NULL`. Subset of `inbox`. Consumes (stamps `read_at`). |
 
 ## Durable reply path (no lost replies)
 
@@ -91,7 +92,7 @@ node scripts/read-adam-advisories.cjs                                        # p
 node scripts/coordinator-ack-adam.cjs --advisory <id> --reply "sourcing now" # retire + reply
 
 # Adam
-node scripts/adam-advisory.cjs replies                                       # drains the reply
+node scripts/adam-advisory.cjs inbox                                         # drains the full lane (replies + directives)
 ```
 
 ## Receipt contract — ALL directive kinds (SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001)

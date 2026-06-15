@@ -146,7 +146,7 @@ function adamReplyMirror() {
     '═══ ADAM ↔ COORDINATOR COMMS (consume-reply path) ═══',
     '  • SEND advisory (fire-and-forget, replyable):  node scripts/adam-advisory.cjs send "<body>"',
     '  • REQUEST (await a sync reply):  node scripts/adam-advisory.cjs request "<question>" [--timeout <ms>]',
-    '  • DRAIN replies that arrived after a timeout:  node scripts/adam-advisory.cjs replies',
+    '  • DRAIN your full inbox (replies + coordinator directives):  node scripts/adam-advisory.cjs inbox',
     '  (canonical doc: docs/protocol/coordinator-adam-comms.md)',
   ].join('\n');
 }
