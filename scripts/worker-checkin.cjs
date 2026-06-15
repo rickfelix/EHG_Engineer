@@ -521,7 +521,9 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
       .from('strategic_directives_v2')
       // sd_key/sd_type/metadata feed classifyDispatchIneligibility; current_phase feeds the
       // resume message (advisory — sd-start reads the live phase authoritatively on attach).
-      .select('sd_key, sd_type, status, current_phase, metadata, updated_at')
+      // target_application added for the SD-LEO-INFRA-WORKER-CLAIM-TIME-001 claim-time repo-match
+      // axis so a repo-mismatched orphan is not adopted into the wrong checkout.
+      .select('sd_key, sd_type, status, current_phase, metadata, updated_at, target_application')
       .eq('status', 'in_progress')
       .is('claiming_session_id', null)
       .neq('sd_type', 'orchestrator')         // parents are in_progress/no-claim BY DESIGN while children run
@@ -531,8 +533,9 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
     for (const sd of (orphans || [])) {
       // Shared classifier (same predicate as the draft tier + coordinator sweep): orchestrator
       // (redundant with .neq — harmless), test-fixture keys (SD-DEMO-*/SD-TEST-*), and
-      // metadata.requires_human_action all skip.
-      if (classifyDispatchIneligibility(sd) !== null) continue;
+      // metadata.requires_human_action all skip. SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): {cwd}
+      // adds the claim-time fitness axes so a repo-mismatched orphan is not adopted here.
+      if (classifyDispatchIneligibility(sd, { cwd: process.cwd() }) !== null) continue;
       // Live-foreign-holder probe (the half-write case: SD-side claim cleared but a LIVE session
       // still points at it via claude_sessions.sd_key). Fail-open: probe errors don't block.
       try {

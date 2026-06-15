@@ -121,6 +121,8 @@ describe('(C) wiring pins — all push/pull consumers call the shared gate', () 
 
   it('worker-checkin draft self_claim path invokes classifyDispatchIneligibility', () => {
     const src = fs.readFileSync(path.join(ROOT, 'scripts', 'worker-checkin.cjs'), 'utf8');
-    expect(src).toMatch(/classifyDispatchIneligibility\(d\)\s*!==\s*null/);
+    // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): the call now passes an optional {cwd} ctx for the
+    // claim-time fitness axes; accept the original (d) form OR (d, { ... }).
+    expect(src).toMatch(/classifyDispatchIneligibility\(d(?:,\s*\{[^}]*\})?\)\s*!==\s*null/);
   });
 });
