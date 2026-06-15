@@ -57,8 +57,17 @@ jobs:
           out="$(node scripts/verify-migration-apply-state.mjs --strict --recent-only 2>&1)"
           code=$?
           echo "$out"
+          # MISCONFIG (no DB credential at all) is an operator error, NOT a transient
+          # outage — HARD FAIL so the gate can never sit permanently green while never
+          # actually checking the live DB.
+          if echo "$out" | grep -q 'MIGRATION_APPLY_STATE_MISCONFIG'; then
+            echo "::error::Deploy-drift gate has NO DB credential — set one of SUPABASE_DB_PASSWORD / SUPABASE_POOLER_URL / DATABASE_URL repo secrets. Failing loud: a credential-less gate verifies nothing."
+            exit 1
+          fi
+          # INFRA = a genuine transient connect failure AFTER a credential was present —
+          # non-blocking so an outage cannot red-X main.
           if echo "$out" | grep -q 'MIGRATION_APPLY_STATE_INFRA_ERROR'; then
-            echo "::warning::DB unreachable / secret missing — deploy-drift check skipped (non-blocking). Verify SUPABASE_DB_PASSWORD/DATABASE_URL secrets."
+            echo "::warning::DB temporarily unreachable — deploy-drift check skipped this run (non-blocking transient)."
             exit 0
           fi
           if [ "$code" != "0" ]; then

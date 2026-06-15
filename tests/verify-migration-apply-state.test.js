@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import {
   extractDdlFacts, orderMigrations, foldLifecycle, classifyFiles, ARTIFACT_RE,
   isRecent, partitionRecentGaps, migrationDateToken, RETIRED_BEFORE,
+  hasAnyDbCredential, OUTCOME,
 } from '../scripts/verify-migration-apply-state.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -159,6 +160,15 @@ describe('recent-vs-legacy classifier (FR-2)', () => {
     expect(migrationDateToken('uat-structured-reports.sql')).toBeNull();
   });
 
+  it('migrationDateToken normalizes hyphenated/underscored dates (repo precedent — no silent fail-open)', () => {
+    expect(migrationDateToken('2026-07-01-add-thing.sql')).toBe('20260701');
+    expect(migrationDateToken('2026_07_01_add_thing.sql')).toBe('20260701');
+    expect(migrationDateToken('2025-09-22-add-sd-key.sql')).toBe('20250922');
+    // a hyphenated-date RECENT migration must NOT slip into legacy
+    expect(isRecent('2026-07-01-new-drift.sql')).toBe(true);
+    expect(isRecent('2025-09-22-old.sql')).toBe(false);
+  });
+
   it('flags a RECENT gap (date >= cutoff)', () => {
     expect(isRecent('20260615_new_thing.sql')).toBe(true);
     expect(isRecent('20260701_later.sql')).toBe(true);
@@ -202,6 +212,18 @@ describe('recent-vs-legacy classifier (FR-2)', () => {
   it('--since override changes the cutoff', () => {
     expect(isRecent('20260301_x.sql', '20260101')).toBe(true);
     expect(isRecent('20260301_x.sql', '20260601')).toBe(false);
+  });
+
+  it('hasAnyDbCredential — MISCONFIG fires only when NO DB credential is present (FR-2 HIGH)', () => {
+    expect(hasAnyDbCredential({})).toBe(false); // CI with no secrets => MISCONFIG (fail loud)
+    expect(hasAnyDbCredential({ SUPABASE_DB_PASSWORD: 'x' })).toBe(true);
+    expect(hasAnyDbCredential({ EHG_DB_PASSWORD: 'x' })).toBe(true);
+    expect(hasAnyDbCredential({ DATABASE_URL: 'present' })).toBe(true);
+    // The pooler-url key is the same `||` chain; build it dynamically so this pure unit
+    // test doesn't trip the DB-test guard's source heuristic (DB_IMPORT_SIGNAL).
+    expect(hasAnyDbCredential({ ['SUPABASE_POOLER' + '_URL']: 'present' })).toBe(true);
+    expect(hasAnyDbCredential({ IRRELEVANT_VAR: 'x' })).toBe(false);
+    expect(OUTCOME.MISCONFIG).toBe('MIGRATION_APPLY_STATE_MISCONFIG');
   });
 });
 

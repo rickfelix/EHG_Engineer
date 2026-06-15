@@ -33,7 +33,17 @@ export const OUTCOME = {
   PASS: 'MIGRATION_APPLY_STATE_PASS',
   GAPS: 'MIGRATION_APPLY_STATE_GAPS_FOUND',
   INFRA: 'MIGRATION_APPLY_STATE_INFRA_ERROR',
+  // MISCONFIG (FR-2 adversarial review): no DB credential present at all — an operator
+  // misconfiguration distinct from a transient outage. The CI gate treats INFRA as a
+  // non-blocking warning but MISCONFIG as a HARD failure, so a permanently-credential-less
+  // gate can never sit silently green while never actually checking the live DB.
+  MISCONFIG: 'MIGRATION_APPLY_STATE_MISCONFIG',
 };
+
+/** The DB credentials createDatabaseClient/connectionString can use. At least one must be present. */
+export function hasAnyDbCredential(env = process.env) {
+  return Boolean(env.SUPABASE_DB_PASSWORD || env.EHG_DB_PASSWORD || env.SUPABASE_POOLER_URL || env.DATABASE_URL);
+}
 
 // ── Recent-vs-legacy classifier (SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 FR-2) ──
 //
@@ -51,10 +61,21 @@ export const OUTCOME = {
 // @approved-by prod-deploy guard (scripts/lib/migration-guards.js), which is untouched.
 export const RETIRED_BEFORE = '20260615';
 
-/** Leading 8+ digit date token (YYYYMMDD…), or null for a non-dated (legacy) file. */
+/**
+ * Leading date token normalized to YYYYMMDD, or null for a non-dated (legacy) file.
+ * Recognizes BOTH the compact convention (20260701_…) AND the older hyphenated/
+ * underscored form (2026-07-01-…, 2026_07_01_…) that has precedent in this repo —
+ * so a future author reverting to the hyphenated style cannot create a recent
+ * migration that silently classifies as legacy and escapes the strict gate
+ * (FR-2 adversarial review, med-severity fail-open class).
+ */
 export function migrationDateToken(file) {
-  const m = String(file).match(/^(\d{8,})/);
-  return m ? m[1] : null;
+  const s = String(file);
+  const compact = s.match(/^(\d{8,})/);
+  if (compact) return compact[1];
+  const sep = s.match(/^(\d{4})[-_](\d{2})[-_](\d{2})/);
+  if (sep) return `${sep[1]}${sep[2]}${sep[3]}`; // 2026-07-01 -> 20260701
+  return null;
 }
 
 /** True iff the file is dated AND its date token >= cutoff (recent). Non-dated => legacy => false. */
@@ -282,7 +303,15 @@ async function main() {
   // overrides the RETIRED_BEFORE cutoff. The DEFAULT (no --recent-only) is unchanged.
   const recentOnly = args.includes('--recent-only');
   const sinceArg = args.find((a) => a.startsWith('--since='));
-  const cutoff = sinceArg ? sinceArg.slice('--since='.length) : RETIRED_BEFORE;
+  const sinceVal = sinceArg ? sinceArg.slice('--since='.length) : null;
+  // FR-2 adversarial review (low): reject a malformed --since rather than silently
+  // producing an empty (fail-open) recent set. Must be an 8-digit YYYYMMDD.
+  if (sinceVal !== null && !/^\d{8}$/.test(sinceVal)) {
+    console.error(`Invalid --since='${sinceVal}': expected an 8-digit YYYYMMDD date.`);
+    console.log(`[${OUTCOME.MISCONFIG}]`);
+    return 2;
+  }
+  const cutoff = sinceVal || RETIRED_BEFORE;
 
   const { forward, down } = listForwardMigrations();
   const fileFacts = forward.map((file) => ({
@@ -294,8 +323,24 @@ async function main() {
   let live;
   let client;
   try {
+    // Import FIRST: supabase-connection.js loads .env (dotenv) at module init, which
+    // populates the DB credential env vars the MISCONFIG check below reads. (The verifier
+    // itself does not load dotenv, so checking before this import would false-positive.)
     const { createDatabaseClient } = await import('./lib/supabase-connection.js');
-    client = await createDatabaseClient('ehg');
+    // FR-2 adversarial review (HIGH): a missing DB credential is an operator MISCONFIG,
+    // not a transient outage. Fail LOUD (distinct marker, exit 2) so the CI gate can
+    // hard-fail on it instead of silently INFRA-skipping green forever. Only a genuine
+    // connect failure AFTER a credential is present demotes to the non-blocking INFRA path.
+    if (!hasAnyDbCredential()) {
+      console.error('No DB credential present (set one of SUPABASE_DB_PASSWORD / EHG_DB_PASSWORD / SUPABASE_POOLER_URL / DATABASE_URL).');
+      console.log(`[${OUTCOME.MISCONFIG}]`);
+      return 2;
+    }
+    // Honor the wired connection-string secrets (SUPABASE_POOLER_URL / DATABASE_URL) the CI
+    // provides — createDatabaseClient prefers options.connectionString, else builds from the
+    // password. Passing it here closes the dead-wiring gap the review flagged.
+    const connectionString = process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL || undefined;
+    client = await createDatabaseClient('ehg', connectionString ? { connectionString } : {});
     live = await resolveLive(client, expected);
   } catch (e) {
     console.error(`DB unreachable: ${e.message}`);
