@@ -756,6 +756,29 @@ async function createChild(parentKey, index = null, overrides = {}) {
     console.warn(`[createChild] ⚠️  Parent claim check failed (fail-open): ${e.message}`);
   }
 
+  // SD-LEO-INFRA-ADAM-CREATION-PROCESS-001 (FR-3): one-step child linkage. createSD set
+  // parent_sd_id, but NOT relationship_type='child' (children then failed
+  // validate-child-sd-completeness) and NOT the parent-registry registration (previously
+  // manual DB surgery during sourcing). linkChild does both idempotently in one call.
+  try {
+    const { linkChild } = await import('../lib/sd/child-linkage.js');
+    const linkRes = await linkChild(supabase, parent, sdKey, {
+      role: overrides.role ?? overrides.title ?? null,
+      childUuid: sd?.uuid_id ?? null,
+      registeredBy: 'leo-create-sd',
+      today: new Date().toISOString().slice(0, 10),
+      registryOptional: true,
+    });
+    console.log(
+      '   🔗 Child linkage: relationship_type=\'child\'' +
+      (linkRes.registered
+        ? `; registered in parent ${parent.sd_key} (${linkRes.registryKind})`
+        : (linkRes.alreadyRegistered ? '; already registered in parent' : ''))
+    );
+  } catch (e) {
+    console.warn(`[createChild] ⚠️  Child-linkage step failed (non-fatal): ${e.message}`);
+  }
+
   return sd;
 }
 
@@ -1753,6 +1776,12 @@ async function createSD(options) {
   const sdData = {
     id: randomUUID(),
     sd_key: sdKey,
+    // SD-LEO-INFRA-ADAM-CREATION-PROCESS-001 (FR-2): set the human-readable key at
+    // creation so sd_code_user_facing is the SD key, NOT the UUID (the prior default
+    // left it equal to id=randomUUID(), forcing a governance-gated re-key). Both id and
+    // sd_code_user_facing are non-null at INSERT, so the sync trigger
+    // (sync_sd_code_user_facing, BEFORE INSERT) no-ops — id is NOT mutated.
+    sd_code_user_facing: sdKey,
     title,
     description,
     scope: scope || description,  // SD-LEO-INFRA-BUILDDEFAULTSMOKETESTSTEPS-KEYWORD-DETECTOR-001 (FR-3): prefer atomic-INSERT scope, fall back to description.
@@ -1897,7 +1926,7 @@ async function createSD(options) {
   const { data, error } = await supabase
     .from('strategic_directives_v2')
     .insert(sdData)
-    .select('id, sd_key, title, sd_type, status, priority, current_phase')
+    .select('id, uuid_id, sd_key, sd_code_user_facing, title, sd_type, status, priority, current_phase')
     .single();
 
   if (error) {
@@ -2152,16 +2181,47 @@ function resolveProposalFiles(pathOrGlob) {
 }
 
 /**
+ * Per-proposal ingest CORE (SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001): given an
+ * already-parsed proposal OBJECT and a string `source` label, run validateProposalShape
+ * -> keyExists -> mapProposalToCreateArgs -> (dryRun ? report : createSD). Returns a
+ * {sdKey, file, action} row. This is the SINGLE shared path for every ingest route
+ * (file, --proposal-b64, --proposal-stdin) so they cannot drift. No FS/argv access here —
+ * callers are responsible for materializing the proposal object.
+ * @param {object} proposal — parsed proposal object
+ * @param {string} source — provenance label (file path, '<proposal-b64>', '<proposal-stdin>')
+ * @param {{dryRun?:boolean, deps?:{keyExists?:Function, createSD?:Function}}} options
+ */
+export async function ingestProposalObject(proposal, source, options = {}) {
+  const { dryRun = false, deps = {} } = options;
+  const _keyExists = deps.keyExists || keyExists;
+  const _createSD = deps.createSD || createSD;
+
+  const normalized = validateProposalShape(proposal, source);
+  const exists = await _keyExists(normalized.sdKey);
+  if (exists) {
+    console.log(`⏭️  ${normalized.sdKey} already exists, skipping (${source})`);
+    return { sdKey: normalized.sdKey, file: source, action: 'skipped' };
+  }
+  const args = mapProposalToCreateArgs(normalized, proposal, source);
+  if (dryRun) {
+    console.log(`🔎 [dry-run] would create ${args.sdKey} (${args.type}/${args.priority}) — ${args.title}`);
+    return { sdKey: normalized.sdKey, file: source, action: 'dry-run' };
+  }
+  await _createSD(args);
+  console.log(`✅ Created DRAFT SD ${args.sdKey} from ${source}`);
+  return { sdKey: normalized.sdKey, file: source, action: 'created' };
+}
+
+/**
  * --from-proposal ingest: read PROPOSAL-*.json file(s), validate, and create a
- * DRAFT SD per file via the existing createSD() path (verbatim key). Idempotent
- * (skips an already-materialized key). --dry-run validates + reports, zero writes.
+ * DRAFT SD per file via the shared ingestProposalObject() core (verbatim key).
+ * Idempotent (skips an already-materialized key). --dry-run validates + reports,
+ * zero writes.
  * @param {string} pathOrGlob
  * @param {{dryRun?:boolean, deps?:{keyExists?:Function, createSD?:Function, readFile?:Function, resolveFiles?:Function}}} options
  */
 export async function createFromProposal(pathOrGlob, options = {}) {
-  const { dryRun = false, deps = {} } = options;
-  const _keyExists = deps.keyExists || keyExists;
-  const _createSD = deps.createSD || createSD;
+  const { deps = {} } = options;
   const _readFile = deps.readFile || readFileSync;
   const _resolveFiles = deps.resolveFiles || resolveProposalFiles;
 
@@ -2181,24 +2241,89 @@ export async function createFromProposal(pathOrGlob, options = {}) {
       console.error(`[INVALID_PROPOSAL] ${file}: invalid JSON: ${e.message}`);
       process.exit(1);
     }
-    const normalized = validateProposalShape(proposal, file);
-    const exists = await _keyExists(normalized.sdKey);
-    if (exists) {
-      console.log(`⏭️  ${normalized.sdKey} already exists, skipping (${file})`);
-      results.push({ sdKey: normalized.sdKey, file, action: 'skipped' });
-      continue;
-    }
-    const args = mapProposalToCreateArgs(normalized, proposal, file);
-    if (dryRun) {
-      console.log(`🔎 [dry-run] would create ${args.sdKey} (${args.type}/${args.priority}) — ${args.title}`);
-      results.push({ sdKey: normalized.sdKey, file, action: 'dry-run' });
-      continue;
-    }
-    await _createSD(args);
-    console.log(`✅ Created DRAFT SD ${args.sdKey} from ${file}`);
-    results.push({ sdKey: normalized.sdKey, file, action: 'created' });
+    // Delegate to the shared core; the whole `options` (dryRun + deps) carries through.
+    results.push(await ingestProposalObject(proposal, file, options));
   }
   return results;
+}
+
+/**
+ * --proposal-b64 ingest (SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001): base64-decode a
+ * proposal JSON and route the OBJECT through ingestProposalObject(). FILE-FREE — lets an
+ * operator-attached session (Adam/coordinator) on main source a DRAFT SD without writing
+ * a payload file (which the worktree-hygiene Write guard blocks). base64-on-the-wire is
+ * PREFERRED over a raw --proposal-json argv flag because it is immune to the Bash
+ * single-quote mangling that defeats inline JSON. Buffer.from(.,'base64') is lenient
+ * (never throws on junk — it drops out-of-alphabet bytes), so the post-decode JSON.parse
+ * is the load-bearing validator that fails loud on garbage input.
+ * @param {string} b64
+ * @param {{dryRun?:boolean, deps?:{keyExists?:Function, createSD?:Function}}} options
+ */
+export async function createFromProposalB64(b64, options = {}) {
+  if (!b64 || typeof b64 !== 'string') {
+    console.error('[INVALID_PROPOSAL] --proposal-b64 requires a base64-encoded proposal JSON string');
+    process.exit(1);
+  }
+  const raw = Buffer.from(b64, 'base64').toString('utf8');
+  let proposal;
+  try {
+    proposal = JSON.parse(raw);
+  } catch (e) {
+    console.error(`[INVALID_PROPOSAL] --proposal-b64: invalid JSON after base64 decode: ${e.message}`);
+    process.exit(1);
+  }
+  return [await ingestProposalObject(proposal, '<proposal-b64>', options)];
+}
+
+/**
+ * Read all of process.stdin as a UTF-8 string (resolves on 'end'). Extracted so
+ * --proposal-stdin can inject a fake reader in unit tests (no real pipe needed).
+ */
+function readStdinUtf8() {
+  return new Promise((resolve, reject) => {
+    // No piped input (interactive TTY): 'end' would never fire and the process would
+    // hang until Ctrl-C. Fail loud instead — the caller surfaces [INVALID_PROPOSAL].
+    if (process.stdin.isTTY) {
+      reject(new Error('stdin is a TTY (no piped proposal JSON)'));
+      return;
+    }
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { data += chunk; });
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
+
+/**
+ * --proposal-stdin ingest (SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001): read a proposal
+ * JSON from stdin and route the OBJECT through ingestProposalObject(). FILE-FREE
+ * pipe-based counterpart to --proposal-b64. The stdin reader is injectable
+ * (deps.readStdin) so tests need no real pipe. Fails loud on empty stdin / invalid JSON.
+ * @param {{dryRun?:boolean, deps?:{keyExists?:Function, createSD?:Function, readStdin?:Function}}} options
+ */
+export async function createFromProposalStdin(options = {}) {
+  const { deps = {} } = options;
+  const _readStdin = deps.readStdin || readStdinUtf8;
+  let raw;
+  try {
+    raw = await _readStdin();
+  } catch (e) {
+    console.error(`[INVALID_PROPOSAL] --proposal-stdin: cannot read stdin: ${e.message}`);
+    process.exit(1);
+  }
+  if (!raw || !raw.trim()) {
+    console.error('[INVALID_PROPOSAL] --proposal-stdin: empty stdin (expected a proposal JSON on stdin)');
+    process.exit(1);
+  }
+  let proposal;
+  try {
+    proposal = JSON.parse(raw);
+  } catch (e) {
+    console.error(`[INVALID_PROPOSAL] --proposal-stdin: invalid JSON: ${e.message}`);
+    process.exit(1);
+  }
+  return [await ingestProposalObject(proposal, '<proposal-stdin>', options)];
 }
 
 // Export for programmatic use (e.g., corrective-sd-generator)
@@ -2222,6 +2347,8 @@ Usage:
   node scripts/leo-create-sd.js --from-feedback <feedback-id>
   node scripts/leo-create-sd.js --from-qf <QF-ID>
   node scripts/leo-create-sd.js --from-proposal <path|glob> [--dry-run]
+  node scripts/leo-create-sd.js --proposal-b64 <base64> [--dry-run]      # file-free DB-direct sourcing
+  cat PROPOSAL.json | node scripts/leo-create-sd.js --proposal-stdin [--dry-run]
   node scripts/leo-create-sd.js --from-plan [path] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js --child <parent-key> [index] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js <source> <type> "<title>"
@@ -2255,7 +2382,13 @@ Flags:
                         Pairs with computeReposForSD() at lead-final-approval/gates.js
                         (SD-LEO-INFRA-CROSS-REPO-MERGE-001). Supported in all 3 modes:
                         direct LEO, --from-plan, --child.
-  --dry-run          (--from-proposal only) Validate + report would-create SDs; ZERO database writes.
+  --dry-run          (--from-proposal / --proposal-b64 / --proposal-stdin) Validate + report
+                     would-create SDs; ZERO database writes.
+  --proposal-b64 <b64>  File-free DB-direct sourcing: base64-encoded proposal JSON ingested via
+                        the same validate -> keyExists -> create core as --from-proposal. PREFERRED
+                        for operator-attached (Adam/coordinator) sessions on main — needs NO payload
+                        file and NO worktree (base64-on-the-wire is immune to Bash quote mangling).
+  --proposal-stdin      File-free DB-direct sourcing via a pipe: read the proposal JSON from stdin.
   --help             Show this help message
 
 Dependency Field Guide:
@@ -2333,6 +2466,21 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const fpKnownFlags = new Set(['--from-proposal', '--dry-run']);
       const proposalArg = args.find((a, i) => i > 0 && !a.startsWith('-') && !fpKnownFlags.has(a)) || args[1];
       await createFromProposal(proposalArg, { dryRun });
+    } else if (args[0] === '--proposal-b64') {
+      // SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001: file-free DB-direct sourcing.
+      // The base64 string is the first non-flag positional (base64 never starts with '-').
+      const dryRun = args.includes('--dry-run');
+      const b64KnownFlags = new Set(['--proposal-b64', '--dry-run']);
+      // No `|| args[1]` fallback: if no non-flag positional is present (e.g.
+      // `--proposal-b64 --dry-run`), b64Arg stays undefined so createFromProposalB64's
+      // guard reports the clear "requires a base64-encoded proposal JSON string" error
+      // instead of base64-decoding the literal '--dry-run' flag into junk.
+      const b64Arg = args.find((a, i) => i > 0 && !a.startsWith('-') && !b64KnownFlags.has(a));
+      await createFromProposalB64(b64Arg, { dryRun });
+    } else if (args[0] === '--proposal-stdin') {
+      // SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001: file-free DB-direct sourcing via a pipe.
+      const dryRun = args.includes('--dry-run');
+      await createFromProposalStdin({ dryRun });
     } else if (args[0] === '--from-plan') {
       // Check for --yes flag (skip confirmation for auto-detect)
       const hasYesFlag = args.includes('--yes') || args.includes('-y');

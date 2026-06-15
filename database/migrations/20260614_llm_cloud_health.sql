@@ -1,3 +1,6 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman confirmed in-session (AskUserQuestion, session 7c76f0db) under
+-- SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 to apply the genuine deploy-drift gaps.
 -- SD-LEO-INFRA-CLOUD-CAP-LIVE-FEEDER-001 — dedicated cloud-health substrate for the
 -- chairman-away PAUSE ladder. Coordinator spec-fork ruling 3e11be61: fork2 =
 -- dedicated-table-additive-migration (clean separation; do NOT overload the local-model

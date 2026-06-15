@@ -1,0 +1,14 @@
+name: Bad Plain Scalar Fixture
+# SD-LEO-FIX-UNIT-TIER-STARTUP-001 (FR-3): a deliberately-broken workflow. The run:
+# below is an unquoted plain scalar whose embedded "Quarantined files: " colon-space
+# is parsed by YAML as a mapping separator -> top-level parse rejection. This is the
+# exact class that broke unit-tier.yml; the lint guard MUST fail loud on it.
+on:
+  push:
+    branches: [main]
+jobs:
+  bad:
+    runs-on: ubuntu-latest
+    steps:
+      - name: broken summary
+        run: node -e "console.log('Quarantined files: '+1)"

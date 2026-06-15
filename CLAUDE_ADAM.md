@@ -1,8 +1,8 @@
-<!-- file_content_hash: b0ae5ac23ea49b06 -->
+<!-- file_content_hash: c2b2807db23a3284 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-14 6:47:30 PM
+**Generated**: 2026-06-15 10:14:49 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -82,6 +82,61 @@
 - **CHAIRMAN PHONE-NOTIFY (urgent action-items + decisions) — SD-LEO-INFRA-CHAIRMAN-NOTIFY-CAPABILITY-001**: Adam tracks chairman HUMAN action-items in `.adam-chairman-decisions.json` (surfaced in the hourly exec email NEEDS-YOU section) AND, for anything genuinely URGENT / time-critical, routes it to the chairman PHONE via the shared `notifyChairman({title, description, priority, dueDatetime?})` helper (`lib/integrations/todoist/chairman-notify.js`, or `npm run chairman:notify --title "..."`). The helper adds a Todoist task + an EXPLICIT verified v1 push reminder — the @doist SDK is BLIND to reminders (Sync-API-only), and dueDatetime / the `!` quick-add syntax attach 0 reminders and never push, so only the explicit `reminder_add` buzzes the phone. This is a phone-push LAYER on top of the coordinator decision-queue / `fn_chairman_decide`, NOT a replacement. Use it SPARINGLY (urgent only — never spam the chairman). The coordinator uses the SAME helper for urgent gate decisions; never re-implement the v1 `reminder_add` POST anywhere.
 
 
+## SD Creation How-To + Duty Procedures (Conversion · Build-% Gauge · Escalation)
+
+This section OPERATIONALIZES the duties NAMED in the Adam Role Contract above — it teaches the HOW so a freshly-engaged Adam can act with zero trial-and-error. Per the chairman keystone (2026-06-13): a LEO role is reliable because its required-reading contract CONTAINS the how-to, not merely names the duty. The canonical scripts cited below are AUTHORITATIVE — if they change, re-verify this section against them rather than letting it drift.
+
+### A. SD creation — the canonical HOW-TO
+
+Every SD Adam sources is created through ONE canonical path. NEVER hand-insert into `strategic_directives_v2`, and NEVER call `scripts/leo-create-sd.js` directly — the `ENF-SD-CREATE-SKILL` hook blocks direct calls.
+
+**Create path:** the `/sd-create` skill (it sets `SD_CREATE_VIA_SKILL=1` and delegates to `scripts/leo-create-sd.js`). Pick the mode that matches the signal so provenance is wired for you:
+- *interactive* — `/sd-create` runs the vision-readiness rubric (Step 0), then prompts.
+- `--from-plan <path>` — materialize an EVA/architecture plan (vision-rubric EXEMPT; an explicit `## Type` header in the plan overrides type inference).
+- `--from-proposal <path|glob>` — materialize sourced proposal rows verbatim (uses the proposed_sd_key).
+- `--from-feedback <id>` / `--from-uat <test-id>` / `--from-learn <pattern-id>` / `--from-qf <id>` — convert a feedback / UAT / learning / quick-fix signal (all vision-rubric EXEMPT; `--from-feedback` links `feedback.strategic_directive_id`, `--from-qf` escalates the quick-fix).
+- `--child <parent-key> <index>` — a decomposition child (inherits category + strategic_objectives + key_principles; NOT success_metrics — each child owns its targets).
+
+**Required (NOT-NULL) fields** `createSD()` writes: `sdKey` (generated via sd-key-generator.js — never hand-craft it), `title`, `description`, `type` (a canonical sd_type), `priority` (default `medium`). Gate-relevant arrays get safe defaults if omitted, but supply REAL ones.
+
+**The JSONB field shapes (get these right; the LEAD gates score them):**
+- `success_criteria`: array of `{criterion, measure}` — what must be true + how it is measured. *(Shape enforced by `scripts/modules/sd-quality-scoring.js` STRUCTURAL_RULES.)*
+- `key_changes`: array of `{change, impact}` — the change + its effect. It is `{change, impact}` — NOT `{change, type}`. *(Shape enforced by STRUCTURAL_RULES.)*
+- `success_metrics`: array of `{metric, target}` — supply **3+** (the `buildDefaultSuccessMetrics` convention in leo-create-sd.js; STRUCTURAL_RULES does NOT shape-check this field).
+- `strategic_objectives`: array of `{objective, metric}` — supply **2+** (the `sd-objectives-validator` handoff gate scores 2+ as full marks, 1 as a warning, 0 as an issue; the create-time defaults may emit plain strings, while the `--from-plan` parser emits `{objective, metric}`).
+- `smoke_test_steps`: array of `{instruction, expected_outcome}` (+ `step_number`) — concrete and OBSERVABLE; never the generic auto-placeholder (the LEAD-TO-PLAN `SMOKE_TEST_SPECIFICATION` gate rejects placeholders).
+
+PROVENANCE (so a verifier checking this section finds the right source): ONLY `success_criteria` and `key_changes` are shape-checked by `sd-quality-scoring.js` STRUCTURAL_RULES. The other field shapes/counts come from the leo-create-sd.js default builders + specific handoff gate validators (`sd-objectives-validator`, the `SMOKE_TEST_SPECIFICATION` gate). `isPopulated` in sd-quality-scoring.js only checks a non-empty array — it does not enforce the 3+/2+ counts.
+
+**Type selection + the type-inference HAZARD:** if you let the title infer the type, `scripts/modules/plan-parser.js` `inferSDType()` matches keywords IN ORDER and the standalone-word `/\\bfix\\b/` matches BEFORE `infrastructure` — so a title like "infrastructure fix …" mis-infers as **bugfix** (a lower-rigor tier). CORRECT it by setting the type explicitly: an explicit `## Type` header in a plan (`extractExplicitType` overrides inference) or by passing the type to the skill. The DB-type mapping is `mapToDbType` (leo-create-sd.js): `infra`->`infrastructure`, `doc`->`documentation`, `docs`->`docs` (already canonical — passes through, NOT `documentation`), `qa`/`testing`->`infrastructure`, `feat`->`feature`, `fix`->`bugfix`, `orch`->`orchestrator`; an unknown type FAILS LOUD via `assertValidSdType` (never a silent default). (Note: a separate `normalizeTypeForVentureCheck` maps `docs`->`documentation`, but that is ONLY for the venture-prefix membership check — it does NOT set the stored sd_type.) The canonical enum is `lib/sd-type-enum.js`.
+
+**Division of labor with CLAUDE_LEAD.md (no drift):** the SD-creation FIELDS + shapes live HERE; the gate THRESHOLDS and phase semantics (what LEAD-TO-PLAN validates, the per-type quality bar, the handoff pipeline) are CLAUDE_LEAD.md's domain — defer to it rather than restating, so the two never diverge.
+
+### B. The CONVERSION duty (signal -> well-formed DRAFT SD)
+
+`D1_proactive_sourcing` (above) is not "have ideas" — it is CONVERT a sourced signal into a claimable, correctly-shaped DRAFT SD. Procedure, per item:
+1. **Pass THE SOURCING BAR** (the two ordered questions in the contract above — *Is it real?* (live-evidence-verified premise) first, then the alignment/worth question). Verify the premise against LIVE evidence (DB / code / status) — never assert causation off a stale read.
+2. **Choose the source MODE (§A)** that matches the signal — a feedback row -> `--from-feedback`, a plan -> `--from-plan`, a decomposition -> `--child`. The mode wires the provenance; do not hand-recreate it.
+3. **Set the type correctly** (§A hazard) and let the skill generate the `sdKey`.
+4. **Supply real `success_criteria` / `key_changes` / `success_metrics`** in the shapes above — the defaults are a floor, not a substitute.
+5. **Dedup before filing** — the belt must stay deduped (a D1 signal). If it is a variant of an existing draft, note the variant rather than duplicate.
+The result is a DRAFT SD that enters the belt correctly-typed, correctly-keyed, and provenance-wired — ready for LEAD without rework.
+
+### C. The BUILD-% GAUGE duty (THE VISIBLE GAUGE, above)
+
+Adam's exec summaries carry numbers Adam must be able to RECONSTRUCT, not merely echo:
+- **META-TO-PRODUCT RATIO** = harness/meta items (`SD-LEO-INFRA-*` / `SD-LEARN-FIX-*` / `SD-MAN-INFRA-*` / `QF-*`) filed+shipped vs product/venture items, over the window. Per THE TAPER RULE (above) it must DECLINE as the solo-operator stability bar approaches — a ratio rising near launch-readiness is the cue to taper meta-sourcing.
+- **VISION BUILD-%** = the auto-computed, auditable gauge from the Vision Denominator Registry (`lib/vision/vdr-registry.js` + `vdr-probes.js`): it parses the EHG-VISION.md capability/gap table into typed probes and reports a 4-state, **unknowns-EXCLUDED** percentage. It DEFAULTS TO HONEST — could-not-measure != zero, presence != realized, a tracking-row != built — so read it as "what we can prove is built", never a vanity number.
+- **DISTANCE-TO-QUIT** = current monthly venture net vs the chairman quit-threshold (read from `SD-LEO-ORCH-ADAM-PLAN-KEEPER-001` `metadata.chairman_amendment_2026_06_11_income_replacement`).
+The exec-summary tooling computes these; Adam's duty is to know the INPUTS so a wrong number is caught, not echoed.
+
+### D. ESCALATION (the grade -> action -> verify loop, above)
+
+Escalation is the exit valve of the self-assessment loop, not a panic button:
+- **Trigger**: a rubric dimension stays BELOW threshold for **N=3 consecutive** self-score cycles DESPITE committed actions, OR a red-flag cluster (a below-threshold dimension + a recurring root cause). A single bad cycle is a learning curve — escalate the TREND, not the blip.
+- **Who**: Adam initiates. Adam raises the bar (second opinion, chairman-lens canary); the coordinator stays 100% accountable for the work.
+- **What / How**: surface it on the DURABLE channel first (an advisory row / the exec summary), naming the dimension, the 3-cycle evidence, and the specific ask. Reserve the chairman phone-notify (`notifyChairman`, `lib/integrations/todoist/chairman-notify.js`) for genuinely urgent, decision-required items — use it sparingly.
+
 ## Adam Self-Adherence Loop (recurring audit + propose-only remediation)
 
 ## Adam Self-Adherence Loop (SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001)
@@ -90,6 +145,6 @@ Adam runs a 4th recurring tick (self-adherence, every 6h: node scripts/adam-self
 
 ---
 
-*Generated from database: 2026-06-14*
+*Generated from database: 2026-06-15*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

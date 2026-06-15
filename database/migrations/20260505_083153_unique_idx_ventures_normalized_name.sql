@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman in-session (session 7c76f0db) under SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001.
 -- Unique partial index on normalized venture name to prevent collision at write-time.
 -- SD-LEO-INFRA-FAIL-CLOSED-VENTURE-001-A / PA-3 (validation C5 + database-agent R3)
 --

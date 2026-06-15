@@ -183,13 +183,28 @@ describe('convertSprintToSDs', () => {
 
     let callCount = 0;
     const idempotentSupabase = {
-      from: vi.fn().mockReturnValue({
-        insert: vi.fn().mockResolvedValue({ error: null }),
-        select: vi.fn().mockImplementation(() => {
-          callCount++;
-          if (callCount === 1) return selectMock();
-          return childSelectMock();
-        }),
+      // Table-aware: SD-LEO-INFRA-PILOT-VENTURE-GUARD-001 added a pilot-gate flag fetch
+      // (.from('ventures')) that runs BEFORE findExistingOrchestrator. Return non-pilot
+      // flags so the gate proceeds, and keep the strategic_directives_v2 callCount
+      // sequence (orchestrator lookup, then children) intact for the idempotency check.
+      from: vi.fn((table) => {
+        if (table === 'ventures') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { is_demo: false, is_scaffolding: false }, error: null }),
+              }),
+            }),
+          };
+        }
+        return {
+          insert: vi.fn().mockResolvedValue({ error: null }),
+          select: vi.fn().mockImplementation(() => {
+            callCount++;
+            if (callCount === 1) return selectMock();
+            return childSelectMock();
+          }),
+        };
       }),
     };
 

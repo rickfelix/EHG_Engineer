@@ -1,3 +1,6 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman confirmed in-session (AskUserQuestion, session 7c76f0db) under
+-- SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 to apply the genuine deploy-drift gaps.
 -- Sibling B FR-B-4: goal_evaluator_verdicts (DEDICATED table per GOAL-VERDICTS-STORAGE-DECISION)
 -- Trust-tier separation, CISO posture. Ordinal 20260516140000 > Sibling A 20260516130002 (in main).
 

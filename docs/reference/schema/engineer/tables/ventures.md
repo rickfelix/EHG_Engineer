@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-15T00:11:01.798Z
+**Generated**: 2026-06-15T17:40:25.343Z
 **Rows**: 9
 **RLS**: Enabled (2 policies)
 
@@ -188,6 +188,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_lifecycle_stage`
   ```sql
   CREATE INDEX idx_ventures_lifecycle_stage ON public.ventures USING btree (current_lifecycle_stage)
+  ```
+- `idx_ventures_normalized_name`
+  ```sql
+  CREATE UNIQUE INDEX idx_ventures_normalized_name ON public.ventures USING btree (lower(regexp_replace(regexp_replace(NORMALIZE(name, NFKD), '[̀-ͯ]'::text, ''::text, 'g'::text), '[^A-Za-z0-9]'::text, ''::text, 'g'::text)) COLLATE "C") WHERE ((deleted_at IS NULL) AND (status = ANY (ARRAY['active'::venture_status_enum, 'paused'::venture_status_enum])))
   ```
 - `idx_ventures_orchestrator_polling`
   ```sql

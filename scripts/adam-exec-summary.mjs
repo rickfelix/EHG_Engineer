@@ -18,9 +18,11 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
-import { readFileSync } from 'fs';
 import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs';
 import { renderDecisionLines } from '../lib/chairman/decision-layman.mjs';
+// SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
+// static .adam-vision-build.json number.
+import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-registry.js';
 
 const EM = '—';
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -80,17 +82,56 @@ if (avgActive === null) {
 }
 const workerText = pulseSource === 'unavailable' ? 'count unavailable (will refresh next run)' : `${avgActive} active${avgIdle ? `, ${avgIdle} idle` : ''} (${pulseSource})`;
 
-// ── 2. EHG VISION build-% gauge (.adam-vision-build.json) ──
-const LAYER_LABEL = { infrastructure: 'infrastructure', application: 'UI/UX', 'venture/income': 'venture/income', process: 'process' };
-let vis = null;
-try { vis = JSON.parse(readFileSync(resolve('.adam-vision-build.json'), 'utf8')); }
-catch (e) { console.warn('[adam-email] vision gauge file unreadable (.adam-vision-build.json): ' + (e?.message || e)); vis = null; }
-const visPct = (vis && typeof vis.overall_pct === 'number') ? vis.overall_pct : null;
-const layers = (vis && Array.isArray(vis.per_layer)) ? vis.per_layer : [];
-const layerLine = layers.map((l) => `${LAYER_LABEL[l.layer] || l.layer} ${l.pct == null ? '?' : l.pct}%`).join('  ·  ');
-let measured = null;
-if (vis && vis.measured_at) { const d = new Date(vis.measured_at + 'T00:00:00Z'); if (!Number.isNaN(d.getTime())) measured = d.toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); }
-const visNote = vis ? `(v1 estimate${measured ? ' as of ' + measured : ''} ${EM} live auto-updating gauge coming)` : '';
+// ── 2. EHG VISION build-% gauge (LIVE VDR — SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 FR-4) ──
+// Replaces the static .adam-vision-build.json estimate with the auto-computed Vision Denominator
+// Registry gauge (deterministic typed probes over EHG-VISION.md's REQUIRED capabilities; no LLM).
+// Fail-soft: a gauge error or an unavailable vision doc degrades to "(gauge unavailable)".
+let visPct = null;
+let layerLine = '';
+let visNote = '';
+try {
+  // SD-LEO-INFRA-VISION-LADDER-V1-001 (FR-5): source the denominator from the ACTIVE vision rung
+  // (visionSource:true → the re-anchorable ladder pointer), so the gauge re-points automatically when
+  // the chairman promotes the next rung — no code edit, no dependency on a missing EHG-VISION.md file.
+  // Still fail-soft: an unavailable ladder/DB degrades to "(gauge unavailable)", never a false 0%.
+  // no grep seam ⇒ code_grep probes report 'unknown' (excluded from the denominator)
+  const gauge = await computeBuildGauge({ io: { supabase: db }, visionSource: true });
+  const fmt = formatGaugeForSummary(gauge, { em: EM }); // single-source display mapping (shared with the Chairman-UI tile)
+  visPct = fmt.pct;
+  layerLine = fmt.layerLine;
+  visNote = fmt.note;
+} catch (e) {
+  console.warn('[adam-email] live VDR gauge failed (fail-soft): ' + (e?.message || e));
+  visPct = null;
+  visNote = `(gauge unavailable ${EM} compute error)`;
+}
+
+// ── 2b. DISTANCE-TO-QUIT (SD-LEO-INFRA-VISION-LADDER-V1-001 FR-5) ──
+// The quit threshold is READ AT RUNTIME from the chairman amendment metadata — the fleet NEVER
+// hardcodes a dollar figure (chairman-source-of-truth: SD-LEO-ORCH-ADAM-PLAN-KEEPER-001
+// metadata.chairman_amendment_2026_06_11_income_replacement.target_number_2026_06_11.draft_quit_threshold).
+// Net $ is ~$0 until a later rung (revenue instrumentation is a V2 precursor), so the line degrades
+// gracefully. Fail-soft on EVERY branch: a missing source/key must NOT crash the email.
+let quitLine = null;
+try {
+  const { data: pk } = await db.from('strategic_directives_v2')
+    .select('metadata').eq('sd_key', 'SD-LEO-ORCH-ADAM-PLAN-KEEPER-001').maybeSingle();
+  const threshold = pk?.metadata
+    ?.chairman_amendment_2026_06_11_income_replacement
+    ?.target_number_2026_06_11
+    ?.draft_quit_threshold;
+  // Net monthly EHG profit — no revenue instrumentation yet (a V2 precursor) ⇒ ~$0. When an income
+  // source exists this can read income_capture_monthly; today it honestly degrades to ~$0.
+  const netMonthly = '~$0';
+  if (typeof threshold === 'string' && threshold.trim()) {
+    quitLine = `Distance-to-quit: net ${netMonthly}/mo vs the chairman quit-threshold ${EM} ${threshold.trim()}`;
+  } else {
+    quitLine = `Distance-to-quit: net ${netMonthly}/mo (quit-threshold unset ${EM} awaiting chairman ratification)`;
+  }
+} catch (e) {
+  console.warn('[adam-email] distance-to-quit unavailable (fail-soft): ' + (e?.message || e));
+  quitLine = `Distance-to-quit: (unavailable ${EM} threshold source not reachable this run)`;
+}
 
 // ── 3. ACTIONS FOR YOU: render the pending decisions (fetched above) as a copy-paste block ──
 const LEAD_IN = "I have received the following executive decisions via email and I'm ready to address them:";
@@ -110,6 +151,7 @@ const text = [
   visPct != null ? `EHG vision: ${visPct}% built` : 'EHG vision: (gauge unavailable)',
   ...(layerLine ? ['   ' + layerLine] : []),
   ...(visNote ? ['   ' + visNote] : []),
+  ...(quitLine ? ['', quitLine] : []),
   '',
   '──────────────────────────────────────────────',
   nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'No decisions need you right now.',
@@ -120,6 +162,7 @@ const text = [
 
 const layerHtml = layerLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(layerLine)}</div>` : '';
 const noteHtml = visNote ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(visNote)}</div>` : '';
+const quitHtml = quitLine ? `<p style="font-size:14px;margin:10px 0 0">${esc(quitLine)}</p>` : '';
 const actionsHtml = nActions
   ? `<p style="font-size:14px;margin:0 0 2px"><b>${nActions} ${nActions === 1 ? 'action' : 'actions'} for you</b></p>` +
     `<p style="font-size:12px;color:#888;margin:0 0 6px">On your phone, press and hold the box below, tap "Select All", then "Copy" — then paste it into Claude Code.</p>` +
@@ -128,7 +171,7 @@ const actionsHtml = nActions
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
   `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
   `<p style="font-size:15px;font-weight:600;margin:0 0 0">EHG vision: ${visPct != null ? visPct + '% built' : '(gauge unavailable)'}</p>` +
-  layerHtml + noteHtml +
+  layerHtml + noteHtml + quitHtml +
   '<hr style="border:none;border-top:1px solid #e1e4e8;margin:14px 0">' +
   actionsHtml +
   `<p style="font-size:11px;color:#999;margin:14px 0 0">as of ${esc(when)} ET ${EM} Adam ${EM} LEO Fleet Advisor</p></div>`;

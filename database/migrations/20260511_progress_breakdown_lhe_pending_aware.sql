@@ -1,3 +1,6 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman confirmed in-session (AskUserQuestion, session 7c76f0db) under
+-- SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 to apply the genuine deploy-drift gaps.
 -- Migration: get_progress_breakdown LHE-pending-aware (PR-A FR-3)
 -- Date: 2026-05-11
 -- SD: SD-FDBK-INFRA-REFACTOR-LEADFINALAPPROVALEXECUTOR-LHE-001

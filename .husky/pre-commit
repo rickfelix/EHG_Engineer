@@ -818,5 +818,22 @@ echo ""
 echo "📐 Checking CLAUDE_*.md drift vs leo_protocol_sections..."
 node scripts/hooks/pre-commit-claude-md-drift.cjs || exit 1
 
+# ============================================================================
+# STAGE 11: Workflow-YAML Parse Gate (BLOCKING when a workflow file is staged)
+# ============================================================================
+# SD-LEO-FIX-UNIT-TIER-STARTUP-001 (FR-2): if this commit stages a
+# .github/workflows/*.yml|*.yaml, parse-validate it so a plain-scalar ': ' (or any
+# YAML parse) defect FAILS LOUD at author time instead of shipping a phantom-green
+# workflow — the exact class that caused startup_failure on every Unit Tier run since
+# #4619. Scoped to staged workflow files; no-op on unrelated commits.
+echo ""
+echo "🔧 Checking staged workflow YAML..."
+STAGED_WORKFLOWS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^\.github/workflows/.*\.(yml|yaml)$' || true)
+if [ -n "$STAGED_WORKFLOWS" ]; then
+  node scripts/check-workflow-yaml.mjs $STAGED_WORKFLOWS || exit 1
+else
+  echo "✅ No workflow files staged — skipping workflow-YAML gate"
+fi
+
 echo ""
 echo "✅ Pre-commit checks passed. Proceeding with commit."

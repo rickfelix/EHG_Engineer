@@ -1,0 +1,76 @@
+name: Migration Deploy-Drift Guard
+
+# SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 FR-2.
+# BLOCKING gate: fails loud (non-zero) when a RECENT (date >= RETIRED_BEFORE),
+# committed-but-unapplied migration is missing from the live consolidated DB.
+# Runs post-merge on main (when a migration or the verifier changes) and daily.
+# The deliberately-retired LEGACY backlog stays advisory and never fails the gate.
+#
+# This gate is a verify-only DRIFT DETECTOR. It does NOT apply migrations and does
+# NOT touch the 3-factor @approved-by prod-deploy guard (scripts/lib/migration-guards.js)
+# — apply-migration.js --prod-deploy remains the only apply path, with its flag +
+# 1h single-use token + `-- @approved-by:<email>` header (matching git user.email)
+# preserved exactly. A real DB outage / missing secret (INFRA) is demoted to a
+# non-blocking warning so it cannot red-X main; only a genuine recent gap fails.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'database/migrations/*.sql'
+      - 'scripts/verify-migration-apply-state.mjs'
+      - 'scripts/lib/migration-guards.js'
+      - '.github/workflows/migration-deploy-drift-guard.yml'
+  schedule:
+    - cron: '17 9 * * *'   # daily 09:17 UTC — catches drift even with no migration pushes
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-drift:
+    name: recent committed-but-unapplied migrations (BLOCKING)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install deps
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Strict apply-state verifier (recent-only)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set +e
+          out="$(node scripts/verify-migration-apply-state.mjs --strict --recent-only 2>&1)"
+          code=$?
+          echo "$out"
+          # MISCONFIG (no DB credential at all) is an operator error, NOT a transient
+          # outage — HARD FAIL so the gate can never sit permanently green while never
+          # actually checking the live DB.
+          if echo "$out" | grep -q 'MIGRATION_APPLY_STATE_MISCONFIG'; then
+            echo "::error::Deploy-drift gate has NO DB credential — set one of SUPABASE_DB_PASSWORD / SUPABASE_POOLER_URL / DATABASE_URL repo secrets. Failing loud: a credential-less gate verifies nothing."
+            exit 1
+          fi
+          # INFRA = a genuine transient connect failure AFTER a credential was present —
+          # non-blocking so an outage cannot red-X main.
+          if echo "$out" | grep -q 'MIGRATION_APPLY_STATE_INFRA_ERROR'; then
+            echo "::warning::DB temporarily unreachable — deploy-drift check skipped this run (non-blocking transient)."
+            exit 0
+          fi
+          if [ "$code" != "0" ]; then
+            echo "::error::RECENT committed-but-unapplied migration(s) detected (named above). Apply via 'node scripts/apply-migration.js <path> --prod-deploy' (3-factor @approved-by guard) or retire as legacy. Drift must not accumulate."
+          fi
+          exit "$code"

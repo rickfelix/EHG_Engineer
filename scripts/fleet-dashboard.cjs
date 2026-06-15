@@ -19,7 +19,11 @@ function saveDashState(s) { try { fs.mkdirSync(path.dirname(DASH_STATE_FILE), { 
 function normalizeRender(s) {
   return s.replace(/\[[0-9;]*m/g, '').replace(/\d+s ago/g, '_s_').replace(/\d+m ago/g, '_m_')
     .replace(/\d+:\d+:\d+ [AP]M/g, '_T_').replace(/\d+:\d+ [AP]M/g, '_t_').replace(/uptime \d+h\d+m/gi, '_U_')
-    .replace(/[\d.]+h ago/g, '_H_').replace(/\d{4,}m/g, '_W_');
+    .replace(/[\d.]+h ago/g, '_H_').replace(/\d{4,}m/g, '_W_')
+    // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3): working_context age indicators tick every
+    // minute ("STALE (98m old …)" / "fresh (1m)") — normalize them so the steady-state suppress hash
+    // does not change every minute and the dashboard can still reach its identical-render threshold.
+    .replace(/-?\d+m old/g, '_m_old').replace(/\(-?\d+m\)/g, '(_m_)');
 }
 // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B (Phase 2)
 const teamBanner = require('../lib/execute/team-banner.cjs');
@@ -1223,6 +1227,36 @@ async function printAdamInbox() {
   console.log('');
 }
 
+// ── Section: Working context (FR-3, SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001) ──
+// Dual-render of both operators' standing working_context (claude_sessions.metadata.working_context)
+// so neither Adam nor the coordinator mistakes the other's heads-down silence for being ignored.
+// waiting-on-the-other-party threads are highlighted (the highest-value signal) and a context older
+// than the staleness threshold is flagged so a stale (misleading) context is never trusted blindly.
+// Read-only — renders via the single-source formatWorkingContext; stamps nothing.
+async function printWorkingContext() {
+  const getActiveCoordinatorId = _getActiveCoordinatorIdForInbox;
+  const store = require('../lib/coordinator/working-context-store.cjs');
+  const wcLib = require('../lib/coordinator/working-context.cjs');
+  let resolveAdamSessionId = null;
+  try { ({ resolveAdamSessionId } = require('./read-adam-directives.cjs')); } catch { resolveAdamSessionId = null; }
+
+  console.log('WORKING CONTEXT (Adam <-> Coordinator standing threads)');
+  console.log('─'.repeat(72));
+
+  let adamId = null, coordId = null;
+  try { adamId = resolveAdamSessionId ? await resolveAdamSessionId(supabase) : null; } catch { adamId = null; }
+  try { coordId = await getActiveCoordinatorId(supabase); } catch { coordId = null; }
+
+  const adam = adamId ? await store.getWorkingContext(supabase, adamId) : null;
+  const coord = coordId ? await store.getWorkingContext(supabase, coordId) : null;
+  const em = (s) => '\x1b[33m' + s + '\x1b[0m'; // yellow = waiting-on-other / STALE
+
+  console.log(wcLib.formatWorkingContext(adam, { label: 'Adam' + (adamId ? '' : ' (no session)'), em }));
+  console.log('');
+  console.log(wcLib.formatWorkingContext(coord, { label: 'Coordinator' + (coordId ? '' : ' (no session)'), em }));
+  console.log('');
+}
+
 // ── Section: Undelivered outbound + dead letters (FR-2/FR-4, SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001) ──
 // Receipt contract: read_at = DELIVERED, payload.actioned_at / acknowledged_at = ACTIONED.
 // This section closes the SENDER-side gap: outbound rows sitting UNREAD at a LIVE target
@@ -1425,6 +1459,7 @@ async function main() {
       await printDeadLetters();
     },
     adam:          async () => await printAdamInbox(), // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B
+    context:       async () => await printWorkingContext(), // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3)
     feedback:      async () => await printFeedback(d), // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001
     team:          () => printTeam(d), // SD-MULTISESSION-EXECUTION-TEAM-COMMAND-ORCH-001-B
     all:           async () => {
@@ -1441,6 +1476,7 @@ async function main() {
       await printUndeliveredOutbound(); // FR-2 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printDeadLetters(); // FR-4 SD-LEO-INFRA-COORD-ADAM-COMMS-RESILIENT-001
       await printAdamInbox(); // SD-LEO-INFRA-ADAM-ROLE-FORMALIZATION-001-B — Adam advisory lane
+      await printWorkingContext(); // SD-LEO-INFRA-ADAM-COORDINATOR-INTERFACE-001 (FR-3) — standing context dual-render
       await printFeedback(d); // SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001 — feedback work-store
       await printCoaching(d);
       printHealth(d);
@@ -1453,7 +1489,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, adam, feedback, team, all');
+    console.log('Sections: workers, orchestrator, available, quickfixes, coordination, coaching, health, qa, forecast, predictions, inbox, adam, context, feedback, team, all');
     process.exit(1);
   }
 

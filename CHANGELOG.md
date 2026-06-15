@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-15](#2026-06-15)
+  - [Infrastructure](#infrastructure)
 - [2026-06-14](#2026-06-14)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -53,6 +55,21 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-15
+
+### Infrastructure
+- **Pilot/test-fixture ventures can no longer auto-build into throwaway V2 SD trees — a fail-safe venture-build gate plus a one-time retire/cancel governance pass** - PR #4781, #4783 (SD-LEO-INFRA-PILOT-VENTURE-GUARD-001)
+  - **What shipped**: The Stage-19 sprint→SD generator (`lib/eva/lifecycle-sd-bridge.js` `convertSprintToSDs`) now SKIPS SD-tree generation for pilot/test-fixture ventures BEFORE any DB write, gated on `ventures.is_scaffolding OR is_demo` being EXPLICITLY true. It is FAIL-SAFE — a real venture (both markers false/null) still generates, so none is ever silently un-built. The marker REUSES the already-applied `ventures.is_scaffolding` column (the documented chairman-set "build-out vehicle" flag), so there is NO migration and the gate is effective immediately on ship. A new `PILOT_SKIPPED` S19 outcome (`lib/eva/bridge/s19-advance-decision.js` + `stage-execution-worker.js`) keeps an intentional skip from being mis-classified as `ZERO_SDS_FAILURE` / a false "Bridge FAILED" S19 BLOCK. An idempotent `scripts/eva/retire-pilot-ventures.mjs` (`npm run eva:retire-pilot-ventures`, already applied) marked DataDistill the SOLE active pilot, retired the 5 other pilot ventures (`status=cancelled`, never deleted), and cancelled the 26 deferred CronGenius build SDs via the canonical `cancel-sd.js`, asserting the 3 chairman-retained infra SDs stayed untouched. The EHG-app pilot badge (original scope part 6) is carved to a durable follow-up pointer (`metadata.followup_sd`).
+  - **Verification**: Adversarial review caught a real HIGH the isolated green tests missed — the pilot skip return (`created:false`) was classified as `ZERO_SDS_FAILURE` by the S19 caller, raising a false "Bridge FAILED"/BLOCKED alarm — fixed with the first-class `PILOT_SKIPPED` outcome. 39 new/updated unit tests; full touched-module sweep 248 pass / 0 fail. Live end-state verified (DataDistill sole active `is_scaffolding` pilot; 5 pilots cancelled; 26/26 CronGenius cancelled; 3 infra SDs still `deferred`). Heal 100/100; gates L2P 95 / P2E 95 / E2P pass / P2L pass / LEAD-FINAL pass.
+
+- **Shared-root resync no longer wipes gitignored runtime state — a canonical safe-resync helper replaces ad-hoc `git clean -fdx`** - PR #4768 (SD-LEO-INFRA-SHARED-ROOT-RESYNC-SAFETY-001)
+  - **What shipped**: `scripts/safe-root-resync.mjs` (`npm run resync:safe`) — the canonical shared-root SYNC step, wired into `docs/protocol/fleet-coordinator-and-worker-behavior.md`. Default path is non-destructive (`git fetch` + `git merge --ff-only origin/main`, dirty-tree skip, and a hard worktree-guard abort when `.git` is a file). Untracked cleanup is DOUBLE-gated: `--clean-untracked` only prints the `git clean -fdn` dry-run preview, and the actual `git clean -fd` requires a second explicit `--confirm-clean`. No code path can construct `-x`, so gitignored runtime state (`node_modules/`, `.claude/active-coordinator.json`) is always preserved — closing the 3 confirmed prod incidents. A fail-open `restoreAfterResync()` tail re-registers the coordinator pointer (reusing the shipped `restoreCoordinatorPointer` hook) and repairs a broken `node_modules` via a bounded `npm install` that runs ONLY when this session owns the cross-session mutex, with a timeout bounded strictly below `LOCK_TTL_MS` so a slow install can never outlive the lock and overlap a second session's install.
+  - **Verification**: `tests/unit/scripts/safe-root-resync.test.js` 15/15 (no-x invariant, worktree guard, double-confirm clean gate, lock-ownership bail, install-timeout < lock-TTL invariant, fail-open tail). Three adversarial-review rounds converged (5 findings → 1 HIGH → 0 new). `docs/runbooks/safe-root-resync.md` documents operation, exit codes, and the data-safety contract. Heal 93/100; gates E2P 95 / P2L 96.
+
+- **Adam's role contract now TEACHES the SD-creation how-to + its duties (not just names them)** - PR #4773 (SD-LEO-INFRA-ADAM-ROLE-CONTRACT-001)
+  - **What shipped**: A new `leo_protocol_sections` row (`section_type=adam_role_contract`, id=604) authored in the DB and rendered into `CLAUDE_ADAM.md` via `scripts/generate-claude-md-from-db.js` (never hand-edited). It teaches the SD-creation HOW-TO — the required NOT-NULL fields; the VERIFIED JSONB shapes (`success_criteria={criterion,measure}`, `key_changes={change,impact}` — NOT `{change,type}`); the canonical `/sd-create` create path + the `ENF-SD-CREATE-SKILL` block; and the keyword type-inference hazard (standalone `fix` matches before `infrastructure`) + the `docs→docs` `mapToDbType` caveat — plus procedural teaching of the conversion, build-% gauge (Vision Denominator Registry), and escalation duties, referencing `CLAUDE_LEAD.md` rather than duplicating it. Child C of SD-LEO-INFRA-ADAM-AUTONOMY-HARDENING-001 (closes the chairman keystone 2026-06-13: a LEO role is reliable because its required-reading contract CONTAINS the how-to).
+  - **Verification**: a 3-lens adversarial content review (accuracy-vs-code / does-it-teach / no-drift) caught 4 real accuracy errors, all corrected verbatim-from-code; drift guard green (`check-claude-md-drift.cjs`); TESTING PASS 95 / VALIDATION PASS 100. Gates L2P 94 / P2E 99 / E2P 96 / P2L 100 / LEAD-FINAL 99; heal 92/100.
 
 ## 2026-06-14
 

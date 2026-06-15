@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-15T00:11:01.798Z
+**Generated**: 2026-06-15T17:40:25.343Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -71,12 +71,7 @@
 
 ## RLS Policies
 
-### 1. bypass_ledger_insert_only (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. bypass_ledger_read_all (SELECT)
+### 1. bypass_ledger_read_all (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`

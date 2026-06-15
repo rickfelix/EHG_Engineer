@@ -1,3 +1,6 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman confirmed in-session (AskUserQuestion, session 7c76f0db) under
+-- SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 to apply the genuine deploy-drift gaps.
 -- venture_guardrail_state — per-venture record of the 8 engineered spend-guardrail decisions.
 -- SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-C (FR-4 / FR-5).
 -- Minimal ADDITIVE table — no change to any existing table. One row per (venture_id, guardrail),

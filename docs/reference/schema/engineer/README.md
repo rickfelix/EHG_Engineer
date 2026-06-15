@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-15T00:11:01.798Z
-**Tables**: 737
+**Generated**: 2026-06-15T17:40:25.343Z
+**Tables**: 742
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (737)
+## All Tables (742)
 
 ### LEO Protocol
 
@@ -440,6 +440,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [genesis_tier_config](tables/genesis_tier_config.md)
 - [github_operations](tables/github_operations.md)
 - [global_competitors](tables/global_competitors.md)
+- [goal_evaluator_verdicts](tables/goal_evaluator_verdicts.md)
 - [governance_audit_log](tables/governance_audit_log.md)
 - [governance_decisions](tables/governance_decisions.md)
 - [governance_policies](tables/governance_policies.md)
@@ -474,6 +475,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [llm_canary_metrics](tables/llm_canary_metrics.md)
 - [llm_canary_state](tables/llm_canary_state.md)
 - [llm_canary_transitions](tables/llm_canary_transitions.md)
+- [llm_cloud_health](tables/llm_cloud_health.md)
 - [llm_models](tables/llm_models.md)
 - [llm_providers](tables/llm_providers.md)
 - [management_reviews](tables/management_reviews.md)
@@ -592,6 +594,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [runtime_audits](tables/runtime_audits.md)
 - [scaffold_patterns](tables/scaffold_patterns.md)
 - [schema_expectations](tables/schema_expectations.md)
+- [scope_completion_chain](tables/scope_completion_chain.md)
 - [screen_layouts](tables/screen_layouts.md)
 - [sdip_ai_analysis](tables/sdip_ai_analysis.md)
 - [sdip_groups](tables/sdip_groups.md)
@@ -728,6 +731,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_compliance_progress](tables/venture_compliance_progress.md)
 - [venture_data_room_artifacts](tables/venture_data_room_artifacts.md)
 - [venture_data_room_artifacts_qparity20260610](tables/venture_data_room_artifacts_qparity20260610.md)
+- [venture_db_secrets](tables/venture_db_secrets.md)
 - [venture_decisions](tables/venture_decisions.md)
 - [venture_dependencies](tables/venture_dependencies.md)
 - [venture_documents](tables/venture_documents.md)
@@ -737,6 +741,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_financial_projections](tables/venture_financial_projections.md)
 - [venture_fundamentals](tables/venture_fundamentals.md)
+- [venture_guardrail_state](tables/venture_guardrail_state.md)
 - [venture_gvos_profile](tables/venture_gvos_profile.md)
 - [venture_market_analysis](tables/venture_market_analysis.md)
 - [venture_milestones](tables/venture_milestones.md)

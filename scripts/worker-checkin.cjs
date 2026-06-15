@@ -391,8 +391,9 @@ async function fetchDraftCandidates(sb) {
   const { data: drafts } = await sb
     .from('strategic_directives_v2')
     // metadata feeds the shared classifyDispatchIneligibility gate (the requires_human_action axis);
-    // sd_type already selected for the existing orchestrator exclusion.
-    .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata')
+    // sd_type already selected for the existing orchestrator exclusion. target_application added for
+    // the SD-LEO-INFRA-WORKER-CLAIM-TIME-001 claim-time repo-match fitness axis.
+    .select('sd_key, status, sd_type, priority, created_at, dependencies, metadata, target_application')
     .in('status', ['draft', 'active'])
     .is('claiming_session_id', null)
     .neq('sd_type', 'orchestrator')
@@ -410,7 +411,9 @@ async function tryClaimDraftCandidate(sb, sessionId, base, d) {
   // SD-FDBK-INFRA-CONVERGE-WORK-ASSIGNMENT-001: same shared classifier the baselined candidate-view
   // tier (step 6) and the coordinator/sweep PUSH path use — the un-baselined draft tier must not
   // self-claim a test-fixture phantom (SD-DEMO-*/SD-TEST-*) or a requires_human_action SD.
-  if (classifyDispatchIneligibility(d) !== null) return null;
+  // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): pass {cwd} so an SD that is unfit for THIS checkout
+  // (repo mismatch / closed premise / missing precondition) is skipped before claiming.
+  if (classifyDispatchIneligibility(d, { cwd: process.cwd() }) !== null) return null;
   if (!(await draftDepsSatisfied(sb, d))) return null; // skip dependency-blocked
   if (await isSdInFlight(sb, d.sd_key, sessionId)) return null; // dedup: started or live-foreign-held
   const claimed = await tryClaim(sb, d.sd_key, sessionId);
@@ -518,7 +521,9 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
       .from('strategic_directives_v2')
       // sd_key/sd_type/metadata feed classifyDispatchIneligibility; current_phase feeds the
       // resume message (advisory — sd-start reads the live phase authoritatively on attach).
-      .select('sd_key, sd_type, status, current_phase, metadata, updated_at')
+      // target_application added for the SD-LEO-INFRA-WORKER-CLAIM-TIME-001 claim-time repo-match
+      // axis so a repo-mismatched orphan is not adopted into the wrong checkout.
+      .select('sd_key, sd_type, status, current_phase, metadata, updated_at, target_application')
       .eq('status', 'in_progress')
       .is('claiming_session_id', null)
       .neq('sd_type', 'orchestrator')         // parents are in_progress/no-claim BY DESIGN while children run
@@ -528,8 +533,9 @@ async function adoptOrphanInProgress(sb, sessionId, base) {
     for (const sd of (orphans || [])) {
       // Shared classifier (same predicate as the draft tier + coordinator sweep): orchestrator
       // (redundant with .neq — harmless), test-fixture keys (SD-DEMO-*/SD-TEST-*), and
-      // metadata.requires_human_action all skip.
-      if (classifyDispatchIneligibility(sd) !== null) continue;
+      // metadata.requires_human_action all skip. SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): {cwd}
+      // adds the claim-time fitness axes so a repo-mismatched orphan is not adopted here.
+      if (classifyDispatchIneligibility(sd, { cwd: process.cwd() }) !== null) continue;
       // Live-foreign-holder probe (the half-write case: SD-side claim cleared but a LIVE session
       // still points at it via claude_sessions.sd_key). Fail-open: probe errors don't block.
       try {
@@ -920,7 +926,9 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
       if (x.kind === 'baselined') {
         // SD-FDBK-FIX-WORKER-SELF-CLAIM-001: skip dependency-blocked SDs and orchestrator PARENTS
         // (the view surfaces both; claim_sd enforces neither). Mirrors the draft-tier guard.
-        if (!(await baselinedCandidateEligible(sb, x.key))) continue;
+        // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-2): {cwd} adds the claim-time fitness axes so a
+        // baselined candidate unfit for THIS checkout is skipped before claiming.
+        if (!(await baselinedCandidateEligible(sb, x.key, { cwd: process.cwd() }))) continue;
         if (await isSdInFlight(sb, x.key, sessionId)) continue;  // dedup: started or live-foreign-held
         const claimed = await tryClaim(sb, x.key, sessionId, x.track);
         if (claimed.ok) {
