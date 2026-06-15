@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-15](#2026-06-15)
+  - [Infrastructure](#infrastructure)
 - [2026-06-14](#2026-06-14)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -53,6 +55,13 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-15
+
+### Infrastructure
+- **Shared-root resync no longer wipes gitignored runtime state — a canonical safe-resync helper replaces ad-hoc `git clean -fdx`** - PR #4768 (SD-LEO-INFRA-SHARED-ROOT-RESYNC-SAFETY-001)
+  - **What shipped**: `scripts/safe-root-resync.mjs` (`npm run resync:safe`) — the canonical shared-root SYNC step, wired into `docs/protocol/fleet-coordinator-and-worker-behavior.md`. Default path is non-destructive (`git fetch` + `git merge --ff-only origin/main`, dirty-tree skip, and a hard worktree-guard abort when `.git` is a file). Untracked cleanup is DOUBLE-gated: `--clean-untracked` only prints the `git clean -fdn` dry-run preview, and the actual `git clean -fd` requires a second explicit `--confirm-clean`. No code path can construct `-x`, so gitignored runtime state (`node_modules/`, `.claude/active-coordinator.json`) is always preserved — closing the 3 confirmed prod incidents. A fail-open `restoreAfterResync()` tail re-registers the coordinator pointer (reusing the shipped `restoreCoordinatorPointer` hook) and repairs a broken `node_modules` via a bounded `npm install` that runs ONLY when this session owns the cross-session mutex, with a timeout bounded strictly below `LOCK_TTL_MS` so a slow install can never outlive the lock and overlap a second session's install.
+  - **Verification**: `tests/unit/scripts/safe-root-resync.test.js` 15/15 (no-x invariant, worktree guard, double-confirm clean gate, lock-ownership bail, install-timeout < lock-TTL invariant, fail-open tail). Three adversarial-review rounds converged (5 findings → 1 HIGH → 0 new). `docs/runbooks/safe-root-resync.md` documents operation, exit codes, and the data-safety contract. Heal 93/100; gates E2P 95 / P2L 96.
 
 ## 2026-06-14
 
