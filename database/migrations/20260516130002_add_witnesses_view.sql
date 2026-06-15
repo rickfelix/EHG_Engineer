@@ -1,3 +1,6 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman confirmed in-session (AskUserQuestion, session 7c76f0db) under
+-- SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 to apply the genuine deploy-drift gaps.
 -- Sibling A FR-A-3: writer_consumer_asymmetry_witnesses VIEW (plain, NOT materialized)
 -- Aggregates witnesses from bypass_ledger + scope_completion_chain + validation_audit_log.
 -- Ordinal 20260516130002 strictly > FR-A-1 and FR-A-2 ordinals.

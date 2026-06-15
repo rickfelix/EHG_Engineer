@@ -1,3 +1,6 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman confirmed in-session (AskUserQuestion, session 7c76f0db) under
+-- SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 to apply the genuine deploy-drift gaps.
 -- venture_db_secrets — per-venture database connection secret REFERENCES (not literals).
 -- SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-B (FR-4).
 -- Minimal ADDITIVE table — no change to any existing table. One row per venture

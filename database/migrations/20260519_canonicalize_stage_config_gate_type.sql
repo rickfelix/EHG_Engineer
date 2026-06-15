@@ -1,3 +1,6 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Attestation: chairman confirmed in-session (AskUserQuestion, session 7c76f0db) under
+-- SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 to apply the genuine deploy-drift gaps.
 -- SD-LEO-REFAC-CANONICALIZE-STAGE-CONFIG-001 FR-4
 -- Migration: Canonicalize stage_config.gate_type on lifecycle_stage_config.work_type
 --
