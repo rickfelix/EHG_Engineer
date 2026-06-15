@@ -32,12 +32,20 @@ describe('resolveWorkerCount (SD-LEO-INFRA-WORKER-COUNT-PULSE-RESILIENCE-001)', 
     expect(r.label).not.toBe('hourly avg');
   });
 
-  it('sparse primary + healthy wider window → wide avg, sparse-labeled', () => {
-    const r = resolveWorkerCount({ primaryPulses: [pulse(2, 3, 1)], widePulses: [pulse(2, 3, 1), pulse(4, 5, 1), pulse(6, 7, 1)], live: { active: 9, idle: 0 }, threshold: 2, wideHours: 3 });
+  it('sparse primary + healthy wider window + NO live → wide avg, sparse-labeled', () => {
+    const r = resolveWorkerCount({ primaryPulses: [pulse(2, 3, 1)], widePulses: [pulse(2, 3, 1), pulse(4, 5, 1), pulse(6, 7, 1)], live: null, threshold: 2, wideHours: 3 });
     expect(r.source).toBe('wide avg');
     expect(r.sparse).toBe(true);
     expect(r.active).toBe(4); // round((2+4+6)/3)
     expect(r.label).toBe('3h avg, sparse');
+  });
+
+  it('honesty/recency: a FRESH live read is preferred over a stale wider-window average', () => {
+    // adversarial review MED: 1 fresh pulse=8 + live=8 must NOT be reported as a 3h mean of ~3.
+    const r = resolveWorkerCount({ primaryPulses: [pulse(8, 9, 1)], widePulses: [pulse(8, 9, 1), pulse(1, 2, 1), pulse(1, 2, 1)], live: { active: 8, idle: 0 }, threshold: 2 });
+    expect(r.source).toBe('live');
+    expect(r.active).toBe(8);
+    expect(r.label).toMatch(/live \(sparse/);
   });
 
   it('sparse primary + no wide + no live → sparse-labeled average of the few samples (honest, not confident)', () => {
@@ -80,5 +88,18 @@ describe('resolveWorkerCount (SD-LEO-INFRA-WORKER-COUNT-PULSE-RESILIENCE-001)', 
   it('defensive: undefined args do not throw → unavailable', () => {
     expect(() => resolveWorkerCount()).not.toThrow();
     expect(resolveWorkerCount().source).toBe('unavailable');
+  });
+
+  it('LOW fix: threshold=0 with an empty primary window never yields a confident NaN', () => {
+    const r = resolveWorkerCount({ primaryPulses: [], threshold: 0 });
+    // clamped thr>=1 + empty-guard: must route to unavailable, NOT a confident "hourly avg" of NaN
+    expect(r.source).toBe('unavailable');
+    expect(r.active).toBeNull();
+    expect(Number.isNaN(r.active)).toBe(false);
+  });
+
+  it('LOW fix: a negative explicit idle_count is clamped to 0 (never a negative idle)', () => {
+    const r = resolveWorkerCount({ primaryPulses: [{ active_count: 3, total_count: 4, idle_count: -5 }, { active_count: 3, total_count: 4, idle_count: -5 }], threshold: 2 });
+    expect(r.idle).toBe(0);
   });
 });
