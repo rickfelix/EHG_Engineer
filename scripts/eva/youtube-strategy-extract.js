@@ -34,6 +34,7 @@ import {
   runExtraction,
   cleanLedgerEntry,
   isEnhancementWorthy,
+  disposeEntries,
 } from '../../lib/integrations/youtube/strategy-extract-core.js';
 import { emitFeedback } from '../../lib/governance/emit-feedback.js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
@@ -43,12 +44,13 @@ const LEDGER_PATH = path.resolve(process.cwd(), 'memory', 'youtube-strategy-ledg
 const REFERENCE_PATH = path.resolve(process.cwd(), 'docs', 'reference', 'youtube-strategy-frameworks.md');
 
 export function parseArgs(argv = []) {
-  const a = { limit: null, dryRun: false, verbose: false, lang: 'en' };
+  const a = { limit: null, dryRun: false, dispose: false, verbose: false, lang: 'en' };
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i];
     if (t === '--limit') a.limit = Number(argv[++i]) || null;
     else if (t.startsWith('--limit=')) a.limit = Number(t.split('=')[1]) || null;
     else if (t === '--dry-run') a.dryRun = true;
+    else if (t === '--dispose') a.dispose = true;
     else if (t === '--verbose' || t === '-v') a.verbose = true;
     else if (t === '--lang') a.lang = argv[++i] || 'en';
     else if (t.startsWith('--lang=')) a.lang = t.split('=')[1] || 'en';
@@ -158,7 +160,8 @@ export async function main(argv = process.argv.slice(2)) {
   console.log(`     recommendation:${JSON.stringify(summary.by_recommendation)}`);
 
   if (opts.dryRun) {
-    console.log('\n   DRY-RUN: no ledger / reference / routing writes. Done.');
+    if (opts.dispose) console.log('   (--dispose ignored under --dry-run — no playlist mutation.)');
+    console.log('\n   DRY-RUN: no ledger / reference / routing / disposal writes. Done.');
     return { processed: entries.length, summary, dryRun: true };
   }
 
@@ -174,8 +177,31 @@ export async function main(argv = process.argv.slice(2)) {
   console.log(`\n   Ledger updated: ${LEDGER_PATH}`);
   console.log(`   Novel frameworks -> reference library: ${refCount}`);
   console.log(`   Enhancement-worthy routed to chairman/coordinator: ${routed}`);
-  console.log('   (Disposal is a separate, explicitly-gated step — FR-5 — not run here.)');
-  return { processed: entries.length, summary, refCount, routed };
+
+  // FR-5: disposal (outward-facing playlist mutation) is OPT-IN via --dispose and
+  // only ever moves successfully-extracted videos — failures stay in For-Processing.
+  let disposed = 0;
+  if (opts.dispose) {
+    console.log('\n   --dispose: moving successfully-extracted videos For-Processing -> Processed...');
+    let youtube = null;
+    try {
+      const { getAuthenticatedClient } = await import('../../lib/integrations/youtube/oauth-manager.js');
+      const { google } = await import('googleapis');
+      youtube = google.youtube({ version: 'v3', auth: await getAuthenticatedClient() });
+    } catch (e) {
+      console.log(`   disposal skipped (not authenticated): ${e.message}`);
+    }
+    if (youtube) {
+      const disp = await disposeEntries(entries, { youtube, supabase, verbose: opts.verbose });
+      for (const vid of disp.disposed_ids) if (ledger.videos[vid]) ledger.videos[vid].disposed = true;
+      saveLedger(ledger);
+      disposed = disp.moved;
+      console.log(`   Disposed (-> Processed): ${disp.moved}${disp.errors.length ? `, errors: ${disp.errors.length}` : ''}`);
+    }
+  } else {
+    console.log('   (Disposal NOT run — pass --dispose to move successfully-extracted videos to Processed.)');
+  }
+  return { processed: entries.length, summary, refCount, routed, disposed };
 }
 
 if (isMainModule(import.meta.url)) {

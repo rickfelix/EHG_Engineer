@@ -13,6 +13,8 @@ import {
   summarizeEntries,
   runExtraction,
   cleanLedgerEntry,
+  selectDisposable,
+  disposeEntries,
   CATEGORIES,
 } from '../../../lib/integrations/youtube/strategy-extract-core.js';
 
@@ -191,5 +193,79 @@ describe('runExtraction (injectable orchestration)', () => {
 
   it('throws only if analyzeWithFallback dep is missing', async () => {
     await expect(runExtraction(candidates, {})).rejects.toThrow(/analyzeWithFallback/);
+  });
+});
+
+describe('selectDisposable (FR-5)', () => {
+  it('selects only ok entries that have a playlist_item_id', () => {
+    const entries = [
+      { video_id: 'a', title: 'A', analysis_status: 'ok', _row: { id: 1, youtube_playlist_item_id: 'pi-a' } },
+      { video_id: 'b', title: 'B', analysis_status: 'ok', _row: { id: 2 } }, // no playlist item id
+      { video_id: 'c', title: 'C', analysis_status: 'failed_long', _row: { id: 3, youtube_playlist_item_id: 'pi-c' } },
+    ];
+    const sel = selectDisposable(entries);
+    expect(sel.map((s) => s.video_id)).toEqual(['a']);
+    expect(sel[0]).toEqual({ video_id: 'a', intake_id: 1, playlist_item_id: 'pi-a', title: 'A' });
+  });
+});
+
+describe('disposeEntries (FR-5, injectable clients)', () => {
+  const okEntries = (n = 2) => Array.from({ length: n }, (_, i) => ({
+    video_id: `v${i}`, title: `V${i}`, analysis_status: 'ok', _row: { id: i, youtube_playlist_item_id: `pi-${i}` },
+  }));
+
+  function fakeYoutube(overrides = {}) {
+    return {
+      _inserts: [], _deletes: [],
+      playlists: {
+        list: vi.fn(async () => ({ data: { items: [{ id: 'PL_PROC', snippet: { title: 'Processed' } }] } })),
+        insert: vi.fn(async () => ({ data: { id: 'PL_NEW' } })),
+      },
+      playlistItems: {
+        insert: overrides.insert || vi.fn(async function (this_, arg) { return { data: {} }; }),
+        delete: overrides.delete || vi.fn(async () => ({ data: {} })),
+      },
+    };
+  }
+  function fakeSupabase() {
+    const calls = [];
+    return {
+      calls,
+      from() { return this; },
+      update(patch) { this._patch = patch; return this; },
+      eq(col, val) { calls.push({ patch: this._patch, col, val }); return Promise.resolve({ error: null }); },
+    };
+  }
+
+  it('returns {moved:0} with no targets and does not require youtube', async () => {
+    const r = await disposeEntries([{ video_id: 'x', analysis_status: 'failed_long', _row: {} }], {});
+    expect(r.moved).toBe(0);
+    expect(r.errors).toEqual([]);
+  });
+
+  it('throws if there are targets but no youtube client', async () => {
+    await expect(disposeEntries(okEntries(1), {})).rejects.toThrow(/youtube/);
+  });
+
+  it('moves only ok videos: insert + delete + mark intake processed', async () => {
+    const yt = fakeYoutube();
+    const sb = fakeSupabase();
+    const r = await disposeEntries(okEntries(2), { youtube: yt, supabase: sb, nowIso: '2026-06-15T00:00:00Z' });
+    expect(r.moved).toBe(2);
+    expect(r.playlist_id).toBe('PL_PROC');
+    expect(r.disposed_ids).toEqual(['v0', 'v1']);
+    expect(yt.playlistItems.insert).toHaveBeenCalledTimes(2);
+    expect(yt.playlistItems.delete).toHaveBeenCalledTimes(2);
+    expect(sb.calls).toHaveLength(2);
+    expect(sb.calls[0].patch).toMatchObject({ status: 'processed', destination_playlist_id: 'PL_PROC' });
+  });
+
+  it('records a per-video error without aborting the batch', async () => {
+    let n = 0;
+    const yt = fakeYoutube({ insert: vi.fn(async () => { n++; if (n === 1) throw new Error('quota'); return { data: {} }; }) });
+    const r = await disposeEntries(okEntries(2), { youtube: yt, supabase: fakeSupabase() });
+    expect(r.moved).toBe(1);
+    expect(r.errors).toHaveLength(1);
+    expect(r.errors[0].error).toMatch(/quota/);
   });
 });
