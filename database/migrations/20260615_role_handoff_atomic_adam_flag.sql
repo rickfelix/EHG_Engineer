@@ -22,8 +22,14 @@ LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+  -- Drop adam_since + non_fleet always; drop the GENERIC 'role' key ONLY when it is 'adam' (never
+  -- strip a legitimate role='worker'/'coordinator' tag — review finding: 'role' is not Adam-exclusive).
   UPDATE claude_sessions
-  SET metadata = COALESCE(metadata, '{}'::jsonb) - 'role' - 'adam_since' - 'non_fleet'
+  SET metadata = CASE
+                   WHEN COALESCE(metadata, '{}'::jsonb)->>'role' = 'adam'
+                     THEN COALESCE(metadata, '{}'::jsonb) - 'role' - 'adam_since' - 'non_fleet'
+                   ELSE COALESCE(metadata, '{}'::jsonb) - 'adam_since' - 'non_fleet'
+                 END
   WHERE session_id = p_session_id;
 $$;
 

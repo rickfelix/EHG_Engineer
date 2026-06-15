@@ -101,6 +101,23 @@ describe('decideSingleAdamGuard (refuse-new-on-fresh-prior divergence)', () => {
     });
     expect(d.action).toBe('refuse');
   });
+  it('multiple FRESH priors => REFUSE with retire=[] (none cleared)', () => {
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [{ session_id: 'f1', heartbeat_at: fresh(1) }, { session_id: 'f2', heartbeat_at: fresh(2) }],
+      selfSessionId: self, nowMs: NOW,
+    });
+    expect(d.action).toBe('refuse');
+    expect(d.retire).toEqual([]);
+    expect(d.freshPriors.sort()).toEqual(['f1', 'f2']);
+  });
+  it('null heartbeat_at prior => classified stale => retired (anomalous never-heartbeated adam)', () => {
+    const d = adam.decideSingleAdamGuard({
+      priorAdams: [{ session_id: 'nullhb', heartbeat_at: null }],
+      selfSessionId: self, nowMs: NOW,
+    });
+    expect(d.action).toBe('retire_stale_then_register');
+    expect(d.retire).toEqual(['nullhb']);
+  });
 });
 
 describe('detectMultipleAdams (pure, mirror of detectSplitBrain)', () => {
