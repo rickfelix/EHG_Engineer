@@ -381,7 +381,39 @@ async function main() {
   }
 }
 
-module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow };
+/**
+ * FR-4 (SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C): on an Adam (re)register/restart, re-target
+ * UNREAD session_coordination rows destined for an OLD Adam session to the NEW Adam session, so a
+ * restarted Adam receives replies/directives the prior session never consumed. Mirrors the
+ * coordinator broadcast-drain (lib/coordinator/resolve.cjs:233-238). IDEMPOTENT: gates on
+ * read_at IS NULL and re-targets old->new, so a re-run matches nothing (no loop, no duplicate).
+ * FAIL-OPEN: returns { moved:0, error? } on any error, never throws. The caller (adam-register)
+ * only invokes this under the ROLE_HANDOFF_ADAM_V1 flag.
+ * @param {object} supabase
+ * @param {{ newSessionId: string, oldSessionIds: string[] }} p
+ * @returns {Promise<{ moved: number, error?: string }>}
+ */
+async function drainAdamOutbound(supabase, { newSessionId, oldSessionIds } = {}) {
+  if (!supabase || !newSessionId || !Array.isArray(oldSessionIds)) return { moved: 0 };
+  const olds = oldSessionIds.filter((s) => typeof s === 'string' && s && s !== newSessionId);
+  if (!olds.length) return { moved: 0 };
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('session_coordination')
+      .update({ target_session: newSessionId })
+      .in('target_session', olds)
+      .is('read_at', null)            // only UNREAD rows → idempotent (consumed rows never re-move)
+      .gte('created_at', cutoff)
+      .select('id');
+    if (error) return { moved: 0, error: error.message };
+    return { moved: Array.isArray(data) ? data.length : 0 };
+  } catch (e) {
+    return { moved: 0, error: e && e.message ? e.message : String(e) };
+  }
+}
+
+module.exports = { buildAdvisoryPayload, advisoryExpiresAt, ADVISORY_TTL_MS, resolveScopeForSend, resolveReplyToCorrelation, drainReplies, isReplyRow, drainInbox, isDirectiveRow, drainAdamOutbound };
 
 if (require.main === module) {
   main().catch(err => { console.error('UNHANDLED:', err.message || err); process.exit(1); });

@@ -25,9 +25,39 @@ const fs = require('fs');
 const path = require('path');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { resolveStateReadPath } = require('./hooks/lib/session-state-resolver.cjs');
+// SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C (FR-3): single-Adam guard + atomic write.
+// fetchAllAdams (not fetchFreshAdams) so the guard sees stale priors too and classifies fresh-vs-
+// stale itself (fresh => refuse; stale-only => retire).
+const { fetchAllAdams, decideSingleAdamGuard, isFresh } = require('../lib/coordinator/adam-identity.cjs');
+// FR-4: re-target a retired prior Adam's unread inbound to the new session (comms survive a restart).
+const { drainAdamOutbound } = require('./adam-advisory.cjs');
 
 const ADAM_ROLE = 'adam';
 const CONTRACT_FILE = 'CLAUDE_ADAM.md';
+
+/** FR-3 flag (default-OFF): when 'on', the single-Adam guard + atomic set_adam_flag write-path runs.
+ *  OFF => the legacy computeAdamTag + JS-merge register path is BYTE-IDENTICAL to before. */
+function isAdamHandoffV1Enabled() {
+  return process.env.ROLE_HANDOFF_ADAM_V1 === 'on';
+}
+
+/** Postgres/PostgREST signal that an RPC is not defined (the chairman-gated migration is unapplied). */
+function isMissingFunctionError(error) {
+  if (!error) return false;
+  if (error.code === '42883' || error.code === 'PGRST202') return true;
+  const msg = String(error.message || error.hint || '').toLowerCase();
+  return /(set_adam_flag|clear_adam_flag)/.test(msg) && /not (found|exist)/.test(msg);
+}
+
+/** Atomic Adam-flag write via the RPC; fail-soft result (NEVER throws). */
+async function writeAdamFlagViaRpc(supabase, sessionId) {
+  let res;
+  try { res = await supabase.rpc('set_adam_flag', { p_session_id: sessionId }); }
+  catch (e) { return isMissingFunctionError(e) ? { persisted: false, reason: 'rpc_absent' } : { persisted: false, reason: 'error', error: e && e.message }; }
+  const error = res && res.error;
+  if (error) return isMissingFunctionError(error) ? { persisted: false, reason: 'rpc_absent' } : { persisted: false, reason: 'error', error: error.message };
+  return { persisted: true };
+}
 
 /**
  * Pure: given current metadata, decide whether a write is needed and produce the
@@ -46,7 +76,7 @@ function computeAdamTag(current) {
  * Register/verify the Adam tag for a session. Injectable supabase for tests.
  * Never throws — returns a structured result object.
  */
-async function registerAdam(supabase, sessionId) {
+async function registerAdam(supabase, sessionId, opts = {}) {
   if (!sessionId) {
     return { ok: false, action: 'error', error: 'CLAUDE_SESSION_ID env var required (set by the SessionStart hook).' };
   }
@@ -64,6 +94,63 @@ async function registerAdam(supabase, sessionId) {
   }
   if (!row) {
     return { ok: false, action: 'error', error: `session ${sessionId} not found in claude_sessions (is the SessionStart register hook run?).` };
+  }
+
+  // SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C (FR-3): flag-ON runs the single-Adam guard +
+  // atomic set_adam_flag write-path. Flag-OFF falls through to the legacy path below (byte-identical).
+  if (isAdamHandoffV1Enabled()) {
+    const nowMs = (opts && Number.isFinite(opts.nowMs)) ? opts.nowMs : Date.now();
+    const priorAdams = await fetchAllAdams(supabase); // ALL adams (incl. stale) so the guard classifies
+    const decision = decideSingleAdamGuard({ priorAdams, selfSessionId: sessionId, nowMs });
+    if (decision.action === 'refuse') {
+      // A FRESH prior Adam holds the singleton — do NOT register a 2nd and do NOT clear the prior
+      // (the deliberate divergence: never kill a legitimately-restarting Adam mid-canary).
+      return { ok: false, action: 'refused', session_id: sessionId, fresh_priors: decision.freshPriors,
+        message: `Refused: a fresh prior Adam (${decision.freshPriors.join(', ')}) holds the singleton — not registering a 2nd. ${decision.reason}` };
+    }
+    // REGISTER-BEFORE-RETIRE (mirror sibling A's coordinator setActiveCoordinator ordering): claim the
+    // singleton FIRST so there is never a zero-Adam window, THEN retire stale priors.
+    const wrote = await writeAdamFlagViaRpc(supabase, sessionId);
+    let action = null;
+    let fallbackReason = null;
+    if (wrote.persisted) {
+      action = 'tagged';
+    } else {
+      // Fail-soft: the chairman-gated migration is unapplied (or a transient RPC error). Fall back
+      // to the legacy JS merge (+ adam_since) — no worse than flag-OFF; atomic safety lands on apply.
+      const mergedAdam = { ...((row.metadata && typeof row.metadata === 'object') ? row.metadata : {}), role: ADAM_ROLE, non_fleet: true, adam_since: new Date(nowMs).toISOString() };
+      try {
+        const { error } = await supabase.from('claude_sessions').update({ metadata: mergedAdam }).eq('session_id', sessionId);
+        if (error) return { ok: false, action: 'error', error: error.message };
+      } catch (e) { return { ok: false, action: 'error', error: e.message }; }
+      action = 'tagged_fallback';
+      fallbackReason = wrote.reason;
+    }
+    // Retire stale priors — but RE-VALIDATE freshness right before clearing each, so a prior that
+    // became fresh since the decision (a racing restart) is NEVER cleared (the deliberate divergence
+    // holds even under a race). Residual: two simultaneous STALE restarts can both register briefly
+    // — surfaced by the MULTIPLE_ADAMS detector + refused on the next register (eventual convergence).
+    const retired = [];
+    if (decision.retire.length) {
+      const nowMs2 = Date.now();
+      const current = await fetchAllAdams(supabase);
+      const freshNow = new Set(current.filter((a) => isFresh(a.heartbeat_at, nowMs2)).map((a) => a.session_id));
+      for (const sid of decision.retire) {
+        if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Adam
+        const r = await supabase.rpc('clear_adam_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
+        if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
+      }
+    }
+    if (retired.length) action = action === 'tagged_fallback' ? 'tagged_after_retire_fallback' : 'tagged_after_retire';
+    // FR-4: re-target the retired prior Adam(s)' unread inbound to this new session (comms survive
+    // the handoff). Fail-open + idempotent; a drain error never fails the registration.
+    let drained = 0;
+    if (retired.length) {
+      const d = await drainAdamOutbound(supabase, { newSessionId: sessionId, oldSessionIds: retired });
+      drained = (d && d.moved) || 0;
+    }
+    return { ok: true, action, session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired, drained,
+      message: `Registered as the single Adam${retired.length ? ` (retired stale prior(s): ${retired.join(', ')}; re-targeted ${drained} inbound row(s))` : ''}${fallbackReason ? ` — fail-soft JS merge (set_adam_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_adam_flag'}.` };
   }
 
   const { alreadyTagged, merged } = computeAdamTag(row.metadata);
@@ -188,7 +275,7 @@ async function main() {
   return shutdown(result.ok ? 0 : 1);
 }
 
-module.exports = { computeAdamTag, registerAdam, adamReplyMirror, checkContractRead, contractReadBanner, ADAM_ROLE, CONTRACT_FILE };
+module.exports = { computeAdamTag, registerAdam, adamReplyMirror, checkContractRead, contractReadBanner, ADAM_ROLE, CONTRACT_FILE, isAdamHandoffV1Enabled, isMissingFunctionError, writeAdamFlagViaRpc };
 
 if (require.main === module) {
   main().catch(err => {

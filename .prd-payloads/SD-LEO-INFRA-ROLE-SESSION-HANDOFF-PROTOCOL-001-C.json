@@ -1,0 +1,139 @@
+{
+  "executive_summary": "The Adam-singleton half of the role-session handoff/restart protocol (child C of SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001; sibling A already shipped the COORDINATOR half). A LEAD VALIDATION pass (row 4804bb03) confirmed all 6 building blocks are GENUINE net-new (grep found zero electAdam/getActiveAdam/pickCanonicalAdam/detectMultipleAdams/set_adam_flag/adam_since) and gave the exact sibling-A patterns to MIRROR (compose, not reinvent): the coordinator election in lib/coordinator/resolve.cjs:62-164, the atomic-jsonb identity migration 20260614_role_handoff_atomic_coordinator_flag.sql, and the coordinator broadcast-drain at resolve.cjs:233-238. This delivers a single-Adam election + detector, a single-Adam register guard that PREFERS refuse-new-on-fresh-prior (never kills a restarting Adam mid-canary), atomic set_adam_flag/clear_adam_flag RPCs (chairman-gated), an idempotent Adam outbound-advisory drain with old->new re-target, and scripts/adam-restart.cjs (freshness -> regenerate CLAUDE_ADAM.md -> re-register+guard -> canary -> structured JSON). All new write-path behavior is flag-gated default-OFF (mirror COORDINATOR_TWOWAY_V2) + the migration chairman-gated, so it ships BYTE-IDENTICAL until enabled. Verified by hermetic unit tests + the unchanged existing adam suites.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Single-Adam election + detector (lib/coordinator/detectors.cjs)",
+      "description": "Add pickCanonicalAdam, electAdamFromDb / getActiveAdamId, and detectMultipleAdams to lib/coordinator/detectors.cjs, MIRRORING the shipped coordinator election (lib/coordinator/resolve.cjs:62-164 pickCanonicalCoordinator/electCoordinatorFromDb/getActiveCoordinatorId) but keyed on metadata.role='adam'. Canonical Adam = adam_since DESC NULLS LAST, then session_id ASC (deterministic). detectMultipleAdams SELF-COUNTS fresh (heartbeat-recent) role=adam sessions and flags >1 (note: the existing detectSplitBrain takes a PRE-COMPUTED count, so Adam needs its own counting query). Pure + fail-open (a detection error never throws to callers); injectable supabase for tests.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "pickCanonicalAdam orders candidates by adam_since DESC NULLS LAST then session_id ASC and returns the single canonical session_id.",
+        "detectMultipleAdams returns a structured verdict flagging >1 fresh role=adam session (self-counted).",
+        "getActiveAdamId resolves the canonical Adam (file-first/DB as the coordinator analogue does) and fails open to null.",
+        "All helpers are pure/injectable and unit-tested with no live DB."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Atomic set_adam_flag / clear_adam_flag RPCs (chairman-gated migration)",
+      "description": "A new migration database/migrations/<date>_role_handoff_atomic_adam_flag.sql CLONING 20260614_role_handoff_atomic_coordinator_flag.sql: SECURITY DEFINER set_adam_flag(p_session_id) that atomically stamps metadata via jsonb || jsonb_build_object('role','adam','adam_since',now()) (create-if-absent via INSERT ... ON CONFLICT) and clear_adam_flag(p_session_id) that drops the keys via jsonb -, both preserving sibling metadata keys. Includes an in-migration DO $verify$ ASSERT block (set preserves siblings; clear drops only the adam keys; create-if-absent works) and a _DOWN companion. Chairman-gated (NO -- @approved-by); the JS writer fail-softs until applied.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "set_adam_flag atomically merges role=adam + adam_since via jsonb || preserving all sibling keys; clear_adam_flag drops only those two keys via jsonb -.",
+        "The migration carries an in-migration DO $verify$ ASSERT and a _DOWN companion, and has NO @approved-by attestation (chairman-gated).",
+        "No JS read-modify-write of the whole metadata object is introduced anywhere on the Adam identity path."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Single-Adam register guard (refuse-new-on-fresh-prior) + adam_since",
+      "description": "UPDATE scripts/adam-register.cjs (today a JS read-merge-write that sets {role:adam, non_fleet:true} with no adam_since and no guard) to: route the identity write through the set_adam_flag RPC (stamping adam_since), and run a single-Adam GUARD on (re)register. The guard's deliberate divergence from the coordinator clear-losers pattern: it PREFERS refuse-new-on-fresh-prior over clear-prior — if a FRESH prior Adam exists, the new registration REFUSES (so a legitimately-restarting Adam is not cleared mid-canary); only a STALE prior is retired (clear_adam_flag). Flag-gated default-OFF: with the flag OFF, behavior is byte-identical to today.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "With a FRESH prior Adam, a new register REFUSES (no clear of the fresh prior).",
+        "With a STALE prior Adam, the prior is retired (clear_adam_flag) and the new Adam registers as the single holder.",
+        "adam_since is stamped via set_adam_flag; with the flag OFF the register path is byte-identical to today."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Idempotent Adam outbound-advisory drain + old->new re-target",
+      "description": "UPDATE scripts/adam-advisory.cjs to drain dead-lettered / in-flight OUTBOUND advisories on (re)register, MIRRORING the shipped coordinator broadcast-drain (lib/coordinator/resolve.cjs:233-238): re-target rows that point at the OLD Adam session_id (or the broadcast sentinel) to the NEW Adam session_id, with an idempotent consumed-marker so a re-run does not re-send (no loop) and does not duplicate. Flag-gated default-OFF.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "On (re)register, a stale outbound advisory targeting the OLD Adam session is re-targeted to the new session.",
+        "The drain is idempotent — re-running it consumes nothing new and produces no duplicate / no re-send loop.",
+        "With the flag OFF, no drain runs (byte-identical to today)."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "scripts/adam-restart.cjs (freshness -> regenerate -> re-register+guard -> canary)",
+      "description": "CREATE scripts/adam-restart.cjs orchestrating an Adam restart: (1) sync+freshness vs origin/main REUSING lib/governance/checkout-freshness.js (evaluateFreshness/checkoutFreshness); (2) regenerate the contract via generate-claude-md-from-db.js --only CLAUDE_ADAM.md; (3) re-register + run the single-Adam guard; (4) canary — a fresh Adam reads the regenerated contract, registers, and reaches the active coordinator (getActiveCoordinatorId + a round-trip advisory ack); (5) emit a structured PASS/FAIL JSON. Fail-soft on each advisory/optional step; the canary's coordinator round-trip is gated by COORDINATOR_TWOWAY_V2.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "adam-restart.cjs runs freshness -> regenerate CLAUDE_ADAM.md -> re-register+guard -> canary and emits a structured PASS/FAIL JSON.",
+        "The canary verifies the fresh Adam reaches the active coordinator (getActiveCoordinatorId + round-trip ack).",
+        "Each step fails soft with a clear status; a missing optional capability degrades to a recorded WARN, not a crash."
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Cross-link, flag-gating, and regression tests",
+      "description": "Cross-link .claude/commands/adam.md to the shared .claude/commands/role-session-handoff.md (the doc from sibling A). Gate all new write-path behavior behind a flag default-OFF (mirror COORDINATOR_TWOWAY_V2). A hermetic vitest suite covers FR-1 election/detector, the FR-3 guard (refuse-vs-clear), and the FR-4 drain idempotency; the existing adam-register / adam-advisory suites stay green (zero regression).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "adam.md links to role-session-handoff.md.",
+        "A documented flag gates all new write-path behavior default-OFF; flag-OFF is byte-identical.",
+        "New hermetic tests are green and the existing adam suites pass unchanged."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Mirror sibling A, don't reinvent", "description": "REUSE the coordinator election (resolve.cjs:62-164) as the template for the Adam election; CLONE the atomic-coordinator-flag migration for the Adam RPCs; MIRROR the broadcast-drain (resolve.cjs:233-238) for the outbound drain; REUSE checkout-freshness.js + generate-claude-md-from-db.js --only + getActiveCoordinatorId for adam-restart." },
+    { "id": "TR-2", "title": "Atomic JSONB only — never JS RMW", "description": "Adam identity writes go through set_adam_flag/clear_adam_flag (jsonb ||/-) — never a JS read-modify-write of claude_sessions.metadata (the FIX-CREATE-REPLACE / atomic-coordinator-flag lost-update class)." },
+    { "id": "TR-3", "title": "Flag-gated default-OFF + chairman-gated migration", "description": "All new write-path behavior is behind a flag default-OFF (mirror COORDINATOR_TWOWAY_V2); the migration is chairman-gated. Flag-OFF + migration-unapplied => byte-identical to today; the JS writer fail-softs when the RPC is absent." },
+    { "id": "TR-4", "title": "Fail-open detection / fail-soft restart; CJS", "description": "Election/detector helpers fail open (never throw to callers); adam-restart fails soft per-step. New modules are CJS (.cjs) consistent with the existing coordinator/adam machinery (repo is type:module)." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "pickCanonicalAdam ordering (adam_since DESC, session_id ASC)", "type": "unit", "expected": "deterministic single canonical session_id" },
+    { "id": "TS-2", "scenario": "detectMultipleAdams self-counts fresh role=adam > 1", "type": "unit", "expected": "structured multi-Adam verdict" },
+    { "id": "TS-3", "scenario": "single-Adam guard: fresh prior", "type": "unit", "expected": "new register REFUSES (fresh prior not cleared)" },
+    { "id": "TS-4", "scenario": "single-Adam guard: stale prior", "type": "unit", "expected": "stale prior retired; new Adam is sole holder" },
+    { "id": "TS-5", "scenario": "outbound drain idempotency + re-target", "type": "unit", "expected": "old-session advisory re-targeted; re-run is a no-op" },
+    { "id": "TS-6", "scenario": "flag OFF => byte-identical register/advisory", "type": "unit", "expected": "no guard/drain runs; existing behavior unchanged" }
+  ],
+  "acceptance_criteria": [
+    "Adam is a single-holder role-session: a 2nd fresh Adam is refused, a stale prior is retired, via atomic jsonb RPCs (no JS RMW).",
+    "Adam comms survive a restart: outbound advisories are drained + re-targeted old->new idempotently (no loop/dup).",
+    "adam-restart.cjs regenerates CLAUDE_ADAM.md and a canary confirms the fresh Adam reaches the coordinator, emitting structured PASS/FAIL JSON.",
+    "Flag-OFF + migration-unapplied is byte-identical; existing adam suites green (zero regression)."
+  ],
+  "risks": [
+    { "risk": "Clearing a legitimately-restarting Adam mid-canary (transient 2-Adam window).", "mitigation": "The guard PREFERS refuse-new-on-fresh-prior; only a STALE prior is cleared.", "severity": "high" },
+    { "risk": "JS read-modify-write of Adam metadata reintroduces the lost-update race.", "mitigation": "Atomic set_adam_flag/clear_adam_flag jsonb RPC; never a whole-object write.", "severity": "high" },
+    { "risk": "Outbound drain re-send loop / double-consume.", "mitigation": "Idempotent consumed-marker (mirror coordinator broadcast-drain); re-run is a no-op.", "severity": "medium" },
+    { "risk": "New machinery changing live Adam behavior before ready.", "mitigation": "Flag-gated default-OFF + chairman-gated migration; flag-OFF byte-identical; existing tests green.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/adam-register.cjs", "scripts/adam-advisory.cjs", "scripts/adam-restart.cjs (new)", ".claude/commands/adam.md", "the coordinator (canary round-trip via getActiveCoordinatorId)"],
+    "dependencies": ["lib/coordinator/resolve.cjs (election template + broadcast-drain mirror + getActiveCoordinatorId)", "lib/coordinator/detectors.cjs (host for the new detector)", "database/migrations/20260614_role_handoff_atomic_coordinator_flag.sql (clone source)", "lib/governance/checkout-freshness.js", "scripts/generate-claude-md-from-db.js (--only CLAUDE_ADAM.md)", ".claude/commands/role-session-handoff.md"],
+    "data_contracts": ["claude_sessions.metadata.role='adam' + metadata.adam_since (new key, JSONB, no column change)", "RPC set_adam_flag(p_session_id text) / clear_adam_flag(p_session_id text)", "session_coordination outbound advisory re-target (existing columns)"],
+    "runtime_config": ["a new flag default-OFF gating the write-path (mirror COORDINATOR_TWOWAY_V2); the migration activates persistence when the chairman applies it"],
+    "observability_rollout": ["the new hermetic adam-singleton suite + unchanged existing adam suites", "adam-restart.cjs structured PASS/FAIL JSON", "the 5 smoke_test_steps", "detectMultipleAdams surfaced via the coordinator audit"]
+  },
+  "system_architecture": {
+    "summary": "An Adam-role mirror of the shipped coordinator singleton machinery: election + detector + atomic identity RPCs + register guard (refuse-new-on-fresh-prior) + idempotent outbound drain + a restart orchestrator, all flag-gated default-OFF.",
+    "components": [
+      { "name": "lib/coordinator/detectors.cjs", "change": "UPDATE — add pickCanonicalAdam/electAdamFromDb/getActiveAdamId/detectMultipleAdams (mirror resolve.cjs election)" },
+      { "name": "database/migrations/<date>_role_handoff_atomic_adam_flag.sql", "change": "NEW — chairman-gated set_adam_flag/clear_adam_flag (clone of the coordinator-flag migration) + _DOWN" },
+      { "name": "scripts/adam-register.cjs", "change": "UPDATE — set_adam_flag RPC + adam_since + single-Adam guard (refuse-new-on-fresh-prior)" },
+      { "name": "scripts/adam-advisory.cjs", "change": "UPDATE — idempotent outbound dead-letter/in-flight drain + old->new re-target" },
+      { "name": "scripts/adam-restart.cjs", "change": "NEW — freshness -> regenerate CLAUDE_ADAM.md -> re-register+guard -> canary -> JSON" },
+      { "name": ".claude/commands/adam.md", "change": "UPDATE — cross-link to role-session-handoff.md" },
+      { "name": "tests/unit/coordination/adam-singleton.test.js", "change": "NEW — hermetic election/guard/drain suite" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Mirror sibling A block-by-block for the Adam role, gate default-OFF, and lock with hermetic tests + the unchanged existing suites.",
+    "steps": [
+      "Read the mirror sources (resolve.cjs:62-164 election + :233-238 drain, the coordinator-flag migration, detectors.cjs detectSplitBrain) to ground exact shapes.",
+      "Add the Adam election + detectMultipleAdams to detectors.cjs + the hermetic suite.",
+      "Clone the atomic-flag migration for set_adam_flag/clear_adam_flag (chairman-gated, in-migration verify, _DOWN).",
+      "Update adam-register.cjs: RPC + adam_since + single-Adam guard (refuse-new-on-fresh-prior), flag-gated.",
+      "Update adam-advisory.cjs: idempotent outbound drain + old->new re-target, flag-gated.",
+      "Create adam-restart.cjs (freshness -> regenerate -> re-register+guard -> canary -> JSON); cross-link adam.md.",
+      "Run the new suite + the existing adam suites; adversarial Agent review (atomic-jsonb, guard refuse-vs-clear, drain idempotency, fail-open, flag-OFF byte-identical)."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the Adam-singleton unit tests: npx vitest run tests/unit/coordination/adam-singleton.test.js", "expected_outcome": "Green. pickCanonicalAdam orders by adam_since DESC then session_id ASC; detectMultipleAdams flags >1 fresh role=adam; the guard REFUSES a 2nd Adam on a FRESH prior and retires only a STALE prior; helpers fail-open." },
+    { "step_number": 2, "instruction": "Inspect database/migrations/<date>_role_handoff_atomic_adam_flag.sql (chairman-gated, NOT applied)", "expected_outcome": "set_adam_flag stamps role+adam_since via jsonb || preserving siblings; clear_adam_flag drops them via jsonb -; create-if-absent works; in-migration DO $verify$ present; NO @approved-by." },
+    { "step_number": 3, "instruction": "With the flag ON: register a 2nd Adam against a STALE prior, then against a FRESH prior", "expected_outcome": "Stale-prior: prior retired, single holder. Fresh-prior: new register REFUSES (no mid-canary kill). Flag OFF: byte-identical to today." },
+    { "step_number": 4, "instruction": "Re-register an Adam and run the outbound drain", "expected_outcome": "A stale/old-session outbound advisory is re-targeted to the new Adam session and consumed once; re-run is a no-op (no dup/loop)." },
+    { "step_number": 5, "instruction": "Run node scripts/adam-restart.cjs", "expected_outcome": "Structured PASS/FAIL JSON after freshness -> regenerate CLAUDE_ADAM.md -> re-register+guard -> canary; canary reaches the active coordinator." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-ROLE-SESSION-HANDOFF-PROTOCOL-001-C"
+  }
+}
