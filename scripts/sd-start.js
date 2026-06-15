@@ -64,6 +64,9 @@ import { validateTargetApplication, formatCrosscheckResult } from './modules/sd-
 import { shouldShowVenturePipelinePointer, VENTURE_PIPELINE_POINTER } from '../lib/leo/venture-pipeline-pointer.js';
 // SD-FDBK-INFRA-DEPENDENCY-BLOCKS-ADVISORY-001: enforce declared dependencies at claim time.
 import { evaluateDependencyGate, formatDependencyRefusal } from '../lib/sd-start/dependency-gate.mjs';
+// SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-3): claim-time fitness fail-fast (repo-match + premise +
+// preconditions). CJS module imported as default (Node CJS interop) for its named export.
+import sdFit from '../lib/fleet/sd-executable-here.cjs';
 
 dotenv.config();
 
@@ -1375,6 +1378,32 @@ async function main() {
   } catch (ccErr) {
     // Non-blocking — cross-check is defense-in-depth
     console.log(`${colors.dim}[crosscheck] skipped: ${ccErr.message}${colors.reset}`);
+  }
+
+  // 4.45. SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-3): claim-time fitness fail-fast. Refuse to HOLD a
+  // claim for an SD that is unfit for THIS checkout — a repo mismatch (SD targets a different app),
+  // a closed premise (terminal/superseded/released), or a missing input-data precondition — and
+  // release it back to the queue. Mirrors the target-application crosscheck BLOCK + release_sd path
+  // above. FAIL-OPEN: isSdExecutableHere only returns fit:false on a POSITIVELY-determined unfit
+  // condition, so an indeterminate signal (e.g. no target_application) never blocks a start.
+  try {
+    const fitVerdict = sdFit.isSdExecutableHere(
+      { sd_key: sd.sd_key, target_application: sd.target_application, status: sd.status, metadata: sd.metadata },
+      { cwd: process.cwd() }
+    );
+    if (fitVerdict && fitVerdict.fit === false) {
+      console.error(`\n${colors.red}   ❌ UNFIT(${fitVerdict.blockClass}): ${(fitVerdict.reasons || []).join('; ')}${colors.reset}`);
+      console.error(`${colors.dim}   Refusing to hold this claim from the current checkout; releasing ${effectiveId}.${colors.reset}`);
+      console.error(`${colors.dim}   Route it: node scripts/worker-signal.cjs unfit "${fitVerdict.blockClass}: ${sd.sd_key}"${colors.reset}`);
+      await supabase.rpc('release_sd', {
+        p_session_id: session.session_id,
+        p_reason: 'manual'
+      }).catch(() => {});
+      process.exit(1);
+    }
+  } catch (fitErr) {
+    // Non-blocking — fitness fail-fast is defense-in-depth and must fail open.
+    console.log(`${colors.dim}[fitness] skipped (fail-open): ${fitErr.message}${colors.reset}`);
   }
 
   // 4.5. Resolve worktree (creates if needed in claim mode)

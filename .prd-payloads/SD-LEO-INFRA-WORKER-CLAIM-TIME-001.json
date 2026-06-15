@@ -1,0 +1,141 @@
+{
+  "executive_summary": "Eliminate the recurring 'unfit assignment' churn where a fleet worker claims an SD then discovers mid-flight it cannot execute in its context (live: worker Alpha hit 4 consecutive unfit assignments — an already-released SD, a repo mismatch where the SD targeted the EHG app while the worktree was EHG_Engineer, and a run-SD whose input data file was absent). A LEAD VALIDATION pass (row dcd2e090) confirmed this is a COMPOSE/WIRE effort, not greenfield: every building block has an existing primitive (lib/repo-paths.js, lib/fleet/claim-eligibility.cjs classifyDispatchIneligibility, claimable-work.cjs TERMINAL_STATUSES, lib/eva create buildChildSD), but none decides 'is this SD executable HERE/NOW' before a worker commits. This PRD delivers a single reusable, FAIL-OPEN predicate isSdExecutableHere(sd,ctx) composed from those primitives, wired into the shared claim/rank seam and into sd-start fail-fast, plus a typed 'unfit' signal and a propose-only partial-block triage. Verified by a hermetic predicate suite + the unchanged existing claim-eligibility suite (zero regression).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "isSdExecutableHere(sd, ctx) fitness predicate (new pure module, FAIL-OPEN)",
+      "description": "A new pure, injectable module (lib/fleet/sd-executable-here.cjs) exporting isSdExecutableHere(sd, ctx) -> { fit:boolean, blockClass:'repo_mismatch'|'missing_precondition'|'premise_closed'|null, reasons:string[] }. It COMPOSES existing primitives, never reimplements them: (a) repo-match via lib/repo-paths.js canonicalization comparing the SD's target_application / metadata.target_application_explicit to ctx's current checkout repo; (b) preconditions-met by checking declared input-data preconditions (e.g. a required ledger/file) against the checkout; (c) premise-open by REUSING claimable-work.cjs TERMINAL_STATUSES (+ released/superseded). CRITICAL invariant: it FAILS OPEN — any internal error, indeterminate signal, OR absent/ambiguous target_application yields fit:true (a fitness bug must NEVER block all claims). Only a POSITIVELY-determined unfit condition returns fit:false.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Returns {fit:true} for an SD targeting the current repo with met preconditions and an open premise.",
+        "Returns {fit:false, blockClass:'repo_mismatch'} when target_application resolves to a different repo than the current checkout (via repo-paths canonicalization).",
+        "Returns {fit:false, blockClass:'missing_precondition'} when a declared input precondition is unmet, and {fit:false, blockClass:'premise_closed'} for a TERMINAL_STATUSES / released / superseded SD.",
+        "FAILS OPEN: an internal throw, an indeterminate signal, or an absent/ambiguous target_application all yield {fit:true} (never blocks).",
+        "Pure + injectable (repo resolver, supabase, fs probes passed in) — unit-tested with no live DB."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Wire fitness into the shared claim-eligibility seam (no parallel filter)",
+      "description": "EXTEND lib/fleet/claim-eligibility.cjs classifyDispatchIneligibility (the single shared pull+push predicate used by worker-checkin self_claim AND the coordinator sweep) to consult isSdExecutableHere and add the fitness axes as new ineligibility reasons — additively, behind the existing contract, NOT a parallel filter. Unfit SDs become claim-ineligible so they never rank/surface; clear metadata.dispatch_rank for an SD that becomes unfit (mirroring scripts/coordinator-backlog-rank.mjs's rank write/clear). Existing eligibility axes (orchestrator-parent, test-fixture, requires_human_action, deps, in-flight dedup) are unchanged.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "classifyDispatchIneligibility returns an ineligible verdict (with a fitness reason + blockClass) for an unfit SD.",
+        "dispatch_rank is cleared for an SD that is classified unfit.",
+        "The existing claim-eligibility test suite stays green (zero regression in existing axes)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "sd-start fail-fast before claiming",
+      "description": "Add an isSdExecutableHere check in scripts/sd-start.js that runs BEFORE the claim is committed and aborts fast on a positively-unfit verdict, mirroring the existing target-application crosscheck-BLOCK + release_sd pattern already in sd-start (~lines 1359-1373). The message names the blockClass (e.g. UNFIT(repo_mismatch)) and the SD is left unclaimed. Fail-open: an indeterminate verdict does NOT block start.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "sd-start aborts with a clear UNFIT(<blockClass>) message and leaves the SD unclaimed when the verdict is positively unfit.",
+        "An indeterminate/fail-open verdict allows start to proceed (no false block).",
+        "The abort path reuses the existing crosscheck-BLOCK + release_sd mechanism (no new claim-mutation path)."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Typed 'unfit' worker signal + router recognition",
+      "description": "Add 'unfit' to scripts/worker-signal.cjs SIGNAL_TYPES and emit a STRUCTURED payload (block class, repo, missing precondition, sd_key) instead of a free-text release, so the coordinator can route it systematically. Recognize the new type in lib/coordinator/signal-router.cjs (routed, not dropped, not mishandled as generic friction). Preserves the existing signal-lane invariants.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "worker-signal.cjs accepts type 'unfit' and writes a row with payload.signal_type='unfit' + a structured payload.",
+        "signal-router.cjs recognizes signal_type='unfit' and routes it (a unit/contract test asserts recognition).",
+        "Existing signal types and lane separation are unchanged."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Propose-only partial-block triage (reuse decomposition)",
+      "description": "On a PARTIAL block (a code-buildable SD whose RUN is blocked — e.g. missing input data), provide a triage helper that PROPOSES a decomposition (buildable code child + blocked run child) by REUSING lib/eva/create-orchestrator-from-plan.js buildChildSD, behind a PROPOSE-ONLY / dry-run-default boundary — it prints/returns the proposed split and emits the FR-4 unfit signal; it never creates or executes children without explicit coordinator/chairman action.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "The triage helper returns/prints a proposed {code_child, run_child} split for a partial-block SD using buildChildSD shapes.",
+        "Dry-run-default: with no explicit execute flag it creates/executes NOTHING (propose-not-execute boundary verified).",
+        "It emits the typed unfit signal describing the partial block."
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Regression tests + zero-regression guarantee",
+      "description": "A hermetic vitest suite (tests/unit/fleet/sd-executable-here.test.js) covering FR-1 (fit, each unfit class, fail-open) and FR-2's extension behavior with injected stubs; plus a contract test for the FR-4 unfit signal recognition. The existing claim-eligibility suite must remain green to prove no regression in the shared seam.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "sd-executable-here.test.js is hermetic (no live DB / injected resolver+probes) and green.",
+        "A test exercises the fail-open path (internal error => fit:true).",
+        "The pre-existing claim-eligibility test suite passes unchanged."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Compose, don't duplicate", "description": "REUSE lib/repo-paths.js, lib/fleet/claim-eligibility.cjs classifyDispatchIneligibility, claimable-work.cjs TERMINAL_STATUSES, lib/eva buildChildSD. No reimplementation of repo resolution, eligibility, terminal-status, or decomposition logic." },
+    { "id": "TR-2", "title": "Fail-open safety", "description": "isSdExecutableHere and every call site default to fit/allow on error or indeterminacy. A fitness defect must degrade to today's behavior (claim allowed), never a fleet-wide claim stall." },
+    { "id": "TR-3", "title": "Additive, CJS, no schema change", "description": "New lib is .cjs (repo is type:module). No new table/column — uses existing strategic_directives_v2 fields (target_application, status, metadata) + session_coordination for the signal. Pure functions injectable for tests." },
+    { "id": "TR-4", "title": "Propose-not-execute", "description": "The triage layer is dry-run-default; it never auto-creates/executes child SDs without explicit action." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "fit SD (repo match, preconditions met, premise open)", "type": "unit", "expected": "{fit:true, blockClass:null}" },
+    { "id": "TS-2", "scenario": "repo mismatch (target != checkout)", "type": "unit", "expected": "{fit:false, blockClass:'repo_mismatch'}" },
+    { "id": "TS-3", "scenario": "missing input precondition", "type": "unit", "expected": "{fit:false, blockClass:'missing_precondition'}" },
+    { "id": "TS-4", "scenario": "terminal/released/superseded premise", "type": "unit", "expected": "{fit:false, blockClass:'premise_closed'} reusing TERMINAL_STATUSES" },
+    { "id": "TS-5", "scenario": "internal error / absent target / indeterminate", "type": "unit", "expected": "FAILS OPEN => {fit:true}" },
+    { "id": "TS-6", "scenario": "claim-eligibility extension marks unfit ineligible + clears dispatch_rank", "type": "unit", "expected": "ineligible verdict with fitness reason; existing axes unchanged" },
+    { "id": "TS-7", "scenario": "unfit signal recognized by router", "type": "unit", "expected": "signal_type='unfit' routed, not dropped" }
+  ],
+  "acceptance_criteria": [
+    "A repo-mismatch / missing-precondition / premise-closed SD is classified UNFIT before claim and does not rank/surface; sd-start fails fast and leaves it unclaimed.",
+    "The fitness predicate is a single reusable, fail-open module composed from existing primitives, wired into the shared claim-eligibility seam (no parallel filter).",
+    "A partial block produces a typed 'unfit' signal + a propose-only decomposition; nothing is auto-created.",
+    "Zero regression: existing claim-eligibility + signal behavior unchanged; new hermetic suite green."
+  ],
+  "risks": [
+    { "risk": "A fitness bug blocks ALL claims (fleet-wide stall).", "mitigation": "FAIL OPEN everywhere — error/indeterminate/absent-target => fit:true; only positive-unfit blocks; fail-open unit-tested.", "severity": "high" },
+    { "risk": "Repo-match false-positive on harness SDs with no explicit target.", "mitigation": "Absent/ambiguous target => fit; only a POSITIVE target-vs-checkout mismatch is unfit; reuse repo-paths canonicalization.", "severity": "medium" },
+    { "risk": "Extending the shared claim-eligibility seam regresses dispatch.", "mitigation": "Additive new reasons behind the existing contract; keep the existing suite green.", "severity": "medium" },
+    { "risk": "Auto-decomposition creates unwanted children.", "mitigation": "Propose-only / dry-run-default; never create/execute without explicit action.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/worker-checkin.cjs (self_claim)", "the coordinator deconfliction/dispatch sweep", "scripts/sd-start.js", "scripts/coordinator-backlog-rank.mjs"],
+    "dependencies": ["lib/repo-paths.js", "lib/fleet/claim-eligibility.cjs", "scripts/claimable-work.cjs TERMINAL_STATUSES", "lib/eva/create-orchestrator-from-plan.js buildChildSD", "scripts/worker-signal.cjs", "lib/coordinator/signal-router.cjs"],
+    "data_contracts": ["strategic_directives_v2.target_application / metadata.target_application_explicit / status / metadata.dispatch_rank (read/clear)", "session_coordination payload.signal_type='unfit' + structured payload (new value, no schema change)"],
+    "runtime_config": ["none (no new env var/flag); dry-run-default for triage"],
+    "observability_rollout": ["tests/unit/fleet/sd-executable-here.test.js", "the unchanged claim-eligibility suite", "the 5 smoke_test_steps", "live: an unfit SD no longer surfaces for claim + a typed unfit signal in the coordinator inbox"]
+  },
+  "system_architecture": {
+    "summary": "One fail-open fitness predicate composed from existing repo/eligibility/terminal-status primitives, wired into the shared claim seam + sd-start, with a typed unfit signal and a propose-only triage.",
+    "components": [
+      { "name": "lib/fleet/sd-executable-here.cjs", "change": "NEW — isSdExecutableHere(sd,ctx) fail-open predicate (composes repo-paths + claim-eligibility + TERMINAL_STATUSES)" },
+      { "name": "lib/fleet/claim-eligibility.cjs", "change": "UPDATE — classifyDispatchIneligibility consults fitness + clears dispatch_rank for unfit" },
+      { "name": "scripts/sd-start.js", "change": "UPDATE — fail-fast unfit check before claim (mirror crosscheck-BLOCK pattern)" },
+      { "name": "scripts/worker-signal.cjs", "change": "UPDATE — add 'unfit' SIGNAL_TYPE + structured payload" },
+      { "name": "lib/coordinator/signal-router.cjs", "change": "UPDATE — recognize/route signal_type='unfit'" },
+      { "name": "lib/fleet/unfit-triage.cjs", "change": "NEW — propose-only partial-block decomposition (reuses buildChildSD)" },
+      { "name": "tests/unit/fleet/sd-executable-here.test.js", "change": "NEW — hermetic regression suite" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the fail-open predicate first, wire it into the shared seam + sd-start, add the typed signal + propose-only triage, lock with hermetic tests + the unchanged existing suite.",
+    "steps": [
+      "Read the existing primitives (repo-paths canonicalization, claim-eligibility classifyDispatchIneligibility, claimable-work TERMINAL_STATUSES, sd-start crosscheck-BLOCK ~1359-1373, worker-signal SIGNAL_TYPES, signal-router) to ground exact signatures.",
+      "Write lib/fleet/sd-executable-here.cjs (compose, fail-open) + its hermetic test suite.",
+      "Extend claim-eligibility.cjs classifyDispatchIneligibility additively + clear dispatch_rank for unfit; keep the existing suite green.",
+      "Add the sd-start fail-fast call mirroring the crosscheck-BLOCK + release_sd path.",
+      "Add 'unfit' to worker-signal SIGNAL_TYPES + structured payload + signal-router recognition.",
+      "Add lib/fleet/unfit-triage.cjs propose-only decomposition (reuse buildChildSD).",
+      "Run the new suite + the existing claim-eligibility suite; adversarial review (fail-open, repo false-positives, regression)."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the fitness unit tests: npx vitest run tests/unit/fleet/sd-executable-here.test.js", "expected_outcome": "Green. fit SD => {fit:true}; repo-mismatch/missing-precondition/premise-closed => {fit:false, blockClass:...}; internal error => fail-open {fit:true}." },
+    { "step_number": 2, "instruction": "Attempt to start an SD targeting the OTHER app from this EHG_Engineer checkout: node scripts/sd-start.js <other-app-SD>", "expected_outcome": "Fails fast with UNFIT(repo_mismatch) and does NOT claim (mirrors the crosscheck-BLOCK + release_sd path)." },
+    { "step_number": 3, "instruction": "Run the self-claim / backlog-rank path with an unfit SD present", "expected_outcome": "The unfit SD does not rank/surface (dispatch_rank cleared via classifyDispatchIneligibility); fit SDs still rank." },
+    { "step_number": 4, "instruction": "Emit a typed unfit signal: node scripts/worker-signal.cjs unfit \"repo mismatch: SD targets ehg, worktree is EHG_Engineer\" --severity medium", "expected_outcome": "Row written with payload.signal_type=unfit + structured payload; signal-router recognizes the type (not dropped)." },
+    { "step_number": 5, "instruction": "Trigger the partial-block triage in propose-only mode against a code+run SD", "expected_outcome": "Proposes a {code_child, blocked run_child} split via buildChildSD WITHOUT creating/executing anything (propose-not-execute)." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-WORKER-CLAIM-TIME-001"
+  }
+}

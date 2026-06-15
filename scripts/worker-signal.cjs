@@ -20,7 +20,12 @@ const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { getActiveCoordinatorId, isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 
-const SIGNAL_TYPES = ['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-conflict', 'harness-bug', 'feedback', 'other'];
+// SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-4): 'unfit' — a worker reporting an assignment it cannot
+// execute HERE/NOW (repo mismatch / closed premise / missing input precondition). Replaces the
+// free-text release so the coordinator can route systematically; carries a structured payload
+// (block_class via --block-class, plus the standard sd_key + repo). The signal-router is
+// signal_type-agnostic, so aggregation/promotion works without router changes.
+const SIGNAL_TYPES = ['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-conflict', 'harness-bug', 'feedback', 'unfit', 'other'];
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
 const BODY_HARD_CAP = 4096;
 
@@ -471,6 +476,11 @@ async function main() {
   } catch { /* best-effort */ }
 
   const subject = `[WORKER_SIGNAL:${type.toUpperCase()}] ${body.slice(0, 80)}`;
+  // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-4): an 'unfit' signal carries a structured block_class
+  // (repo_mismatch | premise_closed | missing_precondition) so the coordinator routes it
+  // systematically instead of parsing free text. --block-class is accepted for any type but is the
+  // intended companion of `unfit`.
+  const blockClass = flags['block-class'] ? redact(String(flags['block-class'])).slice(0, 80) : null;
   const payload = {
     signal_type: type,
     body,
@@ -478,7 +488,8 @@ async function main() {
     sender_callsign: senderCallsign,
     sd_key: claimedSdKey,
     repo: process.cwd(),
-    ...(subtype ? { subtype } : {})
+    ...(subtype ? { subtype } : {}),
+    ...(blockClass ? { block_class: blockClass } : {})
   };
 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
