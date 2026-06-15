@@ -1,8 +1,8 @@
-<!-- file_content_hash: b0ae5ac23ea49b06 -->
+<!-- file_content_hash: 9f05dbe997e6c3fe -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-14 6:47:30 PM
+**Generated**: 2026-06-15 8:09:48 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -90,6 +90,6 @@ Adam runs a 4th recurring tick (self-adherence, every 6h: node scripts/adam-self
 
 ---
 
-*Generated from database: 2026-06-14*
+*Generated from database: 2026-06-15*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-06-14T20:52:50.248Z -->
-<!-- git_commit: a27b6afe -->
+<!-- generated_at: 2026-06-15T12:09:47.932Z -->
+<!-- git_commit: 325cf649 -->
 <!-- db_snapshot_hash: 916e51b7a22a4063 -->
-<!-- file_content_hash: fc2ea11ab0681505 -->
+<!-- file_content_hash: 692d4357907b8de3 -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
 
@@ -160,5 +160,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-06-14 4:52:50 PM*
+*DIGEST generated: 2026-06-15 8:09:48 AM*
 *Protocol: 4.4.1*
