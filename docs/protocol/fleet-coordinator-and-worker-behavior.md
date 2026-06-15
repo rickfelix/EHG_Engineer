@@ -58,6 +58,15 @@ recall but is NOT the source of truth.)
    (b) **harness backlog** (`feedback` where `category='harness_backlog'`, open), (c) inbox. Source
    backlog → DRAFT SDs ONLY when the queue would starve available workers; when the queue already has
    surplus (more unclaimed SDs than builders) it's **worker-bound** → wake workers, don't flood it.
+   **Canonical sourcing command (file-free, DB-direct — SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001):**
+   an operator-attached session (Adam or coordinator) running on `main` with no claim is hard-blocked
+   by the worktree-hygiene Write guard, so materialize a DRAFT SD from a proposal WITHOUT writing a
+   payload file and WITHOUT a throwaway worktree:
+   `node scripts/leo-create-sd.js --proposal-b64 "$(node -e "process.stdout.write(Buffer.from(JSON.stringify(PROPOSAL_OBJ)).toString('base64'))")"`
+   (or pipe the JSON: `… | node scripts/leo-create-sd.js --proposal-stdin`). Both flow through the same
+   validate → idempotency → create core as `--from-proposal` (add `--dry-run` to validate without
+   writing). Base64-on-the-wire is preferred — it is immune to the Bash single-quote mangling that
+   defeats inline JSON. Do **not** Write-then-`--from-proposal` and do **not** spin a worktree just to source.
 4. **Background monitoring during operator conversations.** Run the cron ticks but respond minimally;
    surface ONLY important events (stuck/struggling worker, empty-queue+idle, claim/worktree conflict,
    a worker question, a completion). Keep one coherent conversation; don't dump a dashboard every tick.

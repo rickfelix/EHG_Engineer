@@ -14,6 +14,9 @@ import {
   validateProposalShape,
   mapProposalToCreateArgs,
   createFromProposal,
+  ingestProposalObject,
+  createFromProposalB64,
+  createFromProposalStdin,
 } from '../../scripts/leo-create-sd.js';
 
 function validProposal(overrides = {}) {
@@ -202,5 +205,112 @@ describe('createFromProposal (dry-run + idempotency, injected deps, zero DB/FS)'
     const res = await createFromProposal('.prd-payloads/PROPOSAL-*.json', { dryRun: true, deps });
     expect(res).toHaveLength(2);
     expect(res.every(r => r.action === 'dry-run')).toBe(true);
+  });
+});
+
+// SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001: file-free DB-direct ingest. The shared
+// core (ingestProposalObject) plus the two file-free routes (--proposal-b64 / --proposal-stdin)
+// must flow through the SAME validate -> keyExists -> map -> createSD path as the file route.
+describe('ingestProposalObject (shared core — SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001)', () => {
+  let logSpy;
+  beforeEach(() => { logSpy = vi.spyOn(console, 'log').mockImplementation(() => {}); });
+  afterEach(() => { logSpy.mockRestore(); });
+
+  it('create path → {sdKey, file: source, action: created}, createSD called once with verbatim key', async () => {
+    const deps = { keyExists: vi.fn(async () => false), createSD: vi.fn(async () => ({ id: 'x' })) };
+    const res = await ingestProposalObject(validProposal(), '<unit>', { deps });
+    expect(res).toEqual({ sdKey: 'SD-LEO-INFRA-EXAMPLE-001', file: '<unit>', action: 'created' });
+    expect(deps.createSD).toHaveBeenCalledTimes(1);
+    expect(deps.createSD.mock.calls[0][0].sdKey).toBe('SD-LEO-INFRA-EXAMPLE-001');
+  });
+
+  it('dry-run → action=dry-run, createSD never called; existing key → action=skipped', async () => {
+    const dryDeps = { keyExists: vi.fn(async () => false), createSD: vi.fn() };
+    expect((await ingestProposalObject(validProposal(), '<unit>', { dryRun: true, deps: dryDeps })).action).toBe('dry-run');
+    expect(dryDeps.createSD).not.toHaveBeenCalled();
+
+    const existDeps = { keyExists: vi.fn(async () => true), createSD: vi.fn() };
+    expect((await ingestProposalObject(validProposal(), '<unit>', { deps: existDeps })).action).toBe('skipped');
+    expect(existDeps.createSD).not.toHaveBeenCalled();
+  });
+});
+
+describe('createFromProposalB64 / createFromProposalStdin (file-free routes)', () => {
+  let exitSpy, errorSpy, logSpy;
+  beforeEach(() => {
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => { throw new Error(`process.exit(${code})`); });
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => { exitSpy.mockRestore(); errorSpy.mockRestore(); logSpy.mockRestore(); });
+
+  const b64Of = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64');
+
+  // The core parity guarantee: sourcing via base64 produces the SAME createSD args as the
+  // file path for the SAME proposal — modulo the provenance label (proposal_file_path),
+  // which legitimately records WHERE the proposal came from.
+  it('b64 ingest produces createSD args identical (modulo provenance) to the file path', async () => {
+    const proposal = validProposal();
+
+    const fileDeps = { resolveFiles: () => ['fake.json'], readFile: () => JSON.stringify(proposal), keyExists: vi.fn(async () => false), createSD: vi.fn(async () => ({})) };
+    await createFromProposal('fake.json', { deps: fileDeps });
+    const fileArgs = fileDeps.createSD.mock.calls[0][0];
+
+    const b64Deps = { keyExists: vi.fn(async () => false), createSD: vi.fn(async () => ({})) };
+    await createFromProposalB64(b64Of(proposal), { deps: b64Deps });
+    const b64Args = b64Deps.createSD.mock.calls[0][0];
+
+    const strip = (a) => { const c = JSON.parse(JSON.stringify(a)); delete c.metadata.proposal_file_path; return c; };
+    expect(strip(b64Args)).toEqual(strip(fileArgs));
+    expect(b64Args.metadata.proposal_file_path).toBe('<proposal-b64>');
+    expect(fileArgs.metadata.proposal_file_path).toBe('fake.json');
+  });
+
+  it('--proposal-b64 --dry-run never calls createSD; result file=<proposal-b64>', async () => {
+    const deps = { keyExists: vi.fn(async () => false), createSD: vi.fn() };
+    const res = await createFromProposalB64(b64Of(validProposal()), { dryRun: true, deps });
+    expect(deps.createSD).not.toHaveBeenCalled();
+    expect(res).toEqual([{ sdKey: 'SD-LEO-INFRA-EXAMPLE-001', file: '<proposal-b64>', action: 'dry-run' }]);
+  });
+
+  it('--proposal-b64 idempotent: existing key skipped, createSD not called', async () => {
+    const deps = { keyExists: vi.fn(async () => true), createSD: vi.fn() };
+    const res = await createFromProposalB64(b64Of(validProposal()), { deps });
+    expect(deps.createSD).not.toHaveBeenCalled();
+    expect(res[0].action).toBe('skipped');
+  });
+
+  it('--proposal-b64 with non-JSON after decode → [INVALID_PROPOSAL] + exit 1', async () => {
+    const deps = { keyExists: vi.fn(async () => false), createSD: vi.fn() };
+    // base64-decodes to plain text → JSON.parse fails (the load-bearing validator)
+    await expect(createFromProposalB64(Buffer.from('this is not json').toString('base64'), { deps })).rejects.toThrow('process.exit(1)');
+    expect(deps.createSD).not.toHaveBeenCalled();
+    expect(errorSpy.mock.calls.map(c => c[0]).join('\n')).toContain('[INVALID_PROPOSAL]');
+  });
+
+  it('--proposal-b64 with empty/non-string arg → [INVALID_PROPOSAL] + exit 1', async () => {
+    await expect(createFromProposalB64('', {})).rejects.toThrow('process.exit(1)');
+    expect(errorSpy.mock.calls.map(c => c[0]).join('\n')).toContain('[INVALID_PROPOSAL]');
+  });
+
+  it('--proposal-stdin routes injected stdin JSON through the shared core (file=<proposal-stdin>)', async () => {
+    const deps = { readStdin: async () => JSON.stringify(validProposal()), keyExists: vi.fn(async () => false), createSD: vi.fn(async () => ({})) };
+    const res = await createFromProposalStdin({ deps });
+    expect(deps.createSD).toHaveBeenCalledTimes(1);
+    expect(deps.createSD.mock.calls[0][0].sdKey).toBe('SD-LEO-INFRA-EXAMPLE-001');
+    expect(res).toEqual([{ sdKey: 'SD-LEO-INFRA-EXAMPLE-001', file: '<proposal-stdin>', action: 'created' }]);
+  });
+
+  it('--proposal-stdin with empty stdin → [INVALID_PROPOSAL] + exit 1', async () => {
+    const deps = { readStdin: async () => '   ', createSD: vi.fn() };
+    await expect(createFromProposalStdin({ deps })).rejects.toThrow('process.exit(1)');
+    expect(deps.createSD).not.toHaveBeenCalled();
+    expect(errorSpy.mock.calls.map(c => c[0]).join('\n')).toContain('[INVALID_PROPOSAL]');
+  });
+
+  it('--proposal-stdin with invalid JSON → [INVALID_PROPOSAL] + exit 1', async () => {
+    const deps = { readStdin: async () => '{ not valid json', createSD: vi.fn() };
+    await expect(createFromProposalStdin({ deps })).rejects.toThrow('process.exit(1)');
+    expect(deps.createSD).not.toHaveBeenCalled();
   });
 });
