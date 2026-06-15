@@ -23,6 +23,8 @@ import { renderDecisionLines } from '../lib/chairman/decision-layman.mjs';
 // SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
 // static .adam-vision-build.json number.
 import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-registry.js';
+// SD-LEO-INFRA-WORKER-COUNT-PULSE-RESILIENCE-001: honest sparse-pulse worker-count source.
+import { resolveWorkerCount, SPARSE_THRESHOLD } from '../lib/fleet/worker-count-source.mjs';
 
 const EM = '—';
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -53,34 +55,43 @@ if (!DRY && !FORCE && nActions === 0) {
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// ── 1. WORKERS: hourly average of 15-min active pulses (rounded), fail-soft to live count ──
-let avgActive = null, avgIdle = 0, pulseSource = 'live';
-try {
-  const sinceHr = new Date(t - 60 * 60 * 1000).toISOString();
-  const { data: pulses, error } = await db.from('fleet_worker_pulse')
-    .select('active_count,total_count,idle_count').gte('captured_at', sinceHr);
-  if (!error && pulses && pulses.length) {
-    const sum = (f) => pulses.reduce((a, p) => a + (Number(f(p)) || 0), 0);
-    avgActive = Math.round(sum((p) => p.active_count) / pulses.length);
-    avgIdle = Math.round(sum((p) => (p.idle_count != null ? p.idle_count : (p.total_count - p.active_count))) / pulses.length);
-    pulseSource = 'hourly avg';
-  }
-} catch { /* table may not exist yet -> live fallback */ }
-if (avgActive === null) {
-  // Live instantaneous fallback — same genuine-worker predicate the fleet dashboard/coordinator use.
+// ── 1. WORKERS: hourly average of 15-min active pulses, HONEST under sparse/missing pulses ──
+// SD-LEO-INFRA-WORKER-COUNT-PULSE-RESILIENCE-001: a single stale pulse must never be presented
+// as a confident "hourly avg". resolveWorkerCount() decides the source: >= SPARSE_THRESHOLD pulses
+// in the 1h window => confident hourly avg; sparse => widen to a 3h window or prefer the live
+// instantaneous count, labeled honestly. Wider-window + live queries fire LAZILY (only when sparse).
+const WIDE_HOURS = parseInt(process.env.ADAM_WORKER_WIDE_HOURS || '3', 10);
+const fetchPulses = async (hours) => {
+  try {
+    const since = new Date(t - hours * 60 * 60 * 1000).toISOString();
+    const { data, error } = await db.from('fleet_worker_pulse')
+      .select('active_count,total_count,idle_count').gte('captured_at', since);
+    if (error) return [];
+    return data || [];
+  } catch { return []; } // table may not exist yet -> empty -> live fallback in the helper
+};
+// Live instantaneous count — same genuine-worker predicate the fleet dashboard/coordinator use.
+// Returns null on a query error so a failure NEVER masquerades as a real "0 active".
+const computeLive = async () => {
   try {
     const { data: sessRaw, error: sErr } = await db.from('claude_sessions')
       .select('session_id,heartbeat_at,sd_key,status,claimed_at,worktree_path,continuous_sds_completed,metadata')
       .order('heartbeat_at', { ascending: false }).limit(60);
-    if (sErr) throw sErr; // a query error must NOT masquerade as a real "0 active"
+    if (sErr) throw sErr;
     const live = liveFleetWorkers(sessRaw, me, t);
     const PROVISIONED_WINDOW = parseInt(process.env.COORD_PROVISIONED_WINDOW_MIN || '480', 10) * 60000;
     const recentSeen = (sessRaw || []).filter((s) => isFleetWorker(s, me) && s.heartbeat_at && (t - new Date(s.heartbeat_at).getTime()) < PROVISIONED_WINDOW);
-    avgActive = live.length;
-    avgIdle = Math.max(0, recentSeen.length - live.length);
-  } catch (e) { console.warn('[adam-email] worker count unavailable: ' + (e?.message || e)); avgActive = null; avgIdle = 0; pulseSource = 'unavailable'; }
-}
-const workerText = pulseSource === 'unavailable' ? 'count unavailable (will refresh next run)' : `${avgActive} active${avgIdle ? `, ${avgIdle} idle` : ''} (${pulseSource})`;
+    return { active: live.length, idle: Math.max(0, recentSeen.length - live.length) };
+  } catch (e) { console.warn('[adam-email] live worker count unavailable: ' + (e?.message || e)); return null; }
+};
+const primaryPulses = await fetchPulses(1);
+// Healthy primary window -> no extra queries. Sparse -> fetch the wider window + live, then decide.
+const sparse = primaryPulses.length < SPARSE_THRESHOLD;
+const widePulses = sparse ? await fetchPulses(WIDE_HOURS) : [];
+const live = sparse ? await computeLive() : null;
+const wc = resolveWorkerCount({ primaryPulses, widePulses, live, threshold: SPARSE_THRESHOLD, wideHours: WIDE_HOURS });
+const avgActive = wc.active, avgIdle = wc.idle, pulseSource = wc.source;
+const workerText = pulseSource === 'unavailable' ? 'count unavailable (will refresh next run)' : `${avgActive} active${avgIdle ? `, ${avgIdle} idle` : ''} (${wc.label})`;
 
 // ── 2. EHG VISION build-% gauge (LIVE VDR — SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 FR-4) ──
 // Replaces the static .adam-vision-build.json estimate with the auto-computed Vision Denominator
@@ -141,7 +152,8 @@ const copyBlock = nActions ? [LEAD_IN, '', ...numbered].join('\n') : null;
 // ── subject + bodies (no emojis) ──
 const when = new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
 const visSubj = visPct != null ? `EHG ${visPct}% built` : 'EHG vision n/a';
-const workerSubj = pulseSource === 'unavailable' ? 'workers n/a' : `${avgActive} active${pulseSource === 'hourly avg' ? ' (hr avg)' : ''}`;
+// '(hr avg)' tag only for a CONFIDENT (non-sparse) hourly average — keep the subject honest too.
+const workerSubj = pulseSource === 'unavailable' ? 'workers n/a' : `${avgActive} active${(pulseSource === 'hourly avg' && !wc.sparse) ? ' (hr avg)' : ''}`;
 const actionsSubj = nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'all clear';
 const subject = `[Chairman] ${visSubj} · ${workerSubj} · ${actionsSubj}`;
 
