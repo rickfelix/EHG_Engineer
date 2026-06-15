@@ -119,7 +119,9 @@ describe('FR-7: self-surfacing on startup (both sides)', () => {
   it('adam-register adamReplyMirror lists the consume-reply path', () => {
     const m = adamReplyMirror();
     expect(m).toContain('adam-advisory.cjs send');
-    expect(m).toContain('adam-advisory.cjs replies');
+    // SD-LEO-FIX-ADAM-INBOX-ALL-CLASSES-001: the mirror now points to the FULL-LANE `inbox` drain
+    // (SD-LEO-FIX-ADAM-INBOX-FULL-LANE-001 repointed replies->inbox); this assertion was left stale.
+    expect(m).toContain('adam-advisory.cjs inbox');
     expect(m).toContain('coordinator-adam-comms.md');
   });
 });
