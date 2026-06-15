@@ -97,7 +97,10 @@ describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', ()
     expect(g.available).toBe(true);
     expect(g.coherence.ok).toBe(true);
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
-    expect(g.unknown_count).toBe(5);
+    // +5 governance probes (SD-LEO-INFRA-V1-GOV-PROBES-001) are all unknown under this mock (no KR-GOV
+    // rows, no grep seam): unknown_count = 5 original code_grep + 5 governance = 10. denominator/overall
+    // UNCHANGED because unknowns are excluded from the denominator (honest gauge).
+    expect(g.unknown_count).toBe(10);
     expect(g.denominator).toBe(8); // +2: the capability-layer db_count probes (unbuilt at count 0)
     // (1 + 0.5 + 0.5 + 0 + 0 + 0 + 0 + 0) / 8 = 2.0/8 = 25%
     expect(g.overall_pct).toBe(25);
