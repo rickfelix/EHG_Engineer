@@ -59,6 +59,7 @@
     "test:loader:dry": "node dist/services/database-loader/index.js --dry-run",
     "venture:prove": "node scripts/venture-proving-companion.js",
     "test": "vitest run --project unit",
+    "resync:safe": "node scripts/safe-root-resync.mjs",
     "protocol:lint": "node scripts/protocol-lint/cli.mjs audit",
     "protocol:lint:test": "node scripts/protocol-lint/cli.mjs test",
     "protocol:lint:promote": "node scripts/protocol-lint/cli.mjs promote",
