@@ -33,6 +33,11 @@ import {
 } from '../lib/coordinator/charter-audit-detectors.mjs';
 // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: DUTY-7 silent-stall detector (drafts stranded with null vision_score).
 import { findStalledDrafts } from '../lib/coordinator/draft-stall-detector.mjs';
+// DUTY-3/8 worker-set fix: reuse the CANONICAL fleet-membership predicate (the same one coordinator-audit.mjs uses
+// via liveFleetWorkers) so the coordinator's OWN session + Adam (role=adam) / non_fleet / fixtures are never
+// miscounted as idle WORKERS. detectIdleWithWork only knows "no sd_key" → without this, the coordinator + Adam —
+// which legitimately never hold an SD claim — read as idle workers (a false DUTY-3 no WORK_ASSIGNMENT can clear).
+import { isDispatchableFleetMember } from '../lib/fleet/session-predicates.mjs';
 
 const require = createRequire(import.meta.url);
 const { isWithinArmedSilenceWindow } = require('../lib/fleet/silence-cap.cjs');
@@ -82,7 +87,7 @@ async function main() {
 
   // Defense-in-depth: exclude lifecycle-terminated sessions server-side (classifyLiveness also guards this).
   const { data: sessRows, error: sessErr } = await db.from('claude_sessions')
-    .select('session_id,terminal_id,heartbeat_at,sd_key,expected_silence_until,status')
+    .select('session_id,terminal_id,heartbeat_at,sd_key,expected_silence_until,status,metadata')
     .not('status', 'in', '(released,stale,ended)')
     .order('heartbeat_at', { ascending: false }).limit(80);
   const sessMarker = foundationalQueryError(sessErr, 'claude_sessions');
@@ -92,6 +97,14 @@ async function main() {
   // ── AUTHORITATIVE liveness (heartbeat | armed-silence | live PID) ──
   const isPidAlive = (s) => { const pid = resolveCcPidFromTerminalId(s.terminal_id, s.session_id); return pid != null && isProcessRunning(pid); };
   const live = sessions.filter((s) => classifyLiveness(s, { nowMs, staleThresholdMs: STALE_MS, isWithinArmedSilence: isWithinArmedSilenceWindow, isPidAlive }).alive);
+  // DUTY-3/8 operate on genuine WORKERS only: exclude the coordinator's own session + Adam + non_fleet + fixtures
+  // via the canonical predicate. detectIdleWithWork/detectProgressStall only check "no sd_key", so without this the
+  // coordinator and Adam (which never hold an SD claim) are counted as idle workers — a false DUTY-3 no
+  // WORK_ASSIGNMENT can ever clear. coordinatorId is resolved from the live set (is_coordinator), with an env
+  // fallback + a belt-and-suspenders is_coordinator filter in case the predicate's coordinatorId arg is unset.
+  const coordinatorId = (sessions.find((s) => s.metadata && s.metadata.is_coordinator === true) || {}).session_id
+    || process.env.CLAUDE_SESSION_ID || null;
+  const liveWorkers = live.filter((s) => !(s.metadata && s.metadata.is_coordinator === true) && isDispatchableFleetMember(s, coordinatorId));
 
   // pending WORK_ASSIGNMENTs (unread => still pending; read_at-stamped => drained by the sweep, NOT pending)
   let pendingAssignmentSessionIds = new Set();
@@ -144,7 +157,7 @@ async function main() {
   // ── run the pure detectors ──
   const D = {
     pool: detectWorktreePool({ count: wtCount, max: MAX_WORKTREE_COUNT }),
-    idle: detectIdleWithWork({ liveSessions: live, unclaimedCount: unclaimed.length, pendingAssignmentSessionIds }),
+    idle: detectIdleWithWork({ liveSessions: liveWorkers, unclaimedCount: unclaimed.length, pendingAssignmentSessionIds }),
     dep: detectDependencyHealth({ sds, statusByKey, terminalSet: TERMINAL, nowMs }),
     rank: detectBacklogRankStaleness({ claimableSds: claimable, nowMs, ttlMs: DISPATCH_RANK_TTL_MS }),
     quiet: detectQuietTickUnverified({ coordinatorReviews: reviews || [] }),
@@ -154,7 +167,7 @@ async function main() {
     draft: findStalledDrafts(sds, nowMs, { thresholdMs: DRAFT_STALL_MS, scoredKeys: scoredDraftKeys }),
     // SD-LEO-INFRA-PROGRESS-STALL-DETECTION-001: DUTY-8 — claim-holders heartbeat-ALIVE but claimed SD FROZEN.
     // Reuses the canonical detectStuckWorker predicate (injected); advisory remediation count only (no new exit).
-    progress: detectProgressStall({ liveSessions: live, sds, nowMs, thresholdMs: PROGRESS_STALL_MS, isWithinArmedSilence: isWithinArmedSilenceWindow, detectStuck: detectStuckWorker }),
+    progress: detectProgressStall({ liveSessions: liveWorkers, sds, nowMs, thresholdMs: PROGRESS_STALL_MS, isWithinArmedSilence: isWithinArmedSilenceWindow, detectStuck: detectStuckWorker }),
   };
 
   const flag = (r) => (r.remediation ? '  ⚠ ' + r.remediation : '');
