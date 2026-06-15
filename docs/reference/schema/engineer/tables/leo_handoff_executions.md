@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-15T00:11:01.798Z
-**Rows**: 16,114
+**Generated**: 2026-06-15T10:31:11.746Z
+**Rows**: 16,136
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -83,6 +83,10 @@
 - `idx_handoff_executions_type`
   ```sql
   CREATE INDEX idx_handoff_executions_type ON public.leo_handoff_executions USING btree (handoff_type)
+  ```
+- `idx_lhe_lfa_pending_unique`
+  ```sql
+  CREATE UNIQUE INDEX idx_lhe_lfa_pending_unique ON public.leo_handoff_executions USING btree (sd_id, handoff_type) WHERE ((status = 'pending_acceptance'::text) AND (handoff_type = 'LEAD-FINAL-APPROVAL'::text))
   ```
 - `leo_handoff_executions_pkey`
   ```sql

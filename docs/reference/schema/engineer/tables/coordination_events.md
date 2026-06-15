@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-15T00:11:01.798Z
+**Generated**: 2026-06-15T10:31:11.746Z
 **Rows**: 34
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -53,11 +53,33 @@
 
 ## RLS Policies
 
-### 1. service_role_all (ALL)
+### 1. coordination_events_insert_service_role (INSERT)
+
+- **Roles**: {service_role}
+- **With Check**: `true`
+
+### 2. coordination_events_select_service_role (SELECT)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+
+### 3. service_role_all (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+## Triggers
+
+### trg_coordination_events_append_only
+
+- **Timing**: BEFORE DELETE
+- **Action**: `EXECUTE FUNCTION coordination_events_append_only()`
+
+### trg_coordination_events_append_only
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION coordination_events_append_only()`
 
 ---
 
