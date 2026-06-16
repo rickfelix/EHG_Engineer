@@ -37,11 +37,25 @@ not wired to Adam's sourcing:
   verdict + `change_requests` (the **skeptic** machinery).
 - `lib/integrations/refine-score.js` — a **4-persona weighted scorer** (optimist / pragmatist /
   devil's-advocate / strategist) already used for roadmap-wave items.
+- `lib/brainstorm/panel-selector.js` — **`selectPanel(topic, keywords, {maxSeats, minGovernance})`
+  already does dynamic seat-selection**: relevance × authority ranking with a **governance-floor**
+  of seats always included. This is the existing engine the Adam-domain selection (§2) adapts, not
+  a from-scratch build.
+- `lib/brainstorm/deliberation-engine.js` — **`executeDeliberation({topic, keywords, invokeAgent,
+  quorum, ...})` already orchestrates the WHOLE deliberate→synthesize→skeptic flow**: create debate
+  session → `selectPanel` → Round 1 parallel seat positions → `EXPERTISE_GAP` specialist summoning →
+  Round 2 rebuttals (dissent) → judiciary synthesis with constitutional citations + quorum (67%).
+  §3 is therefore mostly *this engine*, adapted — not assembled from primitives.
 
-**The Phase-0 thesis: this protocol is mostly a COMPOSE + a thin Adam-domain seat-selection layer,
-not a new judge panel.** The board-of-directors archetypes below map onto the existing brainstorm
-board seats + critic personas; the genuinely NET-NEW work is (a) the Adam-specific permanent seats,
-and (b) the dynamic seat-selection keyed off roadmap wave + gauge capability.
+**The Phase-0 thesis: this protocol is mostly a COMPOSE — both the seat-selection engine
+(`selectPanel`) and the full deliberation orchestrator (`executeDeliberation`) already exist.** The
+board-of-directors archetypes below map onto the existing brainstorm board seats + critic personas.
+The genuinely NET-NEW work is narrower than a new judge panel: (a) the Adam-specific permanent-seat
+roster (esp. the Operator survivability lens); (b) feeding `selectPanel` Adam-domain selection
+inputs (roadmap wave + gauge capability + decision domain) with a fixed 3-permanent-seat floor; and
+(c) the **non-trivial** wiring that adapts the topic-shaped `executeDeliberation` to rank a *set of
+candidate work-items* and return a *ranked list with attached dissent* (see §6 — this is the real
+cost, not the deliberation flow itself).
 
 ## 1. Director roster (FR-1)
 
@@ -52,7 +66,7 @@ Each archetype is `{key, title, lens, decision_heuristics, when_seated}`.
 | key | title | lens | decision heuristics | anchors / source |
 |-----|-------|------|---------------------|------------------|
 | `operator` | The Operator | Solo-founder survivability | Can one founder actually run/maintain this? Does it shorten distance-to-broke / distance-to-quit? Does it reduce operational load rather than add it? | Solo-founder survivability. NET-NEW lens; can borrow framing from the distance-to-broke/quit gauge capabilities (`vdr-registry.js`, application layer). |
-| `intent_keeper` | The Chairman's-Intent Keeper | Roadmap + stated-preference fidelity / anti-drift | Does this match the ratified roadmap wave order and the chairman's stated preferences? Is it drifting toward meta-work the chairman deprioritized? | **COMPOSE** `lib/adam/preference-model.js` (`computePreferenceWeights`, clamp 0.8–1.25) + `lib/integrations/okr-wave-linker.js` wave alignment. |
+| `intent_keeper` | The Chairman's-Intent Keeper | Roadmap + stated-preference fidelity / anti-drift | Does this match the ratified roadmap wave order and the chairman's stated preferences? Is it drifting toward meta-work the chairman deprioritized? | **COMPOSE** `lib/adam/preference-model.js` (`computePreferenceWeights`, applied as a bounded *intra-tier* nudge; per the module's own header the 0.8–1.25 clamp is no longer load-bearing for cross-tier safety — cross-tier fidelity is enforced by `selectAdvisory`'s status-tier-dominant sort) + `lib/integrations/okr-wave-linker.js` wave alignment. |
 | `compounding` | The Compounding-Leverage Director | Does it unlock downstream / is it a prerequisite | Is this a keystone other work depends on? Does shipping it raise a weak gauge capability? Or is it a leaf with no compounding? | **COMPOSE** `lib/adam/gauge-lens.js` (`readCapabilityGaps` → per-capability build%). |
 
 The 3 permanent seats are the board's constitutional spine — they are the lensed embodiment of
@@ -93,17 +107,28 @@ specialists** selected per decision. Selection inputs and where they are read:
    presentation-surface consolidation*). A decision touching a weak application capability seats
    `product_ux`; a weak infrastructure capability seats `architect`.
 
-**Selection algorithm (NET-NEW, the thin Adam-domain layer):**
+**Selection algorithm — ADAPT the existing `selectPanel`, don't rebuild it.**
+`lib/brainstorm/panel-selector.js` `selectPanel(topic, keywords, {maxSeats, minGovernance})` already
+ranks seats by relevance × authority and always includes a **governance floor**. The Adam-domain
+work is to drive it with Adam's inputs and pin the 3 permanent seats as the floor:
 ```
-panel = [operator, intent_keeper, compounding]            # always
-weights = waveWeighting(currentWave)                      # COMPOSE okr-wave-linker
-rotating = rankSpecialists(decisionDomain, gaugeCapabilityArea, weights)
+# COMPOSE selectPanel's relevance-ranking + governance-floor pattern; Adam-domain inputs are the new part
+panel = [operator, intent_keeper, compounding]            # NET-NEW: fixed permanent-seat floor (vs selectPanel's minGovernance)
+weights = waveWeighting(currentWave)                      # COMPOSE okr-wave-linker.calculateAlignment
+rotating = selectPanel(domain, gaugeCapabilityKeywords, {maxSeats:2})   # COMPOSE selectPanel, fed wave/gauge/domain inputs (NET-NEW inputs)
 panel += rotating.slice(0, clamp(panelSize-3, 0, 2))      # 0-2 rotating -> total 3-5
 ```
+**NET-NEW here:** the wave/gauge/domain selection *inputs* and the fixed 3-permanent-seat anchor.
+**COMPOSE:** `selectPanel`'s ranking + governance-floor machinery itself.
 
 ## 3. Deliberate → Synthesize → Skeptic protocol (FR-3)
 
-A multi-agent judge panel. Each phase names the module it **COMPOSE**s or is flagged **NET-NEW**.
+A multi-agent judge panel. **The whole flow already exists as `lib/brainstorm/deliberation-engine.js`
+`executeDeliberation(...)`** — it creates the debate session, calls `selectPanel`, runs Round 1
+positions, summons `EXPERTISE_GAP` specialists, runs Round 2 rebuttals (dissent), and synthesizes a
+judiciary verdict with constitutional citations + quorum. The phases below therefore map to parts of
+that engine; each names the module it **COMPOSE**s or is flagged **NET-NEW**. The genuinely net-new
+adaptation (candidate-set input + ranked-list output) is in §6, not here.
 
 ### 3.1 Deliberate (dissent preserved, not averaged)
 Each seated director independently scores + critiques the candidate(s) **from its own lens**.
@@ -147,11 +172,17 @@ record.
 | Sourcing / prioritization / sequencing of real consequence (which SD next, wave ordering, a keystone vs a leaf) | **Convene the board** (3–5 seats). |
 | Routine / trivial (a clear next child, a mechanical follow-up, a tie already broken by status tier) | **Adam decides solo** via the existing `selectAdvisory` scalar — no fan-out. |
 
+**Convene trigger (contested OR consequential).** Confidence ≠ consequence: a decision can be
+uncontested by `selectAdvisory`'s scalar yet high-stakes (a single dominant candidate that is also
+irreversible / a keystone / wave-reordering / CONST-NNN-touching). So convene if **EITHER**:
+(a) `selectAdvisory` returns a low-confidence / near-tie ranking, **OR** (b) the decision clears a
+*consequence floor* — irreversibility, keystone/prerequisite status, roadmap-wave reordering, or a
+CONST-NNN touch. Only decide solo when the ranking is **both** confident **and** below the
+consequence floor.
+
 **Cost discipline:** the board is multi-agent and therefore expensive — it must **not** fan out for
-trivial calls. The convene test is "would the chairman want preserved dissent on this?" If
-`selectAdvisory` already returns a confident, uncontested ranking (single dominant status tier, no
-near-ties), decide solo. Panel size stays 3–5; ad-hoc specialists are added only on a real
-`EXPERTISE_GAP`, not by default.
+trivial calls. Panel size stays 3–5; ad-hoc specialists are added only on a real `EXPERTISE_GAP`,
+not by default.
 
 ## 5. Non-goals (design-only boundary)
 
@@ -165,13 +196,22 @@ near-ties), decide solo. Panel size stays 3–5; ad-hoc specialists are added on
 **COMPOSE (already in repo):** preference weights (`preference-model.js`), capability-gap lens
 (`gauge-lens.js`), wave alignment (`okr-wave-linker.js`), 4-persona scoring (`refine-score.js`),
 critic/skeptic personas (`critic-personas.js`), board seats + dissent + verdict persistence
-(`board-seats/index.js`, `board-judiciary-bridge.js`), dynamic specialists (`specialist-registry.js`).
+(`board-seats/index.js`, `board-judiciary-bridge.js`), dynamic specialists (`specialist-registry.js`),
+**dynamic seat-selection (`panel-selector.js` `selectPanel`)**, and **the full deliberation
+orchestrator (`deliberation-engine.js` `executeDeliberation`)**. The deliberate→synthesize→skeptic
+*flow itself is not net-new.*
 
-**NET-NEW (the build SD's actual work):** (1) the `operator` survivability lens; (2) the
-Adam-domain dynamic seat-selection layer (§2 algorithm) wiring wave + gauge-capability + domain to a
-3–5 seat panel; (3) a wave→ordinal mapping (Q1); (4) the glue that invokes the existing
-brainstorm-board/judiciary machinery from Adam's sourcing flow (`selectAdvisory` / opportunity-scan)
-instead of from brainstorm.
+**NET-NEW (the build SD's actual work):** (1) the `operator` survivability lens; (2) feeding
+`selectPanel` Adam-domain selection *inputs* (roadmap wave + gauge-capability + decision domain) +
+the fixed 3-permanent-seat floor (the ranking/floor machinery is composed); (3) a wave→ordinal
+mapping (Q1); (4) **the non-trivial impedance-bridge**: `executeDeliberation` is topic-shaped (free-text
+`topic` + `invokeAgent` → a single synthesized verdict), whereas Adam sourcing needs to rank a *set
+of candidate work-items* and get back a *ranked list with attached dissent*. The build must (4a)
+translate a candidate-set into the engine's topic/context inputs, and (4b) bridge the engine's
+single-verdict output to ranked-candidate-with-dissent — likely via the existing
+`recordBoardVotes`/`resolveTies` (which `executeDeliberation` does not currently call). This bridge,
+not the deliberation flow, is the real build cost; (5) invoking the whole thing from Adam's sourcing
+flow (`selectAdvisory` / opportunity-scan) instead of from brainstorm.
 
 **Open questions for the chairman:**
 - **Q1** Wave ordinals: waves are identified by title/linkage today, not a `wave_number`. Add an
@@ -183,4 +223,4 @@ instead of from brainstorm.
 
 **Follow-up:** after chairman sign-off, a separate **build/wire SD** (the executable board harness)
 implements the NET-NEW items above and wires the composed machinery into Adam's sourcing. A durable
-pointer is recorded on this SD's `metadata.followup`.
+pointer is recorded on this SD's `metadata.followup_sd` (and `metadata.followup`).
