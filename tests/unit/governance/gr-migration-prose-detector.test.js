@@ -42,6 +42,37 @@ describe('GR-MIGRATION-REVIEW — genuine data-layer signals STILL block (FR-1/F
   });
 });
 
+describe('GR-MIGRATION-REVIEW — broadened DDL coverage (adversarial-review close-the-holes)', () => {
+  it.each([
+    ['add a new status column to ventures', 'multi-word column gap'],
+    ['drop the email column from users', 'two-word column gap'],
+    ['rename table ventures to portfolios', 'rename table (exact SQL form)'],
+    ['create trigger audit_ins on ventures', 'create trigger'],
+    ['create type mood as enum', 'create type/enum'],
+    ['create function compute_health()', 'create function'],
+    ['alter sequence venture_seq restart', 'alter sequence'],
+    ['add foreign key fk_owner to orders', 'add foreign key'],
+    ['add a unique constraint on email', 'add constraint'],
+    ['grant select on ventures to anon', 'grant ... on'],
+    ['new RLS migration for tenants', 'RLS + migration co-occurrence'],
+    ['schema migration adding a foreign key', 'foreign key + migration co-occurrence'],
+  ])('BLOCKS genuine schema prose: %s (%s)', (scope) => {
+    expect(mig({ scope, metadata: {} })).toBeDefined();
+  });
+});
+
+describe('GR-MIGRATION-REVIEW — broadening does NOT re-introduce governance false-blocks', () => {
+  it.each([
+    ['create a trigger for the build pipeline when a release ships', 'CI trigger, not SQL'],
+    ['index the search results and add a column chart to the dashboard', 'UI/search prose (no adjacent DDL verb)'],
+    ['document the migration review policy and the deploy sequence', 'migration + ambiguous nouns (policy/sequence) only'],
+    ['refine the migration keyword filter so a schema change discussion no longer false-blocks', 'pure governance prose'],
+    ['grant the user access to the migration dashboard', 'grant access (not grant ... on)'],
+  ])('PASSES pure-JS/governance prose: %s (%s)', (scope) => {
+    expect(mig({ scope, metadata: {} })).toBeUndefined();
+  });
+});
+
 describe('GR-MIGRATION-REVIEW — attestation bypass unchanged', () => {
   it('PASSES a real DDL SD when migration_reviewed is attested', () => {
     expect(mig({ scope: 'ALTER TABLE users ADD COLUMN x', metadata: { migration_reviewed: true } })).toBeUndefined();
