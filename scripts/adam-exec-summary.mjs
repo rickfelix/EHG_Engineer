@@ -135,6 +135,28 @@ if (!DRY && visPct != null) {
   } catch (e) { console.warn('[adam-email] vision_gauge_read marker skipped (fail-soft): ' + (e?.message || e)); }
 }
 
+// ── 2a. VISION BUILD-% TREND (SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001 FR-3) ──
+// Read the last N persisted snapshots from vision_build_gauge and render the overall_pct trend
+// (compact sparkline + signed delta vs the prior run) and a short prior-analysis line, so the chairman
+// sees whether the build-% is MOVING, not just the live number. Fail-soft on EVERY branch: a DB/read
+// error degrades to an honest "(unavailable this run)" note and NEVER blocks the email; <2 snapshots
+// degrade to "trend: building history" (the pure helper owns the honest fallbacks).
+let trendLine = null, trendAnalysis = null;
+try {
+  const { data: snaps } = await db.from('vision_build_gauge')
+    .select('overall_pct, available, measured_at')
+    .order('measured_at', { ascending: false })
+    .limit(24);
+  const { computeGaugeTrend } = await import('../lib/vision/gauge-trend.js');
+  const trend = computeGaugeTrend(snaps || []);
+  trendLine = trend.trendLine;
+  trendAnalysis = trend.analysisLine;
+} catch (e) {
+  console.warn('[adam-email] vision trend unavailable (fail-soft): ' + (e?.message || e));
+  trendLine = 'EHG vision trend: (unavailable this run)';
+  trendAnalysis = null;
+}
+
 // ── 2b. DISTANCE-TO-QUIT (SD-LEO-INFRA-VISION-LADDER-V1-001 FR-5) ──
 // The quit threshold is READ AT RUNTIME from the chairman amendment metadata — the fleet NEVER
 // hardcodes a dollar figure (chairman-source-of-truth: SD-LEO-ORCH-ADAM-PLAN-KEEPER-001
@@ -213,6 +235,8 @@ const text = [
   visPct != null ? `EHG vision: ${visPct}% built` : 'EHG vision: (gauge unavailable)',
   ...(layerLine ? ['   ' + layerLine] : []),
   ...(visNote ? ['   ' + visNote] : []),
+  ...(trendLine ? ['   ' + trendLine] : []),
+  ...(trendAnalysis ? ['   ' + trendAnalysis] : []),
   ...(watchdogLine ? ['   ' + watchdogLine] : []),
   ...(quitLine ? ['', quitLine] : []),
   ...(decisionsLine ? [decisionsLine] : []),
@@ -226,6 +250,8 @@ const text = [
 
 const layerHtml = layerLine ? `<div style="font-size:13px;color:#444;margin:2px 0 0">${esc(layerLine)}</div>` : '';
 const noteHtml = visNote ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(visNote)}</div>` : '';
+const trendHtml = trendLine ? `<div style="font-size:13px;color:#444;margin:4px 0 0;font-family:ui-monospace,Menlo,Consolas,monospace">${esc(trendLine)}</div>` : '';
+const trendAnalysisHtml = trendAnalysis ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(trendAnalysis)}</div>` : '';
 const quitHtml = quitLine ? `<p style="font-size:14px;margin:10px 0 0">${esc(quitLine)}</p>` : '';
 const decisionsHtml = decisionsLine ? `<p style="font-size:12px;color:#888;margin:4px 0 0">${esc(decisionsLine)}</p>` : '';
 const actionsHtml = nActions
@@ -236,7 +262,7 @@ const actionsHtml = nActions
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
   `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
   `<p style="font-size:15px;font-weight:600;margin:0 0 0">EHG vision: ${visPct != null ? visPct + '% built' : '(gauge unavailable)'}</p>` +
-  layerHtml + noteHtml +
+  layerHtml + noteHtml + trendHtml + trendAnalysisHtml +
   (watchdogLine ? `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(watchdogLine)}</div>` : '') +
   quitHtml + decisionsHtml +
   '<hr style="border:none;border-top:1px solid #e1e4e8;margin:14px 0">' +

@@ -151,6 +151,9 @@ async function approveProposal(proposalId) {
   }
 
   // Call the database function to create SD
+  // DEPRECATED (SD-LEO-INFRA-ADAM-VISION-SD-FLOW-001 FR-2): fn_create_sd_from_proposal is superseded by the
+  // canonical `node scripts/leo-create-sd.js --from-proposal` path (this site fires only on manual chairman
+  // approval of an sd_proposals row, of which there are none). Do NOT route new autonomous sourcing here.
   const { data: sdId, error } = await supabase
     .rpc('fn_create_sd_from_proposal', { proposal_id: proposal.id });
 

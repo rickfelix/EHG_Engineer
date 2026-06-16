@@ -136,6 +136,15 @@ async function main() {
     const m = d.metadata || {};
     return m.auto_generated === true && !m.triaged_by;
   };
+  // SD-LEO-INFRA-ADAM-VISION-SD-FLOW-001 (FR-1): the LEAD-advancement nudge. An Adam-sourced vision-loop
+  // draft (metadata.source==='proposal' AND on the vision roadmap, metadata.roadmap_phase set) is the
+  // gauge-driven / weakest-capability work the chairman cares about; nudge it earlier among otherwise-
+  // comparable claimable SDs so it reaches a worker for LEAD-TO-PLAN sooner. Applied AFTER unlock (never
+  // overrides critical-path unlocking) and BEFORE priority/age — a tie-break boost, NOT a new ranker.
+  const visionLoopDraft = (d) => {
+    const m = d.metadata || {};
+    return m.source === 'proposal' && !!m.roadmap_phase;
+  };
   claimable.sort((a, b) => {
     // SD-FDBK-INFRA-BACKLOG-RANK-EXCLUSION-001: bare-shell stubs sort below EVERY
     // authored SD (rank-last), so a worker never self-claims a stub that cannot pass
@@ -147,6 +156,9 @@ async function main() {
     if (qa !== qb) return qa - qb;                          // human-authored first
     const ua = unlockScore(a.sd_key), ub = unlockScore(b.sd_key);
     if (ub !== ua) return ub - ua;
+    // FR-1 LEAD-advancement nudge: vision-loop drafts ahead of other claimable SDs at the same unlock level.
+    const va = visionLoopDraft(a) ? 1 : 0, vb = visionLoopDraft(b) ? 1 : 0;
+    if (vb !== va) return vb - va;
     const pa = PRIORITY_W[String(a.priority || '').toLowerCase()] ?? 0;
     const pb = PRIORITY_W[String(b.priority || '').toLowerCase()] ?? 0;
     if (pb !== pa) return pb - pa;

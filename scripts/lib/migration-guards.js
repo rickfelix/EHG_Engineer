@@ -92,3 +92,49 @@ export async function validateProdDeployGuards({ flagPresent, tokenEnv, sqlConte
   if (!t.ok) return t;
   return { ok: true, approver: a.approver, tokenRowId: t.tokenRowId, tokenHash: t.tokenHash };
 }
+
+// ── SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001 — Adam delegated-apply gate ──
+// Chairman-authorized (2026-06-16) SCOPED delegation: Adam may APPLY additive + governed-data-row
+// changes ONLY. This is a SEPARATE wrapper — checkApproverFactor / validateProdDeployGuards above
+// are NOT broadened (the chairman path stays the only path for non-delegatable changes).
+//
+// SEC-H1 (confused-deputy defense): the `-- @delegated-by: adam` line is just a forgeable ROUTING
+// marker — it is NOT the authority. The REAL secret factor is the SAME crypto token mechanism the
+// chairman path uses (checkTokenFactor: an unconsumed, <1h, hashed-in-DB token). A forged
+// @delegated-by line without a valid token is REJECTED. The fail-closed SCOPE boundary
+// (isDelegatableForApply) + the default-OFF kill-switch (isDelegationEnabled) gate everything.
+import { isDelegatableForApply, isDelegationEnabled } from '../../lib/migration/adam-delegated-apply.js';
+
+const DELEGATED_BY_RE = /^\s*--\s*@delegated-by:\s*adam\s*$/im;
+
+export function extractDelegatedBy(sqlContent) {
+  if (typeof sqlContent !== 'string') return null;
+  return DELEGATED_BY_RE.test(sqlContent) ? 'adam' : null;
+}
+
+/**
+ * Adam delegated-apply guard. ALL factors must pass, in fail-closed order:
+ *   (1) --prod-deploy flag present
+ *   (2) kill-switch ON (LEO_ADAM_DBAPPLY_DELEGATION === 'on'); default-OFF => reject (chairman path)
+ *   (3) SCOPE: isDelegatableForApply(sql) true (additive-no-policy/rls OR governed literal INSERT)
+ *   (4) routing marker `-- @delegated-by: adam` present
+ *   (5) REAL SECRET: a valid unconsumed delegation token (checkTokenFactor) — SEC-H1
+ * Returns { ok, path:'delegated', kind, scopeReason, tokenRowId, tokenHash } or { ok:false, factor, reason }.
+ */
+export async function validateDelegatedApplyGuards({ flagPresent, tokenEnv, sqlContent, client, env }) {
+  const f = checkFlagFactor(flagPresent);
+  if (!f.ok) return { ...f, path: 'delegated' };
+  if (!isDelegationEnabled(env)) {
+    return { ok: false, factor: 'kill_switch', reason: 'delegation disabled (LEO_ADAM_DBAPPLY_DELEGATION != on) — chairman path required', path: 'delegated' };
+  }
+  const scope = isDelegatableForApply(sqlContent);
+  if (!scope.delegatable) {
+    return { ok: false, factor: 'scope', reason: `not delegatable (chairman-only): ${scope.reason}`, path: 'delegated', scope };
+  }
+  if (!extractDelegatedBy(sqlContent)) {
+    return { ok: false, factor: 'delegated_marker', reason: 'missing -- @delegated-by: adam routing marker', path: 'delegated' };
+  }
+  const t = await checkTokenFactor(client, tokenEnv); // SEC-H1: the real secret (NOT the @delegated-by string)
+  if (!t.ok) return { ...t, path: 'delegated' };
+  return { ok: true, path: 'delegated', kind: scope.kind, scopeReason: scope.reason, tokenRowId: t.tokenRowId, tokenHash: t.tokenHash };
+}

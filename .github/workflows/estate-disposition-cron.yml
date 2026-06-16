@@ -1,0 +1,61 @@
+name: "Estate disposition drain (cron)"
+
+# SD-LEO-INFRA-ESTATE-DISPOSITION-001 (FR-4)
+#
+# Recurring fail-soft drain of newly-arrived idea-estate rows (eva_todoist_intake /
+# eva_youtube_intake / eva_claude_code_intake) into the conversion_ledger solution-backlog.
+# The estate is a LIVE inflow, so a one-shot backfill goes stale. The drain is IDEMPOTENT — it
+# loads only rows lacking a raw_data.conversion_ledger_id back-pointer — so overlapping/re-runs
+# are safe; concurrency cancels an in-flight run to save Actions minutes.
+
+on:
+  schedule:
+    # Hourly at :17 (offset from other crons).
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (preview only, no writes)"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  drain:
+    name: Drain estate into conversion_ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Drain estate (idempotent)
+        run: |
+          ARGS="--pools estate"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "dry-run requested: no --apply, zero writes"
+          else
+            ARGS="$ARGS --apply"
+          fi
+          node scripts/intake/drain-intake.mjs $ARGS

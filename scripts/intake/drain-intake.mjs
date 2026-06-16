@@ -25,9 +25,18 @@ import path from 'path';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { classify } from '../../lib/intake/triage-classifier.js';
 import { registerItem, setDisposition, backlogDepth } from '../../lib/intake/conversion-ledger.js';
+// SD-LEO-INFRA-ESTATE-DISPOSITION-001 (FR-2): pure 0-3 compounding score captured at disposition time.
+import { computeCompoundingScore } from '../../lib/intake/compounding-score.js';
+// SD-LEO-INFRA-ESTATE-DISPOSITION-001: pure, unit-tested estate-disposition helpers.
+import { estateAlreadyDrained, todoistPriorityToText, classifyEstateItem, buildEstateMarkOff } from '../../lib/intake/estate-disposition-helpers.js';
 
 const APPLY = process.argv.includes('--apply');
 const DRY_RUN = !APPLY; // dry-run is the default
+// SD-LEO-INFRA-ESTATE-DISPOSITION-001: --pools estate runs the estate-table drain (todoist/youtube/claude_code)
+// independently of the original 3-pool set; without it the original behavior is byte-identical.
+const _poolsIdx = process.argv.indexOf('--pools');
+const POOLS = _poolsIdx !== -1 ? String(process.argv[_poolsIdx + 1] || '') : null;
+const ESTATE = POOLS === 'estate';
 const limIdx = process.argv.indexOf('--limit');
 const _rawLimit = limIdx !== -1 ? parseInt(process.argv[limIdx + 1], 10) : null;
 if (_rawLimit !== null && (!Number.isInteger(_rawLimit) || _rawLimit <= 0)) {
@@ -128,8 +137,116 @@ function loadPool3() {
   return items;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SD-LEO-INFRA-ESTATE-DISPOSITION-001 — estate drain (eva_todoist_intake / eva_youtube_intake /
+// eva_claude_code_intake → conversion_ledger). Reuses registerItem/setDisposition/classify; adds a
+// pure 0-3 compounding score + per-table idempotent mark-off. POPULATES the backlog only — sourcing
+// (auto-SD-creation) is deferred to the sibling spine-wire SD, so auto-promote is SUPPRESSED here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ESTATE_SOURCES = [
+  { table: 'eva_todoist_intake', pool: 'todoist_todo',
+    select: 'id, title, description, todoist_priority, todoist_task_id, status, raw_data, created_at',
+    map: (r) => ({ source_external_id: r.todoist_task_id || null, normalized_priority: todoistPriorityToText(r.todoist_priority) }) },
+  { table: 'eva_youtube_intake', pool: 'youtube_playlist',
+    select: 'id, title, description, confidence_score, youtube_video_id, status, raw_data, created_at',
+    map: (r) => ({ source_external_id: r.youtube_video_id || null, normalized_priority: normalizePriorityScore(r.confidence_score) }) },
+  { table: 'eva_claude_code_intake', pool: 'estate_corpus',
+    select: 'id, title, description, relevance_score, github_release_id, status, raw_data, created_at',
+    map: (r) => ({ source_external_id: r.github_release_id ? String(r.github_release_id) : null, normalized_priority: normalizePriorityScore(r.relevance_score) }) },
+];
+
+/** Load one estate table → normalized items (UNDRAINED only — JS-filtered on the back-pointer so a
+ *  re-run / the recurring trigger naturally skips already-dispositioned rows; idempotent on source id). */
+async function loadEstate(sb, src) {
+  const { data, error } = await sb.from(src.table).select(src.select).order('created_at', { ascending: true });
+  if (error) throw new Error(`loadEstate(${src.table}): ${error.message}`);
+  return (data || [])
+    .filter((r) => !estateAlreadyDrained(r))
+    .map((r) => ({
+      source_pool: src.pool,
+      source_id: r.id,
+      title: r.title || '(untitled)',
+      description: r.description || null,
+      action_type: null,
+      _estateTable: src.table,
+      _rawData: (r.raw_data && typeof r.raw_data === 'object') ? r.raw_data : {},
+      _source: r,
+      ...src.map(r),
+    }));
+}
+
+/** FR-3 MARK-OFF: write ONLY the ledger back-pointer + the 0-3 compounding score + the FR-2
+ *  classification into the source row's raw_data. Deliberately leaves `status`/`processed_at` alone —
+ *  those columns gate each table's enrichment pipeline (status='pending'), so stamping them here would
+ *  silently starve those pipelines. The back-pointer is the authoritative idempotency marker.
+ *  Idempotent (re-writes the same values). Non-fatal on a CHECK conflict. */
+async function markOffEstateSource(sb, item, ledgerRowId, score, classification) {
+  const update = buildEstateMarkOff(item, ledgerRowId, score, classification);
+  const { error } = await sb.from(item._estateTable).update(update).eq('id', item.source_id);
+  if (error) console.warn(`   ⚠️  mark-off skipped for ${item._estateTable}:${item.source_id}: ${error.message}`);
+}
+
+async function runEstateDrain(sb) {
+  console.log('   mode: ESTATE drain (todoist_todo / youtube_playlist / estate_corpus)');
+  const [existingSds, capabilities] = await Promise.all([loadExistingSds(sb), loadCapabilities(sb)]);
+  const existingSdKeys = new Set(existingSds.map((s) => s.sd_key).filter(Boolean));
+  const loaded = await Promise.all(ESTATE_SOURCES.map((s) => loadEstate(sb, s)));
+  let items = loaded.flat();
+  console.log(`   undrained estate items: ${loaded.map((l, i) => `${ESTATE_SOURCES[i].pool}=${l.length}`).join(', ')} | total=${items.length}`);
+  console.log(`   existing SDs (dedup corpus)=${existingSds.length}, capabilities=${capabilities.length}`);
+  if (LIMIT) items = items.slice(0, LIMIT);
+
+  const tally = {}; const scoreDist = { 0: 0, 1: 0, 2: 0, 3: 0 }; let applied = 0, skipped = 0;
+  for (const item of items) {
+    const verdict = classify(item, { existingSds, capabilities, existingSdKeys });
+    const score = computeCompoundingScore(item, { verdict });
+    scoreDist[score] = (scoreDist[score] || 0) + 1;
+    // SUPPRESS auto-promote: this SD POPULATES the backlog; sourcing (SD creation) is the sibling
+    // spine-wire SD's job. A would-be-promote (novel improvement-candidate) is left UNDISPOSITIONED —
+    // a registered ledger row that IS the backlog. Terminal dispositions apply only to the clear cases.
+    const disposition = verdict.promote ? null : (verdict.disposition || null);
+    // FR-2 classification (improvement-candidate / drop / already-covered / needs-human), persisted in
+    // the source raw_data alongside the score (the ledger has no column for it; the SD forbids new columns).
+    const classification = classifyEstateItem(verdict);
+    const bucket = disposition || (verdict.promote ? 'candidate (undispositioned — backlog)' : 'undispositioned (ambiguous)');
+    tally[bucket] = (tally[bucket] || 0) + 1;
+    if (DRY_RUN) continue;
+    try {
+      const row = await registerItem({
+        source_pool: item.source_pool, source_id: item.source_id,
+        source_external_id: item.source_external_id, title: item.title,
+        description: item.description, normalized_priority: item.normalized_priority,
+      }, { client: sb });
+      // Idempotent: if the source row was already drained (back-pointer present) OR the ledger row is
+      // already dispositioned, reconcile the mark-off and skip re-dispositioning (no double-disposition).
+      if (estateAlreadyDrained(item._source) || (row && row.disposition)) {
+        await markOffEstateSource(sb, item, row.id, score, classification);
+        skipped++; continue;
+      }
+      if (disposition) {
+        await setDisposition(row.id, {
+          disposition, triage_verdict: verdict.triage_verdict,
+          dedup_match_sd_key: verdict.dedup_match_sd_key, dedup_score: verdict.dedup_score,
+          dismiss_reason: verdict.dismiss_reason,
+        }, { client: sb });
+      }
+      await markOffEstateSource(sb, item, row.id, score, classification);
+      applied++;
+    } catch (e) {
+      console.error(`   ❌ estate apply failed for ${item._estateTable}:${item.source_id}: ${e.message}`);
+    }
+  }
+  console.log('\n--- estate disposition plan ---');
+  for (const [k, v] of Object.entries(tally)) console.log(`   ${String(k).padEnd(34)}: ${v}`);
+  console.log('   compounding score 0/1/2/3        :', JSON.stringify(scoreDist));
+  if (DRY_RUN) console.log('\n   DRY-RUN: zero writes. Re-run with --apply to register + disposition + score + mark-off.');
+  else console.log(`\n   APPLIED: ${applied} newly dispositioned, ${skipped} already-drained (idempotent).`);
+}
+
 async function main() {
   const sb = createSupabaseServiceClient();
+  if (ESTATE) { await runEstateDrain(sb); return; }
   console.log(`\n=== intake drain (${DRY_RUN ? 'DRY-RUN — zero writes' : 'APPLY'}) ===`);
 
   const [pool1, pool2, existingSds, capabilities] = await Promise.all([
