@@ -1482,8 +1482,25 @@ async function main() {
   const standaloneSDs = standaloneRes.data || [];
   const allSDs = [...children, ...standaloneSDs];
 
-  // Dependency-aware availability: only suggest SDs whose deps are all completed
-  const completedKeys = new Set(allSDs.filter(c => c.status === 'completed').map(c => c.sd_key));
+  // Dependency-aware availability: only suggest SDs whose deps are all satisfied (terminal).
+  // SD-LEO-INFRA-SWEEP-DEP-RESOLVER-COMPLETED-LOOKUP-001: the standalone working set above is
+  // filtered to NON-terminal statuses (draft/in_progress/ready/pending_approval) and .limit(20),
+  // so it can NEVER contain a completed SD — building the satisfied-set from it made it effectively
+  // EMPTY, falsely BLOCKING any SD whose real dependency-key is completed-but-out-of-window.
+  // Mirror the canonical coordinator-audit.mjs resolver (line ~189): do a FRESH targeted DB lookup
+  // of the exact dependency keys and check against the TERMINAL set, not in-window 'completed'.
+  const SWEEP_DEP_TERMINAL = ['completed', 'cancelled', 'archived', 'deferred'];
+  const allDepKeys = [...new Set(allSDs.flatMap(c => parseSdDependencies(c.dependencies)))];
+  const depStatusByKey = {};
+  if (allDepKeys.length) {
+    const { data: depRows } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, status')
+      .in('sd_key', allDepKeys);
+    for (const r of (depRows || [])) depStatusByKey[r.sd_key] = r.status;
+  }
+  // unknown/missing dep-key also counts as unmet (matches coordinator-audit.mjs isTerminal)
+  const isDepSatisfied = (k) => SWEEP_DEP_TERMINAL.includes(depStatusByKey[k]);
   // SD-LEO-INFRA-EXPOSE-CLAIM-OWNER-001 (FR-3) / absorbed QF-20260526-577: was
   // `status === 'ACTIVE'` only, which let an ALIVE_NO_HEARTBEAT or
   // ALIVE_SOURCE_SIDE holder's SD be advertised available-to-claim while the
@@ -1505,7 +1522,7 @@ async function main() {
       // QF-20260525-542: canonical SD-key blocker rule (was completedKeys.has(dep) on
       // raw elements — object-shaped placeholders never matched → false BLOCKED).
       const depKeys = parseSdDependencies(c.dependencies);
-      if (depKeys.length > 0 && !depKeys.every(k => completedKeys.has(k))) return false;
+      if (depKeys.length > 0 && !depKeys.every(isDepSatisfied)) return false;
       return true;
     })
     .map(c => c.sd_key);
@@ -1515,7 +1532,7 @@ async function main() {
       if (c.status === 'completed') return false;
       const depKeys = parseSdDependencies(c.dependencies); // QF-20260525-542: canonical rule
       if (depKeys.length === 0) return false;
-      return !depKeys.every(k => completedKeys.has(k));
+      return !depKeys.every(isDepSatisfied);
     })
     .map(c => c.sd_key);
 
