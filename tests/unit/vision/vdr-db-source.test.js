@@ -90,9 +90,9 @@ describe('computeBuildGauge visionSource=true (FR-4) — DB denominator, unchang
     expect(g.available).toBe(true);
     expect(g.coherence.ok).toBe(true); // DB labels match VDR_REGISTRY → no drift
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
-    // +5 governance probes (SD-LEO-INFRA-V1-GOV-PROBES-001) are unknown under this mock (no KR-GOV rows,
-    // no grep seam): unknown_count = 5 original code_grep + 5 governance = 10. denominator/overall unchanged.
-    expect(g.unknown_count).toBe(10);
+    // unknown_count = 5 original code_grep + 5 governance + 4 automation/intelligence (ordinals 17-20) = 14.
+    // All code_grep with no seam (or KR-GOV rows absent) in this stub → 'unknown'; denominator/overall unchanged.
+    expect(g.unknown_count).toBe(14);
     expect(g.denominator).toBe(8); // +2: the capability-layer db_count probes (unbuilt at count 0)
     expect(g.overall_pct).toBe(25); // (1+0.5+0.5+0+0+0+0+0)/8 = 2.0/8 = 25%; identical to the markdown-source path
     expect(g.measured_at_note).toMatch(/DB vision source/);

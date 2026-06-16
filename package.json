@@ -12,6 +12,7 @@
     "okr:wire-o-2026-07": "node scripts/okr/wire-o-2026-07-kr-alignment.mjs",
     "vision:wire-v1-caplayer": "node scripts/okr/wire-v1-caplayer-criteria.mjs",
     "vision:gauge": "node scripts/vision-gauge-refresh.mjs",
+    "vision:seed-v1-automation": "node scripts/seed-v1-automation-criteria.mjs",
     "setup-db": "node scripts/setup-database.js",
     "setup-db-supabase": "node scripts/setup-database-supabase.js",
     "check-directives": "node scripts/check-directives-data.js",
