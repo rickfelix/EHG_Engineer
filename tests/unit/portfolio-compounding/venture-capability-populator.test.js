@@ -8,6 +8,7 @@ import {
   isRealVenture,
   deriveVentureCapabilities,
   populateVentureCapabilities,
+  VENTURE_MATURITY_LEVELS,
 } from '../../../lib/governance/venture-capability-populator.js';
 
 describe('isRealVenture — conservative, default-exclude', () => {
@@ -27,16 +28,30 @@ describe('deriveVentureCapabilities — pure', () => {
     { id: 'v-real', name: 'Real Co', status: 'active' },
     { id: 'v-cancel', name: 'Dead Co', status: 'cancelled' },
   ];
-  it('derives rows only from real ventures, shaped for the live columns', () => {
+  it('derives rows only from real ventures, shaped for the live columns (incl. origin_sd_key)', () => {
     const sds = [
-      { venture_id: 'v-real', delivers_capabilities: ['auth', { name: 'billing', capability_type: 'core', maturity_level: 'mature' }] },
-      { venture_id: 'v-cancel', delivers_capabilities: ['ignored'] },
+      { venture_id: 'v-real', sd_key: 'SD-X', delivers_capabilities: ['auth', { name: 'billing', capability_type: 'core', maturity_level: 'stable' }] },
+      { venture_id: 'v-cancel', sd_key: 'SD-Y', delivers_capabilities: ['ignored'] },
     ];
     const { rows, skipped } = deriveVentureCapabilities(ventures, sds);
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ name: 'auth', origin_venture_id: 'v-real', capability_type: 'delivered', maturity_level: 'emerging' });
-    expect(rows[1]).toMatchObject({ name: 'billing', origin_venture_id: 'v-real', capability_type: 'core', maturity_level: 'mature' });
+    // default maturity is CHECK-valid 'experimental'; provenance origin_sd_key is threaded
+    expect(rows[0]).toMatchObject({ name: 'auth', origin_venture_id: 'v-real', origin_sd_key: 'SD-X', capability_type: 'delivered', maturity_level: 'experimental' });
+    expect(rows[1]).toMatchObject({ name: 'billing', origin_venture_id: 'v-real', capability_type: 'core', maturity_level: 'stable' });
     expect(skipped).toBe(1); // the cancelled venture's SD
+  });
+
+  it('coerces every maturity_level to a CHECK-valid value (an invalid passthrough -> default)', () => {
+    const sds = [
+      { venture_id: 'v-real', sd_key: 'SD-Z', delivers_capabilities: [
+        { name: 'cap-invalid', maturity_level: 'mature' },   // not in the live CHECK set -> coerced
+        { name: 'cap-valid', maturity_level: 'production' },  // valid -> preserved
+      ] },
+    ];
+    const { rows } = deriveVentureCapabilities(ventures, sds);
+    expect(rows.find((r) => r.name === 'cap-invalid').maturity_level).toBe('experimental');
+    expect(rows.find((r) => r.name === 'cap-valid').maturity_level).toBe('production');
+    for (const r of rows) expect(VENTURE_MATURITY_LEVELS).toContain(r.maturity_level);
   });
 
   it('dedups (venture,capability) and ignores empty capability names', () => {
