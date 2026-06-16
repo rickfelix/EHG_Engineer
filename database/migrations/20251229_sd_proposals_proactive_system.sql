@@ -1,4 +1,12 @@
 -- ============================================================================
+-- DEPRECATED (SD-LEO-INFRA-ADAM-VISION-SD-FLOW-001, FR-2): the sd_proposals ->
+-- fn_create_sd_from_proposal bridge is SUPERSEDED by the canonical Adam DRAFT-SD path
+-- `node scripts/leo-create-sd.js --from-proposal` (+ --proposal-b64 / --proposal-stdin,
+-- SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001). Verified dead: sd_proposals = 0 rows; the only
+-- fn_create_sd_from_proposal callers are scripts/proposal-manage.js (manual chairman approval only)
+-- and lib/strategy/sd-proposal-generator.js (reachable only from archived intelligence-loop). The
+-- table/function are LEFT IN PLACE (no DROP) — do NOT build new sourcing on this bridge; use --from-proposal.
+-- ============================================================================
 -- LEO Protocol v4.4: Proactive SD Proposal System
 -- Migration: sd_proposals table and supporting infrastructure
 -- SD: SD-LEO-PROACTIVE-001
