@@ -1,8 +1,8 @@
-<!-- file_content_hash: adbf0cfa859a110d -->
+<!-- file_content_hash: 74fa677a3a8b02a2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-16 12:22:26 AM
+**Generated**: 2026-06-16 8:59:39 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -121,6 +121,8 @@ PROVENANCE (so a verifier checking this section finds the right source): ONLY `s
 4. **Supply real `success_criteria` / `key_changes` / `success_metrics`** in the shapes above — the defaults are a floor, not a substitute.
 5. **Dedup before filing** — the belt must stay deduped (a D1 signal). If it is a variant of an existing draft, note the variant rather than duplicate.
 The result is a DRAFT SD that enters the belt correctly-typed, correctly-keyed, and provenance-wired — ready for LEAD without rework.
+
+**DECOMPOSE-WEAKEST-LAYER — parallelize sourcing across the whole weak layer, sized to idle capacity (chairman directive 2026-06-16).** When the VDR build-% gauge's **weakest LAYER** holds N weak (unbuilt/partial) capabilities — e.g. the application/cockpit layer with ~7 — do **not** source one monolithic SD for the belt-low cycle. Instead source up to **N parallel** design/spec SDs, **one per capability**, each a distinct **conflict-free write-surface**, right-sized (a Phase-0 design/spec pass, not a build) — and cap the count at the coordinator's stated **live idle-worker capacity** (the SOURCE-TO-CAPACITY handshake in the coordinator contract). This keeps the whole weak layer moving in parallel, one-capability-per-worker, instead of serializing it behind a single SD.
 
 ### C. The BUILD-% GAUGE duty (THE VISIBLE GAUGE, above)
 
