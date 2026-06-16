@@ -259,86 +259,6 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },
     {
-      "file": "test/unit/discovery-mode.test.js",
-      "reason_class": "unclassified",
-      "error_signature": "LLMEmptyResponseError: trend_scanner_empty_response: got 2 chars from LLM",
-      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "test/unit/modeling.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected +0 to be 5000000000 // Object.is equality",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "test/unit/stage-zero.test.js",
-      "reason_class": "unclassified",
-      "error_signature": "LLMUndercountError: trend_scanner_undercount: got 1 of 5 expected",
-      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "test/unit/synthesis-components-4-8.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "TypeError: Cannot read properties of null (reading 'type')",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "test/unit/synthesis-engine.test.js",
-      "reason_class": "assertion-drift",
-      "error_signature": "AssertionError: expected +0 to be 72 // Object.is equality",
-      "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/archived/directive-lab-debug.test.js",
-      "reason_class": "unclassified",
-      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
-      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/archived/directive-lab-e2e.test.js",
-      "reason_class": "unclassified",
-      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
-      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/archived/directive-lab-enhanced-features.test.js",
-      "reason_class": "unclassified",
-      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
-      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/archived/enhanced-directive-lab.test.js",
-      "reason_class": "unclassified",
-      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
-      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/archived/step4-layout-fix-verification.test.js",
-      "reason_class": "unclassified",
-      "error_signature": "Error: Playwright Test did not expect test.describe() to be called here.",
-      "linked_ref": "feedback:f44292ba-e082-4c39-aa9d-ae0000226313",
-      "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
       "file": "tests/capture-session-id-hook.test.js",
       "reason_class": "windows-abort-0xC0000409",
       "error_signature": "AssertionError: expected 3221226505 to be +0 // Object.is equality",
@@ -1015,14 +935,6 @@
       "reason_class": "assertion-drift",
       "error_signature": "AssertionError: expected error to be instance of ManifestoActivationError",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
-      "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
-    },
-    {
-      "file": "tests/unit/handoff-orchestrator.test.js",
-      "reason_class": "duplicate",
-      "error_signature": "AssertionError: expected false to be true // Object.is equality",
-      "linked_ref": "SD-LEO-INFRA-TEST-ESTATE-HYGIENE-001",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
     },

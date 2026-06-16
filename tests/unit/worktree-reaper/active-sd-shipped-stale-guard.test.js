@@ -17,7 +17,11 @@ vi.mock('../../../lib/worktree-reaper/detectors.js', () => ({
   isNested: vi.fn(() => ({ matched: false })),
   isZombieOnMain: vi.fn(() => ({ matched: false })),
   hasOrphanSD: vi.fn(() => ({ matched: false })),
-  isPatchEquivalentToMain: vi.fn(async () => ({ matched: true, reason: 'patch_equivalent_absorbed', evidence: {} })),
+  // SD-FDBK-FIX-WORKTREE-REAPER-LIVE-001 (PR #4669) demoted an absorbed-cherry match with ZERO
+  // merged PRs to advisory-only (unreliable under squash merges) — stage1 'shipped-stale' authority
+  // now REQUIRES merged-PR backing. Supply merged_pr_count:1 so these "STILL flags shipped-stale"
+  // cases exercise the merged-PR-backed path (the empty-evidence absorbed-no-PR case is advisory).
+  isPatchEquivalentToMain: vi.fn(async () => ({ matched: true, reason: 'patch_equivalent_via_squash', evidence: { merged_pr_count: 1 } })),
   isIdle: vi.fn(() => ({ matched: false })),
 }));
 

@@ -88,7 +88,11 @@ describe('stage-26-growth-playbook — FR-5 entry-precondition refusal', () => {
     expect(result.lifecycle_terminal).toBe(false);
   });
 
-  it('emits SKIP partial_postlaunch_artifacts when only one of the two is present', async () => {
+  it('PROCEEDS (no SKIP) when only one of the two postlaunch artifacts is present', async () => {
+    // SD-LEO-INFRA-DATADISTILL-HONEST-LAUNCH-001 (first-contact defect #11) deliberately removed
+    // the partial_postlaunch_artifacts SKIP: a venture launched minutes ago legitimately has
+    // assumptions_vs_reality but ZERO user feedback yet. PARTIAL data now generates an honest
+    // playbook from what exists (the prompt receives only the present artifacts) — it does NOT skip.
     const result = await analyzeStage26GrowthPlaybook({
       ventureName: 'TestVenture',
       ventureWorkflowStatus: 'in_progress',
@@ -97,9 +101,10 @@ describe('stage-26-growth-playbook — FR-5 entry-precondition refusal', () => {
         { artifact_type: 'postlaunch_user_feedback_summary', is_current: false },
       ],
     });
-    expect(result.status).toBe('no_data');
-    expect(result.reason).toBe('partial_postlaunch_artifacts');
-    expect(result.lifecycle_terminal).toBe(false);
+    expect(result.status).not.toBe('no_data');
+    expect(result.reason).not.toBe('partial_postlaunch_artifacts');
+    // The proceed path runs the generator (lifecycle_terminal carries an LLM-request marker, not a
+    // SKIP's `false`); the load-bearing contract is simply that it did NOT skip on partial data.
   });
 });
 

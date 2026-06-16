@@ -56,20 +56,25 @@ describe('session-check-concurrency.js entrypoint guard', () => {
     expect(typeof mod.detectSdKeyDrift).toBe('function');
   }, 5_000);
 
-  it('still runs main() when invoked as a CLI (sanity, exit code is 0/1/2)', () => {
-    // Use spawnSync so this runs as a real child process — the entrypoint
-    // guard's `import.meta.url === pathToFileURL(process.argv[1]).href`
-    // check passes only in this mode.
+  // QUARANTINED (SD-LEO-INFRA-UNIT-TIER-SOURCEPIN-REBASELINE-001, FR-3): this CLI-sanity check spawns
+  // a REAL child that does LIVE DB I/O (session-check-concurrency.js self-loads .env and queries
+  // claude_sessions; creds cannot be stripped from the test side). In isolation it exits in ~1s, but
+  // under full-suite parallelism (~1500 files / 16 workers all touching the DB) the child's query
+  // starves past the spawn timeout → SIGTERM → status=null with no banner printed, so it is
+  // chronically red on main. It is NOT a source regression: the entrypoint-guard mechanism is fully
+  // covered by the HERMETIC static-import test above (the actual QF-20260509-358 regression pin).
+  // A non-hermetic live-DB subprocess check belongs in an integration tier, not the unit tier.
+  // Rehoming tracked via /signal harness-bug. Skipped (not deleted) to preserve intent + history.
+  it.skip('still runs main() when invoked as a CLI (sanity) — NON-HERMETIC, rehome to integration tier', () => {
     const result = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: REPO_ROOT,
       encoding: 'utf-8',
       timeout: 15_000,
       env: { ...process.env, NODE_NO_WARNINGS: '1' }
     });
-
-    // 0 = isolated, 1 = concurrent, 2 = could-not-determine. All three are
-    // valid runtime outcomes; what we assert is that main() ran (i.e. one of
-    // the documented exit codes was emitted, NOT a silent no-op).
-    expect([0, 1, 2]).toContain(result.status);
+    // 0 = isolated, 1 = concurrent, 2 = could-not-determine — all valid; OR an observed main() banner.
+    const output = `${result.stdout || ''}${result.stderr || ''}`;
+    const mainRan = /\[ISOLATED\]|\[CONCURRENT SESSIONS DETECTED\]/.test(output);
+    expect(mainRan || [0, 1, 2].includes(result.status)).toBe(true);
   }, 20_000);
 });

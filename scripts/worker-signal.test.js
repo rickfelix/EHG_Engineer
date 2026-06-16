@@ -75,9 +75,11 @@ describe('WS-9: parseArgs --help flag', () => {
   });
 });
 
-describe('WS-10: type vocabulary fixed at 8 types + severity at 4 levels', () => {
+describe('WS-10: type vocabulary fixed at 9 types + severity at 4 levels', () => {
   it('exposes documented vocabularies and BODY_HARD_CAP=4096', () => {
-    expect(SIGNAL_TYPES).toEqual(['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-conflict', 'harness-bug', 'feedback', 'other']);
+    // 'unfit' added by SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-4, PR #4777): a worker reporting an
+    // assignment it cannot execute HERE/NOW (repo mismatch / closed premise / missing precondition).
+    expect(SIGNAL_TYPES).toEqual(['stuck', 'need-sweep', 'prd-ambiguous', 'gate-bug', 'spec-conflict', 'harness-bug', 'feedback', 'unfit', 'other']);
     expect(SEVERITIES).toEqual(['low', 'medium', 'high', 'critical']);
     expect(BODY_HARD_CAP).toBe(4096);
     // Sanity: redaction patterns count

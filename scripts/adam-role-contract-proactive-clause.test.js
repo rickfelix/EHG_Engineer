@@ -25,7 +25,10 @@ describe('Adam Role Contract — proactivity-is-propose clause', () => {
 
   it('forbids Adam autonomously BEGINNING self-generated proactive work without the coordinator', () => {
     expect(contract).toMatch(/does \*\*NOT\*\* autonomously|does NOT autonomously/);
-    expect(contract).toMatch(/proactive work requires the coordinator/i);
+    // Re-synced to the current canonical phrasing (the NEVER-HOLD-SOURCING carve-out reworded the
+    // clause): "...proactive work (investigations/building) requires the coordinator's go". Match the
+    // concept (proactive work … requires the coordinator) rather than a frozen exact phrase.
+    expect(contract).toMatch(/proactive work[\s\S]{0,60}requires the coordinator/i);
   });
 
   it('keeps surfacing findings / proposing options always in-bounds', () => {
