@@ -22,7 +22,9 @@ Active vision-ladder rung, ordinal 2 — **"See distance-to-quit"**:
 
 Distance-to-quit answers the operator's single most important survival/progress question: **"How close
 am I to being able to leave the day job?"** It is the headline emotional + financial signal of the whole
-EHG endeavor. The VDR gauge shows the application/cockpit layer at ~17% with this capability **unbuilt**.
+EHG endeavor. Per the VDR gauge (the separate vision-probe registry — `lib/vision/vdr-registry.js`, NOT
+the `vision_ladder_criteria` table), the application/cockpit layer is the weakest V1 area (~17% at the
+gauge run that sourced this work) with this capability **unbuilt**.
 
 ## 2. The quit-threshold (live, ratified working target — read at runtime, never hardcoded)
 
@@ -31,8 +33,11 @@ Source of truth: `strategic_directives_v2` where `sd_key='SD-LEO-ORCH-ADAM-PLAN-
 
 - **`draft_quit_threshold`:** *"EHG monthly net profit (after business expenses incl AI/infra costs)
   **≥ ~$14–15k/mo sustained 3–6 CONSECUTIVE months**. Equivalent annualized: ~$170–180k net…"*
-- **`status`:** *"**RATIFIED at sitting #1 (2026-06-11) as working target; amendable**"* — i.e. it is a
-  ratified working number, not an open draft. (Correction vs the parent spec's "unratified" note.)
+- **`status`:** *"**RATIFIED at sitting #1 (2026-06-11) as working target; amendable**"* — i.e. ratified
+  **as a working target**, but the dollar figure and sustain-window remain amendable: the
+  `draft_quit_threshold` prose itself is still labelled *"DRAFT for chairman ratification at roadmap
+  layout"*, and the parent cockpit spec cites a live, unresolved chairman decision (**$14–15k vs $18k**).
+  Treat the number as **ratified-but-provisional** — see Q-7.
 - **`derived`:** take-home ~$136k/yr ≈ $11.3k/mo, **plus** self-employed must cover health insurance
   (~$1.0–1.5k/mo), retirement replacement for 401k + pension (~$1.5–2.5k/mo), and SE-tax differences.
 - **`chairman_facts_verbatim`:** gross ~$200k/yr; ~32% taxes; employer covers health insurance; has 401k AND pension.
@@ -62,7 +67,7 @@ Source of truth: `strategic_directives_v2` where `sd_key='SD-LEO-ORCH-ADAM-PLAN-
 | Input | Source | Status |
 |-------|--------|--------|
 | **Quit-threshold ($ + sustained months)** | `SD-LEO-ORCH-ADAM-PLAN-KEEPER-001` metadata `…draft_quit_threshold` (read at runtime) | ✅ Exists (ratified). ⚠️ Stored as **prose** — parsing "~$14–15k / 3–6 months" out of text is brittle (see Q-3). |
-| **Current net monthly profit** | `income_capture_monthly` (table EXISTS, 14 columns) — intended source for revenue/expense per month | ⚠️ **Exists but not wired/populated.** `adam-exec-summary` hardcodes `netMonthly='~$0'` with the comment "when an income source exists this can read income_capture_monthly". **This is the blocking dependency (Q-1).** |
+| **Current net monthly profit** | `income_capture_monthly` (table EXISTS, 14 columns) — intended source for revenue/expense per month | ⚠️ **Populated but NOT wired into the gauge.** The table has begun capturing (1 row: 2026-06, recurring_revenue $25, business_expenses $0, source `ops_payment_events_aggregate`, **`livemode=false`** — i.e. test-mode). But `adam-exec-summary` does not read it — it hardcodes `netMonthly='~$0'` ("when an income source exists this can read income_capture_monthly"). **The blocking dependency (Q-1) is the WIRING + real (livemode) revenue/expense capture, not the table's existence.** |
 | **Consecutive-months run** | derived from `income_capture_monthly` history (count trailing months ≥ threshold) | ⚠️ Depends on the table being populated. |
 | **Existing headline line** | `scripts/adam-exec-summary.mjs` `quitLine` already renders "Distance-to-quit: net ~$0/mo vs … threshold" | ✅ Reuse — the cockpit tile is the richer visual of the same computation. |
 
@@ -106,9 +111,11 @@ Mirror the exec-summary's fail-soft idiom on every branch:
 
 ## 8. Open design questions (for the chairman)
 
-1. **Q-1 (BLOCKING):** `income_capture_monthly` exists but is **not populated/wired**. What feeds it —
-   revenue (from where?) and business expenses **including the fleet's own AI/infra costs**? Until this is
-   built, the gauge honestly shows net ~$0. *This is the prerequisite for the gauge to show a real number.*
+1. **Q-1 (BLOCKING):** `income_capture_monthly` exists and has **one test-mode row** ($25, `livemode=false`),
+   but it is **not wired into the gauge** and has **no real (livemode) revenue/expense capture** yet. What
+   feeds it in production — revenue (from where?) and business expenses **including the fleet's own AI/infra
+   costs**? Until the gauge reads it AND real income flows, it honestly shows net ~$0. *This wiring + real
+   capture is the prerequisite for the gauge to show a real number.*
 2. **Q-2:** Sustained period — **3 or 6** consecutive qualifying months? (The ratified text says 3–6.)
 3. **Q-3:** The threshold is stored as **prose** ("~$14–15k/mo sustained 3–6 months"). Should it become a
    **structured field** (`{ amount_min, amount_max, sustain_months }`) so the gauge parses it reliably
@@ -118,6 +125,9 @@ Mirror the exec-summary's fail-soft idiom on every branch:
 5. **Q-5:** Show the **derived buffer** (health-insurance + retirement-replacement breakdown) inside the
    gauge, or keep the gauge to the single net-vs-threshold number and link the breakdown?
 6. **Q-6:** Host surface + interactivity — inherited from the parent cockpit Q-4/Q-6 (read-only assumed).
+7. **Q-7:** The quit-threshold is ratified **as a working target** but the dollar figure is still
+   amendable — the prose self-labels "DRAFT for chairman ratification" and a live **$14–15k vs $18k**
+   decision is pending. Confirm the figure (and whether the gauge should display it as "provisional").
 
 ## 9. Build handoff (NO build in this SD)
 
