@@ -20,6 +20,10 @@ import { computeReviewHealth } from '../lib/fleet/review-health.mjs';
 // SD-LEO-INFRA-LOOP-LIVENESS-DETECTORS-001: reuse the pure detectors as the single source for the gauges.
 // SD-LEO-INFRA-REVIVE-EVA-HEARTBEAT-ALARM-001: + the EVA scheduler staleness detector.
 import { detectLoopExpiry, detectStalledLoop, detectEvaSchedulerStale } from '../lib/coordinator/detectors.cjs';
+// SD-LEO-INFRA-DEP-RESOLVER-IGNORE-NON-SDKEY-001: reuse the canonical SD-key dependency
+// predicate so prose/file-path/gate-name deps don't inflate the blocked count (ESM-imports-CJS,
+// same pattern as detectors.cjs above). SSOT shared with stale-session-sweep.cjs (QF-20260525-542).
+import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -175,7 +179,10 @@ try {
 // (e) DEPENDENCY / CRITICAL-PATH — blocked vs ready, plus stale-blocked anomalies
 let depLine, depStale = [];
 try {
-  const depOf = (s) => Array.isArray(s.dependencies) ? s.dependencies.map(d => d && (d.sd_id || d.sd_key || d)).filter(Boolean) : [];
+  // Canonical predicate: keeps only /^SD-[A-Z0-9-]+/ keys (string or sd_key/id/sd_id fields);
+  // prose strings, file paths, gate names, and object placeholders are dropped so they no longer
+  // count as unmet blockers (line 185/190 below). Unknown/missing REAL SD-keys still count as unmet.
+  const depOf = (s) => parseSdDependencies(s.dependencies);
   const depKeys = [...new Set(sds.flatMap(depOf))];
   const statusByKey = {};
   if (depKeys.length) {
