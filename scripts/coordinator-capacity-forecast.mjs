@@ -152,7 +152,8 @@ async function main() {
       idleNow++;
       const hbAgeS = Math.round((Date.now() - new Date(w.heartbeat_at).getTime()) / 1000);
       // A stale heartbeat is only a STALL if there is claimable work the loop is failing to take.
-      // beltDepth inputs (claimable[], openQfCount) are already in scope here (finalized below @161).
+      // beltDepth inputs are already populated before this loop (openQfCount + claimable[]); the
+      // beltDepth re-derivation lower down is only for the verdict math.
       const { stalled: stalledFlag, state: idleState, detail: idleDetail } =
         classifyIdleWorker({ hbAgeS, beltDepth: claimable.length + openQfCount });
       if (stalledFlag) stalled++;
