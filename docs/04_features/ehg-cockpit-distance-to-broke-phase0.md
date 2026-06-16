@@ -100,7 +100,10 @@ Runway in months drives a three-band gauge. **Candidate** cut points (exact numb
 | **Cash-positive** | `monthly_net_burn <= 0` | Not burning | distinct neutral/positive state, no finite runway |
 
 The 6/12-month cut points are **placeholders pending chairman ratification** (Q1); not
-asserted as final.
+asserted as final. Note the **cash-positive** band depends on `monthly_net_burn`, which
+requires netting revenue — a derivation that does not exist today (§2.1). It is therefore
+reachable only if **Q4** selects the net-burn branch; under the gross-burn reuse branch the
+gauge never enters the cash-positive state.
 
 ### 3.2 Refresh cadence
 
