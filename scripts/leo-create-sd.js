@@ -60,7 +60,7 @@ import { validateSDFields } from './modules/validate-sd-fields.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // SD-LEO-INFRA-SD-AUTHORING-TARGET-AUTODETECT-001: path-based target detector
 import { detectFromKeyChanges } from './modules/handoff/executors/lead-to-plan/gates/target-application.js';
-import { assertValidSdType, isValidSdType } from '../lib/sd-type-enum.js';
+import { assertValidSdType } from '../lib/sd-type-enum.js';
 
 const supabase = createSupabaseServiceClient();
 
@@ -895,7 +895,6 @@ async function createFromPlan(planPath = null, skipConfirmation = false, overrid
   console.log('   PLAN SUMMARY');
   console.log('   ═══════════════════════════════════════════');
   console.log(`   Title: ${parsed.title || '(untitled)'}`);
-  const typeSource = overrides.typeOverride ? 'override' : (priorityFromPlan !== undefined ? 'from plan' : 'inferred');
   // Type source is independent — re-derive to avoid coupling with priority detection.
   const typeLabel = overrides.typeOverride ? ' (override)' : (parsed.type && priorityFromPlan !== undefined ? ' (from plan or inferred)' : ' (inferred)');
   console.log(`   Type${typeLabel}: ${parsed.type}`);
@@ -1221,15 +1220,6 @@ function mapPriority(feedbackPriority) {
  * orchestrator, qa, refactor, security, implementation, strategic_observation,
  * architectural_review, discovery_spike, ux_debt, product_decision
  */
-// QF-20260504-251: VALID_DB_SD_TYPES aligned with actual sd_type_check enum.
-// Removed: 'qa', 'library', 'fix' (rejected by DB constraint).
-// Added: 'discovery_spike', 'ux_debt' (valid per constraint).
-const VALID_DB_SD_TYPES = [
-  'feature', 'infrastructure', 'bugfix', 'database', 'security',
-  'refactor', 'documentation', 'docs', 'orchestrator', 'performance',
-  'enhancement', 'uat', 'implementation', 'discovery_spike', 'ux_debt'
-];
-
 function mapToDbType(userType) {
   const map = {
     // User-friendly -> Database type
@@ -1266,9 +1256,8 @@ function mapToDbType(userType) {
     assertValidSdType(userType, `unknown --type value: no synonym match in mapToDbType for ${JSON.stringify(userType)}`);
   }
   // assertValidSdType is the contract anchor: throws unless `mapped` is in
-  // CANONICAL_SD_TYPES (lib/sd-type-enum.js), which mirrors the DB CHECK constraint.
-  // The legacy VALID_DB_SD_TYPES const above is retained for documentation but is no
-  // longer the validator of record.
+  // CANONICAL_SD_TYPES (lib/sd-type-enum.js), which mirrors the DB CHECK constraint
+  // and is the single validator of record.
   assertValidSdType(mapped, `mapToDbType produced non-canonical sd_type from input ${JSON.stringify(userType)}`);
   return mapped;
 }
