@@ -1,39 +1,109 @@
 {
-  "generated_at": "2026-06-16T04:22:25.977Z",
-  "git_commit": "ad7e92ac",
+  "generated_at": "2026-06-16T12:59:38.915Z",
+  "git_commit": "bc991d9d",
   "db_snapshot_hash": "7f0504975a9426f6",
   "files": {
+    "CLAUDE.md": {
+      "type": "full",
+      "chars": 19368,
+      "estimated_tokens": 4842,
+      "content_hash": "bf24de02d28fae95",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE.md"
+    },
+    "CLAUDE_CORE.md": {
+      "type": "full",
+      "chars": 83527,
+      "estimated_tokens": 20882,
+      "content_hash": "57a7f90178e01508",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_CORE.md"
+    },
+    "CLAUDE_LEAD.md": {
+      "type": "full",
+      "chars": 65128,
+      "estimated_tokens": 16282,
+      "content_hash": "cd6eddd0a629f8d7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_LEAD.md"
+    },
+    "CLAUDE_PLAN.md": {
+      "type": "full",
+      "chars": 90830,
+      "estimated_tokens": 22708,
+      "content_hash": "729ad3d926ce8579",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_PLAN.md"
+    },
+    "CLAUDE_EXEC.md": {
+      "type": "full",
+      "chars": 84821,
+      "estimated_tokens": 21206,
+      "content_hash": "f8dc0ebfdf6e7cca",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_EXEC.md"
+    },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 36180,
-      "estimated_tokens": 9045,
-      "content_hash": "7e3d20c23bb5e371",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_ADAM.md"
+      "chars": 36961,
+      "estimated_tokens": 9241,
+      "content_hash": "a4787bfa90ea0a80",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 15821,
-      "estimated_tokens": 3956,
-      "content_hash": "439a760223d2dda7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_COORDINATOR.md"
+      "chars": 16618,
+      "estimated_tokens": 4155,
+      "content_hash": "43ee8b6ecaae2584",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_COORDINATOR.md"
+    },
+    "CLAUDE_DIGEST.md": {
+      "type": "digest",
+      "chars": 9611,
+      "estimated_tokens": 2403,
+      "content_hash": "4773bec555b87234",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_DIGEST.md"
+    },
+    "CLAUDE_CORE_DIGEST.md": {
+      "type": "digest",
+      "chars": 11535,
+      "estimated_tokens": 2884,
+      "content_hash": "12ab81dea52fbf75",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_CORE_DIGEST.md"
+    },
+    "CLAUDE_LEAD_DIGEST.md": {
+      "type": "digest",
+      "chars": 5422,
+      "estimated_tokens": 1356,
+      "content_hash": "82c742649849c58c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_LEAD_DIGEST.md"
+    },
+    "CLAUDE_PLAN_DIGEST.md": {
+      "type": "digest",
+      "chars": 8412,
+      "estimated_tokens": 2103,
+      "content_hash": "29e39d6ca83bf6ca",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_PLAN_DIGEST.md"
+    },
+    "CLAUDE_EXEC_DIGEST.md": {
+      "type": "digest",
+      "chars": 10835,
+      "estimated_tokens": 2709,
+      "content_hash": "808c2a20b055222e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 9344,
       "estimated_tokens": 2336,
-      "content_hash": "9eed64f1540e64ff",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "4f7667136b6a1639",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 3973,
       "estimated_tokens": 994,
-      "content_hash": "a92796bc0be56f96",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "22c6fc2a22ca4a28",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-SOURCING-CAPACITY-CANONICALIZE-001\\CLAUDE_COORDINATOR_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "fa49b9b0339726a1",
+    "global": "865fab3b6529670d",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -290,8 +360,8 @@
       "601": "88747ca78c466c44",
       "602": "ad0aecae8cdc6cb3",
       "603": "ca922c736e8d8ed3",
-      "604": "bb29fe0a029f8d7e",
-      "605": "c8b0f2c0948e1c41",
+      "604": "2acf962c49efc60c",
+      "605": "19e13f356fce24ab",
       "606": "25aa68b575c66d07"
     },
     "meta": {
