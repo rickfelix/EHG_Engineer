@@ -1,0 +1,63 @@
+name: "Adam opportunity scan (cron)"
+
+# SD: SD-LEO-INFRA-ADAM-DURABLE-SOURCE-TRIGGER-001 (FR-1)
+#
+# Moves Adam's recurring opportunity-scan/source tick off session-scoped CronCreate (which
+# dies with the session) onto a DURABLE GitHub-Actions schedule, mirroring
+# adam-exec-email-cron.yml. Runs the existing read-only/propose-only `--scan` subcommand via
+# the existing `npm run adam:scan` script (scripts/adam-opportunity-scan.cjs --scan).
+#
+# FAIL-SOFT + PROPOSE-ONLY: the scan is read-only and ships INERT behind
+# ADAM_GOVERNANCE_HEARTBEAT_V1 (default OFF). The scheduled run only does real evaluation when
+# the repo variable ADAM_GOVERNANCE_HEARTBEAT_V1 == 'on' (mirrors the exec-email observe-only
+# bring-up). Candidates still route through selectAdvisory — the scan never auto-creates SDs.
+# The final `|| true` keeps a scan error from hard-failing the scheduled job.
+
+on:
+  schedule:
+    # Hourly (FR-2: matches the exec-email measurement-loop cadence; governance-scan's daily
+    # cadence is too slow). Fires at :37 — a non-:00 minute, offset from the exec-email :17 —
+    # to dodge GitHub Actions' top-of-hour scheduling congestion (queued runs get delayed or
+    # dropped) and to spread fleet cron load. The belt-low coordinator_request event
+    # (coordinator-capacity-forecast.mjs reachAdam, FR-3) is the responsive event-driven
+    # complement to this heartbeat tick.
+    - cron: '37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  adam-scan:
+    name: Adam opportunity scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Observe-only until the operator sets repo var ADAM_GOVERNANCE_HEARTBEAT_V1=on.
+      # With it off (default), the scan no-ops cleanly (ships INERT behind the flag).
+      ADAM_GOVERNANCE_HEARTBEAT_V1: ${{ vars.ADAM_GOVERNANCE_HEARTBEAT_V1 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Adam opportunity scan (read-only / propose-only; inert until ADAM_GOVERNANCE_HEARTBEAT_V1=on)
+        run: |
+          echo "Running adam:scan (flag=${ADAM_GOVERNANCE_HEARTBEAT_V1:-off})"
+          npm run adam:scan || true
