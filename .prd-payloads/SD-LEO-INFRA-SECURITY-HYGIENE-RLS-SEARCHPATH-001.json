@@ -1,0 +1,115 @@
+{
+  "executive_summary": "Close two genuine Supabase database-linter SECURITY findings and re-baseline the weekly security-linter sentinel so its signal lands on real gaps. (1) scope_completion_chain is a public table created additively with RLS disabled and zero policies (rls_disabled_in_public). (2) fn_advance_venture_stage is SECURITY DEFINER with a mutable search_path (function_search_path_mutable, a CVE-2018-1058-class privilege-escalation surface). Both are fixed by a single chairman-gated TIER-2 migration that ships DORMANT (worker authors + tests; the chairman applies via the 3-factor attestation gate). Separately, the sentinel was flagging ~24 disposable quarantine/parity/backup table copies from the 2026-06-09/10 purge sweep as RLS gaps, drowning the two real findings; FR-4 exempts exactly those disposable copies (tool-generated _qparity suffix by pattern; overloaded _backup/_quarantine names by explicit review-list) without ever exempting a live table.",
+  "system_architecture": {
+    "overview": "Three artifacts, no runtime behavior change for product code. The migration ships dormant (chairman-applied); the sentinel re-baseline and tests take effect on merge.",
+    "components": [
+      {"name": "20260616_security_hygiene_rls_searchpath.sql", "responsibility": "Chairman-gated TIER-2 migration: ENABLE RLS + SELECT-only read_all policy on scope_completion_chain (mirrors bypass_ledger/goal_evaluator_verdicts), ALTER FUNCTION fn_advance_venture_stage SET search_path = pg_catalog, public, and a DO $verify$ self-check. Ships dormant with an unfilled @approved-by."},
+      {"name": "scripts/sentinels/audit-security-linter.mjs", "responsibility": "Adds exported isExemptTable() (explicit disposable-table set + single _qparity tool-suffix pattern) applied to the rlsDisabled and sensitiveExposed filters, plus an import.meta.url entrypoint guard so the module is importable without opening a DB connection."},
+      {"name": "tests/unit/security-hygiene-rls-searchpath.test.js", "responsibility": "Unit coverage for the exemption logic (24 disposables exempt, live tables not, real dated backups not) and migration-content assertions."}
+    ]
+  },
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Enable RLS + read policy on scope_completion_chain",
+      "description": "In the chairman-gated migration, ALTER TABLE scope_completion_chain ENABLE ROW LEVEL SECURITY and create a SELECT-only policy scope_completion_chain_read_all USING (true), mirroring the live *_read_all convention on sibling tables bypass_ledger and goal_evaluator_verdicts. No write policy: the only writer/reader is service-role (runtime-probe-coverage-gate.js) and the owner-privileged witnesses VIEW, both of which bypass RLS, so enabling RLS is behavior-neutral while satisfying rls_disabled_in_public."
+    },
+    {
+      "id": "FR-2",
+      "title": "Pin fn_advance_venture_stage search_path",
+      "description": "ALTER FUNCTION public.fn_advance_venture_stage(uuid, integer, integer, jsonb, uuid) SET search_path = pg_catalog, public. The function body references only unqualified public objects and pg_catalog built-ins (verified: every referenced table/function lives in public or pg_catalog; gen_random_uuid resolves to the native pg_catalog version), so pg_catalog, public is the exact resolution order it already relies on — behavior is preserved while closing function_search_path_mutable."
+    },
+    {
+      "id": "FR-3",
+      "title": "Ship the migration dormant (chairman-gated TIER-2)",
+      "description": "The migration uses ALTER (RLS + function) statements that are TIER-2 and do not auto-apply. The worker authors and tests it but leaves the @approved-by attestation line unfilled (CONST-002). A self-verifying DO $verify$ block raises loudly if either fix did not land, so a chairman apply either fully succeeds or fails visibly."
+    },
+    {
+      "id": "FR-4",
+      "title": "Re-baseline the sentinel to exempt disposable copies only",
+      "description": "Add isExemptTable() to scripts/sentinels/audit-security-linter.mjs exempting the 24 disposable purge-sweep copies: the 20 tool-generated _qparityYYYYMMDD copies via an anchored pattern, and the 4 overloaded _backup/_quarantine names via an explicit reviewed set. A real dated backup/quarantine table (e.g. view_definitions_backup_YYYYMMDD) must remain flagged. Apply the exemption to both the rlsDisabled and sensitiveExposed filters."
+    },
+    {
+      "id": "FR-5",
+      "title": "Make the sentinel importable + test both surfaces",
+      "description": "Guard the sentinel's main() with an import.meta.url entrypoint check so importing the module (for tests) does not open a DB connection. Add tests/unit/security-hygiene-rls-searchpath.test.js asserting (a) all 24 disposables are exempt, (b) scope_completion_chain and other live tables are NOT exempt, (c) real dated backups are not pattern-exempted, and (d) the migration SQL contains the RLS enable, the read policy, the pinned search_path, an unfilled @approved-by, and the self-verify block."
+    }
+  ],
+  "technical_requirements": [
+    {"id": "TR-1", "requirement": "Migration is additive/behavior-preserving and idempotent (ENABLE RLS, IF NOT EXISTS policy guard via pg_policy, ALTER FUNCTION ... SET are all re-runnable)."},
+    {"id": "TR-2", "requirement": "No non-service-role writer to scope_completion_chain exists in the codebase (verified by grep); enabling RLS with a SELECT-only policy breaks no consumer."},
+    {"id": "TR-3", "requirement": "Sentinel exemption must be precise: zero false-positive exemptions of live tables; the only pattern is the campaign-only _qparityYYYYMMDD suffix."},
+    {"id": "TR-4", "requirement": "The sentinel continues to run live as a CLI (GitHub Actions Monday cron) after the entrypoint guard is added."}
+  ],
+  "implementation_approach": {
+    "summary": "Ground every gap against the live DB before coding, then author a dormant migration + a precise sentinel exemption, verify end-to-end, and drive the LEO chain. Migration application is chairman-only.",
+    "steps": [
+      "Ground against live DB: RLS state of scope_completion_chain, fn_advance_venture_stage proconfig, full disposable-table list, sibling read_all policy convention.",
+      "Author the dormant migration mirroring the live sibling read_all policy; use search_path = pg_catalog, public (not '') because the function uses unqualified public objects.",
+      "Harden the sentinel with an explicit-set + single-pattern exemption (overloaded _backup/_quarantine names listed, never pattern-matched) and an entrypoint guard.",
+      "Verify: run the live sentinel (25 RLS findings -> 1 real) and the unit suite; then drive LEAD->PLAN->EXEC->...->LEAD-FINAL."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": "scope_completion_chain: written/read by scripts/modules/handoff/executors/lead-final-approval/gates/runtime-probe-coverage-gate.js (service-role, bypasses RLS) and aggregated by the writer_consumer_asymmetry_witnesses VIEW (owner-privileged, bypasses RLS). fn_advance_venture_stage: called by the venture stage-advance path. audit-security-linter.mjs: consumed by the security-linter-sentinel GitHub Actions workflow and importable by the unit test.",
+    "dependencies": "Depends on the existing sibling migrations 20260516130000 (scope_completion_chain table), 20260516130002 (witnesses view), and the live bypass_ledger/goal_evaluator_verdicts read_all policy convention. Application depends on the chairman 3-factor attestation gate (feature flag + --issue-token + @approved-by) per apply-migration.js TIER-2 classification.",
+    "data_contracts": "scope_completion_chain columns unchanged (RLS is additive). fn_advance_venture_stage signature (uuid, integer, integer, jsonb, uuid) and return contract unchanged; only search_path metadata is pinned. The read_all policy exposes SELECT to public role exactly as siblings do.",
+    "runtime_config": "Migration ships dormant — no runtime config until the chairman applies it. The sentinel reads SUPABASE_POOLER_URL/DATABASE_URL (CI) or SUPABASE_DB_PASSWORD (local), unchanged. No new env vars or feature flags.",
+    "observability_rollout": "Rollout: code merges immediately; the sentinel re-baseline takes effect on next Monday cron (or workflow_dispatch). The migration is applied later by the chairman. Verification: the live sentinel goes from 25 RLS findings to 1 (scope_completion_chain) + 1 mutable function (fn_advance_venture_stage), and to fully CLEAN once the chairman applies the migration. Rollback: git revert the PR (sentinel) and/or a DISABLE RLS + DROP POLICY + reset search_path migration (function/table) — no data impact."
+  },
+  "acceptance_criteria": [
+    "The security-linter sentinel no longer reports the ~24 disposable purge-sweep copies as RLS gaps, so its output shows only the genuinely unprotected tables.",
+    "The sentinel still reports scope_completion_chain as an RLS gap and fn_advance_venture_stage as a mutable-search-path function until the chairman applies the migration (the findings are honestly surfaced, not silenced).",
+    "A real dated backup table such as view_definitions_backup_20260124 is still flagged by the sentinel — only the four reviewed disposable copies are explicitly exempt.",
+    "The migration, when applied with the chairman's attestation, enables row-level security on scope_completion_chain with a read policy and pins the venture-stage function's search path, and its self-check passes; if either fix fails to land, the migration aborts with a clear error.",
+    "The migration ships without a filled-in approval attestation, so it cannot be auto-applied and waits for the chairman.",
+    "The unit test suite for this work passes, covering both the exemption logic and the migration file contents."
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "title": "All 24 disposable copies are exempt; live tables are not",
+      "type": "unit",
+      "scenario": "Import isExemptTable() from the sentinel and call it on the 24 disposable table names captured live (qparity/quarantine/backup copies) and on a list of real live tables including scope_completion_chain, ventures, eva_decisions, bypass_ledger, goal_evaluator_verdicts.",
+      "expected": "isExemptTable returns true for all 24 disposable names and for schema_migrations/spatial_ref_sys; returns false for every real live table including scope_completion_chain."
+    },
+    {
+      "id": "TS-2",
+      "title": "Real dated backups are not pattern-exempted",
+      "type": "unit",
+      "scenario": "Call isExemptTable() on view_definitions_backup_20260124, product_requirements_v2_backup_20260206, rls_policy_backup_20260603, and some_feature_quarantine_20270101.",
+      "expected": "isExemptTable returns false for all of them — the overloaded _backup/_quarantine conventions are exempted only via the explicit reviewed set, never by an open-ended suffix pattern."
+    },
+    {
+      "id": "TS-3",
+      "title": "Migration content asserts both fixes and dormant attestation",
+      "type": "unit",
+      "scenario": "Read the migration SQL file and assert it contains the RLS enable on scope_completion_chain, the scope_completion_chain_read_all SELECT policy USING (true), ALTER FUNCTION ... SET search_path = pg_catalog, public (and NOT search_path = ''), an @approved-by line with no email value, and the DO $verify$ self-check raise messages.",
+      "expected": "All assertions pass: both fixes are present, the function path is pinned to pg_catalog, public, the attestation is unfilled (dormant), and the self-verify block is present."
+    },
+    {
+      "id": "TS-4",
+      "title": "Live sentinel run reduces RLS noise to the real gap",
+      "type": "integration",
+      "scenario": "Run node scripts/sentinels/audit-security-linter.mjs against the live consolidated DB before the chairman applies the migration.",
+      "expected": "rls_disabled_in_public reports exactly 1 table (scope_completion_chain) instead of ~25, and function_search_path_mutable reports exactly 1 function (fn_advance_venture_stage); the disposable copies no longer appear."
+    }
+  ],
+  "risks": [
+    {"risk": "search_path = pg_catalog, public shadows a public object the function relies on", "mitigation": "Verified the function body references no object whose name collides with a pg_catalog built-in; gen_random_uuid resolves natively in pg_catalog. Adversarial review confirmed no shadowing.", "severity": "low"},
+    {"risk": "Enabling RLS breaks a non-service-role writer to scope_completion_chain", "mitigation": "Grepped the codebase: the only consumer is the service-role runtime gate (read) and the owner-privileged witnesses VIEW; no anon/authenticated writer exists. SELECT-only policy added; service-role bypasses RLS.", "severity": "low"},
+    {"risk": "Sentinel exemption silently hides a future real RLS gap", "mitigation": "Overloaded _backup/_quarantine names are an explicit reviewed set; only the campaign-only _qparityYYYYMMDD suffix is a pattern. A test asserts real dated backups stay flagged.", "severity": "low"},
+    {"risk": "Worker self-applies the chairman-gated migration", "mitigation": "Ships dormant with an unfilled @approved-by; apply-migration.js TIER-2 gate blocks until the chairman attests. CONST-002 honored.", "severity": "low"}
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-SECURITY-HYGIENE-RLS-SEARCHPATH-001",
+    "target_application": "EHG_Engineer",
+    "target_files": [
+      "database/migrations/20260616_security_hygiene_rls_searchpath.sql",
+      "scripts/sentinels/audit-security-linter.mjs",
+      "tests/unit/security-hygiene-rls-searchpath.test.js"
+    ],
+    "created_via": "fleet-worker-charlie",
+    "chairman_gated_migration": "database/migrations/20260616_security_hygiene_rls_searchpath.sql"
+  }
+}
