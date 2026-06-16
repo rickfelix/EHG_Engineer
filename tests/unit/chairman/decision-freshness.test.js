@@ -24,10 +24,24 @@ const rows = () => [
 ];
 
 describe('isCorrectiveFlag', () => {
-  it('matches only "Corrective:" flag_reviews', () => {
+  it('matches only auto-generated "Corrective: … Vision/Architecture Gap" flag_reviews', () => {
     expect(isCorrectiveFlag({ decision_type: 'flag_review', title: 'Corrective: Vision Gap — x' })).toBe(true);
+    expect(isCorrectiveFlag({ decision_type: 'flag_review', title: 'Corrective: Architecture Gap — y' })).toBe(true);
     expect(isCorrectiveFlag({ decision_type: 'flag_review', title: 'security-linter failed' })).toBe(false);
-    expect(isCorrectiveFlag({ decision_type: 'chairman_approval', title: 'Corrective: x' })).toBe(false);
+    expect(isCorrectiveFlag({ decision_type: 'chairman_approval', title: 'Corrective: Vision Gap' })).toBe(false);
+    // a hand-written urgent "Corrective:" with NO gap signature must NOT collapse (stays its own action)
+    expect(isCorrectiveFlag({ decision_type: 'flag_review', title: 'Corrective: SEV1 — payments down' })).toBe(false);
+  });
+});
+
+describe('prepareDecisions — does not swallow a non-gap urgent "Corrective:" item', () => {
+  it('leaves a "Corrective: SEV1" flag_review as an individual action', () => {
+    const out = prepareDecisions([{ id: 'sev', decision_type: 'flag_review', title: 'Corrective: SEV1 — payments down', priority: 'critical' }], {});
+    expect(out[0]._corrective).toBeUndefined();
+  });
+  it('treats a chairman_approval whose venture row is GONE (hard-deleted) as droppable when its id is in deadVentureIds', () => {
+    const out = prepareDecisions([{ id: 'a', decision_type: 'chairman_approval', venture_id: 'gone', title: 'Stage 9 Approval' }], { deadVentureIds: new Set(['gone']) });
+    expect(out.find((r) => r.id === 'a')).toBeUndefined();
   });
 });
 

@@ -56,8 +56,12 @@ let deadVentureIds = new Set();
 try {
   const vids = [...new Set(rows.filter((r) => r.decision_type === 'chairman_approval' && r.venture_id).map((r) => r.venture_id))];
   if (vids.length) {
-    const { data: vrows } = await db.from('ventures').select('id, status').in('id', vids);
-    deadVentureIds = new Set((vrows || []).filter((v) => DEAD_VENTURE_STATUSES.has(String(v.status || '').toLowerCase())).map((v) => v.id));
+    const { data: vrows, error: vErr } = await db.from('ventures').select('id, status').in('id', vids);
+    if (!vErr) {
+      const found = new Set((vrows || []).map((v) => v.id));
+      // dead = terminal status OR the venture row is GONE (hard-deleted) — both make a pending approval stale
+      deadVentureIds = new Set(vids.filter((id) => !found.has(id) || (vrows || []).some((v) => v.id === id && DEAD_VENTURE_STATUSES.has(String(v.status || '').toLowerCase()))));
+    }
   }
 } catch (e) { console.warn('[adam-email] venture-status filter skipped (fail-soft): ' + (e?.message || e)); }
 const preparedRows = prepareDecisions(rows, { deadVentureIds });
@@ -293,5 +297,7 @@ if (DRY) {
   if (r && r.success) {
     const mk = await recordSent(db, { sentIso: recentWindow.nowIso, windowStartIso: recentWindow.startIso, windowEndIso: recentWindow.nowIso, sdCount: recentSdCount });
     console.log('ADAM-EMAIL-MARKER', JSON.stringify(mk));
+    // LOUD on failure: a missed marker re-opens the duplicate-send path (the next run won't see this send).
+    if (!mk.ok) console.error('[adam-email] CRITICAL: send marker NOT recorded — next run may duplicate this email: ' + mk.error);
   }
 }

@@ -36,7 +36,12 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: true
+  # SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001 (FR-1): MUST be false. With over-scheduling (~every 15 min)
+  # a true setting would let the next trigger CANCEL a run mid-send — between the Resend success and
+  # the audit_log marker insert — so the marker is never written and the following run re-sends a
+  # DUPLICATE. false serializes runs (one runs, the next queues), guaranteeing the marker is recorded
+  # before the next run's guard reads it. Runs are short (~2-3 min) so no meaningful pileup.
+  cancel-in-progress: false
 
 jobs:
   exec-email:
