@@ -11,9 +11,9 @@
  *   5. fail-loud: garbage → throws (post-FR-4 — replaces silent default-to-feature)
  *   6. fail-loud: empty string → throws
  *
- * Probe technique: extracts `mapToDbType` source + `VALID_DB_SD_TYPES` from
- * leo-create-sd.js AND splices the lib/sd-type-enum.js exports inline so the
- * extracted function can resolve `assertValidSdType`. Mirrors the existing
+ * Probe technique: extracts the `mapToDbType` source from leo-create-sd.js AND
+ * splices the lib/sd-type-enum.js exports inline so the extracted function can
+ * resolve `assertValidSdType`. Mirrors the existing
  * leo-create-sd-mapper.test.js probe but with the dependency injected.
  */
 
@@ -38,13 +38,14 @@ function runMapper(userType) {
   // Strip the `export ` prefix from sd-type-enum.js so the source can be eval'd in CJS.
   const enumStripped = enumSrc.replace(/\bexport\s+(const|function)\b/g, '$1');
 
-  const validMatch = src.match(/const VALID_DB_SD_TYPES = \[([\s\S]*?)\];/);
+  // mapToDbType resolves via the local `map` object + assertValidSdType (spliced from
+  // enumStripped); it does not reference the former VALID_DB_SD_TYPES const, which was
+  // removed as dead code (SD-LEO-INFRA-LEO-CREATE-SD-UNUSED-VARS-001), so we no longer splice it.
   const fnMatch = src.match(/function mapToDbType\(userType\)\s*\{[\s\S]*?\n\}/);
-  if (!validMatch || !fnMatch) throw new Error('Could not extract mapper from script');
+  if (!fnMatch) throw new Error('Could not extract mapper from script');
 
   const code = [
     enumStripped,
-    validMatch[0],
     fnMatch[0],
     'try {',
     '  const result = mapToDbType(' + JSON.stringify(userType) + ');',
