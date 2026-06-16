@@ -313,6 +313,7 @@
     "story:template": "node scripts/story-requirements-template.js",
     "sd:next": "node scripts/sd-next.js",
     "sd:cancel": "node scripts/cancel-sd.js",
+    "sd:reactivate": "node scripts/reactivate-sd.js",
     "sd:park": "node scripts/sd-park.js park",
     "sd:unpark": "node scripts/sd-park.js unpark",
     "signal": "node scripts/worker-signal.cjs",

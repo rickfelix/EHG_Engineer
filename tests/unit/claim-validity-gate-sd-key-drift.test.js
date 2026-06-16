@@ -94,8 +94,15 @@ describe('telemetry: console.warn emits sd_key_drift verdict (audit trail)', () 
 // ── Backward compat: stale-heartbeat path still works ────────────────────
 
 describe('backward compat: stale-heartbeat path preserved (no regression)', () => {
-  it('ownerIsDead boolean retains its 4-condition definition (status stale/released, is_alive false, missing)', () => {
-    expect(src).toMatch(/ownerIsDead\s*=\s*!owner\s*\|\|\s*owner\.status\s*===\s*['"]stale['"]\s*\|\|\s*owner\.status\s*===\s*['"]released['"]\s*\|\|\s*owner\.is_alive\s*===\s*false/);
+  it('ownerIsDead delegates to ownerIsDeadByLiveness (SD-LEO-INFRA-CLAIM-VALIDITY-ISALIVE-LAG-001 FR-1: is_alive now gated on heartbeat staleness; missing + status stale/released preserved)', () => {
+    // The inline 4-condition predicate was replaced by the pure ownerIsDeadByLiveness helper,
+    // which trusts heartbeat_at over the lagging is_alive column (is_alive===false => dead ONLY
+    // when the heartbeat is ALSO stale). The helper preserves the missing-owner + lifecycle-status
+    // dead signals (fail-open), so the prior conditions still hold for those cases.
+    expect(src).toMatch(/ownerIsDead\s*=\s*ownerIsDeadByLiveness\(owner,\s*Date\.now\(\)\)/);
+    expect(src).toMatch(/if\s*\(!owner\)\s*return true;/);
+    expect(src).toMatch(/owner\.status\s*===\s*['"]stale['"]\s*\|\|\s*owner\.status\s*===\s*['"]released['"]/);
+    expect(src).toMatch(/owner\.is_alive\s*===\s*false\)\s*return isHeartbeatStale/);
   });
 
   it('foreign_claim throw still fires when neither ownerIsDead NOR ownerHasSdKeyDrifted', () => {
