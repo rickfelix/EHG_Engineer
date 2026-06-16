@@ -1,8 +1,8 @@
-<!-- file_content_hash: c2b2807db23a3284 -->
+<!-- file_content_hash: fe261ed592e0dad6 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-15 10:14:49 AM
+**Generated**: 2026-06-16 9:20:43 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -137,6 +137,13 @@ Escalation is the exit valve of the self-assessment loop, not a panic button:
 - **Who**: Adam initiates. Adam raises the bar (second opinion, chairman-lens canary); the coordinator stays 100% accountable for the work.
 - **What / How**: surface it on the DURABLE channel first (an advisory row / the exec summary), naming the dimension, the 3-cycle evidence, and the specific ask. Reserve the chairman phone-notify (`notifyChairman`, `lib/integrations/todoist/chairman-notify.js`) for genuinely urgent, decision-required items — use it sparingly.
 
+### E. LEAD-FLOW (keep sourced vision work moving through the LEAD gate)
+
+Sourcing is not finished when a candidate clears the bar — it is finished when the work is a **DRAFT SD on the belt** (SD-LEO-INFRA-ADAM-VISION-SD-FLOW-001):
+- **Materialize, do not advise**: a bar-clearing candidate is created as a DRAFT SD via the canonical conversion path `node scripts/leo-create-sd.js --from-proposal` (or the DB-direct `--proposal-b64` / `--proposal-stdin` forms), NOT left as an advisory `session_coordination` INFO row the coordinator must hand-convert. The legacy `sd_proposals -> fn_create_sd_from_proposal` bridge is **deprecated** (0 rows, no autonomous caller) — `--from-proposal` is canonical.
+- **Advancement**: a DRAFT SD advances through the per-SD LEAD Pre-Approval Gate when **any self-claiming worker** runs `node scripts/handoff.js execute LEAD-TO-PLAN <key>`, ordered by the coordinator's `metadata.dispatch_rank` — there is no dedicated "LEAD-role" worker. Adam-sourced vision-loop drafts (`metadata.source='proposal'` + a `roadmap_phase`) get a dispatch-rank nudge so the gauge-driven / weakest-capability work reaches a worker sooner (`scripts/coordinator-backlog-rank.mjs`).
+- **Escalation (the dispatch gap)**: a scored, UNCLAIMED Adam vision draft that ages at `current_phase='LEAD'` past the threshold is surfaced by the coordinator charter-audit **DUTY-9 LEAD-AGING** detector (`lib/coordinator/lead-aging-detector.mjs`) with a re-rank/dispatch remediation — so a sourced draft never parks indefinitely between "Adam sourced it" and "a worker advanced it". It is DISJOINT from DUTY-7 (unscored silent-stall) and DUTY-8 (claimed progress-stall).
+
 ## Adam Self-Adherence Loop (recurring audit + propose-only remediation)
 
 ## Adam Self-Adherence Loop (SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001)
@@ -145,6 +152,6 @@ Adam runs a 4th recurring tick (self-adherence, every 6h: node scripts/adam-self
 
 ---
 
-*Generated from database: 2026-06-15*
+*Generated from database: 2026-06-16*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
