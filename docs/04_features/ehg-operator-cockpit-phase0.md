@@ -37,6 +37,11 @@ below maps **1:1** to one of these:
 | C4 | **The cockpit** (9) | The host surface itself — the always-on single-pane shell |
 | C5 | **Venture-performance read** (4) | Per-venture/portfolio read: which ventures are moving, stalled, or dead |
 
+> **Provenance note:** the capability **names + ordinals** above are verbatim from `vision_ladder_criteria`
+> (active rung). The **layer assignment** and the **~17% application-layer build %** are not ladder-row
+> values — they come from the VDR gauge / registry (`lib/vision/vdr-registry.js`), which keys its probes
+> to these same capability labels.
+
 ## 3. Estate provenance (what the chairman actually asked for)
 
 Semantic match over `conversion_ledger` (NOT keyword). Informing items:
@@ -67,8 +72,8 @@ These matched on keywords but are semantically unrelated — excluded per the SD
 | Tile | Moves | What it shows | Data source |
 |------|-------|---------------|-------------|
 | **T1 · North Star** | C1 | The one canonical objective + current value vs target, queryable | The active **vision ladder** rung / OKR objective (`vision_ladder_*`, `key_results`). Currently prose+ladder; "queryable" is the gap to close. |
-| **T2 · Distance-to-Broke** | C2 | Runway in weeks/months at current burn; red when < threshold | **Income/runway model** = cash-on-hand + burn rate. ⚠️ *This model does not yet exist* — see Q-1. |
-| **T3 · Distance-to-Quit** | C3 | Net monthly income vs the chairman quit-threshold | **Reuse** the existing `adam-exec-summary` distance-to-quit computation: chairman quit-threshold amendment (`SD-LEO-ORCH-ADAM-PLAN-KEEPER-001` metadata `…draft_quit_threshold`) + net-monthly income. |
+| **T2 · Distance-to-Broke** | C2 | Runway in weeks/months at current burn; red when < threshold | **Operator-level income/runway model** = cash-on-hand + actual burn. ⚠️ *No operator-level model exists yet* — the per-venture `financial-engine` (`src/api/financial-engine`) *projects venture* runway from assumptions, not the operator's actual cash position. See Q-1. |
+| **T3 · Distance-to-Quit** | C3 | Net monthly income vs the chairman quit-threshold | **Reuse** the existing `adam-exec-summary` distance-to-quit computation: chairman quit-threshold amendment (`SD-LEO-ORCH-ADAM-PLAN-KEEPER-001` metadata `…draft_quit_threshold`, live value **~$14–15k/mo**, itself unratified — chairman decision $14–15k vs $18k pending) + net-monthly income. |
 | **T4 · Cockpit Shell** | C4 | The always-on single-pane host: ticker banner + rotating tiles + persona toggle | Composition of T1–T3, T5; the shell IS the capability. Layout DNA from the chairman anchor idea (§3). |
 | **T5 · Venture Performance** | C5 | Per-venture status (moving / stalled / dead), grouped by investment category | **Venture data** (`ventures` + venture KPIs); grouping from the estate investment-categories framing (§3). |
 
@@ -84,7 +89,7 @@ Concept only — not a final visual design.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  ◀ TICKER:  North★ 34% ·· Broke in ~6wk ·· Quit: net $0 / $18k ·· 4 active │  ← T4 banner (always scrolling)
+│  ◀ TICKER:  North★ 34% ·· Broke in ~6wk ·· Quit: net $0 / $14k ·· 4 active │  ← T4 banner (always scrolling)
 ├──────────────────────────────────────────────────────────────────────────┤
 │  Persona:  ( Operator ) ( Chairman ) ( Builder )            [ always-on ]  │  ← persona toggle
 ├──────────────────────────────┬───────────────────────────────────────────┤
@@ -94,7 +99,7 @@ Concept only — not a final visual design.
 │  └────────────┘ └──────────┘ │                                            │
 │  ┌────────────┐ ┌──────────┐ │  (stretch, from the anchor idea: a music  │
 │  │ T3 QUIT    │ │ T5 VENT. │ │   strip the operator can rank — see Q-5)  │
-│  │  $0 / $18k │ │ 3↑ 1→ 0✗ │ │                                            │
+│  │  $0 / $14k │ │ 3↑ 1→ 0✗ │ │                                            │
 │  └────────────┘ └──────────┘ │                                            │
 └──────────────────────────────┴───────────────────────────────────────────┘
 ```
@@ -108,8 +113,11 @@ Concept only — not a final visual design.
 
 ## 6. Open design questions (for the chairman to resolve)
 
-1. **Q-1 (blocking T2):** There is **no income/runway model** yet (cash-on-hand + burn). Distance-to-broke
-   needs one. Build a minimal runway model first, or ship T2 as "not yet measurable"?
+1. **Q-1 (blocking T2):** There is **no operator-level income/runway model** yet (cash-on-hand + actual
+   burn). The per-venture `financial-engine` (`src/api/financial-engine`) projects *venture* runway from
+   assumptions, not the operator's actual cash position. Distance-to-broke needs an operator-level model.
+   Build a minimal one first, or ship T2 as "not yet measurable"? (Also: the quit-threshold dollar figure
+   in T3 is itself unratified — $14–15k vs $18k — and needs the chairman's decision.)
 2. **Q-2 (north star):** What is the single canonical **north-star metric** T1 should show, and at what
    target? (Today it's the vision ladder %, ~34% — is that the north star, or something revenue-based?)
 3. **Q-3 (personas):** Which personas does the toggle switch between, and what changes per persona
