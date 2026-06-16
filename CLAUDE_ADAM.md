@@ -1,8 +1,8 @@
-<!-- file_content_hash: fe261ed592e0dad6 -->
+<!-- file_content_hash: fe705ac3a65b4368 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-16 9:20:43 PM
+**Generated**: 2026-06-16 10:27:01 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
