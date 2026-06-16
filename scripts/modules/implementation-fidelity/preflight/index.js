@@ -11,6 +11,36 @@ import { getSDSearchTerms, gitLogForSD, detectImplementationRepos, EHG_ENGINEER_
 
 const execAsync = promisify(exec);
 
+// SD-LEO-INFRA-PREFLIGHT-AMBIGUITY-LABEL-FP-001:
+// The ambiguity patterns below guard 'unclear'/'ambiguous'/etc. with lookarounds that
+// exclude only [a-z-] — NOT '/'. So the deliberate classification-label enum
+// 'redundant/unclear/orphaned/adequate' (assessment vocabulary, used verbatim in review
+// reports) false-trips the 'unclear' marker (harness_backlog f5090617 / 7d1401d8).
+// CONSERVATIVELY neutralize ONLY a SLASH-delimited run of 2+ of these KNOWN labels before
+// the scan — slash is unambiguous enum syntax. Comma-joined runs are intentionally NOT
+// neutralized: a short comma run like 'unclear, redundant' overlaps real prose adjective
+// lists, and neutralizing it would open a gate hole on genuine prose.
+const CLASSIFICATION_LABELS = '(?:redundant|unclear|orphaned|adequate)';
+const CLASSIFICATION_LABEL_ENUM_RE = new RegExp(
+  CLASSIFICATION_LABELS + '(?:\\s*/\\s*' + CLASSIFICATION_LABELS + ')+',
+  'gi'
+);
+const LABEL_ENUM_PLACEHOLDER = ' CLASSIFICATION_LABEL_ENUM ';
+
+/**
+ * Replace slash-delimited classification-label enum runs (2+ of
+ * redundant/unclear/orphaned/adequate) with an inert placeholder so the ambiguity scan
+ * does not false-trip on them. Pure: no I/O. A bare prose 'unclear'/'ambiguous' (not
+ * inside such a slash run) is untouched and still trips the gate. Comma-joined runs are
+ * deliberately left intact (prose-overlap / gate-hole risk).
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripClassificationLabelEnums(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text.replace(CLASSIFICATION_LABEL_ENUM_RE, LABEL_ENUM_PLACEHOLDER);
+}
+
 /**
  * Run all preflight checks
  *
@@ -144,9 +174,15 @@ async function checkAmbiguityResolution(sd_id, validation, supabase) {
         /(?<![a-z-])don't know(?![a-z-])/gi
       ];
 
+      // SD-LEO-INFRA-PREFLIGHT-AMBIGUITY-LABEL-FP-001: neutralize slash-delimited
+      // classification-label enums before scanning, so a deliberate assessment-vocabulary
+      // run (e.g. redundant/unclear/orphaned/adequate) no longer false-trips. Bare prose
+      // 'unclear'/'ambiguous' (and comma-joined runs) are untouched and still gate.
+      const scannableDiff = stripClassificationLabelEnums(diff);
+
       const foundAmbiguities = [];
       for (const pattern of ambiguityPatterns) {
-        const matches = diff.match(pattern);
+        const matches = scannableDiff.match(pattern);
         if (matches) {
           foundAmbiguities.push(...matches);
         }
