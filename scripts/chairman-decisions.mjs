@@ -14,6 +14,7 @@ import {
   parseArgs, routeDecision, sortPending, effectivePriority, formatAge, USAGE,
 } from '../lib/chairman/decision-queue.mjs';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
+import { CHAIRMAN_FEEDBACK_TYPE } from '../lib/chairman/feedback-decision-type.mjs';
 
 const parsed = parseArgs(process.argv.slice(2));
 if (parsed.error) {
@@ -82,7 +83,7 @@ const writers = {
   recordFlagCall: async (id, decision, rationale) => {
     const { data: flag } = await db.from('leo_feature_flags').select('flag_key').eq('id', id).maybeSingle();
     const { data, error } = await db.from('feedback').insert({
-      type: 'improvement', source_application: 'EHG_Engineer', source_type: 'auto_capture',
+      type: CHAIRMAN_FEEDBACK_TYPE, source_application: 'EHG_Engineer', source_type: 'auto_capture',
       category: 'chairman_flag_decision', status: 'new', severity: 'low',
       title: `Chairman call on flag ${flag?.flag_key || id}: ${decision}`,
       description: rationale || '(no rationale provided)',
@@ -108,7 +109,7 @@ const writers = {
   // deferral — durable audit row; the item stays pending (visibility act, not a decision).
   recordDeferral: async (d) => {
     const { data, error } = await db.from('feedback').insert({
-      type: 'improvement', source_application: 'EHG_Engineer', source_type: 'auto_capture',
+      type: CHAIRMAN_FEEDBACK_TYPE, source_application: 'EHG_Engineer', source_type: 'auto_capture',
       category: 'chairman_decision_deferred', status: 'new', severity: 'low',
       title: `Chairman deferred ${d.decisionType}:${d.id}`,
       description: d.rationale || '(no rationale provided)',
