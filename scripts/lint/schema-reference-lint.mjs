@@ -25,6 +25,9 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { extractReferences, findViolations } from './schema-reference-extract.mjs';
+// SD-LEO-INFRA-SCHEMA-LINT-DEGRADED-FAILOPEN-001: a degraded --diff run (unresolvable base ->
+// whole-repo fallback) is ADVISORY and must not block; the pure helper encodes that exit rule.
+import { computeExitCode } from './schema-lint-exit.mjs';
 
 const SNAPSHOT_PATH = 'database/schema-reference-snapshot.json';
 const ALLOWLIST_PATH = 'scripts/lint/schema-reference-allowlist.json';
@@ -140,6 +143,18 @@ if (asJson) {
   console.log(JSON.stringify({ mode, files_checked: files.length, violations: allViolations }, null, 1));
 } else if (allViolations.length === 0) {
   console.log(`✅ schema-reference-lint (${mode}): ${files.length} file(s) checked, 0 violations`);
+} else if (degradedFallback) {
+  // Degraded full-repo sweep (the --diff base was unresolvable): these are the pre-existing
+  // backlog, NOT new drift, and the check is NON-BLOCKING (advisory). Print as a warning.
+  console.warn(`⚠️  schema-reference-lint (advisory — DEGRADED full-repo sweep, diff base unresolvable): ${allViolations.length} pre-existing reference(s) across ${files.length} file(s) checked. NOT blocking this PR (no diff base to scope new drift).`);
+  for (const v of allViolations) {
+    console.warn(`   ${v.file}:${v.line}  missing ${v.missing}  (${v.kind})`);
+  }
+  console.warn(
+    '\nThis is the known phantom backlog re-surfaced because the diff base could not be fetched; ' +
+    'it does not reflect new drift introduced by this change. To clear the backlog: ' +
+    'npm run schema:snapshot:lint (commit the result) or update ' + ALLOWLIST_PATH + '.'
+  );
 } else {
   console.error(`❌ schema-reference-lint (${mode}): ${allViolations.length} violation(s) in ${files.length} file(s) checked:\n`);
   for (const v of allViolations) {
@@ -154,4 +169,6 @@ if (asJson) {
   );
 }
 
-process.exitCode = allViolations.length > 0 ? 1 : 0;
+// FR-1: a degraded --diff run (unresolvable base) is advisory and exits 0; a resolvable-base run
+// keeps full diff-scoped blocking. An explicit --all run keeps degradedFallback=false -> unchanged.
+process.exitCode = computeExitCode({ violations: allViolations.length, degradedFallback });
