@@ -373,6 +373,41 @@ ${adamContent}
 `;
 }
 
+/**
+ * Generate CLAUDE_COORDINATOR_DIGEST.md — coordinator role contract essentials (enforcement).
+ * Mirrors generateAdamDigest.
+ * @param {Object} data - All data from database
+ * @param {Object} fileMapping - Section to file mapping (digest version)
+ * @param {Object} metadata - Generation metadata
+ * @returns {string} Generated CLAUDE_COORDINATOR_DIGEST.md content
+ */
+function generateCoordinatorDigest(data, fileMapping, metadata) {
+  const { protocol } = data;
+  const sections = protocol.sections;
+
+  const coordinatorSections = getSectionsByMapping(sections, 'CLAUDE_COORDINATOR_DIGEST.md', fileMapping);
+  const coordinatorContent = coordinatorSections.map(s => formatSectionCompact(s)).join('\n\n');
+
+  const header = generateDigestHeader('CLAUDE_COORDINATOR_DIGEST.md', metadata);
+  const fullLoadInstr = generateFullLoadInstructions('CLAUDE_COORDINATOR.md');
+
+  return `${header}# CLAUDE_COORDINATOR_DIGEST.md - Coordinator Role (Enforcement)
+
+**Protocol**: LEO ${protocol.version}
+**Purpose**: Coordinator role + SRE charter essentials — fleet supervisor session (<3k chars)
+
+${fullLoadInstr}
+
+---
+
+${coordinatorContent}
+
+---
+*The coordinator is NOT a worker and NOT Adam. Full contract in CLAUDE_COORDINATOR.md.*
+*Protocol: ${protocol.version}*
+`;
+}
+
 export {
   getSectionsByMapping,
   formatSectionCompact,
@@ -383,5 +418,6 @@ export {
   generateLeadDigest,
   generatePlanDigest,
   generateExecDigest,
-  generateAdamDigest
+  generateAdamDigest,
+  generateCoordinatorDigest
 };

@@ -1,25 +1,39 @@
 {
-  "generated_at": "2026-06-16T03:05:27.477Z",
-  "git_commit": "7690b69d",
+  "generated_at": "2026-06-16T04:22:25.977Z",
+  "git_commit": "ad7e92ac",
   "db_snapshot_hash": "7f0504975a9426f6",
   "files": {
     "CLAUDE_ADAM.md": {
       "type": "full",
       "chars": 36180,
       "estimated_tokens": 9045,
-      "content_hash": "6f255e8b7f483433",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001\\CLAUDE_ADAM.md"
+      "content_hash": "7e3d20c23bb5e371",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_ADAM.md"
+    },
+    "CLAUDE_COORDINATOR.md": {
+      "type": "full",
+      "chars": 15821,
+      "estimated_tokens": 3956,
+      "content_hash": "439a760223d2dda7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
       "chars": 9344,
       "estimated_tokens": 2336,
-      "content_hash": "29bb5f53c445599c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001\\CLAUDE_ADAM_DIGEST.md"
+      "content_hash": "9eed64f1540e64ff",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_ADAM_DIGEST.md"
+    },
+    "CLAUDE_COORDINATOR_DIGEST.md": {
+      "type": "digest",
+      "chars": 3973,
+      "estimated_tokens": 994,
+      "content_hash": "a92796bc0be56f96",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_COORDINATOR_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "fb40765324e4ba9e",
+    "global": "fa49b9b0339726a1",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -277,7 +291,7 @@
       "602": "ad0aecae8cdc6cb3",
       "603": "ca922c736e8d8ed3",
       "604": "bb29fe0a029f8d7e",
-      "605": "98f34c97e157d332",
+      "605": "c8b0f2c0948e1c41",
       "606": "25aa68b575c66d07"
     },
     "meta": {
