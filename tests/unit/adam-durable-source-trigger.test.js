@@ -65,6 +65,11 @@ describe('assessAdamSourceWatchdog (SD-LEO-INFRA-ADAM-DURABLE-SOURCE-TRIGGER-001
     expect(r.verdict).toBe('ok');
   });
 
+  it('defensive: a non-finite nowMs degrades to ok (never false-alarms the chairman email)', () => {
+    expect(assessAdamSourceWatchdog({ lastGaugeAtMs: minsAgo(999), nowMs: NaN }).verdict).toBe('ok');
+    expect(assessAdamSourceWatchdog({ lastGaugeAtMs: minsAgo(999) }).verdict).toBe('ok'); // nowMs undefined
+  });
+
   it('defensive: empty args do not throw', () => {
     expect(() => assessAdamSourceWatchdog({ nowMs: NOW })).not.toThrow();
     // no gauge timestamp + provisioned default true → missing (no run on record)
