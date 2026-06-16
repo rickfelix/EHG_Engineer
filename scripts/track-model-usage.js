@@ -12,10 +12,40 @@
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// SD-LEO-INFRA-MODEL-USAGE-PHASE-NORMALIZE-001 (FR-1):
+// The model_usage_log_phase_check CHECK constraint allows this exact set. The canonical
+// VERIFY phase name used everywhere else (subagent-enforcement-system.js,
+// sub_agent_execution_results) is PLAN_VERIFICATION, which is NOT in this set — its
+// already-accepted equivalent here is PLAN_VERIFY. Mirror of the live constraint; the
+// regression test introspects the live constraint to catch drift.
+const ALLOWED_PHASES = new Set([
+  'LEAD', 'PLAN', 'EXEC', 'UNKNOWN', 'STANDALONE', 'QF_COMPLETION', 'SD_COMPLETION',
+  'HANDOFF', 'COMPLETE', 'LEAD_APPROVAL', 'LEAD_FINAL_APPROVAL', 'PLAN_DESIGN',
+  'PLAN_VERIFY', 'EXEC_IMPLEMENTATION', 'LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN',
+  'PLAN-TO-LEAD', 'LEAD-FINAL', 'LEAD_FINAL', 'PROSPECTIVE_VALIDATION',
+]);
+
+// Canonical synonyms used elsewhere that are NOT in ALLOWED_PHASES → their accepted equivalent.
+const PHASE_SYNONYMS = { PLAN_VERIFICATION: 'PLAN_VERIFY' };
+
+/**
+ * Normalize a phase value to a model_usage_log_phase_check-allowed value.
+ * - Maps a known synonym (PLAN_VERIFICATION → PLAN_VERIFY) to its accepted equivalent.
+ * - Passes through any value already in the allowed set unchanged.
+ * - Falls back to the already-allowed 'UNKNOWN' for null/undefined/empty/unrecognized.
+ * Pure: no I/O, no DB. Never coerces an unknown value into an allowed one beyond PHASE_SYNONYMS.
+ */
+function normalizePhase(phase) {
+  if (!phase || typeof phase !== 'string') return 'UNKNOWN';
+  if (PHASE_SYNONYMS[phase]) return PHASE_SYNONYMS[phase];
+  if (ALLOWED_PHASES.has(phase)) return phase;
+  return 'UNKNOWN';
+}
 
 /**
  * Get configured model from agent file frontmatter
@@ -135,7 +165,7 @@ async function logModelUsage(data) {
   const record = {
     session_id: data.sessionId || null,
     sd_id: data.sdId || null,
-    phase: data.phase || 'UNKNOWN',
+    phase: normalizePhase(data.phase),
     subagent_type: data.subagentType,
     subagent_configured_model: data.configuredModel,
     reported_model_name: data.modelName,
@@ -217,10 +247,15 @@ async function main() {
 }
 
 // Export for use as module
-export { logModelUsage, getConfiguredModel };
+// SD-LEO-INFRA-MODEL-USAGE-PHASE-NORMALIZE-001 (FR-1): normalizePhase exported for unit testing.
+export { logModelUsage, getConfiguredModel, normalizePhase };
 
-// Run if executed directly
-main().catch(err => {
-  console.error('Error:', err.message);
-  process.exit(1);
-});
+// Run if executed directly.
+// SD-LEO-INFRA-MODEL-USAGE-PHASE-NORMALIZE-001 (FR-2): entry guard so importing this module
+// (e.g. the regression test importing normalizePhase) does NOT execute the CLI main().
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(err => {
+    console.error('Error:', err.message);
+    process.exit(1);
+  });
+}
