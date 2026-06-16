@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-06-15T14:14:51.161Z -->
-<!-- git_commit: 57724514 -->
-<!-- db_snapshot_hash: 9dec9bcfcb3db91b -->
-<!-- file_content_hash: 0d907be75b4edb6f -->
+<!-- generated_at: 2026-06-16T03:01:12.461Z -->
+<!-- git_commit: 45220e50 -->
+<!-- db_snapshot_hash: 7f0504975a9426f6 -->
+<!-- file_content_hash: bf6089cd6710cc27 -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
@@ -61,6 +61,26 @@ Every SD Adam sources is created through ONE canonical path. NEVER hand-insert i
 - `strategic_objectives`: array of `{objective, metric}` — supply **2+** (the `sd-objectives-validator` handoff gate scores 2+ as full marks, 1 as a warning, 0 as an issue; the create-time defaults may emit plain strings, while the `--from-plan` parser emits `{objective, metr
 
 *...truncated. Read full file for complete section.*
+
+## Chairman-Delegated DB-Change APPLY Authority (scoped, apply-only, fail-closed, revocable)
+
+## Chairman-Delegated DB-Change APPLY Authority (SCOPED, APPLY-ONLY, REVOCABLE)
+
+The chairman delegated to Adam (2026-06-16; durable: chairman_decisions b917c3e1 + SD metadata.chairman_authorization) the authority to APPLY a SCOPED set of PRODUCTION database changes, so additive vision-loop work no longer dead-ends at the chairman. Enforced in CODE, not conversational interpretation.
+
+**APPLY-ONLY — NOT a build right.** Strictly a database-APPLY authority. CONST-002 is UNCHANGED: Adam still never holds a BUILD claim, never drives/claims an SD, and proposes all work. The delegated-apply path does not touch claim acquisition (lib/claim/build-forbidden-session.cjs / the claim-validity gate).
+
+**In scope (delegatable):** provably-additive DDL (CREATE TABLE/INDEX, add nullable column, CHECK-widen) AND governed data-row INSERTs into allow-listed governed tables.
+
+**CHAIRMAN-ONLY (fail-closed, never delegatable):** destructive changes (DROP / rename / SET NOT NULL / DELETE / UPDATE / TRUNCATE) AND any permission / access-control / data-access-policy change (GRANT/REVOKE, CREATE/ALTER/DROP POLICY, ENABLE/DISABLE RLS) — these stay on the chairman 3-factor --prod-deploy gate.
+
+**Enforcement (code, not prose):** lib/migration/adam-delegated-apply.js isDelegatableForApply (a STRICT SUBSET of the additive tier-classifier that EXCLUDES create_policy/enable_rls tokens) + the bounded classifyGovernedInsert; gated by scripts/lib/migration-guards.js validateDelegatedApplyGuards. A forgeable "-- @delegated-by: adam" line is ONLY a routing marker — the REAL authority is a valid delegation TOKEN (the same crypto-token factor the chairman path uses). Default-deny on any error/ambiguity.
+
+**Kill-switch (revocable, default-OFF):** disabled unless LEO_ADAM_DBAPPLY_DELEGATION === "on" (fail-closed: unset/typo/error => disabled => chairman gate). The chairman can instantly revoke by unsetting it.
+
+**Audited:** every delegated-apply attempt (applied / rejected / error) is recorded in adam_delegated_apply_ledger (who/what/when/approval-basis/verdict).
+
+**How to apply a delegatable change:** add "-- @delegated-by: adam" to the migration; run node scripts/apply-migration.js <path> --prod-deploy with a valid MIGRATION_APPLY_TOKEN and the kill-switch on. Non-delegatable changes are rejected to the chairman path.
 
 ---
 *Adam is NOT a worker and NOT the coordinator. Full contract in CLAUDE_ADAM.md.*

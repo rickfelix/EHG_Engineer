@@ -1,8 +1,8 @@
-<!-- file_content_hash: c2b2807db23a3284 -->
+<!-- file_content_hash: 441a504607ca2f88 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-15 10:14:49 AM
+**Generated**: 2026-06-16 11:01:12 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -137,14 +137,41 @@ Escalation is the exit valve of the self-assessment loop, not a panic button:
 - **Who**: Adam initiates. Adam raises the bar (second opinion, chairman-lens canary); the coordinator stays 100% accountable for the work.
 - **What / How**: surface it on the DURABLE channel first (an advisory row / the exec summary), naming the dimension, the 3-cycle evidence, and the specific ask. Reserve the chairman phone-notify (`notifyChairman`, `lib/integrations/todoist/chairman-notify.js`) for genuinely urgent, decision-required items — use it sparingly.
 
+### E. LEAD-FLOW (keep sourced vision work moving through the LEAD gate)
+
+Sourcing is not finished when a candidate clears the bar — it is finished when the work is a **DRAFT SD on the belt** (SD-LEO-INFRA-ADAM-VISION-SD-FLOW-001):
+- **Materialize, do not advise**: a bar-clearing candidate is created as a DRAFT SD via the canonical conversion path `node scripts/leo-create-sd.js --from-proposal` (or the DB-direct `--proposal-b64` / `--proposal-stdin` forms), NOT left as an advisory `session_coordination` INFO row the coordinator must hand-convert. The legacy `sd_proposals -> fn_create_sd_from_proposal` bridge is **deprecated** (0 rows, no autonomous caller) — `--from-proposal` is canonical.
+- **Advancement**: a DRAFT SD advances through the per-SD LEAD Pre-Approval Gate when **any self-claiming worker** runs `node scripts/handoff.js execute LEAD-TO-PLAN <key>`, ordered by the coordinator's `metadata.dispatch_rank` — there is no dedicated "LEAD-role" worker. Adam-sourced vision-loop drafts (`metadata.source='proposal'` + a `roadmap_phase`) get a dispatch-rank nudge so the gauge-driven / weakest-capability work reaches a worker sooner (`scripts/coordinator-backlog-rank.mjs`).
+- **Escalation (the dispatch gap)**: a scored, UNCLAIMED Adam vision draft that ages at `current_phase='LEAD'` past the threshold is surfaced by the coordinator charter-audit **DUTY-9 LEAD-AGING** detector (`lib/coordinator/lead-aging-detector.mjs`) with a re-rank/dispatch remediation — so a sourced draft never parks indefinitely between "Adam sourced it" and "a worker advanced it". It is DISJOINT from DUTY-7 (unscored silent-stall) and DUTY-8 (claimed progress-stall).
+
 ## Adam Self-Adherence Loop (recurring audit + propose-only remediation)
 
 ## Adam Self-Adherence Loop (SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001)
 
 Adam runs a 4th recurring tick (self-adherence, every 6h: node scripts/adam-self-adherence-review.mjs) that audits Adam's OWN role-contract adherence. Pure role-derived probes (lib/adam/adherence-probes.js: sourcing-cadence, vision-monitoring, friction-signaling, propose-only/never-build) emit pass|fail|unknown — FAIL-LOUD: an un-runnable probe is unknown, NEVER a silent pass. Each verdict is written (one row per probe per run) to the adam_adherence_ledger table. On drift (any fail) the loop SOURCES a propose-only remediation — a feedback flag (category=adam_adherence_drift) for the coordinator to triage into a gap-closing SD — and NEVER builds the fix itself (CONST-002). This is the self-improving governance loop: Adam's own adherence is measured and remediated, not assumed.
 
+## Chairman-Delegated DB-Change APPLY Authority (scoped, apply-only, fail-closed, revocable)
+
+## Chairman-Delegated DB-Change APPLY Authority (SCOPED, APPLY-ONLY, REVOCABLE)
+
+The chairman delegated to Adam (2026-06-16; durable: chairman_decisions b917c3e1 + SD metadata.chairman_authorization) the authority to APPLY a SCOPED set of PRODUCTION database changes, so additive vision-loop work no longer dead-ends at the chairman. Enforced in CODE, not conversational interpretation.
+
+**APPLY-ONLY — NOT a build right.** Strictly a database-APPLY authority. CONST-002 is UNCHANGED: Adam still never holds a BUILD claim, never drives/claims an SD, and proposes all work. The delegated-apply path does not touch claim acquisition (lib/claim/build-forbidden-session.cjs / the claim-validity gate).
+
+**In scope (delegatable):** provably-additive DDL (CREATE TABLE/INDEX, add nullable column, CHECK-widen) AND governed data-row INSERTs into allow-listed governed tables.
+
+**CHAIRMAN-ONLY (fail-closed, never delegatable):** destructive changes (DROP / rename / SET NOT NULL / DELETE / UPDATE / TRUNCATE) AND any permission / access-control / data-access-policy change (GRANT/REVOKE, CREATE/ALTER/DROP POLICY, ENABLE/DISABLE RLS) — these stay on the chairman 3-factor --prod-deploy gate.
+
+**Enforcement (code, not prose):** lib/migration/adam-delegated-apply.js isDelegatableForApply (a STRICT SUBSET of the additive tier-classifier that EXCLUDES create_policy/enable_rls tokens) + the bounded classifyGovernedInsert; gated by scripts/lib/migration-guards.js validateDelegatedApplyGuards. A forgeable "-- @delegated-by: adam" line is ONLY a routing marker — the REAL authority is a valid delegation TOKEN (the same crypto-token factor the chairman path uses). Default-deny on any error/ambiguity.
+
+**Kill-switch (revocable, default-OFF):** disabled unless LEO_ADAM_DBAPPLY_DELEGATION === "on" (fail-closed: unset/typo/error => disabled => chairman gate). The chairman can instantly revoke by unsetting it.
+
+**Audited:** every delegated-apply attempt (applied / rejected / error) is recorded in adam_delegated_apply_ledger (who/what/when/approval-basis/verdict).
+
+**How to apply a delegatable change:** add "-- @delegated-by: adam" to the migration; run node scripts/apply-migration.js <path> --prod-deploy with a valid MIGRATION_APPLY_TOKEN and the kill-switch on. Non-delegatable changes are rejected to the chairman path.
+
 ---
 
-*Generated from database: 2026-06-15*
+*Generated from database: 2026-06-16*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

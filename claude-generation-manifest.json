@@ -1,18 +1,39 @@
 {
-  "generated_at": "2026-06-15T14:14:51.161Z",
-  "git_commit": "57724514",
-  "db_snapshot_hash": "9dec9bcfcb3db91b",
+  "generated_at": "2026-06-16T03:01:12.461Z",
+  "git_commit": "45220e50",
+  "db_snapshot_hash": "7f0504975a9426f6",
   "files": {
+    "CLAUDE_ADAM.md": {
+      "type": "full",
+      "chars": 36180,
+      "estimated_tokens": 9045,
+      "content_hash": "e2cc5d2d4fdbb0d8",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_ADAM.md"
+    },
+    "CLAUDE_COORDINATOR.md": {
+      "type": "full",
+      "chars": 13993,
+      "estimated_tokens": 3499,
+      "content_hash": "1b2860fe7e49dcb1",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_COORDINATOR.md"
+    },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 6928,
-      "estimated_tokens": 1732,
-      "content_hash": "00e8b1242f80df58",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-ROLE-CONTRACT-001\\CLAUDE_ADAM_DIGEST.md"
+      "chars": 9344,
+      "estimated_tokens": 2336,
+      "content_hash": "3f6c6092ced3dc5e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_ADAM_DIGEST.md"
+    },
+    "CLAUDE_COORDINATOR_DIGEST.md": {
+      "type": "digest",
+      "chars": 3973,
+      "estimated_tokens": 994,
+      "content_hash": "133a4053b9dbf03c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-COORDINATOR-ROLE-CONTRACT-001\\CLAUDE_COORDINATOR_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "555a881c9ae0da20",
+    "global": "fb40765324e4ba9e",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -269,7 +290,9 @@
       "601": "88747ca78c466c44",
       "602": "ad0aecae8cdc6cb3",
       "603": "ca922c736e8d8ed3",
-      "604": "629ec121c6d72a97"
+      "604": "bb29fe0a029f8d7e",
+      "605": "98f34c97e157d332",
+      "606": "25aa68b575c66d07"
     },
     "meta": {
       "94": {
@@ -1551,6 +1574,16 @@
         "section_type": "adam_role_contract",
         "target_file": "CLAUDE_ADAM.md",
         "title": "SD Creation How-To + Duty Procedures (Conversion · Build-% Gauge · Escalation)"
+      },
+      "605": {
+        "section_type": "coordinator_role_contract",
+        "target_file": "CLAUDE_COORDINATOR.md",
+        "title": "Coordinator Role Contract — Fleet Supervisor / SRE Session"
+      },
+      "606": {
+        "section_type": "adam_role_contract",
+        "target_file": "CLAUDE_ADAM.md",
+        "title": "Chairman-Delegated DB-Change APPLY Authority (scoped, apply-only, fail-closed, revocable)"
       }
     }
   }
