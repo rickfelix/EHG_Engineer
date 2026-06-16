@@ -1,11 +1,11 @@
-# adam_adherence_ledger Table
+# vision_build_gauge Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-06-16T01:17:43.910Z
-**Rows**: 32
+**Rows**: 0
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,50 +14,45 @@
 
 ---
 
-## Columns (8 total)
+## Columns (10 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| run_id | `uuid` | **NO** | - | - |
-| probe | `text` | **NO** | - | - |
-| duty | `text` | **NO** | - | - |
-| verdict | `text` | **NO** | - | - |
-| detail | `text` | YES | - | - |
-| remediation_ref | `text` | YES | - | - |
-| created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| overall_pct | `integer(32)` | YES | - | - |
+| available | `boolean` | **NO** | `true` | - |
+| per_layer | `jsonb` | **NO** | `'{}'::jsonb` | - |
+| components | `jsonb` | **NO** | `'[]'::jsonb` | - |
+| denominator | `integer(32)` | **NO** | `0` | - |
+| total_capabilities | `integer(32)` | **NO** | `0` | - |
+| unknown_count | `integer(32)` | **NO** | `0` | - |
+| source | `text` | **NO** | `'vdr'::text` | - |
+| measured_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `adam_adherence_ledger_pkey`: PRIMARY KEY (id)
-
-### Check Constraints
-- `adam_adherence_ledger_verdict_check`: CHECK ((verdict = ANY (ARRAY['pass'::text, 'fail'::text, 'unknown'::text])))
+- `vision_build_gauge_pkey`: PRIMARY KEY (id)
 
 ## Indexes
 
-- `adam_adherence_ledger_pkey`
+- `idx_vision_build_gauge_measured_at`
   ```sql
-  CREATE UNIQUE INDEX adam_adherence_ledger_pkey ON public.adam_adherence_ledger USING btree (id)
+  CREATE INDEX idx_vision_build_gauge_measured_at ON public.vision_build_gauge USING btree (measured_at DESC)
   ```
-- `idx_adam_adherence_ledger_created`
+- `vision_build_gauge_pkey`
   ```sql
-  CREATE INDEX idx_adam_adherence_ledger_created ON public.adam_adherence_ledger USING btree (created_at DESC)
-  ```
-- `idx_adam_adherence_ledger_run`
-  ```sql
-  CREATE INDEX idx_adam_adherence_ledger_run ON public.adam_adherence_ledger USING btree (run_id)
+  CREATE UNIQUE INDEX vision_build_gauge_pkey ON public.vision_build_gauge USING btree (id)
   ```
 
 ## RLS Policies
 
-### 1. adam_adherence_ledger_read (SELECT)
+### 1. vision_build_gauge_read (SELECT)
 
 - **Roles**: {public}
 - **Using**: `((auth.role() = 'authenticated'::text) OR (auth.role() = 'service_role'::text))`
 
-### 2. adam_adherence_ledger_service_write (ALL)
+### 2. vision_build_gauge_service_write (ALL)
 
 - **Roles**: {public}
 - **Using**: `(auth.role() = 'service_role'::text)`
