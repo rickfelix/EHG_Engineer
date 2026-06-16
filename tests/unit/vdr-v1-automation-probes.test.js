@@ -34,8 +34,9 @@ describe('VDR_REGISTRY — 4 new automation/intelligence entries (ordinals 17-20
     expect(e.probe.type).toBe('code_grep'); // bands 'partial' max, never 'built'
   });
 
-  it('the registry now has 15 capabilities (11 + 4)', () => {
-    expect(VDR_REGISTRY.length).toBe(15);
+  it('the registry includes these 4 (alongside the concurrently-landed governance + capability-layer clusters)', () => {
+    // 22 = 11 original + 5 governance (V1-GOV-PROBES) + 2 capability-layer (V1-CAPLAYER-PROBES) + 4 here.
+    expect(VDR_REGISTRY.length).toBe(22);
   });
 });
 

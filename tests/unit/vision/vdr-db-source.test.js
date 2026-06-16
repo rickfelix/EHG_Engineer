@@ -73,7 +73,9 @@ describe('dbVisionSource (FR-4) — reads active rung criteria from the ladder p
 
 describe('computeBuildGauge visionSource=true (FR-4) — DB denominator, unchanged probe math', () => {
   it('computes the gauge from the DB source with the SAME 4-state/unknowns-excluded math', async () => {
-    // Same probe inputs as the markdown-source test: 6 DB-backed probeable, 5 code_grep unknown.
+    // Same probe inputs as the markdown-source test: 6 original DB-backed probeable + the 2
+    // capability-layer db_count probes (sd_capabilities/specialist_registry, no count here → 0 →
+    // unbuilt) = 8 scored; 5 code_grep unknown.
     const io = {
       supabase: stubLadderSupabase({
         countByTable: { agent_messages: 2, pattern_occurrences: 0, key_results: 1 },
@@ -88,11 +90,11 @@ describe('computeBuildGauge visionSource=true (FR-4) — DB denominator, unchang
     expect(g.available).toBe(true);
     expect(g.coherence.ok).toBe(true); // DB labels match VDR_REGISTRY → no drift
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
-    // 9 unknown = 5 original code_grep + 4 SD-LEO-INFRA-V1-AUTOMATION-PROBES-001 automation/intelligence
-    // code_grep probes (ordinals 17-20), all 'unknown' here (no grep seam in this stub) — excluded.
-    expect(g.unknown_count).toBe(9);
-    expect(g.denominator).toBe(6);
-    expect(g.overall_pct).toBe(33); // identical to the markdown-source path
+    // unknown_count = 5 original code_grep + 5 governance + 4 automation/intelligence (ordinals 17-20) = 14.
+    // All code_grep with no seam (or KR-GOV rows absent) in this stub → 'unknown'; denominator/overall unchanged.
+    expect(g.unknown_count).toBe(14);
+    expect(g.denominator).toBe(8); // +2: the capability-layer db_count probes (unbuilt at count 0)
+    expect(g.overall_pct).toBe(25); // (1+0.5+0.5+0+0+0+0+0)/8 = 2.0/8 = 25%; identical to the markdown-source path
     expect(g.measured_at_note).toMatch(/DB vision source/);
   });
 
