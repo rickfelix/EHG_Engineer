@@ -1,95 +1,25 @@
 {
-  "generated_at": "2026-06-16T02:27:01.050Z",
-  "git_commit": "0e0c4847",
-  "db_snapshot_hash": "5d958fb45bf60028",
+  "generated_at": "2026-06-16T03:05:27.477Z",
+  "git_commit": "7690b69d",
+  "db_snapshot_hash": "7f0504975a9426f6",
   "files": {
-    "CLAUDE.md": {
-      "type": "full",
-      "chars": 19369,
-      "estimated_tokens": 4843,
-      "content_hash": "ac4d80b4fca34a4e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE.md"
-    },
-    "CLAUDE_CORE.md": {
-      "type": "full",
-      "chars": 83528,
-      "estimated_tokens": 20882,
-      "content_hash": "bd12f4b2a2614293",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_CORE.md"
-    },
-    "CLAUDE_LEAD.md": {
-      "type": "full",
-      "chars": 65129,
-      "estimated_tokens": 16283,
-      "content_hash": "3d462284b49a23a7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_LEAD.md"
-    },
-    "CLAUDE_PLAN.md": {
-      "type": "full",
-      "chars": 90831,
-      "estimated_tokens": 22708,
-      "content_hash": "d210e822483ba9f8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_PLAN.md"
-    },
-    "CLAUDE_EXEC.md": {
-      "type": "full",
-      "chars": 84822,
-      "estimated_tokens": 21206,
-      "content_hash": "0dc1cd0f0abcefdc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_EXEC.md"
-    },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 33764,
-      "estimated_tokens": 8441,
-      "content_hash": "bd9daf1a022cb26d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_ADAM.md"
-    },
-    "CLAUDE_DIGEST.md": {
-      "type": "digest",
-      "chars": 9612,
-      "estimated_tokens": 2403,
-      "content_hash": "bb3d24fc80aaa69c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_DIGEST.md"
-    },
-    "CLAUDE_CORE_DIGEST.md": {
-      "type": "digest",
-      "chars": 11536,
-      "estimated_tokens": 2884,
-      "content_hash": "7d8130541fb4a950",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_CORE_DIGEST.md"
-    },
-    "CLAUDE_LEAD_DIGEST.md": {
-      "type": "digest",
-      "chars": 5423,
-      "estimated_tokens": 1356,
-      "content_hash": "054536e48b2fb492",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_LEAD_DIGEST.md"
-    },
-    "CLAUDE_PLAN_DIGEST.md": {
-      "type": "digest",
-      "chars": 8413,
-      "estimated_tokens": 2104,
-      "content_hash": "95e5aaaa7e313a9f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_PLAN_DIGEST.md"
-    },
-    "CLAUDE_EXEC_DIGEST.md": {
-      "type": "digest",
-      "chars": 10836,
-      "estimated_tokens": 2709,
-      "content_hash": "a5023c48f888fa39",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_EXEC_DIGEST.md"
+      "chars": 36180,
+      "estimated_tokens": 9045,
+      "content_hash": "6f255e8b7f483433",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 6928,
-      "estimated_tokens": 1732,
-      "content_hash": "04ff87f29d8658f9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001\\CLAUDE_ADAM_DIGEST.md"
+      "chars": 9344,
+      "estimated_tokens": 2336,
+      "content_hash": "29bb5f53c445599c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001\\CLAUDE_ADAM_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "be14b9a0856d7108",
+    "global": "fb40765324e4ba9e",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -347,7 +277,8 @@
       "602": "ad0aecae8cdc6cb3",
       "603": "ca922c736e8d8ed3",
       "604": "bb29fe0a029f8d7e",
-      "605": "98f34c97e157d332"
+      "605": "98f34c97e157d332",
+      "606": "25aa68b575c66d07"
     },
     "meta": {
       "94": {
@@ -1634,6 +1565,11 @@
         "section_type": "coordinator_role_contract",
         "target_file": "CLAUDE_COORDINATOR.md",
         "title": "Coordinator Role Contract — Fleet Supervisor / SRE Session"
+      },
+      "606": {
+        "section_type": "adam_role_contract",
+        "target_file": "CLAUDE_ADAM.md",
+        "title": "Chairman-Delegated DB-Change APPLY Authority (scoped, apply-only, fail-closed, revocable)"
       }
     }
   }

@@ -42,10 +42,36 @@ import { parseDeclaredObjects, detectDestructiveDDL } from './lib/migration-obje
 import { captureObjectDefinitions, buildObjectDiffs } from './lib/migration-verification.js';
 import {
   validateProdDeployGuards,
+  validateDelegatedApplyGuards,
+  extractDelegatedBy,
   hashToken,
   generateTokenValue,
 } from './lib/migration-guards.js';
 import { getLatestSuccessForPath } from '../lib/migration-audit-reader.js';
+
+// SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001 (FR-4): audit-always ledger write for delegated
+// applies. SEPARATE short-lived connection so the row survives an apply-tx ROLLBACK (SEC-H cond 7).
+// Fail-soft: a ledger write failure is logged loudly but never crashes the apply path.
+const DELEGATION_APPROVAL_BASIS =
+  'chairman authorization 2026-06-16 (chairman_decisions b917c3e1; SD metadata.chairman_authorization)';
+async function recordDelegatedApply(row) {
+  let fc = null;
+  try {
+    fc = await createDatabaseClient('engineer', { verify: false });
+    await fc.query(
+      `INSERT INTO public.adam_delegated_apply_ledger
+         (migration_path, migration_sha256, delegatable, delegatable_kind, outcome, reject_factor, reason, approval_basis, success, error)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [row.migration_path ?? null, row.migration_sha256 ?? null, row.delegatable === true,
+       row.delegatable_kind ?? null, row.outcome, row.reject_factor ?? null, row.reason ?? null,
+       DELEGATION_APPROVAL_BASIS, row.success ?? null, row.error ? String(row.error).slice(0, 4000) : null]
+    );
+  } catch (e) {
+    process.stderr.write(`[delegated-apply-ledger-write-failed] ${e.message} (outcome=${row.outcome})\n`);
+  } finally {
+    if (fc) await fc.end().catch(() => {});
+  }
+}
 
 const GLOBAL_MIGRATION_LOCK_ID = 0x6d69_6772; // 'migr' as int — stable global advisory lock id
 const LOCK_WAIT_MS = 5000;
@@ -231,19 +257,42 @@ async function applyMode({ args, repoRoot }) {
     return 1;
   }
 
-  const guards = await validateProdDeployGuards({
-    flagPresent: prodDeploy,
-    tokenEnv: process.env.MIGRATION_APPLY_TOKEN,
-    sqlContent: sql,
-    gitUserEmail: gitUserEmail(),
-    client: auditClient,
-  });
+  // SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001: route by the `-- @delegated-by: adam` marker.
+  // Delegated path = SCOPED (additive + governed data-row only), fail-closed, kill-switch-gated,
+  // token-authenticated (SEC-H1). The chairman path (validateProdDeployGuards) is UNCHANGED and
+  // remains the only path for non-delegated / non-delegatable changes.
+  const isDelegated = extractDelegatedBy(sql) !== null;
+  const guards = isDelegated
+    ? await validateDelegatedApplyGuards({
+        flagPresent: prodDeploy,
+        tokenEnv: process.env.MIGRATION_APPLY_TOKEN,
+        sqlContent: sql,
+        client: auditClient,
+        env: process.env,
+      })
+    : await validateProdDeployGuards({
+        flagPresent: prodDeploy,
+        tokenEnv: process.env.MIGRATION_APPLY_TOKEN,
+        sqlContent: sql,
+        gitUserEmail: gitUserEmail(),
+        client: auditClient,
+      });
   if (!guards.ok) {
     emitMarker(`[MIGRATION_APPLY_PROD_FAIL_GUARDS=${guards.factor}]`);
     process.stderr.write(`Guard rejection: ${guards.reason}\n`);
+    if (isDelegated) {
+      await recordDelegatedApply({
+        migration_path: absPath, migration_sha256: sha,
+        delegatable: !!(guards.scope && guards.scope.delegatable),
+        delegatable_kind: guards.scope && guards.scope.kind,
+        outcome: 'rejected', reject_factor: guards.factor, reason: guards.reason, success: false,
+      });
+    }
     await auditClient.end();
     return 1;
   }
+  // For the audit table, identify the applier on both paths.
+  const appliedBy = isDelegated ? 'adam (delegated)' : guards.approver;
 
   const useTx = !noTx;
   if (noTx && !iKnow) {
@@ -267,6 +316,12 @@ async function applyMode({ args, repoRoot }) {
       if (!okPath || !okGlobal) {
         await auditClient.query('ROLLBACK');
         emitMarker('[MIGRATION_APPLY_PROD_FAIL_LOCK_CONTENTION]');
+        if (isDelegated) {
+          await recordDelegatedApply({
+            migration_path: absPath, migration_sha256: sha, delegatable: true, delegatable_kind: guards.kind,
+            outcome: 'rejected', reject_factor: 'lock_contention', reason: guards.scopeReason, success: false,
+          });
+        }
         await auditClient.end();
         return 1;
       }
@@ -297,7 +352,7 @@ async function applyMode({ args, repoRoot }) {
         await writeAuditRow(fc, {
           migration_path: absPath,
           migration_sha256: sha,
-          applied_by: guards.approver,
+          applied_by: appliedBy,
           prod_deploy: true,
           dry_run: false,
           statement_count: stmtCount,
@@ -311,6 +366,12 @@ async function applyMode({ args, repoRoot }) {
         await fc.end();
       }
 
+      if (isDelegated) {
+        await recordDelegatedApply({
+          migration_path: absPath, migration_sha256: sha, delegatable: true, delegatable_kind: guards.kind,
+          outcome: 'error', reason: guards.scopeReason, success: false, error: errorMsg,
+        });
+      }
       await auditClient.end();
       return 1;
     }
@@ -321,7 +382,7 @@ async function applyMode({ args, repoRoot }) {
     auditId = await writeAuditRow(auditClient, {
       migration_path: absPath,
       migration_sha256: sha,
-      applied_by: guards.approver,
+      applied_by: appliedBy,
       prod_deploy: true,
       dry_run: false,
       statement_count: stmtCount,
@@ -345,6 +406,14 @@ async function applyMode({ args, repoRoot }) {
     process.stderr.write(`unexpected error: ${errorMsg}\n`);
   } finally {
     await auditClient.end().catch(() => {});
+  }
+
+  if (isDelegated) {
+    await recordDelegatedApply({
+      migration_path: absPath, migration_sha256: sha, delegatable: true, delegatable_kind: guards.kind,
+      outcome: success ? 'applied' : 'error', reason: guards.scopeReason,
+      success, error: success ? null : errorMsg,
+    });
   }
 
   if (success) emitMarker('[MIGRATION_APPLY_PROD_PASS]');

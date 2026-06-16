@@ -1,8 +1,8 @@
-<!-- file_content_hash: fe705ac3a65b4368 -->
+<!-- file_content_hash: 4d259dd92e60dfbd -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-06-16 10:27:01 PM
+**Generated**: 2026-06-16 11:05:28 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -149,6 +149,26 @@ Sourcing is not finished when a candidate clears the bar — it is finished when
 ## Adam Self-Adherence Loop (SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001)
 
 Adam runs a 4th recurring tick (self-adherence, every 6h: node scripts/adam-self-adherence-review.mjs) that audits Adam's OWN role-contract adherence. Pure role-derived probes (lib/adam/adherence-probes.js: sourcing-cadence, vision-monitoring, friction-signaling, propose-only/never-build) emit pass|fail|unknown — FAIL-LOUD: an un-runnable probe is unknown, NEVER a silent pass. Each verdict is written (one row per probe per run) to the adam_adherence_ledger table. On drift (any fail) the loop SOURCES a propose-only remediation — a feedback flag (category=adam_adherence_drift) for the coordinator to triage into a gap-closing SD — and NEVER builds the fix itself (CONST-002). This is the self-improving governance loop: Adam's own adherence is measured and remediated, not assumed.
+
+## Chairman-Delegated DB-Change APPLY Authority (scoped, apply-only, fail-closed, revocable)
+
+## Chairman-Delegated DB-Change APPLY Authority (SCOPED, APPLY-ONLY, REVOCABLE)
+
+The chairman delegated to Adam (2026-06-16; durable: chairman_decisions b917c3e1 + SD metadata.chairman_authorization) the authority to APPLY a SCOPED set of PRODUCTION database changes, so additive vision-loop work no longer dead-ends at the chairman. Enforced in CODE, not conversational interpretation.
+
+**APPLY-ONLY — NOT a build right.** Strictly a database-APPLY authority. CONST-002 is UNCHANGED: Adam still never holds a BUILD claim, never drives/claims an SD, and proposes all work. The delegated-apply path does not touch claim acquisition (lib/claim/build-forbidden-session.cjs / the claim-validity gate).
+
+**In scope (delegatable):** provably-additive DDL (CREATE TABLE/INDEX, add nullable column, CHECK-widen) AND governed data-row INSERTs into allow-listed governed tables.
+
+**CHAIRMAN-ONLY (fail-closed, never delegatable):** destructive changes (DROP / rename / SET NOT NULL / DELETE / UPDATE / TRUNCATE) AND any permission / access-control / data-access-policy change (GRANT/REVOKE, CREATE/ALTER/DROP POLICY, ENABLE/DISABLE RLS) — these stay on the chairman 3-factor --prod-deploy gate.
+
+**Enforcement (code, not prose):** lib/migration/adam-delegated-apply.js isDelegatableForApply (a STRICT SUBSET of the additive tier-classifier that EXCLUDES create_policy/enable_rls tokens) + the bounded classifyGovernedInsert; gated by scripts/lib/migration-guards.js validateDelegatedApplyGuards. A forgeable "-- @delegated-by: adam" line is ONLY a routing marker — the REAL authority is a valid delegation TOKEN (the same crypto-token factor the chairman path uses). Default-deny on any error/ambiguity.
+
+**Kill-switch (revocable, default-OFF):** disabled unless LEO_ADAM_DBAPPLY_DELEGATION === "on" (fail-closed: unset/typo/error => disabled => chairman gate). The chairman can instantly revoke by unsetting it.
+
+**Audited:** every delegated-apply attempt (applied / rejected / error) is recorded in adam_delegated_apply_ledger (who/what/when/approval-basis/verdict).
+
+**How to apply a delegatable change:** add "-- @delegated-by: adam" to the migration; run node scripts/apply-migration.js <path> --prod-deploy with a valid MIGRATION_APPLY_TOKEN and the kill-switch on. Non-delegatable changes are rejected to the chairman path.
 
 ---
 
