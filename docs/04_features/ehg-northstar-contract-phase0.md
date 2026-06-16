@@ -31,7 +31,7 @@ of it is then a trivial downstream follow-on (and is largely already covered by 
 |--------|-----------|------|
 | `objectives` | 9 rows | OKR objectives; no single one is marked "the north star". |
 | `strategic_vision` | 1 row | A narrative row — **no quantified metric**. |
-| `key_results` | 43 rows | 7 `pending`; **7 PAT-AUTO retro-noise rows** (de-noise target); the 5 `KR-2026-07-*` rows are `pending`, NOT active. |
+| `key_results` | 43 rows | 7 `pending`; **7 PAT-AUTO retro-noise rows** (de-noise target); of the 5 `KR-2026-07-*` rows, **4 are `pending`** (07-01 is `achieved`) — none is the north star. |
 | `okr_vision_alignment_records` | **0 rows** | The intended alignment ledger is empty. |
 | `strategy_objectives` | **0 rows** | Empty. |
 | orphan visions | ~68 | Unattached vision rows (de-noise / reconcile target). |
@@ -99,7 +99,7 @@ A single authoritative record with these contract fields (storage TBD at build):
 - **Populate** the canonical record from the substrate (§2) — NOT auto-invent. The candidate definition
   is reconciled from the quantified quit-threshold + the active objective(s); presented for ratification.
 - **De-noise:** EXCLUDE the 7 PAT-AUTO retro-noise KR rows and the ~68 orphan visions from any
-  north-star reconciliation; treat the 5 `KR-2026-07-*` as `pending` (not the north star). The
+  north-star reconciliation; treat the `KR-2026-07-*` rows as non-canonical (4 `pending`, 07-01 `achieved`; none is the north star). The
   `okr_vision_alignment_records` ledger (currently 0) is the intended home for the alignment links.
 
 ### 5c. Single read API / queryable contract
