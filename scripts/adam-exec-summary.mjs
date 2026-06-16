@@ -19,7 +19,7 @@ import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { resolve } from 'path';
 import { liveFleetWorkers, isFleetWorker } from '../lib/fleet/genuine-worker.mjs';
-import { renderDecisionLines } from '../lib/chairman/decision-layman.mjs';
+import { renderDecisionLines, prepareDecisions, DEAD_VENTURE_STATUSES } from '../lib/chairman/decision-layman.mjs';
 // SD-LEO-INFRA-AUTOMATED-ONE-ROADMAP-001 (FR-4): the LIVE VDR build-% gauge, replacing the
 // static .adam-vision-build.json number.
 import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-registry.js';
@@ -30,6 +30,10 @@ import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
 import { resolveWorkerCount, SPARSE_THRESHOLD } from '../lib/fleet/worker-count-source.mjs';
 // SD-LEO-INFRA-ADAM-DURABLE-SOURCE-TRIGGER-001 (FR-4): missing-run watchdog seam.
 import { assessAdamSourceWatchdog } from '../lib/fleet/adam-source-watchdog.mjs';
+// SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001: the plain "Done in the last hour" section (FR-2/3) +
+// the once-per-hour send marker (FR-1). Replaces the stale Distance-to-quit block below.
+import { shouldSendNow, recordSent } from '../lib/fleet/exec-email-send-guard.js';
+import { resolveWindow, loadRecentWork, renderRecentWork } from '../lib/fleet/exec-email-recent-work.js';
 
 const EM = '—';
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -44,7 +48,20 @@ try {
   const { data } = await db.from('chairman_pending_decisions').select('*').limit(200);
   rows = data || [];
 } catch { rows = []; }
-const { count: nActions, lines } = renderDecisionLines(rows, new Date(t));
+// FR-4 (SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001): drop stale chairman_approvals for DEAD ventures
+// (the view never joins venture status) and collapse the auto-generated "Corrective:" gap findings
+// into one advisory line — so the chairman's action count is real, not inflated by resolved/noise
+// items. Fail-soft: a venture-status lookup error simply skips the dead-venture filter (show all).
+let deadVentureIds = new Set();
+try {
+  const vids = [...new Set(rows.filter((r) => r.decision_type === 'chairman_approval' && r.venture_id).map((r) => r.venture_id))];
+  if (vids.length) {
+    const { data: vrows } = await db.from('ventures').select('id, status').in('id', vids);
+    deadVentureIds = new Set((vrows || []).filter((v) => DEAD_VENTURE_STATUSES.has(String(v.status || '').toLowerCase())).map((v) => v.id));
+  }
+} catch (e) { console.warn('[adam-email] venture-status filter skipped (fail-soft): ' + (e?.message || e)); }
+const preparedRows = prepareDecisions(rows, { deadVentureIds });
+const { count: nActions, lines } = renderDecisionLines(preparedRows, new Date(t));
 
 // Quiescence gate (QF-20260612-437): skip the hourly send when the fleet is fully OFF — UNLESS the
 // chairman has pending actions, which must surface regardless of fleet state (they are often the very
@@ -143,7 +160,7 @@ if (!DRY && visPct != null) {
 // degrade to "trend: building history" (the pure helper owns the honest fallbacks).
 let trendLine = null, trendAnalysis = null;
 try {
-  const { data: snaps } = await db.from('vision_build_gauge')
+  const { data: snaps } = await db.from('vision_build_gauge') // schema-lint-disable-line — real table, missing from the stale 2026-06-14 snapshot (pre-existing read; harness flag 6cc2757f)
     .select('overall_pct, available, measured_at')
     .order('measured_at', { ascending: false })
     .limit(24);
@@ -157,31 +174,26 @@ try {
   trendAnalysis = null;
 }
 
-// ── 2b. DISTANCE-TO-QUIT (SD-LEO-INFRA-VISION-LADDER-V1-001 FR-5) ──
-// The quit threshold is READ AT RUNTIME from the chairman amendment metadata — the fleet NEVER
-// hardcodes a dollar figure (chairman-source-of-truth: SD-LEO-ORCH-ADAM-PLAN-KEEPER-001
-// metadata.chairman_amendment_2026_06_11_income_replacement.target_number_2026_06_11.draft_quit_threshold).
-// Net $ is ~$0 until a later rung (revenue instrumentation is a V2 precursor), so the line degrades
-// gracefully. Fail-soft on EVERY branch: a missing source/key must NOT crash the email.
-let quitLine = null;
+// ── 2b. DONE IN THE LAST HOUR (SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001 FR-2/FR-3) ──
+// Replaces the stale "Distance-to-quit" roadmap prose (chairman-directed 2026-06-16). A couple of
+// plain-language sentences about what shipped since the previous email — readable by a non-technical
+// chairman. Window boundary = the FR-1 send marker's window_end (half-open, contiguous across runs);
+// cold-start looks back 1h. recentWindow.startIso/nowIso are also used by recordSent after a send.
+// Fail-soft on EVERY branch: a DB/marker error degrades to the honest empty-state, never blocks.
+let recentText = null, recentHtml = '', recentWindow = null, recentSdCount = 0;
 try {
-  const { data: pk } = await db.from('strategic_directives_v2')
-    .select('metadata').eq('sd_key', 'SD-LEO-ORCH-ADAM-PLAN-KEEPER-001').maybeSingle();
-  const threshold = pk?.metadata
-    ?.chairman_amendment_2026_06_11_income_replacement
-    ?.target_number_2026_06_11
-    ?.draft_quit_threshold;
-  // Net monthly EHG profit — no revenue instrumentation yet (a V2 precursor) ⇒ ~$0. When an income
-  // source exists this can read income_capture_monthly; today it honestly degrades to ~$0.
-  const netMonthly = '~$0';
-  if (typeof threshold === 'string' && threshold.trim()) {
-    quitLine = `Distance-to-quit: net ${netMonthly}/mo vs the chairman quit-threshold ${EM} ${threshold.trim()}`;
-  } else {
-    quitLine = `Distance-to-quit: net ${netMonthly}/mo (quit-threshold unset ${EM} awaiting chairman ratification)`;
-  }
+  const prior = await shouldSendNow(db, { nowMs: t }); // we only need prior windowEnd here (send-gating is done in the workflow CLI)
+  recentWindow = resolveWindow({ windowEndIso: prior.windowEnd, nowMs: t });
+  const recent = await loadRecentWork(db, recentWindow);
+  recentSdCount = recent.completed.length;
+  const rendered = renderRecentWork(recent);
+  recentText = rendered.text;
+  recentHtml = rendered.html;
 } catch (e) {
-  console.warn('[adam-email] distance-to-quit unavailable (fail-soft): ' + (e?.message || e));
-  quitLine = `Distance-to-quit: (unavailable ${EM} threshold source not reachable this run)`;
+  console.warn('[adam-email] done-in-the-last-hour unavailable (fail-soft): ' + (e?.message || e));
+  recentText = 'Done in the last hour: (unavailable this run)';
+  recentHtml = `<p style="font-size:13px;color:#888;margin:8px 0 0">Done in the last hour: (unavailable this run)</p>`;
+  recentWindow = recentWindow || { startIso: null, nowIso: new Date(t).toISOString() };
 }
 
 // ── 2c. chairman_decisions CONSUMED counter (SD-LEO-INFRA-ADAM-PRIORITY-ANCHORING-001 FR-4) ──
@@ -220,7 +232,7 @@ const subject = `[Chairman] ${visSubj} · ${workerSubj} · ${actionsSubj}`;
 // line, and only a genuine MISSING run renders a degraded line — the watchdog never blocks the email.
 let watchdogLine = null;
 try {
-  const { data: lastGauge, error: gErr } = await db.from('vision_build_gauge').select('measured_at').order('measured_at', { ascending: false }).limit(1);
+  const { data: lastGauge, error: gErr } = await db.from('vision_build_gauge').select('measured_at').order('measured_at', { ascending: false }).limit(1); // schema-lint-disable-line — real table, missing from the stale 2026-06-14 snapshot (pre-existing read; harness flag 6cc2757f)
   const tableProvisioned = !(gErr && /relation|does not exist|find the table|schema cache/i.test(gErr.message || ''));
   const lastGaugeAtMs = (!gErr && lastGauge && lastGauge[0] && lastGauge[0].measured_at) ? new Date(lastGauge[0].measured_at).getTime() : null;
   // Source arm omitted (lastSourceAtMs undefined) until a durable DB Adam-source-event signal is defined,
@@ -238,7 +250,7 @@ const text = [
   ...(trendLine ? ['   ' + trendLine] : []),
   ...(trendAnalysis ? ['   ' + trendAnalysis] : []),
   ...(watchdogLine ? ['   ' + watchdogLine] : []),
-  ...(quitLine ? ['', quitLine] : []),
+  ...(recentText ? ['', recentText] : []),
   ...(decisionsLine ? [decisionsLine] : []),
   '',
   '──────────────────────────────────────────────',
@@ -252,7 +264,6 @@ const layerHtml = layerLine ? `<div style="font-size:13px;color:#444;margin:2px 
 const noteHtml = visNote ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(visNote)}</div>` : '';
 const trendHtml = trendLine ? `<div style="font-size:13px;color:#444;margin:4px 0 0;font-family:ui-monospace,Menlo,Consolas,monospace">${esc(trendLine)}</div>` : '';
 const trendAnalysisHtml = trendAnalysis ? `<div style="font-size:12px;color:#888;margin:2px 0 0">${esc(trendAnalysis)}</div>` : '';
-const quitHtml = quitLine ? `<p style="font-size:14px;margin:10px 0 0">${esc(quitLine)}</p>` : '';
 const decisionsHtml = decisionsLine ? `<p style="font-size:12px;color:#888;margin:4px 0 0">${esc(decisionsLine)}</p>` : '';
 const actionsHtml = nActions
   ? `<p style="font-size:14px;margin:0 0 2px"><b>${nActions} ${nActions === 1 ? 'action' : 'actions'} for you</b></p>` +
@@ -264,7 +275,7 @@ const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px
   `<p style="font-size:15px;font-weight:600;margin:0 0 0">EHG vision: ${visPct != null ? visPct + '% built' : '(gauge unavailable)'}</p>` +
   layerHtml + noteHtml + trendHtml + trendAnalysisHtml +
   (watchdogLine ? `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(watchdogLine)}</div>` : '') +
-  quitHtml + decisionsHtml +
+  recentHtml + decisionsHtml +
   '<hr style="border:none;border-top:1px solid #e1e4e8;margin:14px 0">' +
   actionsHtml +
   `<p style="font-size:11px;color:#999;margin:14px 0 0">as of ${esc(when)} ET ${EM} Adam ${EM} LEO Fleet Advisor</p></div>`;
@@ -276,4 +287,11 @@ if (DRY) {
   const mod = await import(pathToFileURL(resolve('lib/notifications/resend-adapter.js')).href);
   const r = await mod.sendEmail({ from: 'Adam ' + EM + ' LEO Fleet Advisor <onboarding@resend.dev>', to: process.env.CLAUDE_NOTIFY_EMAIL, subject, html, text });
   console.log('ADAM-EMAIL', JSON.stringify(r));
+  // FR-1: record the once-per-hour send marker ONLY after a successful send. The marker's window_end
+  // (=this run's nowIso) becomes the next email's completion-window start. Fail-soft: a marker-write
+  // error never throws (a bounded single duplicate next run is acceptable; a storm is not).
+  if (r && r.success) {
+    const mk = await recordSent(db, { sentIso: recentWindow.nowIso, windowStartIso: recentWindow.startIso, windowEndIso: recentWindow.nowIso, sdCount: recentSdCount });
+    console.log('ADAM-EMAIL-MARKER', JSON.stringify(mk));
+  }
 }

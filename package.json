@@ -336,6 +336,8 @@
     "adam:scan": "node scripts/adam-opportunity-scan.cjs --scan",
     "adam:briefing": "node scripts/adam-opportunity-scan.cjs --briefing",
     "adam:self-score": "node scripts/adam-self-assessment-writer.cjs",
+    "exec-email:should-send": "node scripts/exec-email-should-send.mjs",
+    "capture:chairman-summary": "node scripts/capture-chairman-summary.mjs",
     "capabilities:populate-ventures": "node scripts/populate-venture-capabilities.mjs",
     "patterns:auto-block-check": "node scripts/auto-block-check.mjs",
     "patterns:seed-auto-block": "node scripts/seed-auto-block-patterns.mjs",
