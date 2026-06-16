@@ -66,7 +66,7 @@ describe('Surface Inventory completeness (all 8 governed routes)', () => {
 
 describe('Assessment classifies surfaces and enumerates missing capabilities (FR-2)', () => {
   it('uses the four classification labels', () => {
-    for (const label of ['redundant', 'unclear', 'orphaned', 'adequate']) {
+    for (const label of ['redundant', 'underdefined', 'orphaned', 'adequate']) {
       expect(report.toLowerCase()).toContain(label);
     }
   });

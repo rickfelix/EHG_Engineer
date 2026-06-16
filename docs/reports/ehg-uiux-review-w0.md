@@ -29,13 +29,13 @@ The governed `ehg_page_routes` map contains **8 surfaces**. Each is listed with 
 
 ## 2. Assessment
 
-This section classifies each surface as **redundant / unclear / orphaned / adequate** against solo-operator survivability and the gauge capabilities, with a one-line rationale. A **Missing-capabilities** subsection follows.
+This section classifies each surface as **redundant / underdefined / orphaned / adequate** against solo-operator survivability and the gauge capabilities, with a one-line rationale. A **Missing-capabilities** subsection follows.
 
 | id | classification | rationale |
 |----|----------------|-----------|
 | S1 `/analytics` | **redundant** | Generic BI charts overlap S3's "key metrics" and S6's custom reports; three surfaces present overlapping read-only metrics with no clear division of labor. |
 | S2 `/automation` | **adequate** (peripheral) | Automation status/config is a distinct concern (automation-by-default); useful but not a survivability surface. Its `related_routes` (`/workflows`) is unmapped — minor orphan-reference. |
-| S3 `/chairman` | **unclear** | Positioned as the executive overview and the closest thing to a cockpit, but it is **venture-portfolio-centric**, not **survivability-centric** — it does not lead with distance-to-broke, distance-to-quit, or a single north-star. Its role ("is this THE operator cockpit?") is undefined. |
+| S3 `/chairman` | **underdefined** | Serves as the executive overview and the closest thing to a cockpit, but stays **venture-portfolio-centric**, not **survivability-centric** — it does not lead with distance-to-broke, distance-to-quit, or a single north-star. Its role as the operator cockpit remains undefined. |
 | S4 `/chairman/settings` | **redundant** (consolidation candidate) | A standalone settings page for one dashboard; for a solo operator this is surface bloat that should fold into the cockpit's own settings affordance. |
 | S5 `/eva` | **adequate** (under-used) | The AI assistant is the natural host for a *queryable north-star* ("ask EVA: what is my distance-to-broke?") but does not currently expose the north-star as a first-class query. |
 | S6 `/reports/builder` | **redundant** (overlaps S1) | Custom report authoring overlaps the BI dashboard (S1); the two reporting surfaces should consolidate into one reporting story. |
