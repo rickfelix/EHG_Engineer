@@ -15,14 +15,17 @@ name: "Adam chairman exec email (cron)"
 
 on:
   schedule:
-    # Chairman-chosen cadence is HOURLY (2026-06-10), but GitHub Actions routinely DELAYS and
-    # silently DROPS scheduled runs — observed firing every 2-3h, never near :17. So we
-    # OVER-SCHEDULE (~every 15 min) and gate each trigger behind a once-per-~55-min send guard
-    # (scripts/exec-email-should-send.mjs, audit_log marker). GitHub can drop 2-3 of every 4
-    # sub-hourly triggers and the chairman still gets exactly ONE email per ~hour, no duplicates,
-    # near the top of the hour. The vision:gauge historize AND the send BOTH gate on the guard, so
-    # the trend is historized once per hour (not 4x). SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001 (FR-1).
-    - cron: '2,17,32,47 * * * *'
+    # Chairman-chosen cadence is HOURLY (2026-06-10) and the chairman explicitly asked for it to run
+    # at the TOP OF THE HOUR. But GitHub Actions routinely DELAYS and silently DROPS scheduled runs
+    # (and drops the :00 slot most often), so a literal `0 * * * *` is unreliable. We therefore ANCHOR
+    # the over-schedule grid at :00 (`0,15,30,45`) — it ATTEMPTS the true top of the hour first, with
+    # :15/:30/:45 + the once-per-~55-min send guard (scripts/exec-email-should-send.mjs, audit_log
+    # marker) as reliability catch-up. GitHub can drop 2-3 of every 4 sub-hourly triggers and the
+    # chairman still gets exactly ONE email per ~hour, no duplicates, as close to the top of the hour
+    # as GitHub allows. The vision:gauge historize AND the send BOTH gate on the guard, so the trend
+    # is historized once per hour (not 4x). SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001 (FR-1); top-of-hour
+    # anchor per chairman request 2026-06-16 (QF-20260616-776).
+    - cron: '0,15,30,45 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
