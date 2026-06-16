@@ -88,15 +88,17 @@ describe('FR-3: the 3 consolidation entries are registered with the honest shape
     expect(e.probe).toMatchObject({ type: 'count_ratio', table: 'sd_backlog_map', numerFilter: { completion_status: 'COMPLETED' } });
     expect(e.probe.builtAt).toBeGreaterThan(0.5); // not gamed to today's 9%
   });
-  it('Surface → db_count on ehg_page_routes min 6, layer application', () => {
+  it('Surface → count_ratio on ehg_page_routes (mapped feature_area / total), layer application, builtAt 1.0', () => {
     const e = entryFor(SURFACE);
     expect(e.layer).toBe('application');
-    expect(e.probe).toMatchObject({ type: 'db_count', table: 'ehg_page_routes', min: 6, builtWhen: 'gte' });
+    // count_ratio (orphan-free organization), NOT a backwards gte presence-count.
+    expect(e.probe).toMatchObject({ type: 'count_ratio', table: 'ehg_page_routes', numerFilter: { feature_area_id: { not: null } }, builtAt: 1.0 });
   });
-  it('Vigilance → db_count on competitive_baselines min 1, layer process', () => {
+  it('Vigilance → db_count on competitive_baselines (OBSERVED only) min 1, layer process', () => {
     const e = entryFor(VIGILANCE);
     expect(e.layer).toBe('process');
-    expect(e.probe).toMatchObject({ type: 'db_count', table: 'competitive_baselines', min: 1, builtWhen: 'gte' });
+    // OBSERVED filter excludes STATUS_QUO/ASSUMPTION seed rows (anti-lie-high).
+    expect(e.probe).toMatchObject({ type: 'db_count', table: 'competitive_baselines', filter: { epistemic_tag: 'OBSERVED' }, min: 1, builtWhen: 'gte' });
   });
 });
 
@@ -108,18 +110,18 @@ describe('FR-3 adversarial: each band MOVES with the signal (not green-by-constr
     expect((await run(145, 13)).status).toBe('partial');   // the live ~9%
     expect((await run(145, 102)).status).toBe('built');    // ~70%
   });
-  it('Surface db_count: 0→unbuilt, 5→partial, 8(live)→built', async () => {
-    const probe = entryFor(SURFACE).probe;
-    const run = (n) => runProbe(probe, { supabase: stubSupabase({ countByTable: { ehg_page_routes: n } }) });
-    expect((await run(0)).status).toBe('unbuilt');
-    expect((await run(5)).status).toBe('partial');
-    expect((await run(8)).status).toBe('built'); // live count
+  it('Surface count_ratio (mapped/total): orphans→partial, all-mapped(8/8 live)→built', async () => {
+    const probe = entryFor(SURFACE).probe; // builtAt 1.0
+    const run = (denom, numer) => runProbe(probe, { supabase: stubRatio({ denom, numer }) });
+    expect((await run(8, 0)).status).toBe('unbuilt');  // 0 mapped
+    expect((await run(8, 7)).status).toBe('partial');  // 1 orphan route → not fully consolidated
+    expect((await run(8, 8)).status).toBe('built');    // all mapped (the live state)
   });
-  it('Vigilance db_count: 0→unbuilt, 4(live)→built', async () => {
+  it('Vigilance db_count(OBSERVED): 0→unbuilt (live: only ASSUMPTION seeds), 1→built', async () => {
     const probe = entryFor(VIGILANCE).probe;
     const run = (n) => runProbe(probe, { supabase: stubSupabase({ countByTable: { competitive_baselines: n } }) });
-    expect((await run(0)).status).toBe('unbuilt');
-    expect((await run(4)).status).toBe('built'); // live count
+    expect((await run(0)).status).toBe('unbuilt'); // 0 OBSERVED → process not established (honest live read)
+    expect((await run(1)).status).toBe('built');   // >=1 real observed baseline → established
   });
 });
 

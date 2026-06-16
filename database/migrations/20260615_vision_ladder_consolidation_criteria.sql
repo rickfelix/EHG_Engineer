@@ -34,9 +34,9 @@ INSERT INTO vision_ladder_criteria (rung_id, ordinal, capability, today, require
 SELECT r.id, c.ordinal, c.capability, c.today, c.required
 FROM vision_ladder_rungs r
 CROSS JOIN (VALUES
-  (23, 'Backlog distilled and dispositioned',              'backlog distillation begun (~13/145 items dispositioned/COMPLETED); conversion-ledger integration not yet started', 'the backlog is fully distilled and each item dispositioned (build/research/reference/cancel) or integrated'),
-  (24, 'Application presentation-surface consolidation',   'a bounded canonical surface set exists (8 feature-area-mapped authenticated routes)',                                 'all application presentation surfaces consolidated into the canonical surface set'),
-  (25, 'Competitive vigilance process established',        'competitive vigilance process running (competitive_baselines populated)',                                            'a recurring competitive-vigilance process is established (and exercised)')
+  (23, 'Backlog distilled and dispositioned',              'backlog distillation begun (~13/145 items COMPLETED — a strict lower-bound proxy for dispositioned; no separate disposition column yet); conversion-ledger integration not yet started', 'the backlog is fully distilled and each item dispositioned (build/research/reference/cancel) or integrated'),
+  (24, 'Application presentation-surface consolidation',   'all 8 presentation routes are mapped to canonical feature areas (orphan-free); surface-count reduction not separately measured',                                          'all application presentation surfaces consolidated into the canonical surface set'),
+  (25, 'Competitive vigilance process established',        'only placeholder STATUS_QUO/ASSUMPTION baselines exist (stale); no OBSERVED competitor baselines yet — process not yet established',                                      'a recurring competitive-vigilance process is established (and exercised) producing OBSERVED baselines')
 ) AS c(ordinal, capability, today, required)
 WHERE r.rung_key = 'V1'
 ON CONFLICT (rung_id, capability) DO NOTHING;
