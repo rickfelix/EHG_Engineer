@@ -31,9 +31,44 @@ import { createDatabaseClient } from '../lib/supabase-connection.js';
 const JSON_MODE = process.argv.includes('--json');
 const STRICT = process.argv.includes('--strict');
 
-// Tables intentionally without RLS (system / PostGIS). Matches the exemption
-// set in scripts/audit-rls-policies.js.
-const EXEMPTED_TABLES = new Set(['schema_migrations', 'spatial_ref_sys']);
+// Tables intentionally without RLS — system/PostGIS plus the disposable
+// quarantine/backup copies left by the 20260609/20260610 SD-MAN purge sweep.
+// They hold pre-image copies slated for drop, never carry live reads, and are
+// not worth an RLS policy — exempting them keeps the sentinel's signal on REAL
+// gaps instead of drowning in ~two dozen false positives.
+//
+// `_backup`/`_quarantine` are OVERLOADED naming conventions in this repo (real
+// dated backup tables also use `<feature>_backup_YYYYMMDD`), so those copies are
+// listed EXPLICITLY and by review — never by an open-ended suffix pattern that
+// could silently swallow a future real table's RLS gap (the very failure this
+// anti-noise change must not introduce).
+const EXEMPTED_TABLES = new Set([
+  'schema_migrations',
+  'spatial_ref_sys',
+  // SD-MAN purge/quarantine campaign copies (2026-06-09/10) — non-`_qparity` suffix.
+  'management_reviews_quarantine_20260610',
+  'venture_artifacts_storm_quarantine_20260610',
+  'sd_baseline_items_purge_backup_20260609',
+  'sd_baseline_items_recon_backup',
+]);
+
+// `_qparityYYYYMMDD` is a TOOL-GENERATED quarantine-parity suffix unique to the
+// purge sweep — no human-authored feature table uses it — so it is safe to
+// exempt by pattern. Anchored to the suffix with an 8-digit datestamp so it
+// cannot match a live table (e.g. `scope_completion_chain` matches none).
+const EXEMPTED_TABLE_PATTERNS = [
+  /_qparity\d{8}$/i,
+];
+
+/**
+ * True if a public table is intentionally exempt from the RLS requirement:
+ * either an explicit system table or a disposable quarantine/backup copy.
+ * Exported so the exemption set is unit-testable against the live table list.
+ */
+export function isExemptTable(name) {
+  if (EXEMPTED_TABLES.has(name)) return true;
+  return EXEMPTED_TABLE_PATTERNS.some((re) => re.test(name));
+}
 
 function log(msg = '') { if (!JSON_MODE) console.log(msg); }
 
@@ -92,8 +127,8 @@ async function main() {
 
     result = {
       securityDefinerViews: views.rows.map(r => r.name),
-      rlsDisabled: tables.rows.map(r => r.name).filter(n => !EXEMPTED_TABLES.has(n)),
-      sensitiveExposed: sensitive.rows.map(r => r.name).filter(n => !EXEMPTED_TABLES.has(n)),
+      rlsDisabled: tables.rows.map(r => r.name).filter(n => !isExemptTable(n)),
+      sensitiveExposed: sensitive.rows.map(r => r.name).filter(n => !isExemptTable(n)),
       securityDefinerMutableFns: secdefFns.rows.map(r => r.name),
       triggerEnabled: trig.rows.length === 1 && trig.rows[0].evtenabled !== 'D',
     };
@@ -128,7 +163,14 @@ async function main() {
   if (STRICT && !clean) process.exitCode = 1;
 }
 
-main().catch(err => {
-  console.error('Sentinel error:', err.message);
-  process.exitCode = 1;
-});
+// Only run the live audit when invoked directly (node scripts/sentinels/...).
+// When imported (e.g. by the exemption unit test) the module just exposes
+// isExemptTable without opening a DB connection.
+import { pathToFileURL } from 'node:url';
+const INVOKED_DIRECTLY = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
+if (INVOKED_DIRECTLY) {
+  main().catch(err => {
+    console.error('Sentinel error:', err.message);
+    process.exitCode = 1;
+  });
+}

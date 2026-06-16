@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-D",
-  "expectedBranch": "feat/SD-EHG-FEAT-AUTOMATED-RESILIENT-VENTURE-001-D",
-  "createdAt": "2026-06-14T21:48:20.163Z",
+  "sdKey": "SD-LEO-INFRA-SECURITY-HYGIENE-RLS-SEARCHPATH-001",
+  "expectedBranch": "feat/SD-LEO-INFRA-SECURITY-HYGIENE-RLS-SEARCHPATH-001",
+  "createdAt": "2026-06-16T14:50:43.759Z",
   "repoRoot": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer",
   "baseRef": "origin/main"
 }
