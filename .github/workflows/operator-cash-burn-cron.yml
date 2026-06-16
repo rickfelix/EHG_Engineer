@@ -1,0 +1,44 @@
+name: Operator Cash/Burn Substrate Feed
+
+# Fail-soft hourly feeder for SD-EHG-OPERATOR-RUNWAY-SUBSTRATE-001.
+# Over-scheduled (:00,:20,:40) to beat GitHub's habit of dropping scheduled cron runs; the feed
+# itself is idempotent (upsert by period_month) and fail-soft (a failure leaves inputs stale, never
+# writes a fabricated value), so an extra run is harmless and a missed run only delays freshness.
+
+on:
+  schedule:
+    - cron: '0,20,40 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Compute and print, do not write'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: operator-cash-burn-feed
+  cancel-in-progress: false
+
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+      - name: Feed operator cash/burn substrate
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            npm run operator:cash-burn:feed -- --dry-run
+          else
+            npm run operator:cash-burn:feed
+          fi
