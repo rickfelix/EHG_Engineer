@@ -188,6 +188,20 @@ describe('classifyOrphanDirs back-compat (additive)', () => {
   });
 });
 
+describe('classifyOrphanDirs live-owner guard — cross-module casing (review HIGH)', () => {
+  it('excludes a live-owned orphan even when liveOwners was lowercased by a different normalizePath', () => {
+    const live = mkLeftover('Live-Orphan-MixedCase'); // no .git, would otherwise be reapable
+    const now = Date.now();
+    const old = new Date(now - 2 * 60 * 60 * 1000);
+    fs.utimesSync(live, old, old);
+    // Simulate the producer (worktree-reapability.js::normalizePath) which LOWERCASES on all platforms.
+    const lowered = path.resolve(live).replace(/\\/g, '/').toLowerCase();
+    const res = classifyOrphanDirs(worktreesDir, [], { liveOwners: new Set([lowered]), minAgeMs: 30 * 60 * 1000, now });
+    expect(res.reapableDirs.find((r) => r.dir === 'Live-Orphan-MixedCase')).toBeUndefined();
+    expect(res.excluded.find((e) => e.dir === 'Live-Orphan-MixedCase')?.reason).toBe('live_owner');
+  });
+});
+
 describe('resolveMinAgeMs', () => {
   it('defaults when unset and parses a valid override', () => {
     expect(resolveMinAgeMs({})).toBe(DEFAULT_ORPHAN_MIN_AGE_MS);
