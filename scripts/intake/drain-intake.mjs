@@ -24,7 +24,7 @@ import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { classify } from '../../lib/intake/triage-classifier.js';
-import { registerItem, setDisposition, backlogDepth } from '../../lib/intake/conversion-ledger.js';
+import { registerItem, setDisposition, recordVerdict, backlogDepth } from '../../lib/intake/conversion-ledger.js';
 // SD-LEO-INFRA-ESTATE-DISPOSITION-001 (FR-2): pure 0-3 compounding score captured at disposition time.
 import { computeCompoundingScore } from '../../lib/intake/compounding-score.js';
 // SD-LEO-INFRA-ESTATE-DISPOSITION-001: pure, unit-tested estate-disposition helpers.
@@ -230,6 +230,12 @@ async function runEstateDrain(sb) {
           dedup_match_sd_key: verdict.dedup_match_sd_key, dedup_score: verdict.dedup_score,
           dismiss_reason: verdict.dismiss_reason,
         }, { client: sb });
+      } else {
+        // FR-2 (SD-LEO-INFRA-ESTATE-LEDGER-PROJECTION-001): DECOUPLE recording from promotion.
+        // A suppressed-promote / ambiguous item stays UNdispositioned (it IS the backlog), but the
+        // ledger row must SELF-DESCRIBE so the backlog is mineable — record the classification as the
+        // queryable verdict (intake_status='triaged', disposition stays NULL). NO SD is created here.
+        await recordVerdict(row.id, { triage_verdict: classification }, { client: sb });
       }
       await markOffEstateSource(sb, item, row.id, score, classification);
       applied++;
