@@ -29,6 +29,9 @@ export function buildRecord(ratification) {
   if (!ratification || ratification.status !== 'chairman_ratified') {
     throw new Error('north_star_ratification missing or not chairman_ratified — refusing to fabricate');
   }
+  if (!ratification.target || typeof ratification.target.amount !== 'number') {
+    throw new Error('north_star_ratification.target.amount missing — refusing to persist a record with no target');
+  }
   return {
     definition: `EHG income-replacement: monthly ${ratification.metric} of $${ratification.target.amount}/${(ratification.target.unit || '$/mo').replace('$/', '')} net, sustained ${ratification.sustain}. Leading sub-target: ${ratification.leading_sub_target}.`,
     metric: ratification.metric,
@@ -74,4 +77,10 @@ async function main() {
   console.log(`✅ north_star canonical record ${existing && existing[0] ? 'updated' : 'inserted'}: ${res.data.id}`);
 }
 
-main().catch((e) => { console.error('❌', e.message); process.exit(1); });
+// Entry-point guard: run main() ONLY as a CLI, never on import. Without this, importing
+// buildRecord (e.g. from the test suite) would execute main() and write to the production
+// north_star table. (Adversarial-review CRITICAL.)
+import { pathToFileURL } from 'node:url';
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((e) => { console.error('❌', e.message); process.exit(1); });
+}

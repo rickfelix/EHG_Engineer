@@ -8,7 +8,9 @@
  * and buildRecord refuses to fabricate from a non-ratified ratification.
  */
 import { describe, it, expect } from 'vitest';
-import { getNorthStar, toContract, isPatAutoNoise, denoiseSubstrate } from '../../../lib/vision/north-star.js';
+import { getNorthStar, toContract, isAutoNoiseKr, denoiseSubstrate } from '../../../lib/vision/north-star.js';
+// Importing buildRecord MUST NOT trigger a live DB write — populate-north-star.mjs has an
+// entry-point guard so main() only runs as a CLI (adversarial-review CRITICAL).
 import { buildRecord } from '../../../scripts/populate-north-star.mjs';
 import { VDR_REGISTRY, assertRegistryCoherence } from '../../../lib/vision/vdr-registry.js';
 
@@ -61,20 +63,25 @@ describe('getNorthStar — fail-soft unset, never fabricated (FR-2 / US-002)', (
 });
 
 describe('de-noise filter — read-side, excludes PAT-AUTO + orphans (FR-5 / US-005)', () => {
-  it('isPatAutoNoise detects PAT-AUTO-* codes only', () => {
-    expect(isPatAutoNoise('PAT-AUTO-12345')).toBe(true);
-    expect(isPatAutoNoise('KR-2026-07-05')).toBe(false);
+  it('isAutoNoiseKr detects the auto-noise families (PAT-AUTO/HF/RETRO) only', () => {
+    expect(isAutoNoiseKr('PAT-AUTO-12345')).toBe(true);
+    expect(isAutoNoiseKr('PAT-HF-001')).toBe(true);
+    expect(isAutoNoiseKr('PAT-RETRO-7')).toBe(true);
+    expect(isAutoNoiseKr('  PAT-AUTO-9')).toBe(true); // tolerant of leading whitespace
+    expect(isAutoNoiseKr('KR-2026-07-05')).toBe(false);
+    expect(isAutoNoiseKr('XPAT-AUTO-1')).toBe(false); // anchored
   });
-  it('excludes PAT-AUTO KRs and orphan-vision ids, keeps canonical rows, no mutation', () => {
+  it('excludes auto-noise KRs and orphan-vision ids, keeps canonical rows, no mutation', () => {
     const rows = [
       { code: 'KR-2026-07-05', id: 'kr5' },
       { code: 'PAT-AUTO-9', id: 'pa9' },
+      { code: 'PAT-HF-3', id: 'hf3' },
       { id: 'orphan-1' },
       { id: 'real-vision' },
     ];
     const out = denoiseSubstrate(rows, { orphanVisionIds: ['orphan-1'] });
     expect(out.map((r) => r.id)).toEqual(['kr5', 'real-vision']);
-    expect(rows).toHaveLength(4); // input not mutated
+    expect(rows).toHaveLength(5); // input not mutated
   });
 });
 
@@ -94,8 +101,11 @@ describe('ord-11 VDR probe repoint + no double-count (FR-3 / US-003)', () => {
     const sharers = VDR_REGISTRY.filter((c) => c.probe?.code === 'KR-2026-07-05');
     expect(sharers).toHaveLength(1);
   });
-  it('the VDR coherence invariant still holds', () => {
-    expect(() => assertRegistryCoherence()).not.toThrow();
+  it('the VDR coherence invariant still holds after the repoint (real assertion, not just no-throw)', () => {
+    // assertRegistryCoherence() never throws — it returns a verdict. Assert the verdict is ok,
+    // matching the registry against itself (the repoint left every capability LABEL unchanged).
+    const verdict = assertRegistryCoherence(VDR_REGISTRY.map((e) => ({ capability: e.capability })));
+    expect(verdict.ok).toBe(true);
   });
 });
 
