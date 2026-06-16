@@ -41,7 +41,10 @@ const EXCLUDE_FILE_RX = /\.(test|spec)\.(m?js)$/;
 
 const EXPECTED_LITERAL_FILES = [
   'scripts/modules/sd-quality-scoring.js',
-  'scripts/modules/handoff/executors/lead-to-plan/gates/vision-score.js',
+  // vision-score.js no longer holds an INLINE literal: SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001
+  // (PR #4657) consolidated it into the shared single-source lib/handoff/threshold-resolver.js,
+  // which vision-score.js now imports/re-exports. Pin the canonical literal at its new home.
+  'lib/handoff/threshold-resolver.js',
   'scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js',
   'scripts/story-requirements-template.js',
 ];

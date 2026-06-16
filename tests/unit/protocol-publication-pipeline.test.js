@@ -134,9 +134,13 @@ describe('FR-4: --only scoped regeneration', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('KNOWN_GENERATED_FILES covers the 12 generated files', () => {
-    expect(KNOWN_GENERATED_FILES).toHaveLength(12);
+  it('KNOWN_GENERATED_FILES covers the 14 generated files', () => {
+    // Grew 12 -> 14 when the Coordinator role contract joined the generated set
+    // (CLAUDE_COORDINATOR.md + CLAUDE_COORDINATOR_DIGEST.md).
+    expect(KNOWN_GENERATED_FILES).toHaveLength(14);
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_ADAM_DIGEST.md');
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR.md');
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_COORDINATOR_DIGEST.md');
   });
 });

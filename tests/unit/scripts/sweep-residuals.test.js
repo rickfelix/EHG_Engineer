@@ -22,7 +22,11 @@ function block(after, before) {
 }
 
 describe('FR-1: terminal-target WORK_ASSIGNMENT drain', () => {
-  const fr1 = block('drain WORK_ASSIGNMENT rows whose target SD/QF', 'for (const s of activeSessions)');
+  // `before` anchor re-synced: the old 'for (const s of activeSessions)' literal no longer exists
+  // in the source, so block() silently fell back to a 2500-char window that truncated before the
+  // read_at stamp (line ~1797) and the fail-open WORK_ASSIGNMENT_TERMINAL_DRAIN string (~1803).
+  // Anchor on the next top-level statement after the drain's try/catch instead.
+  const fr1 = block('drain WORK_ASSIGNMENT rows whose target SD/QF', 'await dispatchWorkAssignmentsIfAllowed');
   it('stamps read_at (drain marker), never hard-DELETE on these rows', () => {
     expect(fr1).toMatch(/\.update\(\{\s*read_at: now\.toISOString\(\)\s*\}\)/);
     expect(fr1).not.toMatch(/\.delete\(\)/);

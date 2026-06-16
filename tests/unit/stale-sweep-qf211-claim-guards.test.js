@@ -60,8 +60,12 @@ describe('SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: CLAIM_FIX fixture-session guard
 
   it('clears the SD claim ONLY if it still points at the fixture (race guard), then continues', () => {
     const idx = src.indexOf('SWEEP_FIXTURE_SESSION_CLAIM_FIX');
-    const block = src.slice(idx, idx + 800);
+    const block = src.slice(idx, idx + 1300);
     expect(block).toMatch(/claiming_session_id:\s*null/);
+    // FR-1 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): the SD-only release MUST also null
+    // active_session_id (the sync trigger's CAS branch can't cover a value pointing at another
+    // session). This SD-release site previously omitted it — the claim-lifecycle guard caught it.
+    expect(block).toMatch(/active_session_id:\s*null/);
     expect(block).toMatch(/\.eq\(['"]claiming_session_id['"],\s*s\.session_id\)/); // race guard on the SD clear
     expect(block).toMatch(/continue;/);
   });

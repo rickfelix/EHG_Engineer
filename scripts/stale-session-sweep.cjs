@@ -1627,7 +1627,11 @@ async function main() {
       if (sd.claiming_session_id === s.session_id) {
         await supabase
           .from('strategic_directives_v2')
-          .update({ claiming_session_id: null, is_working_on: false })
+          // FR-1 (SD-LEO-INFRA-CLAIM-LIFECYCLE-HARDENING-002): an SD-only release that nulls
+          // claiming_session_id MUST also null active_session_id — the sync trigger's CAS branch
+          // only clears active_session_id WHERE it equals THIS fixture's session, so a value
+          // pointing at a different session would dangle. Co-clear unconditionally on the SD write.
+          .update({ claiming_session_id: null, active_session_id: null, is_working_on: false })
           .eq('sd_key', s.sd_key)
           .eq('claiming_session_id', s.session_id); // race guard: only clear if still the fixture
       }

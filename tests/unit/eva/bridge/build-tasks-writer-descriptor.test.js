@@ -72,9 +72,13 @@ describe('buildBuildTasks — Cloudflare descriptor', () => {
     expect(out).not.toContain('Replit Postgres');
   });
 
-  it('3.5 Deploy line is present and unchanged', () => {
+  it('3.5 Deploy line is present and family-appropriate (Cloudflare)', () => {
+    // FR-4 made the 3.5 Deploy line descriptor-driven (per deploy-target family), so it is no
+    // longer the byte-identical Replit line on cloud paths. Assert presence + family-correctness
+    // (a Cloudflare venture must NOT be told to deploy on Replit) rather than a frozen string.
     expect(out).toContain('3.5 Deploy');
-    expect(out).toContain('Replit hosting (autoscale)');
+    expect(out).toContain('Cloudflare Pages (frontend) + Workers (compute)');
+    expect(out).not.toContain('Replit hosting (autoscale)');
   });
 
   it('is deterministic', () => {
@@ -121,9 +125,11 @@ describe('buildBuildTasks — neon + cloud-run descriptor (F7/F8)', () => {
     expect(child1Block).not.toContain('R2 Workers binding');
   });
 
-  it('3.5 Deploy line still present and unchanged', () => {
+  it('3.5 Deploy line is present and family-appropriate (GCP Cloud Run)', () => {
+    // Descriptor-driven (FR-4): neon + cloud-run (F7/F8) emits the GCP Cloud Run line, not Replit.
     expect(out).toContain('3.5 Deploy');
-    expect(out).toContain('Replit hosting (autoscale)');
+    expect(out).toContain('GCP Cloud Run via `gcloud run deploy`');
+    expect(out).not.toContain('Replit hosting (autoscale)');
   });
 });
 
@@ -182,11 +188,16 @@ describe('3.5 Deploy line invariant', () => {
     expect(buildBuildTasks({})).toContain(DEPLOY_LINE_FRAGMENT);
   });
 
-  it('content is identical in both paths', () => {
-    const cloudOut = buildBuildTasks({ stackDescriptor: CF_DESCRIPTOR });
-    const replitOut = buildBuildTasks({});
-    // Extract the line starting with '3.5 Deploy'
+  it('every descriptor path emits exactly one family-appropriate 3.5 Deploy line', () => {
+    // FR-4: the 3.5 Deploy line is descriptor-driven, so it is NO LONGER identical across paths
+    // (a Cloudflare/GCP venture must not be told to deploy on Replit). The real invariant is that
+    // EACH path emits a single 3.5 Deploy line that matches its own family.
     const extractLine = (s) => s.split('\n').find((l) => l.includes('3.5 Deploy')) || '';
-    expect(extractLine(cloudOut)).toBe(extractLine(replitOut));
+    const cloudLine = extractLine(buildBuildTasks({ stackDescriptor: CF_DESCRIPTOR }));
+    const replitLine = extractLine(buildBuildTasks({}));
+    expect(cloudLine).toContain('3.5 Deploy');
+    expect(replitLine).toContain('3.5 Deploy');
+    expect(cloudLine).toContain('Cloudflare Pages');
+    expect(replitLine).toContain('Replit hosting (autoscale)');
   });
 });

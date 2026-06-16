@@ -147,19 +147,25 @@ describe('T4 — Default-omitted regression pin (LOAD-BEARING)', () => {
     // constant produced (= resolve(import.meta.dirname, '../../..') from check-types.js,
     // which is REPO_ROOT). The default `checkTypes` export uses this default.
     // Test: run file_count for a known-EHG-only path against default; should find files.
+    // Probe re-synced (SD-LEO-INFRA-UNIT-TIER-SOURCEPIN-REBASELINE-001): the former probe
+    // `scripts/eva/evidence-rubrics/V*.js` was archived by PR #4629 (estate reconciliation),
+    // so the default-ROOT contract was firing on a vanished sentinel. Repointed to the stable,
+    // archive-immune `lib/eva/stage-templates/stage-*.js` fileset (27 files; also used by the
+    // sibling assertions above). The CONTRACT under test is unchanged: createCheckTypes()
+    // defaults to REPO_ROOT.
     const result = await checkTypes.file_count({
-      glob: 'scripts/eva/evidence-rubrics/V*.js',
+      glob: 'lib/eva/stage-templates/stage-*.js',
       minCount: 5,
     });
     expect(result.passed).toBe(true);
-    // Sanity-check: the legacy path should find at least 11 V*.js rubrics (V01-V11)
+    // Sanity-check: the legacy default path should find many stage templates.
     expect(result.evidence).toMatch(/Found \d+ file/);
   });
 
   it('createCheckTypes({ targetPath: <empty> }) does NOT find EHG files (proves switch works)', async () => {
     const ct = createCheckTypes({ targetPath: emptyFixture });
     const result = await ct.file_count({
-      glob: 'scripts/eva/evidence-rubrics/V*.js',
+      glob: 'lib/eva/stage-templates/stage-*.js',
       minCount: 5,
     });
     expect(result.passed).toBe(false);

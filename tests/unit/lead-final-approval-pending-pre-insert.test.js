@@ -73,16 +73,22 @@ describe('Pin Set 1: LeadFinalApprovalExecutor flag-gated pre-insert (FR-1 + FR-
     expect(helperBody).toMatch(/\.delete\(\)/);
     expect(helperBody).toMatch(/\.eq\(['"]handoff_type['"]\s*,\s*['"]LEAD-FINAL-APPROVAL['"]\)/);
     expect(helperBody).toMatch(/\.eq\(['"]status['"]\s*,\s*['"]pending_acceptance['"]\)/);
-    expect(helperBody).toMatch(/\.eq\(['"]created_by['"]\s*,\s*['"]UNIFIED-HANDOFF-SYSTEM['"]\)/);
+    // created_by scope re-synced: SD-FDBK-FIX-HANDOFF-CLAIM-GATE-001 (FR-4) replaced the single
+    // `.eq('created_by','UNIFIED-HANDOFF-SYSTEM')` with `.in('created_by', recorderIdentities())`
+    // (matches the system tag OR the session identity — strictly safer). Accept either form, but
+    // still FAIL LOUD if the created_by scope is ever dropped entirely (the real data-safety risk).
+    expect(helperBody).toMatch(/\.(?:eq|in)\(['"]created_by['"]\s*,\s*(?:['"]UNIFIED-HANDOFF-SYSTEM['"]|recorderIdentities\(\))\)/);
     // Fail-soft logging marker
     expect(helperBody).toMatch(/LFA_PENDING_CLEANUP_FAILED/);
   });
 
-  test('FR-4 cleanup wired at BOTH post-pre-insert rejection sites (UNAPPLIED_MIGRATIONS + SD_UPDATE_FAILED)', () => {
+  test('FR-4 cleanup wired at every post-pre-insert rejection site (UNAPPLIED_MIGRATIONS + CANONICAL_LFA_WRITE_FAILED x2 + SD_UPDATE_FAILED)', () => {
     const src = readFileSync(EXECUTOR_PATH, 'utf8');
-    // Two cleanup-call sites: enumerate count parity with the count of rejected returns between pre-insert and HandoffRecorder
+    // Cleanup-call sites: count parity with rejected returns between pre-insert and HandoffRecorder.
+    // Grew 2 -> 4 when SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001 added the two CANONICAL_LFA_WRITE_FAILED
+    // rejection branches (canonErr + catch) — each correctly cleans up the pending pre-insert row.
     const cleanupCalls = src.match(/await this\._cleanupPendingPreInsert\(sd\.id,\s*usePendingPath\)/g) || [];
-    expect(cleanupCalls.length).toBe(2);
+    expect(cleanupCalls.length).toBe(4);
   });
 });
 
@@ -168,7 +174,9 @@ describe('Pin Set 4: FR-9 helper in pending-migrations-check.js + FR-2 upsert in
     const upsertRegion = src.slice(upsertAnchor, upsertEnd);
     expect(upsertRegion).toMatch(/\.eq\(['"]handoff_type['"]\s*,\s*['"]LEAD-FINAL-APPROVAL['"]\)/);
     expect(upsertRegion).toMatch(/\.eq\(['"]status['"]\s*,\s*['"]pending_acceptance['"]\)/);
-    expect(upsertRegion).toMatch(/\.eq\(['"]created_by['"]\s*,\s*['"]UNIFIED-HANDOFF-SYSTEM['"]\)/);
+    // created_by scope re-synced to the recorderIdentities() helper (see Pin Set 1 rationale).
+    // Accept either the literal tag or the identity helper; still fails loudly if the scope is dropped.
+    expect(upsertRegion).toMatch(/\.(?:eq|in)\(['"]created_by['"]\s*,\s*(?:['"]UNIFIED-HANDOFF-SYSTEM['"]|recorderIdentities\(\))\)/);
     expect(upsertRegion).toMatch(/upserted_by_recorder/);
   });
 });
