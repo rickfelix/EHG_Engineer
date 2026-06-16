@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-06-15T23:33:48.286Z
+**Generated**: 2026-06-16T01:26:05.422Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,7 @@
 | triaged_at | `timestamp with time zone` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| target_rung | `text` | YES | - | - |
 
 ## Constraints
 
@@ -46,10 +47,11 @@
 - `conversion_ledger_source_pool_source_id_key`: UNIQUE (source_pool, source_id)
 
 ### Check Constraints
-- `conversion_ledger_disposition_check`: CHECK ((disposition = ANY (ARRAY['converted'::text, 'dismissed'::text, 'merged_duplicate'::text, 'deferred'::text])))
+- `conversion_ledger_disposition_check`: CHECK (((disposition IS NULL) OR (disposition = ANY (ARRAY['built'::text, 'already_covered'::text, 'duplicate'::text, 'declined'::text, 'deferred_to_rung'::text, 'converted'::text, 'dismissed'::text, 'merged_duplicate'::text, 'deferred'::text]))))
 - `conversion_ledger_intake_status_check`: CHECK ((intake_status = ANY (ARRAY['registered'::text, 'triaged'::text])))
 - `conversion_ledger_normalized_priority_check`: CHECK ((normalized_priority = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
-- `conversion_ledger_source_pool_check`: CHECK ((source_pool = ANY (ARRAY['eva_consultant_rec'::text, 'sd_proposal'::text, 'prd_payload_file'::text])))
+- `conversion_ledger_source_pool_check`: CHECK ((source_pool = ANY (ARRAY['eva_consultant_rec'::text, 'sd_proposal'::text, 'prd_payload_file'::text, 'todoist_todo'::text, 'youtube_playlist'::text, 'ehg_folder'::text, 'estate_corpus'::text])))
+- `conversion_ledger_target_rung_check`: CHECK (((target_rung IS NULL) OR (target_rung = ANY (ARRAY['v2'::text, 'v3'::text]))))
 
 ## Indexes
 

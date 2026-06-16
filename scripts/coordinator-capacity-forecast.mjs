@@ -218,7 +218,10 @@ async function reachAdam(f) {
     `[COORD->ADAM] PREDICTIVE belt-low (capacity forecaster). Verdict=${f.verdict}.`,
     `Belt=${f.beltDepth} claimable vs demand(soon)=${f.demandSoon} (idle ${f.idleNow} + freeing-soon ${f.freeingSoon}) → short by ${f.deficit}.`,
     `Claimable now: ${f.claimable.map(d => d.sd_key.replace('SD-LEO-INFRA-', '')).join(', ') || 'NONE'}. Idle/at-risk workers: ${idleList}.`,
-    `Per protocol I'm reaching out BEFORE the belt empties. Please propose a shortlist of CONFLICT-FREE, non-gated, draft-ready SD candidates (groom harness backlog + cross-program), propose-only; I'll dispatch. Dedup vs in-flight + SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001.`,
+    // SD-LEO-INFRA-ADAM-DURABLE-SOURCE-TRIGGER-001 (FR-3): retarget the belt-low ask at the
+    // VISION-ALIGNED weakest capabilities (read the per-capability gauge + mine the dispositioned
+    // estate) instead of generic harness-backlog grooming.
+    `Per protocol I'm reaching out BEFORE the belt empties. Please READ the per-capability vision gauge + MINE the dispositioned estate for the WEAKEST capabilities, then propose a shortlist of CONFLICT-FREE, non-gated, draft-ready SD candidates that move those weakest capabilities forward (NOT generic harness-backlog grooming), propose-only; I'll dispatch. Dedup vs in-flight + SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001.`,
     `Reply via adam-advisory (correlation ${correlation_id}).`,
   ].join('\n');
   const res = await insertCoordinationRow(sb, {

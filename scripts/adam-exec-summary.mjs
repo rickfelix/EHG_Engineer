@@ -28,6 +28,8 @@ import { computeBuildGauge, formatGaugeForSummary } from '../lib/vision/vdr-regi
 import { makeDefaultGrepSeam } from '../lib/vision/vdr-grep-seam.js';
 // SD-LEO-INFRA-WORKER-COUNT-PULSE-RESILIENCE-001: honest sparse-pulse worker-count source.
 import { resolveWorkerCount, SPARSE_THRESHOLD } from '../lib/fleet/worker-count-source.mjs';
+// SD-LEO-INFRA-ADAM-DURABLE-SOURCE-TRIGGER-001 (FR-4): missing-run watchdog seam.
+import { assessAdamSourceWatchdog } from '../lib/fleet/adam-source-watchdog.mjs';
 
 const EM = '—';
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -211,6 +213,22 @@ const workerSubj = pulseSource === 'unavailable' ? 'workers n/a' : `${avgActive}
 const actionsSubj = nActions ? `${nActions} ${nActions === 1 ? 'action' : 'actions'} for you` : 'all clear';
 const subject = `[Chairman] ${visSubj} · ${workerSubj} · ${actionsSubj}`;
 
+// FR-4 (SD-LEO-INFRA-ADAM-DURABLE-SOURCE-TRIGGER-001): missing-run watchdog. Catches a DROPPED
+// vision-gauge run — no row gets written at all, which the HISTORIZE available=false fail-soft
+// cannot see (it only records when a run actually executes). FAIL-SOFT throughout: the still-gated
+// vision_build_gauge table being ABSENT yields 'unprovisioned' (no line), any query error yields no
+// line, and only a genuine MISSING run renders a degraded line — the watchdog never blocks the email.
+let watchdogLine = null;
+try {
+  const { data: lastGauge, error: gErr } = await db.from('vision_build_gauge').select('measured_at').order('measured_at', { ascending: false }).limit(1);
+  const tableProvisioned = !(gErr && /relation|does not exist|find the table|schema cache/i.test(gErr.message || ''));
+  const lastGaugeAtMs = (!gErr && lastGauge && lastGauge[0] && lastGauge[0].measured_at) ? new Date(lastGauge[0].measured_at).getTime() : null;
+  // Source arm omitted (lastSourceAtMs undefined) until a durable DB Adam-source-event signal is defined,
+  // so an unavailable source signal cannot false-alarm; the pure seam supports it and is unit-tested.
+  const wd = assessAdamSourceWatchdog({ tableProvisioned, lastGaugeAtMs, nowMs: t });
+  if (wd.verdict === 'missing' && wd.label) watchdogLine = 'Watchdog: ' + wd.label;
+} catch { /* fail-soft: the watchdog never blocks the email */ }
+
 const text = [
   `Workers: ${workerText}`,
   '',
@@ -219,6 +237,7 @@ const text = [
   ...(visNote ? ['   ' + visNote] : []),
   ...(trendLine ? ['   ' + trendLine] : []),
   ...(trendAnalysis ? ['   ' + trendAnalysis] : []),
+  ...(watchdogLine ? ['   ' + watchdogLine] : []),
   ...(quitLine ? ['', quitLine] : []),
   ...(decisionsLine ? [decisionsLine] : []),
   '',
@@ -243,7 +262,9 @@ const actionsHtml = nActions
 const html = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px">' +
   `<p style="font-size:15px;margin:0 0 12px"><b>Workers:</b> ${esc(workerText)}</p>` +
   `<p style="font-size:15px;font-weight:600;margin:0 0 0">EHG vision: ${visPct != null ? visPct + '% built' : '(gauge unavailable)'}</p>` +
-  layerHtml + noteHtml + trendHtml + trendAnalysisHtml + quitHtml + decisionsHtml +
+  layerHtml + noteHtml + trendHtml + trendAnalysisHtml +
+  (watchdogLine ? `<div style="font-size:12px;color:#b54708;margin:2px 0 0">${esc(watchdogLine)}</div>` : '') +
+  quitHtml + decisionsHtml +
   '<hr style="border:none;border-top:1px solid #e1e4e8;margin:14px 0">' +
   actionsHtml +
   `<p style="font-size:11px;color:#999;margin:14px 0 0">as of ${esc(when)} ET ${EM} Adam ${EM} LEO Fleet Advisor</p></div>`;

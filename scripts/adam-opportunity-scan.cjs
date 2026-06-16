@@ -229,6 +229,17 @@ async function main() {
         let waveAlignment = null;
         try { waveAlignment = await calculateAlignment(supabase, LEO_ROADMAP_ID); } catch { waveAlignment = null; }
         selectOpts.waveAlignment = waveAlignment;
+        // SD-LEO-INFRA-ADAM-GAUGE-ESTATE-SOURCING-001 (FR-1/FR-2 SPINE WIRE): the LIVE vision gauge
+        // as an ADDITIONAL intra-tier lens (lower build% => higher rank). Per-candidate no-op until a
+        // candidate DECLARES a `capability`; fail-soft to empty gaps on any gauge unavailability.
+        // The capability_gap multiplier is bounded + folded into _effective, so it NEVER overrides
+        // the KR-status tier (tier compared first). This closes loop piece B (gauge as a lens).
+        let capabilityGap = null;
+        try {
+          const { readCapabilityGaps } = await import('../lib/adam/gauge-lens.js');
+          capabilityGap = await readCapabilityGaps({ supabase });
+        } catch { capabilityGap = null; }
+        selectOpts.capabilityGap = capabilityGap;
       } catch (e) {
         // Fail-soft: drop the perturbation entirely -> byte-identical baseline.
         process.stderr.write(`[adam-scan] preference/wave term skipped (fail-soft): ${e.message}\n`);

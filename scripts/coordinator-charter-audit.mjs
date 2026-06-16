@@ -33,6 +33,9 @@ import {
 } from '../lib/coordinator/charter-audit-detectors.mjs';
 // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: DUTY-7 silent-stall detector (drafts stranded with null vision_score).
 import { findStalledDrafts } from '../lib/coordinator/draft-stall-detector.mjs';
+// SD-LEO-INFRA-ADAM-VISION-SD-FLOW-001: DUTY-9 LEAD-aging detector (scored, unclaimed Adam-sourced vision drafts
+// aging at current_phase='LEAD' — the dispatch gap; DISJOINT from DUTY-7 (unscored) and DUTY-8 (claimed)).
+import { findLeadAgingDrafts } from '../lib/coordinator/lead-aging-detector.mjs';
 // DUTY-3/8 worker-set fix: reuse the CANONICAL fleet-membership predicate (the same one coordinator-audit.mjs uses
 // via liveFleetWorkers) so the coordinator's OWN session + Adam (role=adam) / non_fleet / fixtures are never
 // miscounted as idle WORKERS. detectIdleWithWork only knows "no sd_key" → without this, the coordinator + Adam —
@@ -59,6 +62,10 @@ const DISPATCH_RANK_TTL_MS = 60 * 60 * 1000; // mirrors worker-checkin.cjs DISPA
 // only on NaN/empty/negative.
 const _draftStallDays = Number(process.env.DRAFT_STALL_DAYS_THRESHOLD);
 const DRAFT_STALL_MS = (Number.isFinite(_draftStallDays) && _draftStallDays >= 0 ? _draftStallDays : 7) * 86400000;
+// SD-LEO-INFRA-ADAM-VISION-SD-FLOW-001 — DUTY-9 threshold: a SCORED, UNCLAIMED Adam-sourced vision draft aging
+// at current_phase='LEAD' beyond this is the dispatch gap (no worker advanced it). Honor an explicit 0; default 7d.
+const _leadAgingDays = Number(process.env.LEAD_AGING_DAYS_THRESHOLD);
+const LEAD_AGING_MS = (Number.isFinite(_leadAgingDays) && _leadAgingDays >= 0 ? _leadAgingDays : 7) * 86400000;
 // SD-LEO-INFRA-PROGRESS-STALL-DETECTION-001 — DUTY-8 threshold: a claimed SD whose updated_at is stale beyond
 // this (while the worker is fresh-heartbeating + NOT in armed-silence) is a progress-stall. Honor an explicit 0.
 // Default 4h is DELIBERATELY conservative and is the PRIMARY false-positive guard: strategic_directives_v2.updated_at
@@ -165,6 +172,10 @@ async function main() {
     // Advisory remediation count only — summarizeViolations never drives a process.exit (foundational-query
     // failures are the ONLY hard exits), so a stalled draft surfaces a remediation action, never a hard fail.
     draft: findStalledDrafts(sds, nowMs, { thresholdMs: DRAFT_STALL_MS, scoredKeys: scoredDraftKeys }),
+    // SD-LEO-INFRA-ADAM-VISION-SD-FLOW-001: DUTY-9 — scored, UNCLAIMED Adam vision drafts aging at LEAD (dispatch
+    // gap). Reuses the same scoredDraftKeys signal but flags the COMPLEMENT of DUTY-7 (scored, not unscored), and
+    // requires UNCLAIMED (complement of DUTY-8's claimed) — so no SD is ever double-reported across the three.
+    leadAging: findLeadAgingDrafts(sds, nowMs, { thresholdMs: LEAD_AGING_MS, scoredKeys: scoredDraftKeys }),
     // SD-LEO-INFRA-PROGRESS-STALL-DETECTION-001: DUTY-8 — claim-holders heartbeat-ALIVE but claimed SD FROZEN.
     // Reuses the canonical detectStuckWorker predicate (injected); advisory remediation count only (no new exit).
     progress: detectProgressStall({ liveSessions: liveWorkers, sds, nowMs, thresholdMs: PROGRESS_STALL_MS, isWithinArmedSilence: isWithinArmedSilenceWindow, detectStuck: detectStuckWorker }),
@@ -180,6 +191,7 @@ async function main() {
   console.log('  QUIET-TICK COMMITTED : ' + D.quiet.detail + flag(D.quiet));
   console.log('  DUTY-7 DRAFT-STALL   : ' + D.draft.detail + flag(D.draft)); // SILENT-STALL-PREVENTION-001
   console.log('  DUTY-8 PROGRESS-STALL: ' + D.progress.detail + flag(D.progress)); // PROGRESS-STALL-DETECTION-001
+  console.log('  DUTY-9 LEAD-AGING    : ' + D.leadAging.detail + flag(D.leadAging)); // ADAM-VISION-SD-FLOW-001
 
   // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: ADVISORY freshness dimension — fail-open and deliberately
   // kept OUT of `D`/summarizeViolations, so a stale checkout surfaces a warning but never trips the
