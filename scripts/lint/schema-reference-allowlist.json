@@ -1,5 +1,5 @@
 {
   "_comment": "schema-reference-lint escapes (SD-LEO-INFRA-SCHEMA-REFERENCE-LINT-001). files: repo-relative paths whose DB client targets ANOTHER database (e.g. the EHG app project) or whose table names are dynamic/templated. tables: relation names to skip everywhere (e.g. tables that exist only in the EHG app DB but are referenced from cross-DB scripts). Prefer the inline pragma (schema-lint-disable-line) for single intentional lines.",
   "files": [],
-  "tables": ["north_star"]
+  "tables": ["north_star", "vision_ladder_rungs", "vision_ladder_criteria"]
 }
