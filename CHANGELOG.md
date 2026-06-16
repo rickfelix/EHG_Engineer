@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-06-16](#2026-06-16)
+  - [Infrastructure](#infrastructure)
 - [2026-06-15](#2026-06-15)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -56,6 +58,13 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-06-16
+
+### Infrastructure
+- **The estate backlog (Todoist + YouTube + Claude-Code intake, 561 items) is now dispositioned into the conversion ledger with an auditable trace-back — without starving the enrichment pipelines** - PR #4815 (SD-LEO-INFRA-ESTATE-DISPOSITION-001)
+  - **What shipped**: A new `--pools estate` mode in `scripts/intake/drain-intake.mjs` (`npm run intake:drain-estate`) drains the three estate intake tables (`eva_todoist_intake`, `eva_youtube_intake`, `eva_claude_code_intake`) into `conversion_ledger` under reserved pools (`todoist_todo` / `youtube_playlist` / `estate_corpus`), reusing the existing `registerItem`/`setDisposition`/triage primitives (no parallel disposition engine). Each item carries a pure 0-3 compounding score (`lib/intake/compounding-score.js` — priority + substance + value, no `sd_capabilities`) and an FR-2 classification, persisted in the source row's `raw_data`. The **mark-off writes ONLY `raw_data`** (the ledger back-pointer is the authoritative idempotency marker) and deliberately never touches the source `status`/`processed_at` columns — those gate each table's enrichment pipeline (release-analyzer / youtube post-processor / todoist), so a re-run or the new hourly cron never re-disposes a row and never starves a pipeline. A TIER-1 read-only `v_estate_traceback` view (`database/migrations/20260616_estate_traceback_view.sql`) joins each ledger item to its linked SD's status so already-shipped ideas are suppressed from re-proposal and provenance is auditable. A fail-soft hourly `.github/workflows/estate-disposition-cron.yml` drains new inflow. Auto-promotion (SD creation) is intentionally SUPPRESSED here — deferred to the sibling spine-wire SD. Live end state: 561 ledger rows = 561 view rows, idempotent re-run dispositioned 0.
+  - **Verification**: Adversarial review caught a real HIGH the 36 green tests structurally missed — the original mark-off wrote `status='processed'` to the source row, which collides with the 3 `status='pending'`-gated enrichment pipelines and would have silently starved 102 YouTube + 11 Claude-Code + 1 Todoist pending rows; fixed to a `raw_data`-only back-pointer and **proven live** (source pending counts unchanged at todoist 1 / youtube 102 / claude 11 across the full 561-item backfill). A MEDIUM (the `--apply` path dropped the classification arg → null) was also fixed. The traceback view was authored as a paren-free bare `CREATE VIEW` (no `DO` block, no `COMMENT ON VIEW`) specifically to stay TIER-1 auto-apply-eligible. 37/37 hermetic unit tests; staged backfill (dry-run → `--limit 5` verify → full → idempotent re-run). Heal 98/100; gates E2P 93 / P2L 97 / LEAD-FINAL 99 (26/26 gates).
 
 ## 2026-06-15
 
