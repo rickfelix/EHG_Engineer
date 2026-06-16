@@ -58,6 +58,8 @@ import { createClient } from '@supabase/supabase-js';
 
 import { listActiveWorktrees, countActiveWorktrees, MAX_WORKTREE_COUNT } from '../lib/worktree-quota.js';
 import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../lib/worktree-manager.js';
+// SD-LEO-INFRA-ORPHAN-WORKTREE-SWEEP-001 (FR-1/FR-4): reclaim unregistered .worktrees/ dirs.
+import { runOrphanSweep } from '../lib/worktree-reaper/orphan-sweep.js';
 // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001: single-source reapability helpers.
 // These three used to be defined locally below; the canonical home is now
 // lib/worktree-reapability.js so every removal path shares one implementation.
@@ -103,6 +105,11 @@ function parseArgs(argv) {
     yes: args.includes('--yes'),
     verbose: args.includes('--verbose') || args.includes('-v'),
     phantomOnly: args.includes('--phantom-only'),
+    // SD-LEO-INFRA-ORPHAN-WORKTREE-SWEEP-001: --orphan-sweep = run ONLY the orphan sweep
+    // (standalone, for manual inspection); --no-orphan-sweep = skip the sweep that is
+    // otherwise folded into the normal flow (so the hourly tick includes it).
+    orphanSweep: args.includes('--orphan-sweep'),
+    noOrphanSweep: args.includes('--no-orphan-sweep'),
     help: args.includes('--help') || args.includes('-h'),
     days: DEFAULT_IDLE_DAYS,
     threshold: DEFAULT_POOL_THRESHOLD,
@@ -149,6 +156,9 @@ Options:
   --repo <path>         Run against a different repo (chdir before scanning); useful when
                         the target repo's quota is full but you can't easily cd into it
   --phantom-only        Legacy mode: only report phantoms (missing dirs / prunable)
+  --orphan-sweep        Standalone: ONLY reclaim ORPHANED .worktrees/ dirs (on disk but
+                        NOT in 'git worktree list'). Dry-run unless --execute. Junction-safe.
+  --no-orphan-sweep     Skip the orphan sweep that is otherwise folded into a normal run.
   --verbose, -v         Include per-worktree detector trace in the table
   --help, -h            Show this help
 
@@ -923,6 +933,53 @@ function runPhantomOnlyMode({ repoRoot, worktrees }) {
 
 // ── Main ───────────────────────────────────────────────────────────────
 
+/**
+ * SD-LEO-INFRA-ORPHAN-WORKTREE-SWEEP-001 (FR-1/FR-2/FR-4): run + report one orphan sweep.
+ * Reclaims unregistered `.worktrees/` dirs via the junction-safe path. Conservative:
+ * EXECUTE removal is forced to dry-run when Supabase is unavailable, because without it
+ * the live-owner (active-claim) guard cannot be verified — mirroring the reaper's own
+ * "refuse to remove without active-claim verification" stance (main():~1096). Fail-soft.
+ *
+ * @param {{repoRoot: string, worktreesDir: string, supabase: object|null, execute: boolean}} p
+ * @returns {Promise<object>} the runOrphanSweep result
+ */
+async function runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execute }) {
+  const owners = supabase ? await loadClaimMap(supabase).catch(() => new Map()) : new Map();
+  const liveOwners = new Set([...owners.keys()]);
+  const effectiveExecute = execute && !!supabase;
+  if (execute && !supabase) {
+    console.log('🧹 Orphan sweep: Supabase unavailable — running DRY-RUN (cannot verify active-claim ownership).');
+  }
+  const sweep = runOrphanSweep({
+    repoRoot,
+    worktreesDir,
+    execute: effectiveExecute,
+    liveOwners,
+    emit: emitJsonLine,
+    logger: (m) => process.stderr.write(m + '\n'),
+  });
+  const s = sweep.summary || {};
+  console.log(
+    `🧹 Orphan sweep: scanned=${s.scanned ?? '?'} reapable=${s.reapable ?? '?'} ` +
+    `reclaimed=${s.reclaimed_count ?? 0} bytes=${s.reclaimed_bytes ?? 0} ` +
+    `excluded=${s.excluded_count ?? 0} failed=${s.failed_count ?? 0}${s.dry_run ? ' (dry-run)' : ''}`
+  );
+  // FR-4 durable summary: best-effort audit_log row when an EXECUTE run actually acted. Fail-soft.
+  if (sweep.ok && supabase && effectiveExecute && ((s.reclaimed_count || 0) > 0 || (s.failed_count || 0) > 0)) {
+    try {
+      await supabase.from('audit_log').insert({
+        event_type: 'worktree_orphan_sweep',
+        entity_type: 'worktree',
+        entity_id: 'orphan_sweep',
+        severity: (s.failed_count || 0) > 0 ? 'warning' : 'info',
+        created_by: 'worktree-reaper',
+        metadata: s,
+      });
+    } catch { /* fail-soft: the stderr JSON line is the primary durable signal */ }
+  }
+  return sweep;
+}
+
 export async function main(argv = process.argv) {
   const opts = parseArgs(argv);
   if (opts.help) {
@@ -961,6 +1018,21 @@ export async function main(argv = process.argv) {
   // Phantom-only mode: preserves legacy cleanup-phantom-worktrees.js behavior.
   if (opts.phantomOnly) {
     return runPhantomOnlyMode({ repoRoot, worktrees: allWorktrees });
+  }
+
+  // SD-LEO-INFRA-ORPHAN-WORKTREE-SWEEP-001: standalone orphan-sweep mode (manual /
+  // `npm run worktree:orphan-sweep[:execute]`). Reclaims ONLY unregistered .worktrees/ dirs.
+  if (opts.orphanSweep) {
+    await runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execute: opts.execute });
+    return 0; // fail-soft: the sweep never produces a non-zero reaper exit
+  }
+
+  // FR-4 durability: fold the orphan sweep into the NORMAL reaper flow so the hourly
+  // worktree-reaper-tick.cjs spawn includes it with NO separate cron. Runs BEFORE the
+  // registered-worktree stage scan (and its early returns), is dry-run unless --execute,
+  // and is fully fail-soft so it can never abort the reaper. Opt out with --no-orphan-sweep.
+  if (!opts.noOrphanSweep) {
+    await runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execute: opts.execute });
   }
 
   // Load reference data (best-effort — reaper is useful even with empty maps).
