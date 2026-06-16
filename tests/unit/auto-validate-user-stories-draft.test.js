@@ -15,7 +15,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { autoValidateUserStories } from '../../scripts/auto-validate-user-stories-on-exec-complete.js';
+import { autoValidateUserStories, classifyDesignOnly, storyMeetsDesignBar } from '../../scripts/auto-validate-user-stories-on-exec-complete.js';
 
 /**
  * Minimal chainable + awaitable mock of the supabase-js query builder.
@@ -28,13 +28,20 @@ function makeClient(opts) {
     const resolve = () => {
       if (st.table === 'strategic_directives_v2') {
         recorded.resolvedByKey = st.eqs.sd_key ?? null;
-        return { data: { id: opts.uuid }, error: null };
+        // opts.sdRow lets a test supply metadata/description for design-only classification.
+        return { data: { id: opts.uuid, ...(opts.sdRow || {}) }, error: null };
       }
       if (st.table === 'sd_scope_deliverables') return { data: opts.deliverables, error: null };
       if (st.table === 'user_stories') {
         if (st.op === 'update') {
-          if (st.updateData?.status === 'completed') recorded.promoteStatusIn = st.ins.status ?? null;
-          if (st.updateData?.validation_status === 'validated') recorded.validateCalled = true;
+          if (st.updateData?.status === 'completed') {
+            recorded.promoteStatusIn = st.ins.status ?? null;
+            if (st.ins.id) recorded.promotedIds = st.ins.id;
+          }
+          if (st.updateData?.validation_status === 'validated') {
+            recorded.validateCalled = true;
+            if (st.ins.id) recorded.validatedIds = st.ins.id;
+          }
           return { data: opts.stories, error: null };
         }
         return { data: opts.stories, error: null };
@@ -129,4 +136,88 @@ test('no user stories returns the {validated:true,count:0} contract (infra/docs 
   assert.equal(res.validated, true, 'no stories is an acceptable pass for infra/docs SDs');
   assert.equal(res.count, 0);
   assert.equal(recorded.promoteStatusIn, null, 'nothing to promote when there are no stories');
+});
+
+// ── SD-LEO-INFRA-VALIDATE-DESIGN-ONLY-STORIES-001 ──────────────────────────────────────────────
+
+test('classifyDesignOnly: explicit metadata.design_only flag wins', () => {
+  assert.equal(classifyDesignOnly({ metadata: { design_only: true } }, []).designOnly, true);
+});
+
+test('classifyDesignOnly: all-docs deliverable paths → design-only; any code path → not', () => {
+  assert.equal(classifyDesignOnly({}, [{ deliverable_name: 'docs/04_features/spec.md' }]).designOnly, true);
+  assert.equal(classifyDesignOnly({}, [{ deliverable_name: 'docs/x.md' }, { deliverable_name: 'src/foo.ts' }]).designOnly, false);
+});
+
+test('classifyDesignOnly: generic deliverable names + a design-only marker in SD text → design-only', () => {
+  const sd = { description: 'DESIGN-ONLY — NO build and NO code in this SD; reviewable spec.' };
+  const generic = [{ deliverable_name: 'Documentation updated' }, { deliverable_name: 'Core functionality implemented' }];
+  assert.equal(classifyDesignOnly(sd, generic).designOnly, true);
+});
+
+test('classifyDesignOnly: generic names + no marker → FAIL-OPEN to not-design-only', () => {
+  const generic = [{ deliverable_name: 'Documentation updated' }, { deliverable_name: 'Unit tests written' }];
+  assert.equal(classifyDesignOnly({ description: 'Add a feature' }, generic).designOnly, false);
+});
+
+test('storyMeetsDesignBar: substantive non-boilerplate ACs pass; thin/boilerplate fail', () => {
+  const good = { title: 'Review the spec', acceptance_criteria: [
+    'Opening the design spec, a reviewer can see the cockpit purpose stated clearly.',
+    'The spec ends with an open-questions section for the chairman.' ] };
+  assert.equal(storyMeetsDesignBar(good).ok, true);
+  assert.equal(storyMeetsDesignBar({ title: 't', acceptance_criteria: ['only one criterion here, long enough'] }).ok, false, '<2 substantive → fail');
+  assert.equal(storyMeetsDesignBar({ title: 't', acceptance_criteria: ['It is built successfully', 'Works as expected'] }).ok, false, 'boilerplate → fail');
+  // substantive + non-boilerplate, no literal "spec" keyword → PASS (the per-story spec-keyword check
+  // was dropped; the SD is already classified design-only, and a good design AC can describe content).
+  assert.equal(storyMeetsDesignBar({ title: 't', acceptance_criteria: [
+    'The metric reads months-of-runway = liquid cash / monthly net burn.',
+    'No alternative formula is left ambiguous in the document.' ] }).ok, true);
+});
+
+test('storyMeetsDesignBar: OBJECT-shaped acceptance_criteria are normalized (not silently dropped)', () => {
+  // ~half the corpus stores ACs as {given,when,then} objects — these must be measured, not ignored.
+  const objStory = { title: 'Object ACs', acceptance_criteria: [
+    { given: 'the metric-definition section of the spec is open', when: 'an engineer reads the formula', then: 'it reads months-of-runway = liquid cash / monthly net burn' },
+    { scenario: 'A reviewer checks the open-questions list and finds the chairman decisions enumerated.' } ] };
+  assert.equal(storyMeetsDesignBar(objStory).ok, true, 'object ACs must be normalized + pass the bar');
+  // an object AC that is empty/thin still fails
+  assert.equal(storyMeetsDesignBar({ title: 't', acceptance_criteria: [{ given: '', when: '', then: '' }] }).ok, false);
+});
+
+test('design-only branch: good story validated, thin story surfaced (advisory, not rubber-stamped)', async () => {
+  const stories = [
+    { id: 'g1', title: 'Good', status: 'ready', validation_status: 'pending', implementation_context: 'see the design spec',
+      acceptance_criteria: ['The spec documents the gauge purpose and data source clearly.', 'The spec lists open questions for the chairman.'] },
+    { id: 't1', title: 'Thin', status: 'ready', validation_status: 'pending',
+      acceptance_criteria: ['It is built successfully'] },
+  ];
+  const { client, recorded } = makeClient({
+    uuid: '77777777-7777-7777-7777-777777777777',
+    sdRow: { metadata: { design_only: true } },
+    stories,
+    deliverables: [{ deliverable_name: 'docs/04_features/spec.md', completion_status: 'completed' }],
+  });
+  const res = await autoValidateUserStories('77777777-7777-7777-7777-777777777777', client);
+  assert.equal(res.designOnly, true);
+  assert.equal(res.validated, false, 'a thin story keeps the SD from a clean validated pass');
+  assert.equal(res.passing, 1, 'only the good story is validated');
+  assert.equal(res.failing, 1, 'the thin story is surfaced');
+  assert.ok(res.warnings.some(w => w.includes('Thin')), 'the thin story is named in the warnings');
+  // Option A: ALL design stories are promoted status->completed (so USER_STORY_COVERAGE is not
+  // hard-blocked), but only the good story is validation_status->validated.
+  assert.deepEqual([...(recorded.promotedIds || [])].sort(), ['g1', 't1'], 'all stories promoted to completed');
+  assert.deepEqual(recorded.validatedIds, ['g1'], 'only the good story is validated');
+});
+
+test('FR-3: a design-only SD with a spec deliverable but ZERO stories is surfaced, not auto-passed', async () => {
+  const { client } = makeClient({
+    uuid: '88888888-8888-8888-8888-888888888888',
+    sdRow: { metadata: { design_only: true } },
+    stories: [],
+    deliverables: [{ deliverable_name: 'docs/04_features/spec.md', completion_status: 'completed' }],
+  });
+  const res = await autoValidateUserStories('88888888-8888-8888-8888-888888888888', client);
+  assert.equal(res.validated, false, 'design-only + zero stories must NOT silently auto-pass');
+  assert.equal(res.designOnly, true);
+  assert.ok(res.warnings && res.warnings.length >= 1, 'the zero-stories case is surfaced as a warning');
 });
