@@ -15,11 +15,14 @@ name: "Adam chairman exec email (cron)"
 
 on:
   schedule:
-    # Hourly (chairman-chosen cadence 2026-06-10, 24/day) — the always-on proactive
-    # chairman artifact. Fires at :17 past the hour (NOT :00) to dodge GitHub Actions'
-    # top-of-hour scheduling congestion, where queued runs are routinely delayed or
-    # dropped — so the hourly email actually lands. Count is unchanged (24/day).
-    - cron: '17 * * * *'
+    # Chairman-chosen cadence is HOURLY (2026-06-10), but GitHub Actions routinely DELAYS and
+    # silently DROPS scheduled runs — observed firing every 2-3h, never near :17. So we
+    # OVER-SCHEDULE (~every 15 min) and gate each trigger behind a once-per-~55-min send guard
+    # (scripts/exec-email-should-send.mjs, audit_log marker). GitHub can drop 2-3 of every 4
+    # sub-hourly triggers and the chairman still gets exactly ONE email per ~hour, no duplicates,
+    # near the top of the hour. The vision:gauge historize AND the send BOTH gate on the guard, so
+    # the trend is historized once per hour (not 4x). SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001 (FR-1).
+    - cron: '2,17,32,47 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -33,7 +36,12 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: true
+  # SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001 (FR-1): MUST be false. With over-scheduling (~every 15 min)
+  # a true setting would let the next trigger CANCEL a run mid-send — between the Resend success and
+  # the audit_log marker insert — so the marker is never written and the following run re-sends a
+  # DUPLICATE. false serializes runs (one runs, the next queues), guaranteeing the marker is recorded
+  # before the next run's guard reads it. Runs are short (~2-3 min) so no meaningful pileup.
+  cancel-in-progress: false
 
 jobs:
   exec-email:
@@ -60,17 +68,31 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      # SD-LEO-INFRA-FIX-CHAIRMAN-HOURLY-001 (FR-1): the once-per-hour gate. Because we over-schedule
+      # (~every 15 min) to beat GitHub Actions dropping runs, this step decides ONCE whether this
+      # trigger should proceed (LIVE: send only if >~55 min since the last send marker; dry-run:
+      # always proceed). Both the historize and send steps gate on `should_send`, so the email lands
+      # once/hour with no duplicates and the trend historizes once/hour (not 4x).
+      - name: Once-per-hour gate
+        id: guard
+        env:
+          ADAM_EMAIL_LIVE: ${{ vars.ADAM_EMAIL_LIVE }}
+          FORCE_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: node scripts/exec-email-should-send.mjs
+
       # SD-LEO-INFRA-VISION-GAUGE-HISTORIZE-001 (FR-2): historize the vision gauge on the SAME hourly
-      # cadence as this email, so each run appends one auditable snapshot to vision_build_gauge and the
-      # send step below renders a trend that includes the fresh point. continue-on-error so a writer
-      # failure (e.g. a transient DB error) can NEVER block the chairman email; the writer is itself
-      # fail-soft (a doc-unavailable run is recorded as available=false, never a missing row). The job's
-      # concurrency:cancel-in-progress keeps this append-only (one snapshot per scheduled run).
+      # cadence as this email, so each sending run appends one auditable snapshot to vision_build_gauge
+      # and the send step renders a trend that includes the fresh point. Gated by the once-per-hour
+      # guard so over-scheduling does not append 4 snapshots/hour (which would shrink the 24-row trend
+      # window). continue-on-error so a writer failure can NEVER block the chairman email; the writer
+      # is itself fail-soft (a doc-unavailable run is recorded as available=false, never a missing row).
       - name: Historize the vision gauge (append one snapshot)
+        if: steps.guard.outputs.should_send == 'true'
         continue-on-error: true
         run: npm run vision:gauge
 
       - name: Send chairman exec email (observe-only until ADAM_EMAIL_LIVE repo var = true)
+        if: steps.guard.outputs.should_send == 'true'
         run: |
           ARGS="--dry-run"
           if [ "${{ vars.ADAM_EMAIL_LIVE }}" = "true" ] && [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
