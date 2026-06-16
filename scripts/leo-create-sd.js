@@ -2146,7 +2146,7 @@ export function validateProposalShape(proposal, filePath) {
  * sourced_by. Those historical rows are still counted by FR-1b as-is; this stamp makes the
  * proposal-based routes the durable, code-enforced producer going forward. No retroactive change.
  */
-export function mapProposalToCreateArgs(normalized, proposal, filePath) {
+export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {}) {
   return {
     sdKey: normalized.sdKey,
     title: normalized.title,
@@ -2171,6 +2171,15 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath) {
       // sourcing-cadence consumer; see this function's doc comment). Only stamped for an explicit
       // Adam-origin proposal — never coerced/defaulted, so a non-Adam proposal stays unattributed.
       ...(proposal.sourced_by === 'adam' ? { sourced_by: 'adam' } : {}),
+      // SD-LEO-INFRA-PROPOSAL-INGEST-REVIEW-FLAGS-001 (FR-1/FR-3): bring the proposal-ingest
+      // route to PARITY with the direct-args route (~line 2989) for the review-attestation
+      // flags. The attestation is stamped ONLY on an explicit `=== true` — from the proposal's
+      // own metadata OR the threaded CLI flag (opts). NEVER coerced/defaulted: a 'true' string,
+      // 1, false, or absence all leave the flag UNSET, so a genuinely-unreviewed governed
+      // proposal is STILL blocked by GR-MIGRATION-REVIEW / GR-SECURITY-BASELINE. This removes a
+      // FALSE block (an already-reviewed proposal), it does NOT weaken the review gate.
+      ...(proposal.metadata?.migration_reviewed === true || opts.migrationReviewed === true ? { migration_reviewed: true } : {}),
+      ...(proposal.metadata?.security_reviewed === true || opts.securityReviewed === true ? { security_reviewed: true } : {}),
     },
   };
 }
@@ -2219,7 +2228,7 @@ function resolveProposalFiles(pathOrGlob) {
  * @param {{dryRun?:boolean, deps?:{keyExists?:Function, createSD?:Function}}} options
  */
 export async function ingestProposalObject(proposal, source, options = {}) {
-  const { dryRun = false, deps = {} } = options;
+  const { dryRun = false, deps = {}, migrationReviewed = false, securityReviewed = false } = options;
   const _keyExists = deps.keyExists || keyExists;
   const _createSD = deps.createSD || createSD;
 
@@ -2229,7 +2238,10 @@ export async function ingestProposalObject(proposal, source, options = {}) {
     console.log(`⏭️  ${normalized.sdKey} already exists, skipping (${source})`);
     return { sdKey: normalized.sdKey, file: source, action: 'skipped' };
   }
-  const args = mapProposalToCreateArgs(normalized, proposal, source);
+  // FR-2: forward the threaded review-attestation flags (from --migration-reviewed /
+  // --security-reviewed on the proposal-ingest CLI routes) to the mapper, which honors them
+  // ONLY on an explicit `=== true` (FR-3 guard lives in mapProposalToCreateArgs).
+  const args = mapProposalToCreateArgs(normalized, proposal, source, { migrationReviewed, securityReviewed });
   if (dryRun) {
     console.log(`🔎 [dry-run] would create ${args.sdKey} (${args.type}/${args.priority}) — ${args.title}`);
     return { sdKey: normalized.sdKey, file: source, action: 'dry-run' };
@@ -2396,8 +2408,13 @@ Flags:
                      Supported in both direct creation AND --from-plan mode.
   --migration-reviewed  Set metadata.migration_reviewed=true to satisfy GR-MIGRATION-REVIEW
                         guardrail (required when scope contains migration/schema keywords).
+                        Honored on direct, --from-feedback, --child AND the proposal-ingest
+                        routes (--from-proposal / --proposal-b64 / --proposal-stdin); on the
+                        proposal routes proposal.metadata.migration_reviewed===true also attests.
   --security-reviewed   Set metadata.security_reviewed=true to satisfy GR-SECURITY-BASELINE
                         guardrail (required when scope contains auth/credential/RLS keywords).
+                        Honored on the same routes as --migration-reviewed (incl. proposal
+                        metadata.security_reviewed===true).
   --scope-slice <JSON>  (--child only) Declare the slice of parent orchestrator scope this
                         child claims. JSON shape: {stages?: number[], deliverable_globs?: string[]}.
                         Example: --scope-slice='{"stages":[18]}'
@@ -2490,24 +2507,38 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // SD-LEO-INFRA-FROM-PROPOSAL-INGEST-001: materialize PROPOSAL-*.json into DRAFT SDs.
       // path/glob = first non-flag positional after --from-proposal; --dry-run = no writes.
       const dryRun = args.includes('--dry-run');
-      const fpKnownFlags = new Set(['--from-proposal', '--dry-run']);
+      // FR-2: --migration-reviewed/--security-reviewed are known flags (not the path positional).
+      const fpKnownFlags = new Set(['--from-proposal', '--dry-run', '--migration-reviewed', '--security-reviewed']);
       const proposalArg = args.find((a, i) => i > 0 && !a.startsWith('-') && !fpKnownFlags.has(a)) || args[1];
-      await createFromProposal(proposalArg, { dryRun });
+      await createFromProposal(proposalArg, {
+        dryRun,
+        migrationReviewed: args.includes('--migration-reviewed'),
+        securityReviewed: args.includes('--security-reviewed'),
+      });
     } else if (args[0] === '--proposal-b64') {
       // SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001: file-free DB-direct sourcing.
       // The base64 string is the first non-flag positional (base64 never starts with '-').
       const dryRun = args.includes('--dry-run');
-      const b64KnownFlags = new Set(['--proposal-b64', '--dry-run']);
+      // FR-2: --migration-reviewed/--security-reviewed are known flags (not the base64 positional).
+      const b64KnownFlags = new Set(['--proposal-b64', '--dry-run', '--migration-reviewed', '--security-reviewed']);
       // No `|| args[1]` fallback: if no non-flag positional is present (e.g.
       // `--proposal-b64 --dry-run`), b64Arg stays undefined so createFromProposalB64's
       // guard reports the clear "requires a base64-encoded proposal JSON string" error
       // instead of base64-decoding the literal '--dry-run' flag into junk.
       const b64Arg = args.find((a, i) => i > 0 && !a.startsWith('-') && !b64KnownFlags.has(a));
-      await createFromProposalB64(b64Arg, { dryRun });
+      await createFromProposalB64(b64Arg, {
+        dryRun,
+        migrationReviewed: args.includes('--migration-reviewed'),
+        securityReviewed: args.includes('--security-reviewed'),
+      });
     } else if (args[0] === '--proposal-stdin') {
       // SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001: file-free DB-direct sourcing via a pipe.
       const dryRun = args.includes('--dry-run');
-      await createFromProposalStdin({ dryRun });
+      await createFromProposalStdin({
+        dryRun,
+        migrationReviewed: args.includes('--migration-reviewed'),
+        securityReviewed: args.includes('--security-reviewed'),
+      });
     } else if (args[0] === '--from-plan') {
       // Check for --yes flag (skip confirmation for auto-detect)
       const hasYesFlag = args.includes('--yes') || args.includes('-y');
