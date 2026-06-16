@@ -97,15 +97,16 @@ describe('computeBuildGauge (FR-1 numerator math + honest unknown handling)', ()
     expect(g.available).toBe(true);
     expect(g.coherence.ok).toBe(true);
     expect(g.total_capabilities).toBe(VDR_REGISTRY.length);
-    // unknown_count = 5 original code_grep + 5 governance (SD-LEO-INFRA-V1-GOV-PROBES-001) + 4
-    // automation/intelligence (SD-LEO-INFRA-V1-AUTOMATION-PROBES-001, ordinals 17-20) = 14. All are
-    // code_grep with no seam (or KR-GOV rows absent) in this stub → 'unknown', so denominator/overall
-    // are UNCHANGED (honest gauge: unknowns excluded from the denominator).
+    // unknown_count = 5 original code_grep + 5 governance (V1-GOV-PROBES) + 4 automation/intelligence
+    // (V1-AUTOMATION-PROBES, ordinals 17-20) = 14, all 'unknown' (no seam / KR-GOV rows in this stub) →
+    // EXCLUDED. The +3 consolidation probes (V1-CONSOLIDATION-PROBES) are unbuilt at count 0, so they
+    // ENTER the denominator (8 → 11).
     expect(g.unknown_count).toBe(14);
-    expect(g.denominator).toBe(8); // +2: the capability-layer db_count probes (unbuilt at count 0)
-    // (1 + 0.5 + 0.5 + 0 + 0 + 0 + 0 + 0) / 8 = 2.0/8 = 25%
-    expect(g.overall_pct).toBe(25);
+    expect(g.denominator).toBe(11); // 8 + 3 consolidation probes (unbuilt at count 0)
+    // numerator unchanged (1 + 0.5 + 0.5 + 0×8) = 2.0; 2.0/11 = 18%
+    expect(g.overall_pct).toBe(18);
     // infrastructure scored = survivability(0.5) + Capability Registry(0) + Expertise on-demand(0) = 0.5/3 = 17%
+    // application/process gain consolidation probes that are all 0 → those layer %s stay 0 (numerator 0).
     expect(g.per_layer).toMatchObject({ venture: 75, infrastructure: 17, application: 0, process: 0 });
     for (const c of g.components) expect(STATUS_SCORE).toHaveProperty(c.status);
   });
