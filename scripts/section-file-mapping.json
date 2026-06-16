@@ -172,6 +172,12 @@
       "adam_self_adherence_loop"
     ]
   },
+  "CLAUDE_COORDINATOR.md": {
+    "description": "Coordinator role contract + SRE charter — fleet supervisor/orchestration role. Loaded by the /coordinator skill or when orienting a fleet-coordinator session, as workers load CLAUDE_CORE.",
+    "sections": [
+      "coordinator_role_contract"
+    ]
+  },
   "SHARED": {
     "description": "Sections that appear in multiple files or are general reference",
     "sections": [

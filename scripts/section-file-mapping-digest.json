@@ -64,5 +64,11 @@
     "sections": [
       "adam_role_contract"
     ]
+  },
+  "CLAUDE_COORDINATOR_DIGEST.md": {
+    "description": "Coordinator role contract + SRE charter essentials (~2-3k chars) - fleet supervisor role, the six standing SRE duties, deploy-verification practice.",
+    "sections": [
+      "coordinator_role_contract"
+    ]
   }
 }

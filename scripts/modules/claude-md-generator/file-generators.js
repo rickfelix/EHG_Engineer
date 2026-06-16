@@ -465,6 +465,43 @@ ${adamContent}
 `;
 }
 
+/**
+ * Generate CLAUDE_COORDINATOR.md — Coordinator role contract (database-first).
+ * Mirrors generateAdam: composes the sections listed under 'CLAUDE_COORDINATOR.md' in
+ * section-file-mapping.json from leo_protocol_sections (section_type=coordinator_role_contract).
+ * @param {Object} data - All data from database
+ * @param {Object} fileMapping - Section to file mapping
+ * @returns {string} Generated markdown content
+ */
+function generateCoordinator(data, fileMapping) {
+  const { protocol } = data;
+  const sections = protocol.sections;
+  const { today, time } = getMetadata(protocol);
+
+  const coordinatorSections = getSectionsByMapping(sections, 'CLAUDE_COORDINATOR.md', fileMapping);
+  const coordinatorContent = coordinatorSections.map(s => formatSection(s)).join('\n\n');
+
+  return `# CLAUDE_COORDINATOR.md - Coordinator Role Contract
+
+**Generated**: ${today} ${time}
+**Protocol**: LEO ${protocol.version}
+**Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
+**Load when**: Running /coordinator, or orienting a fleet-coordinator session
+
+> The coordinator is a first-class LEO role parallel to Adam and the worker. For the LEAD→PLAN→EXEC workflow itself, see CLAUDE_CORE.md and the phase files; for the operational /coordinator subcommands, see .claude/commands/coordinator.md.
+
+---
+
+${coordinatorContent}
+
+---
+
+*Generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*
+`;
+}
+
 export {
   getSectionsByMapping,
   generateRouter,
@@ -472,5 +509,6 @@ export {
   generateLead,
   generatePlan,
   generateExec,
-  generateAdam
+  generateAdam,
+  generateCoordinator
 };
