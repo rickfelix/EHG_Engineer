@@ -5,7 +5,7 @@
 // asserted to RECORD a row (never a hole), and the unavailable-point handling is checked end-to-end.
 import { describe, it, expect } from 'vitest';
 import { buildGaugeRow } from '../../../scripts/vision-gauge-refresh.mjs';
-import { computeGaugeTrend } from '../../../lib/vision/gauge-trend.js';
+import { computeGaugeTrend, __test } from '../../../lib/vision/gauge-trend.js';
 
 const WRITABLE_KEYS = ['overall_pct', 'available', 'per_layer', 'components', 'denominator', 'total_capabilities', 'unknown_count', 'source'];
 
@@ -124,5 +124,23 @@ describe('FR-4: computeGaugeTrend — unavailable runs are honest (gap, excluded
   it('fewer than 2 MEASURABLE runs in the window → honest "only N measurable" analysis', () => {
     const t = computeGaugeTrend(snaps([null, null, 18])); // only 1 available
     expect(t.analysisLine).toMatch(/only 1 measurable run\(s\) in the last 3/);
+  });
+  it('an unparseable measured_at is dropped (deterministic, never NaN-sorted)', () => {
+    const bad = [{ overall_pct: 10, available: true, measured_at: 'not-a-date' }, ...snaps([14, 19])];
+    // the bad row is dropped → behaves like the 2 valid rows → +5 delta
+    expect(computeGaugeTrend(bad).trendLine).toMatch(/19% \(\+5 vs prior run, 2 runs\)/);
+  });
+});
+
+describe('FR-4: sparkline glyph mapping is absolute 0..100 (direct, not just length)', () => {
+  it('bar() maps the band edges + clamps out-of-range honestly', () => {
+    const { bar, BARS, GAP } = __test;
+    expect(bar(0)).toBe(BARS[0]);            // ▁
+    expect(bar(100)).toBe(BARS[BARS.length - 1]); // █
+    expect(bar(50)).toBe(BARS[Math.round(0.5 * (BARS.length - 1))]); // mid
+    expect(bar(-5)).toBe(BARS[0]);           // clamp low
+    expect(bar(150)).toBe(BARS[BARS.length - 1]); // clamp high
+    expect(bar(null)).toBe(GAP);             // unavailable → gap, never a 0% bar
+    expect(bar(NaN)).toBe(GAP);
   });
 });
