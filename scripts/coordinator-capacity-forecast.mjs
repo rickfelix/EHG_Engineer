@@ -32,6 +32,10 @@ import { dirname, join } from 'path';
 // fixtures AND bare-shell stubs (neither can pass LEAD-TO-PLAN) never inflate belt depth —
 // counting them as claimable over-reports capacity and suppresses the deficit/Adam alert.
 import { isExcludedFromBelt } from '../lib/coordinator/sd-exclusion.mjs';
+// SD-LEO-INFRA-CAPACITY-FORECAST-STALLED-BELT-EMPTY-FP-001: an idle worker is STALLED only when
+// its loop isn't claiming DESPITE available work — gate the stall label on belt depth, not heartbeat
+// age alone, so an empty-belt idle worker isn't a false-positive STALLED.
+import { classifyIdleWorker } from './lib/capacity-idle-classifier.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
@@ -147,11 +151,15 @@ async function main() {
       // idle: distinguish a healthy idle from a stalled loop (alive but never converting work)
       idleNow++;
       const hbAgeS = Math.round((Date.now() - new Date(w.heartbeat_at).getTime()) / 1000);
-      const stalledFlag = hbAgeS > 180; // alive heartbeat but >3m without claiming = likely stalled loop
+      // A stale heartbeat is only a STALL if there is claimable work the loop is failing to take.
+      // beltDepth inputs are already populated before this loop (openQfCount + claimable[]); the
+      // beltDepth re-derivation lower down is only for the verdict math.
+      const { stalled: stalledFlag, state: idleState, detail: idleDetail } =
+        classifyIdleWorker({ hbAgeS, beltDepth: claimable.length + openQfCount });
       if (stalledFlag) stalled++;
       rows.push({
-        sess: w.session_id.slice(0, 8), callsign, state: stalledFlag ? 'IDLE⚠STALLED' : 'IDLE',
-        detail: stalledFlag ? 'alive but loop not claiming (needs /loop re-arm)' : 'available',
+        sess: w.session_id.slice(0, 8), callsign, state: idleState,
+        detail: idleDetail,
         eta: `idle ${hbAgeS}s`,
       });
     }
