@@ -1,0 +1,77 @@
+{
+  "executive_summary": "Feed real cash-on-hand into the operator distance-to-broke runway gauge so months-of-runway (cash / net-burn) renders honestly, retiring the interim 'awaiting cash source' partial state. The runway substrate (SD-EHG-OPERATOR-RUNWAY-SUBSTRATE-001, completed) already provides the operator_cash_burn_monthly table, the upsertSubstrateInputs() write helper, freshness windows, and computeRunway()/getDistanceToBroke() — so FR-5 is largely automatic once cash flows. This SD adds the cash SOURCES with a hard read-only security contract: (FR-3) Stripe Balance via the already-wired read-only getStripe() client (testable now); (FR-1) a server-side token vault for a long-lived bank-READ token reusing the existing AES-256-GCM lib/security/encryption.cjs, where the token NEVER enters the gauge/client code path; (FR-2) a fail-soft pull step in feed-operator-cash-burn.mjs that writes cash_usd + categorized other_burn_usd with last_synced_at freshness. (FR-4) The actual bank CONNECTION (enrolling the chairman's account) is a CHAIRMAN-ONLY action — this SD ships the integration design, credential-handling contract, the vault, and the pull; it CONNECTS NOTHING until the chairman enrolls (the Teller path is authored but inert).",
+  "system_architecture": {
+    "overview": "All cash-read work lives in EHG_Engineer (lib/operator/, scripts/operator/); the separate /ehg/ cockpit consumes getDistanceToBroke() unchanged, so the PR stays in EHG_Engineer with no cross-repo change. The bank-read token is vaulted server-side and only a derived numeric cash row reaches the substrate; the gauge never sees a credential.",
+    "components": [
+      {"name": "lib/operator/cash-sources/stripe-balance.js", "responsibility": "FR-3: read-only Stripe available-balance slice via getStripe() (lib/payments/stripe-client.js). Calls stripe.balance.retrieve() server-side; returns a numeric USD cash slice; fail-soft (returns null on error, never throws into the feeder). No write/payout scope."},
+      {"name": "lib/operator/cash-sources/bank-read-service.js", "responsibility": "FR-1/FR-4: greenfield Teller bank-READ service mirroring the Stripe client guard+lazy pattern. Loads the vaulted bank-read token server-side ONLY; read-only scope; INERT (returns null cash slice) until the chairman enrolls an account. Plaid noted as the compliance alternative."},
+      {"name": "lib/operator/cash-sources/token-vault.js", "responsibility": "FR-1: server-side token vault wrapping lib/security/encryption.cjs (AES-256-GCM). encrypt/decrypt the long-lived bank-read token; decrypted token is held only in the bank-read service, never returned to callers, never logged, never imported by gauge/client code."},
+      {"name": "scripts/operator/feed-operator-cash-burn.mjs (extended)", "responsibility": "FR-2: add a fail-soft cash-pull step that sums available cash slices (Stripe now; bank when enrolled) and calls upsertSubstrateInputs(periodMonth, { cash_usd, cash_last_synced_at, other_burn_usd?, other_burn_last_synced_at? }). A failed/stale pull preserves the prior value (never zeroes cash)."},
+      {"name": "tests/unit/operator/cash-bank-feed.test.js", "responsibility": "FR-5/contract: unit tests for the Stripe slice (mocked), the vault round-trip, the inert-without-enrollment bank path, the fail-soft feeder, and a guard that the token never appears in the gauge code path."}
+    ]
+  },
+  "functional_requirements": [
+    {"id": "FR-1", "title": "Server-side bank-read token vault + enrollment design", "description": "Design the Teller enrollment flow and build a server-side token vault (reusing lib/security/encryption.cjs AES-256-GCM) for the long-lived bank-READ token. HARD contract: read-only scope, NO payout/write scope EVER requested; the token is vaulted server-side and NEVER appears in the gauge code path; the gauge reads ONLY a derived numeric balance/burn row."},
+    {"id": "FR-2", "title": "Fail-soft periodic cash + burn pull", "description": "Add a fail-soft step to feed-operator-cash-burn.mjs that writes cash-on-hand (sum of available slices) and categorized burn-part-(b) (broader non-AI business expenses) into operator_cash_burn_monthly with last_synced_at freshness. A failed pull is a logged skip that preserves the prior value, never a crash or a zeroing."},
+    {"id": "FR-3", "title": "Stripe Balance cash slice (read-only)", "description": "Add Stripe Balance via the already-wired read-only getStripe() client as a second, low-sensitivity cash slice (funds sitting in Stripe). Uses stripe.balance.retrieve() server-side; works in test-mode now; restricted (rk_) key supported. No write/payout scope."},
+    {"id": "FR-4", "title": "Chairman-gated connection (connects nothing)", "description": "The ACTUAL bank CONNECTION (enrolling the chairman's account) is a CHAIRMAN-ONLY action. This SD ships the integration design + credential-handling contract + the vault + the pull; the Teller bank-read path is authored but INERT and connects nothing until the chairman enrolls. No live bank token is committed or self-provisioned (CONST-002 spirit)."},
+    {"id": "FR-5", "title": "Distance-to-broke renders on fresh cash", "description": "Once cash is fresh, the distance-to-broke headline months-of-runway renders (cash / net-burn) with honest freshness via the existing getDistanceToBroke(); the interim partial-only ('awaiting cash source') state retires. This is wiring + verification — the substrate's computeRunway() already implements the freshness/headline logic."}
+  ],
+  "technical_requirements": [
+    {"id": "TR-1", "requirement": "The bank-read token must never be returned to callers, logged, serialized into the substrate, or importable by gauge/client code — only the derived numeric cash slice flows onward. A test asserts the token is absent from the gauge code path."},
+    {"id": "TR-2", "requirement": "Both cash sources are READ-ONLY: Stripe via balance.retrieve() (no charges/payouts); Teller/Plaid requesting read scope only. No write/payout scope is ever requested."},
+    {"id": "TR-3", "requirement": "The pull is fail-soft and idempotent per period_month: errors log a skip and preserve the prior substrate value; success stamps the matching *_last_synced_at. Stripe runs in test-mode in CI/fleet (existing guard)."},
+    {"id": "TR-4", "requirement": "The Teller path is inert without an enrolled token (returns a null slice), so the whole SD ships and is testable with zero live bank credentials; live connection is the chairman's enrollment action."}
+  ],
+  "implementation_approach": {
+    "summary": "Reuse the substrate's existing write/freshness/runway machinery; add only the cash SOURCES behind a strict read-only, server-side-only credential contract. Build the testable Stripe slice first, then the vault, then the inert Teller service, then the fail-soft feeder step. Verify the gauge auto-renders. Bank enrollment is chairman-only.",
+    "steps": [
+      "Build lib/operator/cash-sources/stripe-balance.js (read-only balance.retrieve via getStripe(); fail-soft) — testable in test-mode now.",
+      "Build lib/operator/cash-sources/token-vault.js over lib/security/encryption.cjs; build bank-read-service.js that loads the vaulted token server-side and stays inert until enrollment.",
+      "Extend feed-operator-cash-burn.mjs with a fail-soft cash-pull step that sums available slices and upserts cash_usd + other_burn_usd with freshness.",
+      "Add unit tests incl. the never-in-gauge-path guard; verify getDistanceToBroke() renders months-of-runway on fresh cash and retires the interim headline.",
+      "Drive the LEO chain; do NOT self-provision a live bank token (chairman-gated)."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": "operator_cash_burn_monthly.cash_usd is consumed by getDistanceToBroke()/computeRunway() (lib/operator/cash-burn-substrate.js), which the /ehg/ cockpit distance-to-broke gauge renders. The new cash-source modules are consumed only by scripts/operator/feed-operator-cash-burn.mjs (server-side). The vault/bank-read token has exactly one consumer: bank-read-service.js (server-side).",
+    "dependencies": "Hard dependency on SD-EHG-OPERATOR-RUNWAY-SUBSTRATE-001 (COMPLETED) for the operator_cash_burn_monthly table, upsertSubstrateInputs(), and getDistanceToBroke(). Reuses lib/payments/stripe-client.js getStripe() (FR-3) and lib/security/encryption.cjs (FR-1). Teller SDK is a new npm dependency (read-only client). Live bank connection depends on the chairman's enrollment (FR-4).",
+    "data_contracts": "Writes operator_cash_burn_monthly { cash_usd numeric, cash_last_synced_at timestamptz, other_burn_usd numeric, other_burn_last_synced_at timestamptz } via upsertSubstrateInputs (existing contract, unchanged columns). Cash slice functions return { usd: number|null, source: string } | null. No schema change. The bank-read token lives encrypted at rest, never in the row.",
+    "runtime_config": "STRIPE_SECRET_KEY / restricted rk_ key (existing, test-mode in CI). Teller credentials (app id + a vaulted bank-read token) provided only at chairman enrollment — absent by default, keeping the bank path inert. Encryption master key via existing .leo-keys (lib/security/encryption.cjs). No new public-facing config.",
+    "observability_rollout": "Rollout: code merges; the feeder's cash step runs on the existing feed-operator-cash-burn schedule. Until the chairman enrolls, only the Stripe slice contributes (test-mode) and the gauge shows runway from Stripe cash + AI burn. Verification: getDistanceToBroke() returns months_of_runway with cash status 'live' once cash is fresh. Rollback: git revert the PR (no data/schema impact; substrate columns are pre-existing); the bank token, if ever enrolled, is revoked chairman-side."
+  },
+  "acceptance_criteria": [
+    "After the cash-read step runs, the operator runway view shows a real months-of-runway number (cash divided by net burn) instead of the interim 'awaiting cash source' message.",
+    "The cash number is marked fresh, with a last-synced timestamp, and a failed refresh keeps the last known cash value rather than dropping it to zero.",
+    "Money sitting in Stripe is counted as part of cash-on-hand using a read-only key — no charges or payouts are ever made.",
+    "The long-lived bank login token is stored encrypted on the server and never appears anywhere the gauge or any browser code can read it — only the resulting cash number is shared.",
+    "No bank account is actually connected by this work: the bank-reading path stays dormant and connects nothing until the chairman personally enrolls an account.",
+    "The unit tests for this work pass, including a check that the bank token is absent from the gauge code path."
+  ],
+  "test_scenarios": [
+    {"id": "TS-1", "title": "Stripe balance slice is read-only and fail-soft", "type": "unit", "scenario": "Call the Stripe balance slice with a mocked getStripe() returning a known available balance; then with a client that throws.", "expected": "Returns the numeric USD balance on success; returns null (logged skip) on error; never calls a charge/payout method and never throws into the feeder."},
+    {"id": "TS-2", "title": "Token vault round-trips without leaking", "type": "unit", "scenario": "Encrypt a fake bank-read token via the vault, then decrypt it inside the bank-read service.", "expected": "Decrypt returns the original token only inside the service; the token is never part of any returned cash slice, log line, or substrate row."},
+    {"id": "TS-3", "title": "Bank path inert without enrollment", "type": "unit", "scenario": "Run the bank-read service with no vaulted token configured.", "expected": "Returns a null cash slice (inert); the feeder proceeds on the Stripe slice alone; no connection attempt is made."},
+    {"id": "TS-4", "title": "Feeder writes fresh cash; gauge renders runway", "type": "integration", "scenario": "Run the extended feed-operator-cash-burn.mjs cash step (Stripe test-mode), then call getDistanceToBroke(currentMonth).", "expected": "operator_cash_burn_monthly.cash_usd is upserted with cash_last_synced_at ~now; getDistanceToBroke returns months_of_runway = cash/net-burn with cash status 'live' and the interim 'awaiting cash source' headline is gone."},
+    {"id": "TS-5", "title": "Token never in gauge code path", "type": "unit", "scenario": "Static guard: assert the gauge/consumer modules (cash-burn-substrate.js / gauge path) do not import the vault or bank-read service and contain no token reference.", "expected": "No gauge/client module references the token, the vault, or the bank-read service — only the derived cash row."}
+  ],
+  "risks": [
+    {"risk": "Bank-read token leaks into logs/client/gauge", "mitigation": "Token vaulted server-side (encryption.cjs); held only in bank-read-service; TS-5 static guard asserts absence from the gauge path; never serialized into the substrate row.", "severity": "high"},
+    {"risk": "Accidental write/payout scope", "mitigation": "Stripe uses balance.retrieve() only (read); Teller/Plaid request read scope only; no charge/payout/transfer call exists in the new modules.", "severity": "high"},
+    {"risk": "Worker self-connects a live bank account", "mitigation": "FR-4 chairman-gated: the Teller path is inert without an enrolled token; no live token is committed or self-provisioned.", "severity": "medium"},
+    {"risk": "A failed pull zeroes cash and shows false runway collapse", "mitigation": "Fail-soft: errors log a skip and preserve the prior value; freshness windows mark stale cash rather than zero (TS-1/TS-4).", "severity": "medium"}
+  ],
+  "metadata": {
+    "sd_key": "SD-EHG-OPERATOR-CASH-BANK-FEED-001",
+    "target_application": "EHG_Engineer",
+    "target_files": [
+      "lib/operator/cash-sources/stripe-balance.js",
+      "lib/operator/cash-sources/bank-read-service.js",
+      "lib/operator/cash-sources/token-vault.js",
+      "scripts/operator/feed-operator-cash-burn.mjs",
+      "tests/unit/operator/cash-bank-feed.test.js"
+    ],
+    "created_via": "fleet-worker",
+    "depends_on": ["SD-EHG-OPERATOR-RUNWAY-SUBSTRATE-001"]
+  }
+}

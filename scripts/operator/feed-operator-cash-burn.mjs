@@ -28,6 +28,8 @@ import path from 'node:path';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { priceFor } from '../../lib/cost/llm-pricing.js';
 import { periodMonthOf, upsertSubstrateInputs, AI_BURN_LOWER_BOUND_LABEL } from '../../lib/operator/cash-burn-substrate.js';
+import { readStripeCashSlice } from '../../lib/operator/cash-sources/stripe-balance.js';
+import { readBankCashSlice } from '../../lib/operator/cash-sources/bank-read-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -59,7 +61,36 @@ async function main() {
   const supabase = createSupabaseServiceClient();
   const nowIso = new Date().toISOString();
   const periodMonth = periodMonthOf(Date.now());
-  const result = { period_month: periodMonth, dry_run: DRY_RUN, ai_burn: null, revenue: null, backfill: null };
+  const result = { period_month: periodMonth, dry_run: DRY_RUN, cash: null, ai_burn: null, revenue: null, backfill: null };
+
+  // ---- FR-2/FR-3: cash-on-hand (bank is PRIMARY + chairman-gated; Stripe is a SECOND slice) ----
+  // HONESTY (mirrors the substrate's "missing is NULL, never 0"): the bulk of cash lives in the
+  // bank, so the BANK is the primary source that establishes the cash reading. Stripe (FR-3) is an
+  // ADDITIVE "second slice" (funds sitting in Stripe) — alone it is NOT a complete cash picture, so
+  // writing it standalone would render a misleadingly-LOW runway. Until the chairman enrolls the
+  // bank (FR-4), cash stays UNATTESTED and the gauge honestly shows 'awaiting cash source' rather
+  // than a false near-zero. Fail-soft throughout: a failed pull preserves the prior value.
+  try {
+    const bankSlice = await readBankCashSlice();
+    if (!bankSlice) {
+      // Inert: no primary cash source yet. Peek Stripe for logging only; do NOT write cash.
+      const stripePeek = await readStripeCashSlice();
+      log('FR-cash', `bank cash slice inert (chairman not enrolled) — cash left unattested${stripePeek ? `; Stripe would add $${stripePeek.usd} once a bank is connected` : ''}`);
+      result.cash = { written: false, reason: 'primary bank source not enrolled (cash left unattested — gauge stays "awaiting cash source")' };
+    } else {
+      const stripeSlice = await readStripeCashSlice(); // additive second slice
+      const cashUsd = Number((Number(bankSlice.usd) + (stripeSlice ? Number(stripeSlice.usd) || 0 : 0)).toFixed(2));
+      const sources = ['bank', ...(stripeSlice ? ['stripe'] : [])];
+      const otherBurn = bankSlice.other_burn_usd; // categorized non-AI burn (FR-2 part-b), bank-derived
+      log('FR-cash', `cash-on-hand = $${cashUsd} from ${sources.join('+')}`);
+      if (!DRY_RUN) {
+        const fields = { cash_usd: cashUsd };
+        if (otherBurn != null) fields.other_burn_usd = Number(Number(otherBurn).toFixed(2));
+        await upsertSubstrateInputs(periodMonth, fields, supabase, nowIso);
+      }
+      result.cash = { written: !DRY_RUN, value_usd: cashUsd, sources, other_burn_usd: otherBurn };
+    }
+  } catch (e) { warn('FR-cash', `failed (fail-soft): ${e.message}`); result.cash = { written: false, error: e.message }; }
 
   // ---- FR-2: AI burn ----
   try {
