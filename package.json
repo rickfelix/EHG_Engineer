@@ -320,6 +320,7 @@
     "signal": "node scripts/worker-signal.cjs",
     "checkin": "node scripts/worker-checkin.cjs",
     "ci:autotriage:loop": "node scripts/clockwork/ci-autotriage-loop.cjs",
+    "distill:backlog-dispositions": "node scripts/distill-backlog-dispositions.mjs",
     "contract:scaffold": "node scripts/artifact-contract.js scaffold",
     "contract:check": "node scripts/artifact-contract.js check",
     "payments:test-charge": "node scripts/payments/test-charge-harness.mjs",

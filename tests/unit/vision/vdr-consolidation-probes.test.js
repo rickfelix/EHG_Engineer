@@ -81,12 +81,14 @@ describe('FR-2: count_ratio is a registered runner with honest bands + fail-open
 });
 
 describe('FR-3: the 3 consolidation entries are registered with the honest shape', () => {
-  it('Backlog → count_ratio on sd_backlog_map (numerator completion_status=COMPLETED), layer process', () => {
+  it('Backlog → count_ratio on sd_backlog_map (numerator disposition IS NOT NULL), layer process', () => {
+    // SD-LEO-INFRA-BACKLOG-DISPOSITION-COLUMN-WORKFLOW-001: repointed from the completion_status=COMPLETED
+    // lower-bound proxy to the first-class disposition column (fail-soft 'unknown' until the migration lands).
     const e = entryFor(BACKLOG);
     expect(e).toBeTruthy();
     expect(e.layer).toBe('process');
-    expect(e.probe).toMatchObject({ type: 'count_ratio', table: 'sd_backlog_map', numerFilter: { completion_status: 'COMPLETED' } });
-    expect(e.probe.builtAt).toBeGreaterThan(0.5); // not gamed to today's 9%
+    expect(e.probe).toMatchObject({ type: 'count_ratio', table: 'sd_backlog_map', numerFilter: { disposition: { not: null } } });
+    expect(e.probe.builtAt).toBeGreaterThan(0.5); // not gamed to today's ratio
   });
   it('Surface → count_ratio on ehg_page_routes (mapped feature_area / total), layer application, builtAt 1.0', () => {
     const e = entryFor(SURFACE);
