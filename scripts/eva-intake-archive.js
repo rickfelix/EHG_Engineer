@@ -27,6 +27,10 @@ async function main() {
     for (const e of [...result.todoist.errors, ...result.youtube.errors]) {
       console.log(`      - ${e.id}: ${e.error}`);
     }
+    // SD-LEO-INFRA-DISTILL-ARCHIVE-PATH-AND-YT-PROCESSED-001 (FR-3): a partial archive failure
+    // (some items errored at source) must NOT be swallowed as exit 0 — exit non-zero so the
+    // pipeline's Step 5 sees !ok and fails loud (::error:: annotation + a harness-bug feedback row).
+    process.exitCode = 1;
   }
 }
 
