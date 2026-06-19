@@ -10,12 +10,14 @@
  * Flow each tick (fail-soft, flag-gated default OFF):
  *   1. fetch OPEN ci_failure rows (feedback category='ci_failure', status in new/triaged/in_progress
  *      — self-healed rows auto-resolve-recovered closed are status='resolved' and excluded)
- *   2. detect chronic, NOT-yet-covered classes (pure ci-recurrence-detector)
- *   3. cap per-run + per-day (anti-spam)
- *   4. per class: source ONE DRAFT corrective SD via the canonical leo-create-sd.js --from-feedback,
+ *   2. strip DEAD links (rows linked only to a cancelled/archived SD are treated as uncovered so a
+ *      stale link can't immortalize a recurring class)
+ *   3. detect chronic, NOT-yet-covered classes (pure ci-recurrence-detector)
+ *   4. cap per-run + per-day (anti-spam)
+ *   5. per class: source ONE DRAFT corrective SD via the canonical leo-create-sd.js --from-feedback,
+ *      read the created SD key back from the DB (authoritative — NOT scraped from stdout),
  *      tag metadata.sourced_by='ci-autotriage', and LINK the whole class to that SD
- *      (strategic_directive_id + resolution_sd_id, status='in_progress' — NOT resolved;
- *      mirrors the safe sd-from-feedback.js linkage so a still-failing class is never mislabeled).
+ *      (strategic_directive_id + resolution_sd_id, status='in_progress' — NOT resolved).
  *
  * Default DRY-RUN (like the sibling clockwork scripts). Pass --apply to write.
  * Gate: CI_AUTOTRIAGE_LOOP_ENABLE !== 'true' → [SKIP] exit 0.
@@ -31,11 +33,12 @@ const THRESHOLD = Number((args.find((a) => a.startsWith('--threshold=')) || '').
 const PER_RUN_CAP = Number((args.find((a) => a.startsWith('--per-run=')) || '').split('=')[1]) || undefined;
 const PER_DAY_CAP = Number((args.find((a) => a.startsWith('--per-day=')) || '').split('=')[1]) || undefined;
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
+const TERMINAL_SD_STATUSES = ['cancelled', 'archived', 'superseded', 'rejected'];
 
 function log(...a) { console.log('[ci-autotriage-loop]', ...a); }
 
 async function main() {
-  // FR-6: flag-gated, default OFF. Fail-soft no-op when disabled.
+  // flag-gated, default OFF. Fail-soft no-op when disabled.
   if (process.env.CI_AUTOTRIAGE_LOOP_ENABLE !== 'true') {
     log('[SKIP] disabled (set CI_AUTOTRIAGE_LOOP_ENABLE=true to enable)');
     return;
@@ -53,15 +56,19 @@ async function main() {
     .select('id,status,error_hash,resolution_type,strategic_directive_id,resolution_sd_id,occurrence_count,created_at,error_message,metadata')
     .eq('category', 'ci_failure')
     .in('status', ['new', 'triaged', 'in_progress']);
-  if (error) { log('fetch failed (fail-soft):', error.message); return; }
+  if (error) { log('[ALERT] fetch failed (fail-soft):', error.message); return; }
   log(`open ci_failure rows: ${rows ? rows.length : 0}`);
 
-  // 2. detect chronic, uncovered classes.
+  // 2. strip DEAD links: a row whose only corrective link points at a terminal (cancelled/archived)
+  //    SD is treated as UNCOVERED so a stale link can't permanently suppress a still-recurring class.
+  await stripDeadLinks(db, rows || []);
+
+  // 3. detect chronic, uncovered classes.
   const threshold = THRESHOLD || DEFAULT_THRESHOLD;
   const candidates = detectChronicClasses(rows || [], { threshold });
   log(`chronic uncovered classes (threshold ${threshold}): ${candidates.length}`);
 
-  // 3. anti-spam caps: per-run + remaining per-day budget (count today's ci-autotriage SDs).
+  // 4. anti-spam caps: per-run + remaining per-day budget (count today's ci-autotriage SDs).
   const since = new Date(); since.setUTCHours(0, 0, 0, 0);
   let sourcedToday = 0;
   try {
@@ -71,7 +78,7 @@ async function main() {
       .eq('metadata->>sourced_by', 'ci-autotriage')
       .gte('created_at', since.toISOString());
     sourcedToday = count || 0;
-  } catch (e) { log('per-day count failed (fail-soft, assume 0):', e.message); }
+  } catch (e) { log('[ALERT] per-day count failed (fail-soft, assume 0):', e.message); }
   const capped = applyCaps(candidates, {
     perRunCap: PER_RUN_CAP || DEFAULT_PER_RUN_CAP,
     sourcedToday,
@@ -79,42 +86,83 @@ async function main() {
   });
   log(`sourcing this run: ${capped.length} (sourcedToday=${sourcedToday})${APPLY ? '' : ' [DRY-RUN]'}`);
 
-  // 4. per candidate, fail-soft: source a DRAFT SD + link the class.
+  // 5. per candidate, fail-soft: source a DRAFT SD + link the class.
   for (const c of capped) {
     try {
       log(`class ${c.classSignature} (${c.workflow_name || '?'}, x${c.occurrenceTotal}) rep=${c.representativeId}`);
       if (!APPLY) { log('  [DRY-RUN] would source a DRAFT corrective SD via --from-feedback + link the class'); continue; }
-      const sdKey = sourceDraftSd(c.representativeId);
-      if (!sdKey) { log('  could not source/parse SD key — skipping (fail-soft)'); continue; }
+      const sdKey = await sourceDraftSd(db, c.representativeId);
+      if (!sdKey) { log('  no NEW SD linked (duplicate-guard or create failed) — skipping (fail-soft)'); continue; }
       log(`  sourced DRAFT ${sdKey}`);
-      await tagSourcedBy(db, sdKey, c.classSignature);
+      const tagged = await tagSourcedBy(db, sdKey, c.classSignature);
+      if (!tagged) log(`  [ALERT] could not tag ${sdKey} sourced_by=ci-autotriage — per-day accounting may undercount`);
       await linkClass(db, c.rowIds, sdKey);
       log(`  linked ${c.rowIds.length} class row(s) → ${sdKey} (status in_progress, not resolved)`);
     } catch (e) {
-      log(`  class ${c.classSignature} failed (fail-soft):`, e.message);
+      log(`  [ALERT] class ${c.classSignature} failed (fail-soft):`, e.message);
     }
   }
 }
 
-/** Source a DRAFT corrective SD via the canonical CLI (never a hand-rolled insert). Returns the SD key or null. */
-function sourceDraftSd(feedbackId) {
-  const out = execFileSync('node', ['scripts/leo-create-sd.js', '--from-feedback', feedbackId, '--type', 'infrastructure'], {
-    cwd: REPO_ROOT,
-    encoding: 'utf8',
-    timeout: 120000,
-    env: { ...process.env, SD_CREATE_VIA_SKILL: '1' },
-  });
-  const m = out.match(/SD[- ]?Created:?\s*(SD-[A-Z0-9-]+)/i) || out.match(/\b(SD-[A-Z0-9][A-Z0-9-]+)\b/);
-  return m ? m[1] : null;
+/**
+ * Treat rows linked ONLY to a terminal (cancelled/archived/...) SD as uncovered, by clearing their
+ * in-memory link fields before detection. Prevents a dead link from immortalizing a recurring class.
+ */
+async function stripDeadLinks(db, rows) {
+  const keys = [...new Set(rows.map((r) => r.strategic_directive_id || r.resolution_sd_id).filter(Boolean))];
+  if (!keys.length) return;
+  const statusByKey = {};
+  try {
+    const { data } = await db.from('strategic_directives_v2').select('id,status').in('id', keys);
+    for (const sd of data || []) statusByKey[sd.id] = sd.status;
+  } catch (e) { log('[ALERT] dead-link status lookup failed (fail-soft, keep links):', e.message); return; }
+  let stripped = 0;
+  for (const r of rows) {
+    const link = r.strategic_directive_id || r.resolution_sd_id;
+    if (link && TERMINAL_SD_STATUSES.includes(statusByKey[link])) {
+      r.strategic_directive_id = null;
+      r.resolution_sd_id = null;
+      stripped++;
+    }
+  }
+  if (stripped) log(`stripped ${stripped} dead (terminal-SD) link(s) so stale links don't suppress recurring classes`);
+}
+
+/**
+ * Source a DRAFT corrective SD via the canonical CLI (never a hand-rolled insert), then read the
+ * created SD key back from the DB (feedback.strategic_directive_id — the authoritative value
+ * createFromFeedback writes) rather than scraping stdout. Returns the NEW SD key, or null when the
+ * spawn created nothing new (e.g. the --from-feedback duplicate guard fired) — never a foreign key.
+ */
+async function sourceDraftSd(db, feedbackId) {
+  // pre-read the rep row's link (the detector should have excluded covered classes, so expect null).
+  const { data: before } = await db.from('feedback').select('strategic_directive_id').eq('id', feedbackId).maybeSingle();
+  const beforeLink = before ? before.strategic_directive_id : null;
+  try {
+    execFileSync('node', ['scripts/leo-create-sd.js', '--from-feedback', feedbackId, '--type', 'infrastructure'], {
+      cwd: REPO_ROOT, encoding: 'utf8', timeout: 120000, env: { ...process.env, SD_CREATE_VIA_SKILL: '1' },
+    });
+  } catch (e) {
+    log('  [ALERT] leo-create-sd --from-feedback failed:', (e.message || '').split('\n')[0]);
+    return null;
+  }
+  // authoritative: re-read the link createFromFeedback wrote; only accept a NEW, changed value.
+  const { data: after } = await db.from('feedback').select('strategic_directive_id').eq('id', feedbackId).maybeSingle();
+  const afterLink = after ? after.strategic_directive_id : null;
+  if (afterLink && afterLink !== beforeLink) return afterLink;
+  return null; // duplicate-guard hit or no link written — do not tag/relink a pre-existing/foreign SD
 }
 
 async function tagSourcedBy(db, sdKey, classSignature) {
-  const { data: sd } = await db.from('strategic_directives_v2').select('id,metadata').eq('sd_key', sdKey).maybeSingle();
-  if (!sd) return;
-  const md = sd.metadata || {};
-  md.sourced_by = 'ci-autotriage';
-  md.ci_class_signature = classSignature;
-  await db.from('strategic_directives_v2').update({ metadata: md }).eq('id', sd.id);
+  try {
+    const { data: sd } = await db.from('strategic_directives_v2').select('id,metadata').eq('id', sdKey).maybeSingle();
+    if (!sd) return false;
+    const md = sd.metadata || {};
+    md.sourced_by = 'ci-autotriage';
+    md.ci_class_signature = classSignature;
+    const { error } = await db.from('strategic_directives_v2').update({ metadata: md }).eq('id', sd.id);
+    return !error;
+  } catch { return false; }
 }
 
 /** Link every still-open row in the class to the corrective SD — status stays in_progress (NOT resolved). */
@@ -126,4 +174,4 @@ async function linkClass(db, rowIds, sdKey) {
     .neq('status', 'resolved');
 }
 
-main().then(() => process.exit(0)).catch((e) => { console.error('[ci-autotriage-loop] fatal (fail-soft):', e.message); process.exit(0); });
+main().then(() => process.exit(0)).catch((e) => { console.error('[ci-autotriage-loop] [ALERT] fatal (fail-soft):', e.message); process.exit(0); });
