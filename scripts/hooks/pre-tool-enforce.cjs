@@ -182,6 +182,14 @@ const _SESSION_ID = _stdinPayload.session_id ||
   process.env.LEO_SESSION_ID ||
   'unknown';
 
+// SD-FDBK-INFRA-CREDS-FREE-ASKUSER-001: the PreToolUse stdin payload carries the
+// session's `cwd` (the directory the Claude Code session is running from). This is
+// a CREDS-FREE worker signal used by ENFORCEMENT 12: fleet workers run with cwd
+// INSIDE .worktrees/<SD>/, while the coordinator/Adam/operator run from the repo
+// ROOT. Falls back to process.cwd() only if the payload omitted it. May be ''/undefined
+// in degenerate cases — every consumer guards against that and fail-safes to ALLOW.
+const _CWD = (typeof _stdinPayload.cwd === 'string' && _stdinPayload.cwd) || process.cwd() || '';
+
 // QF-20260504-932: test-only mode — print resolved variables and exit before
 // any enforcement runs. Tests use this to verify stdin/env resolution without
 // triggering side-effects (audit writes, exit-2 blocks). Production hooks
@@ -566,13 +574,56 @@ async function main() {
   // coordinator/Adam/non_fleet); operator/chairman/coordinator/Adam and any unresolved
   // session are EXEMPT. The metadata lookup runs ONLY for this (rare) tool, and fail-OPEN
   // (any resolution error → meta=null → not blockable) so it can never wedge a tool call.
+  //
+  // SD-FDBK-INFRA-CREDS-FREE-ASKUSER-001: the DB lookup needs Supabase creds, which the
+  // live worker hooks currently LACK, so it silently fail-opened and workers hung their
+  // /loop. A CREDS-FREE fallback (cwd inside .worktrees/ → worker) now also blocks, while
+  // never false-blocking a RESOLVED coordinator/Adam (exemptByMeta). DB path stays
+  // authoritative; cwd only adds coverage when creds are absent. See block below.
   if (TOOL_NAME === 'AskUserQuestion') {
     const { metadata: meta, loopState } = await resolveSessionContext(_SESSION_ID);
-    if (isBlockableWorker(meta, loopState)) {
+
+    // SD-FDBK-INFRA-CREDS-FREE-ASKUSER-001: CREDS-FREE worker fallback.
+    // resolveSessionContext reads SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY from the
+    // inherited env and fail-OPENS (meta=null, loopState=null) when those creds are
+    // absent — which they currently are for live worker hooks (collateral from a
+    // shared-root `git clean -fdx`). With meta=null, isBlockableWorker returns false
+    // and the worker successfully calls AskUserQuestion, hanging its /loop forever
+    // (the #1 attrition cause). To close that hole we add a creds-free, metadata-
+    // wipe-proof signal: the session cwd. Fleet WORKERS run with cwd inside
+    // .worktrees/<SD>/; the coordinator, Adam, and the operator/chairman run from the
+    // repo ROOT (never inside .worktrees/), so a worktree cwd alone is a clean WORKER
+    // signal that excludes those privileged sessions. The DB path stays AUTHORITATIVE
+    // when creds are present (isBlockableWorker); the cwd predicate only adds coverage
+    // when it is not. Wrapped in try/catch — ANY error → not-worktree → fall through
+    // to the existing DB-only behavior; this can NEVER throw or wedge a tool call.
+    let isWorktreeWorker = false;
+    try {
+      isWorktreeWorker = typeof _CWD === 'string' && _CWD.length > 0 && WORKTREE_PATH_RE.test(_CWD);
+    } catch {
+      isWorktreeWorker = false; // fail-safe: treat as not-worktree → existing behavior
+    }
+    // exemptByMeta is true ONLY when metadata was ACTUALLY resolved AND says this is a
+    // privileged session (coordinator / Adam / non_fleet). When meta is null (credless),
+    // exemptByMeta is false, so a worktree cwd alone blocks. This guarantees we never
+    // false-block a RESOLVED coordinator/Adam that happens to run inside a worktree.
+    const exemptByMeta = Boolean(
+      meta && typeof meta === 'object' &&
+      (meta.is_coordinator === true || meta.role === 'adam' || meta.non_fleet === true)
+    );
+
+    const blockByDb = isBlockableWorker(meta, loopState);
+    const blockByCwd = isWorktreeWorker && !exemptByMeta;
+
+    if (blockByDb || blockByCwd) {
+      const detectedVia = blockByDb ? 'db' : 'cwd_worktree';
       const auditPromise = auditPermissionDecision(
         _SESSION_ID, TOOL_NAME, 'ENF-NO-ASKUSER-WORKER',
         'AskUserQuestion blocked for autonomous fleet worker', 'block',
-        { callsign: (meta.fleet_identity && meta.fleet_identity.callsign) || meta.callsign || null }
+        {
+          callsign: (meta && ((meta.fleet_identity && meta.fleet_identity.callsign) || meta.callsign)) || null,
+          detected_via: detectedVia
+        }
       );
       process.stderr.write(ASKUSER_DENY_MESSAGE + '\n');
       await auditAndExit(auditPromise, 2, 800);
