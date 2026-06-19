@@ -1,0 +1,44 @@
+name: "Clockwork: CI Auto-Triage Loop"
+
+# The missing MIDDLE of the CI-triage pipeline (SD-LEO-INFRA-CI-FAILURE-AUTOTRIAGE-LOOP-001):
+# turns recurring, NOT-yet-covered CI-failure classes into traceably-linked DRAFT corrective SDs.
+# Never edits code or merges (CONST-002); diagnosis happens when the DRAFT SD is worked.
+# Default OFF: the script skips unless CI_AUTOTRIAGE_LOOP_ENABLE=true (set the repo variable to opt in).
+# Runs at :50 — AFTER capture (:15), triage (:30) and self-heal resolve (:45) so it only sees
+# genuinely-recurring, unresolved, uncovered classes.
+
+on:
+  schedule:
+    - cron: '50 * * * *'
+  workflow_dispatch:
+    # Manual trigger for testing
+
+permissions:
+  actions: read
+
+jobs:
+  autotriage-loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run CI Auto-Triage Loop (fail-soft; default OFF; --apply gated by the flag)
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          # Default OFF — the script no-ops unless this repo variable is set to 'true'.
+          CI_AUTOTRIAGE_LOOP_ENABLE: ${{ vars.CI_AUTOTRIAGE_LOOP_ENABLE }}
+        run: node scripts/clockwork/ci-autotriage-loop.cjs --apply
