@@ -54,16 +54,16 @@ describe('FAIL-LOUD contract (FR-5): unresolved facts NEVER silent-pass', () => 
     const hostile = {};
     Object.defineProperty(hostile, 'sourcedInWindow', { get() { throw new Error('boom'); }, enumerable: true });
     const bars = runAdherenceProbes(hostile);
-    expect(bars).toHaveLength(4);
+    expect(bars).toHaveLength(6);
     expect(bars[0].verdict).toBe('unknown');
   });
 });
 
 describe('runAdherenceProbes + hasDrift', () => {
-  it('runs the full canonical probe set (4) with {probe,duty,verdict,detail} shape', () => {
-    expect(ADHERENCE_PROBES).toHaveLength(4);
-    const bars = runAdherenceProbes({ sourcedInWindow: 1, visionGaugeReadInWindow: true, recurrencesInWindow: 0, signalsInWindow: 0, adamAuthoredBuildsInWindow: 0 });
-    expect(bars).toHaveLength(4);
+  it('runs the full canonical probe set (6) with {probe,duty,verdict,detail} shape', () => {
+    expect(ADHERENCE_PROBES).toHaveLength(6);
+    const bars = runAdherenceProbes({ sourcedInWindow: 1, visionGaugeReadInWindow: true, recurrencesInWindow: 0, signalsInWindow: 0, adamAuthoredBuildsInWindow: 0, claimableBelt: 1, idleWorkers: 0, sourceableBacklogCount: 0, advisoryBody: 'ok' });
+    expect(bars).toHaveLength(6);
     for (const b of bars) {
       expect(typeof b.probe).toBe('string');
       expect(typeof b.duty).toBe('string');

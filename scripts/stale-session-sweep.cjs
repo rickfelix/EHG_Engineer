@@ -2296,6 +2296,45 @@ async function main() {
     console.log('ADAM_ACTION_ACK: ' + (aaErr && aaErr.message ? aaErr.message : 'unknown'));
   }
 
+  // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-2): run the CARDINAL Adam adherence
+  // probes at ACTION-TIME (per sweep tick) — not only the 6h retrospective audit — and record a
+  // DB-validated verdict to adam_adherence_ledger ONLY on a verdict transition (dedupe-on-change).
+  // Flag-gated (ADAM_ACTION_TIME_ADHERENCE_V1=on; default-OFF), FAIL-OPEN, WARN-only: it can NEVER
+  // block the sweep. Both modules are ESM, so dynamic-import them from this CJS sweep.
+  try {
+    const [{ recordActionTimeAdherence, isActionTimeAdherenceEnabled }, { recordAdherence }] = await Promise.all([
+      import('../lib/adam/action-time-adherence.mjs'),
+      import('./adam-self-adherence-review.mjs'),
+    ]);
+    if (isActionTimeAdherenceEnabled()) {
+      // The sweep tick's action-time check resolves the ADVISORY-BOUNDARY (D2) fact (the latest
+      // advisory body) — that is the pre-send boundary self-check. The belt-starvation (D1) and
+      // propose-only facts (claimableBelt/idleWorkers/adamAuthoredBuildsInWindow) are NOT cheaply
+      // available here, so those probes honestly degrade to 'unknown' in this path (never a silent
+      // pass). D1 belt-starvation is fully evaluated where belt/idle live: the 6h retrospective audit
+      // (adam-self-adherence-review) and the coordinator charter-audit's SOURCE-TO-CAPACITY detector.
+      let sourceableBacklogCount = null;
+      try {
+        const { sourceableBacklog } = await import('./lib/sourceable-backlog.mjs');
+        const { data: bl } = await supabase.from('feedback')
+          .select('id, status, title, metadata')
+          .eq('category', 'harness_backlog').in('status', ['open', 'new', 'backlog']);
+        sourceableBacklogCount = Array.isArray(bl) ? sourceableBacklog(bl).length : null;
+      } catch { /* unresolved → probe returns unknown (fail-loud) */ }
+      let advisoryBody = null;
+      try {
+        const { data: adv } = await supabase.from('chairman_decisions')
+          .select('decision').order('created_at', { ascending: false }).limit(1);
+        if (adv && adv[0]) advisoryBody = String(adv[0].decision || '');
+      } catch { /* unresolved → D2 unknown */ }
+      const facts = { sourceableBacklogCount, advisoryBody };
+      const res = await recordActionTimeAdherence({ supabase, facts, recordAdherence });
+      if (res && res.recorded > 0) console.log('  ADAM_ACTION_TIME_ADHERENCE: recorded ' + res.recorded + ' verdict transition(s)');
+    }
+  } catch (atErr) {
+    console.log('ADAM_ACTION_TIME_ADHERENCE: ' + (atErr && atErr.message ? atErr.message : 'unknown') + ' (fail-open)');
+  }
+
   // SD-LEO-INFRA-ADD-PART-MUTUAL-001 — 3-part mutual self-ID handshake housekeeping.
   // The reactive RESPONDER self-heal (a coordinator replying + re-registering its
   // is_coordinator flag) runs in COORDINATOR context (coordinator-comms-check.mjs); the
