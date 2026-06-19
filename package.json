@@ -319,6 +319,7 @@
     "sd:unpark": "node scripts/sd-park.js unpark",
     "signal": "node scripts/worker-signal.cjs",
     "checkin": "node scripts/worker-checkin.cjs",
+    "canary:sweep": "node scripts/canary-trigger-sweep.mjs",
     "ci:autotriage:loop": "node scripts/clockwork/ci-autotriage-loop.cjs",
     "distill:backlog-dispositions": "node scripts/distill-backlog-dispositions.mjs",
     "contract:scaffold": "node scripts/artifact-contract.js scaffold",
