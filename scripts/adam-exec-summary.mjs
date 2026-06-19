@@ -126,6 +126,10 @@ const workerText = pulseSource === 'unavailable' ? 'count unavailable (will refr
 let visPct = null;
 let layerLine = '';
 let visNote = '';
+// SD-LEO-INFRA-GAUGE-BUILDABLE-VS-OPERATIONAL-001 (FR-3): lead with fleet-build %, show rung-% + operational separately
+let buildLine = '';
+let rungLine = '';
+let operationalLine = '';
 try {
   // SD-LEO-INFRA-VISION-LADDER-V1-001 (FR-5): source the denominator from the ACTIVE vision rung
   // (visionSource:true → the re-anchorable ladder pointer), so the gauge re-points automatically when
@@ -139,6 +143,9 @@ try {
   visPct = fmt.pct;
   layerLine = fmt.layerLine;
   visNote = fmt.note;
+  buildLine = fmt.buildLine;
+  rungLine = fmt.rungLine;
+  operationalLine = fmt.operationalLine;
 } catch (e) {
   console.warn('[adam-email] live VDR gauge failed (fail-soft): ' + (e?.message || e));
   visPct = null;
@@ -248,7 +255,11 @@ try {
 const text = [
   `Workers: ${workerText}`,
   '',
-  visPct != null ? `EHG vision: ${visPct}% built` : 'EHG vision: (gauge unavailable)',
+  // FR-3: lead with the fleet-build % (the honest 'built' number); fall back to the rung-% if the
+  // segregated number is unavailable; then show V1 rung-completion + operational proofs separately.
+  buildLine || (visPct != null ? `EHG vision: ${visPct}% built` : 'EHG vision: (gauge unavailable)'),
+  ...(rungLine ? ['   ' + rungLine] : []),
+  ...(operationalLine ? ['   ' + operationalLine] : []),
   ...(layerLine ? ['   ' + layerLine] : []),
   ...(visNote ? ['   ' + visNote] : []),
   ...(trendLine ? ['   ' + trendLine] : []),
