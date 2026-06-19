@@ -39,6 +39,12 @@ import { classifyIdleWorker } from './lib/capacity-idle-classifier.mjs';
 
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+// SD-LEO-INFRA-FORECASTER-DEP-SENTINEL-BELTDEPTH-001: resolve dependency keys via the canonical
+// blocker rule (lib/utils/parse-sd-dependencies.cjs, same SSOT coordinator-audit.mjs uses) instead of
+// a hand-rolled resolver. parseSdDependencies counts ONLY /^SD-/ entries as real blockers, so the
+// documented 'no dependencies' sentinel ({sd_key:'none'} / bare 'none') and free-text placeholders
+// resolve to zero blockers — a freshly-sourced SD is no longer mis-counted out of belt depth.
+const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -98,10 +104,10 @@ async function main() {
   const openQfCount = Array.isArray(openQfRows) ? openQfRows.length : 0;
 
   // ── resolve dependency statuses → claimable belt ──
-  // Deps appear as [{sd_id}] AND raw string arrays (live mix); coerce both shapes.
-  const depId = (x) => (typeof x === 'string' ? x : (x && (x.sd_id || x.sd_key || x.id)) || null);
+  // parseSdDependencies handles the live shape mix ([{sd_id}], [{sd_key}], raw strings) AND drops the
+  // 'none' sentinel + free-text non-SD placeholders, returning only real /^SD-/ blocker keys.
   const depKeys = new Set();
-  (sds || []).forEach(d => (d.dependencies || []).forEach(x => { const k = depId(x); if (k) depKeys.add(k); }));
+  (sds || []).forEach(d => parseSdDependencies(d.dependencies).forEach(k => depKeys.add(k)));
   let depStatus = {};
   if (depKeys.size) {
     const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
@@ -120,7 +126,7 @@ async function main() {
     // belt — neither can pass LEAD-TO-PLAN. Excluding them keeps beltDepth honest so a
     // forecast deficit (and the proactive Adam reach-out) is not masked by non-distributable rows.
     if (isExcludedFromBelt(d)) { beltExcludes++; continue; }
-    const unmet = (d.dependencies || []).map(depId).filter(k => k && depStatus[k] !== 'completed');
+    const unmet = parseSdDependencies(d.dependencies).filter(k => depStatus[k] !== 'completed');
     if (unmet.length === 0) claimable.push(d);
   }
   if (beltExcludes) console.log(`[CAPACITY-FORECAST] ${beltExcludes} non-distributable SD(s) (fixture/bare-shell) excluded from belt depth`);
