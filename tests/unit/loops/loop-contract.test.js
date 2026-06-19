@@ -7,6 +7,7 @@ import {
   validateLoopContract,
   CADENCE_TYPE,
   BOUNDARY_KIND,
+  GOAL_TYPE,
   LOOP_CONTRACT_FIELDS,
 } from '../../../lib/loops/loop-contract.js';
 
@@ -86,6 +87,119 @@ describe('validateLoopContract — fail-loud (each missing required field is nam
     const c = completeContract();
     c.goals = [];
     expect(validateLoopContract(c).valid).toBe(false);
+  });
+});
+
+// SD-LEO-INFRA-LOOP-CONTRACT-GOAL-TYPE-BUDGET-001 (FR-1): GOAL_TYPE + typed-goal validation.
+describe('GOAL_TYPE + typed goals (FR-1)', () => {
+  it('exposes a frozen GOAL_TYPE enum {verifiable, llm_as_judge}', () => {
+    expect(Object.isFrozen(GOAL_TYPE)).toBe(true);
+    expect(Object.values(GOAL_TYPE)).toEqual(['verifiable', 'llm_as_judge']);
+  });
+
+  it('a bare-string goal is still valid (back-compat)', () => {
+    const c = completeContract();
+    c.goals = ['do the thing'];
+    expect(validateLoopContract(c)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('a typed verifiable goal object (with a metric) is valid', () => {
+    const c = completeContract();
+    c.goals = [{ description: 'reach threshold', type: GOAL_TYPE.VERIFIABLE, metric: 'count >= N' }];
+    expect(validateLoopContract(c)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('a verifiable goal WITHOUT a metric is still valid (metric is SHOULD, not MUST)', () => {
+    const c = completeContract();
+    c.goals = [{ description: 'reach threshold', type: GOAL_TYPE.VERIFIABLE }];
+    expect(validateLoopContract(c).valid).toBe(true);
+  });
+
+  it('an llm_as_judge goal WITH a rubric_ref is valid', () => {
+    const c = completeContract();
+    c.goals = [{ description: 'clears the bar', type: GOAL_TYPE.LLM_AS_JUDGE, rubric_ref: 'lib/adam/rationale-bar.js' }];
+    expect(validateLoopContract(c)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('an llm_as_judge goal WITHOUT a rubric_ref is invalid and names rubric_ref (anti-brittleness guard)', () => {
+    const c = completeContract();
+    c.goals = [{ description: 'clears the bar', type: GOAL_TYPE.LLM_AS_JUDGE }];
+    const res = validateLoopContract(c);
+    expect(res.valid).toBe(false);
+    expect(res.errors.join(' ')).toContain('rubric_ref');
+  });
+
+  it('a goal object missing a description is invalid', () => {
+    const c = completeContract();
+    c.goals = [{ type: GOAL_TYPE.VERIFIABLE }];
+    const res = validateLoopContract(c);
+    expect(res.valid).toBe(false);
+    expect(res.errors.join(' ')).toContain('description');
+  });
+
+  it('a goal object with an unknown type is invalid', () => {
+    const c = completeContract();
+    c.goals = [{ description: 'x', type: 'vibes' }];
+    const res = validateLoopContract(c);
+    expect(res.valid).toBe(false);
+    expect(res.errors.join(' ')).toContain('type');
+  });
+
+  it('mixed bare-string and typed goals are accepted together', () => {
+    const c = completeContract();
+    c.goals = ['legacy goal', { description: 'judged goal', type: GOAL_TYPE.LLM_AS_JUDGE, rubric_ref: 'r' }];
+    expect(validateLoopContract(c).valid).toBe(true);
+  });
+});
+
+// SD-LEO-INFRA-LOOP-CONTRACT-GOAL-TYPE-BUDGET-001 (FR-2): optional budget declaration.
+describe('budget declaration (FR-2)', () => {
+  it('declares "budget" as a known field', () => {
+    expect(LOOP_CONTRACT_FIELDS).toContain('budget');
+  });
+
+  it('an absent budget is valid (optional)', () => {
+    expect(validateLoopContract(completeContract()).valid).toBe(true);
+  });
+
+  it('a well-formed budget is valid', () => {
+    const c = completeContract();
+    c.budget = { tokens_per_run_estimate: 1500, daily_max_runs: 24, pause_if_budget_below_pct: 10 };
+    expect(validateLoopContract(c)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('a negative numeric budget field is invalid', () => {
+    const c = completeContract();
+    c.budget = { daily_max_runs: -1 };
+    const res = validateLoopContract(c);
+    expect(res.valid).toBe(false);
+    expect(res.errors.join(' ')).toContain('daily_max_runs');
+  });
+
+  it('pause_if_budget_below_pct > 100 is invalid', () => {
+    const c = completeContract();
+    c.budget = { pause_if_budget_below_pct: 150 };
+    const res = validateLoopContract(c);
+    expect(res.valid).toBe(false);
+    expect(res.errors.join(' ')).toContain('pause_if_budget_below_pct');
+  });
+
+  it('a non-object budget is invalid', () => {
+    const c = completeContract();
+    c.budget = 'cheap';
+    expect(validateLoopContract(c).valid).toBe(false);
+  });
+
+  it('a null budget is invalid (null is typeof object — must be explicitly rejected)', () => {
+    const c = completeContract();
+    c.budget = null;
+    expect(validateLoopContract(c).valid).toBe(false);
+  });
+
+  it('pause_if_budget_below_pct = 0 is valid (0 is a real number, not a falsy reject)', () => {
+    const c = completeContract();
+    c.budget = { pause_if_budget_below_pct: 0 };
+    expect(validateLoopContract(c)).toEqual({ valid: true, errors: [] });
   });
 });
 
