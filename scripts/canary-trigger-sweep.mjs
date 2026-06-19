@@ -25,12 +25,16 @@ const DRY_RUN = process.argv.includes('--dry-run');
 const COVERAGE = process.argv.includes('--coverage');
 const STALE_MS = 6 * 60 * 60 * 1000; // 6h: a canary request un-actioned this long is "coverage-pending"
 
+// The canary_request is a trigger->coordinator message. Target the live coordinator
+// session_id when resolvable, else the documented worker->coordinator sentinel
+// 'broadcast-coordinator' (valid_target CHECK accepts it; re-targeted by the next
+// /coordinator start). NEVER null — null violates the valid_target constraint.
 async function resolveCoordinatorTarget(supabase) {
   try {
-    const { resolveActiveCoordinator } = require('../lib/coordinator/resolve.cjs');
-    const c = await resolveActiveCoordinator(supabase);
-    return (c && (c.session_id || c.sessionId || c.id)) || null;
-  } catch { return null; }
+    const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+    const id = await getActiveCoordinatorId(supabase);
+    return id || 'broadcast-coordinator';
+  } catch { return 'broadcast-coordinator'; }
 }
 
 async function main() {
