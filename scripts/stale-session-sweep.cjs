@@ -2307,7 +2307,12 @@ async function main() {
       import('./adam-self-adherence-review.mjs'),
     ]);
     if (isActionTimeAdherenceEnabled()) {
-      // Resolve the cheaply-available cardinal facts; the rest honestly degrade to 'unknown'.
+      // The sweep tick's action-time check resolves the ADVISORY-BOUNDARY (D2) fact (the latest
+      // advisory body) — that is the pre-send boundary self-check. The belt-starvation (D1) and
+      // propose-only facts (claimableBelt/idleWorkers/adamAuthoredBuildsInWindow) are NOT cheaply
+      // available here, so those probes honestly degrade to 'unknown' in this path (never a silent
+      // pass). D1 belt-starvation is fully evaluated where belt/idle live: the 6h retrospective audit
+      // (adam-self-adherence-review) and the coordinator charter-audit's SOURCE-TO-CAPACITY detector.
       let sourceableBacklogCount = null;
       try {
         const { sourceableBacklog } = await import('./lib/sourceable-backlog.mjs');

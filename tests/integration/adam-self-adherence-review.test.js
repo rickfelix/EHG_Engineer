@@ -44,7 +44,7 @@ describe('runSelfAdherenceReview (FR-3/FR-6)', () => {
   it('a real run ledgers one row per probe (run_id grouped), unknowns => no remediation', async () => {
     const sb = makeSb();
     const r = await runSelfAdherenceReview(sb, { runId: 'run-1' });
-    expect(sb.inserts.adam_adherence_ledger).toHaveLength(4); // one per probe
+    expect(sb.inserts.adam_adherence_ledger).toHaveLength(6); // one per probe (4 original + 2 red-flag: belt-starvation, dispatch-boundary)
     expect(sb.inserts.adam_adherence_ledger.every((row) => row.run_id === 'run-1')).toBe(true);
     // current resolvers leave most facts null => unknown => no fail => no remediation
     expect(r.remediationRef).toBeNull();

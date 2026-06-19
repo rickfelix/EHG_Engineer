@@ -30,6 +30,8 @@ import {
   classifyLiveness, detectIdleWithWork, detectDependencyHealth, detectWorktreePool,
   detectBacklogRankStaleness, detectQuietTickUnverified, foundationalQueryError, summarizeViolations,
   extractDepKey, resolveWorktreeCount, computeDispatchBelt, detectProgressStall,
+  // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-3): coordinator mirror detectors.
+  detectSourceToCapacity, detectCoordinatorWithoutAdam,
 } from '../lib/coordinator/charter-audit-detectors.mjs';
 // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: DUTY-7 silent-stall detector (drafts stranded with null vision_score).
 import { findStalledDrafts } from '../lib/coordinator/draft-stall-detector.mjs';
@@ -161,6 +163,39 @@ async function main() {
     .select('metadata,created_at').eq('category', 'coordinator_review').order('created_at', { ascending: false }).limit(2);
   if (revErr) console.error('[COORD-CHARTER-AUDIT] WARN: coordinator_review query failed (fail-open): ' + revErr.message);
 
+  // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-3): resolve facts for the coordinator
+  // mirror detectors. Best-effort + skip-on-error (a transient query failure SKIPS the detector this
+  // run rather than passing null → a fail-loud violation, so we never spam violations on a DB hiccup).
+  const idleWorkerCount = (liveWorkers || []).filter((s) => s && !s.sd_key).length;
+  let adamAlive = null;       // null ⇒ unresolved ⇒ skip the D3-lean detector this run
+  let sourceReqRecently = null; // null ⇒ unresolved ⇒ skip the source-to-capacity detector this run
+  try {
+    const { data: recent, error: e } = await db.from('claude_sessions')
+      .select('session_id, callsign, metadata, heartbeat_at')
+      .gte('heartbeat_at', new Date(nowMs - 15 * 60 * 1000).toISOString());
+    if (!e) {
+      adamAlive = (recent || []).some((s) => {
+        const cs = String(s.callsign || '').toLowerCase();
+        const role = String(s?.metadata?.role || s?.metadata?.session_role || '').toLowerCase();
+        return cs.includes('adam') || role === 'adam';
+      });
+    }
+  } catch { /* leave adamAlive null → skip */ }
+  try {
+    // A recent coordinator→Adam sourcing handshake (belt-low source request). Best-effort proxy:
+    // a recent adam_advisory / coordinator sourcing ping in session_coordination within 30 min.
+    const { data: src, error: e } = await db.from('session_coordination')
+      .select('id, message_type, payload, created_at')
+      .gte('created_at', new Date(nowMs - 30 * 60 * 1000).toISOString())
+      .limit(200);
+    if (!e) {
+      sourceReqRecently = (src || []).some((m) => {
+        const blob = JSON.stringify(m || {}).toLowerCase();
+        return /source|sourcing|belt[-_ ]?low|capacity|gap[-_ ]?clos/.test(blob);
+      });
+    }
+  } catch { /* leave sourceReqRecently null → skip */ }
+
   // ── run the pure detectors ──
   const D = {
     pool: detectWorktreePool({ count: wtCount, max: MAX_WORKTREE_COUNT }),
@@ -168,6 +203,9 @@ async function main() {
     dep: detectDependencyHealth({ sds, statusByKey, terminalSet: TERMINAL, nowMs }),
     rank: detectBacklogRankStaleness({ claimableSds: claimable, nowMs, ttlMs: DISPATCH_RANK_TTL_MS }),
     quiet: detectQuietTickUnverified({ coordinatorReviews: reviews || [] }),
+    // FR-3 coordinator mirror — added only when their facts resolved (skip-on-error, no spam).
+    ...(adamAlive !== null ? { d3lean: detectCoordinatorWithoutAdam({ coordinatorAlive: true, adamAlive }) } : {}),
+    ...(sourceReqRecently !== null ? { srcCap: detectSourceToCapacity({ claimableBelt: claimable.length, idleWorkers: idleWorkerCount, sourceRequestedRecently: sourceReqRecently }) } : {}),
     // SD-LEO-INFRA-SILENT-STALL-PREVENTION-001: drafts stranded with a null vision_score (silent stall).
     // Advisory remediation count only — summarizeViolations never drives a process.exit (foundational-query
     // failures are the ONLY hard exits), so a stalled draft surfaces a remediation action, never a hard fail.
@@ -192,6 +230,9 @@ async function main() {
   console.log('  DUTY-7 DRAFT-STALL   : ' + D.draft.detail + flag(D.draft)); // SILENT-STALL-PREVENTION-001
   console.log('  DUTY-8 PROGRESS-STALL: ' + D.progress.detail + flag(D.progress)); // PROGRESS-STALL-DETECTION-001
   console.log('  DUTY-9 LEAD-AGING    : ' + D.leadAging.detail + flag(D.leadAging)); // ADAM-VISION-SD-FLOW-001
+  // SD-LEO-INFRA-GOVERNANCE-ROLE-ADHERENCE-DBVALIDATION-001 (FR-3) — coordinator mirror adherence.
+  if (D.srcCap) console.log('  SOURCE-TO-CAPACITY   : ' + D.srcCap.detail + flag(D.srcCap));
+  if (D.d3lean) console.log('  D3-LEAN (coord/Adam) : ' + D.d3lean.detail + flag(D.d3lean));
 
   // SD-LEO-INFRA-FLEET-FRESHNESS-GUARD-001: ADVISORY freshness dimension — fail-open and deliberately
   // kept OUT of `D`/summarizeViolations, so a stale checkout surfaces a warning but never trips the
