@@ -171,14 +171,11 @@ async function main() {
   let sourceReqRecently = null; // null ⇒ unresolved ⇒ skip the source-to-capacity detector this run
   try {
     const { data: recent, error: e } = await db.from('claude_sessions')
-      .select('session_id, callsign, metadata, heartbeat_at')
+      .select('session_id, metadata, heartbeat_at')
       .gte('heartbeat_at', new Date(nowMs - 15 * 60 * 1000).toISOString());
     if (!e) {
-      adamAlive = (recent || []).some((s) => {
-        const cs = String(s.callsign || '').toLowerCase();
-        const role = String(s?.metadata?.role || s?.metadata?.session_role || '').toLowerCase();
-        return cs.includes('adam') || role === 'adam';
-      });
+      // Adam's canonical marker is metadata.role === 'adam' (lib/fleet/genuine-worker.mjs).
+      adamAlive = (recent || []).some((s) => String(s?.metadata?.role || '').toLowerCase() === 'adam');
     }
   } catch { /* leave adamAlive null → skip */ }
   try {
