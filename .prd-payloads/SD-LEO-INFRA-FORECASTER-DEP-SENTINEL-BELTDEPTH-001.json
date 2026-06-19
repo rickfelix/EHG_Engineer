@@ -1,0 +1,59 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Reuse the canonical dependency resolver in the capacity forecaster",
+      "description": "In scripts/coordinator-capacity-forecast.mjs, replace the hand-rolled `depId` resolver (which returns the literal 'none' for {sd_key:'none'} and bare-string 'none', mis-counting it as an unmet dependency) with the canonical parseSdDependencies from lib/utils/parse-sd-dependencies.cjs (the same SSOT scripts/coordinator-audit.mjs already imports). parseSdDependencies only counts entries matching /^SD-[A-Z0-9-]+/ as real blockers, so the 'none' sentinel, the 'No blocking dependencies identified' marker, and free-text placeholders resolve to zero blockers. Result: a draft/unclaimed SD whose only dependency is the 'none' sentinel is counted in claimable[]/beltDepth instead of being excluded, eliminating the false DEFICIT-URGENT and the spurious Adam reach-out.",
+      "acceptance_criteria": [
+        "coordinator-capacity-forecast.mjs imports parseSdDependencies from ../lib/utils/parse-sd-dependencies.cjs",
+        "The hand-rolled `depId` arrow is removed; both the depKeys-build and the `unmet` computation use parseSdDependencies",
+        "A draft, unclaimed, non-orchestrator SD whose dependencies = [{sd_key:'none'}] is included in claimable[]"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Align the backlog ranker to the same resolver and audit the worker-checkin deps path",
+      "description": "In scripts/coordinator-backlog-rank.mjs, replace the identical hand-rolled `depId` (line 44) used in the depKeys set, the dependents-graph edges, and the `unmet` computation with the canonical parseSdDependencies, so the ranker and forecaster agree on the sentinel and on free-text non-SD entries. Audit confirms two siblings need no change and must be documented as already-correct: (a) the worker-checkin claim/deps path resolves deps via lib/fleet/claim-eligibility.cjs draftDepsSatisfied, which already skips k==='none'||k==='None' as non-blocking; (b) FR-3 root in scripts/leo-create-sd.js already stores dependencies:[] for no-deps (QF-20260525-542). No new duplicate helper (e.g. lib/coordinator/deps.mjs) is created — reusing the existing SSOT avoids a third parallel implementation of the blocker rule.",
+      "acceptance_criteria": [
+        "coordinator-backlog-rank.mjs imports parseSdDependencies and removes the hand-rolled `depId`",
+        "depKeys, the dependents map, and the `unmet` filter all resolve via parseSdDependencies",
+        "No new lib/coordinator/deps.mjs is added; the canonical lib/utils/parse-sd-dependencies.cjs is the single shared resolver"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Regression test pinning the sentinel resolution and forecaster/ranker parity",
+      "description": "Add tests/unit/coordinator-dep-sentinel.test.js asserting parseSdDependencies returns zero blockers for the 'none' sentinel in every live shape ({sd_key:'none'}, {sd_id:'none'}, {id:'none'}, bare string 'none', case-insensitive 'NONE', and a 'No blocking dependencies identified' free-text object) while preserving a genuine SD-key dependency. The test exercises the exact resolver both consumers now share, pinning the regression (a none-sentinel SD is claimable belt, not dep-blocked).",
+      "acceptance_criteria": [
+        "node --test tests/unit/coordinator-dep-sentinel.test.js passes",
+        "Cases cover {sd_key:'none'}, {sd_id:'none'}, {id:'none'}, bare 'none', 'NONE', a free-text non-SD object, and a real SD-key dep preserved",
+        "Test asserts a mixed array [{sd_key:'none'}, {sd_id:'SD-REAL-001'}] resolves to exactly ['SD-REAL-001']"
+      ]
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Sentinel resolves to zero blockers",
+      "steps": "Run node --test tests/unit/coordinator-dep-sentinel.test.js. parseSdDependencies([{sd_key:'none'}]) returns [] and parseSdDependencies(['none']) returns [].",
+      "expected_result": "All assertions pass; the 'none' sentinel and free-text placeholders yield zero real blockers."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Forecaster counts a none-sentinel SD as claimable belt",
+      "steps": "Run node scripts/coordinator-capacity-forecast.mjs against the live DB and inspect the BELT line and claimable SD list.",
+      "expected_result": "The script completes without error and a draft/unclaimed SD whose only dependency is the 'none' sentinel is counted in beltDepth (not excluded as unmet)."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Ranker agrees with forecaster on the sentinel",
+      "steps": "Run node scripts/coordinator-backlog-rank.mjs --dry-run and inspect which SDs are treated as claimable leaves.",
+      "expected_result": "The script completes without error; a none-sentinel-dep SD is a claimable leaf (deps met), matching the forecaster — no divergence between ranker and forecaster."
+    }
+  ],
+  "acceptance_criteria": [
+    "The 'none' dependency sentinel no longer counts as an unmet dependency in the forecaster belt-depth or the backlog ranker",
+    "Forecaster and ranker share the single canonical parseSdDependencies resolver and agree on the sentinel",
+    "A regression test pins the sentinel resolution; existing coordinator behavior for real SD-key deps is unchanged"
+  ]
+}

@@ -33,15 +33,16 @@ import { guardMutation, resolveOwnSessionId } from '../lib/coordinator-mutation-
 // bare-shell demotion uses the shared bareShellLastCompare so the test suite
 // exercises the real comparator, not a re-implementation.
 import { isFixtureSd, isBareShell, bareShellLastCompare, isStartedSd } from '../lib/coordinator/sd-exclusion.mjs';
+// SD-LEO-INFRA-FORECASTER-DEP-SENTINEL-BELTDEPTH-001: resolve dependency keys via the canonical
+// blocker rule (the same SSOT coordinator-audit.mjs imports) so the ranker and the capacity
+// forecaster AGREE on the 'no dependencies' sentinel ({sd_key:'none'} / bare 'none') and on
+// free-text non-SD placeholders. parseSdDependencies returns ONLY real /^SD-/ blocker keys —
+// handling both the [{sd_id}]/[{sd_key}] object and raw-string shapes the old hand-rolled
+// resolver coerced, while correctly dropping the sentinel the hand-rolled one mis-counted.
+import { parseSdDependencies } from '../lib/utils/parse-sd-dependencies.cjs';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
-
-// Dependencies appear in TWO shapes in live data: [{sd_id:'SD-…'}] (add-prd convention) and
-// raw string arrays ['SD-…'] (plan-keeper/Adam authoring). Reading only x.sd_id made this
-// ranker blind to string deps — it ranked a BLOCKED child claimable and missed unlock edges
-// (live catch 2026-06-10: PLAN-KEEPER-D ranked claimable while dep -C was draft). Coerce both.
-const depId = (x) => (typeof x === 'string' ? x : (x && (x.sd_id || x.sd_key || x.id)) || null);
 
 const sb = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -59,7 +60,7 @@ async function main() {
   // ── dependency graph: edges dep -> dependents (over non-terminal set + completed deps resolved) ──
   const byKey = new Map((sds || []).map(d => [d.sd_key, d]));
   const depKeys = new Set();
-  (sds || []).forEach(d => (d.dependencies || []).forEach(x => { const k = depId(x); if (k) depKeys.add(k); }));
+  (sds || []).forEach(d => parseSdDependencies(d.dependencies).forEach(k => depKeys.add(k)));
   let depStatus = {};
   if (depKeys.size) {
     const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
@@ -68,9 +69,7 @@ async function main() {
   // dependents[dep] = [sd_keys that list dep and are not terminal]
   const dependents = new Map();
   for (const d of (sds || [])) {
-    for (const x of (d.dependencies || [])) {
-      const k = depId(x);
-      if (!k) continue;
+    for (const k of parseSdDependencies(d.dependencies)) {
       if (!dependents.has(k)) dependents.set(k, []);
       dependents.get(k).push(d.sd_key);
     }
@@ -111,8 +110,8 @@ async function main() {
       console.log(`  [skip] fixture excluded from ranking: ${d.sd_key}`);
       continue;
     }
-    const unmet = (d.dependencies || []).map(depId)
-      .filter(k => k && (byKey.has(k) ? byKey.get(k).status !== 'completed' : depStatus[k] !== 'completed'));
+    const unmet = parseSdDependencies(d.dependencies)
+      .filter(k => (byKey.has(k) ? byKey.get(k).status !== 'completed' : depStatus[k] !== 'completed'));
     if (unmet.length) continue;
     claimable.push(d);
   }
