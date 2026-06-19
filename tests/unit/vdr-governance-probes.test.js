@@ -79,6 +79,9 @@ describe('FR-2/FR-3: governance kr_status probes — score tracks the live KR si
 describe('FR-2/FR-3: governance code_grep probes — partial on match, unbuilt on miss, unknown without a seam (never false-built)', () => {
   const GREP_CAPS = [
     ['Govern-by-exception', 'database/migrations', 'enforce_doctrine_of_constraint'],
+    // 'Decision Filter Engine' stays code_grep (HONEST band = partial) even after
+    // SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001 wired it as an ADVISORY forward filter: the ord-13
+    // required state is "gating" and CONST-002 forbids gating, so advisory wiring is not 'built'.
     ['Decision Filter Engine', 'lib/eva', 'evaluateDecision'],
   ];
 
@@ -107,6 +110,16 @@ describe('FR-2/FR-3: governance code_grep probes — partial on match, unbuilt o
       expect((await runProbe(probe, {})).status).toBe('unknown');
     });
   }
+});
+
+describe('SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001: ord-13 stays HONEST partial (advisory wiring != gating)', () => {
+  it('Decision Filter Engine is NOT banded built — required state is gating, CONST-002 forbids gating', async () => {
+    const probe = reg('Decision Filter Engine').probe;
+    // The engine IS present (advisory-wired) → code_grep matches → partial, never built.
+    const matched = await runProbe(probe, { grep: () => ({ matched: true, accessible: true }) });
+    expect(matched.status).toBe('partial');
+    expect(matched.status).not.toBe('built');
+  });
 });
 
 describe('FR-1/FR-3: coherence invariant — criteria rows ↔ VDR_REGISTRY must stay 1:1 (atomic-PR guard)', () => {
