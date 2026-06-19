@@ -172,7 +172,14 @@ if (fromStep <= 5 && !skipArchive) {
   } else {
     const ok = run('node scripts/eva-intake-archive.js');
     if (!ok) {
-      console.error('  ⚠ Archive had errors. Items remain in source. Check output above.\n');
+      // SD-LEO-INFRA-DISTILL-ARCHIVE-PATH-AND-YT-PROCESSED-001 (FR-3): a broken archive used to
+      // log a soft warning and continue, silently stranding chairman-reviewed items in their source
+      // (For-Processing playlist / open Todoist tasks) for days. Surface it LOUDLY (::error::) AND
+      // durably (a feedback row via log-harness-bug.js, which is idempotent) so it is caught at once.
+      console.error('\n  ❌ ARCHIVE STEP FAILED — processed items were NOT moved at source (Todoist/YouTube).');
+      console.error('     Chairman-reviewed items remain stranded. Filing a harness-bug alert so this is not missed.\n');
+      console.error('::error title=EVA intake archive failed::Step 5 archive did not complete; processed items remain in their source playlist/project. See pipeline output above.');
+      run('node scripts/log-harness-bug.js "EVA intake pipeline Step 5 (archive) FAILED — chairman-reviewed items were not moved at source (Todoist complete / YouTube Processed playlist). Investigate scripts/eva-intake-archive.js + lib/integrations/post-processor.js." --severity high');
     }
   }
 } else {
