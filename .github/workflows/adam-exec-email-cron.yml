@@ -57,10 +57,56 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       CLAUDE_NOTIFY_EMAIL: ${{ secrets.CLAUDE_NOTIFY_EMAIL }}
+      # SD-LEO-INFRA-VISION-GAUGE-CRON-EHG-CHECKOUT-001 (FR-3): point the VDR gauge's cross-repo grep
+      # seam (lib/vision/vdr-grep-seam.js resolveRepoRoots, which already honors VDR_EHG_REPO_ROOT) at
+      # the ehg checkout, so the 3 ehg-targeted code_grep probes resolve and the vision % is computed
+      # over 25/25 (not 22/25). Without this, the seam falls back to the sibling <engineerRoot>/../ehg
+      # path, which does not exist in CI. When the ehg checkout is skipped (no PAT — see below) this dir
+      # is absent and the seam honestly bands those probes 'unknown' (gauge degrades to 22/25 exactly as
+      # today — never a fabricated 'built'). Verified live: with this set, denominator=25, unknown_count=0.
+      VDR_EHG_REPO_ROOT: ${{ github.workspace }}/ehg
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # SD-LEO-INFRA-VISION-GAUGE-CRON-EHG-CHECKOUT-001 (FR-1/FR-2): also check out rickfelix/ehg
+      # so the VDR gauge's 3 ehg-targeted code_grep probes (distance-to-broke, venture-performance
+      # read, the cockpit) resolve and the automated vision % covers all 25 capabilities (not 22/25).
+      #
+      # AUTH (FR-2): rickfelix/ehg is PRIVATE, so the default GITHUB_TOKEN cannot read it — this step
+      # needs a read-only cross-repo token. It REUSES the established org secret `GH_TOKEN_CROSS_REPO`
+      # already used by the other rickfelix/ehg cross-repo workflows (design-prompts-cross-repo.yml,
+      # venture-stages-drift-guard.yml), so no NEW secret provisioning is needed if that one exists; a
+      # repo-local read-only `EHG_RO_PAT` is the documented fallback if an operator prefers a scoped PAT.
+      # `continue-on-error: true` makes it FAIL-SOFT: if neither secret is present the auth 404s but the
+      # cron + chairman email continue uninterrupted and the gauge stays at 22/25 (the ehg probes band
+      # 'unknown', exactly as today). The next hourly snapshot once a token is present auto-upgrades to
+      # 25/25 (FR-5, no further code change). Verified live: with the checkout present the gauge yields
+      # denominator=25, unknown_count=0.
+      - name: Checkout ehg (for cross-repo VDR gauge probes)
+        id: ehg_checkout
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: rickfelix/ehg
+          path: ehg
+          token: ${{ secrets.GH_TOKEN_CROSS_REPO || secrets.EHG_RO_PAT }}
+          persist-credentials: false
+
+      # SD-LEO-INFRA-VISION-GAUGE-CRON-EHG-CHECKOUT-001 (FR-4): make a missing probe target repo
+      # LOUD (a GitHub Actions ::warning:: annotation), not a silent drop to 22/25. Non-blocking:
+      # it never fails the cron (the gauge degrades honestly), it just surfaces WHY coverage < 25/25
+      # so the cross-repo-token gap is visible in every run until it is closed. Gated on the ehg
+      # checkout step's own outcome (the precedent pattern in the other cross-repo workflows), so the
+      # diagnostic tracks the actual checkout result, not a filesystem-layout heuristic.
+      - name: Report cross-repo VDR gauge coverage (loud, non-blocking)
+        run: |
+          if [ "${{ steps.ehg_checkout.outcome }}" = "success" ] && [ -d "${VDR_EHG_REPO_ROOT}/src" ]; then
+            echo "VDR gauge: ehg checkout present at ${VDR_EHG_REPO_ROOT} — all 25 capabilities are repo-probeable (denominator should be 25, 0 unknown for repo-availability reasons)."
+          else
+            echo "::warning title=VDR gauge coverage <25/25::ehg checkout unavailable (step outcome='${{ steps.ehg_checkout.outcome }}', path '${VDR_EHG_REPO_ROOT}') — the 3 ehg-targeted code_grep probes band 'unknown', so the automated vision % covers only 22/25. Ensure the GH_TOKEN_CROSS_REPO org secret (or a read-only EHG_RO_PAT, Contents:read on rickfelix/ehg) is present (FR-2); the next hourly snapshot then auto-upgrades to 25/25."
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
