@@ -12,7 +12,7 @@ import {
   get,
   assertContractsValid,
 } from '../../../lib/loops/loop-contract-registry.js';
-import { validateLoopContract, BOUNDARY_KIND } from '../../../lib/loops/loop-contract.js';
+import { validateLoopContract, BOUNDARY_KIND, GOAL_TYPE } from '../../../lib/loops/loop-contract.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -67,6 +67,39 @@ describe('registry shape + invariants', () => {
   it('assertContractsValid() does not throw (all declared valid)', () => {
     expect(() => assertContractsValid()).not.toThrow();
     expect(assertContractsValid()).toBe(true);
+  });
+});
+
+// SD-LEO-INFRA-LOOP-CONTRACT-GOAL-TYPE-BUDGET-001 (FR-3): exemplars migrated to typed goals.
+describe('exemplar goals are typed (FR-3)', () => {
+  it('every exemplar goal is a typed object with a valid GOAL_TYPE (no bare strings remain)', () => {
+    const validTypes = new Set(Object.values(GOAL_TYPE));
+    for (const c of LOOP_CONTRACTS) {
+      for (const g of c.goals) {
+        expect(typeof g, `${c.id} goal should be an object`).toBe('object');
+        expect(validTypes.has(g.type), `${c.id} goal type ${g.type}`).toBe(true);
+      }
+    }
+  });
+
+  it('CI-AUTOTRIAGE goals are all verifiable and carry a metric', () => {
+    for (const g of get('LOOP-CI-AUTOTRIAGE-001').goals) {
+      expect(g.type).toBe(GOAL_TYPE.VERIFIABLE);
+      expect(typeof g.metric).toBe('string');
+      expect(g.metric.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('the ADAM rationale-bar goal is llm_as_judge and names its rubric_ref', () => {
+    const judged = get('LOOP-ADAM-OPPORTUNITY-SCAN-001').goals.filter((g) => g.type === GOAL_TYPE.LLM_AS_JUDGE);
+    expect(judged).toHaveLength(1);
+    expect(judged[0].rubric_ref).toBe('lib/adam/rationale-bar.js');
+  });
+
+  it('every declared budget (when present) passes validation', () => {
+    for (const c of LOOP_CONTRACTS) {
+      if (c.budget !== undefined) expect(validateLoopContract(c).valid).toBe(true);
+    }
   });
 });
 
