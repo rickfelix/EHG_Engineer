@@ -168,7 +168,6 @@ async function stripDeadLinks(db, rows) {
  * from, and the row coverage/idempotency is tracked on. Returns the new row id, or null on failure.
  */
 async function insertBridgeRow(db, c) {
-  const sources = [c.source].filter(Boolean);
   const description = [
     `Recurring production breakage detected by the prod-error-sweep loop.`,
     ``,
