@@ -6,7 +6,7 @@
  *   - NEVER writes/updates chairman_decisions (authority unchanged — CONST-002),
  *   - is idempotent and fail-open (never blocks/alters decision creation).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   recordForwardGateScore,
   decisionToEngineInput,
@@ -42,7 +42,8 @@ function makeSupabase({ existingCount = 0, insertError = null, insertThrows = fa
 const sampleDecision = {
   id: 'dec-1',
   lifecycle_stage: 10,
-  health_score: 72,
+  // health_score is CATEGORICAL in production ('green'/'red'/NULL) — realistic fixture.
+  health_score: 'green',
   summary: 'Gate decision for stage 10',
   decision_type: 'stage_gate',
   brief_data: { ventureName: 'Acme', cost: 1200, technologies: ['x'] },
@@ -52,10 +53,15 @@ describe('decisionToEngineInput', () => {
   it('maps live decision fields into an evaluateDecision input (honest, sparse-tolerant)', () => {
     const input = decisionToEngineInput(sampleDecision);
     expect(input.stage).toBe('10');
-    expect(input.visionScore).toBe(72);
     expect(input.description).toBe('Gate decision for stage 10');
     expect(input.cost).toBe(1200);
     expect(input.technologies).toEqual(['x']);
+  });
+
+  it('does NOT feed categorical health_score as a numeric visionScore (would be NaN)', () => {
+    // Regression guard: health_score 'green'/'red' must never become input.visionScore.
+    expect(decisionToEngineInput(sampleDecision)).not.toHaveProperty('visionScore');
+    expect(decisionToEngineInput({ id: 'd', lifecycle_stage: 5, health_score: 'red' })).not.toHaveProperty('visionScore');
   });
 
   it('tolerates a bare decision with no brief_data', () => {
@@ -155,12 +161,59 @@ describe('TS-3: forward path (createOrReusePendingDecision) proceeds unchanged w
     };
   }
 
-  it('still returns the decision even when advisory scoring fails (fail-open)', async () => {
+  it('still returns the decision even when advisory scoring fails (fail-open) — reuse branch', async () => {
     const logger = { log() {}, warn() {}, error() {} };
     const result = await createOrReusePendingDecision({
       ventureId: 'v1', stageNumber: 10, supabase: wiringSupabase(), logger,
     });
     expect(result.id).toBe('existing-id');
     expect(result.isNew).toBe(false);
+  });
+
+  /** table-aware fake: NO existing decision → new-created branch; audit insert throws (fail-open). */
+  function newCreateSupabase() {
+    let stageWorkQueried = false;
+    return {
+      rpc: async () => ({ data: { creates_decision: true, gate_type: 'kill', review_mode: 'review' }, error: null }),
+      from(table) {
+        if (table === 'chairman_decisions') {
+          return {
+            select() { return this; },
+            eq() { return this; },
+            single: async () => ({ data: null }), // none existing → create
+            insert() { return { select: () => ({ single: async () => ({ data: { id: 'new-id' }, error: null }) }) }; },
+          };
+        }
+        if (table === 'venture_stage_work') {
+          stageWorkQueried = true;
+          return {
+            select() { return this; },
+            eq() { return this; },
+            not() { return this; },
+            order() { return this; },
+            limit() { return this; },
+            maybeSingle: async () => ({ data: { health_score: 'green' } }),
+          };
+        }
+        // audit_log: coverage check → 0, insert throws to prove fail-open on the NEW branch
+        return {
+          select() { return this; },
+          eq() { return this; },
+          then(resolve) { resolve({ count: 0, error: null }); },
+          insert() { throw new Error('audit boom (new branch)'); },
+        };
+      },
+      _stageWorkQueried: () => stageWorkQueried,
+    };
+  }
+
+  it('scores + returns the decision on the NEW-created branch even when scoring throws (fail-open)', async () => {
+    const logger = { log() {}, warn() {}, error() {} };
+    const sb = newCreateSupabase();
+    const result = await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 22, supabase: sb, logger,
+    });
+    expect(result.id).toBe('new-id');
+    expect(result.isNew).toBe(true);
   });
 });

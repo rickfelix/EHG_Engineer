@@ -79,9 +79,10 @@ describe('FR-2/FR-3: governance kr_status probes — score tracks the live KR si
 describe('FR-2/FR-3: governance code_grep probes — partial on match, unbuilt on miss, unknown without a seam (never false-built)', () => {
   const GREP_CAPS = [
     ['Govern-by-exception', 'database/migrations', 'enforce_doctrine_of_constraint'],
-    // 'Decision Filter Engine' moved to a db_count audit_log coverage probe by
-    // SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001 (it is now WIRED, not merely defined) — see its
-    // dedicated db_count describe block below.
+    // 'Decision Filter Engine' stays code_grep (HONEST band = partial) even after
+    // SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001 wired it as an ADVISORY forward filter: the ord-13
+    // required state is "gating" and CONST-002 forbids gating, so advisory wiring is not 'built'.
+    ['Decision Filter Engine', 'lib/eva', 'evaluateDecision'],
   ];
 
   for (const [cap, expectedPath, expectedPattern] of GREP_CAPS) {
@@ -111,47 +112,13 @@ describe('FR-2/FR-3: governance code_grep probes — partial on match, unbuilt o
   }
 });
 
-describe('SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001: ord-13 Decision Filter Engine reads forward-gate coverage (db_count audit_log)', () => {
-  /** Mock supabase whose audit_log count(event_type=chairman_forward_gate_score) is `n`. */
-  function countMock(n) {
-    return {
-      from(table) {
-        const b = {
-          select() { return b; },
-          eq() { return b; },
-          then(resolve) {
-            if (table === 'audit_log') return resolve({ count: n, error: null });
-            return resolve({ count: null, error: { message: 'unexpected table ' + table } });
-          },
-        };
-        return b;
-      },
-    };
-  }
-
-  it('is wired to db_count over audit_log event_type=chairman_forward_gate_score (NOT code_grep)', () => {
-    const e = reg('Decision Filter Engine');
-    expect(e.probe.type).toBe('db_count');
-    expect(e.probe.table).toBe('audit_log');
-    expect(e.probe.filter).toEqual({ event_type: 'chairman_forward_gate_score' });
-    expect(e.probe.builtWhen).toBe('gte');
-    expect(e.probe.min).toBe(1);
-    expect(e.layer).toBe('process');
-  });
-
-  it('bands BUILT on real coverage (>=1 scored decision) and UNBUILT on zero — honest both ways', async () => {
+describe('SD-LEO-INFRA-DFE-CHAIRMAN-FORWARD-GATE-001: ord-13 stays HONEST partial (advisory wiring != gating)', () => {
+  it('Decision Filter Engine is NOT banded built — required state is gating, CONST-002 forbids gating', async () => {
     const probe = reg('Decision Filter Engine').probe;
-    expect((await runProbe(probe, { supabase: countMock(52) })).status).toBe('built');
-    expect((await runProbe(probe, { supabase: countMock(1) })).status).toBe('built');
-    expect((await runProbe(probe, { supabase: countMock(0) })).status).toBe('unbuilt');
-  });
-
-  it('label stays byte-identical so assertRegistryCoherence holds after the probe-type change', () => {
-    const rows = VDR_REGISTRY.map((x) => ({ capability: x.capability, today: '', required: '' }));
-    const res = assertRegistryCoherence(rows);
-    expect(res.ok).toBe(true);
-    expect(res.missingProbes).toEqual([]);
-    expect(res.staleProbes).toEqual([]);
+    // The engine IS present (advisory-wired) → code_grep matches → partial, never built.
+    const matched = await runProbe(probe, { grep: () => ({ matched: true, accessible: true }) });
+    expect(matched.status).toBe('partial');
+    expect(matched.status).not.toBe('built');
   });
 });
 
@@ -232,10 +199,7 @@ describe('FR-3: computeBuildGauge end-to-end — governance contributes, coheren
     expect(byCap['OKR-driven prioritization + day-28 hard stop']).toBe('built');
     expect(byCap['Governance cascade enforced']).toBe('built');
     expect(byCap['Govern-by-exception']).toBe('partial');
-    // Decision Filter Engine is now a db_count audit_log probe; gaugeMock returns a count error for
-    // db_count → 'unknown' (excluded, never false-built). Live coverage bands it 'built' (see the
-    // dedicated db_count describe block above).
-    expect(byCap['Decision Filter Engine']).toBe('unknown');
+    expect(byCap['Decision Filter Engine']).toBe('partial');
     // governance lives in the 'process' layer breakdown
     expect(gauge.per_layer.process).not.toBeNull();
   });

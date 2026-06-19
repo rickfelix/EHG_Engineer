@@ -6,8 +6,10 @@
  *
  * Advisory-scores EXISTING chairman_decisions through the genuine pure
  * evaluateDecision() engine and records the verdict to audit_log (via
- * recordForwardGateScore). This seeds HONEST forward-gate coverage — the engine
- * truly evaluates each real decision; nothing is fabricated.
+ * recordForwardGateScore), establishing an advisory forward-gate audit baseline over
+ * the existing decision history — the engine truly evaluates each real decision;
+ * nothing is fabricated. (This is telemetry/foundation; the vision ord-13 gauge stays
+ * honestly 'partial' until a future enforce-mode SD makes the gate actually gate.)
  *
  * ADVISORY / LOG-ONLY: writes ONLY to audit_log, never to chairman_decisions.
  * Idempotent: decisions that already carry a coverage row are skipped.
