@@ -1,0 +1,67 @@
+{
+  "executive_summary": "Two SD-completion AFTER triggers cast a metadata text field to UUID without a format guard, so a malformed metadata.proposal_id / metadata.venture_id raises 22P02 (invalid_text_representation) and ABORTS the entire SD-completion UPDATE — a fleet-wide single-point failure on every SD completion. record_mttr_on_sd_completion (SECURITY DEFINER) casts proposal_id; its `IS NOT NULL` check does not stop 22P02 on a non-null-but-malformed value. fn_emit_sd_completed_event casts venture_id unguarded. The fix adds public.safe_uuid(text) — a strict canonical-UUID regex guard that returns NULL on any non-castable input — and CREATE-OR-REPLACEs both triggers to route their cast through it. Additive and behavior-preserving: a malformed id now resolves to NULL (hitting the existing IS NULL / no-row skip paths) instead of throwing. Adversarial review diffed live-vs-migration byte-by-byte (only the two cast lines change) and confirmed the canonical narrowing drops zero live IDs (227 venture_ids all canonical, 0 proposal_ids).",
+  "system_architecture": {
+    "overview": "One additive migration (CREATE OR REPLACE only) plus a residue-free DB test. No schema/table change. The two trigger functions keep their signatures, SECURITY DEFINER, and search_path settings exactly.",
+    "components": [
+      {"name": "public.safe_uuid(text)", "responsibility": "Format-guarded text->uuid cast. STRICT + IMMUTABLE, search_path=pg_catalog (built-in regex/cast only). Returns the uuid when the input matches the strict canonical-UUID pattern (every match casts cleanly), else NULL — never raises 22P02."},
+      {"name": "record_mttr_on_sd_completion (CREATE OR REPLACE)", "responsibility": "FR-1: routes the proposal_id cast through safe_uuid. SECURITY DEFINER + search_path='public' preserved; all MTTR logic verbatim."},
+      {"name": "fn_emit_sd_completed_event (CREATE OR REPLACE)", "responsibility": "FR-2: routes the venture_id cast through safe_uuid. search_path='public','extensions' preserved; all eva_events emission logic verbatim."},
+      {"name": "tests/database/uuid-cast-guard-sd-completion.test.js", "responsibility": "FR-3: read-only pg probes — raw cast still throws 22P02, safe_uuid guards garbage/36-dash/NULL, valid passes through, and both trigger defs route through safe_uuid (no bare ::UUID cast remains)."}
+    ]
+  },
+  "functional_requirements": [
+    {"id": "FR-1", "title": "Guard the proposal_id cast in record_mttr_on_sd_completion", "description": "Replace `(NEW.metadata->>'proposal_id')::UUID` with `public.safe_uuid(NEW.metadata->>'proposal_id')` so a malformed proposal_id yields NULL (→ the leo_proposals lookup finds no row and the function skips) instead of raising 22P02. The function is reproduced verbatim otherwise (SECURITY DEFINER, search_path, all logic unchanged)."},
+    {"id": "FR-2", "title": "Guard the venture_id cast in fn_emit_sd_completed_event", "description": "Replace `(NEW.metadata->>'venture_id')::UUID` with `public.safe_uuid(NEW.metadata->>'venture_id')` so a malformed venture_id yields NULL (→ the existing `IF v_venture_id IS NULL THEN RETURN NEW` skip) instead of raising 22P02. Reproduced verbatim otherwise."},
+    {"id": "FR-3", "title": "safe_uuid helper + residue-free DB test", "description": "Add public.safe_uuid(text) (strict canonical-UUID regex, NULL on non-match, NOT the loose 36-char form a dash-string could satisfy yet fail ::uuid). Add a tests/database probe asserting the raw cast throws 22P02, safe_uuid guards malformed/36-dash/NULL inputs, a valid UUID passes through, and both trigger definitions route through safe_uuid. The migration includes a DO $verify$ self-check."}
+  ],
+  "technical_requirements": [
+    {"id": "TR-1", "requirement": "Behavior-preserving: CREATE OR REPLACE only; signatures, SECURITY DEFINER, and search_path unchanged; the only behavior change is malformed-id → NULL instead of 22P02. Verified by a byte-level live-vs-migration diff (adversarial review)."},
+    {"id": "TR-2", "requirement": "safe_uuid never throws: every string matching its regex casts cleanly; STRICT short-circuits NULL; built-ins resolve under search_path=pg_catalog."},
+    {"id": "TR-3", "requirement": "Idempotent / re-runnable: all three objects CREATE OR REPLACE; DO $verify$ is read-only."},
+    {"id": "TR-4", "requirement": "The DB test is residue-free (read-only SELECT / pg_get_functiondef — no rows inserted, no triggers fired) and must run AFTER the migration is applied."}
+  ],
+  "implementation_approach": {
+    "summary": "Ground both live function bodies, reproduce them verbatim with only the cast guarded, add a strict safe_uuid helper, apply via apply_migration, then verify with the DB probe. Adversarial-review the verbatim diff before applying (high blast radius — every SD completion).",
+    "steps": [
+      "Author public.safe_uuid(text) with a strict canonical-UUID regex (reject the loose 36-char form).",
+      "CREATE OR REPLACE both triggers verbatim, routing only the cast through safe_uuid; preserve SECURITY DEFINER + search_path.",
+      "Adversarial-review the live-vs-migration diff (confirm only the cast lines change + narrowing has no live impact).",
+      "Apply via apply_migration; the DO $verify$ block self-checks the guard.",
+      "Run the residue-free DB test (raw cast throws; safe_uuid guards; both triggers route through safe_uuid)."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": "Both functions are AFTER triggers on strategic_directives_v2 status->completed (trg_record_mttr_on_sd_completion, tr_sd_completed_event), firing on EVERY SD completion fleet-wide. record_mttr writes pipeline_metrics; fn_emit writes eva_events. safe_uuid is consumed only by these two functions (and is available for future guarded casts).",
+    "dependencies": "Depends only on the live definitions of the two trigger functions (reproduced verbatim) and pg_catalog built-ins (regex `~`, `::uuid`). No external SD, table, or extension dependency. Apply path: scripts/apply-migration.js / apply_migration.",
+    "data_contracts": "No schema change. The two trigger functions keep identical signatures and side-effect contracts (pipeline_metrics / eva_events rows). safe_uuid(text)->uuid returns NULL instead of raising on non-canonical input. metadata columns unchanged.",
+    "runtime_config": "No env vars or feature flags. The migration is additive and applies in place. Both triggers remain enabled with their existing search_path settings.",
+    "observability_rollout": "Rollout: migration applies in place; takes effect on the next SD completion. Verification: SD completions with malformed metadata.proposal_id/venture_id no longer raise 22P02; valid IDs still produce pipeline_metrics / eva_events rows. Rollback: re-create both functions with the original unguarded cast (git revert of the migration) — no data impact. The DO $verify$ block fails the apply loudly if the guard did not land."
+  },
+  "acceptance_criteria": [
+    "An SD whose metadata.proposal_id or metadata.venture_id is malformed can complete without the database raising an invalid-UUID error that aborts the completion.",
+    "An SD with a valid UUID in those metadata fields still has its proposal/venture processed exactly as before (MTTR metric / completion event recorded).",
+    "The guard rejects a 36-character dash/hex string that is not a real UUID (it returns nothing rather than erroring), and accepts a normal canonical UUID.",
+    "Both completion trigger functions keep all their existing behavior — only the unsafe cast is now guarded — confirmed by a line-level comparison.",
+    "The database test for this work passes and would fail if the migration were not applied."
+  ],
+  "test_scenarios": [
+    {"id": "TS-1", "title": "Raw cast still throws (hazard exists)", "type": "db", "scenario": "Run SELECT 'not-a-uuid'::uuid against the DB.", "expected": "Raises 22P02 invalid_text_representation — the hazard the guard addresses."},
+    {"id": "TS-2", "title": "safe_uuid guards malformed input", "type": "db", "scenario": "SELECT public.safe_uuid('not-a-uuid'); SELECT public.safe_uuid(repeat('-',36)); SELECT public.safe_uuid(NULL).", "expected": "All return NULL with no error."},
+    {"id": "TS-3", "title": "safe_uuid passes a valid UUID", "type": "db", "scenario": "SELECT public.safe_uuid('11111111-2222-3333-4444-555555555555').", "expected": "Returns the same UUID unchanged."},
+    {"id": "TS-4", "title": "Both triggers route through safe_uuid", "type": "db", "scenario": "pg_get_functiondef for record_mttr_on_sd_completion and fn_emit_sd_completed_event.", "expected": "Each body contains safe_uuid(NEW.metadata->>'...') and no bare (NEW.metadata->>'...')::UUID cast."}
+  ],
+  "risks": [
+    {"risk": "Verbatim reproduction silently drops trigger logic", "mitigation": "Adversarial review diffed live-vs-migration byte-by-byte: only the two cast lines change; all other logic, attributes, and search_path preserved.", "severity": "low"},
+    {"risk": "Strict regex narrows valid inputs the old cast accepted (braced/no-dash UUID forms)", "mitigation": "Live data check: 227 venture_ids all canonical-dashed, 0 proposal_ids, no braced/no-dash forms — zero live IDs dropped. Metadata is expected canonical. Noted as a follow-up awareness item.", "severity": "low"},
+    {"risk": "High blast radius — fires on every SD completion", "mitigation": "Change is strictly safety-additive (malformed → NULL → existing skip paths); DO $verify$ aborts a bad apply; CREATE OR REPLACE rollback via git revert, no data impact.", "severity": "low"}
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-UUID-CAST-GUARD-SD-COMPLETION-001",
+    "target_application": "EHG_Engineer",
+    "target_files": [
+      "database/migrations/20260619_uuid_cast_guard_sd_completion.sql",
+      "tests/database/uuid-cast-guard-sd-completion.test.js"
+    ],
+    "created_via": "fleet-worker-charlie"
+  }
+}
